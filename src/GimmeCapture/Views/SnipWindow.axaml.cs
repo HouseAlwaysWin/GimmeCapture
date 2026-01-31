@@ -180,6 +180,11 @@ public partial class SnipWindow : Window
         }
     }
 
+    // Text Dragging State
+    private bool _isDraggingAnnotation;
+    private Annotation? _draggingAnnotation;
+    private Point _dragOffset;
+
     private void OnPointerPressed(object? sender, PointerPressedEventArgs e)
     {
         if (_viewModel == null) return;
@@ -187,6 +192,64 @@ public partial class SnipWindow : Window
         var point = e.GetPosition(this);
         var props = e.GetCurrentPoint(this).Properties;
         var source = e.Source as Control;
+
+        // 1. Text Interaction (Edit / Move) - High Priority
+        if (props.IsLeftButtonPressed && _viewModel.IsDrawingMode && _viewModel.CurrentTool == AnnotationType.Text)
+        {
+             // Convert Window Point to Selection Space for Hit Testing
+             var selectionSpacePoint = new Point(point.X - _viewModel.SelectionRect.X, point.Y - _viewModel.SelectionRect.Y);
+             
+             // Check for hit on existing text annotations (Top-most first)
+             for (int i = _viewModel.Annotations.Count - 1; i >= 0; i--)
+             {
+                 var ann = _viewModel.Annotations[i];
+                 if (ann.Type == AnnotationType.Text)
+                 {
+                     // Simple bounds estimation for hit testing
+                     // Assume approx height/width based on font size and length
+                     // A better way would be actual measure, but this is sufficient for now
+                     double estimatedWidth = ann.Text.Length * ann.FontSize * 0.6; 
+                     double estimatedHeight = ann.FontSize * 1.5;
+                     
+                     var rect = new Rect(ann.StartPoint.X, ann.StartPoint.Y, estimatedWidth, estimatedHeight);
+                     if (rect.Contains(selectionSpacePoint))
+                     {
+                         if (e.ClickCount == 2)
+                         {
+                             // Double Click -> Edit Mode
+                             _viewModel.Annotations.Remove(ann);
+                             
+                             _viewModel.IsEnteringText = true;
+                             _viewModel.TextInputPosition = new Point(ann.StartPoint.X + _viewModel.SelectionRect.X, ann.StartPoint.Y + _viewModel.SelectionRect.Y);
+                             _viewModel.PendingText = ann.Text;
+                             _viewModel.CurrentFontSize = ann.FontSize;
+                             _viewModel.CurrentFontFamily = ann.FontFamily;
+                             _viewModel.IsBold = ann.IsBold;
+                             _viewModel.IsItalic = ann.IsItalic;
+                             _viewModel.SelectedColor = ann.Color;
+
+                            // Do NOT call FinishTextEntry() here. We want to START entry.
+                            
+                             // Focus Textbox
+                             var textBox = this.FindControl<TextBox>("TextInputOverlay");
+                             Avalonia.Threading.Dispatcher.UIThread.Post(() => textBox?.Focus());
+                             
+                             e.Handled = true;
+                             return;
+                         }
+                         else
+                         {
+                             // Single Click -> Start Dragging
+                             _isDraggingAnnotation = true;
+                             _draggingAnnotation = ann;
+                             _dragOffset = new Point(selectionSpacePoint.X - ann.StartPoint.X, selectionSpacePoint.Y - ann.StartPoint.Y);
+                             e.Handled = true;
+                             return;
+                         }
+                     }
+                 }
+             }
+        }
 
         // Check if we clicked on a handle
         // Using Control instead of Ellipse because we changed XAML to use Grid (Panel)
@@ -349,6 +412,15 @@ public partial class SnipWindow : Window
              _viewModel.SelectionRect = new Rect(x, y, w, h);
              return;
         }
+        
+        if (_isDraggingAnnotation && _draggingAnnotation != null)
+        {
+             // Move Annotation
+             var selectionSpacePoint = new Point(currentPoint.X - _viewModel.SelectionRect.X, currentPoint.Y - _viewModel.SelectionRect.Y);
+             _draggingAnnotation.StartPoint = new Point(selectionSpacePoint.X - _dragOffset.X, selectionSpacePoint.Y - _dragOffset.Y);
+             _draggingAnnotation.EndPoint = _draggingAnnotation.StartPoint; // Update EndPoint for consistency (Text usually ignores it but good practice)
+             return;
+        }
 
         if (_viewModel.CurrentState == SnipWindowViewModel.SnipState.Selecting)
         {
@@ -382,6 +454,13 @@ public partial class SnipWindow : Window
             // Ensure state is Selected
              _viewModel.CurrentState = SnipWindowViewModel.SnipState.Selected;
              return;
+        }
+        
+        if (_isDraggingAnnotation)
+        {
+            _isDraggingAnnotation = false;
+            _draggingAnnotation = null;
+            return;
         }
         
         if (_viewModel.CurrentState == SnipWindowViewModel.SnipState.Selecting)

@@ -98,17 +98,57 @@ public class ScreenCaptureService : IScreenCaptureService
                         paint.Style = SKPaintStyle.Fill;
                         paint.TextSize = (float)ann.FontSize;
                         
-                        // Create Typeface
+                        // Create Typeface with Fallback Logic
                         var weight = ann.IsBold ? SKFontStyleWeight.Bold : SKFontStyleWeight.Normal;
                         var slant = ann.IsItalic ? SKFontStyleSlant.Italic : SKFontStyleSlant.Upright;
                         var style = new SKFontStyle(weight, SKFontStyleWidth.Normal, slant);
                         
-                        // Use provided font family or fallback to system default
-                        using (var typeface = SKTypeface.FromFamilyName(ann.FontFamily, style)) 
+                        SKTypeface typeface = SKTypeface.FromFamilyName(ann.FontFamily, style);
+                        
+                        // Fallback Check: If text contains non-ASCII and primary font might not support it
+                        if (!string.IsNullOrEmpty(ann.Text))
                         {
-                            paint.Typeface = typeface ?? SKTypeface.Default;
+                            // Optimized: Check if any char is missing glyph in current typeface
+                            bool missingGlyph = false;
+                            
+                            // 1. Check if typeface is valid, if null defaulted to something, potentially missing chars
+                            if (typeface == null) typeface = SKTypeface.Default;
+                            
+                            // 2. Check for missing glyphs
+                            // Convert string to code points (simplification: simple char iteration usually enough for BMP)
+                            var ids = new ushort[ann.Text.Length];
+                            using(var font = new SKFont(typeface))
+                            {
+                                font.GetGlyphs(ann.Text, ids);
+                                // If any glyph ID is 0, it means missing
+                                if (ids.Any(id => id == 0))
+                                {
+                                    missingGlyph = true;
+                                }
+                            }
+                            
+                            if (missingGlyph)
+                            {
+                                // Try to find a fallback that supports the text
+                                // We pick the first non-supported char or just a common fallback
+                                // On Windows, "Microsoft YaHei" is a good bet for CJK
+                                var fallback = SKFontManager.Default.MatchCharacter(ann.Text.FirstOrDefault(c => c > 127));
+                                if (fallback != null)
+                                {
+                                    typeface.Dispose();
+                                    typeface = fallback;
+                                }
+                            }
+                        }
+
+                        using (typeface) // Ensure we dispose it (MatchCharacter returns a new Ref)
+                        {
+                            // Ensure Paint uses this typeface
+                            paint.Typeface = typeface;
+                            
+                            // Draw
                             canvas.DrawText(ann.Text ?? string.Empty, p1, paint);
-                            paint.Typeface = null; // Reset
+                            paint.Typeface = null; // Detach before disposal
                         }
                         break;
                 }
