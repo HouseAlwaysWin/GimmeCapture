@@ -59,6 +59,57 @@ public partial class SnipWindow : Window
         KeyDown += OnKeyDown;
     }
 
+    private System.Collections.Generic.List<Window> _hiddenTopmostWindows = new();
+
+    protected override void OnOpened(EventArgs e)
+    {
+        base.OnOpened(e);
+        
+        // Defer Z-Order logic to ensure window is fully initialized
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            // Ensure SnipWindow is absolutely on top of everything
+            this.Topmost = true;
+            this.Activate(); 
+
+            // Temporarily lower existing Pin windows
+            if (Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
+            {
+                foreach (var win in desktop.Windows)
+                {
+                    if (win is FloatingImageWindow floating && floating.Topmost && floating.IsVisible)
+                    {
+                        floating.Topmost = false;
+                        _hiddenTopmostWindows.Add(floating);
+                        
+                        // Force a refresh/update might help but Topmost=false usually works immediately
+                    }
+                }
+            }
+            
+            // Re-assert Topmost for self just in case
+            this.Topmost = false;
+            this.Topmost = true;
+        }, Avalonia.Threading.DispatcherPriority.Input);
+    }
+
+    protected override void OnClosing(WindowClosingEventArgs e)
+    {
+        base.OnClosing(e);
+        
+        // Restore Pin windows to Topmost
+        foreach (var win in _hiddenTopmostWindows)
+        {
+            try 
+            {
+                if (win.IsVisible) // Ensure not closed
+                    win.Topmost = true;
+            }
+            catch { /* Ignore if window closed */ }
+        }
+        _hiddenTopmostWindows.Clear();
+    }
+
     protected override void OnDataContextChanged(EventArgs e)
     {
         base.OnDataContextChanged(e);
