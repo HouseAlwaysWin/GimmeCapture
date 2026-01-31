@@ -97,7 +97,19 @@ public class ScreenCaptureService : IScreenCaptureService
                     case AnnotationType.Text:
                         paint.Style = SKPaintStyle.Fill;
                         paint.TextSize = (float)ann.FontSize;
-                        canvas.DrawText(ann.Text ?? string.Empty, p1, paint);
+                        
+                        // Create Typeface
+                        var weight = ann.IsBold ? SKFontStyleWeight.Bold : SKFontStyleWeight.Normal;
+                        var slant = ann.IsItalic ? SKFontStyleSlant.Italic : SKFontStyleSlant.Upright;
+                        var style = new SKFontStyle(weight, SKFontStyleWidth.Normal, slant);
+                        
+                        // Use provided font family or fallback to system default
+                        using (var typeface = SKTypeface.FromFamilyName(ann.FontFamily, style)) 
+                        {
+                            paint.Typeface = typeface ?? SKTypeface.Default;
+                            canvas.DrawText(ann.Text ?? string.Empty, p1, paint);
+                            paint.Typeface = null; // Reset
+                        }
                         break;
                 }
             }

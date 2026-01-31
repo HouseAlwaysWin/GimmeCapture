@@ -41,11 +41,12 @@ public partial class SnipWindow : Window
         {
             textBox.KeyDown += (s, e) =>
             {
-                if (e.Key == Key.Enter && !e.KeyModifiers.HasFlag(KeyModifiers.Shift))
+                if (e.Key == Key.Enter && e.KeyModifiers.HasFlag(KeyModifiers.Control))
                 {
                     FinishTextEntry();
                     e.Handled = true;
                 }
+                // Allow normal Enter for new lines
                 else if (e.Key == Key.Escape)
                 {
                     CancelTextEntry();
@@ -57,6 +58,12 @@ public partial class SnipWindow : Window
         
         // Close on Escape
         KeyDown += OnKeyDown;
+    }
+    
+    // Add Click Handler for OK Button
+    private void OnTextConfirmClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        FinishTextEntry();
     }
 
     private System.Collections.Generic.List<Window> _hiddenTopmostWindows = new();
@@ -427,7 +434,10 @@ public partial class SnipWindow : Window
                 EndPoint = relPoint,
                 Text = _viewModel.PendingText,
                 Color = _viewModel.SelectedColor,
-                FontSize = _viewModel.CurrentFontSize
+                FontSize = _viewModel.CurrentFontSize,
+                FontFamily = _viewModel.CurrentFontFamily,
+                IsBold = _viewModel.IsBold,
+                IsItalic = _viewModel.IsItalic
             });
         }
         

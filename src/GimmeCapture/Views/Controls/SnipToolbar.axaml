@@ -73,7 +73,35 @@
             <ToggleButton Theme="{StaticResource SnipToggleButton}" Content="T" 
                            IsChecked="{Binding CurrentTool, ConverterParameter={x:Static m:AnnotationType.Text}, Converter={StaticResource EnumToBoolConverter}}"
                            Command="{Binding SelectToolCommand}" CommandParameter="{x:Static m:AnnotationType.Text}"
-                           ToolTip.Tip="{Binding [Text], Source={x:Static services:LocalizationService.Instance}}"/>
+                           ToolTip.Tip="{Binding [Text], Source={x:Static services:LocalizationService.Instance}}">
+                <Button.Flyout>
+                    <Flyout Placement="Bottom">
+                        <Border Background="#1A1A1A" BorderBrush="#333333" BorderThickness="1" Padding="6" CornerRadius="4">
+                            <StackPanel Spacing="4" Width="140">
+                                <TextBlock Text="{Binding [Font], Source={x:Static services:LocalizationService.Instance}}" FontSize="9" Foreground="Gray"/>
+                                
+                                <!-- Size & Style Row -->
+                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                    <c:CompactNumericStep Value="{Binding CurrentFontSize}"
+                                                          IncreaseCommand="{Binding IncreaseFontSizeCommand}"
+                                                          DecreaseCommand="{Binding DecreaseFontSizeCommand}"/>
+                                    
+                                    <ToggleButton Theme="{StaticResource SnipToggleButton}" Content="B" FontWeight="Bold" Width="24" Height="24"
+                                                  IsChecked="{Binding IsBold}"/>
+                                    <ToggleButton Theme="{StaticResource SnipToggleButton}" Content="I" FontStyle="Italic" Width="24" Height="24"
+                                                  IsChecked="{Binding IsItalic}"/>
+                                </StackPanel>
+                                
+                                <!-- Font Family -->
+                                <ComboBox ItemsSource="{Binding AvailableFonts}" 
+                                          SelectedItem="{Binding CurrentFontFamily}" 
+                                          Height="24" FontSize="10" HorizontalAlignment="Stretch"
+                                          MaxDropDownHeight="200"/>
+                            </StackPanel>
+                        </Border>
+                    </Flyout>
+                </Button.Flyout>
+            </ToggleButton>
             
             <Rectangle Fill="#444444" Width="1" Height="16" Margin="2,0" VerticalAlignment="Center"/>
 
@@ -121,12 +149,7 @@
                                                           DecreaseCommand="{Binding DecreaseThicknessCommand}"/>
                                 </StackPanel>
                                 
-                                <StackPanel IsVisible="{Binding CurrentTool, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Text}}">
-                                    <TextBlock Text="{Binding [Font], Source={x:Static services:LocalizationService.Instance}}" FontSize="9" Foreground="Gray"/>
-                                    <c:CompactNumericStep Value="{Binding CurrentFontSize}"
-                                                          IncreaseCommand="{Binding IncreaseFontSizeCommand}"
-                                                          DecreaseCommand="{Binding DecreaseFontSizeCommand}"/>
-                                </StackPanel>
+                                <!-- (Removed Text Settings from here, now in T Button Flyout) -->
                             </StackPanel>
                         </Border>
                     </Flyout>

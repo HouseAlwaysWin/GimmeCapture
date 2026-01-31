@@ -64,4 +64,25 @@ public class Annotation : ReactiveObject
         get => _fontSize;
         set => this.RaiseAndSetIfChanged(ref _fontSize, value);
     }
+
+    private string _fontFamily = "Arial";
+    public string FontFamily
+    {
+        get => _fontFamily;
+        set => this.RaiseAndSetIfChanged(ref _fontFamily, value);
+    }
+
+    private bool _isBold;
+    public bool IsBold
+    {
+        get => _isBold;
+        set => this.RaiseAndSetIfChanged(ref _isBold, value);
+    }
+
+    private bool _isItalic;
+    public bool IsItalic
+    {
+        get => _isItalic;
+        set => this.RaiseAndSetIfChanged(ref _isItalic, value);
+    }
 }

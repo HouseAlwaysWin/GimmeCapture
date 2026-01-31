@@ -24,6 +24,8 @@
     <Window.Resources>
         <cv:DoubleToBoolConverter x:Key="SizeToBoolConverter"/>
         <cv:StateToBoolConverter x:Key="StateToBoolConverter"/>
+        <cv:BoolToFontWeightConverter x:Key="BoolToFontWeightConverter"/>
+        <cv:BoolToFontStyleConverter x:Key="BoolToFontStyleConverter"/>
     </Window.Resources>
     
     <Window.KeyBindings>
@@ -39,7 +41,6 @@
     </Window.Styles>    
 
     <Grid Cursor="Cross">
-    <Grid>
         <!-- 背景遮罩層 -->
         <Path Fill="#80000000" IsHitTestVisible="False">
             <Path.Data>
@@ -148,6 +149,9 @@
                             <TextBlock Text="{Binding Text}"
                                        Foreground="{Binding Color, Converter={StaticResource ColorToBrushConverter}}"
                                        FontSize="{Binding FontSize}"
+                                       FontFamily="{Binding FontFamily}"
+                                       FontWeight="{Binding IsBold, Converter={StaticResource BoolToFontWeightConverter}}"
+                                       FontStyle="{Binding IsItalic, Converter={StaticResource BoolToFontStyleConverter}}"
                                        IsVisible="{Binding Type, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Text}}"/>
                         </Panel>
                     </DataTemplate>
@@ -208,6 +212,34 @@
                 <Grid Classes="Handle" Name="HandleLeft" Cursor="SizeWestEast" Width="15" HorizontalAlignment="Left" VerticalAlignment="Stretch" Margin="0,15"/>
                 <Grid Classes="Handle" Name="HandleRight" Cursor="SizeWestEast" Width="15" HorizontalAlignment="Right" VerticalAlignment="Stretch" Margin="0,15"/>
             </Grid>
+            
+            <!-- Text Input Overlay Container -->
+            <StackPanel Name="TextEntryPanel"
+                        Canvas.Left="{Binding TextInputPosition.X}"
+                        Canvas.Top="{Binding TextInputPosition.Y}"
+                        IsVisible="{Binding IsEnteringText}"
+                        Orientation="Vertical" Spacing="2">
+                
+                <TextBox Name="TextInputOverlay"
+                         Text="{Binding PendingText, Mode=TwoWay}"
+                         FontFamily="{Binding CurrentFontFamily}"
+                         FontSize="{Binding CurrentFontSize}"
+                         FontWeight="{Binding IsBold, Converter={StaticResource BoolToFontWeightConverter}}"
+                         FontStyle="{Binding IsItalic, Converter={StaticResource BoolToFontStyleConverter}}"
+                         Foreground="{Binding SelectedColor, Converter={StaticResource ColorToBrushConverter}}"
+                         Background="#80000000" 
+                         BorderThickness="1" BorderBrush="White"
+                         Padding="4" MinWidth="100" MaxWidth="600"
+                         AcceptsReturn="True" TextWrapping="Wrap"/>
+                
+                <Button Content="OK" 
+                        HorizontalAlignment="Right"
+                        Theme="{StaticResource SnipButton}"
+                        Background="#333333" BorderBrush="#555555" BorderThickness="1"
+                        Padding="10,2" Margin="0,2,0,0"
+                        Click="OnTextConfirmClick"
+                        Cursor="Hand"/>
+            </StackPanel>
                     
             <!-- 工具列 (位置綁定) -->
             <ctl:SnipToolbar Name="Toolbar"
@@ -216,7 +248,6 @@
                               Margin="0, 5, 0, 0"
                               IsVisible="{Binding CurrentState, Converter={StaticResource StateToBoolConverter}}"/>
         </Canvas>
-    </Grid>
     </Grid>
 
 </Window>

@@ -136,6 +136,32 @@ public class SnipWindowViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _currentFontSize, value);
     }
 
+    private string _currentFontFamily = "Arial";
+    public string CurrentFontFamily
+    {
+        get => _currentFontFamily;
+        set => this.RaiseAndSetIfChanged(ref _currentFontFamily, value);
+    }
+
+    private bool _isBold;
+    public bool IsBold
+    {
+        get => _isBold;
+        set => this.RaiseAndSetIfChanged(ref _isBold, value);
+    }
+
+    private bool _isItalic;
+    public bool IsItalic
+    {
+        get => _isItalic;
+        set => this.RaiseAndSetIfChanged(ref _isItalic, value);
+    }
+
+    public ObservableCollection<string> AvailableFonts { get; } = new ObservableCollection<string>
+    {
+        "Arial", "Segoe UI", "Consolas", "Times New Roman", "Comic Sans MS", "Microsoft JhengHei", "Meiryo"
+    };
+
     private bool _isDrawingMode = false;
     public bool IsDrawingMode
     {
@@ -209,6 +235,9 @@ public class SnipWindowViewModel : ViewModelBase
 
         // Change Language
         ChangeLanguageCommand = ReactiveCommand.Create(() => LocalizationService.Instance.CycleLanguage());
+    
+        ToggleBoldCommand = ReactiveCommand.Create(() => IsBold = !IsBold);
+        ToggleItalicCommand = ReactiveCommand.Create(() => IsItalic = !IsItalic);
     }
 
     public ReactiveCommand<Color, Unit> ChangeColorCommand { get; }
@@ -218,6 +247,8 @@ public class SnipWindowViewModel : ViewModelBase
     public ReactiveCommand<Unit, Unit> DecreaseFontSizeCommand { get; }
     public ReactiveCommand<Unit, Unit> ApplyHexColorCommand { get; }
     public ReactiveCommand<Unit, Unit> ChangeLanguageCommand { get; }
+    public ReactiveCommand<Unit, bool> ToggleBoldCommand { get; }
+    public ReactiveCommand<Unit, bool> ToggleItalicCommand { get; }
 
     public static class StaticData
     {
