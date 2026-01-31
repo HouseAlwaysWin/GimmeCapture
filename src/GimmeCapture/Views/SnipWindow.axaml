@@ -3,6 +3,8 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:vm="using:GimmeCapture.ViewModels"
+        xmlns:cv="using:GimmeCapture.Converters"
+        xmlns:ctl="using:GimmeCapture.Views.Controls"
         mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
         x:Class="GimmeCapture.Views.SnipWindow"
         x:DataType="vm:SnipWindowViewModel"
@@ -11,18 +13,49 @@
         SystemDecorations="None"
         WindowState="Maximized"
         Topmost="True"
-        Background="#44000000"
+        Background="Transparent"
         ExtendClientAreaToDecorationsHint="True"
         ExtendClientAreaChromeHints="NoChrome">
 
-    <Canvas Name="SelectionCanvas" Background="Transparent" Cursor="Cross">
-        <Border BorderBrush="{DynamicResource BMRingRedBrush}"
-                BorderThickness="2"
-                Width="{Binding SelectionRect.Width}"
-                Height="{Binding SelectionRect.Height}"
-                Canvas.Left="{Binding SelectionRect.X}"
-                Canvas.Top="{Binding SelectionRect.Y}"
-                IsVisible="{Binding IsSelecting}"/>
-    </Canvas>
+    <Window.Resources>
+        <cv:DoubleToBoolConverter x:Key="SizeToBoolConverter"/>
+        <cv:StateToBoolConverter x:Key="StateToBoolConverter"/>
+    </Window.Resources>
+
+    <Grid>
+    <Grid>
+        <!-- 背景遮罩層 -->
+        <Path Fill="#80000000">
+            <Path.Data>
+                <CombinedGeometry GeometryCombineMode="Exclude">
+                    <CombinedGeometry.Geometry1>
+                        <RectangleGeometry Rect="0,0,3840,2160" />
+                    </CombinedGeometry.Geometry1>
+                    <CombinedGeometry.Geometry2>
+                        <RectangleGeometry Rect="{Binding SelectionRect}" />
+                    </CombinedGeometry.Geometry2>
+                </CombinedGeometry>
+            </Path.Data>
+        </Path>
+
+        <!-- 互動層：使用 Canvas 定位邊框 -->
+        <Canvas>
+            <Border BorderBrush="{DynamicResource BMRingRedBrush}"
+                    BorderThickness="2"
+                    Width="{Binding SelectionRect.Width}"
+                    Height="{Binding SelectionRect.Height}"
+                    Canvas.Left="{Binding SelectionRect.X}"
+                    Canvas.Top="{Binding SelectionRect.Y}"
+                    IsVisible="{Binding CurrentState, Converter={StaticResource StateToBoolConverter}}" />
+                    
+            <!-- 工具列 (位置綁定) -->
+            <ctl:SnipToolbar Canvas.Left="{Binding SelectionRect.Right}" 
+                             Canvas.Top="{Binding SelectionRect.Bottom}" 
+                             Margin="-100, 5, 0, 0"
+                             IsVisible="{Binding CurrentState, Converter={StaticResource StateToBoolConverter}}"/>
+             <!-- 這裡位置綁定需要優化，暫時放在選區右下角。理想上應該檢查是否超出螢幕 -->
+        </Canvas>
+    </Grid>
+    </Grid>
 
 </Window>

@@ -1,0 +1,21 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:GimmeCapture.ViewModels"
+             mc:Ignorable="d" d:DesignWidth="300" d:DesignHeight="50"
+             x:Class="GimmeCapture.Views.Controls.SnipToolbar"
+             x:DataType="vm:SnipWindowViewModel">
+
+    <Border Background="{StaticResource PanelGrayBrush}" 
+            BorderBrush="{StaticResource FoxGoldBrush}" 
+            BorderThickness="1" 
+            CornerRadius="4" 
+            Padding="5">
+        <StackPanel Orientation="Horizontal" Spacing="5">
+            <Button Theme="{StaticResource MetalButton}" Content="Copy" Command="{Binding CopyCommand}"/>
+            <Button Theme="{StaticResource MetalButton}" Content="Save" Command="{Binding SaveCommand}"/>
+            <Button Theme="{StaticResource MetalButton}" Content="Close" Command="{Binding CloseCommand}"/>
+        </StackPanel>
+    </Border>
+</UserControl>

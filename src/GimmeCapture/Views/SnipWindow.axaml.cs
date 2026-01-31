@@ -29,44 +29,79 @@ public partial class SnipWindow : Window
     {
         base.OnDataContextChanged(e);
         _viewModel = DataContext as SnipWindowViewModel;
+        if (_viewModel != null)
+        {
+            _viewModel.CloseAction = () => 
+            {
+                // Must run on UI thread, though Action usually invoked from UI thread command
+                Close();
+            };
+        }
     }
 
     private void OnPointerPressed(object? sender, PointerPressedEventArgs e)
     {
         if (_viewModel == null) return;
 
-        _startPoint = e.GetPosition(this);
-        _viewModel.IsSelecting = true;
-        _viewModel.SelectionRect = new Rect(_startPoint, new Size(0, 0));
+        var point = e.GetPosition(this);
+        var props = e.GetCurrentPoint(this).Properties;
+
+        if (props.IsLeftButtonPressed)
+        {
+            if (_viewModel.CurrentState == SnipWindowViewModel.SnipState.Idle || 
+                _viewModel.CurrentState == SnipWindowViewModel.SnipState.Detecting)
+            {
+                _startPoint = point;
+                _viewModel.CurrentState = SnipWindowViewModel.SnipState.Selecting;
+                _viewModel.SelectionRect = new Rect(_startPoint, new Size(0, 0));
+            }
+        }
+        else if (props.IsRightButtonPressed)
+        {
+            if (_viewModel.CurrentState == SnipWindowViewModel.SnipState.Selecting || 
+                _viewModel.CurrentState == SnipWindowViewModel.SnipState.Selected)
+            {
+                // Reset to Idle
+                _viewModel.CurrentState = SnipWindowViewModel.SnipState.Idle;
+                _viewModel.SelectionRect = new Rect(0,0,0,0);
+            }
+            else
+            {
+                 Close();
+            }
+        }
     }
 
     private void OnPointerMoved(object? sender, PointerEventArgs e)
     {
-        if (_viewModel == null || !_viewModel.IsSelecting) return;
+        if (_viewModel == null) return;
 
         var currentPoint = e.GetPosition(this);
-        
-        // Calculate rect regardless of drag direction
-        var x = Math.Min(_startPoint.X, currentPoint.X);
-        var y = Math.Min(_startPoint.Y, currentPoint.Y);
-        var width = Math.Abs(currentPoint.X - _startPoint.X);
-        var height = Math.Abs(currentPoint.Y - _startPoint.Y);
 
-        _viewModel.SelectionRect = new Rect(x, y, width, height);
+        if (_viewModel.CurrentState == SnipWindowViewModel.SnipState.Selecting)
+        {
+            var x = Math.Min(_startPoint.X, currentPoint.X);
+            var y = Math.Min(_startPoint.Y, currentPoint.Y);
+            var width = Math.Abs(currentPoint.X - _startPoint.X);
+            var height = Math.Abs(currentPoint.Y - _startPoint.Y);
+
+            _viewModel.SelectionRect = new Rect(x, y, width, height);
+        }
+        else if (_viewModel.CurrentState == SnipWindowViewModel.SnipState.Idle)
+        {
+            // TODO: Window Auto-detection logic here later
+        }
     }
 
     private void OnPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
         if (_viewModel == null) return;
         
-        // Stop updating, but keep the rect visible (or close and capture)
-        // For now, let's just stop selecting.
-        _viewModel.IsSelecting = false; // Or keep it true to show border? 
-        // If IsSelecting is false, the border hides (based on binding).
-        // Let's change IsSelecting to IsDragActive or use another property "HasSelection".
-        
-        // The plan says "PointerReleased -> 完成選區，擷取螢幕"
-        Close();
+        if (_viewModel.CurrentState == SnipWindowViewModel.SnipState.Selecting)
+        {
+             _viewModel.CurrentState = SnipWindowViewModel.SnipState.Selected;
+             // Don't close yet, wait for Toolbar action
+        }
     }
 
     private void OnKeyDown(object? sender, KeyEventArgs e)

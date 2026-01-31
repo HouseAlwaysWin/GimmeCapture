@@ -10,11 +10,25 @@
 
 ## 第一階段：基礎設施建置 (The One - Foundations)
 
-### 專案結構（MVVM 架構）
+### [NEW] [IScreenCaptureService.cs](file:///D:/Projects/GimmeCapture/src/GimmeCapture/Services/IScreenCaptureService.cs)
 
+截圖服務介面：
+```csharp
+public interface IScreenCaptureService
+{
+    Task<SKBitmap> CaptureScreenAsync(Rect region);
+    Task CopyToClipboardAsync(SKBitmap bitmap);
+    Task SaveToFileAsync(SKBitmap bitmap, string path);
+}
 ```
-D:\Projects\GimmeCapture\
-├── docs/
+
+### [NEW] [ScreenCaptureService.cs](file:///D:/Projects/GimmeCapture/src/GimmeCapture/Services/ScreenCaptureService.cs)
+
+實作截圖邏輯。
+*   **Windows**: 使用 `System.Drawing.Common` 的 `Graphics.CopyFromScreen` 抓取螢幕，再轉為 `SKBitmap`。
+*   **Linux/Mac**: 未來擴充 (可能需要 `X11` 或 `SCKit` 相關庫)。
+
+為了簡化 Phase 1，我們先實作 Windows 版本。需要安裝 `System.Drawing.Common` NuGet 套件。
 │   └── implementation_plan.md    # 實作計畫書
 ├── src/
 │   └── GimmeCapture/
@@ -142,16 +156,38 @@ BABYMETAL 風格資源字典，定義：
 
 ### [NEW] [SnipWindow.axaml.cs](file:///D:/Projects/GimmeCapture/src/GimmeCapture/Views/SnipWindow.axaml.cs)
 
-實作滑鼠事件：
+實作滑鼠事件與 Snipaste 風格互動：
 
 ```csharp
-// 監聽事件
-- PointerPressed   → 記錄起始點，開始繪製
-- PointerMoved     → 更新矩形大小
-- PointerReleased  → 完成選區，擷取螢幕
+// 互動狀態機
+enum SnipState { Idle, Detecting, Selecting, Selected, Editing }
+
+// 功能需求
+1. **全域預覽** (Idle): 游標移動時顯示輔助線/座標
+2. **自動視窗偵測** (Detecting): 
+   - 根據游標位置自動偵測視窗邊界 (需實作 IWindowFinder)
+   - 高亮顯示被偵測的區域
+3. **滑鼠選取** (Selecting): 拖曳繪製矩形
+4. **工具列** (Selected): 
+   - 選取完成後，於選區下方顯示工具列
+   - 功能：複製、儲存、取消、繪圖工具(二期)
+5. **遮罩渲染**: 
+   - 使用 Path/GeometryClip 實作「挖洞」效果
+   - 選區亮，背景暗
 ```
 
 矩形邊框使用 `BMRingRed` 色彩。
+
+---
+
+### [NEW] [SnipToolbar.axaml](file:///D:/Projects/GimmeCapture/src/GimmeCapture/Views/Controls/SnipToolbar.axaml)
+
+選區下方的浮動工具列：
+- 包含按鈕：Copy, Save, Close
+- 樣式：金屬風格 (`MetalButton`)
+- 位置：動態跟隨 `SelectionRect`
+
+---
 
 ---
 
