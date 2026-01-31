@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
 using Avalonia.Input;
 using GimmeCapture.ViewModels;
+using GimmeCapture.Models;
 using System;
 
 namespace GimmeCapture.Views;
@@ -11,6 +12,7 @@ public partial class SnipWindow : Window
 {
     private Point _startPoint;
     private SnipWindowViewModel? _viewModel;
+    private Annotation? _currentAnnotation;
     
     // Resize State
     private bool _isResizing;
@@ -31,6 +33,26 @@ public partial class SnipWindow : Window
         PointerPressed += OnPointerPressed;
         PointerMoved += OnPointerMoved;
         PointerReleased += OnPointerReleased;
+        
+        // Text Input Events
+        var textBox = this.FindControl<TextBox>("TextInputOverlay");
+        if (textBox != null)
+        {
+            textBox.KeyDown += (s, e) =>
+            {
+                if (e.Key == Key.Enter && !e.KeyModifiers.HasFlag(KeyModifiers.Shift))
+                {
+                    FinishTextEntry();
+                    e.Handled = true;
+                }
+                else if (e.Key == Key.Escape)
+                {
+                    CancelTextEntry();
+                    e.Handled = true;
+                }
+            };
+            textBox.LostFocus += (s, e) => FinishTextEntry();
+        }
         
         // Close on Escape
         KeyDown += OnKeyDown;
@@ -118,19 +140,56 @@ public partial class SnipWindow : Window
             e.Handled = true;
             return;
         }
-
         if (props.IsLeftButtonPressed)
         {
+            if (_viewModel.IsDrawingMode && _viewModel.CurrentState == SnipWindowViewModel.SnipState.Selected)
+            {
+                // Logic: If in drawing mode and clicked INSIDE the selection area, draw.
+                if (_viewModel.SelectionRect.Contains(point))
+                {
+                    if (_viewModel.CurrentTool == AnnotationType.Text)
+                    {
+                        // Start Text Entry
+                        _viewModel.IsEnteringText = true;
+                        _viewModel.TextInputPosition = point;
+                        _viewModel.PendingText = string.Empty;
+                        
+                        // Focus Textbox
+                        var textBox = this.FindControl<TextBox>("TextInputOverlay");
+                        textBox?.Focus();
+                        e.Handled = true;
+                        return;
+                    }
+
+                    // Start Drawing
+                    _startPoint = point;
+                    var relPoint = new Point(point.X - _viewModel.SelectionRect.X, point.Y - _viewModel.SelectionRect.Y);
+                    
+                    _currentAnnotation = new Annotation
+                    {
+                        Type = _viewModel.CurrentTool,
+                        StartPoint = relPoint,
+                        EndPoint = relPoint,
+                        Color = _viewModel.SelectedColor,
+                        Thickness = _viewModel.CurrentThickness,
+                        FontSize = _viewModel.CurrentFontSize
+                    };
+                    
+                    _viewModel.Annotations.Add(_currentAnnotation);
+                    e.Handled = true;
+                    return;
+                }
+            }
+
+            // If clicking OUTSIDE or in Idle/Detecting, start NEW selection
             if (_viewModel.CurrentState == SnipWindowViewModel.SnipState.Idle || 
                 _viewModel.CurrentState == SnipWindowViewModel.SnipState.Detecting ||
-                _viewModel.CurrentState == SnipWindowViewModel.SnipState.Selected) // Allow re-selection if clicking outside? Or just start new?
+                !_viewModel.SelectionRect.Contains(point))
             {
-                // If we are already selected but clicked outside handle, start new selection?
-                // Or maybe just clear? Let's allow new selection.
-                
                 _startPoint = point;
                 _viewModel.CurrentState = SnipWindowViewModel.SnipState.Selecting;
                 _viewModel.SelectionRect = new Rect(_startPoint, new Size(0, 0));
+                _viewModel.IsDrawingMode = false; // Exit drawing mode when starting new selection
             }
         }
         else if (props.IsRightButtonPressed)
@@ -203,6 +262,12 @@ public partial class SnipWindow : Window
 
             _viewModel.SelectionRect = new Rect(x, y, width, height);
         }
+        else if (_viewModel.CurrentState == SnipWindowViewModel.SnipState.Selected && _currentAnnotation != null)
+        {
+            // Update Drawing
+            var relPoint = new Point(currentPoint.X - _viewModel.SelectionRect.X, currentPoint.Y - _viewModel.SelectionRect.Y);
+            _currentAnnotation.EndPoint = relPoint;
+        }
         else if (_viewModel.CurrentState == SnipWindowViewModel.SnipState.Idle)
         {
             // TODO: Window Auto-detection logic here later
@@ -225,6 +290,11 @@ public partial class SnipWindow : Window
         if (_viewModel.CurrentState == SnipWindowViewModel.SnipState.Selecting)
         {
              _viewModel.CurrentState = SnipWindowViewModel.SnipState.Selected;
+        }
+
+        if (_currentAnnotation != null)
+        {
+            _currentAnnotation = null; // Drawing finished
         }
     }
 
@@ -250,5 +320,36 @@ public partial class SnipWindow : Window
             "HandleRight" => ResizeDirection.Right,
             _ => ResizeDirection.None
         };
+    }
+
+    private void FinishTextEntry()
+    {
+        if (_viewModel == null || !_viewModel.IsEnteringText) return;
+        
+        if (!string.IsNullOrWhiteSpace(_viewModel.PendingText))
+        {
+            var relPoint = new Point(_viewModel.TextInputPosition.X - _viewModel.SelectionRect.X, _viewModel.TextInputPosition.Y - _viewModel.SelectionRect.Y);
+            
+            _viewModel.Annotations.Add(new Annotation
+            {
+                Type = AnnotationType.Text,
+                StartPoint = relPoint,
+                EndPoint = relPoint,
+                Text = _viewModel.PendingText,
+                Color = _viewModel.SelectedColor,
+                FontSize = _viewModel.CurrentFontSize
+            });
+        }
+        
+        CancelTextEntry();
+    }
+
+    private void CancelTextEntry()
+    {
+        if (_viewModel == null) return;
+        _viewModel.IsEnteringText = false;
+        _viewModel.PendingText = string.Empty;
+        // Shift focus back to window to allow hotkeys etc.
+        this.Focus();
     }
 }

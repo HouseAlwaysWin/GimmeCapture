@@ -1,10 +1,25 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:cv="using:GimmeCapture.Converters"
              x:Class="GimmeCapture.App"
              RequestedThemeVariant="Dark">
              <!-- "Default" ThemeVariant follows system theme variant. "Dark" or "Light" are other available options. -->
 
     <Application.Resources>
+        <ResourceDictionary>
+            <cv:StateToBoolConverter x:Key="StateToBoolConverter"/>
+            <cv:ColorToBrushConverter x:Key="ColorToBrushConverter"/>
+            <cv:EnumToBoolConverter x:Key="EnumToBoolConverter"/>
+            <cv:ColorMatchConverter x:Key="ColorMatchConverter"/>
+            <cv:EnumMatchConverter x:Key="EnumMatchConverter"/>
+            <cv:EnumNotMatchConverter x:Key="EnumNotMatchConverter"/>
+            <cv:RectXConverter x:Key="RectXConverter"/>
+            <cv:RectYConverter x:Key="RectYConverter"/>
+            <cv:RectWidthConverter x:Key="RectWidthConverter"/>
+            <cv:RectHeightConverter x:Key="RectHeightConverter"/>
+            <cv:BoolInvertConverter x:Key="BoolInvertConverter"/>
+            <cv:ArrowGeometryConverter x:Key="ArrowGeometryConverter"/>
+        </ResourceDictionary>
     </Application.Resources>
 
     <Application.Styles>

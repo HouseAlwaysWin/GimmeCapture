@@ -5,6 +5,11 @@ using ReactiveUI;
 using System;
 using System.Reactive;
 using System.Threading.Tasks;
+using System.ComponentModel;
+
+using System.Collections.ObjectModel;
+using GimmeCapture.Models;
+using System.Linq;
 
 namespace GimmeCapture.ViewModels;
 
@@ -80,6 +85,87 @@ public class SnipWindowViewModel : ViewModelBase
     public ReactiveCommand<Unit, Unit> SaveCommand { get; }
     public ReactiveCommand<Unit, Unit> PinCommand { get; }
     public ReactiveCommand<Unit, Unit> CloseCommand { get; }
+    public ReactiveCommand<Unit, Unit> UndoCommand { get; }
+    public ReactiveCommand<Unit, Unit> ClearCommand { get; }
+    public ReactiveCommand<AnnotationType, Unit> SelectToolCommand { get; }
+    public ReactiveCommand<Unit, Unit> SelectCommand { get; }
+
+    // Annotation Properties
+    public ObservableCollection<Annotation> Annotations { get; } = new();
+
+    private AnnotationType _currentTool = AnnotationType.Rectangle; // Default tool or None
+    public AnnotationType CurrentTool
+    {
+        get => _currentTool;
+        set 
+        {
+            this.RaiseAndSetIfChanged(ref _currentTool, value);
+            this.RaisePropertyChanged(nameof(IsShapeToolActive));
+            this.RaisePropertyChanged(nameof(IsLineToolActive));
+        }
+    }
+
+    public bool IsShapeToolActive => CurrentTool == AnnotationType.Rectangle || CurrentTool == AnnotationType.Ellipse;
+    public bool IsLineToolActive => CurrentTool == AnnotationType.Arrow || CurrentTool == AnnotationType.Line;
+
+    private Color _selectedColor = Colors.Red;
+    public Color SelectedColor
+    {
+        get => _selectedColor;
+        set => this.RaiseAndSetIfChanged(ref _selectedColor, value);
+    }
+
+    private double _currentThickness = 4.0;
+    public double CurrentThickness
+    {
+        get => _currentThickness;
+        set => this.RaiseAndSetIfChanged(ref _currentThickness, value);
+    }
+
+    private double _currentFontSize = 24.0;
+    public double CurrentFontSize
+    {
+        get => _currentFontSize;
+        set => this.RaiseAndSetIfChanged(ref _currentFontSize, value);
+    }
+
+    private bool _isDrawingMode = false;
+    public bool IsDrawingMode
+    {
+        get => _isDrawingMode;
+        set 
+        {
+            this.RaiseAndSetIfChanged(ref _isDrawingMode, value);
+            this.RaisePropertyChanged(nameof(IsSelectionMode));
+        }
+    }
+
+    public bool IsSelectionMode
+    {
+        get => !IsDrawingMode;
+        set => IsDrawingMode = !value;
+    }
+
+    private bool _isEnteringText = false;
+    public bool IsEnteringText
+    {
+        get => _isEnteringText;
+        set => this.RaiseAndSetIfChanged(ref _isEnteringText, value);
+    }
+
+    private Point _textInputPosition;
+    public Point TextInputPosition
+    {
+        get => _textInputPosition;
+        set => this.RaiseAndSetIfChanged(ref _textInputPosition, value);
+    }
+
+    private string _pendingText = string.Empty;
+    public string PendingText
+    {
+        get => _pendingText;
+        set => this.RaiseAndSetIfChanged(ref _pendingText, value);
+    }
 
     public SnipWindowViewModel()
     {
@@ -89,6 +175,27 @@ public class SnipWindowViewModel : ViewModelBase
         SaveCommand = ReactiveCommand.CreateFromTask(Save);
         PinCommand = ReactiveCommand.CreateFromTask(Pin);
         CloseCommand = ReactiveCommand.Create(Close);
+        UndoCommand = ReactiveCommand.Create(() => { if (Annotations.Count > 0) Annotations.RemoveAt(Annotations.Count - 1); });
+        ClearCommand = ReactiveCommand.Create(() => Annotations.Clear());
+        SelectToolCommand = ReactiveCommand.Create<AnnotationType>(t => {
+            CurrentTool = t;
+            IsDrawingMode = true; // Once a tool is selected, enter drawing mode
+        });
+
+        ChangeColorCommand = ReactiveCommand.Create<Color>(c => SelectedColor = c);
+        SelectCommand = ReactiveCommand.Create(() => { IsDrawingMode = false; });
+    }
+
+    public ReactiveCommand<Color, Unit> ChangeColorCommand { get; }
+
+    public static class StaticData
+    {
+        public static Color[] ColorsList { get; } = new[]
+        {
+            Colors.Red, Colors.Green, Colors.Blue, 
+            Colors.Yellow, Colors.Cyan, Colors.Magenta,
+            Colors.White, Colors.Black, Colors.Gray
+        };
     }
 
     private async Task Copy() 
@@ -100,7 +207,7 @@ public class SnipWindowViewModel : ViewModelBase
 
             try 
             {
-                var bitmap = await _captureService.CaptureScreenAsync(SelectionRect);
+                var bitmap = await _captureService.CaptureScreenWithAnnotationsAsync(SelectionRect, Annotations);
                 await _captureService.CopyToClipboardAsync(bitmap);
             }
             finally
@@ -119,7 +226,7 @@ public class SnipWindowViewModel : ViewModelBase
 
              try
              {
-                 var bitmap = await _captureService.CaptureScreenAsync(SelectionRect);
+                 var bitmap = await _captureService.CaptureScreenWithAnnotationsAsync(SelectionRect, Annotations);
                  
                  if (PickSaveFileAction != null)
                  {
@@ -154,7 +261,7 @@ public class SnipWindowViewModel : ViewModelBase
             
             try
             {
-                var skBitmap = await _captureService.CaptureScreenAsync(SelectionRect);
+                var skBitmap = await _captureService.CaptureScreenWithAnnotationsAsync(SelectionRect, Annotations);
                 
                 // Convert SKBitmap to Avalonia Bitmap
                 using var image = SkiaSharp.SKImage.FromBitmap(skBitmap);

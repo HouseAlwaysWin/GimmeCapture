@@ -5,6 +5,7 @@
         xmlns:vm="using:GimmeCapture.ViewModels"
         xmlns:cv="using:GimmeCapture.Converters"
         xmlns:ctl="using:GimmeCapture.Views.Controls"
+        xmlns:m="using:GimmeCapture.Models"
         mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
         x:Class="GimmeCapture.Views.SnipWindow"
         x:DataType="vm:SnipWindowViewModel"
@@ -50,6 +51,68 @@
                 </CombinedGeometry>
             </Path.Data>
         </Path>
+        
+        <!-- Annotation Layer (Rendered below handles but above mask) -->
+        <Canvas IsHitTestVisible="False">
+            <ItemsControl ItemsSource="{Binding Annotations}"
+                          Width="{Binding SelectionRect.Width}"
+                          Height="{Binding SelectionRect.Height}"
+                          Canvas.Left="{Binding SelectionRect.X}"
+                          Canvas.Top="{Binding SelectionRect.Y}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <Canvas ClipToBounds="True"/>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.DataTemplates>
+                    <!-- Rectangle -->
+                    <DataTemplate DataType="m:Annotation">
+                        <Rectangle Width="{Binding StartPoint, Converter={StaticResource RectWidthConverter}, ConverterParameter={Binding EndPoint}}"
+                                   Height="{Binding StartPoint, Converter={StaticResource RectHeightConverter}, ConverterParameter={Binding EndPoint}}"
+                                   Canvas.Left="{Binding StartPoint, Converter={StaticResource RectXConverter}, ConverterParameter={Binding EndPoint}}"
+                                   Canvas.Top="{Binding StartPoint, Converter={StaticResource RectYConverter}, ConverterParameter={Binding EndPoint}}"
+                                   Stroke="{Binding Color, Converter={StaticResource ColorToBrushConverter}}"
+                                   StrokeThickness="{Binding Thickness}"
+                                   IsVisible="{Binding Type, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Rectangle}}"/>
+                    </DataTemplate>
+                    <!-- Ellipse -->
+                    <DataTemplate DataType="m:Annotation">
+                        <Ellipse Width="{Binding StartPoint, Converter={StaticResource RectWidthConverter}, ConverterParameter={Binding EndPoint}}"
+                                 Height="{Binding StartPoint, Converter={StaticResource RectHeightConverter}, ConverterParameter={Binding EndPoint}}"
+                                 Canvas.Left="{Binding StartPoint, Converter={StaticResource RectXConverter}, ConverterParameter={Binding EndPoint}}"
+                                 Canvas.Top="{Binding StartPoint, Converter={StaticResource RectYConverter}, ConverterParameter={Binding EndPoint}}"
+                                 Stroke="{Binding Color, Converter={StaticResource ColorToBrushConverter}}"
+                                 StrokeThickness="{Binding Thickness}"
+                                 IsVisible="{Binding Type, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Ellipse}}"/>
+                    </DataTemplate>
+                    <!-- Line -->
+                    <DataTemplate DataType="m:Annotation">
+                        <Line StartPoint="{Binding StartPoint}"
+                              EndPoint="{Binding EndPoint}"
+                              Stroke="{Binding Color, Converter={StaticResource ColorToBrushConverter}}"
+                              StrokeThickness="{Binding Thickness}"
+                              IsVisible="{Binding Type, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Line}}"/>
+                    </DataTemplate>
+                    <!-- Arrow -->
+                    <DataTemplate DataType="m:Annotation">
+                        <Path Data="{Binding Converter={StaticResource ArrowGeometryConverter}}"
+                               Stroke="{Binding Color, Converter={StaticResource ColorToBrushConverter}}"
+                               StrokeThickness="{Binding Thickness}"
+                               Fill="{Binding Color, Converter={StaticResource ColorToBrushConverter}}"
+                               IsVisible="{Binding Type, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Arrow}}"/>
+                    </DataTemplate>
+                    <!-- Text -->
+                    <DataTemplate DataType="m:Annotation">
+                        <TextBlock Text="{Binding Text}"
+                                   Canvas.Left="{Binding StartPoint.X}"
+                                   Canvas.Top="{Binding StartPoint.Y}"
+                                   Foreground="{Binding Color, Converter={StaticResource ColorToBrushConverter}}"
+                                   FontSize="{Binding FontSize}"
+                                   IsVisible="{Binding Type, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Text}}"/>
+                    </DataTemplate>
+                </ItemsControl.DataTemplates>
+            </ItemsControl>
+        </Canvas>
 
         <!-- 互動層：使用 Canvas 定位邊框 -->
         <Canvas>
@@ -106,11 +169,10 @@
             </Grid>
                     
             <!-- 工具列 (位置綁定) -->
-            <ctl:SnipToolbar Canvas.Left="{Binding SelectionRect.Right}" 
-                             Canvas.Top="{Binding SelectionRect.Bottom}" 
-                             Margin="-100, 5, 0, 0"
-                             IsVisible="{Binding CurrentState, Converter={StaticResource StateToBoolConverter}}"/>
-             <!-- 這裡位置綁定需要優化，暫時放在選區右下角。理想上應該檢查是否超出螢幕 -->
+            <ctl:SnipToolbar Canvas.Left="{Binding SelectionRect.Left}" 
+                              Canvas.Top="{Binding SelectionRect.Bottom}" 
+                              Margin="0, 5, 0, 0"
+                              IsVisible="{Binding CurrentState, Converter={StaticResource StateToBoolConverter}}"/>
         </Canvas>
     </Grid>
     </Grid>

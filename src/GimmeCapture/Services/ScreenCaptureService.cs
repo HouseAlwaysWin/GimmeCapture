@@ -11,6 +11,11 @@ using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Input.Platform;
 
+using System.Collections.Generic;
+using GimmeCapture.Models;
+using Avalonia.Media;
+using System.Linq;
+
 namespace GimmeCapture.Services;
 
 public class ScreenCaptureService : IScreenCaptureService
@@ -45,6 +50,85 @@ public class ScreenCaptureService : IScreenCaptureService
             // Fallback for other platforms (not implemented in Phase 1)
             return new SKBitmap(100, 100);
         });
+    }
+
+    public async Task<SKBitmap> CaptureScreenWithAnnotationsAsync(Rect region, IEnumerable<Annotation> annotations)
+    {
+        var bitmap = await CaptureScreenAsync(region);
+        if (annotations == null || !annotations.Any()) return bitmap;
+
+        using (var canvas = new SKCanvas(bitmap))
+        {
+            foreach (var ann in annotations)
+            {
+                using var paint = new SKPaint
+                {
+                    Color = new SKColor(ann.Color.R, ann.Color.G, ann.Color.B, ann.Color.A),
+                    IsAntialias = true,
+                    StrokeWidth = (float)ann.Thickness,
+                    Style = SKPaintStyle.Stroke
+                };
+
+                var p1 = new SKPoint((float)ann.StartPoint.X, (float)ann.StartPoint.Y);
+                var p2 = new SKPoint((float)ann.EndPoint.X, (float)ann.EndPoint.Y);
+
+                switch (ann.Type)
+                {
+                    case AnnotationType.Rectangle:
+                        canvas.DrawRect(SKRect.Create(
+                            (float)Math.Min(p1.X, p2.X), 
+                            (float)Math.Min(p1.Y, p2.Y), 
+                            Math.Abs(p1.X - p2.X), 
+                            Math.Abs(p1.Y - p2.Y)), paint);
+                        break;
+                    case AnnotationType.Ellipse:
+                        canvas.DrawOval(SKRect.Create(
+                            (float)Math.Min(p1.X, p2.X), 
+                            (float)Math.Min(p1.Y, p2.Y), 
+                            Math.Abs(p1.X - p2.X), 
+                            Math.Abs(p1.Y - p2.Y)), paint);
+                        break;
+                    case AnnotationType.Line:
+                        canvas.DrawLine(p1, p2, paint);
+                        break;
+                    case AnnotationType.Arrow:
+                        DrawArrow(canvas, p1, p2, paint);
+                        break;
+                    case AnnotationType.Text:
+                        paint.Style = SKPaintStyle.Fill;
+                        paint.TextSize = (float)ann.FontSize;
+                        canvas.DrawText(ann.Text ?? string.Empty, p1, paint);
+                        break;
+                }
+            }
+        }
+
+        return bitmap;
+    }
+
+    private void DrawArrow(SKCanvas canvas, SKPoint p1, SKPoint p2, SKPaint paint)
+    {
+        canvas.DrawLine(p1, p2, paint);
+        
+        var angle = (float)Math.Atan2(p2.Y - p1.Y, p2.X - p1.X);
+        var arrowSize = 15.0f + paint.StrokeWidth;
+        var arrowAngle = (float)Math.PI / 6;
+
+        var ap1 = new SKPoint(
+            p2.X - arrowSize * (float)Math.Cos(angle - arrowAngle),
+            p2.Y - arrowSize * (float)Math.Sin(angle - arrowAngle));
+        
+        var ap2 = new SKPoint(
+            p2.X - arrowSize * (float)Math.Cos(angle + arrowAngle),
+            p2.Y - arrowSize * (float)Math.Sin(angle + arrowAngle));
+
+        paint.Style = SKPaintStyle.Fill;
+        using var path = new SKPath();
+        path.MoveTo(p2);
+        path.LineTo(ap1);
+        path.LineTo(ap2);
+        path.Close();
+        canvas.DrawPath(path, paint);
     }
 
     public async Task CopyToClipboardAsync(SKBitmap bitmap)
