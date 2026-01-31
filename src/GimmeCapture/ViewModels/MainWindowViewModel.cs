@@ -1,29 +1,40 @@
-using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
+using ReactiveUI;
 using Avalonia.Media;
 using System.Threading.Tasks;
+using System.Reactive;
 
 namespace GimmeCapture.ViewModels;
 
-public partial class MainWindowViewModel : ViewModelBase
+public class MainWindowViewModel : ViewModelBase
 {
-    [ObservableProperty]
     private string _statusText = "Ready to Capture";
+    public string StatusText
+    {
+        get => _statusText;
+        set => this.RaiseAndSetIfChanged(ref _statusText, value);
+    }
 
     public System.Action? RequestCaptureAction { get; set; }
 
     private readonly Services.AppSettingsService _settingsService;
     public Services.GlobalHotkeyService HotkeyService { get; } = new();
 
+    // Commands
+    public ReactiveCommand<Unit, Unit> StartCaptureCommand { get; }
+    public ReactiveCommand<Unit, Unit> SaveAndCloseCommand { get; }
+
     public MainWindowViewModel()
     {
         _settingsService = new Services.AppSettingsService();
+        
+        StartCaptureCommand = ReactiveCommand.CreateFromTask(StartCapture);
+        SaveAndCloseCommand = ReactiveCommand.CreateFromTask(SaveAndClose);
         
         // Setup Hotkey Action
         HotkeyService.OnHotkeyPressed = () => 
         {
             // Must run on UI thread if it involves UI updates
-            Avalonia.Threading.Dispatcher.UIThread.Post(() => StartCaptureCommand.Execute(null));
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => StartCaptureCommand.Execute());
         };
 
         // Fire and forget load, in real app use async initialization
@@ -31,33 +42,60 @@ public partial class MainWindowViewModel : ViewModelBase
     }
 
     // General Settings
-    [ObservableProperty]
     private bool _runOnStartup;
+    public bool RunOnStartup
+    {
+        get => _runOnStartup;
+        set => this.RaiseAndSetIfChanged(ref _runOnStartup, value);
+    }
 
-    [ObservableProperty]
     private bool _autoCheckUpdates;
+    public bool AutoCheckUpdates
+    {
+        get => _autoCheckUpdates;
+        set => this.RaiseAndSetIfChanged(ref _autoCheckUpdates, value);
+    }
 
     // Snip Settings
-    [ObservableProperty]
     private double _borderThickness;
+    public double BorderThickness
+    {
+        get => _borderThickness;
+        set => this.RaiseAndSetIfChanged(ref _borderThickness, value);
+    }
 
-    [ObservableProperty]
     private double _maskOpacity;
+    public double MaskOpacity
+    {
+        get => _maskOpacity;
+        set => this.RaiseAndSetIfChanged(ref _maskOpacity, value);
+    }
     
-    [ObservableProperty]
-    private Color _borderColor; 
+    private Color _borderColor;
+    public Color BorderColor
+    {
+        get => _borderColor;
+        set => this.RaiseAndSetIfChanged(ref _borderColor, value);
+    }
 
     // Output Settings
-    [ObservableProperty]
     private bool _autoSave;
+    public bool AutoSave
+    {
+        get => _autoSave;
+        set => this.RaiseAndSetIfChanged(ref _autoSave, value);
+    }
     
     // Control Settings
-    [ObservableProperty]
     private string _snipHotkey = "F1";
-
-    partial void OnSnipHotkeyChanged(string value)
+    public string SnipHotkey
     {
-        HotkeyService.Register(value);
+        get => _snipHotkey;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _snipHotkey, value);
+            HotkeyService.Register(value);
+        }
     }
 
     public async Task LoadSettingsAsync()
@@ -100,7 +138,6 @@ public partial class MainWindowViewModel : ViewModelBase
         await _settingsService.SaveAsync();
     }
 
-    [RelayCommand]
     private async Task StartCapture()
     {
         await SaveSettingsAsync(); // Auto-save on action for now
@@ -109,7 +146,6 @@ public partial class MainWindowViewModel : ViewModelBase
     }
     
     // Command for explicit save (OK button)
-    [RelayCommand]
     private async Task SaveAndClose()
     {
         await SaveSettingsAsync();

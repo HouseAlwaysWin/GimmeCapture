@@ -1,36 +1,60 @@
 using Avalonia;
 using Avalonia.Media;
-using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
+using ReactiveUI;
 using System;
+using System.Reactive;
 using System.Threading.Tasks;
 
 namespace GimmeCapture.ViewModels;
 
-public partial class SnipWindowViewModel : ViewModelBase
+public class SnipWindowViewModel : ViewModelBase
 {
     public enum SnipState { Idle, Detecting, Selecting, Selected }
 
-    [ObservableProperty]
     private SnipState _currentState = SnipState.Idle;
+    public SnipState CurrentState
+    {
+        get => _currentState;
+        set => this.RaiseAndSetIfChanged(ref _currentState, value);
+    }
 
-    [ObservableProperty]
     private Rect _selectionRect;
+    public Rect SelectionRect
+    {
+        get => _selectionRect;
+        set => this.RaiseAndSetIfChanged(ref _selectionRect, value);
+    }
 
-    [ObservableProperty]
     private Geometry _screenGeometry = Geometry.Parse("M0,0 L0,0 0,0 0,0 Z"); // Default empty
+    public Geometry ScreenGeometry
+    {
+        get => _screenGeometry;
+        set => this.RaiseAndSetIfChanged(ref _screenGeometry, value);
+    }
 
-    [ObservableProperty]
     private GeometryGroup _maskGeometry = new GeometryGroup();
+    public GeometryGroup MaskGeometry
+    {
+        get => _maskGeometry;
+        set => this.RaiseAndSetIfChanged(ref _maskGeometry, value);
+    }
 
     private readonly Services.IScreenCaptureService _captureService;
+
+    // Commands
+    public ReactiveCommand<Unit, Unit> CopyCommand { get; }
+    public ReactiveCommand<Unit, Unit> SaveCommand { get; }
+    public ReactiveCommand<Unit, Unit> CloseCommand { get; }
 
     public SnipWindowViewModel()
     {
         _captureService = new Services.ScreenCaptureService();
+
+        CopyCommand = ReactiveCommand.CreateFromTask(Copy);
+        SaveCommand = ReactiveCommand.CreateFromTask(Save);
+        CloseCommand = ReactiveCommand.Create(Close);
     }
 
-    [RelayCommand]
     private async Task Copy() 
     { 
         if (SelectionRect.Width > 0 && SelectionRect.Height > 0)
@@ -50,7 +74,6 @@ public partial class SnipWindowViewModel : ViewModelBase
         }
     }
 
-    [RelayCommand]
     private async Task Save() 
     { 
          if (SelectionRect.Width > 0 && SelectionRect.Height > 0)
@@ -86,7 +109,6 @@ public partial class SnipWindowViewModel : ViewModelBase
          }
     }
 
-    [RelayCommand]
     private void Close() { CloseAction?.Invoke(); }
     
     public Action? CloseAction { get; set; }

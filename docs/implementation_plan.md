@@ -73,20 +73,21 @@ AvaloniaUI 專案檔，使用 .NET 8.0，包含必要的 NuGet 套件：
 - `Avalonia` (11.x)
 - `Avalonia.Desktop`
 - `Avalonia.Themes.Fluent`
-- `CommunityToolkit.Mvvm` (MVVM 工具套件，提供 Source Generator)
+- `Avalonia.Themes.Fluent`
+- `Avalonia.ReactiveUI` (MVVM Framework)
 - `SkiaSharp` (用於影格處理)
 
 ---
 
-### [NEW] [ViewModelBase.cs](file:///D:/Projects/GimmeCapture/src/GimmeCapture/ViewModels/ViewModelBase.cs)
+### [MODIFY] [ViewModelBase.cs](file:///D:/Projects/GimmeCapture/src/GimmeCapture/ViewModels/ViewModelBase.cs)
 
-ViewModel 基底類別，繼承自 `ObservableObject`：
+ViewModel 基底類別，繼承自 `ReactiveObject`：
 
 ```csharp
-public class ViewModelBase : ObservableObject
+using ReactiveUI;
+
+public class ViewModelBase : ReactiveObject
 {
-    // 提供 INotifyPropertyChanged 實作
-    // 使用 [ObservableProperty] 特性自動產生屬性
 }
 ```
 
@@ -117,13 +118,21 @@ public class ViewModelBase : ObservableObject
 截圖視窗 ViewModel：
 
 ```csharp
-public partial class SnipWindowViewModel : ViewModelBase
+public class SnipWindowViewModel : ViewModelBase
 {
-    [ObservableProperty]
     private Rect _selectionRect;
+    public Rect SelectionRect
+    {
+        get => _selectionRect;
+        set => this.RaiseAndSetIfChanged(ref _selectionRect, value);
+    }
     
-    [ObservableProperty]
     private bool _isSelecting;
+    public bool IsSelecting
+    {
+        get => _isSelecting;
+        set => this.RaiseAndSetIfChanged(ref _isSelecting, value);
+    }
 }
 ```
 
