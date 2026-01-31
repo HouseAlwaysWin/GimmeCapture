@@ -87,73 +87,67 @@
                     </ItemsPanelTemplate>
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.DataTemplates>
-                    <!-- Rectangle -->
                     <DataTemplate DataType="m:Annotation">
-                        <Rectangle Stroke="{Binding Color, Converter={StaticResource ColorToBrushConverter}}"
+                        <Panel>
+                            <!-- Rectangle -->
+                            <Rectangle Stroke="{Binding Color, Converter={StaticResource ColorToBrushConverter}}"
+                                       StrokeThickness="{Binding Thickness}"
+                                       IsVisible="{Binding Type, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Rectangle}}">
+                                <Rectangle.Width>
+                                    <MultiBinding Converter="{StaticResource RectWidthConverter}">
+                                        <Binding Path="StartPoint"/>
+                                        <Binding Path="EndPoint"/>
+                                    </MultiBinding>
+                                </Rectangle.Width>
+                                <Rectangle.Height>
+                                    <MultiBinding Converter="{StaticResource RectHeightConverter}">
+                                        <Binding Path="StartPoint"/>
+                                        <Binding Path="EndPoint"/>
+                                    </MultiBinding>
+                                </Rectangle.Height>
+                            </Rectangle>
+                            <!-- Ellipse -->
+                            <Ellipse Stroke="{Binding Color, Converter={StaticResource ColorToBrushConverter}}"
+                                     StrokeThickness="{Binding Thickness}"
+                                     IsVisible="{Binding Type, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Ellipse}}">
+                                <Ellipse.Width>
+                                    <MultiBinding Converter="{StaticResource RectWidthConverter}">
+                                        <Binding Path="StartPoint"/>
+                                        <Binding Path="EndPoint"/>
+                                    </MultiBinding>
+                                </Ellipse.Width>
+                                <Ellipse.Height>
+                                    <MultiBinding Converter="{StaticResource RectHeightConverter}">
+                                        <Binding Path="StartPoint"/>
+                                        <Binding Path="EndPoint"/>
+                                    </MultiBinding>
+                                </Ellipse.Height>
+                            </Ellipse>
+                            <!-- Line -->
+                            <Line StartPoint="{Binding StartPoint}"
+                                   EndPoint="{Binding EndPoint}"
+                                   Stroke="{Binding Color, Converter={StaticResource ColorToBrushConverter}}"
                                    StrokeThickness="{Binding Thickness}"
-                                   IsVisible="{Binding Type, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Rectangle}}">
-                            <Rectangle.Width>
-                                <MultiBinding Converter="{StaticResource RectWidthConverter}">
-                                    <Binding Path="StartPoint"/>
-                                    <Binding Path="EndPoint"/>
-                                </MultiBinding>
-                            </Rectangle.Width>
-                            <Rectangle.Height>
-                                <MultiBinding Converter="{StaticResource RectHeightConverter}">
-                                    <Binding Path="StartPoint"/>
-                                    <Binding Path="EndPoint"/>
-                                </MultiBinding>
-                            </Rectangle.Height>
-                        </Rectangle>
-                    </DataTemplate>
-                    <!-- Ellipse -->
-                    <DataTemplate DataType="m:Annotation">
-                        <Ellipse Stroke="{Binding Color, Converter={StaticResource ColorToBrushConverter}}"
-                                 StrokeThickness="{Binding Thickness}"
-                                 IsVisible="{Binding Type, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Ellipse}}">
-                            <Ellipse.Width>
-                                <MultiBinding Converter="{StaticResource RectWidthConverter}">
-                                    <Binding Path="StartPoint"/>
-                                    <Binding Path="EndPoint"/>
-                                </MultiBinding>
-                            </Ellipse.Width>
-                            <Ellipse.Height>
-                                <MultiBinding Converter="{StaticResource RectHeightConverter}">
-                                    <Binding Path="StartPoint"/>
-                                    <Binding Path="EndPoint"/>
-                                </MultiBinding>
-                            </Ellipse.Height>
-                        </Ellipse>
-                    </DataTemplate>
-                    <!-- Line -->
-                    <DataTemplate DataType="m:Annotation">
-                        <Line StartPoint="{Binding StartPoint}"
-                               EndPoint="{Binding EndPoint}"
-                               Stroke="{Binding Color, Converter={StaticResource ColorToBrushConverter}}"
-                               StrokeThickness="{Binding Thickness}"
-                               IsVisible="{Binding Type, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Line}}"/>
-                    </DataTemplate>
-                    <!-- Arrow -->
-                    <DataTemplate DataType="m:Annotation">
-                        <Path Stroke="{Binding Color, Converter={StaticResource ColorToBrushConverter}}"
-                               StrokeThickness="{Binding Thickness}"
-                               Fill="{Binding Color, Converter={StaticResource ColorToBrushConverter}}"
-                               IsVisible="{Binding Type, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Arrow}}">
-                            <Path.Data>
-                                <MultiBinding Converter="{StaticResource ArrowGeometryConverter}">
-                                    <Binding Path="StartPoint"/>
-                                    <Binding Path="EndPoint"/>
-                                    <Binding Path="Thickness"/>
-                                </MultiBinding>
-                            </Path.Data>
-                        </Path>
-                    </DataTemplate>
-                    <!-- Text -->
-                    <DataTemplate DataType="m:Annotation">
-                        <TextBlock Text="{Binding Text}"
-                                   Foreground="{Binding Color, Converter={StaticResource ColorToBrushConverter}}"
-                                   FontSize="{Binding FontSize}"
-                                   IsVisible="{Binding Type, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Text}}"/>
+                                   IsVisible="{Binding Type, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Line}}"/>
+                            <!-- Arrow -->
+                            <Path Stroke="{Binding Color, Converter={StaticResource ColorToBrushConverter}}"
+                                   StrokeThickness="{Binding Thickness}"
+                                   Fill="{Binding Color, Converter={StaticResource ColorToBrushConverter}}"
+                                   IsVisible="{Binding Type, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Arrow}}">
+                                <Path.Data>
+                                    <MultiBinding Converter="{StaticResource ArrowGeometryConverter}">
+                                        <Binding Path="StartPoint"/>
+                                        <Binding Path="EndPoint"/>
+                                        <Binding Path="Thickness"/>
+                                    </MultiBinding>
+                                </Path.Data>
+                            </Path>
+                            <!-- Text -->
+                            <TextBlock Text="{Binding Text}"
+                                       Foreground="{Binding Color, Converter={StaticResource ColorToBrushConverter}}"
+                                       FontSize="{Binding FontSize}"
+                                       IsVisible="{Binding Type, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Text}}"/>
+                        </Panel>
                     </DataTemplate>
                 </ItemsControl.DataTemplates>
             </ItemsControl>

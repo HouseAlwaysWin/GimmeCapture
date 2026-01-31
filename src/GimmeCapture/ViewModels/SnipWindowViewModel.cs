@@ -92,7 +92,7 @@ public class SnipWindowViewModel : ViewModelBase
     // Annotation Properties
     public ObservableCollection<Annotation> Annotations { get; } = new();
 
-    private AnnotationType _currentTool = AnnotationType.Rectangle; // Default tool or None
+    private AnnotationType _currentTool = AnnotationType.None; // Default to None, no tool selected initially
     public AnnotationType CurrentTool
     {
         get => _currentTool;

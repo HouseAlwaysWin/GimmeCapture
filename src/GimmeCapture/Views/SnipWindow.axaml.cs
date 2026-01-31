@@ -182,6 +182,20 @@ public partial class SnipWindow : Window
             }
 
             // If clicking OUTSIDE or in Idle/Detecting, start NEW selection
+            // But first check if the click is on a popup (flyout) - if so, don't start selection
+            var sourceControl = e.Source as Control;
+            if (sourceControl != null)
+            {
+                // Check if click originated from a popup (flyout content)
+                var ancestor = sourceControl;
+                while (ancestor != null)
+                {
+                    if (ancestor is Avalonia.Controls.Primitives.Popup)
+                        return; // Don't start selection when clicking on flyout
+                    ancestor = ancestor.Parent as Control;
+                }
+            }
+            
             if (_viewModel.CurrentState == SnipWindowViewModel.SnipState.Idle || 
                 _viewModel.CurrentState == SnipWindowViewModel.SnipState.Detecting ||
                 !_viewModel.SelectionRect.Contains(point))
@@ -190,6 +204,7 @@ public partial class SnipWindow : Window
                 _viewModel.CurrentState = SnipWindowViewModel.SnipState.Selecting;
                 _viewModel.SelectionRect = new Rect(_startPoint, new Size(0, 0));
                 _viewModel.IsDrawingMode = false; // Exit drawing mode when starting new selection
+                _viewModel.Annotations.Clear(); // Clear previous annotations when starting new selection
             }
         }
         else if (props.IsRightButtonPressed)

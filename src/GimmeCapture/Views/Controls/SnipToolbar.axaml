@@ -105,12 +105,18 @@
                                 
                                 <StackPanel IsVisible="{Binding CurrentTool, Converter={StaticResource EnumNotMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Text}}">
                                     <TextBlock Text="Size" FontSize="9" Foreground="Gray"/>
-                                    <Slider Width="80" Minimum="1" Maximum="20" Value="{Binding CurrentThickness}"/>
+                                    <NumericUpDown Value="{Binding CurrentThickness}" Minimum="1" Maximum="20" Increment="1" 
+                                                   Width="10" FormatString="0" FontSize="10" Height="10"
+                                                   Background="#2A2A2A" Foreground="White" BorderBrush="#444444"
+                                                   ButtonSpinnerLocation="Right"/>
                                 </StackPanel>
                                 
                                 <StackPanel IsVisible="{Binding CurrentTool, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Text}}">
                                     <TextBlock Text="Font" FontSize="9" Foreground="Gray"/>
-                                    <Slider Width="80" Minimum="10" Maximum="60" Value="{Binding CurrentFontSize}"/>
+                                    <NumericUpDown Value="{Binding CurrentFontSize}" Minimum="10" Maximum="60" Increment="2" 
+                                                   Width="10" FormatString="0" FontSize="10" Height="10"
+                                                   Background="#2A2A2A" Foreground="White" BorderBrush="#444444"
+                                                   ButtonSpinnerLocation="Right"/>
                                 </StackPanel>
                             </StackPanel>
                         </Border>

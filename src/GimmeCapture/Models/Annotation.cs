@@ -6,6 +6,7 @@ namespace GimmeCapture.Models;
 
 public enum AnnotationType
 {
+    None,       // No tool selected
     Rectangle,
     Ellipse,
     Arrow,
