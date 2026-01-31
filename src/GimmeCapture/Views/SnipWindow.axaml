@@ -27,10 +27,29 @@
         <KeyBinding Gesture="Ctrl+S" Command="{Binding SaveCommand}" />
     </Window.KeyBindings>
 
+    <Window.Styles>
+        <Style Selector="Grid.Handle">
+            <Setter Property="Width" Value="30"/>
+            <Setter Property="Height" Value="30"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Margin" Value="-15"/>
+        </Style>
+        <Style Selector="Grid.Handle > Ellipse">
+            <Setter Property="Width" Value="14"/>
+            <Setter Property="Height" Value="14"/>
+            <Setter Property="Fill" Value="{DynamicResource FoxGoldBrush}"/>
+            <Setter Property="Stroke" Value="White"/>
+            <Setter Property="StrokeThickness" Value="2"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="IsHitTestVisible" Value="False"/>
+        </Style>
+    </Window.Styles>    
+
     <Grid>
     <Grid>
         <!-- 背景遮罩層 -->
-        <Path Fill="#80000000">
+        <Path Fill="#80000000" IsHitTestVisible="False">
             <Path.Data>
                 <CombinedGeometry GeometryCombineMode="Exclude">
                     <CombinedGeometry.Geometry1>
@@ -45,13 +64,47 @@
 
         <!-- 互動層：使用 Canvas 定位邊框 -->
         <Canvas>
-            <Border BorderBrush="{DynamicResource AccentRedBrush}"
-                    BorderThickness="2"
-                    Width="{Binding SelectionRect.Width}"
-                    Height="{Binding SelectionRect.Height}"
-                    Canvas.Left="{Binding SelectionRect.X}"
-                    Canvas.Top="{Binding SelectionRect.Y}"
-                    IsVisible="{Binding CurrentState, Converter={StaticResource StateToBoolConverter}}" />
+            <!-- 選擇區域容器 -->
+            <Grid Width="{Binding SelectionRect.Width}"
+                  Height="{Binding SelectionRect.Height}"
+                  Canvas.Left="{Binding SelectionRect.X}"
+                  Canvas.Top="{Binding SelectionRect.Y}"
+                  IsVisible="{Binding CurrentState, Converter={StaticResource StateToBoolConverter}}">
+                  
+                <!-- 邊框 -->
+                <Border BorderBrush="{DynamicResource AccentRedBrush}"
+                        BorderThickness="2"
+                        Background="#01FFFFFF"/> <!-- 微透明背景以確保能夠抓取拖曳事件 -->
+                
+                <!-- Resize Handles -->
+                <!-- Corners -->
+                <Grid Classes="Handle" Name="HandleTopLeft" Cursor="TopLeftCorner" HorizontalAlignment="Left" VerticalAlignment="Top">
+                     <Ellipse/>
+                </Grid>
+                <Grid Classes="Handle" Name="HandleTopRight" Cursor="TopRightCorner" HorizontalAlignment="Right" VerticalAlignment="Top">
+                     <Ellipse/>
+                </Grid>
+                <Grid Classes="Handle" Name="HandleBottomLeft" Cursor="BottomLeftCorner" HorizontalAlignment="Left" VerticalAlignment="Bottom">
+                     <Ellipse/>
+                </Grid>
+                <Grid Classes="Handle" Name="HandleBottomRight" Cursor="BottomRightCorner" HorizontalAlignment="Right" VerticalAlignment="Bottom">
+                     <Ellipse/>
+                </Grid>
+                
+                <!-- Sides -->
+                <Grid Classes="Handle" Name="HandleTop" Cursor="SizeNorthSouth" HorizontalAlignment="Center" VerticalAlignment="Top">
+                     <Ellipse/>
+                </Grid>
+                <Grid Classes="Handle" Name="HandleBottom" Cursor="SizeNorthSouth" HorizontalAlignment="Center" VerticalAlignment="Bottom">
+                     <Ellipse/>
+                </Grid>
+                <Grid Classes="Handle" Name="HandleLeft" Cursor="SizeWestEast" HorizontalAlignment="Left" VerticalAlignment="Center">
+                     <Ellipse/>
+                </Grid>
+                <Grid Classes="Handle" Name="HandleRight" Cursor="SizeWestEast" HorizontalAlignment="Right" VerticalAlignment="Center">
+                     <Ellipse/>
+                </Grid>
+            </Grid>
                     
             <!-- 工具列 (位置綁定) -->
             <ctl:SnipToolbar Canvas.Left="{Binding SelectionRect.Right}" 
