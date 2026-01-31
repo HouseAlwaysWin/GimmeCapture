@@ -66,9 +66,9 @@
                         BoxShadow="0 0 10 1 #80E60012"> <!-- Red Glow -->
                     <Border.BorderBrush>
                         <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
-                            <GradientStop Offset="0" Color="{DynamicResource AccentRed}"/>
-                            <GradientStop Offset="0.5" Color="{DynamicResource AccentGold}"/>
-                            <GradientStop Offset="1" Color="{DynamicResource AccentRed}"/>
+                            <GradientStop Offset="0" Color="{DynamicResource DeepRed}"/>
+                            <GradientStop Offset="0.5" Color="{DynamicResource AccentRed}"/>
+                            <GradientStop Offset="1" Color="{DynamicResource DeepRed}"/>
                         </LinearGradientBrush>
                     </Border.BorderBrush>
                     <Border BorderThickness="2">

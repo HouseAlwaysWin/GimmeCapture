@@ -6,7 +6,10 @@
         mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
         x:Class="GimmeCapture.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
-        Title="GimmeCapture">
+        Title="GimmeCapture"
+        Icon="avares://GimmeCapture/Assets/kitsune_icon.png"
+        Background="{DynamicResource GothicBlackBrush}"
+        Foreground="White">
 
     <Design.DataContext>
         <!-- This only sets the DataContext for the previewer in an IDE,
@@ -74,8 +77,8 @@
             <TabItem Header="關於">
                 <StackPanel Spacing="10" Margin="10" HorizontalAlignment="Center" VerticalAlignment="Center">
                     <TextBlock Text="GimmeCapture!!" FontSize="24" FontWeight="Bold" Foreground="{DynamicResource AccentRedBrush}"/>
-                    <TextBlock Text="Version 0.1.0 (Phase 1)" />
-                    <TextBlock Text="The Metal Image/Video Snip Tool" FontStyle="Italic" Foreground="{DynamicResource AccentGoldBrush}"/>
+                    <TextBlock Text="Version 0.1.0 (Phase 1)" Foreground="White"/>
+                    <TextBlock Text="The Metal Image/Video Snip Tool" FontStyle="Italic" Foreground="{DynamicResource DeepRedBrush}"/>
                 </StackPanel>
             </TabItem>
         </TabControl>
@@ -84,12 +87,12 @@
         <Border Grid.Row="1" BorderBrush="#1E1E1E" BorderThickness="0,1,0,0" Padding="0,10,0,0">
             <Grid ColumnDefinitions="Auto,*,Auto,Auto">
                 <!-- Test Button / Main Action -->
-                <Button Grid.Column="0" Content="啟動截圖 (Snip)" Command="{Binding StartCaptureCommand}" />
+                <Button Grid.Column="0" Content="啟動截圖 (Snip)" Theme="{StaticResource MetalButton}" Command="{Binding StartCaptureCommand}" />
                 
                 <TextBlock Grid.Column="1" Text="{Binding StatusText}" VerticalAlignment="Center" Margin="10,0" Foreground="Gray"/>
 
-                <Button Grid.Column="2" Content="確定 (Save)" Margin="0,0,10,0" Command="{Binding SaveAndCloseCommand}"/>
-                <Button Grid.Column="3" Content="取消" />
+                <Button Grid.Column="2" Content="確定 (Save)" Theme="{StaticResource MetalButton}" Margin="0,0,10,0" Command="{Binding SaveAndCloseCommand}"/>
+                <Button Grid.Column="3" Content="取消" Theme="{StaticResource MetalButton}"/>
             </Grid>
         </Border>
     </Grid>

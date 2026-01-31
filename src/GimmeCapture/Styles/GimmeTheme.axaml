@@ -1,50 +1,134 @@
-<ResourceDictionary xmlns="https://github.com/avaloniaui"
-                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <!-- Theme Color Palette -->
-    <Color x:Key="AccentRed">#E60012</Color>
-    <Color x:Key="GothicBlack">#121212</Color>
-    <Color x:Key="AccentGold">#D4AF37</Color>
-    <Color x:Key="PanelGray">#1E1E1E</Color>
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Styles.Resources>
+        <ResourceDictionary>
+            <!-- Theme Color Palette -->
+            <Color x:Key="AccentRed">#E60012</Color>
+            <Color x:Key="DeepRed">#900000</Color>
+            <Color x:Key="GothicBlack">#121212</Color>
+            <Color x:Key="ChromeSilver">#E0E0E0</Color>
+            <Color x:Key="MetallicSilver">#A0A0A0</Color>
+            <Color x:Key="PanelGray">#1E1E1E</Color>
 
-    <SolidColorBrush x:Key="AccentRedBrush" Color="{StaticResource AccentRed}"/>
-    <SolidColorBrush x:Key="GothicBlackBrush" Color="{StaticResource GothicBlack}"/>
-    <SolidColorBrush x:Key="AccentGoldBrush" Color="{StaticResource AccentGold}"/>
-    <SolidColorBrush x:Key="PanelGrayBrush" Color="{StaticResource PanelGray}"/>
+            <SolidColorBrush x:Key="AccentRedBrush" Color="{StaticResource AccentRed}"/>
+            <SolidColorBrush x:Key="DeepRedBrush" Color="{StaticResource DeepRed}"/>
+            <SolidColorBrush x:Key="GothicBlackBrush" Color="{StaticResource GothicBlack}"/>
+            <SolidColorBrush x:Key="ChromeSilverBrush" Color="{StaticResource ChromeSilver}"/>
+            <SolidColorBrush x:Key="MetallicSilverBrush" Color="{StaticResource MetallicSilver}"/>
+            <SolidColorBrush x:Key="PanelGrayBrush" Color="{StaticResource PanelGray}"/>
 
-    <!-- Metal Button Style -->
-    <ControlTheme x:Key="MetalButton" TargetType="Button">
-        <Setter Property="Background" Value="{StaticResource PanelGrayBrush}"/>
-        <Setter Property="Foreground" Value="{StaticResource AccentGoldBrush}"/>
-        <Setter Property="BorderBrush" Value="{StaticResource AccentRedBrush}"/>
-        <Setter Property="BorderThickness" Value="2"/>
-        <Setter Property="Padding" Value="20,10"/>
-        <Setter Property="CornerRadius" Value="0"/>
-        <Setter Property="FontWeight" Value="Bold"/>
-        <Setter Property="Template">
-            <ControlTemplate>
-                <Border Background="{TemplateBinding Background}"
-                        BorderBrush="{TemplateBinding BorderBrush}"
-                        BorderThickness="{TemplateBinding BorderThickness}"
-                        CornerRadius="{TemplateBinding CornerRadius}"
-                        Padding="{TemplateBinding Padding}">
-                    <ContentPresenter Name="PART_ContentPresenter"
-                                      Content="{TemplateBinding Content}"
-                                      ContentTemplate="{TemplateBinding ContentTemplate}"
-                                      HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
-                                      VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
-                </Border>
-            </ControlTemplate>
+            <!-- Metal Button Style -->
+            <ControlTheme x:Key="MetalButton" TargetType="Button">
+                <Setter Property="Background" Value="{StaticResource GothicBlackBrush}"/>
+                <Setter Property="Foreground" Value="White"/>
+                <Setter Property="BorderThickness" Value="2"/>
+                <Setter Property="Padding" Value="25,10"/>
+                <Setter Property="CornerRadius" Value="0"/>
+                <Setter Property="FontWeight" Value="Bold"/>
+                <Setter Property="FontSize" Value="14"/>
+                <Setter Property="Transitions">
+                    <Transitions>
+                        <BrushTransition Property="Background" Duration="0:0:0.2"/>
+                        <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.1"/>
+                    </Transitions>
+                </Setter>
+                <Setter Property="Template">
+                    <ControlTemplate>
+                        <Border Name="OuterBorder" 
+                                Background="{TemplateBinding Background}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="{TemplateBinding CornerRadius}"
+                                Padding="{TemplateBinding Padding}"
+                                BoxShadow="0 0 5 0 #40E60012">
+                            <Border.BorderBrush>
+                                <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+                                    <GradientStop Offset="0" Color="{StaticResource DeepRed}"/>
+                                    <GradientStop Offset="0.5" Color="{StaticResource AccentRed}"/>
+                                    <GradientStop Offset="1" Color="{StaticResource DeepRed}"/>
+                                </LinearGradientBrush>
+                            </Border.BorderBrush>
+                            <Grid>
+                                <!-- Accent Corners -->
+                                <Rectangle Fill="{StaticResource AccentRedBrush}" Width="8" Height="1.5" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="-20,-5,0,0"/>
+                                <Rectangle Fill="{StaticResource AccentRedBrush}" Width="1.5" Height="8" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="-20,-5,0,0"/>
+                                
+                                <Rectangle Fill="{StaticResource AccentRedBrush}" Width="8" Height="1.5" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="0,0,-20,-5"/>
+                                <Rectangle Fill="{StaticResource AccentRedBrush}" Width="1.5" Height="8" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="0,0,-20,-5"/>
+
+                                <ContentPresenter Name="PART_ContentPresenter"
+                                                  Content="{TemplateBinding Content}"
+                                                  ContentTemplate="{TemplateBinding ContentTemplate}"
+                                                  HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                  VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                            </Grid>
+                        </Border>
+                    </ControlTemplate>
+                </Setter>
+                
+                <Style Selector="^:pointerover">
+                    <Setter Property="Background" Value="#1A1A1A"/>
+                    <Setter Property="RenderTransform" Value="scale(1.05)"/>
+                    <Style Selector="^ /template/ Border#OuterBorder">
+                        <Setter Property="BoxShadow" Value="0 0 12 2 #80E60012"/>
+                    </Style>
+                </Style>
+                
+                <Style Selector="^:pressed">
+                    <Setter Property="Background" Value="{StaticResource AccentRedBrush}"/>
+                    <Setter Property="Foreground" Value="White"/>
+                    <Setter Property="RenderTransform" Value="scale(0.95)"/>
+                </Style>
+            </ControlTheme>
+        </ResourceDictionary>
+    </Styles.Resources>
+
+    <!-- TabControl & TabItem Style -->
+    <Style Selector="TabControl">
+        <Setter Property="Background" Value="Transparent"/>
+    </Style>
+
+    <Style Selector="TabItem">
+        <Setter Property="FontSize" Value="16"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Foreground" Value="Gray"/>
+        <Setter Property="Padding" Value="15,5"/>
+        <Setter Property="Margin" Value="0,0,10,0"/>
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Property="Foreground" Duration="0:0:0.2"/>
+            </Transitions>
         </Setter>
-        
-        <Style Selector="^:pointerover">
-            <Setter Property="Background" Value="#333333"/>
-            <Setter Property="BorderBrush" Value="{StaticResource AccentGoldBrush}"/>
-            <Setter Property="Cursor" Value="Hand"/>
-        </Style>
-        
-        <Style Selector="^:pressed">
+    </Style>
+
+    <Style Selector="TabItem:pointerover">
+        <Setter Property="Foreground" Value="{StaticResource ChromeSilverBrush}"/>
+    </Style>
+
+    <Style Selector="TabItem:selected">
+        <Setter Property="Foreground" Value="{StaticResource AccentRedBrush}"/>
+        <Style Selector="^ /template/ Border#PART_SelectedPipe">
             <Setter Property="Background" Value="{StaticResource AccentRedBrush}"/>
-            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Height" Value="3"/>
+            <Setter Property="CornerRadius" Value="1.5"/>
+            <Setter Property="BoxShadow" Value="0 0 8 1 #80E60012"/>
         </Style>
-    </ControlTheme>
-</ResourceDictionary>
+    </Style>
+
+    <!-- CheckBox & ComboBox Basic Tuning -->
+    <Style Selector="CheckBox">
+        <Setter Property="Foreground" Value="White"/>
+    </Style>
+    <Style Selector="ComboBox">
+        <Setter Property="Background" Value="#1E1E1E"/>
+        <Setter Property="BorderBrush" Value="#333333"/>
+        <Setter Property="Foreground" Value="White"/>
+    </Style>
+    <Style Selector="TextBox">
+        <Setter Property="Background" Value="#1E1E1E"/>
+        <Setter Property="BorderBrush" Value="#333333"/>
+        <Setter Property="Foreground" Value="White"/>
+    </Style>
+    <Style Selector="Slider">
+        <Setter Property="Foreground" Value="{StaticResource AccentRedBrush}"/>
+    </Style>
+</Styles>
