@@ -9,72 +9,6 @@
              x:Class="GimmeCapture.Views.Controls.SnipToolbar"
              x:DataType="vm:SnipWindowViewModel">
 
-    <UserControl.Resources>
-        <Flyout x:Key="ShapesFlyout" Placement="Bottom">
-            <Border Background="#1A1A1A" BorderBrush="#333333" BorderThickness="1" Padding="2" CornerRadius="4">
-                <StackPanel Orientation="Horizontal" Spacing="2">
-                    <ToggleButton Theme="{StaticResource SnipToggleButton}" Content="□" 
-                                   IsChecked="{Binding CurrentTool, ConverterParameter={x:Static m:AnnotationType.Rectangle}, Converter={StaticResource EnumToBoolConverter}}"
-                                   Command="{Binding SelectToolCommand}" CommandParameter="{x:Static m:AnnotationType.Rectangle}"/>
-                    <ToggleButton Theme="{StaticResource SnipToggleButton}" Content="○" 
-                                   IsChecked="{Binding CurrentTool, ConverterParameter={x:Static m:AnnotationType.Ellipse}, Converter={StaticResource EnumToBoolConverter}}"
-                                   Command="{Binding SelectToolCommand}" CommandParameter="{x:Static m:AnnotationType.Ellipse}"/>
-                </StackPanel>
-            </Border>
-        </Flyout>
-
-        <Flyout x:Key="LinesFlyout" Placement="Bottom">
-            <Border Background="#1A1A1A" BorderBrush="#333333" BorderThickness="1" Padding="2" CornerRadius="4">
-                <StackPanel Orientation="Horizontal" Spacing="2">
-                    <ToggleButton Theme="{StaticResource SnipToggleButton}" Content="↗" 
-                                   IsChecked="{Binding CurrentTool, ConverterParameter={x:Static m:AnnotationType.Arrow}, Converter={StaticResource EnumToBoolConverter}}"
-                                   Command="{Binding SelectToolCommand}" CommandParameter="{x:Static m:AnnotationType.Arrow}"/>
-                    <ToggleButton Theme="{StaticResource SnipToggleButton}" Content="—" 
-                                   IsChecked="{Binding CurrentTool, ConverterParameter={x:Static m:AnnotationType.Line}, Converter={StaticResource EnumToBoolConverter}}"
-                                   Command="{Binding SelectToolCommand}" CommandParameter="{x:Static m:AnnotationType.Line}"/>
-                </StackPanel>
-            </Border>
-        </Flyout>
-
-        <Flyout x:Key="StyleFlyout" Placement="Bottom">
-            <Border Background="#1A1A1A" BorderBrush="#333333" BorderThickness="1" Padding="6" CornerRadius="4">
-                <StackPanel Spacing="6">
-                    <TextBlock Text="Color" FontSize="9" Foreground="Gray"/>
-                    <ItemsControl ItemsSource="{x:Static vm:SnipWindowViewModel+StaticData.ColorsList}">
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <WrapPanel Width="88"/>
-                            </ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate x:DataType="media:Color">
-                                <Button Width="16" Height="16" Margin="1" Padding="0" CornerRadius="8"
-                                        Background="{Binding Converter={StaticResource ColorToBrushConverter}}"
-                                        Command="{Binding $parent[UserControl].((vm:SnipWindowViewModel)DataContext).ChangeColorCommand}"
-                                        CommandParameter="{Binding}">
-                                    <Border BorderBrush="White" BorderThickness="1" CornerRadius="8" IsHitTestVisible="False"
-                                            IsVisible="{Binding $parent[UserControl].((vm:SnipWindowViewModel)DataContext).SelectedColor, Converter={StaticResource ColorMatchConverter}, ConverterParameter={Binding}}"/>
-                                </Button>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-
-                    <Separator Background="#333333" Height="1" Margin="0,2"/>
-                    
-                    <StackPanel IsVisible="{Binding CurrentTool, Converter={StaticResource EnumNotMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Text}}">
-                        <TextBlock Text="Size" FontSize="9" Foreground="Gray"/>
-                        <Slider Width="80" Minimum="1" Maximum="20" Value="{Binding CurrentThickness}"/>
-                    </StackPanel>
-                    
-                    <StackPanel IsVisible="{Binding CurrentTool, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Text}}">
-                        <TextBlock Text="Font" FontSize="9" Foreground="Gray"/>
-                        <Slider Width="80" Minimum="10" Maximum="60" Value="{Binding CurrentFontSize}"/>
-                    </StackPanel>
-                </StackPanel>
-            </Border>
-        </Flyout>
-    </UserControl.Resources>
-
     <Border Background="#1A1A1A" 
             BorderBrush="#333333" 
             BorderThickness="1" 
@@ -89,14 +23,22 @@
             
             <Rectangle Fill="#444444" Width="1" Height="16" Margin="2,0" VerticalAlignment="Center"/>
             
-            <!-- Selection -->
-            <ToggleButton Theme="{StaticResource SnipToggleButton}" Content="↖" 
-                           IsChecked="{Binding IsSelectionMode}"
-                           Command="{Binding SelectCommand}"
-                           ToolTip.Tip="Selection Mode (Esc)"/>
-
             <!-- Grouped Annotation Tools -->
-            <Button Theme="{StaticResource SnipButton}" Flyout="{StaticResource ShapesFlyout}" ToolTip.Tip="Shapes">
+            <Button Theme="{StaticResource SnipButton}" ToolTip.Tip="Shapes">
+                <Button.Flyout>
+                    <Flyout Placement="Bottom">
+                        <Border Background="#1A1A1A" BorderBrush="#333333" BorderThickness="1" Padding="2" CornerRadius="4">
+                            <StackPanel Orientation="Horizontal" Spacing="2">
+                                <ToggleButton Theme="{StaticResource SnipToggleButton}" Content="□" 
+                                               IsChecked="{Binding CurrentTool, ConverterParameter={x:Static m:AnnotationType.Rectangle}, Converter={StaticResource EnumToBoolConverter}}"
+                                               Command="{Binding SelectToolCommand}" CommandParameter="{x:Static m:AnnotationType.Rectangle}"/>
+                                <ToggleButton Theme="{StaticResource SnipToggleButton}" Content="○" 
+                                               IsChecked="{Binding CurrentTool, ConverterParameter={x:Static m:AnnotationType.Ellipse}, Converter={StaticResource EnumToBoolConverter}}"
+                                               Command="{Binding SelectToolCommand}" CommandParameter="{x:Static m:AnnotationType.Ellipse}"/>
+                            </StackPanel>
+                        </Border>
+                    </Flyout>
+                </Button.Flyout>
                 <Panel>
                     <TextBlock Text="□" IsVisible="{Binding CurrentTool, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Rectangle}}"/>
                     <TextBlock Text="○" IsVisible="{Binding CurrentTool, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Ellipse}}"/>
@@ -104,7 +46,21 @@
                 </Panel>
             </Button>
 
-            <Button Theme="{StaticResource SnipButton}" Flyout="{StaticResource LinesFlyout}" ToolTip.Tip="Lines &amp; Arrows">
+            <Button Theme="{StaticResource SnipButton}" ToolTip.Tip="Lines &amp; Arrows">
+                <Button.Flyout>
+                    <Flyout Placement="Bottom">
+                        <Border Background="#1A1A1A" BorderBrush="#333333" BorderThickness="1" Padding="2" CornerRadius="4">
+                            <StackPanel Orientation="Horizontal" Spacing="2">
+                                <ToggleButton Theme="{StaticResource SnipToggleButton}" Content="↗" 
+                                               IsChecked="{Binding CurrentTool, ConverterParameter={x:Static m:AnnotationType.Arrow}, Converter={StaticResource EnumToBoolConverter}}"
+                                               Command="{Binding SelectToolCommand}" CommandParameter="{x:Static m:AnnotationType.Arrow}"/>
+                                <ToggleButton Theme="{StaticResource SnipToggleButton}" Content="—" 
+                                               IsChecked="{Binding CurrentTool, ConverterParameter={x:Static m:AnnotationType.Line}, Converter={StaticResource EnumToBoolConverter}}"
+                                               Command="{Binding SelectToolCommand}" CommandParameter="{x:Static m:AnnotationType.Line}"/>
+                            </StackPanel>
+                        </Border>
+                    </Flyout>
+                </Button.Flyout>
                 <Panel>
                     <TextBlock Text="↗" IsVisible="{Binding CurrentTool, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Arrow}}"/>
                     <TextBlock Text="—" IsVisible="{Binding CurrentTool, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Line}}"/>
@@ -120,7 +76,46 @@
             <Rectangle Fill="#444444" Width="1" Height="16" Margin="2,0" VerticalAlignment="Center"/>
 
             <!-- Style Button -->
-            <Button Theme="{StaticResource SnipButton}" Flyout="{StaticResource StyleFlyout}" ToolTip.Tip="Style">
+            <Button Theme="{StaticResource SnipButton}" ToolTip.Tip="Style">
+                <Button.Flyout>
+                    <Flyout Placement="Bottom">
+                        <Border Background="#1A1A1A" BorderBrush="#333333" BorderThickness="1" Padding="6" CornerRadius="4">
+                            <StackPanel Spacing="6">
+                                <TextBlock Text="Color" FontSize="9" Foreground="Gray"/>
+                                <ItemsControl ItemsSource="{x:Static vm:SnipWindowViewModel+StaticData.ColorsList}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel Width="88"/>
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="media:Color">
+                                            <Button Width="16" Height="16" Margin="1" Padding="0" CornerRadius="8"
+                                                    Background="{Binding Converter={StaticResource ColorToBrushConverter}}"
+                                                    Command="{Binding $parent[UserControl].((vm:SnipWindowViewModel)DataContext).ChangeColorCommand}"
+                                                    CommandParameter="{Binding}">
+                                                <Border BorderBrush="White" BorderThickness="1" CornerRadius="8" IsHitTestVisible="False"
+                                                        IsVisible="{Binding $parent[UserControl].((vm:SnipWindowViewModel)DataContext).SelectedColor, Converter={StaticResource ColorMatchConverter}, ConverterParameter={Binding}}"/>
+                                            </Button>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <Separator Background="#333333" Height="1" Margin="0,2"/>
+                                
+                                <StackPanel IsVisible="{Binding CurrentTool, Converter={StaticResource EnumNotMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Text}}">
+                                    <TextBlock Text="Size" FontSize="9" Foreground="Gray"/>
+                                    <Slider Width="80" Minimum="1" Maximum="20" Value="{Binding CurrentThickness}"/>
+                                </StackPanel>
+                                
+                                <StackPanel IsVisible="{Binding CurrentTool, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Text}}">
+                                    <TextBlock Text="Font" FontSize="9" Foreground="Gray"/>
+                                    <Slider Width="80" Minimum="10" Maximum="60" Value="{Binding CurrentFontSize}"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                    </Flyout>
+                </Button.Flyout>
                 <Ellipse Width="10" Height="10" Fill="{Binding SelectedColor, Converter={StaticResource ColorToBrushConverter}}"/>
             </Button>
 

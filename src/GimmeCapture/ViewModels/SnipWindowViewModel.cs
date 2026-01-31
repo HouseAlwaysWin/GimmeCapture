@@ -88,7 +88,6 @@ public class SnipWindowViewModel : ViewModelBase
     public ReactiveCommand<Unit, Unit> UndoCommand { get; }
     public ReactiveCommand<Unit, Unit> ClearCommand { get; }
     public ReactiveCommand<AnnotationType, Unit> SelectToolCommand { get; }
-    public ReactiveCommand<Unit, Unit> SelectCommand { get; }
 
     // Annotation Properties
     public ObservableCollection<Annotation> Annotations { get; } = new();
@@ -133,18 +132,9 @@ public class SnipWindowViewModel : ViewModelBase
     public bool IsDrawingMode
     {
         get => _isDrawingMode;
-        set 
-        {
-            this.RaiseAndSetIfChanged(ref _isDrawingMode, value);
-            this.RaisePropertyChanged(nameof(IsSelectionMode));
-        }
+        set => this.RaiseAndSetIfChanged(ref _isDrawingMode, value);
     }
 
-    public bool IsSelectionMode
-    {
-        get => !IsDrawingMode;
-        set => IsDrawingMode = !value;
-    }
 
     private bool _isEnteringText = false;
     public bool IsEnteringText
@@ -183,7 +173,6 @@ public class SnipWindowViewModel : ViewModelBase
         });
 
         ChangeColorCommand = ReactiveCommand.Create<Color>(c => SelectedColor = c);
-        SelectCommand = ReactiveCommand.Create(() => { IsDrawingMode = false; });
     }
 
     public ReactiveCommand<Color, Unit> ChangeColorCommand { get; }
