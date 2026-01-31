@@ -114,6 +114,13 @@ public class SnipWindowViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _selectedColor, value);
     }
 
+    private string _customHexColor = "#FF0000";
+    public string CustomHexColor
+    {
+        get => _customHexColor;
+        set => this.RaiseAndSetIfChanged(ref _customHexColor, value);
+    }
+
     private double _currentThickness = 4.0;
     public double CurrentThickness
     {
@@ -181,6 +188,23 @@ public class SnipWindowViewModel : ViewModelBase
         // Font size controls
         IncreaseFontSizeCommand = ReactiveCommand.Create(() => { if (CurrentFontSize < 60) CurrentFontSize += 2; });
         DecreaseFontSizeCommand = ReactiveCommand.Create(() => { if (CurrentFontSize > 10) CurrentFontSize -= 2; });
+        
+        // Apply hex color
+        ApplyHexColorCommand = ReactiveCommand.Create(() => 
+        {
+            try
+            {
+                var hex = CustomHexColor.TrimStart('#');
+                if (hex.Length == 6)
+                {
+                    var r = Convert.ToByte(hex.Substring(0, 2), 16);
+                    var g = Convert.ToByte(hex.Substring(2, 2), 16);
+                    var b = Convert.ToByte(hex.Substring(4, 2), 16);
+                    SelectedColor = Color.FromRgb(r, g, b);
+                }
+            }
+            catch { /* Invalid hex */ }
+        });
     }
 
     public ReactiveCommand<Color, Unit> ChangeColorCommand { get; }
@@ -188,6 +212,7 @@ public class SnipWindowViewModel : ViewModelBase
     public ReactiveCommand<Unit, Unit> DecreaseThicknessCommand { get; }
     public ReactiveCommand<Unit, Unit> IncreaseFontSizeCommand { get; }
     public ReactiveCommand<Unit, Unit> DecreaseFontSizeCommand { get; }
+    public ReactiveCommand<Unit, Unit> ApplyHexColorCommand { get; }
 
     public static class StaticData
     {

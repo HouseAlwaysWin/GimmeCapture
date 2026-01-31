@@ -100,6 +100,15 @@
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
+                                
+                                <!-- Custom Color Picker -->
+                                <StackPanel Margin="0,4,0,0">
+                                    <TextBlock Text="Custom" FontSize="9" Foreground="Gray"/>
+                                    <ColorSpectrum Color="{Binding SelectedColor, Mode=TwoWay}" 
+                                                   MinWidth="80" MinHeight="80"
+                                                   MaxWidth="80" MaxHeight="80"
+                                                   Shape="Box"/>
+                                </StackPanel>
 
                                 <Separator Background="#333333" Height="1" Margin="0,2"/>
                                 
