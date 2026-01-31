@@ -1,7 +1,10 @@
 using ReactiveUI;
 using Avalonia.Media;
+using System;
 using System.Threading.Tasks;
+using System.Linq;
 using System.Reactive;
+using System.Reactive.Linq;
 
 namespace GimmeCapture.ViewModels;
 
@@ -34,6 +37,16 @@ public class MainWindowViewModel : ViewModelBase
     {
         _settingsService = new Services.AppSettingsService();
         
+        // Sync ViewModel with Service using ReactiveUI
+        // When Service language changes, notify ViewModel properties to update
+        Services.LocalizationService.Instance
+            .WhenAnyValue(x => x.CurrentLanguage)
+            .ObserveOn(RxApp.MainThreadScheduler)
+            .Subscribe(_ => 
+            {
+                this.RaisePropertyChanged(nameof(SelectedLanguageOption));
+            });
+
         StartCaptureCommand = ReactiveCommand.CreateFromTask<CaptureMode>(StartCapture);
         SaveAndCloseCommand = ReactiveCommand.CreateFromTask(SaveAndClose);
         
@@ -51,7 +64,33 @@ public class MainWindowViewModel : ViewModelBase
         Task.Run(async () => await LoadSettingsAsync());
     }
 
-    // General Settings
+    // Language Selection
+    public class LanguageOption
+    {
+        public string Name { get; set; }
+        public Services.Language Value { get; set; }
+    }
+
+    public LanguageOption[] AvailableLanguages { get; } = new[]
+    {
+        new LanguageOption { Name = "English (US)", Value = Services.Language.English },
+        new LanguageOption { Name = "繁體中文 (台灣)", Value = Services.Language.Chinese },
+        new LanguageOption { Name = "日本語 (日本)", Value = Services.Language.Japanese }
+    };
+
+    public LanguageOption SelectedLanguageOption
+    {
+        get => AvailableLanguages.FirstOrDefault(x => x.Value == Services.LocalizationService.Instance.CurrentLanguage) ?? AvailableLanguages[0];
+        set
+        {
+            if (value != null && Services.LocalizationService.Instance.CurrentLanguage != value.Value)
+            {
+                Services.LocalizationService.Instance.CurrentLanguage = value.Value;
+                this.RaisePropertyChanged();
+            }
+        }
+    }
+
     private bool _runOnStartup;
     public bool RunOnStartup
     {
@@ -142,6 +181,9 @@ public class MainWindowViewModel : ViewModelBase
             BorderColor = color;
         }
 
+        // Load Language
+        Services.LocalizationService.Instance.CurrentLanguage = s.Language;
+
         // Register initial hotkey (ensure UI thread or safe context? Service handles P/Invoke which is thread-tied usually)
         // Ideally we register on UI thread, but LoadSettingsAsync is background here. 
         // We will dispatch to UI thread to be safe as the handle belongs to UI thread.
@@ -164,6 +206,7 @@ public class MainWindowViewModel : ViewModelBase
         s.CopyHotkey = CopyHotkey;
         s.PinHotkey = PinHotkey;
         s.BorderColorHex = BorderColor.ToString();
+        s.Language = Services.LocalizationService.Instance.CurrentLanguage;
         
         await _settingsService.SaveAsync();
     }

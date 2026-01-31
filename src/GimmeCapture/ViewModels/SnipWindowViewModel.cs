@@ -10,6 +10,7 @@ using System.ComponentModel;
 using System.Collections.ObjectModel;
 using GimmeCapture.Models;
 using System.Linq;
+using GimmeCapture.Services;
 
 namespace GimmeCapture.ViewModels;
 
@@ -205,6 +206,9 @@ public class SnipWindowViewModel : ViewModelBase
             }
             catch { /* Invalid hex */ }
         });
+
+        // Change Language
+        ChangeLanguageCommand = ReactiveCommand.Create(() => LocalizationService.Instance.CycleLanguage());
     }
 
     public ReactiveCommand<Color, Unit> ChangeColorCommand { get; }
@@ -213,6 +217,7 @@ public class SnipWindowViewModel : ViewModelBase
     public ReactiveCommand<Unit, Unit> IncreaseFontSizeCommand { get; }
     public ReactiveCommand<Unit, Unit> DecreaseFontSizeCommand { get; }
     public ReactiveCommand<Unit, Unit> ApplyHexColorCommand { get; }
+    public ReactiveCommand<Unit, Unit> ChangeLanguageCommand { get; }
 
     public static class StaticData
     {

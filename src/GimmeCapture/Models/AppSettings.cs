@@ -1,8 +1,10 @@
+using GimmeCapture.Services;
+
 namespace GimmeCapture.Models;
 
 public class AppSettings
 {
-    public string Language { get; set; } = "zh-TW";
+    public Language Language { get; set; } = Language.English;
     public bool RunOnStartup { get; set; }
     public bool AutoCheckUpdates { get; set; }
     

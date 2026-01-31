@@ -1,13 +1,13 @@
 {
-  "Language": "zh-TW",
+  "Language": 2,
   "RunOnStartup": false,
   "AutoCheckUpdates": false,
-  "BorderThickness": 7,
-  "MaskOpacity": 0.10656716417910449,
+  "BorderThickness": 2,
+  "MaskOpacity": 0.5,
   "BorderColorHex": "#ffe60012",
   "AutoSave": false,
   "SaveDirectory": "",
   "SnipHotkey": "F1",
   "CopyHotkey": "Ctrl\u002BC",
-  "PinHotkey": "F2"
+  "PinHotkey": "F3"
 }

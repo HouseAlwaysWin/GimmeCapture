@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:GimmeCapture.ViewModels"
+        xmlns:services="using:GimmeCapture.Services"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
@@ -21,51 +22,56 @@
         <!-- Settings Tabs -->
         <TabControl Grid.Row="0">
             <!-- 一般 (General) -->
-            <TabItem Header="一般">
+            <TabItem Header="{Binding [TabGeneral], Source={x:Static services:LocalizationService.Instance}}">
                 <StackPanel Spacing="10" Margin="10">
-                    <CheckBox IsChecked="{Binding RunOnStartup}" Content="開機自動啟動 (尚未實作)"/>
-                    <CheckBox IsChecked="{Binding AutoCheckUpdates}" Content="自動檢查更新"/>
+                    <CheckBox IsChecked="{Binding RunOnStartup}" Content="{Binding [RunOnStartup], Source={x:Static services:LocalizationService.Instance}}"/>
+                    <CheckBox IsChecked="{Binding AutoCheckUpdates}" Content="{Binding [AutoCheckUpdates], Source={x:Static services:LocalizationService.Instance}}"/>
                     
-                    <TextBlock Text="語言:" Margin="0,10,0,5"/>
-                    <ComboBox SelectedIndex="0" HorizontalAlignment="Stretch">
-                        <ComboBoxItem>繁體中文 (台灣)</ComboBoxItem>
-                        <ComboBoxItem>English (US)</ComboBoxItem>
+                    <TextBlock Text="{Binding [Language], Source={x:Static services:LocalizationService.Instance}}" Margin="0,10,0,5"/>
+                    <ComboBox HorizontalAlignment="Stretch"
+                              ItemsSource="{Binding AvailableLanguages}"
+                              SelectedItem="{Binding SelectedLanguageOption, Mode=TwoWay}">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate x:DataType="vm:MainWindowViewModel+LanguageOption">
+                                <TextBlock Text="{Binding Name}"/>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
                     </ComboBox>
                 </StackPanel>
             </TabItem>
             
             <!-- 擷圖 (Snip) -->
-            <TabItem Header="擷圖">
+            <TabItem Header="{Binding [TabSnip], Source={x:Static services:LocalizationService.Instance}}">
                 <StackPanel Spacing="10" Margin="10">
-                    <TextBlock Text="邊框粗細:" />
+                    <TextBlock Text="{Binding [BorderThickness], Source={x:Static services:LocalizationService.Instance}}" />
                     <Slider Minimum="0" Maximum="10" Value="{Binding BorderThickness}" 
                             TickFrequency="1" IsSnapToTickEnabled="True"/>
                     
-                    <TextBlock Text="遮罩透明度:" />
+                    <TextBlock Text="{Binding [MaskOpacity], Source={x:Static services:LocalizationService.Instance}}" />
                     <Slider Minimum="0.1" Maximum="0.9" Value="{Binding MaskOpacity}" />
                     
-                    <TextBlock Text="邊框顏色 (預設 Red):" />
+                    <TextBlock Text="{Binding [BorderColor], Source={x:Static services:LocalizationService.Instance}}" />
                     <!-- Color Picker placeholder or just text -->
                     <Border Background="{DynamicResource AccentRedBrush}" Height="30" CornerRadius="4"/>
                 </StackPanel>
             </TabItem>
             
             <!-- 輸出 (Output) -->
-            <TabItem Header="輸出">
+            <TabItem Header="{Binding [TabOutput], Source={x:Static services:LocalizationService.Instance}}">
                 <StackPanel Spacing="10" Margin="10">
-                    <CheckBox IsChecked="{Binding AutoSave}" Content="自動儲存 (跳過對話框)"/>
-                    <Button Content="選擇儲存路徑..." HorizontalAlignment="Left" Theme="{StaticResource MetalButton}"/>
-                    <TextBlock Text="目前路徑: [我的圖片]" Foreground="Gray" FontSize="12"/>
+                    <CheckBox IsChecked="{Binding AutoSave}" Content="{Binding [AutoSave], Source={x:Static services:LocalizationService.Instance}}"/>
+                    <Button Content="{Binding [SelectPath], Source={x:Static services:LocalizationService.Instance}}" HorizontalAlignment="Left" Theme="{StaticResource MetalButton}"/>
+                    <TextBlock Text="{Binding [CurrentPath], Source={x:Static services:LocalizationService.Instance}}" Foreground="Gray" FontSize="12"/>
                 </StackPanel>
             </TabItem>
             
             <!-- 控制 (Control/Hotkeys) -->
-            <TabItem Header="控制">
+            <TabItem Header="{Binding [TabControl], Source={x:Static services:LocalizationService.Instance}}">
                 <StackPanel Spacing="10" Margin="10">
-                    <TextBlock Text="全域快捷鍵 (Global Hotkeys)" FontWeight="Bold" Margin="0,0,0,5"/>
+                    <TextBlock Text="{Binding [GlobalHotkeys], Source={x:Static services:LocalizationService.Instance}}" FontWeight="Bold" Margin="0,0,0,5"/>
                     
                     <Grid ColumnDefinitions="Auto, 10, *" RowDefinitions="Auto, 10, Auto, 10, Auto">
-                        <TextBlock Grid.Row="0" Grid.Column="0" Text="截圖熱鍵 (Snip):" VerticalAlignment="Center"/>
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding [SnipHotkey], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center"/>
                         <TextBox Grid.Row="0" Grid.Column="2" 
                                  Text="{Binding SnipHotkey, Mode=OneWay}" 
                                  Watermark="點擊此處並按下按鈕進行設定"
@@ -73,7 +79,7 @@
                                  Name="SnipHotkeyBox"
                                  KeyDown="HotkeyTextBox_KeyDown"/>
 
-                        <TextBlock Grid.Row="2" Grid.Column="0" Text="截圖並複製 (Copy):" VerticalAlignment="Center"/>
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="{Binding [CopyHotkey], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center"/>
                         <TextBox Grid.Row="2" Grid.Column="2" 
                                  Text="{Binding CopyHotkey, Mode=OneWay}" 
                                  Watermark="點擊此處並按下按鈕進行設定"
@@ -81,7 +87,7 @@
                                  Name="CopyHotkeyBox"
                                  KeyDown="HotkeyTextBox_KeyDown"/>
 
-                        <TextBlock Grid.Row="4" Grid.Column="0" Text="截圖並釘選 (Pin):" VerticalAlignment="Center"/>
+                        <TextBlock Grid.Row="4" Grid.Column="0" Text="{Binding [PinHotkey], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center"/>
                         <TextBox Grid.Row="4" Grid.Column="2" 
                                  Text="{Binding PinHotkey, Mode=OneWay}" 
                                  Watermark="點擊此處並按下按鈕進行設定"
@@ -90,12 +96,12 @@
                                  KeyDown="HotkeyTextBox_KeyDown"/>
                     </Grid>
                     
-                    <TextBlock Text="* 已啟用全域監聽 (Kitsune Mode Ready)" Foreground="{StaticResource AccentRedBrush}" FontStyle="Italic" FontSize="11"/>
+                    <TextBlock Text="{Binding [HotkeysActive], Source={x:Static services:LocalizationService.Instance}}" Foreground="{StaticResource AccentRedBrush}" FontStyle="Italic" FontSize="11"/>
                 </StackPanel>
             </TabItem>
             
             <!-- 關於 (About) -->
-            <TabItem Header="關於">
+            <TabItem Header="{Binding [TabAbout], Source={x:Static services:LocalizationService.Instance}}">
                 <StackPanel Spacing="10" Margin="10" HorizontalAlignment="Center" VerticalAlignment="Center">
                     <TextBlock Text="GimmeCapture!!" FontSize="24" FontWeight="Bold" Foreground="{DynamicResource AccentRedBrush}"/>
                     <TextBlock Text="Version 0.1.0 (Phase 1)" Foreground="White"/>
@@ -108,12 +114,12 @@
         <Border Grid.Row="1" BorderBrush="#1E1E1E" BorderThickness="0,1,0,0" Padding="0,10,0,0">
             <Grid ColumnDefinitions="Auto,*,Auto,Auto">
                 <!-- Test Button / Main Action -->
-                <Button Grid.Column="0" Content="啟動截圖 (Snip)" Theme="{StaticResource MetalButton}" Command="{Binding StartCaptureCommand}" />
+                <Button Grid.Column="0" Content="{Binding [StartCapture], Source={x:Static services:LocalizationService.Instance}}" Theme="{StaticResource MetalButton}" Command="{Binding StartCaptureCommand}" />
                 
                 <TextBlock Grid.Column="1" Text="{Binding StatusText}" VerticalAlignment="Center" Margin="10,0" Foreground="Gray"/>
 
-                <Button Grid.Column="2" Content="確定 (Save)" Theme="{StaticResource MetalButton}" Margin="0,0,10,0" Command="{Binding SaveAndCloseCommand}"/>
-                <Button Grid.Column="3" Content="取消" Theme="{StaticResource MetalButton}"/>
+                <Button Grid.Column="2" Content="{Binding [Confirm], Source={x:Static services:LocalizationService.Instance}}" Theme="{StaticResource MetalButton}" Margin="0,0,10,0" Command="{Binding SaveAndCloseCommand}"/>
+                <Button Grid.Column="3" Content="{Binding [Cancel], Source={x:Static services:LocalizationService.Instance}}" Theme="{StaticResource MetalButton}"/>
             </Grid>
         </Border>
     </Grid>
