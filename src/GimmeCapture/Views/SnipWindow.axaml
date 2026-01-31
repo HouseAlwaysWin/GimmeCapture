@@ -31,20 +31,7 @@
 
     <Window.Styles>
         <Style Selector="Grid.Handle">
-            <Setter Property="Width" Value="30"/>
-            <Setter Property="Height" Value="30"/>
             <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="Margin" Value="-15"/>
-        </Style>
-        <Style Selector="Grid.Handle > Ellipse">
-            <Setter Property="Width" Value="14"/>
-            <Setter Property="Height" Value="14"/>
-            <Setter Property="Fill" Value="{DynamicResource FoxGoldBrush}"/>
-            <Setter Property="Stroke" Value="White"/>
-            <Setter Property="StrokeThickness" Value="2"/>
-            <Setter Property="HorizontalAlignment" Value="Center"/>
-            <Setter Property="VerticalAlignment" Value="Center"/>
-            <Setter Property="IsHitTestVisible" Value="False"/>
         </Style>
     </Window.Styles>    
 
@@ -73,39 +60,49 @@
                   Canvas.Top="{Binding SelectionRect.Y}"
                   IsVisible="{Binding CurrentState, Converter={StaticResource StateToBoolConverter}}">
                   
-                <!-- 邊框 -->
-                <Border BorderBrush="{DynamicResource AccentRedBrush}"
-                        BorderThickness="2"
-                        Background="#01FFFFFF"/> <!-- 微透明背景以確保能夠抓取拖曳事件 -->
+                <!-- BABYMETAL Style Selection Border -->
+                <Border CornerRadius="0"
+                        Background="#01FFFFFF"
+                        BoxShadow="0 0 10 1 #80E60012"> <!-- Red Glow -->
+                    <Border.BorderBrush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+                            <GradientStop Offset="0" Color="{DynamicResource AccentRed}"/>
+                            <GradientStop Offset="0.5" Color="{DynamicResource AccentGold}"/>
+                            <GradientStop Offset="1" Color="{DynamicResource AccentRed}"/>
+                        </LinearGradientBrush>
+                    </Border.BorderBrush>
+                    <Border BorderThickness="2">
+                        <Border BorderBrush="{DynamicResource AccentRedBrush}" BorderThickness="1" Margin="-1">
+                            <Grid>
+                                <!-- Accent Corners -->
+                                <Rectangle Fill="{DynamicResource AccentRedBrush}" Width="15" Height="2" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="2"/>
+                                <Rectangle Fill="{DynamicResource AccentRedBrush}" Width="2" Height="15" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="2"/>
+                                
+                                <Rectangle Fill="{DynamicResource AccentRedBrush}" Width="15" Height="2" VerticalAlignment="Top" HorizontalAlignment="Right" Margin="2"/>
+                                <Rectangle Fill="{DynamicResource AccentRedBrush}" Width="2" Height="15" VerticalAlignment="Top" HorizontalAlignment="Right" Margin="2"/>
+                                
+                                <Rectangle Fill="{DynamicResource AccentRedBrush}" Width="15" Height="2" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="2"/>
+                                <Rectangle Fill="{DynamicResource AccentRedBrush}" Width="2" Height="15" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="2"/>
+                                
+                                <Rectangle Fill="{DynamicResource AccentRedBrush}" Width="15" Height="2" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="2"/>
+                                <Rectangle Fill="{DynamicResource AccentRedBrush}" Width="2" Height="15" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="2"/>
+                            </Grid>
+                        </Border>
+                    </Border>
+                </Border>
                 
                 <!-- Resize Handles -->
                 <!-- Corners -->
-                <Grid Classes="Handle" Name="HandleTopLeft" Cursor="TopLeftCorner" HorizontalAlignment="Left" VerticalAlignment="Top">
-                     <Ellipse/>
-                </Grid>
-                <Grid Classes="Handle" Name="HandleTopRight" Cursor="TopRightCorner" HorizontalAlignment="Right" VerticalAlignment="Top">
-                     <Ellipse/>
-                </Grid>
-                <Grid Classes="Handle" Name="HandleBottomLeft" Cursor="BottomLeftCorner" HorizontalAlignment="Left" VerticalAlignment="Bottom">
-                     <Ellipse/>
-                </Grid>
-                <Grid Classes="Handle" Name="HandleBottomRight" Cursor="BottomRightCorner" HorizontalAlignment="Right" VerticalAlignment="Bottom">
-                     <Ellipse/>
-                </Grid>
+                <Grid Classes="Handle" Name="HandleTopLeft" Cursor="TopLeftCorner" Width="30" Height="30" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="-15"/>
+                <Grid Classes="Handle" Name="HandleTopRight" Cursor="TopRightCorner" Width="30" Height="30" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="-15"/>
+                <Grid Classes="Handle" Name="HandleBottomLeft" Cursor="BottomLeftCorner" Width="30" Height="30" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="-15"/>
+                <Grid Classes="Handle" Name="HandleBottomRight" Cursor="BottomRightCorner" Width="30" Height="30" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="-15"/>
                 
                 <!-- Sides -->
-                <Grid Classes="Handle" Name="HandleTop" Cursor="SizeNorthSouth" HorizontalAlignment="Center" VerticalAlignment="Top">
-                     <Ellipse/>
-                </Grid>
-                <Grid Classes="Handle" Name="HandleBottom" Cursor="SizeNorthSouth" HorizontalAlignment="Center" VerticalAlignment="Bottom">
-                     <Ellipse/>
-                </Grid>
-                <Grid Classes="Handle" Name="HandleLeft" Cursor="SizeWestEast" HorizontalAlignment="Left" VerticalAlignment="Center">
-                     <Ellipse/>
-                </Grid>
-                <Grid Classes="Handle" Name="HandleRight" Cursor="SizeWestEast" HorizontalAlignment="Right" VerticalAlignment="Center">
-                     <Ellipse/>
-                </Grid>
+                <Grid Classes="Handle" Name="HandleTop" Cursor="SizeNorthSouth" Height="15" HorizontalAlignment="Stretch" VerticalAlignment="Top" Margin="15,0"/>
+                <Grid Classes="Handle" Name="HandleBottom" Cursor="SizeNorthSouth" Height="15" HorizontalAlignment="Stretch" VerticalAlignment="Bottom" Margin="15,0"/>
+                <Grid Classes="Handle" Name="HandleLeft" Cursor="SizeWestEast" Width="15" HorizontalAlignment="Left" VerticalAlignment="Stretch" Margin="0,15"/>
+                <Grid Classes="Handle" Name="HandleRight" Cursor="SizeWestEast" Width="15" HorizontalAlignment="Right" VerticalAlignment="Stretch" Margin="0,15"/>
             </Grid>
                     
             <!-- 工具列 (位置綁定) -->

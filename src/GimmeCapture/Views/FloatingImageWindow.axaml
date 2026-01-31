@@ -20,13 +20,38 @@
     </Window.Styles>
     
     <Grid Background="Transparent">
-        <!-- Content -->
-        <Border BorderBrush="{DynamicResource FoxGoldBrush}" 
-                BorderThickness="2" 
+        <!-- BABYMETAL Style Border -->
+        <Border Margin="10"
                 CornerRadius="0"
-                BoxShadow="0 4 10 0 #40000000"
-                Margin="10"> 
-            <Image Source="{Binding Image}" Stretch="Fill" Name="PinnedImage" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
+                Background="{DynamicResource GothicBlackBrush}"
+                BoxShadow="0 0 15 2 #80E60012"> <!-- Red Glow -->
+            <Border.BorderBrush>
+                <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+                    <GradientStop Offset="0" Color="{DynamicResource AccentRed}"/>
+                    <GradientStop Offset="0.5" Color="{DynamicResource AccentGold}"/>
+                    <GradientStop Offset="1" Color="{DynamicResource AccentRed}"/>
+                </LinearGradientBrush>
+            </Border.BorderBrush>
+            <Border BorderThickness="3">
+                <Border BorderBrush="{DynamicResource AccentRedBrush}" BorderThickness="1" Margin="-1">
+                    <Grid>
+                        <Image Source="{Binding Image}" Stretch="Fill" Name="PinnedImage" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
+                        
+                        <!-- Accent Corners (Optional kitsune vibe) -->
+                        <Rectangle Fill="{DynamicResource AccentRedBrush}" Width="10" Height="2" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="2"/>
+                        <Rectangle Fill="{DynamicResource AccentRedBrush}" Width="2" Height="10" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="2"/>
+                        
+                        <Rectangle Fill="{DynamicResource AccentRedBrush}" Width="10" Height="2" VerticalAlignment="Top" HorizontalAlignment="Right" Margin="2"/>
+                        <Rectangle Fill="{DynamicResource AccentRedBrush}" Width="2" Height="10" VerticalAlignment="Top" HorizontalAlignment="Right" Margin="2"/>
+                        
+                        <Rectangle Fill="{DynamicResource AccentRedBrush}" Width="10" Height="2" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="2"/>
+                        <Rectangle Fill="{DynamicResource AccentRedBrush}" Width="2" Height="10" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="2"/>
+                        
+                        <Rectangle Fill="{DynamicResource AccentRedBrush}" Width="10" Height="2" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="2"/>
+                        <Rectangle Fill="{DynamicResource AccentRedBrush}" Width="2" Height="10" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="2"/>
+                    </Grid>
+                </Border>
+            </Border>
             
             <Border.ContextMenu>
                 <ContextMenu>
