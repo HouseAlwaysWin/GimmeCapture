@@ -22,14 +22,178 @@ public partial class FloatingImageWindow : Window
         if (DataContext is FloatingImageViewModel vm)
         {
             vm.CloseAction = Close;
+            
+            vm.CopyAction = async () =>
+            {
+                var topLevel = TopLevel.GetTopLevel(this);
+                if (topLevel?.Clipboard != null)
+                {
+                    // TODO: Implement Copy Image to Clipboard
+                }
+            };
+            
+            vm.SaveAction = async () =>
+            {
+                 var topLevel = TopLevel.GetTopLevel(this);
+                 if (topLevel == null) return;
+                 
+                 var file = await topLevel.StorageProvider.SaveFilePickerAsync(new Avalonia.Platform.Storage.FilePickerSaveOptions
+                 {
+                     Title = "Save Floating Image",
+                     DefaultExtension = "png",
+                     ShowOverwritePrompt = true,
+                     SuggestedFileName = $"Pinned_{DateTime.Now:yyyyMMdd_HHmmss}",
+                     FileTypeChoices = new[]
+                     {
+                         new Avalonia.Platform.Storage.FilePickerFileType("PNG Image") { Patterns = new[] { "*.png" } }
+                     }
+                 });
+                 
+                 if (file != null)
+                 {
+                     using var stream = await file.OpenWriteAsync();
+                     vm.Image?.Save(stream);
+                 }
+            };
         }
+    }
+
+    // Resize Fields
+    private bool _isResizing;
+    private ResizeDirection _resizeDirection;
+    private Point _resizeStartPoint; // Screen Coordinates
+    
+    // Start State
+    private PixelPoint _startPosition;
+    private Size _startSize; // Logical
+
+    private enum ResizeDirection
+    {
+        None, TopLeft, TopRight, BottomLeft, BottomRight, Top, Bottom, Left, Right
     }
 
     private void OnPointerPressed(object? sender, PointerPressedEventArgs e)
     {
+        var source = e.Source as Control;
+        
+        // Ensure we hit a handle
+        if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed && source != null && source.Classes.Contains("Handle"))
+        {
+            _isResizing = true;
+            _resizeDirection = GetDirectionFromName(source.Name);
+            
+            try
+            {
+                var p = e.GetCurrentPoint(this);
+                _resizeStartPoint = this.PointToScreen(p.Position).ToPoint(1.0);
+                
+                _startPosition = Position;
+                _startSize = Bounds.Size;
+                
+                e.Pointer.Capture(this);
+                e.Handled = true;
+            }
+            catch (Exception)
+            {
+                _isResizing = false;
+            }
+            return;
+        }
+
         if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
         {
             BeginMoveDrag(e);
+        }
+    }
+    
+    protected override void OnPointerMoved(PointerEventArgs e)
+    {
+        base.OnPointerMoved(e);
+        
+        if (_isResizing)
+        {
+            try
+            {
+                var p = e.GetCurrentPoint(this);
+                var currentScreenPoint = this.PointToScreen(p.Position).ToPoint(1.0);
+                
+                var deltaX = currentScreenPoint.X - _resizeStartPoint.X;
+                var deltaY = currentScreenPoint.Y - _resizeStartPoint.Y;
+
+                var scaling = RenderScaling;
+                var deltaWidth = deltaX / scaling;
+                var deltaHeight = deltaY / scaling;
+
+                double x = _startPosition.X;
+                double y = _startPosition.Y;
+                double w = _startSize.Width;
+                double h = _startSize.Height;
+
+                switch (_resizeDirection)
+                {
+                    case ResizeDirection.TopLeft:
+                        x = _startPosition.X + (int)deltaX; 
+                        y = _startPosition.Y + (int)deltaY; 
+                        w = _startSize.Width - deltaWidth; 
+                        h = _startSize.Height - deltaHeight; 
+                        break;
+                    case ResizeDirection.TopRight:
+                        y = _startPosition.Y + (int)deltaY; 
+                        w = _startSize.Width + deltaWidth; 
+                        h = _startSize.Height - deltaHeight; 
+                        break;
+                    case ResizeDirection.BottomLeft:
+                        x = _startPosition.X + (int)deltaX; 
+                        w = _startSize.Width - deltaWidth; 
+                        h = _startSize.Height + deltaHeight; 
+                        break;
+                    case ResizeDirection.BottomRight:
+                        w = _startSize.Width + deltaWidth; 
+                        h = _startSize.Height + deltaHeight; 
+                        break;
+                    case ResizeDirection.Top:
+                        y = _startPosition.Y + (int)deltaY; 
+                        h = _startSize.Height - deltaHeight; 
+                        break;
+                    case ResizeDirection.Bottom:
+                        h = _startSize.Height + deltaHeight; 
+                        break;
+                    case ResizeDirection.Left:
+                        x = _startPosition.X + (int)deltaX; 
+                        w = _startSize.Width - deltaWidth; 
+                        break;
+                    case ResizeDirection.Right:
+                        w = _startSize.Width + deltaWidth; 
+                        break;
+                }
+
+                w = Math.Max(50, w);
+                h = Math.Max(50, h);
+
+                Position = new PixelPoint((int)x, (int)y);
+                Width = w;
+                Height = h;
+                
+                e.Handled = true;
+                
+                InvalidateMeasure();
+                InvalidateArrange();
+            }
+            catch (Exception)
+            {
+                // Suppress runtime resize errors
+            }
+        }
+    }
+    
+    protected override void OnPointerReleased(PointerReleasedEventArgs e)
+    {
+        base.OnPointerReleased(e);
+        if (_isResizing)
+        {
+            e.Pointer.Capture(null); // Release tracking
+            _isResizing = false;
+            _resizeDirection = ResizeDirection.None;
         }
     }
     
@@ -39,5 +203,21 @@ public partial class FloatingImageWindow : Window
         {
             Close();
         }
+    }
+
+    private ResizeDirection GetDirectionFromName(string? name)
+    {
+        return name switch
+        {
+            "HandleTopLeft" => ResizeDirection.TopLeft,
+            "HandleTopRight" => ResizeDirection.TopRight,
+            "HandleBottomLeft" => ResizeDirection.BottomLeft,
+            "HandleBottomRight" => ResizeDirection.BottomRight,
+            "HandleTop" => ResizeDirection.Top,
+            "HandleBottom" => ResizeDirection.Bottom,
+            "HandleLeft" => ResizeDirection.Left,
+            "HandleRight" => ResizeDirection.Right,
+            _ => ResizeDirection.None
+        };
     }
 }

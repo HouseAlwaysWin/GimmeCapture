@@ -9,22 +9,49 @@
         Title="Pinned Image"
         SystemDecorations="None"
         Topmost="True"
+        SizeToContent="Manual"
         Background="Transparent"
-        TransparencyLevelHint="Transparent"
-        SizeToContent="WidthAndHeight"
         ShowInTaskbar="False">
         
     <Window.Styles>
-        <Style Selector="Window">
-            <Setter Property="ExtendClientAreaToDecorationsHint" Value="True"/>
-            <Setter Property="ExtendClientAreaChromeHints" Value="NoChrome"/>
+        <Style Selector="Grid.Handle">
+            <Setter Property="Background" Value="Transparent"/>
         </Style>
     </Window.Styles>
     
-    <Border BorderBrush="{DynamicResource FoxGoldBrush}" 
-            BorderThickness="2" 
-            CornerRadius="0"
-            BoxShadow="0 4 10 0 #40000000">
-        <Image Source="{Binding Image}" Stretch="None"/>
-    </Border>
+    <Grid Background="Transparent">
+        <!-- Content -->
+        <Border BorderBrush="{DynamicResource FoxGoldBrush}" 
+                BorderThickness="2" 
+                CornerRadius="0"
+                BoxShadow="0 4 10 0 #40000000"
+                Margin="10"> 
+            <Image Source="{Binding Image}" Stretch="Fill" Name="PinnedImage" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
+            
+            <Border.ContextMenu>
+                <ContextMenu>
+                    <MenuItem Header="Copy Image (複製圖像)" Command="{Binding CopyCommand}"/>
+                    <MenuItem Header="Save Image As... (圖像另存為...)" Command="{Binding SaveCommand}"/>
+                    <Separator/>
+                    <MenuItem Header="Show Toolbar (顯示工具列)" IsEnabled="False"/>
+                    <MenuItem Header="Window Shadow (視窗陰影)" IsEnabled="False"/>
+                    <Separator/>
+                    <MenuItem Header="Close (關閉)" Command="{Binding CloseCommand}"/>
+                </ContextMenu>
+            </Border.ContextMenu>
+        </Border>
+        
+        <!-- Resize Handles - Expanded hit areas -->
+        <!-- Corners -->
+        <Grid Classes="Handle" Name="HandleTopLeft" Cursor="TopLeftCorner" Width="20" Height="20" HorizontalAlignment="Left" VerticalAlignment="Top"/>
+        <Grid Classes="Handle" Name="HandleTopRight" Cursor="TopRightCorner" Width="20" Height="20" HorizontalAlignment="Right" VerticalAlignment="Top"/>
+        <Grid Classes="Handle" Name="HandleBottomLeft" Cursor="BottomLeftCorner" Width="20" Height="20" HorizontalAlignment="Left" VerticalAlignment="Bottom"/>
+        <Grid Classes="Handle" Name="HandleBottomRight" Cursor="BottomRightCorner" Width="20" Height="20" HorizontalAlignment="Right" VerticalAlignment="Bottom"/>
+        
+        <!-- Sides -->
+        <Grid Classes="Handle" Name="HandleTop" Cursor="TopSide" Height="15" HorizontalAlignment="Stretch" VerticalAlignment="Top" Margin="20,0"/>
+        <Grid Classes="Handle" Name="HandleBottom" Cursor="BottomSide" Height="15" HorizontalAlignment="Stretch" VerticalAlignment="Bottom" Margin="20,0"/>
+        <Grid Classes="Handle" Name="HandleLeft" Cursor="LeftSide" Width="15" HorizontalAlignment="Left" VerticalAlignment="Stretch" Margin="0,20"/>
+        <Grid Classes="Handle" Name="HandleRight" Cursor="RightSide" Width="15" HorizontalAlignment="Right" VerticalAlignment="Stretch" Margin="0,20"/>
+    </Grid>
 </Window>

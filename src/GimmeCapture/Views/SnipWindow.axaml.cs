@@ -78,14 +78,23 @@ public partial class SnipWindow : Window
                 // Create ViewModel
                 var vm = new FloatingImageViewModel(bitmap);
                 
-                // Create Window
-                var win = new FloatingImageWindow
+                try
                 {
-                    DataContext = vm,
-                    Position = new PixelPoint((int)rect.X, (int)rect.Y)
-                };
-                
-                win.Show();
+                    // Create Window
+                    var win = new FloatingImageWindow
+                    {
+                        DataContext = vm,
+                        Position = new PixelPoint((int)rect.X, (int)rect.Y),
+                        Width = rect.Width,
+                        Height = rect.Height
+                    };
+                    
+                    win.Show();
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Error showing Floating Window: {ex}");
+                }
             };
         }
     }
