@@ -106,12 +106,12 @@
                                 <StackPanel IsVisible="{Binding CurrentTool, Converter={StaticResource EnumNotMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Text}}">
                                     <TextBlock Text="Size" FontSize="9" Foreground="Gray"/>
                                     <StackPanel Orientation="Horizontal" Spacing="1">
-                                        <TextBox Text="{Binding CurrentThickness}" Width="5" Height="5" FontSize="9" 
+                                        <TextBox Text="{Binding CurrentThickness}" Width="1" Height="1" FontSize="20" 
                                                  Background="#2A2A2A" Foreground="White" BorderBrush="#444444" Padding="2,0"/>
                                         <StackPanel Spacing="0">
-                                            <RepeatButton Content="▲" Width="12" Height="12" FontSize="7" Padding="0"
+                                            <RepeatButton Content="▲" Width="15" Height="15" FontSize="7" Padding="0"
                                                           Command="{Binding IncreaseThicknessCommand}"/>
-                                            <RepeatButton Content="▼" Width="12" Height="12" FontSize="7" Padding="0"
+                                            <RepeatButton Content="▼" Width="15" Height="15" FontSize="7" Padding="0"
                                                           Command="{Binding DecreaseThicknessCommand}"/>
                                         </StackPanel>
                                     </StackPanel>
@@ -120,12 +120,12 @@
                                 <StackPanel IsVisible="{Binding CurrentTool, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Text}}">
                                     <TextBlock Text="Font" FontSize="9" Foreground="Gray"/>
                                     <StackPanel Orientation="Horizontal" Spacing="1">
-                                        <TextBox Text="{Binding CurrentFontSize}" Width="5" Height="5" FontSize="9" 
+                                        <TextBox Text="{Binding CurrentFontSize}" Width="1" Height="1" FontSize="20" 
                                                  Background="#2A2A2A" Foreground="White" BorderBrush="#444444" Padding="2,0"/>
                                         <StackPanel Spacing="0">
-                                            <RepeatButton Content="▲" Width="12" Height="12" FontSize="7" Padding="0"
+                                            <RepeatButton Content="▲" Width="15" Height="15" FontSize="7" Padding="0"
                                                           Command="{Binding IncreaseFontSizeCommand}"/>
-                                            <RepeatButton Content="▼" Width="12" Height="12" FontSize="7" Padding="0"
+                                            <RepeatButton Content="▼" Width="15" Height="15" FontSize="7" Padding="0"
                                                           Command="{Binding DecreaseFontSizeCommand}"/>
                                         </StackPanel>
                                     </StackPanel>
