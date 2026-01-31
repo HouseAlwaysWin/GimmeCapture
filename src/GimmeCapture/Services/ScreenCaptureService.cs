@@ -51,77 +51,56 @@ public class ScreenCaptureService : IScreenCaptureService
     {
         await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
         {
+             if (OperatingSystem.IsWindows())
+             {
+                 /* 
+                  * Windows specific implementation using System.Windows.Forms.Clipboard
+                  * for maximum compatibility with other Windows apps.
+                  */
+                 try
+                 {
+                     using var image = SKImage.FromBitmap(bitmap);
+                     using var data = image.Encode(SKEncodedImageFormat.Png, 100);
+                     using var stream = data.AsStream();
+                     using var ms = new MemoryStream();
+                     stream.CopyTo(ms);
+                     ms.Position = 0;
+                     
+                     // Create System.Drawing.Bitmap
+                     using var winBitmap = new System.Drawing.Bitmap(ms);
+                     
+                     // Set to Clipboard
+                     // Note: System.Windows.Forms.Clipboard.SetImage requires STA thread.
+                     // Avalonia UI thread is usually STA on Windows.
+                     System.Windows.Forms.Clipboard.SetImage(winBitmap);
+                     return;
+                 }
+                 catch (Exception ex)
+                 {
+                     System.Diagnostics.Debug.WriteLine($"WinForms Clipboard failed: {ex.Message}");
+                     // Fallback to Avalonia implementation below
+                 }
+             }
+
+             // Fallback / Non-Windows implementation
              var topLevel = TopLevel.GetTopLevel(Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop ? desktop.MainWindow : null);
              if (topLevel?.Clipboard is { } clipboard)
              {
-                 // Convert SKBitmap to Avalonia Bitmap
                  using var image = SKImage.FromBitmap(bitmap);
-                 using var data = image.Encode(SKEncodedImageFormat.Png, 100);
-                 using var stream = data.AsStream();
-                 
-                 // Avalonia 11+ way requires using a platform specific way or creating a DataObject with 'PNG' format
-                 // Since SetBitmapAsync might not be directly available on IClipboard in strict sense depending on version
-                 // We construct a DataObject with file or raw stream.
-                 
-                 // But actually, let's try to pass the stream as a standard bitmap format.
-                 // NOTE: As of now, Avalonia's Clipboard API is basic.
-                 // Best practice for cross-platform image clipboard often involves tmp file or P/Invoke.
-                 // However, let's try the modern DataObject approach if available.
+                 // ... rest of Avalonia implementation ...
+                 // Simplified for brevity in replacement
                  
                  var dataObject = new DataObject();
-                 // "PNG" format is standard
-                 // We need to keep stream open? No, DataObject usually consumes it.
-                 // Actually, we must create a byte array.
+                 using var data = image.Encode(SKEncodedImageFormat.Png, 100);
+                 using var stream = data.AsStream();
+                 using var ms = new MemoryStream();
+                 stream.CopyTo(ms);
+                 ms.Position = 0;
                  
-                 using var memoryStream = new MemoryStream();
-                 stream.CopyTo(memoryStream);
-                 var bytes = memoryStream.ToArray();
-                 
-                 // Standard Clipboard formats usually expect specific naming or handling.
-                 // Let's use a simpler hack for Windows: Save to temp, add to file list.
-                 // Most apps (Discord, Teams, Slack) handle file copy as image upload.
-                 // Paint handles it? No.
-                 
-                 // REAL SOLUTION: Use System.Windows.Forms on Windows (since we have System.Drawing.Common)
-                 if (OperatingSystem.IsWindows())
-                 {
-                     try
-                     {
-                         // We need a STA thread for Windows Forms Clipboard.
-                         // Avalonia UI thread is STA.
-                         // But we need to convert SKBitmap (via stream) -> System.Drawing.Bitmap
-                         using var ms = new MemoryStream(bytes);
-                         using var sysBitmap = new System.Drawing.Bitmap(ms);
-                         
-                         // This call might require <UseWindowsForms>true</UseWindowsForms> in csproj
-                         // But System.Drawing.Common doesn't give Clipboard.
-                         // We might need to P/Invoke or rely on Avalonia.
-                     }
-                     catch {}
-                 }
-                 
-                 // Let's stick to Avalonia DataObject.
-                 // Some sources say: dataObject.Set(DataFormats.Bitmap, avaloniaBitmap);
-                 // We need to create an Avalonia Bitmap from stream.
-                 
-                 memoryStream.Position = 0;
-                 var avaloniaBitmap = new Avalonia.Media.Imaging.Bitmap(memoryStream);
-                 
-                 // dataObject.Set(DataFormats.Bitmap, avaloniaBitmap); // If this works
-                 // Wait, DataFormats.Bitmap is string "Bitmap".
-                 
-                 // DataFormats.Bitmap might not exist in this version of Avalonia.Input?
-                 // Standard formats: "Text", "FileDrop".
-                 // For Bitmap, it's often platform specific string.
-                 // However, Avalonia should handle the key "Bitmap" internally if we pass a Bitmap object.
-                 
-                 // Fix: Use DataFormats.Text for text, but for custom/bitmap, we use raw string "Bitmap" or look up correct field.
-                 // Actually, let's try calling DataObject.Set("Bitmap", avaloniaBitmap);
-                 
+                 var avaloniaBitmap = new Avalonia.Media.Imaging.Bitmap(ms);
                  dataObject.Set("Bitmap", avaloniaBitmap);
                  
-                 // Reverting to SetDataObjectAsync as SetDataAsync with 2 args doesn't match this version's API
-                 #pragma warning disable CS0618 // Type or member is obsolete
+                 #pragma warning disable CS0618
                  await clipboard.SetDataObjectAsync(dataObject);
                  #pragma warning restore CS0618
              }
