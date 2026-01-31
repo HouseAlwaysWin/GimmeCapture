@@ -33,8 +33,35 @@ public partial class SnipWindow : Window
         {
             _viewModel.CloseAction = () => 
             {
-                // Must run on UI thread, though Action usually invoked from UI thread command
+                // Must run on UI thread
                 Close();
+            };
+            
+            _viewModel.HideAction = () =>
+            {
+                // To remove border but keep window active logically, Hide() might close it?
+                // Window.Hide() hides it.
+                Hide();
+            };
+            
+            _viewModel.PickSaveFileAction = async () =>
+            {
+                 var topLevel = TopLevel.GetTopLevel(this);
+                 if (topLevel == null) return null;
+                 
+                 var file = await topLevel.StorageProvider.SaveFilePickerAsync(new Avalonia.Platform.Storage.FilePickerSaveOptions
+                 {
+                     Title = "Save Screenshot",
+                     DefaultExtension = "png",
+                     ShowOverwritePrompt = true,
+                     SuggestedFileName = $"Capture_{DateTime.Now:yyyyMMdd_HHmmss}",
+                     FileTypeChoices = new[]
+                     {
+                         new Avalonia.Platform.Storage.FilePickerFileType("PNG Image") { Patterns = new[] { "*.png" } }
+                     }
+                 });
+                 
+                 return file?.Path.LocalPath;
             };
         }
     }
