@@ -1,0 +1,29 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="40" d:DesignHeight="24"
+             x:Class="GimmeCapture.Views.Controls.CompactNumericStep"
+             x:Name="Root">
+    
+    <Border Background="#2A2A2A" BorderBrush="#444444" BorderThickness="1" CornerRadius="2" Height="24" Width="40">
+        <Grid ColumnDefinitions="*,Auto">
+            <!-- Text Display (Not Editable manually to keep it compact/safe) -->
+            <TextBlock Text="{Binding Value, ElementName=Root}" 
+                       VerticalAlignment="Center" HorizontalAlignment="Center"
+                       Foreground="White" FontSize="11" Margin="2,0,0,0"/>
+
+            <!-- Buttons -->
+            <StackPanel Grid.Column="1" Spacing="0">
+                <RepeatButton Content="▲" Width="14" Height="11" FontSize="6" Padding="0" 
+                              Background="Transparent" BorderThickness="0" Foreground="#AAAAAA"
+                              Delay="300" Interval="50" Focusable="False"
+                              Click="OnIncreaseClick"/>
+                <RepeatButton Content="▼" Width="14" Height="11" FontSize="6" Padding="0"
+                              Background="Transparent" BorderThickness="0" Foreground="#AAAAAA"
+                              Delay="300" Interval="50" Focusable="False"
+                              Click="OnDecreaseClick"/>
+            </StackPanel>
+        </Grid>
+    </Border>
+</UserControl>

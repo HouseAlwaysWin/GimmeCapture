@@ -6,6 +6,7 @@
              xmlns:m="using:GimmeCapture.Models"
              xmlns:services="using:GimmeCapture.Services"
              xmlns:media="using:Avalonia.Media"
+             xmlns:c="using:GimmeCapture.Views.Controls"
              mc:Ignorable="d" d:DesignWidth="300" d:DesignHeight="36"
              x:Class="GimmeCapture.Views.Controls.SnipToolbar"
              x:DataType="vm:SnipWindowViewModel">
@@ -115,30 +116,16 @@
                                 
                                 <StackPanel IsVisible="{Binding CurrentTool, Converter={StaticResource EnumNotMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Text}}">
                                     <TextBlock Text="{Binding [Size], Source={x:Static services:LocalizationService.Instance}}" FontSize="9" Foreground="Gray"/>
-                                    <StackPanel Orientation="Horizontal" Spacing="1">
-                                        <TextBox Text="{Binding CurrentThickness}" Width="1" Height="1" FontSize="20" 
-                                                 Background="#2A2A2A" Foreground="White" BorderBrush="#444444" Padding="2,0"/>
-                                        <StackPanel Spacing="0">
-                                            <RepeatButton Content="▲" Width="15" Height="15" FontSize="7" Padding="0"
-                                                          Command="{Binding IncreaseThicknessCommand}"/>
-                                            <RepeatButton Content="▼" Width="15" Height="15" FontSize="7" Padding="0"
-                                                          Command="{Binding DecreaseThicknessCommand}"/>
-                                        </StackPanel>
-                                    </StackPanel>
+                                    <c:CompactNumericStep Value="{Binding CurrentThickness}" 
+                                                          IncreaseCommand="{Binding IncreaseThicknessCommand}"
+                                                          DecreaseCommand="{Binding DecreaseThicknessCommand}"/>
                                 </StackPanel>
                                 
                                 <StackPanel IsVisible="{Binding CurrentTool, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Text}}">
                                     <TextBlock Text="{Binding [Font], Source={x:Static services:LocalizationService.Instance}}" FontSize="9" Foreground="Gray"/>
-                                    <StackPanel Orientation="Horizontal" Spacing="1">
-                                        <TextBox Text="{Binding CurrentFontSize}" Width="1" Height="1" FontSize="20" 
-                                                 Background="#2A2A2A" Foreground="White" BorderBrush="#444444" Padding="2,0"/>
-                                        <StackPanel Spacing="0">
-                                            <RepeatButton Content="▲" Width="15" Height="15" FontSize="7" Padding="0"
-                                                          Command="{Binding IncreaseFontSizeCommand}"/>
-                                            <RepeatButton Content="▼" Width="15" Height="15" FontSize="7" Padding="0"
-                                                          Command="{Binding DecreaseFontSizeCommand}"/>
-                                        </StackPanel>
-                                    </StackPanel>
+                                    <c:CompactNumericStep Value="{Binding CurrentFontSize}"
+                                                          IncreaseCommand="{Binding IncreaseFontSizeCommand}"
+                                                          DecreaseCommand="{Binding DecreaseFontSizeCommand}"/>
                                 </StackPanel>
                             </StackPanel>
                         </Border>
