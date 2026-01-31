@@ -1,0 +1,28 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="using:GimmeCapture.ViewModels"
+        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+        x:Class="GimmeCapture.Views.SnipWindow"
+        x:DataType="vm:SnipWindowViewModel"
+        Title="SnipWindow"
+        TransparencyLevelHint="Transparent"
+        SystemDecorations="None"
+        WindowState="Maximized"
+        Topmost="True"
+        Background="#44000000"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaChromeHints="NoChrome">
+
+    <Canvas Name="SelectionCanvas" Background="Transparent" Cursor="Cross">
+        <Border BorderBrush="{DynamicResource BMRingRedBrush}"
+                BorderThickness="2"
+                Width="{Binding SelectionRect.Width}"
+                Height="{Binding SelectionRect.Height}"
+                Canvas.Left="{Binding SelectionRect.X}"
+                Canvas.Top="{Binding SelectionRect.Y}"
+                IsVisible="{Binding IsSelecting}"/>
+    </Canvas>
+
+</Window>

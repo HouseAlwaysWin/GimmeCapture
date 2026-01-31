@@ -1,0 +1,50 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- BABYMETAL Color Palette -->
+    <Color x:Key="BMRingRed">#E60012</Color>
+    <Color x:Key="GothicBlack">#121212</Color>
+    <Color x:Key="FoxGold">#D4AF37</Color>
+    <Color x:Key="PanelGray">#1E1E1E</Color>
+
+    <SolidColorBrush x:Key="BMRingRedBrush" Color="{StaticResource BMRingRed}"/>
+    <SolidColorBrush x:Key="GothicBlackBrush" Color="{StaticResource GothicBlack}"/>
+    <SolidColorBrush x:Key="FoxGoldBrush" Color="{StaticResource FoxGold}"/>
+    <SolidColorBrush x:Key="PanelGrayBrush" Color="{StaticResource PanelGray}"/>
+
+    <!-- Metal Button Style -->
+    <ControlTheme x:Key="MetalButton" TargetType="Button">
+        <Setter Property="Background" Value="{StaticResource PanelGrayBrush}"/>
+        <Setter Property="Foreground" Value="{StaticResource FoxGoldBrush}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource BMRingRedBrush}"/>
+        <Setter Property="BorderThickness" Value="2"/>
+        <Setter Property="Padding" Value="20,10"/>
+        <Setter Property="CornerRadius" Value="0"/>
+        <Setter Property="FontWeight" Value="Bold"/>
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Background="{TemplateBinding Background}"
+                        BorderBrush="{TemplateBinding BorderBrush}"
+                        BorderThickness="{TemplateBinding BorderThickness}"
+                        CornerRadius="{TemplateBinding CornerRadius}"
+                        Padding="{TemplateBinding Padding}">
+                    <ContentPresenter Name="PART_ContentPresenter"
+                                      Content="{TemplateBinding Content}"
+                                      ContentTemplate="{TemplateBinding ContentTemplate}"
+                                      HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                      VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                </Border>
+            </ControlTemplate>
+        </Setter>
+        
+        <Style Selector="^:pointerover">
+            <Setter Property="Background" Value="#333333"/>
+            <Setter Property="BorderBrush" Value="{StaticResource FoxGoldBrush}"/>
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+        
+        <Style Selector="^:pressed">
+            <Setter Property="Background" Value="{StaticResource BMRingRedBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+    </ControlTheme>
+</ResourceDictionary>
