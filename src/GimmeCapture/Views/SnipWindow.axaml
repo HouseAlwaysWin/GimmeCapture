@@ -40,7 +40,7 @@
 
         <!-- 互動層：使用 Canvas 定位邊框 -->
         <Canvas>
-            <Border BorderBrush="{DynamicResource BMRingRedBrush}"
+            <Border BorderBrush="{DynamicResource AccentRedBrush}"
                     BorderThickness="2"
                     Width="{Binding SelectionRect.Width}"
                     Height="{Binding SelectionRect.Height}"

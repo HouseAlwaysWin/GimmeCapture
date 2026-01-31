@@ -1,21 +1,21 @@
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <!-- BABYMETAL Color Palette -->
-    <Color x:Key="BMRingRed">#E60012</Color>
+    <!-- Theme Color Palette -->
+    <Color x:Key="AccentRed">#E60012</Color>
     <Color x:Key="GothicBlack">#121212</Color>
-    <Color x:Key="FoxGold">#D4AF37</Color>
+    <Color x:Key="AccentGold">#D4AF37</Color>
     <Color x:Key="PanelGray">#1E1E1E</Color>
 
-    <SolidColorBrush x:Key="BMRingRedBrush" Color="{StaticResource BMRingRed}"/>
+    <SolidColorBrush x:Key="AccentRedBrush" Color="{StaticResource AccentRed}"/>
     <SolidColorBrush x:Key="GothicBlackBrush" Color="{StaticResource GothicBlack}"/>
-    <SolidColorBrush x:Key="FoxGoldBrush" Color="{StaticResource FoxGold}"/>
+    <SolidColorBrush x:Key="AccentGoldBrush" Color="{StaticResource AccentGold}"/>
     <SolidColorBrush x:Key="PanelGrayBrush" Color="{StaticResource PanelGray}"/>
 
     <!-- Metal Button Style -->
     <ControlTheme x:Key="MetalButton" TargetType="Button">
         <Setter Property="Background" Value="{StaticResource PanelGrayBrush}"/>
-        <Setter Property="Foreground" Value="{StaticResource FoxGoldBrush}"/>
-        <Setter Property="BorderBrush" Value="{StaticResource BMRingRedBrush}"/>
+        <Setter Property="Foreground" Value="{StaticResource AccentGoldBrush}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource AccentRedBrush}"/>
         <Setter Property="BorderThickness" Value="2"/>
         <Setter Property="Padding" Value="20,10"/>
         <Setter Property="CornerRadius" Value="0"/>
@@ -38,12 +38,12 @@
         
         <Style Selector="^:pointerover">
             <Setter Property="Background" Value="#333333"/>
-            <Setter Property="BorderBrush" Value="{StaticResource FoxGoldBrush}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource AccentGoldBrush}"/>
             <Setter Property="Cursor" Value="Hand"/>
         </Style>
         
         <Style Selector="^:pressed">
-            <Setter Property="Background" Value="{StaticResource BMRingRedBrush}"/>
+            <Setter Property="Background" Value="{StaticResource AccentRedBrush}"/>
             <Setter Property="Foreground" Value="White"/>
         </Style>
     </ControlTheme>

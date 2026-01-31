@@ -92,20 +92,23 @@ public class ViewModelBase : ObservableObject
 
 ---
 
-### [NEW] [MainWindowViewModel.cs](file:///D:/Projects/GimmeCapture/src/GimmeCapture/ViewModels/MainWindowViewModel.cs)
+### [MODIFY] [MainWindow.axaml](file:///D:/Projects/GimmeCapture/src/GimmeCapture/Views/MainWindow.axaml)
 
-主視窗 ViewModel：
+將主視窗改為應用程式設定介面（Preferences UI），參考 Snipaste 風格：
+*   **Layout**: 使用 `TabControl` 分頁管理。
+*   **Tabs**:
+    *   **一般 (General)**: 語言、開機啟動 (Placeholder)。
+    *   **擷圖 (Snip)**: 邊框粗細、遮罩顏色/透明度。
+    *   **輸出 (Output)**: 自動儲存路徑、檔名格式。
+    *   **關於 (About)**: 版本資訊。
+*   **Actions**: 在底部保留「開始截圖 (Snip)」按鈕以便測試，未來將移至 System Tray。
 
-```csharp
-public partial class MainWindowViewModel : ViewModelBase
-{
-    [ObservableProperty]
-    private string _statusText = "Ready";
-    
-    [RelayCommand]
-    private void StartCapture() { /* 開啟 SnipWindow */ }
-}
-```
+### [MODIFY] [MainWindowViewModel.cs](file:///D:/Projects/GimmeCapture/src/GimmeCapture/ViewModels/MainWindowViewModel.cs)
+
+新增設定相關屬性：
+*   `BorderThickness` (double)
+*   `MaskOpacity` (double)
+*   `AutoSave` (bool)
 
 ---
 
