@@ -29,7 +29,10 @@ namespace GimmeCapture.Services
                 {
                     this.RaiseAndSetIfChanged(ref _currentLanguage, value);
                     UpdateFont(value);
-                    this.RaisePropertyChanged("Item[]"); // Force indexer update
+                    
+                    // Notify indexer changes for binding updates
+                    this.RaisePropertyChanged("Item");
+                    this.RaisePropertyChanged("Item[]"); 
                 }
             }
         }
