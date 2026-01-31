@@ -15,7 +15,6 @@
         <StackPanel Orientation="Horizontal" Spacing="5">
             <Button Theme="{StaticResource MetalButton}" Content="Copy" Command="{Binding CopyCommand}"/>
             <Button Theme="{StaticResource MetalButton}" Content="Save" Command="{Binding SaveCommand}"/>
-            <Button Theme="{StaticResource MetalButton}" Content="Close" Command="{Binding CloseCommand}"/>
         </StackPanel>
     </Border>
 </UserControl>

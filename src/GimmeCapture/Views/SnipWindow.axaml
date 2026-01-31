@@ -21,6 +21,11 @@
         <cv:DoubleToBoolConverter x:Key="SizeToBoolConverter"/>
         <cv:StateToBoolConverter x:Key="StateToBoolConverter"/>
     </Window.Resources>
+    
+    <Window.KeyBindings>
+        <KeyBinding Gesture="Ctrl+C" Command="{Binding CopyCommand}" />
+        <KeyBinding Gesture="Ctrl+S" Command="{Binding SaveCommand}" />
+    </Window.KeyBindings>
 
     <Grid>
     <Grid>
