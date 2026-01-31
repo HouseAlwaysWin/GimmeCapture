@@ -7,6 +7,20 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        
+        this.PropertyChanged += OnPropertyChanged;
+    }
+
+    private void OnPropertyChanged(object? sender, Avalonia.AvaloniaPropertyChangedEventArgs e)
+    {
+        if (e.Property == Window.WindowStateProperty)
+        {
+            if (WindowState == WindowState.Minimized)
+            {
+                // Minimize to Tray
+                Hide();
+            }
+        }
     }
 
     protected override void OnDataContextChanged(System.EventArgs e)
