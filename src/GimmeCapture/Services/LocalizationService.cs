@@ -94,7 +94,22 @@ namespace GimmeCapture.Services
                     ["HotkeysActive"] = "* Global Listener Active (Kitsune Mode Ready)",
                     ["StartCapture"] = "Start Capture (Snip)",
                     ["Confirm"] = "OK (Save)",
-                    ["Cancel"] = "Cancel"
+                    ["Cancel"] = "Cancel",
+
+                    // Tooltips
+                    ["TipCopy"] = "Copy (Ctrl+C)",
+                    ["TipSave"] = "Save (Ctrl+S)",
+                    ["TipPin"] = "Pin (F3)",
+                    ["TipShapes"] = "Shapes",
+                    ["TipLines"] = "Lines & Arrows",
+                    ["Line"] = "Line",
+
+                    // Context Menu
+                    ["MenuCopyImage"] = "Copy Image",
+                    ["MenuSaveImage"] = "Save Image As...",
+                    ["MenuShowToolbar"] = "Show Toolbar",
+                    ["MenuWindowShadow"] = "Window Shadow",
+                    ["MenuClose"] = "Close"
                 },
                 [Language.Chinese] = new Dictionary<string, string>
                 {
@@ -134,7 +149,22 @@ namespace GimmeCapture.Services
                     ["HotkeysActive"] = "* 已啟用全域監聽 (Kitsune Mode Ready)",
                     ["StartCapture"] = "啟動截圖 (Snip)",
                     ["Confirm"] = "確定 (Save)",
-                    ["Cancel"] = "取消"
+                    ["Cancel"] = "取消",
+
+                    // Tooltips
+                    ["TipCopy"] = "複製 (Ctrl+C)",
+                    ["TipSave"] = "儲存 (Ctrl+S)",
+                    ["TipPin"] = "釘選 (F3)",
+                    ["TipShapes"] = "形狀",
+                    ["TipLines"] = "線條與箭頭",
+                    ["Line"] = "直線",
+
+                    // Context Menu
+                    ["MenuCopyImage"] = "複製圖像",
+                    ["MenuSaveImage"] = "圖像另存為...",
+                    ["MenuShowToolbar"] = "顯示工具列",
+                    ["MenuWindowShadow"] = "視窗陰影",
+                    ["MenuClose"] = "關閉"
                 },
                 [Language.Japanese] = new Dictionary<string, string>
                 {
@@ -174,7 +204,22 @@ namespace GimmeCapture.Services
                     ["HotkeysActive"] = "* グローバルリスナー有効 (Kitsune Mode Ready)",
                     ["StartCapture"] = "キャプチャ開始",
                     ["Confirm"] = "OK (保存)",
-                    ["Cancel"] = "キャンセル"
+                    ["Cancel"] = "キャンセル",
+                    
+                    // Tooltips
+                    ["TipCopy"] = "コピー (Ctrl+C)",
+                    ["TipSave"] = "保存 (Ctrl+S)",
+                    ["TipPin"] = "ピン留め (F3)",
+                    ["TipShapes"] = "図形",
+                    ["TipLines"] = "線と矢印",
+                    ["Line"] = "直線",
+
+                    // Context Menu
+                    ["MenuCopyImage"] = "画像をコピー",
+                    ["MenuSaveImage"] = "名前を付けて画像を保存...",
+                    ["MenuShowToolbar"] = "ツールバーを表示",
+                    ["MenuWindowShadow"] = "ウィンドウの影",
+                    ["MenuClose"] = "閉じる"
                 }
             };
 

@@ -1,6 +1,7 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:cv="using:GimmeCapture.Converters"
+             xmlns:services="using:GimmeCapture.Services"
              x:Class="GimmeCapture.App"
              RequestedThemeVariant="Dark">
              <!-- "Default" ThemeVariant follows system theme variant. "Dark" or "Light" are other available options. -->
@@ -28,5 +29,13 @@
         <FluentTheme />
         <StyleInclude Source="avares://Avalonia.Controls.ColorPicker/Themes/Fluent/Fluent.xaml" />
         <StyleInclude Source="/Styles/GimmeTheme.axaml"/>
+        
+        <!-- Global Font Binding for Popups -->
+        <Style Selector="ToolTip">
+            <Setter Property="FontFamily" Value="{Binding CurrentFontFamily, Source={x:Static services:LocalizationService.Instance}}"/>
+        </Style>
+        <Style Selector="ContextMenu">
+            <Setter Property="FontFamily" Value="{Binding CurrentFontFamily, Source={x:Static services:LocalizationService.Instance}}"/>
+        </Style>
     </Application.Styles>
 </Application>

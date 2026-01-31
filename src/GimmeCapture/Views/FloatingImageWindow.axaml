@@ -3,6 +3,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:vm="using:GimmeCapture.ViewModels"
+        xmlns:services="using:GimmeCapture.Services"
         mc:Ignorable="d" d:DesignWidth="300" d:DesignHeight="300"
         x:Class="GimmeCapture.Views.FloatingImageWindow"
         x:DataType="vm:FloatingImageViewModel"
@@ -11,6 +12,7 @@
         Topmost="True"
         SizeToContent="Manual"
         Background="Transparent"
+        FontFamily="{Binding CurrentFontFamily, Source={x:Static services:LocalizationService.Instance}}"
         ShowInTaskbar="False">
         
     <Window.Styles>
@@ -55,13 +57,13 @@
             
             <Border.ContextMenu>
                 <ContextMenu>
-                    <MenuItem Header="Copy Image (複製圖像)" Command="{Binding CopyCommand}"/>
-                    <MenuItem Header="Save Image As... (圖像另存為...)" Command="{Binding SaveCommand}"/>
+                    <MenuItem Header="{Binding [MenuCopyImage], Source={x:Static services:LocalizationService.Instance}}" Command="{Binding CopyCommand}"/>
+                    <MenuItem Header="{Binding [MenuSaveImage], Source={x:Static services:LocalizationService.Instance}}" Command="{Binding SaveCommand}"/>
                     <Separator/>
-                    <MenuItem Header="Show Toolbar (顯示工具列)" IsEnabled="False"/>
-                    <MenuItem Header="Window Shadow (視窗陰影)" IsEnabled="False"/>
+                    <MenuItem Header="{Binding [MenuShowToolbar], Source={x:Static services:LocalizationService.Instance}}" IsEnabled="False"/>
+                    <MenuItem Header="{Binding [MenuWindowShadow], Source={x:Static services:LocalizationService.Instance}}" IsEnabled="False"/>
                     <Separator/>
-                    <MenuItem Header="Close (關閉)" Command="{Binding CloseCommand}"/>
+                    <MenuItem Header="{Binding [MenuClose], Source={x:Static services:LocalizationService.Instance}}" Command="{Binding CloseCommand}"/>
                 </ContextMenu>
             </Border.ContextMenu>
         </Border>

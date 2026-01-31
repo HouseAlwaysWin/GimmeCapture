@@ -10,6 +10,7 @@
         Title="GimmeCapture"
         Icon="avares://GimmeCapture/Assets/kitsune_icon.png"
         Background="{DynamicResource GothicBlackBrush}"
+        FontFamily="{Binding CurrentFontFamily, Source={x:Static services:LocalizationService.Instance}}"
         Foreground="White">
 
     <Design.DataContext>

@@ -18,14 +18,14 @@
             Padding="2">
         <StackPanel Orientation="Horizontal" Spacing="2">
             <!-- Main Actions -->
-            <Button Theme="{StaticResource SnipButton}" Content="{Binding [Copy], Source={x:Static services:LocalizationService.Instance}}" Command="{Binding CopyCommand}" ToolTip.Tip="Copy (Ctrl+C)"/>
-            <Button Theme="{StaticResource SnipButton}" Content="{Binding [Save], Source={x:Static services:LocalizationService.Instance}}" Command="{Binding SaveCommand}" ToolTip.Tip="Save (Ctrl+S)"/>
-            <Button Theme="{StaticResource SnipButton}" Content="{Binding [Pin], Source={x:Static services:LocalizationService.Instance}}" Command="{Binding PinCommand}" ToolTip.Tip="Pin (F3)"/>
+            <Button Theme="{StaticResource SnipButton}" Content="{Binding [Copy], Source={x:Static services:LocalizationService.Instance}}" Command="{Binding CopyCommand}" ToolTip.Tip="{Binding [TipCopy], Source={x:Static services:LocalizationService.Instance}}"/>
+            <Button Theme="{StaticResource SnipButton}" Content="{Binding [Save], Source={x:Static services:LocalizationService.Instance}}" Command="{Binding SaveCommand}" ToolTip.Tip="{Binding [TipSave], Source={x:Static services:LocalizationService.Instance}}"/>
+            <Button Theme="{StaticResource SnipButton}" Content="{Binding [Pin], Source={x:Static services:LocalizationService.Instance}}" Command="{Binding PinCommand}" ToolTip.Tip="{Binding [TipPin], Source={x:Static services:LocalizationService.Instance}}"/>
             
             <Rectangle Fill="#444444" Width="1" Height="16" Margin="2,0" VerticalAlignment="Center"/>
             
             <!-- Grouped Annotation Tools -->
-            <Button Theme="{StaticResource SnipButton}" ToolTip.Tip="Shapes">
+            <Button Theme="{StaticResource SnipButton}" ToolTip.Tip="{Binding [TipShapes], Source={x:Static services:LocalizationService.Instance}}">
                 <Button.Flyout>
                     <Flyout Placement="Bottom">
                         <Border Background="#1A1A1A" BorderBrush="#333333" BorderThickness="1" Padding="2" CornerRadius="4">
@@ -47,7 +47,7 @@
                 </Panel>
             </Button>
 
-            <Button Theme="{StaticResource SnipButton}" ToolTip.Tip="Lines &amp; Arrows">
+            <Button Theme="{StaticResource SnipButton}" ToolTip.Tip="{Binding [TipLines], Source={x:Static services:LocalizationService.Instance}}">
                 <Button.Flyout>
                     <Flyout Placement="Bottom">
                         <Border Background="#1A1A1A" BorderBrush="#333333" BorderThickness="1" Padding="2" CornerRadius="4">
@@ -57,7 +57,7 @@
                                                Command="{Binding SelectToolCommand}" CommandParameter="{x:Static m:AnnotationType.Arrow}" ToolTip.Tip="{Binding [Arrow], Source={x:Static services:LocalizationService.Instance}}"/>
                                 <ToggleButton Theme="{StaticResource SnipToggleButton}" Content="—" 
                                                IsChecked="{Binding CurrentTool, ConverterParameter={x:Static m:AnnotationType.Line}, Converter={StaticResource EnumToBoolConverter}}"
-                                               Command="{Binding SelectToolCommand}" CommandParameter="{x:Static m:AnnotationType.Line}" ToolTip.Tip="Line"/>
+                                               Command="{Binding SelectToolCommand}" CommandParameter="{x:Static m:AnnotationType.Line}" ToolTip.Tip="{Binding [Line], Source={x:Static services:LocalizationService.Instance}}"/>
                             </StackPanel>
                         </Border>
                     </Flyout>
