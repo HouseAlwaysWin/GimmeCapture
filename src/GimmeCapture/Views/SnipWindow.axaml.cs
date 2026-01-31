@@ -52,6 +52,7 @@ public partial class SnipWindow : Window
                 Hide();
             };
             
+
             _viewModel.PickSaveFileAction = async () =>
             {
                  var topLevel = TopLevel.GetTopLevel(this);
@@ -70,6 +71,21 @@ public partial class SnipWindow : Window
                  });
                  
                  return file?.Path.LocalPath;
+            };
+
+            _viewModel.OpenPinWindowAction = (bitmap, rect) =>
+            {
+                // Create ViewModel
+                var vm = new FloatingImageViewModel(bitmap);
+                
+                // Create Window
+                var win = new FloatingImageWindow
+                {
+                    DataContext = vm,
+                    Position = new PixelPoint((int)rect.X, (int)rect.Y)
+                };
+                
+                win.Show();
             };
         }
     }

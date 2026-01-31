@@ -25,6 +25,7 @@
     <Window.KeyBindings>
         <KeyBinding Gesture="Ctrl+C" Command="{Binding CopyCommand}" />
         <KeyBinding Gesture="Ctrl+S" Command="{Binding SaveCommand}" />
+        <KeyBinding Gesture="F3" Command="{Binding PinCommand}" />
     </Window.KeyBindings>
 
     <Window.Styles>

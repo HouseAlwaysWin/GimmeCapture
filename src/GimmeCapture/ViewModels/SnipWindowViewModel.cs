@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
 using ReactiveUI;
 using System;
 using System.Reactive;
@@ -44,6 +45,7 @@ public class SnipWindowViewModel : ViewModelBase
     // Commands
     public ReactiveCommand<Unit, Unit> CopyCommand { get; }
     public ReactiveCommand<Unit, Unit> SaveCommand { get; }
+    public ReactiveCommand<Unit, Unit> PinCommand { get; }
     public ReactiveCommand<Unit, Unit> CloseCommand { get; }
 
     public SnipWindowViewModel()
@@ -52,6 +54,7 @@ public class SnipWindowViewModel : ViewModelBase
 
         CopyCommand = ReactiveCommand.CreateFromTask(Copy);
         SaveCommand = ReactiveCommand.CreateFromTask(Save);
+        PinCommand = ReactiveCommand.CreateFromTask(Pin);
         CloseCommand = ReactiveCommand.Create(Close);
     }
 
@@ -108,10 +111,41 @@ public class SnipWindowViewModel : ViewModelBase
              }
          }
     }
+    
+    private async Task Pin()
+    {
+        if (SelectionRect.Width > 0 && SelectionRect.Height > 0)
+        {
+            HideAction?.Invoke();
+            await Task.Delay(200); // Wait for UI update
+            
+            try
+            {
+                var skBitmap = await _captureService.CaptureScreenAsync(SelectionRect);
+                
+                // Convert SKBitmap to Avalonia Bitmap
+                using var image = SkiaSharp.SKImage.FromBitmap(skBitmap);
+                using var data = image.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
+                using var stream = new System.IO.MemoryStream();
+                data.SaveTo(stream);
+                stream.Position = 0;
+                
+                var avaloniaBitmap = new Avalonia.Media.Imaging.Bitmap(stream);
+                
+                // Open Floating Window
+                OpenPinWindowAction?.Invoke(avaloniaBitmap, SelectionRect);
+            }
+            finally
+            {
+                CloseAction?.Invoke();
+            }
+        }
+    }
 
     private void Close() { CloseAction?.Invoke(); }
     
     public Action? CloseAction { get; set; }
     public Action? HideAction { get; set; }
     public Func<Task<string?>>? PickSaveFileAction { get; set; }
+    public Action<Bitmap, Rect>? OpenPinWindowAction { get; set; }
 }
