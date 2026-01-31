@@ -14,6 +14,9 @@ public partial class MainWindow : Window
         base.OnDataContextChanged(e);
         if (DataContext is GimmeCapture.ViewModels.MainWindowViewModel vm)
         {
+            // Initialize Hotkey Service with this Window
+            vm.HotkeyService.Initialize(this);
+
             vm.RequestCaptureAction = () =>
             {
                 var snip = new SnipWindow();

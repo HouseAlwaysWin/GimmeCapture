@@ -210,6 +210,22 @@ public class AppSettings
 
 ## 第二階段：跨平台錄影準備 (Starlight - GIF/Video Prep)
 
+### [NEW] [GlobalHotkeyService.cs](file:///D:/Projects/GimmeCapture/src/GimmeCapture/Services/GlobalHotkeyService.cs)
+
+實作全域快捷鍵服務 (Windows Only for Phase 1)。
+*   使用 P/Invoke 呼叫 `RegisterHotKey` / `UnregisterHotKey`。
+*   使用 Win32 Subclassing (`SetWindowLongPtr` GWLP_WNDPROC) 攔截 `WM_HOTKEY` 訊息。
+*   提供 `Register(string hotkey)` 方法，自動解析字串 (e.g., "F1", "Ctrl+S")。
+
+### [MODIFY] [MainWindowViewModel.cs](file:///D:/Projects/GimmeCapture/src/GimmeCapture/ViewModels/MainWindowViewModel.cs)
+
+整合 `GlobalHotkeyService`：
+*   在 `LoadSettingsAsync` 後註冊快捷鍵。
+*   監聽 `SnipHotkey` 屬性變更，重新註冊快捷鍵。
+*   當收到快捷鍵事件時，觸發 `RequestCaptureAction`。
+
+---
+
 ### [NEW] [FFmpegEncoder.cs](file:///D:/Projects/GimmeCapture/src/GimmeCapture/Services/FFmpegEncoder.cs)
 
 FFmpeg 編碼器類別：

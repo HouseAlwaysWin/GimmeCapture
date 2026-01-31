@@ -13,10 +13,19 @@ public partial class MainWindowViewModel : ViewModelBase
     public System.Action? RequestCaptureAction { get; set; }
 
     private readonly Services.AppSettingsService _settingsService;
+    public Services.GlobalHotkeyService HotkeyService { get; } = new();
 
     public MainWindowViewModel()
     {
         _settingsService = new Services.AppSettingsService();
+        
+        // Setup Hotkey Action
+        HotkeyService.OnHotkeyPressed = () => 
+        {
+            // Must run on UI thread if it involves UI updates
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => StartCaptureCommand.Execute(null));
+        };
+
         // Fire and forget load, in real app use async initialization
         Task.Run(async () => await LoadSettingsAsync());
     }
@@ -46,6 +55,11 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty]
     private string _snipHotkey = "F1";
 
+    partial void OnSnipHotkeyChanged(string value)
+    {
+        HotkeyService.Register(value);
+    }
+
     public async Task LoadSettingsAsync()
     {
         await _settingsService.LoadAsync();
@@ -63,6 +77,11 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             BorderColor = color;
         }
+
+        // Register initial hotkey (ensure UI thread or safe context? Service handles P/Invoke which is thread-tied usually)
+        // Ideally we register on UI thread, but LoadSettingsAsync is background here. 
+        // We will dispatch to UI thread to be safe as the handle belongs to UI thread.
+        Avalonia.Threading.Dispatcher.UIThread.Post(() => HotkeyService.Register(SnipHotkey));
     }
 
     public async Task SaveSettingsAsync()
