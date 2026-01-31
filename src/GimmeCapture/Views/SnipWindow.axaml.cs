@@ -184,6 +184,10 @@ public partial class SnipWindow : Window
     private bool _isDraggingAnnotation;
     private Annotation? _draggingAnnotation;
     private Point _dragOffset;
+    
+    // Selection Moving State
+    private bool _isMovingSelection;
+    private Point _moveStartPoint;
 
     private void OnPointerPressed(object? sender, PointerPressedEventArgs e)
     {
@@ -351,6 +355,16 @@ public partial class SnipWindow : Window
                 _viewModel.IsDrawingMode = false; // Exit drawing mode when starting new selection
                 _viewModel.Annotations.Clear(); // Clear previous annotations when starting new selection
             }
+            else if (_viewModel.CurrentState == SnipWindowViewModel.SnipState.Selected && 
+                     !_viewModel.IsDrawingMode &&
+                     _viewModel.SelectionRect.Contains(point))
+            {
+                // New Logic: Move Selection
+                _isMovingSelection = true;
+                _moveStartPoint = point;
+                _originalRect = _viewModel.SelectionRect;
+                e.Handled = true;
+            }
         }
         else if (props.IsRightButtonPressed)
         {
@@ -413,6 +427,20 @@ public partial class SnipWindow : Window
              return;
         }
         
+        if (_isMovingSelection)
+        {
+             // Move Selection
+             var deltaX = currentPoint.X - _moveStartPoint.X;
+             var deltaY = currentPoint.Y - _moveStartPoint.Y;
+             
+             _viewModel.SelectionRect = new Rect(
+                 _originalRect.X + deltaX,
+                 _originalRect.Y + deltaY,
+                 _originalRect.Width,
+                 _originalRect.Height);
+             return;
+        }
+        
         if (_isDraggingAnnotation && _draggingAnnotation != null)
         {
              // Move Annotation
@@ -449,11 +477,17 @@ public partial class SnipWindow : Window
         
         if (_isResizing)
         {
-            _isResizing = false;
+             _isResizing = false;
             _resizeDirection = ResizeDirection.None;
             // Ensure state is Selected
              _viewModel.CurrentState = SnipWindowViewModel.SnipState.Selected;
              return;
+        }
+
+        if (_isMovingSelection)
+        {
+            _isMovingSelection = false;
+            return;
         }
         
         if (_isDraggingAnnotation)
