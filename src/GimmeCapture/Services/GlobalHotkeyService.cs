@@ -9,13 +9,14 @@ namespace GimmeCapture.Services;
 public class GlobalHotkeyService : IDisposable
 {
     private const int WM_HOTKEY = 0x0312;
-    private const int HOTKEY_ID = 9000; // Unique ID for our snip hotkey
-
     private IntPtr _handle;
-    private bool _isRegistered;
+    private readonly HashSet<int> _registeredIds = new();
     
-    // Action to fire when hotkey is pressed
-    public Action? OnHotkeyPressed { get; set; }
+    // Action to fire when hotkey is pressed, passing the ID
+    public Action<int>? OnHotkeyPressed { get; set; }
+    
+    private IntPtr _oldWndProc = IntPtr.Zero;
+    private WndProc? _newWndProc; // Keep reference to prevent GC
 
     [DllImport("user32.dll")]
     private static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
@@ -25,25 +26,6 @@ public class GlobalHotkeyService : IDisposable
 
     private delegate IntPtr WndProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
     
-    // We don't necessarily need to subclass if we just use the Avalonia Window's parsing, 
-    // but Avalonia doesn't expose a raw WndProc easily in a cross-platform way without some lifting.
-    // However, typical Avalonia way allows us to hook into the wndproc via IWindowImpl (internal) 
-    // or just use a message loop hook if possible.
-    // The safest "modern Avalonia" way without digging too deep into internals is usually 
-    // creating a dummy invisible window or just subclassing the main window handle if we have it.
-    
-    // Actually, Avalonia on Windows exposes `Win32PlatformOptions` but not direct WndProc hook easily in 11.0 
-    // without `ICoCreateTopLevelImpl`. 
-    // BUT! We can just use a simple message loop filter or `UnamangedMethods` if we had a dedicated message window.
-    // Let's try to just use the Main Window handle and assume we can catch the message or if Avalonia eats it.
-    // Spoiler: Avalonia might eat it.
-    // 
-    // Safer bet: Create a dedicated "MessageOnly" window? No, that's heavy.
-    // Let's try to use the standard Win32 approach: Subclassing or checking if Avalonia has a hook.
-    // Avalonia 0.10 had `Win32Properties.WndProc`, but 11.x?
-    // 
-    // Let's rely on standard HWND and `SetWindowLongPtr` (Subclassing) which is robust.
-    
     public void Initialize(Window window)
     {
         if (!OperatingSystem.IsWindows()) return;
@@ -52,69 +34,24 @@ public class GlobalHotkeyService : IDisposable
         if (platformHandle != null)
         {
             _handle = platformHandle.Handle;
-            
-            // Note: In a real robust app, we should subclass the window procedure (WndProc) 
-            // to listen for WM_HOTKEY.
-            // For this implementation, let's keep it simple. If we just RegisterHotKey, the WM_HOTKEY message
-            // arrives in the message queue. Avalonia's loop will dispatch it. 
-            // Does Avalonia expose it? Not directly.
-            // SO we MUST subclass functionality to intercept the message.
-            
-            // Adding a simple hook managed by ourself.
-            // Since Subclassing in C# can be tricky with delegates being GC'd, we need to be careful.
-            // For now, let's assume we can reference a simpler library or just implement the delegate.
-            
-            // To avoid complex Subclassing code which might crash if not careful (32 vs 64 bit),
-            // We can look for a library-free approach or use a background thread polling (GetAsyncKeyState) 
-            // but Polling is bad for battery/performance.
-            
-            // Let's try the cleanest "Native" way: 
-            // We actually don't NEED to subclass if we use a global hook (SetWindowsHookEx), 
-            // but RegisterHotKey is cleaner. It requires a loop message.
-            // 
-            // CRITICAL: Avalonia's `Win32Platform` exposes `WndProc` hook via reflection or internal? No.
-            // 
-            // Let's go with a hidden dummy form? No forms allowed.
-            // 
-            // Let's implement full proper Subclassing.
         }
     }
-    
-    // To keep this Initial Proof of Concept robust, I will use a P/Invoke subclass wrapper.
-    // HOWEVER, actually modifying the WndProc of the Main Window can be dangerous if Avalonia fights back.
-    // 
-    // SIMPLIFICATION: I will use `GetAsyncKeyState` in a timer loop for "Global" hotkeys as a FAILSAFE first step?
-    // NO! The user wants "Global Hotkey". Polling is "Global" but ugly.
-    // 
-    // Correct way:
-    // Pass the handle. Subclass it.
-    
-    // --- Subclassing Infrastructure ---
-    private IntPtr _oldWndProc = IntPtr.Zero;
-    private WndProc _newWndProc; // Keep reference to prevent GC
 
-    public void Register(string hotkey)
+    public void Register(int id, string hotkey)
     {
         if (!OperatingSystem.IsWindows() || _handle == IntPtr.Zero) return;
         
-        // 1. Unregister old
-        Unregister();
+        Unregister(id);
 
-        // 2. Parse hotkey string (Simple implementation: "F1", "Ctrl+F1")
-        // Mapping: F1 = 0x70
-        // Mods: Ctrl = 2, Alt = 1, Shift = 4, Win = 8
-        
         (uint modifiers, uint vkey) = ParseHotkey(hotkey);
 
         if (vkey != 0)
         {
-            // 3. Register
-             bool success = RegisterHotKey(_handle, HOTKEY_ID, modifiers, vkey);
+             bool success = RegisterHotKey(_handle, id, modifiers, vkey);
              if (success)
              {
-                 _isRegistered = true;
+                 _registeredIds.Add(id);
                  
-                 // Install Hook if not already
                  if (_oldWndProc == IntPtr.Zero)
                  {
                      InstallWndProcHook();
@@ -123,13 +60,23 @@ public class GlobalHotkeyService : IDisposable
         }
     }
     
-    private void Unregister()
+    public void Unregister(int id)
     {
-        if (_isRegistered && _handle != IntPtr.Zero)
+        if (_handle != IntPtr.Zero && _registeredIds.Contains(id))
         {
-            UnregisterHotKey(_handle, HOTKEY_ID);
-            _isRegistered = false;
+            UnregisterHotKey(_handle, id);
+            _registeredIds.Remove(id);
         }
+    }
+
+    private void UnregisterAll()
+    {
+        if (_handle == IntPtr.Zero) return;
+        foreach (var id in new List<int>(_registeredIds))
+        {
+            UnregisterHotKey(_handle, id);
+        }
+        _registeredIds.Clear();
     }
 
     private (uint mods, uint vkey) ParseHotkey(string hk)
@@ -214,9 +161,9 @@ public class GlobalHotkeyService : IDisposable
         if (msg == WM_HOTKEY)
         {
             int id = wParam.ToInt32();
-            if (id == HOTKEY_ID)
+            if (_registeredIds.Contains(id))
             {
-                OnHotkeyPressed?.Invoke();
+                OnHotkeyPressed?.Invoke(id);
             }
         }
         
@@ -225,7 +172,7 @@ public class GlobalHotkeyService : IDisposable
 
     public void Dispose()
     {
-        Unregister();
+        UnregisterAll();
         RemoveWndProcHook();
     }
 }

@@ -14,27 +14,41 @@ public class MainWindowViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _statusText, value);
     }
 
-    public System.Action? RequestCaptureAction { get; set; }
-
+    public System.Action<CaptureMode>? RequestCaptureAction { get; set; }
+    
     private readonly Services.AppSettingsService _settingsService;
     public Services.GlobalHotkeyService HotkeyService { get; } = new();
 
+    // Hotkey IDs
+    private const int ID_SNIP = 9000;
+    private const int ID_COPY = 9001;
+    private const int ID_PIN = 9002;
+
+    public enum CaptureMode { Normal, Copy, Pin }
+
     // Commands
-    public ReactiveCommand<Unit, Unit> StartCaptureCommand { get; }
+    public ReactiveCommand<CaptureMode, Unit> StartCaptureCommand { get; }
     public ReactiveCommand<Unit, Unit> SaveAndCloseCommand { get; }
 
     public MainWindowViewModel()
     {
         _settingsService = new Services.AppSettingsService();
         
-        StartCaptureCommand = ReactiveCommand.CreateFromTask(StartCapture);
+        StartCaptureCommand = ReactiveCommand.CreateFromTask<CaptureMode>(StartCapture);
         SaveAndCloseCommand = ReactiveCommand.CreateFromTask(SaveAndClose);
         
         // Setup Hotkey Action
-        HotkeyService.OnHotkeyPressed = () => 
+        HotkeyService.OnHotkeyPressed = (id) => 
         {
+            CaptureMode mode = id switch
+            {
+                ID_COPY => CaptureMode.Copy,
+                ID_PIN => CaptureMode.Pin,
+                _ => CaptureMode.Normal
+            };
+            
             // Must run on UI thread if it involves UI updates
-            Avalonia.Threading.Dispatcher.UIThread.Post(() => StartCaptureCommand.Execute());
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => StartCaptureCommand.Execute(mode));
         };
 
         // Fire and forget load, in real app use async initialization
@@ -94,7 +108,29 @@ public class MainWindowViewModel : ViewModelBase
         set
         {
             this.RaiseAndSetIfChanged(ref _snipHotkey, value);
-            HotkeyService.Register(value);
+            HotkeyService.Register(ID_SNIP, value);
+        }
+    }
+
+    private string _copyHotkey = "Ctrl+C";
+    public string CopyHotkey
+    {
+        get => _copyHotkey;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _copyHotkey, value);
+            HotkeyService.Register(ID_COPY, value);
+        }
+    }
+
+    private string _pinHotkey = "F3";
+    public string PinHotkey
+    {
+        get => _pinHotkey;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _pinHotkey, value);
+            HotkeyService.Register(ID_PIN, value);
         }
     }
 
@@ -110,6 +146,8 @@ public class MainWindowViewModel : ViewModelBase
         MaskOpacity = s.MaskOpacity;
         AutoSave = s.AutoSave;
         SnipHotkey = s.SnipHotkey;
+        CopyHotkey = s.CopyHotkey;
+        PinHotkey = s.PinHotkey;
         
         if (Color.TryParse(s.BorderColorHex, out var color))
         {
@@ -119,7 +157,11 @@ public class MainWindowViewModel : ViewModelBase
         // Register initial hotkey (ensure UI thread or safe context? Service handles P/Invoke which is thread-tied usually)
         // Ideally we register on UI thread, but LoadSettingsAsync is background here. 
         // We will dispatch to UI thread to be safe as the handle belongs to UI thread.
-        Avalonia.Threading.Dispatcher.UIThread.Post(() => HotkeyService.Register(SnipHotkey));
+        Avalonia.Threading.Dispatcher.UIThread.Post(() => {
+            HotkeyService.Register(ID_SNIP, SnipHotkey);
+            HotkeyService.Register(ID_COPY, CopyHotkey);
+            HotkeyService.Register(ID_PIN, PinHotkey);
+        });
     }
 
     public async Task SaveSettingsAsync()
@@ -133,16 +175,18 @@ public class MainWindowViewModel : ViewModelBase
         s.MaskOpacity = MaskOpacity;
         s.AutoSave = AutoSave;
         s.SnipHotkey = SnipHotkey;
+        s.CopyHotkey = CopyHotkey;
+        s.PinHotkey = PinHotkey;
         s.BorderColorHex = BorderColor.ToString();
         
         await _settingsService.SaveAsync();
     }
 
-    private async Task StartCapture()
+    private async Task StartCapture(CaptureMode mode = CaptureMode.Normal)
     {
         await SaveSettingsAsync(); // Auto-save on action for now
-        RequestCaptureAction?.Invoke();
-        StatusText = "Snip Window Opened";
+        RequestCaptureAction?.Invoke(mode);
+        StatusText = $"Snip Window Opened ({mode})";
     }
     
     // Command for explicit save (OK button)

@@ -64,12 +64,33 @@
                 <StackPanel Spacing="10" Margin="10">
                     <TextBlock Text="全域快捷鍵 (Global Hotkeys)" FontWeight="Bold" Margin="0,0,0,5"/>
                     
-                    <Grid ColumnDefinitions="Auto, 10, *">
-                        <TextBlock Grid.Column="0" Text="截圖熱鍵 (Snip):" VerticalAlignment="Center"/>
-                        <TextBox Grid.Column="2" Text="{Binding SnipHotkey}" Watermark="e.g. F1, Ctrl+Shift+A"/>
+                    <Grid ColumnDefinitions="Auto, 10, *" RowDefinitions="Auto, 10, Auto, 10, Auto">
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="截圖熱鍵 (Snip):" VerticalAlignment="Center"/>
+                        <TextBox Grid.Row="0" Grid.Column="2" 
+                                 Text="{Binding SnipHotkey, Mode=OneWay}" 
+                                 Watermark="點擊此處並按下按鈕進行設定"
+                                 IsReadOnly="True"
+                                 Name="SnipHotkeyBox"
+                                 KeyDown="HotkeyTextBox_KeyDown"/>
+
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="截圖並複製 (Copy):" VerticalAlignment="Center"/>
+                        <TextBox Grid.Row="2" Grid.Column="2" 
+                                 Text="{Binding CopyHotkey, Mode=OneWay}" 
+                                 Watermark="點擊此處並按下按鈕進行設定"
+                                 IsReadOnly="True"
+                                 Name="CopyHotkeyBox"
+                                 KeyDown="HotkeyTextBox_KeyDown"/>
+
+                        <TextBlock Grid.Row="4" Grid.Column="0" Text="截圖並釘選 (Pin):" VerticalAlignment="Center"/>
+                        <TextBox Grid.Row="4" Grid.Column="2" 
+                                 Text="{Binding PinHotkey, Mode=OneWay}" 
+                                 Watermark="點擊此處並按下按鈕進行設定"
+                                 IsReadOnly="True"
+                                 Name="PinHotkeyBox"
+                                 KeyDown="HotkeyTextBox_KeyDown"/>
                     </Grid>
                     
-                    <TextBlock Text="* 目前僅供設定儲存，尚未實作全域監聽 (Phase 2)" Foreground="Gray" FontStyle="Italic" FontSize="11"/>
+                    <TextBlock Text="* 已啟用全域監聽 (Kitsune Mode Ready)" Foreground="{StaticResource AccentRedBrush}" FontStyle="Italic" FontSize="11"/>
                 </StackPanel>
             </TabItem>
             

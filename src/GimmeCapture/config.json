@@ -7,5 +7,7 @@
   "BorderColorHex": "#ffe60012",
   "AutoSave": false,
   "SaveDirectory": "",
-  "SnipHotkey": "F1"
+  "SnipHotkey": "F1",
+  "CopyHotkey": "Ctrl\u002BC",
+  "PinHotkey": "F2"
 }

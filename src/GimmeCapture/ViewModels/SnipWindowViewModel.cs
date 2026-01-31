@@ -16,7 +16,40 @@ public class SnipWindowViewModel : ViewModelBase
     public SnipState CurrentState
     {
         get => _currentState;
-        set => this.RaiseAndSetIfChanged(ref _currentState, value);
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _currentState, value);
+            if (value == SnipState.Selected && AutoActionMode > 0)
+            {
+                TriggerAutoAction();
+            }
+        }
+    }
+
+    private int _autoActionMode = 0; // 0=Normal, 1=Copy, 2=Pin
+    public int AutoActionMode
+    {
+        get => _autoActionMode;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _autoActionMode, value);
+            if (value > 0 && CurrentState == SnipState.Selected)
+            {
+                TriggerAutoAction();
+            }
+        }
+    }
+
+    private void TriggerAutoAction()
+    {
+        if (AutoActionMode == 1) // Copy
+        {
+            Avalonia.Threading.Dispatcher.UIThread.Post(async () => await Copy());
+        }
+        else if (AutoActionMode == 2) // Pin
+        {
+            Avalonia.Threading.Dispatcher.UIThread.Post(async () => await Pin());
+        }
     }
 
     private Rect _selectionRect;

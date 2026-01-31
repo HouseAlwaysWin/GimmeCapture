@@ -17,4 +17,6 @@ public class AppSettings
     
     // Hotkeys
     public string SnipHotkey { get; set; } = "F1";
+    public string CopyHotkey { get; set; } = "Ctrl+C";
+    public string PinHotkey { get; set; } = "F3";
 }
