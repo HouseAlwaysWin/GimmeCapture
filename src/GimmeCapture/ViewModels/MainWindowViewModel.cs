@@ -40,15 +40,11 @@ public class MainWindowViewModel : ViewModelBase
         // Setup Hotkey Action
         HotkeyService.OnHotkeyPressed = (id) => 
         {
-            CaptureMode mode = id switch
+            if (id == ID_SNIP)
             {
-                ID_COPY => CaptureMode.Copy,
-                ID_PIN => CaptureMode.Pin,
-                _ => CaptureMode.Normal
-            };
-            
-            // Must run on UI thread if it involves UI updates
-            Avalonia.Threading.Dispatcher.UIThread.Post(() => StartCaptureCommand.Execute(mode));
+                // Must run on UI thread if it involves UI updates
+                Avalonia.Threading.Dispatcher.UIThread.Post(() => StartCaptureCommand.Execute(CaptureMode.Normal));
+            }
         };
 
         // Fire and forget load, in real app use async initialization
@@ -116,22 +112,14 @@ public class MainWindowViewModel : ViewModelBase
     public string CopyHotkey
     {
         get => _copyHotkey;
-        set
-        {
-            this.RaiseAndSetIfChanged(ref _copyHotkey, value);
-            HotkeyService.Register(ID_COPY, value);
-        }
+        set => this.RaiseAndSetIfChanged(ref _copyHotkey, value);
     }
 
     private string _pinHotkey = "F3";
     public string PinHotkey
     {
         get => _pinHotkey;
-        set
-        {
-            this.RaiseAndSetIfChanged(ref _pinHotkey, value);
-            HotkeyService.Register(ID_PIN, value);
-        }
+        set => this.RaiseAndSetIfChanged(ref _pinHotkey, value);
     }
 
     public async Task LoadSettingsAsync()
@@ -159,8 +147,6 @@ public class MainWindowViewModel : ViewModelBase
         // We will dispatch to UI thread to be safe as the handle belongs to UI thread.
         Avalonia.Threading.Dispatcher.UIThread.Post(() => {
             HotkeyService.Register(ID_SNIP, SnipHotkey);
-            HotkeyService.Register(ID_COPY, CopyHotkey);
-            HotkeyService.Register(ID_PIN, PinHotkey);
         });
     }
 
