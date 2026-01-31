@@ -105,18 +105,30 @@
                                 
                                 <StackPanel IsVisible="{Binding CurrentTool, Converter={StaticResource EnumNotMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Text}}">
                                     <TextBlock Text="Size" FontSize="9" Foreground="Gray"/>
-                                    <NumericUpDown Value="{Binding CurrentThickness}" Minimum="1" Maximum="20" Increment="1" 
-                                                   Width="10" FormatString="0" FontSize="10" Height="10"
-                                                   Background="#2A2A2A" Foreground="White" BorderBrush="#444444"
-                                                   ButtonSpinnerLocation="Right"/>
+                                    <StackPanel Orientation="Horizontal" Spacing="1">
+                                        <TextBox Text="{Binding CurrentThickness}" Width="5" Height="5" FontSize="9" 
+                                                 Background="#2A2A2A" Foreground="White" BorderBrush="#444444" Padding="2,0"/>
+                                        <StackPanel Spacing="0">
+                                            <RepeatButton Content="▲" Width="12" Height="12" FontSize="7" Padding="0"
+                                                          Command="{Binding IncreaseThicknessCommand}"/>
+                                            <RepeatButton Content="▼" Width="12" Height="12" FontSize="7" Padding="0"
+                                                          Command="{Binding DecreaseThicknessCommand}"/>
+                                        </StackPanel>
+                                    </StackPanel>
                                 </StackPanel>
                                 
                                 <StackPanel IsVisible="{Binding CurrentTool, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Text}}">
                                     <TextBlock Text="Font" FontSize="9" Foreground="Gray"/>
-                                    <NumericUpDown Value="{Binding CurrentFontSize}" Minimum="10" Maximum="60" Increment="2" 
-                                                   Width="10" FormatString="0" FontSize="10" Height="10"
-                                                   Background="#2A2A2A" Foreground="White" BorderBrush="#444444"
-                                                   ButtonSpinnerLocation="Right"/>
+                                    <StackPanel Orientation="Horizontal" Spacing="1">
+                                        <TextBox Text="{Binding CurrentFontSize}" Width="5" Height="5" FontSize="9" 
+                                                 Background="#2A2A2A" Foreground="White" BorderBrush="#444444" Padding="2,0"/>
+                                        <StackPanel Spacing="0">
+                                            <RepeatButton Content="▲" Width="12" Height="12" FontSize="7" Padding="0"
+                                                          Command="{Binding IncreaseFontSizeCommand}"/>
+                                            <RepeatButton Content="▼" Width="12" Height="12" FontSize="7" Padding="0"
+                                                          Command="{Binding DecreaseFontSizeCommand}"/>
+                                        </StackPanel>
+                                    </StackPanel>
                                 </StackPanel>
                             </StackPanel>
                         </Border>

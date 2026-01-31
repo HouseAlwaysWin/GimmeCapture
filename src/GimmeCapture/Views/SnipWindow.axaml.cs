@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
 using Avalonia.Input;
+using Avalonia.VisualTree;
 using GimmeCapture.ViewModels;
 using GimmeCapture.Models;
 using System;
@@ -182,17 +183,40 @@ public partial class SnipWindow : Window
             }
 
             // If clicking OUTSIDE or in Idle/Detecting, start NEW selection
-            // But first check if the click is on a popup (flyout) - if so, don't start selection
+            // Check if the click is within the toolbar bounds (coordinate-based check)
+            // This works even when flyouts have closed before the event reaches us
+            var toolbar = this.FindControl<Views.Controls.SnipToolbar>("Toolbar");
+            if (toolbar != null && toolbar.IsVisible)
+            {
+                // Get toolbar bounds in window coordinates
+                var toolbarBounds = toolbar.Bounds;
+                var toolbarPos = toolbar.TranslatePoint(new Point(0, 0), this);
+                if (toolbarPos.HasValue)
+                {
+                    var toolbarRect = new Rect(toolbarPos.Value, toolbarBounds.Size);
+                    // Expand the rect a bit to account for flyouts appearing below
+                    var expandedRect = new Rect(
+                        toolbarRect.X - 20, 
+                        toolbarRect.Y - 20, 
+                        toolbarRect.Width + 200,  // Flyouts can extend to the right
+                        toolbarRect.Height + 250  // Flyouts can extend down
+                    );
+                    if (expandedRect.Contains(point))
+                        return; // Don't start selection when clicking in toolbar area
+                }
+            }
+            
+            // Also check visual tree for popups (they have their own visual tree)
             var sourceControl = e.Source as Control;
             if (sourceControl != null)
             {
-                // Check if click originated from a popup (flyout content)
-                var ancestor = sourceControl;
+                Control? ancestor = sourceControl;
                 while (ancestor != null)
                 {
-                    if (ancestor is Avalonia.Controls.Primitives.Popup)
-                        return; // Don't start selection when clicking on flyout
-                    ancestor = ancestor.Parent as Control;
+                    if (ancestor is Views.Controls.SnipToolbar || 
+                        ancestor is Avalonia.Controls.Primitives.Popup)
+                        return;
+                    ancestor = ancestor.GetVisualParent() as Control;
                 }
             }
             

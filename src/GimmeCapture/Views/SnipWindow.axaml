@@ -208,7 +208,8 @@
             </Grid>
                     
             <!-- 工具列 (位置綁定) -->
-            <ctl:SnipToolbar Canvas.Left="{Binding SelectionRect.Left}" 
+            <ctl:SnipToolbar Name="Toolbar"
+                              Canvas.Left="{Binding SelectionRect.Left}" 
                               Canvas.Top="{Binding SelectionRect.Bottom}" 
                               Margin="0, 5, 0, 0"
                               IsVisible="{Binding CurrentState, Converter={StaticResource StateToBoolConverter}}"/>

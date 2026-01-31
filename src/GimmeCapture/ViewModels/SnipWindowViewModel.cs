@@ -173,9 +173,21 @@ public class SnipWindowViewModel : ViewModelBase
         });
 
         ChangeColorCommand = ReactiveCommand.Create<Color>(c => SelectedColor = c);
+        
+        // Thickness controls
+        IncreaseThicknessCommand = ReactiveCommand.Create(() => { if (CurrentThickness < 20) CurrentThickness += 1; });
+        DecreaseThicknessCommand = ReactiveCommand.Create(() => { if (CurrentThickness > 1) CurrentThickness -= 1; });
+        
+        // Font size controls
+        IncreaseFontSizeCommand = ReactiveCommand.Create(() => { if (CurrentFontSize < 60) CurrentFontSize += 2; });
+        DecreaseFontSizeCommand = ReactiveCommand.Create(() => { if (CurrentFontSize > 10) CurrentFontSize -= 2; });
     }
 
     public ReactiveCommand<Color, Unit> ChangeColorCommand { get; }
+    public ReactiveCommand<Unit, Unit> IncreaseThicknessCommand { get; }
+    public ReactiveCommand<Unit, Unit> DecreaseThicknessCommand { get; }
+    public ReactiveCommand<Unit, Unit> IncreaseFontSizeCommand { get; }
+    public ReactiveCommand<Unit, Unit> DecreaseFontSizeCommand { get; }
 
     public static class StaticData
     {
