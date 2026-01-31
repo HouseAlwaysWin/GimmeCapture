@@ -2,7 +2,7 @@
   "Language": "zh-TW",
   "RunOnStartup": false,
   "AutoCheckUpdates": false,
-  "BorderThickness": 0,
+  "BorderThickness": 7,
   "MaskOpacity": 0.10656716417910449,
   "BorderColorHex": "#ffe60012",
   "AutoSave": false,
