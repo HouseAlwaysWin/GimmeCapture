@@ -157,29 +157,43 @@ BABYMETAL 風格資源字典，定義：
 
 ---
 
-### [NEW] [SnipWindow.axaml.cs](file:///D:/Projects/GimmeCapture/src/GimmeCapture/Views/SnipWindow.axaml.cs)
+### [NEW] [AppSettings.cs](file:///D:/Projects/GimmeCapture/src/GimmeCapture/Models/AppSettings.cs)
 
-實作滑鼠事件與 Snipaste 風格互動：
-
+設定資料模型：
 ```csharp
-// 互動狀態機
-enum SnipState { Idle, Detecting, Selecting, Selected, Editing }
-
-// 功能需求
-1. **全域預覽** (Idle): 游標移動時顯示輔助線/座標
-2. **自動視窗偵測** (Detecting): 
-   - 根據游標位置自動偵測視窗邊界 (需實作 IWindowFinder)
-   - 高亮顯示被偵測的區域
-3. **滑鼠選取** (Selecting): 拖曳繪製矩形
-4. **工具列** (Selected): 
-   - 選取完成後，於選區下方顯示工具列
-   - 功能：複製、儲存、取消、繪圖工具(二期)
-5. **遮罩渲染**: 
-   - 使用 Path/GeometryClip 實作「挖洞」效果
-   - 選區亮，背景暗
+public class AppSettings
+{
+    public string Language { get; set; } = "zh-TW";
+    public bool RunOnStartup { get; set; }
+    public bool AutoCheckUpdates { get; set; }
+    
+    // Snip
+    public double BorderThickness { get; set; } = 2.0;
+    public double MaskOpacity { get; set; } = 0.5;
+    public string BorderColorHex { get; set; } = "#E60012";
+    
+    // Output
+    public bool AutoSave { get; set; }
+    public string SaveDirectory { get; set; }
+    
+    // Hotkeys
+    public string SnipHotkey { get; set; } = "F1";
+}
 ```
 
-矩形邊框使用 `BMRingRed` 色彩。
+### [NEW] [AppSettingsService.cs](file:///D:/Projects/GimmeCapture/src/GimmeCapture/Services/AppSettingsService.cs)
+
+負責 `config.json` 的讀取與寫入 (System.Text.Json)。
+
+### [MODIFY] [MainWindow.axaml](file:///D:/Projects/GimmeCapture/src/GimmeCapture/Views/MainWindow.axaml)
+
+新增「控制」分頁，顯示快捷鍵設定。
+
+### [MODIFY] [MainWindowViewModel.cs](file:///D:/Projects/GimmeCapture/src/GimmeCapture/ViewModels/MainWindowViewModel.cs)
+
+*   注入 `AppSettingsService`。
+*   載入設定到屬性。
+*   儲存設定時寫回 `config.json`。
 
 ---
 

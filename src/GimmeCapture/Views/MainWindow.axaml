@@ -56,6 +56,20 @@
                 </StackPanel>
             </TabItem>
             
+            <!-- 控制 (Control/Hotkeys) -->
+            <TabItem Header="控制">
+                <StackPanel Spacing="10" Margin="10">
+                    <TextBlock Text="全域快捷鍵 (Global Hotkeys)" FontWeight="Bold" Margin="0,0,0,5"/>
+                    
+                    <Grid ColumnDefinitions="Auto, 10, *">
+                        <TextBlock Grid.Column="0" Text="截圖熱鍵 (Snip):" VerticalAlignment="Center"/>
+                        <TextBox Grid.Column="2" Text="{Binding SnipHotkey}" Watermark="e.g. F1, Ctrl+Shift+A"/>
+                    </Grid>
+                    
+                    <TextBlock Text="* 目前僅供設定儲存，尚未實作全域監聽 (Phase 2)" Foreground="Gray" FontStyle="Italic" FontSize="11"/>
+                </StackPanel>
+            </TabItem>
+            
             <!-- 關於 (About) -->
             <TabItem Header="關於">
                 <StackPanel Spacing="10" Margin="10" HorizontalAlignment="Center" VerticalAlignment="Center">
@@ -74,7 +88,7 @@
                 
                 <TextBlock Grid.Column="1" Text="{Binding StatusText}" VerticalAlignment="Center" Margin="10,0" Foreground="Gray"/>
 
-                <Button Grid.Column="2" Content="確定" Margin="0,0,10,0" />
+                <Button Grid.Column="2" Content="確定 (Save)" Margin="0,0,10,0" Command="{Binding SaveAndCloseCommand}"/>
                 <Button Grid.Column="3" Content="取消" />
             </Grid>
         </Border>
