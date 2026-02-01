@@ -446,8 +446,8 @@ public partial class SnipWindow : Window
             if (_viewModel.CurrentState == SnipState.Selecting || 
                 _viewModel.CurrentState == SnipState.Selected)
             {
-                // Reset to Idle
-                _viewModel.CurrentState = SnipState.Idle;
+                // Reset to Detecting to re-enable auto-detection (red box)
+                _viewModel.CurrentState = SnipState.Detecting;
                 _viewModel.SelectionRect = new Rect(0,0,0,0);
             }
             else
