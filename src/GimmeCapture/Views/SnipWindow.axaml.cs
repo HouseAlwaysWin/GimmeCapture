@@ -9,6 +9,7 @@ using System;
 using System.Linq;
 using Avalonia.Platform;
 using Avalonia.Input.Raw;
+using GimmeCapture.Services;
 
 namespace GimmeCapture.Views;
 
@@ -196,7 +197,10 @@ public partial class SnipWindow : Window
             _viewModel.OpenPinWindowAction = (bitmap, rect, color, thickness) =>
             {
                 // Create ViewModel with style properties
-                var vm = new FloatingImageViewModel(bitmap, color, thickness);
+                var settings = new AppSettingsService();
+                settings.LoadSync();
+                
+                var vm = new FloatingImageViewModel(bitmap, color, thickness, settings.Settings.ShowPinDecoration);
                 
                 try
                 {

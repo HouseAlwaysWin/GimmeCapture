@@ -40,17 +40,17 @@
                         <Image Source="{Binding Image}" Stretch="Fill" Name="PinnedImage" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
                         
                         <!-- Accent Corners -->
-                        <Rectangle Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="10" Height="2" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="2"/>
-                        <Rectangle Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="2" Height="10" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="2"/>
+                        <Rectangle IsVisible="{Binding ShowPinDecoration}" Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="10" Height="2" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="2"/>
+                        <Rectangle IsVisible="{Binding ShowPinDecoration}" Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="2" Height="10" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="2"/>
                         
-                        <Rectangle Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="10" Height="2" VerticalAlignment="Top" HorizontalAlignment="Right" Margin="2"/>
-                        <Rectangle Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="2" Height="10" VerticalAlignment="Top" HorizontalAlignment="Right" Margin="2"/>
+                        <Rectangle IsVisible="{Binding ShowPinDecoration}" Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="10" Height="2" VerticalAlignment="Top" HorizontalAlignment="Right" Margin="2"/>
+                        <Rectangle IsVisible="{Binding ShowPinDecoration}" Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="2" Height="10" VerticalAlignment="Top" HorizontalAlignment="Right" Margin="2"/>
                         
-                        <Rectangle Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="10" Height="2" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="2"/>
-                        <Rectangle Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="2" Height="10" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="2"/>
+                        <Rectangle IsVisible="{Binding ShowPinDecoration}" Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="10" Height="2" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="2"/>
+                        <Rectangle IsVisible="{Binding ShowPinDecoration}" Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="2" Height="10" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="2"/>
                         
-                        <Rectangle Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="10" Height="2" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="2"/>
-                        <Rectangle Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="2" Height="10" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="2"/>
+                        <Rectangle IsVisible="{Binding ShowPinDecoration}" Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="10" Height="2" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="2"/>
+                        <Rectangle IsVisible="{Binding ShowPinDecoration}" Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="2" Height="10" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="2"/>
                     </Grid>
                 </Border>
             </Border>

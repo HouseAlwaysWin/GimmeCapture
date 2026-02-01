@@ -135,7 +135,10 @@
                         <!-- Output Settings (Moved from Output Tab) -->
                         <StackPanel Spacing="10">
                             <TextBlock Text="{Binding [TabOutput], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold"/>
-                            <CheckBox IsChecked="{Binding AutoSave}" Content="{Binding [AutoSave], Source={x:Static services:LocalizationService.Instance}}"/>
+                            <StackPanel Spacing="5">
+                                <CheckBox IsChecked="{Binding AutoSave}" Content="{Binding [AutoSave], Source={x:Static services:LocalizationService.Instance}}"/>
+                                <CheckBox IsChecked="{Binding ShowPinDecoration}" Content="{Binding [ShowPinDecoration], Source={x:Static services:LocalizationService.Instance}}"/>
+                            </StackPanel>
                             <DockPanel>
                                 <Button Content="{Binding [SelectPath], Source={x:Static services:LocalizationService.Instance}}" DockPanel.Dock="Right" Command="{Binding SelectSavePath}" Margin="5,0,0,0"/>
                                 <TextBox Text="{Binding SaveDirectory}" IsReadOnly="True"/>

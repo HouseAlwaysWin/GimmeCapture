@@ -28,6 +28,13 @@ public class FloatingImageViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _borderThickness, value);
     }
 
+    private bool _showPinDecoration = true;
+    public bool ShowPinDecoration
+    {
+        get => _showPinDecoration;
+        set => this.RaiseAndSetIfChanged(ref _showPinDecoration, value);
+    }
+
     public ReactiveCommand<Unit, Unit> CloseCommand { get; }
     public ReactiveCommand<Unit, Unit> CopyCommand { get; }
     public ReactiveCommand<Unit, Unit> SaveCommand { get; }
@@ -36,11 +43,12 @@ public class FloatingImageViewModel : ViewModelBase
     public System.Func<Task>? CopyAction { get; set; }
     public System.Func<Task>? SaveAction { get; set; }
 
-    public FloatingImageViewModel(Bitmap image, Avalonia.Media.Color borderColor, double borderThickness)
+    public FloatingImageViewModel(Bitmap image, Avalonia.Media.Color borderColor, double borderThickness, bool showDecoration)
     {
         Image = image;
         BorderColor = borderColor;
         BorderThickness = borderThickness;
+        ShowPinDecoration = showDecoration;
 
         CloseCommand = ReactiveCommand.Create(() => CloseAction?.Invoke());
         
