@@ -174,8 +174,8 @@ public partial class SnipWindow : Window
                  if (topLevel == null) return null;
                  
                  bool isRecording = _viewModel.IsRecordingMode;
-                 string defaultExt = isRecording ? "mp4" : "png";
-                 string fileTypeName = isRecording ? "Video File" : "PNG Image";
+                 string defaultExt = isRecording ? _viewModel.RecordFormat : "png";
+                 string fileTypeName = isRecording ? $"{defaultExt.ToUpper()} Video" : "PNG Image";
                  string pattern = $"*.{defaultExt}";
                  
                  var file = await topLevel.StorageProvider.SaveFilePickerAsync(new Avalonia.Platform.Storage.FilePickerSaveOptions

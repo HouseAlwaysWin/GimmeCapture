@@ -40,6 +40,12 @@ public class SnipWindowViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _isRecordingMode, value);
     }
 
+    // True when actively recording (not idle, not paused) - used to hide selection border
+    public bool IsRecordingActive => _recordingService?.State == RecordingState.Recording;
+
+    // Current recording format (gif, mp4, webm, etc.)
+    public string RecordFormat => _mainVm?.RecordFormat ?? "mp4";
+
     private TimeSpan _recordingDuration = TimeSpan.Zero;
     public TimeSpan RecordingDuration
     {
@@ -392,7 +398,11 @@ public class SnipWindowViewModel : ViewModelBase
         if (_recordingService != null)
         {
             _recordingService.WhenAnyValue(x => x.State)
-                .Subscribe(_ => this.RaisePropertyChanged(nameof(RecState)));
+                .Subscribe(_ => 
+                {
+                    this.RaisePropertyChanged(nameof(RecState));
+                    this.RaisePropertyChanged(nameof(IsRecordingActive));
+                });
         }
 
         CopyCommand = ReactiveCommand.CreateFromTask(Copy);
@@ -594,6 +604,13 @@ public class SnipWindowViewModel : ViewModelBase
 
     private async Task Save() 
     { 
+         // If recording is active, stop recording instead of saving screenshot
+         if (RecState == RecordingState.Recording || RecState == RecordingState.Paused)
+         {
+             await StopRecording();
+             return;
+         }
+
          if (SelectionRect.Width > 0 && SelectionRect.Height > 0)
          {
              HideAction?.Invoke();

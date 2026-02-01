@@ -179,12 +179,13 @@
 
         <!-- 互動層：使用 Canvas 定位邊框 -->
         <Canvas>
-            <!-- 選擇區域容器 -->
+            <!-- 選擇區域容器 - Hidden during active recording to avoid capturing border -->
             <Grid Width="{Binding SelectionRect.Width}"
                   Height="{Binding SelectionRect.Height}"
                   Canvas.Left="{Binding SelectionRect.X}"
                   Canvas.Top="{Binding SelectionRect.Y}"
-                  IsVisible="{Binding CurrentState, Converter={StaticResource StateToBoolConverter}}">
+                  IsVisible="{Binding CurrentState, Converter={StaticResource StateToBoolConverter}}"
+                  Opacity="{Binding IsRecordingActive, Converter={StaticResource BoolInvertConverter}}">
                   
                 <!-- BABYMETAL Style Selection Border -->
                 <Border CornerRadius="0"
