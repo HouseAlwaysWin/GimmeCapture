@@ -6,6 +6,7 @@
   "MaskOpacity": 0.5,
   "BorderColorHex": "#ffe60012",
   "ThemeColorHex": "#ffe60012",
+  "ShowPinDecoration": true,
   "AutoSave": false,
   "SaveDirectory": "D:\\Users\\martin\\Videos\\GimmeCapture\\",
   "VideoSaveDirectory": "D:\\Users\\martin\\Videos\\GimmeCapture",

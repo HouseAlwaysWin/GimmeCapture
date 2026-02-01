@@ -20,15 +20,26 @@ public class AppSettingsService
             {
                 var json = await File.ReadAllTextAsync(ConfigPath);
                 var settings = JsonSerializer.Deserialize<AppSettings>(json);
-                if (settings != null)
-                {
-                    Settings = settings;
-                }
+                if (settings != null) Settings = settings;
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Failed to load config: {ex.Message}");
             }
+        }
+    }
+
+    public void LoadSync()
+    {
+        if (File.Exists(ConfigPath))
+        {
+            try
+            {
+                var json = File.ReadAllText(ConfigPath);
+                var settings = JsonSerializer.Deserialize<AppSettings>(json);
+                if (settings != null) Settings = settings;
+            }
+            catch { }
         }
     }
 

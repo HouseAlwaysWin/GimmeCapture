@@ -279,6 +279,13 @@ public class MainWindowViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _useFixedRecordPath, value);
     }
 
+    private bool _showPinDecoration = true;
+    public bool ShowPinDecoration
+    {
+        get => _showPinDecoration;
+        set => this.RaiseAndSetIfChanged(ref _showPinDecoration, value);
+    }
+
     public string[] AvailableRecordFormats { get; } = { "mp4", "mkv", "gif", "webm", "mov" };
 
     public async Task SelectVideoPath()
@@ -313,6 +320,7 @@ public class MainWindowViewModel : ViewModelBase
         SnipHotkey = s.SnipHotkey;
         CopyHotkey = s.CopyHotkey;
         PinHotkey = s.PinHotkey;
+        ShowPinDecoration = s.ShowPinDecoration;
         
         if (Color.TryParse(s.BorderColorHex, out var color))
         {
@@ -383,6 +391,7 @@ public class MainWindowViewModel : ViewModelBase
         s.VideoSaveDirectory = VideoSaveDirectory;
         s.RecordFormat = RecordFormat;
         s.UseFixedRecordPath = UseFixedRecordPath;
+        s.ShowPinDecoration = ShowPinDecoration;
         
         await _settingsService.SaveAsync();
     }
@@ -414,6 +423,7 @@ public class MainWindowViewModel : ViewModelBase
         SnipHotkey = defaultSettings.SnipHotkey;
         CopyHotkey = defaultSettings.CopyHotkey;
         PinHotkey = defaultSettings.PinHotkey;
+        ShowPinDecoration = defaultSettings.ShowPinDecoration;
         
         if (Color.TryParse(defaultSettings.BorderColorHex, out var color))
             BorderColor = color;

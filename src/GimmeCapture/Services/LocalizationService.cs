@@ -129,7 +129,8 @@ namespace GimmeCapture.Services
                     ["Stop"] = "Stop",
                     ["TipRecord"] = "Record (F2)",
                     ["TipSnipMode"] = "Switch to Snip Mode",
-                    ["TipRecordMode"] = "Switch to Record Mode"
+                    ["TipRecordMode"] = "Switch to Record Mode",
+                    ["ShowPinDecoration"] = "Show Pin Decoration Corners"
                 },
                 [Language.Chinese] = new Dictionary<string, string>
                 {
@@ -204,7 +205,8 @@ namespace GimmeCapture.Services
                     ["Stop"] = "停止",
                     ["TipRecord"] = "錄影 (F2)",
                     ["TipSnipMode"] = "切換至擷圖模式",
-                    ["TipRecordMode"] = "切換至錄影模式"
+                    ["TipRecordMode"] = "切換至錄影模式",
+                    ["ShowPinDecoration"] = "顯示釘選視窗角落裝飾"
                 },
                 [Language.Japanese] = new Dictionary<string, string>
                 {
@@ -277,9 +279,10 @@ namespace GimmeCapture.Services
                     ["Record"] = "録画",
                     ["Pause"] = "一時停止",
                     ["Stop"] = "停止",
-                    ["TipRecord"] = "録画 (F2)",
+                    ["TipRecord"] = "錄録画 (F2)",
                     ["TipSnipMode"] = "スニップモードに切り替える",
-                    ["TipRecordMode"] = "録画モードに切り替える"
+                    ["TipRecordMode"] = "録画モードに切り替える",
+                    ["ShowPinDecoration"] = "ピン留めウィンドウの装飾を表示する"
                 }
             };
 

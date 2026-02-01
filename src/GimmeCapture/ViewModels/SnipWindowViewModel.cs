@@ -699,12 +699,16 @@ public class SnipWindowViewModel : ViewModelBase
                  // Create and show FloatingVideoWindow instead of raw ffplay
                  Avalonia.Threading.Dispatcher.UIThread.Post(() => 
                  {
+                     var settings = new AppSettingsService();
+                     settings.LoadSync(); // Simple load
+                     
                      var videoVm = new FloatingVideoViewModel(
                          recordingPath, 
                          ffplayPath.Replace("ffplay.exe", "ffmpeg.exe"), // We need ffmpeg for streaming
                          w, h, 
                          SelectedColor, 
-                         CurrentThickness);
+                         CurrentThickness,
+                         settings.Settings.ShowPinDecoration);
                          
                      var videoWin = new Views.FloatingVideoWindow
                      {

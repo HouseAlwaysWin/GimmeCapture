@@ -13,6 +13,7 @@ public class AppSettings
     public double MaskOpacity { get; set; } = 0.5;
     public string BorderColorHex { get; set; } = "#E60012";
     public string ThemeColorHex { get; set; } = "#E60012";
+    public bool ShowPinDecoration { get; set; } = true;
     
     // Output
     public bool AutoSave { get; set; }
