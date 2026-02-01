@@ -97,7 +97,7 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable
                 var buffer = new byte[frameSize];
 
                 var cmd = Cli.Wrap(_ffmpegPath)
-                    .WithArguments($"-i \"{_videoPath}\" -f image2pipe -vcodec rawvideo -pix_fmt bgra -s {_width}x{_height} -tune zerolatency -loglevel quiet -")
+                    .WithArguments($"-re -i \"{_videoPath}\" -f image2pipe -vcodec rawvideo -pix_fmt bgra -s {_width}x{_height} -loglevel quiet -")
                     .WithStandardOutputPipe(PipeTarget.ToStream(new FrameStreamWriter(this, frameSize)));
 
                 await cmd.ExecuteAsync(ct);
