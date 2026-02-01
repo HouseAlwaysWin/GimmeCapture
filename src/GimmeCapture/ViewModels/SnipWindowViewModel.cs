@@ -143,23 +143,24 @@ public class SnipWindowViewModel : ViewModelBase
         double vh = ViewportSize.Height > 0 ? ViewportSize.Height : 1080;
         double vw = ViewportSize.Width > 0 ? ViewportSize.Width : 1920;
 
-        const double toolbarHeight = 60; // Estimated height including margin
+        const double toolbarHeight = 35; // More accurate estimated height
         const double toolbarWidth = 400; // Estimated max width
 
-        double top = SelectionRect.Bottom + 10; // Default: Below
+        // Position below by default
+        double top = SelectionRect.Bottom + 4; 
         double left = SelectionRect.Left;
 
         // If bottom overflows, position above selection
-        if (top + toolbarHeight > vh)
+        if (top + toolbarHeight > vh - 10)
         {
-            top = SelectionRect.Top - toolbarHeight - 10;
+            top = SelectionRect.Top - toolbarHeight - 4;
         }
 
         // Final safety clamps to keep toolbar within viewport
-        if (top < 10) top = 10;
-        if (top + toolbarHeight > vh) top = vh - toolbarHeight - 10;
+        if (top < 4) top = 4;
+        if (top + toolbarHeight > vh - 4) top = vh - toolbarHeight - 4;
 
-        if (left + toolbarWidth > vw)
+        if (left + toolbarWidth > vw - 10)
         {
             left = vw - toolbarWidth - 10;
         }
