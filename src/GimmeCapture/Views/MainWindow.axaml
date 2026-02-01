@@ -45,7 +45,7 @@
             
             <!-- 擷圖 (Snip) -->
             <TabItem Header="{Binding [TabSnip], Source={x:Static services:LocalizationService.Instance}}">
-                <Grid ColumnDefinitions="*, 200" Margin="10">
+                <Grid ColumnDefinitions="*, Auto" Margin="10">
                     <!-- Settings Controls -->
                     <StackPanel Grid.Column="0" Spacing="15" Margin="0,0,20,0">
                         <!-- Border Thickness -->
@@ -103,9 +103,9 @@
                     </StackPanel>
 
                     <!-- Style Preview Area -->
-                    <StackPanel Grid.Column="1" Spacing="10" VerticalAlignment="Top">
+                    <StackPanel Grid.Column="1" Spacing="10" VerticalAlignment="Top" Margin="20,0,0,0">
                         <TextBlock Text="樣式預覽" FontWeight="SemiBold" HorizontalAlignment="Center"/>
-                        <Border Background="#11FFFFFF" Width="300" Height="150" CornerRadius="4" BorderBrush="#333333" BorderThickness="1" ClipToBounds="True">
+                        <Border Background="#11FFFFFF" Width="300" Height="150" CornerRadius="4" BorderBrush="#333333" BorderThickness="1">
                             <Grid>
                                 <!-- Mock Background -->
                                 <Image Source="avares://GimmeCapture/Assets/kitsune_icon.png" Opacity="0.1" Stretch="Uniform" Margin="20"/>
@@ -127,7 +127,7 @@
                                 </Path>
                                 
                                 <!-- Selection Preview -->
-                                <Grid Margin="5" VerticalAlignment="Center" HorizontalAlignment="Center">
+                                <Grid Margin="15" VerticalAlignment="Center" HorizontalAlignment="Center">
                                     <Border CornerRadius="0"
                                             Background="#01FFFFFF"
                                             BoxShadow="{Binding BorderColor, Converter={StaticResource ColorToBoxShadowConverter}}">
