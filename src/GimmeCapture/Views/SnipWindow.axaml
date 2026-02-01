@@ -13,7 +13,7 @@
         Title="SnipWindow"
         TransparencyLevelHint="Transparent"
         SystemDecorations="None"
-        WindowState="Maximized"
+        WindowState="Normal"
         Topmost="True"
         Background="Transparent"
         ExtendClientAreaToDecorationsHint="True"
@@ -178,18 +178,20 @@
                             BorderThickness="{Binding SelectionBorderThickness, Converter={StaticResource ThicknessConverter}}">
                         <Border BorderBrush="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" BorderThickness="1" Margin="-1">
                             <Grid>
-                                <!-- Accent Corners -->
-                                <Rectangle Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="15" Height="2" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="2"/>
-                                <Rectangle Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="2" Height="15" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="2"/>
-                                
-                                <Rectangle Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="15" Height="2" VerticalAlignment="Top" HorizontalAlignment="Right" Margin="2"/>
-                                <Rectangle Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="2" Height="15" VerticalAlignment="Top" HorizontalAlignment="Right" Margin="2"/>
-                                
-                                <Rectangle Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="15" Height="2" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="2"/>
-                                <Rectangle Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="2" Height="15" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="2"/>
-                                
-                                <Rectangle Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="15" Height="2" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="2"/>
-                                <Rectangle Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="2" Height="15" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="2"/>
+                                <!-- Accent Corners (Hide during drawing) -->
+                                <Grid IsVisible="{Binding IsDrawingMode, Converter={StaticResource BoolInvertConverter}}">
+                                    <Rectangle Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="15" Height="2" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="2"/>
+                                    <Rectangle Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="2" Height="15" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="2"/>
+                                    
+                                    <Rectangle Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="15" Height="2" VerticalAlignment="Top" HorizontalAlignment="Right" Margin="2"/>
+                                    <Rectangle Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="2" Height="15" VerticalAlignment="Top" HorizontalAlignment="Right" Margin="2"/>
+                                    
+                                    <Rectangle Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="15" Height="2" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="2"/>
+                                    <Rectangle Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="2" Height="15" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="2"/>
+                                    
+                                    <Rectangle Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="15" Height="2" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="2"/>
+                                    <Rectangle Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="2" Height="15" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="2"/>
+                                </Grid>
                             </Grid>
                         </Border>
                     </Border>
@@ -197,16 +199,24 @@
                 
                 <!-- Resize Handles -->
                 <!-- Corners -->
-                <Grid Classes="Handle" Name="HandleTopLeft" Cursor="TopLeftCorner" Width="30" Height="30" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="-15"/>
-                <Grid Classes="Handle" Name="HandleTopRight" Cursor="TopRightCorner" Width="30" Height="30" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="-15"/>
-                <Grid Classes="Handle" Name="HandleBottomLeft" Cursor="BottomLeftCorner" Width="30" Height="30" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="-15"/>
-                <Grid Classes="Handle" Name="HandleBottomRight" Cursor="BottomRightCorner" Width="30" Height="30" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="-15"/>
+                <Grid Classes="Handle" Name="HandleTopLeft" Cursor="TopLeftCorner" Width="30" Height="30" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="-15" 
+                      IsVisible="{Binding IsDrawingMode, Converter={StaticResource BoolInvertConverter}}"/>
+                <Grid Classes="Handle" Name="HandleTopRight" Cursor="TopRightCorner" Width="30" Height="30" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="-15"
+                      IsVisible="{Binding IsDrawingMode, Converter={StaticResource BoolInvertConverter}}"/>
+                <Grid Classes="Handle" Name="HandleBottomLeft" Cursor="BottomLeftCorner" Width="30" Height="30" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="-15"
+                      IsVisible="{Binding IsDrawingMode, Converter={StaticResource BoolInvertConverter}}"/>
+                <Grid Classes="Handle" Name="HandleBottomRight" Cursor="BottomRightCorner" Width="30" Height="30" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="-15"
+                      IsVisible="{Binding IsDrawingMode, Converter={StaticResource BoolInvertConverter}}"/>
                 
                 <!-- Sides -->
-                <Grid Classes="Handle" Name="HandleTop" Cursor="SizeNorthSouth" Height="15" HorizontalAlignment="Stretch" VerticalAlignment="Top" Margin="15,0"/>
-                <Grid Classes="Handle" Name="HandleBottom" Cursor="SizeNorthSouth" Height="15" HorizontalAlignment="Stretch" VerticalAlignment="Bottom" Margin="15,0"/>
-                <Grid Classes="Handle" Name="HandleLeft" Cursor="SizeWestEast" Width="15" HorizontalAlignment="Left" VerticalAlignment="Stretch" Margin="0,15"/>
-                <Grid Classes="Handle" Name="HandleRight" Cursor="SizeWestEast" Width="15" HorizontalAlignment="Right" VerticalAlignment="Stretch" Margin="0,15"/>
+                <Grid Classes="Handle" Name="HandleTop" Cursor="SizeNorthSouth" Height="15" HorizontalAlignment="Stretch" VerticalAlignment="Top" Margin="15,0"
+                      IsVisible="{Binding IsDrawingMode, Converter={StaticResource BoolInvertConverter}}"/>
+                <Grid Classes="Handle" Name="HandleBottom" Cursor="SizeNorthSouth" Height="15" HorizontalAlignment="Stretch" VerticalAlignment="Bottom" Margin="15,0"
+                      IsVisible="{Binding IsDrawingMode, Converter={StaticResource BoolInvertConverter}}"/>
+                <Grid Classes="Handle" Name="HandleLeft" Cursor="SizeWestEast" Width="15" HorizontalAlignment="Left" VerticalAlignment="Stretch" Margin="0,15"
+                      IsVisible="{Binding IsDrawingMode, Converter={StaticResource BoolInvertConverter}}"/>
+                <Grid Classes="Handle" Name="HandleRight" Cursor="SizeWestEast" Width="15" HorizontalAlignment="Right" VerticalAlignment="Stretch" Margin="0,15"
+                      IsVisible="{Binding IsDrawingMode, Converter={StaticResource BoolInvertConverter}}"/>
             </Grid>
             
             <!-- Text Input Overlay Container -->

@@ -3,11 +3,25 @@ using System.Linq;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using GimmeCapture.ViewModels;
+using System.Runtime.InteropServices;
+using Avalonia.Platform;
+using Avalonia.Media;
 
 namespace GimmeCapture.Views;
 
 public partial class MainWindow : Window
 {
+    [StructLayout(LayoutKind.Sequential)]
+    public struct POINT
+    {
+        public int X;
+        public int Y;
+    }
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool GetCursorPos(out POINT lpPoint);
+
     public MainWindow()
     {
         InitializeComponent();
@@ -82,10 +96,36 @@ public partial class MainWindow : Window
                 }
 
                 var snip = new SnipWindow();
+                
+                // Multi-monitor support: Determine target screen based on cursor position
+                POINT p;
+                PixelPoint cursorPoint = new PixelPoint(0, 0);
+                if (GetCursorPos(out p))
+                {
+                    cursorPoint = new PixelPoint(p.X, p.Y);
+                }
+                else if (desktop?.MainWindow != null)
+                {
+                    cursorPoint = desktop.MainWindow.Position;
+                }
+
+                var targetScreen = snip.Screens.ScreenFromPoint(cursorPoint) ?? snip.Screens.All.FirstOrDefault();
+                
+                if (targetScreen != null)
+                {
+                    snip.WindowStartupLocation = WindowStartupLocation.Manual;
+                    
+                    // Position and Size SnipWindow to match target screen's bounds, accounting for DPI scaling
+                    double scaling = targetScreen.Scaling;
+                    snip.Position = targetScreen.Bounds.TopLeft;
+                    snip.Width = targetScreen.Bounds.Width / scaling;
+                    snip.Height = targetScreen.Bounds.Height / scaling;
+                }
+                
                 var snipVm = new SnipWindowViewModel(
-                    vm.BorderColor, 
-                    vm.BorderThickness, 
-                    vm.MaskOpacity
+                    vm?.BorderColor ?? Color.Parse("#E60012"), 
+                    vm?.BorderThickness ?? 2, 
+                    vm?.MaskOpacity ?? 0.5
                 );
                 snipVm.AutoActionMode = (int)mode;
                 snip.DataContext = snipVm;

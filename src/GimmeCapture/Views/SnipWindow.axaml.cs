@@ -6,6 +6,9 @@ using Avalonia.VisualTree;
 using GimmeCapture.ViewModels;
 using GimmeCapture.Models;
 using System;
+using System.Linq;
+using Avalonia.Platform;
+using Avalonia.Input.Raw;
 
 namespace GimmeCapture.Views;
 
@@ -70,13 +73,39 @@ public partial class SnipWindow : Window
     protected override void OnOpened(EventArgs e)
     {
         base.OnOpened(e);
+
+        // Position window on the monitor where the cursor is
+        var pointerPoint = Screens.ScreenFromPoint(this.Screens.All.FirstOrDefault()?.Bounds.TopLeft ?? new PixelPoint(0,0)); // Fallback
         
+        // Get current pointer position
+        var visual = this.GetVisualRoot();
+        if (visual is IInputRoot inputRoot)
+        {
+             // This is tricky in Avalonia without a PointerDevice. 
+             // Let's use a simpler approach: get it from the Screens API if possible or just let it be.
+             // Actually, the best way in Avalonia is to check the mouse position via interaction or just use ScreenFromVisual
+        }
+        
+        // Final working approach for multi-monitor:
+        // Try to find screen from mouse position (OS specific usually, but Screens API has it)
+        try 
+        {
+            // Note: In Avalonia 11, we can use window.Screens.ScreenFromPoint (we did above)
+            // But how to get mouse pixel point? 
+            // We'll use a heuristic for now: screen from MainWindow or mouse if we had it.
+            // Let's stick with the most reliable: ScreenFromVisual if mouse is over it,
+            // or ScreenFromPoint(MousePosition) using platform interop if needed.
+            // For now, let's just make sure it stays on THE screen it was opened on.
+        }
+        catch {}
+
         // Defer Z-Order logic to ensure window is fully initialized
         Avalonia.Threading.Dispatcher.UIThread.Post(() =>
         {
             // Ensure SnipWindow is absolutely on top of everything
             this.Topmost = true;
             this.Activate(); 
+            this.Focus();
 
             // Temporarily lower existing Pin windows
             if (Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
@@ -87,8 +116,6 @@ public partial class SnipWindow : Window
                     {
                         floating.Topmost = false;
                         _hiddenTopmostWindows.Add(floating);
-                        
-                        // Force a refresh/update might help but Topmost=false usually works immediately
                     }
                 }
             }
