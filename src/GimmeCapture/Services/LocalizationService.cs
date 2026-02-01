@@ -130,7 +130,10 @@ namespace GimmeCapture.Services
                     ["TipRecord"] = "Record (F2)",
                     ["TipSnipMode"] = "Switch to Snip Mode",
                     ["TipRecordMode"] = "Switch to Record Mode",
-                    ["ShowPinDecoration"] = "Show Pin Decoration Corners"
+                    ["ShowPinDecoration"] = "Show Pin Decoration Corners",
+            ["HidePinBorder"] = "Hide Pin Window Border",
+            ["ShowSnipCursor"] = "Capture Mouse Cursor in Screenshot",
+            ["ShowRecordCursor"] = "Capture Mouse Cursor in Recording",
                 },
                 [Language.Chinese] = new Dictionary<string, string>
                 {
@@ -206,7 +209,10 @@ namespace GimmeCapture.Services
                     ["TipRecord"] = "錄影 (F2)",
                     ["TipSnipMode"] = "切換至擷圖模式",
                     ["TipRecordMode"] = "切換至錄影模式",
-                    ["ShowPinDecoration"] = "顯示釘選視窗角落裝飾"
+                    ["ShowPinDecoration"] = "顯示釘選視窗角落裝飾",
+            ["HidePinBorder"] = "隱藏釘選視窗邊框",
+            ["ShowSnipCursor"] = "擷取畫面包含滑鼠游標",
+            ["ShowRecordCursor"] = "錄影畫面包含滑鼠游標",
                 },
                 [Language.Japanese] = new Dictionary<string, string>
                 {
@@ -282,7 +288,10 @@ namespace GimmeCapture.Services
                     ["TipRecord"] = "錄録画 (F2)",
                     ["TipSnipMode"] = "スニップモードに切り替える",
                     ["TipRecordMode"] = "録画モードに切り替える",
-                    ["ShowPinDecoration"] = "ピン留めウィンドウの装飾を表示する"
+                    ["ShowPinDecoration"] = "ピン留めウィンドウの装飾を表示する",
+            ["HidePinBorder"] = "ピン留めウィンドウの境界線を非表示にする",
+            ["ShowSnipCursor"] = "スクリーンショットにマウスカーソルを含める",
+            ["ShowRecordCursor"] = "録画にマウスカーソルを含める",
                 }
             };
 

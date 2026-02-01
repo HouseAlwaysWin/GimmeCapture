@@ -43,6 +43,13 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable
         set => this.RaiseAndSetIfChanged(ref _showPinDecoration, value);
     }
 
+    private bool _hidePinBorder = false;
+    public bool HidePinBorder
+    {
+        get => _hidePinBorder;
+        set => this.RaiseAndSetIfChanged(ref _hidePinBorder, value);
+    }
+
     private bool _isLooping = true;
     public bool IsLooping
     {
@@ -61,7 +68,7 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable
     private readonly int _width;
     private readonly int _height;
 
-    public FloatingVideoViewModel(string videoPath, string ffmpegPath, int width, int height, Avalonia.Media.Color borderColor, double borderThickness, bool showDecoration)
+    public FloatingVideoViewModel(string videoPath, string ffmpegPath, int width, int height, Avalonia.Media.Color borderColor, double borderThickness, bool showDecoration, bool hideBorder)
     {
         _videoPath = videoPath;
         _ffmpegPath = ffmpegPath;
@@ -70,6 +77,7 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable
         BorderColor = borderColor;
         BorderThickness = borderThickness;
         ShowPinDecoration = showDecoration;
+        HidePinBorder = hideBorder;
 
         CloseCommand = ReactiveCommand.Create(() => 
         {

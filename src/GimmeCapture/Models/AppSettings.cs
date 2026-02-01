@@ -14,10 +14,14 @@ public class AppSettings
     public string BorderColorHex { get; set; } = "#E60012";
     public string ThemeColorHex { get; set; } = "#E60012";
     public bool ShowPinDecoration { get; set; } = true;
+    public bool HidePinBorder { get; set; } = false;
     
     // Output
     public bool AutoSave { get; set; }
-    public string SaveDirectory { get; set; } = string.Empty;
+    public string SaveDirectory { get; set; } = "";
+    
+    public bool ShowSnipCursor { get; set; } = false;
+    public bool ShowRecordCursor { get; set; } = true;
     public string VideoSaveDirectory { get; set; } = string.Empty;
     public string RecordFormat { get; set; } = "mp4";
     public bool UseFixedRecordPath { get; set; }

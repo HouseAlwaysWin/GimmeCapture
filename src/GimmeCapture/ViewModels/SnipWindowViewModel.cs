@@ -510,7 +510,7 @@ public class SnipWindowViewModel : ViewModelBase
         if (region.Width % 2 != 0) region = region.WithWidth(region.Width - 1);
         if (region.Height % 2 != 0) region = region.WithHeight(region.Height - 1);
 
-        if (await _recordingService.StartAsync(region, _currentRecordingPath, format))
+        if (await _recordingService.StartAsync(region, _currentRecordingPath, format, _mainVm.ShowRecordCursor))
         {
             RecordingDuration = TimeSpan.Zero;
             
@@ -708,7 +708,8 @@ public class SnipWindowViewModel : ViewModelBase
                          w, h, 
                          SelectedColor, 
                          CurrentThickness,
-                         settings.Settings.ShowPinDecoration);
+                         settings.Settings.ShowPinDecoration,
+                         settings.Settings.HidePinBorder);
                          
                      var videoWin = new Views.FloatingVideoWindow
                      {
@@ -771,7 +772,7 @@ public class SnipWindowViewModel : ViewModelBase
 
             try 
             {
-                var bitmap = await _captureService.CaptureScreenWithAnnotationsAsync(SelectionRect, Annotations);
+                var bitmap = await _captureService.CaptureScreenWithAnnotationsAsync(SelectionRect, Annotations, _mainVm?.ShowSnipCursor ?? false);
                 await _captureService.CopyToClipboardAsync(bitmap);
             }
             finally
@@ -797,7 +798,7 @@ public class SnipWindowViewModel : ViewModelBase
 
              try
              {
-                 var bitmap = await _captureService.CaptureScreenWithAnnotationsAsync(SelectionRect, Annotations);
+                 var bitmap = await _captureService.CaptureScreenWithAnnotationsAsync(SelectionRect, Annotations, _mainVm?.ShowSnipCursor ?? false);
                  
                  if (_mainVm != null && _mainVm.AutoSave)
                  {
@@ -853,7 +854,7 @@ public class SnipWindowViewModel : ViewModelBase
             
             try
             {
-                var skBitmap = await _captureService.CaptureScreenWithAnnotationsAsync(SelectionRect, Annotations);
+                var skBitmap = await _captureService.CaptureScreenWithAnnotationsAsync(SelectionRect, Annotations, _mainVm?.ShowSnipCursor ?? false);
                 
                 // Convert SKBitmap to Avalonia Bitmap
                 using var image = SkiaSharp.SKImage.FromBitmap(skBitmap);

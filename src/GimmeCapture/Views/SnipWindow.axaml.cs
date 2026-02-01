@@ -200,7 +200,7 @@ public partial class SnipWindow : Window
                 var settings = new AppSettingsService();
                 settings.LoadSync();
                 
-                var vm = new FloatingImageViewModel(bitmap, color, thickness, settings.Settings.ShowPinDecoration);
+                var vm = new FloatingImageViewModel(bitmap, color, thickness, settings.Settings.ShowPinDecoration, settings.Settings.HidePinBorder);
                 
                 try
                 {

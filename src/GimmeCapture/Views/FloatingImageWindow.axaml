@@ -19,14 +19,27 @@
         <Style Selector="Grid.Handle">
             <Setter Property="Background" Value="Transparent"/>
         </Style>
+        <Style Selector="Border.MainBorder">
+            <Setter Property="BoxShadow" Value="{Binding BorderColor, Converter={StaticResource ColorToBoxShadowConverter}}"/>
+            <Setter Property="BorderThickness" Value="{Binding BorderThickness, Converter={StaticResource ThicknessConverter}}"/>
+        </Style>
+        <Style Selector="Border.MainBorder[Tag=True]">
+            <Setter Property="BoxShadow" Value="0 0 0 0 Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="Border.InnerBorder[Tag=True]">
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
     </Window.Styles>
     
     <Grid Background="Transparent">
         <!-- BABYMETAL Style Border -->
         <Border Margin="10"
+                Classes="MainBorder"
+                Tag="{Binding HidePinBorder}"
                 CornerRadius="0"
-                Background="{DynamicResource GothicBlackBrush}"
-                BoxShadow="{Binding BorderColor, Converter={StaticResource ColorToBoxShadowConverter}}">
+                Background="{DynamicResource GothicBlackBrush}">
             <Border.BorderBrush>
                 <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
                     <GradientStop Offset="0" Color="{Binding BorderColor}"/>
@@ -34,10 +47,12 @@
                     <GradientStop Offset="1" Color="{Binding BorderColor}"/>
                 </LinearGradientBrush>
             </Border.BorderBrush>
-            <Border BorderThickness="{Binding BorderThickness, Converter={StaticResource ThicknessConverter}}">
-                <Border BorderBrush="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" BorderThickness="1" Margin="-1">
-                    <Grid>
-                        <Image Source="{Binding Image}" Stretch="Fill" Name="PinnedImage" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
+            <Border Classes="InnerBorder" Tag="{Binding HidePinBorder}">
+                <Grid>
+                    <Border BorderBrush="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" BorderThickness="1" Margin="-1" IsVisible="{Binding !HidePinBorder}">
+                        <!-- This inner one is tricky, let's just use IsVisible for the actual decorative borders -->
+                    </Border>
+                    <Image Source="{Binding Image}" Stretch="Fill" Name="PinnedImage" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
                         
                         <!-- Accent Corners -->
                         <Rectangle IsVisible="{Binding ShowPinDecoration}" Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="10" Height="2" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="2"/>
@@ -51,8 +66,7 @@
                         
                         <Rectangle IsVisible="{Binding ShowPinDecoration}" Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="10" Height="2" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="2"/>
                         <Rectangle IsVisible="{Binding ShowPinDecoration}" Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="2" Height="10" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="2"/>
-                    </Grid>
-                </Border>
+                </Grid>
             </Border>
             
             <Border.ContextMenu>

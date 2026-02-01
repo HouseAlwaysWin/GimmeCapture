@@ -286,6 +286,27 @@ public class MainWindowViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _showPinDecoration, value);
     }
 
+    private bool _hidePinBorder = false;
+    public bool HidePinBorder
+    {
+        get => _hidePinBorder;
+        set => this.RaiseAndSetIfChanged(ref _hidePinBorder, value);
+    }
+
+    private bool _showSnipCursor = false;
+    public bool ShowSnipCursor
+    {
+        get => _showSnipCursor;
+        set => this.RaiseAndSetIfChanged(ref _showSnipCursor, value);
+    }
+
+    private bool _showRecordCursor = true;
+    public bool ShowRecordCursor
+    {
+        get => _showRecordCursor;
+        set => this.RaiseAndSetIfChanged(ref _showRecordCursor, value);
+    }
+
     public string[] AvailableRecordFormats { get; } = { "mp4", "mkv", "gif", "webm", "mov" };
 
     public async Task SelectVideoPath()
@@ -321,6 +342,9 @@ public class MainWindowViewModel : ViewModelBase
         CopyHotkey = s.CopyHotkey;
         PinHotkey = s.PinHotkey;
         ShowPinDecoration = s.ShowPinDecoration;
+        HidePinBorder = s.HidePinBorder;
+        ShowSnipCursor = s.ShowSnipCursor;
+        ShowRecordCursor = s.ShowRecordCursor;
         
         if (Color.TryParse(s.BorderColorHex, out var color))
         {
@@ -392,6 +416,9 @@ public class MainWindowViewModel : ViewModelBase
         s.RecordFormat = RecordFormat;
         s.UseFixedRecordPath = UseFixedRecordPath;
         s.ShowPinDecoration = ShowPinDecoration;
+        s.HidePinBorder = HidePinBorder;
+        s.ShowSnipCursor = ShowSnipCursor;
+        s.ShowRecordCursor = ShowRecordCursor;
         
         await _settingsService.SaveAsync();
     }
@@ -424,6 +451,9 @@ public class MainWindowViewModel : ViewModelBase
         CopyHotkey = defaultSettings.CopyHotkey;
         PinHotkey = defaultSettings.PinHotkey;
         ShowPinDecoration = defaultSettings.ShowPinDecoration;
+        HidePinBorder = defaultSettings.HidePinBorder;
+        ShowSnipCursor = defaultSettings.ShowSnipCursor;
+        ShowRecordCursor = defaultSettings.ShowRecordCursor;
         
         if (Color.TryParse(defaultSettings.BorderColorHex, out var color))
             BorderColor = color;

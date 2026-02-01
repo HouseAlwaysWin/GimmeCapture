@@ -22,6 +22,7 @@ public class RecordingService : ReactiveObject
     private string _outputFile = string.Empty;
     private string _targetFormat = "mp4";
     private Rect _region;
+    private bool _includeCursor = true;
     // Use local Temp folder in app directory instead of System Temp (usually C:\)
     // This will be updated with a unique ID per session in StartAsync
     private string _tempDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Temp", "Recordings");
@@ -64,7 +65,7 @@ public class RecordingService : ReactiveObject
     /// Start recording with specified target format for final output.
     /// Recording is done in MKV format internally for fast pause/resume.
     /// </summary>
-    public async Task<bool> StartAsync(Rect region, string outputFile, string targetFormat = "mp4")
+    public async Task<bool> StartAsync(Rect region, string outputFile, string targetFormat = "mp4", bool includeCursor = true)
     {
         if (State != RecordingState.Idle) return false;
         if (!_downloader.IsFFmpegAvailable()) return false;
@@ -72,6 +73,7 @@ public class RecordingService : ReactiveObject
         _region = region;
         _outputFile = outputFile;
         _targetFormat = targetFormat.ToLowerInvariant();
+        _includeCursor = includeCursor;
         _segments.Clear();
 
         // Use a unique temp directory for THIS session to avoid conflicts with zombie processes
@@ -100,7 +102,8 @@ public class RecordingService : ReactiveObject
         int h = ((int)_region.Height / 2) * 2;
 
         // Use MKV with zerolatency for instant pause response
-        string args = $"-y -f gdigrab -framerate 30 -offset_x {x} -offset_y {y} -video_size {w}x{h} -i desktop " +
+        string drawMouse = _includeCursor ? "1" : "0";
+        string args = $"-y -f gdigrab -draw_mouse {drawMouse} -framerate 30 -offset_x {x} -offset_y {y} -video_size {w}x{h} -i desktop " +
                       $"-c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p \"{segmentFile}\"";
 
         var startInfo = new ProcessStartInfo

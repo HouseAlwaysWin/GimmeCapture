@@ -19,22 +19,38 @@
         <Style Selector="Grid.Handle">
             <Setter Property="Background" Value="Transparent"/>
         </Style>
+        <Style Selector="Border.MainBorder">
+            <Setter Property="BoxShadow" Value="{Binding BorderColor, Converter={StaticResource ColorToBoxShadowConverter}}"/>
+            <Setter Property="BorderThickness" Value="{Binding BorderThickness, Converter={StaticResource ThicknessConverter}}"/>
+        </Style>
+        <Style Selector="Border.MainBorder[Tag=True]">
+            <Setter Property="BoxShadow" Value="0 0 0 0 Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="Border.InnerBorder[Tag=True]">
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
     </Window.Styles>
     
     <Grid Background="Transparent">
         <!-- Gothic/BABYMETAL Style Border -->
         <Border Margin="10"
+                Classes="MainBorder"
+                Tag="{Binding HidePinBorder}"
                 CornerRadius="0"
-                Background="{DynamicResource GothicBlackBrush}"
-                BoxShadow="0 0 10 0 Black"> <!-- Simplified Shadow if Converter not available or complex -->
+                Background="{DynamicResource GothicBlackBrush}">
             <Border.BorderBrush>
                 <SolidColorBrush Color="{Binding BorderColor}"/>
             </Border.BorderBrush>
-            <Border BorderThickness="{Binding BorderThickness}">
-                <Border BorderBrush="{Binding BorderColor}" BorderThickness="1" Margin="-1">
+            <Border Classes="InnerBorder" Tag="{Binding HidePinBorder}">
+                <Grid>
+                    <!-- Decorative Inner Border -->
+                    <Border BorderBrush="{Binding BorderColor}" BorderThickness="1" Margin="-1" IsVisible="{Binding !HidePinBorder}"/>
+                    
+                    <Image Source="{Binding VideoBitmap}" Stretch="Fill" Name="PinnedVideo" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
+                    
                     <Grid>
-                        <Image Source="{Binding VideoBitmap}" Stretch="Fill" Name="PinnedVideo" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
-                        
                         <!-- Accent Corners -->
                         <Rectangle IsVisible="{Binding ShowPinDecoration}" Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="10" Height="2" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="2"/>
                         <Rectangle IsVisible="{Binding ShowPinDecoration}" Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="2" Height="10" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="2"/>
@@ -48,7 +64,7 @@
                         <Rectangle IsVisible="{Binding ShowPinDecoration}" Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="10" Height="2" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="2"/>
                         <Rectangle IsVisible="{Binding ShowPinDecoration}" Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="2" Height="10" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="2"/>
                     </Grid>
-                </Border>
+                </Grid>
             </Border>
             
             <Border.ContextMenu>

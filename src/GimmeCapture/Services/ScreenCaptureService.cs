@@ -20,7 +20,48 @@ namespace GimmeCapture.Services;
 
 public class ScreenCaptureService : IScreenCaptureService
 {
-    public async Task<SKBitmap> CaptureScreenAsync(Rect region)
+    [DllImport("user32.dll")]
+    static extern bool GetCursorInfo(out CURSORINFO pci);
+
+    [DllImport("user32.dll")]
+    static extern IntPtr CopyIcon(IntPtr hIcon);
+
+    [DllImport("user32.dll")]
+    static extern bool DestroyIcon(IntPtr hIcon);
+
+    [DllImport("user32.dll")]
+    static extern bool GetIconInfo(IntPtr hIcon, out ICONINFO piconinfo);
+
+    [DllImport("gdi32.dll")]
+    static extern bool DeleteObject(IntPtr hObject);
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct CURSORINFO
+    {
+        public Int32 cbSize;
+        public Int32 flags;
+        public IntPtr hCursor;
+        public POINT ptScreenPos;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct POINT
+    {
+        public Int32 x;
+        public Int32 y;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct ICONINFO
+    {
+        public bool fIcon;
+        public Int32 xHotspot;
+        public Int32 yHotspot;
+        public IntPtr hbmMask;
+        public IntPtr hbmColor;
+    }
+
+    public async Task<SKBitmap> CaptureScreenAsync(Rect region, bool includeCursor = false)
     {
         return await Task.Run(() =>
         {
@@ -35,9 +76,46 @@ public class ScreenCaptureService : IScreenCaptureService
                 if (width <= 0 || height <= 0) return new SKBitmap(1, 1);
 
                 using var bitmap = new Bitmap(width, height);
-                using var g = Graphics.FromImage(bitmap);
-                
-                g.CopyFromScreen(x, y, 0, 0, new System.Drawing.Size(width, height));
+                using (var g = Graphics.FromImage(bitmap))
+                {
+                    g.CopyFromScreen(x, y, 0, 0, new System.Drawing.Size(width, height));
+                    
+                    if (includeCursor)
+                    {
+                        try 
+                        {
+                            CURSORINFO pci;
+                            pci.cbSize = Marshal.SizeOf(typeof(CURSORINFO));
+                            if (GetCursorInfo(out pci) && pci.flags == 0x00000001) // CURSOR_SHOWING
+                            {
+                                var hIcon = CopyIcon(pci.hCursor);
+                                if (hIcon != IntPtr.Zero)
+                                {
+                                    try
+                                    {
+                                        ICONINFO ii;
+                                        if (GetIconInfo(hIcon, out ii))
+                                        {
+                                            int cursorX = pci.ptScreenPos.x - x - ii.xHotspot;
+                                            int cursorY = pci.ptScreenPos.y - y - ii.yHotspot;
+                                            
+                                            using var icon = Icon.FromHandle(hIcon);
+                                            g.DrawIcon(icon, cursorX, cursorY);
+                                            
+                                            if (ii.hbmMask != IntPtr.Zero) DeleteObject(ii.hbmMask);
+                                            if (ii.hbmColor != IntPtr.Zero) DeleteObject(ii.hbmColor);
+                                        }
+                                    }
+                                    finally
+                                    {
+                                        DestroyIcon(hIcon);
+                                    }
+                                }
+                            }
+                        }
+                        catch { /* Ignore cursor errors */ }
+                    }
+                }
                 
                 // Convert System.Drawing.Bitmap to SKBitmap
                 using var stream = new MemoryStream();
@@ -52,9 +130,9 @@ public class ScreenCaptureService : IScreenCaptureService
         });
     }
 
-    public async Task<SKBitmap> CaptureScreenWithAnnotationsAsync(Rect region, IEnumerable<Annotation> annotations)
+    public async Task<SKBitmap> CaptureScreenWithAnnotationsAsync(Rect region, IEnumerable<Annotation> annotations, bool includeCursor = false)
     {
-        var bitmap = await CaptureScreenAsync(region);
+        var bitmap = await CaptureScreenAsync(region, includeCursor);
         if (annotations == null || !annotations.Any()) return bitmap;
 
         using (var canvas = new SKCanvas(bitmap))
