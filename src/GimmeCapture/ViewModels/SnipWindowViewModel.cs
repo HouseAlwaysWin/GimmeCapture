@@ -147,11 +147,7 @@ public class SnipWindowViewModel : ViewModelBase
     public Color SelectedColor
     {
         get => _selectedColor;
-        set 
-        {
-            this.RaiseAndSetIfChanged(ref _selectedColor, value);
-            SelectionBorderColor = value;
-        }
+        set => this.RaiseAndSetIfChanged(ref _selectedColor, value);
     }
 
     private string _customHexColor = "#FF0000";
@@ -165,11 +161,7 @@ public class SnipWindowViewModel : ViewModelBase
     public double CurrentThickness
     {
         get => _currentThickness;
-        set 
-        {
-            this.RaiseAndSetIfChanged(ref _currentThickness, value);
-            SelectionBorderThickness = value;
-        }
+        set => this.RaiseAndSetIfChanged(ref _currentThickness, value);
     }
 
     private double _currentFontSize = 24.0;

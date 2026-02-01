@@ -27,8 +27,10 @@
             <Rectangle Fill="#444444" Width="1" Height="16" Margin="2,0" VerticalAlignment="Center"/>
             
             <!-- Grouped Annotation Tools -->
-            <Button Theme="{StaticResource SnipButton}" FontSize="12" BorderThickness="1" ToolTip.Tip="{Binding [TipShapes], Source={x:Static services:LocalizationService.Instance}}">
-                <Button.Flyout>
+            <ToggleButton Theme="{StaticResource SnipToggleButton}" FontSize="12" BorderThickness="1" 
+                          IsChecked="{Binding IsShapeToolActive, Mode=OneWay}"
+                          ToolTip.Tip="{Binding [TipShapes], Source={x:Static services:LocalizationService.Instance}}">
+                <ToggleButton.Flyout>
                     <Flyout Placement="Bottom">
                         <Border Background="#1A1A1A" BorderBrush="#333333" BorderThickness="1" Padding="2" CornerRadius="4">
                             <StackPanel Orientation="Horizontal" Spacing="2" TextElement.FontSize="12">
@@ -45,16 +47,18 @@
                             </StackPanel>
                         </Border>
                     </Flyout>
-                </Button.Flyout>
+                </ToggleButton.Flyout>
                 <Panel>
                     <TextBlock Text="□" IsVisible="{Binding CurrentTool, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Rectangle}}" FontSize="14"/>
                     <TextBlock Text="○" IsVisible="{Binding CurrentTool, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Ellipse}}" FontSize="14"/>
                     <TextBlock Text="⬚" IsVisible="{Binding IsShapeToolActive, Converter={StaticResource BoolInvertConverter}}" FontSize="14"/>
                 </Panel>
-            </Button>
+            </ToggleButton>
 
-            <Button Theme="{StaticResource SnipButton}" FontSize="12" BorderThickness="1" ToolTip.Tip="{Binding [TipLines], Source={x:Static services:LocalizationService.Instance}}">
-                <Button.Flyout>
+            <ToggleButton Theme="{StaticResource SnipToggleButton}" FontSize="12" BorderThickness="1" 
+                          IsChecked="{Binding IsLineToolActive, Mode=OneWay}"
+                          ToolTip.Tip="{Binding [TipLines], Source={x:Static services:LocalizationService.Instance}}">
+                <ToggleButton.Flyout>
                     <Flyout Placement="Bottom">
                         <Border Background="#1A1A1A" BorderBrush="#333333" BorderThickness="1" Padding="2" CornerRadius="4">
                             <StackPanel Orientation="Horizontal" Spacing="2" TextElement.FontSize="12">
@@ -71,20 +75,20 @@
                             </StackPanel>
                         </Border>
                     </Flyout>
-                </Button.Flyout>
+                </ToggleButton.Flyout>
                 <Panel>
                     <TextBlock Text="↗" IsVisible="{Binding CurrentTool, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Arrow}}" FontSize="14"/>
                     <TextBlock Text="—" IsVisible="{Binding CurrentTool, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Line}}" FontSize="14"/>
                     <TextBlock Text="↗" IsVisible="{Binding IsLineToolActive, Converter={StaticResource BoolInvertConverter}}" FontSize="14"/>
                 </Panel>
-            </Button>
+            </ToggleButton>
 
+            <!-- Text Tool -->
             <ToggleButton Theme="{StaticResource SnipToggleButton}" FontSize="12" BorderThickness="1" 
                            IsChecked="{Binding CurrentTool, ConverterParameter={x:Static m:AnnotationType.Text}, Converter={StaticResource EnumToBoolConverter}, Mode=OneWay}"
                            Command="{Binding SelectToolCommand}" CommandParameter="{x:Static m:AnnotationType.Text}"
                            ToolTip.Tip="{Binding [Text], Source={x:Static services:LocalizationService.Instance}}">
-                <PathIcon Data="M5,4v3h5.5v12h3V7H19V4H5z" Width="14" Height="14"/>
-                <Button.Flyout>
+                <ToggleButton.Flyout>
                     <Flyout Placement="Bottom">
                         <Border Background="#1A1A1A" BorderBrush="#333333" BorderThickness="1" Padding="6" CornerRadius="4">
                             <StackPanel Spacing="4" Width="140" TextElement.FontSize="12">
@@ -110,7 +114,8 @@
                             </StackPanel>
                         </Border>
                     </Flyout>
-                </Button.Flyout>
+                </ToggleButton.Flyout>
+                <PathIcon Data="M5,4v3h5.5v12h3V7H19V4H5z" Width="14" Height="14"/>
             </ToggleButton>
             
             <Rectangle Fill="#444444" Width="1" Height="16" Margin="2,0" VerticalAlignment="Center"/>
