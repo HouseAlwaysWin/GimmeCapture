@@ -19,23 +19,27 @@ public class RecordingService : ReactiveObject
     private Process? _ffmpegProcess;
     private RecordingState _state = RecordingState.Idle;
     private readonly List<string> _segments = new();
-    private string? _outputFile;
+    private string _outputFile = string.Empty;
     private string _targetFormat = "mp4";
     private Rect _region;
-    private string _tempDir;
+    // Use local Temp folder in app directory instead of System Temp (usually C:\)
+    // This will be updated with a unique ID per session in StartAsync
+    private string _tempDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Temp", "Recordings");
 
     // Windows API for sending Ctrl+C
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool GenerateConsoleCtrlEvent(uint dwCtrlEvent, uint dwProcessGroupId);
 
     [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern bool AttachConsole(uint dwProcessId);
+    static extern bool AttachConsole(uint dwProcessId);
 
-    [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern bool FreeConsole();
+    [DllImport("kernel32.dll", SetLastError = true, ExactSpelling = true)]
+    static extern bool FreeConsole();
 
-    [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern bool SetConsoleCtrlHandler(IntPtr handler, bool add);
+    [DllImport("kernel32.dll")]
+    static extern bool SetConsoleCtrlHandler(ConsoleCtrlDelegate? HandlerRoutine, bool Add);
+
+    delegate bool ConsoleCtrlDelegate(uint CtrlType);
 
     private const uint CTRL_C_EVENT = 0;
 
@@ -51,7 +55,6 @@ public class RecordingService : ReactiveObject
     public RecordingService(FFmpegDownloaderService downloader)
     {
         _downloader = downloader;
-        _tempDir = Path.Combine(Path.GetTempPath(), "GimmeCapture_Recordings");
     }
 
     /// <summary>
@@ -68,7 +71,10 @@ public class RecordingService : ReactiveObject
         _targetFormat = targetFormat.ToLowerInvariant();
         _segments.Clear();
 
-        // Ensure temp dir is clean
+        // Use a unique temp directory for THIS session to avoid conflicts with zombie processes
+        _tempDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Temp", $"Recordings_{Guid.NewGuid()}");
+
+        // Ensure temp dir is clean (it's new so it should be, but just in case)
         try
         {
             if (Directory.Exists(_tempDir)) Directory.Delete(_tempDir, true);
@@ -257,13 +263,10 @@ public class RecordingService : ReactiveObject
                 };
 
                 using var concatProcess = Process.Start(concatInfo);
-                if (concatProcess != null)
-                {
-                    await concatProcess.WaitForExitAsync();
-                }
+                if (concatProcess != null) await concatProcess.WaitForExitAsync();
             }
 
-            // Step 2: Convert to target format if needed
+            // Step 2: Convert/Move to target format
             if (_targetFormat == "mkv")
             {
                 // Ensure output file has correct extension
@@ -273,42 +276,57 @@ public class RecordingService : ReactiveObject
                     _outputFile = Path.ChangeExtension(_outputFile, "mkv");
                 }
                 
-                // No conversion needed, just move
-                if (File.Exists(_outputFile)) File.Delete(_outputFile);
-                File.Move(mergedMkv, _outputFile);
+                // Robust Move Strategy: Retry loops with Copy+Delete fallback
+                bool moveSuccess = false;
+                Exception? lastEx = null;
+
+                for (int i = 0; i < 5; i++)
+                {
+                    try
+                    {
+                        if (File.Exists(_outputFile)) File.Delete(_outputFile);
+                        
+                        // Try Move first
+                        try 
+                        {
+                            File.Move(mergedMkv, _outputFile);
+                            moveSuccess = true;
+                        }
+                        catch (IOException)
+                        {
+                            // If Move fails (e.g. cross-volume or locked), try Copy+Delete
+                            File.Copy(mergedMkv, _outputFile, true);
+                            try { File.Delete(mergedMkv); } catch { /* best effort delete */ }
+                            moveSuccess = true;
+                        }
+
+                        if (moveSuccess) break;
+                    }
+                    catch (Exception ex)
+                    {
+                        lastEx = ex;
+                        await Task.Delay(500); // Wait before retry
+                    }
+                }
+
+                if (!moveSuccess && lastEx != null) throw lastEx;
             }
             else if (_targetFormat == "gif")
             {
-                // Convert to GIF with palette for better quality
+                // ... (GIF logic omitted for brevity, assumes standard ffmpeg conversion)
+                // Existing GIF logic
                 string paletteFile = Path.Combine(_tempDir, "palette.png");
-                
-                // Generate palette
                 string paletteArgs = $"-y -i \"{mergedMkv}\" -vf \"fps=15,scale=640:-1:flags=lanczos,palettegen\" \"{paletteFile}\"";
-                var paletteInfo = new ProcessStartInfo
-                {
-                    FileName = _downloader.FfmpegExecutablePath,
-                    Arguments = paletteArgs,
-                    UseShellExecute = false,
-                    CreateNoWindow = true
-                };
-                using var paletteProcess = Process.Start(paletteInfo);
-                if (paletteProcess != null) await paletteProcess.WaitForExitAsync();
+                var paletteInfo = new ProcessStartInfo { FileName = _downloader.FfmpegExecutablePath, Arguments = paletteArgs, UseShellExecute = false, CreateNoWindow = true };
+                using (var p = Process.Start(paletteInfo)) if (p != null) await p.WaitForExitAsync();
 
-                // Create GIF using palette
                 string gifArgs = $"-y -i \"{mergedMkv}\" -i \"{paletteFile}\" -lavfi \"fps=15,scale=640:-1:flags=lanczos[x];[x][1:v]paletteuse\" \"{_outputFile}\"";
-                var gifInfo = new ProcessStartInfo
-                {
-                    FileName = _downloader.FfmpegExecutablePath,
-                    Arguments = gifArgs,
-                    UseShellExecute = false,
-                    CreateNoWindow = true
-                };
-                using var gifProcess = Process.Start(gifInfo);
-                if (gifProcess != null) await gifProcess.WaitForExitAsync();
+                var gifInfo = new ProcessStartInfo { FileName = _downloader.FfmpegExecutablePath, Arguments = gifArgs, UseShellExecute = false, CreateNoWindow = true };
+                using (var p = Process.Start(gifInfo)) if (p != null) await p.WaitForExitAsync();
             }
             else
             {
-                // Ensure output file has correct extension
+                // ... (Other formats logic)
                 string outputPath = _outputFile;
                 string currentExt = Path.GetExtension(outputPath).ToLowerInvariant().TrimStart('.');
                 if (currentExt != _targetFormat)
@@ -317,7 +335,6 @@ public class RecordingService : ReactiveObject
                     _outputFile = outputPath;
                 }
 
-                // Convert to MP4/MOV/WebM etc with proper settings
                 string convertArgs = _targetFormat switch
                 {
                     "webm" => $"-y -i \"{mergedMkv}\" -c:v libvpx-vp9 -crf 30 -b:v 0 -c:a libopus \"{_outputFile}\"",
@@ -325,25 +342,25 @@ public class RecordingService : ReactiveObject
                     _ => $"-y -i \"{mergedMkv}\" -c:v libx264 -preset fast -crf 23 -movflags +faststart \"{_outputFile}\""
                 };
 
-                var convertInfo = new ProcessStartInfo
-                {
-                    FileName = _downloader.FfmpegExecutablePath,
-                    Arguments = convertArgs,
-                    UseShellExecute = false,
-                    CreateNoWindow = true
-                };
-
-                using var convertProcess = Process.Start(convertInfo);
-                if (convertProcess != null)
-                {
-                    await convertProcess.WaitForExitAsync();
-                }
+                var convertInfo = new ProcessStartInfo { FileName = _downloader.FfmpegExecutablePath, Arguments = convertArgs, UseShellExecute = false, CreateNoWindow = true };
+                using (var p = Process.Start(convertInfo)) if (p != null) await p.WaitForExitAsync();
             }
         }
         catch (Exception ex)
         {
             Debug.WriteLine($"Error finalizing recording: {ex.Message}");
+            System.Windows.Forms.MessageBox.Show($"Error saving recording: {ex.Message}", "Save Error");
         }
+        
+        // Cleanup: Only clean if it was a temp dir we created
+        try
+        {
+            if (Directory.Exists(_tempDir) && _tempDir.Contains("Recordings_"))
+            {
+                Directory.Delete(_tempDir, true);
+            }
+        }
+        catch { /* best effort */ }
 
         // Cleanup temp directory
         try

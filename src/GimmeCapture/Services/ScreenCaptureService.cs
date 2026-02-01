@@ -264,4 +264,24 @@ public class ScreenCaptureService : IScreenCaptureService
             bitmap.Encode(fs, SKEncodedImageFormat.Png, 100);
         });
     }
+
+    public async Task CopyFileToClipboardAsync(string filePath)
+    {
+        await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
+        {
+            var topLevel = TopLevel.GetTopLevel(Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop ? desktop.MainWindow : null);
+            
+            if (topLevel?.Clipboard is { } clipboard)
+            {
+                var dataObject = new DataObject();
+                dataObject.Set(DataFormats.Files, new[] { filePath });
+                await clipboard.SetDataObjectAsync(dataObject);
+                System.Diagnostics.Debug.WriteLine($"Avalonia Clipboard: Copied file {filePath}");
+            }
+            else
+            {
+                 System.Diagnostics.Debug.WriteLine("Avalonia Clipboard: Clipboard not available");
+            }
+        });
+    }
 }

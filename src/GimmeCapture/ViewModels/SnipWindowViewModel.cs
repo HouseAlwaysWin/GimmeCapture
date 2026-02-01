@@ -418,6 +418,7 @@ public class SnipWindowViewModel : ViewModelBase
         StartRecordingCommand = ReactiveCommand.CreateFromTask(StartRecording);
         PauseRecordingCommand = ReactiveCommand.CreateFromTask(PauseRecording);
         StopRecordingCommand = ReactiveCommand.CreateFromTask(StopRecording);
+        CopyRecordingCommand = ReactiveCommand.CreateFromTask(CopyRecording);
 
         Annotations.CollectionChanged += (s, e) =>
         {
@@ -479,32 +480,30 @@ public class SnipWindowViewModel : ViewModelBase
     public ReactiveCommand<Unit, Unit> StartRecordingCommand { get; }
     public ReactiveCommand<Unit, Unit> PauseRecordingCommand { get; }
     public ReactiveCommand<Unit, Unit> StopRecordingCommand { get; }
+    public ReactiveCommand<Unit, Unit> CopyRecordingCommand { get; }
 
     private async Task StartRecording()
     {
         if (_recordingService == null || _mainVm == null) return;
         
-        if (_mainVm.UseFixedRecordPath)
-        {
-            string fileName = $"Capture_{DateTime.Now:yyyyMMdd_HHmmss}.{_mainVm.RecordFormat}";
-            _currentRecordingPath = System.IO.Path.Combine(_mainVm.VideoSaveDirectory, fileName);
-        }
-        else
-        {
-            _currentRecordingPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"GimmeCapture_Temp_{Guid.NewGuid()}.{_mainVm.RecordFormat}");
-        }
+        string format = _mainVm.RecordFormat?.ToLowerInvariant() ?? "mp4";
 
-        // Convert window-relative SelectionRect to screen-absolute coordinates
-        var screenRect = new Rect(
-            SelectionRect.X + ScreenOffset.X,
-            SelectionRect.Y + ScreenOffset.Y,
-            SelectionRect.Width,
-            SelectionRect.Height
-        );
+        // Use local Temp folder in app directory instead of System Temp
+        string tempDir = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Temp");
+        try { System.IO.Directory.CreateDirectory(tempDir); } catch { }
 
-        if (await _recordingService.StartAsync(screenRect, _currentRecordingPath, _mainVm.RecordFormat))
+        _currentRecordingPath = System.IO.Path.Combine(tempDir, $"GimmeCapture_{Guid.NewGuid()}.{format}");
+        
+        var region = SelectionRect;
+        
+        // Ensure size is even for ffmpeg
+        if (region.Width % 2 != 0) region = region.WithWidth(region.Width - 1);
+        if (region.Height % 2 != 0) region = region.WithHeight(region.Height - 1);
+
+        if (await _recordingService.StartAsync(region, _currentRecordingPath, format))
         {
             RecordingDuration = TimeSpan.Zero;
+            
             _recordTimer = new Avalonia.Threading.DispatcherTimer
             {
                 Interval = TimeSpan.FromSeconds(1)
@@ -564,6 +563,82 @@ public class SnipWindowViewModel : ViewModelBase
         CloseAction?.Invoke();
     }
 
+    private bool _isProcessingRecording = false;
+
+    private async Task CopyRecording()
+    {
+        if (_isProcessingRecording || _recordingService == null || _mainVm == null) return;
+        
+        _isProcessingRecording = true;
+        try
+        {
+            _recordTimer?.Stop();
+            await _recordingService.StopAsync();
+
+            // RecordingService.StopAsync finishes internal tasks but file system might be lagging slightly
+            // Or the path might miss extension because RecordingService handles it internally
+            
+            string? actualOutputPath = _recordingService.OutputFilePath ?? _currentRecordingPath;
+            
+            // Correction: RecordingService might add .mkv extension if missing but not update the property?
+            // Let's check typical variants
+            if (!string.IsNullOrEmpty(actualOutputPath) && !System.IO.File.Exists(actualOutputPath))
+            {
+               if (!actualOutputPath.EndsWith(".mkv", StringComparison.OrdinalIgnoreCase))
+               {
+                   string withExt = actualOutputPath + ".mkv";
+                   if (System.IO.File.Exists(withExt)) actualOutputPath = withExt;
+               }
+            }
+
+            // Wait loop for existence (up to 2 seconds)
+            if (!string.IsNullOrEmpty(actualOutputPath))
+            {
+                for (int i = 0; i < 20; i++) 
+                {
+                    if (System.IO.File.Exists(actualOutputPath)) break;
+                    await Task.Delay(100);
+                }
+            }
+            
+            if (!string.IsNullOrEmpty(actualOutputPath) && System.IO.File.Exists(actualOutputPath))
+            {
+                try
+                {
+                    // Use PowerShell as the ultimate fallback for clipboard operations
+                    // This bypasses all .NET threading/apartment/Avalonia issues
+                    var psi = new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = "powershell",
+                        Arguments = $"-noprofile -command \"Set-Clipboard -Path '{actualOutputPath}'\"",
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    };
+                    var process = System.Diagnostics.Process.Start(psi);
+                    process?.WaitForExit(2000); // Wait up to 2 seconds
+                    
+                    // Success, no message required as per user request
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Failed to copy recording to clipboard: {ex.Message}");
+                    System.Windows.Forms.MessageBox.Show($"Failed to copy: {ex.Message}", "Error");
+                }
+            }
+            else 
+            {
+                 // Debugging help: show what path was looked for
+                 System.Windows.Forms.MessageBox.Show($"Video file not found at:\n{actualOutputPath}", "Error");
+            }
+
+            CloseAction?.Invoke();
+        }
+        finally
+        {
+            _isProcessingRecording = false;
+        }
+    }
+
     private string? _currentRecordingPath;
 
     public ReactiveCommand<Color, Unit> ChangeColorCommand { get; }
@@ -588,6 +663,16 @@ public class SnipWindowViewModel : ViewModelBase
 
     private async Task Copy() 
     { 
+        // If recording is processing, ignore copy command to prevent overwriting with screenshot
+        if (_isProcessingRecording) return;
+
+        // If recording is active, copy recording instead of screenshot
+        if (RecState == RecordingState.Recording || RecState == RecordingState.Paused)
+        {
+            await CopyRecording();
+            return;
+        }
+
         if (SelectionRect.Width > 0 && SelectionRect.Height > 0)
         {
             HideAction?.Invoke();

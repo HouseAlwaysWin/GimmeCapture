@@ -11,5 +11,6 @@ public interface IScreenCaptureService
     Task<SKBitmap> CaptureScreenAsync(Rect region);
     Task<SKBitmap> CaptureScreenWithAnnotationsAsync(Rect region, IEnumerable<Annotation> annotations);
     Task CopyToClipboardAsync(SKBitmap bitmap);
+    Task CopyFileToClipboardAsync(string filePath);
     Task SaveToFileAsync(SKBitmap bitmap, string path);
 }
