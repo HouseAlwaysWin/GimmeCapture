@@ -127,6 +127,49 @@
                 </Style>
             </ControlTheme>
 
+            <!-- SnipToolbar Button with Active State Support -->
+            <ControlTheme x:Key="SnipToolButton" TargetType="Button">
+                <Setter Property="Background" Value="#2A2A2A"/>
+                <Setter Property="Foreground" Value="White"/>
+                <Setter Property="Padding" Value="6,4"/>
+                <Setter Property="MinWidth" Value="28"/>
+                <Setter Property="MinHeight" Value="28"/>
+                <Setter Property="CornerRadius" Value="2"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="BorderBrush" Value="#444444"/>
+                <Setter Property="FontSize" Value="12"/>
+                <Setter Property="Template">
+                    <ControlTemplate>
+                        <Panel>
+                            <Border Name="PART_Border"
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="{TemplateBinding CornerRadius}">
+                                <ContentPresenter Name="PART_ContentPresenter"
+                                                  Content="{TemplateBinding Content}"
+                                                  Padding="{TemplateBinding Padding}"
+                                                  HorizontalContentAlignment="Center"
+                                                  VerticalContentAlignment="Center"/>
+                            </Border>
+                        </Panel>
+                    </ControlTemplate>
+                </Setter>
+
+                <Style Selector="^:pointerover /template/ Border#PART_Border">
+                    <Setter Property="Background" Value="#3A3A3A"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource ThemeAccentBrush}"/>
+                </Style>
+                <Style Selector="^:pressed">
+                    <Setter Property="RenderTransform" Value="scale(0.95)"/>
+                </Style>
+                <Style Selector="^.active /template/ Border#PART_Border">
+                    <Setter Property="Background" Value="{DynamicResource ThemeAccentBrush}"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource ThemeAccentBrush}"/>
+                    <Setter Property="BoxShadow" Value="0 0 8 0 #80E60012"/>
+                </Style>
+            </ControlTheme>
+
             <ControlTheme x:Key="SnipToggleButton" TargetType="ToggleButton">
                 <Setter Property="Background" Value="#2A2A2A"/>
                 <Setter Property="Foreground" Value="White"/>

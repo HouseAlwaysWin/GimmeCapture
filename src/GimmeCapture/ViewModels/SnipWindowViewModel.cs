@@ -234,6 +234,7 @@ public class SnipWindowViewModel : ViewModelBase
     public ReactiveCommand<Unit, Unit> UndoCommand { get; }
     public ReactiveCommand<Unit, Unit> ClearCommand { get; }
     public ReactiveCommand<AnnotationType, Unit> SelectToolCommand { get; }
+    public ReactiveCommand<string, Unit> ToggleToolGroupCommand { get; }
     public ReactiveCommand<Unit, Unit> RedoCommand { get; }
 
     private readonly System.Collections.Generic.List<Annotation> _redoStack = new();
@@ -266,7 +267,7 @@ public class SnipWindowViewModel : ViewModelBase
     // Annotation Properties
     public ObservableCollection<Annotation> Annotations { get; } = new();
 
-    private AnnotationType _currentTool = AnnotationType.None; // Default to None, no tool selected initially
+    private AnnotationType _currentTool = AnnotationType.None;
     public AnnotationType CurrentTool
     {
         get => _currentTool;
@@ -275,46 +276,43 @@ public class SnipWindowViewModel : ViewModelBase
             this.RaiseAndSetIfChanged(ref _currentTool, value);
             this.RaisePropertyChanged(nameof(IsShapeToolActive));
             this.RaisePropertyChanged(nameof(IsLineToolActive));
+            this.RaisePropertyChanged(nameof(IsTextToolActive));
         }
     }
 
-    public bool IsShapeToolActive 
+    public bool IsShapeToolActive => CurrentTool == AnnotationType.Rectangle || CurrentTool == AnnotationType.Ellipse;
+    public bool IsLineToolActive => CurrentTool == AnnotationType.Arrow || CurrentTool == AnnotationType.Line || CurrentTool == AnnotationType.Pen;
+    public bool IsTextToolActive => CurrentTool == AnnotationType.Text;
+
+    public void ToggleToolGroup(string group)
     {
-        get => CurrentTool == AnnotationType.Rectangle || CurrentTool == AnnotationType.Ellipse;
-        set 
+        if (group == "Shapes")
         {
-            if (value)
-            {
-                // If turning ON but no sub-tool selected, force a notification to keep the button gray/unchecked
-                if (CurrentTool != AnnotationType.Rectangle && CurrentTool != AnnotationType.Ellipse)
-                {
-                    this.RaisePropertyChanged(nameof(IsShapeToolActive));
-                }
-            }
-            else
+            if (IsShapeToolActive)
             {
                 CurrentTool = AnnotationType.None;
                 IsDrawingMode = false;
             }
         }
-    }
-
-    public bool IsLineToolActive 
-    {
-        get => CurrentTool == AnnotationType.Arrow || CurrentTool == AnnotationType.Line || CurrentTool == AnnotationType.Pen;
-        set
+        else if (group == "Lines")
         {
-            if (value)
-            {
-                if (CurrentTool != AnnotationType.Arrow && CurrentTool != AnnotationType.Line && CurrentTool != AnnotationType.Pen)
-                {
-                    this.RaisePropertyChanged(nameof(IsLineToolActive));
-                }
-            }
-            else
+            if (IsLineToolActive)
             {
                 CurrentTool = AnnotationType.None;
                 IsDrawingMode = false;
+            }
+        }
+        else if (group == "Text")
+        {
+            if (IsTextToolActive)
+            {
+                CurrentTool = AnnotationType.None;
+                IsDrawingMode = false;
+            }
+            else
+            {
+                CurrentTool = AnnotationType.Text;
+                IsDrawingMode = true;
             }
         }
     }
@@ -474,12 +472,12 @@ public class SnipWindowViewModel : ViewModelBase
             }
             else
             {
-                // Force a reset to None first to ensure UI bindings correctly trigger and clear previous states
-                CurrentTool = AnnotationType.None;
                 CurrentTool = t;
                 IsDrawingMode = true; 
             }
         });
+        
+        ToggleToolGroupCommand = ReactiveCommand.Create<string>(ToggleToolGroup);
         
         ChangeColorCommand = ReactiveCommand.Create<Color>(c => SelectedColor = c);
         UndoCommand = ReactiveCommand.Create(Undo);
