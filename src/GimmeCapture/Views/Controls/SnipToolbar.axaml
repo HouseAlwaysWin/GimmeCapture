@@ -70,15 +70,21 @@
                                 <ToggleButton Theme="{StaticResource SnipToggleButton}" FontSize="12" BorderThickness="1" 
                                                IsChecked="{Binding CurrentTool, ConverterParameter={x:Static m:AnnotationType.Line}, Converter={StaticResource EnumToBoolConverter}, Mode=OneWay}"
                                                Command="{Binding SelectToolCommand}" CommandParameter="{x:Static m:AnnotationType.Line}" ToolTip.Tip="{Binding [Line], Source={x:Static services:LocalizationService.Instance}}">
-                                    <PathIcon Data="M3,11h18v2H3V11z" Width="14" Height="14"/>
-                                </ToggleButton>
-                            </StackPanel>
+                                     <PathIcon Data="M3,11h18v2H3V11z" Width="14" Height="14"/>
+                                 </ToggleButton>
+                                 <ToggleButton Theme="{StaticResource SnipToggleButton}" FontSize="12" BorderThickness="1" 
+                                                IsChecked="{Binding CurrentTool, ConverterParameter={x:Static m:AnnotationType.Pen}, Converter={StaticResource EnumToBoolConverter}, Mode=OneWay}"
+                                                Command="{Binding SelectToolCommand}" CommandParameter="{x:Static m:AnnotationType.Pen}" ToolTip.Tip="{Binding [Pen], Source={x:Static services:LocalizationService.Instance}}">
+                                     <PathIcon Data="M3,17.25V21h3.75L17.81,9.94l-3.75-3.75L3,17.25z M20.71,7.04c0.39-0.39,0.39-1.02,0-1.41l-2.34-2.34c-0.39-0.39-1.02-0.39-1.41,0l-1.83,1.83l3.75,3.75L20.71,7.04z" Width="14" Height="14"/>
+                                 </ToggleButton>
+                             </StackPanel>
                         </Border>
                     </Flyout>
                 </ToggleButton.Flyout>
                 <Panel>
                     <TextBlock Text="↗" IsVisible="{Binding CurrentTool, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Arrow}}" FontSize="14"/>
                     <TextBlock Text="—" IsVisible="{Binding CurrentTool, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Line}}" FontSize="14"/>
+                    <TextBlock Text="✎" IsVisible="{Binding CurrentTool, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Pen}}" FontSize="14"/>
                     <TextBlock Text="↗" IsVisible="{Binding IsLineToolActive, Converter={StaticResource BoolInvertConverter}}" FontSize="14"/>
                 </Panel>
             </ToggleButton>

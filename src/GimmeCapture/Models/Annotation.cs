@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Media;
 using ReactiveUI;
+using System.Collections.ObjectModel;
 
 namespace GimmeCapture.Models;
 
@@ -11,7 +12,8 @@ public enum AnnotationType
     Ellipse,
     Arrow,
     Line,
-    Text
+    Text,
+    Pen
 }
 
 public class Annotation : ReactiveObject
@@ -84,5 +86,13 @@ public class Annotation : ReactiveObject
     {
         get => _isItalic;
         set => this.RaiseAndSetIfChanged(ref _isItalic, value);
+    }
+
+    public ObservableCollection<Point> Points { get; } = new();
+
+    public void AddPoint(Point p)
+    {
+        Points.Add(p);
+        this.RaisePropertyChanged(nameof(Points));
     }
 }

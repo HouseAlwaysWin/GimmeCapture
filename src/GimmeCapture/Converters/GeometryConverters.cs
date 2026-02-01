@@ -3,6 +3,8 @@ using Avalonia.Data.Converters;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
+using Avalonia.Media;
 using GimmeCapture.Models;
 
 namespace GimmeCapture.Converters;
@@ -85,7 +87,7 @@ public class AnnotationToLeftConverter : IMultiValueConverter
                 return Math.Min(p1.X, p2.X);
             if (type == AnnotationType.Text)
                 return p1.X;
-            return 0.0;
+            return 0.0; // Arrow, Line, Pen use relative coordinates or internal geometry offsets
         }
         return 0.0;
     }
@@ -102,9 +104,34 @@ public class AnnotationToTopConverter : IMultiValueConverter
                 return Math.Min(p1.Y, p2.Y);
             if (type == AnnotationType.Text)
                 return p1.Y;
-            return 0.0;
+            return 0.0; // Arrow, Line, Pen
         }
         return 0.0;
     }
     public object?[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture) => throw new NotImplementedException();
+}
+
+public class PenGeometryConverter : IValueConverter
+{
+    public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+    {
+        if (value is System.Collections.ObjectModel.ObservableCollection<Point> points && points.Any())
+        {
+            var geometry = new StreamGeometry();
+            using (var context = geometry.Open())
+            {
+                var first = points[0];
+                context.BeginFigure(first, false);
+                foreach (var point in points.Skip(1))
+                {
+                    context.LineTo(point);
+                }
+                context.EndFigure(false);
+            }
+            return geometry;
+        }
+        return null;
+    }
+
+    public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => throw new NotImplementedException();
 }

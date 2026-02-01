@@ -151,6 +151,19 @@ public class ScreenCaptureService : IScreenCaptureService
                             paint.Typeface = null; // Detach before disposal
                         }
                         break;
+                    case AnnotationType.Pen:
+                        if (ann.Points.Any())
+                        {
+                            using var path = new SKPath();
+                            var first = ann.Points.First();
+                            path.MoveTo((float)first.X, (float)first.Y);
+                            foreach (var p in ann.Points.Skip(1))
+                            {
+                                path.LineTo((float)p.X, (float)p.Y);
+                            }
+                            canvas.DrawPath(path, paint);
+                        }
+                        break;
                 }
             }
         }

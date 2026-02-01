@@ -141,6 +141,13 @@
                                        FontWeight="{Binding IsBold, Converter={StaticResource BoolToFontWeightConverter}}"
                                        FontStyle="{Binding IsItalic, Converter={StaticResource BoolToFontStyleConverter}}"
                                        IsVisible="{Binding Type, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Text}}"/>
+                            <!-- Pen -->
+                            <Path Stroke="{Binding Color, Converter={StaticResource ColorToBrushConverter}}"
+                                  StrokeThickness="{Binding Thickness}"
+                                  StrokeLineCap="Round"
+                                  StrokeJoin="Round"
+                                  Data="{Binding Points, Converter={StaticResource PenGeometryConverter}}"
+                                  IsVisible="{Binding Type, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Pen}}"/>
                         </Panel>
                     </DataTemplate>
                 </ItemsControl.DataTemplates>

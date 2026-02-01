@@ -327,6 +327,11 @@ public partial class SnipWindow : Window
                         Thickness = _viewModel.CurrentThickness,
                         FontSize = _viewModel.CurrentFontSize
                     };
+
+                    if (_viewModel.CurrentTool == AnnotationType.Pen)
+                    {
+                        _currentAnnotation.AddPoint(relPoint);
+                    }
                     
                     _viewModel.Annotations.Add(_currentAnnotation);
                     e.Handled = true;
@@ -563,7 +568,14 @@ public partial class SnipWindow : Window
         {
             // Update Drawing
             var relPoint = new Point(currentPoint.X - _viewModel.SelectionRect.X, currentPoint.Y - _viewModel.SelectionRect.Y);
-            _currentAnnotation.EndPoint = relPoint;
+            if (_currentAnnotation.Type == AnnotationType.Pen)
+            {
+                _currentAnnotation.AddPoint(relPoint);
+            }
+            else
+            {
+                _currentAnnotation.EndPoint = relPoint;
+            }
         }
         else if (_viewModel.CurrentState == SnipWindowViewModel.SnipState.Idle)
         {

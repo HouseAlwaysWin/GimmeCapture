@@ -141,7 +141,7 @@ public class SnipWindowViewModel : ViewModelBase
     }
 
     public bool IsShapeToolActive => CurrentTool == AnnotationType.Rectangle || CurrentTool == AnnotationType.Ellipse;
-    public bool IsLineToolActive => CurrentTool == AnnotationType.Arrow || CurrentTool == AnnotationType.Line;
+    public bool IsLineToolActive => CurrentTool == AnnotationType.Arrow || CurrentTool == AnnotationType.Line || CurrentTool == AnnotationType.Pen;
 
     private Color _selectedColor = Colors.Red;
     public Color SelectedColor
