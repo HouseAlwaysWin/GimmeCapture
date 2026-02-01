@@ -278,8 +278,46 @@ public class SnipWindowViewModel : ViewModelBase
         }
     }
 
-    public bool IsShapeToolActive => CurrentTool == AnnotationType.Rectangle || CurrentTool == AnnotationType.Ellipse;
-    public bool IsLineToolActive => CurrentTool == AnnotationType.Arrow || CurrentTool == AnnotationType.Line || CurrentTool == AnnotationType.Pen;
+    public bool IsShapeToolActive 
+    {
+        get => CurrentTool == AnnotationType.Rectangle || CurrentTool == AnnotationType.Ellipse;
+        set 
+        {
+            if (value)
+            {
+                // If turning ON but no sub-tool selected, force a notification to keep the button gray/unchecked
+                if (CurrentTool != AnnotationType.Rectangle && CurrentTool != AnnotationType.Ellipse)
+                {
+                    this.RaisePropertyChanged(nameof(IsShapeToolActive));
+                }
+            }
+            else
+            {
+                CurrentTool = AnnotationType.None;
+                IsDrawingMode = false;
+            }
+        }
+    }
+
+    public bool IsLineToolActive 
+    {
+        get => CurrentTool == AnnotationType.Arrow || CurrentTool == AnnotationType.Line || CurrentTool == AnnotationType.Pen;
+        set
+        {
+            if (value)
+            {
+                if (CurrentTool != AnnotationType.Arrow && CurrentTool != AnnotationType.Line && CurrentTool != AnnotationType.Pen)
+                {
+                    this.RaisePropertyChanged(nameof(IsLineToolActive));
+                }
+            }
+            else
+            {
+                CurrentTool = AnnotationType.None;
+                IsDrawingMode = false;
+            }
+        }
+    }
 
     private Color _selectedColor = Colors.Red;
     public Color SelectedColor
@@ -436,6 +474,8 @@ public class SnipWindowViewModel : ViewModelBase
             }
             else
             {
+                // Force a reset to None first to ensure UI bindings correctly trigger and clear previous states
+                CurrentTool = AnnotationType.None;
                 CurrentTool = t;
                 IsDrawingMode = true; 
             }
@@ -706,8 +746,8 @@ public class SnipWindowViewModel : ViewModelBase
                          recordingPath, 
                          ffplayPath.Replace("ffplay.exe", "ffmpeg.exe"), // We need ffmpeg for streaming
                          w, h, 
-                         SelectedColor, 
-                         CurrentThickness,
+                         SelectionBorderColor, 
+                         SelectionBorderThickness,
                          settings.Settings.ShowPinDecoration,
                          settings.Settings.HidePinBorder);
                          
