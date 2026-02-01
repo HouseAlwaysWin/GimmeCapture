@@ -58,6 +58,31 @@ public class SnipWindowViewModel : ViewModelBase
         }
     }
 
+    private Size _viewportSize;
+    public Size ViewportSize
+    {
+        get => _viewportSize;
+        set 
+        {
+            this.RaiseAndSetIfChanged(ref _viewportSize, value);
+            UpdateToolbarPosition();
+        }
+    }
+
+    private double _toolbarTop;
+    public double ToolbarTop
+    {
+        get => _toolbarTop;
+        set => this.RaiseAndSetIfChanged(ref _toolbarTop, value);
+    }
+
+    private double _toolbarLeft;
+    public double ToolbarLeft
+    {
+        get => _toolbarLeft;
+        set => this.RaiseAndSetIfChanged(ref _toolbarLeft, value);
+    }
+
     private Rect _selectionRect;
     public Rect SelectionRect
     {
@@ -66,7 +91,40 @@ public class SnipWindowViewModel : ViewModelBase
         {
             this.RaiseAndSetIfChanged(ref _selectionRect, value);
             UpdateMask();
+            UpdateToolbarPosition();
         }
+    }
+
+    private void UpdateToolbarPosition()
+    {
+        // Use ViewportSize if available, otherwise assume a standard FHD height for initial positioning
+        double vh = ViewportSize.Height > 0 ? ViewportSize.Height : 1080;
+        double vw = ViewportSize.Width > 0 ? ViewportSize.Width : 1920;
+
+        const double toolbarHeight = 60; // Estimated height including margin
+        const double toolbarWidth = 400; // Estimated max width
+
+        double top = SelectionRect.Bottom + 10; // Default: Below
+        double left = SelectionRect.Left;
+
+        // If bottom overflows, position above selection
+        if (top + toolbarHeight > vh)
+        {
+            top = SelectionRect.Top - toolbarHeight - 10;
+        }
+
+        // Final safety clamps to keep toolbar within viewport
+        if (top < 10) top = 10;
+        if (top + toolbarHeight > vh) top = vh - toolbarHeight - 10;
+
+        if (left + toolbarWidth > vw)
+        {
+            left = vw - toolbarWidth - 10;
+        }
+        if (left < 10) left = 10;
+
+        ToolbarTop = top;
+        ToolbarLeft = left;
     }
 
     private void UpdateMask()
@@ -84,6 +142,13 @@ public class SnipWindowViewModel : ViewModelBase
     {
         get => _maskGeometry;
         set => this.RaiseAndSetIfChanged(ref _maskGeometry, value);
+    }
+
+    private bool _isMagnifierEnabled = true;
+    public bool IsMagnifierEnabled
+    {
+        get => _isMagnifierEnabled;
+        set => this.RaiseAndSetIfChanged(ref _isMagnifierEnabled, value);
     }
 
     private readonly Services.IScreenCaptureService _captureService;

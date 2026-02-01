@@ -122,6 +122,8 @@ public partial class SnipWindow : Window
         _viewModel = DataContext as SnipWindowViewModel;
         if (_viewModel != null)
         {
+            this.GetObservable(Visual.BoundsProperty).Subscribe(b => _viewModel.ViewportSize = b.Size);
+            _viewModel.IsMagnifierEnabled = true;
             _viewModel.CloseAction = () => 
             {
                 Close();
@@ -379,7 +381,7 @@ public partial class SnipWindow : Window
             
             if (_viewModel.CurrentState == SnipWindowViewModel.SnipState.Idle || 
                 _viewModel.CurrentState == SnipWindowViewModel.SnipState.Detecting ||
-                !_viewModel.SelectionRect.Contains(point))
+                (!_viewModel.SelectionRect.Contains(point) && !_viewModel.IsDrawingMode))
             {
                 _startPoint = point;
                 _viewModel.CurrentState = SnipWindowViewModel.SnipState.Selecting;

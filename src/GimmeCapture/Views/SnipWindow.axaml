@@ -74,7 +74,7 @@
                 </ItemsControl.Styles>
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
-                        <Canvas ClipToBounds="True"/>
+                        <Canvas Width="{Binding SelectionRect.Width}" Height="{Binding SelectionRect.Height}"/>
                     </ItemsPanelTemplate>
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.DataTemplates>
@@ -239,9 +239,8 @@
                     
             <!-- 工具列 (位置綁定) -->
             <ctl:SnipToolbar Name="Toolbar"
-                              Canvas.Left="{Binding SelectionRect.Left}" 
-                              Canvas.Top="{Binding SelectionRect.Bottom}" 
-                              Margin="0, 5, 0, 0"
+                              Canvas.Left="{Binding ToolbarLeft}" 
+                              Canvas.Top="{Binding ToolbarTop}" 
                               IsVisible="{Binding CurrentState, Converter={StaticResource StateToBoolConverter}}"/>
         </Canvas>
     </Grid>
