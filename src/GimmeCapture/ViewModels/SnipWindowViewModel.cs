@@ -89,6 +89,34 @@ public class SnipWindowViewModel : ViewModelBase
     public ReactiveCommand<Unit, Unit> UndoCommand { get; }
     public ReactiveCommand<Unit, Unit> ClearCommand { get; }
     public ReactiveCommand<AnnotationType, Unit> SelectToolCommand { get; }
+    public ReactiveCommand<Unit, Unit> RedoCommand { get; }
+
+    private readonly System.Collections.Generic.List<Annotation> _redoStack = new();
+    private bool _isUndoingOrRedoing = false;
+
+    private void Undo()
+    {
+        if (Annotations.Count > 0)
+        {
+            var item = Annotations[Annotations.Count - 1];
+            _isUndoingOrRedoing = true;
+            Annotations.RemoveAt(Annotations.Count - 1);
+            _redoStack.Add(item);
+            _isUndoingOrRedoing = false;
+        }
+    }
+
+    private void Redo()
+    {
+        if (_redoStack.Count > 0)
+        {
+            var item = _redoStack[_redoStack.Count - 1];
+            _isUndoingOrRedoing = true;
+            _redoStack.RemoveAt(_redoStack.Count - 1);
+            Annotations.Add(item);
+            _isUndoingOrRedoing = false;
+        }
+    }
 
     // Annotation Properties
     public ObservableCollection<Annotation> Annotations { get; } = new();
@@ -199,8 +227,20 @@ public class SnipWindowViewModel : ViewModelBase
         SaveCommand = ReactiveCommand.CreateFromTask(Save);
         PinCommand = ReactiveCommand.CreateFromTask(Pin);
         CloseCommand = ReactiveCommand.Create(Close);
-        UndoCommand = ReactiveCommand.Create(() => { if (Annotations.Count > 0) Annotations.RemoveAt(Annotations.Count - 1); });
-        ClearCommand = ReactiveCommand.Create(() => Annotations.Clear());
+        UndoCommand = ReactiveCommand.Create(Undo);
+        RedoCommand = ReactiveCommand.Create(Redo);
+        ClearCommand = ReactiveCommand.Create(() => Annotations.Clear()); // Clear remains destructive for now
+
+        // Monitor for new user actions to clear Redo stack
+        Annotations.CollectionChanged += (s, e) =>
+        {
+            if (!_isUndoingOrRedoing)
+            {
+                _redoStack.Clear();
+                // Force UI update for Redo button state if needed (ReactiveCommand handles it if we bind CanExecute, but we are using simple Create here)
+            }
+        };
+
         SelectToolCommand = ReactiveCommand.Create<AnnotationType>(t => {
             if (CurrentTool == t)
             {
