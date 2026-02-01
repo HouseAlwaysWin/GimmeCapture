@@ -325,9 +325,9 @@ public class SnipWindowViewModel : ViewModelBase
         SelectionBorderThickness = thickness;
         MaskOpacity = opacity;
 
-        // Tool defaults set to match border settings initially
+        // Tool defaults - SelectedColor syncs with border, but CurrentThickness stays independent
         SelectedColor = borderColor;
-        CurrentThickness = thickness;
+        // CurrentThickness remains at its default value (2.0) - no longer inherits from MainWindow
     }
 
     public ReactiveCommand<Color, Unit> ChangeColorCommand { get; }

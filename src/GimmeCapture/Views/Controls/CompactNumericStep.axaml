@@ -4,7 +4,8 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="40" d:DesignHeight="24"
              x:Class="GimmeCapture.Views.Controls.CompactNumericStep"
-             x:Name="Root">
+             x:Name="Root"
+             FontSize="11">
     
     <Border Background="#2A2A2A" BorderBrush="#444444" BorderThickness="1" CornerRadius="2" Height="24" Width="40">
         <Grid ColumnDefinitions="*,Auto">
