@@ -24,6 +24,7 @@
       <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
     </PackageReference>
     <PackageReference Include="Avalonia.ReactiveUI" Version="11.2.3" />
+    <PackageReference Include="CliWrap" Version="3.10.0" />
     <PackageReference Include="SkiaSharp" Version="3.119.1" />
     <PackageReference Include="System.Drawing.Common" Version="10.0.2" />
   </ItemGroup>

@@ -649,6 +649,83 @@ public class SnipWindowViewModel : ViewModelBase
         }
     }
 
+    private async Task PinRecording()
+    {
+        if (_isProcessingRecording || _recordingService == null) return;
+        
+        // Capture state BEFORE stopping, because StopAsync sets it to Idle
+        bool wasRecording = _recordingService.State == RecordingState.Recording;
+
+        _isProcessingRecording = true;
+        try
+        {
+            _recordTimer?.Stop();
+            await _recordingService.StopAsync();
+            
+            // ... (screenshot logic omitted for brevity if irrelevant, keeping existing structure)
+            
+            // Start playing the video with ffplay (frameless, on top)
+            if (wasRecording) // Use captured state
+            {
+                 // Stop already called above
+                 
+                 var recordingPath = _recordingService.LastRecordingPath;
+                 if (string.IsNullOrEmpty(recordingPath) || !System.IO.File.Exists(recordingPath)) 
+                 {
+                     System.Windows.Forms.MessageBox.Show($"找不到錄影檔案: {recordingPath}", "錯誤");
+                     return;
+                 }
+
+                 // Use path from service (checks system path too)
+                 var ffplayPath = _recordingService.Downloader.GetFFplayPath();
+                 
+                 // Fallback check
+                 if (string.IsNullOrEmpty(ffplayPath) || !System.IO.File.Exists(ffplayPath))
+                 {
+                     System.Windows.Forms.MessageBox.Show(
+                        $"找不到播放器組件 (ffplay.exe)。\n請確認是否已安裝或下載完成。", 
+                        "組件缺失");
+                    _isProcessingRecording = false;
+                     return;
+                 }
+
+                 // Calculate Geometry
+                 // ffplay expects integer coordinates
+                 int x = (int)(SelectionRect.X + ScreenOffset.X);
+                 int y = (int)(SelectionRect.Y + ScreenOffset.Y);
+                 int w = (int)SelectionRect.Width;
+                 int h = (int)SelectionRect.Height;
+                 
+                 // Arguments: -noborder -alwaysontop -loop 0 -autoexit -left X -top Y -x W -y H
+                 // Note: -x and -y in ffplay are Width and Height. -left/-top are position.
+                 var args = $"-noborder -alwaysontop -loop 0 -autoexit -left {x} -top {y} -x {w} -y {h} \"{recordingPath}\"";
+
+                 try
+                 {
+                     System.Diagnostics.Debug.WriteLine($"Launching ffplay: {ffplayPath} {args}");
+                     System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo 
+                     {
+                         FileName = ffplayPath,
+                         Arguments = args,
+                         UseShellExecute = false,
+                         CreateNoWindow = false // Debugging: Show window to see errors
+                     });
+                 }
+                 catch (Exception ex)
+                 {
+                     System.Diagnostics.Debug.WriteLine($"Failed to launch ffplay: {ex.Message}");
+                     System.Windows.Forms.MessageBox.Show($"無法啟動播放器 (ffplay): {ex.Message}\n请嘗試重啟程式以重新下載組件。", "錯誤");
+                 }
+                 
+                 CloseAction?.Invoke();
+            }
+        }
+        finally
+        {
+            _isProcessingRecording = false;
+        }
+    }
+
     private string? _currentRecordingPath;
 
     public ReactiveCommand<Color, Unit> ChangeColorCommand { get; }
@@ -758,6 +835,13 @@ public class SnipWindowViewModel : ViewModelBase
     
     private async Task Pin()
     {
+        // If recording is active, pin recording instead of screenshot
+        if (RecState == RecordingState.Recording || RecState == RecordingState.Paused)
+        {
+            await PinRecording();
+            return;
+        }
+
         if (SelectionRect.Width > 0 && SelectionRect.Height > 0)
         {
             HideAction?.Invoke();

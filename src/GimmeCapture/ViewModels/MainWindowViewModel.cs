@@ -108,6 +108,22 @@ public class MainWindowViewModel : ViewModelBase
             }
         };
 
+        // Progress Feedback
+        FfmpegDownloader.WhenAnyValue(x => x.IsDownloading, x => x.DownloadProgress)
+            .ObserveOn(RxApp.MainThreadScheduler)
+            .Subscribe(x => {
+                var (isDownloading, progress) = x;
+                if (isDownloading)
+                {
+                    StatusText = $"正在下載必要組件... {progress:F0}%";
+                }
+                else if (progress >= 100)
+                {
+                     if (StatusText.StartsWith("正在下載"))
+                        SetStatus("StatusReady");
+                }
+            });
+
         // Fire and forget load, in real app use async initialization
         Task.Run(async () => await LoadSettingsAsync());
     }
@@ -339,8 +355,8 @@ public class MainWindowViewModel : ViewModelBase
             HotkeyService.Register(ID_RECORD, RecordHotkey);
         });
 
-        // Initialize FFmpeg Download if missing
-        if (!FfmpegDownloader.IsFFmpegAvailable())
+        // Initialize FFmpeg Download if missing either component
+        if (!FfmpegDownloader.IsFFmpegAvailable() || !FfmpegDownloader.IsFFplayAvailable())
         {
             await FfmpegDownloader.EnsureFFmpegAsync();
         }

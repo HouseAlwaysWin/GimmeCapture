@@ -51,6 +51,9 @@ public class RecordingService : ReactiveObject
 
     // Expose the actual output file path (may be modified during finalization)
     public string? OutputFilePath => _outputFile;
+    public string? LastRecordingPath => _outputFile;
+
+    public FFmpegDownloaderService Downloader => _downloader;
 
     public RecordingService(FFmpegDownloaderService downloader)
     {
