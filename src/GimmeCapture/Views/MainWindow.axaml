@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:GimmeCapture.ViewModels"
         xmlns:services="using:GimmeCapture.Services"
+        xmlns:media="using:Avalonia.Media"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
@@ -11,6 +12,7 @@
         Icon="avares://GimmeCapture/Assets/kitsune_icon.png"
         Background="{DynamicResource GothicBlackBrush}"
         FontFamily="{Binding CurrentFontFamily, Source={x:Static services:LocalizationService.Instance}}"
+        xmlns:c="using:GimmeCapture.Views.Controls"
         Foreground="White">
 
     <Design.DataContext>
@@ -43,18 +45,107 @@
             
             <!-- 擷圖 (Snip) -->
             <TabItem Header="{Binding [TabSnip], Source={x:Static services:LocalizationService.Instance}}">
-                <StackPanel Spacing="10" Margin="10">
-                    <TextBlock Text="{Binding [BorderThickness], Source={x:Static services:LocalizationService.Instance}}" />
-                    <Slider Minimum="0" Maximum="10" Value="{Binding BorderThickness}" 
-                            TickFrequency="1" IsSnapToTickEnabled="True"/>
-                    
-                    <TextBlock Text="{Binding [MaskOpacity], Source={x:Static services:LocalizationService.Instance}}" />
-                    <Slider Minimum="0.1" Maximum="0.9" Value="{Binding MaskOpacity}" />
-                    
-                    <TextBlock Text="{Binding [BorderColor], Source={x:Static services:LocalizationService.Instance}}" />
-                    <!-- Color Picker placeholder or just text -->
-                    <Border Background="{DynamicResource AccentRedBrush}" Height="30" CornerRadius="4"/>
-                </StackPanel>
+                <Grid ColumnDefinitions="*, 200" Margin="10">
+                    <!-- Settings Controls -->
+                    <StackPanel Grid.Column="0" Spacing="15" Margin="0,0,20,0">
+                        <!-- Border Thickness -->
+                        <StackPanel Spacing="5">
+                            <TextBlock Text="{Binding [BorderThickness], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold"/>
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <Slider Minimum="1" Maximum="20" Value="{Binding BorderThickness}" 
+                                        TickFrequency="1" IsSnapToTickEnabled="True" HorizontalAlignment="Stretch" Width="300"/>
+                                <c:CompactNumericStep Value="{Binding BorderThickness}"
+                                                      IncreaseCommand="{Binding IncreaseThicknessCommand}"
+                                                      DecreaseCommand="{Binding DecreaseThicknessCommand}"/>
+                            </StackPanel>
+                        </StackPanel>
+                        
+                        <!-- Mask Opacity -->
+                        <StackPanel Spacing="5">
+                            <TextBlock Text="{Binding [MaskOpacity], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold"/>
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <Slider Minimum="0.05" Maximum="1.0" Value="{Binding MaskOpacity}" HorizontalAlignment="Stretch" Width="300" />
+                                <c:CompactNumericStep Value="{Binding MaskOpacity}"
+                                                      IncreaseCommand="{Binding IncreaseOpacityCommand}"
+                                                      DecreaseCommand="{Binding DecreaseOpacityCommand}"/>
+                            </StackPanel>
+                        </StackPanel>
+                        
+                        <!-- Border Color -->
+                        <StackPanel Spacing="10">
+                            <TextBlock Text="{Binding [BorderColor], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold"/>
+                            <ItemsControl ItemsSource="{x:Static vm:SnipWindowViewModel+StaticData.ColorsList}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Horizontal" Spacing="15"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="media:Color">
+                                        <Button Width="40" Height="40" Padding="0" CornerRadius="20"
+                                                Background="{Binding Converter={StaticResource ColorToBrushConverter}}"
+                                                Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ChangeColorCommand}"
+                                                CommandParameter="{Binding}"
+                                                BorderThickness="0">
+                                            <Panel>
+                                                <!-- Selection Glow / Indicator -->
+                                                <Border BorderBrush="White" BorderThickness="2" CornerRadius="20" Margin="-2"
+                                                        IsVisible="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).BorderColor, Converter={StaticResource ColorMatchConverter}, ConverterParameter={Binding}}"/>
+                                                
+                                                <!-- Shadow/Inner depth -->
+                                                <Border CornerRadius="20" BoxShadow="inset 0 0 5 0 #80000000"/>
+                                            </Panel>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- Style Preview Area -->
+                    <StackPanel Grid.Column="1" Spacing="10" VerticalAlignment="Top">
+                        <TextBlock Text="樣式預覽" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                        <Border Background="#11FFFFFF" Height="150" CornerRadius="4" BorderBrush="#333333" BorderThickness="1" ClipToBounds="True">
+                            <Grid>
+                                <!-- Mock Background -->
+                                <Image Source="avares://GimmeCapture/Assets/kitsune_icon.png" Opacity="0.1" Stretch="Uniform" Margin="20"/>
+                                
+                                <!-- Selection Preview -->
+                                <Grid Margin="30" VerticalAlignment="Center" HorizontalAlignment="Center">
+                                    <Border CornerRadius="0"
+                                            Background="#01FFFFFF"
+                                            BoxShadow="{Binding BorderColor, Converter={StaticResource ColorToBoxShadowConverter}}">
+                                        <Border.BorderBrush>
+                                            <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+                                                <GradientStop Offset="0" Color="{Binding BorderColor}"/>
+                                                <GradientStop Offset="0.5" Color="{Binding BorderColor}"/>
+                                                <GradientStop Offset="1" Color="{Binding BorderColor}"/>
+                                            </LinearGradientBrush>
+                                        </Border.BorderBrush>
+                                        <Border BorderThickness="{Binding BorderThickness, Converter={StaticResource ThicknessConverter}}">
+                                            <Border BorderBrush="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" BorderThickness="1" Margin="-1">
+                                                <Grid Width="100" Height="60">
+                                                    <!-- Accent Corners -->
+                                                    <Rectangle Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="10" Height="2" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="1"/>
+                                                    <Rectangle Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="2" Height="10" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="1"/>
+                                                    
+                                                    <Rectangle Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="10" Height="2" VerticalAlignment="Top" HorizontalAlignment="Right" Margin="1"/>
+                                                    <Rectangle Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="2" Height="10" VerticalAlignment="Top" HorizontalAlignment="Right" Margin="1"/>
+                                                    
+                                                    <Rectangle Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="10" Height="2" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="1"/>
+                                                    <Rectangle Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="2" Height="10" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="1"/>
+                                                    
+                                                    <Rectangle Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="10" Height="2" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="1"/>
+                                                    <Rectangle Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="2" Height="10" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="1"/>
+                                                </Grid>
+                                            </Border>
+                                        </Border>
+                                    </Border>
+                                </Grid>
+                            </Grid>
+                        </Border>
+                    </StackPanel>
+                </Grid>
             </TabItem>
             
             <!-- 輸出 (Output) -->

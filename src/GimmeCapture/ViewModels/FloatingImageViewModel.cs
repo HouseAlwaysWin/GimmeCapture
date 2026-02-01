@@ -14,18 +14,34 @@ public class FloatingImageViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _image, value);
     }
     
+    private Avalonia.Media.Color _borderColor = Avalonia.Media.Colors.Red;
+    public Avalonia.Media.Color BorderColor
+    {
+        get => _borderColor;
+        set => this.RaiseAndSetIfChanged(ref _borderColor, value);
+    }
+
+    private double _borderThickness = 2.0;
+    public double BorderThickness
+    {
+        get => _borderThickness;
+        set => this.RaiseAndSetIfChanged(ref _borderThickness, value);
+    }
+
     public ReactiveCommand<Unit, Unit> CloseCommand { get; }
     public ReactiveCommand<Unit, Unit> CopyCommand { get; }
     public ReactiveCommand<Unit, Unit> SaveCommand { get; }
     
     public System.Action? CloseAction { get; set; }
-    // Actions for UI interactions (passed from View)
     public System.Func<Task>? CopyAction { get; set; }
     public System.Func<Task>? SaveAction { get; set; }
 
-    public FloatingImageViewModel(Bitmap image)
+    public FloatingImageViewModel(Bitmap image, Avalonia.Media.Color borderColor, double borderThickness)
     {
         Image = image;
+        BorderColor = borderColor;
+        BorderThickness = borderThickness;
+
         CloseCommand = ReactiveCommand.Create(() => CloseAction?.Invoke());
         
         CopyCommand = ReactiveCommand.CreateFromTask(async () => 

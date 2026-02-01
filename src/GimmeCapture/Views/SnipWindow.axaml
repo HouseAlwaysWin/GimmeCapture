@@ -170,29 +170,29 @@
                 <!-- BABYMETAL Style Selection Border -->
                 <Border CornerRadius="0"
                         Background="#01FFFFFF"
-                        BoxShadow="0 0 10 1 #80E60012"> <!-- Red Glow -->
+                        BoxShadow="{Binding SelectionBorderColor, Converter={StaticResource ColorToBoxShadowConverter}}">
                     <Border.BorderBrush>
                         <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
-                            <GradientStop Offset="0" Color="{DynamicResource DeepRed}"/>
-                            <GradientStop Offset="0.5" Color="{DynamicResource AccentRed}"/>
-                            <GradientStop Offset="1" Color="{DynamicResource DeepRed}"/>
+                            <GradientStop Offset="0" Color="{Binding SelectionBorderColor}"/>
+                            <GradientStop Offset="0.5" Color="{Binding SelectionBorderColor}"/>
+                            <GradientStop Offset="1" Color="{Binding SelectionBorderColor}"/>
                         </LinearGradientBrush>
                     </Border.BorderBrush>
-                    <Border BorderThickness="2">
-                        <Border BorderBrush="{DynamicResource AccentRedBrush}" BorderThickness="1" Margin="-1">
+                    <Border BorderThickness="{Binding SelectionBorderThickness, Converter={StaticResource ThicknessConverter}}">
+                        <Border BorderBrush="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" BorderThickness="1" Margin="-1">
                             <Grid>
                                 <!-- Accent Corners -->
-                                <Rectangle Fill="{DynamicResource AccentRedBrush}" Width="15" Height="2" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="2"/>
-                                <Rectangle Fill="{DynamicResource AccentRedBrush}" Width="2" Height="15" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="2"/>
+                                <Rectangle Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="15" Height="2" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="2"/>
+                                <Rectangle Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="2" Height="15" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="2"/>
                                 
-                                <Rectangle Fill="{DynamicResource AccentRedBrush}" Width="15" Height="2" VerticalAlignment="Top" HorizontalAlignment="Right" Margin="2"/>
-                                <Rectangle Fill="{DynamicResource AccentRedBrush}" Width="2" Height="15" VerticalAlignment="Top" HorizontalAlignment="Right" Margin="2"/>
+                                <Rectangle Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="15" Height="2" VerticalAlignment="Top" HorizontalAlignment="Right" Margin="2"/>
+                                <Rectangle Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="2" Height="15" VerticalAlignment="Top" HorizontalAlignment="Right" Margin="2"/>
                                 
-                                <Rectangle Fill="{DynamicResource AccentRedBrush}" Width="15" Height="2" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="2"/>
-                                <Rectangle Fill="{DynamicResource AccentRedBrush}" Width="2" Height="15" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="2"/>
+                                <Rectangle Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="15" Height="2" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="2"/>
+                                <Rectangle Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="2" Height="15" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="2"/>
                                 
-                                <Rectangle Fill="{DynamicResource AccentRedBrush}" Width="15" Height="2" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="2"/>
-                                <Rectangle Fill="{DynamicResource AccentRedBrush}" Width="2" Height="15" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="2"/>
+                                <Rectangle Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="15" Height="2" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="2"/>
+                                <Rectangle Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="2" Height="15" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="2"/>
                             </Grid>
                         </Border>
                     </Border>

@@ -197,7 +197,6 @@ public class SnipWindowViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _isDrawingMode, value);
     }
 
-
     private bool _isEnteringText = false;
     public bool IsEnteringText
     {
@@ -219,6 +218,27 @@ public class SnipWindowViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _pendingText, value);
     }
 
+    private Color _selectionBorderColor = Colors.Red;
+    public Color SelectionBorderColor
+    {
+        get => _selectionBorderColor;
+        set => this.RaiseAndSetIfChanged(ref _selectionBorderColor, value);
+    }
+
+    private double _selectionBorderThickness = 2.0;
+    public double SelectionBorderThickness
+    {
+        get => _selectionBorderThickness;
+        set => this.RaiseAndSetIfChanged(ref _selectionBorderThickness, value);
+    }
+
+    private double _maskOpacity = 0.5;
+    public double MaskOpacity
+    {
+        get => _maskOpacity;
+        set => this.RaiseAndSetIfChanged(ref _maskOpacity, value);
+    }
+
     public SnipWindowViewModel()
     {
         _captureService = new Services.ScreenCaptureService();
@@ -237,20 +257,17 @@ public class SnipWindowViewModel : ViewModelBase
             if (!_isUndoingOrRedoing)
             {
                 _redoStack.Clear();
-                // Force UI update for Redo button state if needed (ReactiveCommand handles it if we bind CanExecute, but we are using simple Create here)
             }
         };
 
         SelectToolCommand = ReactiveCommand.Create<AnnotationType>(t => {
             if (CurrentTool == t)
             {
-                // Toggle Off
                 CurrentTool = AnnotationType.None;
                 IsDrawingMode = false;
             }
             else
             {
-                // Toggle On
                 CurrentTool = t;
                 IsDrawingMode = true; 
             }
@@ -258,15 +275,12 @@ public class SnipWindowViewModel : ViewModelBase
 
         ChangeColorCommand = ReactiveCommand.Create<Color>(c => SelectedColor = c);
         
-        // Thickness controls
         IncreaseThicknessCommand = ReactiveCommand.Create(() => { if (CurrentThickness < 20) CurrentThickness += 1; });
         DecreaseThicknessCommand = ReactiveCommand.Create(() => { if (CurrentThickness > 1) CurrentThickness -= 1; });
         
-        // Font size controls
         IncreaseFontSizeCommand = ReactiveCommand.Create(() => { if (CurrentFontSize < 60) CurrentFontSize += 2; });
         DecreaseFontSizeCommand = ReactiveCommand.Create(() => { if (CurrentFontSize > 10) CurrentFontSize -= 2; });
         
-        // Apply hex color
         ApplyHexColorCommand = ReactiveCommand.Create(() => 
         {
             try
@@ -283,11 +297,20 @@ public class SnipWindowViewModel : ViewModelBase
             catch { /* Invalid hex */ }
         });
 
-        // Change Language
         ChangeLanguageCommand = ReactiveCommand.Create(() => LocalizationService.Instance.CycleLanguage());
-    
         ToggleBoldCommand = ReactiveCommand.Create(() => IsBold = !IsBold);
         ToggleItalicCommand = ReactiveCommand.Create(() => IsItalic = !IsItalic);
+    }
+
+    public SnipWindowViewModel(Color borderColor, double thickness, double opacity) : this()
+    {
+        SelectionBorderColor = borderColor;
+        SelectionBorderThickness = thickness;
+        MaskOpacity = opacity;
+
+        // Tool defaults set to match border settings initially
+        SelectedColor = borderColor;
+        CurrentThickness = thickness;
     }
 
     public ReactiveCommand<Color, Unit> ChangeColorCommand { get; }
@@ -304,9 +327,9 @@ public class SnipWindowViewModel : ViewModelBase
     {
         public static Color[] ColorsList { get; } = new[]
         {
-            Colors.Red, Colors.Green, Colors.Blue, 
-            Colors.Yellow, Colors.Cyan, Colors.Magenta,
-            Colors.White, Colors.Black, Colors.Gray
+            Color.Parse("#D4AF37"), // Gold
+            Color.Parse("#E0E0E0"), // Silver
+            Color.Parse("#E60012")  // Red
         };
     }
 
@@ -385,7 +408,7 @@ public class SnipWindowViewModel : ViewModelBase
                 var avaloniaBitmap = new Avalonia.Media.Imaging.Bitmap(stream);
                 
                 // Open Floating Window
-                OpenPinWindowAction?.Invoke(avaloniaBitmap, SelectionRect);
+            OpenPinWindowAction?.Invoke(avaloniaBitmap, SelectionRect, SelectionBorderColor, SelectionBorderThickness);
             }
             finally
             {
@@ -399,5 +422,5 @@ public class SnipWindowViewModel : ViewModelBase
     public Action? CloseAction { get; set; }
     public Action? HideAction { get; set; }
     public Func<Task<string?>>? PickSaveFileAction { get; set; }
-    public Action<Bitmap, Rect>? OpenPinWindowAction { get; set; }
+    public System.Action<Bitmap, Rect, Color, double>? OpenPinWindowAction { get; set; }
 }

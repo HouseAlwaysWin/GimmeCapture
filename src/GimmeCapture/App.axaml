@@ -10,6 +10,8 @@
         <ResourceDictionary>
             <cv:StateToBoolConverter x:Key="StateToBoolConverter"/>
             <cv:ColorToBrushConverter x:Key="ColorToBrushConverter"/>
+            <cv:ColorToBoxShadowConverter x:Key="ColorToBoxShadowConverter"/>
+            <cv:ThicknessConverter x:Key="ThicknessConverter"/>
             <cv:EnumToBoolConverter x:Key="EnumToBoolConverter"/>
             <cv:ColorMatchConverter x:Key="ColorMatchConverter"/>
             <cv:EnumMatchConverter x:Key="EnumMatchConverter"/>

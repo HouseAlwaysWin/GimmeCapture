@@ -32,6 +32,11 @@ public class MainWindowViewModel : ViewModelBase
     // Commands
     public ReactiveCommand<CaptureMode, Unit> StartCaptureCommand { get; }
     public ReactiveCommand<Unit, Unit> SaveAndCloseCommand { get; }
+    public ReactiveCommand<Unit, Unit> IncreaseThicknessCommand { get; }
+    public ReactiveCommand<Unit, Unit> DecreaseThicknessCommand { get; }
+    public ReactiveCommand<Unit, Unit> IncreaseOpacityCommand { get; }
+    public ReactiveCommand<Unit, Unit> DecreaseOpacityCommand { get; }
+    public ReactiveCommand<Color, Unit> ChangeColorCommand { get; }
 
     public MainWindowViewModel()
     {
@@ -49,6 +54,14 @@ public class MainWindowViewModel : ViewModelBase
 
         StartCaptureCommand = ReactiveCommand.CreateFromTask<CaptureMode>(StartCapture);
         SaveAndCloseCommand = ReactiveCommand.CreateFromTask(SaveAndClose);
+
+        IncreaseThicknessCommand = ReactiveCommand.Create(() => { if (BorderThickness < 20) BorderThickness += 1; });
+        DecreaseThicknessCommand = ReactiveCommand.Create(() => { if (BorderThickness > 1) BorderThickness -= 1; });
+        
+        IncreaseOpacityCommand = ReactiveCommand.Create(() => { if (MaskOpacity < 1.0) MaskOpacity = Math.Min(1.0, MaskOpacity + 0.05); });
+        DecreaseOpacityCommand = ReactiveCommand.Create(() => { if (MaskOpacity > 0.05) MaskOpacity = Math.Max(0.05, MaskOpacity - 0.05); });
+        
+        ChangeColorCommand = ReactiveCommand.Create<Color>(c => BorderColor = c);
         
         // Setup Hotkey Action
         HotkeyService.OnHotkeyPressed = (id) => 

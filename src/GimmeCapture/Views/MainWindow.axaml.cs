@@ -82,7 +82,11 @@ public partial class MainWindow : Window
                 }
 
                 var snip = new SnipWindow();
-                var snipVm = new SnipWindowViewModel();
+                var snipVm = new SnipWindowViewModel(
+                    vm.BorderColor, 
+                    vm.BorderThickness, 
+                    vm.MaskOpacity
+                );
                 snipVm.AutoActionMode = (int)mode;
                 snip.DataContext = snipVm;
                 snip.Show();

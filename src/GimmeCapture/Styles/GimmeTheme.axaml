@@ -8,9 +8,11 @@
             <Color x:Key="GothicBlack">#121212</Color>
             <Color x:Key="ChromeSilver">#E0E0E0</Color>
             <Color x:Key="MetallicSilver">#A0A0A0</Color>
+            <Color x:Key="BabymetalGold">#D4AF37</Color>
             <Color x:Key="PanelGray">#1E1E1E</Color>
 
             <SolidColorBrush x:Key="AccentRedBrush" Color="{StaticResource AccentRed}"/>
+            <SolidColorBrush x:Key="BabymetalGoldBrush" Color="{StaticResource BabymetalGold}"/>
             <SolidColorBrush x:Key="DeepRedBrush" Color="{StaticResource DeepRed}"/>
             <SolidColorBrush x:Key="GothicBlackBrush" Color="{StaticResource GothicBlack}"/>
             <SolidColorBrush x:Key="ChromeSilverBrush" Color="{StaticResource ChromeSilver}"/>

@@ -153,10 +153,10 @@ public partial class SnipWindow : Window
                  return file?.Path.LocalPath;
             };
 
-            _viewModel.OpenPinWindowAction = (bitmap, rect) =>
+            _viewModel.OpenPinWindowAction = (bitmap, rect, color, thickness) =>
             {
-                // Create ViewModel
-                var vm = new FloatingImageViewModel(bitmap);
+                // Create ViewModel with style properties
+                var vm = new FloatingImageViewModel(bitmap, color, thickness);
                 
                 try
                 {
