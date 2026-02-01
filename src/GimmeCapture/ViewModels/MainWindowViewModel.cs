@@ -62,7 +62,7 @@ public class MainWindowViewModel : ViewModelBase
         StartCaptureCommand = ReactiveCommand.CreateFromTask<CaptureMode>(StartCapture);
         SaveAndCloseCommand = ReactiveCommand.CreateFromTask(SaveAndClose);
 
-        IncreaseThicknessCommand = ReactiveCommand.Create(() => { if (BorderThickness < 20) BorderThickness += 1; });
+        IncreaseThicknessCommand = ReactiveCommand.Create(() => { if (BorderThickness < 9) BorderThickness += 1; });
         DecreaseThicknessCommand = ReactiveCommand.Create(() => { if (BorderThickness > 1) BorderThickness -= 1; });
         
         IncreaseOpacityCommand = ReactiveCommand.Create(() => { if (MaskOpacity < 1.0) MaskOpacity = Math.Min(1.0, MaskOpacity + 0.05); });

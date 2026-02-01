@@ -275,7 +275,7 @@ public class SnipWindowViewModel : ViewModelBase
 
         ChangeColorCommand = ReactiveCommand.Create<Color>(c => SelectedColor = c);
         
-        IncreaseThicknessCommand = ReactiveCommand.Create(() => { if (CurrentThickness < 20) CurrentThickness += 1; });
+        IncreaseThicknessCommand = ReactiveCommand.Create(() => { if (CurrentThickness < 9) CurrentThickness += 1; });
         DecreaseThicknessCommand = ReactiveCommand.Create(() => { if (CurrentThickness > 1) CurrentThickness -= 1; });
         
         IncreaseFontSizeCommand = ReactiveCommand.Create(() => { if (CurrentFontSize < 60) CurrentFontSize += 2; });

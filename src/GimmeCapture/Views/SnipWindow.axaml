@@ -41,11 +41,11 @@
 
     <Grid>
         <!-- 背景遮罩層 -->
-        <Path Fill="#80000000" IsHitTestVisible="False">
+        <Path Fill="Black" Opacity="{Binding MaskOpacity}" IsHitTestVisible="False">
             <Path.Data>
                 <CombinedGeometry GeometryCombineMode="Exclude">
                     <CombinedGeometry.Geometry1>
-                        <RectangleGeometry Rect="0,0,3840,2160" />
+                        <RectangleGeometry Rect="-10000,-10000,20000,20000" />
                     </CombinedGeometry.Geometry1>
                     <CombinedGeometry.Geometry2>
                         <RectangleGeometry Rect="{Binding SelectionRect}" />
@@ -178,7 +178,8 @@
                             <GradientStop Offset="1" Color="{Binding SelectionBorderColor}"/>
                         </LinearGradientBrush>
                     </Border.BorderBrush>
-                    <Border BorderThickness="{Binding SelectionBorderThickness, Converter={StaticResource ThicknessConverter}}">
+                    <Border BorderBrush="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" 
+                            BorderThickness="{Binding SelectionBorderThickness, Converter={StaticResource ThicknessConverter}}">
                         <Border BorderBrush="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" BorderThickness="1" Margin="-1">
                             <Grid>
                                 <!-- Accent Corners -->
