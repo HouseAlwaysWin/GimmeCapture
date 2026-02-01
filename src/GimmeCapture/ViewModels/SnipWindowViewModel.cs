@@ -202,8 +202,18 @@ public class SnipWindowViewModel : ViewModelBase
         UndoCommand = ReactiveCommand.Create(() => { if (Annotations.Count > 0) Annotations.RemoveAt(Annotations.Count - 1); });
         ClearCommand = ReactiveCommand.Create(() => Annotations.Clear());
         SelectToolCommand = ReactiveCommand.Create<AnnotationType>(t => {
-            CurrentTool = t;
-            IsDrawingMode = true; // Once a tool is selected, enter drawing mode
+            if (CurrentTool == t)
+            {
+                // Toggle Off
+                CurrentTool = AnnotationType.None;
+                IsDrawingMode = false;
+            }
+            else
+            {
+                // Toggle On
+                CurrentTool = t;
+                IsDrawingMode = true; 
+            }
         });
 
         ChangeColorCommand = ReactiveCommand.Create<Color>(c => SelectedColor = c);

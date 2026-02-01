@@ -32,10 +32,10 @@
                         <Border Background="#1A1A1A" BorderBrush="#333333" BorderThickness="1" Padding="2" CornerRadius="4">
                             <StackPanel Orientation="Horizontal" Spacing="2">
                                 <ToggleButton Theme="{StaticResource SnipToggleButton}" Content="□" 
-                                               IsChecked="{Binding CurrentTool, ConverterParameter={x:Static m:AnnotationType.Rectangle}, Converter={StaticResource EnumToBoolConverter}}"
+                                               IsChecked="{Binding CurrentTool, ConverterParameter={x:Static m:AnnotationType.Rectangle}, Converter={StaticResource EnumToBoolConverter}, Mode=OneWay}"
                                                Command="{Binding SelectToolCommand}" CommandParameter="{x:Static m:AnnotationType.Rectangle}" ToolTip.Tip="{Binding [Rect], Source={x:Static services:LocalizationService.Instance}}"/>
                                 <ToggleButton Theme="{StaticResource SnipToggleButton}" Content="○" 
-                                               IsChecked="{Binding CurrentTool, ConverterParameter={x:Static m:AnnotationType.Ellipse}, Converter={StaticResource EnumToBoolConverter}}"
+                                               IsChecked="{Binding CurrentTool, ConverterParameter={x:Static m:AnnotationType.Ellipse}, Converter={StaticResource EnumToBoolConverter}, Mode=OneWay}"
                                                Command="{Binding SelectToolCommand}" CommandParameter="{x:Static m:AnnotationType.Ellipse}" ToolTip.Tip="{Binding [Rect], Source={x:Static services:LocalizationService.Instance}}"/>
                             </StackPanel>
                         </Border>
@@ -54,10 +54,10 @@
                         <Border Background="#1A1A1A" BorderBrush="#333333" BorderThickness="1" Padding="2" CornerRadius="4">
                             <StackPanel Orientation="Horizontal" Spacing="2">
                                 <ToggleButton Theme="{StaticResource SnipToggleButton}" Content="↗" 
-                                               IsChecked="{Binding CurrentTool, ConverterParameter={x:Static m:AnnotationType.Arrow}, Converter={StaticResource EnumToBoolConverter}}"
+                                               IsChecked="{Binding CurrentTool, ConverterParameter={x:Static m:AnnotationType.Arrow}, Converter={StaticResource EnumToBoolConverter}, Mode=OneWay}"
                                                Command="{Binding SelectToolCommand}" CommandParameter="{x:Static m:AnnotationType.Arrow}" ToolTip.Tip="{Binding [Arrow], Source={x:Static services:LocalizationService.Instance}}"/>
                                 <ToggleButton Theme="{StaticResource SnipToggleButton}" Content="—" 
-                                               IsChecked="{Binding CurrentTool, ConverterParameter={x:Static m:AnnotationType.Line}, Converter={StaticResource EnumToBoolConverter}}"
+                                               IsChecked="{Binding CurrentTool, ConverterParameter={x:Static m:AnnotationType.Line}, Converter={StaticResource EnumToBoolConverter}, Mode=OneWay}"
                                                Command="{Binding SelectToolCommand}" CommandParameter="{x:Static m:AnnotationType.Line}" ToolTip.Tip="{Binding [Line], Source={x:Static services:LocalizationService.Instance}}"/>
                             </StackPanel>
                         </Border>
@@ -71,7 +71,7 @@
             </Button>
 
             <ToggleButton Theme="{StaticResource SnipToggleButton}" Content="T" 
-                           IsChecked="{Binding CurrentTool, ConverterParameter={x:Static m:AnnotationType.Text}, Converter={StaticResource EnumToBoolConverter}}"
+                           IsChecked="{Binding CurrentTool, ConverterParameter={x:Static m:AnnotationType.Text}, Converter={StaticResource EnumToBoolConverter}, Mode=OneWay}"
                            Command="{Binding SelectToolCommand}" CommandParameter="{x:Static m:AnnotationType.Text}"
                            ToolTip.Tip="{Binding [Text], Source={x:Static services:LocalizationService.Instance}}">
                 <Button.Flyout>
@@ -149,7 +149,13 @@
                                                           DecreaseCommand="{Binding DecreaseThicknessCommand}"/>
                                 </StackPanel>
                                 
-                                <!-- (Removed Text Settings from here, now in T Button Flyout) -->
+                                <!-- Text Settings (Added back for convenience) -->
+                                <StackPanel IsVisible="{Binding CurrentTool, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Text}}">
+                                    <TextBlock Text="{Binding [Size], Source={x:Static services:LocalizationService.Instance}}" FontSize="9" Foreground="Gray"/>
+                                    <c:CompactNumericStep Value="{Binding CurrentFontSize}"
+                                                          IncreaseCommand="{Binding IncreaseFontSizeCommand}"
+                                                          DecreaseCommand="{Binding DecreaseFontSizeCommand}"/>
+                                </StackPanel>
                             </StackPanel>
                         </Border>
                     </Flyout>

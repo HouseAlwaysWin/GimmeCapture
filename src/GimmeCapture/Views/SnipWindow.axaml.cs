@@ -53,7 +53,6 @@ public partial class SnipWindow : Window
                     e.Handled = true;
                 }
             };
-            textBox.LostFocus += (s, e) => FinishTextEntry();
         }
         
         // Close on Escape
@@ -189,9 +188,37 @@ public partial class SnipWindow : Window
     private bool _isMovingSelection;
     private Point _moveStartPoint;
 
+    // Flag to Debounce Text Entry Finish
+    private DateTime _lastTextFinishTime = DateTime.MinValue;
+
     private void OnPointerPressed(object? sender, PointerPressedEventArgs e)
     {
         if (_viewModel == null) return;
+
+        // Debounce: If we just finished text entry, ignore clicks for a short moment
+        if ((DateTime.Now - _lastTextFinishTime).TotalMilliseconds < 300)
+        {
+            e.Handled = true;
+            return;
+        }
+
+        // Prevent recursive text entry (If clicking to finish text, don't restart it immediately)
+        if (_viewModel.IsEnteringText)
+        {
+             var src = e.Source as Control;
+             // If clicking on the textbox itself or its children, let it function
+             if (src != null && (src.Name == "TextInputOverlay" || src.FindAncestorOfType<TextBox>() != null))
+             {
+                 return;
+             }
+             
+             // If clicking the OK button
+             if (src is Button b && b.Content as string == "OK") return;
+
+             FinishTextEntry();
+             e.Handled = true;
+             return;
+        }
 
         var point = e.GetPosition(this);
         var props = e.GetCurrentPoint(this).Properties;
@@ -382,11 +409,84 @@ public partial class SnipWindow : Window
         }
     }
 
+    private StandardCursorType _currentCursorType = StandardCursorType.Arrow;
+    
+    private void UpdateCursor(StandardCursorType type)
+    {
+        if (_currentCursorType != type)
+        {
+            this.Cursor = new Cursor(type);
+            _currentCursorType = type;
+        }
+    }
+
     private void OnPointerMoved(object? sender, PointerEventArgs e)
     {
         if (_viewModel == null) return;
 
         var currentPoint = e.GetPosition(this);
+        var sourceControl = e.Source as Control;
+
+        // --- Cursor Logic ---
+        if (_isMovingSelection || _isDraggingAnnotation)
+        {
+            UpdateCursor(StandardCursorType.SizeAll);
+        }
+        else if (_isResizing)
+        {
+             // Handled by XAML/Capture
+        }
+        else if (_viewModel.CurrentState == SnipWindowViewModel.SnipState.Selected)
+        {
+            bool cursorSet = false;
+
+            // 1. Text Annotation Hover (Hand Cursor)
+            if (_viewModel.IsDrawingMode && _viewModel.CurrentTool == AnnotationType.Text)
+            {
+                var selectionSpacePoint = new Point(currentPoint.X - _viewModel.SelectionRect.X, currentPoint.Y - _viewModel.SelectionRect.Y);
+                 for (int i = _viewModel.Annotations.Count - 1; i >= 0; i--)
+                 {
+                     var ann = _viewModel.Annotations[i];
+                     if (ann.Type == AnnotationType.Text)
+                     {
+                         double estimatedWidth = ann.Text.Length * ann.FontSize * 0.6; 
+                         double estimatedHeight = ann.FontSize * 1.5;
+                         var rect = new Rect(ann.StartPoint.X, ann.StartPoint.Y, estimatedWidth, estimatedHeight);
+                         
+                         if (rect.Contains(selectionSpacePoint))
+                         {
+                             UpdateCursor(StandardCursorType.Hand);
+                             cursorSet = true;
+                             break;
+                         }
+                     }
+                 }
+            }
+
+            // 2. Selection Loop Move Hover (SizeAll Cursor)
+            if (!cursorSet && !_viewModel.IsDrawingMode && _viewModel.SelectionRect.Contains(currentPoint))
+            {
+                // Verify we are not over a handle
+                bool isOverHandle = sourceControl != null && sourceControl.Classes.Contains("Handle");
+                
+                if (!isOverHandle)
+                {
+                    UpdateCursor(StandardCursorType.SizeAll);
+                    cursorSet = true;
+                }
+            }
+
+            if (!cursorSet)
+            {
+                UpdateCursor(StandardCursorType.Arrow);
+            }
+        }
+        else
+        {
+            // For Idle, Detecting, Selecting -> Use Crosshair
+            UpdateCursor(StandardCursorType.Cross);
+        }
+        // ------------------
 
         if (_isResizing)
         {
@@ -562,6 +662,7 @@ public partial class SnipWindow : Window
         if (_viewModel == null) return;
         _viewModel.IsEnteringText = false;
         _viewModel.PendingText = string.Empty;
+        _lastTextFinishTime = DateTime.Now; // Set debounce timestamp
         // Shift focus back to window to allow hotkeys etc.
         this.Focus();
     }
