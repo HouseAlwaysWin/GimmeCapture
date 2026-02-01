@@ -32,11 +32,13 @@ public class MainWindowViewModel : ViewModelBase
     // Commands
     public ReactiveCommand<CaptureMode, Unit> StartCaptureCommand { get; }
     public ReactiveCommand<Unit, Unit> SaveAndCloseCommand { get; }
+    public ReactiveCommand<Unit, Unit> ResetToDefaultCommand { get; }
     public ReactiveCommand<Unit, Unit> IncreaseThicknessCommand { get; }
     public ReactiveCommand<Unit, Unit> DecreaseThicknessCommand { get; }
     public ReactiveCommand<Unit, Unit> IncreaseOpacityCommand { get; }
     public ReactiveCommand<Unit, Unit> DecreaseOpacityCommand { get; }
     public ReactiveCommand<Color, Unit> ChangeColorCommand { get; }
+    public ReactiveCommand<Color, Unit> ChangeThemeColorCommand { get; }
     
     public Color[] SettingsColors { get; } = new[]
     {
@@ -61,6 +63,7 @@ public class MainWindowViewModel : ViewModelBase
 
         StartCaptureCommand = ReactiveCommand.CreateFromTask<CaptureMode>(StartCapture);
         SaveAndCloseCommand = ReactiveCommand.CreateFromTask(SaveAndClose);
+        ResetToDefaultCommand = ReactiveCommand.CreateFromTask(ResetToDefault);
 
         IncreaseThicknessCommand = ReactiveCommand.Create(() => { if (BorderThickness < 9) BorderThickness += 1; });
         DecreaseThicknessCommand = ReactiveCommand.Create(() => { if (BorderThickness > 1) BorderThickness -= 1; });
@@ -69,6 +72,7 @@ public class MainWindowViewModel : ViewModelBase
         DecreaseOpacityCommand = ReactiveCommand.Create(() => { if (MaskOpacity > 0.05) MaskOpacity = Math.Max(0.05, MaskOpacity - 0.05); });
         
         ChangeColorCommand = ReactiveCommand.Create<Color>(c => BorderColor = c);
+        ChangeThemeColorCommand = ReactiveCommand.Create<Color>(c => ThemeColor = c);
         
         // Setup Hotkey Action
         HotkeyService.OnHotkeyPressed = (id) => 
@@ -147,6 +151,21 @@ public class MainWindowViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _borderColor, value);
     }
 
+    private Color _themeColor;
+    public Color ThemeColor
+    {
+        get => _themeColor;
+        set 
+        {
+            var old = _themeColor;
+            this.RaiseAndSetIfChanged(ref _themeColor, value);
+            if (old != value)
+            {
+                UpdateThemeResources(value);
+            }
+        }
+    }
+
     // Output Settings
     private bool _autoSave;
     public bool AutoSave
@@ -201,6 +220,15 @@ public class MainWindowViewModel : ViewModelBase
             BorderColor = color;
         }
 
+        if (Color.TryParse(s.ThemeColorHex, out var themeColor))
+        {
+            ThemeColor = themeColor;
+        }
+        else
+        {
+            ThemeColor = Color.Parse("#E60012");
+        }
+
         // Load Language
         Services.LocalizationService.Instance.CurrentLanguage = s.Language;
 
@@ -226,6 +254,7 @@ public class MainWindowViewModel : ViewModelBase
         s.CopyHotkey = CopyHotkey;
         s.PinHotkey = PinHotkey;
         s.BorderColorHex = BorderColor.ToString();
+        s.ThemeColorHex = ThemeColor.ToString();
         s.Language = Services.LocalizationService.Instance.CurrentLanguage;
         
         await _settingsService.SaveAsync();
@@ -242,7 +271,51 @@ public class MainWindowViewModel : ViewModelBase
     private async Task SaveAndClose()
     {
         await SaveSettingsAsync();
-        // Window close logic if needed, or just toast
         StatusText = "Settings Saved";
+    }
+
+    private async Task ResetToDefault()
+    {
+        // Reset to AppSettings initial state
+        var defaultSettings = new Models.AppSettings();
+        
+        RunOnStartup = defaultSettings.RunOnStartup;
+        AutoCheckUpdates = defaultSettings.AutoCheckUpdates;
+        BorderThickness = defaultSettings.BorderThickness;
+        MaskOpacity = defaultSettings.MaskOpacity;
+        AutoSave = defaultSettings.AutoSave;
+        SnipHotkey = defaultSettings.SnipHotkey;
+        CopyHotkey = defaultSettings.CopyHotkey;
+        PinHotkey = defaultSettings.PinHotkey;
+        
+        if (Color.TryParse(defaultSettings.BorderColorHex, out var color))
+            BorderColor = color;
+            
+        if (Color.TryParse(defaultSettings.ThemeColorHex, out var themeColor))
+            ThemeColor = themeColor;
+            
+        Services.LocalizationService.Instance.CurrentLanguage = defaultSettings.Language;
+
+        StatusText = "Settings Reset to Default";
+        await SaveSettingsAsync();
+    }
+
+    private void UpdateThemeResources(Color accentColor)
+    {
+        // BABYMETAL Palette calculation or lookup
+        Color deepColor;
+        if (accentColor == Color.Parse("#D4AF37")) // Gold
+            deepColor = Color.Parse("#8B7500");
+        else if (accentColor == Color.Parse("#E0E0E0")) // Silver
+            deepColor = Color.Parse("#606060");
+        else // Red or custom
+            deepColor = Color.Parse("#900000");
+
+        // Update Application resources for global switching
+        if (Avalonia.Application.Current != null)
+        {
+            Avalonia.Application.Current.Resources["ThemeAccentColor"] = accentColor;
+            Avalonia.Application.Current.Resources["ThemeDeepColor"] = deepColor;
+        }
     }
 }

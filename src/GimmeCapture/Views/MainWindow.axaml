@@ -40,6 +40,36 @@
                             </DataTemplate>
                         </ComboBox.ItemTemplate>
                     </ComboBox>
+
+                    <!-- Theme Color (Moved from Snip) -->
+                    <StackPanel Spacing="10" Margin="0,10,0,0">
+                        <TextBlock Text="{Binding [ThemeColor], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold"/>
+                        <ItemsControl ItemsSource="{Binding SettingsColors}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal" Spacing="15"/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="media:Color">
+                                    <Button Width="40" Height="40" Padding="0" CornerRadius="20"
+                                            Background="{Binding Converter={StaticResource ColorToBrushConverter}}"
+                                            Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ChangeThemeColorCommand}"
+                                            CommandParameter="{Binding}"
+                                            BorderThickness="0">
+                                        <Panel>
+                                            <!-- Selection Glow / Indicator -->
+                                            <Border BorderBrush="White" BorderThickness="2" CornerRadius="20" Margin="-2"
+                                                    IsVisible="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ThemeColor, Converter={StaticResource ColorMatchConverter}, ConverterParameter={Binding}}"/>
+                                            
+                                            <!-- Shadow/Inner depth -->
+                                            <Border CornerRadius="20" BoxShadow="inset 0 0 5 0 #80000000"/>
+                                        </Panel>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
                 </StackPanel>
             </TabItem>
             
@@ -227,8 +257,8 @@
                 
                 <TextBlock Grid.Column="1" Text="{Binding StatusText}" VerticalAlignment="Center" Margin="10,0" Foreground="Gray"/>
 
-                <Button Grid.Column="2" Content="{Binding [Confirm], Source={x:Static services:LocalizationService.Instance}}" Theme="{StaticResource MetalButton}" Margin="0,0,10,0" Command="{Binding SaveAndCloseCommand}"/>
-                <Button Grid.Column="3" Content="{Binding [Cancel], Source={x:Static services:LocalizationService.Instance}}" Theme="{StaticResource MetalButton}"/>
+                <Button Grid.Column="2" Content="{Binding [SaveSettings], Source={x:Static services:LocalizationService.Instance}}" Theme="{StaticResource MetalButton}" Margin="0,0,10,0" Command="{Binding SaveAndCloseCommand}"/>
+                <Button Grid.Column="3" Content="{Binding [ResetDefault], Source={x:Static services:LocalizationService.Instance}}" Theme="{StaticResource MetalButton}" Command="{Binding ResetToDefaultCommand}"/>
             </Grid>
         </Border>
     </Grid>

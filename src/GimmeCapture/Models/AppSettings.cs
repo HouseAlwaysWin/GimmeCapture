@@ -12,6 +12,7 @@ public class AppSettings
     public double BorderThickness { get; set; } = 2.0;
     public double MaskOpacity { get; set; } = 0.5;
     public string BorderColorHex { get; set; } = "#E60012";
+    public string ThemeColorHex { get; set; } = "#E60012";
     
     // Output
     public bool AutoSave { get; set; }

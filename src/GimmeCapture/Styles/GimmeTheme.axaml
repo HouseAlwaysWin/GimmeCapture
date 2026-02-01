@@ -2,6 +2,13 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <Styles.Resources>
         <ResourceDictionary>
+            <!-- Dynamic Theme Colors (Default to Red) -->
+            <Color x:Key="ThemeAccentColor">#E60012</Color>
+            <Color x:Key="ThemeDeepColor">#900000</Color>
+            
+            <SolidColorBrush x:Key="ThemeAccentBrush" Color="{DynamicResource ThemeAccentColor}"/>
+            <SolidColorBrush x:Key="ThemeDeepBrush" Color="{DynamicResource ThemeDeepColor}"/>
+
             <!-- Theme Color Palette -->
             <Color x:Key="AccentRed">#E60012</Color>
             <Color x:Key="DeepRed">#900000</Color>
@@ -44,18 +51,18 @@
                                 BoxShadow="0 0 5 0 #40E60012">
                             <Border.BorderBrush>
                                 <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
-                                    <GradientStop Offset="0" Color="{StaticResource DeepRed}"/>
-                                    <GradientStop Offset="0.5" Color="{StaticResource AccentRed}"/>
-                                    <GradientStop Offset="1" Color="{StaticResource DeepRed}"/>
+                                    <GradientStop Offset="0" Color="{DynamicResource ThemeDeepColor}"/>
+                                    <GradientStop Offset="0.5" Color="{DynamicResource ThemeAccentColor}"/>
+                                    <GradientStop Offset="1" Color="{DynamicResource ThemeDeepColor}"/>
                                 </LinearGradientBrush>
                             </Border.BorderBrush>
                             <Grid>
                                 <!-- Accent Corners -->
-                                <Rectangle Fill="{StaticResource AccentRedBrush}" Width="8" Height="1.5" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="-20,-5,0,0"/>
-                                <Rectangle Fill="{StaticResource AccentRedBrush}" Width="1.5" Height="8" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="-20,-5,0,0"/>
+                                <Rectangle Fill="{DynamicResource ThemeAccentBrush}" Width="8" Height="1.5" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="-20,-5,0,0"/>
+                                <Rectangle Fill="{DynamicResource ThemeAccentBrush}" Width="1.5" Height="8" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="-20,-5,0,0"/>
                                 
-                                <Rectangle Fill="{StaticResource AccentRedBrush}" Width="8" Height="1.5" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="0,0,-20,-5"/>
-                                <Rectangle Fill="{StaticResource AccentRedBrush}" Width="1.5" Height="8" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="0,0,-20,-5"/>
+                                <Rectangle Fill="{DynamicResource ThemeAccentBrush}" Width="8" Height="1.5" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="0,0,-20,-5"/>
+                                <Rectangle Fill="{DynamicResource ThemeAccentBrush}" Width="1.5" Height="8" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="0,0,-20,-5"/>
 
                                 <ContentPresenter Name="PART_ContentPresenter"
                                                   Content="{TemplateBinding Content}"
@@ -150,12 +157,12 @@
 
                 <Style Selector="^:pointerover /template/ Border#PART_Border">
                     <Setter Property="Background" Value="#3A3A3A"/>
-                    <Setter Property="BorderBrush" Value="{StaticResource AccentRedBrush}"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource ThemeAccentBrush}"/>
                 </Style>
                 <Style Selector="^:checked /template/ Border#PART_Border">
-                    <Setter Property="Background" Value="{StaticResource AccentRedBrush}"/>
-                    <Setter Property="BorderBrush" Value="{StaticResource AccentRedBrush}"/>
-                    <Setter Property="BoxShadow" Value="0 0 8 0 #80E60012"/>
+                    <Setter Property="Background" Value="{DynamicResource ThemeAccentBrush}"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource ThemeAccentBrush}"/>
+                    <Setter Property="BoxShadow" Value="0 0 8 0 #80E60012"/> <!-- Will address shadow color later if needed -->
                 </Style>
                 <Style Selector="^:pressed">
                     <Setter Property="RenderTransform" Value="scale(0.95)"/>
@@ -187,9 +194,9 @@
     </Style>
 
     <Style Selector="TabItem:selected">
-        <Setter Property="Foreground" Value="{StaticResource AccentRedBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource ThemeAccentBrush}"/>
         <Style Selector="^ /template/ Border#PART_SelectedPipe">
-            <Setter Property="Background" Value="{StaticResource AccentRedBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource ThemeAccentBrush}"/>
             <Setter Property="Height" Value="3"/>
             <Setter Property="CornerRadius" Value="1.5"/>
             <Setter Property="BoxShadow" Value="0 0 8 1 #80E60012"/>
@@ -199,16 +206,29 @@
     <!-- CheckBox & ComboBox Basic Tuning -->
     <Style Selector="CheckBox">
         <Setter Property="Foreground" Value="White"/>
+        <Style Selector="^:checked /template/ Border#NormalRectangle">
+            <Setter Property="Background" Value="{DynamicResource ThemeAccentBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource ThemeAccentBrush}"/>
+        </Style>
     </Style>
     <Style Selector="ComboBox">
         <Setter Property="Background" Value="#1E1E1E"/>
         <Setter Property="BorderBrush" Value="#333333"/>
         <Setter Property="Foreground" Value="White"/>
+        <Style Selector="^:pointerover">
+            <Setter Property="BorderBrush" Value="{DynamicResource ThemeAccentBrush}"/>
+        </Style>
+        <Style Selector="^:dropdownopen">
+            <Setter Property="BorderBrush" Value="{DynamicResource ThemeAccentBrush}"/>
+        </Style>
     </Style>
     <Style Selector="TextBox">
         <Setter Property="Background" Value="#1E1E1E"/>
         <Setter Property="BorderBrush" Value="#333333"/>
         <Setter Property="Foreground" Value="White"/>
+        <Style Selector="^:focus">
+            <Setter Property="BorderBrush" Value="{DynamicResource ThemeAccentBrush}"/>
+        </Style>
     </Style>
     <!-- Custom Slider Style (Robust Override & No Clipping) -->
     <Style Selector="Slider">
@@ -216,12 +236,12 @@
         <Setter Property="ClipToBounds" Value="False"/>
         <Setter Property="Background" Value="Transparent"/>
         <Style.Resources>
-            <SolidColorBrush x:Key="SliderThumbBackground" Color="{StaticResource AccentRed}"/>
-            <SolidColorBrush x:Key="SliderThumbBackgroundPointerOver" Color="{StaticResource AccentRed}"/>
-            <SolidColorBrush x:Key="SliderThumbBackgroundPressed" Color="{StaticResource DeepRed}"/>
-            <SolidColorBrush x:Key="SliderTrackValueFill" Color="{StaticResource AccentRed}"/>
-            <SolidColorBrush x:Key="SliderTrackValueFillPointerOver" Color="{StaticResource AccentRed}"/>
-            <SolidColorBrush x:Key="SliderTrackValueFillPressed" Color="{StaticResource DeepRed}"/>
+            <SolidColorBrush x:Key="SliderThumbBackground" Color="{DynamicResource ThemeAccentColor}"/>
+            <SolidColorBrush x:Key="SliderThumbBackgroundPointerOver" Color="{DynamicResource ThemeAccentColor}"/>
+            <SolidColorBrush x:Key="SliderThumbBackgroundPressed" Color="{DynamicResource ThemeDeepColor}"/>
+            <SolidColorBrush x:Key="SliderTrackValueFill" Color="{DynamicResource ThemeAccentColor}"/>
+            <SolidColorBrush x:Key="SliderTrackValueFillPointerOver" Color="{DynamicResource ThemeAccentColor}"/>
+            <SolidColorBrush x:Key="SliderTrackValueFillPressed" Color="{DynamicResource ThemeDeepColor}"/>
         </Style.Resources>
         
         <Style Selector="^ /template/ Thumb">
@@ -231,7 +251,7 @@
             <Setter Property="Template">
                 <ControlTemplate>
                     <Grid Background="Transparent" ClipToBounds="False">
-                        <Ellipse Fill="{StaticResource AccentRedBrush}"
+                        <Ellipse Fill="{DynamicResource ThemeAccentBrush}"
                                  Stroke="{StaticResource GothicBlackBrush}"
                                  StrokeThickness="1"
                                  Width="12" Height="12"
