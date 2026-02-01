@@ -62,18 +62,25 @@ public class SnipWindowViewModel : ViewModelBase
     public Rect SelectionRect
     {
         get => _selectionRect;
-        set => this.RaiseAndSetIfChanged(ref _selectionRect, value);
+        set 
+        {
+            this.RaiseAndSetIfChanged(ref _selectionRect, value);
+            UpdateMask();
+        }
     }
 
-    private Geometry _screenGeometry = Geometry.Parse("M0,0 L0,0 0,0 0,0 Z"); // Default empty
-    public Geometry ScreenGeometry
+    private void UpdateMask()
     {
-        get => _screenGeometry;
-        set => this.RaiseAndSetIfChanged(ref _screenGeometry, value);
+        MaskGeometry = new CombinedGeometry
+        {
+            GeometryCombineMode = GeometryCombineMode.Exclude,
+            Geometry1 = new RectangleGeometry(new Rect(-10000, -10000, 20000, 20000)),
+            Geometry2 = new RectangleGeometry(SelectionRect)
+        };
     }
 
-    private GeometryGroup _maskGeometry = new GeometryGroup();
-    public GeometryGroup MaskGeometry
+    private Geometry _maskGeometry = new GeometryGroup();
+    public Geometry MaskGeometry
     {
         get => _maskGeometry;
         set => this.RaiseAndSetIfChanged(ref _maskGeometry, value);
@@ -140,7 +147,11 @@ public class SnipWindowViewModel : ViewModelBase
     public Color SelectedColor
     {
         get => _selectedColor;
-        set => this.RaiseAndSetIfChanged(ref _selectedColor, value);
+        set 
+        {
+            this.RaiseAndSetIfChanged(ref _selectedColor, value);
+            SelectionBorderColor = value;
+        }
     }
 
     private string _customHexColor = "#FF0000";
@@ -150,11 +161,15 @@ public class SnipWindowViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _customHexColor, value);
     }
 
-    private double _currentThickness = 4.0;
+    private double _currentThickness = 2.0;
     public double CurrentThickness
     {
         get => _currentThickness;
-        set => this.RaiseAndSetIfChanged(ref _currentThickness, value);
+        set 
+        {
+            this.RaiseAndSetIfChanged(ref _currentThickness, value);
+            SelectionBorderThickness = value;
+        }
     }
 
     private double _currentFontSize = 24.0;
@@ -300,6 +315,8 @@ public class SnipWindowViewModel : ViewModelBase
         ChangeLanguageCommand = ReactiveCommand.Create(() => LocalizationService.Instance.CycleLanguage());
         ToggleBoldCommand = ReactiveCommand.Create(() => IsBold = !IsBold);
         ToggleItalicCommand = ReactiveCommand.Create(() => IsItalic = !IsItalic);
+
+        UpdateMask(); // Initial mask
     }
 
     public SnipWindowViewModel(Color borderColor, double thickness, double opacity) : this()

@@ -41,18 +41,7 @@
 
     <Grid>
         <!-- 背景遮罩層 -->
-        <Path Fill="Black" Opacity="{Binding MaskOpacity}" IsHitTestVisible="False">
-            <Path.Data>
-                <CombinedGeometry GeometryCombineMode="Exclude">
-                    <CombinedGeometry.Geometry1>
-                        <RectangleGeometry Rect="-10000,-10000,20000,20000" />
-                    </CombinedGeometry.Geometry1>
-                    <CombinedGeometry.Geometry2>
-                        <RectangleGeometry Rect="{Binding SelectionRect}" />
-                    </CombinedGeometry.Geometry2>
-                </CombinedGeometry>
-            </Path.Data>
-        </Path>
+        <Path Fill="Black" Data="{Binding MaskGeometry}" Opacity="{Binding MaskOpacity}" IsHitTestVisible="False"/>
         
         <!-- Annotation Layer (Rendered below handles but above mask) -->
         <Canvas IsHitTestVisible="False">
