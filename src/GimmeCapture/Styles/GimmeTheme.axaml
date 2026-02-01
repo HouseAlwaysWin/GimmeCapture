@@ -83,7 +83,7 @@
                 </Style>
                 
                 <Style Selector="^:pressed">
-                    <Setter Property="Background" Value="{StaticResource AccentRedBrush}"/>
+                    <Setter Property="Background" Value="{DynamicResource ThemeAccentBrush}"/>
                     <Setter Property="Foreground" Value="White"/>
                     <Setter Property="RenderTransform" Value="scale(0.95)"/>
                 </Style>
@@ -120,7 +120,7 @@
 
                 <Style Selector="^:pointerover /template/ Border#PART_Border">
                     <Setter Property="Background" Value="#3A3A3A"/>
-                    <Setter Property="BorderBrush" Value="{StaticResource AccentRedBrush}"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource ThemeAccentBrush}"/>
                 </Style>
                 <Style Selector="^:pressed">
                     <Setter Property="RenderTransform" Value="scale(0.95)"/>
