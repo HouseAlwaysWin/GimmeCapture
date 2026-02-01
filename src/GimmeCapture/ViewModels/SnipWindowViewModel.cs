@@ -327,9 +327,9 @@ public class SnipWindowViewModel : ViewModelBase
     {
         public static Color[] ColorsList { get; } = new[]
         {
-            Color.Parse("#D4AF37"), // Gold
-            Color.Parse("#E0E0E0"), // Silver
-            Color.Parse("#E60012")  // Red
+            Colors.Red, Colors.Green, Colors.Blue, 
+            Colors.Yellow, Colors.Cyan, Colors.Magenta,
+            Colors.White, Colors.Black, Colors.Gray
         };
     }
 

@@ -74,7 +74,7 @@
                         <!-- Border Color -->
                         <StackPanel Spacing="10">
                             <TextBlock Text="{Binding [BorderColor], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold"/>
-                            <ItemsControl ItemsSource="{x:Static vm:SnipWindowViewModel+StaticData.ColorsList}">
+                            <ItemsControl ItemsSource="{Binding SettingsColors}">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
                                         <StackPanel Orientation="Horizontal" Spacing="15"/>

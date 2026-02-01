@@ -37,6 +37,13 @@ public class MainWindowViewModel : ViewModelBase
     public ReactiveCommand<Unit, Unit> IncreaseOpacityCommand { get; }
     public ReactiveCommand<Unit, Unit> DecreaseOpacityCommand { get; }
     public ReactiveCommand<Color, Unit> ChangeColorCommand { get; }
+    
+    public Color[] SettingsColors { get; } = new[]
+    {
+        Color.Parse("#D4AF37"), // Gold
+        Color.Parse("#E0E0E0"), // Silver
+        Color.Parse("#E60012")  // Red
+    };
 
     public MainWindowViewModel()
     {
