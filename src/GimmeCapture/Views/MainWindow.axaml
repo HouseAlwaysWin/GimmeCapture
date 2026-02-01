@@ -130,6 +130,16 @@
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
                         </StackPanel>
+                        
+                        <!-- Output Settings (Moved from Output Tab) -->
+                        <StackPanel Spacing="10">
+                            <TextBlock Text="{Binding [TabOutput], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold"/>
+                            <CheckBox IsChecked="{Binding AutoSave}" Content="{Binding [AutoSave], Source={x:Static services:LocalizationService.Instance}}"/>
+                            <DockPanel>
+                                <Button Content="{Binding [SelectPath], Source={x:Static services:LocalizationService.Instance}}" DockPanel.Dock="Right" Command="{Binding SelectSavePath}" Margin="5,0,0,0"/>
+                                <TextBox Text="{Binding SaveDirectory}" IsReadOnly="True"/>
+                            </DockPanel>
+                        </StackPanel>
                     </StackPanel>
 
                     <!-- Style Preview Area -->
@@ -196,14 +206,7 @@
                 </Grid>
             </TabItem>
             
-            <!-- 輸出 (Output) -->
-            <TabItem Header="{Binding [TabOutput], Source={x:Static services:LocalizationService.Instance}}">
-                <StackPanel Spacing="10" Margin="10">
-                    <CheckBox IsChecked="{Binding AutoSave}" Content="{Binding [AutoSave], Source={x:Static services:LocalizationService.Instance}}"/>
-                    <Button Content="{Binding [SelectPath], Source={x:Static services:LocalizationService.Instance}}" HorizontalAlignment="Left" Theme="{StaticResource MetalButton}"/>
-                    <TextBlock Text="{Binding [CurrentPath], Source={x:Static services:LocalizationService.Instance}}" Foreground="Gray" FontSize="12"/>
-                </StackPanel>
-            </TabItem>
+            <!-- Output Tab Removed (Merged to Snip) -->
             
             <!-- Recording Tab -->
             <TabItem Header="{Binding [TabRecord], Source={x:Static services:LocalizationService.Instance}}">

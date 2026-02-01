@@ -186,6 +186,13 @@ public class MainWindowViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _autoSave, value);
     }
     
+    private string _saveDirectory = string.Empty;
+    public string SaveDirectory
+    {
+        get => _saveDirectory;
+        set => this.RaiseAndSetIfChanged(ref _saveDirectory, value);
+    }
+    
     // Control Settings
     private string _snipHotkey = "F1";
     public string SnipHotkey
@@ -255,6 +262,15 @@ public class MainWindowViewModel : ViewModelBase
         }
     }
 
+    public async Task SelectSavePath()
+    {
+        if (PickFolderAction != null)
+        {
+            var path = await PickFolderAction();
+            if (!string.IsNullOrEmpty(path)) SaveDirectory = path;
+        }
+    }
+
     public async Task LoadSettingsAsync()
     {
         await _settingsService.LoadAsync();
@@ -291,6 +307,13 @@ public class MainWindowViewModel : ViewModelBase
             if (!Directory.Exists(VideoSaveDirectory)) Directory.CreateDirectory(VideoSaveDirectory);
         }
 
+        SaveDirectory = s.SaveDirectory;
+        if (string.IsNullOrEmpty(SaveDirectory))
+        {
+            SaveDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), "GimmeCapture");
+            if (!Directory.Exists(SaveDirectory)) Directory.CreateDirectory(SaveDirectory);
+        }
+
         RecordFormat = s.RecordFormat;
         UseFixedRecordPath = s.UseFixedRecordPath;
         RecordHotkey = s.RecordHotkey;
@@ -321,6 +344,7 @@ public class MainWindowViewModel : ViewModelBase
         s.BorderThickness = BorderThickness;
         s.MaskOpacity = MaskOpacity;
         s.AutoSave = AutoSave;
+        s.SaveDirectory = SaveDirectory;
         s.SnipHotkey = SnipHotkey;
         s.CopyHotkey = CopyHotkey;
         s.PinHotkey = PinHotkey;

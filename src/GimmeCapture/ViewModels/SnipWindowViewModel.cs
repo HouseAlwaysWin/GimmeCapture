@@ -492,7 +492,17 @@ public class SnipWindowViewModel : ViewModelBase
         string tempDir = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Temp");
         try { System.IO.Directory.CreateDirectory(tempDir); } catch { }
 
-        _currentRecordingPath = System.IO.Path.Combine(tempDir, $"GimmeCapture_{Guid.NewGuid()}.{format}");
+        if (_mainVm.UseFixedRecordPath && !string.IsNullOrEmpty(_mainVm.VideoSaveDirectory))
+        {
+             // Ensure directory exists
+             try { System.IO.Directory.CreateDirectory(_mainVm.VideoSaveDirectory); } catch { }
+             string fileName = $"Capture_{DateTime.Now:yyyyMMdd_HHmmss}.{format}";
+             _currentRecordingPath = System.IO.Path.Combine(_mainVm.VideoSaveDirectory, fileName);
+        }
+        else
+        {
+             _currentRecordingPath = System.IO.Path.Combine(tempDir, $"GimmeCapture_{Guid.NewGuid()}.{format}");
+        }
         
         var region = SelectionRect;
         
@@ -708,7 +718,21 @@ public class SnipWindowViewModel : ViewModelBase
              {
                  var bitmap = await _captureService.CaptureScreenWithAnnotationsAsync(SelectionRect, Annotations);
                  
-                 if (PickSaveFileAction != null)
+                 if (_mainVm != null && _mainVm.AutoSave)
+                 {
+                     var dir = _mainVm.SaveDirectory;
+                     if (string.IsNullOrEmpty(dir))
+                     {
+                         dir = System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.MyPictures), "GimmeCapture");
+                     }
+                     try { System.IO.Directory.CreateDirectory(dir); } catch { }
+
+                     var fileName = $"Capture_{DateTime.Now:yyyyMMdd_HHmmss}.png";
+                     var path = System.IO.Path.Combine(dir, fileName);
+                     await _captureService.SaveToFileAsync(bitmap, path);
+                     System.Diagnostics.Debug.WriteLine($"Auto-saved to {path}");
+                 }
+                 else if (PickSaveFileAction != null)
                  {
                      var path = await PickSaveFileAction.Invoke();
                      if (!string.IsNullOrEmpty(path))
