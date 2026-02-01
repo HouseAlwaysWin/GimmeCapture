@@ -135,7 +135,7 @@
                     <!-- Style Preview Area -->
                     <StackPanel Grid.Column="1" Spacing="10" VerticalAlignment="Top" Margin="20,0,0,0">
                         <TextBlock Text="樣式預覽" FontWeight="SemiBold" HorizontalAlignment="Center"/>
-                        <Border Background="#11FFFFFF" Width="300" Height="150" CornerRadius="4" BorderBrush="#333333" BorderThickness="1">
+                        <Border Background="#1A1A1A" Width="300" Height="150" CornerRadius="4" BorderBrush="#333333" BorderThickness="1" ClipToBounds="True">
                             <Grid>
                                 <!-- Mock Background -->
                                 <Image Source="avares://GimmeCapture/Assets/kitsune_icon.png" Opacity="0.1" Stretch="Uniform" Margin="20"/>
@@ -145,10 +145,11 @@
                                     <Path.Data>
                                         <CombinedGeometry GeometryCombineMode="Exclude">
                                             <CombinedGeometry.Geometry1>
-                                                <RectangleGeometry Rect="-500,-500,1000,1000" />
+                                                <!-- Container: 300x150 -->
+                                                <RectangleGeometry Rect="0,0,300,150" />
                                             </CombinedGeometry.Geometry1>
                                             <CombinedGeometry.Geometry2>
-                                                <!-- Container: 300x150, Selection: 100x60 centered -->
+                                                <!-- Selection: 100x60 centered -->
                                                 <!-- (300-100)/2 = 100, (150-60)/2 = 45 -->
                                                 <RectangleGeometry Rect="100,45,100,60" />
                                             </CombinedGeometry.Geometry2>
