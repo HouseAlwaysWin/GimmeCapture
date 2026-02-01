@@ -26,9 +26,13 @@ public partial class FloatingImageWindow : Window
             vm.CopyAction = async () =>
             {
                 var topLevel = TopLevel.GetTopLevel(this);
-                if (topLevel?.Clipboard != null)
+                if (topLevel?.Clipboard != null && vm.Image != null)
                 {
-                    // TODO: Implement Copy Image to Clipboard
+                    var dataObject = new DataObject();
+                    dataObject.Set("Bitmap", vm.Image);
+                    #pragma warning disable CS0618
+                    await topLevel.Clipboard.SetDataObjectAsync(dataObject);
+                    #pragma warning restore CS0618
                 }
             };
             

@@ -57,12 +57,24 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable
         set => this.RaiseAndSetIfChanged(ref _isLooping, value);
     }
 
+    private bool _showToolbar = false;
+    public bool ShowToolbar
+    {
+        get => _showToolbar;
+        set => this.RaiseAndSetIfChanged(ref _showToolbar, value);
+    }
+
     public ReactiveCommand<Unit, Unit> CloseCommand { get; }
+    public ReactiveCommand<Unit, Unit> CopyCommand { get; }
+    public ReactiveCommand<Unit, Unit> SaveCommand { get; }
+    public ReactiveCommand<Unit, Unit> ToggleToolbarCommand { get; }
     
     public System.Action? CloseAction { get; set; }
     public System.Action? RequestRedraw { get; set; }
+    public System.Func<Task>? CopyAction { get; set; }
+    public System.Func<Task>? SaveAction { get; set; }
 
-    private readonly string _videoPath;
+    public string VideoPath { get; }
     private readonly string _ffmpegPath;
     private CancellationTokenSource? _playCts;
     private readonly int _width;
@@ -70,7 +82,7 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable
 
     public FloatingVideoViewModel(string videoPath, string ffmpegPath, int width, int height, Avalonia.Media.Color borderColor, double borderThickness, bool showDecoration, bool hideBorder)
     {
-        _videoPath = videoPath;
+        VideoPath = videoPath;
         _ffmpegPath = ffmpegPath;
         _width = (width / 2) * 2; // Ensure even for FFmpeg
         _height = (height / 2) * 2;
@@ -83,6 +95,18 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable
         {
             Dispose();
             CloseAction?.Invoke();
+        });
+
+        ToggleToolbarCommand = ReactiveCommand.Create(() => { ShowToolbar = !ShowToolbar; });
+
+        CopyCommand = ReactiveCommand.CreateFromTask(async () => 
+        {
+            if (CopyAction != null) await CopyAction();
+        });
+
+        SaveCommand = ReactiveCommand.CreateFromTask(async () => 
+        {
+            if (SaveAction != null) await SaveAction();
         });
 
         // Initialize bitmap
@@ -113,7 +137,7 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable
                 var buffer = new byte[frameSize];
 
                 var cmd = Cli.Wrap(_ffmpegPath)
-                    .WithArguments($"-re -i \"{_videoPath}\" -f image2pipe -vcodec rawvideo -pix_fmt bgra -s {_width}x{_height} -loglevel quiet -")
+                    .WithArguments($"-re -i \"{VideoPath}\" -f image2pipe -vcodec rawvideo -pix_fmt bgra -s {_width}x{_height} -loglevel quiet -")
                     .WithStandardOutputPipe(PipeTarget.ToStream(new FrameStreamWriter(this, frameSize)));
 
                 await cmd.ExecuteAsync(ct);

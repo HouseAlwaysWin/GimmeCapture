@@ -42,9 +42,17 @@ public class FloatingImageViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _hidePinBorder, value);
     }
 
+    private bool _showToolbar = false;
+    public bool ShowToolbar
+    {
+        get => _showToolbar;
+        set => this.RaiseAndSetIfChanged(ref _showToolbar, value);
+    }
+
     public ReactiveCommand<Unit, Unit> CloseCommand { get; }
     public ReactiveCommand<Unit, Unit> CopyCommand { get; }
     public ReactiveCommand<Unit, Unit> SaveCommand { get; }
+    public ReactiveCommand<Unit, Unit> ToggleToolbarCommand { get; }
     
     public System.Action? CloseAction { get; set; }
     public System.Func<Task>? CopyAction { get; set; }
@@ -59,6 +67,7 @@ public class FloatingImageViewModel : ViewModelBase
         HidePinBorder = hideBorder;
 
         CloseCommand = ReactiveCommand.Create(() => CloseAction?.Invoke());
+        ToggleToolbarCommand = ReactiveCommand.Create(() => { ShowToolbar = !ShowToolbar; });
         
         CopyCommand = ReactiveCommand.CreateFromTask(async () => 
         {

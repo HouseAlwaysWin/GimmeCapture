@@ -45,30 +45,57 @@
             </Border.BorderBrush>
             <Border Classes="InnerBorder" Tag="{Binding HidePinBorder}">
                 <Grid>
-                    <!-- Decorative Inner Border -->
-                    <Border BorderBrush="{Binding BorderColor}" BorderThickness="1" Margin="-1" IsVisible="{Binding !HidePinBorder}"/>
-                    
-                    <Image Source="{Binding VideoBitmap}" Stretch="Fill" Name="PinnedVideo" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
-                    
                     <Grid>
-                        <!-- Accent Corners -->
-                        <Rectangle IsVisible="{Binding ShowPinDecoration}" Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="10" Height="2" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="2"/>
-                        <Rectangle IsVisible="{Binding ShowPinDecoration}" Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="2" Height="10" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="2"/>
+                        <!-- Decorative Inner Border -->
+                        <Border BorderBrush="{Binding BorderColor}" BorderThickness="1" Margin="-1" IsVisible="{Binding !HidePinBorder}"/>
                         
-                        <Rectangle IsVisible="{Binding ShowPinDecoration}" Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="10" Height="2" VerticalAlignment="Top" HorizontalAlignment="Right" Margin="2"/>
-                        <Rectangle IsVisible="{Binding ShowPinDecoration}" Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="2" Height="10" VerticalAlignment="Top" HorizontalAlignment="Right" Margin="2"/>
+                        <Image Source="{Binding VideoBitmap}" Stretch="Fill" Name="PinnedVideo" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
                         
-                        <Rectangle IsVisible="{Binding ShowPinDecoration}" Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="10" Height="2" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="2"/>
-                        <Rectangle IsVisible="{Binding ShowPinDecoration}" Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="2" Height="10" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="2"/>
-                        
-                        <Rectangle IsVisible="{Binding ShowPinDecoration}" Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="10" Height="2" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="2"/>
-                        <Rectangle IsVisible="{Binding ShowPinDecoration}" Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="2" Height="10" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="2"/>
+                        <Grid>
+                            <!-- Accent Corners -->
+                            <Rectangle IsVisible="{Binding ShowPinDecoration}" Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="10" Height="2" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="2"/>
+                            <Rectangle IsVisible="{Binding ShowPinDecoration}" Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="2" Height="10" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="2"/>
+                            
+                            <Rectangle IsVisible="{Binding ShowPinDecoration}" Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="10" Height="2" VerticalAlignment="Top" HorizontalAlignment="Right" Margin="2"/>
+                            <Rectangle IsVisible="{Binding ShowPinDecoration}" Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="2" Height="10" VerticalAlignment="Top" HorizontalAlignment="Right" Margin="2"/>
+                            
+                            <Rectangle IsVisible="{Binding ShowPinDecoration}" Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="10" Height="2" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="2"/>
+                            <Rectangle IsVisible="{Binding ShowPinDecoration}" Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="2" Height="10" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="2"/>
+                            
+                            <Rectangle IsVisible="{Binding ShowPinDecoration}" Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="10" Height="2" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="2"/>
+                            <Rectangle IsVisible="{Binding ShowPinDecoration}" Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="2" Height="10" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="2"/>
+                        </Grid>
+                    </Grid>
+
+                    <!-- Toolbar -->
+                    <Grid VerticalAlignment="Top" Background="#AA121212" IsVisible="{Binding ShowToolbar}">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="4" Margin="4">
+                            <Button Theme="{StaticResource SnipButton}" Command="{Binding CopyCommand}" ToolTip.Tip="{Binding [MenuCopyVideo], Source={x:Static services:LocalizationService.Instance}}">
+                                <PathIcon Data="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z" Width="14" Height="14"/>
+                            </Button>
+                            <Button Theme="{StaticResource SnipButton}" Command="{Binding SaveCommand}" ToolTip.Tip="{Binding [MenuSaveVideo], Source={x:Static services:LocalizationService.Instance}}">
+                                <PathIcon Data="M15,9H5V5H15M12,19A3,3 0 0,1 9,16A3,3 0 0,1 12,13A3,3 0 0,1 15,16A3,3 0 0,1 12,19M17,3H5C3.89,3 3,3.9 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V7L17,3Z" Width="14" Height="14"/>
+                            </Button>
+                            <Button Theme="{StaticResource SnipButton}" Command="{Binding CloseCommand}" ToolTip.Tip="{Binding [MenuClose], Source={x:Static services:LocalizationService.Instance}}">
+                                <PathIcon Data="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z" Width="14" Height="14"/>
+                            </Button>
+                        </StackPanel>
                     </Grid>
                 </Grid>
             </Border>
             
             <Border.ContextMenu>
                 <ContextMenu>
+                    <MenuItem Header="{Binding [MenuCopyVideo], Source={x:Static services:LocalizationService.Instance}}" Command="{Binding CopyCommand}"/>
+                    <MenuItem Header="{Binding [MenuSaveVideo], Source={x:Static services:LocalizationService.Instance}}" Command="{Binding SaveCommand}"/>
+                    <Separator/>
+                    <MenuItem Header="{Binding [MenuShowToolbar], Source={x:Static services:LocalizationService.Instance}}" 
+                              Command="{Binding ToggleToolbarCommand}">
+                        <MenuItem.Icon>
+                            <CheckBox IsChecked="{Binding ShowToolbar}" IsHitTestVisible="False"/>
+                        </MenuItem.Icon>
+                    </MenuItem>
+                    <Separator/>
                     <MenuItem Header="{Binding [MenuClose], Source={x:Static services:LocalizationService.Instance}}" Command="{Binding CloseCommand}"/>
                 </ContextMenu>
             </Border.ContextMenu>

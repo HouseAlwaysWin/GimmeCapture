@@ -114,6 +114,8 @@ namespace GimmeCapture.Services
                     // Context Menu
                     ["MenuCopyImage"] = "Copy Image",
                     ["MenuSaveImage"] = "Save Image As...",
+                    ["MenuCopyVideo"] = "Copy Video",
+                    ["MenuSaveVideo"] = "Save Video As...",
                     ["MenuShowToolbar"] = "Show Toolbar",
                     ["MenuWindowShadow"] = "Window Shadow",
                     ["MenuClose"] = "Close",
@@ -193,6 +195,8 @@ namespace GimmeCapture.Services
                     // Context Menu
                     ["MenuCopyImage"] = "複製圖像",
                     ["MenuSaveImage"] = "圖像另存為...",
+                    ["MenuCopyVideo"] = "複製影片",
+                    ["MenuSaveVideo"] = "影片另存為...",
                     ["MenuShowToolbar"] = "顯示工具列",
                     ["MenuWindowShadow"] = "視窗陰影",
                     ["MenuClose"] = "關閉",
@@ -272,6 +276,8 @@ namespace GimmeCapture.Services
                     // Context Menu
                     ["MenuCopyImage"] = "画像をコピー",
                     ["MenuSaveImage"] = "名前を付けて画像を保存...",
+                    ["MenuCopyVideo"] = "動画をコピー",
+                    ["MenuSaveVideo"] = "名前を付けて動画を保存...",
                     ["MenuShowToolbar"] = "ツールバーを表示",
                     ["MenuWindowShadow"] = "ウィンドウの影",
                     ["MenuClose"] = "閉じる",

@@ -3,6 +3,8 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using GimmeCapture.ViewModels;
 using System;
+using System.Threading.Tasks;
+using System.IO;
 
 namespace GimmeCapture.Views;
 
@@ -27,6 +29,47 @@ public partial class FloatingVideoWindow : Window
                 // Force specialized redraw of the image control
                 var image = this.FindControl<Image>("PinnedVideo");
                 image?.InvalidateVisual();
+            };
+
+            vm.CopyAction = async () => 
+            {
+                if (string.IsNullOrEmpty(vm.VideoPath)) return;
+                
+                await Task.Run(() => 
+                {
+                    // Use PowerShell to copy file to clipboard
+                    var escapedPath = vm.VideoPath.Replace("'", "''");
+                    var command = $"Set-Clipboard -Path '{escapedPath}'";
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = "powershell",
+                        Arguments = $"-Command \"{command}\"",
+                        CreateNoWindow = true,
+                        UseShellExecute = false
+                    });
+                });
+            };
+
+            vm.SaveAction = async () => 
+            {
+                if (string.IsNullOrEmpty(vm.VideoPath)) return;
+
+                var storage = this.StorageProvider;
+                if (storage == null) return;
+
+                var extension = System.IO.Path.GetExtension(vm.VideoPath).TrimStart('.');
+                var file = await storage.SaveFilePickerAsync(new Avalonia.Platform.Storage.FilePickerSaveOptions
+                {
+                    Title = "Save Video As",
+                    DefaultExtension = extension,
+                    FileTypeChoices = new[] { new Avalonia.Platform.Storage.FilePickerFileType(extension.ToUpper()) { Patterns = new[] { "*." + extension } } }
+                });
+
+                if (file != null)
+                {
+                    var targetPath = file.Path.LocalPath;
+                    System.IO.File.Copy(vm.VideoPath, targetPath, true);
+                }
             };
         }
     }
