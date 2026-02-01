@@ -70,7 +70,7 @@ public partial class App : Application
                     var trayIcons = new Avalonia.Controls.TrayIcons();
                     trayIcons.Add(trayIcon);
                     
-                    desktop.MainWindow.SetValue(Avalonia.Controls.TrayIcon.IconsProperty, trayIcons);
+                    SetValue(Avalonia.Controls.TrayIcon.IconsProperty, trayIcons);
             }
             catch (System.Exception ex)
             {

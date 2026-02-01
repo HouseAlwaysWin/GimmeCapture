@@ -5,6 +5,8 @@ using System.Threading.Tasks;
 using System.Linq;
 using System.Reactive;
 using System.Reactive.Linq;
+using System.IO;
+using GimmeCapture.Services;
 
 namespace GimmeCapture.ViewModels;
 
@@ -17,7 +19,8 @@ public class MainWindowViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _statusText, value);
     }
 
-    public System.Action<CaptureMode>? RequestCaptureAction { get; set; }
+    public Action<CaptureMode>? RequestCaptureAction { get; set; }
+    public Func<Task<string?>>? PickFolderAction { get; set; }
     
     private readonly Services.AppSettingsService _settingsService;
     public Services.GlobalHotkeyService HotkeyService { get; } = new();
@@ -26,8 +29,12 @@ public class MainWindowViewModel : ViewModelBase
     private const int ID_SNIP = 9000;
     private const int ID_COPY = 9001;
     private const int ID_PIN = 9002;
+    private const int ID_RECORD = 9003;
 
-    public enum CaptureMode { Normal, Copy, Pin }
+    public enum CaptureMode { Normal, Copy, Pin, Record }
+
+    public FFmpegDownloaderService FfmpegDownloader { get; } = new();
+    public RecordingService RecordingService { get; }
 
     // Commands
     public ReactiveCommand<CaptureMode, Unit> StartCaptureCommand { get; }
@@ -50,6 +57,7 @@ public class MainWindowViewModel : ViewModelBase
     public MainWindowViewModel()
     {
         _settingsService = new Services.AppSettingsService();
+        RecordingService = new RecordingService(FfmpegDownloader);
         
         // Sync ViewModel with Service using ReactiveUI
         // When Service language changes, notify ViewModel properties to update
@@ -81,6 +89,10 @@ public class MainWindowViewModel : ViewModelBase
             {
                 // Must run on UI thread if it involves UI updates
                 Avalonia.Threading.Dispatcher.UIThread.Post(() => StartCaptureCommand.Execute(CaptureMode.Normal));
+            }
+            else if (id == ID_RECORD)
+            {
+                Avalonia.Threading.Dispatcher.UIThread.Post(() => StartCaptureCommand.Execute(CaptureMode.Record));
             }
         };
 
@@ -200,6 +212,49 @@ public class MainWindowViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _pinHotkey, value);
     }
 
+    private string _recordHotkey = "F2";
+    public string RecordHotkey
+    {
+        get => _recordHotkey;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _recordHotkey, value);
+            HotkeyService.Register(ID_RECORD, value);
+        }
+    }
+
+    private string _videoSaveDirectory = string.Empty;
+    public string VideoSaveDirectory
+    {
+        get => _videoSaveDirectory;
+        set => this.RaiseAndSetIfChanged(ref _videoSaveDirectory, value);
+    }
+
+    private string _recordFormat = "mp4";
+    public string RecordFormat
+    {
+        get => _recordFormat;
+        set => this.RaiseAndSetIfChanged(ref _recordFormat, value);
+    }
+
+    private bool _useFixedRecordPath;
+    public bool UseFixedRecordPath
+    {
+        get => _useFixedRecordPath;
+        set => this.RaiseAndSetIfChanged(ref _useFixedRecordPath, value);
+    }
+
+    public string[] AvailableRecordFormats { get; } = { "mp4", "mkv", "gif", "webm", "mov" };
+
+    public async Task SelectVideoPath()
+    {
+        if (PickFolderAction != null)
+        {
+            var path = await PickFolderAction();
+            if (!string.IsNullOrEmpty(path)) VideoSaveDirectory = path;
+        }
+    }
+
     public async Task LoadSettingsAsync()
     {
         await _settingsService.LoadAsync();
@@ -229,15 +284,31 @@ public class MainWindowViewModel : ViewModelBase
             ThemeColor = Color.Parse("#E60012");
         }
 
+        VideoSaveDirectory = s.VideoSaveDirectory;
+        if (string.IsNullOrEmpty(VideoSaveDirectory))
+        {
+            VideoSaveDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyVideos), "GimmeCapture");
+            if (!Directory.Exists(VideoSaveDirectory)) Directory.CreateDirectory(VideoSaveDirectory);
+        }
+
+        RecordFormat = s.RecordFormat;
+        UseFixedRecordPath = s.UseFixedRecordPath;
+        RecordHotkey = s.RecordHotkey;
+
         // Load Language
         Services.LocalizationService.Instance.CurrentLanguage = s.Language;
 
-        // Register initial hotkey (ensure UI thread or safe context? Service handles P/Invoke which is thread-tied usually)
-        // Ideally we register on UI thread, but LoadSettingsAsync is background here. 
-        // We will dispatch to UI thread to be safe as the handle belongs to UI thread.
+        // Register initial hotkeys
         Avalonia.Threading.Dispatcher.UIThread.Post(() => {
             HotkeyService.Register(ID_SNIP, SnipHotkey);
+            HotkeyService.Register(ID_RECORD, RecordHotkey);
         });
+
+        // Initialize FFmpeg Download if missing
+        if (!FfmpegDownloader.IsFFmpegAvailable())
+        {
+            await FfmpegDownloader.EnsureFFmpegAsync();
+        }
     }
 
     public async Task SaveSettingsAsync()
@@ -253,9 +324,13 @@ public class MainWindowViewModel : ViewModelBase
         s.SnipHotkey = SnipHotkey;
         s.CopyHotkey = CopyHotkey;
         s.PinHotkey = PinHotkey;
+        s.RecordHotkey = RecordHotkey;
         s.BorderColorHex = BorderColor.ToString();
         s.ThemeColorHex = ThemeColor.ToString();
         s.Language = Services.LocalizationService.Instance.CurrentLanguage;
+        s.VideoSaveDirectory = VideoSaveDirectory;
+        s.RecordFormat = RecordFormat;
+        s.UseFixedRecordPath = UseFixedRecordPath;
         
         await _settingsService.SaveAsync();
     }

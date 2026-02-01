@@ -80,6 +80,18 @@ public partial class MainWindow : Window
             // Initialize Hotkey Service with this Window
             vm.HotkeyService.Initialize(this);
 
+            vm.PickFolderAction = async () =>
+            {
+                var storage = this.StorageProvider;
+                var folders = await storage.OpenFolderPickerAsync(new Avalonia.Platform.Storage.FolderPickerOpenOptions
+                {
+                    Title = "選擇錄影儲存資料夾",
+                    AllowMultiple = false
+                });
+
+                return folders.Count > 0 ? folders[0].Path.LocalPath : null;
+            };
+
             vm.RequestCaptureAction = (mode) =>
             {
                 var desktop = Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime;
@@ -125,9 +137,15 @@ public partial class MainWindow : Window
                 var snipVm = new SnipWindowViewModel(
                     vm?.BorderColor ?? Color.Parse("#E60012"), 
                     vm?.BorderThickness ?? 2, 
-                    vm?.MaskOpacity ?? 0.5
+                    vm?.MaskOpacity ?? 0.5,
+                    vm?.RecordingService,
+                    vm
                 );
                 snipVm.AutoActionMode = (int)mode;
+                if (mode == MainWindowViewModel.CaptureMode.Record)
+                {
+                    snipVm.IsRecordingMode = true;
+                }
                 snip.DataContext = snipVm;
                 snip.Show();
             };

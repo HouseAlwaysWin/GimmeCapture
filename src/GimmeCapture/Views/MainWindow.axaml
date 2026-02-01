@@ -205,12 +205,32 @@
                 </StackPanel>
             </TabItem>
             
+            <!-- Recording Tab -->
+            <TabItem Header="{Binding [TabRecord], Source={x:Static services:LocalizationService.Instance}}">
+                <StackPanel Spacing="10" Margin="10">
+                    <TextBlock Text="{Binding [TabRecord], Source={x:Static services:LocalizationService.Instance}}" FontWeight="Bold" Margin="0,0,0,5"/>
+                    
+                    <Grid RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="Auto, 10, *">
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding [VideoFormat], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center"/>
+                        <ComboBox Grid.Row="0" Grid.Column="2" ItemsSource="{Binding AvailableRecordFormats}" SelectedItem="{Binding RecordFormat}" HorizontalAlignment="Stretch"/>
+
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="{Binding [VideoPath], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,10,0,0"/>
+                        <DockPanel Grid.Row="1" Grid.Column="2" Margin="0,10,0,0">
+                            <Button Content="{Binding [SelectPath], Source={x:Static services:LocalizationService.Instance}}" DockPanel.Dock="Right" Command="{Binding SelectVideoPath}" Margin="5,0,0,0"/>
+                            <TextBox Text="{Binding VideoSaveDirectory}" IsReadOnly="True"/>
+                        </DockPanel>
+
+                        <CheckBox Grid.Row="2" Grid.Column="2" Content="{Binding [FixedPath], Source={x:Static services:LocalizationService.Instance}}" IsChecked="{Binding UseFixedRecordPath}" Margin="0,10,0,0"/>
+                    </Grid>
+                </StackPanel>
+            </TabItem>
+            
             <!-- 控制 (Control/Hotkeys) -->
             <TabItem Header="{Binding [TabControl], Source={x:Static services:LocalizationService.Instance}}">
                 <StackPanel Spacing="10" Margin="10">
                     <TextBlock Text="{Binding [GlobalHotkeys], Source={x:Static services:LocalizationService.Instance}}" FontWeight="Bold" Margin="0,0,0,5"/>
                     
-                    <Grid ColumnDefinitions="Auto, 10, *" RowDefinitions="Auto, 10, Auto, 10, Auto">
+                    <Grid ColumnDefinitions="Auto, 10, *" RowDefinitions="Auto, Auto, Auto, Auto">
                         <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding [SnipHotkey], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center"/>
                         <TextBox Grid.Row="0" Grid.Column="2" 
                                  Text="{Binding SnipHotkey, Mode=OneWay}" 
@@ -219,20 +239,31 @@
                                  Name="SnipHotkeyBox"
                                  KeyDown="HotkeyTextBox_KeyDown"/>
 
-                        <TextBlock Grid.Row="2" Grid.Column="0" Text="{Binding [CopyHotkey], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center"/>
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="{Binding [RecordHotkey], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,10,0,0"/>
+                        <TextBox Grid.Row="1" Grid.Column="2" 
+                                 Text="{Binding RecordHotkey, Mode=OneWay}" 
+                                 Watermark="點擊此處並按下按鈕進行設定"
+                                 IsReadOnly="True"
+                                 Name="RecordHotkeyBox"
+                                 Margin="0,10,0,0"
+                                 KeyDown="HotkeyTextBox_KeyDown"/>
+
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="{Binding [CopyHotkey], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,10,0,0"/>
                         <TextBox Grid.Row="2" Grid.Column="2" 
                                  Text="{Binding CopyHotkey, Mode=OneWay}" 
                                  Watermark="點擊此處並按下按鈕進行設定"
                                  IsReadOnly="True"
                                  Name="CopyHotkeyBox"
+                                 Margin="0,10,0,0"
                                  KeyDown="HotkeyTextBox_KeyDown"/>
 
-                        <TextBlock Grid.Row="4" Grid.Column="0" Text="{Binding [PinHotkey], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center"/>
-                        <TextBox Grid.Row="4" Grid.Column="2" 
+                        <TextBlock Grid.Row="3" Grid.Column="0" Text="{Binding [PinHotkey], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,10,0,0"/>
+                        <TextBox Grid.Row="3" Grid.Column="2" 
                                  Text="{Binding PinHotkey, Mode=OneWay}" 
                                  Watermark="點擊此處並按下按鈕進行設定"
                                  IsReadOnly="True"
                                  Name="PinHotkeyBox"
+                                 Margin="0,10,0,0"
                                  KeyDown="HotkeyTextBox_KeyDown"/>
                     </Grid>
                     
@@ -253,10 +284,17 @@
         <!-- Bottom Actions -->
         <Border Grid.Row="1" BorderBrush="#1E1E1E" BorderThickness="0,1,0,0" Padding="0,10,0,0">
             <Grid ColumnDefinitions="Auto,*,Auto,Auto">
-                <!-- Test Button / Main Action -->
-                <Button Grid.Column="0" Content="{Binding [StartCapture], Source={x:Static services:LocalizationService.Instance}}" Theme="{StaticResource MetalButton}" Command="{Binding StartCaptureCommand}" />
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10">
+                    <Button Content="{Binding [StartCapture], Source={x:Static services:LocalizationService.Instance}}" Theme="{StaticResource MetalButton}" Command="{Binding StartCaptureCommand}" />
+                    
+                    <!-- FFmpeg Status -->
+                    <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center" IsVisible="{Binding FfmpegDownloader.IsDownloading}">
+                        <TextBlock Text="FFmpeg Downloading..." FontSize="11" Foreground="Gray"/>
+                        <ProgressBar Value="{Binding FfmpegDownloader.DownloadProgress}" Minimum="0" Maximum="100" Width="100" Height="4"/>
+                    </StackPanel>
+                </StackPanel>
                 
-                <TextBlock Grid.Column="1" Text="{Binding StatusText}" VerticalAlignment="Center" Margin="10,0" Foreground="Gray"/>
+                <TextBlock Grid.Column="1" Text="{Binding StatusText}" VerticalAlignment="Center" Margin="10,0" Foreground="Gray" FontSize="11"/>
 
                 <Button Grid.Column="2" Content="{Binding [SaveSettings], Source={x:Static services:LocalizationService.Instance}}" Theme="{StaticResource MetalButton}" Margin="0,0,10,0" Command="{Binding SaveAndCloseCommand}"/>
                 <Button Grid.Column="3" Content="{Binding [ResetDefault], Source={x:Static services:LocalizationService.Instance}}" Theme="{StaticResource MetalButton}" Command="{Binding ResetToDefaultCommand}"/>

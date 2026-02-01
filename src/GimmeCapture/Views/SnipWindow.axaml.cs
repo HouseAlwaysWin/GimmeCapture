@@ -173,15 +173,20 @@ public partial class SnipWindow : Window
                  var topLevel = TopLevel.GetTopLevel(this);
                  if (topLevel == null) return null;
                  
+                 bool isRecording = _viewModel.IsRecordingMode;
+                 string defaultExt = isRecording ? "mp4" : "png";
+                 string fileTypeName = isRecording ? "Video File" : "PNG Image";
+                 string pattern = $"*.{defaultExt}";
+                 
                  var file = await topLevel.StorageProvider.SaveFilePickerAsync(new Avalonia.Platform.Storage.FilePickerSaveOptions
                  {
-                     Title = "Save Screenshot",
-                     DefaultExtension = "png",
+                     Title = isRecording ? "Save Recording" : "Save Screenshot",
+                     DefaultExtension = defaultExt,
                      ShowOverwritePrompt = true,
                      SuggestedFileName = $"Capture_{DateTime.Now:yyyyMMdd_HHmmss}",
                      FileTypeChoices = new[]
                      {
-                         new Avalonia.Platform.Storage.FilePickerFileType("PNG Image") { Patterns = new[] { "*.png" } }
+                         new Avalonia.Platform.Storage.FilePickerFileType(fileTypeName) { Patterns = new[] { pattern } }
                      }
                  });
                  
@@ -672,6 +677,20 @@ public partial class SnipWindow : Window
         if (e.Key == Key.Escape)
         {
             Close();
+        }
+        else if (e.Key == Key.S && e.KeyModifiers.HasFlag(KeyModifiers.Control))
+        {
+            if (_viewModel != null)
+            {
+                if (_viewModel.IsRecordingMode)
+                {
+                    _viewModel.StopRecordingCommand.Execute().Subscribe();
+                }
+                else
+                {
+                    _viewModel.SaveCommand.Execute().Subscribe();
+                }
+            }
         }
     }
     

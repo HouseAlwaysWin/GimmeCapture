@@ -26,12 +26,36 @@ public class SnipWindowViewModel : ViewModelBase
         set
         {
             this.RaiseAndSetIfChanged(ref _currentState, value);
-            if (value == SnipState.Selected && AutoActionMode > 0)
+            if (value == SnipState.Selected && AutoActionMode > 0 && AutoActionMode < 3)
             {
                 TriggerAutoAction();
             }
         }
     }
+
+    private bool _isRecordingMode;
+    public bool IsRecordingMode
+    {
+        get => _isRecordingMode;
+        set => this.RaiseAndSetIfChanged(ref _isRecordingMode, value);
+    }
+
+    private TimeSpan _recordingDuration = TimeSpan.Zero;
+    public TimeSpan RecordingDuration
+    {
+        get => _recordingDuration;
+        set 
+        {
+            this.RaiseAndSetIfChanged(ref _recordingDuration, value);
+            this.RaisePropertyChanged(nameof(RecordingDurationText));
+        }
+    }
+
+    public string RecordingDurationText => RecordingDuration.ToString(@"mm\:ss");
+
+    private Avalonia.Threading.DispatcherTimer? _recordTimer;
+    private readonly RecordingService? _recordingService;
+    private readonly MainWindowViewModel? _mainVm;
 
     private PixelPoint _screenOffset;
     public PixelPoint ScreenOffset
@@ -354,19 +378,37 @@ public class SnipWindowViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _maskOpacity, value);
     }
 
-    public SnipWindowViewModel()
+    public SnipWindowViewModel() : this(Colors.Red, 2.0, 0.5, null, null) { }
+
+    public SnipWindowViewModel(Color borderColor, double borderThickness, double maskOpacity, RecordingService? recService = null, MainWindowViewModel? mainVm = null)
     {
         _captureService = new Services.ScreenCaptureService();
+        _selectionBorderColor = borderColor;
+        _selectionBorderThickness = borderThickness;
+        _maskOpacity = maskOpacity;
+        _recordingService = recService;
+        _mainVm = mainVm;
+
+        if (_recordingService != null)
+        {
+            _recordingService.WhenAnyValue(x => x.State)
+                .Subscribe(_ => this.RaisePropertyChanged(nameof(RecState)));
+        }
 
         CopyCommand = ReactiveCommand.CreateFromTask(Copy);
         SaveCommand = ReactiveCommand.CreateFromTask(Save);
         PinCommand = ReactiveCommand.CreateFromTask(Pin);
         CloseCommand = ReactiveCommand.Create(Close);
-        UndoCommand = ReactiveCommand.Create(Undo);
-        RedoCommand = ReactiveCommand.Create(Redo);
-        ClearCommand = ReactiveCommand.Create(() => Annotations.Clear()); // Clear remains destructive for now
 
-        // Monitor for new user actions to clear Redo stack
+        ToggleModeCommand = ReactiveCommand.Create(() => 
+        {
+            if (RecState == RecordingState.Idle) IsRecordingMode = !IsRecordingMode;
+        });
+
+        StartRecordingCommand = ReactiveCommand.CreateFromTask(StartRecording);
+        PauseRecordingCommand = ReactiveCommand.CreateFromTask(PauseRecording);
+        StopRecordingCommand = ReactiveCommand.CreateFromTask(StopRecording);
+
         Annotations.CollectionChanged += (s, e) =>
         {
             if (!_isUndoingOrRedoing)
@@ -387,14 +429,16 @@ public class SnipWindowViewModel : ViewModelBase
                 IsDrawingMode = true; 
             }
         });
-
+        
         ChangeColorCommand = ReactiveCommand.Create<Color>(c => SelectedColor = c);
-        
-        IncreaseThicknessCommand = ReactiveCommand.Create(() => { if (CurrentThickness < 9) CurrentThickness += 1; });
+        UndoCommand = ReactiveCommand.Create(Undo);
+        RedoCommand = ReactiveCommand.Create(Redo);
+        ClearCommand = ReactiveCommand.Create(() => Annotations.Clear());
+
+        IncreaseThicknessCommand = ReactiveCommand.Create(() => { if (CurrentThickness < 20) CurrentThickness += 1; });
         DecreaseThicknessCommand = ReactiveCommand.Create(() => { if (CurrentThickness > 1) CurrentThickness -= 1; });
-        
-        IncreaseFontSizeCommand = ReactiveCommand.Create(() => { if (CurrentFontSize < 60) CurrentFontSize += 2; });
-        DecreaseFontSizeCommand = ReactiveCommand.Create(() => { if (CurrentFontSize > 10) CurrentFontSize -= 2; });
+        IncreaseFontSizeCommand = ReactiveCommand.Create(() => { if (CurrentFontSize < 72) CurrentFontSize += 2; });
+        DecreaseFontSizeCommand = ReactiveCommand.Create(() => { if (CurrentFontSize > 8) CurrentFontSize -= 2; });
         
         ApplyHexColorCommand = ReactiveCommand.Create(() => 
         {
@@ -409,26 +453,105 @@ public class SnipWindowViewModel : ViewModelBase
                     SelectedColor = Color.FromRgb(r, g, b);
                 }
             }
-            catch { /* Invalid hex */ }
+            catch { }
         });
 
         ChangeLanguageCommand = ReactiveCommand.Create(() => LocalizationService.Instance.CycleLanguage());
-        ToggleBoldCommand = ReactiveCommand.Create(() => IsBold = !IsBold);
-        ToggleItalicCommand = ReactiveCommand.Create(() => IsItalic = !IsItalic);
+        ToggleBoldCommand = ReactiveCommand.Create<Unit, bool>(_ => IsBold = !IsBold);
+        ToggleItalicCommand = ReactiveCommand.Create<Unit, bool>(_ => IsItalic = !IsItalic);
 
-        UpdateMask(); // Initial mask
+        UpdateMask();
     }
 
-    public SnipWindowViewModel(Color borderColor, double thickness, double opacity) : this()
+    public RecordingState RecState => _recordingService?.State ?? RecordingState.Idle;
+
+    public ReactiveCommand<Unit, Unit> ToggleModeCommand { get; }
+    public ReactiveCommand<Unit, Unit> StartRecordingCommand { get; }
+    public ReactiveCommand<Unit, Unit> PauseRecordingCommand { get; }
+    public ReactiveCommand<Unit, Unit> StopRecordingCommand { get; }
+
+    private async Task StartRecording()
     {
-        SelectionBorderColor = borderColor;
-        SelectionBorderThickness = thickness;
-        MaskOpacity = opacity;
+        if (_recordingService == null || _mainVm == null) return;
+        
+        if (_mainVm.UseFixedRecordPath)
+        {
+            string fileName = $"Capture_{DateTime.Now:yyyyMMdd_HHmmss}.{_mainVm.RecordFormat}";
+            _currentRecordingPath = System.IO.Path.Combine(_mainVm.VideoSaveDirectory, fileName);
+        }
+        else
+        {
+            _currentRecordingPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"GimmeCapture_Temp_{Guid.NewGuid()}.{_mainVm.RecordFormat}");
+        }
 
-        // Tool defaults - SelectedColor syncs with border, but CurrentThickness stays independent
-        SelectedColor = borderColor;
-        // CurrentThickness remains at its default value (2.0) - no longer inherits from MainWindow
+        // Convert window-relative SelectionRect to screen-absolute coordinates
+        var screenRect = new Rect(
+            SelectionRect.X + ScreenOffset.X,
+            SelectionRect.Y + ScreenOffset.Y,
+            SelectionRect.Width,
+            SelectionRect.Height
+        );
+
+        if (await _recordingService.StartAsync(screenRect, _currentRecordingPath, _mainVm.RecordFormat))
+        {
+            RecordingDuration = TimeSpan.Zero;
+            _recordTimer = new Avalonia.Threading.DispatcherTimer
+            {
+                Interval = TimeSpan.FromSeconds(1)
+            };
+            _recordTimer.Tick += (s, e) => {
+                if (RecState == RecordingState.Recording)
+                    RecordingDuration = RecordingDuration.Add(TimeSpan.FromSeconds(1));
+            };
+            _recordTimer.Start();
+        }
     }
+
+    private async Task PauseRecording()
+    {
+        if (_recordingService == null) return;
+        if (RecState == RecordingState.Recording) await _recordingService.PauseAsync();
+        else if (RecState == RecordingState.Paused) await _recordingService.ResumeAsync();
+    }
+
+    private async Task StopRecording()
+    {
+        if (_recordingService == null || _mainVm == null) return;
+        
+        _recordTimer?.Stop();
+        await _recordingService.StopAsync();
+
+        // Check if we need to prompt
+        if (!_mainVm.UseFixedRecordPath && PickSaveFileAction != null && !string.IsNullOrEmpty(_currentRecordingPath))
+        {
+            if (System.IO.File.Exists(_currentRecordingPath))
+            {
+                var targetPath = await PickSaveFileAction();
+                if (!string.IsNullOrEmpty(targetPath))
+                {
+                    try
+                    {
+                        if (System.IO.File.Exists(targetPath)) System.IO.File.Delete(targetPath);
+                        System.IO.File.Move(_currentRecordingPath, targetPath);
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Failed to move recording: {ex.Message}");
+                    }
+                }
+                else
+                {
+                    // User cancelled, maybe delete temp? 
+                    // Better to keep it in temp or delete? User might want it later.
+                    // For now, let it be.
+                }
+            }
+        }
+
+        CloseAction?.Invoke();
+    }
+
+    private string? _currentRecordingPath;
 
     public ReactiveCommand<Color, Unit> ChangeColorCommand { get; }
     public ReactiveCommand<Unit, Unit> IncreaseThicknessCommand { get; }

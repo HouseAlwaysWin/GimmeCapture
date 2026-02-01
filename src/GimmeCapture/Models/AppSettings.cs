@@ -17,9 +17,13 @@ public class AppSettings
     // Output
     public bool AutoSave { get; set; }
     public string SaveDirectory { get; set; } = string.Empty;
+    public string VideoSaveDirectory { get; set; } = string.Empty;
+    public string RecordFormat { get; set; } = "mp4";
+    public bool UseFixedRecordPath { get; set; }
     
     // Hotkeys
     public string SnipHotkey { get; set; } = "F1";
     public string CopyHotkey { get; set; } = "Ctrl+C";
     public string PinHotkey { get; set; } = "F3";
+    public string RecordHotkey { get; set; } = "F2";
 }

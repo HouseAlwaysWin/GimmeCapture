@@ -112,7 +112,20 @@ namespace GimmeCapture.Services
                     ["MenuSaveImage"] = "Save Image As...",
                     ["MenuShowToolbar"] = "Show Toolbar",
                     ["MenuWindowShadow"] = "Window Shadow",
-                    ["MenuClose"] = "Close"
+                    ["MenuClose"] = "Close",
+
+                    // Recording
+                    ["TabRecord"] = "Record",
+                    ["VideoFormat"] = "Output Format:",
+                    ["VideoPath"] = "Output Folder:",
+                    ["FixedPath"] = "Use Fixed Output Path",
+                    ["RecordHotkey"] = "Record Hotkey:",
+                    ["Record"] = "Record",
+                    ["Pause"] = "Pause",
+                    ["Stop"] = "Stop",
+                    ["TipRecord"] = "Record (F2)",
+                    ["TipSnipMode"] = "Switch to Snip Mode",
+                    ["TipRecordMode"] = "Switch to Record Mode"
                 },
                 [Language.Chinese] = new Dictionary<string, string>
                 {
@@ -170,7 +183,20 @@ namespace GimmeCapture.Services
                     ["MenuSaveImage"] = "圖像另存為...",
                     ["MenuShowToolbar"] = "顯示工具列",
                     ["MenuWindowShadow"] = "視窗陰影",
-                    ["MenuClose"] = "關閉"
+                    ["MenuClose"] = "關閉",
+
+                    // Recording
+                    ["TabRecord"] = "錄影",
+                    ["VideoFormat"] = "輸出格式:",
+                    ["VideoPath"] = "輸出資料夾:",
+                    ["FixedPath"] = "使用固定輸出路徑",
+                    ["RecordHotkey"] = "錄影熱鍵 (Record):",
+                    ["Record"] = "錄影",
+                    ["Pause"] = "暫停",
+                    ["Stop"] = "停止",
+                    ["TipRecord"] = "錄影 (F2)",
+                    ["TipSnipMode"] = "切換至擷圖模式",
+                    ["TipRecordMode"] = "切換至錄影模式"
                 },
                 [Language.Japanese] = new Dictionary<string, string>
                 {
@@ -228,7 +254,20 @@ namespace GimmeCapture.Services
                     ["MenuSaveImage"] = "名前を付けて画像を保存...",
                     ["MenuShowToolbar"] = "ツールバーを表示",
                     ["MenuWindowShadow"] = "ウィンドウの影",
-                    ["MenuClose"] = "閉じる"
+                    ["MenuClose"] = "閉じる",
+
+                    // Recording
+                    ["TabRecord"] = "録画",
+                    ["VideoFormat"] = "出力形式:",
+                    ["VideoPath"] = "出力フォルダー:",
+                    ["FixedPath"] = "固定出力パスを使用する",
+                    ["RecordHotkey"] = "録画ホットキー:",
+                    ["Record"] = "録画",
+                    ["Pause"] = "一時停止",
+                    ["Stop"] = "停止",
+                    ["TipRecord"] = "録画 (F2)",
+                    ["TipSnipMode"] = "スニップモードに切り替える",
+                    ["TipRecordMode"] = "録画モードに切り替える"
                 }
             };
 

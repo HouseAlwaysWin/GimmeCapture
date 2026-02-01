@@ -35,7 +35,7 @@ bld/
 Generated\ Files/
 
 # Visual Studio Code
-.vscode/
+# .vscode/
 
 # Avalonia
 *.Avalonia.user

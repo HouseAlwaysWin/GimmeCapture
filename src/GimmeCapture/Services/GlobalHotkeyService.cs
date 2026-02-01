@@ -163,7 +163,14 @@ public class GlobalHotkeyService : IDisposable
             int id = wParam.ToInt32();
             if (_registeredIds.Contains(id))
             {
-                OnHotkeyPressed?.Invoke(id);
+                try
+                {
+                    OnHotkeyPressed?.Invoke(id);
+                }
+                catch (System.Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Error in hotkey callback: {ex}");
+                }
             }
         }
         
