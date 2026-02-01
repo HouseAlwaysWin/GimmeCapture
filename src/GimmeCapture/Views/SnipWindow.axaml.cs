@@ -102,6 +102,12 @@ public partial class SnipWindow : Window
         // Defer Z-Order logic to ensure window is fully initialized
         Avalonia.Threading.Dispatcher.UIThread.Post(() =>
         {
+            if (_viewModel != null)
+            {
+                _viewModel.ScreenOffset = this.Position;
+                _viewModel.RefreshWindowRects(this.TryGetPlatformHandle()?.Handle);
+            }
+
             // Ensure SnipWindow is absolutely on top of everything
             this.Topmost = true;
             this.Activate(); 
@@ -324,7 +330,7 @@ public partial class SnipWindow : Window
         }
         if (props.IsLeftButtonPressed)
         {
-            if (_viewModel.IsDrawingMode && _viewModel.CurrentState == SnipWindowViewModel.SnipState.Selected)
+            if (_viewModel.IsDrawingMode && _viewModel.CurrentState == SnipState.Selected)
             {
                 // Logic: If in drawing mode and clicked INSIDE the selection area, draw.
                 if (_viewModel.SelectionRect.Contains(point))
@@ -406,17 +412,20 @@ public partial class SnipWindow : Window
                 }
             }
             
-            if (_viewModel.CurrentState == SnipWindowViewModel.SnipState.Idle || 
-                _viewModel.CurrentState == SnipWindowViewModel.SnipState.Detecting ||
+            if (_viewModel.CurrentState == SnipState.Idle || 
+                _viewModel.CurrentState == SnipState.Detecting ||
                 (!_viewModel.SelectionRect.Contains(point) && !_viewModel.IsDrawingMode))
             {
                 _startPoint = point;
-                _viewModel.CurrentState = SnipWindowViewModel.SnipState.Selecting;
+                
+                // If we are in Detecting state and clicked, we MIGHT adopted the DetectedRect on release.
+                // For now, we transition to Selecting but keep track of start point.
+                _viewModel.CurrentState = SnipState.Selecting;
                 _viewModel.SelectionRect = new Rect(_startPoint, new Size(0, 0));
                 _viewModel.IsDrawingMode = false; // Exit drawing mode when starting new selection
                 _viewModel.Annotations.Clear(); // Clear previous annotations when starting new selection
             }
-            else if (_viewModel.CurrentState == SnipWindowViewModel.SnipState.Selected && 
+            else if (_viewModel.CurrentState == SnipState.Selected && 
                      !_viewModel.IsDrawingMode &&
                      _viewModel.SelectionRect.Contains(point))
             {
@@ -429,11 +438,11 @@ public partial class SnipWindow : Window
         }
         else if (props.IsRightButtonPressed)
         {
-            if (_viewModel.CurrentState == SnipWindowViewModel.SnipState.Selecting || 
-                _viewModel.CurrentState == SnipWindowViewModel.SnipState.Selected)
+            if (_viewModel.CurrentState == SnipState.Selecting || 
+                _viewModel.CurrentState == SnipState.Selected)
             {
                 // Reset to Idle
-                _viewModel.CurrentState = SnipWindowViewModel.SnipState.Idle;
+                _viewModel.CurrentState = SnipState.Idle;
                 _viewModel.SelectionRect = new Rect(0,0,0,0);
             }
             else
@@ -470,7 +479,7 @@ public partial class SnipWindow : Window
         {
              // Handled by XAML/Capture
         }
-        else if (_viewModel.CurrentState == SnipWindowViewModel.SnipState.Selected)
+        else if (_viewModel.CurrentState == SnipState.Selected)
         {
             bool cursorSet = false;
 
@@ -584,7 +593,7 @@ public partial class SnipWindow : Window
              return;
         }
 
-        if (_viewModel.CurrentState == SnipWindowViewModel.SnipState.Selecting)
+        if (_viewModel.CurrentState == SnipState.Selecting)
         {
             var x = Math.Min(_startPoint.X, currentPoint.X);
             var y = Math.Min(_startPoint.Y, currentPoint.Y);
@@ -593,7 +602,11 @@ public partial class SnipWindow : Window
 
             _viewModel.SelectionRect = new Rect(x, y, width, height);
         }
-        else if (_viewModel.CurrentState == SnipWindowViewModel.SnipState.Selected && _currentAnnotation != null)
+        else if (_viewModel.CurrentState == SnipState.Detecting)
+        {
+            _viewModel.UpdateDetectedRect(currentPoint);
+        }
+        else if (_viewModel.CurrentState == SnipState.Selected && _currentAnnotation != null)
         {
             // Update Drawing
             var relPoint = new Point(currentPoint.X - _viewModel.SelectionRect.X, currentPoint.Y - _viewModel.SelectionRect.Y);
@@ -606,10 +619,6 @@ public partial class SnipWindow : Window
                 _currentAnnotation.EndPoint = relPoint;
             }
         }
-        else if (_viewModel.CurrentState == SnipWindowViewModel.SnipState.Idle)
-        {
-            // TODO: Window Auto-detection logic here later
-        }
     }
 
     private void OnPointerReleased(object? sender, PointerReleasedEventArgs e)
@@ -621,7 +630,7 @@ public partial class SnipWindow : Window
              _isResizing = false;
             _resizeDirection = ResizeDirection.None;
             // Ensure state is Selected
-             _viewModel.CurrentState = SnipWindowViewModel.SnipState.Selected;
+             _viewModel.CurrentState = SnipState.Selected;
              return;
         }
 
@@ -638,9 +647,18 @@ public partial class SnipWindow : Window
             return;
         }
         
-        if (_viewModel.CurrentState == SnipWindowViewModel.SnipState.Selecting)
+        if (_viewModel.CurrentState == SnipState.Selecting)
         {
-             _viewModel.CurrentState = SnipWindowViewModel.SnipState.Selected;
+             // Check if we should adopt the DetectedRect (if move distance is small)
+             var currentPoint = e.GetPosition(this);
+             var dist = Math.Sqrt(Math.Pow(currentPoint.X - _startPoint.X, 2) + Math.Pow(currentPoint.Y - _startPoint.Y, 2));
+             
+             if (dist < 5 && _viewModel.DetectedRect.Width > 0)
+             {
+                 _viewModel.SelectionRect = _viewModel.DetectedRect;
+             }
+             
+             _viewModel.CurrentState = SnipState.Selected;
         }
 
         if (_currentAnnotation != null)

@@ -7,6 +7,7 @@ using System.Reactive;
 using System.Threading.Tasks;
 using System.ComponentModel;
 
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using GimmeCapture.Models;
 using System.Linq;
@@ -14,11 +15,11 @@ using GimmeCapture.Services;
 
 namespace GimmeCapture.ViewModels;
 
+public enum SnipState { Idle, Detecting, Selecting, Selected }
+
 public class SnipWindowViewModel : ViewModelBase
 {
-    public enum SnipState { Idle, Detecting, Selecting, Selected }
-
-    private SnipState _currentState = SnipState.Idle;
+    private SnipState _currentState = SnipState.Detecting;
     public SnipState CurrentState
     {
         get => _currentState;
@@ -30,6 +31,47 @@ public class SnipWindowViewModel : ViewModelBase
                 TriggerAutoAction();
             }
         }
+    }
+
+    private PixelPoint _screenOffset;
+    public PixelPoint ScreenOffset
+    {
+        get => _screenOffset;
+        set => this.RaiseAndSetIfChanged(ref _screenOffset, value);
+    }
+
+    private Rect _detectedRect;
+    public Rect DetectedRect
+    {
+        get => _detectedRect;
+        set => this.RaiseAndSetIfChanged(ref _detectedRect, value);
+    }
+
+    public List<Rect> WindowRects { get; set; } = new();
+    private readonly WindowDetectionService _detectionService = new();
+
+    public void RefreshWindowRects(IntPtr? excludeHWnd = null)
+    {
+        // Get global rects
+        var globalRects = _detectionService.GetVisibleWindowRects(excludeHWnd);
+        
+        // Translate to local coordinates based on ScreenOffset
+        WindowRects = globalRects
+            .Select(r => new Rect(r.X - ScreenOffset.X, r.Y - ScreenOffset.Y, r.Width, r.Height))
+            .ToList();
+    }
+
+    public void UpdateDetectedRect(Point mousePos)
+    {
+        if (CurrentState != SnipState.Detecting) return;
+        
+        var rect = _detectionService.GetRectAtPoint(mousePos, WindowRects);
+        
+        // Simple heuristic: if the detected rect is basically the whole screen, might be the SnipWindow itself
+        // or the desktop. We should be careful about selecting the SnipWindow.
+        // But SnipWindow is newly created, should be fine if we filter by size or something if needed.
+        
+        DetectedRect = rect ?? new Rect(0,0,0,0);
     }
 
     private int _autoActionMode = 0; // 0=Normal, 1=Copy, 2=Pin

@@ -43,6 +43,29 @@
         <!-- 背景遮罩層 -->
         <Path Fill="Black" Data="{Binding MaskGeometry}" Opacity="{Binding MaskOpacity}" IsHitTestVisible="False"/>
         
+        <!-- Detection Preview Layer (Shows when detecting) -->
+        <Canvas IsHitTestVisible="False">
+            <Rectangle Stroke="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}"
+                       StrokeThickness="2"
+                       StrokeDashArray="4,2"
+                       IsVisible="{Binding !!DetectedRect.Width}"
+                       Width="{Binding DetectedRect.Width}"
+                       Height="{Binding DetectedRect.Height}"
+                       Canvas.Left="{Binding DetectedRect.X}"
+                       Canvas.Top="{Binding DetectedRect.Y}">
+                <Rectangle.Opacity>
+                    <Binding Path="CurrentState">
+                        <Binding.Converter>
+                            <cv:EnumMatchConverter/>
+                        </Binding.Converter>
+                        <Binding.ConverterParameter>
+                            <x:Static Member="vm:SnipState.Detecting"/>
+                        </Binding.ConverterParameter>
+                    </Binding>
+                </Rectangle.Opacity>
+            </Rectangle>
+        </Canvas>
+        
         <!-- Annotation Layer (Rendered below handles but above mask) -->
         <Canvas IsHitTestVisible="False">
             <ItemsControl ItemsSource="{Binding Annotations}"
