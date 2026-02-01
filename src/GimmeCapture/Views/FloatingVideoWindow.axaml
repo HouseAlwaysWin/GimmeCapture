@@ -1,0 +1,72 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="using:GimmeCapture.ViewModels"
+        xmlns:services="using:GimmeCapture.Services"
+        mc:Ignorable="d" d:DesignWidth="300" d:DesignHeight="300"
+        x:Class="GimmeCapture.Views.FloatingVideoWindow"
+        x:DataType="vm:FloatingVideoViewModel"
+        Title="Pinned Video"
+        SystemDecorations="None"
+        Topmost="True"
+        SizeToContent="Manual"
+        Background="Transparent"
+        FontFamily="{Binding CurrentFontFamily, Source={x:Static services:LocalizationService.Instance}}"
+        ShowInTaskbar="False">
+        
+    <Window.Styles>
+        <Style Selector="Grid.Handle">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+    </Window.Styles>
+    
+    <Grid Background="Transparent">
+        <!-- Gothic/BABYMETAL Style Border -->
+        <Border Margin="10"
+                CornerRadius="0"
+                Background="{DynamicResource GothicBlackBrush}"
+                BoxShadow="0 0 10 0 Black"> <!-- Simplified Shadow if Converter not available or complex -->
+            <Border.BorderBrush>
+                <SolidColorBrush Color="{Binding BorderColor}"/>
+            </Border.BorderBrush>
+            <Border BorderThickness="{Binding BorderThickness}">
+                <Border BorderBrush="{Binding BorderColor}" BorderThickness="1" Margin="-1">
+                    <Grid>
+                        <Image Source="{Binding VideoBitmap}" Stretch="Fill" Name="PinnedVideo" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
+                        
+                        <!-- Accent Corners -->
+                        <Rectangle Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="10" Height="2" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="2"/>
+                        <Rectangle Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="2" Height="10" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="2"/>
+                        
+                        <Rectangle Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="10" Height="2" VerticalAlignment="Top" HorizontalAlignment="Right" Margin="2"/>
+                        <Rectangle Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="2" Height="10" VerticalAlignment="Top" HorizontalAlignment="Right" Margin="2"/>
+                        
+                        <Rectangle Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="10" Height="2" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="2"/>
+                        <Rectangle Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="2" Height="10" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="2"/>
+                        
+                        <Rectangle Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="10" Height="2" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="2"/>
+                        <Rectangle Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="2" Height="10" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="2"/>
+                    </Grid>
+                </Border>
+            </Border>
+            
+            <Border.ContextMenu>
+                <ContextMenu>
+                    <MenuItem Header="{Binding [MenuClose], Source={x:Static services:LocalizationService.Instance}}" Command="{Binding CloseCommand}"/>
+                </ContextMenu>
+            </Border.ContextMenu>
+        </Border>
+        
+        <!-- Resize Handles -->
+        <Grid Classes="Handle" Name="HandleTopLeft" Cursor="TopLeftCorner" Width="20" Height="20" HorizontalAlignment="Left" VerticalAlignment="Top"/>
+        <Grid Classes="Handle" Name="HandleTopRight" Cursor="TopRightCorner" Width="20" Height="20" HorizontalAlignment="Right" VerticalAlignment="Top"/>
+        <Grid Classes="Handle" Name="HandleBottomLeft" Cursor="BottomLeftCorner" Width="20" Height="20" HorizontalAlignment="Left" VerticalAlignment="Bottom"/>
+        <Grid Classes="Handle" Name="HandleBottomRight" Cursor="BottomRightCorner" Width="20" Height="20" HorizontalAlignment="Right" VerticalAlignment="Bottom"/>
+        
+        <Grid Classes="Handle" Name="HandleTop" Cursor="TopSide" Height="15" HorizontalAlignment="Stretch" VerticalAlignment="Top" Margin="20,0"/>
+        <Grid Classes="Handle" Name="HandleBottom" Cursor="BottomSide" Height="15" HorizontalAlignment="Stretch" VerticalAlignment="Bottom" Margin="20,0"/>
+        <Grid Classes="Handle" Name="HandleLeft" Cursor="LeftSide" Width="15" HorizontalAlignment="Left" VerticalAlignment="Stretch" Margin="0,20"/>
+        <Grid Classes="Handle" Name="HandleRight" Cursor="RightSide" Width="15" HorizontalAlignment="Right" VerticalAlignment="Stretch" Margin="0,20"/>
+    </Grid>
+</Window>

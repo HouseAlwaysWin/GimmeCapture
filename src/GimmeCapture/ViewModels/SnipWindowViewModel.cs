@@ -696,26 +696,26 @@ public class SnipWindowViewModel : ViewModelBase
                  int w = (int)SelectionRect.Width;
                  int h = (int)SelectionRect.Height;
                  
-                 // Arguments: -noborder -alwaysontop -loop 0 -autoexit -left X -top Y -x W -y H
-                 // Note: -x and -y in ffplay are Width and Height. -left/-top are position.
-                 var args = $"-noborder -alwaysontop -loop 0 -autoexit -left {x} -top {y} -x {w} -y {h} \"{recordingPath}\"";
-
-                 try
+                 // Create and show FloatingVideoWindow instead of raw ffplay
+                 Avalonia.Threading.Dispatcher.UIThread.Post(() => 
                  {
-                     System.Diagnostics.Debug.WriteLine($"Launching ffplay: {ffplayPath} {args}");
-                     System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo 
+                     var videoVm = new FloatingVideoViewModel(
+                         recordingPath, 
+                         ffplayPath.Replace("ffplay.exe", "ffmpeg.exe"), // We need ffmpeg for streaming
+                         w, h, 
+                         SelectedColor, 
+                         CurrentThickness);
+                         
+                     var videoWin = new Views.FloatingVideoWindow
                      {
-                         FileName = ffplayPath,
-                         Arguments = args,
-                         UseShellExecute = false,
-                         CreateNoWindow = false // Debugging: Show window to see errors
-                     });
-                 }
-                 catch (Exception ex)
-                 {
-                     System.Diagnostics.Debug.WriteLine($"Failed to launch ffplay: {ex.Message}");
-                     System.Windows.Forms.MessageBox.Show($"無法啟動播放器 (ffplay): {ex.Message}\n请嘗試重啟程式以重新下載組件。", "錯誤");
-                 }
+                         DataContext = videoVm,
+                         Width = w + 20, // Add margin from XAML
+                         Height = h + 20,
+                         Position = new PixelPoint(x - 10, y - 10)
+                     };
+                     
+                     videoWin.Show();
+                 });
                  
                  CloseAction?.Invoke();
             }
