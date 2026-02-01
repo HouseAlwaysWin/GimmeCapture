@@ -45,6 +45,9 @@ public class RecordingService : ReactiveObject
         private set => this.RaiseAndSetIfChanged(ref _state, value);
     }
 
+    // Expose the actual output file path (may be modified during finalization)
+    public string? OutputFilePath => _outputFile;
+
     public RecordingService(FFmpegDownloaderService downloader)
     {
         _downloader = downloader;
@@ -263,6 +266,13 @@ public class RecordingService : ReactiveObject
             // Step 2: Convert to target format if needed
             if (_targetFormat == "mkv")
             {
+                // Ensure output file has correct extension
+                string currentExt = Path.GetExtension(_outputFile).ToLowerInvariant().TrimStart('.');
+                if (currentExt != "mkv")
+                {
+                    _outputFile = Path.ChangeExtension(_outputFile, "mkv");
+                }
+                
                 // No conversion needed, just move
                 if (File.Exists(_outputFile)) File.Delete(_outputFile);
                 File.Move(mergedMkv, _outputFile);
@@ -298,10 +308,20 @@ public class RecordingService : ReactiveObject
             }
             else
             {
+                // Ensure output file has correct extension
+                string outputPath = _outputFile;
+                string currentExt = Path.GetExtension(outputPath).ToLowerInvariant().TrimStart('.');
+                if (currentExt != _targetFormat)
+                {
+                    outputPath = Path.ChangeExtension(outputPath, _targetFormat);
+                    _outputFile = outputPath;
+                }
+
                 // Convert to MP4/MOV/WebM etc with proper settings
                 string convertArgs = _targetFormat switch
                 {
-                    "webm" => $"-y -i \"{mergedMkv}\" -c:v libvpx-vp9 -crf 30 -b:v 0 \"{_outputFile}\"",
+                    "webm" => $"-y -i \"{mergedMkv}\" -c:v libvpx-vp9 -crf 30 -b:v 0 -c:a libopus \"{_outputFile}\"",
+                    "mov" => $"-y -i \"{mergedMkv}\" -c:v libx264 -preset fast -crf 23 -pix_fmt yuv420p -f mov \"{_outputFile}\"",
                     _ => $"-y -i \"{mergedMkv}\" -c:v libx264 -preset fast -crf 23 -movflags +faststart \"{_outputFile}\""
                 };
 

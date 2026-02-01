@@ -531,10 +531,13 @@ public class SnipWindowViewModel : ViewModelBase
         _recordTimer?.Stop();
         await _recordingService.StopAsync();
 
+        // Use the actual output path from RecordingService (may have been modified during finalization)
+        string? actualOutputPath = _recordingService.OutputFilePath ?? _currentRecordingPath;
+
         // Check if we need to prompt
-        if (!_mainVm.UseFixedRecordPath && PickSaveFileAction != null && !string.IsNullOrEmpty(_currentRecordingPath))
+        if (!_mainVm.UseFixedRecordPath && PickSaveFileAction != null && !string.IsNullOrEmpty(actualOutputPath))
         {
-            if (System.IO.File.Exists(_currentRecordingPath))
+            if (System.IO.File.Exists(actualOutputPath))
             {
                 var targetPath = await PickSaveFileAction();
                 if (!string.IsNullOrEmpty(targetPath))
@@ -542,7 +545,7 @@ public class SnipWindowViewModel : ViewModelBase
                     try
                     {
                         if (System.IO.File.Exists(targetPath)) System.IO.File.Delete(targetPath);
-                        System.IO.File.Move(_currentRecordingPath, targetPath);
+                        System.IO.File.Move(actualOutputPath!, targetPath);
                     }
                     catch (Exception ex)
                     {
