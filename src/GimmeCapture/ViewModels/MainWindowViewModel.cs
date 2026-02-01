@@ -12,11 +12,19 @@ namespace GimmeCapture.ViewModels;
 
 public class MainWindowViewModel : ViewModelBase
 {
-    private string _statusText = "Ready to Capture";
+    private string _statusText = "";
     public string StatusText
     {
         get => _statusText;
         set => this.RaiseAndSetIfChanged(ref _statusText, value);
+    }
+
+    private string _currentStatusKey = "StatusReady";
+
+    public void SetStatus(string key)
+    {
+        _currentStatusKey = key;
+        StatusText = Services.LocalizationService.Instance[key];
     }
 
     public Action<CaptureMode>? RequestCaptureAction { get; set; }
@@ -67,7 +75,11 @@ public class MainWindowViewModel : ViewModelBase
             .Subscribe(_ => 
             {
                 this.RaisePropertyChanged(nameof(SelectedLanguageOption));
+                // Update Status Text on Language Change
+                StatusText = Services.LocalizationService.Instance[_currentStatusKey];
             });
+
+        SetStatus("StatusReady");
 
         StartCaptureCommand = ReactiveCommand.CreateFromTask<CaptureMode>(StartCapture);
         SaveAndCloseCommand = ReactiveCommand.CreateFromTask(SaveAndClose);
@@ -363,14 +375,14 @@ public class MainWindowViewModel : ViewModelBase
     {
         await SaveSettingsAsync(); // Auto-save on action for now
         RequestCaptureAction?.Invoke(mode);
-        StatusText = $"Snip Window Opened ({mode})";
+        SetStatus("StatusSnip");
     }
     
     // Command for explicit save (OK button)
     private async Task SaveAndClose()
     {
         await SaveSettingsAsync();
-        StatusText = "Settings Saved";
+        SetStatus("StatusSaved");
     }
 
     private async Task ResetToDefault()
@@ -392,10 +404,10 @@ public class MainWindowViewModel : ViewModelBase
             
         if (Color.TryParse(defaultSettings.ThemeColorHex, out var themeColor))
             ThemeColor = themeColor;
-            
-        Services.LocalizationService.Instance.CurrentLanguage = defaultSettings.Language;
+        
+        // Services.LocalizationService.Instance.CurrentLanguage = defaultSettings.Language; // Keep current language
 
-        StatusText = "Settings Reset to Default";
+        SetStatus("StatusReset");
         await SaveSettingsAsync();
     }
 

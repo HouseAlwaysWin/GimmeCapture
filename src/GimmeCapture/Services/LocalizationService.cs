@@ -98,6 +98,10 @@ namespace GimmeCapture.Services
                     ["StartCapture"] = "Start Capture (Snip)",
                     ["SaveSettings"] = "Save",
                     ["ResetDefault"] = "Reset Defaults",
+                    ["StatusReady"] = "Ready to Capture",
+                    ["StatusSnip"] = "Snip Window Opened",
+                    ["StatusSaved"] = "Settings Saved",
+                    ["StatusReset"] = "Settings Reset to Default",
 
                     // Tooltips
                     ["TipCopy"] = "Copy (Ctrl+C)",
@@ -166,9 +170,13 @@ namespace GimmeCapture.Services
                     ["CopyHotkey"] = "截圖並複製 (Copy):",
                     ["PinHotkey"] = "截圖並釘選 (Pin):",
                     ["HotkeysActive"] = "* 已啟用全域監聽 (Kitsune Mode Ready)",
-                    ["StartCapture"] = "啟動截圖 (Snip)",
+                    ["StartCapture"] = "啟動截圖",
                     ["SaveSettings"] = "保存",
                     ["ResetDefault"] = "重設預設",
+                    ["StatusReady"] = "準備就緒",
+                    ["StatusSnip"] = "擷圖視窗已開啟",
+                    ["StatusSaved"] = "設定已保存",
+                    ["StatusReset"] = "已重設設定",
 
                     // Tooltips
                     ["TipCopy"] = "複製 (Ctrl+C)",
@@ -240,6 +248,10 @@ namespace GimmeCapture.Services
                     ["StartCapture"] = "キャプチャ開始",
                     ["SaveSettings"] = "保存",
                     ["ResetDefault"] = "初期設定に戻す",
+                    ["StatusReady"] = "キャプチャ準備完了",
+                    ["StatusSnip"] = "キャプチャウィンドウが開きました",
+                    ["StatusSaved"] = "設定を保存しました",
+                    ["StatusReset"] = "初期設定に戻しました",
                     
                     // Tooltips
                     ["TipCopy"] = "コピー (Ctrl+C)",
