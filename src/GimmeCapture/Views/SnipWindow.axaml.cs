@@ -336,8 +336,14 @@ public partial class SnipWindow : Window
 
         // Check if we clicked on a handle
         // Using Control instead of Ellipse because we changed XAML to use Grid (Panel)
+        // Disable resize while recording to prevent mismatch between UI and actual recording region
         if (props.IsLeftButtonPressed && source is Control handle && handle.Classes.Contains("Handle"))
         {
+            if (_viewModel.RecState != RecordingState.Idle)
+            {
+                e.Handled = true;
+                return; // Block resize during recording
+            }
             _isResizing = true;
             _resizeDirection = GetDirectionFromName(handle.Name);
             _resizeStartPoint = point;
@@ -446,7 +452,13 @@ public partial class SnipWindow : Window
                      !_viewModel.IsDrawingMode &&
                      _viewModel.SelectionRect.Contains(point))
             {
-                // New Logic: Move Selection
+                // Block move selection during recording to prevent mismatch
+                if (_viewModel.RecState != RecordingState.Idle)
+                {
+                    e.Handled = true;
+                    return;
+                }
+                // Move Selection
                 _isMovingSelection = true;
                 _moveStartPoint = point;
                 _originalRect = _viewModel.SelectionRect;
