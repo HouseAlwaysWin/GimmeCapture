@@ -207,10 +207,10 @@
                                 <DockPanel Margin="24,0,0,5">
                                     <Button Content="{Binding [SelectPath], Source={x:Static services:LocalizationService.Instance}}" 
                                             DockPanel.Dock="Right" 
-                                            Theme="{StaticResource SnipButton}"
+                                            Theme="{StaticResource SmallMetalButton}"
                                             Command="{Binding SelectSavePath}" 
-                                            Margin="5,0,0,0"/>
-                                    <TextBox Text="{Binding SaveDirectory}" IsReadOnly="True"/>
+                                            Margin="10,0,0,0"/>
+                                    <TextBox Text="{Binding SaveDirectory}" IsReadOnly="True" Margin="0,0,10,0"/>
                                 </DockPanel>
                                 <CheckBox IsChecked="{Binding ShowPinDecoration}" Content="{Binding [ShowPinDecoration], Source={x:Static services:LocalizationService.Instance}}"/>
                                 <CheckBox IsChecked="{Binding HidePinBorder}" Content="{Binding [HidePinBorder], Source={x:Static services:LocalizationService.Instance}}"/>
@@ -235,10 +235,10 @@
                     <DockPanel Grid.Row="0" Grid.Column="2">
                         <Button Content="{Binding [SelectPath], Source={x:Static services:LocalizationService.Instance}}" 
                                 DockPanel.Dock="Right" 
-                                Theme="{StaticResource SnipButton}"
+                                Theme="{StaticResource SmallMetalButton}"
                                 Command="{Binding SelectVideoPath}" 
-                                Margin="5,0,0,0"/>
-                        <TextBox Text="{Binding VideoSaveDirectory}" IsReadOnly="True"/>
+                                Margin="10,0,0,0"/>
+                        <TextBox Text="{Binding VideoSaveDirectory}" IsReadOnly="True" Margin="0,0,10,0"/>
                     </DockPanel>
 
                     <TextBlock Grid.Row="1" Grid.Column="0" Text="{Binding [TabOutput], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,10,0,0"/>

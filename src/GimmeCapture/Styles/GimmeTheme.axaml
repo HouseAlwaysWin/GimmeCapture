@@ -89,6 +89,65 @@
                 </Style>
             </ControlTheme>
 
+            <!-- Small Metal Button Variant for Settings -->
+            <ControlTheme x:Key="SmallMetalButton" TargetType="Button">
+                <Setter Property="Background" Value="{StaticResource GothicBlackBrush}"/>
+                <Setter Property="Foreground" Value="White"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="Padding" Value="12,4"/>
+                <Setter Property="CornerRadius" Value="0"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+                <Setter Property="FontSize" Value="12"/>
+                <Setter Property="Transitions">
+                    <Transitions>
+                        <BrushTransition Property="Background" Duration="0:0:0.2"/>
+                        <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.1"/>
+                    </Transitions>
+                </Setter>
+                <Setter Property="Template">
+                    <ControlTemplate>
+                        <Border Name="OuterBorder" 
+                                Background="{TemplateBinding Background}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="{TemplateBinding CornerRadius}"
+                                Padding="{TemplateBinding Padding}"
+                                BoxShadow="0 0 3 0 #40E60012">
+                            <Border.BorderBrush>
+                                <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+                                    <GradientStop Offset="0" Color="{DynamicResource ThemeDeepColor}"/>
+                                    <GradientStop Offset="0.5" Color="{DynamicResource ThemeAccentColor}"/>
+                                    <GradientStop Offset="1" Color="{DynamicResource ThemeDeepColor}"/>
+                                </LinearGradientBrush>
+                            </Border.BorderBrush>
+                            <Grid>
+                                <!-- Accent Corners (Smaller) -->
+                                <Rectangle Fill="{DynamicResource ThemeAccentBrush}" Width="5" Height="1" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="-5,-2,0,0"/>
+                                <Rectangle Fill="{DynamicResource ThemeAccentBrush}" Width="1" Height="5" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="-5,-2,0,0"/>
+                                
+                                <Rectangle Fill="{DynamicResource ThemeAccentBrush}" Width="5" Height="1" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="0,0,-5,-2"/>
+                                <Rectangle Fill="{DynamicResource ThemeAccentBrush}" Width="1" Height="5" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="0,0,-5,-2"/>
+                                
+                                <ContentPresenter Name="PART_ContentPresenter"
+                                                  Content="{TemplateBinding Content}"
+                                                  ContentTemplate="{TemplateBinding ContentTemplate}"
+                                                  HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                  VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                            </Grid>
+                        </Border>
+                    </ControlTemplate>
+                </Setter>
+                <Style Selector="^:pointerover">
+                    <Setter Property="Background" Value="#1A1A1A"/>
+                    <Style Selector="^ /template/ Border#OuterBorder">
+                        <Setter Property="BoxShadow" Value="0 0 8 1 #60E60012"/>
+                    </Style>
+                </Style>
+                <Style Selector="^:pressed">
+                    <Setter Property="Background" Value="{DynamicResource ThemeAccentBrush}"/>
+                    <Setter Property="RenderTransform" Value="scale(0.95)"/>
+                </Style>
+            </ControlTheme>
+
             <!-- SnipToolbar Button Style -->
             <ControlTheme x:Key="SnipButton" TargetType="Button">
                 <Setter Property="Background" Value="#2A2A2A"/>
@@ -246,31 +305,127 @@
         </Style>
     </Style>
 
-    <!-- CheckBox & ComboBox Basic Tuning -->
+    <!-- CheckBox Babymetal Style -->
     <Style Selector="CheckBox">
         <Setter Property="Foreground" Value="White"/>
+        <Setter Property="Padding" Value="8,0,0,0"/>
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Grid ColumnDefinitions="Auto,*">
+                    <Border Name="NormalRectangle" Grid.Column="0"
+                            Width="18" Height="18"
+                            BorderBrush="#444444" 
+                            BorderThickness="1"
+                            Background="#1A1A1A"
+                            CornerRadius="0">
+                        <Panel>
+                            <Path Name="CheckMark" 
+                                  Data="M 0 5 L 4 9 L 10 0" 
+                                  Stroke="{DynamicResource ThemeAccentBrush}" 
+                                  StrokeThickness="2"
+                                  IsVisible="False"
+                                  HorizontalAlignment="Center" 
+                                  VerticalAlignment="Center"
+                                  Margin="0,2,0,0"/>
+                        </Panel>
+                    </Border>
+                    <ContentPresenter Grid.Column="1" 
+                                      Content="{TemplateBinding Content}"
+                                      Margin="{TemplateBinding Padding}"
+                                      VerticalAlignment="Center"/>
+                </Grid>
+            </ControlTemplate>
+        </Setter>
+        <Style Selector="^:pointerover /template/ Border#NormalRectangle">
+            <Setter Property="BorderBrush" Value="{DynamicResource ThemeAccentBrush}"/>
+            <Setter Property="BoxShadow" Value="0 0 5 0 #40E60012"/>
+        </Style>
+        <Style Selector="^:checked /template/ Path#CheckMark">
+            <Setter Property="IsVisible" Value="True"/>
+        </Style>
         <Style Selector="^:checked /template/ Border#NormalRectangle">
-            <Setter Property="Background" Value="{DynamicResource ThemeAccentBrush}"/>
+            <Setter Property="Background" Value="#1A1A1A"/>
             <Setter Property="BorderBrush" Value="{DynamicResource ThemeAccentBrush}"/>
         </Style>
     </Style>
+
+    <!-- ComboBox Babymetal Style -->
     <Style Selector="ComboBox">
         <Setter Property="Background" Value="#1E1E1E"/>
         <Setter Property="BorderBrush" Value="#333333"/>
         <Setter Property="Foreground" Value="White"/>
-        <Style Selector="^:pointerover">
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="10,5"/>
+        <Setter Property="CornerRadius" Value="0"/>
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Grid>
+                    <Border Name="PART_Border"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="{TemplateBinding CornerRadius}"
+                            Padding="{TemplateBinding Padding}">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <ContentPresenter Name="PART_ContentPresenter"
+                                              Content="{TemplateBinding SelectionBoxItem}"
+                                              ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                              VerticalAlignment="Center"
+                                              HorizontalAlignment="Left"/>
+                            <Path Grid.Column="1" 
+                                  Data="M 0 0 L 4 4 L 8 0" 
+                                  Stroke="White" 
+                                  StrokeThickness="1" 
+                                  VerticalAlignment="Center" 
+                                  Margin="5,0,0,0"/>
+                        </Grid>
+                    </Border>
+                    <!-- Technical Corner Markers (Simulation) -->
+                    <Rectangle Fill="{DynamicResource ThemeAccentBrush}" Width="6" Height="1" VerticalAlignment="Top" HorizontalAlignment="Left" IsVisible="{Binding $parent[ComboBox].IsPointerOver}"/>
+                    <Rectangle Fill="{DynamicResource ThemeAccentBrush}" Width="1" Height="6" VerticalAlignment="Top" HorizontalAlignment="Left" IsVisible="{Binding $parent[ComboBox].IsPointerOver}"/>
+                    <Rectangle Fill="{DynamicResource ThemeAccentBrush}" Width="6" Height="1" VerticalAlignment="Bottom" HorizontalAlignment="Right" IsVisible="{Binding $parent[ComboBox].IsPointerOver}"/>
+                    <Rectangle Fill="{DynamicResource ThemeAccentBrush}" Width="1" Height="6" VerticalAlignment="Bottom" HorizontalAlignment="Right" IsVisible="{Binding $parent[ComboBox].IsPointerOver}"/>
+                    
+                    <Popup Name="PART_Popup"
+                           IsOpen="{TemplateBinding IsDropDownOpen, Mode=TwoWay}"
+                           MinWidth="{Binding $parent[ComboBox].Bounds.Width}"
+                           PlacementTarget="{Binding $parent[ComboBox]}">
+                        <Border Background="#121212" BorderBrush="{DynamicResource ThemeAccentBrush}" BorderThickness="1">
+                            <ScrollViewer>
+                                <ItemsPresenter Name="PART_ItemsPresenter"
+                                                ItemsPanel="{TemplateBinding ItemsPanel}"/>
+                            </ScrollViewer>
+                        </Border>
+                    </Popup>
+                </Grid>
+            </ControlTemplate>
+        </Setter>
+        <Style Selector="^:pointerover /template/ Border#PART_Border">
             <Setter Property="BorderBrush" Value="{DynamicResource ThemeAccentBrush}"/>
+            <Setter Property="BoxShadow" Value="0 0 8 0 #40E60012"/>
         </Style>
-        <Style Selector="^:dropdownopen">
+        <Style Selector="^:dropdownopen /template/ Border#PART_Border">
             <Setter Property="BorderBrush" Value="{DynamicResource ThemeAccentBrush}"/>
         </Style>
     </Style>
+
+    <!-- TextBox Babymetal Style -->
     <Style Selector="TextBox">
-        <Setter Property="Background" Value="#1E1E1E"/>
+        <Setter Property="Background" Value="#1A1A1A"/>
         <Setter Property="BorderBrush" Value="#333333"/>
         <Setter Property="Foreground" Value="White"/>
-        <Style Selector="^:focus">
+        <Setter Property="CornerRadius" Value="0"/>
+        <Setter Property="Padding" Value="8,5"/>
+        <Setter Property="CaretBrush" Value="{StaticResource BabymetalGoldBrush}"/>
+        <Style Selector="^:focus /template/ Border#PART_BorderElement">
             <Setter Property="BorderBrush" Value="{DynamicResource ThemeAccentBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Background" Value="#1A1A1A"/>
+            <Setter Property="BoxShadow" Value="0 0 8 0 #40E60012"/>
+        </Style>
+        <Style Selector="^:pointerover /template/ Border#PART_BorderElement">
+            <Setter Property="BorderBrush" Value="#444444"/>
+            <Setter Property="Background" Value="#1E1E1E"/>
         </Style>
     </Style>
     <!-- Custom Slider Style (Robust Override & No Clipping) -->
