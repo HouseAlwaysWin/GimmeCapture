@@ -6,7 +6,7 @@
         mc:Ignorable="d" d:DesignWidth="480" d:DesignHeight="280"
         x:Class="GimmeCapture.Views.UpdateDialog"
         Title="Gimme Update!!"
-        Width="500" Height="300"
+        SizeToContent="WidthAndHeight"
         WindowStartupLocation="CenterOwner"
         SystemDecorations="None"
         CanResize="False"
@@ -14,8 +14,7 @@
         TransparencyLevelHint="Transparent">
 
     <!-- Root Panel Centered in Window with Shadow Padding -->
-    <!-- Content Size: 450x250 -->
-    <Panel Width="450" Height="250" HorizontalAlignment="Center" VerticalAlignment="Center" PointerPressed="OnPointerPressed">
+    <Panel MinWidth="450" MinHeight="250" HorizontalAlignment="Center" VerticalAlignment="Center" PointerPressed="OnPointerPressed" Margin="25">
         
         <!-- LAYER 1: Shadow (BoxShadow is on a Border) -->
         <!-- We use a background border solely for the shadow and main fill -->
@@ -75,21 +74,24 @@
                 <Button x:Name="CancelButton" 
                         Content="NOT TODAY" 
                         Theme="{StaticResource GothicMetalButton}"
-                        Width="160" Height="48"
+                        MinWidth="180" Height="48"
+                        Padding="20,0"
                         Foreground="#666666"
                         Click="OnCancelClick"/>
 
                 <Button x:Name="UpdateButton" 
                         Content="ENTER THE FOX PIT" 
                         Theme="{StaticResource GothicMetalButton}"
-                        Width="220" Height="48"
+                        MinWidth="220" Height="48"
+                        Padding="20,0"
                         Classes="accent"
                         Click="OnUpdateClick"/>
 
                 <Button x:Name="OkButton" 
                         Content="FOX GOD APPROVES" 
                         Theme="{StaticResource GothicMetalButton}"
-                        Width="220" Height="48"
+                        MinWidth="220" Height="48"
+                        Padding="20,0"
                         IsVisible="False"
                         Click="OnOkClick"/>
             </StackPanel>

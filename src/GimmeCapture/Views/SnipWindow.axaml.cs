@@ -138,6 +138,13 @@ public partial class SnipWindow : Window
     {
         base.OnClosing(e);
         
+        // NEW: Ensure recording is stopped if window is closed (e.g., via ESC or system close)
+        if (_viewModel != null && _viewModel.RecState != RecordingState.Idle)
+        {
+            // Use Fire and Forget for the command, it handles internal state
+            _viewModel.StopRecordingCommand.Execute().Subscribe();
+        }
+
         // Restore Pin windows to Topmost
         foreach (var win in _hiddenTopmostWindows)
         {
@@ -448,6 +455,15 @@ public partial class SnipWindow : Window
         }
         else if (props.IsRightButtonPressed)
         {
+            if (_viewModel == null) return;
+
+            // NEW: Prevent resetting or closing if we are actively recording
+            if (_viewModel.RecState != RecordingState.Idle)
+            {
+                e.Handled = true;
+                return;
+            }
+
             if (_viewModel.CurrentState == SnipState.Selecting || 
                 _viewModel.CurrentState == SnipState.Selected)
             {
