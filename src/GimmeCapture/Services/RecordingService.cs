@@ -23,6 +23,8 @@ public class RecordingService : ReactiveObject
     private string _targetFormat = "mp4";
     private Rect _region;
     private bool _includeCursor = true;
+    private PixelPoint _screenOffset;
+    private double _visualScaling = 1.0;
     // Use local Temp folder in app directory instead of System Temp (usually C:\)
     // This will be updated with a unique ID per session in StartAsync
     private string _tempDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Temp", "Recordings");
@@ -65,7 +67,7 @@ public class RecordingService : ReactiveObject
     /// Start recording with specified target format for final output.
     /// Recording is done in MKV format internally for fast pause/resume.
     /// </summary>
-    public async Task<bool> StartAsync(Rect region, string outputFile, string targetFormat = "mp4", bool includeCursor = true)
+    public async Task<bool> StartAsync(Rect region, string outputFile, string targetFormat = "mp4", bool includeCursor = true, PixelPoint screenOffset = default, double visualScaling = 1.0)
     {
         if (State != RecordingState.Idle) return false;
         if (!_downloader.IsFFmpegAvailable()) return false;
@@ -74,6 +76,8 @@ public class RecordingService : ReactiveObject
         _outputFile = outputFile;
         _targetFormat = targetFormat.ToLowerInvariant();
         _includeCursor = includeCursor;
+        _screenOffset = screenOffset;
+        _visualScaling = visualScaling;
         _segments.Clear();
 
         // Use a unique temp directory for THIS session to avoid conflicts with zombie processes
@@ -96,10 +100,12 @@ public class RecordingService : ReactiveObject
         string segmentFile = Path.Combine(_tempDir, $"segment_{_segments.Count}.mkv");
         _segments.Add(segmentFile);
 
-        int x = (int)_region.X;
-        int y = (int)_region.Y;
-        int w = ((int)_region.Width / 2) * 2;
-        int h = ((int)_region.Height / 2) * 2;
+        // Calculate physical pixels for high-DPI
+        int x = (int)((_region.X + _screenOffset.X) * _visualScaling);
+        int y = (int)((_region.Y + _screenOffset.Y) * _visualScaling);
+        // Ensure even dimensions for video codecs
+        int w = ((int)(_region.Width * _visualScaling) / 2) * 2;
+        int h = ((int)(_region.Height * _visualScaling) / 2) * 2;
 
         // Use MKV with zerolatency for instant pause response
         string drawMouse = _includeCursor ? "1" : "0";

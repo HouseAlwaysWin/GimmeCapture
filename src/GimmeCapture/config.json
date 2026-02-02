@@ -11,7 +11,7 @@
   "AutoSave": true,
   "SaveDirectory": "D:\\Users\\martin\\Videos\\GimmeCapture\\",
   "ShowSnipCursor": false,
-  "ShowRecordCursor": false,
+  "ShowRecordCursor": true,
   "VideoSaveDirectory": "D:\\Users\\martin\\Videos\\GimmeCapture",
   "RecordFormat": "gif",
   "UseFixedRecordPath": false,
