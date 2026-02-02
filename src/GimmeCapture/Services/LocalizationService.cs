@@ -113,6 +113,9 @@ namespace GimmeCapture.Services
                         ["UpdateError"] = "Update failed: {0}",
                         ["CheckingUpdate"] = "Checking for updates...",
                         ["NoUpdateFound"] = "You are using the latest version.",
+                        ["UpdateBtnConfirm"] = "ENTER THE FOX PIT",
+                        ["UpdateBtnCancel"] = "NOT TODAY",
+                        ["UpdateBtnOk"] = "FOX GOD APPROVES",
 
                     // Tooltips
                     ["TipCopy"] = "Copy (Ctrl+C)",
@@ -206,6 +209,9 @@ namespace GimmeCapture.Services
                         ["UpdateError"] = "更新失敗: {0}",
                         ["CheckingUpdate"] = "正在檢查更新...",
                         ["NoUpdateFound"] = "您已使用最新版本。",
+                        ["UpdateBtnConfirm"] = "進入狐穴 (Update)",
+                        ["UpdateBtnCancel"] = "下次一定 (Not Today)",
+                        ["UpdateBtnOk"] = "狐神准許 (OK)",
 
                     // Tooltips
                     ["TipCopy"] = "複製 (Ctrl+C)",
@@ -299,6 +305,9 @@ namespace GimmeCapture.Services
                         ["UpdateError"] = "アップデートに失敗しました: {0}",
                         ["CheckingUpdate"] = "アップデートを確認中...",
                         ["NoUpdateFound"] = "最新バージョンを使用しています。",
+                        ["UpdateBtnConfirm"] = "キツネの穴へ (Update)",
+                        ["UpdateBtnCancel"] = "今はしない (Not Today)",
+                        ["UpdateBtnOk"] = "キツネ様のお導き (OK)",
                     
                     // Tooltips
                     ["TipCopy"] = "コピー (Ctrl+C)",

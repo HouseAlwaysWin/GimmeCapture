@@ -85,6 +85,13 @@
                         Width="220" Height="48"
                         Classes="accent"
                         Click="OnUpdateClick"/>
+
+                <Button x:Name="OkButton" 
+                        Content="FOX GOD APPROVES" 
+                        Theme="{StaticResource GothicMetalButton}"
+                        Width="220" Height="48"
+                        IsVisible="False"
+                        Click="OnOkClick"/>
             </StackPanel>
         </Grid>
 

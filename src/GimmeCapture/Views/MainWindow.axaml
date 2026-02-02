@@ -330,8 +330,8 @@
                 
                 <TextBlock Grid.Column="1" Text="{Binding StatusText}" VerticalAlignment="Center" Margin="10,0" Foreground="Gray" FontSize="11"/>
 
-                <Button Grid.Column="2" Content="Save Settings" Theme="{StaticResource GothicMetalButton}" Margin="0,0,10,0" Command="{Binding SaveAndCloseCommand}"/>
-                <Button Grid.Column="3" Content="Reset Default" Theme="{StaticResource GothicMetalButton}" Command="{Binding ResetToDefaultCommand}"/>
+                <Button Grid.Column="2" Content="{Binding [SaveSettings], Source={x:Static services:LocalizationService.Instance}}" Theme="{StaticResource GothicMetalButton}" Margin="0,0,10,0" Command="{Binding SaveAndCloseCommand}"/>
+                <Button Grid.Column="3" Content="{Binding [ResetDefault], Source={x:Static services:LocalizationService.Instance}}" Theme="{StaticResource GothicMetalButton}" Command="{Binding ResetToDefaultCommand}"/>
             </Grid>
         </Border>
     </Grid>

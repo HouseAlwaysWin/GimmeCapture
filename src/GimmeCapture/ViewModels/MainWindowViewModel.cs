@@ -526,7 +526,7 @@ public class MainWindowViewModel : ViewModelBase
             {
                 var mainWindow = (Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.MainWindow;
                 if (mainWindow == null) return false;
-                return await Views.UpdateDialog.ShowDialog(mainWindow, msg);
+                return await Views.UpdateDialog.ShowDialog(mainWindow, msg, isUpdateAvailable: true);
             });
 
             if (result == true)
@@ -539,7 +539,7 @@ public class MainWindowViewModel : ViewModelBase
                     {
                         var mainWindow = (Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.MainWindow;
                         if (mainWindow == null) return false;
-                        return await Views.UpdateDialog.ShowDialog(mainWindow, readyMsg);
+                        return await Views.UpdateDialog.ShowDialog(mainWindow, readyMsg, isUpdateAvailable: true);
                     });
 
                     if (readyResult == true)
@@ -563,7 +563,7 @@ public class MainWindowViewModel : ViewModelBase
                     var errMsg = string.Format(Services.LocalizationService.Instance["UpdateError"], "Download failed");
                     await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () => {
                         var mainWindow = (Avalonia.Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
-                        if (mainWindow != null) await UpdateDialog.ShowDialog(mainWindow, errMsg);
+                        if (mainWindow != null) await UpdateDialog.ShowDialog(mainWindow, errMsg, isUpdateAvailable: false);
                     });
                 }
             }
@@ -575,7 +575,7 @@ public class MainWindowViewModel : ViewModelBase
                 SetStatus("StatusReady");
                 await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () => {
                     var mainWindow = (Avalonia.Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
-                    if (mainWindow != null) await UpdateDialog.ShowDialog(mainWindow, Services.LocalizationService.Instance["NoUpdateFound"]);
+                    if (mainWindow != null) await UpdateDialog.ShowDialog(mainWindow, Services.LocalizationService.Instance["NoUpdateFound"], isUpdateAvailable: false);
                 });
             }
         }

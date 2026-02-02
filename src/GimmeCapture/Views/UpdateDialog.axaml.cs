@@ -13,18 +13,52 @@ namespace GimmeCapture.Views
             InitializeComponent();
         }
 
-        public static async Task<bool> ShowDialog(Window owner, string message)
+        public static async Task<bool> ShowDialog(Window owner, string message, bool isUpdateAvailable = true)
         {
             var dialog = new UpdateDialog();
             var textBlock = dialog.FindControl<TextBlock>("MessageText");
             if (textBlock != null) textBlock.Text = message;
+            
+            dialog.UpdateUI(isUpdateAvailable);
+
             await dialog.ShowDialog(owner);
             return dialog.Result;
+        }
+
+        private void UpdateUI(bool isUpdateAvailable)
+        {
+            var updateBtn = this.FindControl<Button>("UpdateButton");
+            var cancelBtn = this.FindControl<Button>("CancelButton");
+            var okBtn = this.FindControl<Button>("OkButton");
+
+            var loc = GimmeCapture.Services.LocalizationService.Instance;
+
+            if (updateBtn != null) 
+            {
+                updateBtn.IsVisible = isUpdateAvailable;
+                updateBtn.Content = loc["UpdateBtnConfirm"];
+            }
+            if (cancelBtn != null) 
+            {
+                cancelBtn.IsVisible = isUpdateAvailable;
+                cancelBtn.Content = loc["UpdateBtnCancel"];
+            }
+            if (okBtn != null) 
+            {
+                okBtn.IsVisible = !isUpdateAvailable;
+                okBtn.Content = loc["UpdateBtnOk"];
+            }
         }
 
         private void OnUpdateClick(object? sender, RoutedEventArgs e)
         {
             Result = true;
+            Close();
+        }
+
+        private void OnOkClick(object? sender, RoutedEventArgs e)
+        {
+            Result = false; // Just close
             Close();
         }
 
