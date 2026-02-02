@@ -53,6 +53,8 @@ namespace GimmeCapture.Services
 
         private LocalizationService()
         {
+            _currentFontFamily = _fontEnglish;
+            
             // Initialize Translations
             _translations = new Dictionary<Language, Dictionary<string, string>>
             {

@@ -9,7 +9,7 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Avalonia.Controls;
-using Avalonia.Input.Platform;
+
 
 using System.Collections.Generic;
 using GimmeCapture.Models;
@@ -174,7 +174,7 @@ public class ScreenCaptureService : IScreenCaptureService
                         break;
                     case AnnotationType.Text:
                         paint.Style = SKPaintStyle.Fill;
-                        paint.TextSize = (float)ann.FontSize;
+                        // paint.TextSize and Typeface are deprecated, moved to SKFont logic below
                         
                         // Create Typeface with Fallback Logic
                         var weight = ann.IsBold ? SKFontStyleWeight.Bold : SKFontStyleWeight.Normal;
@@ -183,33 +183,21 @@ public class ScreenCaptureService : IScreenCaptureService
                         
                         SKTypeface typeface = SKTypeface.FromFamilyName(ann.FontFamily, style);
                         
-                        // Fallback Check: If text contains non-ASCII and primary font might not support it
+                        // Fallback Check
                         if (!string.IsNullOrEmpty(ann.Text))
                         {
-                            // Optimized: Check if any char is missing glyph in current typeface
                             bool missingGlyph = false;
-                            
-                            // 1. Check if typeface is valid, if null defaulted to something, potentially missing chars
                             if (typeface == null) typeface = SKTypeface.Default;
                             
-                            // 2. Check for missing glyphs
-                            // Convert string to code points (simplification: simple char iteration usually enough for BMP)
                             var ids = new ushort[ann.Text.Length];
-                            using(var font = new SKFont(typeface))
+                            using(var fontCheck = new SKFont(typeface))
                             {
-                                font.GetGlyphs(ann.Text, ids);
-                                // If any glyph ID is 0, it means missing
-                                if (ids.Any(id => id == 0))
-                                {
-                                    missingGlyph = true;
-                                }
+                                fontCheck.GetGlyphs(ann.Text, ids);
+                                if (ids.Any(id => id == 0)) missingGlyph = true;
                             }
                             
                             if (missingGlyph)
                             {
-                                // Try to find a fallback that supports the text
-                                // We pick the first non-supported char or just a common fallback
-                                // On Windows, "Microsoft YaHei" is a good bet for CJK
                                 var fallback = SKFontManager.Default.MatchCharacter(ann.Text.FirstOrDefault(c => c > 127));
                                 if (fallback != null)
                                 {
@@ -219,14 +207,13 @@ public class ScreenCaptureService : IScreenCaptureService
                             }
                         }
 
-                        using (typeface) // Ensure we dispose it (MatchCharacter returns a new Ref)
+                        using (typeface)
                         {
-                            // Ensure Paint uses this typeface
-                            paint.Typeface = typeface;
+                            // Create SKFont for drawing
+                            using var font = new SKFont(typeface, (float)ann.FontSize);
                             
-                            // Draw
-                            canvas.DrawText(ann.Text ?? string.Empty, p1, paint);
-                            paint.Typeface = null; // Detach before disposal
+                            // Draw using new API
+                            canvas.DrawText(ann.Text ?? string.Empty, p1, SKTextAlign.Left, font, paint);
                         }
                         break;
                     case AnnotationType.Pen:
@@ -309,28 +296,28 @@ public class ScreenCaptureService : IScreenCaptureService
                  }
              }
 
-             // Fallback / Non-Windows implementation
-             var topLevel = TopLevel.GetTopLevel(Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop ? desktop.MainWindow : null);
-             if (topLevel?.Clipboard is { } clipboard)
-             {
-                 using var image = SKImage.FromBitmap(bitmap);
-                 // ... rest of Avalonia implementation ...
-                 // Simplified for brevity in replacement
-                 
-                 var dataObject = new DataObject();
-                 using var data = image.Encode(SKEncodedImageFormat.Png, 100);
-                 using var stream = data.AsStream();
-                 using var ms = new MemoryStream();
-                 stream.CopyTo(ms);
-                 ms.Position = 0;
-                 
-                 var avaloniaBitmap = new Avalonia.Media.Imaging.Bitmap(ms);
-                 dataObject.Set("Bitmap", avaloniaBitmap);
-                 
-                 #pragma warning disable CS0618
-                 await clipboard.SetDataObjectAsync(dataObject);
-                 #pragma warning restore CS0618
-             }
+              // Fallback / Non-Windows implementation
+              var topLevel = TopLevel.GetTopLevel(Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop ? desktop.MainWindow : null);
+              if (topLevel?.Clipboard is { } clipboard)
+              {
+                  using var image = SKImage.FromBitmap(bitmap);
+                  // ... rest of Avalonia implementation ...
+                  
+                  // Encode to PNG for clipboard
+                  using var encodedData = image.Encode(SKEncodedImageFormat.Png, 100);
+                  using var stream = encodedData.AsStream();
+                  using var ms = new MemoryStream();
+                  stream.CopyTo(ms);
+                  ms.Position = 0;
+                  
+                  var avaloniaBitmap = new Avalonia.Media.Imaging.Bitmap(ms);
+                  
+                  #pragma warning disable CS0618 // Usage of obsolete DataObject and SetDataObjectAsync
+                  var dataObject = new DataObject();
+                  dataObject.Set("Bitmap", avaloniaBitmap);
+                  await clipboard.SetDataObjectAsync(dataObject);
+                  #pragma warning restore CS0618
+              }
         });
     }
 
@@ -351,9 +338,12 @@ public class ScreenCaptureService : IScreenCaptureService
             
             if (topLevel?.Clipboard is { } clipboard)
             {
+                #pragma warning disable CS0618
                 var dataObject = new DataObject();
-                dataObject.Set(DataFormats.Files, new[] { filePath });
+                dataObject.Set(Avalonia.Input.DataFormats.Files, new[] { filePath });
                 await clipboard.SetDataObjectAsync(dataObject);
+                #pragma warning restore CS0618
+                
                 System.Diagnostics.Debug.WriteLine($"Avalonia Clipboard: Copied file {filePath}");
             }
             else

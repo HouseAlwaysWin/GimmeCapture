@@ -149,7 +149,7 @@ public class MainWindowViewModel : ViewModelBase
     // Language Selection
     public class LanguageOption
     {
-        public string Name { get; set; }
+        public string Name { get; set; } = string.Empty;
         public Services.Language Value { get; set; }
     }
 

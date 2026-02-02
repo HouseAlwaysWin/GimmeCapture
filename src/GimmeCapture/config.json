@@ -1,5 +1,5 @@
 {
-  "Language": 2,
+  "Language": 1,
   "RunOnStartup": false,
   "AutoCheckUpdates": true,
   "BorderThickness": 1,
@@ -14,7 +14,7 @@
   "ShowRecordCursor": false,
   "VideoSaveDirectory": "D:\\Users\\martin\\Videos\\GimmeCapture",
   "RecordFormat": "gif",
-  "UseFixedRecordPath": true,
+  "UseFixedRecordPath": false,
   "SnipHotkey": "F1",
   "CopyHotkey": "Ctrl\u002BC",
   "PinHotkey": "F3",

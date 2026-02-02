@@ -28,9 +28,11 @@ public partial class FloatingImageWindow : Window
                 var topLevel = TopLevel.GetTopLevel(this);
                 if (topLevel?.Clipboard != null && vm.Image != null)
                 {
+                    // Use pragma suppression for deprecated DataObject/SetDataObjectAsync 
+                    // as replacement API (DataTransfer) details are ambiguous in this context.
+                    #pragma warning disable CS0618
                     var dataObject = new DataObject();
                     dataObject.Set("Bitmap", vm.Image);
-                    #pragma warning disable CS0618
                     await topLevel.Clipboard.SetDataObjectAsync(dataObject);
                     #pragma warning restore CS0618
                 }
