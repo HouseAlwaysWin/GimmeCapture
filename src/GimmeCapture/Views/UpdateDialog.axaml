@@ -14,77 +14,94 @@
         TransparencyLevelHint="Transparent">
 
     <Border x:Name="MainBorder"
-            BorderBrush="{DynamicResource AccentRedBrush}" 
             BorderThickness="2" 
             Background="{DynamicResource GothicBlackBrush}"
             CornerRadius="4"
             BoxShadow="0 0 20 2 #900000"
             PointerPressed="OnPointerPressed">
-        <Grid RowDefinitions="Auto, *, Auto">
-            <!-- Header Ornate Simulation -->
-            <Border Grid.Row="0" Height="40" Background="#1A1A1A" BorderBrush="{DynamicResource DeepRedBrush}" BorderThickness="0,0,0,1">
-                <TextBlock Text="GIMME UPDATE!!" 
-                           Foreground="{DynamicResource AccentRedBrush}"
-                           FontWeight="Bold"
-                           FontSize="18"
-                           FontFamily="{Binding CurrentFontFamily, Source={x:Static services:LocalizationService.Instance}}"
-                           HorizontalAlignment="Center" VerticalAlignment="Center"
-                           LetterSpacing="2"/>
-            </Border>
+        <Border.BorderBrush>
+            <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+                <GradientStop Offset="0" Color="{DynamicResource ThemeDeepColor}"/>
+                <GradientStop Offset="0.5" Color="{DynamicResource ThemeAccentColor}"/>
+                <GradientStop Offset="1" Color="{DynamicResource ThemeDeepColor}"/>
+            </LinearGradientBrush>
+        </Border.BorderBrush>
+        <Grid>
+            <!-- Background Decoration (Corner Brackets) -->
+            <Canvas HorizontalAlignment="Stretch" VerticalAlignment="Stretch" IsHitTestVisible="False">
+                <!-- Top Left -->
+                <Rectangle Fill="{DynamicResource ThemeAccentBrush}" Width="15" Height="2" Canvas.Top="-1" Canvas.Left="-1"/>
+                <Rectangle Fill="{DynamicResource ThemeAccentBrush}" Width="2" Height="15" Canvas.Top="-1" Canvas.Left="-1"/>
+                <!-- Top Right -->
+                <Rectangle Fill="{DynamicResource ThemeAccentBrush}" Width="15" Height="2" Canvas.Top="-1" Canvas.Right="-1"/>
+                <Rectangle Fill="{DynamicResource ThemeAccentBrush}" Width="2" Height="15" Canvas.Top="-1" Canvas.Right="-1"/>
+                <!-- Bottom Left -->
+                <Rectangle Fill="{DynamicResource ThemeAccentBrush}" Width="15" Height="2" Canvas.Bottom="-1" Canvas.Left="-1"/>
+                <Rectangle Fill="{DynamicResource ThemeAccentBrush}" Width="2" Height="15" Canvas.Bottom="-1" Canvas.Left="-1"/>
+                <!-- Bottom Right -->
+                <Rectangle Fill="{DynamicResource ThemeAccentBrush}" Width="15" Height="2" Canvas.Bottom="-1" Canvas.Right="-1"/>
+                <Rectangle Fill="{DynamicResource ThemeAccentBrush}" Width="2" Height="15" Canvas.Bottom="-1" Canvas.Right="-1"/>
 
-            <!-- Content Area -->
-            <StackPanel Grid.Row="1" Spacing="15" Margin="30" VerticalAlignment="Center">
-                <TextBlock x:Name="MessageText" 
-                           Text="A New Fox Has Appeared!"
-                           Foreground="White"
-                           FontSize="16"
-                           TextWrapping="Wrap"
-                           TextAlignment="Center"
-                           FontFamily="{Binding CurrentFontFamily, Source={x:Static services:LocalizationService.Instance}}"/>
-            </StackPanel>
+                <!-- Gold Accents for a more regal metal look -->
+                <Rectangle Fill="{DynamicResource BabymetalGoldBrush}" Width="4" Height="4" Canvas.Top="2" Canvas.Left="2"/>
+                <Rectangle Fill="{DynamicResource BabymetalGoldBrush}" Width="4" Height="4" Canvas.Top="2" Canvas.Right="2"/>
+                <Rectangle Fill="{DynamicResource BabymetalGoldBrush}" Width="4" Height="4" Canvas.Bottom="2" Canvas.Left="2"/>
+                <Rectangle Fill="{DynamicResource BabymetalGoldBrush}" Width="4" Height="4" Canvas.Bottom="2" Canvas.Right="2"/>
+            </Canvas>
 
-            <!-- Footer Buttons -->
-            <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="20" Margin="20">
-                <Button x:Name="CancelButton" 
-                        Content="NOT TODAY" 
-                        Width="120" Height="40"
-                        Background="#2A2A2A"
-                        Foreground="Gray"
-                        FontSize="14"
-                        FontWeight="Bold"
-                        BorderBrush="#444444"
-                        BorderThickness="1"
-                        HorizontalContentAlignment="Center"
-                        VerticalContentAlignment="Center"
-                        Click="OnCancelClick">
-                    <Button.Styles>
-                        <Style Selector="Button:pointerover /template/ ContentPresenter">
-                            <Setter Property="Background" Value="#333333"/>
-                            <Setter Property="Foreground" Value="White"/>
-                        </Style>
-                    </Button.Styles>
-                </Button>
+            <Grid RowDefinitions="Auto, *, Auto">
+                <!-- Label Ornate Simulation -->
+                <Border Grid.Row="0" Height="45" Background="#1A1A1A" BorderThickness="0,0,0,2">
+                    <Border.BorderBrush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
+                            <GradientStop Offset="0" Color="Transparent"/>
+                            <GradientStop Offset="0.5" Color="{DynamicResource ThemeAccentColor}"/>
+                            <GradientStop Offset="1" Color="Transparent"/>
+                        </LinearGradientBrush>
+                    </Border.BorderBrush>
+                    <TextBlock Text="GIMME UPDATE!!" 
+                               Foreground="{DynamicResource AccentRedBrush}"
+                               FontWeight="Bold"
+                               FontSize="20"
+                               FontFamily="{Binding CurrentFontFamily, Source={x:Static services:LocalizationService.Instance}}"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                               LetterSpacing="4"/>
+                </Border>
 
-                <Button x:Name="OkButton" 
-                        Content="ENTER THE FOX PIT" 
-                        Width="160" Height="40"
-                        Background="{DynamicResource AccentRedBrush}"
-                        Foreground="White"
-                        FontSize="14"
-                        FontWeight="Bold"
-                        BorderBrush="{DynamicResource DeepRedBrush}"
-                        BorderThickness="1"
-                        HorizontalContentAlignment="Center"
-                        VerticalContentAlignment="Center"
-                        Click="OnOkClick">
-                    <Button.Styles>
-                        <Style Selector="Button:pointerover /template/ ContentPresenter">
-                            <Setter Property="Background" Value="#FF1A1A"/>
-                            <Setter Property="BoxShadow" Value="0 0 10 2 #FF0000"/>
-                        </Style>
-                    </Button.Styles>
-                </Button>
-            </StackPanel>
+                <!-- Content Area -->
+                <StackPanel Grid.Row="1" Spacing="15" Margin="30" VerticalAlignment="Center">
+                    <TextBlock x:Name="MessageText" 
+                               Text="A New Fox Has Appeared!"
+                               Foreground="White"
+                               FontSize="16"
+                               TextWrapping="Wrap"
+                               TextAlignment="Center"
+                               FontFamily="{Binding CurrentFontFamily, Source={x:Static services:LocalizationService.Instance}}"/>
+                    
+                    <!-- Decorative Fox Element -->
+                    <Path Data="M 10 0 L 20 15 L 0 15 Z" Fill="{DynamicResource ThemeDeepBrush}" HorizontalAlignment="Center" Width="20" Height="15" Opacity="0.5"/>
+                </StackPanel>
+
+                <!-- Footer Buttons -->
+                <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="30" Margin="25">
+                    <Button x:Name="CancelButton" 
+                            Content="NOT TODAY" 
+                            Theme="{StaticResource SmallMetalButton}"
+                            Width="120"
+                            Foreground="#888888"
+                            HorizontalContentAlignment="Center"
+                            VerticalContentAlignment="Center"
+                            Click="OnCancelClick"/>
+
+                    <Button x:Name="OkButton" 
+                            Content="ENTER THE FOX PIT" 
+                            Theme="{StaticResource MetalButton}"
+                            Width="200"
+                            HorizontalContentAlignment="Center"
+                            VerticalContentAlignment="Center"
+                            Click="OnOkClick"/>
+                </StackPanel>
+            </Grid>
         </Grid>
     </Border>
 </Window>
