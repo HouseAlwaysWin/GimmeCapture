@@ -205,7 +205,11 @@
                             <StackPanel Spacing="5">
                                 <CheckBox IsChecked="{Binding AutoSave}" Content="{Binding [AutoSave], Source={x:Static services:LocalizationService.Instance}}"/>
                                 <DockPanel Margin="24,0,0,5">
-                                    <Button Content="{Binding [SelectPath], Source={x:Static services:LocalizationService.Instance}}" DockPanel.Dock="Right" Command="{Binding SelectSavePath}" Margin="5,0,0,0"/>
+                                    <Button Content="{Binding [SelectPath], Source={x:Static services:LocalizationService.Instance}}" 
+                                            DockPanel.Dock="Right" 
+                                            Theme="{StaticResource SnipButton}"
+                                            Command="{Binding SelectSavePath}" 
+                                            Margin="5,0,0,0"/>
                                     <TextBox Text="{Binding SaveDirectory}" IsReadOnly="True"/>
                                 </DockPanel>
                                 <CheckBox IsChecked="{Binding ShowPinDecoration}" Content="{Binding [ShowPinDecoration], Source={x:Static services:LocalizationService.Instance}}"/>
@@ -227,16 +231,20 @@
                     <TextBlock Text="{Binding [TabRecord], Source={x:Static services:LocalizationService.Instance}}" FontWeight="Bold" Margin="0,0,0,5"/>
                     
                     <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto" ColumnDefinitions="Auto, 10, *">
-                    <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding [SaveDirectory], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding [VideoPath], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center"/>
                     <DockPanel Grid.Row="0" Grid.Column="2">
-                        <Button Content="{Binding [SelectPath], Source={x:Static services:LocalizationService.Instance}}" DockPanel.Dock="Right" Command="{Binding SelectVideoPath}" Margin="5,0,0,0"/>
+                        <Button Content="{Binding [SelectPath], Source={x:Static services:LocalizationService.Instance}}" 
+                                DockPanel.Dock="Right" 
+                                Theme="{StaticResource SnipButton}"
+                                Command="{Binding SelectVideoPath}" 
+                                Margin="5,0,0,0"/>
                         <TextBox Text="{Binding VideoSaveDirectory}" IsReadOnly="True"/>
                     </DockPanel>
 
                     <TextBlock Grid.Row="1" Grid.Column="0" Text="{Binding [TabOutput], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,10,0,0"/>
                     <CheckBox Grid.Row="1" Grid.Column="2" IsChecked="{Binding UseFixedRecordPath}" Content="{Binding [UseFixedRecordPath], Source={x:Static services:LocalizationService.Instance}}" Margin="0,10,0,0"/>
 
-                    <TextBlock Grid.Row="2" Grid.Column="0" Text="{Binding [RecordFormat], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,10,0,0"/>
+                    <TextBlock Grid.Row="2" Grid.Column="0" Text="{Binding [VideoFormat], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,10,0,0"/>
                     <ComboBox Grid.Row="2" Grid.Column="2" ItemsSource="{Binding AvailableRecordFormats}" SelectedItem="{Binding RecordFormat}" HorizontalAlignment="Stretch" Margin="0,10,0,0"/>
 
                     <CheckBox Grid.Row="3" Grid.Column="2" Content="{Binding [ShowPinDecoration], Source={x:Static services:LocalizationService.Instance}}" IsChecked="{Binding ShowPinDecoration}" Margin="0,5,0,0"/>
