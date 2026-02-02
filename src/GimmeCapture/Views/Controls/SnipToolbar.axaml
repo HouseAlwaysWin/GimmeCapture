@@ -33,9 +33,15 @@
 
             <!-- Snip Mode Unique Actions -->
             <StackPanel Orientation="Horizontal" Spacing="2" IsVisible="{Binding !IsRecordingMode}">
-                <Button Theme="{StaticResource SnipButton}" FontSize="12" BorderThickness="1" Content="{Binding [Copy], Source={x:Static services:LocalizationService.Instance}}" Command="{Binding CopyCommand}" ToolTip.Tip="{Binding [TipCopy], Source={x:Static services:LocalizationService.Instance}}"/>
-                <Button Theme="{StaticResource SnipButton}" FontSize="12" BorderThickness="1" Content="{Binding [Save], Source={x:Static services:LocalizationService.Instance}}" Command="{Binding SaveCommand}" ToolTip.Tip="{Binding [TipSave], Source={x:Static services:LocalizationService.Instance}}"/>
-                <Button Theme="{StaticResource SnipButton}" FontSize="12" BorderThickness="1" Content="{Binding [Pin], Source={x:Static services:LocalizationService.Instance}}" Command="{Binding PinCommand}" ToolTip.Tip="{Binding [TipPin], Source={x:Static services:LocalizationService.Instance}}"/>
+                <Button Theme="{StaticResource SnipButton}" FontSize="12" BorderThickness="1" Command="{Binding CopyCommand}" ToolTip.Tip="{Binding [TipCopy], Source={x:Static services:LocalizationService.Instance}}">
+                    <PathIcon Data="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z" Width="14" Height="14"/>
+                </Button>
+                <Button Theme="{StaticResource SnipButton}" FontSize="12" BorderThickness="1" Command="{Binding SaveCommand}" ToolTip.Tip="{Binding [TipSave], Source={x:Static services:LocalizationService.Instance}}">
+                    <PathIcon Data="M15,9H5V5H15M12,19A3,3 0 0,1 9,16A3,3 0 0,1 12,13A3,3 0 0,1 15,16A3,3 0 0,1 12,19M17,3H5C3.89,3 3,3.89 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V7L17,3Z" Width="14" Height="14"/>
+                </Button>
+                <Button Theme="{StaticResource SnipButton}" FontSize="12" BorderThickness="1" Command="{Binding PinCommand}" ToolTip.Tip="{Binding [TipPin], Source={x:Static services:LocalizationService.Instance}}">
+                    <PathIcon Data="M16,12V4H17V2H7V4H8V12L6,14V16H11.2V22H12.8V16H18V14L16,12Z" Width="14" Height="14"/>
+                </Button>
                 
                 <Rectangle Fill="#444444" Width="1" Height="16" Margin="2,0" VerticalAlignment="Center"/>
                 
@@ -341,17 +347,18 @@
                             </Border>
                         </Flyout>
                     </Button.Flyout>
-                    <Ellipse Width="10" Height="10" Fill="{Binding SelectedColor, Converter={StaticResource ColorToBrushConverter}}"/>
+                    <Path Data="M 5,0 L 9.33,2.5 L 9.33,7.5 L 5,10 L 0.67,7.5 L 0.67,2.5 Z" Fill="{Binding SelectedColor, Converter={StaticResource ColorToBrushConverter}}" Width="10" Height="10" Stretch="Fill"/>
                 </Button>
 
-                <Rectangle Fill="#444444" Width="1" Height="16" Margin="2,0" VerticalAlignment="Center"/>
+                <Rectangle Fill="#444444" Width="1" Height="16" Margin="10,0" VerticalAlignment="Center"/>
 
                 <!-- Record Buttons -->
                 <Button Theme="{StaticResource SnipButton}" Width="32" BorderThickness="1" 
                         Command="{Binding StartRecordingCommand}" 
                         IsVisible="{Binding RecState, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static services:RecordingState.Idle}}"
                         ToolTip.Tip="{Binding [Record], Source={x:Static services:LocalizationService.Instance}}">
-                    <Ellipse Fill="#E60012" Width="12" Height="12"/>
+                    <Path Data="M 7,23 L 7,12 L 4,5 L 8.5,9.5 L 9.5,13 Q 12,17 14.5,13 L 15.5,9.5 L 20,5 L 17,12 L 17,23 Z" 
+                          Fill="#E60012" Width="18" Height="18" Stretch="Uniform" Margin="0,2,0,0"/>
                 </Button>
                 
                 <Button Theme="{StaticResource SnipButton}" Width="32" BorderThickness="1" 
