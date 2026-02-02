@@ -61,17 +61,17 @@ public class ScreenCaptureService : IScreenCaptureService
         public IntPtr hbmColor;
     }
 
-    public async Task<SKBitmap> CaptureScreenAsync(Rect region, bool includeCursor = false)
+    public async Task<SKBitmap> CaptureScreenAsync(Rect region, PixelPoint screenOffset, double visualScaling, bool includeCursor = false)
     {
         return await Task.Run(() =>
         {
             if (OperatingSystem.IsWindows())
             {
-                // Note: This needs HighDPI awareness in App.manifest to be accurate
-                int x = (int)region.X;
-                int y = (int)region.Y;
-                int width = (int)region.Width;
-                int height = (int)region.Height;
+                // Calculate physical pixels
+                int x = (int)((region.X + screenOffset.X) * visualScaling);
+                int y = (int)((region.Y + screenOffset.Y) * visualScaling);
+                int width = (int)(region.Width * visualScaling);
+                int height = (int)(region.Height * visualScaling);
 
                 if (width <= 0 || height <= 0) return new SKBitmap(1, 1);
 
@@ -130,9 +130,9 @@ public class ScreenCaptureService : IScreenCaptureService
         });
     }
 
-    public async Task<SKBitmap> CaptureScreenWithAnnotationsAsync(Rect region, IEnumerable<Annotation> annotations, bool includeCursor = false)
+    public async Task<SKBitmap> CaptureScreenWithAnnotationsAsync(Rect region, PixelPoint screenOffset, double visualScaling, IEnumerable<Annotation> annotations, bool includeCursor = false)
     {
-        var bitmap = await CaptureScreenAsync(region, includeCursor);
+        var bitmap = await CaptureScreenAsync(region, screenOffset, visualScaling, includeCursor);
         if (annotations == null || !annotations.Any()) return bitmap;
 
         using (var canvas = new SKCanvas(bitmap))

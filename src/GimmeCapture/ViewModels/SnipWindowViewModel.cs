@@ -70,6 +70,13 @@ public class SnipWindowViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _screenOffset, value);
     }
 
+    private double _visualScaling = 1.0;
+    public double VisualScaling
+    {
+        get => _visualScaling;
+        set => this.RaiseAndSetIfChanged(ref _visualScaling, value);
+    }
+
     private Rect _detectedRect;
     public Rect DetectedRect
     {
@@ -82,12 +89,17 @@ public class SnipWindowViewModel : ViewModelBase
 
     public void RefreshWindowRects(IntPtr? excludeHWnd = null)
     {
-        // Get global rects
+        // Get global rects (Physical pixels)
         var globalRects = _detectionService.GetVisibleWindowRects(excludeHWnd);
         
-        // Translate to local coordinates based on ScreenOffset
+        // Translate to local coordinates based on ScreenOffset (Physical)
+        // AND convert to logical coordinates by dividing by VisualScaling
         WindowRects = globalRects
-            .Select(r => new Rect(r.X - ScreenOffset.X, r.Y - ScreenOffset.Y, r.Width, r.Height))
+            .Select(r => new Rect(
+                (r.X - ScreenOffset.X) / VisualScaling, 
+                (r.Y - ScreenOffset.Y) / VisualScaling, 
+                r.Width / VisualScaling, 
+                r.Height / VisualScaling))
             .ToList();
     }
 
@@ -810,7 +822,7 @@ public class SnipWindowViewModel : ViewModelBase
 
             try 
             {
-                var bitmap = await _captureService.CaptureScreenWithAnnotationsAsync(SelectionRect, Annotations, _mainVm?.ShowSnipCursor ?? false);
+                var bitmap = await _captureService.CaptureScreenWithAnnotationsAsync(SelectionRect, ScreenOffset, VisualScaling, Annotations, _mainVm?.ShowSnipCursor ?? false);
                 await _captureService.CopyToClipboardAsync(bitmap);
             }
             finally
@@ -836,7 +848,7 @@ public class SnipWindowViewModel : ViewModelBase
 
              try
              {
-                 var bitmap = await _captureService.CaptureScreenWithAnnotationsAsync(SelectionRect, Annotations, _mainVm?.ShowSnipCursor ?? false);
+                 var bitmap = await _captureService.CaptureScreenWithAnnotationsAsync(SelectionRect, ScreenOffset, VisualScaling, Annotations, _mainVm?.ShowSnipCursor ?? false);
                  
                  if (_mainVm != null && _mainVm.AutoSave)
                  {
@@ -892,7 +904,7 @@ public class SnipWindowViewModel : ViewModelBase
             
             try
             {
-                var skBitmap = await _captureService.CaptureScreenWithAnnotationsAsync(SelectionRect, Annotations, _mainVm?.ShowSnipCursor ?? false);
+                var skBitmap = await _captureService.CaptureScreenWithAnnotationsAsync(SelectionRect, ScreenOffset, VisualScaling, Annotations, _mainVm?.ShowSnipCursor ?? false);
                 
                 // Convert SKBitmap to Avalonia Bitmap
                 using var image = SkiaSharp.SKImage.FromBitmap(skBitmap);

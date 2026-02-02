@@ -105,6 +105,7 @@ public partial class SnipWindow : Window
         {
             if (_viewModel != null)
             {
+                _viewModel.VisualScaling = this.RenderScaling;
                 _viewModel.ScreenOffset = this.Position;
                 _viewModel.RefreshWindowRects(this.TryGetPlatformHandle()?.Handle);
             }
