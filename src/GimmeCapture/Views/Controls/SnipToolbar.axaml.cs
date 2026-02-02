@@ -23,4 +23,16 @@ public partial class SnipToolbar : UserControl
         // This happens AFTER child controls have processed the event
         e.Handled = true;
     }
+
+    private void OnColorSelected(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        // Close the flyout when a color is selected
+        // We use Dispatcher.UIThread.Post to allow the Command to execute first
+        // otherwise closing the flyout might detach the visual/context too early
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            this.FindControl<Button>("SnipStyleButton")?.Flyout?.Hide();
+            this.FindControl<Button>("RecordStyleButton")?.Flyout?.Hide();
+        });
+    }
 }

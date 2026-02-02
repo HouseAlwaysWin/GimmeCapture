@@ -2,7 +2,7 @@
   "Language": 0,
   "RunOnStartup": false,
   "AutoCheckUpdates": true,
-  "BorderThickness": 3,
+  "BorderThickness": 1,
   "MaskOpacity": 0.05,
   "BorderColorHex": "#ffd4af37",
   "ThemeColorHex": "#ffd4af37",
