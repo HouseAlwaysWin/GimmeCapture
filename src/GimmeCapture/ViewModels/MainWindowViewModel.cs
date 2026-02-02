@@ -399,6 +399,9 @@ public class MainWindowViewModel : ViewModelBase
         // Load Language
         Services.LocalizationService.Instance.CurrentLanguage = s.Language;
 
+        // Ensure registry is in sync with setting
+        Services.StartupService.SetStartup(s.RunOnStartup);
+
         // Register initial hotkeys
         Avalonia.Threading.Dispatcher.UIThread.Post(() => {
             HotkeyService.Register(ID_SNIP, SnipHotkey);
@@ -445,6 +448,9 @@ public class MainWindowViewModel : ViewModelBase
         s.ShowRecordCursor = ShowRecordCursor;
         
         await _settingsService.SaveAsync();
+
+        // Update Windows startup registry
+        Services.StartupService.SetStartup(s.RunOnStartup);
     }
 
     private async Task StartCapture(CaptureMode mode = CaptureMode.Normal)
