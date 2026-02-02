@@ -2,6 +2,8 @@ using ReactiveUI;
 using Avalonia.Media;
 using System;
 using System.Threading.Tasks;
+using Avalonia.Controls.ApplicationLifetimes;
+using GimmeCapture.Views;
 using System.Linq;
 using System.Reactive;
 using System.Reactive.Linq;
@@ -519,23 +521,28 @@ public class MainWindowViewModel : ViewModelBase
         {
             SetStatus("StatusReady");
             var msg = string.Format(Services.LocalizationService.Instance["UpdateFound"], release.TagName);
-            var result = System.Windows.Forms.MessageBox.Show(msg, 
-                Services.LocalizationService.Instance["UpdateCheckTitle"], 
-                System.Windows.Forms.MessageBoxButtons.YesNo, 
-                System.Windows.Forms.MessageBoxIcon.Information);
+            
+            bool? result = await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
+            {
+                var mainWindow = (Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.MainWindow;
+                if (mainWindow == null) return false;
+                return await Views.UpdateDialog.ShowDialog(mainWindow, msg);
+            });
 
-            if (result == System.Windows.Forms.DialogResult.Yes)
+            if (result == true)
             {
                 var zipPath = await UpdateService.DownloadUpdateAsync(release);
                 if (!string.IsNullOrEmpty(zipPath))
                 {
                     var readyMsg = Services.LocalizationService.Instance["UpdateReady"];
-                    var readyResult = System.Windows.Forms.MessageBox.Show(readyMsg, 
-                        Services.LocalizationService.Instance["UpdateCheckTitle"], 
-                        System.Windows.Forms.MessageBoxButtons.YesNo, 
-                        System.Windows.Forms.MessageBoxIcon.Question);
+                    bool? readyResult = await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
+                    {
+                        var mainWindow = (Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.MainWindow;
+                        if (mainWindow == null) return false;
+                        return await Views.UpdateDialog.ShowDialog(mainWindow, readyMsg);
+                    });
 
-                    if (readyResult == System.Windows.Forms.DialogResult.Yes)
+                    if (readyResult == true)
                     {
                         UpdateService.ApplyUpdate(zipPath);
                     }
@@ -543,7 +550,10 @@ public class MainWindowViewModel : ViewModelBase
                 else
                 {
                     var errMsg = string.Format(Services.LocalizationService.Instance["UpdateError"], "Download failed");
-                    System.Windows.Forms.MessageBox.Show(errMsg, Services.LocalizationService.Instance["UpdateCheckTitle"], System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Error);
+                    await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () => {
+                        var mainWindow = (Avalonia.Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
+                        if (mainWindow != null) await UpdateDialog.ShowDialog(mainWindow, errMsg);
+                    });
                 }
             }
         }
@@ -552,10 +562,10 @@ public class MainWindowViewModel : ViewModelBase
             if (!silent)
             {
                 SetStatus("StatusReady");
-                System.Windows.Forms.MessageBox.Show(Services.LocalizationService.Instance["NoUpdateFound"], 
-                    Services.LocalizationService.Instance["UpdateCheckTitle"], 
-                    System.Windows.Forms.MessageBoxButtons.OK, 
-                    System.Windows.Forms.MessageBoxIcon.Information);
+                await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () => {
+                    var mainWindow = (Avalonia.Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
+                    if (mainWindow != null) await UpdateDialog.ShowDialog(mainWindow, Services.LocalizationService.Instance["NoUpdateFound"]);
+                });
             }
         }
     }

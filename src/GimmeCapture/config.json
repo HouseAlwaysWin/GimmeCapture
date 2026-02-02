@@ -1,7 +1,7 @@
 {
-  "Language": 1,
+  "Language": 0,
   "RunOnStartup": false,
-  "AutoCheckUpdates": false,
+  "AutoCheckUpdates": true,
   "BorderThickness": 1,
   "MaskOpacity": 0.05,
   "BorderColorHex": "#ffd4af37",

@@ -1,0 +1,90 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:services="using:GimmeCapture.Services"
+        mc:Ignorable="d" d:DesignWidth="450" d:DesignHeight="250"
+        x:Class="GimmeCapture.Views.UpdateDialog"
+        Title="Gimme Update!!"
+        Width="450" Height="250"
+        WindowStartupLocation="CenterOwner"
+        SystemDecorations="None"
+        CanResize="False"
+        Background="Transparent"
+        TransparencyLevelHint="Transparent">
+
+    <Border x:Name="MainBorder"
+            BorderBrush="{DynamicResource AccentRedBrush}" 
+            BorderThickness="2" 
+            Background="{DynamicResource GothicBlackBrush}"
+            CornerRadius="4"
+            BoxShadow="0 0 20 2 #900000"
+            PointerPressed="OnPointerPressed">
+        <Grid RowDefinitions="Auto, *, Auto">
+            <!-- Header Ornate Simulation -->
+            <Border Grid.Row="0" Height="40" Background="#1A1A1A" BorderBrush="{DynamicResource DeepRedBrush}" BorderThickness="0,0,0,1">
+                <TextBlock Text="GIMME UPDATE!!" 
+                           Foreground="{DynamicResource AccentRedBrush}"
+                           FontWeight="Bold"
+                           FontSize="18"
+                           FontFamily="{Binding CurrentFontFamily, Source={x:Static services:LocalizationService.Instance}}"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                           LetterSpacing="2"/>
+            </Border>
+
+            <!-- Content Area -->
+            <StackPanel Grid.Row="1" Spacing="15" Margin="30" VerticalAlignment="Center">
+                <TextBlock x:Name="MessageText" 
+                           Text="A New Fox Has Appeared!"
+                           Foreground="White"
+                           FontSize="16"
+                           TextWrapping="Wrap"
+                           TextAlignment="Center"
+                           FontFamily="{Binding CurrentFontFamily, Source={x:Static services:LocalizationService.Instance}}"/>
+            </StackPanel>
+
+            <!-- Footer Buttons -->
+            <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="20" Margin="20">
+                <Button x:Name="CancelButton" 
+                        Content="NOT TODAY" 
+                        Width="120" Height="40"
+                        Background="#2A2A2A"
+                        Foreground="Gray"
+                        FontSize="14"
+                        FontWeight="Bold"
+                        BorderBrush="#444444"
+                        BorderThickness="1"
+                        HorizontalContentAlignment="Center"
+                        VerticalContentAlignment="Center"
+                        Click="OnCancelClick">
+                    <Button.Styles>
+                        <Style Selector="Button:pointerover /template/ ContentPresenter">
+                            <Setter Property="Background" Value="#333333"/>
+                            <Setter Property="Foreground" Value="White"/>
+                        </Style>
+                    </Button.Styles>
+                </Button>
+
+                <Button x:Name="OkButton" 
+                        Content="ENTER THE FOX PIT" 
+                        Width="160" Height="40"
+                        Background="{DynamicResource AccentRedBrush}"
+                        Foreground="White"
+                        FontSize="14"
+                        FontWeight="Bold"
+                        BorderBrush="{DynamicResource DeepRedBrush}"
+                        BorderThickness="1"
+                        HorizontalContentAlignment="Center"
+                        VerticalContentAlignment="Center"
+                        Click="OnOkClick">
+                    <Button.Styles>
+                        <Style Selector="Button:pointerover /template/ ContentPresenter">
+                            <Setter Property="Background" Value="#FF1A1A"/>
+                            <Setter Property="BoxShadow" Value="0 0 10 2 #FF0000"/>
+                        </Style>
+                    </Button.Styles>
+                </Button>
+            </StackPanel>
+        </Grid>
+    </Border>
+</Window>
