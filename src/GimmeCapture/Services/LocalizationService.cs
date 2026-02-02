@@ -101,7 +101,16 @@ namespace GimmeCapture.Services
                     ["StatusReady"] = "Ready to Capture",
                     ["StatusSnip"] = "Snip Window Opened",
                     ["StatusSaved"] = "Settings Saved",
-                    ["StatusReset"] = "Settings Reset to Default",
+                        ["StatusReset"] = "Settings Reset to Default",
+                        
+                        // Updates
+                        ["UpdateFound"] = "New version found: {0}. Download now?",
+                        ["UpdateDownloading"] = "Downloading update... {0}%",
+                        ["UpdateReady"] = "Update downloaded. Restart and install now?",
+                        ["UpdateCheckTitle"] = "Update Check",
+                        ["UpdateError"] = "Update failed: {0}",
+                        ["CheckingUpdate"] = "Checking for updates...",
+                        ["NoUpdateFound"] = "You are using the latest version.",
 
                     // Tooltips
                     ["TipCopy"] = "Copy (Ctrl+C)",
@@ -183,7 +192,16 @@ namespace GimmeCapture.Services
                     ["StatusReady"] = "準備就緒",
                     ["StatusSnip"] = "擷圖視窗已開啟",
                     ["StatusSaved"] = "設定已保存",
-                    ["StatusReset"] = "已重設設定",
+                        ["StatusReset"] = "已重設設定",
+                        
+                        // Updates
+                        ["UpdateFound"] = "發現新版本: {0}。立即下載？",
+                        ["UpdateDownloading"] = "正在下載更新... {0}%",
+                        ["UpdateReady"] = "更新已下載。立即重啟並安裝？",
+                        ["UpdateCheckTitle"] = "檢查更新",
+                        ["UpdateError"] = "更新失敗: {0}",
+                        ["CheckingUpdate"] = "正在檢查更新...",
+                        ["NoUpdateFound"] = "您已使用最新版本。",
 
                     // Tooltips
                     ["TipCopy"] = "複製 (Ctrl+C)",
@@ -265,7 +283,16 @@ namespace GimmeCapture.Services
                     ["StatusReady"] = "キャプチャ準備完了",
                     ["StatusSnip"] = "キャプチャウィンドウが開きました",
                     ["StatusSaved"] = "設定を保存しました",
-                    ["StatusReset"] = "初期設定に戻しました",
+                        ["StatusReset"] = "初期設定に戻しました",
+                        
+                        // Updates
+                        ["UpdateFound"] = "新しいバージョンが見つかりました: {0}。今すぐダウンロードしますか？",
+                        ["UpdateDownloading"] = "更新プログラムをダウンロード中... {0}%",
+                        ["UpdateReady"] = "更新プログラムがダウンロードされました。再起動してインストールしますか？",
+                        ["UpdateCheckTitle"] = "アップデート確認",
+                        ["UpdateError"] = "アップデートに失敗しました: {0}",
+                        ["CheckingUpdate"] = "アップデートを確認中...",
+                        ["NoUpdateFound"] = "最新バージョンを使用しています。",
                     
                     // Tooltips
                     ["TipCopy"] = "コピー (Ctrl+C)",

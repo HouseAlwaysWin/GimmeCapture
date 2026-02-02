@@ -302,9 +302,15 @@
             <!-- 關於 (About) -->
             <TabItem Header="{Binding [TabAbout], Source={x:Static services:LocalizationService.Instance}}">
                 <StackPanel Spacing="10" Margin="10" HorizontalAlignment="Center" VerticalAlignment="Center">
-                    <TextBlock Text="GimmeCapture!!" FontSize="24" FontWeight="Bold" Foreground="{DynamicResource AccentRedBrush}"/>
-                    <TextBlock Text="Version 0.1.0 (Phase 1)" Foreground="White"/>
-                    <TextBlock Text="The Metal Image/Video Snip Tool" FontStyle="Italic" Foreground="{DynamicResource DeepRedBrush}"/>
+                    <TextBlock Text="GimmeCapture!!" FontSize="24" FontWeight="Bold" Foreground="{DynamicResource AccentRedBrush}" HorizontalAlignment="Center"/>
+                    <TextBlock Text="Version 0.1.0 (Testing Update)" Foreground="White" HorizontalAlignment="Center"/>
+                    <TextBlock Text="The One Tool to Snip &amp; Record" FontStyle="Italic" Foreground="{DynamicResource DeepRedBrush}" HorizontalAlignment="Center"/>
+                    
+                    <Button Content="{Binding [AutoCheckUpdates], Source={x:Static services:LocalizationService.Instance}}" 
+                            Theme="{StaticResource MetalButton}" 
+                            HorizontalAlignment="Center" 
+                            Margin="0,20,0,0"
+                            Command="{Binding CheckUpdateCommand}"/>
                 </StackPanel>
             </TabItem>
         </TabControl>

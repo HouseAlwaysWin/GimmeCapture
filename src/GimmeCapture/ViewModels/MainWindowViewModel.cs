@@ -43,6 +43,7 @@ public class MainWindowViewModel : ViewModelBase
 
     public FFmpegDownloaderService FfmpegDownloader { get; } = new();
     public RecordingService RecordingService { get; }
+    public UpdateService UpdateService { get; }
 
     // Commands
     public ReactiveCommand<CaptureMode, Unit> StartCaptureCommand { get; }
@@ -54,6 +55,7 @@ public class MainWindowViewModel : ViewModelBase
     public ReactiveCommand<Unit, Unit> DecreaseOpacityCommand { get; }
     public ReactiveCommand<Color, Unit> ChangeColorCommand { get; }
     public ReactiveCommand<Color, Unit> ChangeThemeColorCommand { get; }
+    public ReactiveCommand<Unit, Unit> CheckUpdateCommand { get; }
     
     public Color[] SettingsColors { get; } = new[]
     {
@@ -66,6 +68,7 @@ public class MainWindowViewModel : ViewModelBase
     {
         _settingsService = new Services.AppSettingsService();
         RecordingService = new RecordingService(FfmpegDownloader);
+        UpdateService = new UpdateService("0.1.0"); // Test Version
         
         // Sync ViewModel with Service using ReactiveUI
         // When Service language changes, notify ViewModel properties to update
@@ -93,6 +96,7 @@ public class MainWindowViewModel : ViewModelBase
         
         ChangeColorCommand = ReactiveCommand.Create<Color>(c => BorderColor = c);
         ChangeThemeColorCommand = ReactiveCommand.Create<Color>(c => ThemeColor = c);
+        CheckUpdateCommand = ReactiveCommand.CreateFromTask(CheckForUpdates);
         
         // Setup Hotkey Action
         HotkeyService.OnHotkeyPressed = (id) => 
@@ -121,6 +125,17 @@ public class MainWindowViewModel : ViewModelBase
                 {
                      if (StatusText.StartsWith("正在下載"))
                         SetStatus("StatusReady");
+                }
+            });
+
+        // Update Progress Feedback
+        UpdateService.WhenAnyValue(x => x.IsDownloading, x => x.DownloadProgress)
+            .ObserveOn(RxApp.MainThreadScheduler)
+            .Subscribe(x => {
+                var (isDownloading, progress) = x;
+                if (isDownloading)
+                {
+                    StatusText = string.Format(Services.LocalizationService.Instance["UpdateDownloading"], (int)progress);
                 }
             });
 
@@ -483,6 +498,53 @@ public class MainWindowViewModel : ViewModelBase
         {
             Avalonia.Application.Current.Resources["ThemeAccentColor"] = accentColor;
             Avalonia.Application.Current.Resources["ThemeDeepColor"] = deepColor;
+        }
+    }
+
+    private async Task CheckForUpdates()
+    {
+        SetStatus("CheckingUpdate");
+        var release = await UpdateService.CheckForUpdateAsync();
+        
+        if (release != null)
+        {
+            SetStatus("StatusReady");
+            var msg = string.Format(Services.LocalizationService.Instance["UpdateFound"], release.TagName);
+            var result = System.Windows.Forms.MessageBox.Show(msg, 
+                Services.LocalizationService.Instance["UpdateCheckTitle"], 
+                System.Windows.Forms.MessageBoxButtons.YesNo, 
+                System.Windows.Forms.MessageBoxIcon.Information);
+
+            if (result == System.Windows.Forms.DialogResult.Yes)
+            {
+                var zipPath = await UpdateService.DownloadUpdateAsync(release);
+                if (!string.IsNullOrEmpty(zipPath))
+                {
+                    var readyMsg = Services.LocalizationService.Instance["UpdateReady"];
+                    var readyResult = System.Windows.Forms.MessageBox.Show(readyMsg, 
+                        Services.LocalizationService.Instance["UpdateCheckTitle"], 
+                        System.Windows.Forms.MessageBoxButtons.YesNo, 
+                        System.Windows.Forms.MessageBoxIcon.Question);
+
+                    if (readyResult == System.Windows.Forms.DialogResult.Yes)
+                    {
+                        UpdateService.ApplyUpdate(zipPath);
+                    }
+                }
+                else
+                {
+                    var errMsg = string.Format(Services.LocalizationService.Instance["UpdateError"], "Download failed");
+                    System.Windows.Forms.MessageBox.Show(errMsg, Services.LocalizationService.Instance["UpdateCheckTitle"], System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Error);
+                }
+            }
+        }
+        else
+        {
+            SetStatus("StatusReady");
+            System.Windows.Forms.MessageBox.Show(Services.LocalizationService.Instance["NoUpdateFound"], 
+                Services.LocalizationService.Instance["UpdateCheckTitle"], 
+                System.Windows.Forms.MessageBoxButtons.OK, 
+                System.Windows.Forms.MessageBoxIcon.Information);
         }
     }
 }
