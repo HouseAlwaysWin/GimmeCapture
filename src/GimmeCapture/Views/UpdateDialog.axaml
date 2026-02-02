@@ -3,105 +3,125 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:services="using:GimmeCapture.Services"
-        mc:Ignorable="d" d:DesignWidth="450" d:DesignHeight="250"
+        mc:Ignorable="d" d:DesignWidth="480" d:DesignHeight="280"
         x:Class="GimmeCapture.Views.UpdateDialog"
         Title="Gimme Update!!"
-        Width="450" Height="250"
+        Width="500" Height="300"
         WindowStartupLocation="CenterOwner"
         SystemDecorations="None"
         CanResize="False"
         Background="Transparent"
         TransparencyLevelHint="Transparent">
 
-    <Border x:Name="MainBorder"
-            BorderThickness="2" 
-            Background="{DynamicResource GothicBlackBrush}"
-            CornerRadius="4"
-            BoxShadow="0 0 20 2 #900000"
-            PointerPressed="OnPointerPressed">
-        <Border.BorderBrush>
-            <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
-                <GradientStop Offset="0" Color="{DynamicResource ThemeDeepColor}"/>
-                <GradientStop Offset="0.5" Color="{DynamicResource ThemeAccentColor}"/>
-                <GradientStop Offset="1" Color="{DynamicResource ThemeDeepColor}"/>
-            </LinearGradientBrush>
-        </Border.BorderBrush>
-        <Grid>
-            <!-- Background Decoration (Corner Brackets) -->
-            <Canvas HorizontalAlignment="Stretch" VerticalAlignment="Stretch" IsHitTestVisible="False">
-                <!-- Top Left -->
-                <Rectangle Fill="{DynamicResource ThemeAccentBrush}" Width="15" Height="2" Canvas.Top="-1" Canvas.Left="-1"/>
-                <Rectangle Fill="{DynamicResource ThemeAccentBrush}" Width="2" Height="15" Canvas.Top="-1" Canvas.Left="-1"/>
-                <!-- Top Right -->
-                <Rectangle Fill="{DynamicResource ThemeAccentBrush}" Width="15" Height="2" Canvas.Top="-1" Canvas.Right="-1"/>
-                <Rectangle Fill="{DynamicResource ThemeAccentBrush}" Width="2" Height="15" Canvas.Top="-1" Canvas.Right="-1"/>
-                <!-- Bottom Left -->
-                <Rectangle Fill="{DynamicResource ThemeAccentBrush}" Width="15" Height="2" Canvas.Bottom="-1" Canvas.Left="-1"/>
-                <Rectangle Fill="{DynamicResource ThemeAccentBrush}" Width="2" Height="15" Canvas.Bottom="-1" Canvas.Left="-1"/>
-                <!-- Bottom Right -->
-                <Rectangle Fill="{DynamicResource ThemeAccentBrush}" Width="15" Height="2" Canvas.Bottom="-1" Canvas.Right="-1"/>
-                <Rectangle Fill="{DynamicResource ThemeAccentBrush}" Width="2" Height="15" Canvas.Bottom="-1" Canvas.Right="-1"/>
+    <!-- Root Panel Centered in Window with Shadow Padding -->
+    <!-- Content Size: 450x250 -->
+    <Panel Width="450" Height="250" HorizontalAlignment="Center" VerticalAlignment="Center" PointerPressed="OnPointerPressed">
+        
+        <!-- LAYER 1: Shadow (BoxShadow is on a Border) -->
+        <!-- We use a background border solely for the shadow and main fill -->
+        <Border Background="{DynamicResource GothicBlackBrush}"
+                CornerRadius="0"
+                BoxShadow="0 0 25 5 #A00000">
+        </Border>
 
-                <!-- Gold Accents for a more regal metal look -->
-                <Rectangle Fill="{DynamicResource BabymetalGoldBrush}" Width="4" Height="4" Canvas.Top="2" Canvas.Left="2"/>
-                <Rectangle Fill="{DynamicResource BabymetalGoldBrush}" Width="4" Height="4" Canvas.Top="2" Canvas.Right="2"/>
-                <Rectangle Fill="{DynamicResource BabymetalGoldBrush}" Width="4" Height="4" Canvas.Bottom="2" Canvas.Left="2"/>
-                <Rectangle Fill="{DynamicResource BabymetalGoldBrush}" Width="4" Height="4" Canvas.Bottom="2" Canvas.Right="2"/>
-            </Canvas>
-
-            <Grid RowDefinitions="Auto, *, Auto">
-                <!-- Label Ornate Simulation -->
-                <Border Grid.Row="0" Height="45" Background="#1A1A1A" BorderThickness="0,0,0,2">
-                    <Border.BorderBrush>
+        <!-- LAYER 2: Header Background (Underlay) -->
+        <!-- This ensures the header background extends partially behind the border, preventing gaps -->
+        <Rectangle Fill="#1A1A1A" Height="45" VerticalAlignment="Top" HorizontalAlignment="Stretch"/>
+        
+        <!-- LAYER 3: Content -->
+        <Grid RowDefinitions="Auto, *, Auto">
+            
+            <!-- Header Text -->
+            <!-- Note: No visual border here, just the text. The visual border is handled by Layer 4 and the Rectangle above -->
+            <Panel Grid.Row="0" Height="45">
+                <!-- Bottom Divider of Header -->
+                <Border BorderThickness="0,0,0,2" VerticalAlignment="Bottom" Height="2">
+                   <Border.BorderBrush>
                         <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
                             <GradientStop Offset="0" Color="Transparent"/>
                             <GradientStop Offset="0.5" Color="{DynamicResource ThemeAccentColor}"/>
                             <GradientStop Offset="1" Color="Transparent"/>
                         </LinearGradientBrush>
-                    </Border.BorderBrush>
-                    <TextBlock Text="GIMME UPDATE!!" 
-                               Foreground="{DynamicResource AccentRedBrush}"
-                               FontWeight="Bold"
-                               FontSize="20"
-                               FontFamily="{Binding CurrentFontFamily, Source={x:Static services:LocalizationService.Instance}}"
-                               HorizontalAlignment="Center" VerticalAlignment="Center"
-                               LetterSpacing="4"/>
+                   </Border.BorderBrush>
                 </Border>
+                
+                <!-- Text -->
+                <!-- Removed negative margins to restore natural centering -->
+                <TextBlock Text="GIMME UPDATE!!" 
+                           Foreground="{DynamicResource AccentRedBrush}"
+                           FontWeight="Bold"
+                           FontSize="22"
+                           FontFamily="Times New Roman, Georgia, Serif"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                           LetterSpacing="6"/>
+            </Panel>
 
-                <!-- Content Area -->
-                <StackPanel Grid.Row="1" Spacing="15" Margin="30" VerticalAlignment="Center">
-                    <TextBlock x:Name="MessageText" 
-                               Text="A New Fox Has Appeared!"
-                               Foreground="White"
-                               FontSize="16"
-                               TextWrapping="Wrap"
-                               TextAlignment="Center"
-                               FontFamily="{Binding CurrentFontFamily, Source={x:Static services:LocalizationService.Instance}}"/>
-                    
-                    <!-- Decorative Fox Element -->
-                    <Path Data="M 10 0 L 20 15 L 0 15 Z" Fill="{DynamicResource ThemeDeepBrush}" HorizontalAlignment="Center" Width="20" Height="15" Opacity="0.5"/>
-                </StackPanel>
+            <!-- Content Area -->
+            <StackPanel Grid.Row="1" Spacing="15" Margin="30" VerticalAlignment="Center">
+                <TextBlock x:Name="MessageText" 
+                           Text="A New Fox Has Appeared!"
+                           Foreground="White"
+                           FontSize="16"
+                           TextWrapping="Wrap"
+                           TextAlignment="Center"
+                           FontFamily="{Binding CurrentFontFamily, Source={x:Static services:LocalizationService.Instance}}"/>
+                
+                <!-- Decorative Fox Element -->
+                <Path Data="M 10 0 L 20 15 L 0 15 Z" Fill="{DynamicResource ThemeDeepBrush}" HorizontalAlignment="Center" Width="20" Height="15" Opacity="0.5"/>
+            </StackPanel>
 
-                <!-- Footer Buttons -->
-                <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="30" Margin="25">
-                    <Button x:Name="CancelButton" 
-                            Content="NOT TODAY" 
-                            Theme="{StaticResource SmallMetalButton}"
-                            Width="120"
-                            Foreground="#888888"
-                            HorizontalContentAlignment="Center"
-                            VerticalContentAlignment="Center"
-                            Click="OnCancelClick"/>
+            <!-- Footer Buttons -->
+            <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="40" Margin="20" ClipToBounds="False">
+                <Button x:Name="CancelButton" 
+                        Content="NOT TODAY" 
+                        Theme="{StaticResource GothicMetalButton}"
+                        Width="130" Height="48"
+                        Foreground="#666666"
+                        Click="OnCancelClick"/>
 
-                    <Button x:Name="OkButton" 
-                            Content="ENTER THE FOX PIT" 
-                            Theme="{StaticResource MetalButton}"
-                            Width="200"
-                            HorizontalContentAlignment="Center"
-                            VerticalContentAlignment="Center"
-                            Click="OnOkClick"/>
-                </StackPanel>
-            </Grid>
+                <Button x:Name="OkButton" 
+                        Content="ENTER THE FOX PIT" 
+                        Theme="{StaticResource GothicMetalButton}"
+                        Width="240" Height="48"
+                        Click="OnOkClick"/>
+            </StackPanel>
         </Grid>
-    </Border>
+
+        <!-- LAYER 4: Main Border Stroke (Overlay) -->
+        <!-- Placed ON TOP of content to ensure clean edges -->
+        <Border BorderThickness="2" CornerRadius="0" IsHitTestVisible="False">
+            <Border.BorderBrush>
+                <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+                    <GradientStop Offset="0" Color="{DynamicResource ThemeDeepColor}"/>
+                    <GradientStop Offset="0.5" Color="{DynamicResource ThemeAccentColor}"/>
+                    <GradientStop Offset="1" Color="{DynamicResource ThemeDeepColor}"/>
+                </LinearGradientBrush>
+            </Border.BorderBrush>
+        </Border>
+
+        <!-- LAYER 5: Decorations (Corner Brackets) -->
+        <!-- Placed ON TOP of Border to cover corners completely -->
+        <Panel IsHitTestVisible="False" ZIndex="10">
+            <!-- Top Left -->
+            <Rectangle Fill="{DynamicResource ThemeAccentBrush}" Width="15" Height="2" HorizontalAlignment="Left" VerticalAlignment="Top"/>
+            <Rectangle Fill="{DynamicResource ThemeAccentBrush}" Width="2" Height="15" HorizontalAlignment="Left" VerticalAlignment="Top"/>
+            <!-- Top Right -->
+            <Rectangle Fill="{DynamicResource ThemeAccentBrush}" Width="15" Height="2" HorizontalAlignment="Right" VerticalAlignment="Top"/>
+            <Rectangle Fill="{DynamicResource ThemeAccentBrush}" Width="2" Height="15" HorizontalAlignment="Right" VerticalAlignment="Top"/>
+            <!-- Bottom Left -->
+            <Rectangle Fill="{DynamicResource ThemeAccentBrush}" Width="15" Height="2" HorizontalAlignment="Left" VerticalAlignment="Bottom"/>
+            <Rectangle Fill="{DynamicResource ThemeAccentBrush}" Width="2" Height="15" HorizontalAlignment="Left" VerticalAlignment="Bottom"/>
+            <!-- Bottom Right -->
+            <Rectangle Fill="{DynamicResource ThemeAccentBrush}" Width="15" Height="2" HorizontalAlignment="Right" VerticalAlignment="Bottom"/>
+            <Rectangle Fill="{DynamicResource ThemeAccentBrush}" Width="2" Height="15" HorizontalAlignment="Right" VerticalAlignment="Bottom"/>
+
+            <!-- Accent Accents (Gold Dots) -->
+            <!-- Inset by 4px to align visually with the 2px border -->
+            <Rectangle Fill="{DynamicResource AccentGoldBrush}" Width="4" Height="4" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="4"/>
+            <Rectangle Fill="{DynamicResource AccentGoldBrush}" Width="4" Height="4" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="4"/>
+            <Rectangle Fill="{DynamicResource AccentGoldBrush}" Width="4" Height="4" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="4"/>
+            <Rectangle Fill="{DynamicResource AccentGoldBrush}" Width="4" Height="4" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="4"/>
+        </Panel>
+
+    </Panel>
 </Window>

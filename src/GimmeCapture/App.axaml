@@ -8,6 +8,13 @@
 
     <Application.Resources>
         <ResourceDictionary>
+            <!-- Dynamic Theme Colors (Root Level for Global Overrides) -->
+            <Color x:Key="ThemeAccentColor">#E60012</Color>
+            <Color x:Key="ThemeDeepColor">#900000</Color>
+            
+            <SolidColorBrush x:Key="ThemeAccentBrush" Color="{DynamicResource ThemeAccentColor}"/>
+            <SolidColorBrush x:Key="ThemeDeepBrush" Color="{DynamicResource ThemeDeepColor}"/>
+
             <cv:StateToBoolConverter x:Key="StateToBoolConverter"/>
             <cv:ColorToBrushConverter x:Key="ColorToBrushConverter"/>
             <cv:ColorToBoxShadowConverter x:Key="ColorToBoxShadowConverter"/>

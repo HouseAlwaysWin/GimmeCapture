@@ -2,29 +2,99 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <Styles.Resources>
         <ResourceDictionary>
-            <!-- Dynamic Theme Colors (Default to Red) -->
-            <Color x:Key="ThemeAccentColor">#E60012</Color>
-            <Color x:Key="ThemeDeepColor">#900000</Color>
-            
-            <SolidColorBrush x:Key="ThemeAccentBrush" Color="{DynamicResource ThemeAccentColor}"/>
-            <SolidColorBrush x:Key="ThemeDeepBrush" Color="{DynamicResource ThemeDeepColor}"/>
-
             <!-- Theme Color Palette -->
             <Color x:Key="AccentRed">#E60012</Color>
             <Color x:Key="DeepRed">#900000</Color>
             <Color x:Key="GothicBlack">#121212</Color>
             <Color x:Key="ChromeSilver">#E0E0E0</Color>
             <Color x:Key="MetallicSilver">#A0A0A0</Color>
-            <Color x:Key="BabymetalGold">#D4AF37</Color>
+            <Color x:Key="AccentGold">#D4AF37</Color>
             <Color x:Key="PanelGray">#1E1E1E</Color>
 
             <SolidColorBrush x:Key="AccentRedBrush" Color="{StaticResource AccentRed}"/>
-            <SolidColorBrush x:Key="BabymetalGoldBrush" Color="{StaticResource BabymetalGold}"/>
+            <SolidColorBrush x:Key="AccentGoldBrush" Color="{StaticResource AccentGold}"/>
             <SolidColorBrush x:Key="DeepRedBrush" Color="{StaticResource DeepRed}"/>
             <SolidColorBrush x:Key="GothicBlackBrush" Color="{StaticResource GothicBlack}"/>
             <SolidColorBrush x:Key="ChromeSilverBrush" Color="{StaticResource ChromeSilver}"/>
             <SolidColorBrush x:Key="MetallicSilverBrush" Color="{StaticResource MetallicSilver}"/>
             <SolidColorBrush x:Key="PanelGrayBrush" Color="{StaticResource PanelGray}"/>
+
+            <!-- Official Style Gothic Metal Button (Octagonal/Clipped Corners) -->
+            <ControlTheme x:Key="GothicMetalButton" TargetType="Button">
+                <Setter Property="Background" Value="Black"/>
+                <Setter Property="Foreground" Value="{StaticResource ChromeSilverBrush}"/>
+                <Setter Property="Padding" Value="0"/>
+                <Setter Property="FontWeight" Value="Normal"/>
+                <Setter Property="FontSize" Value="13"/>
+                <Setter Property="FontFamily" Value="Times New Roman, Georgia, Serif"/>
+                <Setter Property="HorizontalContentAlignment" Value="Center"/>
+                <Setter Property="VerticalContentAlignment" Value="Center"/>
+                <Setter Property="TextBlock.LetterSpacing" Value="1.5"/>
+                <Setter Property="Cursor" Value="Hand"/>
+                <Setter Property="Transitions">
+                    <Transitions>
+                        <DoubleTransition Property="Opacity" Duration="0:0:0.2"/>
+                        <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.1"/>
+                    </Transitions>
+                </Setter>
+                <Setter Property="Template">
+                    <ControlTemplate>
+                        <Panel Name="RootPanel">
+                            <!-- The Octagonal Base -->
+                            <Path Data="M 12,0 L 238,0 L 250,12 L 250,38 L 238,50 L 12,50 L 0,38 L 0,12 Z"
+                                  Fill="{TemplateBinding Background}"
+                                  Stretch="Fill"
+                                  Name="BgPath"/>
+                            
+                            <!-- Outer Metallic Border -->
+                            <Path Data="M 12,0 L 238,0 L 250,12 L 250,38 L 238,50 L 12,50 L 0,38 L 0,12 Z"
+                                  StrokeThickness="1.0"
+                                  Stretch="Fill"
+                                  Name="BorderPath">
+                                <Path.Stroke>
+                                    <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+                                        <GradientStop Offset="0" Color="{DynamicResource ThemeDeepColor}"/>
+                                        <GradientStop Offset="0.5" Color="{DynamicResource ThemeAccentColor}"/>
+                                        <GradientStop Offset="1" Color="{DynamicResource ThemeDeepColor}"/>
+                                    </LinearGradientBrush>
+                                </Path.Stroke>
+                            </Path>
+
+                            <!-- Inner Subtle Border -->
+                            <Path Data="M 14,2 L 236,2 L 248,14 L 248,36 L 236,48 L 14,48 L 2,36 L 2,14 Z"
+                                  Stroke="#30FFFFFF"
+                                  StrokeThickness="0.5"
+                                  Stretch="Fill"
+                                  IsHitTestVisible="False"/>
+
+                            <ContentPresenter Name="PART_ContentPresenter"
+                                              Content="{TemplateBinding Content}"
+                                              ContentTemplate="{TemplateBinding ContentTemplate}"
+                                              Padding="{TemplateBinding Padding}"
+                                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                        </Panel>
+                    </ControlTemplate>
+                </Setter>
+                
+                <Style Selector="^:pointerover">
+                    <Setter Property="RenderTransform" Value="scale(1.05)"/>
+                    <Setter Property="Foreground" Value="White"/>
+                    <Style Selector="^ /template/ Path#BgPath">
+                        <Setter Property="Fill" Value="#080808"/>
+                    </Style>
+                    <Style Selector="^ /template/ Path#BorderPath">
+                        <Setter Property="Stroke" Value="White"/>
+                    </Style>
+                </Style>
+                
+                <Style Selector="^:pressed">
+                    <Setter Property="RenderTransform" Value="scale(0.98)"/>
+                    <Style Selector="^ /template/ Path#BgPath">
+                        <Setter Property="Fill" Value="#1A1A1A"/>
+                    </Style>
+                </Style>
+            </ControlTheme>
 
             <!-- Metal Button Style -->
             <ControlTheme x:Key="MetalButton" TargetType="Button">
@@ -420,7 +490,7 @@
         <Setter Property="Foreground" Value="White"/>
         <Setter Property="CornerRadius" Value="0"/>
         <Setter Property="Padding" Value="8,5"/>
-        <Setter Property="CaretBrush" Value="{StaticResource BabymetalGoldBrush}"/>
+        <Setter Property="CaretBrush" Value="{StaticResource AccentGoldBrush}"/>
         <Style Selector="^:focus /template/ Border#PART_BorderElement">
             <Setter Property="BorderBrush" Value="{DynamicResource ThemeAccentBrush}"/>
             <Setter Property="BorderThickness" Value="1"/>
