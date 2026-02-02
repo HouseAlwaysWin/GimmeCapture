@@ -57,12 +57,12 @@
             </Panel>
 
             <!-- Content Area -->
-            <StackPanel Grid.Row="1" Spacing="15" Margin="30" VerticalAlignment="Center">
+            <StackPanel Grid.Row="1" Spacing="15" Margin="20" VerticalAlignment="Center">
                 <TextBlock x:Name="MessageText" 
                            Text="A New Fox Has Appeared!"
                            Foreground="White"
                            FontSize="16"
-                           TextWrapping="Wrap"
+                           TextWrapping="WrapWithOverflow"
                            TextAlignment="Center"
                            FontFamily="{Binding CurrentFontFamily, Source={x:Static services:LocalizationService.Instance}}"/>
                 
