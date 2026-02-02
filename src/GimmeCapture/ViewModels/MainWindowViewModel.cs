@@ -68,7 +68,7 @@ public class MainWindowViewModel : ViewModelBase
     {
         _settingsService = new Services.AppSettingsService();
         RecordingService = new RecordingService(FfmpegDownloader);
-        UpdateService = new UpdateService("0.1.0"); // Test Version
+        UpdateService = new UpdateService("0.1.0");
         
         // Sync ViewModel with Service using ReactiveUI
         // When Service language changes, notify ViewModel properties to update
