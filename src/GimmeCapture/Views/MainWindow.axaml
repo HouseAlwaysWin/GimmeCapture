@@ -8,7 +8,7 @@
         mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
         x:Class="GimmeCapture.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
-        Title="GimmeCapture"
+        Title="{Binding AppVersion, StringFormat='GimmeCapture!! v{0}'}"
         Icon="avares://GimmeCapture/Assets/kitsune_icon.png"
         Background="{DynamicResource GothicBlackBrush}"
         FontFamily="{Binding CurrentFontFamily, Source={x:Static services:LocalizationService.Instance}}"
