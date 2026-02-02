@@ -207,7 +207,7 @@
                                 <DockPanel Margin="24,0,0,5">
                                     <Button Content="{Binding [SelectPath], Source={x:Static services:LocalizationService.Instance}}" 
                                             DockPanel.Dock="Right" 
-                                            Theme="{StaticResource SmallMetalButton}"
+                                            Theme="{StaticResource SmallGothicMetalButton}"
                                             Command="{Binding SelectSavePath}" 
                                             Margin="10,0,0,0"/>
                                     <TextBox Text="{Binding SaveDirectory}" IsReadOnly="True" Margin="0,0,10,0"/>
@@ -235,7 +235,7 @@
                     <DockPanel Grid.Row="0" Grid.Column="2">
                         <Button Content="{Binding [SelectPath], Source={x:Static services:LocalizationService.Instance}}" 
                                 DockPanel.Dock="Right" 
-                                Theme="{StaticResource SmallMetalButton}"
+                                Theme="{StaticResource SmallGothicMetalButton}"
                                 Command="{Binding SelectVideoPath}" 
                                 Margin="10,0,0,0"/>
                         <TextBox Text="{Binding VideoSaveDirectory}" IsReadOnly="True" Margin="0,0,10,0"/>
@@ -307,7 +307,7 @@
                     <TextBlock Text="The One Tool to Snip &amp; Record" FontStyle="Italic" Foreground="{DynamicResource DeepRedBrush}" HorizontalAlignment="Center"/>
                     
                     <Button Content="{Binding [AutoCheckUpdates], Source={x:Static services:LocalizationService.Instance}}" 
-                            Theme="{StaticResource MetalButton}" 
+                            Theme="{StaticResource GothicMetalButton}" 
                             HorizontalAlignment="Center" 
                             Margin="0,20,0,0"
                             Command="{Binding CheckUpdateCommand}"/>
@@ -319,7 +319,7 @@
         <Border Grid.Row="1" BorderBrush="#1E1E1E" BorderThickness="0,1,0,0" Padding="0,10,0,0">
             <Grid ColumnDefinitions="Auto,*,Auto,Auto">
                 <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10">
-                    <Button Content="{Binding [StartCapture], Source={x:Static services:LocalizationService.Instance}}" Theme="{StaticResource MetalButton}" Command="{Binding StartCaptureCommand}" />
+                    <Button Content="{Binding [StartCapture], Source={x:Static services:LocalizationService.Instance}}" Theme="{StaticResource GothicMetalButton}" Command="{Binding StartCaptureCommand}" />
                     
                     <!-- FFmpeg Status -->
                     <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center" IsVisible="{Binding FfmpegDownloader.IsDownloading}">
@@ -330,8 +330,8 @@
                 
                 <TextBlock Grid.Column="1" Text="{Binding StatusText}" VerticalAlignment="Center" Margin="10,0" Foreground="Gray" FontSize="11"/>
 
-                <Button Grid.Column="2" Content="{Binding [SaveSettings], Source={x:Static services:LocalizationService.Instance}}" Theme="{StaticResource MetalButton}" Margin="0,0,10,0" Command="{Binding SaveAndCloseCommand}"/>
-                <Button Grid.Column="3" Content="{Binding [ResetDefault], Source={x:Static services:LocalizationService.Instance}}" Theme="{StaticResource MetalButton}" Command="{Binding ResetToDefaultCommand}"/>
+                <Button Grid.Column="2" Content="{Binding [SaveSettings], Source={x:Static services:LocalizationService.Instance}}" Theme="{StaticResource GothicMetalButton}" Margin="0,0,10,0" Command="{Binding SaveAndCloseCommand}"/>
+                <Button Grid.Column="3" Content="{Binding [ResetDefault], Source={x:Static services:LocalizationService.Instance}}" Theme="{StaticResource GothicMetalButton}" Command="{Binding ResetToDefaultCommand}"/>
             </Grid>
         </Border>
     </Grid>

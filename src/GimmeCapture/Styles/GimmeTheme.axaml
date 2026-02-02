@@ -20,10 +20,11 @@
             <SolidColorBrush x:Key="PanelGrayBrush" Color="{StaticResource PanelGray}"/>
 
             <!-- Official Style Gothic Metal Button (Octagonal/Clipped Corners) -->
+
             <ControlTheme x:Key="GothicMetalButton" TargetType="Button">
                 <Setter Property="Background" Value="Black"/>
                 <Setter Property="Foreground" Value="{StaticResource ChromeSilverBrush}"/>
-                <Setter Property="Padding" Value="0"/>
+                <Setter Property="Padding" Value="15,6"/>
                 <Setter Property="FontWeight" Value="Normal"/>
                 <Setter Property="FontSize" Value="13"/>
                 <Setter Property="FontFamily" Value="Times New Roman, Georgia, Serif"/>
@@ -39,58 +40,175 @@
                 </Setter>
                 <Setter Property="Template">
                     <ControlTemplate>
-                        <Panel Name="RootPanel">
-                            <!-- The Octagonal Base -->
-                            <Path Data="M 12,0 L 238,0 L 250,12 L 250,38 L 238,50 L 12,50 L 0,38 L 0,12 Z"
-                                  Fill="{TemplateBinding Background}"
-                                  Stretch="Fill"
-                                  Name="BgPath"/>
-                            
-                            <!-- Outer Metallic Border -->
-                            <Path Data="M 12,0 L 238,0 L 250,12 L 250,38 L 238,50 L 12,50 L 0,38 L 0,12 Z"
-                                  StrokeThickness="1.0"
-                                  Stretch="Fill"
-                                  Name="BorderPath">
-                                <Path.Stroke>
-                                    <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
-                                        <GradientStop Offset="0" Color="{DynamicResource ThemeDeepColor}"/>
-                                        <GradientStop Offset="0.5" Color="{DynamicResource ThemeAccentColor}"/>
-                                        <GradientStop Offset="1" Color="{DynamicResource ThemeDeepColor}"/>
-                                    </LinearGradientBrush>
-                                </Path.Stroke>
-                            </Path>
+                        <Grid ColumnDefinitions="8,*,8" Name="RootGrid">
+                            <Grid.Styles>
+                                <Style Selector="Path.BtnBorder">
+                                    <Setter Property="StrokeThickness" Value="1"/>
+                                    <Setter Property="Stroke">
+                                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                                            <GradientStop Offset="0" Color="{DynamicResource ThemeDeepColor}"/>
+                                            <GradientStop Offset="0.5" Color="{DynamicResource ThemeAccentColor}"/>
+                                            <GradientStop Offset="1" Color="{DynamicResource ThemeDeepColor}"/>
+                                        </LinearGradientBrush>
+                                    </Setter>
+                                </Style>
+                                <Style Selector="Rectangle.BtnBorder">
+                                    <Setter Property="Fill">
+                                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                                            <GradientStop Offset="0" Color="{DynamicResource ThemeDeepColor}"/>
+                                            <GradientStop Offset="0.5" Color="{DynamicResource ThemeAccentColor}"/>
+                                            <GradientStop Offset="1" Color="{DynamicResource ThemeDeepColor}"/>
+                                        </LinearGradientBrush>
+                                    </Setter>
+                                </Style>
+                            </Grid.Styles>
 
-                            <!-- Inner Subtle Border -->
-                            <Path Data="M 14,2 L 236,2 L 248,14 L 248,36 L 236,48 L 14,48 L 2,36 L 2,14 Z"
-                                  Stroke="#30FFFFFF"
-                                  StrokeThickness="0.5"
-                                  Stretch="Fill"
-                                  IsHitTestVisible="False"/>
+                            <!-- Left Cap -->
+                            <Panel Grid.Column="0">
+                                <Path Data="M 1,0 L 0,0.20 L 0,0.80 L 1,1" Stretch="Fill" Fill="{TemplateBinding Background}" Name="BgLeft" Margin="1,0,0,0"/>
+                                <Path Data="M 1,0 L 0,0.20 L 0,0.80 L 1,1" Stretch="Fill" Classes="BtnBorder" Name="BorderLeft" Margin="1,0,0,0"/>
+                                <Path Data="M 1,0.05 L 0.1,0.23 L 0.1,0.77 L 1,0.95" Stretch="Fill" Stroke="#30FFFFFF" StrokeThickness="0.5" Margin="1,1,0,1"/>
+                            </Panel>
 
-                            <ContentPresenter Name="PART_ContentPresenter"
-                                              Content="{TemplateBinding Content}"
-                                              ContentTemplate="{TemplateBinding ContentTemplate}"
-                                              Padding="{TemplateBinding Padding}"
-                                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
-                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
-                        </Panel>
+                            <!-- Center -->
+                            <Panel Grid.Column="1">
+                                <Rectangle Fill="{TemplateBinding Background}" Name="BgCenter"/>
+                                <Rectangle Height="1" VerticalAlignment="Top" Classes="BtnBorder" Name="BorderTop"/>
+                                <Rectangle Height="1" VerticalAlignment="Bottom" Classes="BtnBorder" Name="BorderBottom"/>
+                                <Rectangle Height="1" VerticalAlignment="Top" Fill="#30FFFFFF" Margin="0,2,0,0"/>
+                                <Rectangle Height="1" VerticalAlignment="Bottom" Fill="#30FFFFFF" Margin="0,0,0,2"/>
+
+                                <ContentPresenter Name="PART_ContentPresenter"
+                                                  Content="{TemplateBinding Content}"
+                                                  ContentTemplate="{TemplateBinding ContentTemplate}"
+                                                  Padding="{TemplateBinding Padding}"
+                                                  HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                  VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                            </Panel>
+
+                            <!-- Right Cap -->
+                            <Panel Grid.Column="2">
+                                <Path Data="M 0,0 L 1,0.20 L 1,0.80 L 0,1" Stretch="Fill" Fill="{TemplateBinding Background}" Name="BgRight" Margin="0,0,1,0"/>
+                                <Path Data="M 0,0 L 1,0.20 L 1,0.80 L 0,1" Stretch="Fill" Classes="BtnBorder" Name="BorderRight" Margin="0,0,1,0"/>
+                                <Path Data="M 0,0.05 L 0.9,0.23 L 0.9,0.77 L 0,0.95" Stretch="Fill" Stroke="#30FFFFFF" StrokeThickness="0.5" Margin="0,1,1,1"/>
+                            </Panel>
+                        </Grid>
                     </ControlTemplate>
                 </Setter>
                 
                 <Style Selector="^:pointerover">
                     <Setter Property="RenderTransform" Value="scale(1.05)"/>
                     <Setter Property="Foreground" Value="White"/>
-                    <Style Selector="^ /template/ Path#BgPath">
+                    <Style Selector="^ /template/ Path#BgLeft, ^ /template/ Rectangle#BgCenter, ^ /template/ Path#BgRight">
                         <Setter Property="Fill" Value="#080808"/>
                     </Style>
-                    <Style Selector="^ /template/ Path#BorderPath">
+                    <Style Selector="^ /template/ Path#BorderLeft, ^ /template/ Path#BorderRight">
                         <Setter Property="Stroke" Value="White"/>
+                    </Style>
+                    <Style Selector="^ /template/ Rectangle#BorderTop, ^ /template/ Rectangle#BorderBottom">
+                        <Setter Property="Fill" Value="White"/>
                     </Style>
                 </Style>
                 
                 <Style Selector="^:pressed">
                     <Setter Property="RenderTransform" Value="scale(0.98)"/>
-                    <Style Selector="^ /template/ Path#BgPath">
+                    <Style Selector="^ /template/ Path#BgLeft, ^ /template/ Rectangle#BgCenter, ^ /template/ Path#BgRight">
+                        <Setter Property="Fill" Value="#1A1A1A"/>
+                    </Style>
+                </Style>
+            </ControlTheme>
+
+            <!-- Small Gothic Metal Button -->
+            <ControlTheme x:Key="SmallGothicMetalButton" TargetType="Button">
+                <Setter Property="Background" Value="Black"/>
+                <Setter Property="Foreground" Value="{StaticResource ChromeSilverBrush}"/>
+                <Setter Property="Padding" Value="8,2"/>
+                <Setter Property="FontWeight" Value="Normal"/>
+                <Setter Property="FontSize" Value="11"/>
+                <Setter Property="FontFamily" Value="avares://GimmeCapture/Assets/Fonts/Cinzel/Cinzel-VariableFont_wght.ttf#Cinzel, avares://GimmeCapture/Assets/Fonts/Noto_Serif_JP/NotoSerifJP-VariableFont_wght.ttf#Noto Serif JP, avares://GimmeCapture/Assets/Fonts/Noto_Serif_TC/NotoSerifTC-VariableFont_wght.ttf#Noto Serif TC"/>
+                <Setter Property="HorizontalContentAlignment" Value="Center"/>
+                <Setter Property="VerticalContentAlignment" Value="Center"/>
+                <Setter Property="TextBlock.LetterSpacing" Value="1"/>
+                <Setter Property="Cursor" Value="Hand"/>
+                <Setter Property="Transitions">
+                    <Transitions>
+                        <DoubleTransition Property="Opacity" Duration="0:0:0.2"/>
+                        <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.1"/>
+                    </Transitions>
+                </Setter>
+                <Setter Property="Template">
+                    <ControlTemplate>
+                        <Grid ColumnDefinitions="6,*,6" Name="RootGrid">
+                            <Grid.Styles>
+                                <Style Selector="Path.BtnBorder">
+                                    <Setter Property="StrokeThickness" Value="1"/>
+                                    <Setter Property="Stroke">
+                                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                                            <GradientStop Offset="0" Color="{DynamicResource ThemeDeepColor}"/>
+                                            <GradientStop Offset="0.5" Color="{DynamicResource ThemeAccentColor}"/>
+                                            <GradientStop Offset="1" Color="{DynamicResource ThemeDeepColor}"/>
+                                        </LinearGradientBrush>
+                                    </Setter>
+                                </Style>
+                                <Style Selector="Rectangle.BtnBorder">
+                                    <Setter Property="Fill">
+                                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                                            <GradientStop Offset="0" Color="{DynamicResource ThemeDeepColor}"/>
+                                            <GradientStop Offset="0.5" Color="{DynamicResource ThemeAccentColor}"/>
+                                            <GradientStop Offset="1" Color="{DynamicResource ThemeDeepColor}"/>
+                                        </LinearGradientBrush>
+                                    </Setter>
+                                </Style>
+                            </Grid.Styles>
+
+                            <!-- Left Cap -->
+                            <Panel Grid.Column="0">
+                                <Path Data="M 1,0 L 0,0.25 L 0,0.75 L 1,1" Stretch="Fill" Fill="{TemplateBinding Background}" Name="BgLeft" Margin="1,0,0,0"/>
+                                <Path Data="M 1,0 L 0,0.25 L 0,0.75 L 1,1" Stretch="Fill" Classes="BtnBorder" Name="BorderLeft" Margin="1,0,0,0"/>
+                                <Path Data="M 1,0.05 L 0.1,0.28 L 0.1,0.72 L 1,0.95" Stretch="Fill" Stroke="#30FFFFFF" StrokeThickness="0.5" Margin="1,1,0,1"/>
+                            </Panel>
+
+                            <!-- Center -->
+                            <Panel Grid.Column="1">
+                                <Rectangle Fill="{TemplateBinding Background}" Name="BgCenter"/>
+                                <Rectangle Height="1" VerticalAlignment="Top" Classes="BtnBorder" Name="BorderTop"/>
+                                <Rectangle Height="1" VerticalAlignment="Bottom" Classes="BtnBorder" Name="BorderBottom"/>
+                                
+                                <ContentPresenter Name="PART_ContentPresenter"
+                                                  Content="{TemplateBinding Content}"
+                                                  ContentTemplate="{TemplateBinding ContentTemplate}"
+                                                  Padding="{TemplateBinding Padding}"
+                                                  HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                  VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                            </Panel>
+
+                            <!-- Right Cap -->
+                            <Panel Grid.Column="2">
+                                <Path Data="M 0,0 L 1,0.25 L 1,0.75 L 0,1" Stretch="Fill" Fill="{TemplateBinding Background}" Name="BgRight" Margin="0,0,1,0"/>
+                                <Path Data="M 0,0 L 1,0.25 L 1,0.75 L 0,1" Stretch="Fill" Classes="BtnBorder" Name="BorderRight" Margin="0,0,1,0"/>
+                                <Path Data="M 0,0.05 L 0.9,0.28 L 0.9,0.72 L 0,0.95" Stretch="Fill" Stroke="#30FFFFFF" StrokeThickness="0.5" Margin="0,1,1,1"/>
+                            </Panel>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter>
+                
+                <Style Selector="^:pointerover">
+                    <Setter Property="RenderTransform" Value="scale(1.05)"/>
+                    <Setter Property="Foreground" Value="White"/>
+                    <Style Selector="^ /template/ Path#BgLeft, ^ /template/ Rectangle#BgCenter, ^ /template/ Path#BgRight">
+                        <Setter Property="Fill" Value="#080808"/>
+                    </Style>
+                    <Style Selector="^ /template/ Path#BorderLeft, ^ /template/ Path#BorderRight">
+                        <Setter Property="Stroke" Value="White"/>
+                    </Style>
+                    <Style Selector="^ /template/ Rectangle#BorderTop, ^ /template/ Rectangle#BorderBottom">
+                        <Setter Property="Fill" Value="White"/>
+                    </Style>
+                </Style>
+                
+                <Style Selector="^:pressed">
+                    <Setter Property="RenderTransform" Value="scale(0.98)"/>
+                    <Style Selector="^ /template/ Path#BgLeft, ^ /template/ Rectangle#BgCenter, ^ /template/ Path#BgRight">
                         <Setter Property="Fill" Value="#1A1A1A"/>
                     </Style>
                 </Style>

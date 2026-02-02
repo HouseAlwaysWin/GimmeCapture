@@ -46,12 +46,12 @@
                 </Border>
                 
                 <!-- Text -->
-                <!-- Removed negative margins to restore natural centering -->
+                <!-- Text -->
                 <TextBlock Text="GIMME UPDATE!!" 
                            Foreground="{DynamicResource AccentRedBrush}"
                            FontWeight="Bold"
                            FontSize="22"
-                           FontFamily="Times New Roman, Georgia, Serif"
+                           FontFamily="avares://GimmeCapture/Assets/Fonts/Cinzel/Cinzel-VariableFont_wght.ttf#Cinzel, avares://GimmeCapture/Assets/Fonts/Noto_Serif_JP/NotoSerifJP-VariableFont_wght.ttf#Noto Serif JP, avares://GimmeCapture/Assets/Fonts/Noto_Serif_TC/NotoSerifTC-VariableFont_wght.ttf#Noto Serif TC"
                            HorizontalAlignment="Center" VerticalAlignment="Center"
                            LetterSpacing="6"/>
             </Panel>
@@ -71,19 +71,20 @@
             </StackPanel>
 
             <!-- Footer Buttons -->
-            <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="40" Margin="20" ClipToBounds="False">
+            <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="30" Margin="20,20,20,40" ClipToBounds="False">
                 <Button x:Name="CancelButton" 
                         Content="NOT TODAY" 
                         Theme="{StaticResource GothicMetalButton}"
-                        Width="130" Height="48"
+                        Width="160" Height="48"
                         Foreground="#666666"
                         Click="OnCancelClick"/>
 
-                <Button x:Name="OkButton" 
+                <Button x:Name="UpdateButton" 
                         Content="ENTER THE FOX PIT" 
                         Theme="{StaticResource GothicMetalButton}"
-                        Width="240" Height="48"
-                        Click="OnOkClick"/>
+                        Width="220" Height="48"
+                        Classes="accent"
+                        Click="OnUpdateClick"/>
             </StackPanel>
         </Grid>
 

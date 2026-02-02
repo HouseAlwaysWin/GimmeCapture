@@ -22,7 +22,7 @@ namespace GimmeCapture.Views
             return dialog.Result;
         }
 
-        private void OnOkClick(object? sender, RoutedEventArgs e)
+        private void OnUpdateClick(object? sender, RoutedEventArgs e)
         {
             Result = true;
             Close();
