@@ -169,9 +169,9 @@ public class UpdateService : ReactiveObject
             var script = $@"
 @echo off
 timeout /t 2 /nobreak > nul
-xcopy /s /y ""{tempExtractDir}\*"" ""{appDir}""
-rd /s /q ""{tempExtractDir}""
-del ""{zipPath}""
+xcopy /s /y /i ""{tempExtractDir.TrimEnd('\\')}"" ""{appDir.TrimEnd('\\')}""
+rd /s /q ""{tempExtractDir.TrimEnd('\\')}""
+del /f /q ""{zipPath}""
 start """" ""{Path.Combine(appDir, currentExeName)}""
 del ""%~f0""
 ";
@@ -179,9 +179,11 @@ del ""%~f0""
 
             Process.Start(new ProcessStartInfo
             {
-                FileName = scriptPath,
-                UseShellExecute = true,
-                CreateNoWindow = true
+                FileName = "cmd.exe",
+                Arguments = $"/c \"{scriptPath}\"",
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                WindowStyle = ProcessWindowStyle.Hidden
             });
 
             Environment.Exit(0);

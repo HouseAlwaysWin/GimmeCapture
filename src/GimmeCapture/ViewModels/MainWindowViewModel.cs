@@ -408,6 +408,12 @@ public class MainWindowViewModel : ViewModelBase
         {
             await FfmpegDownloader.EnsureFFmpegAsync();
         }
+
+        // Auto check for updates if enabled
+        if (AutoCheckUpdates)
+        {
+            _ = Task.Run(async () => await CheckForUpdates(silent: true));
+        }
     }
 
     public async Task SaveSettingsAsync()
@@ -502,9 +508,11 @@ public class MainWindowViewModel : ViewModelBase
         }
     }
 
-    private async Task CheckForUpdates()
+    public async Task CheckForUpdates() => await CheckForUpdates(false);
+
+    private async Task CheckForUpdates(bool silent)
     {
-        SetStatus("CheckingUpdate");
+        if (!silent) SetStatus("CheckingUpdate");
         var release = await UpdateService.CheckForUpdateAsync();
         
         if (release != null)
@@ -541,11 +549,14 @@ public class MainWindowViewModel : ViewModelBase
         }
         else
         {
-            SetStatus("StatusReady");
-            System.Windows.Forms.MessageBox.Show(Services.LocalizationService.Instance["NoUpdateFound"], 
-                Services.LocalizationService.Instance["UpdateCheckTitle"], 
-                System.Windows.Forms.MessageBoxButtons.OK, 
-                System.Windows.Forms.MessageBoxIcon.Information);
+            if (!silent)
+            {
+                SetStatus("StatusReady");
+                System.Windows.Forms.MessageBox.Show(Services.LocalizationService.Instance["NoUpdateFound"], 
+                    Services.LocalizationService.Instance["UpdateCheckTitle"], 
+                    System.Windows.Forms.MessageBoxButtons.OK, 
+                    System.Windows.Forms.MessageBoxIcon.Information);
+            }
         }
     }
 }
