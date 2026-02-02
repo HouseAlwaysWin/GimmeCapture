@@ -146,6 +146,8 @@ namespace GimmeCapture.Services
             ["HidePinBorder"] = "Hide Pin Window Border",
             ["ShowSnipCursor"] = "Capture Mouse Cursor in Screenshot",
             ["ShowRecordCursor"] = "Capture Mouse Cursor in Recording",
+            ["FFmpegStatusDownloading"] = "FFmpeg Downloading...",
+            ["ComponentDownloadingProgress"] = "Downloading components... {0}%",
                 },
                 [Language.Chinese] = new Dictionary<string, string>
                 {
@@ -237,6 +239,8 @@ namespace GimmeCapture.Services
             ["HidePinBorder"] = "隱藏釘選視窗邊框",
             ["ShowSnipCursor"] = "擷取畫面包含滑鼠游標",
             ["ShowRecordCursor"] = "錄影畫面包含滑鼠游標",
+            ["FFmpegStatusDownloading"] = "正在下載 FFmpeg...",
+            ["ComponentDownloadingProgress"] = "正在下載必要組件... {0}%",
                 },
                 [Language.Japanese] = new Dictionary<string, string>
                 {
@@ -321,13 +325,15 @@ namespace GimmeCapture.Services
                     ["Record"] = "録画",
                     ["Pause"] = "一時停止",
                     ["Stop"] = "停止",
-                    ["TipRecord"] = "錄録画 (F2)",
+                    ["TipRecord"] = "録画 (F2)",
                     ["TipSnipMode"] = "スニップモードに切り替える",
                     ["TipRecordMode"] = "録画モードに切り替える",
                     ["ShowPinDecoration"] = "ピン留めウィンドウの装飾を表示する",
             ["HidePinBorder"] = "ピン留めウィンドウの境界線を非表示にする",
             ["ShowSnipCursor"] = "スクリーンショットにマウスカーソルを含める",
             ["ShowRecordCursor"] = "録画にマウスカーソルを含める",
+            ["FFmpegStatusDownloading"] = "FFmpeg ダウンロード中...",
+            ["ComponentDownloadingProgress"] = "コンポーネントをダウンロード中... {0}%",
                 }
             };
 

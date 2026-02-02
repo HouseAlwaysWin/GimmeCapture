@@ -120,11 +120,11 @@ public class MainWindowViewModel : ViewModelBase
                 var (isDownloading, progress) = x;
                 if (isDownloading)
                 {
-                    StatusText = $"正在下載必要組件... {progress:F0}%";
+                    StatusText = string.Format(Services.LocalizationService.Instance["ComponentDownloadingProgress"], (int)progress);
                 }
                 else if (progress >= 100)
                 {
-                     if (StatusText.StartsWith("正在下載"))
+                     if (StatusText.Contains(Services.LocalizationService.Instance["ComponentDownloadingProgress"].Split('.')[0]))
                         SetStatus("StatusReady");
                 }
             });
