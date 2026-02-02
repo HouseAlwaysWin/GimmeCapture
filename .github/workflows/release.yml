@@ -24,7 +24,9 @@ jobs:
       run: dotnet restore src/GimmeCapture/GimmeCapture.csproj
 
     - name: Publish application
-      run: dotnet publish src/GimmeCapture/GimmeCapture.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o ./publish
+      run: |
+        $version = "${{ github.ref_name }}".TrimStart('v')
+        dotnet publish src/GimmeCapture/GimmeCapture.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:Version=$version -o ./publish
 
     - name: Zip the application
       run: Compress-Archive -Path ./publish/* -DestinationPath GimmeCapture_win-x64.zip

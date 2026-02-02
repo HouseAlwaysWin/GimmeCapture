@@ -44,6 +44,7 @@ public class MainWindowViewModel : ViewModelBase
     public FFmpegDownloaderService FfmpegDownloader { get; } = new();
     public RecordingService RecordingService { get; }
     public UpdateService UpdateService { get; }
+    public string AppVersion => System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0";
 
     // Commands
     public ReactiveCommand<CaptureMode, Unit> StartCaptureCommand { get; }
@@ -68,7 +69,7 @@ public class MainWindowViewModel : ViewModelBase
     {
         _settingsService = new Services.AppSettingsService();
         RecordingService = new RecordingService(FfmpegDownloader);
-        UpdateService = new UpdateService("0.1.0");
+        UpdateService = new UpdateService(AppVersion);
         
         // Sync ViewModel with Service using ReactiveUI
         // When Service language changes, notify ViewModel properties to update

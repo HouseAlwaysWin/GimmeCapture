@@ -303,7 +303,7 @@
             <TabItem Header="{Binding [TabAbout], Source={x:Static services:LocalizationService.Instance}}">
                 <StackPanel Spacing="10" Margin="10" HorizontalAlignment="Center" VerticalAlignment="Center">
                     <TextBlock Text="GimmeCapture!!" FontSize="24" FontWeight="Bold" Foreground="{DynamicResource AccentRedBrush}" HorizontalAlignment="Center"/>
-                    <TextBlock Text="Version 0.1.0" Foreground="White" HorizontalAlignment="Center"/>
+                    <TextBlock Text="{Binding AppVersion, StringFormat='Version {0}'}" Foreground="White" HorizontalAlignment="Center"/>
                     <TextBlock Text="The One Tool to Snip &amp; Record" FontStyle="Italic" Foreground="{DynamicResource DeepRedBrush}" HorizontalAlignment="Center"/>
                     
                     <Button Content="{Binding [AutoCheckUpdates], Source={x:Static services:LocalizationService.Instance}}" 
