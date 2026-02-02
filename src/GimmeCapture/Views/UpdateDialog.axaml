@@ -48,10 +48,10 @@
                 <!-- Text -->
                 <!-- Text -->
                 <TextBlock Text="GIMME UPDATE!!" 
+                           FontFamily="avares://GimmeCapture/Assets/Fonts/Cinzel/Cinzel-VariableFont_wght.ttf#Cinzel, avares://GimmeCapture/Assets/Fonts/Noto_Serif_JP/NotoSerifJP-VariableFont_wght.ttf#Noto Serif JP, avares://GimmeCapture/Assets/Fonts/Noto_Serif_TC/NotoSerifTC-VariableFont_wght.ttf#Noto Serif TC" 
                            Foreground="{DynamicResource AccentRedBrush}"
                            FontWeight="Bold"
                            FontSize="22"
-                           FontFamily="avares://GimmeCapture/Assets/Fonts/Cinzel/Cinzel-VariableFont_wght.ttf#Cinzel, avares://GimmeCapture/Assets/Fonts/Noto_Serif_JP/NotoSerifJP-VariableFont_wght.ttf#Noto Serif JP, avares://GimmeCapture/Assets/Fonts/Noto_Serif_TC/NotoSerifTC-VariableFont_wght.ttf#Noto Serif TC"
                            HorizontalAlignment="Center" VerticalAlignment="Center"
                            LetterSpacing="6"/>
             </Panel>
