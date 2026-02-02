@@ -165,13 +165,13 @@ public class UpdateService : ReactiveObject
             var scriptPath = Path.Combine(Path.GetTempPath(), "GimmeCapture_Update.bat");
             var currentExe = Process.GetCurrentProcess().MainModule?.FileName ?? "GimmeCapture.exe";
             var currentExeName = Path.GetFileName(currentExe);
+            var parentDir = Path.GetDirectoryName(zipPath)!;
 
             var script = $@"
 @echo off
 timeout /t 2 /nobreak > nul
 xcopy /s /y /i ""{tempExtractDir.TrimEnd('\\')}"" ""{appDir.TrimEnd('\\')}""
-rd /s /q ""{tempExtractDir.TrimEnd('\\')}""
-del /f /q ""{zipPath}""
+rd /s /q ""{parentDir.TrimEnd('\\')}""
 start """" ""{Path.Combine(appDir, currentExeName)}""
 del ""%~f0""
 ";

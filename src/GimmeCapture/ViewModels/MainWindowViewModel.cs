@@ -546,6 +546,17 @@ public class MainWindowViewModel : ViewModelBase
                     {
                         UpdateService.ApplyUpdate(zipPath);
                     }
+                    else
+                    {
+                        // Cleanup if user cancels
+                        try
+                        {
+                            var tempDir = Path.GetDirectoryName(zipPath);
+                            if (!string.IsNullOrEmpty(tempDir) && Directory.Exists(tempDir))
+                                Directory.Delete(tempDir, true);
+                        }
+                        catch { /* Ignore error */ }
+                    }
                 }
                 else
                 {
