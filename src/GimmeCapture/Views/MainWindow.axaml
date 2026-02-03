@@ -212,8 +212,8 @@
                                             Margin="10,0,0,0"/>
                                     <TextBox Text="{Binding SaveDirectory}" IsReadOnly="True" Margin="0,0,10,0"/>
                                 </DockPanel>
-                                <CheckBox IsChecked="{Binding HideSnipPinDecoration}" Content="{Binding [HidePinDecoration], Source={x:Static services:LocalizationService.Instance}}"/>
-                                <CheckBox IsChecked="{Binding HideSnipPinBorder}" Content="{Binding [HidePinBorder], Source={x:Static services:LocalizationService.Instance}}"/>
+                                <CheckBox IsChecked="{Binding HideSnipPinDecoration}" Content="{Binding [HideSnipPinDecoration], Source={x:Static services:LocalizationService.Instance}}"/>
+                                <CheckBox IsChecked="{Binding HideSnipPinBorder}" Content="{Binding [HideSnipPinBorder], Source={x:Static services:LocalizationService.Instance}}"/>
                                 <CheckBox IsChecked="{Binding HideSnipSelectionDecoration}" Content="{Binding [HideSnipSelectionDecoration], Source={x:Static services:LocalizationService.Instance}}"/>
                                 <CheckBox IsChecked="{Binding HideSnipSelectionBorder}" Content="{Binding [HideSnipSelectionBorder], Source={x:Static services:LocalizationService.Instance}}"/>
                                 <CheckBox IsChecked="{Binding ShowSnipCursor}" Content="{Binding [ShowSnipCursor], Source={x:Static services:LocalizationService.Instance}}"/>

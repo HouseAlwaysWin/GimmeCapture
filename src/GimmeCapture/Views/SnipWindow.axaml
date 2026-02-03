@@ -187,6 +187,29 @@
                   IsVisible="{Binding CurrentState, Converter={StaticResource StateToBoolConverter}}"
                   Background="Transparent"> <!-- Ensure it stays hit-test visible -->
                   
+                <!-- Accent Corners (Hide during drawing or if setting disabled, using parallel layer to match border indentation) -->
+                <Grid IsVisible="{Binding IsRecordingActive, Converter={StaticResource BoolInvertConverter}}">
+                    <Grid IsVisible="{Binding HideSelectionDecoration, Converter={StaticResource BoolInvertConverter}}">
+                        <Border BorderThickness="{Binding SelectionBorderThickness, Converter={StaticResource ThicknessConverter}}">
+                            <Border BorderThickness="1" Margin="-1">
+                                <Grid IsVisible="{Binding IsDrawingMode, Converter={StaticResource BoolInvertConverter}}">
+                                    <Rectangle Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="15" Height="2" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="2"/>
+                                    <Rectangle Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="2" Height="15" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="2"/>
+                                    
+                                    <Rectangle Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="15" Height="2" VerticalAlignment="Top" HorizontalAlignment="Right" Margin="2"/>
+                                    <Rectangle Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="2" Height="15" VerticalAlignment="Top" HorizontalAlignment="Right" Margin="2"/>
+                                    
+                                    <Rectangle Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="15" Height="2" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="2"/>
+                                    <Rectangle Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="2" Height="15" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="2"/>
+                                    
+                                    <Rectangle Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="15" Height="2" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="2"/>
+                                    <Rectangle Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="2" Height="15" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="2"/>
+                                </Grid>
+                            </Border>
+                        </Border>
+                    </Grid>
+                </Grid>
+
                 <!-- BABYMETAL Style Selection Border - Hidden during active recording to avoid capturing border -->
                 <Border CornerRadius="0"
                         Background="#01FFFFFF"
@@ -202,26 +225,7 @@
                     </Border.BorderBrush>
                     <Border BorderBrush="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" 
                             BorderThickness="{Binding SelectionBorderThickness, Converter={StaticResource ThicknessConverter}}">
-                        <Border BorderBrush="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" BorderThickness="1" Margin="-1">
-                            <Grid>
-                                <!-- Accent Corners (Hide during drawing or if setting disabled) -->
-                                <Grid IsVisible="{Binding HideSelectionDecoration, Converter={StaticResource BoolInvertConverter}}">
-                                    <Grid IsVisible="{Binding IsDrawingMode, Converter={StaticResource BoolInvertConverter}}">
-                                        <Rectangle Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="15" Height="2" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="2"/>
-                                        <Rectangle Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="2" Height="15" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="2"/>
-                                        
-                                        <Rectangle Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="15" Height="2" VerticalAlignment="Top" HorizontalAlignment="Right" Margin="2"/>
-                                        <Rectangle Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="2" Height="15" VerticalAlignment="Top" HorizontalAlignment="Right" Margin="2"/>
-                                        
-                                        <Rectangle Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="15" Height="2" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="2"/>
-                                        <Rectangle Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="2" Height="15" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="2"/>
-                                        
-                                        <Rectangle Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="15" Height="2" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="2"/>
-                                        <Rectangle Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="2" Height="15" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="2"/>
-                                    </Grid>
-                                </Grid>
-                            </Grid>
-                        </Border>
+                        <Border BorderBrush="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" BorderThickness="1" Margin="-1" />
                     </Border>
                 </Border>
                 
