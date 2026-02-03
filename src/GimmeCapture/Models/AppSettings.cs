@@ -25,6 +25,7 @@ public class AppSettings
     public string VideoSaveDirectory { get; set; } = string.Empty;
     public string RecordFormat { get; set; } = "mp4";
     public bool UseFixedRecordPath { get; set; }
+    public string TempDirectory { get; set; } = string.Empty;
     
     // Hotkeys
     public string SnipHotkey { get; set; } = "F1";

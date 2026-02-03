@@ -1,7 +1,7 @@
 {
   "Language": 1,
   "RunOnStartup": false,
-  "AutoCheckUpdates": true,
+  "AutoCheckUpdates": false,
   "BorderThickness": 1,
   "MaskOpacity": 0.6915798611111111,
   "BorderColorHex": "#ffd4af37",
@@ -15,6 +15,7 @@
   "VideoSaveDirectory": "D:\\Users\\martin\\Videos\\GimmeCapture",
   "RecordFormat": "gif",
   "UseFixedRecordPath": false,
+  "TempDirectory": "",
   "SnipHotkey": "F1",
   "CopyHotkey": "Ctrl\u002BC",
   "PinHotkey": "F3",

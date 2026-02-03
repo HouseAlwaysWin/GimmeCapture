@@ -153,6 +153,7 @@ namespace GimmeCapture.Services
             ["ShowRecordCursor"] = "Capture Mouse Cursor in Recording",
             ["FFmpegStatusDownloading"] = "FFmpeg Downloading...",
             ["ComponentDownloadingProgress"] = "Downloading components... {0}%",
+            ["TempPath"] = "Temp Folder:",
                 },
                 [Language.Chinese] = new Dictionary<string, string>
                 {
@@ -249,6 +250,7 @@ namespace GimmeCapture.Services
             ["ShowRecordCursor"] = "錄影畫面包含滑鼠游標",
             ["FFmpegStatusDownloading"] = "正在下載 FFmpeg...",
             ["ComponentDownloadingProgress"] = "正在下載必要組件... {0}%",
+            ["TempPath"] = "暫存資料夾:",
                 },
                 [Language.Japanese] = new Dictionary<string, string>
                 {
@@ -345,6 +347,7 @@ namespace GimmeCapture.Services
             ["ShowRecordCursor"] = "録画にマウスカーソルを含める",
             ["FFmpegStatusDownloading"] = "FFmpeg ダウンロード中...",
             ["ComponentDownloadingProgress"] = "コンポーネントをダウンロード中... {0}%",
+            ["TempPath"] = "一時フォルダー:",
                 }
             };
 

@@ -311,6 +311,13 @@ public class MainWindowViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _hidePinBorder, value);
     }
 
+    private string _tempDirectory = string.Empty;
+    public string TempDirectory
+    {
+        get => _tempDirectory;
+        set => this.RaiseAndSetIfChanged(ref _tempDirectory, value);
+    }
+
     private bool _showSnipCursor = false;
     public bool ShowSnipCursor
     {
@@ -345,6 +352,15 @@ public class MainWindowViewModel : ViewModelBase
         }
     }
 
+    public async Task SelectTempPath()
+    {
+        if (PickFolderAction != null)
+        {
+            var path = await PickFolderAction();
+            if (!string.IsNullOrEmpty(path)) TempDirectory = path;
+        }
+    }
+
     public async Task LoadSettingsAsync()
     {
         await _settingsService.LoadAsync();
@@ -363,6 +379,12 @@ public class MainWindowViewModel : ViewModelBase
         HidePinBorder = s.HidePinBorder;
         ShowSnipCursor = s.ShowSnipCursor;
         ShowRecordCursor = s.ShowRecordCursor;
+        TempDirectory = s.TempDirectory;
+        if (string.IsNullOrEmpty(TempDirectory))
+        {
+            TempDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Temp");
+            try { if (!Directory.Exists(TempDirectory)) Directory.CreateDirectory(TempDirectory); } catch { }
+        }
         
         if (Color.TryParse(s.BorderColorHex, out var color))
         {
@@ -446,6 +468,7 @@ public class MainWindowViewModel : ViewModelBase
         s.HidePinBorder = HidePinBorder;
         s.ShowSnipCursor = ShowSnipCursor;
         s.ShowRecordCursor = ShowRecordCursor;
+        s.TempDirectory = TempDirectory;
         
         await _settingsService.SaveAsync();
 
@@ -484,6 +507,7 @@ public class MainWindowViewModel : ViewModelBase
         HidePinBorder = defaultSettings.HidePinBorder;
         ShowSnipCursor = defaultSettings.ShowSnipCursor;
         ShowRecordCursor = defaultSettings.ShowRecordCursor;
+        TempDirectory = defaultSettings.TempDirectory;
         
         if (Color.TryParse(defaultSettings.BorderColorHex, out var color))
             BorderColor = color;

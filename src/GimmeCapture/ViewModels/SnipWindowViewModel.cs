@@ -538,8 +538,13 @@ public class SnipWindowViewModel : ViewModelBase
         
         string format = _mainVm.RecordFormat?.ToLowerInvariant() ?? "mp4";
 
-        // Use local Temp folder in app directory instead of System Temp
-        string tempDir = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Temp");
+        // Use TempFolder setting if available, otherwise local Temp folder in app directory
+        string tempDir = _mainVm.TempDirectory;
+        if (string.IsNullOrEmpty(tempDir))
+        {
+            tempDir = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Temp");
+        }
+        
         try { System.IO.Directory.CreateDirectory(tempDir); } catch { }
 
         if (_mainVm.UseFixedRecordPath && !string.IsNullOrEmpty(_mainVm.VideoSaveDirectory))
@@ -613,9 +618,19 @@ public class SnipWindowViewModel : ViewModelBase
                 }
                 else
                 {
-                    // User cancelled, maybe delete temp? 
-                    // Better to keep it in temp or delete? User might want it later.
-                    // For now, let it be.
+                    // User cancelled, delete temp file
+                    try
+                    {
+                        if (System.IO.File.Exists(actualOutputPath))
+                        {
+                            System.IO.File.Delete(actualOutputPath);
+                            System.Diagnostics.Debug.WriteLine($"Deleted cancelled recording: {actualOutputPath}");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Failed to delete cancelled recording: {ex.Message}");
+                    }
                 }
             }
         }
