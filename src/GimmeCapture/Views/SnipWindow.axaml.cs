@@ -204,11 +204,11 @@ public partial class SnipWindow : Window
 
             _viewModel.OpenPinWindowAction = (bitmap, rect, color, thickness) =>
             {
-                // Create ViewModel with style properties
-                var settings = new AppSettingsService();
-                settings.LoadSync();
+                // Use settings directly from MainVm to ensure consistency
+                bool hideDecoration = _viewModel.MainVm?.HideSnipPinDecoration ?? false;
+                bool hideBorder = _viewModel.MainVm?.HideSnipPinBorder ?? false;
                 
-                var vm = new FloatingImageViewModel(bitmap, color, thickness, settings.Settings.ShowPinDecoration, settings.Settings.HidePinBorder);
+                var vm = new FloatingImageViewModel(bitmap, color, thickness, hideDecoration, hideBorder);
                 
                 try
                 {

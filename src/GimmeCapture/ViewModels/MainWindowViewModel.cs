@@ -297,18 +297,60 @@ public class MainWindowViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _useFixedRecordPath, value);
     }
 
-    private bool _showPinDecoration = true;
-    public bool ShowPinDecoration
+    private bool _hideSnipPinDecoration = false;
+    public bool HideSnipPinDecoration
     {
-        get => _showPinDecoration;
-        set => this.RaiseAndSetIfChanged(ref _showPinDecoration, value);
+        get => _hideSnipPinDecoration;
+        set => this.RaiseAndSetIfChanged(ref _hideSnipPinDecoration, value);
     }
 
-    private bool _hidePinBorder = false;
-    public bool HidePinBorder
+    private bool _hideSnipPinBorder = false;
+    public bool HideSnipPinBorder
     {
-        get => _hidePinBorder;
-        set => this.RaiseAndSetIfChanged(ref _hidePinBorder, value);
+        get => _hideSnipPinBorder;
+        set => this.RaiseAndSetIfChanged(ref _hideSnipPinBorder, value);
+    }
+
+    private bool _hideRecordPinDecoration = false;
+    public bool HideRecordPinDecoration
+    {
+        get => _hideRecordPinDecoration;
+        set => this.RaiseAndSetIfChanged(ref _hideRecordPinDecoration, value);
+    }
+
+    private bool _hideRecordPinBorder = false;
+    public bool HideRecordPinBorder
+    {
+        get => _hideRecordPinBorder;
+        set => this.RaiseAndSetIfChanged(ref _hideRecordPinBorder, value);
+    }
+
+    private bool _hideSnipSelectionDecoration = false;
+    public bool HideSnipSelectionDecoration
+    {
+        get => _hideSnipSelectionDecoration;
+        set => this.RaiseAndSetIfChanged(ref _hideSnipSelectionDecoration, value);
+    }
+
+    private bool _hideSnipSelectionBorder = false;
+    public bool HideSnipSelectionBorder
+    {
+        get => _hideSnipSelectionBorder;
+        set => this.RaiseAndSetIfChanged(ref _hideSnipSelectionBorder, value);
+    }
+
+    private bool _hideRecordSelectionDecoration = false;
+    public bool HideRecordSelectionDecoration
+    {
+        get => _hideRecordSelectionDecoration;
+        set => this.RaiseAndSetIfChanged(ref _hideRecordSelectionDecoration, value);
+    }
+
+    private bool _hideRecordSelectionBorder = false;
+    public bool HideRecordSelectionBorder
+    {
+        get => _hideRecordSelectionBorder;
+        set => this.RaiseAndSetIfChanged(ref _hideRecordSelectionBorder, value);
     }
 
     private string _tempDirectory = string.Empty;
@@ -375,8 +417,14 @@ public class MainWindowViewModel : ViewModelBase
         SnipHotkey = s.SnipHotkey;
         CopyHotkey = s.CopyHotkey;
         PinHotkey = s.PinHotkey;
-        ShowPinDecoration = s.ShowPinDecoration;
-        HidePinBorder = s.HidePinBorder;
+        HideSnipPinDecoration = s.HideSnipPinDecoration;
+        HideSnipPinBorder = s.HideSnipPinBorder;
+        HideRecordPinDecoration = s.HideRecordPinDecoration;
+        HideRecordPinBorder = s.HideRecordPinBorder;
+        HideSnipSelectionDecoration = s.HideSnipSelectionDecoration;
+        HideSnipSelectionBorder = s.HideSnipSelectionBorder;
+        HideRecordSelectionDecoration = s.HideRecordSelectionDecoration;
+        HideRecordSelectionBorder = s.HideRecordSelectionBorder;
         ShowSnipCursor = s.ShowSnipCursor;
         ShowRecordCursor = s.ShowRecordCursor;
         TempDirectory = s.TempDirectory;
@@ -464,8 +512,14 @@ public class MainWindowViewModel : ViewModelBase
         s.VideoSaveDirectory = VideoSaveDirectory;
         s.RecordFormat = RecordFormat;
         s.UseFixedRecordPath = UseFixedRecordPath;
-        s.ShowPinDecoration = ShowPinDecoration;
-        s.HidePinBorder = HidePinBorder;
+        s.HideSnipPinDecoration = HideSnipPinDecoration;
+        s.HideSnipPinBorder = HideSnipPinBorder;
+        s.HideRecordPinDecoration = HideRecordPinDecoration;
+        s.HideRecordPinBorder = HideRecordPinBorder;
+        s.HideSnipSelectionDecoration = HideSnipSelectionDecoration;
+        s.HideSnipSelectionBorder = HideSnipSelectionBorder;
+        s.HideRecordSelectionDecoration = HideRecordSelectionDecoration;
+        s.HideRecordSelectionBorder = HideRecordSelectionBorder;
         s.ShowSnipCursor = ShowSnipCursor;
         s.ShowRecordCursor = ShowRecordCursor;
         s.TempDirectory = TempDirectory;
@@ -503,8 +557,14 @@ public class MainWindowViewModel : ViewModelBase
         SnipHotkey = defaultSettings.SnipHotkey;
         CopyHotkey = defaultSettings.CopyHotkey;
         PinHotkey = defaultSettings.PinHotkey;
-        ShowPinDecoration = defaultSettings.ShowPinDecoration;
-        HidePinBorder = defaultSettings.HidePinBorder;
+        HideSnipPinDecoration = false;
+        HideSnipPinBorder = false;
+        HideRecordPinDecoration = false;
+        HideRecordPinBorder = false;
+        HideSnipSelectionDecoration = false;
+        HideSnipSelectionBorder = false;
+        HideRecordSelectionDecoration = false;
+        HideRecordSelectionBorder = false;
         ShowSnipCursor = defaultSettings.ShowSnipCursor;
         ShowRecordCursor = defaultSettings.ShowRecordCursor;
         TempDirectory = defaultSettings.TempDirectory;

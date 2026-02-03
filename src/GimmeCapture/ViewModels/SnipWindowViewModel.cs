@@ -32,12 +32,16 @@ public class SnipWindowViewModel : ViewModelBase
             }
         }
     }
-
     private bool _isRecordingMode;
     public bool IsRecordingMode
     {
         get => _isRecordingMode;
-        set => this.RaiseAndSetIfChanged(ref _isRecordingMode, value);
+        set 
+        {
+            this.RaiseAndSetIfChanged(ref _isRecordingMode, value);
+            this.RaisePropertyChanged(nameof(HideFrameBorder));
+            this.RaisePropertyChanged(nameof(HideSelectionDecoration));
+        }
     }
 
     // True when actively recording (not idle, not paused) - used to hide selection border
@@ -62,6 +66,9 @@ public class SnipWindowViewModel : ViewModelBase
     private Avalonia.Threading.DispatcherTimer? _recordTimer;
     private readonly RecordingService? _recordingService;
     private readonly MainWindowViewModel? _mainVm;
+    public MainWindowViewModel? MainVm => _mainVm;
+    public bool HideSelectionDecoration => IsRecordingMode ? (_mainVm?.HideRecordSelectionDecoration ?? false) : (_mainVm?.HideSnipSelectionDecoration ?? false);
+    public bool HideFrameBorder => IsRecordingMode ? (_mainVm?.HideRecordSelectionBorder ?? false) : (_mainVm?.HideSnipSelectionBorder ?? false);
 
     private PixelPoint _screenOffset;
     public PixelPoint ScreenOffset
@@ -777,17 +784,14 @@ public class SnipWindowViewModel : ViewModelBase
                  // Create and show FloatingVideoWindow instead of raw ffplay
                  Avalonia.Threading.Dispatcher.UIThread.Post(() => 
                  {
-                     var settings = new AppSettingsService();
-                     settings.LoadSync(); // Simple load
-                     
                      var videoVm = new FloatingVideoViewModel(
                          recordingPath, 
                          ffplayPath.Replace("ffplay.exe", "ffmpeg.exe"), // We need ffmpeg for streaming
                          w, h, 
                          SelectionBorderColor, 
                          SelectionBorderThickness,
-                         settings.Settings.ShowPinDecoration,
-                         settings.Settings.HidePinBorder);
+                         _mainVm?.HideRecordPinDecoration ?? false,
+                         _mainVm?.HideRecordPinBorder ?? false);
                          
                      var videoWin = new Views.FloatingVideoWindow
                      {
@@ -852,6 +856,7 @@ public class SnipWindowViewModel : ViewModelBase
             {
                 var bitmap = await _captureService.CaptureScreenWithAnnotationsAsync(SelectionRect, ScreenOffset, VisualScaling, Annotations, _mainVm?.ShowSnipCursor ?? false);
                 await _captureService.CopyToClipboardAsync(bitmap);
+                _mainVm?.SetStatus("StatusCopied");
             }
             finally
             {
@@ -890,6 +895,7 @@ public class SnipWindowViewModel : ViewModelBase
                      var fileName = $"Capture_{DateTime.Now:yyyyMMdd_HHmmss}.png";
                      var path = System.IO.Path.Combine(dir, fileName);
                      await _captureService.SaveToFileAsync(bitmap, path);
+                     _mainVm?.SetStatus("StatusSaved");
                      System.Diagnostics.Debug.WriteLine($"Auto-saved to {path}");
                  }
                  else if (PickSaveFileAction != null)
@@ -898,8 +904,9 @@ public class SnipWindowViewModel : ViewModelBase
                      if (!string.IsNullOrEmpty(path))
                      {
                         await _captureService.SaveToFileAsync(bitmap, path);
-                        System.Diagnostics.Debug.WriteLine($"Saved to {path}");
+                        _mainVm?.SetStatus("StatusSaved");
                      }
+                     System.Diagnostics.Debug.WriteLine($"Saved to {path}");
                  }
                  else
                  {

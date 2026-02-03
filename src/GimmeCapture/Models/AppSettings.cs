@@ -13,8 +13,16 @@ public class AppSettings
     public double MaskOpacity { get; set; } = 0.5;
     public string BorderColorHex { get; set; } = "#E60012";
     public string ThemeColorHex { get; set; } = "#E60012";
-    public bool ShowPinDecoration { get; set; } = true;
-    public bool HidePinBorder { get; set; } = false;
+    // Visibility
+    public bool HideSnipPinDecoration { get; set; } = false;
+    public bool HideSnipPinBorder { get; set; } = false;
+    public bool HideSnipSelectionDecoration { get; set; } = false;
+    public bool HideSnipSelectionBorder { get; set; } = false;
+
+    public bool HideRecordPinDecoration { get; set; } = false;
+    public bool HideRecordPinBorder { get; set; } = false;
+    public bool HideRecordSelectionDecoration { get; set; } = false;
+    public bool HideRecordSelectionBorder { get; set; } = false;
     
     // Output
     public bool AutoSave { get; set; }

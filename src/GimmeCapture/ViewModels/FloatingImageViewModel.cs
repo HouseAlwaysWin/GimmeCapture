@@ -28,11 +28,11 @@ public class FloatingImageViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _borderThickness, value);
     }
 
-    private bool _showPinDecoration = true;
-    public bool ShowPinDecoration
+    private bool _hidePinDecoration = false;
+    public bool HidePinDecoration
     {
-        get => _showPinDecoration;
-        set => this.RaiseAndSetIfChanged(ref _showPinDecoration, value);
+        get => _hidePinDecoration;
+        set => this.RaiseAndSetIfChanged(ref _hidePinDecoration, value);
     }
 
     private bool _hidePinBorder = false;
@@ -58,12 +58,12 @@ public class FloatingImageViewModel : ViewModelBase
     public System.Func<Task>? CopyAction { get; set; }
     public System.Func<Task>? SaveAction { get; set; }
 
-    public FloatingImageViewModel(Bitmap image, Avalonia.Media.Color borderColor, double borderThickness, bool showDecoration, bool hideBorder)
+    public FloatingImageViewModel(Bitmap image, Avalonia.Media.Color borderColor, double borderThickness, bool hideDecoration, bool hideBorder)
     {
         Image = image;
         BorderColor = borderColor;
         BorderThickness = borderThickness;
-        ShowPinDecoration = showDecoration;
+        HidePinDecoration = hideDecoration;
         HidePinBorder = hideBorder;
 
         CloseCommand = ReactiveCommand.Create(() => CloseAction?.Invoke());
