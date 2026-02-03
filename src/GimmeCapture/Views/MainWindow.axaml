@@ -325,6 +325,12 @@
                     <TextBlock Text="{Binding AppVersion, StringFormat='Version {0}'}" Foreground="White" HorizontalAlignment="Center"/>
                     <TextBlock Text="The One Tool to Snip &amp; Record" FontStyle="Italic" Foreground="{DynamicResource DeepRedBrush}" HorizontalAlignment="Center"/>
                     
+                    <Button Content="{Binding [GitHubProject], Source={x:Static services:LocalizationService.Instance}}"
+                            Theme="{StaticResource GothicMetalButton}"
+                            HorizontalAlignment="Center"
+                            Margin="0,10,0,0"
+                            Command="{Binding OpenProjectCommand}"/>
+
                     <Button Content="{Binding [CheckForUpdates], Source={x:Static services:LocalizationService.Instance}}" 
                             Theme="{StaticResource GothicMetalButton}" 
                             HorizontalAlignment="Center" 

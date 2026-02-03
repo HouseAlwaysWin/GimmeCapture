@@ -112,7 +112,9 @@ namespace GimmeCapture.Services
                     ["Yes"] = "Yes",
                     ["No"] = "No",
                     ["No"] = "No",
+                    ["No"] = "No",
                     ["Cancel"] = "Cancel",
+                    ["GitHubProject"] = "GitHub Project",
                         
                         // Updates
                         ["UpdateFound"] = "New version found: {0}. Download now?",
@@ -226,7 +228,9 @@ namespace GimmeCapture.Services
                     ["Yes"] = "是",
                     ["No"] = "否",
                     ["No"] = "否",
+                    ["No"] = "否",
                     ["Cancel"] = "取消",
+                    ["GitHubProject"] = "GitHub 專案頁面",
                         
                         // Updates
                         ["UpdateFound"] = "發現新版本: {0}。立即下載？",
@@ -340,7 +344,9 @@ namespace GimmeCapture.Services
                     ["Yes"] = "はい",
                     ["No"] = "いいえ",
                     ["No"] = "いいえ",
+                    ["No"] = "いいえ",
                     ["Cancel"] = "キャンセル",
+                    ["GitHubProject"] = "GitHub プロジェクト",
                         
                         // Updates
                         ["UpdateFound"] = "新しいバージョンが見つかりました: {0}。今すぐダウンロードしますか？",

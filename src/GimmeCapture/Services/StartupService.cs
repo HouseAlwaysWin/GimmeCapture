@@ -16,17 +16,24 @@ public class StartupService
             using var key = Registry.CurrentUser.OpenSubKey(RunKeyPath, true);
             if (key == null) return;
 
+            var existingValue = key.GetValue(AppName) as string;
+            var exePath = Environment.ProcessPath;
+            if (string.IsNullOrEmpty(exePath)) return;
+            
+            var expectedValue = $"\"{exePath}\"";
+
             if (runOnStartup)
             {
-                var exePath = Environment.ProcessPath;
-                if (!string.IsNullOrEmpty(exePath))
+                // Only write if not exists or different
+                if (existingValue != expectedValue)
                 {
-                    key.SetValue(AppName, $"\"{exePath}\"");
+                    key.SetValue(AppName, expectedValue);
                 }
             }
             else
             {
-                if (key.GetValue(AppName) != null)
+                // Only delete if exists
+                if (existingValue != null)
                 {
                     key.DeleteValue(AppName);
                 }

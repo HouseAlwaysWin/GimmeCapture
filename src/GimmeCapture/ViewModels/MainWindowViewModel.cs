@@ -69,6 +69,7 @@ public class MainWindowViewModel : ViewModelBase
     public ReactiveCommand<Color, Unit> ChangeColorCommand { get; }
     public ReactiveCommand<Color, Unit> ChangeThemeColorCommand { get; }
     public ReactiveCommand<Unit, Unit> CheckUpdateCommand { get; }
+    public ReactiveCommand<Unit, Unit> OpenProjectCommand { get; }
     
     public Color[] SettingsColors { get; } = new[]
     {
@@ -110,6 +111,7 @@ public class MainWindowViewModel : ViewModelBase
         ChangeColorCommand = ReactiveCommand.Create<Color>(c => BorderColor = c);
         ChangeThemeColorCommand = ReactiveCommand.Create<Color>(c => ThemeColor = c);
         CheckUpdateCommand = ReactiveCommand.CreateFromTask(CheckForUpdates);
+        OpenProjectCommand = ReactiveCommand.Create(() => OpenProjectUrl());
         
         // Setup Hotkey Action
         HotkeyService.OnHotkeyPressed = (id) => 
@@ -731,5 +733,22 @@ public class MainWindowViewModel : ViewModelBase
                 });
             }
         }
-    }
+        }
+
+    private void OpenProjectUrl()
+    {
+        try
+        {
+            var url = "https://github.com/HouseAlwaysWin/GimmeCapture";
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = url,
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Failed to open project URL: {ex.Message}");
+        }
+            }
 }
