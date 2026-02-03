@@ -556,6 +556,20 @@ public class MainWindowViewModel : ViewModelBase
 
     private async Task StartCapture(CaptureMode mode = CaptureMode.Normal)
     {
+        if (mode == CaptureMode.Record)
+        {
+            if (!FfmpegDownloader.IsFFmpegAvailable())
+            {
+                var msg = Services.LocalizationService.Instance["FFmpegNotReady"];
+                await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
+                {
+                    var mainWindow = (Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.MainWindow;
+                    if (mainWindow != null) await Views.UpdateDialog.ShowDialog(mainWindow, msg, isUpdateAvailable: false);
+                });
+                return;
+            }
+        }
+
         await SaveSettingsAsync(); // Auto-save on action for now
         RequestCaptureAction?.Invoke(mode);
         SetStatus("StatusSnip");
