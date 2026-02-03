@@ -196,76 +196,80 @@
             
             <!-- 擷圖 (Snip) -->
             <TabItem Header="{Binding [TabSnip], Source={x:Static services:LocalizationService.Instance}}">
-                <Grid ColumnDefinitions="*, Auto" Margin="10">
-                    <!-- Settings Controls -->
-                    <StackPanel Grid.Column="0" Spacing="15" Margin="0,0,20,0">
-                        <!-- Output Settings Back in Snip Tab -->
-                        <StackPanel Spacing="10">
-                            <TextBlock Text="{Binding [TabOutput], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold"/>
-                            <StackPanel Spacing="5">
-                                <CheckBox IsChecked="{Binding AutoSave}" Content="{Binding [AutoSave], Source={x:Static services:LocalizationService.Instance}}"/>
-                                <DockPanel Margin="24,0,0,5">
-                                    <Button Content="{Binding [SelectPath], Source={x:Static services:LocalizationService.Instance}}" 
-                                            DockPanel.Dock="Right" 
-                                            Theme="{StaticResource SmallGothicMetalButton}"
-                                            Command="{Binding SelectSavePath}" 
-                                            Margin="10,0,0,0"/>
-                                    <TextBox Text="{Binding SaveDirectory}" IsReadOnly="True" Margin="0,0,10,0"/>
-                                </DockPanel>
-                                <CheckBox IsChecked="{Binding HideSnipPinDecoration}" Content="{Binding [HideSnipPinDecoration], Source={x:Static services:LocalizationService.Instance}}"/>
-                                <CheckBox IsChecked="{Binding HideSnipPinBorder}" Content="{Binding [HideSnipPinBorder], Source={x:Static services:LocalizationService.Instance}}"/>
-                                <CheckBox IsChecked="{Binding HideSnipSelectionDecoration}" Content="{Binding [HideSnipSelectionDecoration], Source={x:Static services:LocalizationService.Instance}}"/>
-                                <CheckBox IsChecked="{Binding HideSnipSelectionBorder}" Content="{Binding [HideSnipSelectionBorder], Source={x:Static services:LocalizationService.Instance}}"/>
-                                <CheckBox IsChecked="{Binding ShowSnipCursor}" Content="{Binding [ShowSnipCursor], Source={x:Static services:LocalizationService.Instance}}"/>
+                <ScrollViewer>
+                    <Grid ColumnDefinitions="*, Auto" Margin="10">
+                        <!-- Settings Controls -->
+                        <StackPanel Grid.Column="0" Spacing="15" Margin="0,0,20,0">
+                            <!-- Output Settings Back in Snip Tab -->
+                            <StackPanel Spacing="10">
+                                <TextBlock Text="{Binding [TabOutput], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold"/>
+                                <StackPanel Spacing="5">
+                                    <CheckBox IsChecked="{Binding AutoSave}" Content="{Binding [AutoSave], Source={x:Static services:LocalizationService.Instance}}"/>
+                                    <DockPanel Margin="24,0,0,5">
+                                        <Button Content="{Binding [SelectPath], Source={x:Static services:LocalizationService.Instance}}" 
+                                                DockPanel.Dock="Right" 
+                                                Theme="{StaticResource SmallGothicMetalButton}"
+                                                Command="{Binding SelectSavePath}" 
+                                                Margin="10,0,0,0"/>
+                                        <TextBox Text="{Binding SaveDirectory}" Margin="0,0,10,0"/>
+                                    </DockPanel>
+                                    <CheckBox IsChecked="{Binding HideSnipPinDecoration}" Content="{Binding [HideSnipPinDecoration], Source={x:Static services:LocalizationService.Instance}}"/>
+                                    <CheckBox IsChecked="{Binding HideSnipPinBorder}" Content="{Binding [HideSnipPinBorder], Source={x:Static services:LocalizationService.Instance}}"/>
+                                    <CheckBox IsChecked="{Binding HideSnipSelectionDecoration}" Content="{Binding [HideSnipSelectionDecoration], Source={x:Static services:LocalizationService.Instance}}"/>
+                                    <CheckBox IsChecked="{Binding HideSnipSelectionBorder}" Content="{Binding [HideSnipSelectionBorder], Source={x:Static services:LocalizationService.Instance}}"/>
+                                    <CheckBox IsChecked="{Binding ShowSnipCursor}" Content="{Binding [ShowSnipCursor], Source={x:Static services:LocalizationService.Instance}}"/>
+                                </StackPanel>
                             </StackPanel>
                         </StackPanel>
-                    </StackPanel>
 
-                    <!-- Style Preview Area Moved to General Tab -->
-                </Grid>
+                        <!-- Style Preview Area Moved to General Tab -->
+                    </Grid>
+                </ScrollViewer>
             </TabItem>
             
             <!-- Output Tab Removed (Merged to Snip) -->
             
             <!-- Recording Tab -->
             <TabItem Header="{Binding [TabRecord], Source={x:Static services:LocalizationService.Instance}}">
-                <StackPanel Spacing="10" Margin="10">
-                    <TextBlock Text="{Binding [TabRecord], Source={x:Static services:LocalizationService.Instance}}" FontWeight="Bold" Margin="0,0,0,5"/>
-                    
-                    <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto" ColumnDefinitions="Auto, 10, *">
-                    <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding [VideoPath], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center"/>
-                    <DockPanel Grid.Row="0" Grid.Column="2">
-                        <Button Content="{Binding [SelectPath], Source={x:Static services:LocalizationService.Instance}}" 
-                                DockPanel.Dock="Right" 
-                                Theme="{StaticResource SmallGothicMetalButton}"
-                                Command="{Binding SelectVideoPath}" 
-                                Margin="10,0,0,0"/>
-                        <TextBox Text="{Binding VideoSaveDirectory}" IsReadOnly="True" Margin="0,0,10,0"/>
-                    </DockPanel>
+                <ScrollViewer>
+                    <StackPanel Spacing="15" Margin="10">
+                        <StackPanel Spacing="10">
+                            <TextBlock Text="{Binding [TabOutput], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold"/>
+                            <StackPanel Spacing="5">
+                                <CheckBox IsChecked="{Binding UseFixedRecordPath}" Content="{Binding [UseFixedRecordPath], Source={x:Static services:LocalizationService.Instance}}"/>
+                                <DockPanel Margin="24,0,0,5">
+                                    <Button Content="{Binding [SelectPath], Source={x:Static services:LocalizationService.Instance}}" 
+                                            DockPanel.Dock="Right" 
+                                            Theme="{StaticResource SmallGothicMetalButton}"
+                                            Command="{Binding SelectVideoPath}" 
+                                            Margin="10,0,0,0"/>
+                                    <TextBox Text="{Binding VideoSaveDirectory}" Margin="0,0,10,0"/>
+                                </DockPanel>
 
-                    <TextBlock Grid.Row="1" Grid.Column="0" Text="{Binding [TempPath], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,10,0,0"/>
-                    <DockPanel Grid.Row="1" Grid.Column="2" Margin="0,10,0,0">
-                        <Button Content="{Binding [SelectPath], Source={x:Static services:LocalizationService.Instance}}" 
-                                DockPanel.Dock="Right" 
-                                Theme="{StaticResource SmallGothicMetalButton}"
-                                Command="{Binding SelectTempPath}" 
-                                Margin="10,0,0,0"/>
-                        <TextBox Text="{Binding TempDirectory}" IsReadOnly="True" Margin="0,0,10,0" Watermark="預設為程式目錄下的 Temp 資料夾"/>
-                    </DockPanel>
+                                <TextBlock Text="{Binding [TempPath], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,10,0,0"/>
+                                <DockPanel Margin="24,0,0,5">
+                                    <Button Content="{Binding [SelectPath], Source={x:Static services:LocalizationService.Instance}}" 
+                                            DockPanel.Dock="Right" 
+                                            Theme="{StaticResource SmallGothicMetalButton}"
+                                            Command="{Binding SelectTempPath}" 
+                                            Margin="10,0,0,0"/>
+                                    <TextBox Text="{Binding TempDirectory}" Margin="0,0,10,0" Watermark="預設為程式目錄下的 Temp 資料夾"/>
+                                </DockPanel>
 
-                    <TextBlock Grid.Row="2" Grid.Column="0" Text="{Binding [TabOutput], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,10,0,0"/>
-                    <CheckBox Grid.Row="2" Grid.Column="2" IsChecked="{Binding UseFixedRecordPath}" Content="{Binding [UseFixedRecordPath], Source={x:Static services:LocalizationService.Instance}}" Margin="0,10,0,0"/>
+                                <DockPanel Margin="0,10,0,10">
+                                    <TextBlock Text="{Binding [VideoFormat], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                    <ComboBox ItemsSource="{Binding AvailableRecordFormats}" SelectedItem="{Binding RecordFormat}" HorizontalAlignment="Stretch"/>
+                                </DockPanel>
 
-                    <TextBlock Grid.Row="3" Grid.Column="0" Text="{Binding [VideoFormat], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,10,0,0"/>
-                    <ComboBox Grid.Row="3" Grid.Column="2" ItemsSource="{Binding AvailableRecordFormats}" SelectedItem="{Binding RecordFormat}" HorizontalAlignment="Stretch" Margin="0,10,0,0"/>
-
-                    <CheckBox Grid.Row="4" Grid.Column="2" Content="{Binding [HideRecordPinDecoration], Source={x:Static services:LocalizationService.Instance}}" IsChecked="{Binding HideRecordPinDecoration}" Margin="0,5,0,0"/>
-                    <CheckBox Grid.Row="5" Grid.Column="2" Content="{Binding [HideRecordPinBorder], Source={x:Static services:LocalizationService.Instance}}" IsChecked="{Binding HideRecordPinBorder}" Margin="0,5,0,0"/>
-                    <CheckBox Grid.Row="6" Grid.Column="2" Content="{Binding [HideRecordSelectionDecoration], Source={x:Static services:LocalizationService.Instance}}" IsChecked="{Binding HideRecordSelectionDecoration}" Margin="0,5,0,0"/>
-                    <CheckBox Grid.Row="7" Grid.Column="2" Content="{Binding [HideRecordSelectionBorder], Source={x:Static services:LocalizationService.Instance}}" IsChecked="{Binding HideRecordSelectionBorder}" Margin="0,5,0,0"/>
-                    <CheckBox Grid.Row="8" Grid.Column="2" Content="{Binding [ShowRecordCursor], Source={x:Static services:LocalizationService.Instance}}" IsChecked="{Binding ShowRecordCursor}" Margin="0,5,0,0"/>
-                </Grid>
-                </StackPanel>
+                                <CheckBox Content="{Binding [HideRecordPinDecoration], Source={x:Static services:LocalizationService.Instance}}" IsChecked="{Binding HideRecordPinDecoration}" Margin="0,5,0,0"/>
+                                <CheckBox Content="{Binding [HideRecordPinBorder], Source={x:Static services:LocalizationService.Instance}}" IsChecked="{Binding HideRecordPinBorder}" Margin="0,5,0,0"/>
+                                <CheckBox Content="{Binding [HideRecordSelectionDecoration], Source={x:Static services:LocalizationService.Instance}}" IsChecked="{Binding HideRecordSelectionDecoration}" Margin="0,5,0,0"/>
+                                <CheckBox Content="{Binding [HideRecordSelectionBorder], Source={x:Static services:LocalizationService.Instance}}" IsChecked="{Binding HideRecordSelectionBorder}" Margin="0,5,0,0"/>
+                                <CheckBox Content="{Binding [ShowRecordCursor], Source={x:Static services:LocalizationService.Instance}}" IsChecked="{Binding ShowRecordCursor}" Margin="0,5,0,0"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
             </TabItem>
             
             <!-- 控制 (Control/Hotkeys) -->
