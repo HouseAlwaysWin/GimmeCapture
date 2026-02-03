@@ -8,7 +8,7 @@ namespace GimmeCapture.Services;
 
 public class AppSettingsService
 {
-    private static readonly string ConfigPath = "config.json";
+    private static readonly string ConfigPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config.json");
     
     public AppSettings Settings { get; private set; } = new();
 

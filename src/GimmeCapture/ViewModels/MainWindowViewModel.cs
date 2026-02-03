@@ -403,15 +403,15 @@ public class MainWindowViewModel : ViewModelBase
         VideoSaveDirectory = s.VideoSaveDirectory;
         if (string.IsNullOrEmpty(VideoSaveDirectory))
         {
-            VideoSaveDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyVideos), "GimmeCapture");
-            if (!Directory.Exists(VideoSaveDirectory)) Directory.CreateDirectory(VideoSaveDirectory);
+            VideoSaveDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Recordings");
+            try { if (!Directory.Exists(VideoSaveDirectory)) Directory.CreateDirectory(VideoSaveDirectory); } catch { }
         }
 
         SaveDirectory = s.SaveDirectory;
         if (string.IsNullOrEmpty(SaveDirectory))
         {
-            SaveDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), "GimmeCapture");
-            if (!Directory.Exists(SaveDirectory)) Directory.CreateDirectory(SaveDirectory);
+            SaveDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Captures");
+            try { if (!Directory.Exists(SaveDirectory)) Directory.CreateDirectory(SaveDirectory); } catch { }
         }
 
         RecordFormat = s.RecordFormat;

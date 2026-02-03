@@ -230,7 +230,7 @@
                 <StackPanel Spacing="10" Margin="10">
                     <TextBlock Text="{Binding [TabRecord], Source={x:Static services:LocalizationService.Instance}}" FontWeight="Bold" Margin="0,0,0,5"/>
                     
-                    <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto" ColumnDefinitions="Auto, 10, *">
+                    <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto" ColumnDefinitions="Auto, 10, *">
                     <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding [VideoPath], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center"/>
                     <DockPanel Grid.Row="0" Grid.Column="2">
                         <Button Content="{Binding [SelectPath], Source={x:Static services:LocalizationService.Instance}}" 
@@ -316,7 +316,7 @@
                     <TextBlock Text="{Binding AppVersion, StringFormat='Version {0}'}" Foreground="White" HorizontalAlignment="Center"/>
                     <TextBlock Text="The One Tool to Snip &amp; Record" FontStyle="Italic" Foreground="{DynamicResource DeepRedBrush}" HorizontalAlignment="Center"/>
                     
-                    <Button Content="{Binding [AutoCheckUpdates], Source={x:Static services:LocalizationService.Instance}}" 
+                    <Button Content="{Binding [CheckForUpdates], Source={x:Static services:LocalizationService.Instance}}" 
                             Theme="{StaticResource GothicMetalButton}" 
                             HorizontalAlignment="Center" 
                             Margin="0,20,0,0"

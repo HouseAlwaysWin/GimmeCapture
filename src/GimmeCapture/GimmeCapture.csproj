@@ -12,6 +12,9 @@
 
   <ItemGroup>
     <AvaloniaResource Include="Assets\**" />
+    <None Update="config.json">
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
   <ItemGroup>

@@ -535,6 +535,19 @@ public class SnipWindowViewModel : ViewModelBase
     private async Task StartRecording()
     {
         if (_recordingService == null || _mainVm == null) return;
+
+        // Check if FFmpeg is available
+        if (!_mainVm.FfmpegDownloader.IsFFmpegAvailable())
+        {
+            if (!_mainVm.FfmpegDownloader.IsDownloading)
+            {
+                // Trigger download if not started
+                _ = _mainVm.FfmpegDownloader.EnsureFFmpegAsync();
+            }
+            
+            _mainVm.SetStatus("FFmpegNotReady");
+            return;
+        }
         
         string format = _mainVm.RecordFormat?.ToLowerInvariant() ?? "mp4";
 
