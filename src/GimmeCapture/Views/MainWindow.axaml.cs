@@ -50,8 +50,9 @@ public partial class MainWindow : Window
                 }
                 else
                 {
-                    // If save failed, stay open so user can try again or check settings
-                    // or maybe show another error, but vm.SaveSettingsAsync already handles status.
+                    // If save failed, stay open and show error
+                     var msg = Services.LocalizationService.Instance["SaveFailed"];
+                     await UpdateDialog.ShowDialog(this, msg, isUpdateAvailable: false);
                 }
             }
             else if (result == ConfirmationResult.No)

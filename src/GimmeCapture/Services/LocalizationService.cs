@@ -108,7 +108,9 @@ namespace GimmeCapture.Services
                     ["ResetDefault"] = "Reset Defaults",
                     ["UnsavedTitle"] = "Unsaved Changes",
                     ["UnsavedMessage"] = "You have unsaved changes. Would you like to save them before closing?",
+                    ["SaveFailed"] = "Failed to save settings. Please check if the configuration file is writable.",
                     ["Yes"] = "Yes",
+                    ["No"] = "No",
                     ["No"] = "No",
                     ["Cancel"] = "Cancel",
                         
@@ -220,7 +222,9 @@ namespace GimmeCapture.Services
                     ["ResetDefault"] = "重設預設",
                     ["UnsavedTitle"] = "尚未儲存變更",
                     ["UnsavedMessage"] = "您有些設定尚未儲存。是否要在關閉前保存這些變更？",
+                    ["SaveFailed"] = "設定儲存失敗。請檢查設定檔是否被佔用或唯讀。",
                     ["Yes"] = "是",
+                    ["No"] = "否",
                     ["No"] = "否",
                     ["Cancel"] = "取消",
                         
@@ -332,7 +336,9 @@ namespace GimmeCapture.Services
                     ["ResetDefault"] = "初期設定に戻す",
                     ["UnsavedTitle"] = "未保存の変更",
                     ["UnsavedMessage"] = "保存されていない変更があります。閉じる前に保存しますか？",
+                    ["SaveFailed"] = "設定の保存に失敗しました。設定ファイルが書き込み可能か確認してください。",
                     ["Yes"] = "はい",
+                    ["No"] = "いいえ",
                     ["No"] = "いいえ",
                     ["Cancel"] = "キャンセル",
                         
