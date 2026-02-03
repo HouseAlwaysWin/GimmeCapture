@@ -29,6 +29,7 @@ public class MainWindowViewModel : ViewModelBase
     }
 
     private bool _isDataLoading = true;
+    private Task? _loadTask;
 
     private string _currentStatusKey = "StatusReady";
 
@@ -151,13 +152,13 @@ public class MainWindowViewModel : ViewModelBase
                 }
             });
 
-        // Fire and forget load, in real app use async initialization
-        Task.Run(async () => await LoadSettingsAsync());
-
         // Track changes AFTER loading
         this.PropertyChanged += (s, e) =>
         {
-            if (!_isDataLoading && e.PropertyName != nameof(StatusText) && e.PropertyName != nameof(IsModified))
+            if (!_isDataLoading && 
+                e.PropertyName != nameof(StatusText) && 
+                e.PropertyName != nameof(IsModified) &&
+                e.PropertyName != nameof(SelectedLanguageOption))
             {
                 if (!IsModified)
                 {
@@ -166,6 +167,9 @@ public class MainWindowViewModel : ViewModelBase
                 }
             }
         };
+
+        // Initialize on UI thread and keep track of the task
+        _loadTask = LoadSettingsAsync();
     }
 
     // Language Selection
@@ -500,58 +504,75 @@ public class MainWindowViewModel : ViewModelBase
             HotkeyService.Register(ID_RECORD, RecordHotkey);
         });
 
-        // Initialize FFmpeg Download if missing either component
-        if (!FfmpegDownloader.IsFFmpegAvailable() || !FfmpegDownloader.IsFFplayAvailable())
-        {
-            await FfmpegDownloader.EnsureFFmpegAsync();
-        }
-
         if (AutoCheckUpdates)
         {
             _ = Task.Run(async () => await CheckForUpdates(silent: true));
         }
 
         _isDataLoading = false;
+
+        // Ensure FFmpeg/Updates happen AFTER _isDataLoading is false (or just handle them separately)
+        _ = Task.Run(async () => 
+        {
+            if (!FfmpegDownloader.IsFFmpegAvailable() || !FfmpegDownloader.IsFFplayAvailable())
+            {
+                await FfmpegDownloader.EnsureFFmpegAsync();
+            }
+        });
     }
 
-    public async Task SaveSettingsAsync()
+    public async Task<bool> SaveSettingsAsync()
     {
+        // Don't save if we haven't even finished loading
+        if (_loadTask != null && !_loadTask.IsCompleted)
+            await _loadTask;
+
         var s = _settingsService.Settings;
         
-        // Map properties to settings (User Input -> Model)
-        s.RunOnStartup = RunOnStartup;
-        s.AutoCheckUpdates = AutoCheckUpdates;
-        s.BorderThickness = BorderThickness;
-        s.MaskOpacity = MaskOpacity;
-        s.AutoSave = AutoSave;
-        s.SaveDirectory = SaveDirectory;
-        s.SnipHotkey = SnipHotkey;
-        s.CopyHotkey = CopyHotkey;
-        s.PinHotkey = PinHotkey;
-        s.RecordHotkey = RecordHotkey;
-        s.BorderColorHex = BorderColor.ToString();
-        s.ThemeColorHex = ThemeColor.ToString();
-        s.Language = Services.LocalizationService.Instance.CurrentLanguage;
-        s.VideoSaveDirectory = VideoSaveDirectory;
-        s.RecordFormat = RecordFormat;
-        s.UseFixedRecordPath = UseFixedRecordPath;
-        s.HideSnipPinDecoration = HideSnipPinDecoration;
-        s.HideSnipPinBorder = HideSnipPinBorder;
-        s.HideRecordPinDecoration = HideRecordPinDecoration;
-        s.HideRecordPinBorder = HideRecordPinBorder;
-        s.HideSnipSelectionDecoration = HideSnipSelectionDecoration;
-        s.HideSnipSelectionBorder = HideSnipSelectionBorder;
-        s.HideRecordSelectionDecoration = HideRecordSelectionDecoration;
-        s.HideRecordSelectionBorder = HideRecordSelectionBorder;
-        s.ShowSnipCursor = ShowSnipCursor;
-        s.ShowRecordCursor = ShowRecordCursor;
-        s.TempDirectory = TempDirectory;
-        
-        await _settingsService.SaveAsync();
-        IsModified = false;
+        try
+        {
+            // Map properties to settings (User Input -> Model)
+            s.RunOnStartup = RunOnStartup;
+            s.AutoCheckUpdates = AutoCheckUpdates;
+            s.BorderThickness = BorderThickness;
+            s.MaskOpacity = MaskOpacity;
+            s.AutoSave = AutoSave;
+            s.SaveDirectory = SaveDirectory;
+            s.SnipHotkey = SnipHotkey;
+            s.CopyHotkey = CopyHotkey;
+            s.PinHotkey = PinHotkey;
+            s.RecordHotkey = RecordHotkey;
+            s.BorderColorHex = BorderColor.ToString();
+            s.ThemeColorHex = ThemeColor.ToString();
+            s.Language = Services.LocalizationService.Instance.CurrentLanguage;
+            s.VideoSaveDirectory = VideoSaveDirectory;
+            s.RecordFormat = RecordFormat;
+            s.UseFixedRecordPath = UseFixedRecordPath;
+            s.HideSnipPinDecoration = HideSnipPinDecoration;
+            s.HideSnipPinBorder = HideSnipPinBorder;
+            s.HideRecordPinDecoration = HideRecordPinDecoration;
+            s.HideRecordPinBorder = HideRecordPinBorder;
+            s.HideSnipSelectionDecoration = HideSnipSelectionDecoration;
+            s.HideSnipSelectionBorder = HideSnipSelectionBorder;
+            s.HideRecordSelectionDecoration = HideRecordSelectionDecoration;
+            s.HideRecordSelectionBorder = HideRecordSelectionBorder;
+            s.ShowSnipCursor = ShowSnipCursor;
+            s.ShowRecordCursor = ShowRecordCursor;
+            s.TempDirectory = TempDirectory;
+            
+            await _settingsService.SaveAsync();
+            IsModified = false;
 
-        // Update Windows startup registry
-        Services.StartupService.SetStartup(s.RunOnStartup);
+            // Update Windows startup registry
+            Services.StartupService.SetStartup(s.RunOnStartup);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            SetStatus("StatusError"); // We might need an error key
+            System.Diagnostics.Debug.WriteLine($"Error in SaveSettingsAsync: {ex.Message}");
+            return false;
+        }
     }
 
     private async Task StartCapture(CaptureMode mode = CaptureMode.Normal)

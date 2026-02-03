@@ -42,9 +42,17 @@ public partial class MainWindow : Window
             
             if (result == ConfirmationResult.Yes)
             {
-                await vm.SaveSettingsAsync();
-                _isClosingFromDialog = true;
-                Close();
+                var success = await vm.SaveSettingsAsync();
+                if (success)
+                {
+                    _isClosingFromDialog = true;
+                    Close();
+                }
+                else
+                {
+                    // If save failed, stay open so user can try again or check settings
+                    // or maybe show another error, but vm.SaveSettingsAsync already handles status.
+                }
             }
             else if (result == ConfirmationResult.No)
             {
