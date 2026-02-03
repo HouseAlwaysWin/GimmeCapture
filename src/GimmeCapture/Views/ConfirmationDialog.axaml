@@ -1,0 +1,84 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:services="using:GimmeCapture.Services"
+        x:Class="GimmeCapture.Views.ConfirmationDialog"
+        Title="Confirmation"
+        SizeToContent="WidthAndHeight"
+        WindowStartupLocation="CenterOwner"
+        SystemDecorations="None"
+        CanResize="False"
+        Background="Transparent"
+        TransparencyLevelHint="Transparent">
+
+    <Panel MinWidth="400" MinHeight="200" HorizontalAlignment="Center" VerticalAlignment="Center" PointerPressed="OnPointerPressed" Margin="25">
+        <Border Background="#0A0A0A" CornerRadius="0" BoxShadow="0 0 25 5 #A00000"/>
+        <Rectangle Fill="#1A1A1A" Height="45" VerticalAlignment="Top" HorizontalAlignment="Stretch"/>
+        
+        <Grid RowDefinitions="Auto, *, Auto">
+            <Panel Grid.Row="0" Height="45">
+                <Border BorderThickness="0,0,0,2" VerticalAlignment="Bottom" Height="2">
+                   <Border.BorderBrush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
+                            <GradientStop Offset="0" Color="Transparent"/>
+                            <GradientStop Offset="0.5" Color="{DynamicResource ThemeAccentColor}"/>
+                            <GradientStop Offset="1" Color="Transparent"/>
+                        </LinearGradientBrush>
+                   </Border.BorderBrush>
+                </Border>
+                <TextBlock Text="{Binding [UnsavedTitle], Source={x:Static services:LocalizationService.Instance}}" 
+                           Foreground="{DynamicResource AccentRedBrush}"
+                           FontWeight="Bold"
+                           FontSize="18"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                           LetterSpacing="4"/>
+            </Panel>
+
+            <StackPanel Grid.Row="1" Spacing="15" Margin="30,20" VerticalAlignment="Center">
+                <TextBlock Text="{Binding [UnsavedMessage], Source={x:Static services:LocalizationService.Instance}}" 
+                           Foreground="White"
+                           FontSize="14"
+                           TextWrapping="Wrap"
+                           TextAlignment="Center"
+                           FontFamily="{Binding CurrentFontFamily, Source={x:Static services:LocalizationService.Instance}}"/>
+            </StackPanel>
+
+            <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="15" Margin="20,10,20,30">
+                <Button Content="{Binding [Yes], Source={x:Static services:LocalizationService.Instance}}" 
+                        Theme="{StaticResource GothicMetalButton}"
+                        MinWidth="100" Height="40"
+                        Classes="accent"
+                        Click="OnYesClick"/>
+                <Button Content="{Binding [No], Source={x:Static services:LocalizationService.Instance}}" 
+                        Theme="{StaticResource GothicMetalButton}"
+                        MinWidth="100" Height="40"
+                        Click="OnNoClick"/>
+                <Button Content="{Binding [Cancel], Source={x:Static services:LocalizationService.Instance}}" 
+                        Theme="{StaticResource GothicMetalButton}"
+                        MinWidth="100" Height="40"
+                        Foreground="Gray"
+                        Click="OnCancelClick"/>
+            </StackPanel>
+        </Grid>
+
+        <Border BorderThickness="2" CornerRadius="0" IsHitTestVisible="False">
+            <Border.BorderBrush>
+                <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+                    <GradientStop Offset="0" Color="{DynamicResource ThemeDeepColor}"/>
+                    <GradientStop Offset="0.5" Color="{DynamicResource ThemeAccentColor}"/>
+                    <GradientStop Offset="1" Color="{DynamicResource ThemeDeepColor}"/>
+                </LinearGradientBrush>
+            </Border.BorderBrush>
+        </Border>
+        
+        <Panel IsHitTestVisible="False" ZIndex="10">
+            <Rectangle Fill="{DynamicResource ThemeAccentBrush}" Width="15" Height="2" HorizontalAlignment="Left" VerticalAlignment="Top"/>
+            <Rectangle Fill="{DynamicResource ThemeAccentBrush}" Width="2" Height="15" HorizontalAlignment="Left" VerticalAlignment="Top"/>
+            <Rectangle Fill="{DynamicResource ThemeAccentBrush}" Width="15" Height="2" HorizontalAlignment="Right" VerticalAlignment="Top"/>
+            <Rectangle Fill="{DynamicResource ThemeAccentBrush}" Width="2" Height="15" HorizontalAlignment="Right" VerticalAlignment="Top"/>
+            <Rectangle Fill="{DynamicResource ThemeAccentBrush}" Width="15" Height="2" HorizontalAlignment="Left" VerticalAlignment="Bottom"/>
+            <Rectangle Fill="{DynamicResource ThemeAccentBrush}" Width="2" Height="15" HorizontalAlignment="Left" VerticalAlignment="Bottom"/>
+            <Rectangle Fill="{DynamicResource ThemeAccentBrush}" Width="15" Height="2" HorizontalAlignment="Right" VerticalAlignment="Bottom"/>
+            <Rectangle Fill="{DynamicResource ThemeAccentBrush}" Width="2" Height="15" HorizontalAlignment="Right" VerticalAlignment="Bottom"/>
+        </Panel>
+    </Panel>
+</Window>

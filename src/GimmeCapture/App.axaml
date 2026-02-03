@@ -28,6 +28,7 @@
             <cv:RectWidthConverter x:Key="RectWidthConverter"/>
             <cv:RectHeightConverter x:Key="RectHeightConverter"/>
             <cv:BoolInvertConverter x:Key="BoolInvertConverter"/>
+            <cv:ModifiedColorConverter x:Key="ModifiedColorConverter"/>
             <cv:ArrowGeometryConverter x:Key="ArrowGeometryConverter"/>
             <cv:AnnotationToLeftConverter x:Key="AnnotationToLeftConverter"/>
             <cv:AnnotationToTopConverter x:Key="AnnotationToTopConverter"/>

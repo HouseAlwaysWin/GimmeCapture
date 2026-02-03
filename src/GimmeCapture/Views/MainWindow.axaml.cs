@@ -27,6 +27,32 @@ public partial class MainWindow : Window
         InitializeComponent();
         
         this.PropertyChanged += OnPropertyChanged;
+        this.Closing += OnClosing;
+    }
+
+    private bool _isClosingFromDialog = false;
+    private async void OnClosing(object? sender, WindowClosingEventArgs e)
+    {
+        if (_isClosingFromDialog) return;
+
+        if (DataContext is MainWindowViewModel vm && vm.IsModified)
+        {
+            e.Cancel = true;
+            var result = await ConfirmationDialog.ShowConfirmation(this);
+            
+            if (result == ConfirmationResult.Yes)
+            {
+                await vm.SaveSettingsAsync();
+                _isClosingFromDialog = true;
+                Close();
+            }
+            else if (result == ConfirmationResult.No)
+            {
+                _isClosingFromDialog = true;
+                Close();
+            }
+            // If Cancel, do nothing (window stays open)
+        }
     }
 
     private void OnPropertyChanged(object? sender, Avalonia.AvaloniaPropertyChangedEventArgs e)

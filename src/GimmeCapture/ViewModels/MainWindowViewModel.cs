@@ -21,6 +21,15 @@ public class MainWindowViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _statusText, value);
     }
 
+    private bool _isModified;
+    public bool IsModified
+    {
+        get => _isModified;
+        set => this.RaiseAndSetIfChanged(ref _isModified, value);
+    }
+
+    private bool _isDataLoading = true;
+
     private string _currentStatusKey = "StatusReady";
 
     public void SetStatus(string key)
@@ -144,6 +153,19 @@ public class MainWindowViewModel : ViewModelBase
 
         // Fire and forget load, in real app use async initialization
         Task.Run(async () => await LoadSettingsAsync());
+
+        // Track changes AFTER loading
+        this.PropertyChanged += (s, e) =>
+        {
+            if (!_isDataLoading && e.PropertyName != nameof(StatusText) && e.PropertyName != nameof(IsModified))
+            {
+                if (!IsModified)
+                {
+                    IsModified = true;
+                    SetStatus("StatusModified");
+                }
+            }
+        };
     }
 
     // Language Selection
@@ -484,11 +506,12 @@ public class MainWindowViewModel : ViewModelBase
             await FfmpegDownloader.EnsureFFmpegAsync();
         }
 
-        // Auto check for updates if enabled
         if (AutoCheckUpdates)
         {
             _ = Task.Run(async () => await CheckForUpdates(silent: true));
         }
+
+        _isDataLoading = false;
     }
 
     public async Task SaveSettingsAsync()
@@ -525,6 +548,7 @@ public class MainWindowViewModel : ViewModelBase
         s.TempDirectory = TempDirectory;
         
         await _settingsService.SaveAsync();
+        IsModified = false;
 
         // Update Windows startup registry
         Services.StartupService.SetStartup(s.RunOnStartup);
@@ -546,6 +570,7 @@ public class MainWindowViewModel : ViewModelBase
 
     private async Task ResetToDefault()
     {
+        _isDataLoading = true;
         // Reset to AppSettings initial state
         var defaultSettings = new Models.AppSettings();
         
@@ -577,7 +602,9 @@ public class MainWindowViewModel : ViewModelBase
         
         // Services.LocalizationService.Instance.CurrentLanguage = defaultSettings.Language; // Keep current language
 
+        _isDataLoading = false;
         SetStatus("StatusReset");
+        IsModified = false;
         await SaveSettingsAsync();
     }
 
