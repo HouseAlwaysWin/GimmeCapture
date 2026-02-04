@@ -35,5 +35,6 @@ jobs:
       uses: softprops/action-gh-release@v2
       with:
         files: GimmeCapture_win-x64.zip
+        generate_release_notes: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
