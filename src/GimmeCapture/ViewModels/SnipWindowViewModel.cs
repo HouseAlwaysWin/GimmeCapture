@@ -414,7 +414,37 @@ public class SnipWindowViewModel : ViewModelBase
     public bool IsDrawingMode
     {
         get => _isDrawingMode;
-        set => this.RaiseAndSetIfChanged(ref _isDrawingMode, value);
+        set
+        {
+            if (value && !_isDrawingMode)
+            {
+                // Entering drawing mode - capture snapshot first
+                CaptureDrawingModeSnapshotAction?.Invoke();
+            }
+            else if (!value && _isDrawingMode)
+            {
+                // Exiting drawing mode - clear snapshot
+                DrawingModeSnapshot = null;
+            }
+            this.RaiseAndSetIfChanged(ref _isDrawingMode, value);
+        }
+    }
+
+    /// <summary>
+    /// Action to capture the selection area snapshot before closing the hole.
+    /// Set by the View (SnipWindow) since it has access to window position and scaling.
+    /// </summary>
+    public Action? CaptureDrawingModeSnapshotAction { get; set; }
+
+    private Avalonia.Media.Imaging.Bitmap? _drawingModeSnapshot;
+    /// <summary>
+    /// Snapshot of the selection area captured when entering drawing mode.
+    /// Displayed as background so user can see what they're annotating.
+    /// </summary>
+    public Avalonia.Media.Imaging.Bitmap? DrawingModeSnapshot
+    {
+        get => _drawingModeSnapshot;
+        set => this.RaiseAndSetIfChanged(ref _drawingModeSnapshot, value);
     }
 
     private bool _isEnteringText = false;

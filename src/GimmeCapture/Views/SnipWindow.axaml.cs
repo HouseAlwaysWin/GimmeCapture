@@ -28,7 +28,11 @@ public partial class SnipWindow : Window
     
     // Window region for transparent hole (mouse pass-through)
     private IDisposable? _selectionRectSubscription;
+    private IDisposable? _drawingModeSubscription;
     private Rect _originalRect;
+    
+    // Floating draw canvas for see-through drawing
+    private FloatingDrawCanvas? _floatingDrawCanvas;
 
     private enum ResizeDirection
     {
@@ -143,8 +147,13 @@ public partial class SnipWindow : Window
     {
         base.OnClosing(e);
         
-        // Cleanup window region subscription
+        // Cleanup subscriptions
         _selectionRectSubscription?.Dispose();
+        _drawingModeSubscription?.Dispose();
+        
+        // Close floating draw canvas
+        _floatingDrawCanvas?.Close();
+        _floatingDrawCanvas = null;
         
         // Clear window region before closing
         var hwnd = this.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
@@ -198,6 +207,8 @@ public partial class SnipWindow : Window
                 x => x.IsDrawingMode)
                 .Subscribe(tuple => UpdateWindowRegion(tuple.Item1, tuple.Item2, tuple.Item3));
             
+            // Set up the snapshot capture action for drawing mode
+            _viewModel.CaptureDrawingModeSnapshotAction = () => CaptureDrawingModeSnapshot();
 
             _viewModel.PickSaveFileAction = async () =>
             {
@@ -814,7 +825,7 @@ public partial class SnipWindow : Window
 
         // Only apply region when:
         // 1. In Selected state with valid selection
-        // 2. NOT in drawing mode (need full window for drawing annotations)
+        // 2. NOT in drawing mode (SetWindowRgn hole prevents ANY window from receiving mouse in that area)
         if (state == SnipState.Selected && selectionRect.Width > 10 && selectionRect.Height > 10 && !isDrawingMode)
         {
             // Get physical pixel dimensions (account for DPI scaling)
@@ -856,7 +867,57 @@ public partial class SnipWindow : Window
         else
         {
             // Clear region when not in Selected state OR in drawing mode
+            // Drawing mode requires full window for mouse capture
             Win32Helpers.ClearWindowRegion(hwnd);
+        }
+    }
+
+    /// <summary>
+    /// Captures a snapshot of the selection area before closing the hole.
+    /// This allows the user to see what they're annotating while in drawing mode.
+    /// </summary>
+    private void CaptureDrawingModeSnapshot()
+    {
+        if (_viewModel == null || !OperatingSystem.IsWindows()) return;
+        
+        var selectionRect = _viewModel.SelectionRect;
+        if (selectionRect.Width < 10 || selectionRect.Height < 10) return;
+
+        try
+        {
+            // Calculate physical pixels for the selection area
+            double scaling = this.RenderScaling;
+            var screenPos = this.Position; // physical pixels
+            
+            // Convert selection logical coordinates to physical and add window physical position
+            int xPhysical = (int)(selectionRect.X * scaling) + screenPos.X;
+            int yPhysical = (int)(selectionRect.Y * scaling) + screenPos.Y;
+            int widthPhysical = (int)(selectionRect.Width * scaling);
+            int heightPhysical = (int)(selectionRect.Height * scaling);
+
+            if (widthPhysical <= 0 || heightPhysical <= 0) return;
+
+            // Capture using GDI+
+            using var bitmap = new System.Drawing.Bitmap(widthPhysical, heightPhysical);
+            using (var g = System.Drawing.Graphics.FromImage(bitmap))
+            {
+                g.CopyFromScreen(
+                    xPhysical, 
+                    yPhysical, 
+                    0, 0, 
+                    new System.Drawing.Size(widthPhysical, heightPhysical));
+            }
+
+            // Convert to Avalonia Bitmap
+            using var stream = new System.IO.MemoryStream();
+            bitmap.Save(stream, System.Drawing.Imaging.ImageFormat.Png);
+            stream.Seek(0, System.IO.SeekOrigin.Begin);
+            
+            _viewModel.DrawingModeSnapshot = new Avalonia.Media.Imaging.Bitmap(stream);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Failed to capture drawing mode snapshot: {ex.Message}");
         }
     }
 }
