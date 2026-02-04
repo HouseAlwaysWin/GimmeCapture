@@ -203,17 +203,37 @@
                         <Border BorderThickness="{Binding SelectionBorderThickness, Converter={StaticResource ThicknessConverter}}">
                             <Border BorderThickness="1" Margin="-1">
                                 <Grid IsVisible="{Binding IsDrawingMode, Converter={StaticResource BoolInvertConverter}}">
-                                    <Rectangle Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="15" Height="2" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="4"/>
-                                    <Rectangle Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="2" Height="15" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="4"/>
-                                    
-                                    <Rectangle Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="15" Height="2" VerticalAlignment="Top" HorizontalAlignment="Right" Margin="4"/>
-                                    <Rectangle Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="2" Height="15" VerticalAlignment="Top" HorizontalAlignment="Right" Margin="4"/>
-                                    
-                                    <Rectangle Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="15" Height="2" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="4"/>
-                                    <Rectangle Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="2" Height="15" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="4"/>
-                                    
-                                    <Rectangle Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="15" Height="2" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="4"/>
-                                    <Rectangle Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="2" Height="15" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="4"/>
+                                    <!-- Left Inner Corners: Hearts -->
+                                    <Rectangle Width="18" Height="18" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="4"
+                                               Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}"
+                                               RenderOptions.BitmapInterpolationMode="HighQuality">
+                                        <Rectangle.OpacityMask>
+                                            <ImageBrush Source="/Assets/heart.png" Stretch="Uniform"/>
+                                        </Rectangle.OpacityMask>
+                                    </Rectangle>
+                                    <Rectangle Width="18" Height="18" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="4"
+                                               Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}"
+                                               RenderOptions.BitmapInterpolationMode="HighQuality">
+                                        <Rectangle.OpacityMask>
+                                            <ImageBrush Source="/Assets/heart.png" Stretch="Uniform"/>
+                                        </Rectangle.OpacityMask>
+                                    </Rectangle>
+
+                                    <!-- Right Inner Corners: Skulls -->
+                                    <Rectangle Width="18" Height="18" VerticalAlignment="Top" HorizontalAlignment="Right" Margin="4"
+                                               Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}"
+                                               RenderOptions.BitmapInterpolationMode="HighQuality">
+                                        <Rectangle.OpacityMask>
+                                            <ImageBrush Source="/Assets/skull.png" Stretch="Uniform"/>
+                                        </Rectangle.OpacityMask>
+                                    </Rectangle>
+                                    <Rectangle Width="18" Height="18" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="4"
+                                               Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}"
+                                               RenderOptions.BitmapInterpolationMode="HighQuality">
+                                        <Rectangle.OpacityMask>
+                                            <ImageBrush Source="/Assets/skull.png" Stretch="Uniform"/>
+                                        </Rectangle.OpacityMask>
+                                    </Rectangle>
                                 </Grid>
                             </Border>
                         </Border>
@@ -262,12 +282,14 @@
                       IsVisible="{Binding IsDrawingMode, Converter={StaticResource BoolInvertConverter}}"/>
                 
                 <!-- Wing Decorations Layer -->
-                <Grid IsVisible="{Binding IsDrawingMode, Converter={StaticResource BoolInvertConverter}}" 
-                      HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
-                      ClipToBounds="False">
-                    <Grid IsVisible="{Binding IsRecordingActive, Converter={StaticResource BoolInvertConverter}}" 
-                          HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
-                          ClipToBounds="False">
+                <Grid HorizontalAlignment="Stretch" VerticalAlignment="Stretch" ClipToBounds="False">
+                    <Grid.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                             <Binding Path="IsDrawingMode" Converter="{StaticResource BoolInvertConverter}"/>
+                             <Binding Path="IsRecordingActive" Converter="{StaticResource BoolInvertConverter}"/>
+                             <Binding Path="HideSelectionDecoration" Converter="{StaticResource BoolInvertConverter}"/>
+                        </MultiBinding>
+                    </Grid.IsVisible>
                         
                         <!-- Left Side Wing: Anchored Left, pushed 100px OUT, flushed Right -->
                         <Rectangle Width="100" Height="60" VerticalAlignment="Center"
@@ -289,7 +311,6 @@
                             </Rectangle.OpacityMask>
                         </Rectangle>
                     </Grid>
-                </Grid>
             </Grid>
             
             <!-- Text Input Overlay Container -->
