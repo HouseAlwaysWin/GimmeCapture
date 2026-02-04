@@ -18,6 +18,7 @@
         Background="Transparent"
         ExtendClientAreaToDecorationsHint="True"
         ExtendClientAreaChromeHints="NoChrome"
+        ClipToBounds="False"
         FontFamily="{Binding CurrentFontFamily, Source={x:Static services:LocalizationService.Instance}}">
 
     <Window.Resources>
@@ -193,7 +194,8 @@
                   Canvas.Left="{Binding SelectionRect.X}"
                   Canvas.Top="{Binding SelectionRect.Y}"
                   IsVisible="{Binding CurrentState, Converter={StaticResource StateToBoolConverter}}"
-                  Background="Transparent"> <!-- Ensure it stays hit-test visible -->
+                  Background="Transparent"
+                  ClipToBounds="False"> <!-- Ensure it stays hit-test visible and doesn't clip wings -->
                   
                 <!-- Accent Corners (Hide during drawing or if setting disabled, using parallel layer to match border indentation) -->
                 <Grid IsVisible="{Binding IsRecordingActive, Converter={StaticResource BoolInvertConverter}}">
@@ -259,25 +261,33 @@
                 <Grid Classes="Handle" Name="HandleRight" Cursor="SizeWestEast" Width="15" HorizontalAlignment="Right" VerticalAlignment="Stretch" Margin="0,15"
                       IsVisible="{Binding IsDrawingMode, Converter={StaticResource BoolInvertConverter}}"/>
                 
-                <!-- Corner Handle Decorations (skull icons at L-bracket inner corners) -->
-                <Grid IsVisible="{Binding IsDrawingMode, Converter={StaticResource BoolInvertConverter}}">
-                    <Grid IsVisible="{Binding IsRecordingActive, Converter={StaticResource BoolInvertConverter}}">
-                        <!-- Top-Left skull -->
-                        <TextBlock Text="☠" FontSize="10" 
-                                   Foreground="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}"
-                                   HorizontalAlignment="Left" VerticalAlignment="Top" Margin="8,5,0,0"/>
-                        <!-- Top-Right skull -->
-                        <TextBlock Text="☠" FontSize="10" 
-                                   Foreground="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}"
-                                   HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,5,8,0"/>
-                        <!-- Bottom-Left skull -->
-                        <TextBlock Text="☠" FontSize="10" 
-                                   Foreground="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}"
-                                   HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="8,0,0,8"/>
-                        <!-- Bottom-Right skull -->
-                        <TextBlock Text="☠" FontSize="10" 
-                                   Foreground="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}"
-                                   HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,8,8"/>
+                <!-- Wing Decorations Layer -->
+                <Grid IsVisible="{Binding IsDrawingMode, Converter={StaticResource BoolInvertConverter}}" 
+                      HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                      ClipToBounds="False">
+                    <Grid IsVisible="{Binding IsRecordingActive, Converter={StaticResource BoolInvertConverter}}" 
+                          HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                          ClipToBounds="False">
+                        
+                        <!-- Left Side Wing: Anchored Left, pushed 100px OUT, flushed Right -->
+                        <Rectangle Width="100" Height="60" VerticalAlignment="Center"
+                                   HorizontalAlignment="Left" Margin="-100,0,0,0"
+                                   Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}"
+                                   RenderOptions.BitmapInterpolationMode="HighQuality">
+                            <Rectangle.OpacityMask>
+                                <ImageBrush Source="/Assets/wing_left.png" Stretch="Uniform" AlignmentX="Right"/>
+                            </Rectangle.OpacityMask>
+                        </Rectangle>
+                               
+                        <!-- Right Side Wing: Anchored Right, pushed 100px OUT, flushed Left -->
+                        <Rectangle Width="100" Height="60" VerticalAlignment="Center"
+                                   HorizontalAlignment="Right" Margin="0,0,-100,0"
+                                   Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}"
+                                   RenderOptions.BitmapInterpolationMode="HighQuality">
+                            <Rectangle.OpacityMask>
+                                <ImageBrush Source="/Assets/wing_right.png" Stretch="Uniform" AlignmentX="Left"/>
+                            </Rectangle.OpacityMask>
+                        </Rectangle>
                     </Grid>
                 </Grid>
             </Grid>

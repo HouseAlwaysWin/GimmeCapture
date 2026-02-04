@@ -882,11 +882,11 @@ public partial class SnipWindow : Window
             }
             
             // Apply window region with hole (border width in physical pixels)
-            // Use 20px logical border to:
-            // 1. Keep resize handles responsive
-            // 2. Allow move gesture by clicking near the edges
-            // 3. Preserve corner decorations visibility
-            int borderWidth = (int)(20 * scaling);
+            // Use 120px logical border to:
+            // 1. Ensure external decorations (like 100px wings) are fully visible
+            // 2. Keep resize handles and wings responsive
+            // 3. Allow move gesture by clicking near the edges
+            int borderWidth = (int)(120 * scaling);
             Win32Helpers.SetWindowHoleRegion(hwnd, windowWidth, windowHeight, scaledRect, borderWidth, toolbarRect);
         }
         else
