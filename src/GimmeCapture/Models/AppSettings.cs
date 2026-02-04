@@ -13,6 +13,7 @@ public class AppSettings
     public double MaskOpacity { get; set; } = 0.5;
     public string BorderColorHex { get; set; } = "#E60012";
     public string ThemeColorHex { get; set; } = "#E60012";
+    public double WingScale { get; set; } = 1.0;
     // Visibility
     public bool HideSnipPinDecoration { get; set; } = false;
     public bool HideSnipPinBorder { get; set; } = false;

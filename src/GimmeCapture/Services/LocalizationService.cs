@@ -176,6 +176,7 @@ namespace GimmeCapture.Services
             ["FFmpegStatusDownloading"] = "FFmpeg Downloading...",
             ["ComponentDownloadingProgress"] = "Downloading components... {0}%",
             ["TempPath"] = "Temp Folder:",
+            ["WingScale"] = "Wing Scale:",
                 },
                 [Language.Chinese] = new Dictionary<string, string>
                 {
@@ -295,6 +296,7 @@ namespace GimmeCapture.Services
             ["FFmpegStatusDownloading"] = "正在下載 FFmpeg...",
             ["ComponentDownloadingProgress"] = "正在下載必要組件... {0}%",
             ["TempPath"] = "暫存資料夾:",
+            ["WingScale"] = "翅膀大小:",
                 },
                 [Language.Japanese] = new Dictionary<string, string>
                 {
@@ -414,7 +416,8 @@ namespace GimmeCapture.Services
             ["FFmpegStatusDownloading"] = "FFmpeg ダウンロード中...",
             ["ComponentDownloadingProgress"] = "コンポーネントをダウンロード中... {0}%",
             ["TempPath"] = "一時フォルダー:",
-                }
+            ["WingScale"] = "翼のサイズ:",
+                },
             };
 
             // Set Default

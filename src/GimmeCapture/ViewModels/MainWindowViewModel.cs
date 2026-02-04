@@ -1,4 +1,5 @@
 using ReactiveUI;
+using Avalonia;
 using Avalonia.Media;
 using System;
 using System.Threading.Tasks;
@@ -70,6 +71,8 @@ public class MainWindowViewModel : ViewModelBase
     public ReactiveCommand<Color, Unit> ChangeThemeColorCommand { get; }
     public ReactiveCommand<Unit, Unit> CheckUpdateCommand { get; }
     public ReactiveCommand<Unit, Unit> OpenProjectCommand { get; }
+    public ReactiveCommand<Unit, Unit> IncreaseWingScaleCommand { get; }
+    public ReactiveCommand<Unit, Unit> DecreaseWingScaleCommand { get; }
     
     public Color[] SettingsColors { get; } = new[]
     {
@@ -112,6 +115,9 @@ public class MainWindowViewModel : ViewModelBase
         ChangeThemeColorCommand = ReactiveCommand.Create<Color>(c => ThemeColor = c);
         CheckUpdateCommand = ReactiveCommand.CreateFromTask(CheckForUpdates);
         OpenProjectCommand = ReactiveCommand.Create(() => OpenProjectUrl());
+        
+        IncreaseWingScaleCommand = ReactiveCommand.Create(() => { if (WingScale < 4.0) WingScale = Math.Round(WingScale + 0.1, 1); });
+        DecreaseWingScaleCommand = ReactiveCommand.Create(() => { if (WingScale > 0.5) WingScale = Math.Round(WingScale - 0.1, 1); });
         
         // Setup Hotkey Action
         HotkeyService.OnHotkeyPressed = (id) => 
@@ -229,6 +235,25 @@ public class MainWindowViewModel : ViewModelBase
         get => _maskOpacity;
         set => this.RaiseAndSetIfChanged(ref _maskOpacity, value);
     }
+
+    private double _wingScale;
+    public double WingScale
+    {
+        get => _wingScale;
+        set 
+        {
+            this.RaiseAndSetIfChanged(ref _wingScale, value);
+            this.RaisePropertyChanged(nameof(PreviewWingWidth));
+            this.RaisePropertyChanged(nameof(PreviewWingHeight));
+            this.RaisePropertyChanged(nameof(PreviewLeftWingMargin));
+            this.RaisePropertyChanged(nameof(PreviewRightWingMargin));
+        }
+    }
+
+    public double PreviewWingWidth => 100 * WingScale * 0.5; // Scaled for small preview
+    public double PreviewWingHeight => 60 * WingScale * 0.5; // Scaled for small preview
+    public Thickness PreviewLeftWingMargin => new Thickness(-PreviewWingWidth, 0, 0, 0);
+    public Thickness PreviewRightWingMargin => new Thickness(0, 0, -PreviewWingWidth, 0);
     
     private Color _borderColor;
     public Color BorderColor
@@ -441,6 +466,7 @@ public class MainWindowViewModel : ViewModelBase
         AutoCheckUpdates = s.AutoCheckUpdates;
         BorderThickness = s.BorderThickness;
         MaskOpacity = s.MaskOpacity;
+        WingScale = s.WingScale;
         AutoSave = s.AutoSave;
         SnipHotkey = s.SnipHotkey;
         CopyHotkey = s.CopyHotkey;
@@ -538,6 +564,7 @@ public class MainWindowViewModel : ViewModelBase
             s.AutoCheckUpdates = AutoCheckUpdates;
             s.BorderThickness = BorderThickness;
             s.MaskOpacity = MaskOpacity;
+            s.WingScale = WingScale;
             s.AutoSave = AutoSave;
             s.SaveDirectory = SaveDirectory;
             s.SnipHotkey = SnipHotkey;

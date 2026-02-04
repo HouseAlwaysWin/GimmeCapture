@@ -204,6 +204,15 @@
                                                                IncreaseCommand="{Binding IncreaseFontSizeCommand}"
                                                                DecreaseCommand="{Binding DecreaseFontSizeCommand}"/>
                                     </StackPanel>
+
+                                    <Separator Background="#333333" Height="1" Margin="0,2"/>
+
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding [WingScale], Source={x:Static services:LocalizationService.Instance}}" FontSize="9" Foreground="Gray"/>
+                                        <c:CompactNumericStep Value="{Binding WingScale}"
+                                                               IncreaseCommand="{Binding IncreaseWingScaleCommand}"
+                                                               DecreaseCommand="{Binding DecreaseWingScaleCommand}"/>
+                                    </StackPanel>
                                 </StackPanel>
                             </Border>
                         </Flyout>

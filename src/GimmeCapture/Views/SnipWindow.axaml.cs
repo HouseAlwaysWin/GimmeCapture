@@ -899,25 +899,28 @@ public partial class SnipWindow : Window
             }
 
             // EXTRA OPAQUE REGIONS: Wings
-            // Wings are centered vertically on the selection edges, 100x60 logical
+            // Wings are centered vertically on the selection edges
             var extraRegions = new System.Collections.Generic.List<Rect>();
-            double wingsY = selectionRect.Center.Y - 30; // 60/2
-            
-            // Left Wing (outside, flush)
-            extraRegions.Add(new Rect(
-                (selectionRect.X - 100) * scaling,
-                wingsY * scaling,
-                100 * scaling,
-                60 * scaling
-            ));
-            
-            // Right Wing (outside, flush)
-            extraRegions.Add(new Rect(
-                selectionRect.Right * scaling,
-                wingsY * scaling,
-                100 * scaling,
-                60 * scaling
-            ));
+            if (_viewModel != null)
+            {
+                double wingsY = selectionRect.Center.Y - (_viewModel.WingHeight / 2);
+                
+                // Left Wing (outside, flush)
+                extraRegions.Add(new Rect(
+                    (selectionRect.X - _viewModel.WingWidth) * scaling,
+                    wingsY * scaling,
+                    _viewModel.WingWidth * scaling,
+                    _viewModel.WingHeight * scaling
+                ));
+                
+                // Right Wing (outside, flush)
+                extraRegions.Add(new Rect(
+                    selectionRect.Right * scaling,
+                    wingsY * scaling,
+                    _viewModel.WingWidth * scaling,
+                    _viewModel.WingHeight * scaling
+                ));
+            }
             
             // Apply window region with hole.
             // Use 30px logical border (matching handles) instead of 120px to reduce dead zone.

@@ -275,6 +275,8 @@ public class SnipWindowViewModel : ViewModelBase
     public ReactiveCommand<Unit, Unit> ChangeLanguageCommand { get; }
     public ReactiveCommand<Unit, bool> ToggleBoldCommand { get; }
     public ReactiveCommand<Unit, bool> ToggleItalicCommand { get; }
+    public ReactiveCommand<Unit, Unit> IncreaseWingScaleCommand { get; }
+    public ReactiveCommand<Unit, Unit> DecreaseWingScaleCommand { get; }
 
     private readonly System.Collections.Generic.List<Annotation> _redoStack = new();
     private bool _isUndoingOrRedoing = false;
@@ -482,6 +484,28 @@ public class SnipWindowViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _selectionBorderThickness, value);
     }
 
+    public double WingScale
+    {
+        get => _mainVm?.WingScale ?? 1.0;
+        set 
+        {
+            if (_mainVm != null)
+            {
+                _mainVm.WingScale = value;
+                this.RaisePropertyChanged();
+                this.RaisePropertyChanged(nameof(WingWidth));
+                this.RaisePropertyChanged(nameof(WingHeight));
+                this.RaisePropertyChanged(nameof(LeftWingMargin));
+                this.RaisePropertyChanged(nameof(RightWingMargin));
+            }
+        }
+    }
+
+    public double WingWidth => 100 * WingScale;
+    public double WingHeight => 60 * WingScale;
+    public Thickness LeftWingMargin => new Thickness(-WingWidth, 0, 0, 0);
+    public Thickness RightWingMargin => new Thickness(0, 0, -WingWidth, 0);
+
     private double _maskOpacity = 0.5;
     public double MaskOpacity
     {
@@ -582,6 +606,9 @@ public class SnipWindowViewModel : ViewModelBase
         ChangeLanguageCommand = ReactiveCommand.Create(() => LocalizationService.Instance.CycleLanguage());
         ToggleBoldCommand = ReactiveCommand.Create<Unit, bool>(_ => IsBold = !IsBold);
         ToggleItalicCommand = ReactiveCommand.Create<Unit, bool>(_ => IsItalic = !IsItalic);
+
+        IncreaseWingScaleCommand = ReactiveCommand.Create(() => { if (WingScale < 4.0) WingScale = Math.Round(WingScale + 0.1, 1); });
+        DecreaseWingScaleCommand = ReactiveCommand.Create(() => { if (WingScale > 0.5) WingScale = Math.Round(WingScale - 0.1, 1); });
 
         UpdateMask();
     }

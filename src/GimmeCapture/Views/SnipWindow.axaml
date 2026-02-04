@@ -293,8 +293,8 @@
                     </Grid.IsVisible>
                         
                         <!-- Left Side Wing: Anchored Left, pushed 100px OUT, flushed Right -->
-                        <Rectangle Width="100" Height="60" VerticalAlignment="Center"
-                                   HorizontalAlignment="Left" Margin="-100,0,0,0"
+                        <Rectangle Width="{Binding WingWidth}" Height="{Binding WingHeight}" VerticalAlignment="Center"
+                                   HorizontalAlignment="Left" Margin="{Binding LeftWingMargin}"
                                    Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}"
                                    RenderOptions.BitmapInterpolationMode="HighQuality">
                             <Rectangle.OpacityMask>
@@ -303,8 +303,8 @@
                         </Rectangle>
                                
                         <!-- Right Side Wing: Anchored Right, pushed 100px OUT, flushed Left -->
-                        <Rectangle Width="100" Height="60" VerticalAlignment="Center"
-                                   HorizontalAlignment="Right" Margin="0,0,-100,0"
+                        <Rectangle Width="{Binding WingWidth}" Height="{Binding WingHeight}" VerticalAlignment="Center"
+                                   HorizontalAlignment="Right" Margin="{Binding RightWingMargin}"
                                    Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}"
                                    RenderOptions.BitmapInterpolationMode="HighQuality">
                             <Rectangle.OpacityMask>
