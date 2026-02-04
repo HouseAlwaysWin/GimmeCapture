@@ -105,7 +105,7 @@
                                         <StackPanel Spacing="5">
                                             <TextBlock Text="{Binding [WingScale], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>
                                             <StackPanel Orientation="Horizontal" Spacing="10">
-                                                <Slider Minimum="0.5" Maximum="4.0" Value="{Binding WingScale}" 
+                                                <Slider Minimum="0.5" Maximum="3.0" Value="{Binding WingScale}" 
                                                         TickFrequency="0.1" IsSnapToTickEnabled="True" HorizontalAlignment="Stretch" Width="250"/>
                                                 <c:CompactNumericStep Value="{Binding WingScale}"
                                                                       IncreaseCommand="{Binding IncreaseWingScaleCommand}"
@@ -144,7 +144,7 @@
                                     <!-- Style Preview Area -->
                                     <StackPanel Grid.Column="1" Spacing="10" VerticalAlignment="Top" Margin="20,0,0,0">
                                         <TextBlock Text="樣式預覽" FontWeight="SemiBold" HorizontalAlignment="Center"/>
-                                        <Border Background="#1A1A1A" Width="300" Height="150" CornerRadius="4" BorderBrush="#333333" BorderThickness="1" ClipToBounds="True">
+                                        <Border Background="#1A1A1A" Width="550" Height="250" CornerRadius="4" BorderBrush="#333333" BorderThickness="1" ClipToBounds="True">
                                             <Grid>
                                                 <!-- Mock Background -->
                                                 <Image Source="avares://GimmeCapture/Assets/kitsune_icon.png" Opacity="0.1" Stretch="Uniform" Margin="20"/>
@@ -154,10 +154,10 @@
                                                     <Path.Data>
                                                         <CombinedGeometry GeometryCombineMode="Exclude">
                                                             <CombinedGeometry.Geometry1>
-                                                                <RectangleGeometry Rect="0,0,300,150" />
+                                                                <RectangleGeometry Rect="0,0,550,250" />
                                                             </CombinedGeometry.Geometry1>
                                                             <CombinedGeometry.Geometry2>
-                                                                <RectangleGeometry Rect="100,45,100,60" />
+                                                                <RectangleGeometry Rect="175,65,200,120" />
                                                             </CombinedGeometry.Geometry2>
                                                         </CombinedGeometry>
                                                     </Path.Data>
@@ -178,7 +178,7 @@
                                                         <Border BorderBrush="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" 
                                                                 BorderThickness="{Binding BorderThickness, Converter={StaticResource ThicknessConverter}}">
                                                             <Border BorderBrush="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" BorderThickness="1" Margin="-1">
-                                                                <Grid Width="100" Height="60" ClipToBounds="False">
+                                                                <Grid Width="200" Height="120" ClipToBounds="False">
                                                                     <!-- Wings -->
                                                                     <Rectangle Width="{Binding PreviewWingWidth}" Height="{Binding PreviewWingHeight}" VerticalAlignment="Center"
                                                                                HorizontalAlignment="Left" Margin="{Binding PreviewLeftWingMargin}"
@@ -196,26 +196,26 @@
                                                                     </Rectangle>
 
                                                                     <!-- Accent Corners: Hearts & Skulls -->
-                                                                    <Rectangle Width="20" Height="20" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="2"
+                                                                    <Rectangle Width="28" Height="28" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="4"
                                                                                Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}">
                                                                         <Rectangle.OpacityMask>
                                                                             <ImageBrush Source="/Assets/heart.png" Stretch="Uniform"/>
                                                                         </Rectangle.OpacityMask>
                                                                     </Rectangle>
-                                                                    <Rectangle Width="20" Height="20" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="2"
+                                                                    <Rectangle Width="28" Height="28" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="4"
                                                                                Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}">
                                                                         <Rectangle.OpacityMask>
                                                                             <ImageBrush Source="/Assets/heart.png" Stretch="Uniform" />
                                                                         </Rectangle.OpacityMask>
                                                                     </Rectangle>
 
-                                                                    <Rectangle Width="20" Height="20" VerticalAlignment="Top" HorizontalAlignment="Right" Margin="2"
+                                                                    <Rectangle Width="28" Height="28" VerticalAlignment="Top" HorizontalAlignment="Right" Margin="4"
                                                                                Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}">
                                                                         <Rectangle.OpacityMask>
                                                                             <ImageBrush Source="/Assets/skull.png" Stretch="Uniform" />
                                                                         </Rectangle.OpacityMask>
                                                                     </Rectangle>
-                                                                    <Rectangle Width="20" Height="20" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="2"
+                                                                    <Rectangle Width="28" Height="28" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="4"
                                                                                Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}">
                                                                         <Rectangle.OpacityMask>
                                                                             <ImageBrush Source="/Assets/skull.png" Stretch="Uniform" />

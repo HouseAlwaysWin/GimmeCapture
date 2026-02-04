@@ -116,7 +116,7 @@ public class MainWindowViewModel : ViewModelBase
         CheckUpdateCommand = ReactiveCommand.CreateFromTask(CheckForUpdates);
         OpenProjectCommand = ReactiveCommand.Create(() => OpenProjectUrl());
         
-        IncreaseWingScaleCommand = ReactiveCommand.Create(() => { if (WingScale < 4.0) WingScale = Math.Round(WingScale + 0.1, 1); });
+        IncreaseWingScaleCommand = ReactiveCommand.Create(() => { if (WingScale < 3.0) WingScale = Math.Round(WingScale + 0.1, 1); });
         DecreaseWingScaleCommand = ReactiveCommand.Create(() => { if (WingScale > 0.5) WingScale = Math.Round(WingScale - 0.1, 1); });
         
         // Setup Hotkey Action
@@ -250,8 +250,8 @@ public class MainWindowViewModel : ViewModelBase
         }
     }
 
-    public double PreviewWingWidth => 100 * WingScale * 0.5; // Scaled for small preview
-    public double PreviewWingHeight => 60 * WingScale * 0.5; // Scaled for small preview
+    public double PreviewWingWidth => 100 * WingScale * 0.5; // Reduced from 0.8 to 0.5
+    public double PreviewWingHeight => 60 * WingScale * 0.5; // Reduced from 0.8 to 0.5
     public Thickness PreviewLeftWingMargin => new Thickness(-PreviewWingWidth, 0, 0, 0);
     public Thickness PreviewRightWingMargin => new Thickness(0, 0, -PreviewWingWidth, 0);
     

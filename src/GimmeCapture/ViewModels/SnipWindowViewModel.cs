@@ -607,7 +607,7 @@ public class SnipWindowViewModel : ViewModelBase
         ToggleBoldCommand = ReactiveCommand.Create<Unit, bool>(_ => IsBold = !IsBold);
         ToggleItalicCommand = ReactiveCommand.Create<Unit, bool>(_ => IsItalic = !IsItalic);
 
-        IncreaseWingScaleCommand = ReactiveCommand.Create(() => { if (WingScale < 4.0) WingScale = Math.Round(WingScale + 0.1, 1); });
+        IncreaseWingScaleCommand = ReactiveCommand.Create(() => { if (WingScale < 3.0) WingScale = Math.Round(WingScale + 0.1, 1); });
         DecreaseWingScaleCommand = ReactiveCommand.Create(() => { if (WingScale > 0.5) WingScale = Math.Round(WingScale - 0.1, 1); });
 
         UpdateMask();
