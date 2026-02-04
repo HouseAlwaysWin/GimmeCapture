@@ -4,7 +4,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:services="using:GimmeCapture.Services.Core"
         mc:Ignorable="d" d:DesignWidth="480" d:DesignHeight="280"
-        x:Class="GimmeCapture.Views.UpdateDialog"
+        x:Class="GimmeCapture.Views.Dialogs.UpdateDialog"
         Title="Gimme Update!!"
         SizeToContent="WidthAndHeight"
         WindowStartupLocation="CenterOwner"

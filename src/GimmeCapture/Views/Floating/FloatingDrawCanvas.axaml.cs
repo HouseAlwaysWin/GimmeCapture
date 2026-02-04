@@ -4,11 +4,11 @@ using Avalonia.Controls.Shapes;
 using Avalonia.Input;
 using Avalonia.Media;
 using GimmeCapture.Models;
-using GimmeCapture.ViewModels;
+using GimmeCapture.ViewModels.Main;
 using System;
 using System.Collections.Generic;
 
-namespace GimmeCapture.Views;
+namespace GimmeCapture.Views.Floating;
 
 /// <summary>
 /// A floating, nearly transparent canvas window that overlays the selection area.

@@ -2,7 +2,10 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.VisualTree;
-using GimmeCapture.ViewModels;
+using GimmeCapture.ViewModels.Main;
+using GimmeCapture.ViewModels.Floating;
+using GimmeCapture.Views.Floating;
+using GimmeCapture.Views.Main;
 using GimmeCapture.Models;
 using System;
 using System.Linq;
@@ -17,7 +20,7 @@ using ReactiveUI;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
 
-namespace GimmeCapture.Views;
+namespace GimmeCapture.Views.Main;
 
 public partial class SnipWindow : Window
 {

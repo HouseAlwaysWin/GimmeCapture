@@ -14,8 +14,10 @@ using System.Linq;
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core;
 using GimmeCapture.Services.Platforms.Windows;
+using GimmeCapture.ViewModels.Floating;
+using GimmeCapture.Views.Floating;
 
-namespace GimmeCapture.ViewModels;
+namespace GimmeCapture.ViewModels.Main;
 
 public enum SnipState { Idle, Detecting, Selecting, Selected }
 
@@ -942,7 +944,7 @@ public class SnipWindowViewModel : ViewModelBase
                          _mainVm?.HideRecordPinDecoration ?? false,
                          _mainVm?.HideRecordPinBorder ?? false);
                          
-                     var videoWin = new Views.FloatingVideoWindow
+                     var videoWin = new FloatingVideoWindow
                      {
                          DataContext = videoVm,
                          Width = w + 20, // Add margin from XAML

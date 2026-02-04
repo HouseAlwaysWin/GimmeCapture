@@ -4,10 +4,10 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Interop;
-using GimmeCapture.ViewModels;
+using GimmeCapture.ViewModels.Main;
 using System;
 
-namespace GimmeCapture.Views;
+namespace GimmeCapture.Views.Main;
 
 public partial class SnipWindow : Window
 {

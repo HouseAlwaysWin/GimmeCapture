@@ -1,10 +1,10 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
-using GimmeCapture.ViewModels;
+using GimmeCapture.ViewModels.Floating;
 using System;
 
-namespace GimmeCapture.Views;
+namespace GimmeCapture.Views.Floating;
 
 public partial class FloatingImageWindow : Window
 {

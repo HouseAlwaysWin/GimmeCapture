@@ -1,5 +1,5 @@
 using Avalonia.Data.Converters;
-using GimmeCapture.ViewModels;
+using GimmeCapture.ViewModels.Main;
 using System;
 using System.Globalization;
 

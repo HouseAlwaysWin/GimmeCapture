@@ -3,7 +3,7 @@ using Avalonia.Interactivity;
 using System.Threading.Tasks;
 using GimmeCapture.Services.Core;
 
-namespace GimmeCapture.Views
+namespace GimmeCapture.Views.Dialogs
 {
     public partial class UpdateDialog : Window
     {

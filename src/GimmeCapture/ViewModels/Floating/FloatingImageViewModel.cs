@@ -6,7 +6,7 @@ using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core;
 using GimmeCapture.Services.Platforms.Windows;
 
-namespace GimmeCapture.ViewModels;
+namespace GimmeCapture.ViewModels.Floating;
 
 public class FloatingImageViewModel : ViewModelBase
 {

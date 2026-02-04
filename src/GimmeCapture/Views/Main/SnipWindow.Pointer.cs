@@ -2,14 +2,15 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.VisualTree;
-using GimmeCapture.ViewModels;
+using GimmeCapture.ViewModels.Main;
+using GimmeCapture.Views.Controls;
 using GimmeCapture.Models;
 using GimmeCapture.Services; // For RecordingState if it's there
 using System;
 using GimmeCapture.Services.Core;
 using System.Linq;
 
-namespace GimmeCapture.Views;
+namespace GimmeCapture.Views.Main;
 
 public partial class SnipWindow : Window
 {
@@ -182,7 +183,7 @@ public partial class SnipWindow : Window
 
             // If clicking OUTSIDE or in Idle/Detecting, start NEW selection
             // Check if the click is within the toolbar bounds (coordinate-based check)
-            var toolbar = this.FindControl<Views.Controls.SnipToolbar>("Toolbar");
+            var toolbar = this.FindControl<SnipToolbar>("Toolbar");
             if (toolbar != null && toolbar.IsVisible)
             {
                 // Get toolbar bounds in window coordinates

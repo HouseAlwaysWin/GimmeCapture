@@ -5,7 +5,8 @@ using System;
 using System.Threading.Tasks;
 using Avalonia.Controls.ApplicationLifetimes;
 using GimmeCapture.Models;
-using GimmeCapture.Views;
+using GimmeCapture.Views.Dialogs;
+using GimmeCapture.Views.Main;
 using System.Linq;
 using System.Reactive;
 using System.Reactive.Linq;
@@ -14,7 +15,7 @@ using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core;
 using GimmeCapture.Services.Platforms.Windows;
 
-namespace GimmeCapture.ViewModels;
+namespace GimmeCapture.ViewModels.Main;
 
 public class MainWindowViewModel : ViewModelBase
 {
@@ -637,7 +638,7 @@ public class MainWindowViewModel : ViewModelBase
                 await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
                 {
                     var mainWindow = (Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.MainWindow;
-                    if (mainWindow != null) await Views.UpdateDialog.ShowDialog(mainWindow, msg, isUpdateAvailable: false);
+                    if (mainWindow != null) await UpdateDialog.ShowDialog(mainWindow, msg, isUpdateAvailable: false);
                 });
                 return;
             }
@@ -730,7 +731,7 @@ public class MainWindowViewModel : ViewModelBase
             {
                 var mainWindow = (Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.MainWindow;
                 if (mainWindow == null) return false;
-                return await Views.UpdateDialog.ShowDialog(mainWindow, msg, isUpdateAvailable: true);
+                return await UpdateDialog.ShowDialog(mainWindow, msg, isUpdateAvailable: true);
             });
 
             if (result == true)
@@ -743,7 +744,7 @@ public class MainWindowViewModel : ViewModelBase
                     {
                         var mainWindow = (Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.MainWindow;
                         if (mainWindow == null) return false;
-                        return await Views.UpdateDialog.ShowDialog(mainWindow, readyMsg, isUpdateAvailable: true);
+                        return await UpdateDialog.ShowDialog(mainWindow, readyMsg, isUpdateAvailable: true);
                     });
 
                     if (readyResult == true)

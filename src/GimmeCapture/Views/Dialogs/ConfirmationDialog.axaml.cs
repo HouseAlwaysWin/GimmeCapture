@@ -2,7 +2,7 @@ using Avalonia.Controls;
 using Avalonia.Interactivity;
 using System.Threading.Tasks;
 
-namespace GimmeCapture.Views
+namespace GimmeCapture.Views.Dialogs
 {
     public enum ConfirmationResult
     {

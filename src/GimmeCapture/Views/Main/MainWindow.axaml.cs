@@ -2,7 +2,9 @@ using Avalonia.Controls;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
-using GimmeCapture.ViewModels;
+using GimmeCapture.ViewModels.Main;
+using GimmeCapture.Views.Dialogs;
+using GimmeCapture.Views.Main;
 using System.Runtime.InteropServices;
 using Avalonia.Platform;
 using Avalonia.Media;
@@ -10,7 +12,7 @@ using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core;
 using GimmeCapture.Services.Platforms.Windows;
 
-namespace GimmeCapture.Views;
+namespace GimmeCapture.Views.Main;
 
 public partial class MainWindow : Window
 {
@@ -100,7 +102,7 @@ public partial class MainWindow : Window
 
         hotkeyStr += key.ToString();
 
-        if (DataContext is GimmeCapture.ViewModels.MainWindowViewModel vm && sender is TextBox tb)
+        if (DataContext is MainWindowViewModel vm && sender is TextBox tb)
         {
             if (tb.Name == "SnipHotkeyBox") vm.SnipHotkey = hotkeyStr;
             else if (tb.Name == "CopyHotkeyBox") vm.CopyHotkey = hotkeyStr;
@@ -113,7 +115,7 @@ public partial class MainWindow : Window
     protected override void OnDataContextChanged(System.EventArgs e)
     {
         base.OnDataContextChanged(e);
-        if (DataContext is GimmeCapture.ViewModels.MainWindowViewModel vm)
+        if (DataContext is MainWindowViewModel vm)
         {
             // Initialize Hotkey Service with this Window
             vm.HotkeyService.Initialize(this);

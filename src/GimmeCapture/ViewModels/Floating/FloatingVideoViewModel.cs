@@ -11,7 +11,7 @@ using System.Threading.Tasks;
 using CliWrap;
 using CliWrap.Buffered;
 
-namespace GimmeCapture.ViewModels;
+namespace GimmeCapture.ViewModels.Floating;
 
 public class FloatingVideoViewModel : ViewModelBase, IDisposable
 {

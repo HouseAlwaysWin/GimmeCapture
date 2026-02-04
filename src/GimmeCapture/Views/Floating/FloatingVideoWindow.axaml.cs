@@ -1,12 +1,12 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
-using GimmeCapture.ViewModels;
+using GimmeCapture.ViewModels.Floating;
 using System;
 using System.Threading.Tasks;
 using System.IO;
 
-namespace GimmeCapture.Views;
+namespace GimmeCapture.Views.Floating;
 
 public partial class FloatingVideoWindow : Window
 {
