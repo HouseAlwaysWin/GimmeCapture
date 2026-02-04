@@ -130,6 +130,9 @@ namespace GimmeCapture.Services
                         ["UpdateBtnCancel"] = "NOT TODAY",
                         ["UpdateBtnOk"] = "FOX GOD APPROVES",
 
+                        ["CaptureModeNormal"] = "Screenshot Mode",
+                        ["CaptureModeRecord"] = "Recording Mode",
+
                     // Tooltips
                     ["TipCopy"] = "Copy (Ctrl+C)",
                     ["TipSave"] = "Save (Ctrl+S)",
@@ -246,6 +249,9 @@ namespace GimmeCapture.Services
                         ["UpdateBtnCancel"] = "下次一定 (Not Today)",
                         ["UpdateBtnOk"] = "狐神准許 (OK)",
 
+                        ["CaptureModeNormal"] = "截圖模式",
+                        ["CaptureModeRecord"] = "錄影模式",
+
                     // Tooltips
                     ["TipCopy"] = "複製 (Ctrl+C)",
                     ["TipSave"] = "儲存 (Ctrl+S)",
@@ -361,6 +367,9 @@ namespace GimmeCapture.Services
                         ["UpdateBtnConfirm"] = "キツネの穴へ (Update)",
                         ["UpdateBtnCancel"] = "今はしない (Not Today)",
                         ["UpdateBtnOk"] = "キツネ様のお導き (OK)",
+
+                        ["CaptureModeNormal"] = "スニップモード",
+                        ["CaptureModeRecord"] = "録画モード",
                     
                     // Tooltips
                     ["TipCopy"] = "コピー (Ctrl+C)",

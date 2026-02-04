@@ -41,8 +41,13 @@ public class SnipWindowViewModel : ViewModelBase
             this.RaiseAndSetIfChanged(ref _isRecordingMode, value);
             this.RaisePropertyChanged(nameof(HideFrameBorder));
             this.RaisePropertyChanged(nameof(HideSelectionDecoration));
+            this.RaisePropertyChanged(nameof(ModeDisplayName));
         }
     }
+
+    public string ModeDisplayName => IsRecordingMode 
+        ? Services.LocalizationService.Instance["CaptureModeRecord"] 
+        : Services.LocalizationService.Instance["CaptureModeNormal"];
 
     // True when actively recording (not idle, not paused) - used to hide selection border
     public bool IsRecordingActive => _recordingService?.State == RecordingState.Recording;
@@ -250,11 +255,26 @@ public class SnipWindowViewModel : ViewModelBase
     public ReactiveCommand<Unit, Unit> SaveCommand { get; }
     public ReactiveCommand<Unit, Unit> PinCommand { get; }
     public ReactiveCommand<Unit, Unit> CloseCommand { get; }
-    public ReactiveCommand<Unit, Unit> UndoCommand { get; }
-    public ReactiveCommand<Unit, Unit> ClearCommand { get; }
+    public ReactiveCommand<Unit, Unit> ToggleModeCommand { get; }
+    public ReactiveCommand<bool, Unit> SetCaptureModeCommand { get; }
+    public ReactiveCommand<Unit, Unit> StartRecordingCommand { get; }
+    public ReactiveCommand<Unit, Unit> PauseRecordingCommand { get; }
+    public ReactiveCommand<Unit, Unit> StopRecordingCommand { get; }
+    public ReactiveCommand<Unit, Unit> CopyRecordingCommand { get; }
     public ReactiveCommand<AnnotationType, Unit> SelectToolCommand { get; }
     public ReactiveCommand<string, Unit> ToggleToolGroupCommand { get; }
+    public ReactiveCommand<Color, Unit> ChangeColorCommand { get; }
+    public ReactiveCommand<Unit, Unit> UndoCommand { get; }
     public ReactiveCommand<Unit, Unit> RedoCommand { get; }
+    public ReactiveCommand<Unit, Unit> ClearCommand { get; }
+    public ReactiveCommand<Unit, Unit> IncreaseThicknessCommand { get; }
+    public ReactiveCommand<Unit, Unit> DecreaseThicknessCommand { get; }
+    public ReactiveCommand<Unit, Unit> IncreaseFontSizeCommand { get; }
+    public ReactiveCommand<Unit, Unit> DecreaseFontSizeCommand { get; }
+    public ReactiveCommand<Unit, Unit> ApplyHexColorCommand { get; }
+    public ReactiveCommand<Unit, Unit> ChangeLanguageCommand { get; }
+    public ReactiveCommand<Unit, bool> ToggleBoldCommand { get; }
+    public ReactiveCommand<Unit, bool> ToggleItalicCommand { get; }
 
     private readonly System.Collections.Generic.List<Annotation> _redoStack = new();
     private bool _isUndoingOrRedoing = false;
@@ -470,6 +490,11 @@ public class SnipWindowViewModel : ViewModelBase
             if (RecState == RecordingState.Idle) IsRecordingMode = !IsRecordingMode;
         });
 
+        SetCaptureModeCommand = ReactiveCommand.Create<bool>(isRecord => 
+        {
+            if (RecState == RecordingState.Idle) IsRecordingMode = isRecord;
+        });
+
         StartRecordingCommand = ReactiveCommand.CreateFromTask(StartRecording);
         PauseRecordingCommand = ReactiveCommand.CreateFromTask(PauseRecording);
         StopRecordingCommand = ReactiveCommand.CreateFromTask(StopRecording);
@@ -532,12 +557,6 @@ public class SnipWindowViewModel : ViewModelBase
     }
 
     public RecordingState RecState => _recordingService?.State ?? RecordingState.Idle;
-
-    public ReactiveCommand<Unit, Unit> ToggleModeCommand { get; }
-    public ReactiveCommand<Unit, Unit> StartRecordingCommand { get; }
-    public ReactiveCommand<Unit, Unit> PauseRecordingCommand { get; }
-    public ReactiveCommand<Unit, Unit> StopRecordingCommand { get; }
-    public ReactiveCommand<Unit, Unit> CopyRecordingCommand { get; }
 
     private async Task StartRecording()
     {
@@ -814,16 +833,6 @@ public class SnipWindowViewModel : ViewModelBase
     }
 
     private string? _currentRecordingPath;
-
-    public ReactiveCommand<Color, Unit> ChangeColorCommand { get; }
-    public ReactiveCommand<Unit, Unit> IncreaseThicknessCommand { get; }
-    public ReactiveCommand<Unit, Unit> DecreaseThicknessCommand { get; }
-    public ReactiveCommand<Unit, Unit> IncreaseFontSizeCommand { get; }
-    public ReactiveCommand<Unit, Unit> DecreaseFontSizeCommand { get; }
-    public ReactiveCommand<Unit, Unit> ApplyHexColorCommand { get; }
-    public ReactiveCommand<Unit, Unit> ChangeLanguageCommand { get; }
-    public ReactiveCommand<Unit, bool> ToggleBoldCommand { get; }
-    public ReactiveCommand<Unit, bool> ToggleItalicCommand { get; }
 
     public static class StaticData
     {
