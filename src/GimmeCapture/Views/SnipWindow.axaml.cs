@@ -367,10 +367,13 @@ public partial class SnipWindow : Window
              }
         }
 
-        // Check if we clicked on a handle
-        // Using Control instead of Ellipse because we changed XAML to use Grid (Panel)
-        // Disable resize while recording to prevent mismatch between UI and actual recording region
-        if (props.IsLeftButtonPressed && source is Control handle && handle.Classes.Contains("Handle"))
+        // Check for handle interaction (Move or Resize)
+        // prioritized before drawing logic to allow adjustment while tool is active
+        var sourceControl = e.Source as Control;
+        bool isResizeHandle = sourceControl != null && sourceControl.Classes.Contains("Handle");
+        bool isMoveHandle = sourceControl != null && (sourceControl.Classes.Contains("MoveHandle") || sourceControl.Name?.Contains("InnerCorner") == true);
+
+        if (props.IsLeftButtonPressed && isResizeHandle)
         {
             if (_viewModel.RecState != RecordingState.Idle)
             {
@@ -378,12 +381,25 @@ public partial class SnipWindow : Window
                 return; // Block resize during recording
             }
             _isResizing = true;
-            _resizeDirection = GetDirectionFromName(handle.Name);
+            _resizeDirection = GetDirectionFromName(sourceControl.Name);
             _resizeStartPoint = point;
             _originalRect = _viewModel.SelectionRect;
             e.Handled = true;
             return;
         }
+
+        if (props.IsLeftButtonPressed && isMoveHandle)
+        {
+            if (_viewModel.RecState == RecordingState.Idle && _viewModel.CurrentState == SnipState.Selected)
+            {
+                _isMovingSelection = true;
+                _moveStartPoint = point;
+                _originalRect = _viewModel.SelectionRect;
+                e.Handled = true;
+                return;
+            }
+        }
+
         if (props.IsLeftButtonPressed)
         {
             if (_viewModel.IsDrawingMode && _viewModel.CurrentState == SnipState.Selected)
@@ -455,7 +471,6 @@ public partial class SnipWindow : Window
             }
             
             // Also check visual tree for popups (they have their own visual tree)
-            var sourceControl = e.Source as Control;
             if (sourceControl != null)
             {
                 Control? ancestor = sourceControl;
@@ -477,7 +492,7 @@ public partial class SnipWindow : Window
                 _viewModel.IsDrawingMode = false;
                 _viewModel.Annotations.Clear();
             }
-            else if (_viewModel.CurrentState == SnipState.Selected && !_viewModel.IsDrawingMode)
+            else if (_viewModel.CurrentState == SnipState.Selected)
             {
                 // Check if we are in the "Wing Dead Zone" (outside selection but within 120px of border)
                 // If so, we ignore the click instead of starting a new selection 
@@ -489,28 +504,7 @@ public partial class SnipWindow : Window
                     return;
                 }
 
-                if (_viewModel.SelectionRect.Contains(point))
-                {
-                    // Move Selection - ONLY if clicking on handles or specific move regions
-                    // Since we removed Background="Transparent", we only get here if e.Source is a visible element.
-                    // We allow move if source is a Handle or one of our decorative icons.
-                    bool isHandle = sourceControl != null && (sourceControl.Classes.Contains("Handle") || sourceControl.Name?.Contains("InnerCorner") == true || sourceControl.Parent?.GetType() == typeof(Grid) && ((Grid)sourceControl.Parent).Name == "AccentCornersGrid");
-                    
-                    if (isHandle && _viewModel.RecState == RecordingState.Idle)
-                    {
-                        _isMovingSelection = true;
-                        _moveStartPoint = point;
-                        _originalRect = _viewModel.SelectionRect;
-                        e.Handled = true;
-                    }
-                    else if (!isHandle)
-                    {
-                        // Clicked in the middle (click-through) or on non-handle border part.
-                        // If it's the middle, Avalonia shouldn't even fire this on 'this' because it's transparent.
-                        // But as a fallback, we do nothing.
-                    }
-                }
-                else
+                if (!_viewModel.SelectionRect.Contains(point))
                 {
                     // Clicked far away from selection -> Start NEW selection
                      _startPoint = point;
