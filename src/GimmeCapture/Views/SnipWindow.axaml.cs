@@ -243,16 +243,22 @@ public partial class SnipWindow : Window
                 bool hideBorder = _viewModel.MainVm?.HideSnipPinBorder ?? false;
                 
                 var vm = new FloatingImageViewModel(bitmap, color, thickness, hideDecoration, hideBorder);
+                vm.WingScale = _viewModel.WingScale;
+                vm.CornerIconScale = _viewModel.CornerIconScale;
                 
                 try
                 {
+                    // Calculate Window Size & Position based on the padding needed for decorations
+                    // The 'rect' is the IMAGE position/size. The Window needs to be larger to hold the wings.
+                    var padding = vm.WindowPadding;
+                    
                     // Create Window FIRST so we can use it for TopLevel resolution
                     var win = new FloatingImageWindow
                     {
                         DataContext = vm,
-                        Position = new PixelPoint((int)rect.X, (int)rect.Y),
-                        Width = rect.Width,
-                        Height = rect.Height
+                        Position = new PixelPoint((int)(rect.X - padding.Left), (int)(rect.Y - padding.Top)),
+                        Width = rect.Width + padding.Left + padding.Right,
+                        Height = rect.Height + padding.Top + padding.Bottom
                     };
 
                     // Copy Action
