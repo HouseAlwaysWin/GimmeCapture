@@ -34,6 +34,9 @@ public partial class SnipWindow : Window
     
     // Floating draw canvas for see-through drawing
     private FloatingDrawCanvas? _floatingDrawCanvas;
+    
+    // Services
+    private readonly Services.ClipboardService _clipboardService = new Services.ClipboardService();
 
     private enum ResizeDirection
     {
@@ -242,7 +245,7 @@ public partial class SnipWindow : Window
                 bool hideDecoration = _viewModel.MainVm?.HideSnipPinDecoration ?? false;
                 bool hideBorder = _viewModel.MainVm?.HideSnipPinBorder ?? false;
                 
-                var vm = new FloatingImageViewModel(bitmap, color, thickness, hideDecoration, hideBorder);
+                var vm = new FloatingImageViewModel(bitmap, color, thickness, hideDecoration, hideBorder, _clipboardService);
                 vm.WingScale = _viewModel.WingScale;
                 vm.CornerIconScale = _viewModel.CornerIconScale;
                 
@@ -259,61 +262,6 @@ public partial class SnipWindow : Window
                         Position = new PixelPoint((int)(rect.X - padding.Left), (int)(rect.Y - padding.Top)),
                         Width = rect.Width + padding.Left + padding.Right,
                         Height = rect.Height + padding.Top + padding.Bottom
-                    };
-
-                    // Copy Action
-                    vm.CopyAction = async () =>
-                    {
-                        try
-                        {
-                            if (OperatingSystem.IsWindows())
-                            {
-                                // Windows-specific robust copy - MUST run on UI Thread (STA) for Clipboard
-                                await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => 
-                                {
-                                    try 
-                                    {
-                                        using var ms = new System.IO.MemoryStream();
-                                        bitmap.Save(ms); // Saves as PNG by default
-                                        ms.Position = 0;
-                                        using var winBitmap = new System.Drawing.Bitmap(ms);
-                                        
-                                        // Specific retry logic for clipboard which can be locked
-                                        for (int i = 0; i < 5; i++)
-                                        {
-                                            try
-                                            {
-                                                System.Windows.Forms.Clipboard.SetImage(winBitmap);
-                                                return;
-                                            }
-                                            catch (System.Runtime.InteropServices.ExternalException)
-                                            {
-                                                System.Threading.Thread.Sleep(100);
-                                            }
-                                        }
-                                    }
-                                    catch (Exception ex)
-                                    {
-                                        System.Diagnostics.Debug.WriteLine($"WinForms Clipboard failed: {ex}");
-                                    }
-                                });
-                            }
-                            else
-                            {
-                                // Fallback / Non-Windows
-                                var topLevel = TopLevel.GetTopLevel(win);
-                                if (topLevel?.Clipboard is { } clipboard)
-                                {
-                                    var dataObject = new DataObject();
-                                    dataObject.Set("Bitmap", bitmap);
-                                    await clipboard.SetDataObjectAsync(dataObject);
-                                }
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            System.Diagnostics.Debug.WriteLine($"Failed to copy pinned image: {ex}");
-                        }
                     };
 
                     // Save Action

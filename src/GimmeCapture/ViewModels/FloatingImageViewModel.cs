@@ -55,8 +55,10 @@ public class FloatingImageViewModel : ViewModelBase
     public ReactiveCommand<Unit, Unit> ToggleToolbarCommand { get; }
     
     public System.Action? CloseAction { get; set; }
-    public System.Func<Task>? CopyAction { get; set; }
+    // CopyAction removed in favor of IClipboardService
     public System.Func<Task>? SaveAction { get; set; }
+
+    private readonly Services.IClipboardService _clipboardService;
 
     private double _wingScale = 1.0;
     public double WingScale
@@ -103,20 +105,24 @@ public class FloatingImageViewModel : ViewModelBase
         }
     }
 
-    public FloatingImageViewModel(Bitmap image, Avalonia.Media.Color borderColor, double borderThickness, bool hideDecoration, bool hideBorder)
+    public FloatingImageViewModel(Bitmap image, Avalonia.Media.Color borderColor, double borderThickness, bool hideDecoration, bool hideBorder, Services.IClipboardService clipboardService)
     {
         Image = image;
         BorderColor = borderColor;
         BorderThickness = borderThickness;
         HidePinDecoration = hideDecoration;
         HidePinBorder = hideBorder;
+        _clipboardService = clipboardService;
 
         CloseCommand = ReactiveCommand.Create(() => CloseAction?.Invoke());
         ToggleToolbarCommand = ReactiveCommand.Create(() => { ShowToolbar = !ShowToolbar; });
         
         CopyCommand = ReactiveCommand.CreateFromTask(async () => 
         {
-            if (CopyAction != null) await CopyAction();
+            if (Image != null)
+            {
+                await _clipboardService.CopyImageAsync(Image);
+            }
         });
         
         SaveCommand = ReactiveCommand.CreateFromTask(async () => 

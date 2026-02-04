@@ -23,20 +23,8 @@ public partial class FloatingImageWindow : Window
         {
             vm.CloseAction = Close;
             
-            vm.CopyAction = async () =>
-            {
-                var topLevel = TopLevel.GetTopLevel(this);
-                if (topLevel?.Clipboard != null && vm.Image != null)
-                {
-                    // Use pragma suppression for deprecated DataObject/SetDataObjectAsync 
-                    // as replacement API (DataTransfer) details are ambiguous in this context.
-                    #pragma warning disable CS0618
-                    var dataObject = new DataObject();
-                    dataObject.Set("Bitmap", vm.Image);
-                    await topLevel.Clipboard.SetDataObjectAsync(dataObject);
-                    #pragma warning restore CS0618
-                }
-            };
+            // CopyAction handled by IClipboardService in ViewModel
+
             
             vm.SaveAction = async () =>
             {
