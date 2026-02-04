@@ -469,33 +469,56 @@ public partial class SnipWindow : Window
             }
             
             if (_viewModel.CurrentState == SnipState.Idle || 
-                _viewModel.CurrentState == SnipState.Detecting ||
-                (!_viewModel.SelectionRect.Contains(point) && !_viewModel.IsDrawingMode))
+                _viewModel.CurrentState == SnipState.Detecting)
             {
                 _startPoint = point;
-                
-                // If we are in Detecting state and clicked, we MIGHT adopted the DetectedRect on release.
-                // For now, we transition to Selecting but keep track of start point.
                 _viewModel.CurrentState = SnipState.Selecting;
                 _viewModel.SelectionRect = new Rect(_startPoint, new Size(0, 0));
-                _viewModel.IsDrawingMode = false; // Exit drawing mode when starting new selection
-                _viewModel.Annotations.Clear(); // Clear previous annotations when starting new selection
+                _viewModel.IsDrawingMode = false;
+                _viewModel.Annotations.Clear();
             }
-            else if (_viewModel.CurrentState == SnipState.Selected && 
-                     !_viewModel.IsDrawingMode &&
-                     _viewModel.SelectionRect.Contains(point))
+            else if (_viewModel.CurrentState == SnipState.Selected && !_viewModel.IsDrawingMode)
             {
-                // Block move selection during recording to prevent mismatch
-                if (_viewModel.RecState != RecordingState.Idle)
+                // Check if we are in the "Wing Dead Zone" (outside selection but within 120px of border)
+                // If so, we ignore the click instead of starting a new selection 
+                // to prevent accidental resets when clicking near wings.
+                var expandedBounds = _viewModel.SelectionRect.Inflate(120);
+                if (expandedBounds.Contains(point) && !_viewModel.SelectionRect.Contains(point))
                 {
                     e.Handled = true;
                     return;
                 }
-                // Move Selection
-                _isMovingSelection = true;
-                _moveStartPoint = point;
-                _originalRect = _viewModel.SelectionRect;
-                e.Handled = true;
+
+                if (_viewModel.SelectionRect.Contains(point))
+                {
+                    // Move Selection - ONLY if clicking on handles or specific move regions
+                    // Since we removed Background="Transparent", we only get here if e.Source is a visible element.
+                    // We allow move if source is a Handle or one of our decorative icons.
+                    bool isHandle = sourceControl != null && (sourceControl.Classes.Contains("Handle") || sourceControl.Name?.Contains("InnerCorner") == true || sourceControl.Parent?.GetType() == typeof(Grid) && ((Grid)sourceControl.Parent).Name == "AccentCornersGrid");
+                    
+                    if (isHandle && _viewModel.RecState == RecordingState.Idle)
+                    {
+                        _isMovingSelection = true;
+                        _moveStartPoint = point;
+                        _originalRect = _viewModel.SelectionRect;
+                        e.Handled = true;
+                    }
+                    else if (!isHandle)
+                    {
+                        // Clicked in the middle (click-through) or on non-handle border part.
+                        // If it's the middle, Avalonia shouldn't even fire this on 'this' because it's transparent.
+                        // But as a fallback, we do nothing.
+                    }
+                }
+                else
+                {
+                    // Clicked far away from selection -> Start NEW selection
+                     _startPoint = point;
+                     _viewModel.CurrentState = SnipState.Selecting;
+                     _viewModel.SelectionRect = new Rect(_startPoint, new Size(0, 0));
+                     _viewModel.IsDrawingMode = false;
+                     _viewModel.Annotations.Clear();
+                }
             }
         }
         else if (props.IsRightButtonPressed)
@@ -880,14 +903,32 @@ public partial class SnipWindow : Window
                     toolbarHeight * scaling
                 );
             }
+
+            // EXTRA OPAQUE REGIONS: Wings
+            // Wings are centered vertically on the selection edges, 100x60 logical
+            var extraRegions = new System.Collections.Generic.List<Rect>();
+            double wingsY = selectionRect.Center.Y - 30; // 60/2
             
-            // Apply window region with hole (border width in physical pixels)
-            // Use 120px logical border to:
-            // 1. Ensure external decorations (like 100px wings) are fully visible
-            // 2. Keep resize handles and wings responsive
-            // 3. Allow move gesture by clicking near the edges
-            int borderWidth = (int)(120 * scaling);
-            Win32Helpers.SetWindowHoleRegion(hwnd, windowWidth, windowHeight, scaledRect, borderWidth, toolbarRect);
+            // Left Wing (outside, flush)
+            extraRegions.Add(new Rect(
+                (selectionRect.X - 100) * scaling,
+                wingsY * scaling,
+                100 * scaling,
+                60 * scaling
+            ));
+            
+            // Right Wing (outside, flush)
+            extraRegions.Add(new Rect(
+                selectionRect.Right * scaling,
+                wingsY * scaling,
+                100 * scaling,
+                60 * scaling
+            ));
+            
+            // Apply window region with hole.
+            // Use 30px logical border (matching handles) instead of 120px to reduce dead zone.
+            int borderWidth = (int)(30 * scaling);
+            Win32Helpers.SetWindowHoleRegion(hwnd, windowWidth, windowHeight, scaledRect, borderWidth, toolbarRect, extraRegions);
         }
         else
         {

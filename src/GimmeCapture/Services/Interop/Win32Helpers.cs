@@ -42,16 +42,17 @@ public static class Win32Helpers
     /// <param name="windowHeight">Window height in pixels</param>
     /// <param name="selectionRect">Selection rectangle in window coordinates</param>
     /// <param name="borderWidth">Width of the interactive border to keep around the hole</param>
-    /// <param name="toolbarRect">Optional toolbar rectangle to keep interactive (prevents clipping)</param>
+    /// <param name="toolbarRect">Optional toolbar rectangle to keep interactive</param>
+    /// <param name="extraOpaqueRects">Optional extra rectangles to keep opaque (e.g. wings)</param>
     /// <returns>True if region was applied successfully</returns>
-    public static bool SetWindowHoleRegion(IntPtr hwnd, int windowWidth, int windowHeight, Rect selectionRect, int borderWidth = 4, Rect? toolbarRect = null)
+    public static bool SetWindowHoleRegion(IntPtr hwnd, int windowWidth, int windowHeight, Rect selectionRect, int borderWidth = 4, Rect? toolbarRect = null, System.Collections.Generic.IEnumerable<Rect>? extraOpaqueRects = null)
     {
         if (hwnd == IntPtr.Zero) return false;
         if (selectionRect.Width <= borderWidth * 2 || selectionRect.Height <= borderWidth * 2) return false;
 
         IntPtr fullRegion = IntPtr.Zero;
         IntPtr holeRegion = IntPtr.Zero;
-        IntPtr toolbarRegion = IntPtr.Zero;
+        IntPtr tempRegion = IntPtr.Zero;
 
         try
         {
@@ -73,40 +74,53 @@ public static class Win32Helpers
 
             // 3. Subtract hole from full region (RGN_DIFF)
             int result = CombineRgn(fullRegion, fullRegion, holeRegion, RGN_DIFF);
-            if (result == 0) return false; // ERROR
+            if (result == 0) return false;
 
-            // 4. If toolbar rect is provided, add it back to the region (prevents clipping)
+            // 4. Add extra opaque rects back (islands like wings)
+            if (extraOpaqueRects != null)
+            {
+                foreach (var rect in extraOpaqueRects)
+                {
+                    if (rect.Width <= 0 || rect.Height <= 0) continue;
+                    tempRegion = CreateRectRgn((int)rect.X, (int)rect.Y, (int)rect.Right, (int)rect.Bottom);
+                    if (tempRegion != IntPtr.Zero)
+                    {
+                        CombineRgn(fullRegion, fullRegion, tempRegion, RGN_OR);
+                        DeleteObject(tempRegion);
+                        tempRegion = IntPtr.Zero;
+                    }
+                }
+            }
+
+            // 5. If toolbar rect is provided, add it back to the region
             if (toolbarRect.HasValue && toolbarRect.Value.Width > 0 && toolbarRect.Value.Height > 0)
             {
                 var tbRect = toolbarRect.Value;
-                // Add some padding around toolbar
                 int padding = 5;
-                toolbarRegion = CreateRectRgn(
+                tempRegion = CreateRectRgn(
                     Math.Max(0, (int)tbRect.X - padding),
                     Math.Max(0, (int)tbRect.Y - padding),
                     Math.Min(windowWidth, (int)tbRect.Right + padding),
                     Math.Min(windowHeight, (int)tbRect.Bottom + padding)
                 );
-                if (toolbarRegion != IntPtr.Zero)
+                if (tempRegion != IntPtr.Zero)
                 {
-                    CombineRgn(fullRegion, fullRegion, toolbarRegion, RGN_OR);
+                    CombineRgn(fullRegion, fullRegion, tempRegion, RGN_OR);
+                    DeleteObject(tempRegion);
+                    tempRegion = IntPtr.Zero;
                 }
             }
 
-            // 5. Apply region to window
-            // Note: SetWindowRgn takes ownership of the region, so we should NOT delete fullRegion
+            // 6. Apply region to window
             int setResult = SetWindowRgn(hwnd, fullRegion, true);
-            
-            // Only delete temp regions since SetWindowRgn now owns fullRegion
-            fullRegion = IntPtr.Zero;
+            fullRegion = IntPtr.Zero; // Owned by window now
             
             return setResult != 0;
         }
         finally
         {
-            // Clean up temp regions (fullRegion is now owned by the window)
             if (holeRegion != IntPtr.Zero) DeleteObject(holeRegion);
-            if (toolbarRegion != IntPtr.Zero) DeleteObject(toolbarRegion);
+            if (tempRegion != IntPtr.Zero) DeleteObject(tempRegion);
             if (fullRegion != IntPtr.Zero) DeleteObject(fullRegion);
         }
     }
