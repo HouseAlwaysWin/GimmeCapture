@@ -29,10 +29,10 @@ namespace GimmeCapture.Services
                 {
                     this.RaiseAndSetIfChanged(ref _currentLanguage, value);
                     UpdateFont(value);
-                    
+
                     // Notify indexer changes for binding updates
                     this.RaisePropertyChanged("Item");
-                    this.RaisePropertyChanged("Item[]"); 
+                    this.RaisePropertyChanged("Item[]");
                 }
             }
         }
@@ -54,7 +54,7 @@ namespace GimmeCapture.Services
         private LocalizationService()
         {
             _currentFontFamily = _fontEnglish;
-            
+
             // Initialize Translations
             _translations = new Dictionary<Language, Dictionary<string, string>>
             {
@@ -76,7 +76,7 @@ namespace GimmeCapture.Services
                     ["Undo"] = "Undo",
                     ["Clear"] = "Clear",
                     ["Language"] = "Language",
-                    
+
                     // MainWindow
                     ["TabGeneral"] = "General",
                     ["TabSnip"] = "Snip",
@@ -115,23 +115,23 @@ namespace GimmeCapture.Services
                     ["No"] = "No",
                     ["Cancel"] = "Cancel",
                     ["GitHubProject"] = "GitHub Project",
-                        
-                        // Updates
-                        ["UpdateFound"] = "New version found: {0}. Download now?",
-                        ["UpdateDownloading"] = "Downloading update... {0}%",
-                        ["UpdateReady"] = "Update downloaded. Restart and install now?",
-                        ["UpdateCheckTitle"] = "Update Check",
-                        ["UpdateError"] = "Update failed: {0}",
-                        ["CheckingUpdate"] = "Checking for updates...",
-                        ["NoUpdateFound"] = "You are using the latest version.",
-                        ["CheckForUpdates"] = "Check for Updates",
-                        ["FFmpegNotReady"] = "FFmpeg components are still downloading. Please wait before recording.",
-                        ["UpdateBtnConfirm"] = "ENTER THE FOX PIT",
-                        ["UpdateBtnCancel"] = "NOT TODAY",
-                        ["UpdateBtnOk"] = "FOX GOD APPROVES",
 
-                        ["CaptureModeNormal"] = "Screenshot Mode",
-                        ["CaptureModeRecord"] = "Recording Mode",
+                    // Updates
+                    ["UpdateFound"] = "New version found: {0}. Download now?",
+                    ["UpdateDownloading"] = "Downloading update... {0}%",
+                    ["UpdateReady"] = "Update downloaded. Restart and install now?",
+                    ["UpdateCheckTitle"] = "Update Check",
+                    ["UpdateError"] = "Update failed: {0}",
+                    ["CheckingUpdate"] = "Checking for updates...",
+                    ["NoUpdateFound"] = "You are using the latest version.",
+                    ["CheckForUpdates"] = "Check for Updates",
+                    ["FFmpegNotReady"] = "FFmpeg components are still downloading. Please wait before recording.",
+                    ["UpdateBtnConfirm"] = "ENTER THE FOX PIT",
+                    ["UpdateBtnCancel"] = "NOT TODAY",
+                    ["UpdateBtnOk"] = "FOX GOD APPROVES",
+
+                    ["CaptureModeNormal"] = "Screenshot Mode",
+                    ["CaptureModeRecord"] = "Recording Mode",
 
                     // Tooltips
                     ["TipCopy"] = "Copy (Ctrl+C)",
@@ -172,12 +172,12 @@ namespace GimmeCapture.Services
                     ["HideRecordSelectionDecoration"] = "Hide Record Selection Decoration Corners",
                     ["HideRecordSelectionBorder"] = "Hide Record Selection Border",
                     ["ShowSnipCursor"] = "Capture Mouse Cursor in Screenshot",
-            ["ShowRecordCursor"] = "Capture Mouse Cursor in Recording",
-            ["FFmpegStatusDownloading"] = "FFmpeg Downloading...",
-            ["ComponentDownloadingProgress"] = "Downloading components... {0}%",
-            ["TempPath"] = "Temp Folder:",
-            ["WingScale"] = "Wing Scale:",
-            ["IconScale"] = "Icon Scale:",
+                    ["ShowRecordCursor"] = "Capture Mouse Cursor in Recording",
+                    ["FFmpegStatusDownloading"] = "FFmpeg Downloading...",
+                    ["ComponentDownloadingProgress"] = "Downloading components... {0}%",
+                    ["TempPath"] = "Temp Folder:",
+                    ["WingScale"] = "Wing Scale:",
+                    ["IconScale"] = "Icon Scale:",
                 },
                 [Language.Chinese] = new Dictionary<string, string>
                 {
@@ -236,23 +236,23 @@ namespace GimmeCapture.Services
                     ["No"] = "否",
                     ["Cancel"] = "取消",
                     ["GitHubProject"] = "GitHub 專案頁面",
-                        
-                        // Updates
-                        ["UpdateFound"] = "發現新版本: {0}。立即下載？",
-                        ["UpdateDownloading"] = "正在下載更新... {0}%",
-                        ["UpdateReady"] = "更新已下載。立即重啟並安裝？",
-                        ["UpdateCheckTitle"] = "檢查更新",
-                        ["UpdateError"] = "更新失敗: {0}",
-                        ["CheckingUpdate"] = "正在檢查更新...",
-                        ["NoUpdateFound"] = "您已使用最新版本。",
-                        ["CheckForUpdates"] = "檢查更新",
-                        ["FFmpegNotReady"] = "必要組件 (FFmpeg) 正在下載中，請稍候再進行錄影。",
-                        ["UpdateBtnConfirm"] = "進入狐穴 (Update)",
-                        ["UpdateBtnCancel"] = "下次一定 (Not Today)",
-                        ["UpdateBtnOk"] = "狐神准許 (OK)",
 
-                        ["CaptureModeNormal"] = "截圖模式",
-                        ["CaptureModeRecord"] = "錄影模式",
+                    // Updates
+                    ["UpdateFound"] = "發現新版本: {0}。立即下載？",
+                    ["UpdateDownloading"] = "正在下載更新... {0}%",
+                    ["UpdateReady"] = "更新已下載。立即重啟並安裝？",
+                    ["UpdateCheckTitle"] = "檢查更新",
+                    ["UpdateError"] = "更新失敗: {0}",
+                    ["CheckingUpdate"] = "正在檢查更新...",
+                    ["NoUpdateFound"] = "您已使用最新版本。",
+                    ["CheckForUpdates"] = "檢查更新",
+                    ["FFmpegNotReady"] = "必要組件 (FFmpeg) 正在下載中，請稍候再進行錄影。",
+                    ["UpdateBtnConfirm"] = "進入狐穴 (Update)",
+                    ["UpdateBtnCancel"] = "下次一定 (Not Today)",
+                    ["UpdateBtnOk"] = "狐神准許 (OK)",
+
+                    ["CaptureModeNormal"] = "截圖模式",
+                    ["CaptureModeRecord"] = "錄影模式",
 
                     // Tooltips
                     ["TipCopy"] = "複製 (Ctrl+C)",
@@ -293,12 +293,12 @@ namespace GimmeCapture.Services
                     ["HideRecordSelectionDecoration"] = "隱藏錄影角落裝飾",
                     ["HideRecordSelectionBorder"] = "隱藏錄影邊框",
                     ["ShowSnipCursor"] = "在截圖中擷取滑鼠指標",
-            ["ShowRecordCursor"] = "錄影畫面包含滑鼠游標",
-            ["FFmpegStatusDownloading"] = "正在下載 FFmpeg...",
-            ["ComponentDownloadingProgress"] = "正在下載必要組件... {0}%",
-            ["TempPath"] = "暫存資料夾:",
-            ["WingScale"] = "翅膀大小:",
-            ["IconScale"] = "裝飾大小:",
+                    ["ShowRecordCursor"] = "錄影畫面包含滑鼠游標",
+                    ["FFmpegStatusDownloading"] = "正在下載 FFmpeg...",
+                    ["ComponentDownloadingProgress"] = "正在下載必要組件... {0}%",
+                    ["TempPath"] = "暫存資料夾:",
+                    ["WingScale"] = "翅膀大小:",
+                    ["IconScale"] = "裝飾大小:",
                 },
                 [Language.Japanese] = new Dictionary<string, string>
                 {
@@ -357,24 +357,24 @@ namespace GimmeCapture.Services
                     ["No"] = "いいえ",
                     ["Cancel"] = "キャンセル",
                     ["GitHubProject"] = "GitHub プロジェクト",
-                        
-                        // Updates
-                        ["UpdateFound"] = "新しいバージョンが見つかりました: {0}。今すぐダウンロードしますか？",
-                        ["UpdateDownloading"] = "更新プログラムをダウンロード中... {0}%",
-                        ["UpdateReady"] = "更新プログラムがダウンロードされました。再起動してインストールしますか？",
-                        ["UpdateCheckTitle"] = "アップデート確認",
-                        ["UpdateError"] = "アップデートに失敗しました: {0}",
-                        ["CheckingUpdate"] = "アップデートを確認中...",
-                        ["NoUpdateFound"] = "最新バージョンを使用しています。",
-                        ["CheckForUpdates"] = "アップデートを確認",
-                        ["FFmpegNotReady"] = "録画に必要なコンポーネント (FFmpeg) をダウンロード中です。完了までお待ちください。",
-                        ["UpdateBtnConfirm"] = "キツネの穴へ (Update)",
-                        ["UpdateBtnCancel"] = "今はしない (Not Today)",
-                        ["UpdateBtnOk"] = "キツネ様のお導き (OK)",
 
-                        ["CaptureModeNormal"] = "スニップモード",
-                        ["CaptureModeRecord"] = "録画モード",
-                    
+                    // Updates
+                    ["UpdateFound"] = "新しいバージョンが見つかりました: {0}。今すぐダウンロードしますか？",
+                    ["UpdateDownloading"] = "更新プログラムをダウンロード中... {0}%",
+                    ["UpdateReady"] = "更新プログラムがダウンロードされました。再起動してインストールしますか？",
+                    ["UpdateCheckTitle"] = "アップデート確認",
+                    ["UpdateError"] = "アップデートに失敗しました: {0}",
+                    ["CheckingUpdate"] = "アップデートを確認中...",
+                    ["NoUpdateFound"] = "最新バージョンを使用しています。",
+                    ["CheckForUpdates"] = "アップデートを確認",
+                    ["FFmpegNotReady"] = "録画に必要なコンポーネント (FFmpeg) をダウンロード中です。完了までお待ちください。",
+                    ["UpdateBtnConfirm"] = "キツネの穴へ (Update)",
+                    ["UpdateBtnCancel"] = "今はしない (Not Today)",
+                    ["UpdateBtnOk"] = "キツネ様のお導き (OK)",
+
+                    ["CaptureModeNormal"] = "スニップモード",
+                    ["CaptureModeRecord"] = "録画モード",
+
                     // Tooltips
                     ["TipCopy"] = "コピー (Ctrl+C)",
                     ["TipSave"] = "保存 (Ctrl+S)",
@@ -414,34 +414,34 @@ namespace GimmeCapture.Services
                     ["HideRecordSelectionDecoration"] = "録画装飾を非表示",
                     ["HideRecordSelectionBorder"] = "録画境界線を非表示",
                     ["ShowSnipCursor"] = "スクリーンショットにマウスカーソルを含める",
-            ["ShowRecordCursor"] = "録画にマウスカーソルを含める",
-            ["FFmpegStatusDownloading"] = "FFmpeg ダウンロード中...",
-            ["ComponentDownloadingProgress"] = "コンポーネントをダウンロード中... {0}%",
-            ["TempPath"] = "一時フォルダー:",
-            ["WingScale"] = "翼のサイズ:",
-            ["IconScale"] = "アイコンのサイズ:",
+                    ["ShowRecordCursor"] = "録画にマウスカーソルを含める",
+                    ["FFmpegStatusDownloading"] = "FFmpeg ダウンロード中...",
+                    ["ComponentDownloadingProgress"] = "コンポーネントをダウンロード中... {0}%",
+                    ["TempPath"] = "一時フォルダー:",
+                    ["WingScale"] = "翼のサイズ:",
+                    ["IconScale"] = "アイコンのサイズ:",
                 },
             };
 
             // Set Default
             // CurrentLanguage = Language.English; // Trigger setter
-            UpdateFont(Language.English); 
+            UpdateFont(Language.English);
         }
 
         private void UpdateFont(Language lang)
         {
-             switch (lang)
-             {
-                 case Language.English:
-                     CurrentFontFamily = _fontEnglish;
-                     break;
-                 case Language.Chinese:
-                     CurrentFontFamily = _fontChinese;
-                     break;
-                 case Language.Japanese:
-                     CurrentFontFamily = _fontJapanese;
-                     break;
-             }
+            switch (lang)
+            {
+                case Language.English:
+                    CurrentFontFamily = _fontEnglish;
+                    break;
+                case Language.Chinese:
+                    CurrentFontFamily = _fontChinese;
+                    break;
+                case Language.Japanese:
+                    CurrentFontFamily = _fontJapanese;
+                    break;
+            }
         }
 
         public string this[string key]
