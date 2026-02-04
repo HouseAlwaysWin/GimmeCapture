@@ -246,14 +246,14 @@
                             <Border BorderThickness="1" Margin="-1" ClipToBounds="False">
                                 <Grid Name="AccentCornersGrid" ClipToBounds="False">
                                     <!-- Left Inner Corners: Hearts -->
-                                    <Rectangle Name="InnerCornerTopLeft" Classes="MoveHandle" Width="22" Height="22" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="4"
+                                    <Rectangle Name="InnerCornerTopLeft" Classes="MoveHandle" Width="{Binding SelectionIconSize}" Height="{Binding SelectionIconSize}" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="4"
                                                Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}"
                                                RenderOptions.BitmapInterpolationMode="HighQuality">
                                         <Rectangle.OpacityMask>
                                             <ImageBrush Source="/Assets/heart.png" Stretch="Uniform"/>
                                         </Rectangle.OpacityMask>
                                     </Rectangle>
-                                    <Rectangle Name="InnerCornerBottomLeft" Classes="MoveHandle" Width="22" Height="22" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="4"
+                                    <Rectangle Name="InnerCornerBottomLeft" Classes="MoveHandle" Width="{Binding SelectionIconSize}" Height="{Binding SelectionIconSize}" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="4"
                                                Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}"
                                                RenderOptions.BitmapInterpolationMode="HighQuality">
                                         <Rectangle.OpacityMask>
@@ -262,14 +262,14 @@
                                     </Rectangle>
 
                                     <!-- Right Inner Corners: Skulls -->
-                                    <Rectangle Name="InnerCornerTopRight" Classes="MoveHandle" Width="22" Height="22" VerticalAlignment="Top" HorizontalAlignment="Right" Margin="4"
+                                    <Rectangle Name="InnerCornerTopRight" Classes="MoveHandle" Width="{Binding SelectionIconSize}" Height="{Binding SelectionIconSize}" VerticalAlignment="Top" HorizontalAlignment="Right" Margin="4"
                                                Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}"
                                                RenderOptions.BitmapInterpolationMode="HighQuality">
                                         <Rectangle.OpacityMask>
                                             <ImageBrush Source="/Assets/skull.png" Stretch="Uniform"/>
                                         </Rectangle.OpacityMask>
                                     </Rectangle>
-                                    <Rectangle Name="InnerCornerBottomRight" Classes="MoveHandle" Width="22" Height="22" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="4"
+                                    <Rectangle Name="InnerCornerBottomRight" Classes="MoveHandle" Width="{Binding SelectionIconSize}" Height="{Binding SelectionIconSize}" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="4"
                                                Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}"
                                                RenderOptions.BitmapInterpolationMode="HighQuality">
                                         <Rectangle.OpacityMask>

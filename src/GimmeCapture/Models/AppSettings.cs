@@ -14,6 +14,7 @@ public class AppSettings
     public string BorderColorHex { get; set; } = "#E60012";
     public string ThemeColorHex { get; set; } = "#E60012";
     public double WingScale { get; set; } = 1.0;
+    public double CornerIconScale { get; set; } = 1.0;
     // Visibility
     public bool HideSnipPinDecoration { get; set; } = false;
     public bool HideSnipPinBorder { get; set; } = false;

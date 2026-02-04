@@ -273,6 +273,8 @@ public class SnipWindowViewModel : ViewModelBase
     public ReactiveCommand<Unit, Unit> DecreaseFontSizeCommand { get; }
     public ReactiveCommand<Unit, Unit> ApplyHexColorCommand { get; }
     public ReactiveCommand<Unit, Unit> ChangeLanguageCommand { get; }
+    public ReactiveCommand<Unit, Unit> IncreaseCornerIconScaleCommand { get; }
+    public ReactiveCommand<Unit, Unit> DecreaseCornerIconScaleCommand { get; }
     public ReactiveCommand<Unit, bool> ToggleBoldCommand { get; }
     public ReactiveCommand<Unit, bool> ToggleItalicCommand { get; }
     public ReactiveCommand<Unit, Unit> IncreaseWingScaleCommand { get; }
@@ -501,8 +503,23 @@ public class SnipWindowViewModel : ViewModelBase
         }
     }
 
+    public double CornerIconScale
+    {
+        get => _mainVm?.CornerIconScale ?? 1.0;
+        set
+        {
+            if (_mainVm != null)
+            {
+                _mainVm.CornerIconScale = value;
+                this.RaisePropertyChanged();
+                this.RaisePropertyChanged(nameof(SelectionIconSize));
+            }
+        }
+    }
+
     public double WingWidth => 100 * WingScale;
     public double WingHeight => 60 * WingScale;
+    public double SelectionIconSize => 22 * CornerIconScale;
     public Thickness LeftWingMargin => new Thickness(-WingWidth, 0, 0, 0);
     public Thickness RightWingMargin => new Thickness(0, 0, -WingWidth, 0);
 
@@ -533,6 +550,13 @@ public class SnipWindowViewModel : ViewModelBase
                     this.RaisePropertyChanged(nameof(IsRecordingActive));
                 });
         }
+
+        // Initial loads
+        if (mainVm != null)
+        {
+            SelectedColor = mainVm.BorderColor;
+        }
+
 
         CopyCommand = ReactiveCommand.CreateFromTask(Copy);
         SaveCommand = ReactiveCommand.CreateFromTask(Save);
@@ -609,6 +633,9 @@ public class SnipWindowViewModel : ViewModelBase
 
         IncreaseWingScaleCommand = ReactiveCommand.Create(() => { if (WingScale < 3.0) WingScale = Math.Round(WingScale + 0.1, 1); });
         DecreaseWingScaleCommand = ReactiveCommand.Create(() => { if (WingScale > 0.5) WingScale = Math.Round(WingScale - 0.1, 1); });
+
+        IncreaseCornerIconScaleCommand = ReactiveCommand.Create(() => { if (CornerIconScale < 1.0) CornerIconScale = Math.Round(CornerIconScale + 0.1, 1); });
+        DecreaseCornerIconScaleCommand = ReactiveCommand.Create(() => { if (CornerIconScale > 0.4) CornerIconScale = Math.Round(CornerIconScale - 0.1, 1); });
 
         UpdateMask();
     }

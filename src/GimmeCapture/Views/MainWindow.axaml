@@ -101,6 +101,18 @@
                                             </StackPanel>
                                         </StackPanel>
 
+                                        <!-- Icon Scale -->
+                                        <StackPanel Spacing="5">
+                                            <TextBlock Text="{Binding [IconScale], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>
+                                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                                <Slider Minimum="0.4" Maximum="1.0" Value="{Binding CornerIconScale}" 
+                                                        TickFrequency="0.1" IsSnapToTickEnabled="True" HorizontalAlignment="Stretch" Width="250"/>
+                                                <c:CompactNumericStep Value="{Binding CornerIconScale}"
+                                                                       IncreaseCommand="{Binding IncreaseCornerIconScaleCommand}"
+                                                                       DecreaseCommand="{Binding DecreaseCornerIconScaleCommand}"/>
+                                            </StackPanel>
+                                        </StackPanel>
+
                                         <!-- Wing Scale -->
                                         <StackPanel Spacing="5">
                                             <TextBlock Text="{Binding [WingScale], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>
@@ -196,26 +208,25 @@
                                                                     </Rectangle>
 
                                                                     <!-- Accent Corners: Hearts & Skulls -->
-                                                                    <Rectangle Width="28" Height="28" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="4"
+                                                                    <Rectangle Width="{Binding PreviewIconSize}" Height="{Binding PreviewIconSize}" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="4"
                                                                                Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}">
                                                                         <Rectangle.OpacityMask>
                                                                             <ImageBrush Source="/Assets/heart.png" Stretch="Uniform"/>
                                                                         </Rectangle.OpacityMask>
                                                                     </Rectangle>
-                                                                    <Rectangle Width="28" Height="28" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="4"
+                                                                    <Rectangle Width="{Binding PreviewIconSize}" Height="{Binding PreviewIconSize}" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="4"
                                                                                Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}">
                                                                         <Rectangle.OpacityMask>
                                                                             <ImageBrush Source="/Assets/heart.png" Stretch="Uniform" />
                                                                         </Rectangle.OpacityMask>
                                                                     </Rectangle>
-
-                                                                    <Rectangle Width="28" Height="28" VerticalAlignment="Top" HorizontalAlignment="Right" Margin="4"
+                                                                    <Rectangle Width="{Binding PreviewIconSize}" Height="{Binding PreviewIconSize}" VerticalAlignment="Top" HorizontalAlignment="Right" Margin="4"
                                                                                Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}">
                                                                         <Rectangle.OpacityMask>
                                                                             <ImageBrush Source="/Assets/skull.png" Stretch="Uniform" />
                                                                         </Rectangle.OpacityMask>
                                                                     </Rectangle>
-                                                                    <Rectangle Width="28" Height="28" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="4"
+                                                                    <Rectangle Width="{Binding PreviewIconSize}" Height="{Binding PreviewIconSize}" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="4"
                                                                                Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}">
                                                                         <Rectangle.OpacityMask>
                                                                             <ImageBrush Source="/Assets/skull.png" Stretch="Uniform" />

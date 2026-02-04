@@ -73,6 +73,8 @@ public class MainWindowViewModel : ViewModelBase
     public ReactiveCommand<Unit, Unit> OpenProjectCommand { get; }
     public ReactiveCommand<Unit, Unit> IncreaseWingScaleCommand { get; }
     public ReactiveCommand<Unit, Unit> DecreaseWingScaleCommand { get; }
+    public ReactiveCommand<Unit, Unit> IncreaseCornerIconScaleCommand { get; }
+    public ReactiveCommand<Unit, Unit> DecreaseCornerIconScaleCommand { get; }
     
     public Color[] SettingsColors { get; } = new[]
     {
@@ -118,6 +120,9 @@ public class MainWindowViewModel : ViewModelBase
         
         IncreaseWingScaleCommand = ReactiveCommand.Create(() => { if (WingScale < 3.0) WingScale = Math.Round(WingScale + 0.1, 1); });
         DecreaseWingScaleCommand = ReactiveCommand.Create(() => { if (WingScale > 0.5) WingScale = Math.Round(WingScale - 0.1, 1); });
+        
+        IncreaseCornerIconScaleCommand = ReactiveCommand.Create(() => { if (CornerIconScale < 1.0) CornerIconScale = Math.Round(CornerIconScale + 0.1, 1); });
+        DecreaseCornerIconScaleCommand = ReactiveCommand.Create(() => { if (CornerIconScale > 0.4) CornerIconScale = Math.Round(CornerIconScale - 0.1, 1); });
         
         // Setup Hotkey Action
         HotkeyService.OnHotkeyPressed = (id) => 
@@ -249,6 +254,19 @@ public class MainWindowViewModel : ViewModelBase
             this.RaisePropertyChanged(nameof(PreviewRightWingMargin));
         }
     }
+
+    private double _cornerIconScale = 1.0;
+    public double CornerIconScale
+    {
+        get => _cornerIconScale;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _cornerIconScale, value);
+            this.RaisePropertyChanged(nameof(PreviewIconSize));
+        }
+    }
+
+    public double PreviewIconSize => 28 * CornerIconScale;
 
     public double PreviewWingWidth => 100 * WingScale * 0.5; // Reduced from 0.8 to 0.5
     public double PreviewWingHeight => 60 * WingScale * 0.5; // Reduced from 0.8 to 0.5
@@ -467,6 +485,7 @@ public class MainWindowViewModel : ViewModelBase
         BorderThickness = s.BorderThickness;
         MaskOpacity = s.MaskOpacity;
         WingScale = s.WingScale;
+        CornerIconScale = s.CornerIconScale;
         AutoSave = s.AutoSave;
         SnipHotkey = s.SnipHotkey;
         CopyHotkey = s.CopyHotkey;
@@ -565,6 +584,7 @@ public class MainWindowViewModel : ViewModelBase
             s.BorderThickness = BorderThickness;
             s.MaskOpacity = MaskOpacity;
             s.WingScale = WingScale;
+            s.CornerIconScale = CornerIconScale;
             s.AutoSave = AutoSave;
             s.SaveDirectory = SaveDirectory;
             s.SnipHotkey = SnipHotkey;
