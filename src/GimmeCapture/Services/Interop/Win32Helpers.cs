@@ -42,14 +42,16 @@ public static class Win32Helpers
     /// <param name="windowHeight">Window height in pixels</param>
     /// <param name="selectionRect">Selection rectangle in window coordinates</param>
     /// <param name="borderWidth">Width of the interactive border to keep around the hole</param>
+    /// <param name="toolbarRect">Optional toolbar rectangle to keep interactive (prevents clipping)</param>
     /// <returns>True if region was applied successfully</returns>
-    public static bool SetWindowHoleRegion(IntPtr hwnd, int windowWidth, int windowHeight, Rect selectionRect, int borderWidth = 4)
+    public static bool SetWindowHoleRegion(IntPtr hwnd, int windowWidth, int windowHeight, Rect selectionRect, int borderWidth = 4, Rect? toolbarRect = null)
     {
         if (hwnd == IntPtr.Zero) return false;
         if (selectionRect.Width <= borderWidth * 2 || selectionRect.Height <= borderWidth * 2) return false;
 
         IntPtr fullRegion = IntPtr.Zero;
         IntPtr holeRegion = IntPtr.Zero;
+        IntPtr toolbarRegion = IntPtr.Zero;
 
         try
         {
@@ -73,19 +75,38 @@ public static class Win32Helpers
             int result = CombineRgn(fullRegion, fullRegion, holeRegion, RGN_DIFF);
             if (result == 0) return false; // ERROR
 
-            // 4. Apply region to window
+            // 4. If toolbar rect is provided, add it back to the region (prevents clipping)
+            if (toolbarRect.HasValue && toolbarRect.Value.Width > 0 && toolbarRect.Value.Height > 0)
+            {
+                var tbRect = toolbarRect.Value;
+                // Add some padding around toolbar
+                int padding = 5;
+                toolbarRegion = CreateRectRgn(
+                    Math.Max(0, (int)tbRect.X - padding),
+                    Math.Max(0, (int)tbRect.Y - padding),
+                    Math.Min(windowWidth, (int)tbRect.Right + padding),
+                    Math.Min(windowHeight, (int)tbRect.Bottom + padding)
+                );
+                if (toolbarRegion != IntPtr.Zero)
+                {
+                    CombineRgn(fullRegion, fullRegion, toolbarRegion, RGN_OR);
+                }
+            }
+
+            // 5. Apply region to window
             // Note: SetWindowRgn takes ownership of the region, so we should NOT delete fullRegion
             int setResult = SetWindowRgn(hwnd, fullRegion, true);
             
-            // Only delete holeRegion since SetWindowRgn now owns fullRegion
+            // Only delete temp regions since SetWindowRgn now owns fullRegion
             fullRegion = IntPtr.Zero;
             
             return setResult != 0;
         }
         finally
         {
-            // Clean up holeRegion (fullRegion is now owned by the window)
+            // Clean up temp regions (fullRegion is now owned by the window)
             if (holeRegion != IntPtr.Zero) DeleteObject(holeRegion);
+            if (toolbarRegion != IntPtr.Zero) DeleteObject(toolbarRegion);
             if (fullRegion != IntPtr.Zero) DeleteObject(fullRegion);
         }
     }

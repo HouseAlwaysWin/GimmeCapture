@@ -249,6 +249,28 @@
                       IsVisible="{Binding IsDrawingMode, Converter={StaticResource BoolInvertConverter}}"/>
                 <Grid Classes="Handle" Name="HandleRight" Cursor="SizeWestEast" Width="15" HorizontalAlignment="Right" VerticalAlignment="Stretch" Margin="0,15"
                       IsVisible="{Binding IsDrawingMode, Converter={StaticResource BoolInvertConverter}}"/>
+                
+                <!-- Corner Handle Decorations (skull icons at L-bracket inner corners) -->
+                <Grid IsVisible="{Binding IsDrawingMode, Converter={StaticResource BoolInvertConverter}}">
+                    <Grid IsVisible="{Binding IsRecordingActive, Converter={StaticResource BoolInvertConverter}}">
+                        <!-- Top-Left skull -->
+                        <TextBlock Text="☠" FontSize="10" 
+                                   Foreground="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}"
+                                   HorizontalAlignment="Left" VerticalAlignment="Top" Margin="6,3,0,0"/>
+                        <!-- Top-Right skull -->
+                        <TextBlock Text="☠" FontSize="10" 
+                                   Foreground="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}"
+                                   HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,3,6,0"/>
+                        <!-- Bottom-Left skull -->
+                        <TextBlock Text="☠" FontSize="10" 
+                                   Foreground="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}"
+                                   HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="6,0,0,6"/>
+                        <!-- Bottom-Right skull -->
+                        <TextBlock Text="☠" FontSize="10" 
+                                   Foreground="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}"
+                                   HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,6,6"/>
+                    </Grid>
+                </Grid>
             </Grid>
             
             <!-- Text Input Overlay Container -->

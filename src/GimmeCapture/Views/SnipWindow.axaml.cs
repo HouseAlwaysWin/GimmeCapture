@@ -191,9 +191,12 @@ public partial class SnipWindow : Window
                 Hide();
             };
             
-            // Subscribe to SelectionRect changes to update window region for mouse pass-through
-            _selectionRectSubscription = _viewModel.WhenAnyValue(x => x.SelectionRect, x => x.CurrentState)
-                .Subscribe(tuple => UpdateWindowRegion(tuple.Item1, tuple.Item2));
+            // Subscribe to SelectionRect, CurrentState, and IsDrawingMode changes to update window region
+            _selectionRectSubscription = _viewModel.WhenAnyValue(
+                x => x.SelectionRect, 
+                x => x.CurrentState, 
+                x => x.IsDrawingMode)
+                .Subscribe(tuple => UpdateWindowRegion(tuple.Item1, tuple.Item2, tuple.Item3));
             
 
             _viewModel.PickSaveFileAction = async () =>
@@ -800,16 +803,19 @@ public partial class SnipWindow : Window
     /// <summary>
     /// Updates the window region to create a "hole" in the selection area for mouse pass-through.
     /// This allows clicking on underlying windows (like YouTube) while keeping the border UI interactive.
+    /// The hole is disabled when in drawing mode to allow annotations.
     /// </summary>
-    private void UpdateWindowRegion(Rect selectionRect, SnipState state)
+    private void UpdateWindowRegion(Rect selectionRect, SnipState state, bool isDrawingMode)
     {
         if (!OperatingSystem.IsWindows()) return;
         
         var hwnd = this.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
         if (hwnd == IntPtr.Zero) return;
 
-        // Only apply region when in Selected state with a valid selection
-        if (state == SnipState.Selected && selectionRect.Width > 10 && selectionRect.Height > 10)
+        // Only apply region when:
+        // 1. In Selected state with valid selection
+        // 2. NOT in drawing mode (need full window for drawing annotations)
+        if (state == SnipState.Selected && selectionRect.Width > 10 && selectionRect.Height > 10 && !isDrawingMode)
         {
             // Get physical pixel dimensions (account for DPI scaling)
             double scaling = this.RenderScaling;
@@ -824,14 +830,32 @@ public partial class SnipWindow : Window
                 selectionRect.Height * scaling
             );
             
+            // Calculate toolbar rect in physical pixels (prevents toolbar from being clipped)
+            Rect? toolbarRect = null;
+            if (_viewModel != null)
+            {
+                // Toolbar position is stored in ViewModel, size is approximately 400x40
+                const double toolbarWidth = 500;  // Slightly larger to account for flyouts
+                const double toolbarHeight = 50;
+                toolbarRect = new Rect(
+                    _viewModel.ToolbarLeft * scaling,
+                    _viewModel.ToolbarTop * scaling,
+                    toolbarWidth * scaling,
+                    toolbarHeight * scaling
+                );
+            }
+            
             // Apply window region with hole (border width in physical pixels)
-            // Use a smaller border (4px logical = 4*scaling physical) to keep handles responsive
-            int borderWidth = (int)(4 * scaling);
-            Win32Helpers.SetWindowHoleRegion(hwnd, windowWidth, windowHeight, scaledRect, borderWidth);
+            // Use 20px logical border to:
+            // 1. Keep resize handles responsive
+            // 2. Allow move gesture by clicking near the edges
+            // 3. Preserve corner decorations visibility
+            int borderWidth = (int)(20 * scaling);
+            Win32Helpers.SetWindowHoleRegion(hwnd, windowWidth, windowHeight, scaledRect, borderWidth, toolbarRect);
         }
         else
         {
-            // Clear region when not in Selected state (allow full window interaction for selection)
+            // Clear region when not in Selected state OR in drawing mode
             Win32Helpers.ClearWindowRegion(hwnd);
         }
     }
