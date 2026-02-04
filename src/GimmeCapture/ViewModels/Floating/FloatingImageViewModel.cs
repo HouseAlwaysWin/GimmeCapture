@@ -35,7 +35,11 @@ public class FloatingImageViewModel : ViewModelBase
     public bool HidePinDecoration
     {
         get => _hidePinDecoration;
-        set => this.RaiseAndSetIfChanged(ref _hidePinDecoration, value);
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _hidePinDecoration, value);
+            this.RaisePropertyChanged(nameof(WindowPadding));
+        }
     }
 
     private bool _hidePinBorder = false;

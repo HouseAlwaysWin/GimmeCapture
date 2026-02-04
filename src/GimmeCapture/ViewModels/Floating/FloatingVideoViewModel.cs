@@ -40,7 +40,11 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable
     public bool HidePinDecoration
     {
         get => _hidePinDecoration;
-        set => this.RaiseAndSetIfChanged(ref _hidePinDecoration, value);
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _hidePinDecoration, value);
+            this.RaisePropertyChanged(nameof(WindowPadding));
+        }
     }
 
     private bool _hidePinBorder = false;
@@ -62,6 +66,51 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable
     {
         get => _showToolbar;
         set => this.RaiseAndSetIfChanged(ref _showToolbar, value);
+    }
+
+    private double _wingScale = 1.0;
+    public double WingScale
+    {
+        get => _wingScale;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _wingScale, value);
+            this.RaisePropertyChanged(nameof(WingWidth));
+            this.RaisePropertyChanged(nameof(WingHeight));
+            this.RaisePropertyChanged(nameof(LeftWingMargin));
+            this.RaisePropertyChanged(nameof(RightWingMargin));
+            this.RaisePropertyChanged(nameof(WindowPadding));
+        }
+    }
+
+    private double _cornerIconScale = 1.0;
+    public double CornerIconScale
+    {
+        get => _cornerIconScale;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _cornerIconScale, value);
+            this.RaisePropertyChanged(nameof(SelectionIconSize));
+        }
+    }
+
+    // Derived properties for UI binding
+    public double WingWidth => 100 * WingScale;
+    public double WingHeight => 60 * WingScale;
+    public double SelectionIconSize => 22 * CornerIconScale;
+    public Avalonia.Thickness LeftWingMargin => new Avalonia.Thickness(-WingWidth, 0, 0, 0);
+    public Avalonia.Thickness RightWingMargin => new Avalonia.Thickness(0, 0, -WingWidth, 0);
+
+    public Avalonia.Thickness WindowPadding
+    {
+        get
+        {
+            // If decorations are hidden, we just need the standard margin (e.g. 10 for shadow/resize handles).
+            // If they are visible, we need enough space for the wings (WingWidth).
+            double hPad = _hidePinDecoration ? 10 : System.Math.Max(10, WingWidth);
+            double vPad = 10;
+            return new Avalonia.Thickness(hPad, vPad, hPad, vPad);
+        }
     }
 
     public ReactiveCommand<Unit, Unit> CloseCommand { get; }

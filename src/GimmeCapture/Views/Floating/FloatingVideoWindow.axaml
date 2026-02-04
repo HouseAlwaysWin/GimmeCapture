@@ -35,7 +35,7 @@
     
     <Grid Background="Transparent">
         <!-- Gothic/BABYMETAL Style Border -->
-        <Border Margin="10"
+        <Border Margin="{Binding WindowPadding}"
                 Classes="MainBorder"
                 Classes.hidden-border="{Binding HidePinBorder}"
                 CornerRadius="0"
@@ -51,19 +51,73 @@
                         
                         <Image Source="{Binding VideoBitmap}" Stretch="Fill" Name="PinnedVideo" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
                         
-                        <Grid IsVisible="{Binding HidePinDecoration, Converter={StaticResource BoolInvertConverter}}">
-                            <!-- Accent Corners -->
-                            <Rectangle Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="10" Height="2" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="2"/>
-                            <Rectangle Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="2" Height="10" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="2"/>
+                        <!-- Accent Corners (Themed) -->
+                        <Grid IsVisible="{Binding HidePinDecoration, Converter={StaticResource BoolInvertConverter}}" Margin="0" ClipToBounds="False">
+                            <Grid ClipToBounds="False">
+                                <Border BorderThickness="{Binding BorderThickness, Converter={StaticResource ThicknessConverter}}" ClipToBounds="False">
+                                    <Border BorderThickness="1" Margin="-1" ClipToBounds="False">
+                                        <Grid Name="AccentCornersGrid" ClipToBounds="False">
+                                            <!-- Left Inner Corners: Hearts -->
+                                            <Rectangle Name="InnerCornerTopLeft" Width="{Binding SelectionIconSize}" Height="{Binding SelectionIconSize}" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="4"
+                                                       Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}"
+                                                       RenderOptions.BitmapInterpolationMode="HighQuality">
+                                                <Rectangle.OpacityMask>
+                                                    <ImageBrush Source="/Assets/heart.png" Stretch="Uniform"/>
+                                                </Rectangle.OpacityMask>
+                                            </Rectangle>
+                                            <Rectangle Name="InnerCornerBottomLeft" Width="{Binding SelectionIconSize}" Height="{Binding SelectionIconSize}" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="4"
+                                                       Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}"
+                                                       RenderOptions.BitmapInterpolationMode="HighQuality">
+                                                <Rectangle.OpacityMask>
+                                                    <ImageBrush Source="/Assets/heart.png" Stretch="Uniform"/>
+                                                </Rectangle.OpacityMask>
+                                            </Rectangle>
+
+                                            <!-- Right Inner Corners: Skulls -->
+                                            <Rectangle Name="InnerCornerTopRight" Width="{Binding SelectionIconSize}" Height="{Binding SelectionIconSize}" VerticalAlignment="Top" HorizontalAlignment="Right" Margin="4"
+                                                       Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}"
+                                                       RenderOptions.BitmapInterpolationMode="HighQuality">
+                                                <Rectangle.OpacityMask>
+                                                    <ImageBrush Source="/Assets/skull.png" Stretch="Uniform"/>
+                                                </Rectangle.OpacityMask>
+                                            </Rectangle>
+                                            <Rectangle Name="InnerCornerBottomRight" Width="{Binding SelectionIconSize}" Height="{Binding SelectionIconSize}" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="4"
+                                                       Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}"
+                                                       RenderOptions.BitmapInterpolationMode="HighQuality">
+                                                <Rectangle.OpacityMask>
+                                                    <ImageBrush Source="/Assets/skull.png" Stretch="Uniform"/>
+                                                </Rectangle.OpacityMask>
+                                            </Rectangle>
+                                        </Grid>
+                                    </Border>
+                                </Border>
+                            </Grid>
                             
-                            <Rectangle Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="10" Height="2" VerticalAlignment="Top" HorizontalAlignment="Right" Margin="2"/>
-                            <Rectangle Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="2" Height="10" VerticalAlignment="Top" HorizontalAlignment="Right" Margin="2"/>
-                            
-                            <Rectangle Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="10" Height="2" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="2"/>
-                            <Rectangle Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="2" Height="10" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="2"/>
-                            
-                            <Rectangle Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="10" Height="2" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="2"/>
-                            <Rectangle Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" Width="2" Height="10" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="2"/>
+                             <!-- Wing Decorations Layer -->
+                            <Grid HorizontalAlignment="Stretch" VerticalAlignment="Stretch" 
+                                  ClipToBounds="False" IsHitTestVisible="False"
+                                  IsVisible="{Binding HidePinDecoration, Converter={StaticResource BoolInvertConverter}}">
+                                    
+                                    <!-- Left Side Wing -->
+                                    <Rectangle Width="{Binding WingWidth}" Height="{Binding WingHeight}" VerticalAlignment="Center"
+                                               HorizontalAlignment="Left" Margin="{Binding LeftWingMargin}"
+                                               Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}"
+                                               RenderOptions.BitmapInterpolationMode="HighQuality">
+                                        <Rectangle.OpacityMask>
+                                            <ImageBrush Source="/Assets/wing_left.png" Stretch="Uniform" AlignmentX="Right"/>
+                                        </Rectangle.OpacityMask>
+                                    </Rectangle>
+                                           
+                                    <!-- Right Side Wing -->
+                                    <Rectangle Width="{Binding WingWidth}" Height="{Binding WingHeight}" VerticalAlignment="Center"
+                                               HorizontalAlignment="Right" Margin="{Binding RightWingMargin}"
+                                               Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}"
+                                               RenderOptions.BitmapInterpolationMode="HighQuality">
+                                        <Rectangle.OpacityMask>
+                                            <ImageBrush Source="/Assets/wing_right.png" Stretch="Uniform" AlignmentX="Left"/>
+                                        </Rectangle.OpacityMask>
+                                    </Rectangle>
+                                </Grid>
                         </Grid>
                     </Grid>
 
