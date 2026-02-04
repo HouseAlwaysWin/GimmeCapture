@@ -6,6 +6,7 @@ using GimmeCapture.ViewModels;
 using GimmeCapture.Models;
 using GimmeCapture.Services; // For RecordingState if it's there
 using System;
+using GimmeCapture.Services.Core;
 using System.Linq;
 
 namespace GimmeCapture.Views;

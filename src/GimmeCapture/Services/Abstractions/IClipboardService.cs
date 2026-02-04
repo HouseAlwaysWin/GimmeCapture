@@ -1,7 +1,7 @@
 using Avalonia.Media.Imaging;
 using System.Threading.Tasks;
 
-namespace GimmeCapture.Services;
+namespace GimmeCapture.Services.Abstractions;
 
 public interface IClipboardService
 {

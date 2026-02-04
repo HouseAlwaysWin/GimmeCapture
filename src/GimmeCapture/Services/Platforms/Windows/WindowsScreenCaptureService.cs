@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
+using Avalonia.Media.Imaging;
 using SkiaSharp;
 using System;
 using System.Drawing;
@@ -8,6 +9,7 @@ using System.Drawing.Imaging;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
+using GimmeCapture.Services.Abstractions;
 using Avalonia.Controls;
 
 
@@ -16,7 +18,7 @@ using GimmeCapture.Models;
 using Avalonia.Media;
 using System.Linq;
 
-namespace GimmeCapture.Services;
+namespace GimmeCapture.Services.Platforms.Windows;
 
 public class WindowsScreenCaptureService : IScreenCaptureService
 {
@@ -75,7 +77,7 @@ public class WindowsScreenCaptureService : IScreenCaptureService
 
                 if (width <= 0 || height <= 0) return new SKBitmap(1, 1);
 
-                using var bitmap = new Bitmap(width, height);
+                using var bitmap = new System.Drawing.Bitmap(width, height);
                 using (var g = Graphics.FromImage(bitmap))
                 {
                     g.CopyFromScreen(x, y, 0, 0, new System.Drawing.Size(width, height));

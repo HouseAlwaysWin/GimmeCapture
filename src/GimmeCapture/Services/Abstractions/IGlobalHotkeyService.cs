@@ -1,7 +1,7 @@
 using System;
 using Avalonia.Controls;
 
-namespace GimmeCapture.Services;
+namespace GimmeCapture.Services.Abstractions;
 
 public interface IGlobalHotkeyService : IDisposable
 {

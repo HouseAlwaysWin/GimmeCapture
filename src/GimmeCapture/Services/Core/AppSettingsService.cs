@@ -4,7 +4,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using GimmeCapture.Models;
 
-namespace GimmeCapture.Services;
+namespace GimmeCapture.Services.Core;
 
 public class AppSettingsService
 {

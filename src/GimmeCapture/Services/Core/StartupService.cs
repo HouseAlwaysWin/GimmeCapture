@@ -2,7 +2,7 @@ using Microsoft.Win32;
 using System;
 using System.IO;
 
-namespace GimmeCapture.Services;
+namespace GimmeCapture.Services.Core;
 
 public class StartupService
 {

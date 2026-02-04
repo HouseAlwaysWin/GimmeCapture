@@ -1,4 +1,4 @@
-using GimmeCapture.Services;
+using GimmeCapture.Services.Core;
 
 namespace GimmeCapture.Models;
 

@@ -4,12 +4,15 @@ using Avalonia.Media;
 using System;
 using System.Threading.Tasks;
 using Avalonia.Controls.ApplicationLifetimes;
+using GimmeCapture.Models;
 using GimmeCapture.Views;
 using System.Linq;
 using System.Reactive;
 using System.Reactive.Linq;
 using System.IO;
-using GimmeCapture.Services;
+using GimmeCapture.Services.Abstractions;
+using GimmeCapture.Services.Core;
+using GimmeCapture.Services.Platforms.Windows;
 
 namespace GimmeCapture.ViewModels;
 
@@ -37,14 +40,14 @@ public class MainWindowViewModel : ViewModelBase
     public void SetStatus(string key)
     {
         _currentStatusKey = key;
-        StatusText = Services.LocalizationService.Instance[key];
+        StatusText = LocalizationService.Instance[key];
     }
 
     public Action<CaptureMode>? RequestCaptureAction { get; set; }
     public Func<Task<string?>>? PickFolderAction { get; set; }
     
-    private readonly Services.AppSettingsService _settingsService;
-    public Services.GlobalHotkeyService HotkeyService { get; } = new();
+    private readonly AppSettingsService _settingsService;
+    public WindowsGlobalHotkeyService HotkeyService { get; } = new();
 
     // Hotkey IDs
     private const int ID_SNIP = 9000;
@@ -85,20 +88,20 @@ public class MainWindowViewModel : ViewModelBase
 
     public MainWindowViewModel()
     {
-        _settingsService = new Services.AppSettingsService();
+        _settingsService = new AppSettingsService();
         RecordingService = new RecordingService(FfmpegDownloader);
         UpdateService = new UpdateService(AppVersion);
         
         // Sync ViewModel with Service using ReactiveUI
         // When Service language changes, notify ViewModel properties to update
-        Services.LocalizationService.Instance
+        LocalizationService.Instance
             .WhenAnyValue(x => x.CurrentLanguage)
             .ObserveOn(RxApp.MainThreadScheduler)
             .Subscribe(_ => 
             {
                 this.RaisePropertyChanged(nameof(SelectedLanguageOption));
                 // Update Status Text on Language Change
-                StatusText = Services.LocalizationService.Instance[_currentStatusKey];
+                StatusText = LocalizationService.Instance[_currentStatusKey];
             });
 
         SetStatus("StatusReady");
@@ -145,11 +148,11 @@ public class MainWindowViewModel : ViewModelBase
                 var (isDownloading, progress) = x;
                 if (isDownloading)
                 {
-                    StatusText = string.Format(Services.LocalizationService.Instance["ComponentDownloadingProgress"], (int)progress);
+                    StatusText = string.Format(LocalizationService.Instance["ComponentDownloadingProgress"], (int)progress);
                 }
                 else if (progress >= 100)
                 {
-                     if (StatusText.Contains(Services.LocalizationService.Instance["ComponentDownloadingProgress"].Split('.')[0]))
+                     if (StatusText.Contains(LocalizationService.Instance["ComponentDownloadingProgress"].Split('.')[0]))
                         SetStatus("StatusReady");
                 }
             });
@@ -161,7 +164,7 @@ public class MainWindowViewModel : ViewModelBase
                 var (isDownloading, progress) = x;
                 if (isDownloading)
                 {
-                    StatusText = string.Format(Services.LocalizationService.Instance["UpdateDownloading"], (int)progress);
+                    StatusText = string.Format(LocalizationService.Instance["UpdateDownloading"], (int)progress);
                 }
             });
 
@@ -189,24 +192,24 @@ public class MainWindowViewModel : ViewModelBase
     public class LanguageOption
     {
         public string Name { get; set; } = string.Empty;
-        public Services.Language Value { get; set; }
+        public Language Value { get; set; }
     }
 
     public LanguageOption[] AvailableLanguages { get; } = new[]
     {
-        new LanguageOption { Name = "English (US)", Value = Services.Language.English },
-        new LanguageOption { Name = "繁體中文 (台灣)", Value = Services.Language.Chinese },
-        new LanguageOption { Name = "日本語 (日本)", Value = Services.Language.Japanese }
+        new LanguageOption { Name = "English (US)", Value = Language.English },
+        new LanguageOption { Name = "繁體中文 (台灣)", Value = Language.Chinese },
+        new LanguageOption { Name = "日本語 (日本)", Value = Language.Japanese }
     };
 
     public LanguageOption SelectedLanguageOption
     {
-        get => AvailableLanguages.FirstOrDefault(x => x.Value == Services.LocalizationService.Instance.CurrentLanguage) ?? AvailableLanguages[0];
+        get => AvailableLanguages.FirstOrDefault(x => x.Value == LocalizationService.Instance.CurrentLanguage) ?? AvailableLanguages[0];
         set
         {
-            if (value != null && Services.LocalizationService.Instance.CurrentLanguage != value.Value)
+            if (value != null && LocalizationService.Instance.CurrentLanguage != value.Value)
             {
-                Services.LocalizationService.Instance.CurrentLanguage = value.Value;
+                LocalizationService.Instance.CurrentLanguage = value.Value;
                 this.RaisePropertyChanged();
             }
         }
@@ -540,10 +543,10 @@ public class MainWindowViewModel : ViewModelBase
         RecordHotkey = s.RecordHotkey;
 
         // Load Language
-        Services.LocalizationService.Instance.CurrentLanguage = s.Language;
+        LocalizationService.Instance.CurrentLanguage = s.Language;
 
         // Ensure registry is in sync with setting
-        Services.StartupService.SetStartup(s.RunOnStartup);
+        StartupService.SetStartup(s.RunOnStartup);
 
         // Register initial hotkeys
         Avalonia.Threading.Dispatcher.UIThread.Post(() => {
@@ -593,7 +596,7 @@ public class MainWindowViewModel : ViewModelBase
             s.RecordHotkey = RecordHotkey;
             s.BorderColorHex = BorderColor.ToString();
             s.ThemeColorHex = ThemeColor.ToString();
-            s.Language = Services.LocalizationService.Instance.CurrentLanguage;
+            s.Language = LocalizationService.Instance.CurrentLanguage;
             s.VideoSaveDirectory = VideoSaveDirectory;
             s.RecordFormat = RecordFormat;
             s.UseFixedRecordPath = UseFixedRecordPath;
@@ -613,7 +616,7 @@ public class MainWindowViewModel : ViewModelBase
             IsModified = false;
 
             // Update Windows startup registry
-            Services.StartupService.SetStartup(s.RunOnStartup);
+            StartupService.SetStartup(s.RunOnStartup);
             return true;
         }
         catch (Exception ex)
@@ -630,7 +633,7 @@ public class MainWindowViewModel : ViewModelBase
         {
             if (!FfmpegDownloader.IsFFmpegAvailable())
             {
-                var msg = Services.LocalizationService.Instance["FFmpegNotReady"];
+                var msg = LocalizationService.Instance["FFmpegNotReady"];
                 await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
                 {
                     var mainWindow = (Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.MainWindow;
@@ -721,7 +724,7 @@ public class MainWindowViewModel : ViewModelBase
         if (release != null)
         {
             SetStatus("StatusReady");
-            var msg = string.Format(Services.LocalizationService.Instance["UpdateFound"], release.TagName);
+            var msg = string.Format(LocalizationService.Instance["UpdateFound"], release.TagName);
             
             bool? result = await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
             {
@@ -735,7 +738,7 @@ public class MainWindowViewModel : ViewModelBase
                 var zipPath = await UpdateService.DownloadUpdateAsync(release);
                 if (!string.IsNullOrEmpty(zipPath))
                 {
-                    var readyMsg = Services.LocalizationService.Instance["UpdateReady"];
+                    var readyMsg = LocalizationService.Instance["UpdateReady"];
                     bool? readyResult = await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
                     {
                         var mainWindow = (Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.MainWindow;
@@ -761,7 +764,7 @@ public class MainWindowViewModel : ViewModelBase
                 }
                 else
                 {
-                    var errMsg = string.Format(Services.LocalizationService.Instance["UpdateError"], "Download failed");
+                    var errMsg = string.Format(LocalizationService.Instance["UpdateError"], "Download failed");
                     await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () => {
                         var mainWindow = (Avalonia.Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
                         if (mainWindow != null) await UpdateDialog.ShowDialog(mainWindow, errMsg, isUpdateAvailable: false);
@@ -776,7 +779,7 @@ public class MainWindowViewModel : ViewModelBase
                 SetStatus("StatusReady");
                 await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () => {
                     var mainWindow = (Avalonia.Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
-                    if (mainWindow != null) await UpdateDialog.ShowDialog(mainWindow, Services.LocalizationService.Instance["NoUpdateFound"], isUpdateAvailable: false);
+                    if (mainWindow != null) await UpdateDialog.ShowDialog(mainWindow, LocalizationService.Instance["NoUpdateFound"], isUpdateAvailable: false);
                 });
             }
         }

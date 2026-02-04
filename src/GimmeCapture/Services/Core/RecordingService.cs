@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using ReactiveUI;
 
-namespace GimmeCapture.Services;
+namespace GimmeCapture.Services.Core;
 
 public enum RecordingState { Idle, Recording, Paused }
 

@@ -4,7 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using CliWrap;
 
-namespace GimmeCapture.Services;
+namespace GimmeCapture.Services.Core;
 
 public class ProcessManagerService
 {

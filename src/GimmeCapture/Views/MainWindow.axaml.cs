@@ -6,6 +6,9 @@ using GimmeCapture.ViewModels;
 using System.Runtime.InteropServices;
 using Avalonia.Platform;
 using Avalonia.Media;
+using GimmeCapture.Services.Abstractions;
+using GimmeCapture.Services.Core;
+using GimmeCapture.Services.Platforms.Windows;
 
 namespace GimmeCapture.Views;
 
@@ -51,7 +54,7 @@ public partial class MainWindow : Window
                 else
                 {
                     // If save failed, stay open and show error
-                     var msg = Services.LocalizationService.Instance["SaveFailed"];
+                     var msg = LocalizationService.Instance["SaveFailed"];
                      await UpdateDialog.ShowDialog(this, msg, isUpdateAvailable: false);
                 }
             }

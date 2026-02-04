@@ -5,8 +5,7 @@ using System.Runtime.CompilerServices;
 using Avalonia.Media;
 using ReactiveUI;
 
-namespace GimmeCapture.Services
-{
+namespace GimmeCapture.Services.Core;
     public enum Language
     {
         English,
@@ -463,6 +462,5 @@ namespace GimmeCapture.Services
             var next = (int)CurrentLanguage + 1;
             if (next > (int)Language.Japanese) next = 0;
             CurrentLanguage = (Language)next;
-        }
     }
 }

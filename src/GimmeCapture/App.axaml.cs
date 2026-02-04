@@ -3,6 +3,9 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using GimmeCapture.ViewModels;
 using GimmeCapture.Views;
+using GimmeCapture.Services.Abstractions;
+using GimmeCapture.Services.Core;
+using GimmeCapture.Services.Platforms.Windows;
 
 namespace GimmeCapture;
 

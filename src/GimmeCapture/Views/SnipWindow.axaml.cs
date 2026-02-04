@@ -8,8 +8,11 @@ using System;
 using System.Linq;
 using Avalonia.Platform;
 using Avalonia.Input.Raw;
-using GimmeCapture.Services;
+using GimmeCapture.Services.Abstractions;
+using GimmeCapture.Services.Core;
+using GimmeCapture.Services.Platforms.Windows;
 using GimmeCapture.Services.Interop;
+
 using ReactiveUI;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
@@ -32,7 +35,7 @@ public partial class SnipWindow : Window
     private Rect _originalRect;
     
     // Services
-    private readonly Services.ClipboardService _clipboardService = new Services.ClipboardService();
+    private readonly ClipboardService _clipboardService = new ClipboardService();
 
     private enum ResizeDirection
     {

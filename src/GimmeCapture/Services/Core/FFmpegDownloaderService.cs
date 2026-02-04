@@ -5,7 +5,7 @@ using System.Net.Http;
 using System.Threading.Tasks;
 using ReactiveUI;
 
-namespace GimmeCapture.Services;
+namespace GimmeCapture.Services.Core;
 
 public class FFmpegDownloaderService : ReactiveObject
 {

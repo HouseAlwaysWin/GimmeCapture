@@ -6,7 +6,7 @@
         xmlns:cv="using:GimmeCapture.Converters"
         xmlns:ctl="using:GimmeCapture.Views.Controls"
         xmlns:m="using:GimmeCapture.Models"
-        xmlns:services="using:GimmeCapture.Services"
+        xmlns:services="using:GimmeCapture.Services.Core"
         mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
         x:Class="GimmeCapture.Views.SnipWindow"
         x:DataType="vm:SnipWindowViewModel"

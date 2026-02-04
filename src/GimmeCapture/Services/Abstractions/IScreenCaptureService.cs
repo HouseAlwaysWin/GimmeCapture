@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using GimmeCapture.Models;
 
-namespace GimmeCapture.Services;
+namespace GimmeCapture.Services.Abstractions;
 
 public interface IScreenCaptureService
 {

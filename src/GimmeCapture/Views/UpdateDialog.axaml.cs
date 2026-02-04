@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using System.Threading.Tasks;
+using GimmeCapture.Services.Core;
 
 namespace GimmeCapture.Views
 {
@@ -31,7 +32,7 @@ namespace GimmeCapture.Views
             var cancelBtn = this.FindControl<Button>("CancelButton");
             var okBtn = this.FindControl<Button>("OkButton");
 
-            var loc = GimmeCapture.Services.LocalizationService.Instance;
+            var loc = LocalizationService.Instance;
 
             if (updateBtn != null) 
             {

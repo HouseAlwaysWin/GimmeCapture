@@ -3,7 +3,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:vm="using:GimmeCapture.ViewModels"
-        xmlns:services="using:GimmeCapture.Services"
+        xmlns:services="using:GimmeCapture.Services.Core"
         mc:Ignorable="d" d:DesignWidth="300" d:DesignHeight="300"
         x:Class="GimmeCapture.Views.FloatingImageWindow"
         x:DataType="vm:FloatingImageViewModel"

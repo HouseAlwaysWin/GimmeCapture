@@ -11,7 +11,9 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using GimmeCapture.Models;
 using System.Linq;
-using GimmeCapture.Services;
+using GimmeCapture.Services.Abstractions;
+using GimmeCapture.Services.Core;
+using GimmeCapture.Services.Platforms.Windows;
 
 namespace GimmeCapture.ViewModels;
 
@@ -46,8 +48,8 @@ public class SnipWindowViewModel : ViewModelBase
     }
 
     public string ModeDisplayName => IsRecordingMode 
-        ? Services.LocalizationService.Instance["CaptureModeRecord"] 
-        : Services.LocalizationService.Instance["CaptureModeNormal"];
+        ? LocalizationService.Instance["CaptureModeRecord"] 
+        : LocalizationService.Instance["CaptureModeNormal"];
 
     // True when actively recording (not idle, not paused) - used to hide selection border
     public bool IsRecordingActive => _recordingService?.State == RecordingState.Recording;
@@ -248,7 +250,7 @@ public class SnipWindowViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _isMagnifierEnabled, value);
     }
 
-    private readonly Services.IScreenCaptureService _captureService;
+    private readonly IScreenCaptureService _captureService;
 
     // Commands
     public ReactiveCommand<Unit, Unit> CopyCommand { get; }
@@ -557,7 +559,7 @@ public class SnipWindowViewModel : ViewModelBase
     {
         // TODO: In real DI, this should be injected. For now we instantiate the concrete Windows implementation.
         // In future Linux support, we would check OS and instantiate LinuxScreenCaptureService.
-        _captureService = new Services.WindowsScreenCaptureService();
+        _captureService = new WindowsScreenCaptureService();
         _selectionBorderColor = borderColor;
         _selectionBorderThickness = borderThickness;
         _maskOpacity = maskOpacity;

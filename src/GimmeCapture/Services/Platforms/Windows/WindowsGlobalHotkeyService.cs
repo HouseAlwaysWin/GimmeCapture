@@ -1,12 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using GimmeCapture.Services.Abstractions;
 using Avalonia.Controls;
 using Avalonia.Platform;
 
-namespace GimmeCapture.Services;
+namespace GimmeCapture.Services.Platforms.Windows;
 
-public class GlobalHotkeyService : IGlobalHotkeyService
+public class WindowsGlobalHotkeyService : IGlobalHotkeyService
 {
     private const int WM_HOTKEY = 0x0312;
     private IntPtr _handle;

@@ -8,8 +8,9 @@ using Avalonia.Platform.Storage;
 using System;
 using System.IO;
 using System.Threading.Tasks;
+using GimmeCapture.Services.Abstractions;
 
-namespace GimmeCapture.Services;
+namespace GimmeCapture.Services.Core;
 
 public class ClipboardService : IClipboardService
 {

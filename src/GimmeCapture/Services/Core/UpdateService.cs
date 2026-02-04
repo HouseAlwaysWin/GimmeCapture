@@ -14,7 +14,7 @@ using System.Threading.Tasks;
 using Avalonia.Media;
 using ReactiveUI;
 
-namespace GimmeCapture.Services;
+namespace GimmeCapture.Services.Core;
 
 public class ReleaseInfo
 {

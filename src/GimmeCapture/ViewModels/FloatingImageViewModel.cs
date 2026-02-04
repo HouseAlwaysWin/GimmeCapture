@@ -2,6 +2,9 @@ using Avalonia.Media.Imaging;
 using ReactiveUI;
 using System.Reactive;
 using System.Threading.Tasks;
+using GimmeCapture.Services.Abstractions;
+using GimmeCapture.Services.Core;
+using GimmeCapture.Services.Platforms.Windows;
 
 namespace GimmeCapture.ViewModels;
 
@@ -58,7 +61,7 @@ public class FloatingImageViewModel : ViewModelBase
     // CopyAction removed in favor of IClipboardService
     public System.Func<Task>? SaveAction { get; set; }
 
-    private readonly Services.IClipboardService _clipboardService;
+    private readonly IClipboardService _clipboardService;
 
     private double _wingScale = 1.0;
     public double WingScale
@@ -105,7 +108,7 @@ public class FloatingImageViewModel : ViewModelBase
         }
     }
 
-    public FloatingImageViewModel(Bitmap image, Avalonia.Media.Color borderColor, double borderThickness, bool hideDecoration, bool hideBorder, Services.IClipboardService clipboardService)
+    public FloatingImageViewModel(Bitmap image, Avalonia.Media.Color borderColor, double borderThickness, bool hideDecoration, bool hideBorder, IClipboardService clipboardService)
     {
         Image = image;
         BorderColor = borderColor;

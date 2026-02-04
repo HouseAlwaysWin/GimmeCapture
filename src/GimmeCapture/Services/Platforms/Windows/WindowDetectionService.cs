@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 using Avalonia;
 using System.Linq;
 
-namespace GimmeCapture.Services;
+namespace GimmeCapture.Services.Platforms.Windows;
 
 public class WindowDetectionService
 {
