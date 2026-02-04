@@ -3,6 +3,8 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
+using Avalonia.Input.Platform;
+using Avalonia.Platform.Storage;
 using System;
 using System.IO;
 using System.Threading.Tasks;
@@ -64,9 +66,8 @@ public class ClipboardService : IClipboardService
         var topLevel = GetTopLevel();
         if (topLevel?.Clipboard is { } clipboard)
         {
-            var dataObject = new DataObject();
-            dataObject.Set("Bitmap", bitmap);
-            await clipboard.SetDataObjectAsync(dataObject);
+            // Trying explicit extension method call
+            await Avalonia.Input.Platform.ClipboardExtensions.SetBitmapAsync(clipboard, bitmap);
         }
     }
 
@@ -82,13 +83,16 @@ public class ClipboardService : IClipboardService
     public async Task CopyFileAsync(string filePath)
     {
         var topLevel = GetTopLevel();
-        if (topLevel?.Clipboard is { } clipboard)
+        var clipboard = topLevel?.Clipboard;
+        var storageProvider = topLevel?.StorageProvider;
+
+        if (clipboard != null && storageProvider != null)
         {
-            #pragma warning disable CS0618
-            var dataObject = new DataObject();
-            dataObject.Set(DataFormats.Files, new[] { filePath });
-            await clipboard.SetDataObjectAsync(dataObject);
-            #pragma warning restore CS0618
+             var file = await storageProvider.TryGetFileFromPathAsync(new Uri(filePath));
+             if (file != null)
+             {
+                 await Avalonia.Input.Platform.ClipboardExtensions.SetFilesAsync(clipboard, new[] { file });
+             }
         }
     }
 

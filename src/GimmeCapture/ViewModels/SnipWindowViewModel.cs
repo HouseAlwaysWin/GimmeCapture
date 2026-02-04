@@ -415,24 +415,29 @@ public class SnipWindowViewModel : ViewModelBase
     };
 
     private bool _isDrawingMode = false;
-    public bool IsDrawingMode
-    {
-        get => _isDrawingMode;
-        set
+        public bool IsDrawingMode
         {
-            if (value && !_isDrawingMode)
+            get => _isDrawingMode;
+            set
             {
-                // Entering drawing mode - capture snapshot first
-                CaptureDrawingModeSnapshotAction?.Invoke();
+                if (value && !_isDrawingMode)
+                {
+                    // Entering drawing mode - capture snapshot first
+                    CaptureDrawingModeSnapshotAction?.Invoke();
+                }
+                else if (!value && _isDrawingMode)
+                {
+                    // Exiting drawing mode - clear and dispose snapshot
+                    if (_drawingModeSnapshot != null)
+                    {
+                        var temp = _drawingModeSnapshot;
+                        DrawingModeSnapshot = null;
+                        temp.Dispose();
+                    }
+                }
+                this.RaiseAndSetIfChanged(ref _isDrawingMode, value);
             }
-            else if (!value && _isDrawingMode)
-            {
-                // Exiting drawing mode - clear snapshot
-                DrawingModeSnapshot = null;
-            }
-            this.RaiseAndSetIfChanged(ref _isDrawingMode, value);
         }
-    }
 
     /// <summary>
     /// Action to capture the selection area snapshot before closing the hole.
@@ -638,6 +643,27 @@ public class SnipWindowViewModel : ViewModelBase
         DecreaseCornerIconScaleCommand = ReactiveCommand.Create(() => { if (CornerIconScale > 0.4) CornerIconScale = Math.Round(CornerIconScale - 0.1, 1); });
 
         UpdateMask();
+    }
+
+    /// <summary>
+    /// Handles right-click logic:
+    /// - If Recording: Do nothing (handled by UI to prevent interruptions)
+    /// - If Selecting/Selected: Reset to Detecting
+    /// - Otherwise: Close Window
+    /// </summary>
+    public void HandleRightClick()
+    {
+        if (RecState != RecordingState.Idle) return;
+
+        if (CurrentState == SnipState.Selecting || CurrentState == SnipState.Selected)
+        {
+            CurrentState = SnipState.Detecting;
+            SelectionRect = new Rect(0,0,0,0);
+        }
+        else
+        {
+            Close();
+        }
     }
 
     public RecordingState RecState => _recordingService?.State ?? RecordingState.Idle;
