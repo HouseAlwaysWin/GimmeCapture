@@ -311,7 +311,7 @@ public class MainWindowViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _videoSaveDirectory, value);
     }
 
-    private string _recordFormat = "mp4";
+    private string _recordFormat = "gif";
     public string RecordFormat
     {
         get => _recordFormat;
