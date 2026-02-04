@@ -415,35 +415,51 @@ public class SnipWindowViewModel : ViewModelBase
     };
 
     private bool _isDrawingMode = false;
-        public bool IsDrawingMode
+    public bool IsDrawingMode
+    {
+        get => _isDrawingMode;
+        set
         {
-            get => _isDrawingMode;
-            set
+            if (value && !_isDrawingMode)
             {
-                if (value && !_isDrawingMode)
+                // Entering drawing mode - capture snapshot
+                // We do this async. Since setter is sync, we fire and forget or use Dispatcher.
+                // However, we want the snapshot to be ready.
+                // Ideally this should be a Command, but IsDrawingMode is property bound.
+                // We'll trigger the capture.
+                Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () => 
                 {
-                    // Entering drawing mode - capture snapshot first
-                    CaptureDrawingModeSnapshotAction?.Invoke();
-                }
-                else if (!value && _isDrawingMode)
-                {
-                    // Exiting drawing mode - clear and dispose snapshot
-                    if (_drawingModeSnapshot != null)
+                    try
                     {
-                        var temp = _drawingModeSnapshot;
-                        DrawingModeSnapshot = null;
-                        temp.Dispose();
+                        var snapshot = await _captureService.CaptureRegionBitmapAsync(SelectionRect, ScreenOffset, VisualScaling);
+                        if (snapshot != null)
+                        {
+                            // Dispose old if exists
+                            if (DrawingModeSnapshot != null) DrawingModeSnapshot.Dispose();
+                            DrawingModeSnapshot = snapshot;
+                        }
                     }
-                }
-                this.RaiseAndSetIfChanged(ref _isDrawingMode, value);
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Capture failed: {ex}");
+                    }
+                });
             }
+            else if (!value && _isDrawingMode)
+            {
+                // Exiting drawing mode - clear and dispose snapshot
+                if (_drawingModeSnapshot != null)
+                {
+                    var temp = _drawingModeSnapshot;
+                    DrawingModeSnapshot = null;
+                    temp.Dispose();
+                }
+            }
+            this.RaiseAndSetIfChanged(ref _isDrawingMode, value);
         }
+    }
 
-    /// <summary>
-    /// Action to capture the selection area snapshot before closing the hole.
-    /// Set by the View (SnipWindow) since it has access to window position and scaling.
-    /// </summary>
-    public Action? CaptureDrawingModeSnapshotAction { get; set; }
+    // Removed CaptureDrawingModeSnapshotAction as logic is now in ViewModel/Service
 
     private Avalonia.Media.Imaging.Bitmap? _drawingModeSnapshot;
     /// <summary>
@@ -462,7 +478,7 @@ public class SnipWindowViewModel : ViewModelBase
         get => _isEnteringText;
         set => this.RaiseAndSetIfChanged(ref _isEnteringText, value);
     }
-
+    
     private Point _textInputPosition;
     public Point TextInputPosition
     {
@@ -539,7 +555,9 @@ public class SnipWindowViewModel : ViewModelBase
 
     public SnipWindowViewModel(Color borderColor, double borderThickness, double maskOpacity, RecordingService? recService = null, MainWindowViewModel? mainVm = null)
     {
-        _captureService = new Services.ScreenCaptureService();
+        // TODO: In real DI, this should be injected. For now we instantiate the concrete Windows implementation.
+        // In future Linux support, we would check OS and instantiate LinuxScreenCaptureService.
+        _captureService = new Services.WindowsScreenCaptureService();
         _selectionBorderColor = borderColor;
         _selectionBorderThickness = borderThickness;
         _maskOpacity = maskOpacity;

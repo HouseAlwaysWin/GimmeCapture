@@ -18,7 +18,7 @@ using System.Linq;
 
 namespace GimmeCapture.Services;
 
-public class ScreenCaptureService : IScreenCaptureService
+public class WindowsScreenCaptureService : IScreenCaptureService
 {
     [DllImport("user32.dll")]
     static extern bool GetCursorInfo(out CURSORINFO pci);
@@ -125,8 +125,80 @@ public class ScreenCaptureService : IScreenCaptureService
                 return SKBitmap.Decode(stream);
             }
             
-            // Fallback for other platforms (not implemented in Phase 1)
             return new SKBitmap(100, 100);
+        });
+    }
+
+    public async Task<Avalonia.Media.Imaging.WriteableBitmap?> CaptureRegionBitmapAsync(Avalonia.Rect region, Avalonia.PixelPoint screenOffset, double visualScaling)
+    {
+        if (!OperatingSystem.IsWindows()) return null;
+
+        return await Task.Run(() =>
+        {
+             try
+            {
+                // Calculate physical pixels for the selection area
+                // Convert selection logical coordinates to physical and add window physical position
+                int xPhysical = (int)(region.X * visualScaling) + screenOffset.X;
+                int yPhysical = (int)(region.Y * visualScaling) + screenOffset.Y;
+                int widthPhysical = (int)(region.Width * visualScaling);
+                int heightPhysical = (int)(region.Height * visualScaling);
+
+                if (widthPhysical <= 0 || heightPhysical <= 0) return null;
+
+                // Use WriteableBitmap to avoid MemoryStream & PNG Encoding overhead
+                var writeableBitmap = new Avalonia.Media.Imaging.WriteableBitmap(
+                    new PixelSize(widthPhysical, heightPhysical), 
+                    new Vector(96, 96), 
+                    Avalonia.Platform.PixelFormat.Bgra8888, 
+                    Avalonia.Platform.AlphaFormat.Premul);
+
+                using (var lockedBitmap = writeableBitmap.Lock())
+                {
+                    // We still use GDI+ to capture the screen, but we copy bits directly to the WriteableBitmap
+                    using var screenBmp = new System.Drawing.Bitmap(widthPhysical, heightPhysical, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+                    using (var g = System.Drawing.Graphics.FromImage(screenBmp))
+                    {
+                        g.CopyFromScreen(
+                            xPhysical, 
+                            yPhysical, 
+                            0, 0, 
+                            new System.Drawing.Size(widthPhysical, heightPhysical));
+                    }
+
+                    var bmpData = screenBmp.LockBits(
+                        new System.Drawing.Rectangle(0, 0, widthPhysical, heightPhysical),
+                        System.Drawing.Imaging.ImageLockMode.ReadOnly,
+                        System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+
+                    // Copy memory
+                    for (int y = 0; y < heightPhysical; y++)
+                    {
+                       // Source Row
+                       IntPtr srcRow = bmpData.Scan0 + (y * bmpData.Stride);
+                       // Dest Row
+                       IntPtr destRow = lockedBitmap.Address + (y * lockedBitmap.RowBytes);
+                       
+                       unsafe
+                       {
+                           Buffer.MemoryCopy(
+                               (void*)srcRow, 
+                               (void*)destRow, 
+                               lockedBitmap.RowBytes, 
+                               widthPhysical * 4);
+                       }
+                    }
+
+                    screenBmp.UnlockBits(bmpData);
+                }
+                
+                return writeableBitmap;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Failed to capture region: {ex.Message}");
+                return null;
+            }
         });
     }
 
@@ -312,11 +384,8 @@ public class ScreenCaptureService : IScreenCaptureService
                   
                   var avaloniaBitmap = new Avalonia.Media.Imaging.Bitmap(ms);
                   
-                  #pragma warning disable CS0618 // Usage of obsolete DataObject and SetDataObjectAsync
-                  var dataObject = new DataObject();
-                  dataObject.Set("Bitmap", avaloniaBitmap);
-                  await clipboard.SetDataObjectAsync(dataObject);
-                  #pragma warning restore CS0618
+                  // Use new extension method way
+                  await Avalonia.Input.Platform.ClipboardExtensions.SetBitmapAsync(clipboard, avaloniaBitmap);
               }
         });
     }
@@ -335,16 +404,17 @@ public class ScreenCaptureService : IScreenCaptureService
         await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
         {
             var topLevel = TopLevel.GetTopLevel(Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop ? desktop.MainWindow : null);
-            
-            if (topLevel?.Clipboard is { } clipboard)
+            var clipboard = topLevel?.Clipboard;
+            var storageProvider = topLevel?.StorageProvider;
+
+            if (clipboard != null && storageProvider != null)
             {
-                #pragma warning disable CS0618
-                var dataObject = new DataObject();
-                dataObject.Set(Avalonia.Input.DataFormats.Files, new[] { filePath });
-                await clipboard.SetDataObjectAsync(dataObject);
-                #pragma warning restore CS0618
-                
-                System.Diagnostics.Debug.WriteLine($"Avalonia Clipboard: Copied file {filePath}");
+                 var file = await storageProvider.TryGetFileFromPathAsync(new Uri(filePath));
+                 if (file != null)
+                 {
+                     await Avalonia.Input.Platform.ClipboardExtensions.SetFilesAsync(clipboard, new[] { file });
+                 }
+                 System.Diagnostics.Debug.WriteLine($"Avalonia Clipboard: Copied file {filePath}");
             }
             else
             {

@@ -13,4 +13,9 @@ public interface IScreenCaptureService
     Task CopyToClipboardAsync(SKBitmap bitmap);
     Task CopyFileToClipboardAsync(string filePath);
     Task SaveToFileAsync(SKBitmap bitmap, string path);
+    
+    /// <summary>
+    /// Captures a region as a WriteableBitmap (optimized for display/drawing).
+    /// </summary>
+    Task<Avalonia.Media.Imaging.WriteableBitmap?> CaptureRegionBitmapAsync(Avalonia.Rect region, Avalonia.PixelPoint screenOffset, double visualScaling);
 }

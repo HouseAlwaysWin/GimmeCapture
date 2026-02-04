@@ -182,8 +182,7 @@ public partial class SnipWindow : Window
                 .ObserveOn(RxApp.MainThreadScheduler)
                 .Subscribe(tuple => UpdateWindowRegion(tuple.Item1, tuple.Item2, tuple.Item3));
             
-            // Set up the snapshot capture action for drawing mode
-            _viewModel.CaptureDrawingModeSnapshotAction = () => CaptureDrawingModeSnapshot();
+
 
             _viewModel.PickSaveFileAction = async () =>
             {

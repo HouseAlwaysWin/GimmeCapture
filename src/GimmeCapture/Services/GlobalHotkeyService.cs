@@ -6,7 +6,7 @@ using Avalonia.Platform;
 
 namespace GimmeCapture.Services;
 
-public class GlobalHotkeyService : IDisposable
+public class GlobalHotkeyService : IGlobalHotkeyService
 {
     private const int WM_HOTKEY = 0x0312;
     private IntPtr _handle;
