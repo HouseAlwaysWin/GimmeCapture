@@ -7,23 +7,61 @@
              x:Name="Root"
              FontSize="11">
     
-    <Border Background="#2A2A2A" BorderBrush="#444444" BorderThickness="1" CornerRadius="2" Height="24" Width="40">
+    <Border Name="Container" Background="#2A2A2A" BorderBrush="#444444" BorderThickness="1" CornerRadius="2" Height="24" Width="52">
+        <Border.Styles>
+            <Style Selector="Border:pointerover">
+                <Setter Property="BorderBrush" Value="#666666"/>
+            </Style>
+            <Style Selector="UserControl[IsKeyboardFocusWithin=true] Border#Container">
+                <Setter Property="BorderBrush" Value="{DynamicResource ThemeAccentBrush}"/>
+            </Style>
+        </Border.Styles>
         <Grid ColumnDefinitions="*,Auto">
-            <!-- Text Display (Not Editable manually to keep it compact/safe) -->
-            <TextBlock Text="{Binding Value, ElementName=Root, StringFormat={}{0:0.##}}" 
-                       VerticalAlignment="Center" HorizontalAlignment="Center"
-                       Foreground="White" FontSize="11" Margin="2,0,0,0"/>
+            <!-- TextBox for manual input (OneWay to allow code-behind cleanup) -->
+            <TextBox Name="ValueInput" 
+                     Text="{Binding Value, ElementName=Root, StringFormat={}{0:0.##}, Mode=OneWay}"
+                     VerticalAlignment="Center" HorizontalAlignment="Stretch"
+                     Background="Transparent" BorderThickness="0"
+                     Foreground="White" FontSize="11" Padding="4,0"
+                     MinHeight="0" MinWidth="0"
+                     SelectionBrush="{DynamicResource ThemeAccentBrush}"
+                     CaretBrush="{DynamicResource ThemeAccentBrush}">
+                <TextBox.Styles>
+                    <Style Selector="TextBox:focus /template/ Border#PART_BorderElement">
+                        <Setter Property="Background" Value="Transparent"/>
+                        <Setter Property="BorderThickness" Value="0"/>
+                    </Style>
+                    <Style Selector="TextBox:pointerover /template/ Border#PART_BorderElement">
+                        <Setter Property="Background" Value="Transparent"/>
+                        <Setter Property="BorderThickness" Value="0"/>
+                    </Style>
+                </TextBox.Styles>
+            </TextBox>
 
             <!-- Buttons -->
             <StackPanel Grid.Column="1" Spacing="0">
                 <RepeatButton Content="▲" Width="14" Height="11" FontSize="6" Padding="0" 
                               Background="Transparent" BorderThickness="0" Foreground="#AAAAAA"
                               Delay="300" Interval="50" Focusable="False"
-                              Click="OnIncreaseClick"/>
+                              Click="OnIncreaseClick">
+                    <RepeatButton.Styles>
+                        <Style Selector="RepeatButton:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+                            <Setter Property="Background" Value="Transparent"/>
+                            <Setter Property="TextElement.Foreground" Value="{DynamicResource ThemeAccentBrush}"/>
+                        </Style>
+                    </RepeatButton.Styles>
+                </RepeatButton>
                 <RepeatButton Content="▼" Width="14" Height="11" FontSize="6" Padding="0"
                               Background="Transparent" BorderThickness="0" Foreground="#AAAAAA"
                               Delay="300" Interval="50" Focusable="False"
-                              Click="OnDecreaseClick"/>
+                              Click="OnDecreaseClick">
+                    <RepeatButton.Styles>
+                        <Style Selector="RepeatButton:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+                            <Setter Property="Background" Value="Transparent"/>
+                            <Setter Property="TextElement.Foreground" Value="{DynamicResource ThemeAccentBrush}"/>
+                        </Style>
+                    </RepeatButton.Styles>
+                </RepeatButton>
             </StackPanel>
         </Grid>
     </Border>
