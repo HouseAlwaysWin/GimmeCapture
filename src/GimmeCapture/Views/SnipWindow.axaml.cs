@@ -12,6 +12,7 @@ using Avalonia.Input.Raw;
 using GimmeCapture.Services;
 using GimmeCapture.Services.Interop;
 using ReactiveUI;
+using System.Threading.Tasks;
 
 namespace GimmeCapture.Views;
 
@@ -245,13 +246,101 @@ public partial class SnipWindow : Window
                 
                 try
                 {
-                    // Create Window
+                    // Create Window FIRST so we can use it for TopLevel resolution
                     var win = new FloatingImageWindow
                     {
                         DataContext = vm,
                         Position = new PixelPoint((int)rect.X, (int)rect.Y),
                         Width = rect.Width,
                         Height = rect.Height
+                    };
+
+                    // Copy Action
+                    vm.CopyAction = async () =>
+                    {
+                        try
+                        {
+                            if (OperatingSystem.IsWindows())
+                            {
+                                // Windows-specific robust copy - MUST run on UI Thread (STA) for Clipboard
+                                await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => 
+                                {
+                                    try 
+                                    {
+                                        using var ms = new System.IO.MemoryStream();
+                                        bitmap.Save(ms); // Saves as PNG by default
+                                        ms.Position = 0;
+                                        using var winBitmap = new System.Drawing.Bitmap(ms);
+                                        
+                                        // Specific retry logic for clipboard which can be locked
+                                        for (int i = 0; i < 5; i++)
+                                        {
+                                            try
+                                            {
+                                                System.Windows.Forms.Clipboard.SetImage(winBitmap);
+                                                return;
+                                            }
+                                            catch (System.Runtime.InteropServices.ExternalException)
+                                            {
+                                                System.Threading.Thread.Sleep(100);
+                                            }
+                                        }
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        System.Diagnostics.Debug.WriteLine($"WinForms Clipboard failed: {ex}");
+                                    }
+                                });
+                            }
+                            else
+                            {
+                                // Fallback / Non-Windows
+                                var topLevel = TopLevel.GetTopLevel(win);
+                                if (topLevel?.Clipboard is { } clipboard)
+                                {
+                                    var dataObject = new DataObject();
+                                    dataObject.Set("Bitmap", bitmap);
+                                    await clipboard.SetDataObjectAsync(dataObject);
+                                }
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"Failed to copy pinned image: {ex}");
+                        }
+                    };
+
+                    // Save Action
+                    vm.SaveAction = async () =>
+                    {
+                        try
+                        {
+                            var topLevel = TopLevel.GetTopLevel(win);
+                            if (topLevel?.StorageProvider is { } storageProvider)
+                            {
+                                var file = await storageProvider.SaveFilePickerAsync(new Avalonia.Platform.Storage.FilePickerSaveOptions
+                                {
+                                    Title = "Save Pinned Image",
+                                    DefaultExtension = "png",
+                                    ShowOverwritePrompt = true,
+                                    SuggestedFileName = $"Capture_{DateTime.Now:yyyyMMdd_HHmmss}",
+                                    FileTypeChoices = new[]
+                                    {
+                                        new Avalonia.Platform.Storage.FilePickerFileType("PNG Image") { Patterns = new[] { "*.png" } }
+                                    }
+                                });
+
+                                if (file != null)
+                                {
+                                    using var stream = await file.OpenWriteAsync();
+                                    bitmap.Save(stream);
+                                }
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"Failed to save pinned image: {ex}");
+                        }
                     };
                     
                     win.Show();
