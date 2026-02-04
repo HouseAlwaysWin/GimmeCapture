@@ -10,6 +10,8 @@ using System.Linq;
 using Avalonia.Platform;
 using Avalonia.Input.Raw;
 using GimmeCapture.Services;
+using GimmeCapture.Services.Interop;
+using ReactiveUI;
 
 namespace GimmeCapture.Views;
 
@@ -23,6 +25,9 @@ public partial class SnipWindow : Window
     private bool _isResizing;
     private ResizeDirection _resizeDirection;
     private Point _resizeStartPoint;
+    
+    // Window region for transparent hole (mouse pass-through)
+    private IDisposable? _selectionRectSubscription;
     private Rect _originalRect;
 
     private enum ResizeDirection
@@ -138,6 +143,16 @@ public partial class SnipWindow : Window
     {
         base.OnClosing(e);
         
+        // Cleanup window region subscription
+        _selectionRectSubscription?.Dispose();
+        
+        // Clear window region before closing
+        var hwnd = this.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
+        if (hwnd != IntPtr.Zero && OperatingSystem.IsWindows())
+        {
+            Win32Helpers.ClearWindowRegion(hwnd);
+        }
+        
         // NEW: Ensure recording is stopped if window is closed (e.g., via ESC or system close)
         if (_viewModel != null && _viewModel.RecState != RecordingState.Idle)
         {
@@ -175,6 +190,10 @@ public partial class SnipWindow : Window
             {
                 Hide();
             };
+            
+            // Subscribe to SelectionRect changes to update window region for mouse pass-through
+            _selectionRectSubscription = _viewModel.WhenAnyValue(x => x.SelectionRect, x => x.CurrentState)
+                .Subscribe(tuple => UpdateWindowRegion(tuple.Item1, tuple.Item2));
             
 
             _viewModel.PickSaveFileAction = async () =>
@@ -776,5 +795,44 @@ public partial class SnipWindow : Window
         _lastTextFinishTime = DateTime.Now; // Set debounce timestamp
         // Shift focus back to window to allow hotkeys etc.
         this.Focus();
+    }
+
+    /// <summary>
+    /// Updates the window region to create a "hole" in the selection area for mouse pass-through.
+    /// This allows clicking on underlying windows (like YouTube) while keeping the border UI interactive.
+    /// </summary>
+    private void UpdateWindowRegion(Rect selectionRect, SnipState state)
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        
+        var hwnd = this.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
+        if (hwnd == IntPtr.Zero) return;
+
+        // Only apply region when in Selected state with a valid selection
+        if (state == SnipState.Selected && selectionRect.Width > 10 && selectionRect.Height > 10)
+        {
+            // Get physical pixel dimensions (account for DPI scaling)
+            double scaling = this.RenderScaling;
+            int windowWidth = (int)(this.Bounds.Width * scaling);
+            int windowHeight = (int)(this.Bounds.Height * scaling);
+            
+            // Convert selection rect to physical pixels
+            var scaledRect = new Rect(
+                selectionRect.X * scaling,
+                selectionRect.Y * scaling,
+                selectionRect.Width * scaling,
+                selectionRect.Height * scaling
+            );
+            
+            // Apply window region with hole (border width in physical pixels)
+            // Use a smaller border (4px logical = 4*scaling physical) to keep handles responsive
+            int borderWidth = (int)(4 * scaling);
+            Win32Helpers.SetWindowHoleRegion(hwnd, windowWidth, windowHeight, scaledRect, borderWidth);
+        }
+        else
+        {
+            // Clear region when not in Selected state (allow full window interaction for selection)
+            Win32Helpers.ClearWindowRegion(hwnd);
+        }
     }
 }
