@@ -23,6 +23,7 @@ The name **GimmeCapture!!** is a tribute to the song **["Gimme chocolate!!" (Off
 - **Editing Tools**: Draw boxes, arrows, lines, and text directly on your capture.
 - **Customizable Hotkeys**: All shortcuts are fully customizable in the "Control" tab.
 - **Visual Personalization**: Adjustable border thickness, mask opacity, and theme colors (Gold, Silver, Red).
+- **Decoration Scaling**: Customize the size of **Side Wings (0.5x - 3.0x)** and **Corner Icons (0.4x - 1.0x)** to fit your style.
 - **Auto-start**: Option to launch automatically when Windows starts.
 
 ### How to Use
