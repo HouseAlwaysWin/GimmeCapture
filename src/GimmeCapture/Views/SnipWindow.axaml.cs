@@ -742,7 +742,32 @@ public partial class SnipWindow : Window
     {
         if (e.Key == Key.Escape)
         {
-            Close();
+            if (_viewModel == null) return;
+
+            // NEW: Prevent resetting or closing if we are actively recording
+            if (_viewModel.RecState != RecordingState.Idle)
+            {
+                e.Handled = true;
+                return;
+            }
+
+            if (_viewModel.IsDrawingMode)
+            {
+                _viewModel.IsDrawingMode = false;
+                e.Handled = true;
+            }
+            else if (_viewModel.CurrentState == SnipState.Selecting || 
+                     _viewModel.CurrentState == SnipState.Selected)
+            {
+                // Reset to Detecting to re-enable auto-detection (red box)
+                _viewModel.CurrentState = SnipState.Detecting;
+                _viewModel.SelectionRect = new Rect(0,0,0,0);
+                e.Handled = true;
+            }
+            else
+            {
+                 Close();
+            }
         }
         else if (e.Key == Key.S && e.KeyModifiers.HasFlag(KeyModifiers.Control))
         {
