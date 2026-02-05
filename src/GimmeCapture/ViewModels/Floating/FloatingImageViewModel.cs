@@ -14,6 +14,12 @@ using System;
 
 namespace GimmeCapture.ViewModels.Floating;
 
+public enum FloatingTool
+{
+    None,
+    Selection
+}
+
 public class FloatingImageViewModel : ViewModelBase
 {
     private Bitmap? _image;
@@ -75,6 +81,35 @@ public class FloatingImageViewModel : ViewModelBase
         get => _processingText;
         set => this.RaiseAndSetIfChanged(ref _processingText, value);
     }
+
+    private FloatingTool _currentTool = FloatingTool.None;
+    public FloatingTool CurrentTool
+    {
+        get => _currentTool;
+        set 
+        {
+            this.RaiseAndSetIfChanged(ref _currentTool, value);
+            this.RaisePropertyChanged(nameof(IsSelectionMode));
+            if (value == FloatingTool.None)
+            {
+                SelectionRect = new Avalonia.Rect();
+            }
+        }
+    }
+
+    private Avalonia.Rect _selectionRect = new Avalonia.Rect();
+    public Avalonia.Rect SelectionRect
+    {
+        get => _selectionRect;
+        set 
+        {
+            this.RaiseAndSetIfChanged(ref _selectionRect, value);
+            this.RaisePropertyChanged(nameof(IsSelectionActive));
+        }
+    }
+
+    public bool IsSelectionActive => SelectionRect.Width > 0 && SelectionRect.Height > 0;
+    public bool IsSelectionMode => CurrentTool == FloatingTool.Selection;
     
     // Only allow background removal if not processing.
     // We could also check if already transparent, but that's harder to detect cheaply.
@@ -86,6 +121,7 @@ public class FloatingImageViewModel : ViewModelBase
     public ReactiveCommand<Unit, Unit> SaveCommand { get; }
     public ReactiveCommand<Unit, Unit> ToggleToolbarCommand { get; }
     public ReactiveCommand<Unit, Unit> RemoveBackgroundCommand { get; }
+    public ReactiveCommand<Unit, Unit> SelectionCommand { get; }
     
     public System.Action? CloseAction { get; set; }
     // CopyAction removed in favor of IClipboardService
@@ -151,6 +187,11 @@ public class FloatingImageViewModel : ViewModelBase
 
         CloseCommand = ReactiveCommand.Create(() => CloseAction?.Invoke());
         ToggleToolbarCommand = ReactiveCommand.Create(() => { ShowToolbar = !ShowToolbar; });
+        
+        SelectionCommand = ReactiveCommand.Create(() => 
+        {
+            CurrentTool = CurrentTool == FloatingTool.Selection ? FloatingTool.None : FloatingTool.Selection;
+        });
         
         CopyCommand = ReactiveCommand.CreateFromTask(async () => 
         {

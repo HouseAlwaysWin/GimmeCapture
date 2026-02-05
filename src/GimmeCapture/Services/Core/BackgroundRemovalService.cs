@@ -17,6 +17,8 @@ public class BackgroundRemovalService : IDisposable
     private readonly AIResourceService _resourceService;
     private bool _isInitialized = false;
 
+    private static bool _isResolverSet = false;
+
     public BackgroundRemovalService(AIResourceService resourceService)
     {
         _resourceService = resourceService;
@@ -81,6 +83,9 @@ public class BackgroundRemovalService : IDisposable
 
     private void SetupNativeResolver()
     {
+        if (_isResolverSet) return;
+        _isResolverSet = true;
+
         // Use .NET's modern DllImportResolver to point directly to the AI/runtime folder.
         // This is much more reliable than modifying PATH at runtime.
         NativeLibrary.SetDllImportResolver(typeof(InferenceSession).Assembly, (libraryName, assembly, searchPath) =>

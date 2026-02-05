@@ -1,6 +1,8 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.VisualTree;
+using Avalonia.Controls.Primitives;
 using GimmeCapture.ViewModels.Floating;
 using System;
 
@@ -49,7 +51,27 @@ public partial class FloatingImageWindow : Window
                      vm.Image?.Save(stream);
                  }
             };
+
+            // Force initial sync
+            SyncWindowSizeToImage();
+            
+            vm.PropertyChanged += (s, ev) =>
+            {
+                if (ev.PropertyName == nameof(FloatingImageViewModel.Image) || 
+                    ev.PropertyName == nameof(FloatingImageViewModel.WindowPadding) ||
+                    ev.PropertyName == nameof(FloatingImageViewModel.ShowToolbar))
+                {
+                    SyncWindowSizeToImage();
+                }
+            };
         }
+    }
+
+    private void SyncWindowSizeToImage()
+    {
+        // Now using SizeToContent="WidthAndHeight", so we just need to ensure layout is refreshed
+        InvalidateMeasure();
+        InvalidateArrange();
     }
 
     // Resize Fields
@@ -61,6 +83,10 @@ public partial class FloatingImageWindow : Window
     private PixelPoint _startPosition;
     private Size _startSize; // Logical
 
+    // Selection State
+    private bool _isSelecting;
+    private Point _selectionStartPoint;
+
     private enum ResizeDirection
     {
         None, TopLeft, TopRight, BottomLeft, BottomRight, Top, Bottom, Left, Right
@@ -68,116 +94,159 @@ public partial class FloatingImageWindow : Window
 
     private void OnPointerPressed(object? sender, PointerPressedEventArgs e)
     {
+        if (DataContext is not FloatingImageViewModel vm) return;
         var source = e.Source as Control;
-        
-        // Ensure we hit a handle
+        var pointerPos = e.GetCurrentPoint(this).Position;
+
+        // 1. Resize handles priority
         if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed && source != null && source.Classes.Contains("Handle"))
         {
             _isResizing = true;
             _resizeDirection = GetDirectionFromName(source.Name);
-            
             try
             {
                 var p = e.GetCurrentPoint(this);
                 _resizeStartPoint = this.PointToScreen(p.Position).ToPoint(1.0);
-                
                 _startPosition = Position;
                 _startSize = Bounds.Size;
-                
                 e.Pointer.Capture(this);
                 e.Handled = true;
             }
-            catch (Exception)
-            {
-                _isResizing = false;
-            }
+            catch (Exception) { _isResizing = false; }
             return;
         }
 
+        // 2. Interactive elements (Buttons etc)
+        var visualSource = e.Source as Avalonia.Visual;
+        var vFallback = visualSource;
+        while (vFallback != null)
+        {
+            if (vFallback is Button || vFallback is ICommandSource || vFallback is ContextMenu)
+                return;
+            vFallback = vFallback.GetVisualParent();
+        }
+
+        // 3. Selection Tool vs Movement
         if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
         {
-            BeginMoveDrag(e);
+            if (vm.CurrentTool != FloatingTool.None)
+            {
+                // Start selection (Save start point relative to PinnedImage)
+                var imageControl = this.FindControl<Image>("PinnedImage");
+                if (imageControl != null)
+                {
+                    _isSelecting = true;
+                    _selectionStartPoint = e.GetPosition(imageControl);
+                    e.Pointer.Capture(this);
+                    e.Handled = true;
+                }
+            }
+            else
+            {
+                BeginMoveDrag(e);
+            }
         }
     }
     
     protected override void OnPointerMoved(PointerEventArgs e)
     {
         base.OnPointerMoved(e);
-        
+        if (DataContext is not FloatingImageViewModel vm) return;
+        var pointerPos = e.GetCurrentPoint(this).Position;
+
         if (_isResizing)
         {
-            try
-            {
-                var p = e.GetCurrentPoint(this);
-                var currentScreenPoint = this.PointToScreen(p.Position).ToPoint(1.0);
-                
-                var deltaX = currentScreenPoint.X - _resizeStartPoint.X;
-                var deltaY = currentScreenPoint.Y - _resizeStartPoint.Y;
-
-                var scaling = RenderScaling;
-                var deltaWidth = deltaX / scaling;
-                var deltaHeight = deltaY / scaling;
-
-                double x = _startPosition.X;
-                double y = _startPosition.Y;
-                double w = _startSize.Width;
-                double h = _startSize.Height;
-
-                switch (_resizeDirection)
-                {
-                    case ResizeDirection.TopLeft:
-                        x = _startPosition.X + (int)deltaX; 
-                        y = _startPosition.Y + (int)deltaY; 
-                        w = _startSize.Width - deltaWidth; 
-                        h = _startSize.Height - deltaHeight; 
-                        break;
-                    case ResizeDirection.TopRight:
-                        y = _startPosition.Y + (int)deltaY; 
-                        w = _startSize.Width + deltaWidth; 
-                        h = _startSize.Height - deltaHeight; 
-                        break;
-                    case ResizeDirection.BottomLeft:
-                        x = _startPosition.X + (int)deltaX; 
-                        w = _startSize.Width - deltaWidth; 
-                        h = _startSize.Height + deltaHeight; 
-                        break;
-                    case ResizeDirection.BottomRight:
-                        w = _startSize.Width + deltaWidth; 
-                        h = _startSize.Height + deltaHeight; 
-                        break;
-                    case ResizeDirection.Top:
-                        y = _startPosition.Y + (int)deltaY; 
-                        h = _startSize.Height - deltaHeight; 
-                        break;
-                    case ResizeDirection.Bottom:
-                        h = _startSize.Height + deltaHeight; 
-                        break;
-                    case ResizeDirection.Left:
-                        x = _startPosition.X + (int)deltaX; 
-                        w = _startSize.Width - deltaWidth; 
-                        break;
-                    case ResizeDirection.Right:
-                        w = _startSize.Width + deltaWidth; 
-                        break;
-                }
-
-                w = Math.Max(50, w);
-                h = Math.Max(50, h);
-
-                Position = new PixelPoint((int)x, (int)y);
-                Width = w;
-                Height = h;
-                
-                e.Handled = true;
-                
-                InvalidateMeasure();
-                InvalidateArrange();
-            }
-            catch (Exception)
-            {
-                // Suppress runtime resize errors
-            }
+            PerformResizing(e);
         }
+        else if (_isSelecting)
+        {
+            // Update Selection Rect (Coordinates should be relative to PinnedImage or its container)
+            // Get position relative to PinnedImage to ensure it's in image space
+            var imageControl = this.FindControl<Image>("PinnedImage");
+            if (imageControl == null) return;
+
+            var relativePos = e.GetPosition(imageControl);
+            var startPos = _selectionStartPoint; // We'll store start as relative to image too
+            
+            double x = Math.Min(startPos.X, relativePos.X);
+            double y = Math.Min(startPos.Y, relativePos.Y);
+            double w = Math.Abs(startPos.X - relativePos.X);
+            double h = Math.Abs(startPos.Y - relativePos.Y);
+            
+            vm.SelectionRect = new Rect(x, y, w, h);
+            e.Handled = true;
+        }
+    }
+
+    private void PerformResizing(PointerEventArgs e)
+    {
+        try
+        {
+            var p = e.GetCurrentPoint(this);
+            var currentScreenPoint = this.PointToScreen(p.Position).ToPoint(1.0);
+            
+            var deltaX = currentScreenPoint.X - _resizeStartPoint.X;
+            var deltaY = currentScreenPoint.Y - _resizeStartPoint.Y;
+
+            var scaling = RenderScaling;
+            var deltaWidth = deltaX / scaling;
+            var deltaHeight = deltaY / scaling;
+
+            double x = _startPosition.X;
+            double y = _startPosition.Y;
+            double w = _startSize.Width;
+            double h = _startSize.Height;
+
+            switch (_resizeDirection)
+            {
+                case ResizeDirection.TopLeft:
+                    x = _startPosition.X + (int)deltaX; 
+                    y = _startPosition.Y + (int)deltaY; 
+                    w = _startSize.Width - deltaWidth; 
+                    h = _startSize.Height - deltaHeight; 
+                    break;
+                case ResizeDirection.TopRight:
+                    y = _startPosition.Y + (int)deltaY; 
+                    w = _startSize.Width + deltaWidth; 
+                    h = _startSize.Height - deltaHeight; 
+                    break;
+                case ResizeDirection.BottomLeft:
+                    x = _startPosition.X + (int)deltaX; 
+                    w = _startSize.Width - deltaWidth; 
+                    h = _startSize.Height + deltaHeight; 
+                    break;
+                case ResizeDirection.BottomRight:
+                    w = _startSize.Width + deltaWidth; 
+                    h = _startSize.Height + deltaHeight; 
+                    break;
+                case ResizeDirection.Top:
+                    y = _startPosition.Y + (int)deltaY; 
+                    h = _startSize.Height - deltaHeight; 
+                    break;
+                case ResizeDirection.Bottom:
+                    h = _startSize.Height + deltaHeight; 
+                    break;
+                case ResizeDirection.Left:
+                    x = _startPosition.X + (int)deltaX; 
+                    w = _startSize.Width - deltaWidth; 
+                    break;
+                case ResizeDirection.Right:
+                    w = _startSize.Width + deltaWidth; 
+                    break;
+            }
+
+            w = Math.Max(50, w);
+            h = Math.Max(50, h);
+
+            Position = new PixelPoint((int)x, (int)y);
+            Width = w;
+            Height = h;
+            
+            e.Handled = true;
+            InvalidateMeasure();
+            InvalidateArrange();
+        }
+        catch (Exception) { }
     }
     
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
@@ -185,9 +254,13 @@ public partial class FloatingImageWindow : Window
         base.OnPointerReleased(e);
         if (_isResizing)
         {
-            e.Pointer.Capture(null); // Release tracking
+            e.Pointer.Capture(null); 
             _isResizing = false;
-            _resizeDirection = ResizeDirection.None;
+        }
+        else if (_isSelecting)
+        {
+            e.Pointer.Capture(null);
+            _isSelecting = false;
         }
     }
     
