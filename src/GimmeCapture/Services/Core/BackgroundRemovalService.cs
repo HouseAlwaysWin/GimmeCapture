@@ -184,62 +184,81 @@ public class BackgroundRemovalService : IDisposable
 
     private bool IsSolidBackground(SKBitmap bmp, out SKColor bgColor)
     {
-        // Probe closer to edge (2px)
-        int margin = 2;
-        int w = bmp.Width;
-        int h = bmp.Height;
-
-        if (w <= 10 || h <= 10) margin = 0;
-
-        // Collect all 4 corners
-        SKColor[] corners = new SKColor[4];
-        corners[0] = bmp.GetPixel(margin, margin); // Top-Left
-        corners[1] = bmp.GetPixel(w - 1 - margin, margin); // Top-Right
-        corners[2] = bmp.GetPixel(margin, h - 1 - margin); // Bottom-Left
-        corners[3] = bmp.GetPixel(w - 1 - margin, h - 1 - margin); // Bottom-Right
-
         bgColor = SKColors.Empty;
 
-        // Find the "Consensus Color"
-        // We compare every corner against every other corner to find the largest group of similar colors.
-        int maxVotes = 0;
-        SKColor bestCandidate = SKColors.Empty;
+        // Minimum size check
+        if (bmp.Width < 50 || bmp.Height < 50) return false;
 
-        for (int i = 0; i < 4; i++)
+        // Sample pixels along the edges (top, bottom, left, right)
+        // We want to detect if the "frame" of the image is uniform.
+        var samples = new List<SKColor>();
+        
+        int step = 10; // Sample every 10 pixels
+        
+        // Top & Bottom
+        for (int x = 0; x < bmp.Width; x += step)
         {
-            var candidate = corners[i];
-            
-            // Skip transparent corners
-            if (candidate.Alpha < 250) continue;
-
-            // Determine tolerance for this candidate
-            int tolerance = 25;
-            if (candidate.Red > 240 && candidate.Green > 240 && candidate.Blue > 240)
-            {
-                tolerance = 45; // Bright/White tolerance
-            }
-
-            int votes = 0;
-            for (int j = 0; j < 4; j++)
-            {
-                if (ColorsAreSimilar(candidate, corners[j], tolerance))
-                {
-                    votes++;
-                }
-            }
-
-            if (votes > maxVotes)
-            {
-                maxVotes = votes;
-                bestCandidate = candidate;
-            }
+            samples.Add(bmp.GetPixel(x, 0));
+            samples.Add(bmp.GetPixel(x, bmp.Height - 1));
         }
 
-        // We need at least 3 corners (including itself) to agree to call it a solid background.
-        // This allows 1 corner to be different (watermark, UI element, noise) while still detecting the background.
-        if (maxVotes >= 3)
+        // Left & Right
+        for (int y = 0; y < bmp.Height; y += step)
         {
-            bgColor = bestCandidate;
+            samples.Add(bmp.GetPixel(0, y));
+            samples.Add(bmp.GetPixel(bmp.Width - 1, y));
+        }
+
+        if (samples.Count == 0) return false;
+
+        // Filter out transparent pixels - if edges are transparent, it's not a solid COLOR background we can remove easily
+        var opaqueSamples = samples.Where(c => c.Alpha > 250).ToList();
+        
+        // If too many edge pixels are transparent, we probably shouldn't use the solid color algorithm
+        if ((double)opaqueSamples.Count / samples.Count < 0.8) 
+        {
+             return false;
+        }
+
+        // Calculate Average Color
+        long sumR = 0, sumG = 0, sumB = 0;
+        foreach (var c in opaqueSamples)
+        {
+            sumR += c.Red;
+            sumG += c.Green;
+            sumB += c.Blue;
+        }
+
+        double avgR = (double)sumR / opaqueSamples.Count;
+        double avgG = (double)sumG / opaqueSamples.Count;
+        double avgB = (double)sumB / opaqueSamples.Count;
+
+        // Calculate Standard Deviation (Variance)
+        // This tells us how much the edge pixels differ from the average.
+        double sumSqDiff = 0;
+        foreach (var c in opaqueSamples)
+        {
+            double dr = c.Red - avgR;
+            double dg = c.Green - avgG;
+            double db = c.Blue - avgB;
+            // Distance squared in RGB space
+            sumSqDiff += (dr*dr + dg*dg + db*db);
+        }
+
+        double meanSqDiff = sumSqDiff / opaqueSamples.Count;
+        double stdDev = Math.Sqrt(meanSqDiff);
+
+        System.Diagnostics.Debug.WriteLine($"[BgDetection] Edge StdDev: {stdDev:F2} (Threshold: 15.0)");
+
+        // Thresholds:
+        // A truly solid digital image (mspaint) has StdDev ~ 0.
+        // A clean screenshot might have StdDev < 5 (compression artifacts).
+        // A photo of a wall/curtain (even if it looks solid) will often have StdDev > 20 due to shadows/noise.
+        
+        if (stdDev < 15.0) 
+        {
+            bgColor = new SKColor((byte)avgR, (byte)avgG, (byte)avgB);
+            System.Diagnostics.Debug.WriteLine($"[BgDetection] Solid background confirmed. Color: {bgColor}");
             return true;
         }
 
