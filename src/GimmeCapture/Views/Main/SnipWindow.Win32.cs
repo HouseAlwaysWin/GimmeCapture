@@ -1,0 +1,102 @@
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Media.Imaging;
+using Avalonia.Platform;
+using GimmeCapture.Models;
+using GimmeCapture.Services.Interop;
+using GimmeCapture.ViewModels.Main;
+using System;
+
+namespace GimmeCapture.Views.Main;
+
+public partial class SnipWindow : Window
+{
+    /// <summary>
+    /// Updates the window region to create a "hole" in the selection area for mouse pass-through.
+    /// This allows clicking on underlying windows (like YouTube) while keeping the border UI interactive.
+    /// The hole is disabled when in drawing mode to allow annotations.
+    /// </summary>
+    private void UpdateWindowRegion(Rect selectionRect, SnipState state, bool isDrawingMode)
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        
+        var hwnd = this.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
+        if (hwnd == IntPtr.Zero) return;
+
+        // Only apply region when:
+        // 1. In Selected state with valid selection
+        // 2. NOT in drawing mode (SetWindowRgn hole prevents ANY window from receiving mouse in that area)
+        if (state == SnipState.Selected && selectionRect.Width > 10 && selectionRect.Height > 10 && !isDrawingMode)
+        {
+            // Get physical pixel dimensions (account for DPI scaling)
+            double scaling = this.RenderScaling;
+            int windowWidth = (int)(this.Bounds.Width * scaling);
+            int windowHeight = (int)(this.Bounds.Height * scaling);
+            
+            // Convert selection rect to physical pixels
+            var scaledRect = new Rect(
+                selectionRect.X * scaling,
+                selectionRect.Y * scaling,
+                selectionRect.Width * scaling,
+                selectionRect.Height * scaling
+            );
+            
+            // Calculate toolbar rect in physical pixels (prevents toolbar from being clipped)
+            Rect? toolbarRect = null;
+            if (_viewModel != null)
+            {
+                // Toolbar position is stored in ViewModel, size is approximately 400x40
+                const double toolbarWidth = 500;  // Slightly larger to account for flyouts
+                const double toolbarHeight = 50;
+                toolbarRect = new Rect(
+                    _viewModel.ToolbarLeft * scaling,
+                    _viewModel.ToolbarTop * scaling,
+                    toolbarWidth * scaling,
+                    toolbarHeight * scaling
+                );
+            }
+
+            // EXTRA OPAQUE REGIONS: Wings
+            // Wings are centered vertically on the selection edges
+            var extraRegions = new System.Collections.Generic.List<Rect>();
+            if (_viewModel != null)
+            {
+                double wingsY = selectionRect.Center.Y - (_viewModel.WingHeight / 2);
+                
+                // Left Wing (outside, flush)
+                extraRegions.Add(new Rect(
+                    (selectionRect.X - _viewModel.WingWidth) * scaling,
+                    wingsY * scaling,
+                    _viewModel.WingWidth * scaling,
+                    _viewModel.WingHeight * scaling
+                ));
+                
+                // Right Wing (outside, flush)
+                extraRegions.Add(new Rect(
+                    selectionRect.Right * scaling,
+                    wingsY * scaling,
+                    _viewModel.WingWidth * scaling,
+                    _viewModel.WingHeight * scaling
+                ));
+            }
+            
+            // Apply window region with hole.
+            // Use 30px logical border (matching handles) instead of 120px to reduce dead zone.
+            int borderWidth = (int)(30 * scaling);
+            Win32Helpers.SetWindowHoleRegion(hwnd, windowWidth, windowHeight, scaledRect, borderWidth, toolbarRect, extraRegions);
+        }
+        else
+        {
+            // Clear region when not in Selected state OR in drawing mode
+            // Drawing mode requires full window for mouse capture
+            Win32Helpers.ClearWindowRegion(hwnd);
+        }
+    }
+
+    /// <summary>
+    /// Captures a snapshot of the selection area before closing the hole.
+    /// This allows the user to see what they're annotating while in drawing mode.
+    /// Optimized to use WriteableBitmap and raw pointer copy instead of intermediate GDI+ Bitmap/MemoryStream.
+    /// </summary>
+
+}

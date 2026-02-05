@@ -1,0 +1,174 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="using:GimmeCapture.ViewModels.Floating"
+        xmlns:services="using:GimmeCapture.Services.Core"
+        mc:Ignorable="d" d:DesignWidth="300" d:DesignHeight="300"
+        x:Class="GimmeCapture.Views.Floating.FloatingVideoWindow"
+        x:DataType="vm:FloatingVideoViewModel"
+        Title="Pinned Video"
+        SystemDecorations="None"
+        Topmost="True"
+        SizeToContent="Manual"
+        Background="Transparent"
+        FontFamily="{Binding CurrentFontFamily, Source={x:Static services:LocalizationService.Instance}}"
+        ShowInTaskbar="False">
+        
+    <Window.Styles>
+        <Style Selector="Grid.Handle">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="Border.MainBorder">
+            <Setter Property="BoxShadow" Value="{Binding BorderColor, Converter={StaticResource ColorToBoxShadowConverter}}"/>
+            <Setter Property="BorderThickness" Value="{Binding BorderThickness, Converter={StaticResource ThicknessConverter}}"/>
+        </Style>
+        <Style Selector="Border.MainBorder.hidden-border">
+            <Setter Property="BoxShadow" Value="0 0 0 0 Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="Border.InnerBorder.hidden-border">
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
+    </Window.Styles>
+    
+    <Grid Background="Transparent">
+        <!-- Gothic/BABYMETAL Style Border -->
+        <Border Margin="{Binding WindowPadding}"
+                Classes="MainBorder"
+                Classes.hidden-border="{Binding HidePinBorder}"
+                CornerRadius="0"
+                Background="{DynamicResource GothicBlackBrush}">
+            <Border.BorderBrush>
+                <SolidColorBrush Color="{Binding BorderColor}" Opacity="{Binding HidePinBorder, Converter={StaticResource BoolInvertConverter}}"/>
+            </Border.BorderBrush>
+            <Border Classes="InnerBorder" Classes.hidden-border="{Binding HidePinBorder}">
+                <Grid RowDefinitions="*, Auto">
+                    <Grid Grid.Row="0">
+                        <!-- Decorative Inner Border -->
+                        <Border BorderBrush="{Binding BorderColor}" BorderThickness="1" Margin="-1" IsVisible="{Binding HidePinBorder, Converter={StaticResource BoolInvertConverter}}"/>
+                        
+                        <Image Source="{Binding VideoBitmap}" Stretch="Fill" Name="PinnedVideo" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
+                        
+                        <!-- Accent Corners (Themed) -->
+                        <Grid IsVisible="{Binding HidePinDecoration, Converter={StaticResource BoolInvertConverter}}" Margin="0" ClipToBounds="False">
+                            <Grid ClipToBounds="False">
+                                <Border BorderThickness="{Binding BorderThickness, Converter={StaticResource ThicknessConverter}}" ClipToBounds="False">
+                                    <Border BorderThickness="1" Margin="-1" ClipToBounds="False">
+                                        <Grid Name="AccentCornersGrid" ClipToBounds="False">
+                                            <!-- Left Inner Corners: Hearts -->
+                                            <Rectangle Name="InnerCornerTopLeft" Width="{Binding SelectionIconSize}" Height="{Binding SelectionIconSize}" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="4"
+                                                       Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}"
+                                                       RenderOptions.BitmapInterpolationMode="HighQuality">
+                                                <Rectangle.OpacityMask>
+                                                    <ImageBrush Source="/Assets/heart.png" Stretch="Uniform"/>
+                                                </Rectangle.OpacityMask>
+                                            </Rectangle>
+                                            <Rectangle Name="InnerCornerBottomLeft" Width="{Binding SelectionIconSize}" Height="{Binding SelectionIconSize}" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="4"
+                                                       Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}"
+                                                       RenderOptions.BitmapInterpolationMode="HighQuality">
+                                                <Rectangle.OpacityMask>
+                                                    <ImageBrush Source="/Assets/heart.png" Stretch="Uniform"/>
+                                                </Rectangle.OpacityMask>
+                                            </Rectangle>
+
+                                            <!-- Right Inner Corners: Skulls -->
+                                            <Rectangle Name="InnerCornerTopRight" Width="{Binding SelectionIconSize}" Height="{Binding SelectionIconSize}" VerticalAlignment="Top" HorizontalAlignment="Right" Margin="4"
+                                                       Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}"
+                                                       RenderOptions.BitmapInterpolationMode="HighQuality">
+                                                <Rectangle.OpacityMask>
+                                                    <ImageBrush Source="/Assets/skull.png" Stretch="Uniform"/>
+                                                </Rectangle.OpacityMask>
+                                            </Rectangle>
+                                            <Rectangle Name="InnerCornerBottomRight" Width="{Binding SelectionIconSize}" Height="{Binding SelectionIconSize}" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="4"
+                                                       Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}"
+                                                       RenderOptions.BitmapInterpolationMode="HighQuality">
+                                                <Rectangle.OpacityMask>
+                                                    <ImageBrush Source="/Assets/skull.png" Stretch="Uniform"/>
+                                                </Rectangle.OpacityMask>
+                                            </Rectangle>
+                                        </Grid>
+                                    </Border>
+                                </Border>
+                            </Grid>
+                            
+                             <!-- Wing Decorations Layer -->
+                            <Grid HorizontalAlignment="Stretch" VerticalAlignment="Stretch" 
+                                  ClipToBounds="False" IsHitTestVisible="False"
+                                  IsVisible="{Binding HidePinDecoration, Converter={StaticResource BoolInvertConverter}}">
+                                    
+                                    <!-- Left Side Wing -->
+                                    <Rectangle Width="{Binding WingWidth}" Height="{Binding WingHeight}" VerticalAlignment="Center"
+                                               HorizontalAlignment="Left" Margin="{Binding LeftWingMargin}"
+                                               Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}"
+                                               RenderOptions.BitmapInterpolationMode="HighQuality">
+                                        <Rectangle.OpacityMask>
+                                            <ImageBrush Source="/Assets/wing_left.png" Stretch="Uniform" AlignmentX="Right"/>
+                                        </Rectangle.OpacityMask>
+                                    </Rectangle>
+                                           
+                                    <!-- Right Side Wing -->
+                                    <Rectangle Width="{Binding WingWidth}" Height="{Binding WingHeight}" VerticalAlignment="Center"
+                                               HorizontalAlignment="Right" Margin="{Binding RightWingMargin}"
+                                               Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}"
+                                               RenderOptions.BitmapInterpolationMode="HighQuality">
+                                        <Rectangle.OpacityMask>
+                                            <ImageBrush Source="/Assets/wing_right.png" Stretch="Uniform" AlignmentX="Left"/>
+                                        </Rectangle.OpacityMask>
+                                    </Rectangle>
+                                </Grid>
+                        </Grid>
+                    </Grid>
+
+                    <!-- Bottom Toolbar -->
+                    <Border Grid.Row="1" IsVisible="{Binding ShowToolbar}" 
+                            Background="#1A1A1A" BorderBrush="#333333" BorderThickness="1" 
+                            CornerRadius="4" Padding="2" Margin="0,4,0,0"
+                            HorizontalAlignment="Center" VerticalAlignment="Top"
+                            BoxShadow="0 2 8 0 #A0000000">
+                        <StackPanel Orientation="Horizontal" Spacing="2">
+                            <Button Theme="{StaticResource SnipButton}" Command="{Binding CopyCommand}" ToolTip.Tip="{Binding [MenuCopyVideo], Source={x:Static services:LocalizationService.Instance}}">
+                                <PathIcon Data="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z" Width="14" Height="14"/>
+                            </Button>
+                            <Button Theme="{StaticResource SnipButton}" Command="{Binding SaveCommand}" ToolTip.Tip="{Binding [MenuSaveVideo], Source={x:Static services:LocalizationService.Instance}}">
+                                <PathIcon Data="M15,9H5V5H15M12,19A3,3 0 0,1 9,16A3,3 0 0,1 12,13A3,3 0 0,1 15,16A3,3 0 0,1 12,19M17,3H5C3.89,3 3,3.9 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V7L17,3Z" Width="14" Height="14"/>
+                            </Button>
+                            <Rectangle Fill="#444444" Width="1" Height="16" Margin="2,0" VerticalAlignment="Center"/>
+                            <Button Theme="{StaticResource SnipButton}" Command="{Binding CloseCommand}" ToolTip.Tip="{Binding [MenuClose], Source={x:Static services:LocalizationService.Instance}}">
+                                <PathIcon Data="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z" Width="14" Height="14"/>
+                            </Button>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </Border>
+            
+            <Border.ContextMenu>
+                <ContextMenu>
+                    <MenuItem Header="{Binding [MenuCopyVideo], Source={x:Static services:LocalizationService.Instance}}" Command="{Binding CopyCommand}"/>
+                    <MenuItem Header="{Binding [MenuSaveVideo], Source={x:Static services:LocalizationService.Instance}}" Command="{Binding SaveCommand}"/>
+                    <Separator/>
+                    <MenuItem Header="{Binding [MenuShowToolbar], Source={x:Static services:LocalizationService.Instance}}" 
+                              Command="{Binding ToggleToolbarCommand}">
+                        <MenuItem.Icon>
+                            <CheckBox IsChecked="{Binding ShowToolbar}" IsHitTestVisible="False"/>
+                        </MenuItem.Icon>
+                    </MenuItem>
+                    <Separator/>
+                    <MenuItem Header="{Binding [MenuClose], Source={x:Static services:LocalizationService.Instance}}" Command="{Binding CloseCommand}"/>
+                </ContextMenu>
+            </Border.ContextMenu>
+        </Border>
+        
+        <!-- Resize Handles -->
+        <Grid Classes="Handle" Name="HandleTopLeft" Cursor="TopLeftCorner" Width="20" Height="20" HorizontalAlignment="Left" VerticalAlignment="Top"/>
+        <Grid Classes="Handle" Name="HandleTopRight" Cursor="TopRightCorner" Width="20" Height="20" HorizontalAlignment="Right" VerticalAlignment="Top"/>
+        <Grid Classes="Handle" Name="HandleBottomLeft" Cursor="BottomLeftCorner" Width="20" Height="20" HorizontalAlignment="Left" VerticalAlignment="Bottom"/>
+        <Grid Classes="Handle" Name="HandleBottomRight" Cursor="BottomRightCorner" Width="20" Height="20" HorizontalAlignment="Right" VerticalAlignment="Bottom"/>
+        
+        <Grid Classes="Handle" Name="HandleTop" Cursor="TopSide" Height="15" HorizontalAlignment="Stretch" VerticalAlignment="Top" Margin="20,0"/>
+        <Grid Classes="Handle" Name="HandleBottom" Cursor="BottomSide" Height="15" HorizontalAlignment="Stretch" VerticalAlignment="Bottom" Margin="20,0"/>
+        <Grid Classes="Handle" Name="HandleLeft" Cursor="LeftSide" Width="15" HorizontalAlignment="Left" VerticalAlignment="Stretch" Margin="0,20"/>
+        <Grid Classes="Handle" Name="HandleRight" Cursor="RightSide" Width="15" HorizontalAlignment="Right" VerticalAlignment="Stretch" Margin="0,20"/>
+    </Grid>
+</Window>

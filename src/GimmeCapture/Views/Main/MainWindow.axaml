@@ -1,0 +1,421 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:GimmeCapture.ViewModels.Main"
+        xmlns:services="using:GimmeCapture.Services.Core"
+        xmlns:media="using:Avalonia.Media"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+        x:Class="GimmeCapture.Views.Main.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Title="{Binding AppVersion, StringFormat='GimmeCapture!! v{0}'}"
+        Icon="avares://GimmeCapture/Assets/kitsune_icon.png"
+        Background="{DynamicResource GothicBlackBrush}"
+        FontFamily="{Binding CurrentFontFamily, Source={x:Static services:LocalizationService.Instance}}"
+        xmlns:c="using:GimmeCapture.Views.Controls"
+        Foreground="White"
+        MinWidth="720" MinHeight="500">
+
+    <Design.DataContext>
+        <!-- This only sets the DataContext for the previewer in an IDE,
+             to set the actual DataContext for runtime, set the DataContext property in code (look at App.axaml.cs) -->
+        <vm:MainWindowViewModel/>
+    </Design.DataContext>
+
+    <Grid RowDefinitions="*,Auto" Margin="10">
+        <!-- Settings Tabs -->
+        <TabControl Grid.Row="0">
+            <!-- 一般 (General) -->
+            <TabItem Header="{Binding [TabGeneral], Source={x:Static services:LocalizationService.Instance}}">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <Grid ColumnDefinitions="*, Auto" Margin="10">
+                        <!-- Settings Controls -->
+                        <StackPanel Grid.Column="0" Spacing="10">
+                            <CheckBox IsChecked="{Binding RunOnStartup}" Content="{Binding [RunOnStartup], Source={x:Static services:LocalizationService.Instance}}"/>
+                            <CheckBox IsChecked="{Binding AutoCheckUpdates}" Content="{Binding [AutoCheckUpdates], Source={x:Static services:LocalizationService.Instance}}"/>
+                            
+                            <TextBlock Text="{Binding [Language], Source={x:Static services:LocalizationService.Instance}}" Margin="0,10,0,5"/>
+                            <ComboBox HorizontalAlignment="Stretch"
+                                      ItemsSource="{Binding AvailableLanguages}"
+                                      SelectedItem="{Binding SelectedLanguageOption, Mode=TwoWay}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:MainWindowViewModel+LanguageOption">
+                                        <TextBlock Text="{Binding Name}"/>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+
+                            <!-- Theme Color -->
+                            <StackPanel Spacing="10" Margin="0,10,0,0">
+                                <TextBlock Text="{Binding [ThemeColor], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold"/>
+                                <ItemsControl ItemsSource="{Binding SettingsColors}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <StackPanel Orientation="Horizontal" Spacing="15"/>
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="media:Color">
+                                            <Button Width="40" Height="40" Padding="0" CornerRadius="20"
+                                                    Background="{Binding Converter={StaticResource ColorToBrushConverter}}"
+                                                    Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ChangeThemeColorCommand}"
+                                                    CommandParameter="{Binding}"
+                                                    BorderThickness="0">
+                                                <Panel>
+                                                    <Border BorderBrush="White" BorderThickness="2" CornerRadius="20" Margin="-2"
+                                                            IsVisible="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ThemeColor, Converter={StaticResource ColorMatchConverter}, ConverterParameter={Binding}}"/>
+                                                    <Border CornerRadius="20" BoxShadow="inset 0 0 5 0 #80000000"/>
+                                                </Panel>
+                                            </Button>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+
+                            <!-- Styling Section -->
+                            <StackPanel Spacing="15" Margin="0,15,0,0">
+                                <TextBlock Text="{Binding [TabSnip], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold"/>
+                                
+                                <Grid ColumnDefinitions="Auto, Auto">
+                                    <StackPanel Grid.Column="0" Spacing="15" Width="350">
+                                        <!-- Border Thickness -->
+                                        <StackPanel Spacing="5">
+                                            <TextBlock Text="{Binding [BorderThickness], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>
+                                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                                <Slider Minimum="1" Maximum="9" Value="{Binding BorderThickness}" 
+                                                        TickFrequency="1" IsSnapToTickEnabled="True" HorizontalAlignment="Stretch" Width="250"/>
+                                                <c:CompactNumericStep Value="{Binding BorderThickness}"
+                                                                      IncreaseCommand="{Binding IncreaseThicknessCommand}"
+                                                                      DecreaseCommand="{Binding DecreaseThicknessCommand}"/>
+                                            </StackPanel>
+                                        </StackPanel>
+                                        
+                                        <!-- Mask Opacity -->
+                                        <StackPanel Spacing="5">
+                                            <TextBlock Text="{Binding [MaskOpacity], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>
+                                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                                <Slider Minimum="0.05" Maximum="1.0" Value="{Binding MaskOpacity}" HorizontalAlignment="Stretch" Width="250" />
+                                                <c:CompactNumericStep Value="{Binding MaskOpacity}"
+                                                                      IncreaseCommand="{Binding IncreaseOpacityCommand}"
+                                                                      DecreaseCommand="{Binding DecreaseOpacityCommand}"/>
+                                            </StackPanel>
+                                        </StackPanel>
+
+                                        <!-- Icon Scale -->
+                                        <StackPanel Spacing="5">
+                                            <TextBlock Text="{Binding [IconScale], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>
+                                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                                <Slider Minimum="0.4" Maximum="1.0" Value="{Binding CornerIconScale}" 
+                                                        TickFrequency="0.1" IsSnapToTickEnabled="True" HorizontalAlignment="Stretch" Width="250"/>
+                                                <c:CompactNumericStep Value="{Binding CornerIconScale}"
+                                                                       IncreaseCommand="{Binding IncreaseCornerIconScaleCommand}"
+                                                                       DecreaseCommand="{Binding DecreaseCornerIconScaleCommand}"/>
+                                            </StackPanel>
+                                        </StackPanel>
+
+                                        <!-- Wing Scale -->
+                                        <StackPanel Spacing="5">
+                                            <TextBlock Text="{Binding [WingScale], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>
+                                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                                <Slider Minimum="0.5" Maximum="3.0" Value="{Binding WingScale}" 
+                                                        TickFrequency="0.1" IsSnapToTickEnabled="True" HorizontalAlignment="Stretch" Width="250"/>
+                                                <c:CompactNumericStep Value="{Binding WingScale}"
+                                                                      IncreaseCommand="{Binding IncreaseWingScaleCommand}"
+                                                                      DecreaseCommand="{Binding DecreaseWingScaleCommand}"/>
+                                            </StackPanel>
+                                        </StackPanel>
+                                        
+                                        <!-- Border Color -->
+                                        <StackPanel Spacing="10">
+                                            <TextBlock Text="{Binding [BorderColor], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>
+                                            <ItemsControl ItemsSource="{Binding SettingsColors}">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate>
+                                                        <StackPanel Orientation="Horizontal" Spacing="15"/>
+                                                    </ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate x:DataType="media:Color">
+                                                        <Button Width="32" Height="32" Padding="0" CornerRadius="16"
+                                                                Background="{Binding Converter={StaticResource ColorToBrushConverter}}"
+                                                                Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ChangeColorCommand}"
+                                                                CommandParameter="{Binding}"
+                                                                BorderThickness="0">
+                                                            <Panel>
+                                                                <Border BorderBrush="White" BorderThickness="2" CornerRadius="16" Margin="-2"
+                                                                        IsVisible="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).BorderColor, Converter={StaticResource ColorMatchConverter}, ConverterParameter={Binding}}"/>
+                                                                <Border CornerRadius="16" BoxShadow="inset 0 0 5 0 #80000000"/>
+                                                            </Panel>
+                                                        </Button>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+                                    </StackPanel>
+
+                                    <!-- Style Preview Area -->
+                                    <StackPanel Grid.Column="1" Spacing="10" VerticalAlignment="Top" Margin="20,0,0,0">
+                                        <TextBlock Text="樣式預覽" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                                        <Border Background="#1A1A1A" Width="550" Height="250" CornerRadius="4" BorderBrush="#333333" BorderThickness="1" ClipToBounds="True">
+                                            <Grid>
+                                                <!-- Mock Background -->
+                                                <Image Source="avares://GimmeCapture/Assets/kitsune_icon.png" Opacity="0.1" Stretch="Uniform" Margin="20"/>
+                                                
+                                                <!-- Selection Preview Mask (Excludes Center Area) -->
+                                                <Path Fill="Black" Opacity="{Binding MaskOpacity}" IsHitTestVisible="False">
+                                                    <Path.Data>
+                                                        <CombinedGeometry GeometryCombineMode="Exclude">
+                                                            <CombinedGeometry.Geometry1>
+                                                                <RectangleGeometry Rect="0,0,550,250" />
+                                                            </CombinedGeometry.Geometry1>
+                                                            <CombinedGeometry.Geometry2>
+                                                                <RectangleGeometry Rect="175,65,200,120" />
+                                                            </CombinedGeometry.Geometry2>
+                                                        </CombinedGeometry>
+                                                    </Path.Data>
+                                                </Path>
+                                                
+                                                <!-- Selection Preview -->
+                                                <Grid Margin="15" VerticalAlignment="Center" HorizontalAlignment="Center" ClipToBounds="False">
+                                                    <Border CornerRadius="0"
+                                                            Background="#01FFFFFF"
+                                                            BoxShadow="{Binding BorderColor, Converter={StaticResource ColorToBoxShadowConverter}}">
+                                                        <Border.BorderBrush>
+                                                            <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+                                                                <GradientStop Offset="0" Color="{Binding BorderColor}"/>
+                                                                <GradientStop Offset="0.5" Color="{Binding BorderColor}"/>
+                                                                <GradientStop Offset="1" Color="{Binding BorderColor}"/>
+                                                            </LinearGradientBrush>
+                                                        </Border.BorderBrush>
+                                                        <Border BorderBrush="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" 
+                                                                BorderThickness="{Binding BorderThickness, Converter={StaticResource ThicknessConverter}}">
+                                                            <Border BorderBrush="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" BorderThickness="1" Margin="-1">
+                                                                <Grid Width="200" Height="120" ClipToBounds="False">
+                                                                    <!-- Wings -->
+                                                                    <Rectangle Width="{Binding PreviewWingWidth}" Height="{Binding PreviewWingHeight}" VerticalAlignment="Center"
+                                                                               HorizontalAlignment="Left" Margin="{Binding PreviewLeftWingMargin}"
+                                                                               Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}">
+                                                                        <Rectangle.OpacityMask>
+                                                                            <ImageBrush Source="/Assets/wing_left.png" Stretch="Uniform" AlignmentX="Right"/>
+                                                                        </Rectangle.OpacityMask>
+                                                                    </Rectangle>
+                                                                    <Rectangle Width="{Binding PreviewWingWidth}" Height="{Binding PreviewWingHeight}" VerticalAlignment="Center"
+                                                                               HorizontalAlignment="Right" Margin="{Binding PreviewRightWingMargin}"
+                                                                               Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}">
+                                                                        <Rectangle.OpacityMask>
+                                                                            <ImageBrush Source="/Assets/wing_right.png" Stretch="Uniform" AlignmentX="Left"/>
+                                                                        </Rectangle.OpacityMask>
+                                                                    </Rectangle>
+
+                                                                    <!-- Accent Corners: Hearts & Skulls -->
+                                                                    <Rectangle Width="{Binding PreviewIconSize}" Height="{Binding PreviewIconSize}" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="4"
+                                                                               Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}">
+                                                                        <Rectangle.OpacityMask>
+                                                                            <ImageBrush Source="/Assets/heart.png" Stretch="Uniform"/>
+                                                                        </Rectangle.OpacityMask>
+                                                                    </Rectangle>
+                                                                    <Rectangle Width="{Binding PreviewIconSize}" Height="{Binding PreviewIconSize}" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="4"
+                                                                               Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}">
+                                                                        <Rectangle.OpacityMask>
+                                                                            <ImageBrush Source="/Assets/heart.png" Stretch="Uniform" />
+                                                                        </Rectangle.OpacityMask>
+                                                                    </Rectangle>
+                                                                    <Rectangle Width="{Binding PreviewIconSize}" Height="{Binding PreviewIconSize}" VerticalAlignment="Top" HorizontalAlignment="Right" Margin="4"
+                                                                               Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}">
+                                                                        <Rectangle.OpacityMask>
+                                                                            <ImageBrush Source="/Assets/skull.png" Stretch="Uniform" />
+                                                                        </Rectangle.OpacityMask>
+                                                                    </Rectangle>
+                                                                    <Rectangle Width="{Binding PreviewIconSize}" Height="{Binding PreviewIconSize}" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="4"
+                                                                               Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}">
+                                                                        <Rectangle.OpacityMask>
+                                                                            <ImageBrush Source="/Assets/skull.png" Stretch="Uniform" />
+                                                                        </Rectangle.OpacityMask>
+                                                                    </Rectangle>
+                                                                </Grid>
+                                                            </Border>
+                                                        </Border>
+                                                    </Border>
+                                                </Grid>
+                                            </Grid>
+                                        </Border>
+                                    </StackPanel>
+                                </Grid>
+                            </StackPanel>
+                        </StackPanel>
+                    </Grid>
+                </ScrollViewer>
+            </TabItem>
+            
+            <!-- 擷圖 (Snip) -->
+            <TabItem Header="{Binding [TabSnip], Source={x:Static services:LocalizationService.Instance}}">
+                <ScrollViewer>
+                    <Grid ColumnDefinitions="*, Auto" Margin="10">
+                        <!-- Settings Controls -->
+                        <StackPanel Grid.Column="0" Spacing="15" Margin="0,0,20,0">
+                            <!-- Output Settings Back in Snip Tab -->
+                            <StackPanel Spacing="10">
+                                <TextBlock Text="{Binding [TabOutput], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold"/>
+                                <StackPanel Spacing="5">
+                                    <CheckBox IsChecked="{Binding AutoSave}" Content="{Binding [AutoSave], Source={x:Static services:LocalizationService.Instance}}"/>
+                                    <DockPanel Margin="24,0,0,5">
+                                        <Button Content="{Binding [SelectPath], Source={x:Static services:LocalizationService.Instance}}" 
+                                                DockPanel.Dock="Right" 
+                                                Theme="{StaticResource SmallGothicMetalButton}"
+                                                Command="{Binding SelectSavePath}" 
+                                                Margin="10,0,0,0"/>
+                                        <TextBox Text="{Binding SaveDirectory}" Margin="0,0,10,0"/>
+                                    </DockPanel>
+                                    <CheckBox IsChecked="{Binding HideSnipPinDecoration}" Content="{Binding [HideSnipPinDecoration], Source={x:Static services:LocalizationService.Instance}}"/>
+                                    <CheckBox IsChecked="{Binding HideSnipPinBorder}" Content="{Binding [HideSnipPinBorder], Source={x:Static services:LocalizationService.Instance}}"/>
+                                    <CheckBox IsChecked="{Binding HideSnipSelectionDecoration}" Content="{Binding [HideSnipSelectionDecoration], Source={x:Static services:LocalizationService.Instance}}"/>
+                                    <CheckBox IsChecked="{Binding HideSnipSelectionBorder}" Content="{Binding [HideSnipSelectionBorder], Source={x:Static services:LocalizationService.Instance}}"/>
+                                    <CheckBox IsChecked="{Binding ShowSnipCursor}" Content="{Binding [ShowSnipCursor], Source={x:Static services:LocalizationService.Instance}}"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- Style Preview Area Moved to General Tab -->
+                    </Grid>
+                </ScrollViewer>
+            </TabItem>
+            
+            <!-- Output Tab Removed (Merged to Snip) -->
+            
+            <!-- Recording Tab -->
+            <TabItem Header="{Binding [TabRecord], Source={x:Static services:LocalizationService.Instance}}">
+                <ScrollViewer>
+                    <StackPanel Spacing="15" Margin="10">
+                        <StackPanel Spacing="10">
+                            <TextBlock Text="{Binding [TabOutput], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold"/>
+                            <StackPanel Spacing="5">
+                                <CheckBox IsChecked="{Binding UseFixedRecordPath}" Content="{Binding [UseFixedRecordPath], Source={x:Static services:LocalizationService.Instance}}"/>
+                                <DockPanel Margin="24,0,0,5">
+                                    <Button Content="{Binding [SelectPath], Source={x:Static services:LocalizationService.Instance}}" 
+                                            DockPanel.Dock="Right" 
+                                            Theme="{StaticResource SmallGothicMetalButton}"
+                                            Command="{Binding SelectVideoPath}" 
+                                            Margin="10,0,0,0"/>
+                                    <TextBox Text="{Binding VideoSaveDirectory}" Margin="0,0,10,0"/>
+                                </DockPanel>
+
+                                <TextBlock Text="{Binding [TempPath], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,10,0,0"/>
+                                <DockPanel Margin="24,0,0,5">
+                                    <Button Content="{Binding [SelectPath], Source={x:Static services:LocalizationService.Instance}}" 
+                                            DockPanel.Dock="Right" 
+                                            Theme="{StaticResource SmallGothicMetalButton}"
+                                            Command="{Binding SelectTempPath}" 
+                                            Margin="10,0,0,0"/>
+                                    <TextBox Text="{Binding TempDirectory}" Margin="0,0,10,0" Watermark="預設為程式目錄下的 Temp 資料夾"/>
+                                </DockPanel>
+
+                                <DockPanel Margin="0,10,0,10">
+                                    <TextBlock Text="{Binding [VideoFormat], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                    <ComboBox ItemsSource="{Binding AvailableRecordFormats}" SelectedItem="{Binding RecordFormat}" HorizontalAlignment="Stretch"/>
+                                </DockPanel>
+
+                                <CheckBox Content="{Binding [HideRecordPinDecoration], Source={x:Static services:LocalizationService.Instance}}" IsChecked="{Binding HideRecordPinDecoration}" Margin="0,5,0,0"/>
+                                <CheckBox Content="{Binding [HideRecordPinBorder], Source={x:Static services:LocalizationService.Instance}}" IsChecked="{Binding HideRecordPinBorder}" Margin="0,5,0,0"/>
+                                <CheckBox Content="{Binding [HideRecordSelectionDecoration], Source={x:Static services:LocalizationService.Instance}}" IsChecked="{Binding HideRecordSelectionDecoration}" Margin="0,5,0,0"/>
+                                <CheckBox Content="{Binding [HideRecordSelectionBorder], Source={x:Static services:LocalizationService.Instance}}" IsChecked="{Binding HideRecordSelectionBorder}" Margin="0,5,0,0"/>
+                                <CheckBox Content="{Binding [ShowRecordCursor], Source={x:Static services:LocalizationService.Instance}}" IsChecked="{Binding ShowRecordCursor}" Margin="0,5,0,0"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+            
+            <!-- 控制 (Control/Hotkeys) -->
+            <TabItem Header="{Binding [TabControl], Source={x:Static services:LocalizationService.Instance}}">
+                <StackPanel Spacing="10" Margin="10">
+                    <TextBlock Text="{Binding [GlobalHotkeys], Source={x:Static services:LocalizationService.Instance}}" FontWeight="Bold" Margin="0,0,0,5"/>
+                    
+                    <Grid ColumnDefinitions="Auto, 10, *" RowDefinitions="Auto, Auto, Auto, Auto">
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding [SnipHotkey], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center"/>
+                        <TextBox Grid.Row="0" Grid.Column="2" 
+                                 Text="{Binding SnipHotkey, Mode=OneWay}" 
+                                 Watermark="點擊此處並按下按鈕進行設定"
+                                 IsReadOnly="True"
+                                 Name="SnipHotkeyBox"
+                                 KeyDown="HotkeyTextBox_KeyDown"/>
+
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="{Binding [RecordHotkey], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,10,0,0"/>
+                        <TextBox Grid.Row="1" Grid.Column="2" 
+                                 Text="{Binding RecordHotkey, Mode=OneWay}" 
+                                 Watermark="點擊此處並按下按鈕進行設定"
+                                 IsReadOnly="True"
+                                 Name="RecordHotkeyBox"
+                                 Margin="0,10,0,0"
+                                 KeyDown="HotkeyTextBox_KeyDown"/>
+
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="{Binding [CopyHotkey], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,10,0,0"/>
+                        <TextBox Grid.Row="2" Grid.Column="2" 
+                                 Text="{Binding CopyHotkey, Mode=OneWay}" 
+                                 Watermark="點擊此處並按下按鈕進行設定"
+                                 IsReadOnly="True"
+                                 Name="CopyHotkeyBox"
+                                 Margin="0,10,0,0"
+                                 KeyDown="HotkeyTextBox_KeyDown"/>
+
+                        <TextBlock Grid.Row="3" Grid.Column="0" Text="{Binding [PinHotkey], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,10,0,0"/>
+                        <TextBox Grid.Row="3" Grid.Column="2" 
+                                 Text="{Binding PinHotkey, Mode=OneWay}" 
+                                 Watermark="點擊此處並按下按鈕進行設定"
+                                 IsReadOnly="True"
+                                 Name="PinHotkeyBox"
+                                 Margin="0,10,0,0"
+                                 KeyDown="HotkeyTextBox_KeyDown"/>
+                    </Grid>
+                    
+                    <TextBlock Text="{Binding [HotkeysActive], Source={x:Static services:LocalizationService.Instance}}" Foreground="{StaticResource AccentRedBrush}" FontStyle="Italic" FontSize="11"/>
+                </StackPanel>
+            </TabItem>
+            
+            <!-- 關於 (About) -->
+            <TabItem Header="{Binding [TabAbout], Source={x:Static services:LocalizationService.Instance}}">
+                <StackPanel Spacing="10" Margin="10" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <TextBlock Text="GimmeCapture!!" FontSize="24" FontWeight="Bold" Foreground="{DynamicResource AccentRedBrush}" HorizontalAlignment="Center"/>
+                    <TextBlock Text="{Binding AppVersion, StringFormat='Version {0}'}" Foreground="White" HorizontalAlignment="Center"/>
+                    <TextBlock Text="The One Tool to Snip &amp; Record" FontStyle="Italic" Foreground="{DynamicResource DeepRedBrush}" HorizontalAlignment="Center"/>
+                    
+                    <Button Content="{Binding [GitHubProject], Source={x:Static services:LocalizationService.Instance}}"
+                            Theme="{StaticResource GothicMetalButton}"
+                            HorizontalAlignment="Center"
+                            Margin="0,10,0,0"
+                            Command="{Binding OpenProjectCommand}"/>
+
+                    <Button Content="{Binding [CheckForUpdates], Source={x:Static services:LocalizationService.Instance}}" 
+                            Theme="{StaticResource GothicMetalButton}" 
+                            HorizontalAlignment="Center" 
+                            Margin="0,20,0,0"
+                            Command="{Binding CheckUpdateCommand}"/>
+                </StackPanel>
+            </TabItem>
+        </TabControl>
+        
+        <!-- Bottom Actions -->
+        <Border Grid.Row="1" BorderBrush="#1E1E1E" BorderThickness="0,1,0,0" Padding="0,10,0,0">
+            <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10">
+                    <Button Content="{Binding [StartCapture], Source={x:Static services:LocalizationService.Instance}}" Theme="{StaticResource GothicMetalButton}" Command="{Binding StartCaptureCommand}" />
+                    
+                    <!-- FFmpeg Status -->
+                    <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center" IsVisible="{Binding FfmpegDownloader.IsDownloading}">
+                        <TextBlock Text="{Binding [FFmpegStatusDownloading], Source={x:Static services:LocalizationService.Instance}}" FontSize="11" Foreground="Gray"/>
+                        <ProgressBar Value="{Binding FfmpegDownloader.DownloadProgress}" Minimum="0" Maximum="100" Width="100" Height="4"/>
+                    </StackPanel>
+                </StackPanel>
+                
+                <TextBlock Grid.Column="1" 
+                           Text="{Binding StatusText}" 
+                           VerticalAlignment="Center" 
+                           Margin="10,0" 
+                           Foreground="{Binding IsModified, Converter={StaticResource ModifiedColorConverter}}" 
+                           FontSize="11"/>
+
+                <Button Grid.Column="2" Content="{Binding [SaveSettings], Source={x:Static services:LocalizationService.Instance}}" Theme="{StaticResource GothicMetalButton}" Margin="0,0,10,0" Command="{Binding SaveAndCloseCommand}"/>
+                <Button Grid.Column="3" Content="{Binding [ResetDefault], Source={x:Static services:LocalizationService.Instance}}" Theme="{StaticResource GothicMetalButton}" Command="{Binding ResetToDefaultCommand}"/>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

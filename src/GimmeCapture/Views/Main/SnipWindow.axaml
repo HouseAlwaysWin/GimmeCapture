@@ -1,0 +1,353 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="using:GimmeCapture.ViewModels.Main"
+        xmlns:cv="using:GimmeCapture.Converters"
+        xmlns:ctl="using:GimmeCapture.Views.Controls"
+        xmlns:m="using:GimmeCapture.Models"
+        xmlns:services="using:GimmeCapture.Services.Core"
+        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+        x:Class="GimmeCapture.Views.Main.SnipWindow"
+        x:DataType="vm:SnipWindowViewModel"
+        Title="SnipWindow"
+        TransparencyLevelHint="Transparent"
+        SystemDecorations="None"
+        WindowState="Normal"
+        Topmost="True"
+        Background="Transparent"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaChromeHints="NoChrome"
+        ClipToBounds="False"
+        FontFamily="{Binding CurrentFontFamily, Source={x:Static services:LocalizationService.Instance}}">
+
+    <Window.Resources>
+        <cv:DoubleToBoolConverter x:Key="SizeToBoolConverter"/>
+        <cv:StateToBoolConverter x:Key="StateToBoolConverter"/>
+        <cv:BoolToFontWeightConverter x:Key="BoolToFontWeightConverter"/>
+        <cv:BoolToFontStyleConverter x:Key="BoolToFontStyleConverter"/>
+    </Window.Resources>
+    
+    <Window.KeyBindings>
+        <KeyBinding Gesture="Ctrl+C" Command="{Binding CopyCommand}" />
+        <KeyBinding Gesture="Ctrl+S" Command="{Binding SaveCommand}" />
+        <KeyBinding Gesture="F3" Command="{Binding PinCommand}" />
+    </Window.KeyBindings>
+
+    <Window.Styles>
+        <Style Selector="Grid.Handle">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+    </Window.Styles>    
+
+    <Grid>
+        <!-- 背景遮罩層 -->
+        <Path Fill="Black" Data="{Binding MaskGeometry}" Opacity="{Binding MaskOpacity}" IsHitTestVisible="False"/>
+        
+        <!-- Detection Preview Layer (Shows when detecting) -->
+        <Canvas IsHitTestVisible="False">
+            <Rectangle Stroke="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}"
+                       StrokeThickness="2"
+                       StrokeDashArray="4,2"
+                       IsVisible="{Binding !!DetectedRect.Width}"
+                       Width="{Binding DetectedRect.Width}"
+                       Height="{Binding DetectedRect.Height}"
+                       Canvas.Left="{Binding DetectedRect.X}"
+                       Canvas.Top="{Binding DetectedRect.Y}">
+                <Rectangle.Opacity>
+                    <Binding Path="CurrentState">
+                        <Binding.Converter>
+                            <cv:EnumMatchConverter/>
+                        </Binding.Converter>
+                        <Binding.ConverterParameter>
+                            <x:Static Member="vm:SnipState.Detecting"/>
+                        </Binding.ConverterParameter>
+                    </Binding>
+                </Rectangle.Opacity>
+            </Rectangle>
+        </Canvas>
+        
+        <!-- Annotation Layer (Rendered below handles but above mask) -->
+        <Canvas IsHitTestVisible="False">
+            <Panel Width="{Binding SelectionRect.Width}"
+                   Height="{Binding SelectionRect.Height}"
+                   Canvas.Left="{Binding SelectionRect.X}"
+                   Canvas.Top="{Binding SelectionRect.Y}">
+                
+                <!-- Drawing Mode Snapshot Background (Option A) -->
+                <Image Source="{Binding DrawingModeSnapshot}"
+                       Stretch="Fill"
+                       IsVisible="{Binding IsDrawingMode}"
+                       IsHitTestVisible="False"/>
+
+                <ItemsControl ItemsSource="{Binding Annotations}">
+                    <ItemsControl.Styles>
+                        <Style Selector="ItemsControl > ContentPresenter" x:DataType="m:Annotation">
+                            <Setter Property="Canvas.Left">
+                                <Setter.Value>
+                                    <MultiBinding Converter="{StaticResource AnnotationToLeftConverter}">
+                                        <Binding Path="Type"/>
+                                        <Binding Path="StartPoint"/>
+                                        <Binding Path="EndPoint"/>
+                                    </MultiBinding>
+                                </Setter.Value>
+                            </Setter>
+                            <Setter Property="Canvas.Top">
+                                <Setter.Value>
+                                    <MultiBinding Converter="{StaticResource AnnotationToTopConverter}">
+                                        <Binding Path="Type"/>
+                                        <Binding Path="StartPoint"/>
+                                        <Binding Path="EndPoint"/>
+                                    </MultiBinding>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </ItemsControl.Styles>
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <Canvas Width="{Binding SelectionRect.Width}" Height="{Binding SelectionRect.Height}"/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.DataTemplates>
+                        <DataTemplate DataType="m:Annotation">
+                            <Panel>
+                                <!-- Rectangle -->
+                                <Rectangle Stroke="{Binding Color, Converter={StaticResource ColorToBrushConverter}}"
+                                           StrokeThickness="{Binding Thickness}"
+                                           IsVisible="{Binding Type, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Rectangle}}">
+                                    <Rectangle.Width>
+                                        <MultiBinding Converter="{StaticResource RectWidthConverter}">
+                                            <Binding Path="StartPoint"/>
+                                            <Binding Path="EndPoint"/>
+                                        </MultiBinding>
+                                    </Rectangle.Width>
+                                    <Rectangle.Height>
+                                        <MultiBinding Converter="{StaticResource RectHeightConverter}">
+                                            <Binding Path="StartPoint"/>
+                                            <Binding Path="EndPoint"/>
+                                        </MultiBinding>
+                                    </Rectangle.Height>
+                                </Rectangle>
+                                <!-- Ellipse -->
+                                <Ellipse Stroke="{Binding Color, Converter={StaticResource ColorToBrushConverter}}"
+                                         StrokeThickness="{Binding Thickness}"
+                                         IsVisible="{Binding Type, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Ellipse}}">
+                                    <Ellipse.Width>
+                                        <MultiBinding Converter="{StaticResource RectWidthConverter}">
+                                            <Binding Path="StartPoint"/>
+                                            <Binding Path="EndPoint"/>
+                                        </MultiBinding>
+                                    </Ellipse.Width>
+                                    <Ellipse.Height>
+                                        <MultiBinding Converter="{StaticResource RectHeightConverter}">
+                                            <Binding Path="StartPoint"/>
+                                            <Binding Path="EndPoint"/>
+                                        </MultiBinding>
+                                    </Ellipse.Height>
+                                </Ellipse>
+                                <!-- Line -->
+                                <Line StartPoint="{Binding StartPoint}"
+                                       EndPoint="{Binding EndPoint}"
+                                       Stroke="{Binding Color, Converter={StaticResource ColorToBrushConverter}}"
+                                       StrokeThickness="{Binding Thickness}"
+                                       IsVisible="{Binding Type, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Line}}"/>
+                                <!-- Arrow -->
+                                <Path Stroke="{Binding Color, Converter={StaticResource ColorToBrushConverter}}"
+                                       StrokeThickness="{Binding Thickness}"
+                                       Fill="{Binding Color, Converter={StaticResource ColorToBrushConverter}}"
+                                       IsVisible="{Binding Type, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Arrow}}">
+                                    <Path.Data>
+                                        <MultiBinding Converter="{StaticResource ArrowGeometryConverter}">
+                                            <Binding Path="StartPoint"/>
+                                            <Binding Path="EndPoint"/>
+                                            <Binding Path="Thickness"/>
+                                        </MultiBinding>
+                                    </Path.Data>
+                                </Path>
+                                <!-- Text -->
+                                <TextBlock Text="{Binding Text}"
+                                           Foreground="{Binding Color, Converter={StaticResource ColorToBrushConverter}}"
+                                           FontSize="{Binding FontSize}"
+                                           FontFamily="{Binding FontFamily}"
+                                           FontWeight="{Binding IsBold, Converter={StaticResource BoolToFontWeightConverter}}"
+                                           FontStyle="{Binding IsItalic, Converter={StaticResource BoolToFontStyleConverter}}"
+                                           IsVisible="{Binding Type, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Text}}"/>
+                                <!-- Pen -->
+                                <Path Stroke="{Binding Color, Converter={StaticResource ColorToBrushConverter}}"
+                                      StrokeThickness="{Binding Thickness}"
+                                      StrokeLineCap="Round"
+                                      StrokeJoin="Round"
+                                      Data="{Binding Points, Converter={StaticResource PenGeometryConverter}}"
+                                      IsVisible="{Binding Type, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Pen}}"/>
+                            </Panel>
+                        </DataTemplate>
+                    </ItemsControl.DataTemplates>
+                </ItemsControl>
+            </Panel>
+        </Canvas>
+
+        <!-- 互動層：使用 Canvas 定位邊框 -->
+        <Canvas>
+            <!-- 選擇區域容器 -->
+            <Grid Width="{Binding SelectionRect.Width}"
+                  Height="{Binding SelectionRect.Height}"
+                  Canvas.Left="{Binding SelectionRect.X}"
+                  Canvas.Top="{Binding SelectionRect.Y}"
+                  IsVisible="{Binding CurrentState, Converter={StaticResource StateToBoolConverter}}"
+                  ClipToBounds="False"> <!-- Ensure it stays hit-test visible and doesn't clip wings -->
+                  
+
+
+            <!-- BABYMETAL Style Selection Border - Hidden during active recording to avoid capturing border -->
+                <Border CornerRadius="0"
+                        Background="#01FFFFFF"
+                        BoxShadow="{Binding SelectionBorderColor, Converter={StaticResource ColorToBoxShadowConverter}}"
+                        IsVisible="{Binding HideFrameBorder, Converter={StaticResource BoolInvertConverter}}"
+                        IsHitTestVisible="{Binding IsDrawingMode, Converter={StaticResource BoolInvertConverter}}"
+                        Opacity="{Binding IsRecordingActive, Converter={StaticResource BoolInvertConverter}}">
+                    <Border.BorderBrush>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+                            <GradientStop Offset="0" Color="{Binding SelectionBorderColor}"/>
+                            <GradientStop Offset="0.5" Color="{Binding SelectionBorderColor}"/>
+                            <GradientStop Offset="1" Color="{Binding SelectionBorderColor}"/>
+                        </LinearGradientBrush>
+                    </Border.BorderBrush>
+                    <Border BorderBrush="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" 
+                            BorderThickness="{Binding SelectionBorderThickness, Converter={StaticResource ThicknessConverter}}">
+                        <Border BorderBrush="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" BorderThickness="1" Margin="-1" />
+                    </Border>
+                </Border>
+                
+                <!-- Resize Handles -->
+                <!-- Corners -->
+                <Grid Classes="Handle" Name="HandleTopLeft" Cursor="TopLeftCorner" Width="30" Height="30" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="-15" 
+                      IsVisible="{Binding IsDrawingMode, Converter={StaticResource BoolInvertConverter}}"/>
+                <Grid Classes="Handle" Name="HandleTopRight" Cursor="TopRightCorner" Width="30" Height="30" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="-15"
+                      IsVisible="{Binding IsDrawingMode, Converter={StaticResource BoolInvertConverter}}"/>
+                <Grid Classes="Handle" Name="HandleBottomLeft" Cursor="BottomLeftCorner" Width="30" Height="30" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="-15"
+                      IsVisible="{Binding IsDrawingMode, Converter={StaticResource BoolInvertConverter}}"/>
+                <Grid Classes="Handle" Name="HandleBottomRight" Cursor="BottomRightCorner" Width="30" Height="30" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="-15"
+                      IsVisible="{Binding IsDrawingMode, Converter={StaticResource BoolInvertConverter}}"/>
+                
+                <!-- Sides -->
+                <Grid Classes="Handle" Name="HandleTop" Cursor="SizeNorthSouth" Height="15" HorizontalAlignment="Stretch" VerticalAlignment="Top" Margin="15,0"
+                      IsVisible="{Binding IsDrawingMode, Converter={StaticResource BoolInvertConverter}}"/>
+                <Grid Classes="Handle" Name="HandleBottom" Cursor="SizeNorthSouth" Height="15" HorizontalAlignment="Stretch" VerticalAlignment="Bottom" Margin="15,0"
+                      IsVisible="{Binding IsDrawingMode, Converter={StaticResource BoolInvertConverter}}"/>
+                <Grid Classes="Handle" Name="HandleLeft" Cursor="SizeWestEast" Width="15" HorizontalAlignment="Left" VerticalAlignment="Stretch" Margin="0,15"
+                      IsVisible="{Binding IsDrawingMode, Converter={StaticResource BoolInvertConverter}}"/>
+                <Grid Classes="Handle" Name="HandleRight" Cursor="SizeWestEast" Width="15" HorizontalAlignment="Right" VerticalAlignment="Stretch" Margin="0,15"
+                      IsVisible="{Binding IsDrawingMode, Converter={StaticResource BoolInvertConverter}}"/>
+
+                <!-- Accent Corners (Move Handles) -->
+                <Grid IsVisible="{Binding IsRecordingActive, Converter={StaticResource BoolInvertConverter}}" Margin="0" ClipToBounds="False">
+                    <Grid IsVisible="{Binding HideSelectionDecoration, Converter={StaticResource BoolInvertConverter}}" ClipToBounds="False">
+                        <Border BorderThickness="{Binding SelectionBorderThickness, Converter={StaticResource ThicknessConverter}}" ClipToBounds="False">
+                            <Border BorderThickness="1" Margin="-1" ClipToBounds="False">
+                                <Grid Name="AccentCornersGrid" ClipToBounds="False">
+                                    <!-- Left Inner Corners: Hearts -->
+                                    <Rectangle Name="InnerCornerTopLeft" Classes="MoveHandle" Width="{Binding SelectionIconSize}" Height="{Binding SelectionIconSize}" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="4"
+                                               Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}"
+                                               RenderOptions.BitmapInterpolationMode="HighQuality">
+                                        <Rectangle.OpacityMask>
+                                            <ImageBrush Source="/Assets/heart.png" Stretch="Uniform"/>
+                                        </Rectangle.OpacityMask>
+                                    </Rectangle>
+                                    <Rectangle Name="InnerCornerBottomLeft" Classes="MoveHandle" Width="{Binding SelectionIconSize}" Height="{Binding SelectionIconSize}" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="4"
+                                               Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}"
+                                               RenderOptions.BitmapInterpolationMode="HighQuality">
+                                        <Rectangle.OpacityMask>
+                                            <ImageBrush Source="/Assets/heart.png" Stretch="Uniform"/>
+                                        </Rectangle.OpacityMask>
+                                    </Rectangle>
+
+                                    <!-- Right Inner Corners: Skulls -->
+                                    <Rectangle Name="InnerCornerTopRight" Classes="MoveHandle" Width="{Binding SelectionIconSize}" Height="{Binding SelectionIconSize}" VerticalAlignment="Top" HorizontalAlignment="Right" Margin="4"
+                                               Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}"
+                                               RenderOptions.BitmapInterpolationMode="HighQuality">
+                                        <Rectangle.OpacityMask>
+                                            <ImageBrush Source="/Assets/skull.png" Stretch="Uniform"/>
+                                        </Rectangle.OpacityMask>
+                                    </Rectangle>
+                                    <Rectangle Name="InnerCornerBottomRight" Classes="MoveHandle" Width="{Binding SelectionIconSize}" Height="{Binding SelectionIconSize}" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="4"
+                                               Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}"
+                                               RenderOptions.BitmapInterpolationMode="HighQuality">
+                                        <Rectangle.OpacityMask>
+                                            <ImageBrush Source="/Assets/skull.png" Stretch="Uniform"/>
+                                        </Rectangle.OpacityMask>
+                                    </Rectangle>
+                                </Grid>
+                            </Border>
+                        </Border>
+                    </Grid>
+                </Grid>
+                
+                <!-- Wing Decorations Layer -->
+                <Grid HorizontalAlignment="Stretch" VerticalAlignment="Stretch" 
+                      ClipToBounds="False" IsHitTestVisible="False">
+                    <Grid.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                             <Binding Path="IsRecordingActive" Converter="{StaticResource BoolInvertConverter}"/>
+                             <Binding Path="HideSelectionDecoration" Converter="{StaticResource BoolInvertConverter}"/>
+                        </MultiBinding>
+                    </Grid.IsVisible>
+                        
+                        <!-- Left Side Wing: Anchored Left, pushed 100px OUT, flushed Right -->
+                        <Rectangle Width="{Binding WingWidth}" Height="{Binding WingHeight}" VerticalAlignment="Center"
+                                   HorizontalAlignment="Left" Margin="{Binding LeftWingMargin}"
+                                   Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}"
+                                   RenderOptions.BitmapInterpolationMode="HighQuality">
+                            <Rectangle.OpacityMask>
+                                <ImageBrush Source="/Assets/wing_left.png" Stretch="Uniform" AlignmentX="Right"/>
+                            </Rectangle.OpacityMask>
+                        </Rectangle>
+                               
+                        <!-- Right Side Wing: Anchored Right, pushed 100px OUT, flushed Left -->
+                        <Rectangle Width="{Binding WingWidth}" Height="{Binding WingHeight}" VerticalAlignment="Center"
+                                   HorizontalAlignment="Right" Margin="{Binding RightWingMargin}"
+                                   Fill="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}"
+                                   RenderOptions.BitmapInterpolationMode="HighQuality">
+                            <Rectangle.OpacityMask>
+                                <ImageBrush Source="/Assets/wing_right.png" Stretch="Uniform" AlignmentX="Left"/>
+                            </Rectangle.OpacityMask>
+                        </Rectangle>
+                    </Grid>
+            </Grid>
+            
+            <!-- Text Input Overlay Container -->
+            <StackPanel Name="TextEntryPanel"
+                        Canvas.Left="{Binding TextInputPosition.X}"
+                        Canvas.Top="{Binding TextInputPosition.Y}"
+                        IsVisible="{Binding IsEnteringText}"
+                        Orientation="Vertical" Spacing="2">
+                
+                <TextBox Name="TextInputOverlay"
+                         Text="{Binding PendingText, Mode=TwoWay}"
+                         FontFamily="{Binding CurrentFontFamily}"
+                         FontSize="{Binding CurrentFontSize}"
+                         FontWeight="{Binding IsBold, Converter={StaticResource BoolToFontWeightConverter}}"
+                         FontStyle="{Binding IsItalic, Converter={StaticResource BoolToFontStyleConverter}}"
+                         Foreground="{Binding SelectedColor, Converter={StaticResource ColorToBrushConverter}}"
+                         Background="#80000000" 
+                         BorderThickness="1" BorderBrush="White"
+                         Padding="4" MinWidth="100" MaxWidth="600"
+                         AcceptsReturn="True" TextWrapping="Wrap"/>
+                
+                <Button Content="OK" 
+                        HorizontalAlignment="Right"
+                        Theme="{StaticResource SnipButton}"
+                        Background="#333333" BorderBrush="#555555" BorderThickness="1"
+                        Padding="10,2" Margin="0,2,0,0"
+                        Click="OnTextConfirmClick"
+                        Cursor="Hand"/>
+            </StackPanel>
+                    
+            <!-- 工具列 (位置綁定) -->
+            <ctl:SnipToolbar Name="Toolbar"
+                              Canvas.Left="{Binding ToolbarLeft}" 
+                              Canvas.Top="{Binding ToolbarTop}" 
+                              IsVisible="{Binding CurrentState, Converter={StaticResource StateToBoolConverter}}"/>
+        </Canvas>
+    </Grid>
+
+</Window>
