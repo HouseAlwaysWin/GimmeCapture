@@ -109,7 +109,12 @@ public class FloatingImageViewModel : ViewModelBase
     }
 
     public bool IsSelectionActive => SelectionRect.Width > 0 && SelectionRect.Height > 0;
-    public bool IsSelectionMode => CurrentTool == FloatingTool.Selection;
+    
+    public bool IsSelectionMode
+    {
+        get => CurrentTool == FloatingTool.Selection;
+        set => CurrentTool = value ? FloatingTool.Selection : FloatingTool.None;
+    }
     
     // Only allow background removal if not processing.
     // We could also check if already transparent, but that's harder to detect cheaply.

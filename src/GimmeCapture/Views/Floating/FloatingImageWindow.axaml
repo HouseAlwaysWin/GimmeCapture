@@ -81,7 +81,8 @@
                                 IsVisible="{Binding IsSelectionMode}"
                                 IsHitTestVisible="True"
                                 HorizontalAlignment="Stretch"
-                                VerticalAlignment="Stretch">
+                                VerticalAlignment="Stretch"
+                                Cursor="Cross">
                             <Rectangle Canvas.Left="{Binding SelectionRect.X}"
                                        Canvas.Top="{Binding SelectionRect.Y}"
                                        Width="{Binding SelectionRect.Width}"
@@ -190,11 +191,11 @@
                             
                             <!-- Selection Tool -->
                             <ToggleButton Theme="{StaticResource SnipToggleButton}" 
-                                          IsChecked="{Binding CurrentTool, Converter={StaticResource EnumToBoolConverter}, ConverterParameter={x:Static vm:FloatingTool.Selection}, Mode=TwoWay}"
-                                          Command="{Binding SelectionCommand}"
+                                          IsChecked="{Binding IsSelectionMode, Mode=TwoWay}"
                                           ToolTip.Tip="Selection Area">
                                 <PathIcon Data="M2,4H4V2H2A2,2 0 0,0 0,4V6H2V4M22,2H20V4H22V6H24V4A2,2 0 0,0 22,2M2,22V20H0V22A2,2 0 0,0 2,24H4V22H2M22,24A2,2 0 0,0 24,22V20H22V22H20V24H22M2,10H0V14H2V10M2,18H0V19A1,1 0 0,0 1,20H2V18M14,2H10V4H14V2M18,2H17A1,1 0 0,0 16,3V4H18V2M1,4V3A1,1 0 0,0 0,2H1V4M24,10H22V14H24V10M24,18H22V20H23A1,1 0 0,0 24,19V18M14,22H10V24H14V22M18,22V24H19A1,1 0 0,0 20,23V22H18M4,2H3A1,1 0 0,0 2,1V2H4Z" Width="12" Height="12"/>
                             </ToggleButton>
+                            
                             
                              <!-- Remove Background Button -->
                             <Rectangle Fill="#444444" Width="1" Height="16" Margin="2,0" VerticalAlignment="Center" IsVisible="{Binding CanRemoveBackground}"/>
