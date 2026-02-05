@@ -20,17 +20,17 @@
             
             <!-- Left Wing -->
             <Rectangle Grid.Column="0" Width="44" Height="26" VerticalAlignment="Center" 
-                       Fill="#AAFFFFFF" Opacity="0.8">
+                       Fill="{DynamicResource ThemeAccentBrush}" Opacity="0.8">
                 <Rectangle.OpacityMask>
                     <ImageBrush Source="avares://GimmeCapture/Assets/wing_left.png" Stretch="Fill"/>
                 </Rectangle.OpacityMask>
             </Rectangle>
 
             <!-- Center Content -->
-            <Panel Grid.Column="1" Width="224" Height="48">
-                <!-- Octagonal Shadow/Glow -->
+            <Panel Grid.Column="1" MinWidth="180" MaxWidth="224" Height="48">
+                <!-- Octagonal Shadow/Glow (Red accent) -->
                 <Path Data="M 12,0 L 212,0 L 224,12 L 224,36 L 212,48 L 12,48 L 0,36 L 0,12 Z" 
-                      Fill="Black" Opacity="0.5" Stretch="Fill" Margin="-3">
+                      Fill="{DynamicResource ThemeAccentBrush}" Opacity="0.3" Stretch="Fill" Margin="-3">
                     <Path.Effect>
                         <BlurEffect Radius="12"/>
                     </Path.Effect>
@@ -41,14 +41,38 @@
                     <!-- Left Cap -->
                     <Panel Grid.Column="0">
                         <Path Data="M 1,0 L 0,0.25 L 0,0.75 L 1,1" Stretch="Fill" Fill="#1A1A1A"/>
-                        <Path Data="M 1,0 L 0,0.25 L 0,0.75 L 1,1" Stretch="Fill" StrokeThickness="1" Stroke="#555555"/>
+                        <Path Data="M 1,0 L 0,0.25 L 0,0.75 L 1,1" Stretch="Fill" StrokeThickness="1">
+                            <Path.Stroke>
+                                <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                                    <GradientStop Offset="0" Color="{DynamicResource ThemeDeepColor}"/>
+                                    <GradientStop Offset="0.5" Color="{DynamicResource ThemeAccentColor}"/>
+                                    <GradientStop Offset="1" Color="{DynamicResource ThemeDeepColor}"/>
+                                </LinearGradientBrush>
+                            </Path.Stroke>
+                        </Path>
                     </Panel>
                     
                     <!-- Center -->
                     <Panel Grid.Column="1">
                         <Rectangle Fill="#1A1A1A"/>
-                        <Rectangle Height="1" VerticalAlignment="Top" Fill="#555555"/>
-                        <Rectangle Height="1" VerticalAlignment="Bottom" Fill="#555555"/>
+                        <Rectangle Height="1" VerticalAlignment="Top">
+                            <Rectangle.Fill>
+                                <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
+                                    <GradientStop Offset="0" Color="{DynamicResource ThemeDeepColor}"/>
+                                    <GradientStop Offset="0.5" Color="{DynamicResource ThemeAccentColor}"/>
+                                    <GradientStop Offset="1" Color="{DynamicResource ThemeDeepColor}"/>
+                                </LinearGradientBrush>
+                            </Rectangle.Fill>
+                        </Rectangle>
+                        <Rectangle Height="1" VerticalAlignment="Bottom">
+                            <Rectangle.Fill>
+                                <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
+                                    <GradientStop Offset="0" Color="{DynamicResource ThemeDeepColor}"/>
+                                    <GradientStop Offset="0.5" Color="{DynamicResource ThemeAccentColor}"/>
+                                    <GradientStop Offset="1" Color="{DynamicResource ThemeDeepColor}"/>
+                                </LinearGradientBrush>
+                            </Rectangle.Fill>
+                        </Rectangle>
                         
                         <StackPanel Spacing="6" VerticalAlignment="Center" Margin="0,0,0,2">
                             <TextBlock Text="{Binding ProcessingText}" 
@@ -58,11 +82,11 @@
                                        HorizontalAlignment="Center"
                                        LetterSpacing="1.2"/>
                             
-                            <!-- Indeterminate Progress Bar -->
+                            <!-- Indeterminate Progress Bar (Red) -->
                             <ProgressBar IsIndeterminate="True"
                                          Height="3"
-                                         Width="180"
-                                         Foreground="#FFFFFF"
+                                         Width="160"
+                                         Foreground="{DynamicResource ThemeAccentBrush}"
                                          Background="#333333"/>
                         </StackPanel>
                     </Panel>
@@ -70,14 +94,22 @@
                     <!-- Right Cap -->
                     <Panel Grid.Column="2">
                         <Path Data="M 0,0 L 1,0.25 L 1,0.75 L 0,1" Stretch="Fill" Fill="#1A1A1A"/>
-                        <Path Data="M 0,0 L 1,0.25 L 1,0.75 L 0,1" Stretch="Fill" StrokeThickness="1" Stroke="#555555"/>
+                        <Path Data="M 0,0 L 1,0.25 L 1,0.75 L 0,1" Stretch="Fill" StrokeThickness="1">
+                            <Path.Stroke>
+                                <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                                    <GradientStop Offset="0" Color="{DynamicResource ThemeDeepColor}"/>
+                                    <GradientStop Offset="0.5" Color="{DynamicResource ThemeAccentColor}"/>
+                                    <GradientStop Offset="1" Color="{DynamicResource ThemeDeepColor}"/>
+                                </LinearGradientBrush>
+                            </Path.Stroke>
+                        </Path>
                     </Panel>
                 </Grid>
             </Panel>
 
             <!-- Right Wing -->
             <Rectangle Grid.Column="2" Width="44" Height="26" VerticalAlignment="Center" 
-                       Fill="#AAFFFFFF" Opacity="0.8">
+                       Fill="{DynamicResource ThemeAccentBrush}" Opacity="0.8">
                 <Rectangle.OpacityMask>
                     <ImageBrush Source="avares://GimmeCapture/Assets/wing_right.png" Stretch="Fill"/>
                 </Rectangle.OpacityMask>
