@@ -6,6 +6,12 @@ using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core;
 using GimmeCapture.Services.Platforms.Windows;
 
+using System.Linq;
+using System.Reactive.Linq;
+using GimmeCapture.ViewModels.Main;
+using GimmeCapture.ViewModels.Shared;
+using System;
+
 namespace GimmeCapture.ViewModels.Floating;
 
 public class FloatingImageViewModel : ViewModelBase
@@ -56,16 +62,37 @@ public class FloatingImageViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _showToolbar, value);
     }
 
+    private bool _isProcessing;
+    public bool IsProcessing
+    {
+        get => _isProcessing;
+        set => this.RaiseAndSetIfChanged(ref _isProcessing, value);
+    }
+
+    private string _processingText = "Processing...";
+    public string ProcessingText
+    {
+        get => _processingText;
+        set => this.RaiseAndSetIfChanged(ref _processingText, value);
+    }
+    
+    // Only allow background removal if not processing.
+    // We could also check if already transparent, but that's harder to detect cheaply.
+    private readonly ObservableAsPropertyHelper<bool> _canRemoveBackground;
+    public bool CanRemoveBackground => _canRemoveBackground.Value;
+
     public ReactiveCommand<Unit, Unit> CloseCommand { get; }
     public ReactiveCommand<Unit, Unit> CopyCommand { get; }
     public ReactiveCommand<Unit, Unit> SaveCommand { get; }
     public ReactiveCommand<Unit, Unit> ToggleToolbarCommand { get; }
+    public ReactiveCommand<Unit, Unit> RemoveBackgroundCommand { get; }
     
     public System.Action? CloseAction { get; set; }
     // CopyAction removed in favor of IClipboardService
     public System.Func<Task>? SaveAction { get; set; }
 
     private readonly IClipboardService _clipboardService;
+    private readonly AIResourceService _aiResourceService;
 
     private double _wingScale = 1.0;
     public double WingScale
@@ -112,7 +139,7 @@ public class FloatingImageViewModel : ViewModelBase
         }
     }
 
-    public FloatingImageViewModel(Bitmap image, Avalonia.Media.Color borderColor, double borderThickness, bool hideDecoration, bool hideBorder, IClipboardService clipboardService)
+    public FloatingImageViewModel(Bitmap image, Avalonia.Media.Color borderColor, double borderThickness, bool hideDecoration, bool hideBorder, IClipboardService clipboardService, AIResourceService aiResourceService)
     {
         Image = image;
         BorderColor = borderColor;
@@ -120,6 +147,7 @@ public class FloatingImageViewModel : ViewModelBase
         HidePinDecoration = hideDecoration;
         HidePinBorder = hideBorder;
         _clipboardService = clipboardService;
+        _aiResourceService = aiResourceService;
 
         CloseCommand = ReactiveCommand.Create(() => CloseAction?.Invoke());
         ToggleToolbarCommand = ReactiveCommand.Create(() => { ShowToolbar = !ShowToolbar; });
@@ -136,5 +164,100 @@ public class FloatingImageViewModel : ViewModelBase
         {
              if (SaveAction != null) await SaveAction();
         });
+
+        _canRemoveBackground = this.WhenAnyValue(x => x.IsProcessing)
+            .Select(x => !x)
+            .ToProperty(this, x => x.CanRemoveBackground);
+
+        RemoveBackgroundCommand = ReactiveCommand.CreateFromTask(RemoveBackgroundAsync, this.WhenAnyValue(x => x.IsProcessing).Select(p => !p));
+        RemoveBackgroundCommand.ThrownExceptions.Subscribe((System.Exception ex) => System.Diagnostics.Debug.WriteLine($"Pinned AI Error: {ex}"));
+    }
+
+    private async Task RemoveBackgroundAsync()
+    {
+        if (Image == null) return;
+        
+        // Check Resources
+        if (!_aiResourceService.AreResourcesReady())
+        {
+            var title = LocalizationService.Instance["AIDownloadTitle"];
+            var prompt = LocalizationService.Instance["AIDownloadPrompt"];
+            
+            var dialogVm = new GothicDialogViewModel { Title = title, Message = prompt };
+            var dialog = new GimmeCapture.Views.Shared.GothicDialog { DataContext = dialogVm };
+
+            // Find owner window (this floating window)
+            // Since we are inside ViewModel, we don't have direct ref to Window, 
+            // but we can try to find active window or rely on UI layer passing it.
+            // For simplicity, we can fallback to App.Current or try finding window by DataContext if possible.
+            // A better way is using a DialogService, but for now we look for active windows.
+            var desktop = Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime;
+            var owner = desktop?.Windows.FirstOrDefault(w => w.DataContext == this) as Avalonia.Controls.Window;
+            
+            bool result = false;
+            if (owner != null)
+            {
+                 result = await dialog.ShowDialog<bool>(owner);
+            }
+            
+            if (!result) return;
+            
+            // Background download
+             _ = _aiResourceService.EnsureResourcesAsync().ContinueWith(t => {
+                if (!t.Result && owner != null)
+                {
+                    Avalonia.Threading.Dispatcher.UIThread.Post(() => {
+                         // Error handling similar to SnipWindow
+                         /* ... error dialog ... */
+                    });
+                }
+            });
+            return;
+        }
+
+        try
+        {
+            IsProcessing = true;
+            ProcessingText = LocalizationService.Instance["ProcessingAI"] ?? "Processing...";
+            
+             // 1. Convert Avalonia Bitmap to Bytes
+            byte[] imageBytes;
+            using (var ms = new System.IO.MemoryStream())
+            {
+                // We need to save the current bitmap to stream
+                Image.Save(ms);
+                imageBytes = ms.ToArray();
+            }
+
+            // 2. Process
+            using var aiService = new BackgroundRemovalService(_aiResourceService);
+            var transparentBytes = await aiService.RemoveBackgroundAsync(imageBytes);
+
+            // 3. Update Image
+            using var tms = new System.IO.MemoryStream(transparentBytes);
+            // Replace the current image with the new transparent one
+            var newBitmap = new Bitmap(tms);
+            
+            // Dispose old image if possible/safe? 
+            // Avalonia bitmaps are ref counted roughly, but explicit dispose is good practice if we own it.
+            // But we bound it to UI. UI will release ref when binding updates.
+            Image = newBitmap; 
+        }
+        catch (System.Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"AI Processing Failed: {ex}");
+            // Show error dialog
+             Avalonia.Threading.Dispatcher.UIThread.Post(() => {
+                 var dialogVm = new GothicDialogViewModel { Title = "Error", Message = ex.Message };
+                 var dialog = new GimmeCapture.Views.Shared.GothicDialog { DataContext = dialogVm };
+                 var desktop = Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime;
+                 var owner = desktop?.Windows.FirstOrDefault(w => w.DataContext == this) as Avalonia.Controls.Window;
+                 if (owner != null) dialog.ShowDialog<bool>(owner);
+            });
+        }
+        finally
+        {
+            IsProcessing = false;
+        }
     }
 }

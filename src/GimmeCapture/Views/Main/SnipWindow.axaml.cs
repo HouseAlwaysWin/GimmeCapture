@@ -215,13 +215,21 @@ public partial class SnipWindow : Window
                  return file?.Path.LocalPath;
             };
 
-            _viewModel.OpenPinWindowAction = (bitmap, rect, color, thickness) =>
+            _viewModel.OpenPinWindowAction = (bitmap, rect, color, thickness, runAI) =>
             {
                 // Use settings directly from MainVm to ensure consistency
                 bool hideDecoration = _viewModel.MainVm?.HideSnipPinDecoration ?? false;
                 bool hideBorder = _viewModel.MainVm?.HideSnipPinBorder ?? false;
+                var aiService = _viewModel.MainVm?.AIResourceService;
                 
-                var vm = new FloatingImageViewModel(bitmap, color, thickness, hideDecoration, hideBorder, _clipboardService);
+                if (aiService == null)
+                {
+                     // Fallback check (shouldn't happen if MainVm is set)
+                     System.Diagnostics.Debug.WriteLine("AIResourceService is null!");
+                     return;
+                }
+                
+                var vm = new FloatingImageViewModel(bitmap, color, thickness, hideDecoration, hideBorder, _clipboardService, aiService);
                 vm.WingScale = _viewModel.WingScale;
                 vm.CornerIconScale = _viewModel.CornerIconScale;
                 
@@ -263,7 +271,7 @@ public partial class SnipWindow : Window
                                 if (file != null)
                                 {
                                     using var stream = await file.OpenWriteAsync();
-                                    bitmap.Save(stream);
+                                    vm.Image?.Save(stream); // Save current image (might be transparent)
                                 }
                             }
                         }
@@ -274,6 +282,15 @@ public partial class SnipWindow : Window
                     };
                     
                     win.Show();
+                    
+                    // Auto-Run AI if requested
+                    if (runAI)
+                    {
+                        // Use dispatcher to ensure window is shown/initialized before starting
+                         Avalonia.Threading.Dispatcher.UIThread.Post(() => {
+                            vm.RemoveBackgroundCommand.Execute().Subscribe();
+                         });
+                    }
                 }
                 catch (Exception ex)
                 {

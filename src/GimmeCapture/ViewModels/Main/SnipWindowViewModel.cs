@@ -461,6 +461,13 @@ public class SnipWindowViewModel : ViewModelBase
         "Arial", "Segoe UI", "Consolas", "Times New Roman", "Comic Sans MS", "Microsoft JhengHei", "Meiryo"
     };
 
+    private bool _isBackgroundRemoved;
+    public bool IsBackgroundRemoved
+    {
+        get => _isBackgroundRemoved;
+        set => this.RaiseAndSetIfChanged(ref _isBackgroundRemoved, value);
+    }
+
     private bool _isDrawingMode = false;
     public bool IsDrawingMode
     {
@@ -669,7 +676,7 @@ public class SnipWindowViewModel : ViewModelBase
         CopyCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
         SaveCommand = ReactiveCommand.CreateFromTask(Save);
         SaveCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
-        PinCommand = ReactiveCommand.CreateFromTask(Pin);
+        PinCommand = ReactiveCommand.CreateFromTask(() => Pin(false));
         PinCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
         CloseCommand = ReactiveCommand.Create(Close);
         CloseCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
@@ -727,95 +734,16 @@ public class SnipWindowViewModel : ViewModelBase
         RedoCommand = ReactiveCommand.Create(Redo);
         RedoCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
         ClearCommand = ReactiveCommand.Create(() => Annotations.Clear());
-        ClearCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
         
+        var canRemoveBackground = this.WhenAnyValue(
+            x => x.IsRecordingMode, 
+            x => x.IsProcessing, 
+            (isRec, isProc) => !isRec && !isProc);
+
         RemoveBackgroundCommand = ReactiveCommand.CreateFromTask(async () => {
-            if (_mainVm == null) return;
-            
-            var resourceService = _mainVm.AIResourceService;
-            
-            if (!resourceService.AreResourcesReady())
-            {
-                var title = LocalizationService.Instance["AIDownloadTitle"];
-                var prompt = LocalizationService.Instance["AIDownloadPrompt"];
-                
-                var dialogVm = new GothicDialogViewModel
-                {
-                    Title = title,
-                    Message = prompt
-                };
-                
-                var dialog = new GimmeCapture.Views.Shared.GothicDialog
-                {
-                    DataContext = dialogVm
-                };
-
-                // Find the active SnipWindow to use as owner
-                var desktop = Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime;
-                var owner = desktop?.Windows.OfType<GimmeCapture.Views.Main.SnipWindow>().FirstOrDefault();
-
-                var result = await dialog.ShowDialog<bool>(owner!); 
-                    
-                if (!result) return;
-                
-                // User confirmed: Fire download in background and return early
-                // We don't await this so the user can continue using the tool
-                _ = resourceService.EnsureResourcesAsync().ContinueWith(t => {
-                    if (t.IsFaulted) System.Diagnostics.Debug.WriteLine($"Background AI Download Error: {t.Exception}");
-                });
-                return;
-            }
-
-            IsProcessing = true;
-            try
-            {
-                if (!resourceService.AreResourcesReady())
-                {
-                    ProcessingText = LocalizationService.Instance["DownloadingAI"];
-                    var success = await resourceService.EnsureResourcesAsync();
-                    if (!success)
-                    {
-                        System.Diagnostics.Debug.WriteLine("Download failed. Please check your internet connection.");
-                        return;
-                    }
-                }
-
-                ProcessingText = LocalizationService.Instance["ProcessingAI"];
-                
-                // Get current selection as bytes
-                var skBitmap = await _captureService.CaptureScreenWithAnnotationsAsync(SelectionRect, ScreenOffset, VisualScaling, Annotations, _mainVm?.ShowSnipCursor ?? false);
-                if (skBitmap == null) return;
-
-                byte[] imageBytes;
-                using (var ms = new MemoryStream())
-                {
-                    using (var image = SkiaSharp.SKImage.FromBitmap(skBitmap))
-                    using (var data = image.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100))
-                    {
-                        data.SaveTo(ms);
-                    }
-                    imageBytes = ms.ToArray();
-                }
-
-                // Run AI
-                using var aiService = new BackgroundRemovalService(resourceService);
-                var transparentBytes = await aiService.RemoveBackgroundAsync(imageBytes);
-
-                using var tms = new MemoryStream(transparentBytes);
-                DrawingModeSnapshot = new Avalonia.Media.Imaging.Bitmap(tms);
-                
-                CurrentState = SnipState.Selected; 
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"AI Error: {ex.Message}");
-            }
-            finally
-            {
-                IsProcessing = false;
-                ProcessingText = LocalizationService.Instance["StatusProcessing"] ?? "正在處理...";
-            }
-        });
+             // Refactored: Pin first, then Run AI
+             await Pin(true);
+        }, canRemoveBackground);
         RemoveBackgroundCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
 
         IncreaseThicknessCommand = ReactiveCommand.Create(() => { if (CurrentThickness < 20) CurrentThickness += 1; });
@@ -1264,7 +1192,7 @@ public class SnipWindowViewModel : ViewModelBase
          }
     }
     
-    private async Task Pin()
+    private async Task Pin(bool runAI = false)
     {
         // If recording is active, pin recording instead of screenshot
         if (RecState == RecordingState.Recording || RecState == RecordingState.Paused)
@@ -1292,7 +1220,7 @@ public class SnipWindowViewModel : ViewModelBase
                 var avaloniaBitmap = new Avalonia.Media.Imaging.Bitmap(stream);
                 
                 // Open Floating Window
-            OpenPinWindowAction?.Invoke(avaloniaBitmap, SelectionRect, SelectionBorderColor, SelectionBorderThickness);
+            OpenPinWindowAction?.Invoke(avaloniaBitmap, SelectionRect, SelectionBorderColor, SelectionBorderThickness, runAI);
             }
             finally
             {
@@ -1306,5 +1234,5 @@ public class SnipWindowViewModel : ViewModelBase
     public Action? CloseAction { get; set; }
     public Action? HideAction { get; set; }
     public Func<Task<string?>>? PickSaveFileAction { get; set; }
-    public System.Action<Bitmap, Rect, Color, double>? OpenPinWindowAction { get; set; }
+    public System.Action<Avalonia.Media.Imaging.Bitmap, Rect, Color, double, bool>? OpenPinWindowAction { get; set; }
 }

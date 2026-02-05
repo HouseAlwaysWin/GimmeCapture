@@ -10,9 +10,16 @@ namespace GimmeCapture.Services.Core;
 
 public class AIResourceService : ReactiveObject
 {
-    private const string ModelUrl = "https://github.com/danielgindi/u2net-onnx/raw/master/u2net.onnx";
+    private const string ModelUrl = "https://github.com/danielgatis/rembg/releases/download/v0.0.0/u2net.onnx";
     // Using a reliable direct link to ONNX Runtime GPU (Win x64)
     private const string OnnxRuntimeZipUrl = "https://github.com/microsoft/onnxruntime/releases/download/v1.20.1/onnxruntime-win-x64-gpu-1.20.1.zip";
+
+    private string _lastErrorMessage;
+    public string LastErrorMessage
+    {
+        get => _lastErrorMessage;
+        set => this.RaiseAndSetIfChanged(ref _lastErrorMessage, value);
+    }
 
     private double _downloadProgress;
     public double DownloadProgress
@@ -33,6 +40,7 @@ public class AIResourceService : ReactiveObject
     public AIResourceService(AppSettingsService settingsService)
     {
         _settingsService = settingsService;
+        _lastErrorMessage = string.Empty;
     }
 
     public string GetAIResourcesPath()
@@ -49,7 +57,8 @@ public class AIResourceService : ReactiveObject
     {
         var baseDir = GetAIResourcesPath();
         var modelPath = Path.Combine(baseDir, "models", "u2net.onnx");
-        var onnxDll = Path.Combine(baseDir, "runtime", "Microsoft.ML.OnnxRuntime.dll");
+        // We download the native runtime (onnxruntime.dll), not the managed one (which is in the app dir)
+        var onnxDll = Path.Combine(baseDir, "runtime", "onnxruntime.dll");
         
         return File.Exists(modelPath) && File.Exists(onnxDll);
     }
@@ -72,17 +81,34 @@ public class AIResourceService : ReactiveObject
             Directory.CreateDirectory(modelsDir);
 
             // 1. Download Runtime
-            await DownloadAndExtractZip(OnnxRuntimeZipUrl, runtimeDir, 0, 50);
+            var onnxDll = Path.Combine(runtimeDir, "onnxruntime.dll");
+            if (!File.Exists(onnxDll))
+            {
+                await DownloadAndExtractZip(OnnxRuntimeZipUrl, runtimeDir, 0, 50);
+            }
+            else
+            {
+                // Already have runtime, set progress to 50%
+                DownloadProgress = 50;
+            }
 
             // 2. Download Model
             var modelPath = Path.Combine(modelsDir, "u2net.onnx");
-            await DownloadFile(ModelUrl, modelPath, 50, 50);
+            if (!File.Exists(modelPath))
+            {
+                await DownloadFile(ModelUrl, modelPath, 50, 50);
+            }
+            else
+            {
+                 DownloadProgress = 100;
+            }
 
             return AreResourcesReady();
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"AI Resource Download Failed: {ex.Message}");
+            LastErrorMessage = ex.Message;
             return false;
         }
         finally

@@ -46,7 +46,10 @@
                 <Button Theme="{StaticResource SnipButton}" FontSize="12" BorderThickness="1" Command="{Binding PinCommand}" ToolTip.Tip="{Binding [TipPin], Source={x:Static services:LocalizationService.Instance}}">
                     <PathIcon Data="M16,12V4H17V2H7V4H8V12L6,14V16H11.2V22H12.8V16H18V14L16,12Z" Width="14" Height="14"/>
                 </Button>
-                <Button Theme="{StaticResource SnipButton}" FontSize="12" BorderThickness="1" Command="{Binding RemoveBackgroundCommand}" ToolTip.Tip="{Binding [RemoveBackground], Source={x:Static services:LocalizationService.Instance}}">
+                <Button Theme="{StaticResource SnipButton}" FontSize="12" BorderThickness="1" 
+                        Command="{Binding RemoveBackgroundCommand}" 
+                        ToolTip.Tip="{Binding [RemoveBackground], Source={x:Static services:LocalizationService.Instance}}"
+                        IsVisible="{Binding !IsRecordingMode}">
                     <PathIcon Data="M7.5,5.6L5,7L6.4,4.5L5,2L7.5,3.4L10,2L8.6,4.5L10,7L7.5,5.6M19.5,15.4L22,14L20.6,16.5L22,19L19.5,17.6L17,19L18.4,16.5L17,14L19.5,15.4M22,2L20.6,4.5L22,7L19.5,5.6L17,7L18.4,4.5L17,2L19.5,3.4L22,2M13.3,9.1L4.1,18.3C3.7,18.7 3.7,19.3 4.1,19.7L5.3,20.9C5.7,21.3 6.3,21.3 6.7,20.9L15.9,11.7L13.3,9.1Z" Width="14" Height="14"/>
                 </Button>
             </StackPanel>

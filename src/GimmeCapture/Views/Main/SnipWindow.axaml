@@ -97,9 +97,23 @@
                    Canvas.Left="{Binding SelectionRect.X}"
                    Canvas.Top="{Binding SelectionRect.Y}">
                 
+                <!-- Checkerboard Background for Transparency Visualization -->
+                <Border IsVisible="{Binding !!DrawingModeSnapshot}" IsHitTestVisible="False">
+                    <Border.Background>
+                        <VisualBrush TileMode="Tile" Stretch="None" SourceRect="0,0,10,10" DestinationRect="0,0,10,10">
+                            <VisualBrush.Visual>
+                                <Canvas Width="10" Height="10" Background="White">
+                                    <Rectangle Width="5" Height="5" Fill="#CCCCCC" />
+                                    <Rectangle Canvas.Left="5" Canvas.Top="5" Width="5" Height="5" Fill="#CCCCCC" />
+                                </Canvas>
+                            </VisualBrush.Visual>
+                        </VisualBrush>
+                    </Border.Background>
+                </Border>
+
                 <Image Source="{Binding DrawingModeSnapshot}"
                        Stretch="Fill"
-                       IsVisible="{Binding IsDrawingMode}"
+                       IsVisible="{Binding !!DrawingModeSnapshot}"
                        IsHitTestVisible="False"/>
 
                 <ItemsControl ItemsSource="{Binding Annotations}">
@@ -307,6 +321,15 @@
                         Padding="10,2" Margin="0,2,0,0" Click="OnTextConfirmClick" Cursor="Hand"/>
             </StackPanel>
                     
+            <!-- Processing Overlay -->
+            <Border Background="#AA000000" CornerRadius="8" Padding="16" IsVisible="{Binding IsProcessing}"
+                    HorizontalAlignment="Center" VerticalAlignment="Center">
+                <StackPanel Spacing="10">
+                    <TextBlock Text="{Binding ProcessingText}" Foreground="White" FontSize="16" FontWeight="Bold" HorizontalAlignment="Center"/>
+                    <ProgressBar IsIndeterminate="True" Width="200" Height="4"/>
+                </StackPanel>
+            </Border>
+
             <ctl:SnipToolbar Name="Toolbar" Canvas.Left="{Binding ToolbarLeft}" Canvas.Top="{Binding ToolbarTop}" IsVisible="{Binding CurrentState, Converter={StaticResource StateToBoolConverter}}"/>
         </Canvas>
     </Grid>
