@@ -38,8 +38,32 @@
         <Style Selector="Grid.Handle">
             <Setter Property="Background" Value="Transparent"/>
         </Style>
-    </Window.Styles>    
 
+        <Style Selector="Border.StatusBar">
+            <Setter Property="Background" Value="#E6000000"/>
+            <Setter Property="CornerRadius" Value="20"/>
+            <Setter Property="Padding" Value="16,8"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="VerticalAlignment" Value="Bottom"/>
+            <Setter Property="Margin" Value="0,0,0,80"/>
+            <Setter Property="IsHitTestVisible" Value="False"/>
+            <Setter Property="Opacity" Value="0"/>
+            <Setter Property="IsVisible" Value="False"/>
+            <Setter Property="RenderTransform" Value="translateY(20px)"/>
+            <Setter Property="Transitions">
+                <Transitions>
+                    <DoubleTransition Property="Opacity" Duration="0:0:0.3"/>
+                    <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.3"/>
+                </Transitions>
+            </Setter>
+        </Style>
+        <Style Selector="Border.StatusBar.active">
+            <Setter Property="IsVisible" Value="True"/>
+            <Setter Property="Opacity" Value="1"/>
+            <Setter Property="RenderTransform" Value="translateY(0px)"/>
+        </Style>
+    </Window.Styles>
+    
     <Grid>
         <!-- 背景遮罩層 -->
         <Path Fill="Black" Data="{Binding MaskGeometry}" Opacity="{Binding MaskOpacity}" IsHitTestVisible="False"/>
@@ -348,6 +372,23 @@
                               Canvas.Top="{Binding ToolbarTop}" 
                               IsVisible="{Binding CurrentState, Converter={StaticResource StateToBoolConverter}}"/>
         </Canvas>
+
+        <!-- Loading Overlay (StatusBar Style) -->
+        <Border Classes="StatusBar" Classes.active="{Binding IsProcessing}">
+            <StackPanel Spacing="8" Width="200">
+                <TextBlock Text="{Binding ProcessingText}" 
+                           Foreground="White" 
+                           FontSize="12" 
+                           HorizontalAlignment="Left"
+                           FontFamily="{Binding CurrentFontFamily}"/>
+                <ProgressBar IsIndeterminate="{Binding !RecordingService.IsFinalizing}" 
+                             Value="{Binding RecordingService.FinalizationProgress}"
+                             Minimum="0" Maximum="100"
+                             Height="4"
+                             Foreground="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}"
+                             Background="#444444"/>
+            </StackPanel>
+        </Border>
     </Grid>
 
 </Window>

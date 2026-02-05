@@ -25,6 +25,8 @@ public class RecordingService : ReactiveObject
     private bool _includeCursor = true;
     private PixelPoint _screenOffset;
     private double _visualScaling = 1.0;
+    private bool _isFinalizing;
+    private double _finalizationProgress;
     // Use local Temp folder in app directory instead of System Temp (usually C:\)
     // This will be updated with a unique ID per session in StartAsync
     private string _tempDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Temp", "Recordings");
@@ -57,6 +59,18 @@ public class RecordingService : ReactiveObject
     public string? LastRecordingPath => _outputFile;
 
     public FFmpegDownloaderService Downloader => _downloader;
+
+    public bool IsFinalizing
+    {
+        get => _isFinalizing;
+        private set => this.RaiseAndSetIfChanged(ref _isFinalizing, value);
+    }
+
+    public double FinalizationProgress
+    {
+        get => _finalizationProgress;
+        private set => this.RaiseAndSetIfChanged(ref _finalizationProgress, value);
+    }
 
     public RecordingService(FFmpegDownloaderService downloader)
     {
@@ -178,8 +192,18 @@ public class RecordingService : ReactiveObject
             await StopCurrentSegmentAsync();
         }
 
-        await FinalizeRecordingAsync();
-        State = RecordingState.Idle;
+        IsFinalizing = true;
+        FinalizationProgress = 0;
+        try
+        {
+            await FinalizeRecordingAsync();
+        }
+        finally
+        {
+            IsFinalizing = false;
+            FinalizationProgress = 100;
+            State = RecordingState.Idle;
+        }
     }
 
     private async Task StopCurrentSegmentAsync()
@@ -278,6 +302,8 @@ public class RecordingService : ReactiveObject
                 if (concatProcess != null) await concatProcess.WaitForExitAsync();
             }
 
+            FinalizationProgress = 30;
+
             // Step 2: Convert/Move to target format
             if (_targetFormat == "mkv")
             {
@@ -322,6 +348,7 @@ public class RecordingService : ReactiveObject
                 }
 
                 if (!moveSuccess && lastEx != null) throw lastEx;
+                FinalizationProgress = 100;
             }
             else if (_targetFormat == "gif")
             {
@@ -331,6 +358,8 @@ public class RecordingService : ReactiveObject
                 string paletteArgs = $"-y -i \"{mergedMkv}\" -vf \"fps=15,scale=640:-1:flags=lanczos,palettegen\" \"{paletteFile}\"";
                 var paletteInfo = new ProcessStartInfo { FileName = _downloader.FfmpegExecutablePath, Arguments = paletteArgs, UseShellExecute = false, CreateNoWindow = true };
                 using (var p = Process.Start(paletteInfo)) if (p != null) await p.WaitForExitAsync();
+
+                FinalizationProgress = 60;
 
                 string gifArgs = $"-y -i \"{mergedMkv}\" -i \"{paletteFile}\" -lavfi \"fps=15,scale=640:-1:flags=lanczos[x];[x][1:v]paletteuse\" \"{_outputFile}\"";
                 var gifInfo = new ProcessStartInfo { FileName = _downloader.FfmpegExecutablePath, Arguments = gifArgs, UseShellExecute = false, CreateNoWindow = true };
@@ -356,6 +385,8 @@ public class RecordingService : ReactiveObject
 
                 var convertInfo = new ProcessStartInfo { FileName = _downloader.FfmpegExecutablePath, Arguments = convertArgs, UseShellExecute = false, CreateNoWindow = true };
                 using (var p = Process.Start(convertInfo)) if (p != null) await p.WaitForExitAsync();
+                
+                FinalizationProgress = 100;
             }
         }
         catch (Exception ex)

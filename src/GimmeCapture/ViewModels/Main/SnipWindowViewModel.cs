@@ -7,6 +7,7 @@ using System.Reactive;
 using System.Threading.Tasks;
 using System.ComponentModel;
 
+using System.Reactive.Linq;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using GimmeCapture.Models;
@@ -74,10 +75,25 @@ public class SnipWindowViewModel : ViewModelBase
 
     private Avalonia.Threading.DispatcherTimer? _recordTimer;
     private readonly RecordingService? _recordingService;
+    public RecordingService? RecordingService => _recordingService;
     private readonly MainWindowViewModel? _mainVm;
     public MainWindowViewModel? MainVm => _mainVm;
     public bool HideSelectionDecoration => IsRecordingMode ? (_mainVm?.HideRecordSelectionDecoration ?? false) : (_mainVm?.HideSnipSelectionDecoration ?? false);
     public bool HideFrameBorder => IsRecordingMode ? (_mainVm?.HideRecordSelectionBorder ?? false) : (_mainVm?.HideSnipSelectionBorder ?? false);
+
+    private bool _isProcessing;
+    public bool IsProcessing
+    {
+        get => _isProcessing;
+        set => this.RaiseAndSetIfChanged(ref _isProcessing, value);
+    }
+
+    private string _processingText = "Processing...";
+    public string ProcessingText
+    {
+        get => _processingText;
+        set => this.RaiseAndSetIfChanged(ref _processingText, value);
+    }
 
     private PixelPoint _screenOffset;
     public PixelPoint ScreenOffset
@@ -576,6 +592,17 @@ public class SnipWindowViewModel : ViewModelBase
                     this.RaisePropertyChanged(nameof(RecState));
                     this.RaisePropertyChanged(nameof(IsRecordingActive));
                 });
+
+            _recordingService.WhenAnyValue(x => x.IsFinalizing)
+                .ObserveOn(RxApp.MainThreadScheduler)
+                .Subscribe(isFinalizing => 
+                {
+                    if (isFinalizing)
+                    {
+                         ProcessingText = LocalizationService.Instance["StatusProcessing"] ?? "Processing...";
+                    }
+                    IsProcessing = isFinalizing;
+                });
         }
 
         // Initial loads
@@ -995,12 +1022,15 @@ public class SnipWindowViewModel : ViewModelBase
 
             try 
             {
+                IsProcessing = true;
+                ProcessingText = LocalizationService.Instance["StatusProcessing"] ?? "Processing...";
                 var bitmap = await _captureService.CaptureScreenWithAnnotationsAsync(SelectionRect, ScreenOffset, VisualScaling, Annotations, _mainVm?.ShowSnipCursor ?? false);
                 await _captureService.CopyToClipboardAsync(bitmap);
                 _mainVm?.SetStatus("StatusCopied");
             }
             finally
             {
+                IsProcessing = false;
                 CloseAction?.Invoke();
             }
         }
@@ -1022,6 +1052,8 @@ public class SnipWindowViewModel : ViewModelBase
 
              try
              {
+                 IsProcessing = true;
+                 ProcessingText = LocalizationService.Instance["StatusSaving"] ?? "Saving...";
                  var bitmap = await _captureService.CaptureScreenWithAnnotationsAsync(SelectionRect, ScreenOffset, VisualScaling, Annotations, _mainVm?.ShowSnipCursor ?? false);
                  
                  if (_mainVm != null && _mainVm.AutoSave)
@@ -1059,6 +1091,7 @@ public class SnipWindowViewModel : ViewModelBase
              }
              finally
              {
+                 IsProcessing = false;
                  CloseAction?.Invoke(); 
              }
          }
