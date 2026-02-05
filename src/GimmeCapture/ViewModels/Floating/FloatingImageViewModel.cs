@@ -277,7 +277,8 @@ public class FloatingImageViewModel : ViewModelBase
 
             // 2. Process
             using var aiService = new BackgroundRemovalService(_aiResourceService);
-            var transparentBytes = await aiService.RemoveBackgroundAsync(imageBytes);
+            var rect = IsSelectionActive ? (Avalonia.Rect?)SelectionRect : null;
+            var transparentBytes = await aiService.RemoveBackgroundAsync(imageBytes, rect);
 
             // 3. Update Image
             using var tms = new System.IO.MemoryStream(transparentBytes);
@@ -288,6 +289,9 @@ public class FloatingImageViewModel : ViewModelBase
             // Avalonia bitmaps are ref counted roughly, but explicit dispose is good practice if we own it.
             // But we bound it to UI. UI will release ref when binding updates.
             Image = newBitmap; 
+            
+            // Clear selection after processing
+            IsSelectionMode = false;
         }
         catch (System.Exception ex)
         {

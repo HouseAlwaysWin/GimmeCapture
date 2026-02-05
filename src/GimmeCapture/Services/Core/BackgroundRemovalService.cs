@@ -113,7 +113,7 @@ public class BackgroundRemovalService : IDisposable
         }
     }
 
-    public async Task<byte[]> RemoveBackgroundAsync(byte[] imageBytes)
+    public async Task<byte[]> RemoveBackgroundAsync(byte[] imageBytes, Avalonia.Rect? selectionRect = null)
     {
         if (!_isInitialized) await InitializeAsync();
         if (_session == null) throw new InvalidOperationException("AI Session not initialized.");
@@ -123,16 +123,62 @@ public class BackgroundRemovalService : IDisposable
             using var original = SKBitmap.Decode(imageBytes);
             if (original == null) return imageBytes;
 
-            if (IsSolidBackground(original, out var bgColor))
+            SKBitmap targetBmp = original;
+            SKRectI? roi = null;
+
+            if (selectionRect.HasValue && selectionRect.Value.Width > 1 && selectionRect.Value.Height > 1)
+            {
+                // Convert logical Rect to pixel Rect
+                int x = (int)Math.Max(0, selectionRect.Value.X);
+                int y = (int)Math.Max(0, selectionRect.Value.Y);
+                int w = (int)Math.Min(original.Width - x, selectionRect.Value.Width);
+                int h = (int)Math.Min(original.Height - y, selectionRect.Value.Height);
+                roi = new SKRectI(x, y, x + w, y + h);
+
+                // Create cropped version
+                targetBmp = new SKBitmap(w, h);
+                original.ExtractSubset(targetBmp, roi.Value);
+            }
+
+            byte[] processedBytes;
+            if (IsSolidBackground(targetBmp, out var bgColor))
             {
                 System.Diagnostics.Debug.WriteLine($"Solid background detected ({bgColor}). Using Manual Removal.");
-                return RemoveSolidBackground(original, bgColor);
+                processedBytes = RemoveSolidBackground(targetBmp, bgColor);
             }
-            
-            System.Diagnostics.Debug.WriteLine("Complex background detected. Using AI Removal.");
-            // Capture session locally to satisfy compiler nullability checks
-            var session = _session;
-            return RunAIInference(original, session);
+            else
+            {
+                System.Diagnostics.Debug.WriteLine("Complex background detected. Using AI Removal.");
+                var session = _session;
+                processedBytes = RunAIInference(targetBmp, session!);
+            }
+
+            if (roi.HasValue)
+            {
+                using var processedBmp = SKBitmap.Decode(processedBytes);
+                
+                // We create a new bitmap for the result to ensure transparency is handled correctly
+                var resultBmp = new SKBitmap(original.Width, original.Height, SKColorType.Bgra8888, SKAlphaType.Unpremul);
+                using (var canvas = new SKCanvas(resultBmp))
+                {
+                    canvas.Clear(SKColors.Transparent);
+                    canvas.DrawBitmap(original, 0, 0);
+                    // Use Src blend mode to replace the ROI with processed transparent version
+                    using var paint = new SKPaint { BlendMode = SKBlendMode.Src };
+                    canvas.DrawBitmap(processedBmp, roi.Value.Left, roi.Value.Top, paint);
+                }
+
+                if (targetBmp != original) targetBmp.Dispose();
+
+                using var image = SKImage.FromBitmap(resultBmp);
+                using var data = image.Encode(SKEncodedImageFormat.Png, 100);
+                resultBmp.Dispose();
+                return data.ToArray();
+            }
+            else
+            {
+                return processedBytes;
+            }
         });
     }
 
