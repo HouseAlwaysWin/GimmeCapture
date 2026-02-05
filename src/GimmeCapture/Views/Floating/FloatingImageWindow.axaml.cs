@@ -105,6 +105,18 @@ public partial class FloatingImageWindow : Window
             _resizeDirection = GetDirectionFromName(source.Name);
             try
             {
+                // 關閉 SizeToContent 以允許手動 resize
+                SizeToContent = SizeToContent.Manual;
+                
+                // 設定 Image Stretch 為 Fill 讓圖片填滿整個區域
+                var pinnedImage = this.FindControl<Image>("PinnedImage");
+                if (pinnedImage != null)
+                {
+                    pinnedImage.Stretch = Avalonia.Media.Stretch.Fill;
+                    pinnedImage.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
+                    pinnedImage.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Stretch;
+                }
+                
                 var p = e.GetCurrentPoint(this);
                 _resizeStartPoint = this.PointToScreen(p.Position).ToPoint(1.0);
                 _startPosition = Position;
