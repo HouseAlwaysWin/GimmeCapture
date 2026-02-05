@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Reflection;
+using System.Runtime.InteropServices;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
 using SkiaSharp;
@@ -35,48 +37,74 @@ public class BackgroundRemovalService : IDisposable
 
         await Task.Run(() =>
         {
-            var options = new SessionOptions();
-            bool cudaSuccess = false;
             try
             {
-                // Try CUDA first (4070 Super)
-                options.AppendExecutionProvider_CUDA(0);
-                cudaSuccess = true;
+                var options = new SessionOptions();
+                bool cudaSuccess = false;
+                try
+                {
+                    // Try CUDA first (4070 Super)
+                    options.AppendExecutionProvider_CUDA(0);
+                    cudaSuccess = true;
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"CUDA not available, falling back to CPU: {ex.Message}");
+                }
+                
+                try
+                {
+                     _session = new InferenceSession(modelPath, options);
+                }
+                catch (Exception ex) when (cudaSuccess)
+                {
+                    // If CUDA was appended but session creation failed (e.g. missing cuDNN), try again with CPU
+                     System.Diagnostics.Debug.WriteLine($"Session creation with CUDA failed: {ex.Message}. Retrying with CPU.");
+                     options = new SessionOptions(); // Reset options
+                     _session = new InferenceSession(modelPath, options);
+                }
+                
+                _isInitialized = true;
             }
-            catch (Exception ex)
+            catch (TypeInitializationException ex)
             {
-                System.Diagnostics.Debug.WriteLine($"CUDA not available, falling back to CPU: {ex.Message}");
-            }
-            
-            try
-            {
-                 _session = new InferenceSession(modelPath, options);
-            }
-            catch (Exception ex) when (cudaSuccess)
-            {
-                // If CUDA was appended but session creation failed (e.g. missing cuDNN), try again with CPU
-                 System.Diagnostics.Debug.WriteLine($"Session creation with CUDA failed: {ex.Message}. Retrying with CPU.");
-                 options = new SessionOptions(); // Reset options
-                 _session = new InferenceSession(modelPath, options);
+                // Most common error: Missing Native DLL or CUDA dependencies
+                var inner = ex.InnerException?.Message ?? "No inner exception";
+                throw new Exception($"ONNX Runtime failed to initialize. Make sure you have the required native libraries and CUDA 12.x/cuDNN 9.x (if using GPU). \nInner Error: {inner}", ex);
             }
             catch (Exception ex)
             {
                 throw new Exception($"Failed to initialize AI model: {ex.Message}", ex);
             }
-
-            _isInitialized = true;
         });
     }
 
     private void SetupNativeResolver()
     {
-        var runtimeDir = Path.Combine(_resourceService.GetAIResourcesPath(), "runtime");
-        
-        // Add runtime dir to PATH so Windows can find native DLLs like onnxruntime.dll, cublas64_11.dll etc.
-        var path = Environment.GetEnvironmentVariable("PATH") ?? "";
-        if (!path.Contains(runtimeDir))
+        // Use .NET's modern DllImportResolver to point directly to the AI/runtime folder.
+        // This is much more reliable than modifying PATH at runtime.
+        NativeLibrary.SetDllImportResolver(typeof(InferenceSession).Assembly, (libraryName, assembly, searchPath) =>
         {
-            Environment.SetEnvironmentVariable("PATH", runtimeDir + Path.PathSeparator + path);
+            if (libraryName == "onnxruntime")
+            {
+                var runtimeDir = Path.Combine(_resourceService.GetAIResourcesPath(), "runtime");
+                var dllPath = Path.Combine(runtimeDir, "onnxruntime.dll");
+                
+                if (File.Exists(dllPath))
+                {
+                    System.Diagnostics.Debug.WriteLine($"[ONNX] Custom Resolver loading: {dllPath}");
+                    return NativeLibrary.Load(dllPath);
+                }
+            }
+            return IntPtr.Zero;
+        });
+
+        // Also add to PATH as fallback for dependencies of onnxruntime.dll (like zlib, etc)
+        var runtimeDirFallback = Path.Combine(_resourceService.GetAIResourcesPath(), "runtime");
+        var path = Environment.GetEnvironmentVariable("PATH") ?? "";
+        if (!path.Contains(runtimeDirFallback))
+        {
+            Environment.SetEnvironmentVariable("PATH", runtimeDirFallback + Path.PathSeparator + path);
         }
     }
 
