@@ -105,49 +105,52 @@ public class BackgroundRemovalService : IDisposable
 
     private bool IsSolidBackground(SKBitmap bmp, out SKColor bgColor)
     {
-        // Probe inwards to avoid 1px borders or compression artifacts at the edge
-        int margin = 10;
+        // Probe closer to edge. 10px was too deep and hit the subject in tightly cropped images.
+        // 2px is enough to avoid the 1px bounding box/border.
+        int margin = 2;
         int w = bmp.Width;
         int h = bmp.Height;
 
-        // Ensure image is big enough, otherwise fallback to corners
-        if (w <= 20 || h <= 20) margin = 0;
+        // Ensure image is big enough
+        if (w <= 10 || h <= 10) margin = 0;
 
-        var c1 = bmp.GetPixel(margin, margin);
-        
-        // Safeguard: If probe is transparent, ignore
+        var c1 = bmp.GetPixel(margin, margin); // Top-Left
+        var c2 = bmp.GetPixel(w - 1 - margin, margin); // Top-Right
+        var c3 = bmp.GetPixel(margin, h - 1 - margin); // Bottom-Left
+        var c4 = bmp.GetPixel(w - 1 - margin, h - 1 - margin); // Bottom-Right
+
+        // Safeguard: If primary probe is transparent, ignore
         if (c1.Alpha < 250) 
         {
             bgColor = SKColors.Empty;
             return false;
         }
 
-        var c2 = bmp.GetPixel(w - 1 - margin, margin);
-        var c3 = bmp.GetPixel(margin, h - 1 - margin);
-        var c4 = bmp.GetPixel(w - 1 - margin, h - 1 - margin);
-
-        // Simple strict equality or small tolerance?
-        // Let's use a tighter tolerance to avoid False Positives on gradients
-        int tolerance = 15;
+        // Tolerance Tuning:
+        // Use 25 as safe middle ground (filters gradients, accepts JPEG noise)
+        int tolerance = 25;
         
-        bool match = ColorsAreSimilar(c1, c2, tolerance) && 
-                     ColorsAreSimilar(c1, c3, tolerance) && 
-                     ColorsAreSimilar(c1, c4, tolerance);
-
-        // Special Case: High Brightness (White/Near White)
-        // If the top-left probe is very bright, assume it's a white background we want to remove
-        if (!match && c1.Red > 240 && c1.Green > 240 && c1.Blue > 240)
+        // Dynamic Tolerance for Whites:
+        // If Top-Left is bright white, allow more noise (up to 45).
+        if (c1.Red > 240 && c1.Green > 240 && c1.Blue > 240)
         {
-             // Check if other corners are also reasonably bright
-             if (c2.Red > 200 && c3.Red > 200 && c4.Red > 200)
-             {
-                 bgColor = c1;
-                 return true;
-             }
+            tolerance = 45;
         }
-                     
+        
+        // Voting System:
+        // Instead of strict AND (&&), we count matches.
+        // If 3 out of 3 other corners match Top-Left, we are confident.
+        // This handles cases where one corner might cover a small watermark or UI element.
+        int matchCount = 0;
+        if (ColorsAreSimilar(c1, c2, tolerance)) matchCount++;
+        if (ColorsAreSimilar(c1, c3, tolerance)) matchCount++;
+        if (ColorsAreSimilar(c1, c4, tolerance)) matchCount++;
+
         bgColor = c1;
-        return match;
+        
+        // Require at least 2 other corners to match Top-Left (3 corners total same color)
+        // Or if it's super bright white, be even more lenient? No, 2 matches is distinct enough.
+        return matchCount >= 2;
     }
 
     private bool ColorsAreSimilar(SKColor a, SKColor b, int tolerance)
