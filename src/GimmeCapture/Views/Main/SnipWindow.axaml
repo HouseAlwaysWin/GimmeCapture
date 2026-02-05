@@ -40,9 +40,8 @@
         </Style>
 
         <Style Selector="Border.StatusBar">
-            <Setter Property="Background" Value="#E6000000"/>
-            <Setter Property="CornerRadius" Value="20"/>
-            <Setter Property="Padding" Value="16,8"/>
+            <Setter Property="Background" Value="#F2121212"/>
+            <Setter Property="Padding" Value="0"/>
             <Setter Property="HorizontalAlignment" Value="Center"/>
             <Setter Property="VerticalAlignment" Value="Bottom"/>
             <Setter Property="Margin" Value="0,0,0,80"/>
@@ -373,21 +372,118 @@
                               IsVisible="{Binding CurrentState, Converter={StaticResource StateToBoolConverter}}"/>
         </Canvas>
 
-        <!-- Loading Overlay (StatusBar Style) -->
+        <!-- Loading Overlay (Babymetal Style) -->
         <Border Classes="StatusBar" Classes.active="{Binding IsProcessing}">
-            <StackPanel Spacing="8" Width="200">
-                <TextBlock Text="{Binding ProcessingText}" 
-                           Foreground="White" 
-                           FontSize="12" 
-                           HorizontalAlignment="Left"
-                           FontFamily="{Binding CurrentFontFamily}"/>
-                <ProgressBar IsIndeterminate="{Binding !RecordingService.IsFinalizing}" 
-                             Value="{Binding RecordingService.FinalizationProgress}"
-                             Minimum="0" Maximum="100"
-                             Height="4"
-                             Foreground="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}"
-                             Background="#444444"/>
-            </StackPanel>
+            <Grid ColumnDefinitions="Auto,224,Auto" HorizontalAlignment="Center">
+                <!-- Left Wing Decoration -->
+                <Rectangle Grid.Column="0" Width="44" Height="26" VerticalAlignment="Center" 
+                           Fill="{Binding ThemeColor, Converter={StaticResource ColorToBrushConverter}}" 
+                           Opacity="0.8"
+                           RenderOptions.BitmapInterpolationMode="HighQuality">
+                    <Rectangle.OpacityMask>
+                        <ImageBrush Source="/Assets/wing_left.png" Stretch="Fill"/>
+                    </Rectangle.OpacityMask>
+                </Rectangle>
+
+                <Panel Grid.Column="1" Width="224" Height="48">
+                    <!-- Octagonal Shadow/Glow -->
+                    <Path Data="M 12,0 L 212,0 L 224,12 L 224,36 L 212,48 L 12,48 L 0,36 L 0,12 Z" 
+                          Fill="{Binding ThemeColor, Converter={StaticResource ColorToBrushConverter}}" 
+                          Opacity="0.3"
+                          Stretch="Fill"
+                          Margin="-3">
+                        <Path.Effect>
+                            <BlurEffect Radius="12"/>
+                        </Path.Effect>
+                    </Path>
+
+                    <Grid ColumnDefinitions="12,*,12">
+                        <!-- Left Cap -->
+                        <Panel Grid.Column="0">
+                            <Path Data="M 1,0 L 0,0.25 L 0,0.75 L 1,1" Stretch="Fill" Fill="{Binding $parent[Border].Background}"/>
+                            <Path Data="M 1,0 L 0,0.25 L 0,0.75 L 1,1" Stretch="Fill" StrokeThickness="1">
+                                <Path.Stroke>
+                                    <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                                        <GradientStop Offset="0" Color="{Binding ThemeDeepColor}"/>
+                                        <GradientStop Offset="0.5" Color="{Binding ThemeColor}"/>
+                                        <GradientStop Offset="1" Color="{Binding ThemeDeepColor}"/>
+                                    </LinearGradientBrush>
+                                </Path.Stroke>
+                            </Path>
+                        </Panel>
+                        
+                        <!-- Center -->
+                        <Panel Grid.Column="1">
+                            <Rectangle Fill="{Binding $parent[Border].Background}"/>
+                            <Rectangle Height="1" VerticalAlignment="Top">
+                                <Rectangle.Fill>
+                                    <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                                        <GradientStop Offset="0" Color="{Binding ThemeDeepColor}"/>
+                                        <GradientStop Offset="0.5" Color="{Binding ThemeColor}"/>
+                                        <GradientStop Offset="1" Color="{Binding ThemeDeepColor}"/>
+                                    </LinearGradientBrush>
+                                </Rectangle.Fill>
+                            </Rectangle>
+                            <Rectangle Height="1" VerticalAlignment="Bottom">
+                                <Rectangle.Fill>
+                                    <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                                        <GradientStop Offset="0" Color="{Binding ThemeDeepColor}"/>
+                                        <GradientStop Offset="0.5" Color="{Binding ThemeColor}"/>
+                                        <GradientStop Offset="1" Color="{Binding ThemeDeepColor}"/>
+                                    </LinearGradientBrush>
+                                </Rectangle.Fill>
+                            </Rectangle>
+                            
+                            <StackPanel Spacing="6" VerticalAlignment="Center" Margin="0,0,0,2">
+                                <TextBlock Text="{Binding ProcessingText}" 
+                                           Foreground="White" 
+                                           FontSize="11" 
+                                           FontWeight="SemiBold"
+                                           HorizontalAlignment="Center"
+                                           FontFamily="{Binding CurrentFontFamily}"
+                                           LetterSpacing="1.2"/>
+                                <ProgressBar IsIndeterminate="{Binding !RecordingService.IsFinalizing}" 
+                                             Value="{Binding RecordingService.FinalizationProgress}"
+                                             Minimum="0" Maximum="100"
+                                             Height="3"
+                                             CornerRadius="0"
+                                             Foreground="{Binding ThemeColor, Converter={StaticResource ColorToBrushConverter}}"
+                                             Background="#333333">
+                                    <ProgressBar.Styles>
+                                        <Style Selector="ProgressBar /template/ Border#ProgressBarRoot">
+                                            <Setter Property="ClipToBounds" Value="False"/>
+                                        </Style>
+                                    </ProgressBar.Styles>
+                                </ProgressBar>
+                            </StackPanel>
+                        </Panel>
+
+                        <!-- Right Cap -->
+                        <Panel Grid.Column="2">
+                            <Path Data="M 0,0 L 1,0.25 L 1,0.75 L 0,1" Stretch="Fill" Fill="{Binding $parent[Border].Background}"/>
+                            <Path Data="M 0,0 L 1,0.25 L 1,0.75 L 0,1" Stretch="Fill" StrokeThickness="1">
+                                <Path.Stroke>
+                                    <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                                        <GradientStop Offset="0" Color="{Binding ThemeDeepColor}"/>
+                                        <GradientStop Offset="0.5" Color="{Binding ThemeColor}"/>
+                                        <GradientStop Offset="1" Color="{Binding ThemeDeepColor}"/>
+                                    </LinearGradientBrush>
+                                </Path.Stroke>
+                            </Path>
+                        </Panel>
+                    </Grid>
+                </Panel>
+
+                <!-- Right Wing Decoration -->
+                <Rectangle Grid.Column="2" Width="44" Height="26" VerticalAlignment="Center" 
+                           Fill="{Binding ThemeColor, Converter={StaticResource ColorToBrushConverter}}" 
+                           Opacity="0.8"
+                           RenderOptions.BitmapInterpolationMode="HighQuality">
+                    <Rectangle.OpacityMask>
+                        <ImageBrush Source="/Assets/wing_right.png" Stretch="Fill"/>
+                    </Rectangle.OpacityMask>
+                </Rectangle>
+            </Grid>
         </Border>
     </Grid>
 

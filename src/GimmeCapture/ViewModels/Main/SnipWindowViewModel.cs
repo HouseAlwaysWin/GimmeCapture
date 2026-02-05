@@ -95,6 +95,17 @@ public class SnipWindowViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _processingText, value);
     }
 
+    public Color ThemeColor => _mainVm?.ThemeColor ?? Colors.Red;
+    public Color ThemeDeepColor 
+    {
+        get
+        {
+            if (ThemeColor == Color.Parse("#D4AF37")) return Color.Parse("#8B7500");
+            if (ThemeColor == Color.Parse("#E0E0E0")) return Color.Parse("#606060");
+            return Color.Parse("#900000");
+        }
+    }
+
     private PixelPoint _screenOffset;
     public PixelPoint ScreenOffset
     {
@@ -609,6 +620,12 @@ public class SnipWindowViewModel : ViewModelBase
         if (mainVm != null)
         {
             SelectedColor = mainVm.BorderColor;
+            
+            mainVm.WhenAnyValue(x => x.ThemeColor)
+                .Subscribe(_ => {
+                    this.RaisePropertyChanged(nameof(ThemeColor));
+                    this.RaisePropertyChanged(nameof(ThemeDeepColor));
+                });
         }
 
 
