@@ -1,0 +1,97 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="using:GimmeCapture.ViewModels.Shared"
+        xmlns:services="using:GimmeCapture.Services.Core"
+        mc:Ignorable="d" d:DesignWidth="450" d:DesignHeight="250"
+        x:Class="GimmeCapture.Views.Shared.GothicDialog"
+        x:DataType="vm:GothicDialogViewModel"
+        Title="{Binding Title}"
+        Width="550" Height="300"
+        WindowStartupLocation="CenterOwner"
+        SystemDecorations="None"
+        Background="Transparent"
+        TransparencyLevelHint="Transparent"
+        Topmost="True">
+
+    <!-- Root Grid centered with no margin at window level so wings can extend 550px width -->
+    <Grid HorizontalAlignment="Center" VerticalAlignment="Center" Width="550" Height="300" Background="#01000000">
+        <!-- Octagonal Background Layer (Actual box size is 450x250) -->
+        <Grid Margin="50,25" Width="450" Height="250">
+            <!-- Shadow/Glow -->
+            <Path Data="M 12,0 L 378,0 L 390,12 L 390,178 L 378,190 L 12,190 L 0,178 L 0,12 Z" 
+                  Fill="{Binding #MainBorder.BorderBrush}" 
+                  Opacity="0.2"
+                  Stretch="Fill"
+                  Margin="-5">
+                <Path.Effect>
+                    <BlurEffect Radius="15"/>
+                </Path.Effect>
+            </Path>
+
+            <!-- Main Octagonal Border & Background -->
+            <Border Name="MainBorder" Background="#0A0A0A" CornerRadius="0">
+                <Border.BorderBrush>
+                    <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+                        <GradientStop Offset="0" Color="#555555"/>
+                        <GradientStop Offset="0.5" Color="#E60012"/>
+                        <GradientStop Offset="1" Color="#555555"/>
+                    </LinearGradientBrush>
+                </Border.BorderBrush>
+                <Border.BorderThickness>1</Border.BorderThickness>
+                
+                <Grid ClipToBounds="False">
+                    <!-- Internal Red Line -->
+                    <Path Data="M 12,0 L 374,0 L 386,12 L 386,174 L 374,186 L 12,186 L 0,174 L 0,12 Z" 
+                          Stroke="#40E60012" StrokeThickness="1" Stretch="Fill" Margin="2"/>
+
+                    <!-- Wings (Now logically nested inside the Octagonal Border's Grid) -->
+                    <Rectangle Width="60" Height="34" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="-45,0,0,0" Fill="#E60012" Opacity="0.6" IsHitTestVisible="False">
+                        <Rectangle.OpacityMask><ImageBrush Source="avares://GimmeCapture/Assets/wing_left.png" Stretch="Uniform"/></Rectangle.OpacityMask>
+                    </Rectangle>
+                    <Rectangle Width="60" Height="34" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,-45,0" Fill="#E60012" Opacity="0.6" IsHitTestVisible="False">
+                        <Rectangle.OpacityMask><ImageBrush Source="avares://GimmeCapture/Assets/wing_right.png" Stretch="Uniform"/></Rectangle.OpacityMask>
+                    </Rectangle>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- Content Area (Must match background layer alignment) -->
+        <Grid Margin="50,25" Width="450" Height="250" RowDefinitions="*, Auto">
+            <Grid Grid.Row="0" Margin="20" RowDefinitions="Auto, *">
+                <TextBlock Text="{Binding Title}" 
+                           FontSize="18" FontWeight="Bold" Foreground="#E60012"
+                           HorizontalAlignment="Center" Margin="0,0,0,10"
+                           FontFamily="{Binding CurrentFontFamily, Source={x:Static services:LocalizationService.Instance}}"/>
+                
+                <TextBlock Grid.Row="1" Text="{Binding Message}" 
+                           FontSize="14" Foreground="#CCCCCC"
+                           TextWrapping="Wrap" TextAlignment="Center" VerticalAlignment="Center"
+                           FontFamily="{Binding CurrentFontFamily, Source={x:Static services:LocalizationService.Instance}}"/>
+                
+                <!-- Icons (Moved inside content area but positioned absolute) -->
+                <Grid Grid.RowSpan="2" IsHitTestVisible="False">
+                    <!-- Left Corner Heart -->
+                    <Rectangle Width="24" Height="24" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="-10,-10,0,0" Fill="#E60012">
+                        <Rectangle.OpacityMask><ImageBrush Source="avares://GimmeCapture/Assets/heart.png"/></Rectangle.OpacityMask>
+                    </Rectangle>
+                    <!-- Right Corner Skull -->
+                    <Rectangle Width="24" Height="24" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-10,-10,0" Fill="#E60012">
+                        <Rectangle.OpacityMask><ImageBrush Source="avares://GimmeCapture/Assets/skull.png"/></Rectangle.OpacityMask>
+                    </Rectangle>
+                </Grid>
+            </Grid>
+
+            <!-- Button Area -->
+            <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="20" Margin="0,0,0,30">
+                <Button Content="YES" Width="100" Height="32" 
+                        Command="{Binding CloseCommand}" CommandParameter="{x:True}"
+                        Theme="{StaticResource SnipButton}" Background="#330000" BorderBrush="#E60012"/>
+                <Button Content="NO" Width="100" Height="32" 
+                        Command="{Binding CloseCommand}" CommandParameter="{x:False}"
+                        Theme="{StaticResource SnipButton}" Background="#222222" BorderBrush="#555555"/>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Window>

@@ -26,6 +26,13 @@ public class MainWindowViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _statusText, value);
     }
 
+    private string _aiProgressText = "";
+    public string AIProgressText
+    {
+        get => _aiProgressText;
+        set => this.RaiseAndSetIfChanged(ref _aiProgressText, value);
+    }
+
     private bool _isModified;
     public bool IsModified
     {
@@ -61,6 +68,7 @@ public class MainWindowViewModel : ViewModelBase
     public FFmpegDownloaderService FfmpegDownloader { get; } = new();
     public RecordingService RecordingService { get; }
     public UpdateService UpdateService { get; }
+    public AIResourceService AIResourceService { get; }
     public string AppVersion => System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0";
 
     // Commands
@@ -79,6 +87,7 @@ public class MainWindowViewModel : ViewModelBase
     public ReactiveCommand<Unit, Unit> DecreaseWingScaleCommand { get; }
     public ReactiveCommand<Unit, Unit> IncreaseCornerIconScaleCommand { get; }
     public ReactiveCommand<Unit, Unit> DecreaseCornerIconScaleCommand { get; }
+    public ReactiveCommand<Unit, Unit> PickAIFolderCommand { get; }
     
     public Color[] SettingsColors { get; } = new[]
     {
@@ -92,6 +101,7 @@ public class MainWindowViewModel : ViewModelBase
         _settingsService = new AppSettingsService();
         RecordingService = new RecordingService(FfmpegDownloader);
         UpdateService = new UpdateService(AppVersion);
+        AIResourceService = new AIResourceService(_settingsService);
         
         // Sync ViewModel with Service using ReactiveUI
         // When Service language changes, notify ViewModel properties to update
@@ -108,25 +118,78 @@ public class MainWindowViewModel : ViewModelBase
         SetStatus("StatusReady");
 
         StartCaptureCommand = ReactiveCommand.CreateFromTask<CaptureMode>(StartCapture);
+        StartCaptureCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
         SaveAndCloseCommand = ReactiveCommand.CreateFromTask(SaveAndClose);
+        SaveAndCloseCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
         ResetToDefaultCommand = ReactiveCommand.CreateFromTask(ResetToDefault);
+        ResetToDefaultCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
 
         IncreaseThicknessCommand = ReactiveCommand.Create(() => { if (BorderThickness < 9) BorderThickness += 1; });
+        IncreaseThicknessCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
         DecreaseThicknessCommand = ReactiveCommand.Create(() => { if (BorderThickness > 1) BorderThickness -= 1; });
+        DecreaseThicknessCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
         
         IncreaseOpacityCommand = ReactiveCommand.Create(() => { if (MaskOpacity < 1.0) MaskOpacity = Math.Min(1.0, MaskOpacity + 0.05); });
+        IncreaseOpacityCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
         DecreaseOpacityCommand = ReactiveCommand.Create(() => { if (MaskOpacity > 0.05) MaskOpacity = Math.Max(0.05, MaskOpacity - 0.05); });
+        DecreaseOpacityCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
         
         ChangeColorCommand = ReactiveCommand.Create<Color>(c => BorderColor = c);
+        ChangeColorCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
         ChangeThemeColorCommand = ReactiveCommand.Create<Color>(c => ThemeColor = c);
+        ChangeThemeColorCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
         CheckUpdateCommand = ReactiveCommand.CreateFromTask(CheckForUpdates);
+        CheckUpdateCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
         OpenProjectCommand = ReactiveCommand.Create(() => OpenProjectUrl());
+        OpenProjectCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
         
         IncreaseWingScaleCommand = ReactiveCommand.Create(() => { if (WingScale < 3.0) WingScale = Math.Round(WingScale + 0.1, 1); });
+        IncreaseWingScaleCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
         DecreaseWingScaleCommand = ReactiveCommand.Create(() => { if (WingScale > 0.5) WingScale = Math.Round(WingScale - 0.1, 1); });
+        DecreaseWingScaleCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
         
         IncreaseCornerIconScaleCommand = ReactiveCommand.Create(() => { if (CornerIconScale < 1.0) CornerIconScale = Math.Round(CornerIconScale + 0.1, 1); });
+        IncreaseCornerIconScaleCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
         DecreaseCornerIconScaleCommand = ReactiveCommand.Create(() => { if (CornerIconScale > 0.4) CornerIconScale = Math.Round(CornerIconScale - 0.1, 1); });
+        DecreaseCornerIconScaleCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
+        
+        PickAIFolderCommand = ReactiveCommand.CreateFromTask(async () => {
+            if (PickFolderAction != null)
+            {
+                var path = await PickFolderAction();
+                if (!string.IsNullOrEmpty(path))
+                {
+                    AIResourcesDirectory = path;
+                }
+            }
+        });
+        PickAIFolderCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
+        
+        // --- AI Download Window Management ---
+        AIResourceService.WhenAnyValue(x => x.IsDownloading)
+            .ObserveOn(RxApp.MainThreadScheduler)
+            .Subscribe(isDownloading => 
+            {
+                if (isDownloading)
+                {
+                    AIProgressText = string.Format(LocalizationService.Instance["ComponentDownloadingProgress"], 0);
+                    ShowProgressWindow();
+                }
+                else
+                {
+                    CloseProgressWindow();
+                }
+            });
+
+        AIResourceService.WhenAnyValue(x => x.DownloadProgress)
+            .ObserveOn(RxApp.MainThreadScheduler)
+            .Subscribe(progress =>
+            {
+                if (AIResourceService.IsDownloading)
+                {
+                    AIProgressText = string.Format(LocalizationService.Instance["ComponentDownloadingProgress"], (int)progress);
+                }
+            });
         
         // Setup Hotkey Action
         HotkeyService.OnHotkeyPressed = (id) => 
@@ -202,6 +265,19 @@ public class MainWindowViewModel : ViewModelBase
         new LanguageOption { Name = "繁體中文 (台灣)", Value = Language.Chinese },
         new LanguageOption { Name = "日本語 (日本)", Value = Language.Japanese }
     };
+
+    public string AIResourcesDirectory
+    {
+        get => string.IsNullOrEmpty(_settingsService.Settings.AIResourcesDirectory) 
+               ? Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "AI") 
+               : _settingsService.Settings.AIResourcesDirectory;
+        set
+        {
+            _settingsService.Settings.AIResourcesDirectory = value;
+            this.RaisePropertyChanged();
+            IsModified = true;
+        }
+    }
 
     public LanguageOption SelectedLanguageOption
     {
@@ -295,7 +371,18 @@ public class MainWindowViewModel : ViewModelBase
             if (old != value)
             {
                 UpdateThemeResources(value);
+                this.RaisePropertyChanged(nameof(ThemeDeepColor));
             }
+        }
+    }
+
+    public Color ThemeDeepColor 
+    {
+        get
+        {
+            if (ThemeColor == Color.Parse("#D4AF37")) return Color.Parse("#8B7500");
+            if (ThemeColor == Color.Parse("#E0E0E0")) return Color.Parse("#606060");
+            return Color.Parse("#900000");
         }
     }
 
@@ -785,6 +872,28 @@ public class MainWindowViewModel : ViewModelBase
             }
         }
         }
+
+    private GimmeCapture.Views.Shared.DownloadProgressWindow? _progressWindow;
+
+    private void ShowProgressWindow()
+    {
+        if (_progressWindow != null) return;
+
+        _progressWindow = new GimmeCapture.Views.Shared.DownloadProgressWindow
+        {
+            DataContext = this
+        };
+        _progressWindow.Show();
+    }
+
+    private void CloseProgressWindow()
+    {
+        if (_progressWindow != null)
+        {
+            _progressWindow.Close();
+            _progressWindow = null;
+        }
+    }
 
     private void OpenProjectUrl()
     {

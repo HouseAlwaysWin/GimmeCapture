@@ -42,4 +42,7 @@ public class AppSettings
     public string CopyHotkey { get; set; } = "Ctrl+C";
     public string PinHotkey { get; set; } = "F3";
     public string RecordHotkey { get; set; } = "F2";
+    
+    // AI
+    public string AIResourcesDirectory { get; set; } = string.Empty;
 }

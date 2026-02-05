@@ -6,7 +6,7 @@ using System;
 using System.Reactive;
 using System.Threading.Tasks;
 using System.ComponentModel;
-
+using System.IO;
 using System.Reactive.Linq;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -16,6 +16,7 @@ using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core;
 using GimmeCapture.Services.Platforms.Windows;
 using GimmeCapture.ViewModels.Floating;
+using GimmeCapture.ViewModels.Shared;
 using GimmeCapture.Views.Floating;
 
 namespace GimmeCapture.ViewModels.Main;
@@ -44,6 +45,17 @@ public class SnipWindowViewModel : ViewModelBase
         set 
         {
             this.RaiseAndSetIfChanged(ref _isRecordingMode, value);
+            
+            // Update border color based on mode
+            if (value)
+            {
+                SelectionBorderColor = Color.Parse("#FFD700"); // Gold for Recording
+            }
+            else
+            {
+                SelectionBorderColor = _mainVm?.BorderColor ?? Colors.Red;
+            }
+            
             this.RaisePropertyChanged(nameof(HideFrameBorder));
             this.RaisePropertyChanged(nameof(HideSelectionDecoration));
             this.RaisePropertyChanged(nameof(ModeDisplayName));
@@ -298,6 +310,7 @@ public class SnipWindowViewModel : ViewModelBase
     public ReactiveCommand<Unit, Unit> UndoCommand { get; }
     public ReactiveCommand<Unit, Unit> RedoCommand { get; }
     public ReactiveCommand<Unit, Unit> ClearCommand { get; }
+    public ReactiveCommand<Unit, Unit> RemoveBackgroundCommand { get; }
     public ReactiveCommand<Unit, Unit> IncreaseThicknessCommand { get; }
     public ReactiveCommand<Unit, Unit> DecreaseThicknessCommand { get; }
     public ReactiveCommand<Unit, Unit> IncreaseFontSizeCommand { get; }
@@ -353,6 +366,9 @@ public class SnipWindowViewModel : ViewModelBase
             this.RaisePropertyChanged(nameof(IsTextToolActive));
         }
     }
+
+    public bool IsAIDownloading => _mainVm?.AIResourceService.IsDownloading ?? false;
+    public double AIResourceProgress => _mainVm?.AIResourceService.DownloadProgress ?? 0;
 
     public bool IsShapeToolActive => CurrentTool == AnnotationType.Rectangle || CurrentTool == AnnotationType.Ellipse;
     public bool IsLineToolActive => CurrentTool == AnnotationType.Arrow || CurrentTool == AnnotationType.Line || CurrentTool == AnnotationType.Pen;
@@ -626,28 +642,58 @@ public class SnipWindowViewModel : ViewModelBase
                     this.RaisePropertyChanged(nameof(ThemeColor));
                     this.RaisePropertyChanged(nameof(ThemeDeepColor));
                 });
+
+            mainVm.AIResourceService.WhenAnyValue(x => x.IsDownloading)
+                .ObserveOn(RxApp.MainThreadScheduler)
+                .Subscribe(isDownloading => 
+                {
+                    this.RaisePropertyChanged(nameof(IsAIDownloading));
+                    if (isDownloading)
+                    {
+                        ProcessingText = LocalizationService.Instance["ComponentDownloadingProgress"] ?? "Downloading...";
+                        IsProcessing = true;
+                    }
+                    else if (!(_recordingService?.IsFinalizing ?? false))
+                    {
+                        IsProcessing = false;
+                    }
+                });
+
+            mainVm.AIResourceService.WhenAnyValue(x => x.DownloadProgress)
+                .ObserveOn(RxApp.MainThreadScheduler)
+                .Subscribe(_ => this.RaisePropertyChanged(nameof(AIResourceProgress)));
         }
 
 
         CopyCommand = ReactiveCommand.CreateFromTask(Copy);
+        CopyCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
         SaveCommand = ReactiveCommand.CreateFromTask(Save);
+        SaveCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
         PinCommand = ReactiveCommand.CreateFromTask(Pin);
+        PinCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
         CloseCommand = ReactiveCommand.Create(Close);
+        CloseCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
 
         ToggleModeCommand = ReactiveCommand.Create(() => 
         {
             if (RecState == RecordingState.Idle) IsRecordingMode = !IsRecordingMode;
         });
+        ToggleModeCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
 
         SetCaptureModeCommand = ReactiveCommand.Create<bool>(isRecord => 
         {
             if (RecState == RecordingState.Idle) IsRecordingMode = isRecord;
         });
+        SetCaptureModeCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
 
         StartRecordingCommand = ReactiveCommand.CreateFromTask(StartRecording);
+        StartRecordingCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
         PauseRecordingCommand = ReactiveCommand.CreateFromTask(PauseRecording);
+        PauseRecordingCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
         StopRecordingCommand = ReactiveCommand.CreateFromTask(StopRecording);
+        StopRecordingCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
         CopyRecordingCommand = ReactiveCommand.CreateFromTask(CopyRecording);
+        CopyRecordingCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
 
         Annotations.CollectionChanged += (s, e) =>
         {
@@ -669,18 +715,117 @@ public class SnipWindowViewModel : ViewModelBase
                 IsDrawingMode = true; 
             }
         });
+        SelectToolCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
         
         ToggleToolGroupCommand = ReactiveCommand.Create<string>(ToggleToolGroup);
+        ToggleToolGroupCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
         
         ChangeColorCommand = ReactiveCommand.Create<Color>(c => SelectedColor = c);
+        ChangeColorCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
         UndoCommand = ReactiveCommand.Create(Undo);
+        UndoCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
         RedoCommand = ReactiveCommand.Create(Redo);
+        RedoCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
         ClearCommand = ReactiveCommand.Create(() => Annotations.Clear());
+        ClearCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
+        
+        RemoveBackgroundCommand = ReactiveCommand.CreateFromTask(async () => {
+            if (_mainVm == null) return;
+            
+            var resourceService = _mainVm.AIResourceService;
+            
+            if (!resourceService.AreResourcesReady())
+            {
+                var title = LocalizationService.Instance["AIDownloadTitle"];
+                var prompt = LocalizationService.Instance["AIDownloadPrompt"];
+                
+                var dialogVm = new GothicDialogViewModel
+                {
+                    Title = title,
+                    Message = prompt
+                };
+                
+                var dialog = new GimmeCapture.Views.Shared.GothicDialog
+                {
+                    DataContext = dialogVm
+                };
+
+                // Find the active SnipWindow to use as owner
+                var desktop = Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime;
+                var owner = desktop?.Windows.OfType<GimmeCapture.Views.Main.SnipWindow>().FirstOrDefault();
+
+                var result = await dialog.ShowDialog<bool>(owner!); 
+                    
+                if (!result) return;
+                
+                // User confirmed: Fire download in background and return early
+                // We don't await this so the user can continue using the tool
+                _ = resourceService.EnsureResourcesAsync().ContinueWith(t => {
+                    if (t.IsFaulted) System.Diagnostics.Debug.WriteLine($"Background AI Download Error: {t.Exception}");
+                });
+                return;
+            }
+
+            IsProcessing = true;
+            try
+            {
+                if (!resourceService.AreResourcesReady())
+                {
+                    ProcessingText = LocalizationService.Instance["DownloadingAI"];
+                    var success = await resourceService.EnsureResourcesAsync();
+                    if (!success)
+                    {
+                        System.Diagnostics.Debug.WriteLine("Download failed. Please check your internet connection.");
+                        return;
+                    }
+                }
+
+                ProcessingText = LocalizationService.Instance["ProcessingAI"];
+                
+                // Get current selection as bytes
+                var skBitmap = await _captureService.CaptureScreenWithAnnotationsAsync(SelectionRect, ScreenOffset, VisualScaling, Annotations, _mainVm?.ShowSnipCursor ?? false);
+                if (skBitmap == null) return;
+
+                byte[] imageBytes;
+                using (var ms = new MemoryStream())
+                {
+                    using (var image = SkiaSharp.SKImage.FromBitmap(skBitmap))
+                    using (var data = image.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100))
+                    {
+                        data.SaveTo(ms);
+                    }
+                    imageBytes = ms.ToArray();
+                }
+
+                // Run AI
+                using var aiService = new BackgroundRemovalService(resourceService);
+                var transparentBytes = await aiService.RemoveBackgroundAsync(imageBytes);
+
+                using var tms = new MemoryStream(transparentBytes);
+                DrawingModeSnapshot = new Avalonia.Media.Imaging.Bitmap(tms);
+                
+                CurrentState = SnipState.Selected; 
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"AI Error: {ex.Message}");
+            }
+            finally
+            {
+                IsProcessing = false;
+                ProcessingText = LocalizationService.Instance["StatusProcessing"] ?? "正在處理...";
+            }
+        });
+        RemoveBackgroundCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
 
         IncreaseThicknessCommand = ReactiveCommand.Create(() => { if (CurrentThickness < 20) CurrentThickness += 1; });
+        IncreaseThicknessCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
         DecreaseThicknessCommand = ReactiveCommand.Create(() => { if (CurrentThickness > 1) CurrentThickness -= 1; });
+        DecreaseThicknessCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
         IncreaseFontSizeCommand = ReactiveCommand.Create(() => { if (CurrentFontSize < 72) CurrentFontSize += 2; });
+        IncreaseFontSizeCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
         DecreaseFontSizeCommand = ReactiveCommand.Create(() => { if (CurrentFontSize > 8) CurrentFontSize -= 2; });
+        DecreaseFontSizeCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
         
         ApplyHexColorCommand = ReactiveCommand.Create(() => 
         {
@@ -697,16 +842,24 @@ public class SnipWindowViewModel : ViewModelBase
             }
             catch { }
         });
+        ApplyHexColorCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
 
         ChangeLanguageCommand = ReactiveCommand.Create(() => LocalizationService.Instance.CycleLanguage());
+        ChangeLanguageCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
         ToggleBoldCommand = ReactiveCommand.Create<Unit, bool>(_ => IsBold = !IsBold);
+        ToggleBoldCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
         ToggleItalicCommand = ReactiveCommand.Create<Unit, bool>(_ => IsItalic = !IsItalic);
+        ToggleItalicCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
 
         IncreaseWingScaleCommand = ReactiveCommand.Create(() => { if (WingScale < 3.0) WingScale = Math.Round(WingScale + 0.1, 1); });
+        IncreaseWingScaleCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
         DecreaseWingScaleCommand = ReactiveCommand.Create(() => { if (WingScale > 0.5) WingScale = Math.Round(WingScale - 0.1, 1); });
+        DecreaseWingScaleCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
 
         IncreaseCornerIconScaleCommand = ReactiveCommand.Create(() => { if (CornerIconScale < 1.0) CornerIconScale = Math.Round(CornerIconScale + 0.1, 1); });
+        IncreaseCornerIconScaleCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
         DecreaseCornerIconScaleCommand = ReactiveCommand.Create(() => { if (CornerIconScale > 0.4) CornerIconScale = Math.Round(CornerIconScale - 0.1, 1); });
+        DecreaseCornerIconScaleCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
 
         UpdateMask();
     }
@@ -912,13 +1065,12 @@ public class SnipWindowViewModel : ViewModelBase
                 catch (Exception ex)
                 {
                     System.Diagnostics.Debug.WriteLine($"Failed to copy recording to clipboard: {ex.Message}");
-                    System.Windows.Forms.MessageBox.Show($"Failed to copy: {ex.Message}", "Error");
                 }
             }
             else 
             {
-                 // Debugging help: show what path was looked for
-                 System.Windows.Forms.MessageBox.Show($"Video file not found at:\n{actualOutputPath}", "Error");
+                 // Debugging help: log error
+                 System.Diagnostics.Debug.WriteLine($"Video file not found at: {actualOutputPath}");
             }
 
             CloseAction?.Invoke();
@@ -947,27 +1099,25 @@ public class SnipWindowViewModel : ViewModelBase
             // Start playing the video with ffplay (frameless, on top)
             if (wasRecording) // Use captured state
             {
-                 // Stop already called above
-                 
-                 var recordingPath = _recordingService.LastRecordingPath;
-                 if (string.IsNullOrEmpty(recordingPath) || !System.IO.File.Exists(recordingPath)) 
-                 {
-                     System.Windows.Forms.MessageBox.Show($"找不到錄影檔案: {recordingPath}", "錯誤");
-                     return;
-                 }
+                  // Stop already called above
+                  
+                  var recordingPath = _recordingService.LastRecordingPath;
+                  if (string.IsNullOrEmpty(recordingPath) || !System.IO.File.Exists(recordingPath)) 
+                  {
+                      System.Diagnostics.Debug.WriteLine($"找不到錄影檔案: {recordingPath}");
+                      return;
+                  }
 
                  // Use path from service (checks system path too)
                  var ffplayPath = _recordingService.Downloader.GetFFplayPath();
                  
                  // Fallback check
-                 if (string.IsNullOrEmpty(ffplayPath) || !System.IO.File.Exists(ffplayPath))
-                 {
-                     System.Windows.Forms.MessageBox.Show(
-                        $"找不到播放器組件 (ffplay.exe)。\n請確認是否已安裝或下載完成。", 
-                        "組件缺失");
+                  if (string.IsNullOrEmpty(ffplayPath) || !System.IO.File.Exists(ffplayPath))
+                  {
+                      System.Diagnostics.Debug.WriteLine($"找不到播放器組件 (ffplay.exe)");
                     _isProcessingRecording = false;
-                     return;
-                 }
+                      return;
+                  }
 
                  // Calculate Geometry
                  // ffplay expects integer coordinates

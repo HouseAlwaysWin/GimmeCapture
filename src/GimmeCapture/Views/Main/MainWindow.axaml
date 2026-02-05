@@ -271,6 +271,16 @@
                                     <CheckBox IsChecked="{Binding HideSnipSelectionDecoration}" Content="{Binding [HideSnipSelectionDecoration], Source={x:Static services:LocalizationService.Instance}}"/>
                                     <CheckBox IsChecked="{Binding HideSnipSelectionBorder}" Content="{Binding [HideSnipSelectionBorder], Source={x:Static services:LocalizationService.Instance}}"/>
                                     <CheckBox IsChecked="{Binding ShowSnipCursor}" Content="{Binding [ShowSnipCursor], Source={x:Static services:LocalizationService.Instance}}"/>
+                                    
+                                    <TextBlock Text="AI 資源路徑 (AI Resources Path)" FontSize="12" Foreground="#888888" Margin="24,10,0,0"/>
+                                    <DockPanel Margin="24,0,0,10">
+                                        <Button Content="{Binding [SelectPath], Source={x:Static services:LocalizationService.Instance}}" 
+                                                DockPanel.Dock="Right" 
+                                                Theme="{StaticResource SmallGothicMetalButton}"
+                                                Command="{Binding PickAIFolderCommand}" 
+                                                Margin="10,0,0,0"/>
+                                        <TextBox Text="{Binding AIResourcesDirectory}" Margin="0,0,10,0"/>
+                                    </DockPanel>
                                 </StackPanel>
                             </StackPanel>
                         </StackPanel>
