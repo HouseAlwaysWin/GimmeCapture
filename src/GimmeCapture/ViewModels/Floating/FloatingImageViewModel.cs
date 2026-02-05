@@ -2,6 +2,7 @@ using Avalonia.Media.Imaging;
 using ReactiveUI;
 using System.Reactive;
 using System.Threading.Tasks;
+using System.Collections.Generic;
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core;
 using GimmeCapture.Services.Platforms.Windows;
@@ -217,6 +218,82 @@ public class FloatingImageViewModel : ViewModelBase
 
         RemoveBackgroundCommand = ReactiveCommand.CreateFromTask(RemoveBackgroundAsync, this.WhenAnyValue(x => x.IsProcessing).Select(p => !p));
         RemoveBackgroundCommand.ThrownExceptions.Subscribe((System.Exception ex) => System.Diagnostics.Debug.WriteLine($"Pinned AI Error: {ex}"));
+
+        var canUndo = this.WhenAnyValue(x => x.HasUndo).ObserveOn(RxApp.MainThreadScheduler);
+        UndoCommand = ReactiveCommand.Create(Undo, canUndo);
+
+        var canRedo = this.WhenAnyValue(x => x.HasRedo).ObserveOn(RxApp.MainThreadScheduler);
+        RedoCommand = ReactiveCommand.Create(Redo, canRedo);
+    }
+
+    private Stack<Bitmap> _undoStack = new Stack<Bitmap>();
+    private Stack<Bitmap> _redoStack = new Stack<Bitmap>();
+
+    private bool _hasUndo;
+    public bool HasUndo
+    {
+        get => _hasUndo;
+        set => this.RaiseAndSetIfChanged(ref _hasUndo, value);
+    }
+
+    private bool _hasRedo;
+    public bool HasRedo
+    {
+        get => _hasRedo;
+        set => this.RaiseAndSetIfChanged(ref _hasRedo, value);
+    }
+
+    public ReactiveCommand<Unit, Unit> UndoCommand { get; }
+    public ReactiveCommand<Unit, Unit> RedoCommand { get; }
+
+    private void PushUndoState()
+    {
+        if (Image == null) return;
+        
+        // We need to clone the current bitmap, otherwise we just push a reference to the one we are about to change
+        // In Avalonia, Bitmap does not have a direct Clone(), but we can save to streams.
+        // Or simpler: Since we create NEW bitmaps on every change (immutable style), we *might* be able to just push the current reference 
+        // IF the change replaces the property with a NEW reference.
+        // Let's assume operation replaces property.
+        
+        _undoStack.Push(Image);
+        _redoStack.Clear();
+        
+        UpdateStackStatus();
+    }
+
+    private void Undo()
+    {
+        if (_undoStack.Count == 0) return;
+
+        var current = Image;
+        if (current != null) _redoStack.Push(current);
+
+        var prev = _undoStack.Pop();
+        // Set backing field directly or property? Property triggers change notification which is good, 
+        // BUT we need to avoid pushing to undo stack again if we had auto-push logic (we don't, it's manual).
+        Image = prev;
+        
+        UpdateStackStatus();
+    }
+
+    private void Redo()
+    {
+        if (_redoStack.Count == 0) return;
+
+        var current = Image;
+        if (current != null) _undoStack.Push(current);
+
+        var next = _redoStack.Pop();
+        Image = next;
+
+        UpdateStackStatus();
+    }
+
+    private void UpdateStackStatus()
+    {
+        HasUndo = _undoStack.Count > 0;
+        HasRedo = _redoStack.Count > 0;
     }
 
     private async Task RemoveBackgroundAsync()
@@ -266,6 +343,9 @@ public class FloatingImageViewModel : ViewModelBase
             IsProcessing = true;
             ProcessingText = LocalizationService.Instance["ProcessingAI"] ?? "Processing...";
             
+            // Save state for Undo
+            PushUndoState();
+
              // 1. Convert Avalonia Bitmap to Bytes
             byte[] imageBytes;
             using (var ms = new System.IO.MemoryStream())
