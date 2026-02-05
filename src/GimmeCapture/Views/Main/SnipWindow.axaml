@@ -322,13 +322,7 @@
             </StackPanel>
                     
             <!-- Processing Overlay -->
-            <Border Background="#AA000000" CornerRadius="8" Padding="16" IsVisible="{Binding IsProcessing}"
-                    HorizontalAlignment="Center" VerticalAlignment="Center">
-                <StackPanel Spacing="10">
-                    <TextBlock Text="{Binding ProcessingText}" Foreground="White" FontSize="16" FontWeight="Bold" HorizontalAlignment="Center"/>
-                    <ProgressBar IsIndeterminate="True" Width="200" Height="4"/>
-                </StackPanel>
-            </Border>
+            <ctl:ProcessingOverlay DataContext="{Binding}" IsVisible="{Binding IsProcessing}"/>
 
             <ctl:SnipToolbar Name="Toolbar" Canvas.Left="{Binding ToolbarLeft}" Canvas.Top="{Binding ToolbarTop}" IsVisible="{Binding CurrentState, Converter={StaticResource StateToBoolConverter}}"/>
         </Canvas>

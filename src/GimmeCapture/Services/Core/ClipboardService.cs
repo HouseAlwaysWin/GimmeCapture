@@ -27,15 +27,29 @@ public class ClipboardService : IClipboardService
                     {
                         using var ms = new System.IO.MemoryStream();
                         bitmap.Save(ms); // Saves as PNG by default
-                        ms.Position = 0;
-                        using var winBitmap = new System.Drawing.Bitmap(ms);
+                        var pngBytes = ms.ToArray();
+                        
+                        using var msForBitmap = new System.IO.MemoryStream(pngBytes);
+                        using var winBitmap = new System.Drawing.Bitmap(msForBitmap);
+                        
+                        // Create DataObject with multiple formats
+                        var data = new System.Windows.Forms.DataObject();
+                        
+                        // 1. Standard Bitmap (Legacy apps) - Alpha might be lost depending on app
+                        data.SetData(System.Windows.Forms.DataFormats.Bitmap, true, winBitmap);
+                        
+                        // 2. PNG Format (Modern apps: Chrome, Discord, Slack support transparency via this)
+                        // Note: Stream must be kept open? DataObject usually serializes it.
+                        // Ideally we pass MemoryStream. 
+                        using var pngStream = new System.IO.MemoryStream(pngBytes);
+                        data.SetData("PNG", false, pngStream);
                         
                         // Specific retry logic for clipboard which can be locked
                         for (int i = 0; i < 5; i++)
                         {
                             try
                             {
-                                System.Windows.Forms.Clipboard.SetImage(winBitmap);
+                                System.Windows.Forms.Clipboard.SetDataObject(data, true);
                                 return;
                             }
                             catch (System.Runtime.InteropServices.ExternalException)

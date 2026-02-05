@@ -4,6 +4,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:vm="using:GimmeCapture.ViewModels.Floating"
         xmlns:services="using:GimmeCapture.Services.Core"
+        xmlns:ctl="using:GimmeCapture.Views.Controls"
         mc:Ignorable="d" d:DesignWidth="300" d:DesignHeight="300"
         x:Class="GimmeCapture.Views.Floating.FloatingImageWindow"
         x:DataType="vm:FloatingImageViewModel"
@@ -167,12 +168,8 @@
                     </Border>
                     
                     <!-- Processing Overlay -->
-                    <Border Grid.Row="0" Grid.RowSpan="2" Background="#AA000000" CornerRadius="8" Padding="16" IsVisible="{Binding IsProcessing}"
-                            HorizontalAlignment="Center" VerticalAlignment="Center">
-                        <StackPanel Spacing="10">
-                            <TextBlock Text="{Binding ProcessingText}" Foreground="White" FontSize="14" FontWeight="Bold" HorizontalAlignment="Center"/>
-                            <ProgressBar IsIndeterminate="True" Width="150" Height="4"/>
-                        </StackPanel>
+                    <Border Grid.Row="0" Grid.RowSpan="2" IsVisible="{Binding IsProcessing}">
+                         <ctl:ProcessingOverlay DataContext="{Binding}"/>
                     </Border>
                 </Grid>
             </Border>

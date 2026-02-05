@@ -1,0 +1,87 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:GimmeCapture.ViewModels.Main"
+             mc:Ignorable="d" d:DesignWidth="300" d:DesignHeight="100"
+             x:Class="GimmeCapture.Views.Controls.ProcessingOverlay"
+             x:CompileBindings="False"
+             IsVisible="{Binding IsProcessing}">
+
+    <UserControl.Styles>
+        <Style Selector="ProgressBar /template/ Border#ProgressBarRoot">
+            <Setter Property="ClipToBounds" Value="False"/>
+        </Style>
+    </UserControl.Styles>
+
+    <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
+        <!-- Octagonal Background Panel -->
+        <Grid ColumnDefinitions="Auto,224,Auto" HorizontalAlignment="Center">
+            
+            <!-- Left Wing -->
+            <Rectangle Grid.Column="0" Width="44" Height="26" VerticalAlignment="Center" 
+                       Fill="#AAFFFFFF" Opacity="0.8">
+                <Rectangle.OpacityMask>
+                    <ImageBrush Source="avares://GimmeCapture/Assets/wing_left.png" Stretch="Fill"/>
+                </Rectangle.OpacityMask>
+            </Rectangle>
+
+            <!-- Center Content -->
+            <Panel Grid.Column="1" Width="224" Height="48">
+                <!-- Octagonal Shadow/Glow -->
+                <Path Data="M 12,0 L 212,0 L 224,12 L 224,36 L 212,48 L 12,48 L 0,36 L 0,12 Z" 
+                      Fill="Black" Opacity="0.5" Stretch="Fill" Margin="-3">
+                    <Path.Effect>
+                        <BlurEffect Radius="12"/>
+                    </Path.Effect>
+                </Path>
+
+                <!-- Main Frame -->
+                <Grid ColumnDefinitions="12,*,12">
+                    <!-- Left Cap -->
+                    <Panel Grid.Column="0">
+                        <Path Data="M 1,0 L 0,0.25 L 0,0.75 L 1,1" Stretch="Fill" Fill="#1A1A1A"/>
+                        <Path Data="M 1,0 L 0,0.25 L 0,0.75 L 1,1" Stretch="Fill" StrokeThickness="1" Stroke="#555555"/>
+                    </Panel>
+                    
+                    <!-- Center -->
+                    <Panel Grid.Column="1">
+                        <Rectangle Fill="#1A1A1A"/>
+                        <Rectangle Height="1" VerticalAlignment="Top" Fill="#555555"/>
+                        <Rectangle Height="1" VerticalAlignment="Bottom" Fill="#555555"/>
+                        
+                        <StackPanel Spacing="6" VerticalAlignment="Center" Margin="0,0,0,2">
+                            <TextBlock Text="{Binding ProcessingText}" 
+                                       Foreground="White" 
+                                       FontSize="11" 
+                                       FontWeight="SemiBold"
+                                       HorizontalAlignment="Center"
+                                       LetterSpacing="1.2"/>
+                            
+                            <!-- Indeterminate Progress Bar -->
+                            <ProgressBar IsIndeterminate="True"
+                                         Height="3"
+                                         Width="180"
+                                         Foreground="#FFFFFF"
+                                         Background="#333333"/>
+                        </StackPanel>
+                    </Panel>
+
+                    <!-- Right Cap -->
+                    <Panel Grid.Column="2">
+                        <Path Data="M 0,0 L 1,0.25 L 1,0.75 L 0,1" Stretch="Fill" Fill="#1A1A1A"/>
+                        <Path Data="M 0,0 L 1,0.25 L 1,0.75 L 0,1" Stretch="Fill" StrokeThickness="1" Stroke="#555555"/>
+                    </Panel>
+                </Grid>
+            </Panel>
+
+            <!-- Right Wing -->
+            <Rectangle Grid.Column="2" Width="44" Height="26" VerticalAlignment="Center" 
+                       Fill="#AAFFFFFF" Opacity="0.8">
+                <Rectangle.OpacityMask>
+                    <ImageBrush Source="avares://GimmeCapture/Assets/wing_right.png" Stretch="Fill"/>
+                </Rectangle.OpacityMask>
+            </Rectangle>
+        </Grid>
+    </Grid>
+</UserControl>
