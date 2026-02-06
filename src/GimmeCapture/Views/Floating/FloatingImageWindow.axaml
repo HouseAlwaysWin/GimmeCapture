@@ -14,7 +14,8 @@
         Background="Transparent"
         FontFamily="{Binding CurrentFontFamily, Source={x:Static services:LocalizationService.Instance}}"
         ShowInTaskbar="False"
-        SizeToContent="WidthAndHeight">
+        SizeToContent="WidthAndHeight"
+        Tapped="OnTapped">
         
     <Window.Styles>
         <Style Selector="Grid.Handle">
@@ -186,24 +187,6 @@
                     </Grid>
                 </Grid>
             </Border>
-            
-            <Border.ContextMenu>
-                <ContextMenu>
-                    <MenuItem Header="{Binding [MenuCopyImage], Source={x:Static services:LocalizationService.Instance}}" Command="{Binding CopyCommand}"/>
-                    <MenuItem Header="{Binding [MenuCrop], Source={x:Static services:LocalizationService.Instance}}" Command="{Binding CropCommand}" IsVisible="{Binding IsSelectionActive}"/>
-                    <MenuItem Header="{Binding [MenuPinSelection], Source={x:Static services:LocalizationService.Instance}}" Command="{Binding PinSelectionCommand}" IsVisible="{Binding IsSelectionActive}"/>
-                    <MenuItem Header="{Binding [MenuSaveImage], Source={x:Static services:LocalizationService.Instance}}" Command="{Binding SaveCommand}"/>
-                    <Separator/>
-                    <MenuItem Header="{Binding [MenuShowToolbar], Source={x:Static services:LocalizationService.Instance}}" 
-                              Command="{Binding ToggleToolbarCommand}">
-                        <MenuItem.Icon>
-                            <CheckBox IsChecked="{Binding ShowToolbar}" IsHitTestVisible="False"/>
-                        </MenuItem.Icon>
-                    </MenuItem>
-                    <Separator/>
-                    <MenuItem Header="{Binding [MenuClose], Source={x:Static services:LocalizationService.Instance}}" Command="{Binding CloseCommand}"/>
-                </ContextMenu>
-            </Border.ContextMenu>
         </Border>
 
         <!-- Bottom Toolbar (Grown OUTSIDE the main border) -->
@@ -275,9 +258,26 @@
                         </StackPanel>
         </Border>
         
-        <!-- Processing Overlay (Covers image and toolbar) -->
         <Border Grid.Row="0" Grid.RowSpan="2" IsVisible="{Binding IsProcessing}">
              <ctl:ProcessingOverlay DataContext="{Binding}"/>
         </Border>
+
+        <Grid.ContextMenu>
+            <ContextMenu>
+                <MenuItem Header="{Binding [MenuCopyImage], Source={x:Static services:LocalizationService.Instance}}" Command="{Binding CopyCommand}"/>
+                <MenuItem Header="{Binding [MenuCrop], Source={x:Static services:LocalizationService.Instance}}" Command="{Binding CropCommand}" IsVisible="{Binding IsSelectionActive}"/>
+                <MenuItem Header="{Binding [MenuPinSelection], Source={x:Static services:LocalizationService.Instance}}" Command="{Binding PinSelectionCommand}" IsVisible="{Binding IsSelectionActive}"/>
+                <MenuItem Header="{Binding [MenuSaveImage], Source={x:Static services:LocalizationService.Instance}}" Command="{Binding SaveCommand}"/>
+                <Separator/>
+                <MenuItem Header="{Binding [MenuShowToolbar], Source={x:Static services:LocalizationService.Instance}}" 
+                          Command="{Binding ToggleToolbarCommand}">
+                    <MenuItem.Icon>
+                        <CheckBox IsChecked="{Binding ShowToolbar}" IsHitTestVisible="False"/>
+                    </MenuItem.Icon>
+                </MenuItem>
+                <Separator/>
+                <MenuItem Header="{Binding [MenuClose], Source={x:Static services:LocalizationService.Instance}}" Command="{Binding CloseCommand}"/>
+            </ContextMenu>
+        </Grid.ContextMenu>
     </Grid>
 </Window>

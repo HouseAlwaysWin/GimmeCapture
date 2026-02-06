@@ -66,6 +66,13 @@ public partial class FloatingImageWindow : Window
                     ev.PropertyName == nameof(FloatingImageViewModel.WindowPadding) ||
                     ev.PropertyName == nameof(FloatingImageViewModel.ShowToolbar))
                 {
+                    // If toolbar visibility changed, we MUST restore SizeToContent 
+                    // to ensure the window grows to show it correctly.
+                    if (ev.PropertyName == nameof(FloatingImageViewModel.ShowToolbar))
+                    {
+                        SizeToContent = SizeToContent.WidthAndHeight;
+                    }
+                    
                     SyncWindowSizeToImage();
                 }
             };
@@ -102,6 +109,27 @@ public partial class FloatingImageWindow : Window
         }
     }
 
+    private void OnTapped(object? sender, TappedEventArgs e)
+    {
+        if (DataContext is FloatingImageViewModel vm)
+        {
+            // 1. Filter out interactive elements (Buttons, ToggleButtons, etc.)
+            var visualSource = e.Source as Avalonia.Visual;
+            while (visualSource != null)
+            {
+                if (visualSource is Button || visualSource is ToggleButton || visualSource is ContextMenu)
+                    return;
+                visualSource = visualSource.GetVisualParent();
+            }
+
+            // 2. Toggle toolbar on single click if not currently performing other actions
+            if (!_isResizing && !_isSelecting && !_isMaybeMoving)
+            {
+                vm.ToggleToolbarCommand.Execute().Subscribe();
+            }
+        }
+    }
+
     private void SyncWindowSizeToImage()
     {
         // Now using SizeToContent="WidthAndHeight", so we just need to ensure layout is refreshed
@@ -117,6 +145,9 @@ public partial class FloatingImageWindow : Window
     // Start State
     private PixelPoint _startPosition;
     private Size _startSize; // Logical
+    private Point _pointerPressedPoint; // Screen Coordinates for drag threshold
+    private bool _isMaybeMoving;
+    private PointerPressedEventArgs? _pendingMoveEvent;
 
     // Selection State
     private bool _isSelecting;
@@ -166,7 +197,7 @@ public partial class FloatingImageWindow : Window
             vFallback = vFallback.GetVisualParent();
         }
 
-        // 3. Selection Tool vs Movement
+        // 3. Selection Tool vs Movement Preparation
         if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
         {
             if (vm.CurrentTool != FloatingTool.None)
@@ -175,7 +206,6 @@ public partial class FloatingImageWindow : Window
                 var imageControl = this.FindControl<Image>("PinnedImage");
                 if (imageControl != null)
                 {
-                    _isSelecting = true;
                     _isSelecting = true;
                     var pos = e.GetPosition(imageControl);
                     _selectionStartPoint = new Point(
@@ -188,7 +218,12 @@ public partial class FloatingImageWindow : Window
             }
             else
             {
-                BeginMoveDrag(e);
+                // DO NOT BeginMoveDrag immediately, as it swalllows Tapped events.
+                // We'll wait for a small movement in OnPointerMoved.
+                _isMaybeMoving = true;
+                _pointerPressedPoint = this.PointToScreen(pointerPos).ToPoint(1.0);
+                _pendingMoveEvent = e;
+                e.Pointer.Capture(this);
             }
         }
     }
@@ -223,6 +258,22 @@ public partial class FloatingImageWindow : Window
             
             vm.SelectionRect = new Rect(x, y, w, h);
             e.Handled = true;
+        }
+        else if (_isMaybeMoving)
+        {
+            var currentScreenPoint = this.PointToScreen(e.GetPosition(this)).ToPoint(1.0);
+            var distance = Math.Sqrt(Math.Pow(currentScreenPoint.X - _pointerPressedPoint.X, 2) + 
+                                     Math.Pow(currentScreenPoint.Y - _pointerPressedPoint.Y, 2));
+            
+            // Movement threshold (3 pixels) to distinguish between Click and Drag
+            if (distance > 3 && _pendingMoveEvent != null)
+            {
+                _isMaybeMoving = false;
+                var ev = _pendingMoveEvent;
+                _pendingMoveEvent = null;
+                e.Pointer.Capture(null); // Release capture so BeginMoveDrag works
+                BeginMoveDrag(ev);
+            }
         }
     }
 
@@ -319,6 +370,12 @@ public partial class FloatingImageWindow : Window
         {
             e.Pointer.Capture(null);
             _isSelecting = false;
+        }
+        else if (_isMaybeMoving)
+        {
+            e.Pointer.Capture(null);
+            _isMaybeMoving = false;
+            _pendingMoveEvent = null;
         }
     }
     
