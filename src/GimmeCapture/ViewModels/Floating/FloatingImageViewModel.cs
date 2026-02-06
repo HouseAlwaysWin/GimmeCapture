@@ -12,6 +12,7 @@ using System.Reactive.Linq;
 using GimmeCapture.ViewModels.Main;
 using GimmeCapture.ViewModels.Shared;
 using System;
+using SkiaSharp;
 
 namespace GimmeCapture.ViewModels.Floating;
 
@@ -19,7 +20,8 @@ public enum FloatingTool
 {
     None,
     Selection,
-    PointRemoval
+    PointRemoval,
+    InteractiveSelection
 }
 
 public class FloatingImageViewModel : ViewModelBase
@@ -90,11 +92,32 @@ public class FloatingImageViewModel : ViewModelBase
         get => _currentTool;
         set 
         {
-            this.RaiseAndSetIfChanged(ref _currentTool, value);
-            this.RaisePropertyChanged(nameof(IsSelectionMode));
-            if (value == FloatingTool.None)
+            if (_currentTool == value) return;
+            System.Diagnostics.Debug.WriteLine($"FloatingVM: Tool changing: {_currentTool} -> {value}");
+            
+            // Cleanup previous tool state
+            if (_currentTool == FloatingTool.PointRemoval)
+            {
+                IsInteractiveSelectionMode = false;
+                InteractiveMask = null;
+                _mobileSAMService?.Dispose();
+                _mobileSAMService = null;
+            }
+            else if (_currentTool == FloatingTool.Selection)
             {
                 SelectionRect = new Avalonia.Rect();
+            }
+
+            this.RaiseAndSetIfChanged(ref _currentTool, value);
+            
+            // Notify UI properties
+            this.RaisePropertyChanged(nameof(IsSelectionMode));
+            this.RaisePropertyChanged(nameof(IsPointRemovalMode));
+            
+            // Initialization for new tool
+            if (value == FloatingTool.PointRemoval)
+            {
+                _ = StartInteractiveRemovalAsync();
             }
         }
     }
@@ -140,6 +163,27 @@ public class FloatingImageViewModel : ViewModelBase
 
     public bool IsSelectionActive => SelectionRect.Width > 0 && SelectionRect.Height > 0;
 
+    private bool _isInteractiveSelectionMode;
+    public bool IsInteractiveSelectionMode
+    {
+        get => _isInteractiveSelectionMode;
+        set => this.RaiseAndSetIfChanged(ref _isInteractiveSelectionMode, value);
+    }
+
+    private Bitmap? _interactiveMask;
+    public Bitmap? InteractiveMask
+    {
+        get => _interactiveMask;
+        set => this.RaiseAndSetIfChanged(ref _interactiveMask, value);
+    }
+
+    private string _diagnosticText = "Ready";
+    public string DiagnosticText
+    {
+        get => _diagnosticText;
+        set => this.RaiseAndSetIfChanged(ref _diagnosticText, value);
+    }
+
     private double _progressValue;
     public double ProgressValue
     {
@@ -157,20 +201,187 @@ public class FloatingImageViewModel : ViewModelBase
     public bool IsSelectionMode
     {
         get => CurrentTool == FloatingTool.Selection;
-        set => CurrentTool = value ? FloatingTool.Selection : FloatingTool.None;
+        set => CurrentTool = value ? FloatingTool.Selection : (CurrentTool == FloatingTool.Selection ? FloatingTool.None : CurrentTool);
     }
 
     public bool IsPointRemovalMode
     {
         get => CurrentTool == FloatingTool.PointRemoval;
-        set 
+        set => CurrentTool = value ? FloatingTool.PointRemoval : (CurrentTool == FloatingTool.PointRemoval ? FloatingTool.None : CurrentTool);
+    }
+
+    private MobileSAMService? _mobileSAMService;
+
+    private async Task StartInteractiveRemovalAsync()
+    {
+        System.Diagnostics.Debug.WriteLine("FloatingVM: Starting Interactive Removal Init");
+        // Must check mode under UI thread or safely
+        if (CurrentTool != FloatingTool.PointRemoval)
         {
-            if (value && !_aiResourceService.AreResourcesReady())
+            System.Diagnostics.Debug.WriteLine("FloatingVM: Aborting init - CurrentTool is not PointRemoval");
+            return;
+        }
+
+        if (!await EnsureAIResourcesAsync())
+        {
+             System.Diagnostics.Debug.WriteLine("FloatingVM: AI resources failed");
+             CurrentTool = FloatingTool.None;
+             return;
+        }
+
+        try
+        {
+            IsProcessing = true;
+            ProcessingText = LocalizationService.Instance["ProcessingAI"] ?? "Initializing AI...";
+            
+            _mobileSAMService?.Dispose();
+            _mobileSAMService = new MobileSAMService(_aiResourceService);
+            System.Diagnostics.Debug.WriteLine("FloatingVM: Initializing SAM Service...");
+            await _mobileSAMService.InitializeAsync();
+
+            if (CurrentTool != FloatingTool.PointRemoval) 
             {
-                _ = DownloadAIResourcesAsync();
+                System.Diagnostics.Debug.WriteLine("FloatingVM: Mode changed during SAM init, aborting.");
                 return;
             }
-            CurrentTool = value ? FloatingTool.PointRemoval : FloatingTool.None;
+
+            byte[] imageBytes;
+            using (var ms = new System.IO.MemoryStream())
+            {
+                Image?.Save(ms);
+                imageBytes = ms.ToArray();
+            }
+
+            System.Diagnostics.Debug.WriteLine("FloatingVM: Setting image to SAM...");
+            await _mobileSAMService.SetImageAsync(imageBytes);
+            
+            // This flag can still be used for internal state but visibility will rely on IsPointRemovalMode
+            IsInteractiveSelectionMode = true; 
+            DiagnosticText = "AI Initialized & Ready";
+            System.Diagnostics.Debug.WriteLine("FloatingVM: Interactive Selection Ready");
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"FloatingVM: Failed to start interactive removal: {ex}");
+            DiagnosticText = "AI Init Failed";
+            CurrentTool = FloatingTool.None;
+            
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => {
+                 var dialogVm = new GothicDialogViewModel { 
+                     Title = "AI Initialization Error", 
+                     Message = "Failed to start AI: " + ex.Message 
+                 };
+                 var dialog = new GimmeCapture.Views.Shared.GothicDialog { DataContext = dialogVm };
+                 var desktop = Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime;
+                 var owner = desktop?.Windows.FirstOrDefault(w => w.DataContext == this) as Avalonia.Controls.Window;
+                 if (owner != null) dialog.ShowDialog<bool>(owner);
+            });
+        }
+        finally
+        {
+            IsProcessing = false;
+        }
+    }
+
+    public async Task HandlePointClickAsync(double x, double y)
+    {
+        System.Diagnostics.Debug.WriteLine($"FloatingVM: HandlePointClickAsync at ({x}, {y})");
+        // Calculate physical coordinates from logical UI coordinates
+        var pixW = Image?.PixelSize.Width ?? 1;
+        var pixH = Image?.PixelSize.Height ?? 1;
+        
+        var scaleX = (double)pixW / (DisplayWidth > 0 ? DisplayWidth : OriginalWidth);
+        var scaleY = (double)pixH / (DisplayHeight > 0 ? DisplayHeight : OriginalHeight);
+        
+        var physicalX = x * scaleX;
+        var physicalY = y * scaleY;
+
+        DiagnosticText = $"AI Trigger: L({x:F0},{y:F0}) -> P({physicalX:F0},{physicalY:F0}) DISP({DisplayWidth:F0}x{DisplayHeight:F0}) PIX({pixW}x{pixH})";
+        System.Diagnostics.Debug.WriteLine($"FloatingVM: {DiagnosticText}");
+
+        // --- PURE UI TEST: Draw a red dot manually on a new bitmap ---
+        try
+        {
+            // Create or update mask with a red square at the physical location
+            using (var bmp = new SKBitmap(pixW, pixH))
+            {
+                using (var canvas = new SKCanvas(bmp))
+                {
+                    canvas.Clear(SKColors.Transparent);
+                    
+                    // Draw a red crosshair at the suspected physical location for visual confirmation
+                    var paint = new SKPaint { Color = SKColors.Red, StrokeWidth = 2, Style = SKPaintStyle.Stroke };
+                    float crossSize = 15;
+                    canvas.DrawLine((float)physicalX - crossSize, (float)physicalY, (float)physicalX + crossSize, (float)physicalY, paint);
+                    canvas.DrawLine((float)physicalX, (float)physicalY - crossSize, (float)physicalX, (float)physicalY + crossSize, paint);
+                }
+                
+                using (var ms = new System.IO.MemoryStream())
+                {
+                    bmp.Encode(ms, SKEncodedImageFormat.Png, 100);
+                    ms.Seek(0, System.IO.SeekOrigin.Begin);
+                    InteractiveMask = new Bitmap(ms);
+                }
+            }
+        }
+        catch (Exception ex) { 
+            DiagnosticText = "UI Test Error: " + ex.Message;
+        }
+        // --- End PURE UI TEST ---
+
+        if (_mobileSAMService == null)
+        {
+             System.Diagnostics.Debug.WriteLine("FloatingVM: Click ignored - _mobileSAMService is null");
+             return;
+        }
+        if (!IsInteractiveSelectionMode)
+        {
+             System.Diagnostics.Debug.WriteLine("FloatingVM: Click ignored - IsInteractiveSelectionMode is false");
+             return;
+        }
+
+        try
+        {
+            System.Diagnostics.Debug.WriteLine($"FloatingVM: Physical coordinates: ({physicalX}, {physicalY})");
+
+            var maskBytes = await _mobileSAMService.GetMaskAsync(physicalX, physicalY);
+            var iouInfo = _mobileSAMService.LastIouInfo;
+            DiagnosticText = $"AI Trigger: L({x:F0},{y:F0}) -> P({physicalX:F0},{physicalY:F0}) {iouInfo}";
+            System.Diagnostics.Debug.WriteLine($"FloatingVM: Mask generated, bytes: {maskBytes?.Length ?? 0}, {iouInfo}");
+            
+            if (maskBytes != null && maskBytes.Length > 0)
+            {
+                // Decode AI mask
+                using var aiMask = SKBitmap.Decode(maskBytes);
+                
+                // Draw diagnostic crosshair ON TOP of the AI mask to verify alignment
+                using (var canvas = new SKCanvas(aiMask))
+                {
+                    var paint = new SKPaint { Color = SKColors.Red, StrokeWidth = 3, Style = SKPaintStyle.Stroke };
+                    float crossSize = 20;
+                    // Draw crosshair at physical coordinates
+                    canvas.DrawLine((float)physicalX - crossSize, (float)physicalY, (float)physicalX + crossSize, (float)physicalY, paint);
+                    canvas.DrawLine((float)physicalX, (float)physicalY - crossSize, (float)physicalX, (float)physicalY + crossSize, paint);
+                    // Draw a circle to make it more visible
+                    canvas.DrawCircle((float)physicalX, (float)physicalY, crossSize / 2, paint);
+                }
+                
+                using var finalMs = new System.IO.MemoryStream();
+                aiMask.Encode(finalMs, SKEncodedImageFormat.Png, 100);
+                finalMs.Seek(0, System.IO.SeekOrigin.Begin);
+                InteractiveMask = new Bitmap(finalMs);
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"FloatingVM: Error getting mask: {ex}");
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => {
+                 var dialogVm = new GothicDialogViewModel { Title = "AI Error", Message = "Failed to generate mask: " + ex.Message };
+                 var dialog = new GimmeCapture.Views.Shared.GothicDialog { DataContext = dialogVm };
+                 var desktop = Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime;
+                 var owner = desktop?.Windows.FirstOrDefault(w => w.DataContext == this) as Avalonia.Controls.Window;
+                 if (owner != null) dialog.ShowDialog<bool>(owner);
+            });
         }
     }
 
@@ -239,6 +450,8 @@ public class FloatingImageViewModel : ViewModelBase
     public ReactiveCommand<Unit, Unit> ToggleToolbarCommand { get; }
     public ReactiveCommand<Unit, Unit> RemoveBackgroundCommand { get; }
     public ReactiveCommand<Unit, Unit> SelectionCommand { get; }
+    public ReactiveCommand<Unit, Unit> ConfirmInteractiveCommand { get; }
+    public ReactiveCommand<Unit, Unit> CancelInteractiveCommand { get; }
     
     public System.Action? CloseAction { get; set; }
     
@@ -342,6 +555,74 @@ public class FloatingImageViewModel : ViewModelBase
 
         var canRedo = this.WhenAnyValue(x => x.HasRedo).ObserveOn(RxApp.MainThreadScheduler);
         RedoCommand = ReactiveCommand.Create(Redo, canRedo);
+
+        ConfirmInteractiveCommand = ReactiveCommand.CreateFromTask(ConfirmInteractiveAsync, this.WhenAnyValue(x => x.InteractiveMask).Select(m => m != null));
+        CancelInteractiveCommand = ReactiveCommand.Create(() => 
+        {
+            IsPointRemovalMode = false;
+        });
+    }
+
+    private async Task ConfirmInteractiveAsync()
+    {
+        if (Image == null || InteractiveMask == null) return;
+
+        try
+        {
+            IsProcessing = true;
+            ProcessingText = LocalizationService.Instance["ProcessingAI"] ?? "Applying Removal...";
+            
+            PushUndoState();
+
+            // 1. Process with SkiaSharp in a background thread to prevent UI freeze
+            var imageBytes = await Task.Run(() =>
+            {
+                using var originalMs = new System.IO.MemoryStream();
+                Image.Save(originalMs);
+                using var originalBmp = SKBitmap.Decode(originalMs.ToArray());
+
+                using var maskMs = new System.IO.MemoryStream();
+                InteractiveMask.Save(maskMs);
+                using var maskBmp = SKBitmap.Decode(maskMs.ToArray());
+                
+                // RESIZE MASK TO MATCH ORIGINAL BITMAP EXACTLY with Nearest sampling to avoid blurring edges
+                // This ensures pixel-perfect alignment with the physical image
+                using var resizedMask = maskBmp.Resize(new SKImageInfo(originalBmp.Width, originalBmp.Height), new SKSamplingOptions(SKFilterMode.Nearest));
+
+                using var resultBmp = new SKBitmap(originalBmp.Width, originalBmp.Height, SKColorType.Bgra8888, SKAlphaType.Unpremul);
+                
+                for (int y = 0; y < originalBmp.Height; y++)
+                {
+                    for (int x = 0; x < originalBmp.Width; x++)
+                    {
+                        var color = originalBmp.GetPixel(x, y);
+                        var maskColor = resizedMask.GetPixel(x, y);
+                        
+                        // REMOVE SELECTED: If the pixel is part of the yellow mask (Alpha > 128), it's the area the user clicked.
+                        // Since this is a "Removal" tool, we make these pixels transparent (alpha 0).
+                        byte alpha = maskColor.Alpha > 128 ? (byte)0 : (byte)255;
+                        resultBmp.SetPixel(x, y, new SKColor(color.Red, color.Green, color.Blue, alpha));
+                    }
+                }
+
+                using var image = SKImage.FromBitmap(resultBmp);
+                using var data = image.Encode(SKEncodedImageFormat.Png, 100);
+                return data.ToArray();
+            });
+
+            using var resultMs = new System.IO.MemoryStream(imageBytes);
+            Image = new Bitmap(resultMs);
+
+            IsPointRemovalMode = false;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Failed to confirm interactive: {ex}");
+        }
+        finally
+        {
+            IsProcessing = false;
+        }
     }
 
     private Stack<Bitmap> _undoStack = new Stack<Bitmap>();

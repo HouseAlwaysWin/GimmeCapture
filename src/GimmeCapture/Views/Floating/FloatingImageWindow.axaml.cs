@@ -10,6 +10,7 @@ using GimmeCapture.Services.Core;
 using Avalonia.Media.Imaging;
 using Avalonia.Media;
 using System.Reactive.Linq;
+using Avalonia.Interactivity;
 
 namespace GimmeCapture.Views.Floating;
 
@@ -19,7 +20,11 @@ public partial class FloatingImageWindow : Window
     {
         InitializeComponent();
         
-        PointerPressed += OnPointerPressed;
+        // Use Tunneling for PointerPressed to catch events before children can swallow them,
+        // although here we mostly want to catch them BEFORE they bubble up to Tapped.
+        AddHandler(PointerPressedEvent, OnPointerPressed, RoutingStrategies.Tunnel);
+        AddHandler(TappedEvent, OnTapped, RoutingStrategies.Bubble);
+        
         KeyDown += OnKeyDown;
     }
 
@@ -122,10 +127,28 @@ public partial class FloatingImageWindow : Window
                 visualSource = visualSource.GetVisualParent();
             }
 
-            // 2. Toggle toolbar on single click if not currently performing other actions
-            if (!_isResizing && !_isSelecting && !_isMaybeMoving)
+            // Prevent diagnostic overwrite if AI just triggered or is processing
+            if (vm.IsProcessing || vm.DiagnosticText.Contains("AI Trigger"))
             {
+                System.Diagnostics.Debug.WriteLine("FloatingWindow: Skipping Tap Diagnostic (AI Active)");
+            }
+            else
+            {
+                vm.DiagnosticText = $"Tap: Tool={vm.CurrentTool}, AI={vm.IsInteractiveSelectionMode}";
+            }
+            System.Diagnostics.Debug.WriteLine($"FloatingWindow: OnTapped. Source: {e.Source}. Tool: {vm.CurrentTool}. AI: {vm.IsInteractiveSelectionMode}");
+            
+            // 2. Toggle toolbar on single click ONLY if no tool is active
+            if (!_isResizing && !_isSelecting && !_isMaybeMoving && !_isAIPointing &&
+                vm.CurrentTool == FloatingTool.None && !vm.IsInteractiveSelectionMode)
+            {
+                System.Diagnostics.Debug.WriteLine("FloatingWindow: Toggling toolbar");
                 vm.ToggleToolbarCommand.Execute().Subscribe();
+            }
+            else
+            {
+                System.Diagnostics.Debug.WriteLine("FloatingWindow: Blocking toolbar toggle (Tool Active)");
+                e.Handled = true;
             }
         }
     }
@@ -152,6 +175,7 @@ public partial class FloatingImageWindow : Window
     // Selection State
     private bool _isSelecting;
     private Point _selectionStartPoint;
+    private bool _isAIPointing;
 
     private enum ResizeDirection
     {
@@ -200,26 +224,38 @@ public partial class FloatingImageWindow : Window
         // 3. Selection Tool vs Movement Preparation
         if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
         {
-            if (vm.CurrentTool != FloatingTool.None)
+            var imageControl = this.FindControl<Image>("PinnedImage");
+            
+            if (vm.CurrentTool == FloatingTool.Selection && imageControl != null)
             {
-                // Start selection (Save start point relative to PinnedImage)
-                var imageControl = this.FindControl<Image>("PinnedImage");
-                if (imageControl != null)
+                var pos = e.GetPosition(imageControl);
+                // Only start selecting if click is within image bounds
+                if (new Rect(0, 0, imageControl.Bounds.Width, imageControl.Bounds.Height).Contains(pos))
                 {
                     _isSelecting = true;
-                    var pos = e.GetPosition(imageControl);
                     _selectionStartPoint = new Point(
                         Math.Max(0, Math.Min(imageControl.Bounds.Width, pos.X)),
                         Math.Max(0, Math.Min(imageControl.Bounds.Height, pos.Y))
                     );
                     e.Pointer.Capture(this);
                     e.Handled = true;
+                    return;
                 }
             }
-            else
+            
+            if (vm.IsPointRemovalMode)
             {
-                // DO NOT BeginMoveDrag immediately, as it swalllows Tapped events.
-                // We'll wait for a small movement in OnPointerMoved.
+                vm.DiagnosticText = "AI Pressed: Capturing...";
+                System.Diagnostics.Debug.WriteLine("FloatingWindow: AI Mode Pressed - Capturing Pointer");
+                _isAIPointing = true;
+                e.Pointer.Capture(this);
+                e.Handled = true;
+                return;
+            }
+
+            // Default: Drag preparation (Only if no AI mode/Selection mode)
+            if (vm.CurrentTool == FloatingTool.None)
+            {
                 _isMaybeMoving = true;
                 _pointerPressedPoint = this.PointToScreen(pointerPos).ToPoint(1.0);
                 _pendingMoveEvent = e;
@@ -370,6 +406,31 @@ public partial class FloatingImageWindow : Window
         {
             e.Pointer.Capture(null);
             _isSelecting = false;
+        }
+        else if (_isAIPointing)
+        {
+            var imageControl = this.FindControl<Image>("PinnedImage");
+            if (imageControl != null && DataContext is FloatingImageViewModel vm)
+            {
+                var pos = e.GetPosition(imageControl);
+                var bounds = new Rect(0, 0, imageControl.Bounds.Width, imageControl.Bounds.Height);
+                System.Diagnostics.Debug.WriteLine($"FloatingWindow: AI Released. Pos: {pos}, Bounds: {bounds}");
+                
+                if (bounds.Contains(pos))
+                {
+                    vm.DiagnosticText = $"AI Trigger: {pos.X:F0},{pos.Y:F0}";
+                    System.Diagnostics.Debug.WriteLine("FloatingWindow: Triggering AI recognition");
+                    _ = vm.HandlePointClickAsync(pos.X, pos.Y);
+                }
+                else
+                {
+                    vm.DiagnosticText = "AI Release: Out of Bounds";
+                    System.Diagnostics.Debug.WriteLine("FloatingWindow: AI click outside image bounds - ignored");
+                }
+            }
+            e.Pointer.Capture(null);
+            _isAIPointing = false;
+            e.Handled = true;
         }
         else if (_isMaybeMoving)
         {
