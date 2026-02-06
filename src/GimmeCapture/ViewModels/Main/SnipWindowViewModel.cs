@@ -650,6 +650,7 @@ public class SnipWindowViewModel : ViewModelBase
                     this.RaisePropertyChanged(nameof(ThemeDeepColor));
                 });
 
+            /* 
             mainVm.AIResourceService.WhenAnyValue(x => x.IsDownloading)
                 .ObserveOn(RxApp.MainThreadScheduler)
                 .Subscribe(isDownloading => 
@@ -669,6 +670,7 @@ public class SnipWindowViewModel : ViewModelBase
             mainVm.AIResourceService.WhenAnyValue(x => x.DownloadProgress)
                 .ObserveOn(RxApp.MainThreadScheduler)
                 .Subscribe(_ => this.RaisePropertyChanged(nameof(AIResourceProgress)));
+            */
         }
 
 

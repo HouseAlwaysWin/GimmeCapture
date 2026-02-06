@@ -82,8 +82,10 @@
                                        HorizontalAlignment="Center"
                                        LetterSpacing="1.2"/>
                             
-                            <!-- Indeterminate Progress Bar (Red) -->
-                            <ProgressBar IsIndeterminate="True"
+                            <!-- Progress Bar (Red) -->
+                            <ProgressBar IsIndeterminate="{Binding IsIndeterminate}"
+                                         Value="{Binding ProgressValue}"
+                                         Minimum="0" Maximum="100"
                                          Height="3"
                                          Width="160"
                                          Foreground="{DynamicResource ThemeAccentBrush}"

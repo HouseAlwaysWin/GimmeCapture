@@ -165,6 +165,7 @@ public class MainWindowViewModel : ViewModelBase
         });
         PickAIFolderCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
         
+        /* 
         // --- AI Download Window Management ---
         AIResourceService.WhenAnyValue(x => x.IsDownloading)
             .ObserveOn(RxApp.MainThreadScheduler)
@@ -190,6 +191,7 @@ public class MainWindowViewModel : ViewModelBase
                     AIProgressText = string.Format(LocalizationService.Instance["ComponentDownloadingProgress"], (int)progress);
                 }
             });
+        */
         
         // Setup Hotkey Action
         HotkeyService.OnHotkeyPressed = (id) => 

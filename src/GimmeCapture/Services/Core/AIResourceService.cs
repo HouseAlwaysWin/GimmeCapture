@@ -11,6 +11,9 @@ namespace GimmeCapture.Services.Core;
 public class AIResourceService : ReactiveObject
 {
     private const string ModelUrl = "https://github.com/danielgatis/rembg/releases/download/v0.0.0/u2net.onnx";
+    private const string MobileSamEncoderUrl = "https://huggingface.co/Acly/MobileSAM/resolve/main/mobile_sam_image_encoder.onnx";
+    private const string MobileSamDecoderUrl = "https://huggingface.co/Acly/MobileSAM/resolve/main/sam_mask_decoder_multi.onnx";
+    
     // Using a reliable direct link to ONNX Runtime GPU (Win x64)
     private const string OnnxRuntimeZipUrl = "https://github.com/microsoft/onnxruntime/releases/download/v1.20.1/onnxruntime-win-x64-gpu-1.20.1.zip";
 
@@ -56,11 +59,18 @@ public class AIResourceService : ReactiveObject
     public bool AreResourcesReady()
     {
         var baseDir = GetAIResourcesPath();
+        
+        // 1. Generic Model (U2Net)
         var modelPath = Path.Combine(baseDir, "models", "u2net.onnx");
-        // We download the native runtime (onnxruntime.dll), not the managed one (which is in the app dir)
+        
+        // 2. MobileSAM Models
+        var encoderPath = Path.Combine(baseDir, "models", "mobile_sam_image_encoder.onnx");
+        var decoderPath = Path.Combine(baseDir, "models", "sam_mask_decoder_multi.onnx");
+        
+        // 3. Runtime
         var onnxDll = Path.Combine(baseDir, "runtime", "onnxruntime.dll");
         
-        return File.Exists(modelPath) && File.Exists(onnxDll);
+        return File.Exists(modelPath) && File.Exists(encoderPath) && File.Exists(decoderPath) && File.Exists(onnxDll);
     }
 
     public async Task<bool> EnsureResourcesAsync()
@@ -84,23 +94,44 @@ public class AIResourceService : ReactiveObject
             var onnxDll = Path.Combine(runtimeDir, "onnxruntime.dll");
             if (!File.Exists(onnxDll))
             {
-                await DownloadAndExtractZip(OnnxRuntimeZipUrl, runtimeDir, 0, 50);
+                await DownloadAndExtractZip(OnnxRuntimeZipUrl, runtimeDir, 0, 30);
             }
             else
             {
-                // Already have runtime, set progress to 50%
-                DownloadProgress = 50;
+                DownloadProgress = 30;
             }
 
-            // 2. Download Model
+            // 2. Download U2Net Model
             var modelPath = Path.Combine(modelsDir, "u2net.onnx");
             if (!File.Exists(modelPath))
             {
-                await DownloadFile(ModelUrl, modelPath, 50, 50);
+                await DownloadFile(ModelUrl, modelPath, 30, 20);
             }
             else
             {
-                 DownloadProgress = 100;
+                DownloadProgress = 50;
+            }
+
+            // 3. Download MobileSAM Encoder (Largest)
+            var encoderPath = Path.Combine(modelsDir, "mobile_sam_image_encoder.onnx");
+            if (!File.Exists(encoderPath))
+            {
+                await DownloadFile(MobileSamEncoderUrl, encoderPath, 50, 40);
+            }
+            else
+            {
+                DownloadProgress = 90;
+            }
+
+            // 4. Download MobileSAM Decoder
+            var decoderPath = Path.Combine(modelsDir, "sam_mask_decoder_multi.onnx");
+            if (!File.Exists(decoderPath))
+            {
+                await DownloadFile(MobileSamDecoderUrl, decoderPath, 90, 10);
+            }
+            else
+            {
+                DownloadProgress = 100;
             }
 
             return AreResourcesReady();

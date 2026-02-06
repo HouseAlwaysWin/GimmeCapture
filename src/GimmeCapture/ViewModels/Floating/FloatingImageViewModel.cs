@@ -139,6 +139,20 @@ public class FloatingImageViewModel : ViewModelBase
     }
 
     public bool IsSelectionActive => SelectionRect.Width > 0 && SelectionRect.Height > 0;
+
+    private double _progressValue;
+    public double ProgressValue
+    {
+        get => _progressValue;
+        set => this.RaiseAndSetIfChanged(ref _progressValue, value);
+    }
+    
+    private bool _isIndeterminate = true;
+    public bool IsIndeterminate
+    {
+        get => _isIndeterminate;
+        set => this.RaiseAndSetIfChanged(ref _isIndeterminate, value);
+    }
     
     public bool IsSelectionMode
     {
@@ -149,7 +163,66 @@ public class FloatingImageViewModel : ViewModelBase
     public bool IsPointRemovalMode
     {
         get => CurrentTool == FloatingTool.PointRemoval;
-        set => CurrentTool = value ? FloatingTool.PointRemoval : FloatingTool.None;
+        set 
+        {
+            if (value && !_aiResourceService.AreResourcesReady())
+            {
+                _ = DownloadAIResourcesAsync();
+                return;
+            }
+            CurrentTool = value ? FloatingTool.PointRemoval : FloatingTool.None;
+        }
+    }
+
+    private async Task<bool> EnsureAIResourcesAsync()
+    {
+        if (_aiResourceService.AreResourcesReady()) return true;
+
+        try
+        {
+            IsProcessing = true;
+            IsIndeterminate = false;
+            ProcessingText = LocalizationService.Instance["DownloadingAI"];
+
+            // Link progress from service
+            var progressSub = _aiResourceService.WhenAnyValue(x => x.DownloadProgress)
+                .Subscribe(p => ProgressValue = p);
+
+            bool success = await _aiResourceService.EnsureResourcesAsync();
+            progressSub.Dispose();
+
+            if (!success)
+            {
+                throw new Exception("Failed to download AI resources: " + _aiResourceService.LastErrorMessage);
+            }
+            return true;
+        }
+        catch (Exception ex)
+        {
+             Avalonia.Threading.Dispatcher.UIThread.Post(() => {
+                 var dialogVm = new GothicDialogViewModel { Title = "Download Failed", Message = ex.Message };
+                 var dialog = new GimmeCapture.Views.Shared.GothicDialog { DataContext = dialogVm };
+                 var desktop = Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime;
+                 var owner = desktop?.Windows.FirstOrDefault(w => w.DataContext == this) as Avalonia.Controls.Window;
+                 if (owner != null) dialog.ShowDialog<bool>(owner);
+            });
+            return false;
+        }
+        finally
+        {
+            IsProcessing = false;
+            ProcessingText = "Processing Background Removal..."; // Default message
+            IsIndeterminate = true;
+        }
+    }
+
+    private async Task DownloadAIResourcesAsync()
+    {
+        if (await EnsureAIResourcesAsync())
+        {
+            CurrentTool = FloatingTool.PointRemoval;
+            this.RaisePropertyChanged(nameof(IsPointRemovalMode));
+        }
     }
     
     // Only allow background removal if not processing.
@@ -345,43 +418,8 @@ public class FloatingImageViewModel : ViewModelBase
     {
         if (Image == null) return;
         
-        // Check Resources
-        if (!_aiResourceService.AreResourcesReady())
-        {
-            var title = LocalizationService.Instance["AIDownloadTitle"];
-            var prompt = LocalizationService.Instance["AIDownloadPrompt"];
-            
-            var dialogVm = new GothicDialogViewModel { Title = title, Message = prompt };
-            var dialog = new GimmeCapture.Views.Shared.GothicDialog { DataContext = dialogVm };
-
-            // Find owner window (this floating window)
-            // Since we are inside ViewModel, we don't have direct ref to Window, 
-            // but we can try to find active window or rely on UI layer passing it.
-            // For simplicity, we can fallback to App.Current or try finding window by DataContext if possible.
-            // A better way is using a DialogService, but for now we look for active windows.
-            var desktop = Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime;
-            var owner = desktop?.Windows.FirstOrDefault(w => w.DataContext == this) as Avalonia.Controls.Window;
-            
-            bool result = false;
-            if (owner != null)
-            {
-                 result = await dialog.ShowDialog<bool>(owner);
-            }
-            
-            if (!result) return;
-            
-            // Background download
-             _ = _aiResourceService.EnsureResourcesAsync().ContinueWith(t => {
-                if (!t.Result && owner != null)
-                {
-                    Avalonia.Threading.Dispatcher.UIThread.Post(() => {
-                         // Error handling similar to SnipWindow
-                         /* ... error dialog ... */
-                    });
-                }
-            });
-            return;
-        }
+        // Check Resources and download if needed
+        if (!await EnsureAIResourcesAsync()) return;
 
         try
         {
