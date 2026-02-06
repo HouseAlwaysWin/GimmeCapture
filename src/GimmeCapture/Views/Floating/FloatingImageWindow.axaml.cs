@@ -87,9 +87,7 @@ public partial class FloatingImageWindow : Window
                 var newWin = new FloatingImageWindow
                 {
                     DataContext = newVm,
-                    Position = new PixelPoint(Position.X + 40, Position.Y + 40),
-                    Width = rect.Width + padding.Left + padding.Right,
-                    Height = rect.Height + padding.Top + padding.Bottom
+                    Position = new PixelPoint(Position.X + 40, Position.Y + 40)
                 };
                 
                 newWin.Show();
@@ -146,15 +144,6 @@ public partial class FloatingImageWindow : Window
             {
                 // 關閉 SizeToContent 以允許手動 resize
                 SizeToContent = SizeToContent.Manual;
-                
-                // 設定 Image Stretch 為 Fill 讓圖片填滿整個區域
-                var pinnedImage = this.FindControl<Image>("PinnedImage");
-                if (pinnedImage != null)
-                {
-                    pinnedImage.Stretch = Avalonia.Media.Stretch.Fill;
-                    pinnedImage.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
-                    pinnedImage.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Stretch;
-                }
                 
                 var p = e.GetCurrentPoint(this);
                 _resizeStartPoint = this.PointToScreen(p.Position).ToPoint(1.0);
@@ -300,6 +289,16 @@ public partial class FloatingImageWindow : Window
             Position = new PixelPoint((int)x, (int)y);
             Width = w;
             Height = h;
+
+            // 更新 ViewModel 中的顯示尺寸
+            if (DataContext is FloatingImageViewModel vm)
+            {
+                var padding = vm.WindowPadding;
+                vm.DisplayWidth = Math.Max(1, w - padding.Left - padding.Right);
+                
+                double toolbarHeight = vm.ShowToolbar ? 42 : 0; // 預估工具列高度
+                vm.DisplayHeight = Math.Max(1, h - padding.Top - padding.Bottom - toolbarHeight);
+            }
             
             e.Handled = true;
             InvalidateMeasure();

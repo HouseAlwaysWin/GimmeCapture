@@ -13,7 +13,8 @@
         Topmost="True"
         Background="Transparent"
         FontFamily="{Binding CurrentFontFamily, Source={x:Static services:LocalizationService.Instance}}"
-        ShowInTaskbar="False">
+        ShowInTaskbar="False"
+        SizeToContent="WidthAndHeight">
         
     <Window.Styles>
         <Style Selector="Grid.Handle">
@@ -34,9 +35,10 @@
         </Style>
     </Window.Styles>
     
-    <Grid Background="Transparent">
-        <!-- BABYMETAL Style Border -->
-        <Border Margin="{Binding WindowPadding}"
+    <Grid Name="RootGrid" Background="Transparent" RowDefinitions="Auto, Auto">
+        <!-- BABYMETAL Style Border (Wraps IMAGE ONLY) -->
+        <Border Grid.Row="0"
+                Margin="{Binding WindowPadding}"
                 Classes="MainBorder"
                 Classes.hidden-border="{Binding HidePinBorder}"
                 CornerRadius="0"
@@ -49,8 +51,8 @@
                 </LinearGradientBrush>
             </Border.BorderBrush>
             <Border Classes="InnerBorder">
-                <Grid RowDefinitions="*, Auto">
-                    <Grid Grid.Row="0">
+                <Grid> <!-- Single row for image and overlays -->
+                    <Grid>
                         <Border BorderBrush="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" 
                                 BorderThickness="1" Margin="-1" 
                                 IsVisible="{Binding HidePinBorder, Converter={StaticResource BoolInvertConverter}}"/>
@@ -73,9 +75,9 @@
                              share the exact same coordinate space even if window is larger than image -->
                         <Grid HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
                             <Image Source="{Binding Image}" 
+                                   Width="{Binding DisplayWidth}"
+                                   Height="{Binding DisplayHeight}"
                                    Stretch="Fill" 
-                                   HorizontalAlignment="Stretch"
-                                   VerticalAlignment="Stretch"
                                    Name="PinnedImage"/>
                             
                             <!-- Selection Overlay (Over Image Area) -->
@@ -182,9 +184,30 @@
                         <Grid Classes="Handle" Name="HandleLeft" Cursor="LeftSide" Width="15" HorizontalAlignment="Left" VerticalAlignment="Stretch" Margin="0,15"/>
                         <Grid Classes="Handle" Name="HandleRight" Cursor="RightSide" Width="15" HorizontalAlignment="Right" VerticalAlignment="Stretch" Margin="0,15"/>
                     </Grid>
+                </Grid>
+            </Border>
+            
+            <Border.ContextMenu>
+                <ContextMenu>
+                    <MenuItem Header="{Binding [MenuCopyImage], Source={x:Static services:LocalizationService.Instance}}" Command="{Binding CopyCommand}"/>
+                    <MenuItem Header="{Binding [MenuCrop], Source={x:Static services:LocalizationService.Instance}}" Command="{Binding CropCommand}" IsVisible="{Binding IsSelectionActive}"/>
+                    <MenuItem Header="{Binding [MenuPinSelection], Source={x:Static services:LocalizationService.Instance}}" Command="{Binding PinSelectionCommand}" IsVisible="{Binding IsSelectionActive}"/>
+                    <MenuItem Header="{Binding [MenuSaveImage], Source={x:Static services:LocalizationService.Instance}}" Command="{Binding SaveCommand}"/>
+                    <Separator/>
+                    <MenuItem Header="{Binding [MenuShowToolbar], Source={x:Static services:LocalizationService.Instance}}" 
+                              Command="{Binding ToggleToolbarCommand}">
+                        <MenuItem.Icon>
+                            <CheckBox IsChecked="{Binding ShowToolbar}" IsHitTestVisible="False"/>
+                        </MenuItem.Icon>
+                    </MenuItem>
+                    <Separator/>
+                    <MenuItem Header="{Binding [MenuClose], Source={x:Static services:LocalizationService.Instance}}" Command="{Binding CloseCommand}"/>
+                </ContextMenu>
+            </Border.ContextMenu>
+        </Border>
 
-                    <!-- Bottom Toolbar -->
-                    <Border Grid.Row="1" IsVisible="{Binding ShowToolbar}" 
+        <!-- Bottom Toolbar (Grown OUTSIDE the main border) -->
+        <Border Grid.Row="1" IsVisible="{Binding ShowToolbar}" 
                             Background="#1A1A1A" BorderBrush="#333333" BorderThickness="1" 
                             CornerRadius="4" Padding="2" Margin="0,4,0,0"
                             HorizontalAlignment="Center" VerticalAlignment="Top"
@@ -229,6 +252,14 @@
                                 <PathIcon Data="M16,12V4H17V2H7V4H8V12L6,14V16H11V22H13V16H18V14L16,12M14,14H10V4H14V14Z" Width="14" Height="14"/>
                             </Button>
 
+                            <!-- Point Removal Mode Toggle -->
+                            <ToggleButton Theme="{StaticResource SnipToggleButton}" 
+                                          IsChecked="{Binding IsPointRemovalMode, Mode=TwoWay}"
+                                          ToolTip.Tip="Point Removal (AI)"
+                                          IsVisible="{Binding CanRemoveBackground}">
+                                <PathIcon Data="M12,19.58V19.58C10.4,19.58 8.89,18.96 7.76,17.83C6.62,16.69 6,15.19 6,13.58C6,12 6.62,10.47 7.76,9.34L12,5.1M17.66,7.93L12,2.27V2.27L6.34,7.93C3.22,11.05 3.22,16.12 6.34,19.24C7.9,20.8 9.95,21.58 12,21.58C14.05,21.58 16.1,20.8 17.66,19.24C20.78,16.12 20.78,11.05 17.66,7.93Z" Width="14" Height="14"/>
+                            </ToggleButton>
+
                             <!-- Undo / Redo -->
                             <Rectangle Fill="#444444" Width="1" Height="16" Margin="2,0" VerticalAlignment="Center" IsVisible="{Binding HasUndo}"/>
                             <Button Theme="{StaticResource SnipButton}" Command="{Binding UndoCommand}" ToolTip.Tip="{Binding [Undo], Source={x:Static services:LocalizationService.Instance}}" IsVisible="{Binding HasUndo}">
@@ -236,40 +267,17 @@
                             </Button>
                             <Button Theme="{StaticResource SnipButton}" Command="{Binding RedoCommand}" ToolTip.Tip="Redo" IsVisible="{Binding HasRedo}">
                                 <PathIcon Data="M18.4,10.6C16.55,9 14.15,8 11.5,8C6.85,8 2.92,11.03 1.54,15.22L3.9,16C4.95,12.81 7.95,10.5 11.5,10.5C13.45,10.5 15.23,11.22 16.62,12.38L13,16H22V7L18.4,10.6Z" Width="14" Height="14"/>
-                            </Button>
-                             
-                             <!-- Remove Background Button -->
+                            </Button>                         <!-- Remove Background Button -->
                             <Rectangle Fill="#444444" Width="1" Height="16" Margin="2,0" VerticalAlignment="Center" IsVisible="{Binding CanRemoveBackground}"/>
                             <Button Theme="{StaticResource SnipButton}" Command="{Binding RemoveBackgroundCommand}" ToolTip.Tip="{Binding [RemoveBackground], Source={x:Static services:LocalizationService.Instance}}" IsVisible="{Binding CanRemoveBackground}">
                                 <PathIcon Data="M7.5,5.6L5,7L6.4,4.5L5,2L7.5,3.4L10,2L8.6,4.5L10,7L7.5,5.6M19.5,15.4L22,14L20.6,16.5L22,19L19.5,17.6L17,19L18.4,16.5L17,14L19.5,15.4M22,2L20.6,4.5L22,7L19.5,5.6L17,7L18.4,4.5L17,2L19.5,3.4L22,2M13.34,12.78L15.78,10.34L13.66,8.22L11.22,10.66L13.34,12.78M14.37,7.29L16.71,9.63C17.1,10 17.1,10.65 16.71,11.04L5.04,22.71C4.65,23.1 4,23.1 3.63,22.71L1.29,20.37C0.9,20 0.9,19.35 1.29,18.96L12.96,7.29C13.35,6.9 14,6.9 14.37,7.29Z" Width="14" Height="14"/>
                             </Button>
                         </StackPanel>
-                    </Border>
-                    
-                    <!-- Processing Overlay -->
-                    <Border Grid.Row="0" Grid.RowSpan="2" IsVisible="{Binding IsProcessing}">
-                         <ctl:ProcessingOverlay DataContext="{Binding}"/>
-                    </Border>
-                </Grid>
-            </Border>
-            
-            <Border.ContextMenu>
-                <ContextMenu>
-                    <MenuItem Header="{Binding [MenuCopyImage], Source={x:Static services:LocalizationService.Instance}}" Command="{Binding CopyCommand}"/>
-                    <MenuItem Header="{Binding [MenuCrop], Source={x:Static services:LocalizationService.Instance}}" Command="{Binding CropCommand}" IsVisible="{Binding IsSelectionActive}"/>
-                    <MenuItem Header="{Binding [MenuPinSelection], Source={x:Static services:LocalizationService.Instance}}" Command="{Binding PinSelectionCommand}" IsVisible="{Binding IsSelectionActive}"/>
-                    <MenuItem Header="{Binding [MenuSaveImage], Source={x:Static services:LocalizationService.Instance}}" Command="{Binding SaveCommand}"/>
-                    <Separator/>
-                    <MenuItem Header="{Binding [MenuShowToolbar], Source={x:Static services:LocalizationService.Instance}}" 
-                              Command="{Binding ToggleToolbarCommand}">
-                        <MenuItem.Icon>
-                            <CheckBox IsChecked="{Binding ShowToolbar}" IsHitTestVisible="False"/>
-                        </MenuItem.Icon>
-                    </MenuItem>
-                    <Separator/>
-                    <MenuItem Header="{Binding [MenuClose], Source={x:Static services:LocalizationService.Instance}}" Command="{Binding CloseCommand}"/>
-                </ContextMenu>
-            </Border.ContextMenu>
+        </Border>
+        
+        <!-- Processing Overlay (Covers image and toolbar) -->
+        <Border Grid.Row="0" Grid.RowSpan="2" IsVisible="{Binding IsProcessing}">
+             <ctl:ProcessingOverlay DataContext="{Binding}"/>
         </Border>
     </Grid>
 </Window>

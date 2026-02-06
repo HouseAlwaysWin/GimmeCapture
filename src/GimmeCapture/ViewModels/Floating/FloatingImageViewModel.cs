@@ -18,7 +18,8 @@ namespace GimmeCapture.ViewModels.Floating;
 public enum FloatingTool
 {
     None,
-    Selection
+    Selection,
+    PointRemoval
 }
 
 public class FloatingImageViewModel : ViewModelBase
@@ -144,6 +145,12 @@ public class FloatingImageViewModel : ViewModelBase
         get => CurrentTool == FloatingTool.Selection;
         set => CurrentTool = value ? FloatingTool.Selection : FloatingTool.None;
     }
+
+    public bool IsPointRemovalMode
+    {
+        get => CurrentTool == FloatingTool.PointRemoval;
+        set => CurrentTool = value ? FloatingTool.PointRemoval : FloatingTool.None;
+    }
     
     // Only allow background removal if not processing.
     // We could also check if already transparent, but that's harder to detect cheaply.
@@ -223,6 +230,8 @@ public class FloatingImageViewModel : ViewModelBase
         Image = image;
         OriginalWidth = originalWidth;
         OriginalHeight = originalHeight;
+        DisplayWidth = originalWidth;
+        DisplayHeight = originalHeight;
         BorderColor = borderColor;
         BorderThickness = borderThickness;
         HidePinDecoration = hideDecoration;
