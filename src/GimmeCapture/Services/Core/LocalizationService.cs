@@ -184,6 +184,12 @@ namespace GimmeCapture.Services.Core;
                     ["TempPath"] = "Temp Folder:",
                     ["WingScale"] = "Wing Scale:",
                     ["IconScale"] = "Icon Scale:",
+                    ["TipCrop"] = "Crop Selection",
+                    ["TipCut"] = "Cut Selection (Ctrl+X)",
+                    ["TipPinSelection"] = "Pin Selection to New Window",
+                    ["MenuCut"] = "Cut",
+                    ["MenuCrop"] = "Crop",
+                    ["MenuPinSelection"] = "Pin Selection",
                 },
                 [Language.Chinese] = new Dictionary<string, string>
                 {
@@ -312,6 +318,12 @@ namespace GimmeCapture.Services.Core;
                     ["TempPath"] = "暫存資料夾:",
                     ["WingScale"] = "翅膀大小:",
                     ["IconScale"] = "裝飾大小:",
+                    ["TipCrop"] = "裁切選取區",
+                    ["TipCut"] = "剪下選取區 (Ctrl+X)",
+                    ["TipPinSelection"] = "將選取區釘選至新視窗",
+                    ["MenuCut"] = "剪下",
+                    ["MenuCrop"] = "裁切",
+                    ["MenuPinSelection"] = "釘選選取區",
                 },
                 [Language.Japanese] = new Dictionary<string, string>
                 {
@@ -435,6 +447,12 @@ namespace GimmeCapture.Services.Core;
                     ["TempPath"] = "一時フォルダー:",
                     ["WingScale"] = "翼のサイズ:",
                     ["IconScale"] = "アイコンのサイズ:",
+                    ["TipCrop"] = "選択範囲をトリミング",
+                    ["TipCut"] = "選択範囲を切り取り (Ctrl+X)",
+                    ["TipPinSelection"] = "選択範囲を新しいウィンドウにピン留め",
+                    ["MenuCut"] = "切り取り",
+                    ["MenuCrop"] = "トリミング",
+                    ["MenuPinSelection"] = "選択範囲をピン留め",
                 },
             };
 
