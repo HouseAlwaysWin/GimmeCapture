@@ -25,6 +25,8 @@ public partial class FloatingImageWindow : Window
         AddHandler(PointerPressedEvent, OnPointerPressed, RoutingStrategies.Tunnel);
         AddHandler(TappedEvent, OnTapped, RoutingStrategies.Bubble);
         
+        // Use Tunneling for ContextRequested to catch it before the RootGrid opens the menu
+        AddHandler(ContextRequestedEvent, OnContextRequested, RoutingStrategies.Tunnel);
         KeyDown += OnKeyDown;
     }
 
@@ -222,7 +224,8 @@ public partial class FloatingImageWindow : Window
         }
 
         // 3. Selection Tool vs Movement Preparation
-        if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+        var pProperties = e.GetCurrentPoint(this).Properties;
+        if (pProperties.IsLeftButtonPressed)
         {
             var imageControl = this.FindControl<Image>("PinnedImage");
             
@@ -260,6 +263,23 @@ public partial class FloatingImageWindow : Window
                 _pointerPressedPoint = this.PointToScreen(pointerPos).ToPoint(1.0);
                 _pendingMoveEvent = e;
                 e.Pointer.Capture(this);
+            }
+        }
+        else if (pProperties.IsRightButtonPressed)
+        {
+            // Block ContextMenu and perform tool-specific cancel if a tool is active
+            if (vm.IsPointRemovalMode)
+            {
+                vm.ResetInteractivePoints();
+                e.Handled = true;
+                System.Diagnostics.Debug.WriteLine("FloatingWindow: AI Points Reset via Right-Click");
+            }
+            else if (vm.IsSelectionMode)
+            {
+                // Reset selection
+                vm.SelectionRect = new Rect();
+                e.Handled = true;
+                System.Diagnostics.Debug.WriteLine("FloatingWindow: Selection Reset via Right-Click");
             }
         }
     }
@@ -440,6 +460,19 @@ public partial class FloatingImageWindow : Window
         }
     }
     
+    private void OnContextRequested(object? sender, ContextRequestedEventArgs e)
+    {
+        if (DataContext is FloatingImageViewModel vm)
+        {
+            // Block context menu if any interactive tool is active
+            if (vm.IsPointRemovalMode || vm.IsSelectionMode)
+            {
+                e.Handled = true;
+                System.Diagnostics.Debug.WriteLine("FloatingWindow: Blocking ContextMenu because a tool is active.");
+            }
+        }
+    }
+
     private void OnKeyDown(object? sender, KeyEventArgs e)
     {
         if (DataContext is not FloatingImageViewModel vm) return;

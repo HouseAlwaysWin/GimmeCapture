@@ -100,6 +100,7 @@ public class FloatingImageViewModel : ViewModelBase
             {
                 IsInteractiveSelectionMode = false;
                 InteractiveMask = null;
+                _interactivePoints.Clear();
                 _mobileSAMService?.Dispose();
                 _mobileSAMService = null;
             }
@@ -211,6 +212,7 @@ public class FloatingImageViewModel : ViewModelBase
     }
 
     private MobileSAMService? _mobileSAMService;
+    private readonly List<(double X, double Y, bool IsPositive)> _interactivePoints = new();
 
     private async Task StartInteractiveRemovalAsync()
     {
@@ -255,7 +257,8 @@ public class FloatingImageViewModel : ViewModelBase
             System.Diagnostics.Debug.WriteLine("FloatingVM: Setting image to SAM...");
             await _mobileSAMService.SetImageAsync(imageBytes);
             
-            // This flag can still be used for internal state but visibility will rely on IsPointRemovalMode
+            // Reset points list
+            _interactivePoints.Clear();
             IsInteractiveSelectionMode = true; 
             DiagnosticText = "AI Initialized & Ready";
             System.Diagnostics.Debug.WriteLine("FloatingVM: Interactive Selection Ready");
@@ -283,59 +286,60 @@ public class FloatingImageViewModel : ViewModelBase
         }
     }
 
+    public void ResetInteractivePoints()
+    {
+        _interactivePoints.Clear();
+        InteractiveMask = null;
+        DiagnosticText = "AI: Points Reset";
+        System.Diagnostics.Debug.WriteLine("FloatingVM: Resetting interactive points");
+    }
+
     public async Task HandlePointClickAsync(double x, double y)
     {
         System.Diagnostics.Debug.WriteLine($"FloatingVM: HandlePointClickAsync at ({x}, {y})");
-        // Calculate physical coordinates from logical UI coordinates
+        
+        // Calculate physical coordinates
         var pixW = Image?.PixelSize.Width ?? 1;
         var pixH = Image?.PixelSize.Height ?? 1;
-        
         var scaleX = (double)pixW / (DisplayWidth > 0 ? DisplayWidth : OriginalWidth);
         var scaleY = (double)pixH / (DisplayHeight > 0 ? DisplayHeight : OriginalHeight);
         
         var physicalX = x * scaleX;
         var physicalY = y * scaleY;
 
-        DiagnosticText = $"AI: ({x:F0},{y:F0}) -> ({physicalX:F0},{physicalY:F0})";
-        System.Diagnostics.Debug.WriteLine($"FloatingVM: {DiagnosticText}");
-
-        if (_mobileSAMService == null)
-        {
-             System.Diagnostics.Debug.WriteLine("FloatingVM: Click ignored - _mobileSAMService is null");
-             return;
-        }
-        if (!IsInteractiveSelectionMode)
-        {
-             System.Diagnostics.Debug.WriteLine("FloatingVM: Click ignored - IsInteractiveSelectionMode is false");
-             return;
-        }
+        if (_mobileSAMService == null || !IsInteractiveSelectionMode) return;
 
         try
         {
-            System.Diagnostics.Debug.WriteLine($"FloatingVM: Physical coordinates: ({physicalX}, {physicalY})");
+            // Add point (default to positive selection for now)
+            _interactivePoints.Add((physicalX, physicalY, true));
 
-            var maskBytes = await _mobileSAMService.GetMaskAsync(physicalX, physicalY);
+            var maskBytes = await _mobileSAMService.GetMaskAsync(_interactivePoints);
             var iouInfo = _mobileSAMService.LastIouInfo;
-            DiagnosticText = $"AI: ({physicalX:F0},{physicalY:F0}) {iouInfo}";
-            System.Diagnostics.Debug.WriteLine($"FloatingVM: Mask generated, bytes: {maskBytes?.Length ?? 0}, {iouInfo}");
-            
+            DiagnosticText = $"AI: ({_interactivePoints.Count} pts) {iouInfo}";
+
             if (maskBytes != null && maskBytes.Length > 0)
             {
-                // Use AI mask directly without any diagnostic overlays
-                using var maskMs = new System.IO.MemoryStream(maskBytes);
-                InteractiveMask = new Bitmap(maskMs);
+                // Decode mask and DRAW DOTS for visual feedback
+                using var aiMask = SKBitmap.Decode(maskBytes);
+                using (var canvas = new SKCanvas(aiMask))
+                {
+                    var paint = new SKPaint { Color = SKColors.Red, Style = SKPaintStyle.Fill, IsAntialias = true };
+                    foreach (var pt in _interactivePoints)
+                    {
+                        canvas.DrawCircle((float)pt.X, (float)pt.Y, 5, paint);
+                    }
+                }
+
+                using var finalMs = new System.IO.MemoryStream();
+                aiMask.Encode(finalMs, SKEncodedImageFormat.Png, 100);
+                finalMs.Seek(0, System.IO.SeekOrigin.Begin);
+                InteractiveMask = new Bitmap(finalMs);
             }
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"FloatingVM: Error getting mask: {ex}");
-            Avalonia.Threading.Dispatcher.UIThread.Post(() => {
-                 var dialogVm = new GothicDialogViewModel { Title = "AI Error", Message = "Failed to generate mask: " + ex.Message };
-                 var dialog = new GimmeCapture.Views.Shared.GothicDialog { DataContext = dialogVm };
-                 var desktop = Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime;
-                 var owner = desktop?.Windows.FirstOrDefault(w => w.DataContext == this) as Avalonia.Controls.Window;
-                 if (owner != null) dialog.ShowDialog<bool>(owner);
-            });
+            System.Diagnostics.Debug.WriteLine($"FloatingVM: Multi-point Error: {ex}");
         }
     }
 

@@ -207,31 +207,34 @@ public class MobileSAMService : IDisposable
         });
     }
 
-    public async Task<byte[]> GetMaskAsync(double physicalX, double physicalY, bool isPositive = true)
+    public async Task<byte[]> GetMaskAsync(IEnumerable<(double X, double Y, bool IsPositive)> points)
     {
         if (_decoderSession == null || _imageEmbeddings == null)
             throw new InvalidOperationException("Service not ready. Call SetImageAsync first.");
 
+        var pointList = points.ToList();
+        if (pointList.Count == 0) return Array.Empty<byte>();
+
         return await Task.Run(() =>
         {
-            // Coordinate Safety
-            physicalX = Math.Clamp(physicalX, 0, _originalWidth - 1);
-            physicalY = Math.Clamp(physicalY, 0, _originalHeight - 1);
-
+            int numPoints = pointList.Count;
             // 1. Prepare Points (Scale physical image coords to SAM TargetSize space)
-            // Use UNIFORM scaling based on max dimension to match SAM's 1024x1024 padded square
-            var coords = new DenseTensor<float>(new int[] { 1, 1, 2 });
+            // MobileSAM multi-point shape: [1, N, 2]
+            var coords = new DenseTensor<float>(new int[] { 1, numPoints, 2 });
+            var labels = new DenseTensor<float>(new int[] { 1, numPoints });
+
             double scale = (double)_lastModelTargetSize / Math.Max(_originalWidth, _originalHeight);
             
-            // Standard (X, Y) order - SAM expects point_coords as [x, y]
-            coords[0, 0, 0] = (float)(physicalX * scale);
-            coords[0, 0, 1] = (float)(physicalY * scale);
-            
-            // Enhanced logging for debugging
-            System.Diagnostics.Debug.WriteLine($"MobileSAM: Physical({physicalX:F1}, {physicalY:F1}) -> Tensor({coords[0,0,0]:F1}, {coords[0,0,1]:F1}) Scale={scale:F4} OrigSize=({_originalWidth}x{_originalHeight}) ModelTarget={_lastModelTargetSize}");
+            for (int i = 0; i < numPoints; i++)
+            {
+                var p = pointList[i];
+                float px = (float)Math.Clamp(p.X, 0, _originalWidth - 1);
+                float py = (float)Math.Clamp(p.Y, 0, _originalHeight - 1);
 
-            var labels = new DenseTensor<float>(new int[] { 1, 1 });
-            labels[0, 0] = isPositive ? 1f : 0f;
+                coords[0, i, 0] = (float)(px * scale);
+                coords[0, i, 1] = (float)(py * scale);
+                labels[0, i] = p.IsPositive ? 1f : 0f;
+            }
 
             // 2. Prepare Decoder Inputs
             var inputs = new List<NamedOnnxValue>
@@ -244,7 +247,7 @@ public class MobileSAMService : IDisposable
                 NamedOnnxValue.CreateFromTensor("orig_im_size", new DenseTensor<float>(new float[] { (float)_originalHeight, (float)_originalWidth }, new int[] { 2 }))
             };
             
-            System.Diagnostics.Debug.WriteLine($"MobileSAM: Running Decoder at point ({physicalX}, {physicalY}) scaled to ({coords[0,0,0]}, {coords[0,0,1]})");
+            System.Diagnostics.Debug.WriteLine($"MobileSAM: Running Decoder with {pointList.Count} points");
             using var results = _decoderSession.Run(inputs);
             
             // MobileSAM multi-mask decoder returns:
