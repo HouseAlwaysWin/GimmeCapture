@@ -5,6 +5,11 @@ using Avalonia.VisualTree;
 using Avalonia.Controls.Primitives;
 using GimmeCapture.ViewModels.Floating;
 using System;
+using GimmeCapture.Services.Abstractions;
+using GimmeCapture.Services.Core;
+using Avalonia.Media.Imaging;
+using Avalonia.Media;
+using System.Reactive.Linq;
 
 namespace GimmeCapture.Views.Floating;
 
@@ -62,6 +67,38 @@ public partial class FloatingImageWindow : Window
                     ev.PropertyName == nameof(FloatingImageViewModel.ShowToolbar))
                 {
                     SyncWindowSizeToImage();
+                }
+            };
+
+            // Implementation for spawning a NEW pinned window from selection
+            vm.OpenPinWindowAction = (bitmap, rect, color, thickness, runAI) =>
+            {
+                // Reuse the same logic as SnipWindow to spawn new windows
+                var newVm = new FloatingImageViewModel(bitmap, color, thickness, vm.HidePinDecoration, vm.HidePinBorder, 
+                    vm.ClipboardService, vm.AIResourceService);
+                
+                newVm.WingScale = vm.WingScale;
+                newVm.CornerIconScale = vm.CornerIconScale;
+                
+                var padding = newVm.WindowPadding;
+                
+                // Position the new window near the current one for feedback, 
+                // but offset it so it's clearly a new window.
+                var newWin = new FloatingImageWindow
+                {
+                    DataContext = newVm,
+                    Position = new PixelPoint(Position.X + 40, Position.Y + 40),
+                    Width = bitmap.Size.Width + padding.Left + padding.Right,
+                    Height = bitmap.Size.Height + padding.Top + padding.Bottom
+                };
+                
+                newWin.Show();
+                
+                if (runAI)
+                {
+                    Avalonia.Threading.Dispatcher.UIThread.Post(() => {
+                        newVm.RemoveBackgroundCommand.Execute().Subscribe();
+                    });
                 }
             };
         }
@@ -280,9 +317,21 @@ public partial class FloatingImageWindow : Window
     
     private void OnKeyDown(object? sender, KeyEventArgs e)
     {
+        if (DataContext is not FloatingImageViewModel vm) return;
+
         if (e.Key == Key.Escape)
         {
             Close();
+        }
+        else if (e.Key == Key.C && e.KeyModifiers.HasFlag(KeyModifiers.Control))
+        {
+            vm.CopyCommand.Execute().Subscribe();
+            e.Handled = true;
+        }
+        else if (e.Key == Key.X && e.KeyModifiers.HasFlag(KeyModifiers.Control))
+        {
+            vm.CutCommand.Execute().Subscribe();
+            e.Handled = true;
         }
     }
 

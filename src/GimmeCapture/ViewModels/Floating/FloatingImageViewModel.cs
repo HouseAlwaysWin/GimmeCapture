@@ -124,14 +124,23 @@ public class FloatingImageViewModel : ViewModelBase
 
     public ReactiveCommand<Unit, Unit> CloseCommand { get; }
     public ReactiveCommand<Unit, Unit> CopyCommand { get; }
+    public ReactiveCommand<Unit, Unit> CutCommand { get; }
+    public ReactiveCommand<Unit, Unit> CropCommand { get; }
+    public ReactiveCommand<Unit, Unit> PinSelectionCommand { get; }
     public ReactiveCommand<Unit, Unit> SaveCommand { get; }
     public ReactiveCommand<Unit, Unit> ToggleToolbarCommand { get; }
     public ReactiveCommand<Unit, Unit> RemoveBackgroundCommand { get; }
     public ReactiveCommand<Unit, Unit> SelectionCommand { get; }
     
     public System.Action? CloseAction { get; set; }
-    // CopyAction removed in favor of IClipboardService
+    
+    // Action to open a new pinned window, typically provided by the View/Window layer
+    public System.Action<Bitmap, Avalonia.Rect, Avalonia.Media.Color, double, bool>? OpenPinWindowAction { get; set; }
+    
     public System.Func<Task>? SaveAction { get; set; }
+
+    public IClipboardService ClipboardService => _clipboardService;
+    public AIResourceService AIResourceService => _aiResourceService;
 
     private readonly IClipboardService _clipboardService;
     private readonly AIResourceService _aiResourceService;
@@ -199,18 +208,15 @@ public class FloatingImageViewModel : ViewModelBase
             CurrentTool = CurrentTool == FloatingTool.Selection ? FloatingTool.None : FloatingTool.Selection;
         });
         
-        CopyCommand = ReactiveCommand.CreateFromTask(async () => 
-        {
-            if (Image != null)
-            {
-                await _clipboardService.CopyImageAsync(Image);
-            }
-        });
-        
         SaveCommand = ReactiveCommand.CreateFromTask(async () => 
         {
              if (SaveAction != null) await SaveAction();
         });
+
+        CopyCommand = ReactiveCommand.CreateFromTask(CopyAsync);
+        CutCommand = ReactiveCommand.CreateFromTask(CutAsync, this.WhenAnyValue(x => x.IsSelectionActive));
+        CropCommand = ReactiveCommand.CreateFromTask(CropAsync, this.WhenAnyValue(x => x.IsSelectionActive));
+        PinSelectionCommand = ReactiveCommand.CreateFromTask(PinSelectionAsync, this.WhenAnyValue(x => x.IsSelectionActive));
 
         _canRemoveBackground = this.WhenAnyValue(x => x.IsProcessing)
             .Select(x => !x)
@@ -402,6 +408,125 @@ public class FloatingImageViewModel : ViewModelBase
         finally
         {
             IsProcessing = false;
+        }
+    }
+
+    private async Task<Bitmap?> GetSelectedBitmapAsync()
+    {
+        if (Image == null || !IsSelectionActive) return null;
+
+        return await Task.Run(() =>
+        {
+            try
+            {
+                using var ms = new System.IO.MemoryStream();
+                Image.Save(ms);
+                ms.Position = 0;
+
+                using var original = SkiaSharp.SKBitmap.Decode(ms);
+                if (original == null) return null;
+
+                var scaleX = (double)Image.PixelSize.Width / Image.Size.Width;
+                var scaleY = (double)Image.PixelSize.Height / Image.Size.Height;
+
+                int x = (int)Math.Round(Math.Max(0, SelectionRect.X * scaleX));
+                int y = (int)Math.Round(Math.Max(0, SelectionRect.Y * scaleY));
+                int w = (int)Math.Round(Math.Min(original.Width - x, SelectionRect.Width * scaleX));
+                int h = (int)Math.Round(Math.Min(original.Height - y, SelectionRect.Height * scaleY));
+
+                if (w <= 0 || h <= 0) return null;
+
+                var cropped = new SkiaSharp.SKBitmap(w, h);
+                if (original.ExtractSubset(cropped, new SkiaSharp.SKRectI(x, y, x + w, y + h)))
+                {
+                    using var cms = new System.IO.MemoryStream();
+                    using var image = SkiaSharp.SKImage.FromBitmap(cropped);
+                    using var data = image.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
+                    data.SaveTo(cms);
+                    cms.Position = 0;
+                    return new Bitmap(cms);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error extracting selection: {ex}");
+            }
+            return null;
+        });
+    }
+
+    private async Task CopyAsync()
+    {
+        if (Image == null) return;
+
+        if (IsSelectionActive)
+        {
+            var selected = await GetSelectedBitmapAsync();
+            if (selected != null)
+            {
+                await _clipboardService.CopyImageAsync(selected);
+            }
+        }
+        else
+        {
+            await _clipboardService.CopyImageAsync(Image);
+        }
+    }
+
+    private async Task CutAsync()
+    {
+        if (Image == null || !IsSelectionActive) return;
+
+        // 1. Copy selection to clipboard
+        var selected = await GetSelectedBitmapAsync();
+        if (selected != null)
+        {
+            await _clipboardService.CopyImageAsync(selected);
+        }
+
+        // 2. Actually crop it (Cut behavior in pinned window = Crop + Copy)
+        await CropAsync();
+    }
+
+    private async Task CropAsync()
+    {
+        if (Image == null || !IsSelectionActive) return;
+
+        var cropped = await GetSelectedBitmapAsync();
+        if (cropped != null)
+        {
+            PushUndoState();
+            Image = cropped;
+            SelectionRect = new Avalonia.Rect();
+            IsSelectionMode = false;
+        }
+    }
+
+    private async Task PinSelectionAsync()
+    {
+        if (Image == null || !IsSelectionActive || OpenPinWindowAction == null) return;
+
+        var selected = await GetSelectedBitmapAsync();
+        if (selected != null)
+        {
+            // Position the new window relative to the current one
+            // We use the absolute screen coordinates if we had them, but here we provide relative rect.
+            // FloatingImageWindow implementation in SnipWindow.axaml.cs uses rect.X/Y for Position.
+            // We'll simulate that by passing the selection rect, but we need to know the window's screen position.
+            // For now, let's just use a default or let the UI layer handle it if it can.
+            
+            // Need a way to get window screen position from VM if possible, or just pass the offset.
+            // Since we don't have screen pos here, we just pass the selected bitmap.
+            // The UI layer (FloatingImageWindow.axaml.cs) will handle the actual spawn.
+            
+            // Fake rect just for size, UI layer will position near cursor or current window
+            var rect = new Avalonia.Rect(0, 0, selected.Size.Width, selected.Size.Height);
+            
+            OpenPinWindowAction(selected, rect, BorderColor, BorderThickness, false);
+            
+            // Clear selection after pinning
+            SelectionRect = new Avalonia.Rect();
+            IsSelectionMode = false;
         }
     }
 }
