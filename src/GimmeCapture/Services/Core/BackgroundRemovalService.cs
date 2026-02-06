@@ -141,9 +141,18 @@ public class BackgroundRemovalService : IDisposable
             }
 
             byte[] processedBytes;
-            if (IsSolidBackground(targetBmp, out var bgColor))
+            SKColor bgColor;
+            
+            // Try edge-based solid background detection first
+            if (IsSolidBackground(targetBmp, out bgColor))
             {
-                System.Diagnostics.Debug.WriteLine($"Solid background detected ({bgColor}). Using Manual Removal.");
+                System.Diagnostics.Debug.WriteLine($"Solid background detected via edges ({bgColor}). Using Manual Removal.");
+                processedBytes = RemoveSolidBackground(targetBmp, bgColor);
+            }
+            // Try corner-based detection as fallback (better for cropped regions where logo touches edges)
+            else if (TryGetCornerBackgroundColor(targetBmp, out bgColor))
+            {
+                System.Diagnostics.Debug.WriteLine($"Solid background detected via corners ({bgColor}). Using Manual Removal.");
                 processedBytes = RemoveSolidBackground(targetBmp, bgColor);
             }
             else
@@ -270,6 +279,85 @@ public class BackgroundRemovalService : IDisposable
         return Math.Abs(a.Red - b.Red) <= tolerance &&
                Math.Abs(a.Green - b.Green) <= tolerance &&
                Math.Abs(a.Blue - b.Blue) <= tolerance;
+    }
+
+    /// <summary>
+    /// Alternative background detection that samples from image corners with a small radius.
+    /// More reliable than edge-only sampling when the image is cropped close to the subject.
+    /// </summary>
+    private bool TryGetCornerBackgroundColor(SKBitmap bmp, out SKColor bgColor)
+    {
+        bgColor = SKColors.Empty;
+        if (bmp.Width < 20 || bmp.Height < 20) return false;
+
+        // Sample from all four corners using a 5x5 region
+        int sampleSize = 5;
+        var cornerSamples = new List<SKColor>();
+
+        // Top-left corner
+        for (int y = 0; y < sampleSize && y < bmp.Height; y++)
+            for (int x = 0; x < sampleSize && x < bmp.Width; x++)
+                cornerSamples.Add(bmp.GetPixel(x, y));
+
+        // Top-right corner
+        for (int y = 0; y < sampleSize && y < bmp.Height; y++)
+            for (int x = bmp.Width - sampleSize; x < bmp.Width && x >= 0; x++)
+                cornerSamples.Add(bmp.GetPixel(x, y));
+
+        // Bottom-left corner
+        for (int y = bmp.Height - sampleSize; y < bmp.Height && y >= 0; y++)
+            for (int x = 0; x < sampleSize && x < bmp.Width; x++)
+                cornerSamples.Add(bmp.GetPixel(x, y));
+
+        // Bottom-right corner
+        for (int y = bmp.Height - sampleSize; y < bmp.Height && y >= 0; y++)
+            for (int x = bmp.Width - sampleSize; x < bmp.Width && x >= 0; x++)
+                cornerSamples.Add(bmp.GetPixel(x, y));
+
+        if (cornerSamples.Count == 0) return false;
+
+        // Filter opaque samples
+        var opaqueSamples = cornerSamples.Where(c => c.Alpha > 250).ToList();
+        if (opaqueSamples.Count < cornerSamples.Count * 0.7) return false;
+
+        // Group by similar colors to find dominant color
+        var groups = new List<(SKColor avg, int count)>();
+        foreach (var sample in opaqueSamples)
+        {
+            bool found = false;
+            for (int i = 0; i < groups.Count; i++)
+            {
+                if (ColorsAreSimilar(sample, groups[i].avg, 30))
+                {
+                    // Update running average (simplified)
+                    groups[i] = (groups[i].avg, groups[i].count + 1);
+                    found = true;
+                    break;
+                }
+            }
+            if (!found)
+            {
+                groups.Add((sample, 1));
+            }
+        }
+
+        if (groups.Count == 0) return false;
+
+        // Find most common color group
+        var dominant = groups.OrderByDescending(g => g.count).First();
+        
+        // Require at least 60% of samples to be this color to be considered uniform
+        double ratio = (double)dominant.count / opaqueSamples.Count;
+        System.Diagnostics.Debug.WriteLine($"[CornerBg] Dominant color ratio: {ratio:P0}, Count: {dominant.count}/{opaqueSamples.Count}");
+        
+        if (ratio >= 0.6)
+        {
+            bgColor = dominant.avg;
+            System.Diagnostics.Debug.WriteLine($"[CornerBg] Background detected: {bgColor}");
+            return true;
+        }
+
+        return false;
     }
 
     private byte[] RemoveSolidBackground(SKBitmap original, SKColor bgColor)
