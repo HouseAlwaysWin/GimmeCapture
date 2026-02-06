@@ -187,7 +187,12 @@ public partial class FloatingImageWindow : Window
                 if (imageControl != null)
                 {
                     _isSelecting = true;
-                    _selectionStartPoint = e.GetPosition(imageControl);
+                    _isSelecting = true;
+                    var pos = e.GetPosition(imageControl);
+                    _selectionStartPoint = new Point(
+                        Math.Max(0, Math.Min(imageControl.Bounds.Width, pos.X)),
+                        Math.Max(0, Math.Min(imageControl.Bounds.Height, pos.Y))
+                    );
                     e.Pointer.Capture(this);
                     e.Handled = true;
                 }
@@ -212,17 +217,20 @@ public partial class FloatingImageWindow : Window
         else if (_isSelecting)
         {
             // Update Selection Rect (Coordinates should be relative to PinnedImage or its container)
-            // Get position relative to PinnedImage to ensure it's in image space
             var imageControl = this.FindControl<Image>("PinnedImage");
             if (imageControl == null) return;
 
             var relativePos = e.GetPosition(imageControl);
-            var startPos = _selectionStartPoint; // We'll store start as relative to image too
+            var startPos = _selectionStartPoint;
             
-            double x = Math.Min(startPos.X, relativePos.X);
-            double y = Math.Min(startPos.Y, relativePos.Y);
-            double w = Math.Abs(startPos.X - relativePos.X);
-            double h = Math.Abs(startPos.Y - relativePos.Y);
+            // Clamp current point to image bounds
+            double clampedX = Math.Max(0, Math.Min(imageControl.Bounds.Width, relativePos.X));
+            double clampedY = Math.Max(0, Math.Min(imageControl.Bounds.Height, relativePos.Y));
+            
+            double x = Math.Min(startPos.X, clampedX);
+            double y = Math.Min(startPos.Y, clampedY);
+            double w = Math.Abs(startPos.X - clampedX);
+            double h = Math.Abs(startPos.Y - clampedY);
             
             vm.SelectionRect = new Rect(x, y, w, h);
             e.Handled = true;
