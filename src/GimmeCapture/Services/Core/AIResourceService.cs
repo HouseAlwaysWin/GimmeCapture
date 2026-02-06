@@ -201,4 +201,47 @@ public class AIResourceService : ReactiveObject
             File.Delete(zipPath);
         });
     }
+    private static bool _isResolverSet = false;
+
+    public void SetupNativeResolvers()
+    {
+        if (_isResolverSet) return;
+        _isResolverSet = true;
+
+        try
+        {
+            // Use .NET's modern DllImportResolver to point directly to the AI/runtime folder.
+            // This is much more reliable than modifying PATH at runtime.
+            // We only need to set this once for the onnxruntime assembly.
+            var onnxAssembly = typeof(Microsoft.ML.OnnxRuntime.InferenceSession).Assembly;
+            
+            System.Runtime.InteropServices.NativeLibrary.SetDllImportResolver(onnxAssembly, (libraryName, assembly, searchPath) =>
+            {
+                if (libraryName == "onnxruntime")
+                {
+                    var runtimeDir = Path.Combine(GetAIResourcesPath(), "runtime");
+                    var dllPath = Path.Combine(runtimeDir, "onnxruntime.dll");
+                    
+                    if (File.Exists(dllPath))
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[AI] Custom Resolver loading: {dllPath}");
+                        return System.Runtime.InteropServices.NativeLibrary.Load(dllPath);
+                    }
+                }
+                return IntPtr.Zero;
+            });
+
+            // Also add to PATH as fallback for dependencies of onnxruntime.dll (like zlib, etc)
+            var runtimeDirFallback = Path.Combine(GetAIResourcesPath(), "runtime");
+            var path = Environment.GetEnvironmentVariable("PATH") ?? "";
+            if (!path.Contains(runtimeDirFallback))
+            {
+                Environment.SetEnvironmentVariable("PATH", runtimeDirFallback + Path.PathSeparator + path);
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[AI] Failed to setup native resolvers: {ex.Message}");
+        }
+    }
 }

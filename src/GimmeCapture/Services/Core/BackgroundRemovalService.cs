@@ -17,7 +17,6 @@ public class BackgroundRemovalService : IDisposable
     private readonly AIResourceService _resourceService;
     private bool _isInitialized = false;
 
-    private static bool _isResolverSet = false;
 
     public BackgroundRemovalService(AIResourceService resourceService)
     {
@@ -29,7 +28,7 @@ public class BackgroundRemovalService : IDisposable
         if (_isInitialized) return;
 
         // Ensure we load the native libraries from the custom path
-        SetupNativeResolver();
+        _resourceService.SetupNativeResolvers();
 
         var baseDir = _resourceService.GetAIResourcesPath();
         var modelPath = Path.Combine(baseDir, "models", "u2net.onnx");
@@ -81,37 +80,6 @@ public class BackgroundRemovalService : IDisposable
         });
     }
 
-    private void SetupNativeResolver()
-    {
-        if (_isResolverSet) return;
-        _isResolverSet = true;
-
-        // Use .NET's modern DllImportResolver to point directly to the AI/runtime folder.
-        // This is much more reliable than modifying PATH at runtime.
-        NativeLibrary.SetDllImportResolver(typeof(InferenceSession).Assembly, (libraryName, assembly, searchPath) =>
-        {
-            if (libraryName == "onnxruntime")
-            {
-                var runtimeDir = Path.Combine(_resourceService.GetAIResourcesPath(), "runtime");
-                var dllPath = Path.Combine(runtimeDir, "onnxruntime.dll");
-                
-                if (File.Exists(dllPath))
-                {
-                    System.Diagnostics.Debug.WriteLine($"[ONNX] Custom Resolver loading: {dllPath}");
-                    return NativeLibrary.Load(dllPath);
-                }
-            }
-            return IntPtr.Zero;
-        });
-
-        // Also add to PATH as fallback for dependencies of onnxruntime.dll (like zlib, etc)
-        var runtimeDirFallback = Path.Combine(_resourceService.GetAIResourcesPath(), "runtime");
-        var path = Environment.GetEnvironmentVariable("PATH") ?? "";
-        if (!path.Contains(runtimeDirFallback))
-        {
-            Environment.SetEnvironmentVariable("PATH", runtimeDirFallback + Path.PathSeparator + path);
-        }
-    }
 
     public async Task<byte[]> RemoveBackgroundAsync(byte[] imageBytes, Avalonia.Rect? selectionRect = null)
     {
@@ -382,8 +350,8 @@ public class BackgroundRemovalService : IDisposable
                  }
                  else
                  {
-                     // Opaque
-                     result.SetPixel(x, y, new SKColor(color.Red, color.Green, color.Blue, 255));
+                     // Preserve original color (including alpha)
+                     result.SetPixel(x, y, color);
                  }
              }
          }
@@ -500,12 +468,13 @@ public class BackgroundRemovalService : IDisposable
                 var maskVal = mask.GetPixel(x, y).Red; 
                 
                 // Use mask value directly as Alpha for soft edges (hair, anti-aliasing)
-                byte alpha = maskVal;
+                // PRESERVE original transparency: new alpha is min(original_alpha, mask_alpha)
+                byte alpha = (byte)Math.Min((int)color.Alpha, (int)maskVal);
                 
                 // Optional: Clip very low values to full transparent to clean up noise
                 if (alpha < 10) alpha = 0;
-                // Optional: Clip very high values to full opaque to ensure solid subject
-                if (alpha > 240) alpha = 255;
+                // Optional: Clip very high values to full opaque (up to original alpha)
+                if (alpha > 240) alpha = color.Alpha;
                 
                 // Set pixel with new alpha
                 // Note: SkiaSharp SKColor constructors usually imply Premultiplied if we aren't careful, 

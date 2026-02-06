@@ -13,7 +13,6 @@ namespace GimmeCapture.Services.Core;
 
 public class MobileSAMService : IDisposable
 {
-    private static bool _isResolverSet = false;
     private InferenceSession? _encoderSession;
     private InferenceSession? _decoderSession;
     private readonly AIResourceService _resourceService;
@@ -39,7 +38,7 @@ public class MobileSAMService : IDisposable
         if (_isInitialized) return;
 
         // Ensure we load the native libraries from the custom path
-        SetupNativeResolver();
+        _resourceService.SetupNativeResolvers();
 
         var baseDir = _resourceService.GetAIResourcesPath();
         var encoderPath = Path.Combine(baseDir, "models", "mobile_sam_image_encoder.onnx");
@@ -94,35 +93,6 @@ public class MobileSAMService : IDisposable
         });
     }
 
-    private void SetupNativeResolver()
-    {
-        if (_isResolverSet) return;
-        _isResolverSet = true;
-
-        NativeLibrary.SetDllImportResolver(typeof(InferenceSession).Assembly, (libraryName, assembly, searchPath) =>
-        {
-            if (libraryName == "onnxruntime")
-            {
-                var runtimeDir = Path.Combine(_resourceService.GetAIResourcesPath(), "runtime");
-                var dllPath = Path.Combine(runtimeDir, "onnxruntime.dll");
-                
-                if (File.Exists(dllPath))
-                {
-                    System.Diagnostics.Debug.WriteLine($"[MobileSAM] Custom Resolver loading: {dllPath}");
-                    return NativeLibrary.Load(dllPath);
-                }
-            }
-            return IntPtr.Zero;
-        });
-
-        // Also add to PATH as fallback
-        var runtimeDirFallback = Path.Combine(_resourceService.GetAIResourcesPath(), "runtime");
-        var path = Environment.GetEnvironmentVariable("PATH") ?? "";
-        if (!path.Contains(runtimeDirFallback))
-        {
-            Environment.SetEnvironmentVariable("PATH", runtimeDirFallback + Path.PathSeparator + path);
-        }
-    }
 
     public async Task SetImageAsync(byte[] imageBytes)
     {

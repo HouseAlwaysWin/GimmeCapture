@@ -296,38 +296,8 @@ public class FloatingImageViewModel : ViewModelBase
         var physicalX = x * scaleX;
         var physicalY = y * scaleY;
 
-        DiagnosticText = $"AI Trigger: L({x:F0},{y:F0}) -> P({physicalX:F0},{physicalY:F0}) DISP({DisplayWidth:F0}x{DisplayHeight:F0}) PIX({pixW}x{pixH})";
+        DiagnosticText = $"AI: ({x:F0},{y:F0}) -> ({physicalX:F0},{physicalY:F0})";
         System.Diagnostics.Debug.WriteLine($"FloatingVM: {DiagnosticText}");
-
-        // --- PURE UI TEST: Draw a red dot manually on a new bitmap ---
-        try
-        {
-            // Create or update mask with a red square at the physical location
-            using (var bmp = new SKBitmap(pixW, pixH))
-            {
-                using (var canvas = new SKCanvas(bmp))
-                {
-                    canvas.Clear(SKColors.Transparent);
-                    
-                    // Draw a red crosshair at the suspected physical location for visual confirmation
-                    var paint = new SKPaint { Color = SKColors.Red, StrokeWidth = 2, Style = SKPaintStyle.Stroke };
-                    float crossSize = 15;
-                    canvas.DrawLine((float)physicalX - crossSize, (float)physicalY, (float)physicalX + crossSize, (float)physicalY, paint);
-                    canvas.DrawLine((float)physicalX, (float)physicalY - crossSize, (float)physicalX, (float)physicalY + crossSize, paint);
-                }
-                
-                using (var ms = new System.IO.MemoryStream())
-                {
-                    bmp.Encode(ms, SKEncodedImageFormat.Png, 100);
-                    ms.Seek(0, System.IO.SeekOrigin.Begin);
-                    InteractiveMask = new Bitmap(ms);
-                }
-            }
-        }
-        catch (Exception ex) { 
-            DiagnosticText = "UI Test Error: " + ex.Message;
-        }
-        // --- End PURE UI TEST ---
 
         if (_mobileSAMService == null)
         {
@@ -346,30 +316,14 @@ public class FloatingImageViewModel : ViewModelBase
 
             var maskBytes = await _mobileSAMService.GetMaskAsync(physicalX, physicalY);
             var iouInfo = _mobileSAMService.LastIouInfo;
-            DiagnosticText = $"AI Trigger: L({x:F0},{y:F0}) -> P({physicalX:F0},{physicalY:F0}) {iouInfo}";
+            DiagnosticText = $"AI: ({physicalX:F0},{physicalY:F0}) {iouInfo}";
             System.Diagnostics.Debug.WriteLine($"FloatingVM: Mask generated, bytes: {maskBytes?.Length ?? 0}, {iouInfo}");
             
             if (maskBytes != null && maskBytes.Length > 0)
             {
-                // Decode AI mask
-                using var aiMask = SKBitmap.Decode(maskBytes);
-                
-                // Draw diagnostic crosshair ON TOP of the AI mask to verify alignment
-                using (var canvas = new SKCanvas(aiMask))
-                {
-                    var paint = new SKPaint { Color = SKColors.Red, StrokeWidth = 3, Style = SKPaintStyle.Stroke };
-                    float crossSize = 20;
-                    // Draw crosshair at physical coordinates
-                    canvas.DrawLine((float)physicalX - crossSize, (float)physicalY, (float)physicalX + crossSize, (float)physicalY, paint);
-                    canvas.DrawLine((float)physicalX, (float)physicalY - crossSize, (float)physicalX, (float)physicalY + crossSize, paint);
-                    // Draw a circle to make it more visible
-                    canvas.DrawCircle((float)physicalX, (float)physicalY, crossSize / 2, paint);
-                }
-                
-                using var finalMs = new System.IO.MemoryStream();
-                aiMask.Encode(finalMs, SKEncodedImageFormat.Png, 100);
-                finalMs.Seek(0, System.IO.SeekOrigin.Begin);
-                InteractiveMask = new Bitmap(finalMs);
+                // Use AI mask directly without any diagnostic overlays
+                using var maskMs = new System.IO.MemoryStream(maskBytes);
+                InteractiveMask = new Bitmap(maskMs);
             }
         }
         catch (Exception ex)
@@ -598,9 +552,20 @@ public class FloatingImageViewModel : ViewModelBase
                         var color = originalBmp.GetPixel(x, y);
                         var maskColor = resizedMask.GetPixel(x, y);
                         
-                        // REMOVE SELECTED: If the pixel is part of the yellow mask (Alpha > 128), it's the area the user clicked.
-                        // Since this is a "Removal" tool, we make these pixels transparent (alpha 0).
-                        byte alpha = maskColor.Alpha > 128 ? (byte)0 : (byte)255;
+                        // PRESERVE original transparency for already-transparent areas
+                        // Only apply mask to non-transparent pixels
+                        byte alpha;
+                        if (maskColor.Alpha > 128)
+                        {
+                            // This pixel is in the selected mask area - make it transparent
+                            alpha = 0;
+                        }
+                        else
+                        {
+                            // Keep the original alpha value (preserves previous transparent areas)
+                            alpha = color.Alpha;
+                        }
+                        
                         resultBmp.SetPixel(x, y, new SKColor(color.Red, color.Green, color.Blue, alpha));
                     }
                 }
