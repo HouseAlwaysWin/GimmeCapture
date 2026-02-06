@@ -49,7 +49,13 @@
                         <!-- Decorative Inner Border -->
                         <Border BorderBrush="{Binding BorderColor}" BorderThickness="1" Margin="-1" IsVisible="{Binding HidePinBorder, Converter={StaticResource BoolInvertConverter}}"/>
                         
-                        <Image Source="{Binding VideoBitmap}" Stretch="Fill" Name="PinnedVideo" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
+                        <Image Source="{Binding VideoBitmap}" 
+                               Width="{Binding OriginalWidth}"
+                               Height="{Binding OriginalHeight}"
+                               Stretch="Uniform" 
+                               Name="PinnedVideo" 
+                               HorizontalAlignment="Center" 
+                               VerticalAlignment="Center"/>
                         
                         <!-- Accent Corners (Themed) -->
                         <Grid IsVisible="{Binding HidePinDecoration, Converter={StaticResource BoolInvertConverter}}" Margin="0" ClipToBounds="False">

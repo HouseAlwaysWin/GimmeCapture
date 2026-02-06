@@ -56,33 +56,36 @@ public partial class SnipWindow : Window
                 );
             }
 
-            // EXTRA OPAQUE REGIONS: Wings
-            // Wings are centered vertically on the selection edges
+            // EXTRA OPAQUE REGIONS: Wings and Handles
+            // We must add handles back because narrowing the borderWidth makes them part of the hole (non-interactive)
             var extraRegions = new System.Collections.Generic.List<Rect>();
             if (_viewModel != null)
             {
+                // 1. Wings (centered vertically on selection edges)
                 double wingsY = selectionRect.Center.Y - (_viewModel.WingHeight / 2);
-                
-                // Left Wing (outside, flush)
-                extraRegions.Add(new Rect(
-                    (selectionRect.X - _viewModel.WingWidth) * scaling,
-                    wingsY * scaling,
-                    _viewModel.WingWidth * scaling,
-                    _viewModel.WingHeight * scaling
-                ));
-                
-                // Right Wing (outside, flush)
-                extraRegions.Add(new Rect(
-                    selectionRect.Right * scaling,
-                    wingsY * scaling,
-                    _viewModel.WingWidth * scaling,
-                    _viewModel.WingHeight * scaling
-                ));
+                extraRegions.Add(new Rect((selectionRect.X - _viewModel.WingWidth) * scaling, wingsY * scaling, _viewModel.WingWidth * scaling, _viewModel.WingHeight * scaling));
+                extraRegions.Add(new Rect(selectionRect.Right * scaling, wingsY * scaling, _viewModel.WingWidth * scaling, _viewModel.WingHeight * scaling));
+
+                // 2. Corner Handles (30x30, centered on corners)
+                double hSize = 30 * scaling;
+                double hHalf = 15 * scaling;
+                extraRegions.Add(new Rect(scaledRect.X - hHalf, scaledRect.Y - hHalf, hSize, hSize)); // TL
+                extraRegions.Add(new Rect(scaledRect.Right - hHalf, scaledRect.Y - hHalf, hSize, hSize)); // TR
+                extraRegions.Add(new Rect(scaledRect.X - hHalf, scaledRect.Bottom - hHalf, hSize, hSize)); // BL
+                extraRegions.Add(new Rect(scaledRect.Right - hHalf, scaledRect.Bottom - hHalf, hSize, hSize)); // BR
+
+                // 3. Side Handles (15px thick)
+                double sThick = 15 * scaling;
+                double sHalf = 7.5 * scaling;
+                extraRegions.Add(new Rect(scaledRect.X + hSize, scaledRect.Y - sHalf, scaledRect.Width - hSize * 2, sThick)); // Top
+                extraRegions.Add(new Rect(scaledRect.X + hSize, scaledRect.Bottom - sHalf, scaledRect.Width - hSize * 2, sThick)); // Bottom
+                extraRegions.Add(new Rect(scaledRect.X - sHalf, scaledRect.Y + hSize, sThick, scaledRect.Height - hSize * 2)); // Left
+                extraRegions.Add(new Rect(scaledRect.Right - sHalf, scaledRect.Y + hSize, sThick, scaledRect.Height - hSize * 2)); // Right
             }
             
             // Apply window region with hole.
-            // Use 30px logical border (matching handles) instead of 120px to reduce dead zone.
-            int borderWidth = (int)(30 * scaling);
+            // Use small borderWidth (2px) to match visual border, keep entire inner area clear.
+            int borderWidth = (int)(2 * scaling);
             Win32Helpers.SetWindowHoleRegion(hwnd, windowWidth, windowHeight, scaledRect, borderWidth, toolbarRect, extraRegions);
         }
         else

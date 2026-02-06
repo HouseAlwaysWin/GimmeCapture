@@ -229,21 +229,33 @@ public partial class SnipWindow : Window
                      return;
                 }
                 
-                var vm = new FloatingImageViewModel(bitmap, color, thickness, hideDecoration, hideBorder, _clipboardService, aiService);
+                var vm = new FloatingImageViewModel(bitmap, rect.Width, rect.Height, color, thickness, hideDecoration, hideBorder, _clipboardService, aiService);
                 vm.WingScale = _viewModel.WingScale;
                 vm.CornerIconScale = _viewModel.CornerIconScale;
                 
                 try
                 {
                     // Calculate Window Size & Position based on the padding needed for decorations
-                    // The 'rect' is the IMAGE position/size. The Window needs to be larger to hold the wings.
+                    // The 'rect' is the IMAGE position/size in Logical pixels.
+                    // Window Position must be in PHYSICAL pixels.
+                    double scaling = _viewModel.VisualScaling;
                     var padding = vm.WindowPadding;
                     
-                    // Create Window FIRST so we can use it for TopLevel resolution
+                    // Convert Logical Rect to Physical Screen coordinates
+                    int physicalX = (int)(rect.X * scaling) + _viewModel.ScreenOffset.X;
+                    int physicalY = (int)(rect.Y * scaling) + _viewModel.ScreenOffset.Y;
+                    
+                    // Convert Logical Padding to Physical
+                    int physicalPaddingLeft = (int)(padding.Left * scaling);
+                    int physicalPaddingTop = (int)(padding.Top * scaling);
+                    
+                    // Create Window
                     var win = new FloatingImageWindow
                     {
                         DataContext = vm,
-                        Position = new PixelPoint((int)(rect.X - padding.Left), (int)(rect.Y - padding.Top)),
+                        // Set physical position using converted values
+                        Position = new PixelPoint(physicalX - physicalPaddingLeft, physicalY - physicalPaddingTop),
+                        // Width/Height in Avalonia are Logical
                         Width = rect.Width + padding.Left + padding.Right,
                         Height = rect.Height + padding.Top + padding.Bottom
                     };

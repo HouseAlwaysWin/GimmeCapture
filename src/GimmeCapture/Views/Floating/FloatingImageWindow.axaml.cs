@@ -74,7 +74,7 @@ public partial class FloatingImageWindow : Window
             vm.OpenPinWindowAction = (bitmap, rect, color, thickness, runAI) =>
             {
                 // Reuse the same logic as SnipWindow to spawn new windows
-                var newVm = new FloatingImageViewModel(bitmap, color, thickness, vm.HidePinDecoration, vm.HidePinBorder, 
+                var newVm = new FloatingImageViewModel(bitmap, rect.Width, rect.Height, color, thickness, vm.HidePinDecoration, vm.HidePinBorder, 
                     vm.ClipboardService, vm.AIResourceService);
                 
                 newVm.WingScale = vm.WingScale;
@@ -88,8 +88,8 @@ public partial class FloatingImageWindow : Window
                 {
                     DataContext = newVm,
                     Position = new PixelPoint(Position.X + 40, Position.Y + 40),
-                    Width = bitmap.Size.Width + padding.Left + padding.Right,
-                    Height = bitmap.Size.Height + padding.Top + padding.Bottom
+                    Width = rect.Width + padding.Left + padding.Right,
+                    Height = rect.Height + padding.Top + padding.Bottom
                 };
                 
                 newWin.Show();

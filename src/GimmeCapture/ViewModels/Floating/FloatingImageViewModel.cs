@@ -109,6 +109,20 @@ public class FloatingImageViewModel : ViewModelBase
         }
     }
 
+    private double _originalWidth;
+    public double OriginalWidth
+    {
+        get => _originalWidth;
+        set => this.RaiseAndSetIfChanged(ref _originalWidth, value);
+    }
+
+    private double _originalHeight;
+    public double OriginalHeight
+    {
+        get => _originalHeight;
+        set => this.RaiseAndSetIfChanged(ref _originalHeight, value);
+    }
+
     public bool IsSelectionActive => SelectionRect.Width > 0 && SelectionRect.Height > 0;
     
     public bool IsSelectionMode
@@ -190,9 +204,11 @@ public class FloatingImageViewModel : ViewModelBase
         }
     }
 
-    public FloatingImageViewModel(Bitmap image, Avalonia.Media.Color borderColor, double borderThickness, bool hideDecoration, bool hideBorder, IClipboardService clipboardService, AIResourceService aiResourceService)
+    public FloatingImageViewModel(Bitmap image, double originalWidth, double originalHeight, Avalonia.Media.Color borderColor, double borderThickness, bool hideDecoration, bool hideBorder, IClipboardService clipboardService, AIResourceService aiResourceService)
     {
         Image = image;
+        OriginalWidth = originalWidth;
+        OriginalHeight = originalHeight;
         BorderColor = borderColor;
         BorderThickness = borderThickness;
         HidePinDecoration = hideDecoration;

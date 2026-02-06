@@ -74,7 +74,9 @@
                              share the exact same coordinate space even if window is larger than image -->
                         <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
                             <Image Source="{Binding Image}" 
-                                   Stretch="None" 
+                                   Width="{Binding OriginalWidth}"
+                                   Height="{Binding OriginalHeight}"
+                                   Stretch="Uniform" 
                                    Name="PinnedImage"/>
                             
                             <!-- Selection Overlay (Over Image Area) -->

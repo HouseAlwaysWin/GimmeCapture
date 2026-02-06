@@ -1048,11 +1048,16 @@ public class SnipWindowViewModel : ViewModelBase
                   }
 
                  // Calculate Geometry
-                 // ffplay expects integer coordinates
-                 int x = (int)(SelectionRect.X + ScreenOffset.X);
-                 int y = (int)(SelectionRect.Y + ScreenOffset.Y);
-                 int w = (int)SelectionRect.Width;
-                 int h = (int)SelectionRect.Height;
+                 // ffplay expects physical screen coordinates for window position
+                 double scaling = VisualScaling;
+                 int x = (int)(SelectionRect.X * scaling) + ScreenOffset.X;
+                 int y = (int)(SelectionRect.Y * scaling) + ScreenOffset.Y;
+                 
+                 // w and h should be physical pixels for capture, but stored in VM alongside logical original size
+                 int w = (int)(SelectionRect.Width * scaling);
+                 int h = (int)(SelectionRect.Height * scaling);
+                 double logW = SelectionRect.Width;
+                 double logH = SelectionRect.Height;
                  
                  // Create and show FloatingVideoWindow instead of raw ffplay
                  Avalonia.Threading.Dispatcher.UIThread.Post(() => 
@@ -1061,6 +1066,7 @@ public class SnipWindowViewModel : ViewModelBase
                          recordingPath, 
                          ffplayPath.Replace("ffplay.exe", "ffmpeg.exe"), // We need ffmpeg for streaming
                          w, h, 
+                         logW, logH,
                          SelectionBorderColor, 
                          SelectionBorderThickness,
                          _mainVm?.HideRecordPinDecoration ?? false,
@@ -1069,9 +1075,9 @@ public class SnipWindowViewModel : ViewModelBase
                      var videoWin = new FloatingVideoWindow
                      {
                          DataContext = videoVm,
-                         Width = w + 20, // Add margin from XAML
-                         Height = h + 20,
-                         Position = new PixelPoint(x - 10, y - 10)
+                         Width = logW + 20, // Add margin from XAML (logical)
+                         Height = logH + 20,
+                         Position = new PixelPoint(x - (int)(10 * scaling), y - (int)(10 * scaling))
                      };
                      
                      videoWin.Show();

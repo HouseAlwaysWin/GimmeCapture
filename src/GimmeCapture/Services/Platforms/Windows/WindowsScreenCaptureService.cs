@@ -70,8 +70,9 @@ public class WindowsScreenCaptureService : IScreenCaptureService
             if (OperatingSystem.IsWindows())
             {
                 // Calculate physical pixels
-                int x = (int)((region.X + screenOffset.X) * visualScaling);
-                int y = (int)((region.Y + screenOffset.Y) * visualScaling);
+                // Logical X * Scaling + Physical Offset (already scaled by OS if it's Position)
+                int x = (int)(region.X * visualScaling) + screenOffset.X;
+                int y = (int)(region.Y * visualScaling) + screenOffset.Y;
                 int width = (int)(region.Width * visualScaling);
                 int height = (int)(region.Height * visualScaling);
 

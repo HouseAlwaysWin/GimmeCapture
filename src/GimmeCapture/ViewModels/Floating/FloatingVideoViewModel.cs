@@ -61,6 +61,20 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable
         set => this.RaiseAndSetIfChanged(ref _isLooping, value);
     }
 
+    private double _originalWidth;
+    public double OriginalWidth
+    {
+        get => _originalWidth;
+        set => this.RaiseAndSetIfChanged(ref _originalWidth, value);
+    }
+
+    private double _originalHeight;
+    public double OriginalHeight
+    {
+        get => _originalHeight;
+        set => this.RaiseAndSetIfChanged(ref _originalHeight, value);
+    }
+
     private bool _showToolbar = false;
     public bool ShowToolbar
     {
@@ -129,12 +143,14 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable
     private readonly int _width;
     private readonly int _height;
 
-    public FloatingVideoViewModel(string videoPath, string ffmpegPath, int width, int height, Avalonia.Media.Color borderColor, double borderThickness, bool hideDecoration, bool hideBorder)
+    public FloatingVideoViewModel(string videoPath, string ffmpegPath, int width, int height, double originalWidth, double originalHeight, Avalonia.Media.Color borderColor, double borderThickness, bool hideDecoration, bool hideBorder)
     {
         VideoPath = videoPath;
         _ffmpegPath = ffmpegPath;
         _width = (width / 2) * 2; // Ensure even for FFmpeg
         _height = (height / 2) * 2;
+        OriginalWidth = originalWidth;
+        OriginalHeight = originalHeight;
         BorderColor = borderColor;
         BorderThickness = borderThickness;
         HidePinDecoration = hideDecoration;
