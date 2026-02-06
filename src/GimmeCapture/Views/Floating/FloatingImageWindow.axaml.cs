@@ -99,7 +99,9 @@ public partial class FloatingImageWindow : Window
         var pointerPos = e.GetCurrentPoint(this).Position;
 
         // 1. Resize handles priority
-        if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed && source != null && source.Classes.Contains("Handle"))
+        if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed && 
+            vm.CurrentTool == FloatingTool.None && 
+            source != null && source.Classes.Contains("Handle"))
         {
             _isResizing = true;
             _resizeDirection = GetDirectionFromName(source.Name);
