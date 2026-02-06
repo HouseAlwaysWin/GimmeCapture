@@ -128,11 +128,11 @@ public class BackgroundRemovalService : IDisposable
 
             if (selectionRect.HasValue && selectionRect.Value.Width > 1 && selectionRect.Value.Height > 1)
             {
-                // Convert logical Rect to pixel Rect
-                int x = (int)Math.Max(0, selectionRect.Value.X);
-                int y = (int)Math.Max(0, selectionRect.Value.Y);
-                int w = (int)Math.Min(original.Width - x, selectionRect.Value.Width);
-                int h = (int)Math.Min(original.Height - y, selectionRect.Value.Height);
+                // Convert logical Rect to pixel Rect using rounding for better accuracy
+                int x = (int)Math.Round(Math.Max(0, selectionRect.Value.X));
+                int y = (int)Math.Round(Math.Max(0, selectionRect.Value.Y));
+                int w = (int)Math.Round(Math.Min(original.Width - x, selectionRect.Value.Width));
+                int h = (int)Math.Round(Math.Min(original.Height - y, selectionRect.Value.Height));
                 roi = new SKRectI(x, y, x + w, y + h);
 
                 // Create cropped version

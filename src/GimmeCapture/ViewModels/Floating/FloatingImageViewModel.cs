@@ -357,8 +357,22 @@ public class FloatingImageViewModel : ViewModelBase
 
             // 2. Process
             using var aiService = new BackgroundRemovalService(_aiResourceService);
-            var rect = IsSelectionActive ? (Avalonia.Rect?)SelectionRect : null;
-            var transparentBytes = await aiService.RemoveBackgroundAsync(imageBytes, rect);
+            
+            // SelectionRect is in logical pixels (UI space). 
+            // We need to scale it to physical image pixels for BackgroundRemovalService.
+            Avalonia.Rect? scaledRect = null;
+            if (IsSelectionActive)
+            {
+                var scaleX = (double)Image.PixelSize.Width / Image.Size.Width;
+                var scaleY = (double)Image.PixelSize.Height / Image.Size.Height;
+                scaledRect = new Avalonia.Rect(
+                    SelectionRect.X * scaleX,
+                    SelectionRect.Y * scaleY,
+                    SelectionRect.Width * scaleX,
+                    SelectionRect.Height * scaleY);
+            }
+
+            var transparentBytes = await aiService.RemoveBackgroundAsync(imageBytes, scaledRect);
 
             // 3. Update Image
             using var tms = new System.IO.MemoryStream(transparentBytes);

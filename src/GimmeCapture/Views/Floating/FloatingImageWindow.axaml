@@ -69,35 +69,37 @@
                             </Border.Background>
                         </Border>
                                 
-                        <Image Source="{Binding Image}" 
-                               Stretch="None" 
-                               Name="PinnedImage" 
-                               HorizontalAlignment="Center" 
-                               VerticalAlignment="Center"/>
-                        
-                        <!-- Selection Overlay (Over Image Area) -->
-                        <Canvas Name="SelectionCanvas" 
-                                Background="Transparent"
-                                IsVisible="{Binding IsSelectionMode}"
-                                IsHitTestVisible="True"
-                                HorizontalAlignment="Stretch"
-                                VerticalAlignment="Stretch"
-                                Cursor="Cross">
-                            <Rectangle Canvas.Left="{Binding SelectionRect.X}"
-                                       Canvas.Top="{Binding SelectionRect.Y}"
-                                       Width="{Binding SelectionRect.Width}"
-                                       Height="{Binding SelectionRect.Height}"
-                                       Stroke="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}"
-                                       StrokeThickness="2"
-                                       Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}"
-                                       Opacity="0.3">
-                                <Rectangle.Styles>
-                                    <Style Selector="Rectangle">
-                                        <Setter Property="StrokeDashArray" Value="4,2"/>
-                                    </Style>
-                                </Rectangle.Styles>
-                            </Rectangle>
-                        </Canvas>
+                        <!-- Center everything in a shared container to ensure PinnedImage and SelectionCanvas
+                             share the exact same coordinate space even if window is larger than image -->
+                        <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <Image Source="{Binding Image}" 
+                                   Stretch="None" 
+                                   Name="PinnedImage"/>
+                            
+                            <!-- Selection Overlay (Over Image Area) -->
+                            <Canvas Name="SelectionCanvas" 
+                                    Background="Transparent"
+                                    IsVisible="{Binding IsSelectionMode}"
+                                    IsHitTestVisible="True"
+                                    HorizontalAlignment="Stretch"
+                                    VerticalAlignment="Stretch"
+                                    Cursor="Cross">
+                                <Rectangle Canvas.Left="{Binding SelectionRect.X}"
+                                           Canvas.Top="{Binding SelectionRect.Y}"
+                                           Width="{Binding SelectionRect.Width}"
+                                           Height="{Binding SelectionRect.Height}"
+                                           Stroke="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}"
+                                           StrokeThickness="2"
+                                           Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}"
+                                           Opacity="0.3">
+                                    <Rectangle.Styles>
+                                        <Style Selector="Rectangle">
+                                            <Setter Property="StrokeDashArray" Value="4,2"/>
+                                        </Style>
+                                    </Rectangle.Styles>
+                                </Rectangle>
+                            </Canvas>
+                        </Grid>
                             
                         <!-- Accent Corners (Themed) -->
                         <Grid IsVisible="{Binding HidePinDecoration, Converter={StaticResource BoolInvertConverter}}" Margin="0" ClipToBounds="False">
