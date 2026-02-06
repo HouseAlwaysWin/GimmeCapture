@@ -123,6 +123,20 @@ public class FloatingImageViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _originalHeight, value);
     }
 
+    private double _displayWidth;
+    public double DisplayWidth
+    {
+        get => _displayWidth;
+        set => this.RaiseAndSetIfChanged(ref _displayWidth, value);
+    }
+
+    private double _displayHeight;
+    public double DisplayHeight
+    {
+        get => _displayHeight;
+        set => this.RaiseAndSetIfChanged(ref _displayHeight, value);
+    }
+
     public bool IsSelectionActive => SelectionRect.Width > 0 && SelectionRect.Height > 0;
     
     public bool IsSelectionMode
@@ -385,8 +399,11 @@ public class FloatingImageViewModel : ViewModelBase
             Avalonia.Rect? scaledRect = null;
             if (IsSelectionActive)
             {
-                var scaleX = (double)Image.PixelSize.Width / Image.Size.Width;
-                var scaleY = (double)Image.PixelSize.Height / Image.Size.Height;
+                // Must use current DisplayWidth/Height for scaling the UI selection to physical pixels
+                var refW = DisplayWidth > 0 ? DisplayWidth : OriginalWidth;
+                var refH = DisplayHeight > 0 ? DisplayHeight : OriginalHeight;
+                var scaleX = (double)Image.PixelSize.Width / refW;
+                var scaleY = (double)Image.PixelSize.Height / refH;
                 scaledRect = new Avalonia.Rect(
                     SelectionRect.X * scaleX,
                     SelectionRect.Y * scaleY,
@@ -442,8 +459,11 @@ public class FloatingImageViewModel : ViewModelBase
                 using var original = SkiaSharp.SKBitmap.Decode(ms);
                 if (original == null) return null;
 
-                var scaleX = (double)Image.PixelSize.Width / Image.Size.Width;
-                var scaleY = (double)Image.PixelSize.Height / Image.Size.Height;
+                // Must use current DisplayWidth/Height for scaling the UI selection to pixels
+                var refW = DisplayWidth > 0 ? DisplayWidth : OriginalWidth;
+                var refH = DisplayHeight > 0 ? DisplayHeight : OriginalHeight;
+                var scaleX = (double)Image.PixelSize.Width / refW;
+                var scaleY = (double)Image.PixelSize.Height / refH;
 
                 int x = (int)Math.Round(Math.Max(0, SelectionRect.X * scaleX));
                 int y = (int)Math.Round(Math.Max(0, SelectionRect.Y * scaleY));

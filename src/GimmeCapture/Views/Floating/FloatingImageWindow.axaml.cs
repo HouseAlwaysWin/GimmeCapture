@@ -350,4 +350,19 @@ public partial class FloatingImageWindow : Window
             _ => ResizeDirection.None
         };
     }
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        
+        if (change.Property == BoundsProperty && DataContext is FloatingImageViewModel vm)
+        {
+            var imageControl = this.FindControl<Image>("PinnedImage");
+            if (imageControl != null)
+            {
+                vm.DisplayWidth = imageControl.Bounds.Width;
+                vm.DisplayHeight = imageControl.Bounds.Height;
+            }
+        }
+    }
 }

@@ -11,7 +11,6 @@
         Title="Pinned Image"
         SystemDecorations="None"
         Topmost="True"
-        SizeToContent="WidthAndHeight"
         Background="Transparent"
         FontFamily="{Binding CurrentFontFamily, Source={x:Static services:LocalizationService.Instance}}"
         ShowInTaskbar="False">
@@ -72,11 +71,11 @@
                                 
                         <!-- Center everything in a shared container to ensure PinnedImage and SelectionCanvas
                              share the exact same coordinate space even if window is larger than image -->
-                        <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <Grid HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
                             <Image Source="{Binding Image}" 
-                                   Width="{Binding OriginalWidth}"
-                                   Height="{Binding OriginalHeight}"
-                                   Stretch="Uniform" 
+                                   Stretch="Fill" 
+                                   HorizontalAlignment="Stretch"
+                                   VerticalAlignment="Stretch"
                                    Name="PinnedImage"/>
                             
                             <!-- Selection Overlay (Over Image Area) -->

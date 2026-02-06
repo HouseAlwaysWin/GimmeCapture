@@ -10,7 +10,6 @@
         Title="Pinned Video"
         SystemDecorations="None"
         Topmost="True"
-        SizeToContent="Manual"
         Background="Transparent"
         FontFamily="{Binding CurrentFontFamily, Source={x:Static services:LocalizationService.Instance}}"
         ShowInTaskbar="False">
@@ -50,12 +49,10 @@
                         <Border BorderBrush="{Binding BorderColor}" BorderThickness="1" Margin="-1" IsVisible="{Binding HidePinBorder, Converter={StaticResource BoolInvertConverter}}"/>
                         
                         <Image Source="{Binding VideoBitmap}" 
-                               Width="{Binding OriginalWidth}"
-                               Height="{Binding OriginalHeight}"
-                               Stretch="Uniform" 
+                               Stretch="Fill" 
                                Name="PinnedVideo" 
-                               HorizontalAlignment="Center" 
-                               VerticalAlignment="Center"/>
+                               HorizontalAlignment="Stretch" 
+                               VerticalAlignment="Stretch"/>
                         
                         <!-- Accent Corners (Themed) -->
                         <Grid IsVisible="{Binding HidePinDecoration, Converter={StaticResource BoolInvertConverter}}" Margin="0" ClipToBounds="False">
