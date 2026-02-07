@@ -228,51 +228,73 @@ public class MainWindowViewModel : ViewModelBase
             .ObserveOn(RxApp.MainThreadScheduler)
             .Subscribe(busy => IsProcessing = busy);
 
-        // FFmpeg Progress Feedback
-        FfmpegDownloader.WhenAnyValue(x => x.IsDownloading, x => x.DownloadProgress)
+        // Unified Progress Handling to prevent flickering
+        var processingSources = new[] 
+        {
+            FfmpegDownloader.WhenAnyValue(x => x.IsDownloading, x => x.DownloadProgress).Select(x => ("FFmpeg", x.Item1, x.Item2)),
+            UpdateService.WhenAnyValue(x => x.IsDownloading, x => x.DownloadProgress).Select(x => ("Update", x.Item1, x.Item2)),
+            AIResourceService.WhenAnyValue(x => x.IsDownloading, x => x.DownloadProgress).Select(x => ("AI", x.Item1, x.Item2))
+        };
+
+        Observable.CombineLatest(processingSources)
             .ObserveOn(RxApp.MainThreadScheduler)
-            .Subscribe(x => {
-                var (isDownloading, progress) = x;
-                if (isDownloading)
+            .Subscribe(states => 
+            {
+                var activeDownloads = states.Where(s => s.Item2).ToList();
+                int activeCount = activeDownloads.Count;
+
+                if (activeCount > 0)
                 {
-                    ProcessingText = string.Format(LocalizationService.Instance["ComponentDownloadingProgress"], (int)progress);
-                    ProgressValue = progress;
+                    double totalProgress = activeDownloads.Sum(s => s.Item3);
+                    double avgProgress = totalProgress / activeCount;
+                    
+                    // Update main processing state
+                    IsProcessing = true;
+                    ProgressValue = avgProgress;
                     IsIndeterminate = false;
+
+                    if (activeCount == 1)
+                    {
+                        // Specific message if only one
+                        var item = activeDownloads[0];
+                        if (item.Item1 == "Update")
+                             ProcessingText = string.Format(LocalizationService.Instance["UpdateDownloading"], (int)avgProgress);
+                        else
+                             ProcessingText = string.Format(LocalizationService.Instance["ComponentDownloadingProgress"], (int)avgProgress);
+                    }
+                    else
+                    {
+                        // Generic aggregate message
+                        ProcessingText = $"{LocalizationService.Instance["ComponentDownloadingProgress"]?.Split('.')[0] ?? "Downloading"} ({activeCount})... {(int)avgProgress}%";
+                    }
+                    
                     StatusText = ProcessingText;
                 }
-                else if (progress >= 100)
+                else
                 {
-                    if (StatusText.Contains(LocalizationService.Instance["ComponentDownloadingProgress"].Split('.')[0]))
-                        SetStatus("StatusReady");
+                    // If we were processing but now strictly nothing is active, turn it off.
+                    // Note: This relies on the fact that if activeCount == 0, IsProcessing should be false.
+                    // But we also have the separate 'isAnyProcessing' subscription below. 
+                    // Let's rely on this unified block for TEXT and VALUE, but let 'isAnyProcessing' handle the Bool?
+                    // actually, let's keep it simple.
+                    
+                    if (IsProcessing)
+                    {
+                         // only reset if we were previously processing
+                         if (StatusText.Contains("Downloading") || StatusText.Contains("下載"))
+                             SetStatus("StatusReady");
+                    }
                 }
             });
 
-        // Update Progress Feedback
-        UpdateService.WhenAnyValue(x => x.IsDownloading, x => x.DownloadProgress)
-            .ObserveOn(RxApp.MainThreadScheduler)
-            .Subscribe(x => {
-                var (isDownloading, progress) = x;
-                if (isDownloading)
-                {
-                    ProcessingText = string.Format(LocalizationService.Instance["UpdateDownloading"], (int)progress);
-                    ProgressValue = progress;
-                    StatusText = ProcessingText;
-                }
-            });
-
-        // AI Download Progress Feedback
-        AIResourceService.WhenAnyValue(x => x.IsDownloading, x => x.DownloadProgress)
-            .ObserveOn(RxApp.MainThreadScheduler)
-            .Subscribe(x => {
-                var (isDownloading, progress) = x;
-                if (isDownloading)
-                {
-                    ProcessingText = string.Format(LocalizationService.Instance["ComponentDownloadingProgress"], (int)progress);
-                    ProgressValue = progress;
-                    IsIndeterminate = false;
-                    StatusText = ProcessingText;
-                }
-            });
+        // Combined Boolean for IsProcessing Visibility
+        Observable.CombineLatest(
+            FfmpegDownloader.WhenAnyValue(x => x.IsDownloading),
+            UpdateService.WhenAnyValue(x => x.IsDownloading),
+            AIResourceService.WhenAnyValue(x => x.IsDownloading),
+            (a, b, c) => a || b || c
+        ).ObserveOn(RxApp.MainThreadScheduler)
+         .Subscribe(busy => IsProcessing = busy);
 
         // Track changes AFTER loading
         this.PropertyChanged += (s, e) =>

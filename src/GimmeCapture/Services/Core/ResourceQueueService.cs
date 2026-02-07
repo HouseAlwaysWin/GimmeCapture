@@ -48,7 +48,7 @@ public class ResourceQueueService : ReactiveObject
     private static ResourceQueueService? _instance;
     public static ResourceQueueService Instance => _instance ??= new ResourceQueueService();
 
-    private readonly SemaphoreSlim _semaphore = new(1, 1);
+    private readonly SemaphoreSlim _semaphore = new(3, 3);
     private readonly ConcurrentQueue<DownloadQueueItem> _queue = new();
     private readonly ConcurrentDictionary<string, DownloadQueueItem> _activeItems = new();
     private readonly ISubject<(string Name, QueueItemStatus Status)> _statusSubject = new Subject<(string Name, QueueItemStatus Status)>();
@@ -127,45 +127,59 @@ public class ResourceQueueService : ReactiveObject
         {
             IsProcessing = true;
             
-            while (_queue.TryPeek(out var item))
+            while (!_queue.IsEmpty)
             {
-                // Retrieve the canonical item from dictionary to ensure updates are visible
-                if (!_activeItems.TryGetValue(item.Name, out var activeItem))
-                {
-                    activeItem = item;
-                }
+                // Wait for a slot
+                await _semaphore.WaitAsync();
 
-                try 
+                if (_queue.TryDequeue(out var item))
                 {
-                    await _semaphore.WaitAsync();
-                    
-                    activeItem.Status = QueueItemStatus.Downloading;
-                    
-                    if (activeItem.DownloadAction != null)
+                    // Dispatch to background task
+                    _ = Task.Run(async () => 
                     {
-                        bool success = await activeItem.DownloadAction();
-                        activeItem.Status = success ? QueueItemStatus.Completed : QueueItemStatus.Failed;
-                    }
-                    else
-                    {
-                        activeItem.Status = QueueItemStatus.Failed;
-                    }
+                        try 
+                        {
+                            // Retrieve the canonical item from dictionary to ensure updates are visible
+                            if (!_activeItems.TryGetValue(item.Name, out var activeItem))
+                            {
+                                activeItem = item;
+                            }
+
+                            activeItem.Status = QueueItemStatus.Downloading;
+                            
+                            if (activeItem.DownloadAction != null)
+                            {
+                                bool success = await activeItem.DownloadAction();
+                                activeItem.Status = success ? QueueItemStatus.Completed : QueueItemStatus.Failed;
+                            }
+                            else
+                            {
+                                activeItem.Status = QueueItemStatus.Failed;
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"Queue Download Error ({item.Name}): {ex.Message}");
+                            if (_activeItems.TryGetValue(item.Name, out var activeItem))
+                            {
+                                activeItem.Status = QueueItemStatus.Failed;
+                            }
+                        }
+                        finally
+                        {
+                            _semaphore.Release();
+                            
+                            // Check if we need to restart the pump/ensure it keeps running?
+                            // The main loop is running, it triggers on 'queue not empty'.
+                            // If main loop is blocked on WaitAsync, Release() will unblock it.
+                            // So this is self-sustaining until queue is empty.
+                        }
+                    });
                 }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"Queue Download Error ({item.Name}): {ex.Message}");
-                    activeItem.Status = QueueItemStatus.Failed;
-                }
-                finally
+                else
                 {
                     _semaphore.Release();
-                    _queue.TryDequeue(out _);
-                    
-                    // Keep in dictionary for a bit or remove? 
-                    // If we remove, the observer completes.
-                    // Let's keep it so the "Completed" status can be read.
-                    // But maybe we should remove if we want to allow re-queueing cleanly?
-                    // For now, let's leave it.
+                    break; 
                 }
             }
         }

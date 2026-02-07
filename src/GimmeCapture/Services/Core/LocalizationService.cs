@@ -118,8 +118,6 @@ namespace GimmeCapture.Services.Core;
                     ["SaveFailed"] = "Failed to save settings. Please check if the configuration file is writable.",
                     ["Yes"] = "Yes",
                     ["No"] = "No",
-                    ["No"] = "No",
-                    ["No"] = "No",
                     ["Cancel"] = "Cancel",
                     ["GitHubProject"] = "GitHub Project",
 
@@ -209,8 +207,6 @@ namespace GimmeCapture.Services.Core;
                     ["SaveFailed"] = "設定儲存失敗。請檢查設定檔是否被佔用或唯讀。",
                     ["Yes"] = "是",
                     ["No"] = "否",
-                    ["No"] = "否",
-                    ["No"] = "否",
                     ["Cancel"] = "取消",
                     ["GitHubProject"] = "GitHub 專案頁面",
 
@@ -294,8 +290,6 @@ namespace GimmeCapture.Services.Core;
                     ["UnsavedMessage"] = "保存されていない変更があります。閉じる前に保存しますか？",
                     ["SaveFailed"] = "設定の保存に失敗しました。設定ファイルが書き込み可能か確認してください。",
                     ["Yes"] = "はい",
-                    ["No"] = "いいえ",
-                    ["No"] = "いいえ",
                     ["No"] = "いいえ",
                     ["Cancel"] = "キャンセル",
                     ["GitHubProject"] = "GitHub プロジェクト",
