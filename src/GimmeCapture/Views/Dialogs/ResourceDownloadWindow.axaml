@@ -8,7 +8,9 @@
         x:Class="GimmeCapture.Views.Dialogs.ResourceDownloadWindow"
         x:DataType="vm:MainWindowViewModel"
         Title="Downloading Resources..."
-        Width="400" Height="100"
+        SizeToContent="WidthAndHeight"
+        MinWidth="350"
+        MaxWidth="600"
         SystemDecorations="None"
         WindowStartupLocation="CenterOwner"
         Background="Transparent"
@@ -20,7 +22,7 @@
             BorderThickness="0"
             BoxShadow="0 0 20 2 #900000"
             PointerPressed="OnPointerPressed">
-        <Grid Margin="10">
+        <Grid Margin="10" HorizontalAlignment="Center" VerticalAlignment="Center">
             <c:ProcessingOverlay />
         </Grid>
     </Border>

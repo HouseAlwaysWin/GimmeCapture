@@ -16,7 +16,7 @@
 
     <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
         <!-- Octagonal Background Panel -->
-        <Grid ColumnDefinitions="Auto,280,Auto" HorizontalAlignment="Center">
+        <Grid ColumnDefinitions="Auto,Auto,Auto" HorizontalAlignment="Center">
             
             <!-- Left Wing -->
             <Rectangle Grid.Column="0" Width="44" Height="26" VerticalAlignment="Center" 
@@ -27,7 +27,7 @@
             </Rectangle>
 
             <!-- Center Content -->
-            <Panel Grid.Column="1" MinWidth="180" MaxWidth="280" Height="48">
+            <Panel Grid.Column="1" MinWidth="180" MaxWidth="450" Height="48">
                 <!-- Octagonal Shadow/Glow (Red accent) -->
                 <Path Data="M 12,0 L 268,0 L 280,12 L 280,36 L 268,48 L 12,48 L 0,36 L 0,12 Z" 
                       Fill="{DynamicResource ThemeAccentBrush}" Opacity="0.3" Stretch="Fill" Margin="-3">
@@ -74,20 +74,22 @@
                             </Rectangle.Fill>
                         </Rectangle>
                         
-                        <StackPanel Spacing="6" VerticalAlignment="Center" Margin="0,0,0,2">
+                        <StackPanel Spacing="6" VerticalAlignment="Center" Margin="10,0,10,2">
                             <TextBlock Text="{Binding ProcessingText}" 
                                        Foreground="White" 
                                        FontSize="11" 
                                        FontWeight="SemiBold"
                                        HorizontalAlignment="Center"
-                                       LetterSpacing="1.2"/>
+                                       LetterSpacing="1.2"
+                                       TextWrapping="NoWrap"/>
                             
-                            <!-- Progress Bar (Red) -->
+                            <!-- Progress Bar (Red) - Adaptive width -->
                             <ProgressBar IsIndeterminate="{Binding IsIndeterminate}"
                                          Value="{Binding ProgressValue}"
                                          Minimum="0" Maximum="100"
                                          Height="3"
-                                         Width="160"
+                                         HorizontalAlignment="Stretch"
+                                         MinWidth="160"
                                          Foreground="{DynamicResource ThemeAccentBrush}"
                                          Background="#333333"/>
                         </StackPanel>
