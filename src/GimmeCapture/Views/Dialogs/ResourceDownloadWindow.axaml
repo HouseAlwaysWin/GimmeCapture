@@ -1,0 +1,27 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="using:GimmeCapture.ViewModels.Main"
+        xmlns:c="using:GimmeCapture.Views.Controls"
+        mc:Ignorable="d" d:DesignWidth="400" d:DesignHeight="120"
+        x:Class="GimmeCapture.Views.Dialogs.ResourceDownloadWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Title="Downloading Resources..."
+        Width="400" Height="100"
+        SystemDecorations="None"
+        WindowStartupLocation="CenterOwner"
+        Background="Transparent"
+        TransparencyLevelHint="Transparent"
+        Topmost="True"
+        CanResize="False">
+
+    <Border Background="{DynamicResource GothicBlackBrush}" 
+            BorderThickness="0"
+            BoxShadow="0 0 20 2 #900000"
+            PointerPressed="OnPointerPressed">
+        <Grid Margin="10">
+            <c:ProcessingOverlay />
+        </Grid>
+    </Border>
+</Window>

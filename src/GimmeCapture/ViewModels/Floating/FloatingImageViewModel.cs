@@ -472,18 +472,28 @@ public class FloatingImageViewModel : ViewModelBase
     {
         if (_aiResourceService.AreResourcesReady()) return true;
 
+        // Ask user for confirmation
+        var msg = LocalizationService.Instance["AIDownloadConfirm"] ?? "Interactive AI Selection requires additional modules. Download now?";
+        bool confirmed = false;
+
+        await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
+        {
+            // Find owner window (FloatingImageWindow)
+            var desktop = Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime;
+            var owner = desktop?.Windows.FirstOrDefault(w => w.DataContext == this);
+            if (owner != null)
+            {
+                confirmed = await GimmeCapture.Views.Dialogs.UpdateDialog.ShowDialog(owner, msg, isUpdateAvailable: true);
+            }
+        });
+
+        if (!confirmed) return false;
+
         try
         {
-            IsProcessing = true;
-            IsIndeterminate = false;
-            ProcessingText = LocalizationService.Instance["DownloadingAI"];
-
-            // Link progress from service
-            var progressSub = _aiResourceService.WhenAnyValue(x => x.DownloadProgress)
-                .Subscribe(p => ProgressValue = p);
-
+            // Note: Global MainWindowViewModel will catch AIResourceService.IsDownloading
+            // and show the ResourceDownloadWindow automatically.
             bool success = await _aiResourceService.EnsureResourcesAsync();
-            progressSub.Dispose();
 
             if (!success)
             {
@@ -501,12 +511,6 @@ public class FloatingImageViewModel : ViewModelBase
                  if (owner != null) dialog.ShowDialog<bool>(owner);
             });
             return false;
-        }
-        finally
-        {
-            IsProcessing = false;
-            ProcessingText = "Processing Background Removal..."; // Default message
-            IsIndeterminate = true;
         }
     }
 

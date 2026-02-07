@@ -40,6 +40,34 @@ public class MainWindowViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _isModified, value);
     }
 
+    private bool _isProcessing;
+    public bool IsProcessing
+    {
+        get => _isProcessing;
+        set => this.RaiseAndSetIfChanged(ref _isProcessing, value);
+    }
+
+    private string _processingText = "";
+    public string ProcessingText
+    {
+        get => _processingText;
+        set => this.RaiseAndSetIfChanged(ref _processingText, value);
+    }
+
+    private double _progressValue;
+    public double ProgressValue
+    {
+        get => _progressValue;
+        set => this.RaiseAndSetIfChanged(ref _progressValue, value);
+    }
+
+    private bool _isIndeterminate;
+    public bool IsIndeterminate
+    {
+        get => _isIndeterminate;
+        set => this.RaiseAndSetIfChanged(ref _isIndeterminate, value);
+    }
+
     private bool _isDataLoading = true;
     private Task? _loadTask;
 
@@ -165,34 +193,6 @@ public class MainWindowViewModel : ViewModelBase
         });
         PickAIFolderCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
         
-        /* 
-        // --- AI Download Window Management ---
-        AIResourceService.WhenAnyValue(x => x.IsDownloading)
-            .ObserveOn(RxApp.MainThreadScheduler)
-            .Subscribe(isDownloading => 
-            {
-                if (isDownloading)
-                {
-                    AIProgressText = string.Format(LocalizationService.Instance["ComponentDownloadingProgress"], 0);
-                    ShowProgressWindow();
-                }
-                else
-                {
-                    CloseProgressWindow();
-                }
-            });
-
-        AIResourceService.WhenAnyValue(x => x.DownloadProgress)
-            .ObserveOn(RxApp.MainThreadScheduler)
-            .Subscribe(progress =>
-            {
-                if (AIResourceService.IsDownloading)
-                {
-                    AIProgressText = string.Format(LocalizationService.Instance["ComponentDownloadingProgress"], (int)progress);
-                }
-            });
-        */
-        
         // Setup Hotkey Action
         HotkeyService.OnHotkeyPressed = (id) => 
         {
@@ -207,18 +207,33 @@ public class MainWindowViewModel : ViewModelBase
             }
         };
 
-        // Progress Feedback
+        // Combine multiple loading/processing signals for the global Loading Window
+        var isAnyProcessing = Observable.CombineLatest(
+            FfmpegDownloader.WhenAnyValue(x => x.IsDownloading),
+            UpdateService.WhenAnyValue(x => x.IsDownloading),
+            AIResourceService.WhenAnyValue(x => x.IsDownloading),
+            (a, b, c) => a || b || c
+        );
+
+        isAnyProcessing
+            .ObserveOn(RxApp.MainThreadScheduler)
+            .Subscribe(busy => IsProcessing = busy);
+
+        // FFmpeg Progress Feedback
         FfmpegDownloader.WhenAnyValue(x => x.IsDownloading, x => x.DownloadProgress)
             .ObserveOn(RxApp.MainThreadScheduler)
             .Subscribe(x => {
                 var (isDownloading, progress) = x;
                 if (isDownloading)
                 {
-                    StatusText = string.Format(LocalizationService.Instance["ComponentDownloadingProgress"], (int)progress);
+                    ProcessingText = string.Format(LocalizationService.Instance["ComponentDownloadingProgress"], (int)progress);
+                    ProgressValue = progress;
+                    IsIndeterminate = false;
+                    StatusText = ProcessingText;
                 }
                 else if (progress >= 100)
                 {
-                     if (StatusText.Contains(LocalizationService.Instance["ComponentDownloadingProgress"].Split('.')[0]))
+                    if (StatusText.Contains(LocalizationService.Instance["ComponentDownloadingProgress"].Split('.')[0]))
                         SetStatus("StatusReady");
                 }
             });
@@ -230,7 +245,23 @@ public class MainWindowViewModel : ViewModelBase
                 var (isDownloading, progress) = x;
                 if (isDownloading)
                 {
-                    StatusText = string.Format(LocalizationService.Instance["UpdateDownloading"], (int)progress);
+                    ProcessingText = string.Format(LocalizationService.Instance["UpdateDownloading"], (int)progress);
+                    ProgressValue = progress;
+                    StatusText = ProcessingText;
+                }
+            });
+
+        // AI Download Progress Feedback
+        AIResourceService.WhenAnyValue(x => x.IsDownloading, x => x.DownloadProgress)
+            .ObserveOn(RxApp.MainThreadScheduler)
+            .Subscribe(x => {
+                var (isDownloading, progress) = x;
+                if (isDownloading)
+                {
+                    ProcessingText = string.Format(LocalizationService.Instance["ComponentDownloadingProgress"], (int)progress);
+                    ProgressValue = progress;
+                    IsIndeterminate = false;
+                    StatusText = ProcessingText;
                 }
             });
 
@@ -650,15 +681,6 @@ public class MainWindowViewModel : ViewModelBase
         }
 
         _isDataLoading = false;
-
-        // Ensure FFmpeg/Updates happen AFTER _isDataLoading is false (or just handle them separately)
-        _ = Task.Run(async () => 
-        {
-            if (!FfmpegDownloader.IsFFmpegAvailable() || !FfmpegDownloader.IsFFplayAvailable())
-            {
-                await FfmpegDownloader.EnsureFFmpegAsync();
-            }
-        });
     }
 
     public async Task<bool> SaveSettingsAsync()
@@ -723,13 +745,27 @@ public class MainWindowViewModel : ViewModelBase
         {
             if (!FfmpegDownloader.IsFFmpegAvailable())
             {
-                var msg = LocalizationService.Instance["FFmpegNotReady"];
+                // Ask user for confirmation before downloading
+                var msg = LocalizationService.Instance["FFmpegDownloadConfirm"] ?? "FFmpeg is required for recording. Download now?";
+                bool confirmed = false;
+                
                 await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
                 {
                     var mainWindow = (Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.MainWindow;
-                    if (mainWindow != null) await UpdateDialog.ShowDialog(mainWindow, msg, isUpdateAvailable: false);
+                    if (mainWindow != null)
+                    {
+                        confirmed = await UpdateDialog.ShowDialog(mainWindow, msg, isUpdateAvailable: true);
+                    }
                 });
-                return;
+
+                if (!confirmed) return;
+
+                // Trigger download
+                await FfmpegDownloader.EnsureFFmpegAsync();
+                
+                // If still not ready (user cancelled or error), then return
+                if (!FfmpegDownloader.IsFFmpegAvailable())
+                    return;
             }
         }
 

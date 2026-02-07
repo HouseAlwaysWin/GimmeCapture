@@ -408,12 +408,6 @@
             <Grid ColumnDefinitions="Auto,*,Auto,Auto">
                 <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10">
                     <Button Content="{Binding [StartCapture], Source={x:Static services:LocalizationService.Instance}}" Theme="{StaticResource GothicMetalButton}" Command="{Binding StartCaptureCommand}" />
-                    
-                    <!-- FFmpeg Status -->
-                    <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center" IsVisible="{Binding FfmpegDownloader.IsDownloading}">
-                        <TextBlock Text="{Binding [FFmpegStatusDownloading], Source={x:Static services:LocalizationService.Instance}}" FontSize="11" Foreground="Gray"/>
-                        <ProgressBar Value="{Binding FfmpegDownloader.DownloadProgress}" Minimum="0" Maximum="100" Width="100" Height="4"/>
-                    </StackPanel>
                 </StackPanel>
                 
                 <TextBlock Grid.Column="1" 

@@ -16,7 +16,7 @@
 
     <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
         <!-- Octagonal Background Panel -->
-        <Grid ColumnDefinitions="Auto,224,Auto" HorizontalAlignment="Center">
+        <Grid ColumnDefinitions="Auto,280,Auto" HorizontalAlignment="Center">
             
             <!-- Left Wing -->
             <Rectangle Grid.Column="0" Width="44" Height="26" VerticalAlignment="Center" 
@@ -27,9 +27,9 @@
             </Rectangle>
 
             <!-- Center Content -->
-            <Panel Grid.Column="1" MinWidth="180" MaxWidth="224" Height="48">
+            <Panel Grid.Column="1" MinWidth="180" MaxWidth="280" Height="48">
                 <!-- Octagonal Shadow/Glow (Red accent) -->
-                <Path Data="M 12,0 L 212,0 L 224,12 L 224,36 L 212,48 L 12,48 L 0,36 L 0,12 Z" 
+                <Path Data="M 12,0 L 268,0 L 280,12 L 280,36 L 268,48 L 12,48 L 0,36 L 0,12 Z" 
                       Fill="{DynamicResource ThemeAccentBrush}" Opacity="0.3" Stretch="Fill" Margin="-3">
                     <Path.Effect>
                         <BlurEffect Radius="12"/>

@@ -1,3 +1,4 @@
+using System;
 using Avalonia.Controls;
 using System.Linq;
 using Avalonia;
@@ -11,6 +12,8 @@ using Avalonia.Media;
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core;
 using GimmeCapture.Services.Platforms.Windows;
+using ReactiveUI;
+using System.Reactive.Linq;
 
 namespace GimmeCapture.Views.Main;
 
@@ -189,6 +192,31 @@ public partial class MainWindow : Window
                 snip.DataContext = snipVm;
                 snip.Show();
             };
+
+            // Monitor Downloading Status to show/hide separate window
+            vm.WhenAnyValue(x => x.IsProcessing)
+              .ObserveOn(RxApp.MainThreadScheduler)
+              .Subscribe(isProcessing => 
+              {
+                  if (isProcessing)
+                  {
+                      if (_downloadWindow == null)
+                      {
+                          _downloadWindow = new ResourceDownloadWindow
+                          {
+                              DataContext = vm
+                          };
+                          _downloadWindow.Show(this);
+                      }
+                  }
+                  else
+                  {
+                      _downloadWindow?.Close();
+                      _downloadWindow = null;
+                  }
+              });
         }
     }
+
+    private ResourceDownloadWindow? _downloadWindow;
 }
