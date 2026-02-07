@@ -35,9 +35,25 @@
         </Style>
     </Window.Styles>
     
-    <Grid Name="RootGrid" Background="Transparent" RowDefinitions="Auto, Auto">
-        <!-- BABYMETAL Style Border (Wraps IMAGE ONLY) -->
+    <Grid Name="RootGrid" Background="Transparent" RowDefinitions="Auto, Auto, Auto">
+        <!-- Diagnostic Overlay (Dedicated Top Row) -->
         <Border Grid.Row="0"
+                Background="#CC000000" 
+                VerticalAlignment="Top" 
+                HorizontalAlignment="Left" 
+                Margin="{Binding WindowPadding, Converter={StaticResource ThicknessToLeftTopMarginConverter}}" 
+                Padding="5" 
+                CornerRadius="4"
+                IsHitTestVisible="False"
+                IsVisible="{Binding IsPointRemovalMode}">
+            <TextBlock Text="{Binding DiagnosticText}" 
+                       Foreground="#00FF00" 
+                       FontSize="12" 
+                       FontWeight="Bold"/>
+        </Border>
+
+        <!-- BABYMETAL Style Border (Wraps IMAGE ONLY) -->
+        <Border Grid.Row="1"
                 Margin="{Binding WindowPadding}"
                 Classes="MainBorder"
                 Classes.hidden-border="{Binding HidePinBorder}"
@@ -216,7 +232,7 @@
         </Border>
 
         <!-- Bottom Toolbar (Grown OUTSIDE the main border) -->
-        <Border Grid.Row="1" IsVisible="{Binding ShowToolbar}" 
+        <Border Grid.Row="2" IsVisible="{Binding ShowToolbar}" 
                             Background="#1A1A1A" BorderBrush="#333333" BorderThickness="1" 
                             CornerRadius="4" Padding="2" Margin="0,4,0,0"
                             HorizontalAlignment="Center" VerticalAlignment="Top"
@@ -301,22 +317,7 @@
                         </StackPanel>
         </Border>
         
-        <!-- Diagnostic Overlay (Top Left) -->
-        <Border Background="#CC000000" 
-                VerticalAlignment="Top" 
-                HorizontalAlignment="Left" 
-                Margin="10" 
-                Padding="5" 
-                CornerRadius="4"
-                IsHitTestVisible="False"
-                Grid.Row="0">
-            <TextBlock Text="{Binding DiagnosticText}" 
-                       Foreground="#00FF00" 
-                       FontSize="12" 
-                       FontWeight="Bold"/>
-        </Border>
-        
-        <Border Grid.Row="0" Grid.RowSpan="2" IsVisible="{Binding IsProcessing}">
+        <Border Grid.Row="0" Grid.RowSpan="3" IsVisible="{Binding IsProcessing}">
              <ctl:ProcessingOverlay DataContext="{Binding}"/>
         </Border>
 

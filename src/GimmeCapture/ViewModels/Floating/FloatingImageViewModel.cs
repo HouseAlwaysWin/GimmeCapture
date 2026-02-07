@@ -298,6 +298,61 @@ public class FloatingImageViewModel : ViewModelBase
         System.Diagnostics.Debug.WriteLine("FloatingVM: Resetting interactive points");
     }
 
+    public async Task UndoLastPointAsync()
+    {
+        if (_interactivePoints.Count > 0)
+        {
+            _interactivePoints.RemoveAt(_interactivePoints.Count - 1);
+            if (_interactivePoints.Count == 0)
+            {
+                ResetInteractivePoints();
+            }
+            else
+            {
+                // We need to trigger a re-run of the AI with the remaining points
+                // We should NOT reset the hidden mask input here, let SAM refine it backward or re-evaluate
+                // Actually, if we remove a point, it might be better to reset the hidden mask to be safe, 
+                // OR just call GetMaskAsync which will use the existing _lowResMask (which might be slightly weird).
+                // SAM refinement is usually forward. Let's try without reset first.
+                await RefineMaskAsync();
+            }
+        }
+    }
+
+    private async Task RefineMaskAsync()
+    {
+        if (_mobileSAMService == null) return;
+        
+        try
+        {
+            var maskBytes = await _mobileSAMService.GetMaskAsync(_interactivePoints);
+            var iouInfo = _mobileSAMService.LastIouInfo;
+            DiagnosticText = $"AI: ({_interactivePoints.Count} pts) {iouInfo}";
+
+            if (maskBytes != null && maskBytes.Length > 0)
+            {
+                using var aiMask = SKBitmap.Decode(maskBytes);
+                using (var canvas = new SKCanvas(aiMask))
+                {
+                    var paint = new SKPaint { Color = SKColors.Red, Style = SKPaintStyle.Fill, IsAntialias = true };
+                    foreach (var pt in _interactivePoints)
+                    {
+                        canvas.DrawCircle((float)pt.X, (float)pt.Y, 5, paint);
+                    }
+                }
+
+                using var finalMs = new System.IO.MemoryStream();
+                aiMask.Encode(finalMs, SKEncodedImageFormat.Png, 100);
+                finalMs.Seek(0, System.IO.SeekOrigin.Begin);
+                InteractiveMask = new Bitmap(finalMs);
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"FloatingVM: RefineMask Error: {ex}");
+        }
+    }
+
     public async Task HandlePointClickAsync(double x, double y)
     {
         System.Diagnostics.Debug.WriteLine($"FloatingVM: HandlePointClickAsync at ({x}, {y})");
@@ -318,28 +373,7 @@ public class FloatingImageViewModel : ViewModelBase
             // Add point (default to positive selection for now)
             _interactivePoints.Add((physicalX, physicalY, true));
 
-            var maskBytes = await _mobileSAMService.GetMaskAsync(_interactivePoints);
-            var iouInfo = _mobileSAMService.LastIouInfo;
-            DiagnosticText = $"AI: ({_interactivePoints.Count} pts) {iouInfo}";
-
-            if (maskBytes != null && maskBytes.Length > 0)
-            {
-                // Decode mask and DRAW DOTS for visual feedback
-                using var aiMask = SKBitmap.Decode(maskBytes);
-                using (var canvas = new SKCanvas(aiMask))
-                {
-                    var paint = new SKPaint { Color = SKColors.Red, Style = SKPaintStyle.Fill, IsAntialias = true };
-                    foreach (var pt in _interactivePoints)
-                    {
-                        canvas.DrawCircle((float)pt.X, (float)pt.Y, 5, paint);
-                    }
-                }
-
-                using var finalMs = new System.IO.MemoryStream();
-                aiMask.Encode(finalMs, SKEncodedImageFormat.Png, 100);
-                finalMs.Seek(0, System.IO.SeekOrigin.Begin);
-                InteractiveMask = new Bitmap(finalMs);
-            }
+            await RefineMaskAsync();
         }
         catch (Exception ex)
         {

@@ -184,7 +184,7 @@ public partial class FloatingImageWindow : Window
         None, TopLeft, TopRight, BottomLeft, BottomRight, Top, Bottom, Left, Right
     }
 
-    private void OnPointerPressed(object? sender, PointerPressedEventArgs e)
+    private async void OnPointerPressed(object? sender, PointerPressedEventArgs e)
     {
         if (DataContext is not FloatingImageViewModel vm) return;
         var source = e.Source as Control;
@@ -270,9 +270,9 @@ public partial class FloatingImageWindow : Window
             // Block ContextMenu and perform tool-specific cancel if a tool is active
             if (vm.IsPointRemovalMode)
             {
-                vm.ResetInteractivePoints();
+                await vm.UndoLastPointAsync();
                 e.Handled = true;
-                System.Diagnostics.Debug.WriteLine("FloatingWindow: AI Points Reset via Right-Click");
+                System.Diagnostics.Debug.WriteLine("FloatingWindow: AI Undo Last Point via Right-Click");
             }
             else if (vm.IsSelectionMode)
             {
