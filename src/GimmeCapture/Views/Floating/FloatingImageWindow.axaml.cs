@@ -438,8 +438,12 @@ public partial class FloatingImageWindow : Window
                 
                 if (bounds.Contains(pos))
                 {
+                    // CRITICAL: Sync exact UI bounds to ViewModel to eliminate mapping drift
+                    vm.DisplayWidth = imageControl.Bounds.Width;
+                    vm.DisplayHeight = imageControl.Bounds.Height;
+                    
                     vm.DiagnosticText = $"AI Trigger: {pos.X:F0},{pos.Y:F0}";
-                    System.Diagnostics.Debug.WriteLine("FloatingWindow: Triggering AI recognition");
+                    System.Diagnostics.Debug.WriteLine($"FloatingWindow: Triggering AI recognition. UI Bounds Sync: {vm.DisplayWidth}x{vm.DisplayHeight}");
                     _ = vm.HandlePointClickAsync(pos.X, pos.Y);
                 }
                 else

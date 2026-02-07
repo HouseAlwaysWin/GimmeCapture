@@ -303,17 +303,17 @@ public class FloatingImageViewModel : ViewModelBase
         if (_interactivePoints.Count > 0)
         {
             _interactivePoints.RemoveAt(_interactivePoints.Count - 1);
+            
+            // CRITICAL: Reset the AI's mask feedback memory when undoing.
+            // If the last result was a "bad" full-image mask, we don't want the AI to reuse it.
+            _mobileSAMService?.ResetMaskInput();
+
             if (_interactivePoints.Count == 0)
             {
                 ResetInteractivePoints();
             }
             else
             {
-                // We need to trigger a re-run of the AI with the remaining points
-                // We should NOT reset the hidden mask input here, let SAM refine it backward or re-evaluate
-                // Actually, if we remove a point, it might be better to reset the hidden mask to be safe, 
-                // OR just call GetMaskAsync which will use the existing _lowResMask (which might be slightly weird).
-                // SAM refinement is usually forward. Let's try without reset first.
                 await RefineMaskAsync();
             }
         }
@@ -337,7 +337,7 @@ public class FloatingImageViewModel : ViewModelBase
                     var paint = new SKPaint { Color = SKColors.Red, Style = SKPaintStyle.Fill, IsAntialias = true };
                     foreach (var pt in _interactivePoints)
                     {
-                        canvas.DrawCircle((float)pt.X, (float)pt.Y, 5, paint);
+                        canvas.DrawCircle((float)pt.X, (float)pt.Y, 2, paint); // Shrunk from 5 to 2
                     }
                 }
 
@@ -365,6 +365,7 @@ public class FloatingImageViewModel : ViewModelBase
         
         var physicalX = x * scaleX;
         var physicalY = y * scaleY;
+        System.Diagnostics.Debug.WriteLine($"FloatingVM: Click Log - UI:({x:F1},{y:F1}) Display:({DisplayWidth}x{DisplayHeight}) Pix:({pixW}x{pixH}) Scale:({scaleX:F3},{scaleY:F3}) -> Physical:({physicalX:F1},{physicalY:F1})");
 
         if (_mobileSAMService == null || !IsInteractiveSelectionMode) return;
 

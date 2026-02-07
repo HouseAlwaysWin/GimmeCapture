@@ -132,14 +132,14 @@ public class MobileSAMService : IDisposable
             
             System.Diagnostics.Debug.WriteLine($"MobileSAM: Detected model target size: {modelTargetSize}");
 
-            // 1. Resize and Pad (CENTERED)
+            // 1. Resize and Pad (TOP-LEFT - Best for MobileSAM)
             _lastModelTargetSize = modelTargetSize;
             float scale = (float)_lastModelTargetSize / Math.Max(_originalWidth, _originalHeight);
             _lastNewW = (int)Math.Round(_originalWidth * scale);
             _lastNewH = (int)Math.Round(_originalHeight * scale);
             
-            _offsetX = (_lastModelTargetSize - _lastNewW) / 2;
-            _offsetY = (_lastModelTargetSize - _lastNewH) / 2;
+            _offsetX = 0; 
+            _offsetY = 0;
 
             using var resized = original.Resize(new SKImageInfo(_lastNewW, _lastNewH), new SKSamplingOptions(SKFilterMode.Linear));
             
@@ -291,47 +291,76 @@ public class MobileSAMService : IDisposable
             int bestMaskIndex = 0;
             string iouInfo = "IOU Missing";
             
+            int safeMaskCount = 0;
+            int iouRank = 0;
+            DenseTensor<float>? currentIouTensor = null;
+
             if (iouResult != null)
             {
                 try
                 {
-                    var iouTensor = iouResult.AsTensor<float>();
-                    int iouRank = iouTensor.Dimensions.Length;
-                    int numMasksReported = iouTensor.Dimensions[iouRank - 1]; // Assume last dim is mask count
+                    currentIouTensor = iouResult.AsTensor<float>() as DenseTensor<float>;
+                    if (currentIouTensor == null) throw new Exception("IOU tensor cast failed");
                     
-                    // Safety: Limit to available masks to prevent out-of-bounds access
-                    int safeMaskCount = Math.Min(numMasksReported, availableMasks);
+                    iouRank = currentIouTensor.Dimensions.Length;
+                    int numMasksReported = currentIouTensor.Dimensions[iouRank - 1]; 
+                    safeMaskCount = Math.Min(numMasksReported, availableMasks);
                     
-                    float maxIou = -1.0f;
+                    // 2. Perform a multi-mask weighted selection heuristic
+                    // We calculate rough density for each mask to prefer specific parts over broad masks.
+                    float maxWeightedScore = -1.0f;
                     var scores = new List<string>();
+                    
+                    int mDimRank = masksTensor.Dimensions.Length;
+                    int mH = masksTensor.Dimensions[mDimRank - 2];
+                    int mW = masksTensor.Dimensions[mDimRank - 1];
+
                     for (int i = 0; i < safeMaskCount; i++)
                     {
-                        // Rank-agnostic IOU access with bounds checking
-                        float score = 0f;
-                        try
-                        {
-                            score = iouRank switch {
-                                2 => iouTensor[0, i],
-                                1 => iouTensor[i],
-                                _ => iouTensor.First() // Fallback if shape is weird
+                        float iou = 0f;
+                        try {
+                            iou = iouRank switch {
+                                2 => currentIouTensor[0, i],
+                                1 => currentIouTensor[i],
+                                _ => 0.5f
                             };
-                        }
-                        catch { score = 0f; }
+                        } catch { iou = 0f; }
+                        if (iou > 1.0f) iou = 1.0f;
+
+                        // Calculate rough density for this mask
+                        int setPixels = 0;
+                        for(int y=0; y<mH; y+=4) // Sampler for speed
+                            for(int x=0; x<mW; x+=4)
+                            {
+                                float val = mDimRank == 4 ? masksTensor[0, i, y, x] : masksTensor[i, y, x];
+                                if (val > 0) setPixels++;
+                            }
+                        float denominator = Math.Max(1.0f, (float)Math.Ceiling(mH / 4.0) * (float)Math.Ceiling(mW / 4.0));
+                        float roughDensity = setPixels / denominator;
                         
-                        scores.Add(score.ToString("F2"));
-                        if (score > maxIou)
+                        // Weighted Score (Batch 8): Force specificity.
+                        // Score = IOU * (1.1 - Density). 
+                        // High density (0.9) -> Score = IOU * 0.2. 
+                        // Low density (0.1) -> Score = IOU * 1.0.
+                        float specificityBonus = 1.1f - roughDensity;
+                        if (i == 3) specificityBonus *= 0.6f; // Extremely penalize background index
+                        if (i == 0) specificityBonus *= 0.8f; // Penalize broad index
+                        
+                        float weightedScore = iou * Math.Max(0.1f, specificityBonus);
+                        scores.Add($"{weightedScore:F2}(D:{roughDensity:F2})");
+                        
+                        if (weightedScore > maxWeightedScore)
                         {
-                            maxIou = score;
+                            maxWeightedScore = weightedScore;
                             bestMaskIndex = i;
                         }
                     }
-                    iouInfo = $"IOU:[{string.Join(",", scores)}] Best:{bestMaskIndex}";
-                    System.Diagnostics.Debug.WriteLine($"MobileSAM: {iouInfo}, MasksShape:[{string.Join(",", masksTensor.Dimensions.ToArray())}]");
+                    iouInfo = $"Weighted:[{string.Join(",", scores)}] Best:{bestMaskIndex}";
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"MobileSAM: IOU parsing error: {ex.Message}");
-                    bestMaskIndex = 0; // Fallback to first mask
+                    System.Diagnostics.Debug.WriteLine($"MobileSAM: Selection heuristic error: {ex.Message}");
+                    bestMaskIndex = 0; 
                 }
             }
             
@@ -393,27 +422,74 @@ public class MobileSAMService : IDisposable
                 }
             }
             
-            // Calculate the active region in mask space (where the actual image content is)
-            double maskScale = (double)_lastModelTargetSize / Math.Max(_originalWidth, _originalHeight);
+            // 3. Reconstruct Mask with HIGH PRECISION
+            // Step A: Resize the ENTIRE mask tensor to the processing resolution (1024x1024)
+            // This ensures we can use the original integer offsets (_offsetX, _offsetY) exactly.
+            using var mask1024 = maskFull.Resize(new SKImageInfo(_lastModelTargetSize, _lastModelTargetSize), new SKSamplingOptions(SKFilterMode.Linear));
             
-            // Scaled content size in the current mask resolution
-            int activeW = (int)Math.Round(_originalWidth * scale * actualMaskW / _lastModelTargetSize);
-            int activeH = (int)Math.Round(_originalHeight * scale * actualMaskH / _lastModelTargetSize);
+            // Step B: Extract the active content using precise integer offsets
+            int safeW = Math.Clamp(_lastNewW, 1, _lastModelTargetSize - _offsetX);
+            int safeH = Math.Clamp(_lastNewH, 1, _lastModelTargetSize - _offsetY);
             
-            // Offsets in the current mask resolution
-            int mOffsetX = (int)Math.Round((double)_offsetX * actualMaskW / _lastModelTargetSize);
-            int mOffsetY = (int)Math.Round((double)_offsetY * actualMaskH / _lastModelTargetSize);
+            using var activeMask = new SKBitmap(safeW, safeH, SKColorType.Gray8, SKAlphaType.Opaque);
+            mask1024.ExtractSubset(activeMask, new SKRectI(_offsetX, _offsetY, _offsetX + safeW, _offsetY + safeH));
+
+            // Step C: Check mask density to avoid "all-select" junk
+            int maskPixels = 0;
+            for(int y=0; y<safeH; y++)
+                for(int x=0; x<safeW; x++)
+                    if(activeMask.GetPixel(x, y).Red > 128) maskPixels++;
             
-            activeW = Math.Clamp(activeW, 1, actualMaskW - mOffsetX);
-            activeH = Math.Clamp(activeH, 1, actualMaskH - mOffsetY);
+            double density = (double)maskPixels / (safeW * safeH);
+            System.Diagnostics.Debug.WriteLine($"MobileSAM MASK: OrigSize=({_originalWidth}x{_originalHeight}) ActiveRegion=({safeW}x{safeH}) Offset=({_offsetX},{_offsetY}) Density={density:F2}");
             
-            System.Diagnostics.Debug.WriteLine($"MobileSAM MASK: OrigSize=({_originalWidth}x{_originalHeight}) Scale={maskScale:F4} ActiveRegion=({activeW}x{activeH}) Offset=({mOffsetX},{mOffsetY}) in mask space");
-            
-            // Extract the active region (the part that represents the actual image, accounting for center padding)
-            using var activeMask = new SKBitmap(activeW, activeH, SKColorType.Gray8, SKAlphaType.Opaque);
-            maskFull.ExtractSubset(activeMask, new SKRectI(mOffsetX, mOffsetY, mOffsetX + activeW, mOffsetY + activeH));
-            
-            // Resize the active region to match original image dimensions using SkiaSharp's Resize
+            // Step D: Density Check Fallback (Aggressive - Batch 7)
+            // If the picked mask is suspiciously large (>75% of image) and there are alternative masks,
+            // we try to pick the second best mask to avoid "all-select" junk.
+            if (density > 0.75 && safeMaskCount > 1 && currentIouTensor != null)
+            {
+                 float secondMax = -1f;
+                 int secondIdx = -1;
+                 for (int i = 0; i < safeMaskCount; i++)
+                 {
+                     if (i == bestMaskIndex) continue;
+                     float s = iouRank switch { 2 => currentIouTensor[0, i], 1 => currentIouTensor[i], _ => 0f };
+                     if (s > secondMax) { secondMax = s; secondIdx = i; }
+                 }
+                 
+                 if (secondIdx != -1)
+                 {
+                     System.Diagnostics.Debug.WriteLine($"MobileSAM: Junk Mask Detected (Density {density:F2}). Forcing Index {secondIdx}");
+                     // Re-extract the mask pixels using the second best index
+                     for (int y = 0; y < actualMaskH; y++) {
+                        for (int x = 0; x < actualMaskW; x++) {
+                            float logit = masksRank switch {
+                                4 => masksTensor[0, secondIdx, y, x],
+                                3 => masksTensor[secondIdx, y, x],
+                                _ => 0f
+                            };
+                            maskFull.SetPixel(x, y, logit > 0 ? SKColors.White : SKColors.Black);
+                        }
+                     }
+                     // Regenerate mask1024 and activeMask
+                     using var m1024_2 = maskFull.Resize(new SKImageInfo(_lastModelTargetSize, _lastModelTargetSize), new SKSamplingOptions(SKFilterMode.Linear));
+                     m1024_2.ExtractSubset(activeMask, new SKRectI(_offsetX, _offsetY, _offsetX + safeW, _offsetY + safeH));
+                     
+                     // Re-calculate density just for logging
+                     int m2 = 0;
+                     for(int y=0; y<safeH; y++) for(int x=0; x<safeW; x++) if(activeMask.GetPixel(x, y).Red > 128) m2++;
+                     double newDensity = (double)m2 / (safeW * safeH);
+                     System.Diagnostics.Debug.WriteLine($"MobileSAM: Refined Mask Density: {newDensity:F2}");
+                     // Strategic Memory Reset (Batch 8)
+                     if (newDensity > 0.70)
+                     {
+                         System.Diagnostics.Debug.WriteLine($"MobileSAM: High density ({newDensity:F2}) detected. Clearing memory.");
+                         _lowResMask = null;
+                     }
+                 }
+            }
+
+            // Step E: Resize the active region to match physical image dimensions
             using var resizedMask = activeMask.Resize(new SKImageInfo(_originalWidth, _originalHeight), new SKSamplingOptions(SKFilterMode.Nearest));
             
             // Create the final visual representation
