@@ -228,6 +228,7 @@ public class FloatingImageViewModel : ViewModelBase
 
     private SAM2Service? _sam2Service;
     private readonly List<(double X, double Y, bool IsPositive)> _interactivePoints = new();
+    private bool _invertSelectionMode = false; // Shift+Click sets this to true
 
     private async Task StartInteractiveRemovalAsync()
     {
@@ -363,8 +364,11 @@ public class FloatingImageViewModel : ViewModelBase
                 using var grayMask = SKBitmap.Decode(maskBytes);
                 
                 // CRITICAL FIX: Convert grayscale mask to RGBA with transparency
-                // White (selected) → Green with 60% opacity
-                // Black (unselected) → Fully transparent
+                // Color based on mode: Red (remove) vs Green (keep)
+                SKColor overlayColor = _invertSelectionMode 
+                    ? new SKColor(0, 255, 100, 150)   // Green for "Keep mode" (Shift+Click)
+                    : new SKColor(255, 80, 80, 150);  // Red for "Remove mode" (Normal)
+                    
                 using var coloredMask = new SKBitmap(grayMask.Width, grayMask.Height, SKColorType.Rgba8888, SKAlphaType.Premul);
                 for (int y = 0; y < grayMask.Height; y++)
                 {
@@ -373,8 +377,8 @@ public class FloatingImageViewModel : ViewModelBase
                         var grayVal = grayMask.GetPixel(x, y).Red; // Grayscale: R=G=B
                         if (grayVal > 127)
                         {
-                            // Selected area: Green with partial transparency
-                            coloredMask.SetPixel(x, y, new SKColor(0, 255, 100, 150));
+                            // Selected area with mode-specific color
+                            coloredMask.SetPixel(x, y, overlayColor);
                         }
                         else
                         {
@@ -442,8 +446,18 @@ public class FloatingImageViewModel : ViewModelBase
 
         try
         {
-            // Add point (default to positive selection for now)
-            _interactivePoints.Add((physicalX, physicalY, isPositive));
+            // First point determines the mode:
+            // - Positive (normal click) = Remove selected area
+            // - Negative (Shift+click) = Keep selected area (invert result)
+            if (_interactivePoints.Count == 0)
+            {
+                _invertSelectionMode = !isPositive;
+                System.Diagnostics.Debug.WriteLine($"[AI MODE] First point. Invert mode = {_invertSelectionMode}");
+            }
+            
+            // CRITICAL: Always send POSITIVE points to SAM2 (so it selects something)
+            // The Shift key only affects how we interpret the FINAL result, not SAM2 input
+            _interactivePoints.Add((physicalX, physicalY, true)); // Always true for SAM2
 
             await RefineMaskAsync();
         }
@@ -667,18 +681,27 @@ public class FloatingImageViewModel : ViewModelBase
                         var color = originalBmp.GetPixel(x, y);
                         var maskColor = resizedMask.GetPixel(x, y);
                         
-                        // CORRECT LOGIC: Selected area (white in mask) = REMOVE (background)
-                        // Unselected area (black in mask) = KEEP (subject)
+                        // Apply mask based on mode:
+                        // Normal mode: Selected = REMOVE, Unselected = KEEP
+                        // Invert mode: Selected = KEEP, Unselected = REMOVE
                         var maskVal = maskColor.Red; // For Gray8, R=G=B=value
-                        byte alpha;
-                        if (maskVal > 127)
+                        bool isSelected = maskVal > 127;
+                        
+                        // Invert the selection if in invert mode
+                        if (_invertSelectionMode)
                         {
-                            // This pixel is SELECTED (clicked area) - REMOVE it (make transparent)
+                            isSelected = !isSelected;
+                        }
+                        
+                        byte alpha;
+                        if (isSelected)
+                        {
+                            // This pixel is in the "remove" zone - make transparent
                             alpha = 0;
                         }
                         else
                         {
-                            // This pixel is NOT selected - KEEP it (preserve original alpha)
+                            // This pixel is in the "keep" zone - preserve original
                             alpha = color.Alpha;
                         }
                         

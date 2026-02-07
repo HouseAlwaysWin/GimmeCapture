@@ -448,7 +448,9 @@ public partial class FloatingImageWindow : Window
                     var pixelX = relativeX * (sourceSize.Width / renderedRect.Width);
                     var pixelY = relativeY * (sourceSize.Height / renderedRect.Height);
                     
-                    bool isPositive = _lastAIPointType == PointerUpdateKind.LeftButtonPressed;
+                    // SHIFT+Click = Negative selection (exclude from mask)
+                    // Normal Click = Positive selection (include in mask)
+                    bool isPositive = !e.KeyModifiers.HasFlag(KeyModifiers.Shift);
 
                     vm.DiagnosticText = $"AI Trigger: {(isPositive ? "+" : "-")} {pixelX:F0},{pixelY:F0}";
                     await vm.HandlePointClickAsync(pixelX, pixelY, isPositive);
