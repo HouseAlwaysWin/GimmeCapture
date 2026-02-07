@@ -101,8 +101,8 @@ public class FloatingImageViewModel : ViewModelBase
                 IsInteractiveSelectionMode = false;
                 InteractiveMask = null;
                 _interactivePoints.Clear();
-                _mobileSAMService?.Dispose();
-                _mobileSAMService = null;
+                _sam2Service?.Dispose();
+                _sam2Service = null;
             }
             else if (_currentTool == FloatingTool.Selection)
             {
@@ -179,6 +179,9 @@ public class FloatingImageViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _interactiveMask, value);
     }
 
+    // Clean mask without crosshairs for actual removal
+    private byte[]? _cleanMaskBytes;
+
     private string _diagnosticText = "Ready";
     public string DiagnosticText
     {
@@ -209,12 +212,21 @@ public class FloatingImageViewModel : ViewModelBase
     public bool IsPointRemovalMode
     {
         get => CurrentTool == FloatingTool.PointRemoval;
-        set => CurrentTool = value ? FloatingTool.PointRemoval : (CurrentTool == FloatingTool.PointRemoval ? FloatingTool.None : CurrentTool);
+        set {
+            if (CurrentTool == FloatingTool.PointRemoval && !value)
+            {
+                // Clean up AI when exiting PointRemoval mode
+                _sam2Service?.Dispose();
+                _sam2Service = null;
+                IsInteractiveSelectionMode = false;
+            }
+            CurrentTool = value ? FloatingTool.PointRemoval : (CurrentTool == FloatingTool.PointRemoval ? FloatingTool.None : CurrentTool);
+        }
     }
 
     public bool IsAnyToolActive => CurrentTool != FloatingTool.None;
 
-    private MobileSAMService? _mobileSAMService;
+    private SAM2Service? _sam2Service;
     private readonly List<(double X, double Y, bool IsPositive)> _interactivePoints = new();
 
     private async Task StartInteractiveRemovalAsync()
@@ -239,10 +251,10 @@ public class FloatingImageViewModel : ViewModelBase
             IsProcessing = true;
             ProcessingText = LocalizationService.Instance["ProcessingAI"] ?? "Initializing AI...";
             
-            _mobileSAMService?.Dispose();
-            _mobileSAMService = new MobileSAMService(_aiResourceService);
-            System.Diagnostics.Debug.WriteLine("FloatingVM: Initializing SAM Service...");
-            await _mobileSAMService.InitializeAsync();
+            _sam2Service?.Dispose();
+            _sam2Service = new SAM2Service(_aiResourceService);
+            System.Diagnostics.Debug.WriteLine("FloatingVM: Initializing SAM2 Service...");
+            await _sam2Service.InitializeAsync();
 
             if (CurrentTool != FloatingTool.PointRemoval) 
             {
@@ -257,13 +269,20 @@ public class FloatingImageViewModel : ViewModelBase
                 imageBytes = ms.ToArray();
             }
 
-            System.Diagnostics.Debug.WriteLine("FloatingVM: Setting image to SAM...");
-            await _mobileSAMService.SetImageAsync(imageBytes);
+            System.Diagnostics.Debug.WriteLine("FloatingVM: Setting image to SAM2...");
+            await _sam2Service.SetImageAsync(imageBytes);
             
             // Reset points list
             _interactivePoints.Clear();
             IsInteractiveSelectionMode = true; 
-            DiagnosticText = "AI Initialized & Ready";
+            
+            // Show model info for diagnostic
+            if (_sam2Service != null)
+            {
+                var encIn = _sam2Service.ModelInfo.Split('\n').FirstOrDefault(l => l.Contains("Inputs")) ?? "Unknown";
+                DiagnosticText = $"AI Ready: {encIn.Trim()}";
+                System.Diagnostics.Debug.WriteLine(_sam2Service.ModelInfo);
+            }
             System.Diagnostics.Debug.WriteLine("FloatingVM: Interactive Selection Ready");
         }
         catch (Exception ex)
@@ -293,7 +312,7 @@ public class FloatingImageViewModel : ViewModelBase
     {
         _interactivePoints.Clear();
         InteractiveMask = null;
-        _mobileSAMService?.ResetMaskInput(); // NEW: Clear the hidden mask input in AI service
+        _sam2Service?.ResetMaskInput(); // NEW: Clear the hidden mask input in AI service
         DiagnosticText = "AI: Points Reset";
         System.Diagnostics.Debug.WriteLine("FloatingVM: Resetting interactive points");
     }
@@ -306,7 +325,7 @@ public class FloatingImageViewModel : ViewModelBase
             
             // CRITICAL: Reset the AI's mask feedback memory when undoing.
             // If the last result was a "bad" full-image mask, we don't want the AI to reuse it.
-            _mobileSAMService?.ResetMaskInput();
+            _sam2Service?.ResetMaskInput();
 
             if (_interactivePoints.Count == 0)
             {
@@ -319,30 +338,87 @@ public class FloatingImageViewModel : ViewModelBase
         }
     }
 
+    // Synchronous wrapper for right-click undo
+    public void UndoLastInteractivePoint()
+    {
+        _ = UndoLastPointAsync();
+    }
+
     private async Task RefineMaskAsync()
     {
-        if (_mobileSAMService == null) return;
-        
+        if (_sam2Service == null) return;
+    
+        DiagnosticText = "AI: Refining...";
         try
         {
-            var maskBytes = await _mobileSAMService.GetMaskAsync(_interactivePoints);
-            var iouInfo = _mobileSAMService.LastIouInfo;
+            var maskBytes = await _sam2Service.GetMaskAsync(_interactivePoints);
+            var iouInfo = _sam2Service.LastIouInfo;
             DiagnosticText = $"AI: ({_interactivePoints.Count} pts) {iouInfo}";
 
             if (maskBytes != null && maskBytes.Length > 0)
             {
-                using var aiMask = SKBitmap.Decode(maskBytes);
-                using (var canvas = new SKCanvas(aiMask))
+                // Store clean mask for actual removal (without crosshairs)
+                _cleanMaskBytes = maskBytes;
+                
+                using var grayMask = SKBitmap.Decode(maskBytes);
+                
+                // CRITICAL FIX: Convert grayscale mask to RGBA with transparency
+                // White (selected) → Green with 60% opacity
+                // Black (unselected) → Fully transparent
+                using var coloredMask = new SKBitmap(grayMask.Width, grayMask.Height, SKColorType.Rgba8888, SKAlphaType.Premul);
+                for (int y = 0; y < grayMask.Height; y++)
                 {
-                    var paint = new SKPaint { Color = SKColors.Red, Style = SKPaintStyle.Fill, IsAntialias = true };
+                    for (int x = 0; x < grayMask.Width; x++)
+                    {
+                        var grayVal = grayMask.GetPixel(x, y).Red; // Grayscale: R=G=B
+                        if (grayVal > 127)
+                        {
+                            // Selected area: Green with partial transparency
+                            coloredMask.SetPixel(x, y, new SKColor(0, 255, 100, 150));
+                        }
+                        else
+                        {
+                            // Unselected area: Fully transparent
+                            coloredMask.SetPixel(x, y, SKColors.Transparent);
+                        }
+                    }
+                }
+                
+                using (var canvas = new SKCanvas(coloredMask))
+                {
+                    var posPaint = new SKPaint { Color = SKColors.LimeGreen, Style = SKPaintStyle.Fill, IsAntialias = true };
+                    var negPaint = new SKPaint { Color = SKColors.Red, Style = SKPaintStyle.Fill, IsAntialias = true };
+                    
+                    // Scale points to match the mask bitmap size
+                    float scaleX = (float)coloredMask.Width / (Image?.PixelSize.Width ?? 1);
+                    float scaleY = (float)coloredMask.Height / (Image?.PixelSize.Height ?? 1);
+
                     foreach (var pt in _interactivePoints)
                     {
-                        canvas.DrawCircle((float)pt.X, (float)pt.Y, 2, paint); // Shrunk from 5 to 2
+                        var px = (float)pt.X * scaleX;
+                        var py = (float)pt.Y * scaleY;
+                        
+                        // Draw point circle
+                        canvas.DrawCircle(px, py, 6, pt.IsPositive ? posPaint : negPaint);
+                        
+                        // DRAW CALIBRATION CROSSHAIR
+                        using var crossPaint = new SKPaint { 
+                            Color = pt.IsPositive ? SKColors.Lime : SKColors.DeepPink, 
+                            StrokeWidth = 2, 
+                            Style = SKPaintStyle.Stroke,
+                            IsAntialias = true
+                        };
+                        canvas.DrawLine(px - 20, py, px + 20, py, crossPaint);
+                        canvas.DrawLine(px, py - 20, px, py + 20, crossPaint);
+                        
+                        // Draw a tiny center dot
+                        using var dotPaint = new SKPaint { Color = SKColors.Black.WithAlpha(180), Style = SKPaintStyle.Fill, IsAntialias = true };
+                        canvas.DrawCircle(px, py, 1.5f, dotPaint);
                     }
                 }
 
                 using var finalMs = new System.IO.MemoryStream();
-                aiMask.Encode(finalMs, SKEncodedImageFormat.Png, 100);
+                coloredMask.Encode(finalMs, SKEncodedImageFormat.Png, 100);
                 finalMs.Seek(0, System.IO.SeekOrigin.Begin);
                 InteractiveMask = new Bitmap(finalMs);
             }
@@ -350,35 +426,31 @@ public class FloatingImageViewModel : ViewModelBase
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"FloatingVM: RefineMask Error: {ex}");
+            DiagnosticText = $"Refine Error: {ex.Message}";
         }
     }
 
-    public async Task HandlePointClickAsync(double x, double y)
+    public async Task HandlePointClickAsync(double x, double y, bool isPositive = true)
     {
-        System.Diagnostics.Debug.WriteLine($"FloatingVM: HandlePointClickAsync at ({x}, {y})");
+        // LOG PHYSICAL PIXEL COORDINATES FOR USER VERIFICATION
+        System.Diagnostics.Debug.WriteLine($"[AI DEBUG] Click Pixel: ({x:F0}, {y:F0}) Type: {(isPositive ? "Positive" : "Negative")}");
         
-        // Calculate physical coordinates
-        var pixW = Image?.PixelSize.Width ?? 1;
-        var pixH = Image?.PixelSize.Height ?? 1;
-        var scaleX = (double)pixW / (DisplayWidth > 0 ? DisplayWidth : OriginalWidth);
-        var scaleY = (double)pixH / (DisplayHeight > 0 ? DisplayHeight : OriginalHeight);
-        
-        var physicalX = x * scaleX;
-        var physicalY = y * scaleY;
-        System.Diagnostics.Debug.WriteLine($"FloatingVM: Click Log - UI:({x:F1},{y:F1}) Display:({DisplayWidth}x{DisplayHeight}) Pix:({pixW}x{pixH}) Scale:({scaleX:F3},{scaleY:F3}) -> Physical:({physicalX:F1},{physicalY:F1})");
+        var physicalX = x;
+        var physicalY = y;
 
-        if (_mobileSAMService == null || !IsInteractiveSelectionMode) return;
+        if (_sam2Service == null || !IsInteractiveSelectionMode) return;
 
         try
         {
             // Add point (default to positive selection for now)
-            _interactivePoints.Add((physicalX, physicalY, true));
+            _interactivePoints.Add((physicalX, physicalY, isPositive));
 
             await RefineMaskAsync();
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"FloatingVM: Multi-point Error: {ex}");
+            DiagnosticText = $"Click Error: {ex.Message}";
         }
     }
 
@@ -578,9 +650,9 @@ public class FloatingImageViewModel : ViewModelBase
                 Image.Save(originalMs);
                 using var originalBmp = SKBitmap.Decode(originalMs.ToArray());
 
-                using var maskMs = new System.IO.MemoryStream();
-                InteractiveMask.Save(maskMs);
-                using var maskBmp = SKBitmap.Decode(maskMs.ToArray());
+                // Use CLEAN mask without crosshairs!
+                if (_cleanMaskBytes == null) return null!; // Return empty if no clean mask
+                using var maskBmp = SKBitmap.Decode(_cleanMaskBytes);
                 
                 // RESIZE MASK TO MATCH ORIGINAL BITMAP EXACTLY with Nearest sampling to avoid blurring edges
                 // This ensures pixel-perfect alignment with the physical image
@@ -595,17 +667,18 @@ public class FloatingImageViewModel : ViewModelBase
                         var color = originalBmp.GetPixel(x, y);
                         var maskColor = resizedMask.GetPixel(x, y);
                         
-                        // PRESERVE original transparency for already-transparent areas
-                        // Only apply mask to non-transparent pixels
+                        // CORRECT LOGIC: Selected area (white in mask) = REMOVE (background)
+                        // Unselected area (black in mask) = KEEP (subject)
+                        var maskVal = maskColor.Red; // For Gray8, R=G=B=value
                         byte alpha;
-                        if (maskColor.Alpha > 128)
+                        if (maskVal > 127)
                         {
-                            // This pixel is in the selected mask area - make it transparent
+                            // This pixel is SELECTED (clicked area) - REMOVE it (make transparent)
                             alpha = 0;
                         }
                         else
                         {
-                            // Keep the original alpha value (preserves previous transparent areas)
+                            // This pixel is NOT selected - KEEP it (preserve original alpha)
                             alpha = color.Alpha;
                         }
                         

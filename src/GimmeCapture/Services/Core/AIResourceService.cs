@@ -14,6 +14,9 @@ public class AIResourceService : ReactiveObject
     private const string MobileSamEncoderUrl = "https://huggingface.co/Acly/MobileSAM/resolve/main/mobile_sam_image_encoder.onnx";
     private const string MobileSamDecoderUrl = "https://huggingface.co/Acly/MobileSAM/resolve/main/sam_mask_decoder_multi.onnx";
     
+    private const string Sam2EncoderUrl = "https://huggingface.co/shubham0204/sam2-onnx-models/resolve/main/sam2_hiera_tiny_encoder.onnx";
+    private const string Sam2DecoderUrl = "https://huggingface.co/shubham0204/sam2-onnx-models/resolve/main/sam2_hiera_tiny_decoder.onnx";
+    
     // Using a reliable direct link to ONNX Runtime GPU (Win x64)
     private const string OnnxRuntimeZipUrl = "https://github.com/microsoft/onnxruntime/releases/download/v1.20.1/onnxruntime-win-x64-gpu-1.20.1.zip";
 
@@ -63,14 +66,21 @@ public class AIResourceService : ReactiveObject
         // 1. Generic Model (U2Net)
         var modelPath = Path.Combine(baseDir, "models", "u2net.onnx");
         
-        // 2. MobileSAM Models
+        // 2. MobileSAM Models (Keep for backward compatibility or transition)
         var encoderPath = Path.Combine(baseDir, "models", "mobile_sam_image_encoder.onnx");
         var decoderPath = Path.Combine(baseDir, "models", "sam_mask_decoder_multi.onnx");
         
-        // 3. Runtime
+        // 3. SAM2 Models (NEW)
+        var sam2EncoderPath = Path.Combine(baseDir, "models", "sam2_hiera_tiny_encoder.onnx");
+        var sam2DecoderPath = Path.Combine(baseDir, "models", "sam2_hiera_tiny_decoder.onnx");
+        
+        // 4. Runtime
         var onnxDll = Path.Combine(baseDir, "runtime", "onnxruntime.dll");
         
-        return File.Exists(modelPath) && File.Exists(encoderPath) && File.Exists(decoderPath) && File.Exists(onnxDll);
+        // We require SAM2 for the new interactive selection features.
+        bool hasSam2 = File.Exists(sam2EncoderPath) && File.Exists(sam2DecoderPath);
+        
+        return File.Exists(modelPath) && hasSam2 && File.Exists(onnxDll);
     }
 
     public async Task<bool> EnsureResourcesAsync()
@@ -127,7 +137,29 @@ public class AIResourceService : ReactiveObject
             var decoderPath = Path.Combine(modelsDir, "sam_mask_decoder_multi.onnx");
             if (!File.Exists(decoderPath))
             {
-                await DownloadFile(MobileSamDecoderUrl, decoderPath, 90, 10);
+                await DownloadFile(MobileSamDecoderUrl, decoderPath, 90, 5);
+            }
+            else
+            {
+                DownloadProgress = 95;
+            }
+
+            // 5. Download SAM2 Encoder (NEW)
+            var sam2EncoderPath = Path.Combine(modelsDir, "sam2_hiera_tiny_encoder.onnx");
+            if (!File.Exists(sam2EncoderPath))
+            {
+                await DownloadFile(Sam2EncoderUrl, sam2EncoderPath, 95, 3);
+            }
+            else
+            {
+                DownloadProgress = 98;
+            }
+
+            // 6. Download SAM2 Decoder (NEW)
+            var sam2DecoderPath = Path.Combine(modelsDir, "sam2_hiera_tiny_decoder.onnx");
+            if (!File.Exists(sam2DecoderPath))
+            {
+                await DownloadFile(Sam2DecoderUrl, sam2DecoderPath, 98, 2);
             }
             else
             {

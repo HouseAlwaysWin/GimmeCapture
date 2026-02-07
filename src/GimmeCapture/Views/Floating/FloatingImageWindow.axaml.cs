@@ -178,13 +178,14 @@ public partial class FloatingImageWindow : Window
     private bool _isSelecting;
     private Point _selectionStartPoint;
     private bool _isAIPointing;
+    private PointerUpdateKind _lastAIPointType;
 
     private enum ResizeDirection
     {
         None, TopLeft, TopRight, BottomLeft, BottomRight, Top, Bottom, Left, Right
     }
 
-    private async void OnPointerPressed(object? sender, PointerPressedEventArgs e)
+    private void OnPointerPressed(object? sender, PointerPressedEventArgs e)
     {
         if (DataContext is not FloatingImageViewModel vm) return;
         var source = e.Source as Control;
@@ -249,8 +250,8 @@ public partial class FloatingImageWindow : Window
             if (vm.IsPointRemovalMode)
             {
                 vm.DiagnosticText = "AI Pressed: Capturing...";
-                System.Diagnostics.Debug.WriteLine("FloatingWindow: AI Mode Pressed - Capturing Pointer");
                 _isAIPointing = true;
+                _lastAIPointType = pProperties.PointerUpdateKind;
                 e.Pointer.Capture(this);
                 e.Handled = true;
                 return;
@@ -267,12 +268,13 @@ public partial class FloatingImageWindow : Window
         }
         else if (pProperties.IsRightButtonPressed)
         {
-            // Block ContextMenu and perform tool-specific cancel if a tool is active
             if (vm.IsPointRemovalMode)
             {
-                await vm.UndoLastPointAsync();
+                // RIGHT-CLICK = UNDO LAST POINT (not negative selection)
+                vm.DiagnosticText = "AI: Undo Last Point";
+                vm.UndoLastInteractivePoint();
                 e.Handled = true;
-                System.Diagnostics.Debug.WriteLine("FloatingWindow: AI Undo Last Point via Right-Click");
+                return;
             }
             else if (vm.IsSelectionMode)
             {
@@ -414,7 +416,7 @@ public partial class FloatingImageWindow : Window
         catch (Exception) { }
     }
     
-    protected override void OnPointerReleased(PointerReleasedEventArgs e)
+    protected override async void OnPointerReleased(PointerReleasedEventArgs e)
     {
         base.OnPointerReleased(e);
         if (_isResizing)
@@ -430,26 +432,26 @@ public partial class FloatingImageWindow : Window
         else if (_isAIPointing)
         {
             var imageControl = this.FindControl<Image>("PinnedImage");
-            if (imageControl != null && DataContext is FloatingImageViewModel vm)
+            if (imageControl != null && DataContext is FloatingImageViewModel vm && vm.Image != null)
             {
                 var pos = e.GetPosition(imageControl);
-                var bounds = new Rect(0, 0, imageControl.Bounds.Width, imageControl.Bounds.Height);
-                System.Diagnostics.Debug.WriteLine($"FloatingWindow: AI Released. Pos: {pos}, Bounds: {bounds}");
+                var renderedRect = GetImageRenderedRect(imageControl);
                 
-                if (bounds.Contains(pos))
+                if (renderedRect.Contains(pos))
                 {
-                    // CRITICAL: Sync exact UI bounds to ViewModel to eliminate mapping drift
-                    vm.DisplayWidth = imageControl.Bounds.Width;
-                    vm.DisplayHeight = imageControl.Bounds.Height;
+                    // Calculate position relative to the ACTUAL image content
+                    var relativeX = pos.X - renderedRect.X;
+                    var relativeY = pos.Y - renderedRect.Y;
                     
-                    vm.DiagnosticText = $"AI Trigger: {pos.X:F0},{pos.Y:F0}";
-                    System.Diagnostics.Debug.WriteLine($"FloatingWindow: Triggering AI recognition. UI Bounds Sync: {vm.DisplayWidth}x{vm.DisplayHeight}");
-                    _ = vm.HandlePointClickAsync(pos.X, pos.Y);
-                }
-                else
-                {
-                    vm.DiagnosticText = "AI Release: Out of Bounds";
-                    System.Diagnostics.Debug.WriteLine("FloatingWindow: AI click outside image bounds - ignored");
+                    // CRITICAL: Convert UI units to PHYSICAL PIXELS of the original image
+                    var sourceSize = vm.Image.PixelSize;
+                    var pixelX = relativeX * (sourceSize.Width / renderedRect.Width);
+                    var pixelY = relativeY * (sourceSize.Height / renderedRect.Height);
+                    
+                    bool isPositive = _lastAIPointType == PointerUpdateKind.LeftButtonPressed;
+
+                    vm.DiagnosticText = $"AI Trigger: {(isPositive ? "+" : "-")} {pixelX:F0},{pixelY:F0}";
+                    await vm.HandlePointClickAsync(pixelX, pixelY, isPositive);
                 }
             }
             e.Pointer.Capture(null);
@@ -526,5 +528,22 @@ public partial class FloatingImageWindow : Window
                 vm.DisplayHeight = imageControl.Bounds.Height;
             }
         }
+    }
+
+    private Rect GetImageRenderedRect(Image img)
+    {
+        if (img.Source == null || img.Bounds.Width <= 0 || img.Bounds.Height <= 0)
+            return new Rect();
+
+        var viewSize = img.Bounds.Size;
+        var sourceSize = img.Source.Size;
+
+        double scale = Math.Min(viewSize.Width / sourceSize.Width, viewSize.Height / sourceSize.Height);
+        double w = sourceSize.Width * scale;
+        double h = sourceSize.Height * scale;
+        double x = (viewSize.Width - w) / 2;
+        double y = (viewSize.Height - h) / 2;
+
+        return new Rect(x, y, w, h);
     }
 }
