@@ -114,6 +114,7 @@ public class FloatingImageViewModel : ViewModelBase
             // Notify UI properties
             this.RaisePropertyChanged(nameof(IsSelectionMode));
             this.RaisePropertyChanged(nameof(IsPointRemovalMode));
+            this.RaisePropertyChanged(nameof(IsAnyToolActive));
             
             // Initialization for new tool
             if (value == FloatingTool.PointRemoval)
@@ -211,6 +212,8 @@ public class FloatingImageViewModel : ViewModelBase
         set => CurrentTool = value ? FloatingTool.PointRemoval : (CurrentTool == FloatingTool.PointRemoval ? FloatingTool.None : CurrentTool);
     }
 
+    public bool IsAnyToolActive => CurrentTool != FloatingTool.None;
+
     private MobileSAMService? _mobileSAMService;
     private readonly List<(double X, double Y, bool IsPositive)> _interactivePoints = new();
 
@@ -290,6 +293,7 @@ public class FloatingImageViewModel : ViewModelBase
     {
         _interactivePoints.Clear();
         InteractiveMask = null;
+        _mobileSAMService?.ResetMaskInput(); // NEW: Clear the hidden mask input in AI service
         DiagnosticText = "AI: Points Reset";
         System.Diagnostics.Debug.WriteLine("FloatingVM: Resetting interactive points");
     }

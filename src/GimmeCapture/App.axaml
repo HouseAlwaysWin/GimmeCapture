@@ -33,6 +33,7 @@
             <cv:AnnotationToLeftConverter x:Key="AnnotationToLeftConverter"/>
             <cv:AnnotationToTopConverter x:Key="AnnotationToTopConverter"/>
             <cv:PenGeometryConverter x:Key="PenGeometryConverter"/>
+            <cv:BoolToCrossCursorConverter x:Key="BoolToCrossCursorConverter"/>
         </ResourceDictionary>
     </Application.Resources>
 

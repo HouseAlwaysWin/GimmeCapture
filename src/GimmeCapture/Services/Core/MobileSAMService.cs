@@ -24,7 +24,10 @@ public class MobileSAMService : IDisposable
     private int _lastModelTargetSize = 1024;
     private int _lastNewW;
     private int _lastNewH;
+    private int _offsetX; // NEW: X offset for center padding
+    private int _offsetY; // NEW: Y offset for center padding
     private string _lastIouInfo = "";
+    private DenseTensor<float>? _lowResMask;
 
     public string LastIouInfo => _lastIouInfo;
 
@@ -129,11 +132,14 @@ public class MobileSAMService : IDisposable
             
             System.Diagnostics.Debug.WriteLine($"MobileSAM: Detected model target size: {modelTargetSize}");
 
-            // 1. Resize and Pad
+            // 1. Resize and Pad (CENTERED)
             _lastModelTargetSize = modelTargetSize;
             float scale = (float)_lastModelTargetSize / Math.Max(_originalWidth, _originalHeight);
             _lastNewW = (int)Math.Round(_originalWidth * scale);
             _lastNewH = (int)Math.Round(_originalHeight * scale);
+            
+            _offsetX = (_lastModelTargetSize - _lastNewW) / 2;
+            _offsetY = (_lastModelTargetSize - _lastNewH) / 2;
 
             using var resized = original.Resize(new SKImageInfo(_lastNewW, _lastNewH), new SKSamplingOptions(SKFilterMode.Linear));
             
@@ -162,7 +168,11 @@ public class MobileSAMService : IDisposable
                 for (int x = 0; x < _lastModelTargetSize; x++)
                 {
                     // Get pixel from resized image, or default (0,0,0,0) if outside resized bounds (padding)
-                    var color = (x < _lastNewW && y < _lastNewH) ? resized.GetPixel(x, y) : new SKColor(0, 0, 0, 0);
+                    // Account for centering offsets
+                    int rx = x - _offsetX;
+                    int ry = y - _offsetY;
+                    
+                    var color = (rx >= 0 && rx < _lastNewW && ry >= 0 && ry < _lastNewH) ? resized.GetPixel(rx, ry) : new SKColor(0, 0, 0, 0);
                     
                     // Standard SAM normalization: (x - mean) / std in RGB order
                     // Many models expect RGB [0.485, 0.456, 0.406] and [0.229, 0.224, 0.225]
@@ -207,13 +217,23 @@ public class MobileSAMService : IDisposable
         });
     }
 
+    public void ResetMaskInput()
+    {
+        _lowResMask = null;
+        System.Diagnostics.Debug.WriteLine("MobileSAM: Mask input reset");
+    }
+
     public async Task<byte[]> GetMaskAsync(IEnumerable<(double X, double Y, bool IsPositive)> points)
     {
         if (_decoderSession == null || _imageEmbeddings == null)
             throw new InvalidOperationException("Service not ready. Call SetImageAsync first.");
 
         var pointList = points.ToList();
-        if (pointList.Count == 0) return Array.Empty<byte>();
+        if (pointList.Count == 0) 
+        {
+            _lowResMask = null;
+            return Array.Empty<byte>();
+        }
 
         return await Task.Run(() =>
         {
@@ -231,8 +251,9 @@ public class MobileSAMService : IDisposable
                 float px = (float)Math.Clamp(p.X, 0, _originalWidth - 1);
                 float py = (float)Math.Clamp(p.Y, 0, _originalHeight - 1);
 
-                coords[0, i, 0] = (float)(px * scale);
-                coords[0, i, 1] = (float)(py * scale);
+                // Add _offsetX and _offsetY because image is centered in 1024x1024 space
+                coords[0, i, 0] = (float)(px * scale + _offsetX);
+                coords[0, i, 1] = (float)(py * scale + _offsetY);
                 labels[0, i] = p.IsPositive ? 1f : 0f;
             }
 
@@ -242,8 +263,8 @@ public class MobileSAMService : IDisposable
                 NamedOnnxValue.CreateFromTensor("image_embeddings", _imageEmbeddings),
                 NamedOnnxValue.CreateFromTensor("point_coords", coords),
                 NamedOnnxValue.CreateFromTensor("point_labels", labels),
-                NamedOnnxValue.CreateFromTensor("mask_input", new DenseTensor<float>(new int[] { 1, 1, 256, 256 })),
-                NamedOnnxValue.CreateFromTensor("has_mask_input", new DenseTensor<float>(new float[] { 0f }, new int[] { 1 })),
+                NamedOnnxValue.CreateFromTensor("mask_input", _lowResMask ?? new DenseTensor<float>(new int[] { 1, 1, 256, 256 })),
+                NamedOnnxValue.CreateFromTensor("has_mask_input", new DenseTensor<float>(new float[] { _lowResMask != null ? 1f : 0f }, new int[] { 1 })),
                 NamedOnnxValue.CreateFromTensor("orig_im_size", new DenseTensor<float>(new float[] { (float)_originalHeight, (float)_originalWidth }, new int[] { 2 }))
             };
             
@@ -318,6 +339,34 @@ public class MobileSAMService : IDisposable
             bestMaskIndex = Math.Clamp(bestMaskIndex, 0, availableMasks - 1);
             _lastIouInfo = iouInfo;
 
+            // 3. Store the low-res mask for the next iteration (iterative refinement)
+            // MobileSAM often returns a second output or has low-res masks in the bundle
+            // If the model output has a "low_res_masks" or similar, we should use it.
+            // In many SAM versions, it's (1, 4, 64, 64) or similar.
+            var lowResMaskResult = results.FirstOrDefault(r => r.Name == "low_res_masks");
+            if (lowResMaskResult != null)
+            {
+                var lrmTensor = lowResMaskResult.AsTensor<float>();
+                int lrmRank = lrmTensor.Dimensions.Length;
+                int lrmMaskCount = lrmRank switch { 4 => lrmTensor.Dimensions[1], 3 => lrmTensor.Dimensions[0], _ => 1 };
+                int safeLrmIdx = Math.Clamp(bestMaskIndex, 0, lrmMaskCount - 1);
+                
+                // Extract only the best low-res mask
+                int lrmH = lrmTensor.Dimensions[lrmRank - 2];
+                int lrmW = lrmTensor.Dimensions[lrmRank - 1];
+                var bestLrm = new DenseTensor<float>(new int[] { 1, 1, lrmH, lrmW });
+                for(int ly=0; ly<lrmH; ly++)
+                    for(int lx=0; lx<lrmW; lx++)
+                        bestLrm[0, 0, ly, lx] = lrmRank == 4 ? lrmTensor[0, safeLrmIdx, ly, lx] : lrmTensor[safeLrmIdx, ly, lx];
+                
+                _lowResMask = bestLrm;
+            }
+            else
+            {
+                 // If no explicit low-res mask output, reset it to prevent stale data
+                 _lowResMask = null;
+            }
+
             // 3. Reconstruct Mask using Skia for high precision
             // The mask tensor represents the FULL 1024x1024 padded canvas, not just the image
             // We need to extract the region that corresponds to the actual image content
@@ -345,21 +394,26 @@ public class MobileSAMService : IDisposable
             }
             
             // Calculate the active region in mask space (where the actual image content is)
-            // The encoder scales the image uniformly and places it at (0,0)
             double maskScale = (double)_lastModelTargetSize / Math.Max(_originalWidth, _originalHeight);
-            int activeW = (int)Math.Round(_originalWidth * maskScale * actualMaskW / _lastModelTargetSize);
-            int activeH = (int)Math.Round(_originalHeight * maskScale * actualMaskH / _lastModelTargetSize);
-            activeW = Math.Clamp(activeW, 1, actualMaskW);
-            activeH = Math.Clamp(activeH, 1, actualMaskH);
             
-            System.Diagnostics.Debug.WriteLine($"MobileSAM MASK: OrigSize=({_originalWidth}x{_originalHeight}) Scale={maskScale:F4} ActiveRegion=({activeW}x{activeH}) in mask space");
+            // Scaled content size in the current mask resolution
+            int activeW = (int)Math.Round(_originalWidth * scale * actualMaskW / _lastModelTargetSize);
+            int activeH = (int)Math.Round(_originalHeight * scale * actualMaskH / _lastModelTargetSize);
             
-            // Extract the active region (the part that represents the actual image, not padding)
+            // Offsets in the current mask resolution
+            int mOffsetX = (int)Math.Round((double)_offsetX * actualMaskW / _lastModelTargetSize);
+            int mOffsetY = (int)Math.Round((double)_offsetY * actualMaskH / _lastModelTargetSize);
+            
+            activeW = Math.Clamp(activeW, 1, actualMaskW - mOffsetX);
+            activeH = Math.Clamp(activeH, 1, actualMaskH - mOffsetY);
+            
+            System.Diagnostics.Debug.WriteLine($"MobileSAM MASK: OrigSize=({_originalWidth}x{_originalHeight}) Scale={maskScale:F4} ActiveRegion=({activeW}x{activeH}) Offset=({mOffsetX},{mOffsetY}) in mask space");
+            
+            // Extract the active region (the part that represents the actual image, accounting for center padding)
             using var activeMask = new SKBitmap(activeW, activeH, SKColorType.Gray8, SKAlphaType.Opaque);
-            maskFull.ExtractSubset(activeMask, new SKRectI(0, 0, activeW, activeH));
+            maskFull.ExtractSubset(activeMask, new SKRectI(mOffsetX, mOffsetY, mOffsetX + activeW, mOffsetY + activeH));
             
             // Resize the active region to match original image dimensions using SkiaSharp's Resize
-            // This is simpler and less error-prone than manual coordinate mapping
             using var resizedMask = activeMask.Resize(new SKImageInfo(_originalWidth, _originalHeight), new SKSamplingOptions(SKFilterMode.Nearest));
             
             // Create the final visual representation

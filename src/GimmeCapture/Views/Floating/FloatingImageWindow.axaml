@@ -19,7 +19,7 @@
     <Window.Styles>
         <Style Selector="Grid.Handle">
             <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="IsVisible" Value="{Binding IsSelectionMode, Converter={StaticResource BoolInvertConverter}}"/>
+            <Setter Property="IsVisible" Value="{Binding !IsAnyToolActive}"/>
         </Style>
         <Style Selector="Border.MainBorder">
             <Setter Property="BoxShadow" Value="{Binding BorderColor, Converter={StaticResource ColorToBoxShadowConverter}}"/>
@@ -78,7 +78,8 @@
                                    Width="{Binding DisplayWidth}"
                                    Height="{Binding DisplayHeight}"
                                    Stretch="Fill" 
-                                   Name="PinnedImage"/>
+                                   Name="PinnedImage"
+                                   Cursor="{Binding IsPointRemovalMode, Converter={StaticResource BoolToCrossCursorConverter}}"/>
                             
                             <!-- AI Ready Feedback Border -->
                             <Border BorderBrush="#FFD700" 
