@@ -172,6 +172,11 @@ public class FFmpegDownloaderService : ReactiveObject
                                 {
                                     DownloadProgress = (double)totalRead / totalBytes * 100;
                                 }
+                                
+                                if (ct.IsCancellationRequested)
+                                {
+                                     System.Diagnostics.Debug.WriteLine("[FFmpegDownloader] Loop detected cancellation!");
+                                }
                             }
                         }
                     }
@@ -254,6 +259,11 @@ public class FFmpegDownloaderService : ReactiveObject
             });
 
             return IsFFmpegAvailable();
+        }
+        catch (OperationCanceledException)
+        {
+             System.Diagnostics.Debug.WriteLine($"[FFmpegDownloader] Operation Canceled.");
+             return false;
         }
         catch (Exception ex)
         {

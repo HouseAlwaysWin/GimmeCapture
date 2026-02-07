@@ -89,14 +89,29 @@ public class ResourceQueueService : ReactiveObject
 
     public void Cancel(string name)
     {
+        System.Diagnostics.Debug.WriteLine($"[ResourceQueue] Attempting to cancel {name}...");
         if (_cancellationTokens.TryGetValue(name, out var cts))
         {
             try
             {
-                cts.Cancel();
-                System.Diagnostics.Debug.WriteLine($"[Queue] Cancelled item: {name}");
+                if (cts.IsCancellationRequested)
+                {
+                     System.Diagnostics.Debug.WriteLine($"[ResourceQueue] {name} is ALREADY cancelled.");
+                }
+                else
+                {
+                    cts.Cancel();
+                    System.Diagnostics.Debug.WriteLine($"[ResourceQueue] Cancelled item: {name}");
+                }
             }
-            catch (ObjectDisposedException) { }
+            catch (ObjectDisposedException) 
+            {
+                 System.Diagnostics.Debug.WriteLine($"[ResourceQueue] CTS for {name} was disposed.");
+            }
+        }
+        else
+        {
+            System.Diagnostics.Debug.WriteLine($"[ResourceQueue] CTS for {name} NOT FOUND in _cancellationTokens.");
         }
     }
 

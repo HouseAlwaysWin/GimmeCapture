@@ -992,7 +992,7 @@ public class MainWindowViewModel : ViewModelBase
             IsInstalled = FfmpegDownloader.IsFFmpegAvailable(),
             InstallCommand = ReactiveCommand.CreateFromTask(() => InstallModuleAsync("FFmpeg")),
             CancelCommand = ReactiveCommand.CreateFromTask(() => CancelModuleAsync("FFmpeg")),
-            RemoveCommand = ReactiveCommand.Create(() => RemoveModule("FFmpeg"))
+            RemoveCommand = ReactiveCommand.CreateFromTask(() => RemoveModuleAsync("FFmpeg"))
         };
         FfmpegDownloader.WhenAnyValue(x => x.IsDownloading)
             .Subscribe(isDown => 
@@ -1017,7 +1017,7 @@ public class MainWindowViewModel : ViewModelBase
             IsInstalled = AIResourceService.AreResourcesReady(),
             InstallCommand = ReactiveCommand.CreateFromTask(() => InstallModuleAsync("AI")),
             CancelCommand = ReactiveCommand.CreateFromTask(() => CancelModuleAsync("AI")),
-            RemoveCommand = ReactiveCommand.Create(() => RemoveModule("AI"))
+            RemoveCommand = ReactiveCommand.CreateFromTask(() => RemoveModuleAsync("AI"))
         };
         AIResourceService.WhenAnyValue(x => x.IsDownloading)
             .Subscribe(isDown => 
@@ -1067,8 +1067,15 @@ public class MainWindowViewModel : ViewModelBase
         }
     }
 
-    private void RemoveModule(string type)
+    private async Task RemoveModuleAsync(string type)
     {
+        // Add Confirmation
+        var result = await (ConfirmAction?.Invoke(
+            LocalizationService.Instance["TabModules"], 
+            LocalizationService.Instance["ConfirmRemoveModule"]) ?? Task.FromResult(false));
+
+        if (!result) return;
+
         if (type == "FFmpeg")
         {
             FfmpegDownloader.RemoveFFmpeg();
