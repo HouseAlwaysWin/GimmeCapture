@@ -85,7 +85,22 @@ public class ResourceQueueService : ReactiveObject
         return null;
     }
 
-    public Task<bool> EnqueueAsync(string name, Func<Task<bool>> downloadAction, Action<double>? progressCallback = null)
+    private readonly ConcurrentDictionary<string, CancellationTokenSource> _cancellationTokens = new();
+
+    public void Cancel(string name)
+    {
+        if (_cancellationTokens.TryGetValue(name, out var cts))
+        {
+            try
+            {
+                cts.Cancel();
+                System.Diagnostics.Debug.WriteLine($"[Queue] Cancelled item: {name}");
+            }
+            catch (ObjectDisposedException) { }
+        }
+    }
+
+    public Task<bool> EnqueueAsync(string name, Func<CancellationToken, Task<bool>> downloadAction, Action<double>? progressCallback = null)
     {
         // Deduplication: If already pending or downloading, don't queue again.
         if (_activeItems.TryGetValue(name, out var existingItem) && 
@@ -98,7 +113,34 @@ public class ResourceQueueService : ReactiveObject
         {
             Name = name,
             Status = QueueItemStatus.Pending,
-            DownloadAction = downloadAction
+            DownloadAction = null // We use a wrapper or internal storage for the CT-aware action
+        };
+
+        // We need a way to store the CT-aware action. 
+        // Let's modify DownloadQueueItem or use a wrapper.
+        // For simplicity, let's wrap it here and assign to DownloadAction (which expects Task<bool> with no args).
+        // But wait, we need to create the CTS *when processing starts* or just before?
+        // If we create it now, we can allow cancelling Pending items too.
+        
+        var cts = new CancellationTokenSource();
+        _cancellationTokens.AddOrUpdate(name, cts, (k, v) => cts);
+
+        item.DownloadAction = async () => 
+        {
+            try
+            {
+                // Re-get CTS in case it changed (unlikely for same ID)
+                if (!_cancellationTokens.TryGetValue(name, out var myCts)) return false;
+                return await downloadAction(myCts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                return false;
+            }
+            finally
+            {
+               // Cleanup happens in ProcessQueueAsync or here?
+            }
         };
         
         // Publish initial status
@@ -117,6 +159,12 @@ public class ResourceQueueService : ReactiveObject
         }
 
         return Task.FromResult(true);
+    }
+    
+    // Legacy overload
+    public Task<bool> EnqueueAsync(string name, Func<Task<bool>> downloadAction, Action<double>? progressCallback = null)
+    {
+        return EnqueueAsync(name, (ct) => downloadAction(), progressCallback);
     }
 
     private async Task ProcessQueueAsync()
@@ -144,17 +192,26 @@ public class ResourceQueueService : ReactiveObject
                             {
                                 activeItem = item;
                             }
-
-                            activeItem.Status = QueueItemStatus.Downloading;
                             
-                            if (activeItem.DownloadAction != null)
+                            // Check cancellation before starting
+                            if (_cancellationTokens.TryGetValue(activeItem.Name, out var cts) && cts.IsCancellationRequested)
                             {
-                                bool success = await activeItem.DownloadAction();
-                                activeItem.Status = success ? QueueItemStatus.Completed : QueueItemStatus.Failed;
+                                activeItem.Status = QueueItemStatus.Failed; // Or separate Cancelled status?
+                                // "Failed" is probably safer for now as UI handles it as "Stop processing"
                             }
                             else
                             {
-                                activeItem.Status = QueueItemStatus.Failed;
+                                activeItem.Status = QueueItemStatus.Downloading;
+                                
+                                if (activeItem.DownloadAction != null)
+                                {
+                                    bool success = await activeItem.DownloadAction();
+                                    activeItem.Status = success ? QueueItemStatus.Completed : QueueItemStatus.Failed;
+                                }
+                                else
+                                {
+                                    activeItem.Status = QueueItemStatus.Failed;
+                                }
                             }
                         }
                         catch (Exception ex)
@@ -169,10 +226,11 @@ public class ResourceQueueService : ReactiveObject
                         {
                             _semaphore.Release();
                             
-                            // Check if we need to restart the pump/ensure it keeps running?
-                            // The main loop is running, it triggers on 'queue not empty'.
-                            // If main loop is blocked on WaitAsync, Release() will unblock it.
-                            // So this is self-sustaining until queue is empty.
+                            // Cleanup CTS
+                             if (_cancellationTokens.TryRemove(item.Name, out var cts))
+                             {
+                                 cts.Dispose();
+                             }
                         }
                     });
                 }

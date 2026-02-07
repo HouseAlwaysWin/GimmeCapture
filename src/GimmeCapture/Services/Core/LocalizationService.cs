@@ -145,6 +145,8 @@ namespace GimmeCapture.Services.Core;
                     ["UpdateBtnConfirm"] = "Update Now",
                     ["UpdateBtnCancel"] = "Later",
                     ["UpdateBtnOk"] = "OK",
+                    ["CancelDownload"] = "Cancel Download",
+                    ["ConfirmCancelDownload"] = "Are you sure you want to cancel the download?",
                 },
                 [Language.Chinese] = new Dictionary<string, string>
                 {
@@ -234,6 +236,8 @@ namespace GimmeCapture.Services.Core;
                     ["UpdateBtnConfirm"] = "立即更新",
                     ["UpdateBtnCancel"] = "稍後",
                     ["UpdateBtnOk"] = "確定",
+                    ["CancelDownload"] = "取消下載",
+                    ["ConfirmCancelDownload"] = "確定要取消下載嗎？",
                 },
                 [Language.Japanese] = new Dictionary<string, string>
                 {
@@ -318,6 +322,9 @@ namespace GimmeCapture.Services.Core;
                     ["UpdateBtnConfirm"] = "今すぐ更新",
                     ["UpdateBtnCancel"] = "後で",
                     ["UpdateBtnOk"] = "OK",
+                    ["CancelDownload"] = "ダウンロードをキャンセル",
+                    ["ConfirmCancelDownload"] = "ダウンロードをキャンセルしてもよろしいですか？",
+                    ["UpdateCheckTitle"] = "更新の確認",
                 },
             };
 

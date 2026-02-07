@@ -84,6 +84,7 @@ public class MainWindowViewModel : ViewModelBase
 
     public Action<CaptureMode>? RequestCaptureAction { get; set; }
     public Func<Task<string?>>? PickFolderAction { get; set; }
+    public Func<string, string, Task<bool>>? ConfirmAction { get; set; }
     
     private readonly AppSettingsService _settingsService;
     public WindowsGlobalHotkeyService HotkeyService { get; } = new();
@@ -990,6 +991,7 @@ public class MainWindowViewModel : ViewModelBase
         {
             IsInstalled = FfmpegDownloader.IsFFmpegAvailable(),
             InstallCommand = ReactiveCommand.CreateFromTask(() => InstallModuleAsync("FFmpeg")),
+            CancelCommand = ReactiveCommand.CreateFromTask(() => CancelModuleAsync("FFmpeg")),
             RemoveCommand = ReactiveCommand.Create(() => RemoveModule("FFmpeg"))
         };
         FfmpegDownloader.WhenAnyValue(x => x.IsDownloading)
@@ -1014,6 +1016,7 @@ public class MainWindowViewModel : ViewModelBase
         {
             IsInstalled = AIResourceService.AreResourcesReady(),
             InstallCommand = ReactiveCommand.CreateFromTask(() => InstallModuleAsync("AI")),
+            CancelCommand = ReactiveCommand.CreateFromTask(() => CancelModuleAsync("AI")),
             RemoveCommand = ReactiveCommand.Create(() => RemoveModule("AI"))
         };
         AIResourceService.WhenAnyValue(x => x.IsDownloading)
@@ -1041,11 +1044,26 @@ public class MainWindowViewModel : ViewModelBase
     {
         if (type == "FFmpeg")
         {
-            await ResourceQueue.EnqueueAsync("FFmpeg", () => FfmpegDownloader.EnsureFFmpegAsync());
+            await ResourceQueue.EnqueueAsync("FFmpeg", (ct) => FfmpegDownloader.EnsureFFmpegAsync(ct));
         }
         else if (type == "AI")
         {
-            await ResourceQueue.EnqueueAsync("AI", () => AIResourceService.EnsureResourcesAsync());
+            await ResourceQueue.EnqueueAsync("AI", (ct) => AIResourceService.EnsureResourcesAsync(ct));
+        }
+    }
+
+    private async Task CancelModuleAsync(string type)
+    {
+        if (ConfirmAction != null)
+        {
+            var result = await ConfirmAction(
+                LocalizationService.Instance["UpdateCheckTitle"], 
+                LocalizationService.Instance["ConfirmCancelDownload"]);
+
+            if (result)
+            {
+                ResourceQueue.Cancel(type);
+            }
         }
     }
 
@@ -1128,7 +1146,22 @@ public class MainWindowViewModel : ViewModelBase
         }
 
         public ICommand InstallCommand { get; init; } = null!;
+        public ICommand CancelCommand { get; set; } = null!;
         public ICommand RemoveCommand { get; init; } = null!;
+
+        private System.Windows.Input.ICommand _mainActionCommand = null!;
+        public System.Windows.Input.ICommand MainActionCommand
+        {
+            get => _mainActionCommand;
+            set => this.RaiseAndSetIfChanged(ref _mainActionCommand, value);
+        }
+
+        private string _actionButtonText = "";
+        public string ActionButtonText
+        {
+            get => _actionButtonText;
+            set => this.RaiseAndSetIfChanged(ref _actionButtonText, value);
+        }
 
         public ModuleItem(string name, string descriptionKey)
         {
@@ -1159,6 +1192,20 @@ public class MainWindowViewModel : ViewModelBase
                 StatusText = IsInstalled 
                     ? LocalizationService.Instance["Installed"] 
                     : LocalizationService.Instance["NotInstalled"];
+            }
+            
+            if (IsProcessing || IsPending)
+            {
+                 ActionButtonText = LocalizationService.Instance["CancelDownload"];
+                 MainActionCommand = CancelCommand;
+            }
+            else
+            {
+                 ActionButtonText = IsInstalled 
+                    ? LocalizationService.Instance["Remove"] 
+                    : LocalizationService.Instance["Install"];
+                    
+                 MainActionCommand = IsInstalled ? RemoveCommand : InstallCommand;
             }
         }
     }

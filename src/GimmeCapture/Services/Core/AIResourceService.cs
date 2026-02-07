@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.IO.Compression;
 using System.Net.Http;
+using System.Threading;
 using System.Threading.Tasks;
 using ReactiveUI;
 using GimmeCapture.Models;
@@ -103,7 +104,7 @@ public class AIResourceService : ReactiveObject
         }
     }
 
-    public async Task<bool> EnsureResourcesAsync()
+    public async Task<bool> EnsureResourcesAsync(CancellationToken ct = default)
     {
         if (AreResourcesReady()) return true;
         if (IsDownloading) return true; // Already in progress, caller should wait via Queue if needed
@@ -124,7 +125,7 @@ public class AIResourceService : ReactiveObject
             var onnxDll = Path.Combine(runtimeDir, "onnxruntime.dll");
             if (!File.Exists(onnxDll))
             {
-                await DownloadAndExtractZip(OnnxRuntimeZipUrl, runtimeDir, 0, 30);
+                await DownloadAndExtractZip(OnnxRuntimeZipUrl, runtimeDir, 0, 30, ct);
             }
             else
             {
@@ -135,7 +136,7 @@ public class AIResourceService : ReactiveObject
             var modelPath = Path.Combine(modelsDir, "u2net.onnx");
             if (!File.Exists(modelPath))
             {
-                await DownloadFile(ModelUrl, modelPath, 30, 20);
+                await DownloadFile(ModelUrl, modelPath, 30, 20, ct);
             }
             else
             {
@@ -146,7 +147,7 @@ public class AIResourceService : ReactiveObject
             var encoderPath = Path.Combine(modelsDir, "mobile_sam_image_encoder.onnx");
             if (!File.Exists(encoderPath))
             {
-                await DownloadFile(MobileSamEncoderUrl, encoderPath, 50, 40);
+                await DownloadFile(MobileSamEncoderUrl, encoderPath, 50, 40, ct);
             }
             else
             {
@@ -157,7 +158,7 @@ public class AIResourceService : ReactiveObject
             var decoderPath = Path.Combine(modelsDir, "sam_mask_decoder_multi.onnx");
             if (!File.Exists(decoderPath))
             {
-                await DownloadFile(MobileSamDecoderUrl, decoderPath, 90, 5);
+                await DownloadFile(MobileSamDecoderUrl, decoderPath, 90, 5, ct);
             }
             else
             {
@@ -168,7 +169,7 @@ public class AIResourceService : ReactiveObject
             var sam2EncoderPath = Path.Combine(modelsDir, "sam2_hiera_tiny_encoder.onnx");
             if (!File.Exists(sam2EncoderPath))
             {
-                await DownloadFile(Sam2EncoderUrl, sam2EncoderPath, 95, 3);
+                await DownloadFile(Sam2EncoderUrl, sam2EncoderPath, 95, 3, ct);
             }
             else
             {
@@ -179,7 +180,7 @@ public class AIResourceService : ReactiveObject
             var sam2DecoderPath = Path.Combine(modelsDir, "sam2_hiera_tiny_decoder.onnx");
             if (!File.Exists(sam2DecoderPath))
             {
-                await DownloadFile(Sam2DecoderUrl, sam2DecoderPath, 98, 2);
+                await DownloadFile(Sam2DecoderUrl, sam2DecoderPath, 98, 2, ct);
             }
             else
             {
@@ -187,6 +188,11 @@ public class AIResourceService : ReactiveObject
             }
 
             return AreResourcesReady();
+        }
+        catch (OperationCanceledException)
+        {
+            System.Diagnostics.Debug.WriteLine("AI Resource Download Cancelled");
+            return false;
         }
         catch (Exception ex)
         {
@@ -200,25 +206,25 @@ public class AIResourceService : ReactiveObject
         }
     }
 
-    private async Task DownloadFile(string url, string destination, double progressOffset, double progressWeight)
+    private async Task DownloadFile(string url, string destination, double progressOffset, double progressWeight, CancellationToken ct)
     {
         using var client = new HttpClient();
         client.Timeout = TimeSpan.FromMinutes(15);
         
-        using var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
+        using var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
         response.EnsureSuccessStatusCode();
 
         var totalBytes = response.Content.Headers.ContentLength ?? -1L;
-        using var contentStream = await response.Content.ReadAsStreamAsync();
+        using var contentStream = await response.Content.ReadAsStreamAsync(ct);
         using var fileStream = new FileStream(destination, FileMode.Create, FileAccess.Write, FileShare.None, 8192, true);
 
         var buffer = new byte[8192];
         long totalRead = 0;
         int read;
 
-        while ((read = await contentStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+        while ((read = await contentStream.ReadAsync(buffer, 0, buffer.Length, ct)) > 0)
         {
-            await fileStream.WriteAsync(buffer, 0, read);
+            await fileStream.WriteAsync(buffer, 0, read, ct);
             totalRead += read;
 
             if (totalBytes != -1)
@@ -228,13 +234,15 @@ public class AIResourceService : ReactiveObject
         }
     }
 
-    private async Task DownloadAndExtractZip(string url, string outputDir, double progressOffset, double progressWeight)
+    private async Task DownloadAndExtractZip(string url, string outputDir, double progressOffset, double progressWeight, CancellationToken ct)
     {
         string zipPath = Path.Combine(outputDir, "temp_ai.zip");
-        await DownloadFile(url, zipPath, progressOffset, progressWeight);
+        await DownloadFile(url, zipPath, progressOffset, progressWeight, ct);
 
         await Task.Run(() =>
         {
+            if (ct.IsCancellationRequested) return;
+
             // Official zip has subfolders like onnxruntime-win-x64-gpu-1.20.1/lib/
             // We want to extract just the DLLs from /lib into outputDir
             using (ZipArchive archive = ZipFile.OpenRead(zipPath))
@@ -251,7 +259,7 @@ public class AIResourceService : ReactiveObject
                 }
             }
             File.Delete(zipPath);
-        });
+        }, ct);
     }
     private static bool _isResolverSet = false;
 

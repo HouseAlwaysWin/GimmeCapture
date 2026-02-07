@@ -135,6 +135,12 @@ public partial class MainWindow : Window
                 return folders.Count > 0 ? folders[0].Path.LocalPath : null;
             };
 
+            vm.ConfirmAction = async (title, message) =>
+            {
+                var result = await ConfirmationDialog.ShowConfirmation(this, title, message);
+                return result == ConfirmationResult.Yes;
+            };
+
             vm.RequestCaptureAction = (mode) =>
             {
                 var desktop = Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime;

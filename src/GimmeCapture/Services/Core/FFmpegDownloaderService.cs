@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.IO.Compression;
 using System.Net.Http;
+using System.Threading;
 using System.Threading.Tasks;
 using ReactiveUI;
 
@@ -102,7 +103,7 @@ public class FFmpegDownloaderService : ReactiveObject
         }
     }
 
-    public async Task<bool> EnsureFFmpegAsync()
+    public async Task<bool> EnsureFFmpegAsync(CancellationToken ct = default)
     {
         if (IsFFmpegAvailable() && IsFFplayAvailable()) return true;
 
@@ -150,21 +151,21 @@ public class FFmpegDownloaderService : ReactiveObject
                     // Increase timeout for large files
                     client.Timeout = TimeSpan.FromMinutes(10);
                     
-                    using (var response = await client.GetAsync(FfmpegUrl, HttpCompletionOption.ResponseHeadersRead))
+                    using (var response = await client.GetAsync(FfmpegUrl, HttpCompletionOption.ResponseHeadersRead, ct))
                     {
                         response.EnsureSuccessStatusCode();
 
                         var totalBytes = response.Content.Headers.ContentLength ?? -1L;
-                        using (var contentStream = await response.Content.ReadAsStreamAsync())
+                        using (var contentStream = await response.Content.ReadAsStreamAsync(ct))
                         using (var fileStream = new FileStream(zipPath, FileMode.Create, FileAccess.Write, FileShare.None, 8192, true))
                         {
                             var buffer = new byte[8192];
                             long totalRead = 0;
                             int read;
 
-                            while ((read = await contentStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+                            while ((read = await contentStream.ReadAsync(buffer, 0, buffer.Length, ct)) > 0)
                             {
-                                await fileStream.WriteAsync(buffer, 0, read);
+                                await fileStream.WriteAsync(buffer, 0, read, ct);
                                 totalRead += read;
 
                                 if (totalBytes != -1)
@@ -179,10 +180,11 @@ public class FFmpegDownloaderService : ReactiveObject
                 // Extract
                 await Task.Run(() =>
                 {
+                    if (ct.IsCancellationRequested) return;
                     if (Directory.Exists(extractPath)) Directory.Delete(extractPath, true);
                     ZipFile.ExtractToDirectory(zipPath, extractPath);
                     File.Delete(zipPath);
-                });
+                }, ct);
             }
 
             // Move files

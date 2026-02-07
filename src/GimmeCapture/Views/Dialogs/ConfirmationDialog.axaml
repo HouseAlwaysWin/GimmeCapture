@@ -1,7 +1,9 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:services="using:GimmeCapture.Services.Core"
+        xmlns:views="using:GimmeCapture.Views.Dialogs"
         x:Class="GimmeCapture.Views.Dialogs.ConfirmationDialog"
+        x:DataType="views:ConfirmationDialog"
         Title="Confirmation"
         SizeToContent="WidthAndHeight"
         WindowStartupLocation="CenterOwner"
@@ -25,7 +27,7 @@
                         </LinearGradientBrush>
                    </Border.BorderBrush>
                 </Border>
-                <TextBlock Text="{Binding [UnsavedTitle], Source={x:Static services:LocalizationService.Instance}}" 
+                <TextBlock Text="{Binding DialogTitle}" 
                            Foreground="{DynamicResource AccentRedBrush}"
                            FontWeight="Bold"
                            FontSize="18"
@@ -34,7 +36,7 @@
             </Panel>
 
             <StackPanel Grid.Row="1" Spacing="15" Margin="30,20" VerticalAlignment="Center">
-                <TextBlock Text="{Binding [UnsavedMessage], Source={x:Static services:LocalizationService.Instance}}" 
+                <TextBlock Text="{Binding DialogMessage}" 
                            Foreground="White"
                            FontSize="14"
                            TextWrapping="Wrap"

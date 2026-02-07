@@ -406,17 +406,10 @@
                                         </StackPanel>
                                         
                                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="10" Margin="20,0,0,0">
-                                            <Button Content="{Binding [Install], Source={x:Static services:LocalizationService.Instance}}" 
-                                                    Command="{Binding InstallCommand}"
+                                            <Button Content="{Binding ActionButtonText}" 
+                                                    Command="{Binding MainActionCommand}"
                                                     Theme="{StaticResource SmallGothicMetalButton}"
-                                                    Width="80"
-                                                    IsVisible="{Binding !IsInstalled}"/>
-                                            
-                                            <Button Content="{Binding [Remove], Source={x:Static services:LocalizationService.Instance}}" 
-                                                    Command="{Binding RemoveCommand}"
-                                                    Theme="{StaticResource SmallGothicMetalButton}"
-                                                    Width="80"
-                                                    IsVisible="{Binding IsInstalled}"/>
+                                                    Width="80"/>
                                         </StackPanel>
                                     </Grid>
                                 </Border>
