@@ -381,6 +381,51 @@
                 </StackPanel>
             </TabItem>
             
+            <!-- 模組管理 (Modules) -->
+            <TabItem Header="{Binding [TabModules], Source={x:Static services:LocalizationService.Instance}}">
+                <ScrollViewer>
+                    <ItemsControl ItemsSource="{Binding Modules}" Margin="10">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Background="#1A1A1A" BorderBrush="#333333" BorderThickness="1" CornerRadius="4" Margin="0,0,0,10" Padding="15">
+                                    <Grid ColumnDefinitions="*, Auto">
+                                        <StackPanel Grid.Column="0" Spacing="5">
+                                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                                <TextBlock Text="{Binding Name}" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource AccentRedBrush}"/>
+                                                <Border Background="{Binding IsInstalled, Converter={StaticResource StatusToColorConverter}}" CornerRadius="10" Padding="8,2" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding StatusText}" FontSize="10" Foreground="White" FontWeight="Bold"/>
+                                                </Border>
+                                            </StackPanel>
+                                            <TextBlock Text="{Binding Description}" TextWrapping="Wrap" Opacity="0.7" FontSize="12"/>
+                                            
+                                            <!-- Progress Section -->
+                                            <StackPanel IsVisible="{Binding IsProcessing}" Spacing="5" Margin="0,5,0,0">
+                                                <ProgressBar Value="{Binding Progress}" Height="4" Foreground="{DynamicResource AccentRedBrush}" Minimum="0" Maximum="100"/>
+                                                <TextBlock Text="{Binding Progress, StringFormat='{}{0:0}%'}" FontSize="10" HorizontalAlignment="Right"/>
+                                            </StackPanel>
+                                        </StackPanel>
+                                        
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="10" Margin="20,0,0,0">
+                                            <Button Content="{Binding [Install], Source={x:Static services:LocalizationService.Instance}}" 
+                                                    Command="{Binding InstallCommand}"
+                                                    Theme="{StaticResource SmallGothicMetalButton}"
+                                                    Width="80"
+                                                    IsVisible="{Binding !IsInstalled}"/>
+                                            
+                                            <Button Content="{Binding [Remove], Source={x:Static services:LocalizationService.Instance}}" 
+                                                    Command="{Binding RemoveCommand}"
+                                                    Theme="{StaticResource SmallGothicMetalButton}"
+                                                    Width="80"
+                                                    IsVisible="{Binding IsInstalled}"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </TabItem>
+            
             <!-- 關於 (About) -->
             <TabItem Header="{Binding [TabAbout], Source={x:Static services:LocalizationService.Instance}}">
                 <StackPanel Spacing="10" Margin="10" HorizontalAlignment="Center" VerticalAlignment="Center">

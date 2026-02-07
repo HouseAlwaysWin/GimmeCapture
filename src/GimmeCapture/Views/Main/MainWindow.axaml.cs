@@ -198,15 +198,24 @@ public partial class MainWindow : Window
               .ObserveOn(RxApp.MainThreadScheduler)
               .Subscribe(isProcessing => 
               {
-                  if (isProcessing)
+                  // Only show global download window if MainWindow is visible and active
+                  // This prevents double UI when using Floating Windows
+                  if (isProcessing && this.IsVisible && this.WindowState != WindowState.Minimized)
                   {
                       if (_downloadWindow == null)
                       {
-                          _downloadWindow = new ResourceDownloadWindow
+                          try
                           {
-                              DataContext = vm
-                          };
-                          _downloadWindow.Show(this);
+                              _downloadWindow = new ResourceDownloadWindow
+                              {
+                                  DataContext = vm
+                              };
+                              _downloadWindow.Show(this);
+                          }
+                          catch (Exception ex)
+                          {
+                              System.Diagnostics.Debug.WriteLine($"Failed to show download window: {ex}");
+                          }
                       }
                   }
                   else

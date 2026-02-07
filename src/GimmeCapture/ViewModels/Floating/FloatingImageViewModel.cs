@@ -9,6 +9,7 @@ using GimmeCapture.Services.Platforms.Windows;
 
 using System.Linq;
 using System.Reactive.Linq;
+using System.Reactive.Threading.Tasks;
 using GimmeCapture.ViewModels.Main;
 using GimmeCapture.ViewModels.Shared;
 using System;
@@ -468,11 +469,8 @@ public class FloatingImageViewModel : ViewModelBase
         }
     }
 
-    private async Task<bool> EnsureAIResourcesAsync()
+    private async Task<bool> ShowDownloadConfirmationAsync()
     {
-        if (_aiResourceService.AreResourcesReady()) return true;
-
-        // Ask user for confirmation
         var msg = LocalizationService.Instance["AIDownloadConfirm"] ?? "Interactive AI Selection requires additional modules. Download now?";
         bool confirmed = false;
 
@@ -486,25 +484,24 @@ public class FloatingImageViewModel : ViewModelBase
                 confirmed = await GimmeCapture.Views.Dialogs.UpdateDialog.ShowDialog(owner, msg, isUpdateAvailable: true);
             }
         });
+        
+        return confirmed;
+    }
 
-        if (!confirmed) return false;
+    public async Task<bool> EnsureAIResourcesAsync()
+    {
+        // 1. Check if already ready - Fast path
+        if (_aiResourceService.AreResourcesReady()) return true;
 
-        try
-        {
-            // Note: Global MainWindowViewModel will catch AIResourceService.IsDownloading
-            // and show the ResourceDownloadWindow automatically.
-            bool success = await _aiResourceService.EnsureResourcesAsync();
-
-            if (!success)
-            {
-                throw new Exception("Failed to download AI resources: " + _aiResourceService.LastErrorMessage);
-            }
-            return true;
-        }
-        catch (Exception ex)
+        // 2. Check if already downloading (Background)
+        var currentStatus = ResourceQueueService.Instance.GetStatus("AI");
+        if (currentStatus == QueueItemStatus.Pending || currentStatus == QueueItemStatus.Downloading)
         {
              Avalonia.Threading.Dispatcher.UIThread.Post(() => {
-                 var dialogVm = new GothicDialogViewModel { Title = "Download Failed", Message = ex.Message };
+                 var dialogVm = new GothicDialogViewModel { 
+                     Title = "Download in Progress", 
+                     Message = LocalizationService.Instance["ComponentDownloadingProgress"] ?? "Downloading component..." 
+                 };
                  var dialog = new GimmeCapture.Views.Shared.GothicDialog { DataContext = dialogVm };
                  var desktop = Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime;
                  var owner = desktop?.Windows.FirstOrDefault(w => w.DataContext == this) as Avalonia.Controls.Window;
@@ -512,6 +509,18 @@ public class FloatingImageViewModel : ViewModelBase
             });
             return false;
         }
+
+        // 3. Not ready, Not downloading -> Ask for permission
+        var confirmed = await ShowDownloadConfirmationAsync();
+        if (!confirmed) return false;
+
+        // 4. Start Download (Fire and Forget from UI perspective)
+        _ = ResourceQueueService.Instance.EnqueueAsync("AI", async () =>
+        {
+             return await _aiResourceService.EnsureResourcesAsync();
+        });
+
+        return false;
     }
 
     private async Task DownloadAIResourcesAsync()

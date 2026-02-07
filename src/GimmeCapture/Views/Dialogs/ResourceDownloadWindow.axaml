@@ -18,7 +18,7 @@
         Topmost="True"
         CanResize="False">
 
-    <Border Background="{DynamicResource GothicBlackBrush}" 
+    <Border Background="Transparent" 
             BorderThickness="0"
             BoxShadow="0 0 20 2 #900000"
             PointerPressed="OnPointerPressed">

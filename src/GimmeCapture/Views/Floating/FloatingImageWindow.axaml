@@ -317,7 +317,7 @@
                         </StackPanel>
         </Border>
         
-        <Border Grid.Row="0" Grid.RowSpan="3" IsVisible="{Binding IsProcessing}">
+        <Border Grid.Row="0" Grid.RowSpan="3" IsVisible="{Binding IsProcessing}" Background="#80000000">
              <ctl:ProcessingOverlay DataContext="{Binding}"/>
         </Border>
 

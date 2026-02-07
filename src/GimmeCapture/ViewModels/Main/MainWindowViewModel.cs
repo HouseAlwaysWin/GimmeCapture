@@ -7,6 +7,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using GimmeCapture.Models;
 using GimmeCapture.Views.Dialogs;
 using GimmeCapture.Views.Main;
+using System.Collections.ObjectModel;
 using System.Linq;
 using System.Reactive;
 using System.Reactive.Linq;
@@ -14,6 +15,8 @@ using System.IO;
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core;
 using GimmeCapture.Services.Platforms.Windows;
+using System.Windows.Input;
+using DynamicData;
 
 namespace GimmeCapture.ViewModels.Main;
 
@@ -97,6 +100,10 @@ public class MainWindowViewModel : ViewModelBase
     public RecordingService RecordingService { get; }
     public UpdateService UpdateService { get; }
     public AIResourceService AIResourceService { get; }
+    public ResourceQueueService ResourceQueue => ResourceQueueService.Instance;
+    
+    public ObservableCollection<ModuleItem> Modules { get; } = new();
+    
     public string AppVersion => System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0";
 
     // Commands
@@ -130,6 +137,8 @@ public class MainWindowViewModel : ViewModelBase
         RecordingService = new RecordingService(FfmpegDownloader);
         UpdateService = new UpdateService(AppVersion);
         AIResourceService = new AIResourceService(_settingsService);
+        
+        InitializeModules();
         
         // Sync ViewModel with Service using ReactiveUI
         // When Service language changes, notify ViewModel properties to update
@@ -948,5 +957,187 @@ public class MainWindowViewModel : ViewModelBase
         {
             System.Diagnostics.Debug.WriteLine($"Failed to open project URL: {ex.Message}");
         }
+    }
+
+    private void InitializeModules()
+    {
+        Modules.Clear();
+        
+        // FFmpeg Module
+        var ffmpeg = new ModuleItem("FFmpeg", "ModuleFFmpegDescription")
+        {
+            IsInstalled = FfmpegDownloader.IsFFmpegAvailable(),
+            InstallCommand = ReactiveCommand.CreateFromTask(() => InstallModuleAsync("FFmpeg")),
+            RemoveCommand = ReactiveCommand.Create(() => RemoveModule("FFmpeg"))
+        };
+        FfmpegDownloader.WhenAnyValue(x => x.IsDownloading)
+            .Subscribe(isDown => 
+            {
+                ffmpeg.IsProcessing = isDown;
+                if (!isDown) ffmpeg.IsInstalled = FfmpegDownloader.IsFFmpegAvailable();
+            });
+        FfmpegDownloader.WhenAnyValue(x => x.DownloadProgress)
+            .Subscribe(p => ffmpeg.Progress = p);
+            
+        // Subscribe to Queue Status for Pending state
+        ResourceQueue.ObserveStatus("FFmpeg")
+            .ObserveOn(RxApp.MainThreadScheduler)
+            .Subscribe(status => 
+            {
+                ffmpeg.IsPending = status == QueueItemStatus.Pending;
+            });
+
+        // AI Resources Module
+        var ai = new ModuleItem("AI Resources", "ModuleAIDescription")
+        {
+            IsInstalled = AIResourceService.AreResourcesReady(),
+            InstallCommand = ReactiveCommand.CreateFromTask(() => InstallModuleAsync("AI")),
+            RemoveCommand = ReactiveCommand.Create(() => RemoveModule("AI"))
+        };
+        AIResourceService.WhenAnyValue(x => x.IsDownloading)
+            .Subscribe(isDown => 
+            {
+                ai.IsProcessing = isDown;
+                if (!isDown) ai.IsInstalled = AIResourceService.AreResourcesReady();
+            });
+        AIResourceService.WhenAnyValue(x => x.DownloadProgress)
+            .Subscribe(p => ai.Progress = p);
+
+        // Subscribe to Queue Status for Pending state
+        ResourceQueue.ObserveStatus("AI")
+            .ObserveOn(RxApp.MainThreadScheduler)
+            .Subscribe(status => 
+            {
+                ai.IsPending = status == QueueItemStatus.Pending;
+            });
+
+        Modules.Add(ffmpeg);
+        Modules.Add(ai);
+    }
+
+    private async Task InstallModuleAsync(string type)
+    {
+        if (type == "FFmpeg")
+        {
+            await ResourceQueue.EnqueueAsync("FFmpeg", () => FfmpegDownloader.EnsureFFmpegAsync());
+        }
+        else if (type == "AI")
+        {
+            await ResourceQueue.EnqueueAsync("AI", () => AIResourceService.EnsureResourcesAsync());
+        }
+    }
+
+    private void RemoveModule(string type)
+    {
+        if (type == "FFmpeg")
+        {
+            FfmpegDownloader.RemoveFFmpeg();
+        }
+        else if (type == "AI")
+        {
+            AIResourceService.RemoveResources();
+        }
+        
+        // Manual refresh of module status
+        foreach (var m in Modules)
+        {
+            if (m.Name == "FFmpeg") m.IsInstalled = FfmpegDownloader.IsFFmpegAvailable();
+            if (m.Name == "AI Resources") m.IsInstalled = AIResourceService.AreResourcesReady();
+        }
+    }
+
+        public class ModuleItem : ReactiveObject
+    {
+        public string Name { get; }
+        public string DescriptionKey { get; }
+        
+        private string _description = "";
+        public string Description
+        {
+            get => _description;
+            set => this.RaiseAndSetIfChanged(ref _description, value);
+        }
+        
+        private string _statusText = "";
+        public string StatusText
+        {
+            get => _statusText;
+            set => this.RaiseAndSetIfChanged(ref _statusText, value);
+        }
+
+        private bool _isInstalled;
+        public bool IsInstalled
+        {
+            get => _isInstalled;
+            set 
+            {
+                this.RaiseAndSetIfChanged(ref _isInstalled, value);
+                UpdateDescription();
             }
+        }
+
+        private bool _isProcessing;
+        public bool IsProcessing
+        {
+            get => _isProcessing;
+            set 
+            {
+                this.RaiseAndSetIfChanged(ref _isProcessing, value);
+                UpdateDescription();
+            }
+        }
+
+        private bool _isPending;
+        public bool IsPending
+        {
+            get => _isPending;
+            set 
+            {
+                this.RaiseAndSetIfChanged(ref _isPending, value);
+                UpdateDescription();
+            }
+        }
+
+        private double _progress;
+        public double Progress
+        {
+            get => _progress;
+            set => this.RaiseAndSetIfChanged(ref _progress, value);
+        }
+
+        public ICommand InstallCommand { get; init; } = null!;
+        public ICommand RemoveCommand { get; init; } = null!;
+
+        public ModuleItem(string name, string descriptionKey)
+        {
+            Name = name;
+            DescriptionKey = descriptionKey;
+            
+            // Subscribe to language changes to update Description dynamically
+            LocalizationService.Instance.WhenAnyValue(x => x.CurrentLanguage)
+                .Subscribe(_ => UpdateDescription());
+            UpdateDescription();
+        }
+        
+        private void UpdateDescription()
+        {
+            // Update Description and Status Text
+            Description = LocalizationService.Instance[DescriptionKey];
+
+            if (IsPending)
+            {
+                StatusText = LocalizationService.Instance["Pending"];
+            }
+            else if (IsProcessing)
+            {
+                StatusText = LocalizationService.Instance["ComponentDownloadingProgress"];
+            }
+            else
+            {
+                StatusText = IsInstalled 
+                    ? LocalizationService.Instance["Installed"] 
+                    : LocalizationService.Instance["NotInstalled"];
+            }
+        }
+    }
 }

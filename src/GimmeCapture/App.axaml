@@ -35,6 +35,9 @@
             <cv:PenGeometryConverter x:Key="PenGeometryConverter"/>
             <cv:BoolToCrossCursorConverter x:Key="BoolToCrossCursorConverter"/>
             <cv:ThicknessToLeftTopMarginConverter x:Key="ThicknessToLeftTopMarginConverter"/>
+            <cv:StatusToColorConverter x:Key="StatusToColorConverter"/>
+            <cv:StatusToTextConverter x:Key="StatusToTextConverter"/>
+            <cv:LanguageKeyConverter x:Key="LanguageKeyConverter"/>
         </ResourceDictionary>
     </Application.Resources>
 

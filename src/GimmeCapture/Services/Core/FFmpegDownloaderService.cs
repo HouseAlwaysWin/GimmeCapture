@@ -83,11 +83,30 @@ public class FFmpegDownloaderService : ReactiveObject
         return null;
     }
 
+    public void RemoveFFmpeg()
+    {
+        try
+        {
+            if (File.Exists(_ffmpegPath)) File.Delete(_ffmpegPath);
+            var ffprobePath = Path.Combine(_binFolder, "ffprobe.exe");
+            if (File.Exists(ffprobePath)) File.Delete(ffprobePath);
+            var ffplayPath = Path.Combine(_binFolder, "ffplay.exe");
+            if (File.Exists(ffplayPath)) File.Delete(ffplayPath);
+            
+            this.RaisePropertyChanged(nameof(IsFFmpegAvailable));
+            this.RaisePropertyChanged(nameof(IsFFplayAvailable));
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"FFmpeg Removal Failed: {ex.Message}");
+        }
+    }
+
     public async Task<bool> EnsureFFmpegAsync()
     {
         if (IsFFmpegAvailable() && IsFFplayAvailable()) return true;
 
-        if (IsDownloading) return false;
+        if (IsDownloading) return true;
 
         try
         {
@@ -238,10 +257,6 @@ public class FFmpegDownloaderService : ReactiveObject
         {
             System.Diagnostics.Debug.WriteLine($"FFmpeg Download/Install Failed: {ex.Message}");
             DownloadProgress = 0; // Reset progress on failure
-            // Show error to user
-            Avalonia.Threading.Dispatcher.UIThread.Post(() => {
-                 System.Windows.Forms.MessageBox.Show($"下載或安裝失敗: {ex.Message}", "錯誤");
-            });
             return false;
         }
         finally

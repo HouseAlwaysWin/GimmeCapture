@@ -230,7 +230,7 @@ public partial class FloatingImageWindow : Window
         {
             var imageControl = this.FindControl<Image>("PinnedImage");
             
-            if (vm.CurrentTool == FloatingTool.Selection && imageControl != null)
+            if (vm.CurrentTool == FloatingTool.Selection && imageControl != null && !vm.IsProcessing)
             {
                 var pos = e.GetPosition(imageControl);
                 // Only start selecting if click is within image bounds
@@ -247,7 +247,7 @@ public partial class FloatingImageWindow : Window
                 }
             }
             
-            if (vm.IsPointRemovalMode)
+            if (vm.IsPointRemovalMode && !vm.IsProcessing)
             {
                 vm.DiagnosticText = "AI Pressed: Capturing...";
                 _isAIPointing = true;
@@ -257,8 +257,8 @@ public partial class FloatingImageWindow : Window
                 return;
             }
 
-            // Default: Drag preparation (Only if no AI mode/Selection mode)
-            if (vm.CurrentTool == FloatingTool.None)
+            // Default: Drag preparation (Only if no AI mode/Selection mode OR if Processing)
+            if (vm.CurrentTool == FloatingTool.None || vm.IsProcessing)
             {
                 _isMaybeMoving = true;
                 _pointerPressedPoint = this.PointToScreen(pointerPos).ToPoint(1.0);

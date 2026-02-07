@@ -47,14 +47,7 @@ public class SnipWindowViewModel : ViewModelBase
             this.RaiseAndSetIfChanged(ref _isRecordingMode, value);
             
             // Update border color based on mode
-            if (value)
-            {
-                SelectionBorderColor = Color.Parse("#FFD700"); // Gold for Recording
-            }
-            else
-            {
-                SelectionBorderColor = _mainVm?.BorderColor ?? Colors.Red;
-            }
+            SelectionBorderColor = _mainVm?.BorderColor ?? Colors.Red;
             
             this.RaisePropertyChanged(nameof(HideFrameBorder));
             this.RaisePropertyChanged(nameof(HideSelectionDecoration));

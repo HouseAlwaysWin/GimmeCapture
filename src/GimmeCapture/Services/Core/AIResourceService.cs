@@ -83,10 +83,30 @@ public class AIResourceService : ReactiveObject
         return File.Exists(modelPath) && hasSam2 && File.Exists(onnxDll);
     }
 
+    public void RemoveResources()
+    {
+        try
+        {
+            var baseDir = GetAIResourcesPath();
+            var runtimeDir = Path.Combine(baseDir, "runtime");
+            var modelsDir = Path.Combine(baseDir, "models");
+
+            if (Directory.Exists(runtimeDir)) Directory.Delete(runtimeDir, true);
+            if (Directory.Exists(modelsDir)) Directory.Delete(modelsDir, true);
+            
+            this.RaisePropertyChanged(nameof(AreResourcesReady));
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"AI Resource Removal Failed: {ex.Message}");
+            LastErrorMessage = ex.Message;
+        }
+    }
+
     public async Task<bool> EnsureResourcesAsync()
     {
         if (AreResourcesReady()) return true;
-        if (IsDownloading) return false;
+        if (IsDownloading) return true; // Already in progress, caller should wait via Queue if needed
 
         try
         {
