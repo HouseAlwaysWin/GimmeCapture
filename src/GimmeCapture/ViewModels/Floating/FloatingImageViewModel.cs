@@ -353,6 +353,9 @@ public class FloatingImageViewModel : ViewModelBase
         DiagnosticText = "AI: Refining...";
         try
         {
+            IsProcessing = true;
+            ProcessingText = LocalizationService.Instance["ProcessingAI"] ?? "Refining selection...";
+            
             var maskBytes = await _sam2Service.GetMaskAsync(_interactivePoints);
             var iouInfo = _sam2Service.LastIouInfo;
             DiagnosticText = $"AI: ({_interactivePoints.Count} pts) {iouInfo}";
@@ -433,10 +436,16 @@ public class FloatingImageViewModel : ViewModelBase
             System.Diagnostics.Debug.WriteLine($"FloatingVM: RefineMask Error: {ex}");
             DiagnosticText = $"Refine Error: {ex.Message}";
         }
+        finally
+        {
+            IsProcessing = false;
+        }
     }
 
     public async Task HandlePointClickAsync(double x, double y, bool isPositive = true)
     {
+        if (IsProcessing) return;
+        
         // LOG PHYSICAL PIXEL COORDINATES FOR USER VERIFICATION
         System.Diagnostics.Debug.WriteLine($"[AI DEBUG] Click Pixel: ({x:F0}, {y:F0}) Type: {(isPositive ? "Positive" : "Negative")}");
         
