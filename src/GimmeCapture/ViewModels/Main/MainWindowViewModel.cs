@@ -518,6 +518,13 @@ public class MainWindowViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _recordFormat, value);
     }
 
+    private int _recordFPS = 30;
+    public int RecordFPS
+    {
+        get => _recordFPS;
+        set => this.RaiseAndSetIfChanged(ref _recordFPS, value);
+    }
+
     private bool _useFixedRecordPath;
     public bool UseFixedRecordPath
     {
@@ -719,6 +726,7 @@ public class MainWindowViewModel : ViewModelBase
         }
 
         RecordFormat = s.RecordFormat;
+        RecordFPS = s.RecordFPS;
         UseFixedRecordPath = s.UseFixedRecordPath;
         RecordHotkey = s.RecordHotkey;
 
@@ -770,6 +778,7 @@ public class MainWindowViewModel : ViewModelBase
             s.Language = LocalizationService.Instance.CurrentLanguage;
             s.VideoSaveDirectory = VideoSaveDirectory;
             s.RecordFormat = RecordFormat;
+            s.RecordFPS = RecordFPS;
             s.UseFixedRecordPath = UseFixedRecordPath;
             s.HideSnipPinDecoration = HideSnipPinDecoration;
             s.HideSnipPinBorder = HideSnipPinBorder;

@@ -25,6 +25,7 @@ public class RecordingService : ReactiveObject
     private bool _includeCursor = true;
     private PixelPoint _screenOffset;
     private double _visualScaling = 1.0;
+    private int _fps = 30;
     private bool _isFinalizing;
     private double _finalizationProgress;
     // Use local Temp folder in app directory instead of System Temp (usually C:\)
@@ -81,7 +82,7 @@ public class RecordingService : ReactiveObject
     /// Start recording with specified target format for final output.
     /// Recording is done in MKV format internally for fast pause/resume.
     /// </summary>
-    public async Task<bool> StartAsync(Rect region, string outputFile, string targetFormat = "mp4", bool includeCursor = true, PixelPoint screenOffset = default, double visualScaling = 1.0)
+    public async Task<bool> StartAsync(Rect region, string outputFile, string targetFormat = "mp4", bool includeCursor = true, PixelPoint screenOffset = default, double visualScaling = 1.0, int fps = 30)
     {
         if (State != RecordingState.Idle) return false;
         if (!_downloader.IsFFmpegAvailable()) return false;
@@ -92,6 +93,7 @@ public class RecordingService : ReactiveObject
         _includeCursor = includeCursor;
         _screenOffset = screenOffset;
         _visualScaling = visualScaling;
+        _fps = fps;
         _segments.Clear();
 
         // Use a unique temp directory for THIS session to avoid conflicts with zombie processes
@@ -123,7 +125,7 @@ public class RecordingService : ReactiveObject
 
         // Use MKV with zerolatency for instant pause response
         string drawMouse = _includeCursor ? "1" : "0";
-        string args = $"-y -f gdigrab -draw_mouse {drawMouse} -framerate 30 -offset_x {x} -offset_y {y} -video_size {w}x{h} -i desktop " +
+        string args = $"-y -f gdigrab -draw_mouse {drawMouse} -framerate {_fps} -offset_x {x} -offset_y {y} -video_size {w}x{h} -i desktop " +
                       $"-c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p \"{segmentFile}\"";
 
         var startInfo = new ProcessStartInfo
@@ -355,13 +357,13 @@ public class RecordingService : ReactiveObject
                 // ... (GIF logic omitted for brevity, assumes standard ffmpeg conversion)
                 // Existing GIF logic
                 string paletteFile = Path.Combine(_tempDir, "palette.png");
-                string paletteArgs = $"-y -i \"{mergedMkv}\" -vf \"fps=15,scale=640:-1:flags=lanczos,palettegen\" \"{paletteFile}\"";
+                string paletteArgs = $"-y -i \"{mergedMkv}\" -vf \"fps={_fps},palettegen\" \"{paletteFile}\"";
                 var paletteInfo = new ProcessStartInfo { FileName = _downloader.FfmpegExecutablePath, Arguments = paletteArgs, UseShellExecute = false, CreateNoWindow = true };
                 using (var p = Process.Start(paletteInfo)) if (p != null) await p.WaitForExitAsync();
 
                 FinalizationProgress = 60;
 
-                string gifArgs = $"-y -i \"{mergedMkv}\" -i \"{paletteFile}\" -lavfi \"fps=15,scale=640:-1:flags=lanczos[x];[x][1:v]paletteuse\" \"{_outputFile}\"";
+                string gifArgs = $"-y -i \"{mergedMkv}\" -i \"{paletteFile}\" -lavfi \"fps={_fps} [x]; [x][1:v] paletteuse\" \"{_outputFile}\"";
                 var gifInfo = new ProcessStartInfo { FileName = _downloader.FfmpegExecutablePath, Arguments = gifArgs, UseShellExecute = false, CreateNoWindow = true };
                 using (var p = Process.Start(gifInfo)) if (p != null) await p.WaitForExitAsync();
             }
@@ -378,9 +380,9 @@ public class RecordingService : ReactiveObject
 
                 string convertArgs = _targetFormat switch
                 {
-                    "webm" => $"-y -i \"{mergedMkv}\" -c:v libvpx-vp9 -crf 30 -b:v 0 -c:a libopus \"{_outputFile}\"",
-                    "mov" => $"-y -i \"{mergedMkv}\" -c:v libx264 -preset fast -crf 23 -pix_fmt yuv420p -f mov \"{_outputFile}\"",
-                    _ => $"-y -i \"{mergedMkv}\" -c:v libx264 -preset fast -crf 23 -movflags +faststart \"{_outputFile}\""
+                    "webm" => $"-y -i \"{mergedMkv}\" -c:v libvpx-vp9 -crf 25 -b:v 0 -c:a libopus \"{_outputFile}\"",
+                    "mov" => $"-y -i \"{mergedMkv}\" -c:v libx264 -preset fast -crf 20 -pix_fmt yuv420p -f mov \"{_outputFile}\"",
+                    _ => $"-y -i \"{mergedMkv}\" -c:v libx264 -preset fast -crf 20 -movflags +faststart \"{_outputFile}\""
                 };
 
                 var convertInfo = new ProcessStartInfo { FileName = _downloader.FfmpegExecutablePath, Arguments = convertArgs, UseShellExecute = false, CreateNoWindow = true };

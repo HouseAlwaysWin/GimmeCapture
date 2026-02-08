@@ -34,6 +34,7 @@ public class AppSettings
     public bool ShowRecordCursor { get; set; } = true;
     public string VideoSaveDirectory { get; set; } = string.Empty;
     public string RecordFormat { get; set; } = "gif";
+    public int RecordFPS { get; set; } = 30;
     public bool UseFixedRecordPath { get; set; }
     public string TempDirectory { get; set; } = string.Empty;
     

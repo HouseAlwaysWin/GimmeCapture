@@ -954,7 +954,7 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable
         if (region.Width % 2 != 0) region = region.WithWidth(region.Width - 1);
         if (region.Height % 2 != 0) region = region.WithHeight(region.Height - 1);
 
-        if (await _recordingService.StartAsync(region, _currentRecordingPath, format, _mainVm.ShowRecordCursor, ScreenOffset, VisualScaling))
+        if (await _recordingService.StartAsync(SelectionRect, _currentRecordingPath, _mainVm.RecordFormat ?? "mp4", _mainVm.ShowRecordCursor, ScreenOffset, VisualScaling, _mainVm.RecordFPS))
         {
             RecordingDuration = TimeSpan.Zero;
             
@@ -1155,23 +1155,27 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable
                  // Create and show FloatingVideoWindow instead of raw ffplay
                  Avalonia.Threading.Dispatcher.UIThread.Post(() => 
                  {
-                     var videoVm = new FloatingVideoViewModel(
-                         recordingPath, 
-                         ffplayPath.Replace("ffplay.exe", "ffmpeg.exe"), // We need ffmpeg for streaming
-                         w, h, 
-                         logW, logH,
-                         SelectionBorderColor, 
-                         SelectionBorderThickness,
-                         _mainVm?.HideRecordPinDecoration ?? false,
-                         _mainVm?.HideRecordPinBorder ?? false);
-                         
-                     var videoWin = new FloatingVideoWindow
-                     {
-                         DataContext = videoVm,
-                         Width = logW + 20, // Add margin from XAML (logical)
-                         Height = logH + 20,
-                         Position = new PixelPoint(x - (int)(10 * scaling), y - (int)(10 * scaling))
-                     };
+                      var videoVm = new FloatingVideoViewModel(
+                          recordingPath, 
+                          ffplayPath.Replace("ffplay.exe", "ffmpeg.exe"), // We need ffmpeg for streaming
+                          w, h, 
+                          logW, logH,
+                          SelectionBorderColor, 
+                          SelectionBorderThickness,
+                          _mainVm?.HideRecordPinDecoration ?? false,
+                          _mainVm?.HideRecordPinBorder ?? false);
+
+                      // Calculate logic-consistent padding (matches FloatingVideoViewModel.WindowPadding)
+                      double hPad = videoVm.HidePinDecoration ? 10 : Math.Max(10, videoVm.WingWidth);
+                      double vPad = 10;
+                          
+                      var videoWin = new FloatingVideoWindow
+                      {
+                          DataContext = videoVm,
+                          Width = logW + (hPad * 2),
+                          Height = logH + (vPad * 2),
+                          Position = new PixelPoint(x - (int)(hPad * scaling), y - (int)(vPad * scaling))
+                      };
                      
                      videoWin.Show();
                  });

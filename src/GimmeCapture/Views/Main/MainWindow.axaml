@@ -350,7 +350,16 @@
                                 <CheckBox Content="{Binding [HideRecordPinBorder], Source={x:Static services:LocalizationService.Instance}}" IsChecked="{Binding HideRecordPinBorder}" Margin="0,5,0,0"/>
                                 <CheckBox Content="{Binding [HideRecordSelectionDecoration], Source={x:Static services:LocalizationService.Instance}}" IsChecked="{Binding HideRecordSelectionDecoration}" Margin="0,5,0,0"/>
                                 <CheckBox Content="{Binding [HideRecordSelectionBorder], Source={x:Static services:LocalizationService.Instance}}" IsChecked="{Binding HideRecordSelectionBorder}" Margin="0,5,0,0"/>
-                                <CheckBox Content="{Binding [ShowRecordCursor], Source={x:Static services:LocalizationService.Instance}}" IsChecked="{Binding ShowRecordCursor}" Margin="0,5,0,0"/>
+                                    <DockPanel Margin="0,5">
+                                        <TextBlock Text="{Binding [RecordFPS], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Width="100"/>
+                                        <Slider Minimum="5" Maximum="60" Value="{Binding RecordFPS}" 
+                                                TickFrequency="5" IsSnapToTickEnabled="True" 
+                                                HorizontalAlignment="Stretch" Margin="10,0,10,0"/>
+                                        <TextBlock Text="{Binding RecordFPS}" VerticalAlignment="Center" Width="30"/>
+                                    </DockPanel>
+
+                                    <CheckBox Content="{Binding [ShowRecordCursor], Source={x:Static services:LocalizationService.Instance}}" 
+IsChecked="{Binding ShowRecordCursor}" Margin="0,5,0,0"/>
                             </StackPanel>
                         </StackPanel>
                     </StackPanel>
