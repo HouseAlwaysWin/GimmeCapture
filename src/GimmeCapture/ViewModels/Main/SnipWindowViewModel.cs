@@ -1104,12 +1104,13 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable
 
     private async Task PinRecording()
     {
-        if (_isProcessingRecording || _recordingService == null) return;
+        if (IsProcessing || _recordingService == null) return;
         
         // Capture state BEFORE stopping, because StopAsync sets it to Idle
         bool wasRecording = _recordingService.State == RecordingState.Recording;
 
-        _isProcessingRecording = true;
+        IsProcessing = true;
+        ProcessingText = "Finalizing Recording..."; // Optional: Add localization later
         try
         {
             _recordTimer?.Stop();
@@ -1126,6 +1127,7 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable
                   if (string.IsNullOrEmpty(recordingPath) || !System.IO.File.Exists(recordingPath)) 
                   {
                       System.Diagnostics.Debug.WriteLine($"找不到錄影檔案: {recordingPath}");
+                      IsProcessing = false;
                       return;
                   }
 
@@ -1136,7 +1138,7 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable
                   if (string.IsNullOrEmpty(ffplayPath) || !System.IO.File.Exists(ffplayPath))
                   {
                       System.Diagnostics.Debug.WriteLine($"找不到播放器組件 (ffplay.exe)");
-                    _isProcessingRecording = false;
+                      IsProcessing = false;
                       return;
                   }
 
@@ -1177,15 +1179,19 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable
                           Position = new PixelPoint(x - (int)(hPad * scaling), y - (int)(vPad * scaling))
                       };
                      
-                     videoWin.Show();
-                 });
+                      videoWin.Show();
+                  });
                  
                  CloseAction?.Invoke();
             }
         }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error pinning recording: {ex}");
+        }
         finally
         {
-            _isProcessingRecording = false;
+            IsProcessing = false;
         }
     }
 
