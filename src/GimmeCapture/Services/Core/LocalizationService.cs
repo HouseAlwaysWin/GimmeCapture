@@ -304,6 +304,8 @@ namespace GimmeCapture.Services.Core;
                     ["AIScanDensity"] = "AI 掃描網格密度:",
                     ["AIScanMaxObjects"] = "掃描物件數量上限:",
                     ["AIScanSettings"] = "AI 掃描設定",
+                    ["IconScale"] = "圖示縮放:",
+                    ["WingScale"] = "翅膀縮放:",
                 },
                 [Language.Japanese] = new Dictionary<string, string>
                 {
@@ -420,6 +422,8 @@ namespace GimmeCapture.Services.Core;
                     ["AIScanDensity"] = "AI スキャン網格密度:",
                     ["AIScanMaxObjects"] = "最大検出オブジェクト数:",
                     ["AIScanSettings"] = "AI スキャン設定",
+                    ["IconScale"] = "アイコンのサイズ:",
+                    ["WingScale"] = "翼のサイズ:",
                 },
             };
 
