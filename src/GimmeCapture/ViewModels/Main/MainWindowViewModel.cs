@@ -122,6 +122,11 @@ public class MainWindowViewModel : ViewModelBase
     public ReactiveCommand<Unit, Unit> OpenProjectCommand { get; }
     public ReactiveCommand<Unit, Unit> IncreaseWingScaleCommand { get; }
     public ReactiveCommand<Unit, Unit> DecreaseWingScaleCommand { get; }
+
+    public ReactiveCommand<Unit, Unit> IncreaseRecordFPSCommand { get; set; }
+    public ReactiveCommand<Unit, Unit> DecreaseRecordFPSCommand { get; set; }
+
+    public ReactiveCommand<Unit, Unit>? ToggleRecordCommand { get; set; }
     public ReactiveCommand<Unit, Unit> IncreaseCornerIconScaleCommand { get; }
     public ReactiveCommand<Unit, Unit> DecreaseCornerIconScaleCommand { get; }
     public ReactiveCommand<Unit, Unit> PickAIFolderCommand { get; }
@@ -191,6 +196,11 @@ public class MainWindowViewModel : ViewModelBase
         IncreaseCornerIconScaleCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
         DecreaseCornerIconScaleCommand = ReactiveCommand.Create(() => { if (CornerIconScale > 0.4) CornerIconScale = Math.Round(CornerIconScale - 0.1, 1); });
         DecreaseCornerIconScaleCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
+        
+        IncreaseRecordFPSCommand = ReactiveCommand.Create(() => { if (RecordFPS < 60) RecordFPS = Math.Min(60, RecordFPS + 5); });
+        IncreaseRecordFPSCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
+        DecreaseRecordFPSCommand = ReactiveCommand.Create(() => { if (RecordFPS > 5) RecordFPS = Math.Max(5, RecordFPS - 5); });
+        DecreaseRecordFPSCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
         
         PickAIFolderCommand = ReactiveCommand.CreateFromTask(async () => {
             if (PickFolderAction != null)
@@ -736,6 +746,7 @@ public class MainWindowViewModel : ViewModelBase
         // Ensure registry is in sync with setting
         StartupService.SetStartup(s.RunOnStartup);
 
+        // Register initial hotkeys
         // Register initial hotkeys
         Avalonia.Threading.Dispatcher.UIThread.Post(() => {
             HotkeyService.Register(ID_SNIP, SnipHotkey);

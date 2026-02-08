@@ -178,6 +178,10 @@ namespace GimmeCapture.Services.Core;
                     ["AIScanDensity"] = "AI Scan Grid Density:",
                     ["AIScanMaxObjects"] = "Max Detected Objects:",
                     ["AIScanSettings"] = "AI Scan Settings",
+                    ["IconScale"] = "Icon Scale:",
+                    ["WingScale"] = "Wing Scale:",
+                    ["FinalizingRecording"] = "Finalizing Recording...",
+                    ["ProcessingVideo"] = "Processing Video...",
                 },
                 [Language.Chinese] = new Dictionary<string, string>
                 {

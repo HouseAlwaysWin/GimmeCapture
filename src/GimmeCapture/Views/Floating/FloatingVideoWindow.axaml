@@ -56,8 +56,10 @@
                         
                         <!-- Accent Corners (Themed) -->
                         <Grid IsVisible="{Binding HidePinDecoration, Converter={StaticResource BoolInvertConverter}}" Margin="0" ClipToBounds="False">
-                            <Grid ClipToBounds="False">
-                                <Border BorderThickness="{Binding BorderThickness, Converter={StaticResource ThicknessConverter}}" ClipToBounds="False">
+
+        <!-- Decorations Layer -->
+        <!-- Selection Border (Themed) -->
+        <Border BorderThickness="{Binding BorderThickness, Converter={StaticResource ThicknessConverter}}" ClipToBounds="False">
                                     <Border BorderThickness="1" Margin="-1" ClipToBounds="False">
                                         <Grid Name="AccentCornersGrid" ClipToBounds="False">
                                             <!-- Left Inner Corners: Hearts -->
@@ -120,9 +122,8 @@
                                             <ImageBrush Source="/Assets/wing_right.png" Stretch="Uniform" AlignmentX="Left"/>
                                         </Rectangle.OpacityMask>
                                     </Rectangle>
-                                </Grid>
+                                    </Grid>
                         </Grid>
-                    </Grid>
 
                     <!-- Bottom Toolbar -->
                     <Border Grid.Row="1" IsVisible="{Binding ShowToolbar}" 
@@ -158,11 +159,10 @@
                         </MenuItem.Icon>
                     </MenuItem>
                     <Separator/>
-                    <MenuItem Header="{Binding [MenuClose], Source={x:Static services:LocalizationService.Instance}}" Command="{Binding CloseCommand}"/>
                 </ContextMenu>
             </Border.ContextMenu>
         </Border>
-        
+
         <!-- Resize Handles -->
         <Grid Classes="Handle" Name="HandleTopLeft" Cursor="TopLeftCorner" Width="30" Height="30" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="-15"/>
         <Grid Classes="Handle" Name="HandleTopRight" Cursor="TopRightCorner" Width="30" Height="30" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="-15"/>

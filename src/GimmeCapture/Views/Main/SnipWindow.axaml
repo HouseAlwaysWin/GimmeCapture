@@ -358,7 +358,9 @@
                     <ctl:SnipToolbar Name="Toolbar" Canvas.Left="{Binding ToolbarLeft}" Canvas.Top="{Binding ToolbarTop}" IsVisible="{Binding CurrentState, Converter={StaticResource StateToBoolConverter}}"/>
         </Canvas>
         
-        <!-- Processing Overlay - outside Canvas for proper centering -->
-        <ctl:ProcessingOverlay DataContext="{Binding}" IsVisible="{Binding IsProcessing}" IsHitTestVisible="False"/>
+        <!-- Processing Overlay - outside Canvas for proper centering, wrapped in Panel with high ZIndex -->
+        <Panel IsHitTestVisible="False" ZIndex="999">
+             <ctl:ProcessingOverlay DataContext="{Binding}" IsVisible="{Binding IsProcessing}"/>
+        </Panel>
     </Grid>
 </Window>
