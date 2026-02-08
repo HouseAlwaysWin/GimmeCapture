@@ -271,6 +271,7 @@
                                     <CheckBox IsChecked="{Binding HideSnipSelectionDecoration}" Content="{Binding [HideSnipSelectionDecoration], Source={x:Static services:LocalizationService.Instance}}"/>
                                     <CheckBox IsChecked="{Binding HideSnipSelectionBorder}" Content="{Binding [HideSnipSelectionBorder], Source={x:Static services:LocalizationService.Instance}}"/>
                                     <CheckBox IsChecked="{Binding ShowSnipCursor}" Content="{Binding [ShowSnipCursor], Source={x:Static services:LocalizationService.Instance}}"/>
+                                    <CheckBox IsChecked="{Binding ShowAIScanBox}" Content="{Binding [ShowAIScanBox], Source={x:Static services:LocalizationService.Instance}}"/>
                                     
                                     <TextBlock Text="AI 資源路徑 (AI Resources Path)" FontSize="12" Foreground="#888888" Margin="24,10,0,0"/>
                                     <DockPanel Margin="24,0,0,10">

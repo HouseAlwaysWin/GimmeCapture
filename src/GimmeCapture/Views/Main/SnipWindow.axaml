@@ -67,28 +67,63 @@
         <!-- 背景遮罩層 -->
         <Path Fill="Black" Data="{Binding MaskGeometry}" Opacity="{Binding MaskOpacity}" IsHitTestVisible="False"/>
         
-        <!-- Detection Preview Layer -->
-        <Canvas IsHitTestVisible="False">
-            <Rectangle Stroke="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}"
-                       StrokeThickness="2"
-                       StrokeDashArray="4,2"
-                       IsVisible="{Binding !!DetectedRect.Width}"
-                       Width="{Binding DetectedRect.Width}"
-                       Height="{Binding DetectedRect.Height}"
-                       Canvas.Left="{Binding DetectedRect.X}"
-                       Canvas.Top="{Binding DetectedRect.Y}">
-                <Rectangle.Opacity>
-                    <Binding Path="CurrentState">
-                        <Binding.Converter>
-                            <cv:EnumMatchConverter/>
-                        </Binding.Converter>
-                        <Binding.ConverterParameter>
-                            <x:Static Member="vm:SnipState.Detecting"/>
-                        </Binding.ConverterParameter>
-                    </Binding>
-                </Rectangle.Opacity>
-            </Rectangle>
-        </Canvas>
+            <!-- AI Scan Results Layer (Background Candidates) -->
+            <ItemsControl ItemsSource="{Binding WindowRects}" IsHitTestVisible="True"
+                          Width="{Binding ViewportSize.Width}" Height="{Binding ViewportSize.Height}">
+                <ItemsControl.Styles>
+                    <Style Selector="ItemsControl > ContentPresenter" x:DataType="m:VisualRect">
+                        <Setter Property="Canvas.Left" Value="{Binding X}"/>
+                        <Setter Property="Canvas.Top" Value="{Binding Y}"/>
+                    </Style>
+                </ItemsControl.Styles>
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <Canvas />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <!-- Interactive Candidate Box -->
+                        <Border BorderBrush="#40FF0000" 
+                                BorderThickness="1"
+                                Background="Transparent"
+                                Width="{Binding Width}"
+                                Height="{Binding Height}">
+                            <Border.Styles>
+                                <Style Selector="Border:pointerover">
+                                    <Setter Property="BorderBrush" Value="#FFFF0000"/>
+                                    <Setter Property="BorderThickness" Value="3"/>
+                                    <Setter Property="Background" Value="#10FF0000"/>
+                                </Style>
+                            </Border.Styles>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <!-- Detection Preview Layer (Active Selection - Dashed) -->
+            <Canvas IsHitTestVisible="False">
+                <Rectangle Stroke="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}"
+                           StrokeThickness="2"
+                           StrokeDashArray="4,2"
+                           IsVisible="{Binding !!DetectedRect.Width}"
+                           Width="{Binding DetectedRect.Width}"
+                           Height="{Binding DetectedRect.Height}"
+                           Canvas.Left="{Binding DetectedRect.X}"
+                           Canvas.Top="{Binding DetectedRect.Y}">
+                    <Rectangle.Opacity>
+                        <Binding Path="CurrentState">
+                            <Binding.Converter>
+                                <cv:EnumMatchConverter/>
+                            </Binding.Converter>
+                            <Binding.ConverterParameter>
+                                <x:Static Member="vm:SnipState.Detecting"/>
+                            </Binding.ConverterParameter>
+                        </Binding>
+                    </Rectangle.Opacity>
+                </Rectangle>
+            </Canvas>
+
         
         <!-- Annotation Layer -->
         <Canvas IsHitTestVisible="False">

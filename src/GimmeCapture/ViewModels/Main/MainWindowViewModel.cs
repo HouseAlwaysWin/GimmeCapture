@@ -595,6 +595,15 @@ public class MainWindowViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _showSnipCursor, value);
     }
 
+    private bool _showAIScanBox = true;
+    public bool ShowAIScanBox
+    {
+        get => _showAIScanBox;
+        set => this.RaiseAndSetIfChanged(ref _showAIScanBox, value);
+    }
+
+
+
     private bool _showRecordCursor = true;
     public bool ShowRecordCursor
     {
@@ -658,6 +667,7 @@ public class MainWindowViewModel : ViewModelBase
         ShowSnipCursor = s.ShowSnipCursor;
         ShowRecordCursor = s.ShowRecordCursor;
         TempDirectory = s.TempDirectory;
+        ShowAIScanBox = s.ShowAIScanBox;
         if (string.IsNullOrEmpty(TempDirectory))
         {
             TempDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Temp");
@@ -756,6 +766,7 @@ public class MainWindowViewModel : ViewModelBase
             s.ShowSnipCursor = ShowSnipCursor;
             s.ShowRecordCursor = ShowRecordCursor;
             s.TempDirectory = TempDirectory;
+            s.ShowAIScanBox = ShowAIScanBox;
             
             await _settingsService.SaveAsync();
             IsModified = false;
@@ -1040,6 +1051,7 @@ public class MainWindowViewModel : ViewModelBase
             HasVariants = true,
             Variants = new ObservableCollection<string>(Enum.GetNames(typeof(SAM2Variant))),
             SelectedVariant = _settingsService.Settings.SelectedSAM2Variant.ToString(),
+
             IsInstalled = AIResourceService.IsSAM2Ready(_settingsService.Settings.SelectedSAM2Variant),
             InstallCommand = ReactiveCommand.CreateFromTask(() => InstallModuleAsync("SAM2")),
             CancelCommand = ReactiveCommand.CreateFromTask(() => CancelModuleAsync("SAM2")),

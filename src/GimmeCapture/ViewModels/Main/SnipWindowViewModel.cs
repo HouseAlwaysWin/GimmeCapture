@@ -52,6 +52,9 @@ public class SnipWindowViewModel : ViewModelBase
             this.RaisePropertyChanged(nameof(HideFrameBorder));
             this.RaisePropertyChanged(nameof(HideSelectionDecoration));
             this.RaisePropertyChanged(nameof(ModeDisplayName));
+
+            // Debug Test
+            // WindowRects.Add(new VisualRect(100, 100, 200, 200));
         }
     }
 
@@ -139,6 +142,30 @@ public class SnipWindowViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _visualScaling, value);
     }
 
+    public bool ShowAIScanBox
+    {
+        get => _mainVm?.ShowAIScanBox ?? true;
+        set
+        {
+            if (_mainVm != null)
+            {
+                _mainVm.ShowAIScanBox = value;
+                this.RaisePropertyChanged();
+                
+                if (!value)
+                {
+                    WindowRects.Clear();
+                    _scanCts?.Cancel();
+                }
+                else
+                {
+                    // Optionally trigger scan if enabled and not running?
+                    // TriggerAutoScanCommand.Execute(Unit.Default).Subscribe();
+                }
+            }
+        }
+    }
+
     private Rect _detectedRect;
     public Rect DetectedRect
     {
@@ -146,7 +173,7 @@ public class SnipWindowViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _detectedRect, value);
     }
 
-    public List<Rect> WindowRects { get; set; } = new();
+    public System.Collections.ObjectModel.ObservableCollection<VisualRect> WindowRects { get; } = new();
     private readonly WindowDetectionService _detectionService = new();
 
     public void RefreshWindowRects(IntPtr? excludeHWnd = null)
@@ -156,24 +183,28 @@ public class SnipWindowViewModel : ViewModelBase
         
         // Translate to local coordinates based on ScreenOffset (Physical)
         // AND convert to logical coordinates by dividing by VisualScaling
-        WindowRects = globalRects
-            .Select(r => new Rect(
+        var localRects = globalRects
+            .Select(r => new VisualRect(
                 (r.X - ScreenOffset.X) / VisualScaling, 
                 (r.Y - ScreenOffset.Y) / VisualScaling, 
                 r.Width / VisualScaling, 
-                r.Height / VisualScaling))
-            .ToList();
+                r.Height / VisualScaling));
+        
+        WindowRects.Clear();
+        foreach (var rect in localRects)
+        {
+            WindowRects.Add(rect);
+        }
     }
 
     public void UpdateDetectedRect(Point mousePos)
     {
         if (CurrentState != SnipState.Detecting) return;
         
-        var rect = _detectionService.GetRectAtPoint(mousePos, WindowRects);
-        
-        // Simple heuristic: if the detected rect is basically the whole screen, might be the SnipWindow itself
-        // or the desktop. We should be careful about selecting the SnipWindow.
-        // But SnipWindow is newly created, should be fine if we filter by size or something if needed.
+        // Convert VisualRects back to Rects for detection service (or update detection service)
+        // Since VisualRect is simple, we can just project it.
+        var rectList = WindowRects.Select(vr => new Rect(vr.X, vr.Y, vr.Width, vr.Height)).ToList();
+        var rect = _detectionService.GetRectAtPoint(mousePos, rectList);
         
         DetectedRect = rect ?? new Rect(0,0,0,0);
     }
@@ -301,35 +332,39 @@ public class SnipWindowViewModel : ViewModelBase
     private readonly IScreenCaptureService _captureService;
 
     // Commands
-    public ReactiveCommand<Unit, Unit> CopyCommand { get; }
-    public ReactiveCommand<Unit, Unit> SaveCommand { get; }
-    public ReactiveCommand<Unit, Unit> PinCommand { get; }
-    public ReactiveCommand<Unit, Unit> CloseCommand { get; }
-    public ReactiveCommand<Unit, Unit> ToggleModeCommand { get; }
-    public ReactiveCommand<bool, Unit> SetCaptureModeCommand { get; }
-    public ReactiveCommand<Unit, Unit> StartRecordingCommand { get; }
-    public ReactiveCommand<Unit, Unit> PauseRecordingCommand { get; }
-    public ReactiveCommand<Unit, Unit> StopRecordingCommand { get; }
-    public ReactiveCommand<Unit, Unit> CopyRecordingCommand { get; }
-    public ReactiveCommand<AnnotationType, Unit> SelectToolCommand { get; }
-    public ReactiveCommand<string, Unit> ToggleToolGroupCommand { get; }
-    public ReactiveCommand<Color, Unit> ChangeColorCommand { get; }
-    public ReactiveCommand<Unit, Unit> UndoCommand { get; }
-    public ReactiveCommand<Unit, Unit> RedoCommand { get; }
-    public ReactiveCommand<Unit, Unit> ClearCommand { get; }
-    public ReactiveCommand<Unit, Unit> RemoveBackgroundCommand { get; }
-    public ReactiveCommand<Unit, Unit> IncreaseThicknessCommand { get; }
-    public ReactiveCommand<Unit, Unit> DecreaseThicknessCommand { get; }
-    public ReactiveCommand<Unit, Unit> IncreaseFontSizeCommand { get; }
-    public ReactiveCommand<Unit, Unit> DecreaseFontSizeCommand { get; }
-    public ReactiveCommand<Unit, Unit> ApplyHexColorCommand { get; }
-    public ReactiveCommand<Unit, Unit> ChangeLanguageCommand { get; }
-    public ReactiveCommand<Unit, Unit> IncreaseCornerIconScaleCommand { get; }
-    public ReactiveCommand<Unit, Unit> DecreaseCornerIconScaleCommand { get; }
-    public ReactiveCommand<Unit, bool> ToggleBoldCommand { get; }
-    public ReactiveCommand<Unit, bool> ToggleItalicCommand { get; }
-    public ReactiveCommand<Unit, Unit> IncreaseWingScaleCommand { get; }
-    public ReactiveCommand<Unit, Unit> DecreaseWingScaleCommand { get; }
+    public ReactiveCommand<Unit, Unit> CopyCommand { get; set; }
+    public ReactiveCommand<Unit, Unit> SaveCommand { get; set; }
+    public ReactiveCommand<Unit, Unit> PinCommand { get; set; }
+    public ReactiveCommand<Unit, Unit> CloseCommand { get; set; }
+    public ReactiveCommand<Unit, Unit> ToggleModeCommand { get; set; }
+    public ReactiveCommand<bool, Unit> SetCaptureModeCommand { get; set; }
+    public ReactiveCommand<Unit, Unit> StartRecordingCommand { get; set; }
+    public ReactiveCommand<Unit, Unit> PauseRecordingCommand { get; set; }
+    public ReactiveCommand<Unit, Unit> StopRecordingCommand { get; set; }
+    public ReactiveCommand<Unit, Unit> CopyRecordingCommand { get; set; }
+    public ReactiveCommand<AnnotationType, Unit> SelectToolCommand { get; set; }
+    public ReactiveCommand<string, Unit> ToggleToolGroupCommand { get; set; }
+    public ReactiveCommand<Color, Unit> ChangeColorCommand { get; set; }
+    public ReactiveCommand<Unit, Unit> UndoCommand { get; set; }
+    public ReactiveCommand<Unit, Unit> RedoCommand { get; set; }
+    public ReactiveCommand<Unit, Unit> ClearCommand { get; set; }
+    public ReactiveCommand<Unit, Unit> RemoveBackgroundCommand { get; set; }
+    public ReactiveCommand<Unit, Unit> IncreaseThicknessCommand { get; set; }
+    public ReactiveCommand<Unit, Unit> DecreaseThicknessCommand { get; set; }
+    public ReactiveCommand<Unit, Unit> IncreaseFontSizeCommand { get; set; }
+    public ReactiveCommand<Unit, Unit> DecreaseFontSizeCommand { get; set; }
+    public ReactiveCommand<Unit, Unit> ApplyHexColorCommand { get; set; }
+    public ReactiveCommand<Unit, Unit> ChangeLanguageCommand { get; set; }
+    // These were duplicated, ensuring only one definition exists
+    public ReactiveCommand<Unit, Unit> ToggleBoldCommand { get; set; }
+    public ReactiveCommand<Unit, Unit> ToggleItalicCommand { get; set; }
+    public ReactiveCommand<Unit, Unit> IncreaseWingScaleCommand { get; set; }
+    public ReactiveCommand<Unit, Unit> DecreaseWingScaleCommand { get; set; }
+    public ReactiveCommand<Unit, Unit> IncreaseCornerIconScaleCommand { get; set; }
+    public ReactiveCommand<Unit, Unit> DecreaseCornerIconScaleCommand { get; set; }
+    public ReactiveCommand<Unit, Unit> AIScanCommand { get; set; }
+    public ReactiveCommand<Unit, Unit> TriggerAutoScanCommand { get; set; }
+    public ReactiveCommand<Unit, Unit> ToggleAIScanBoxCommand { get; set; }
 
     private readonly System.Collections.Generic.List<Annotation> _redoStack = new();
     private bool _isUndoingOrRedoing = false;
@@ -721,7 +756,20 @@ public class SnipWindowViewModel : ViewModelBase
                 _redoStack.Clear();
             }
         };
-
+        
+        ToggleToolGroupCommand = ReactiveCommand.Create<string>(ToggleToolGroup);
+        TriggerAutoScanCommand = ReactiveCommand.CreateFromTask(RunAIScanAsync);
+        ToggleAIScanBoxCommand = ReactiveCommand.Create(() => 
+        {
+             ShowAIScanBox = !ShowAIScanBox;
+             // Toggle visibility immediately by refreshing or re-filtering if needed
+             // For now, simpler approach: if disabled, clear rects. If enabled, user needs to re-scan.
+             if (!ShowAIScanBox)
+             {
+                 WindowRects.Clear();
+             }
+        });
+        
         SelectToolCommand = ReactiveCommand.Create<AnnotationType>(t => {
             if (CurrentTool == t)
             {
@@ -786,10 +834,23 @@ public class SnipWindowViewModel : ViewModelBase
 
         ChangeLanguageCommand = ReactiveCommand.Create(() => LocalizationService.Instance.CycleLanguage());
         ChangeLanguageCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
-        ToggleBoldCommand = ReactiveCommand.Create<Unit, bool>(_ => IsBold = !IsBold);
+        
+        ToggleBoldCommand = ReactiveCommand.Create(() => 
+        {
+            IsBold = !IsBold;
+            return Unit.Default;
+        });
         ToggleBoldCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
-        ToggleItalicCommand = ReactiveCommand.Create<Unit, bool>(_ => IsItalic = !IsItalic);
+        
+        ToggleItalicCommand = ReactiveCommand.Create(() => 
+        {
+            IsItalic = !IsItalic;
+            return Unit.Default;
+        });
         ToggleItalicCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
+
+
+
 
         IncreaseWingScaleCommand = ReactiveCommand.Create(() => { if (WingScale < 3.0) WingScale = Math.Round(WingScale + 0.1, 1); });
         IncreaseWingScaleCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
@@ -1247,14 +1308,18 @@ public class SnipWindowViewModel : ViewModelBase
         }
     }
 
-    private void Close() { CloseAction?.Invoke(); }
+    private void Close() 
+    { 
+        _scanCts?.Cancel();
+        CloseAction?.Invoke(); 
+    }
     
     public Action? CloseAction { get; set; }
     public Action? HideAction { get; set; }
     public Func<Task<string?>>? PickSaveFileAction { get; set; }
     public System.Action<Avalonia.Media.Imaging.Bitmap, Rect, Color, double, bool>? OpenPinWindowAction { get; set; }
 
-    public ReactiveCommand<Unit, Unit> AIScanCommand { get; private set; } = null!;
+    private System.Threading.CancellationTokenSource? _scanCts;
 
     private async Task RunAIScanAsync()
     {
@@ -1263,6 +1328,11 @@ public class SnipWindowViewModel : ViewModelBase
             Console.WriteLine("[AI Scan] ABORT: _mainVm is null");
             return;
         }
+
+        // Cancel previous scan if any
+        _scanCts?.Cancel();
+        _scanCts = new System.Threading.CancellationTokenSource();
+        var token = _scanCts.Token;
 
         IsProcessing = true;
         ProcessingText = "AI Scanning...";
@@ -1280,10 +1350,12 @@ public class SnipWindowViewModel : ViewModelBase
                 return;
             }
 
+            token.ThrowIfCancellationRequested();
+
             // 1. Capture full screen for SAM2 encoding
             var originalOpacity = MaskOpacity;
             MaskOpacity = 0;
-            await Task.Delay(100); // Let mask hide
+            await Task.Delay(100, token); // Let mask hide
 
             var regionToCapture = new Rect(0, 0, ViewportSize.Width, ViewportSize.Height);
             Console.WriteLine($"[AI Scan] Capturing region: {regionToCapture}");
@@ -1299,12 +1371,16 @@ public class SnipWindowViewModel : ViewModelBase
             }
             
             Console.WriteLine($"[AI Scan] Captured bitmap: {skBitmap.Width}x{skBitmap.Height}");
+            
+            token.ThrowIfCancellationRequested();
 
             // 2. Encode image to PNG bytes for SAM2
             using var image = SkiaSharp.SKImage.FromBitmap(skBitmap);
             using var data = image.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
             var imageBytes = data.ToArray();
             Console.WriteLine($"[AI Scan] Encoded PNG: {imageBytes.Length} bytes");
+
+            token.ThrowIfCancellationRequested();
 
             // 3. Initialize SAM2 and run scan
             var sam2 = new SAM2Service(_mainVm.AIResourceService, _mainVm.AppSettingsService);
@@ -1314,26 +1390,63 @@ public class SnipWindowViewModel : ViewModelBase
             await sam2.SetImageAsync(imageBytes);
             Console.WriteLine("[AI Scan] Image set. Running AutoDetect...");
 
-            var rects = await sam2.AutoDetectObjectsAsync(16); // Grid Density 16 = 225 points
+            token.ThrowIfCancellationRequested();
+
+            var rects = await sam2.AutoDetectObjectsAsync(12, token); // Grid Density 12 = 144 points (Faster)
             sam2.Dispose();
             
             Console.WriteLine($"[AI Scan] AutoDetect returned {rects.Count} rects");
 
+            token.ThrowIfCancellationRequested();
+
             // 4. Add detected rects to WindowRects
             if (rects.Any())
             {
-                foreach (var r in rects)
+                // Only add to WindowRects (visual red boxes) if the setting is enabled
+                if (_mainVm.ShowAIScanBox)
                 {
-                    WindowRects.Add(r);
-                    Console.WriteLine($"[AI Scan] Added rect: {r}");
+                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                    {
+                        if (token.IsCancellationRequested) return;
+
+                        int addedCount = 0;
+                        double scale = VisualScaling > 0 ? VisualScaling : 1.0;
+                        
+                        foreach (var r in rects)
+                        {
+                             if (token.IsCancellationRequested) break;
+
+                            // Filter small objects (e.g. < 50x50 = 2500 area)
+                            double logicalWidth = r.Width / scale;
+                            double logicalHeight = r.Height / scale;
+                            double area = logicalWidth * logicalHeight;
+                            double viewportArea = ViewportSize.Width * ViewportSize.Height;
+                            
+                            // Filter tiny objects AND full-screen objects (> 95% of screen)
+                            if (area > 2500 && area < (viewportArea * 0.95))
+                            {
+                                // Convert to logical coordinates for display
+                                var logicalRect = new Rect(r.X / scale, r.Y / scale, logicalWidth, logicalHeight);
+                                WindowRects.Add(new VisualRect(logicalRect));
+                                addedCount++;
+                            }
+                        }
+                        Console.WriteLine($"[AI Scan] Complete: {addedCount} objects added (filtered from {rects.Count})");
+                    });
                 }
-                
-                Console.WriteLine($"[AI Scan] Complete: {rects.Count} objects added");
+                else
+                {
+                     Console.WriteLine($"[AI Scan] Complete: {rects.Count} objects detected (Hidden by setting)");
+                }
             }
             else
             {
                 Console.WriteLine("[AI Scan] No objects detected");
             }
+        }
+        catch (OperationCanceledException)
+        {
+             Console.WriteLine("[AI Scan] CANCELLED");
         }
         catch (Exception ex)
         {
@@ -1344,6 +1457,8 @@ public class SnipWindowViewModel : ViewModelBase
         {
             IsProcessing = false;
             Console.WriteLine("[AI Scan] Finished");
+            _scanCts?.Dispose();
+            _scanCts = null;
         }
     }
 }

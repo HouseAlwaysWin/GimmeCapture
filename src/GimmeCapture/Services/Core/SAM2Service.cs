@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Threading;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
 using SkiaSharp;
@@ -149,7 +150,7 @@ public class SAM2Service : IDisposable
         });
     }
 
-    public async Task<List<Avalonia.Rect>> AutoDetectObjectsAsync(int gridDensity = 32)
+    public async Task<List<Avalonia.Rect>> AutoDetectObjectsAsync(int gridDensity = 32, CancellationToken cancellationToken = default)
     {
         if (!_isInitialized || _decoderSession == null || _imageEmbeddings == null) return new List<Avalonia.Rect>();
 
@@ -159,7 +160,8 @@ public class SAM2Service : IDisposable
 
             // 1. Generate Grid Points (use lower density to avoid too many inference calls)
             var points = new List<(float X, float Y)>();
-            int effectiveDensity = Math.Min(gridDensity, 8); // Limit to 8 = 49 points max for performance
+            // Limit to 32 = 1024 points max for maximum coverage of small icons
+            int effectiveDensity = Math.Min(gridDensity, 32);
             for (int r = 1; r < effectiveDensity; r++)
             {
                 for (int c = 1; c < effectiveDensity; c++)
@@ -177,6 +179,8 @@ public class SAM2Service : IDisposable
             int processedCount = 0;
             foreach (var pt in points)
             {
+                if (cancellationToken.IsCancellationRequested) break;
+                
                 try
                 {
                     // Create batch=1 tensors
@@ -266,7 +270,7 @@ public class SAM2Service : IDisposable
                             if (iouOutput[0, m] > bestIou) { bestIou = iouOutput[0, m]; bestM = m; }
                         }
 
-                        if (bestIou >= 0.7f) // Accept moderately confident masks
+                        if (bestIou >= 0.60f) // Lower threshold to catch smaller/less confident objects
                         {
                             // Extract bounding box from mask
                             float minX = mw, minY = mh, maxX = 0, maxY = 0;
@@ -292,8 +296,8 @@ public class SAM2Service : IDisposable
                                     (maxX - minX) / mw * _originalWidth,
                                     (maxY - minY) / mh * _originalHeight);
 
-                                // Filter noise
-                                if (rect.Width > 15 && rect.Height > 15 &&
+                                // Filter noise - reduced min size to 10px for small icons
+                                if (rect.Width > 10 && rect.Height > 10 &&
                                     rect.Width < _originalWidth * 0.95 && rect.Height < _originalHeight * 0.95)
                                 {
                                     if (!results.Any(existing => IoU(existing, rect) > 0.5f))
