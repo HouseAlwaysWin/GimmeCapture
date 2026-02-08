@@ -129,14 +129,19 @@ public class SAM2Service : IDisposable
             _originalWidth = original.Width;
             _originalHeight = original.Height;
 
-            // SAM2 CRITICAL: Use Full 1024x1024 STRETCH (No aspect ratio padding)
-
-            var inputTensor = new DenseTensor<float>(new[] { 1, 3, 1024, 1024 });
+            var inputMetaData = _encoderSession.InputMetadata;
+            var inputNames = inputMetaData.Keys.ToList();
+            string inputName = inputNames.FirstOrDefault(n => n == "image" || n == "pixel_values") ?? inputNames.FirstOrDefault() ?? "image";
             
+            var expectedDims = inputMetaData[inputName].Dimensions.ToArray();
+            bool is5D = expectedDims.Length == 5;
+            int bufferSize = 3 * 1024 * 1024;
+            float[] buffer = new float[bufferSize];
+
             // Optimization: Resize using SkiaSharp once
             using var resized = original.Resize(new SKImageInfo(1024, 1024), new SKSamplingOptions(SKFilterMode.Linear));
             
-            // Optimization: Fast pixel access using Pointer
+            // Optimization: Fast parallelized pixel access
             if (resized.ColorType == SKColorType.Bgra8888 || resized.ColorType == SKColorType.Rgba8888)
             {
                 unsafe
@@ -144,14 +149,18 @@ public class SAM2Service : IDisposable
                     byte* ptr = (byte*)resized.GetPixels().ToPointer();
                     int rowBytes = resized.RowBytes;
                     bool isBgra = resized.ColorType == SKColorType.Bgra8888;
+                    float inv255 = 1.0f / 255.0f;
 
-                    for (int y = 0; y < 1024; y++)
+                    // Parallel processing for all 1024 rows
+                    Parallel.For(0, 1024, y =>
                     {
                         byte* row = ptr + (y * rowBytes);
+                        int blueOffset = y * 1024;
+                        int greenOffset = blueOffset + (1024 * 1024);
+                        int redOffset = greenOffset + (1024 * 1024);
+
                         for (int x = 0; x < 1024; x++)
                         {
-                            // Bgra8888: B=0, G=1, R=2, A=3
-                            // Rgba8888: R=0, G=1, B=2, A=3
                             byte b, g, r;
                             if (isBgra)
                             {
@@ -166,51 +175,39 @@ public class SAM2Service : IDisposable
                                 b = row[x * 4 + 2];
                             }
 
-                            // SAM2 CRITICAL FIX: [B, G, R] Order + 0-1 Normalization
-                            inputTensor[0, 0, y, x] = (float)(b / 255.0);
-                            inputTensor[0, 1, y, x] = (float)(g / 255.0);
-                            inputTensor[0, 2, y, x] = (float)(r / 255.0);
+                            // SAM2 Order: [B, G, R]
+                            buffer[blueOffset + x] = b * inv255;
+                            buffer[greenOffset + x] = g * inv255;
+                            buffer[redOffset + x] = r * inv255;
                         }
-                    }
+                    });
                 }
             }
             else
             {
-                // Fallback for other color types (rare)
-                for (int y = 0; y < 1024; y++)
+                // Fallback for non-8888 (Rare)
+                float inv255 = 1.0f / 255.0f;
+                Parallel.For(0, 1024, y =>
                 {
+                    int blueOffset = y * 1024;
+                    int greenOffset = blueOffset + (1024 * 1024);
+                    int redOffset = greenOffset + (1024 * 1024);
                     for (int x = 0; x < 1024; x++)
                     {
                         var color = resized.GetPixel(x, y);
-                        inputTensor[0, 0, y, x] = (float)(color.Blue / 255.0);
-                        inputTensor[0, 1, y, x] = (float)(color.Green / 255.0);
-                        inputTensor[0, 2, y, x] = (float)(color.Red / 255.0);
+                        buffer[blueOffset + x] = color.Blue * inv255;
+                        buffer[greenOffset + x] = color.Green * inv255;
+                        buffer[redOffset + x] = color.Red * inv255;
                     }
-                }
+                });
             }
 
-            var inputMetaData = _encoderSession.InputMetadata;
-            var inputNames = inputMetaData.Keys.ToList();
-            string inputName = inputNames.FirstOrDefault(n => n == "image" || n == "pixel_values") ?? inputNames.FirstOrDefault() ?? "image";
-            
-            var expectedDims = inputMetaData[inputName].Dimensions.ToArray();
-            var expectedShape = string.Join("x", expectedDims);
-            System.Diagnostics.Debug.WriteLine($"SAM2 Encoder: Expected={expectedShape}, Providing={string.Join("x", inputTensor.Dimensions.ToArray())}");
+            // Zero-copy tensor creation
+            var inputTensor = is5D 
+                ? new DenseTensor<float>(buffer, new[] { 1, 1, 3, 1024, 1024 })
+                : new DenseTensor<float>(buffer, new[] { 1, 3, 1024, 1024 });
 
-            // AUTO-RESHAPE: Only if model EXPLICITLY expects 5D [B, F, C, H, W]
-            NamedOnnxValue inputVal;
-            if (expectedDims.Length == 5 && inputTensor.Dimensions.Length == 4)
-            {
-                var reshaped = new DenseTensor<float>(inputTensor.ToArray(), new[] { 1, 1, 3, 1024, 1024 });
-                inputVal = NamedOnnxValue.CreateFromTensor(inputName, reshaped);
-                System.Diagnostics.Debug.WriteLine($"[AI SHAPE] Reshaping 4D -> 5D based on Metadata");
-            }
-            else
-            {
-                inputVal = NamedOnnxValue.CreateFromTensor(inputName, inputTensor);
-            }
-
-            var inputs = new List<NamedOnnxValue> { inputVal };
+            var inputs = new List<NamedOnnxValue> { NamedOnnxValue.CreateFromTensor(inputName, inputTensor) };
             using var results = _encoderSession.Run(inputs);
             
             var outputNames = results.Select(r => r.Name).ToList();
