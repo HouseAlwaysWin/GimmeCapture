@@ -24,10 +24,7 @@ public class SAM2Service : IDisposable
     
     private int _originalWidth;
     private int _originalHeight;
-    private int _lastNewW;
-    private int _lastNewH;
     private string _lastIouInfo = "";
-    private DenseTensor<float>? _lowResMask;
     private int _buildRev = 22; 
 
     public string LastIouInfo => _lastIouInfo;
@@ -61,42 +58,134 @@ public class SAM2Service : IDisposable
         if (_encoderSession == null || _decoderSession == null)
             throw new Exception($"SAM2 models for {variant} failed to load from cache.");
 
+        // New: Warmup models to avoid first-run lag (kernels initialization, etc)
+        await WarmupAsync();
+
         _isInitialized = true;
     }
 
+    public async Task WarmupAsync()
+    {
+        if (_encoderSession == null || _decoderSession == null) return;
+
+        System.Diagnostics.Debug.WriteLine("[AI] Warming up SAM2 models...");
+        await Task.Run(() =>
+        {
+            try
+            {
+                // Encoder Warmup
+                var encoderInput = new DenseTensor<float>(new[] { 1, 3, 1024, 1024 });
+                var encInputs = new List<NamedOnnxValue> { NamedOnnxValue.CreateFromTensor("image", encoderInput) };
+                
+                // Note: Models might have different input names, but InitializeAsync handles finding them
+                // Here we just use a generic set to trigger kernel loading for typical shapes
+                using var encResults = _encoderSession.Run(encInputs);
+
+                // Decoder Warmup (Requires mock embeddings and points)
+                var decInputMetaData = _decoderSession.InputMetadata;
+                var decInputNames = decInputMetaData.Keys.ToList();
+                var decInputs = new List<NamedOnnxValue>();
+
+                void AddMock(string[] aliases, int[] dims)
+                {
+                    var name = decInputNames.FirstOrDefault(n => aliases.Any(a => n == a || n.Contains(a)));
+                    if (name == null) return;
+                    decInputs.Add(NamedOnnxValue.CreateFromTensor(name, new DenseTensor<float>(dims)));
+                }
+
+                AddMock(new[] { "image_embeddings" }, new[] { 1, 256, 64, 64 });
+                AddMock(new[] { "high_res_feats_0" }, new[] { 1, 32, 256, 256 });
+                AddMock(new[] { "high_res_feats_1" }, new[] { 1, 64, 128, 128 });
+                AddMock(new[] { "point_coords" }, new[] { 1, 1, 2 });
+                AddMock(new[] { "point_labels" }, new[] { 1, 1 });
+                AddMock(new[] { "mask_input" }, new[] { 1, 1, 256, 256 });
+                AddMock(new[] { "has_mask_input" }, new[] { 1 });
+                AddMock(new[] { "orig_im_size" }, new[] { 2 });
+
+                using var decResults = _decoderSession.Run(decInputs);
+                System.Diagnostics.Debug.WriteLine("[AI] SAM2 Warmup complete.");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[AI] Warmup Warning (Non-fatal): {ex.Message}");
+            }
+        });
+    }
+
     public async Task SetImageAsync(byte[] imageBytes)
+    {
+        using var original = SKBitmap.Decode(imageBytes);
+        if (original == null) return;
+        await SetImageAsync(original);
+    }
+
+    public async Task SetImageAsync(SKBitmap original)
     {
         if (!_isInitialized) await InitializeAsync();
         if (_encoderSession == null) return;
 
         await Task.Run(() =>
         {
-            using var original = SKBitmap.Decode(imageBytes);
-            if (original == null) return;
-            
             _originalWidth = original.Width;
             _originalHeight = original.Height;
 
-            float scale = 1024f / Math.Max(_originalWidth, _originalHeight);
-            _lastNewW = (int)Math.Round(_originalWidth * scale);
-            _lastNewH = (int)Math.Round(_originalHeight * scale);
-
             // SAM2 CRITICAL: Use Full 1024x1024 STRETCH (No aspect ratio padding)
-            _lastNewW = 1024;
-            _lastNewH = 1024;
 
             var inputTensor = new DenseTensor<float>(new[] { 1, 3, 1024, 1024 });
+            
+            // Optimization: Resize using SkiaSharp once
             using var resized = original.Resize(new SKImageInfo(1024, 1024), new SKSamplingOptions(SKFilterMode.Linear));
             
-            for (int y = 0; y < 1024; y++)
+            // Optimization: Fast pixel access using Pointer
+            if (resized.ColorType == SKColorType.Bgra8888 || resized.ColorType == SKColorType.Rgba8888)
             {
-                for (int x = 0; x < 1024; x++)
+                unsafe
                 {
-                    var color = resized.GetPixel(x, y);
-                    // SAM2 CRITICAL FIX: Switch to BGR [B, G, R] Channel Order + 0-1 Normalization
-                    inputTensor[0, 0, y, x] = (float)(color.Blue / 255.0); 
-                    inputTensor[0, 1, y, x] = (float)(color.Green / 255.0);
-                    inputTensor[0, 2, y, x] = (float)(color.Red / 255.0);
+                    byte* ptr = (byte*)resized.GetPixels().ToPointer();
+                    int rowBytes = resized.RowBytes;
+                    bool isBgra = resized.ColorType == SKColorType.Bgra8888;
+
+                    for (int y = 0; y < 1024; y++)
+                    {
+                        byte* row = ptr + (y * rowBytes);
+                        for (int x = 0; x < 1024; x++)
+                        {
+                            // Bgra8888: B=0, G=1, R=2, A=3
+                            // Rgba8888: R=0, G=1, B=2, A=3
+                            byte b, g, r;
+                            if (isBgra)
+                            {
+                                b = row[x * 4 + 0];
+                                g = row[x * 4 + 1];
+                                r = row[x * 4 + 2];
+                            }
+                            else
+                            {
+                                r = row[x * 4 + 0];
+                                g = row[x * 4 + 1];
+                                b = row[x * 4 + 2];
+                            }
+
+                            // SAM2 CRITICAL FIX: [B, G, R] Order + 0-1 Normalization
+                            inputTensor[0, 0, y, x] = (float)(b / 255.0);
+                            inputTensor[0, 1, y, x] = (float)(g / 255.0);
+                            inputTensor[0, 2, y, x] = (float)(r / 255.0);
+                        }
+                    }
+                }
+            }
+            else
+            {
+                // Fallback for other color types (rare)
+                for (int y = 0; y < 1024; y++)
+                {
+                    for (int x = 0; x < 1024; x++)
+                    {
+                        var color = resized.GetPixel(x, y);
+                        inputTensor[0, 0, y, x] = (float)(color.Blue / 255.0);
+                        inputTensor[0, 1, y, x] = (float)(color.Green / 255.0);
+                        inputTensor[0, 2, y, x] = (float)(color.Red / 255.0);
+                    }
                 }
             }
 
@@ -140,7 +229,6 @@ public class SAM2Service : IDisposable
             _highResFeat1 = FindResult<Tensor<float>>(new[] { "high_res_feats_1", "feat_1", "high_res_feat_1" })?.ToDenseTensor()
                 ?? throw new Exception($"Encoder Error: Missing feat_1. Got: {string.Join(", ", outputNames)}");
             
-            _lowResMask = null;
         });
     }
 
@@ -366,9 +454,9 @@ public class SAM2Service : IDisposable
                 System.Diagnostics.Debug.WriteLine($"[AI MATH] Click({p.X:F0},{p.Y:F0}) -> AI_StretchGrid({aiX:F0},{aiY:F0}) Size=(1024x1024) BGR=1 Normal=0-1");
             }
 
-            var maskInput = _lowResMask ?? new DenseTensor<float>(new[] { 1, 1, 256, 256 });
+            var maskInput = new DenseTensor<float>(new[] { 1, 1, 256, 256 });
             var hasMaskInput = new DenseTensor<float>(new[] { 1 });
-            hasMaskInput[0] = _lowResMask != null ? 1f : 0f;
+            hasMaskInput[0] = 0f;
 
             var decInputMetaData = _decoderSession.InputMetadata;
             var decInputNames = decInputMetaData.Keys.ToList();
@@ -519,7 +607,6 @@ public class SAM2Service : IDisposable
             System.Diagnostics.Debug.WriteLine($"[AI FINAL] Mask {bestIdx}: Min={finalMinVal:F1} Max={finalMaxVal:F1} Thresh={finalThreshold} Inv={invertMask}");
 
             _lastIouInfo = $"REV:{_buildRev} {invTag}{bestPointStats} | D={bestDensity:F1}";
-            if (bestDensity > 0.95f) ResetMaskInput();
 
             // Extract result & RESIZE BACK TO ORIGINAL (Not 1024)
             using var maskFull = new SKBitmap(mw, mh, SKColorType.Gray8, SKAlphaType.Opaque);
@@ -553,7 +640,6 @@ public class SAM2Service : IDisposable
         return areaI / (areaA + areaB - areaI);
     }
 
-    public void ResetMaskInput() => _lowResMask = null;
 
     public string GetModelInfo()
     {

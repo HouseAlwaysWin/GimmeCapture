@@ -25,7 +25,7 @@ public enum FloatingTool
     InteractiveSelection
 }
 
-public class FloatingImageViewModel : ViewModelBase
+public class FloatingImageViewModel : ViewModelBase, IDisposable
 {
     private Bitmap? _image;
     public Bitmap? Image
@@ -102,8 +102,6 @@ public class FloatingImageViewModel : ViewModelBase
                 IsInteractiveSelectionMode = false;
                 InteractiveMask = null;
                 _interactivePoints.Clear();
-                _sam2Service?.Dispose();
-                _sam2Service = null;
             }
             else if (_currentTool == FloatingTool.Selection)
             {
@@ -216,9 +214,7 @@ public class FloatingImageViewModel : ViewModelBase
         set {
             if (CurrentTool == FloatingTool.PointRemoval && !value)
             {
-                // Clean up AI when exiting PointRemoval mode
-                _sam2Service?.Dispose();
-                _sam2Service = null;
+                // We keep SAM2Service alive for the window lifetime for fast re-entry
                 IsInteractiveSelectionMode = false;
             }
             CurrentTool = value ? FloatingTool.PointRemoval : (CurrentTool == FloatingTool.PointRemoval ? FloatingTool.None : CurrentTool);
@@ -227,64 +223,28 @@ public class FloatingImageViewModel : ViewModelBase
 
     public bool IsAnyToolActive => CurrentTool != FloatingTool.None;
 
-    private SAM2Service? _sam2Service;
     private readonly List<(double X, double Y, bool IsPositive)> _interactivePoints = new();
     private bool _invertSelectionMode = false; // Shift+Click sets this to true
 
     private async Task StartInteractiveRemovalAsync()
     {
-        System.Diagnostics.Debug.WriteLine("FloatingVM: Starting Interactive Removal Init");
-        // Must check mode under UI thread or safely
-        if (CurrentTool != FloatingTool.PointRemoval)
-        {
-            System.Diagnostics.Debug.WriteLine("FloatingVM: Aborting init - CurrentTool is not PointRemoval");
-            return;
-        }
+        if (CurrentTool != FloatingTool.PointRemoval) return;
 
-        if (!await EnsureAIResourcesAsync())
-        {
-             System.Diagnostics.Debug.WriteLine("FloatingVM: AI resources failed");
-             CurrentTool = FloatingTool.None;
-             return;
-        }
+        var sam2 = await GetSAM2ServiceAsync();
+        if (sam2 == null) return;
 
         try
         {
             IsProcessing = true;
             ProcessingText = LocalizationService.Instance["ProcessingAI"] ?? "Initializing AI...";
             
-            _sam2Service?.Dispose();
-            _sam2Service = new SAM2Service(_aiResourceService, _appSettingsService);
-            System.Diagnostics.Debug.WriteLine("FloatingVM: Initializing SAM2 Service...");
-            await _sam2Service.InitializeAsync();
-
-            if (CurrentTool != FloatingTool.PointRemoval) 
-            {
-                System.Diagnostics.Debug.WriteLine("FloatingVM: Mode changed during SAM init, aborting.");
-                return;
-            }
-
-            byte[] imageBytes;
-            using (var ms = new System.IO.MemoryStream())
-            {
-                Image?.Save(ms);
-                imageBytes = ms.ToArray();
-            }
-
-            System.Diagnostics.Debug.WriteLine("FloatingVM: Setting image to SAM2...");
-            await _sam2Service.SetImageAsync(imageBytes);
+            // Image is already set by GetSAM2ServiceAsync using direct SKBitmap conversion
             
             // Reset points list
             _interactivePoints.Clear();
             IsInteractiveSelectionMode = true; 
             
-            // Show model info for diagnostic
-            if (_sam2Service != null)
-            {
-                var encIn = _sam2Service.ModelInfo.Split('\n').FirstOrDefault(l => l.Contains("Inputs")) ?? "Unknown";
-                DiagnosticText = $"AI Ready [{_sam2Service.ModelVariantName}]: {encIn.Trim()}";
-                System.Diagnostics.Debug.WriteLine(_sam2Service.ModelInfo);
-            }
+            DiagnosticText = $"AI Ready [{sam2.ModelVariantName}]";
             System.Diagnostics.Debug.WriteLine("FloatingVM: Interactive Selection Ready");
         }
         catch (Exception ex)
@@ -314,7 +274,6 @@ public class FloatingImageViewModel : ViewModelBase
     {
         _interactivePoints.Clear();
         InteractiveMask = null;
-        _sam2Service?.ResetMaskInput(); // NEW: Clear the hidden mask input in AI service
         DiagnosticText = "AI: Points Reset";
         System.Diagnostics.Debug.WriteLine("FloatingVM: Resetting interactive points");
     }
@@ -327,7 +286,6 @@ public class FloatingImageViewModel : ViewModelBase
             
             // CRITICAL: Reset the AI's mask feedback memory when undoing.
             // If the last result was a "bad" full-image mask, we don't want the AI to reuse it.
-            _sam2Service?.ResetMaskInput();
 
             if (_interactivePoints.Count == 0)
             {
@@ -348,7 +306,11 @@ public class FloatingImageViewModel : ViewModelBase
 
     private async Task RefineMaskAsync()
     {
-        if (_sam2Service == null) return;
+        // Check Resources and download if needed (SAM2)
+        if (!await EnsureAIResourcesAsync()) return;
+
+        var sam2 = await GetSAM2ServiceAsync();
+        if (sam2 == null) return;
     
         DiagnosticText = "AI: Refining...";
         try
@@ -356,8 +318,8 @@ public class FloatingImageViewModel : ViewModelBase
             IsProcessing = true;
             ProcessingText = LocalizationService.Instance["ProcessingAI"] ?? "Refining selection...";
             
-            var maskBytes = await _sam2Service.GetMaskAsync(_interactivePoints);
-            var iouInfo = _sam2Service.LastIouInfo;
+            var maskBytes = await sam2.GetMaskAsync(_interactivePoints);
+            var iouInfo = sam2.LastIouInfo;
             DiagnosticText = $"AI: ({_interactivePoints.Count} pts) {iouInfo}";
 
             if (maskBytes != null && maskBytes.Length > 0)
@@ -578,6 +540,49 @@ public class FloatingImageViewModel : ViewModelBase
     private readonly IClipboardService _clipboardService;
     private readonly AIResourceService _aiResourceService;
     private readonly AppSettingsService _appSettingsService;
+    private SAM2Service? _sam2Service;
+
+    private async Task<SAM2Service?> GetSAM2ServiceAsync()
+    {
+        if (_sam2Service != null && _sam2Service.ModelVariantName != "Unknown") return _sam2Service;
+
+        _sam2Service = new SAM2Service(_aiResourceService, _appSettingsService);
+        ProcessingText = LocalizationService.Instance["StatusInitializingAI"] ?? "Initializing AI...";
+        IsProcessing = true;
+        try
+        {
+            await _sam2Service.InitializeAsync();
+             // Optimization: Pass current image to AI immediately after initialization
+            var skImage = ImageToSkia(Image);
+            if (skImage != null)
+            {
+                await _sam2Service.SetImageAsync(skImage);
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[AI] Init Failed: {ex.Message}");
+            _sam2Service = null;
+        }
+        finally
+        {
+            IsProcessing = false;
+        }
+        return _sam2Service;
+    }
+
+    private SKBitmap? ImageToSkia(Bitmap? avaloniaBitmap)
+    {
+        if (avaloniaBitmap == null) return null;
+        try 
+        {
+            using var ms = new System.IO.MemoryStream();
+            avaloniaBitmap.Save(ms);
+            ms.Seek(0, System.IO.SeekOrigin.Begin);
+            return SKBitmap.Decode(ms);
+        }
+        catch { return null; }
+    }
 
     private double _wingScale = 1.0;
     public double WingScale
@@ -1027,5 +1032,10 @@ public class FloatingImageViewModel : ViewModelBase
             SelectionRect = new Avalonia.Rect();
             IsSelectionMode = false;
         }
+    }
+    public void Dispose()
+    {
+        _sam2Service?.Dispose();
+        _sam2Service = null;
     }
 }

@@ -23,7 +23,7 @@ namespace GimmeCapture.ViewModels.Main;
 
 public enum SnipState { Idle, Detecting, Selecting, Selected }
 
-public class SnipWindowViewModel : ViewModelBase
+public class SnipWindowViewModel : ViewModelBase, IDisposable
 {
     private SnipState _currentState = SnipState.Detecting;
     public SnipState CurrentState
@@ -330,6 +330,7 @@ public class SnipWindowViewModel : ViewModelBase
     }
 
     private readonly IScreenCaptureService _captureService;
+    private readonly SAM2Service? _sam2Service;
 
     // Commands
     public ReactiveCommand<Unit, Unit> CopyCommand { get; set; }
@@ -715,17 +716,17 @@ public class SnipWindowViewModel : ViewModelBase
             */
         }
 
-        // Preload SAM2 models in background to avoid delay on first scan
+        // Preload SAM2 models in background with warmup to eliminate delay on first scan
         if (mainVm != null)
         {
+            _sam2Service = new SAM2Service(mainVm.AIResourceService, mainVm.AppSettingsService);
             Task.Run(async () => 
             {
                 try
                 {
-                   if (mainVm.AIResourceService.AreResourcesReady())
-                   {
-                       await mainVm.AIResourceService.LoadSAM2ModelsAsync(mainVm.AppSettingsService.Settings.SelectedSAM2Variant);
-                   }
+                    Console.WriteLine("[SAM2 Preload] Starting background initialization and warmup...");
+                    await _sam2Service.InitializeAsync();
+                    Console.WriteLine("[SAM2 Preload] Background warmup complete. Ready for scan.");
                 }
                 catch (Exception ex)
                 {
@@ -1393,26 +1394,20 @@ public class SnipWindowViewModel : ViewModelBase
             
             token.ThrowIfCancellationRequested();
 
-            // 2. Encode image to PNG bytes for SAM2
-            using var image = SkiaSharp.SKImage.FromBitmap(skBitmap);
-            using var data = image.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
-            var imageBytes = data.ToArray();
-            Console.WriteLine($"[AI Scan] Encoded PNG: {imageBytes.Length} bytes");
-
-            token.ThrowIfCancellationRequested();
-
-            // 3. Initialize SAM2 and run scan
-            var sam2 = new SAM2Service(_mainVm.AIResourceService, _mainVm.AppSettingsService);
-            Console.WriteLine("[AI Scan] Initializing SAM2...");
-            await sam2.InitializeAsync();
-            Console.WriteLine("[AI Scan] SAM2 Initialized. Setting image...");
-            await sam2.SetImageAsync(imageBytes);
+            // 2. Run scan using persistent SAM2 service (Preloaded and Warmed up)
+            if (_sam2Service == null) return;
+            
+            Console.WriteLine("[AI Scan] Using preloaded SAM2 service...");
+            await _sam2Service.InitializeAsync(); // Ensures it's ready if preload was slow
+            
+            Console.WriteLine("[AI Scan] Setting image (Fast path)...");
+            await _sam2Service.SetImageAsync(skBitmap);
             Console.WriteLine("[AI Scan] Image set. Running AutoDetect...");
 
             token.ThrowIfCancellationRequested();
 
-            var rects = await sam2.AutoDetectObjectsAsync(12, token); // Grid Density 12 = 144 points (Faster)
-            sam2.Dispose();
+            var rects = await _sam2Service.AutoDetectObjectsAsync(12, token); 
+            // Do NOT dispose persistent service here
             
             Console.WriteLine($"[AI Scan] AutoDetect returned {rects.Count} rects");
 
@@ -1479,5 +1474,11 @@ public class SnipWindowViewModel : ViewModelBase
             _scanCts?.Dispose();
             _scanCts = null;
         }
+    }
+
+    public void Dispose()
+    {
+        _sam2Service?.Dispose();
+        _recordTimer?.Stop();
     }
 }
