@@ -313,8 +313,7 @@ public class MainWindowViewModel : ViewModelBase
         {
             if (!_isDataLoading && 
                 e.PropertyName != nameof(StatusText) && 
-                e.PropertyName != nameof(IsModified) &&
-                e.PropertyName != nameof(SelectedLanguageOption))
+                e.PropertyName != nameof(IsModified))
             {
                 if (!IsModified)
                 {
@@ -364,6 +363,13 @@ public class MainWindowViewModel : ViewModelBase
             {
                 LocalizationService.Instance.CurrentLanguage = value.Value;
                 this.RaisePropertyChanged();
+                
+                // Propagate to settings and auto-save (if not loading)
+                if (!_isDataLoading)
+                {
+                    _settingsService.Settings.Language = value.Value;
+                    _ = SaveSettingsAsync();
+                }
             }
         }
     }
@@ -618,6 +624,23 @@ public class MainWindowViewModel : ViewModelBase
         get => _showAIScanBox;
         set => this.RaiseAndSetIfChanged(ref _showAIScanBox, value);
     }
+    
+    private bool _enableAI = true;
+    public bool EnableAI
+    {
+        get => _enableAI;
+        set 
+        {
+            this.RaiseAndSetIfChanged(ref _enableAI, value);
+            
+            // Fix: Only save if we are NOT loading data
+            if (!_isDataLoading)
+            {
+                _settingsService.Settings.EnableAI = value;
+                _ = SaveSettingsAsync();
+            }
+        }
+    }
 
     private int _sam2GridDensity = 8;
     public int SAM2GridDensity
@@ -699,6 +722,7 @@ public class MainWindowViewModel : ViewModelBase
         ShowRecordCursor = s.ShowRecordCursor;
         TempDirectory = s.TempDirectory;
         ShowAIScanBox = s.ShowAIScanBox;
+        EnableAI = s.EnableAI;
         SAM2GridDensity = s.SAM2GridDensity;
         SAM2MaxObjects = s.SAM2MaxObjects;
         if (string.IsNullOrEmpty(TempDirectory))
@@ -803,23 +827,23 @@ public class MainWindowViewModel : ViewModelBase
             s.ShowRecordCursor = ShowRecordCursor;
             s.TempDirectory = TempDirectory;
             s.ShowAIScanBox = ShowAIScanBox;
+            s.EnableAI = EnableAI;
             s.SAM2GridDensity = SAM2GridDensity;
             s.SAM2MaxObjects = SAM2MaxObjects;
             
             await _settingsService.SaveAsync();
             IsModified = false;
-
-            // Update Windows startup registry
-            StartupService.SetStartup(s.RunOnStartup);
+            SetStatus("StatusSaved");
             return true;
         }
         catch (Exception ex)
         {
-            SetStatus("StatusError"); // We might need an error key
-            System.Diagnostics.Debug.WriteLine($"Error in SaveSettingsAsync: {ex.Message}");
+            SetStatus("ErrorSaving");
+            System.Diagnostics.Debug.WriteLine($"Error saving settings: {ex}");
             return false;
         }
     }
+
 
     private async Task StartCapture(CaptureMode mode = CaptureMode.Normal)
     {

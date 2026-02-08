@@ -182,6 +182,7 @@ namespace GimmeCapture.Services.Core;
                     ["WingScale"] = "Wing Scale:",
                     ["FinalizingRecording"] = "Finalizing Recording...",
                     ["ProcessingVideo"] = "Processing Video...",
+                    ["EnableAI"] = "Enable AI Features (High Memory Usage)",
                 },
                 [Language.Chinese] = new Dictionary<string, string>
                 {
@@ -304,6 +305,7 @@ namespace GimmeCapture.Services.Core;
                     ["AIScanDensity"] = "AI 掃描網格密度:",
                     ["AIScanMaxObjects"] = "掃描物件數量上限:",
                     ["AIScanSettings"] = "AI 掃描設定",
+                    ["EnableAI"] = "啟用 AI 功能 (高記憶體佔用)",
                     ["IconScale"] = "圖示縮放:",
                     ["WingScale"] = "翅膀縮放:",
                 },
@@ -422,6 +424,7 @@ namespace GimmeCapture.Services.Core;
                     ["AIScanDensity"] = "AI スキャン網格密度:",
                     ["AIScanMaxObjects"] = "最大検出オブジェクト数:",
                     ["AIScanSettings"] = "AI スキャン設定",
+                    ["EnableAI"] = "AI 機能を有効にする (高メモリ使用)",
                     ["IconScale"] = "アイコンのサイズ:",
                     ["WingScale"] = "翼のサイズ:",
                 },

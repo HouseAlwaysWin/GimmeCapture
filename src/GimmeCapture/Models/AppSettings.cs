@@ -46,6 +46,7 @@ public class AppSettings
     
     // AI
     public string AIResourcesDirectory { get; set; } = string.Empty;
+    public bool EnableAI { get; set; } = true;
     [System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter))]
     public SAM2Variant SelectedSAM2Variant { get; set; } = SAM2Variant.Tiny;
     public bool ShowAIScanBox { get; set; } = true;

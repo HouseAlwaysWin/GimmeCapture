@@ -351,7 +351,7 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable
     }
 
     private readonly IScreenCaptureService _captureService;
-    private readonly SAM2Service? _sam2Service;
+    private SAM2Service? _sam2Service;
 
     // Commands
     public ReactiveCommand<Unit, Unit> CopyCommand { get; set; }
@@ -737,24 +737,34 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable
             */
         }
 
-        // Preload SAM2 models in background with warmup to eliminate delay on first scan
+        // Preload SAM2 models in background if AI is enabled
         if (mainVm != null)
         {
-            _sam2Service = new SAM2Service(mainVm.AIResourceService, mainVm.AppSettingsService);
-            Task.Run(async () => 
+            // Initial Check
+            if (mainVm.EnableAI)
             {
-                try
+                InitializeSAM2(mainVm);
+            }
+
+            // React to setting change
+            mainVm.WhenAnyValue(x => x.EnableAI)
+                .Subscribe(enabled => 
                 {
-                    Console.WriteLine("[SAM2 Preload] Starting background initialization and warmup...");
-                    await _sam2Service.InitializeAsync();
-                    Console.WriteLine("[SAM2 Preload] Background warmup complete. Ready for scan.");
-                }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"[SAM2 Preload] Failed: {ex.Message}");
-                }
-            });
+                    if (enabled)
+                    {
+                        if (_sam2Service == null) InitializeSAM2(mainVm);
+                    }
+                    else
+                    {
+                        _scanCts?.Cancel();
+                        _sam2Service = null;
+                        WindowRects.Clear();
+                        // Force unload native models to free memory
+                        mainVm.AIResourceService.UnloadSAM2Models();
+                    }
+                });
         }
+
 
 
         CopyCommand = ReactiveCommand.CreateFromTask(Copy);
@@ -904,6 +914,24 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable
         DecreaseCornerIconScaleCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
 
         UpdateMask();
+    }
+
+    private void InitializeSAM2(MainWindowViewModel mainVm)
+    {
+        _sam2Service = new SAM2Service(mainVm.AIResourceService, mainVm.AppSettingsService);
+        Task.Run(async () => 
+        {
+            try
+            {
+                Console.WriteLine("[SAM2 Preload] Starting background initialization and warmup...");
+                await _sam2Service.InitializeAsync();
+                Console.WriteLine("[SAM2 Preload] Background warmup complete. Ready for scan.");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[SAM2 Preload] Failed: {ex.Message}");
+            }
+        });
     }
 
     /// <summary>
@@ -1325,6 +1353,12 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable
     
     private async Task Pin(bool runAI = false)
     {
+        // Guard: If AI is disabled globally, prevent running it
+        if (runAI && (_mainVm == null || !_mainVm.EnableAI))
+        {
+            runAI = false;
+        }
+
         // If recording is active, pin recording instead of screenshot
         if (RecState == RecordingState.Recording || RecState == RecordingState.Paused)
         {
@@ -1375,9 +1409,9 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable
 
     private async Task RunAIScanAsync()
     {
-        if (_mainVm == null) 
+        if (_mainVm == null || !_mainVm.EnableAI) 
         {
-            Console.WriteLine("[AI Scan] ABORT: _mainVm is null");
+            // Console.WriteLine("[AI Scan] ABORT: _mainVm is null OR AI Disabled");
             return;
         }
 
@@ -1455,8 +1489,8 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable
                     {
                         if (token.IsCancellationRequested) return;
                         
-                        // Guard: If user has already started selecting or finished, don't show rects
-                        if (CurrentState != SnipState.Detecting) return;
+                        // Guard: If user has already started selecting or finished, or AI disabled, don't show rects
+                        if (CurrentState != SnipState.Detecting || _mainVm?.EnableAI != true) return;
 
                         int addedCount = 0;
                         double scale = VisualScaling > 0 ? VisualScaling : 1.0;

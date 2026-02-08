@@ -271,10 +271,12 @@
                                     <CheckBox IsChecked="{Binding HideSnipSelectionDecoration}" Content="{Binding [HideSnipSelectionDecoration], Source={x:Static services:LocalizationService.Instance}}"/>
                                     <CheckBox IsChecked="{Binding HideSnipSelectionBorder}" Content="{Binding [HideSnipSelectionBorder], Source={x:Static services:LocalizationService.Instance}}"/>
                                     <CheckBox IsChecked="{Binding ShowSnipCursor}" Content="{Binding [ShowSnipCursor], Source={x:Static services:LocalizationService.Instance}}"/>
-                                    <CheckBox IsChecked="{Binding ShowAIScanBox}" Content="{Binding [ShowAIScanBox], Source={x:Static services:LocalizationService.Instance}}"/>
+                                    
+                                    <CheckBox IsChecked="{Binding EnableAI}" Content="{Binding [EnableAI], Source={x:Static services:LocalizationService.Instance}}" Margin="0,15,0,0" FontWeight="SemiBold"/>
+                                    <CheckBox IsChecked="{Binding ShowAIScanBox}" Content="{Binding [ShowAIScanBox], Source={x:Static services:LocalizationService.Instance}}" IsEnabled="{Binding EnableAI}" Margin="24,0,0,0"/>
                                     
                                     <TextBlock Text="AI 資源路徑 (AI Resources Path)" FontSize="12" Foreground="#888888" Margin="24,10,0,0"/>
-                                    <DockPanel Margin="24,0,0,10">
+                                    <DockPanel Margin="24,0,0,10" IsEnabled="{Binding EnableAI}">
                                         <Button Content="{Binding [SelectPath], Source={x:Static services:LocalizationService.Instance}}" 
                                                 DockPanel.Dock="Right" 
                                                 Theme="{StaticResource SmallGothicMetalButton}"
@@ -283,24 +285,26 @@
                                         <TextBox Text="{Binding AIResourcesDirectory}" Margin="0,0,10,0"/>
                                     </DockPanel>
                                     
-                                    <TextBlock Text="{Binding [AIScanSettings], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold" Margin="0,15,0,5"/>
-                                    <!-- Grid Density -->
-                                    <StackPanel Spacing="5" Margin="24,0,0,10">
-                                        <TextBlock Text="{Binding [AIScanDensity], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>
-                                        <StackPanel Orientation="Horizontal" Spacing="10">
-                                            <Slider Minimum="4" Maximum="32" Value="{Binding SAM2GridDensity}" 
-                                                    TickFrequency="1" IsSnapToTickEnabled="True" HorizontalAlignment="Stretch" Width="250"/>
-                                            <TextBlock Text="{Binding SAM2GridDensity}" VerticalAlignment="Center" Width="30"/>
+                                    <StackPanel IsEnabled="{Binding EnableAI}">
+                                        <TextBlock Text="{Binding [AIScanSettings], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold" Margin="0,15,0,5"/>
+                                        <!-- Grid Density -->
+                                        <StackPanel Spacing="5" Margin="24,0,0,10">
+                                            <TextBlock Text="{Binding [AIScanDensity], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>
+                                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                                <Slider Minimum="4" Maximum="32" Value="{Binding SAM2GridDensity}" 
+                                                        TickFrequency="1" IsSnapToTickEnabled="True" HorizontalAlignment="Stretch" Width="250"/>
+                                                <TextBlock Text="{Binding SAM2GridDensity}" VerticalAlignment="Center" Width="30"/>
+                                            </StackPanel>
                                         </StackPanel>
-                                    </StackPanel>
-                                    
-                                    <!-- Max Objects -->
-                                    <StackPanel Spacing="5" Margin="24,0,0,10">
-                                        <TextBlock Text="{Binding [AIScanMaxObjects], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>
-                                        <StackPanel Orientation="Horizontal" Spacing="10">
-                                            <Slider Minimum="5" Maximum="100" Value="{Binding SAM2MaxObjects}" 
-                                                    TickFrequency="5" IsSnapToTickEnabled="True" HorizontalAlignment="Stretch" Width="250"/>
-                                            <TextBlock Text="{Binding SAM2MaxObjects}" VerticalAlignment="Center" Width="30"/>
+                                        
+                                        <!-- Max Objects -->
+                                        <StackPanel Spacing="5" Margin="24,0,0,10">
+                                            <TextBlock Text="{Binding [AIScanMaxObjects], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>
+                                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                                <Slider Minimum="5" Maximum="100" Value="{Binding SAM2MaxObjects}" 
+                                                        TickFrequency="5" IsSnapToTickEnabled="True" HorizontalAlignment="Stretch" Width="250"/>
+                                                <TextBlock Text="{Binding SAM2MaxObjects}" VerticalAlignment="Center" Width="30"/>
+                                            </StackPanel>
                                         </StackPanel>
                                     </StackPanel>
                                 </StackPanel>

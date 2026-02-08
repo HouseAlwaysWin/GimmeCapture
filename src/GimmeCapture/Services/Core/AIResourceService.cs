@@ -442,7 +442,7 @@ public class AIResourceService : ReactiveObject
                      System.Diagnostics.Debug.WriteLine("[AI] Models Loaded Successfully");
                      
                      // Centralized Warmup: Trigger it once when sessions are created
-                     await WarmupSessionsAsync();
+                     WarmupSessions();
                  }
                  catch (Exception ex)
                  {
@@ -458,7 +458,7 @@ public class AIResourceService : ReactiveObject
         }
     }
 
-    private async Task WarmupSessionsAsync()
+    private void WarmupSessions()
     {
         if (_isWarmedUp || _cachedEncoder == null || _cachedDecoder == null) return;
 

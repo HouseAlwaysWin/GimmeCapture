@@ -230,6 +230,39 @@ public class FloatingImageViewModel : ViewModelBase, IDisposable
     {
         if (CurrentTool != FloatingTool.PointRemoval) return;
 
+        // Check if AI is enabled
+        if (!_appSettingsService.Settings.EnableAI)
+        {
+            DiagnosticText = "AI Disabled";
+            CurrentTool = FloatingTool.None;
+            
+             Avalonia.Threading.Dispatcher.UIThread.Post(() => {
+                 var dialogVm = new GothicDialogViewModel { Title = "AI Disabled", Message = "AI features are currently disabled in Settings." };
+                 var dialog = new GimmeCapture.Views.Shared.GothicDialog { DataContext = dialogVm };
+                 
+                 var desktop = Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime;
+                 var owner = desktop?.Windows.FirstOrDefault(w => w.DataContext == this) as Avalonia.Controls.Window;
+                 
+                  // Fallback: If owner specific to this VM not found, try any active FloatingImageWindow
+                 if (owner == null)
+                 {
+                     owner = desktop?.Windows.OfType<GimmeCapture.Views.Floating.FloatingImageWindow>().FirstOrDefault(w => w.IsActive);
+                 }
+                 
+                 // Final Fallback: Try Main Window or any active window
+                 if (owner == null)
+                 {
+                     owner = desktop?.Windows.FirstOrDefault(w => w.IsActive) ?? desktop?.MainWindow;
+                 }
+                 
+                 if (owner != null) 
+                 {
+                     dialog.ShowDialog<bool>(owner);
+                 }
+            });
+            return;
+        }
+
         var sam2 = await GetSAM2ServiceAsync();
         if (sam2 == null) return;
 
@@ -838,6 +871,41 @@ public class FloatingImageViewModel : ViewModelBase, IDisposable
     private async Task RemoveBackgroundAsync()
     {
         if (Image == null) return;
+        
+        // Check if AI is enabled
+        if (!_appSettingsService.Settings.EnableAI)
+        {
+             Avalonia.Threading.Dispatcher.UIThread.Post(() => {
+                 var dialogVm = new GothicDialogViewModel { Title = "AI Disabled", Message = "AI features are currently disabled in Settings." };
+                 var dialog = new GimmeCapture.Views.Shared.GothicDialog { DataContext = dialogVm };
+                 
+                 var desktop = Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime;
+                 var owner = desktop?.Windows.FirstOrDefault(w => w.DataContext == this) as Avalonia.Controls.Window;
+                 
+                 // Fallback: If owner specific to this VM not found, try any active FloatingImageWindow
+                 if (owner == null)
+                 {
+                     owner = desktop?.Windows.OfType<GimmeCapture.Views.Floating.FloatingImageWindow>().FirstOrDefault(w => w.IsActive);
+                 }
+                 
+                 // Final Fallback: Try Main Window or any active window
+                 if (owner == null)
+                 {
+                     owner = desktop?.Windows.FirstOrDefault(w => w.IsActive) ?? desktop?.MainWindow;
+                 }
+                 
+                 if (owner != null) 
+                 {
+                     dialog.ShowDialog<bool>(owner);
+                 }
+                 else
+                 {
+                     // Absolute fallback if no window found (should differ happen)
+                     System.Diagnostics.Debug.WriteLine("[Error] No window found to show AI Disabled dialog");
+                 }
+            });
+            return;
+        }
         
         // Check Resources and download if needed
         if (!await EnsureAIResourcesAsync()) return;
