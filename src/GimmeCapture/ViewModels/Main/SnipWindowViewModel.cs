@@ -32,6 +32,15 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable
         set
         {
             this.RaiseAndSetIfChanged(ref _currentState, value);
+            
+            // If we leave Detecting state (e.g. start selecting), cancel any running scan
+            if (value != SnipState.Detecting)
+            {
+                _scanCts?.Cancel();
+                // Optional: clear rects immediately if we want them gone 
+                // (though SnipWindow.axaml handles visibility too)
+            }
+
             if (value == SnipState.Selected && AutoActionMode > 0 && AutoActionMode < 3)
             {
                 TriggerAutoAction();
@@ -1433,6 +1442,9 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable
                     Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                     {
                         if (token.IsCancellationRequested) return;
+                        
+                        // Guard: If user has already started selecting or finished, don't show rects
+                        if (CurrentState != SnipState.Detecting) return;
 
                         int addedCount = 0;
                         double scale = VisualScaling > 0 ? VisualScaling : 1.0;

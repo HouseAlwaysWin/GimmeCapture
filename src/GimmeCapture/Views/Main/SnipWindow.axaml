@@ -70,6 +70,16 @@
             <!-- AI Scan Results Layer (Background Candidates) -->
             <ItemsControl ItemsSource="{Binding WindowRects}" IsHitTestVisible="True"
                           Width="{Binding ViewportSize.Width}" Height="{Binding ViewportSize.Height}">
+                <ItemsControl.IsVisible>
+                    <Binding Path="CurrentState">
+                        <Binding.Converter>
+                            <cv:EnumMatchConverter/>
+                        </Binding.Converter>
+                        <Binding.ConverterParameter>
+                            <x:Static Member="vm:SnipState.Detecting"/>
+                        </Binding.ConverterParameter>
+                    </Binding>
+                </ItemsControl.IsVisible>
                 <ItemsControl.Styles>
                     <Style Selector="ItemsControl > ContentPresenter" x:DataType="m:VisualRect">
                         <Setter Property="Canvas.Left" Value="{Binding X}"/>
