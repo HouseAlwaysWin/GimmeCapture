@@ -40,6 +40,15 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable
                 // Optional: clear rects immediately if we want them gone 
                 // (though SnipWindow.axaml handles visibility too)
             }
+            else
+            {
+                // Re-entering Detecting state (e.g. from Cancel/Reset)
+                // Restart scan if enabled
+                if (ShowAIScanBox)
+                {
+                    TriggerAutoScanCommand.Execute(Unit.Default).Subscribe();
+                }
+            }
 
             if (value == SnipState.Selected && AutoActionMode > 0 && AutoActionMode < 3)
             {
@@ -168,8 +177,11 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable
                 }
                 else
                 {
-                    // Optionally trigger scan if enabled and not running?
-                    // TriggerAutoScanCommand.Execute(Unit.Default).Subscribe();
+                    // Trigger scan if enabled
+                    if (CurrentState == SnipState.Detecting)
+                    {
+                        TriggerAutoScanCommand.Execute(Unit.Default).Subscribe();
+                    }
                 }
             }
         }
