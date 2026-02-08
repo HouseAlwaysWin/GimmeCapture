@@ -229,7 +229,7 @@ public partial class SnipWindow : Window
                      return;
                 }
                 
-                var vm = new FloatingImageViewModel(bitmap, rect.Width, rect.Height, color, thickness, hideDecoration, hideBorder, _clipboardService, aiService);
+                var vm = new FloatingImageViewModel(bitmap, rect.Width, rect.Height, color, thickness, hideDecoration, hideBorder, _clipboardService, aiService, _viewModel.MainVm.AppSettingsService);
                 vm.WingScale = _viewModel.WingScale;
                 vm.CornerIconScale = _viewModel.CornerIconScale;
                 

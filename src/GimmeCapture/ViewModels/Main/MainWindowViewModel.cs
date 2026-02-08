@@ -86,6 +86,7 @@ public class MainWindowViewModel : ViewModelBase
     public Func<Task<string?>>? PickFolderAction { get; set; }
     public Func<string, string, Task<bool>>? ConfirmAction { get; set; }
     
+    public AppSettingsService AppSettingsService => _settingsService;
     private readonly AppSettingsService _settingsService;
     public WindowsGlobalHotkeyService HotkeyService { get; } = new();
 
@@ -1011,33 +1012,73 @@ public class MainWindowViewModel : ViewModelBase
                 ffmpeg.IsPending = status == QueueItemStatus.Pending;
             });
 
-        // AI Resources Module
-        var ai = new ModuleItem("AI Resources", "ModuleAIDescription")
+        // AI Core Module
+        var aiCore = new ModuleItem("AI Core", "ModuleAICoreDescription")
         {
-            IsInstalled = AIResourceService.AreResourcesReady(),
-            InstallCommand = ReactiveCommand.CreateFromTask(() => InstallModuleAsync("AI")),
-            CancelCommand = ReactiveCommand.CreateFromTask(() => CancelModuleAsync("AI")),
-            RemoveCommand = ReactiveCommand.CreateFromTask(() => RemoveModuleAsync("AI"))
+            IsInstalled = AIResourceService.IsAICoreReady(),
+            InstallCommand = ReactiveCommand.CreateFromTask(() => InstallModuleAsync("AICore")),
+            CancelCommand = ReactiveCommand.CreateFromTask(() => CancelModuleAsync("AICore")),
+            RemoveCommand = ReactiveCommand.CreateFromTask(() => RemoveModuleAsync("AICore"))
         };
+        
         AIResourceService.WhenAnyValue(x => x.IsDownloading)
             .Subscribe(isDown => 
             {
-                ai.IsProcessing = isDown;
-                if (!isDown) ai.IsInstalled = AIResourceService.AreResourcesReady();
+                if (isDown && !AIResourceService.IsAICoreReady()) aiCore.IsProcessing = true;
+                else aiCore.IsProcessing = false;
+                
+                if (!isDown) aiCore.IsInstalled = AIResourceService.IsAICoreReady();
             });
-        AIResourceService.WhenAnyValue(x => x.DownloadProgress)
-            .Subscribe(p => ai.Progress = p);
 
-        // Subscribe to Queue Status for Pending state
-        ResourceQueue.ObserveStatus("AI")
+        ResourceQueue.ObserveStatus("AICore")
             .ObserveOn(RxApp.MainThreadScheduler)
-            .Subscribe(status => 
+            .Subscribe(status => aiCore.IsPending = status == QueueItemStatus.Pending);
+
+        // SAM2 Model Module
+        var sam2 = new ModuleItem("SAM2 Model", "ModuleSAM2Description")
+        {
+            HasVariants = true,
+            Variants = new ObservableCollection<string>(Enum.GetNames(typeof(SAM2Variant))),
+            SelectedVariant = _settingsService.Settings.SelectedSAM2Variant.ToString(),
+            IsInstalled = AIResourceService.IsSAM2Ready(_settingsService.Settings.SelectedSAM2Variant),
+            InstallCommand = ReactiveCommand.CreateFromTask(() => InstallModuleAsync("SAM2")),
+            CancelCommand = ReactiveCommand.CreateFromTask(() => CancelModuleAsync("SAM2")),
+            RemoveCommand = ReactiveCommand.CreateFromTask(() => RemoveModuleAsync("SAM2"))
+        };
+
+        sam2.WhenAnyValue(x => x.SelectedVariant)
+            .Subscribe(v => 
             {
-                ai.IsPending = status == QueueItemStatus.Pending;
+                if (Enum.TryParse<SAM2Variant>(v, out var variant))
+                {
+                    _settingsService.Settings.SelectedSAM2Variant = variant;
+                    _settingsService.SaveAsync(); 
+                    sam2.IsInstalled = AIResourceService.IsSAM2Ready(variant);
+                }
             });
+
+        AIResourceService.WhenAnyValue(x => x.IsDownloading)
+            .Subscribe(isDown => 
+            {
+                if (isDown && AIResourceService.IsAICoreReady()) sam2.IsProcessing = true;
+                else sam2.IsProcessing = false;
+
+                if (!isDown) sam2.IsInstalled = AIResourceService.IsSAM2Ready(_settingsService.Settings.SelectedSAM2Variant);
+            });
+        // Linked progress for both
+        AIResourceService.WhenAnyValue(x => x.DownloadProgress)
+            .Subscribe(p => {
+                if (aiCore.IsProcessing) aiCore.Progress = p;
+                if (sam2.IsProcessing) sam2.Progress = p;
+            });
+
+        ResourceQueue.ObserveStatus("SAM2")
+            .ObserveOn(RxApp.MainThreadScheduler)
+            .Subscribe(status => sam2.IsPending = status == QueueItemStatus.Pending);
 
         Modules.Add(ffmpeg);
-        Modules.Add(ai);
+        Modules.Add(aiCore);
+        Modules.Add(sam2);
     }
 
     private async Task InstallModuleAsync(string type)
@@ -1046,9 +1087,18 @@ public class MainWindowViewModel : ViewModelBase
         {
             await ResourceQueue.EnqueueAsync("FFmpeg", (ct) => FfmpegDownloader.EnsureFFmpegAsync(ct));
         }
-        else if (type == "AI")
+        else if (type == "AICore")
         {
-            await ResourceQueue.EnqueueAsync("AI", (ct) => AIResourceService.EnsureResourcesAsync(ct));
+            await ResourceQueue.EnqueueAsync("AICore", (ct) => AIResourceService.EnsureAICoreAsync(ct));
+        }
+        else if (type == "SAM2")
+        {
+             if (!AIResourceService.IsAICoreReady())
+             {
+                 await ResourceQueue.EnqueueAsync("AICore", (ct) => AIResourceService.EnsureAICoreAsync(ct));
+             }
+             var variant = _settingsService.Settings.SelectedSAM2Variant;
+             await ResourceQueue.EnqueueAsync("SAM2", (ct) => AIResourceService.EnsureSAM2Async(variant, ct));
         }
     }
 
@@ -1069,27 +1119,37 @@ public class MainWindowViewModel : ViewModelBase
 
     private async Task RemoveModuleAsync(string type)
     {
-        // Add Confirmation
-        var result = await (ConfirmAction?.Invoke(
-            LocalizationService.Instance["TabModules"], 
-            LocalizationService.Instance["ConfirmRemoveModule"]) ?? Task.FromResult(false));
+        try 
+        {
+            var result = await (ConfirmAction?.Invoke(
+                LocalizationService.Instance["TabModules"], 
+                LocalizationService.Instance["ConfirmRemoveModule"]) ?? Task.FromResult(false));
 
-        if (!result) return;
+            if (!result) return;
 
-        if (type == "FFmpeg")
-        {
-            FfmpegDownloader.RemoveFFmpeg();
+            if (type == "FFmpeg")
+            {
+                FfmpegDownloader.RemoveFFmpeg();
+            }
+            else if (type == "AICore")
+            {
+                AIResourceService.RemoveAICoreResources(); 
+            }
+            else if (type == "SAM2")
+            {
+                 AIResourceService.RemoveSAM2Resources(_settingsService.Settings.SelectedSAM2Variant);
+            }
+            
+            foreach (var m in Modules)
+            {
+                if (m.Name == "FFmpeg") m.IsInstalled = FfmpegDownloader.IsFFmpegAvailable();
+                if (m.Name == "AI Core") m.IsInstalled = AIResourceService.IsAICoreReady();
+                if (m.Name == "SAM2 Model") m.IsInstalled = AIResourceService.IsSAM2Ready(_settingsService.Settings.SelectedSAM2Variant);
+            }
         }
-        else if (type == "AI")
+        catch (Exception ex)
         {
-            AIResourceService.RemoveResources();
-        }
-        
-        // Manual refresh of module status
-        foreach (var m in Modules)
-        {
-            if (m.Name == "FFmpeg") m.IsInstalled = FfmpegDownloader.IsFFmpegAvailable();
-            if (m.Name == "AI Resources") m.IsInstalled = AIResourceService.AreResourcesReady();
+            System.Diagnostics.Debug.WriteLine($"Failed to remove module {type}: {ex}");
         }
     }
 
@@ -1151,6 +1211,18 @@ public class MainWindowViewModel : ViewModelBase
             get => _progress;
             set => this.RaiseAndSetIfChanged(ref _progress, value);
         }
+
+        // --- Variant Support ---
+        public bool HasVariants { get; init; } = false;
+        public ObservableCollection<string>? Variants { get; init; }
+
+        private string _selectedVariant = "";
+        public string SelectedVariant
+        {
+            get => _selectedVariant;
+            set => this.RaiseAndSetIfChanged(ref _selectedVariant, value);
+        }
+        // -----------------------
 
         public ICommand InstallCommand { get; init; } = null!;
         public ICommand CancelCommand { get; set; } = null!;

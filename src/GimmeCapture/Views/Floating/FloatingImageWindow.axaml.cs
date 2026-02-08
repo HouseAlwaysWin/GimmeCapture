@@ -89,7 +89,7 @@ public partial class FloatingImageWindow : Window
             {
                 // Reuse the same logic as SnipWindow to spawn new windows
                 var newVm = new FloatingImageViewModel(bitmap, rect.Width, rect.Height, color, thickness, vm.HidePinDecoration, vm.HidePinBorder, 
-                    vm.ClipboardService, vm.AIResourceService);
+                    vm.ClipboardService, vm.AIResourceService, vm.AppSettingsService);
                 
                 newVm.WingScale = vm.WingScale;
                 newVm.CornerIconScale = vm.CornerIconScale;

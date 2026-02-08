@@ -410,6 +410,14 @@
                                                     Command="{Binding MainActionCommand}"
                                                     Theme="{StaticResource SmallGothicMetalButton}"
                                                     Width="80"/>
+                                            
+                                            <!-- Variant Selector -->
+                                            <ComboBox ItemsSource="{Binding Variants}" 
+                                                      SelectedItem="{Binding SelectedVariant}"
+                                                      IsVisible="{Binding HasVariants}"
+                                                      Width="80"
+                                                      IsEnabled="{Binding !IsProcessing}"
+                                                      Theme="{StaticResource SmallGothicMetalComboBox}"/>
                                         </StackPanel>
                                     </Grid>
                                 </Border>

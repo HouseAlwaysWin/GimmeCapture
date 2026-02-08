@@ -15,9 +15,19 @@ public class AIResourceService : ReactiveObject
     private const string MobileSamEncoderUrl = "https://huggingface.co/Acly/MobileSAM/resolve/main/mobile_sam_image_encoder.onnx";
     private const string MobileSamDecoderUrl = "https://huggingface.co/Acly/MobileSAM/resolve/main/sam_mask_decoder_multi.onnx";
     
-    private const string Sam2EncoderUrl = "https://huggingface.co/shubham0204/sam2-onnx-models/resolve/main/sam2_hiera_tiny_encoder.onnx";
-    private const string Sam2DecoderUrl = "https://huggingface.co/shubham0204/sam2-onnx-models/resolve/main/sam2_hiera_tiny_decoder.onnx";
+    private const string Sam2TinyEncoderUrl = "https://huggingface.co/shubham0204/sam2-onnx-models/resolve/main/sam2_hiera_tiny_encoder.onnx";
+    private const string Sam2TinyDecoderUrl = "https://huggingface.co/shubham0204/sam2-onnx-models/resolve/main/sam2_hiera_tiny_decoder.onnx";
     
+    private const string Sam2SmallEncoderUrl = "https://huggingface.co/shubham0204/sam2-onnx-models/resolve/main/sam2_hiera_small_encoder.onnx";
+    private const string Sam2SmallDecoderUrl = "https://huggingface.co/shubham0204/sam2-onnx-models/resolve/main/sam2_hiera_small_decoder.onnx";
+    
+    // Note: Base Plus is significantly larger
+    private const string Sam2BasePlusEncoderUrl = "https://huggingface.co/shubham0204/sam2-onnx-models/resolve/main/sam2_hiera_base_plus_encoder.onnx";
+    private const string Sam2BasePlusDecoderUrl = "https://huggingface.co/shubham0204/sam2-onnx-models/resolve/main/sam2_hiera_base_plus_decoder.onnx";
+    
+    private const string Sam2LargeEncoderUrl = "https://huggingface.co/SharpAI/sam2-hiera-large-onnx/resolve/main/encoder.onnx";
+    private const string Sam2LargeDecoderUrl = "https://huggingface.co/SharpAI/sam2-hiera-large-onnx/resolve/main/decoder.onnx";
+
     // Using a reliable direct link to ONNX Runtime GPU (Win x64)
     private const string OnnxRuntimeZipUrl = "https://github.com/microsoft/onnxruntime/releases/download/v1.20.1/onnxruntime-win-x64-gpu-1.20.1.zip";
 
@@ -60,31 +70,42 @@ public class AIResourceService : ReactiveObject
         return path;
     }
 
-    public bool AreResourcesReady()
+    public (string Encoder, string Decoder) GetSAM2Paths(SAM2Variant variant)
     {
         var baseDir = GetAIResourcesPath();
+        var modelsDir = Path.Combine(baseDir, "models");
         
-        // 1. Generic Model (U2Net)
-        var modelPath = Path.Combine(baseDir, "models", "u2net.onnx");
-        
-        // 2. MobileSAM Models (Keep for backward compatibility or transition)
-        var encoderPath = Path.Combine(baseDir, "models", "mobile_sam_image_encoder.onnx");
-        var decoderPath = Path.Combine(baseDir, "models", "sam_mask_decoder_multi.onnx");
-        
-        // 3. SAM2 Models (NEW)
-        var sam2EncoderPath = Path.Combine(baseDir, "models", "sam2_hiera_tiny_encoder.onnx");
-        var sam2DecoderPath = Path.Combine(baseDir, "models", "sam2_hiera_tiny_decoder.onnx");
-        
-        // 4. Runtime
-        var onnxDll = Path.Combine(baseDir, "runtime", "onnxruntime.dll");
-        
-        // We require SAM2 for the new interactive selection features.
-        bool hasSam2 = File.Exists(sam2EncoderPath) && File.Exists(sam2DecoderPath);
-        
-        return File.Exists(modelPath) && hasSam2 && File.Exists(onnxDll);
+        return variant switch
+        {
+            SAM2Variant.Tiny => (Path.Combine(modelsDir, "sam2_hiera_tiny_encoder.onnx"), Path.Combine(modelsDir, "sam2_hiera_tiny_decoder.onnx")),
+            SAM2Variant.Small => (Path.Combine(modelsDir, "sam2_hiera_small_encoder.onnx"), Path.Combine(modelsDir, "sam2_hiera_small_decoder.onnx")),
+            SAM2Variant.BasePlus => (Path.Combine(modelsDir, "sam2_hiera_base_plus_encoder.onnx"), Path.Combine(modelsDir, "sam2_hiera_base_plus_decoder.onnx")),
+            SAM2Variant.Large => (Path.Combine(modelsDir, "sam2_hiera_large_encoder.onnx"), Path.Combine(modelsDir, "sam2_hiera_large_decoder.onnx")),
+            _ => (Path.Combine(modelsDir, "sam2_hiera_tiny_encoder.onnx"), Path.Combine(modelsDir, "sam2_hiera_tiny_decoder.onnx"))
+        };
     }
 
-    public void RemoveResources()
+    public bool IsAICoreReady()
+    {
+        var baseDir = GetAIResourcesPath();
+        var modelPath = Path.Combine(baseDir, "models", "u2net.onnx");
+        var onnxDll = Path.Combine(baseDir, "runtime", "onnxruntime.dll");
+        return File.Exists(modelPath) && File.Exists(onnxDll);
+    }
+
+    public bool IsSAM2Ready(SAM2Variant variant)
+    {
+        var paths = GetSAM2Paths(variant);
+        return File.Exists(paths.Encoder) && File.Exists(paths.Decoder);
+    }
+
+    // Deprecated monolithic check, keeping for compatibility if needed, but logic should move to specific checks
+    public bool AreResourcesReady()
+    {
+        return IsAICoreReady() && IsSAM2Ready(_settingsService.Settings.SelectedSAM2Variant);
+    }
+
+    public void RemoveAICoreResources()
     {
         try
         {
@@ -93,21 +114,55 @@ public class AIResourceService : ReactiveObject
             var modelsDir = Path.Combine(baseDir, "models");
 
             if (Directory.Exists(runtimeDir)) Directory.Delete(runtimeDir, true);
-            if (Directory.Exists(modelsDir)) Directory.Delete(modelsDir, true);
             
+            var u2net = Path.Combine(modelsDir, "u2net.onnx");
+            if (File.Exists(u2net)) File.Delete(u2net);
+
+            this.RaisePropertyChanged(nameof(IsAICoreReady));
             this.RaisePropertyChanged(nameof(AreResourcesReady));
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"AI Resource Removal Failed: {ex.Message}");
-            LastErrorMessage = ex.Message;
+            System.Diagnostics.Debug.WriteLine($"AI Core Removal Failed: {ex.Message}");
         }
     }
 
-    public async Task<bool> EnsureResourcesAsync(CancellationToken ct = default)
+    public void RemoveSAM2Resources(SAM2Variant variant)
     {
-        if (AreResourcesReady()) return true;
-        if (IsDownloading) return true; // Already in progress, caller should wait via Queue if needed
+        try
+        {
+            var paths = GetSAM2Paths(variant);
+            
+            if (File.Exists(paths.Encoder)) File.Delete(paths.Encoder);
+            if (File.Exists(paths.Decoder)) File.Delete(paths.Decoder);
+
+            this.RaisePropertyChanged(nameof(IsSAM2Ready));
+            this.RaisePropertyChanged(nameof(AreResourcesReady));
+        }
+        catch (Exception ex)
+        {
+             System.Diagnostics.Debug.WriteLine($"SAM2 Removal Failed: {ex.Message}");
+        }
+    }
+
+    // Deprecated but kept for compatibility if referenced elsewhere
+    public void RemoveResources()
+    {
+        RemoveAICoreResources();
+        // Default to removing all if generic called, or maybe just log warning
+        var baseDir = GetAIResourcesPath();
+        var modelsDir = Path.Combine(baseDir, "models");
+        if (Directory.Exists(modelsDir))
+        {
+            var files = Directory.GetFiles(modelsDir, "sam2_*.onnx");
+            foreach (var f in files) try { File.Delete(f); } catch { }
+        }
+    }
+
+    public async Task<bool> EnsureAICoreAsync(CancellationToken ct = default)
+    {
+        if (IsAICoreReady()) return true;
+        if (IsDownloading) return true; 
 
         try
         {
@@ -125,78 +180,107 @@ public class AIResourceService : ReactiveObject
             var onnxDll = Path.Combine(runtimeDir, "onnxruntime.dll");
             if (!File.Exists(onnxDll))
             {
-                await DownloadAndExtractZip(OnnxRuntimeZipUrl, runtimeDir, 0, 30, ct);
+                await DownloadAndExtractZip(OnnxRuntimeZipUrl, runtimeDir, 0, 60, ct); 
             }
             else
             {
-                DownloadProgress = 30;
+                DownloadProgress = 60;
             }
 
             // 2. Download U2Net Model
             var modelPath = Path.Combine(modelsDir, "u2net.onnx");
             if (!File.Exists(modelPath))
             {
-                await DownloadFile(ModelUrl, modelPath, 30, 20, ct);
-            }
-            else
-            {
-                DownloadProgress = 50;
-            }
-
-            // 3. Download MobileSAM Encoder (Largest)
-            var encoderPath = Path.Combine(modelsDir, "mobile_sam_image_encoder.onnx");
-            if (!File.Exists(encoderPath))
-            {
-                await DownloadFile(MobileSamEncoderUrl, encoderPath, 50, 40, ct);
-            }
-            else
-            {
-                DownloadProgress = 90;
-            }
-
-            // 4. Download MobileSAM Decoder
-            var decoderPath = Path.Combine(modelsDir, "sam_mask_decoder_multi.onnx");
-            if (!File.Exists(decoderPath))
-            {
-                await DownloadFile(MobileSamDecoderUrl, decoderPath, 90, 5, ct);
-            }
-            else
-            {
-                DownloadProgress = 95;
-            }
-
-            // 5. Download SAM2 Encoder (NEW)
-            var sam2EncoderPath = Path.Combine(modelsDir, "sam2_hiera_tiny_encoder.onnx");
-            if (!File.Exists(sam2EncoderPath))
-            {
-                await DownloadFile(Sam2EncoderUrl, sam2EncoderPath, 95, 3, ct);
-            }
-            else
-            {
-                DownloadProgress = 98;
-            }
-
-            // 6. Download SAM2 Decoder (NEW)
-            var sam2DecoderPath = Path.Combine(modelsDir, "sam2_hiera_tiny_decoder.onnx");
-            if (!File.Exists(sam2DecoderPath))
-            {
-                await DownloadFile(Sam2DecoderUrl, sam2DecoderPath, 98, 2, ct);
+                await DownloadFile(ModelUrl, modelPath, 60, 40, ct);
             }
             else
             {
                 DownloadProgress = 100;
             }
 
-            return AreResourcesReady();
+            return IsAICoreReady();
         }
         catch (OperationCanceledException)
         {
-            System.Diagnostics.Debug.WriteLine("AI Resource Download Cancelled");
+            System.Diagnostics.Debug.WriteLine("AI Core Download Cancelled");
             return false;
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"AI Resource Download Failed: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"AI Core Download Failed: {ex.Message}");
+            LastErrorMessage = ex.Message;
+            return false;
+        }
+        finally
+        {
+            IsDownloading = false;
+        }
+    }
+
+    public async Task<bool> EnsureSAM2Async(SAM2Variant variant, CancellationToken ct = default)
+    {
+        if (IsSAM2Ready(variant)) return true;
+        if (IsDownloading) return true;
+
+        try
+        {
+            IsDownloading = true;
+            DownloadProgress = 0;
+
+            var baseDir = GetAIResourcesPath();
+            var modelsDir = Path.Combine(baseDir, "models");
+            Directory.CreateDirectory(modelsDir);
+
+            var paths = GetSAM2Paths(variant);
+            
+            // Determine URLs
+            string encoderUrl = variant switch {
+                SAM2Variant.Tiny => Sam2TinyEncoderUrl,
+                SAM2Variant.Small => Sam2SmallEncoderUrl,
+                SAM2Variant.BasePlus => Sam2BasePlusEncoderUrl,
+                SAM2Variant.Large => Sam2LargeEncoderUrl,
+                _ => Sam2TinyEncoderUrl
+            };
+            
+            string decoderUrl = variant switch {
+                SAM2Variant.Tiny => Sam2TinyDecoderUrl,
+                SAM2Variant.Small => Sam2SmallDecoderUrl,
+                SAM2Variant.BasePlus => Sam2BasePlusDecoderUrl,
+                SAM2Variant.Large => Sam2LargeDecoderUrl,
+                _ => Sam2TinyDecoderUrl
+            };
+
+            // 1. Download Encoder
+            if (!File.Exists(paths.Encoder))
+            {
+                // Encoder is much larger (~90%)
+                await DownloadFile(encoderUrl, paths.Encoder, 0, 90, ct);
+            }
+            else
+            {
+                DownloadProgress = 90;
+            }
+
+            // 2. Download Decoder
+            if (!File.Exists(paths.Decoder))
+            {
+                await DownloadFile(decoderUrl, paths.Decoder, 90, 10, ct);
+            }
+            else
+            {
+                DownloadProgress = 100;
+            }
+
+            return IsSAM2Ready(variant);
+        }
+        catch (OperationCanceledException)
+        {
+            System.Diagnostics.Debug.WriteLine("SAM2 Download Cancelled");
+            return false;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"SAM2 Download Failed: {ex.Message}");
             LastErrorMessage = ex.Message;
             return false;
         }

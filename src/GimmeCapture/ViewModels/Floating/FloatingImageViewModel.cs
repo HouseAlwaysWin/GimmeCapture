@@ -254,7 +254,7 @@ public class FloatingImageViewModel : ViewModelBase
             ProcessingText = LocalizationService.Instance["ProcessingAI"] ?? "Initializing AI...";
             
             _sam2Service?.Dispose();
-            _sam2Service = new SAM2Service(_aiResourceService);
+            _sam2Service = new SAM2Service(_aiResourceService, _appSettingsService);
             System.Diagnostics.Debug.WriteLine("FloatingVM: Initializing SAM2 Service...");
             await _sam2Service.InitializeAsync();
 
@@ -282,7 +282,7 @@ public class FloatingImageViewModel : ViewModelBase
             if (_sam2Service != null)
             {
                 var encIn = _sam2Service.ModelInfo.Split('\n').FirstOrDefault(l => l.Contains("Inputs")) ?? "Unknown";
-                DiagnosticText = $"AI Ready: {encIn.Trim()}";
+                DiagnosticText = $"AI Ready [{_sam2Service.ModelVariantName}]: {encIn.Trim()}";
                 System.Diagnostics.Debug.WriteLine(_sam2Service.ModelInfo);
             }
             System.Diagnostics.Debug.WriteLine("FloatingVM: Interactive Selection Ready");
@@ -491,7 +491,8 @@ public class FloatingImageViewModel : ViewModelBase
     public async Task<bool> EnsureAIResourcesAsync()
     {
         // 1. Check if already ready - Fast path
-        if (_aiResourceService.AreResourcesReady()) return true;
+        var variant = _appSettingsService.Settings.SelectedSAM2Variant;
+        if (_aiResourceService.IsAICoreReady() && _aiResourceService.IsSAM2Ready(variant)) return true;
 
         // 2. Check if already downloading (Background)
         var currentStatus = ResourceQueueService.Instance.GetStatus("AI");
@@ -517,7 +518,12 @@ public class FloatingImageViewModel : ViewModelBase
         // 4. Start Download (Fire and Forget from UI perspective)
         _ = ResourceQueueService.Instance.EnqueueAsync("AI", async () =>
         {
-             return await _aiResourceService.EnsureResourcesAsync();
+             // Download Core and Selected Variant
+             bool coreReady = await _aiResourceService.EnsureAICoreAsync();
+             if (!coreReady) return false;
+             
+             var variant = _appSettingsService.Settings.SelectedSAM2Variant;
+             return await _aiResourceService.EnsureSAM2Async(variant);
         });
 
         return false;
@@ -558,9 +564,11 @@ public class FloatingImageViewModel : ViewModelBase
 
     public IClipboardService ClipboardService => _clipboardService;
     public AIResourceService AIResourceService => _aiResourceService;
+    public AppSettingsService AppSettingsService => _appSettingsService;
 
     private readonly IClipboardService _clipboardService;
     private readonly AIResourceService _aiResourceService;
+    private readonly AppSettingsService _appSettingsService;
 
     private double _wingScale = 1.0;
     public double WingScale
@@ -607,7 +615,7 @@ public class FloatingImageViewModel : ViewModelBase
         }
     }
 
-    public FloatingImageViewModel(Bitmap image, double originalWidth, double originalHeight, Avalonia.Media.Color borderColor, double borderThickness, bool hideDecoration, bool hideBorder, IClipboardService clipboardService, AIResourceService aiResourceService)
+    public FloatingImageViewModel(Bitmap image, double originalWidth, double originalHeight, Avalonia.Media.Color borderColor, double borderThickness, bool hideDecoration, bool hideBorder, IClipboardService clipboardService, AIResourceService aiResourceService, AppSettingsService appSettingsService)
     {
         Image = image;
         OriginalWidth = originalWidth;
@@ -620,6 +628,7 @@ public class FloatingImageViewModel : ViewModelBase
         HidePinBorder = hideBorder;
         _clipboardService = clipboardService;
         _aiResourceService = aiResourceService;
+        _appSettingsService = appSettingsService;
 
         CloseCommand = ReactiveCommand.Create(() => CloseAction?.Invoke());
         ToggleToolbarCommand = ReactiveCommand.Create(() => { ShowToolbar = !ShowToolbar; });

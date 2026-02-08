@@ -31,10 +31,14 @@ public class SAM2Service : IDisposable
 
     public string LastIouInfo => _lastIouInfo;
     public string ModelInfo => GetModelInfo();
+    public string ModelVariantName { get; private set; } = "Unknown";
 
-    public SAM2Service(AIResourceService resourceService)
+    private readonly AppSettingsService _settingsService;
+
+    public SAM2Service(AIResourceService resourceService, AppSettingsService settingsService)
     {
         _resourceService = resourceService;
+        _settingsService = settingsService;
     }
 
     public async Task InitializeAsync()
@@ -43,12 +47,15 @@ public class SAM2Service : IDisposable
 
         _resourceService.SetupNativeResolvers();
 
-        var baseDir = _resourceService.GetAIResourcesPath();
-        var encoderPath = Path.Combine(baseDir, "models", "sam2_hiera_tiny_encoder.onnx");
-        var decoderPath = Path.Combine(baseDir, "models", "sam2_hiera_tiny_decoder.onnx");
+        var variant = _settingsService.Settings.SelectedSAM2Variant;
+        ModelVariantName = variant.ToString();
+        var paths = _resourceService.GetSAM2Paths(variant);
+        
+        var encoderPath = paths.Encoder;
+        var decoderPath = paths.Decoder;
 
         if (!File.Exists(encoderPath) || !File.Exists(decoderPath))
-            throw new FileNotFoundException("SAM2 models not found. Please ensures resources are downloaded.");
+            throw new FileNotFoundException($"SAM2 models for {variant} not found. Please ensures resources are downloaded.");
 
         await Task.Run(() =>
         {
@@ -180,7 +187,12 @@ public class SAM2Service : IDisposable
             var inputs = new List<NamedOnnxValue>();
             
             void AddInput(string[] aliases, float[] data, int[] dimensions) {
-                var name = decInputNames.FirstOrDefault(n => aliases.Any(a => n == a || n == a.Replace("_", "") || n.Contains(a))) ?? aliases.First(); 
+                var name = decInputNames.FirstOrDefault(n => aliases.Any(a => n == a || n == a.Replace("_", "") || n.Contains(a)));
+                if (name == null) {
+                    System.Diagnostics.Debug.WriteLine($"[AI] Skipping input {aliases.First()} - Not required by model");
+                    return;
+                }
+                
                 var meta = decInputMetaData[name];
                 var expectedDims = meta.Dimensions;
                 int[] finalDims = dimensions;
@@ -197,7 +209,12 @@ public class SAM2Service : IDisposable
             }
 
             void AddTensorInput(string[] aliases, DenseTensor<float> tensor) {
-               var name = decInputNames.FirstOrDefault(n => aliases.Any(a => n == a || n == a.Replace("_", "") || n.Contains(a))) ?? aliases.First();
+               var name = decInputNames.FirstOrDefault(n => aliases.Any(a => n == a || n == a.Replace("_", "") || n.Contains(a)));
+               if (name == null) {
+                   System.Diagnostics.Debug.WriteLine($"[AI] Skipping tensor {aliases.First()} - Not required by model");
+                   return;
+               }
+               
                var expectedDims = decInputMetaData[name].Dimensions;
                if (expectedDims.Length == 5 && tensor.Dimensions.Length == 4) {
                    var reshaped = new DenseTensor<float>(tensor.ToArray(), new int[5] { 1, 1, tensor.Dimensions[1], tensor.Dimensions[2], tensor.Dimensions[3] });
