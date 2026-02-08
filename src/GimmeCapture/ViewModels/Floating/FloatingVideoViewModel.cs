@@ -143,7 +143,63 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable
     private readonly int _width;
     private readonly int _height;
 
-    public FloatingVideoViewModel(string videoPath, string ffmpegPath, int width, int height, double originalWidth, double originalHeight, Avalonia.Media.Color borderColor, double borderThickness, bool hideDecoration, bool hideBorder)
+    // Added properties for Resize and Toolbar logic
+    private double _displayWidth;
+    public double DisplayWidth
+    {
+        get => _displayWidth;
+        set => this.RaiseAndSetIfChanged(ref _displayWidth, value);
+    }
+
+    private double _displayHeight;
+    public double DisplayHeight
+    {
+        get => _displayHeight;
+        set => this.RaiseAndSetIfChanged(ref _displayHeight, value);
+    }
+
+    private FloatingTool _currentTool = FloatingTool.None;
+    public FloatingTool CurrentTool
+    {
+        get => _currentTool;
+        set 
+        {
+            this.RaiseAndSetIfChanged(ref _currentTool, value);
+            this.RaisePropertyChanged(nameof(IsSelectionMode));
+            this.RaisePropertyChanged(nameof(IsAnyToolActive));
+        }
+    }
+
+    public bool IsSelectionMode
+    {
+        get => CurrentTool == FloatingTool.Selection;
+        set => CurrentTool = value ? FloatingTool.Selection : (CurrentTool == FloatingTool.Selection ? FloatingTool.None : CurrentTool);
+    }
+
+    public bool IsAnyToolActive => CurrentTool != FloatingTool.None;
+
+    private Avalonia.Rect _selectionRect = new Avalonia.Rect();
+    public Avalonia.Rect SelectionRect
+    {
+        get => _selectionRect;
+        set 
+        {
+            this.RaiseAndSetIfChanged(ref _selectionRect, value);
+            this.RaisePropertyChanged(nameof(IsSelectionActive));
+        }
+    }
+
+    public bool IsSelectionActive => SelectionRect.Width > 0 && SelectionRect.Height > 0;
+
+    public ReactiveCommand<Unit, Unit> SelectionCommand { get; }
+    public ReactiveCommand<Unit, Unit> CropCommand { get; } // Future implementation
+    public ReactiveCommand<Unit, Unit> PinSelectionCommand { get; } // Future implementation
+    
+    // Dependencies
+    private readonly GimmeCapture.Services.Abstractions.IClipboardService _clipboardService;
+    public GimmeCapture.Services.Abstractions.IClipboardService ClipboardService => _clipboardService;
+
+    public FloatingVideoViewModel(string videoPath, string ffmpegPath, int width, int height, double originalWidth, double originalHeight, Avalonia.Media.Color borderColor, double borderThickness, bool hideDecoration, bool hideBorder, GimmeCapture.Services.Abstractions.IClipboardService clipboardService)
     {
         VideoPath = videoPath;
         _ffmpegPath = ffmpegPath;
@@ -151,10 +207,13 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable
         _height = (height / 2) * 2;
         OriginalWidth = originalWidth;
         OriginalHeight = originalHeight;
+        DisplayWidth = originalWidth;
+        DisplayHeight = originalHeight;
         BorderColor = borderColor;
         BorderThickness = borderThickness;
         HidePinDecoration = hideDecoration;
         HidePinBorder = hideBorder;
+        _clipboardService = clipboardService;
 
         CloseCommand = ReactiveCommand.Create(() => 
         {
@@ -163,6 +222,15 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable
         });
 
         ToggleToolbarCommand = ReactiveCommand.Create(() => { ShowToolbar = !ShowToolbar; });
+
+        SelectionCommand = ReactiveCommand.Create(() => 
+        {
+            CurrentTool = CurrentTool == FloatingTool.Selection ? FloatingTool.None : FloatingTool.Selection;
+        });
+
+        // Placeholders for now, logic to be implemented if video cropping/re-pinning is verified feasible
+        CropCommand = ReactiveCommand.Create(() => { });
+        PinSelectionCommand = ReactiveCommand.Create(() => { });
 
         CopyCommand = ReactiveCommand.CreateFromTask(async () => 
         {

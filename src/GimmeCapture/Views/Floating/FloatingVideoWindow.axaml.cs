@@ -5,6 +5,9 @@ using GimmeCapture.ViewModels.Floating;
 using System;
 using System.Threading.Tasks;
 using System.IO;
+using Avalonia.VisualTree;
+using Avalonia.Interactivity;
+using Avalonia.Threading;
 
 namespace GimmeCapture.Views.Floating;
 
@@ -16,6 +19,7 @@ public partial class FloatingVideoWindow : Window
         
         PointerPressed += OnPointerPressed;
         KeyDown += OnKeyDown;
+        AddHandler(TappedEvent, OnTapped, Avalonia.Interactivity.RoutingStrategies.Bubble);
     }
 
     protected override void OnDataContextChanged(EventArgs e)
@@ -71,6 +75,41 @@ public partial class FloatingVideoWindow : Window
                     System.IO.File.Copy(vm.VideoPath, targetPath, true);
                 }
             };
+
+            // Force initial sync
+            SyncWindowSizeToVideo();
+            
+            vm.PropertyChanged += (s, ev) =>
+            {
+                if (ev.PropertyName == nameof(FloatingVideoViewModel.ShowToolbar) || 
+                    ev.PropertyName == nameof(FloatingVideoViewModel.WindowPadding))
+                {
+                    if (ev.PropertyName == nameof(FloatingVideoViewModel.ShowToolbar))
+                    {
+                        SizeToContent = SizeToContent.Manual; // Temporarily disable to force re-measure if needed, or keep Manual
+                        // Actually, for toolbar toggle we might need to adjust Height
+                        var padding = vm.WindowPadding;
+                        double toolbarHeight = vm.ShowToolbar ? 42 : 0;
+                        Height = vm.DisplayHeight + padding.Top + padding.Bottom + toolbarHeight;
+                    }
+                    InvalidateMeasure();
+                }
+            };
+        }
+    }
+
+    private void SyncWindowSizeToVideo()
+    {
+        if (DataContext is FloatingVideoViewModel vm)
+        {
+            // Initial size setup
+            var padding = vm.WindowPadding;
+            double toolbarHeight = vm.ShowToolbar ? 42 : 0;
+            
+            Width = vm.DisplayWidth + padding.Left + padding.Right;
+            Height = vm.DisplayHeight + padding.Top + padding.Bottom + toolbarHeight;
+            
+            InvalidateMeasure();
         }
     }
 
@@ -82,6 +121,11 @@ public partial class FloatingVideoWindow : Window
     // Start State
     private PixelPoint _startPosition;
     private Size _startSize; // Logical
+    
+    // Manual Drag State
+    private Point _pointerPressedPoint;
+    private bool _isMaybeMoving;
+    private PointerPressedEventArgs? _pendingMoveEvent;
 
     private enum ResizeDirection
     {
@@ -118,7 +162,12 @@ public partial class FloatingVideoWindow : Window
 
         if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
         {
-            BeginMoveDrag(e);
+            // Do NOT call BeginMoveDrag immediately, as it swallows MouseUp/Tapped events.
+            // Instead, wait for a small movement threshold.
+            _isMaybeMoving = true;
+            _pointerPressedPoint = this.PointToScreen(e.GetPosition(this)).ToPoint(1.0);
+            _pendingMoveEvent = e;
+            e.Pointer.Capture(this);
         }
     }
     
@@ -190,6 +239,16 @@ public partial class FloatingVideoWindow : Window
                 Width = w;
                 Height = h;
                 
+                // Update ViewModel display size
+                if (DataContext is FloatingVideoViewModel vm)
+                {
+                    var padding = vm.WindowPadding;
+                    vm.DisplayWidth = Math.Max(1, w - padding.Left - padding.Right);
+                    
+                    double toolbarHeight = vm.ShowToolbar ? 42 : 0;
+                    vm.DisplayHeight = Math.Max(1, h - padding.Top - padding.Bottom - toolbarHeight);
+                }
+
                 e.Handled = true;
                 
                 InvalidateMeasure();
@@ -200,8 +259,24 @@ public partial class FloatingVideoWindow : Window
                 // Suppress runtime resize errors
             }
         }
+        else if (_isMaybeMoving)
+        {
+            var currentScreenPoint = this.PointToScreen(e.GetPosition(this)).ToPoint(1.0);
+            var distance = Math.Sqrt(Math.Pow(currentScreenPoint.X - _pointerPressedPoint.X, 2) + 
+                                     Math.Pow(currentScreenPoint.Y - _pointerPressedPoint.Y, 2));
+            
+            // Movement threshold (3 pixels) to distinguish between Click and Drag
+            if (distance > 3 && _pendingMoveEvent != null)
+            {
+                _isMaybeMoving = false;
+                var ev = _pendingMoveEvent;
+                _pendingMoveEvent = null;
+                e.Pointer.Capture(null); // Release capture so BeginMoveDrag works
+                BeginMoveDrag(ev);
+            }
+        }
     }
-    
+
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         base.OnPointerReleased(e);
@@ -211,8 +286,36 @@ public partial class FloatingVideoWindow : Window
             _isResizing = false;
             _resizeDirection = ResizeDirection.None;
         }
+        else if (_isMaybeMoving)
+        {
+            // If we released without moving enough, it's a click, not a drag.
+            e.Pointer.Capture(null);
+            _isMaybeMoving = false;
+            _pendingMoveEvent = null;
+        }
     }
     
+    private void OnTapped(object? sender, Avalonia.Input.TappedEventArgs e)
+    {
+        if (DataContext is FloatingVideoViewModel vm)
+        {
+            // Filter out interactive elements
+            var visualSource = e.Source as Avalonia.Visual;
+            while (visualSource != null)
+            {
+                if (visualSource is Button || visualSource is ContextMenu)
+                    return;
+                visualSource = visualSource.GetVisualParent();
+            }
+
+            // Toggle toolbar if not resizing/moving
+            if (!_isResizing)
+            {
+                vm.ToggleToolbarCommand.Execute().Subscribe();
+            }
+        }
+    }
+
     private void OnKeyDown(object? sender, KeyEventArgs e)
     {
         if (e.Key == Key.Escape)

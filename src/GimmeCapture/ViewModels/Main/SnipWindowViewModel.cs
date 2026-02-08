@@ -1165,7 +1165,8 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable
                           SelectionBorderColor, 
                           SelectionBorderThickness,
                           _mainVm?.HideRecordPinDecoration ?? false,
-                          _mainVm?.HideRecordPinBorder ?? false);
+                          _mainVm?.HideRecordPinBorder ?? false,
+                          new ClipboardService());
 
                       // Calculate logic-consistent padding (matches FloatingVideoViewModel.WindowPadding)
                       double hPad = videoVm.HidePinDecoration ? 10 : Math.Max(10, videoVm.WingWidth);
