@@ -14,7 +14,7 @@
         </Style>
     </UserControl.Styles>
 
-    <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
+    <Grid HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,60,0,0">
         <!-- Octagonal Background Panel -->
         <Grid ColumnDefinitions="Auto,Auto,Auto" HorizontalAlignment="Center">
             
@@ -27,7 +27,7 @@
             </Rectangle>
 
             <!-- Center Content -->
-            <Panel Grid.Column="1" MinWidth="180" MaxWidth="450" Height="48">
+            <Panel Grid.Column="1" Height="48">
                 <!-- Octagonal Shadow/Glow (Red accent) -->
                 <Path Data="M 12,0 L 268,0 L 280,12 L 280,36 L 268,48 L 12,48 L 0,36 L 0,12 Z" 
                       Fill="{DynamicResource ThemeAccentBrush}" Opacity="0.3" Stretch="Fill" Margin="-3">

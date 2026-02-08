@@ -320,11 +320,10 @@
                 <Button Content="OK" HorizontalAlignment="Right" Theme="{StaticResource SnipButton}" Background="#333333" BorderBrush="#555555" BorderThickness="1"
                         Padding="10,2" Margin="0,2,0,0" Click="OnTextConfirmClick" Cursor="Hand"/>
             </StackPanel>
-                    
-            <!-- Processing Overlay -->
-            <ctl:ProcessingOverlay DataContext="{Binding}" IsVisible="{Binding IsProcessing}"/>
-
-            <ctl:SnipToolbar Name="Toolbar" Canvas.Left="{Binding ToolbarLeft}" Canvas.Top="{Binding ToolbarTop}" IsVisible="{Binding CurrentState, Converter={StaticResource StateToBoolConverter}}"/>
+                    <ctl:SnipToolbar Name="Toolbar" Canvas.Left="{Binding ToolbarLeft}" Canvas.Top="{Binding ToolbarTop}" IsVisible="{Binding CurrentState, Converter={StaticResource StateToBoolConverter}}"/>
         </Canvas>
+        
+        <!-- Processing Overlay - outside Canvas for proper centering -->
+        <ctl:ProcessingOverlay DataContext="{Binding}" IsVisible="{Binding IsProcessing}" IsHitTestVisible="False"/>
     </Grid>
 </Window>

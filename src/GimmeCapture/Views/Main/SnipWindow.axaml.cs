@@ -93,13 +93,41 @@ public partial class SnipWindow : Window
         // Position logic ...
         
         // Defer Z-Order logic to ensure window is fully initialized
-        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        Avalonia.Threading.Dispatcher.UIThread.Post(async () =>
         {
+            Console.WriteLine("[SnipWindow] OnOpened Post callback executing");
+            
             if (_viewModel != null)
             {
+                Console.WriteLine("[SnipWindow] ViewModel is not null, setting properties");
                 _viewModel.VisualScaling = this.RenderScaling;
                 _viewModel.ScreenOffset = this.Position;
                 _viewModel.RefreshWindowRects(this.TryGetPlatformHandle()?.Handle);
+                
+                // Trigger AI Auto-Scan in background
+                Console.WriteLine("[SnipWindow] About to execute AIScanCommand");
+                try
+                {
+                    if (_viewModel.AIScanCommand == null)
+                    {
+                        Console.WriteLine("[SnipWindow] ERROR: AIScanCommand is null!");
+                    }
+                    else
+                    {
+                        Console.WriteLine("[SnipWindow] Executing AIScanCommand...");
+                        await _viewModel.AIScanCommand.Execute();
+                        Console.WriteLine("[SnipWindow] AIScanCommand completed");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[SnipWindow] AI Scan exception: {ex.Message}");
+                    Console.WriteLine($"[SnipWindow] Stack: {ex.StackTrace}");
+                }
+            }
+            else
+            {
+                Console.WriteLine("[SnipWindow] WARNING: _viewModel is null in OnOpened!");
             }
 
             // Ensure SnipWindow is absolutely on top of everything
@@ -229,6 +257,7 @@ public partial class SnipWindow : Window
                      return;
                 }
                 
+                if (_viewModel.MainVm == null) return;
                 var vm = new FloatingImageViewModel(bitmap, rect.Width, rect.Height, color, thickness, hideDecoration, hideBorder, _clipboardService, aiService, _viewModel.MainVm.AppSettingsService);
                 vm.WingScale = _viewModel.WingScale;
                 vm.CornerIconScale = _viewModel.CornerIconScale;

@@ -100,6 +100,20 @@ public class SnipWindowViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _processingText, value);
     }
 
+    private bool _isIndeterminate = true;
+    public bool IsIndeterminate
+    {
+        get => _isIndeterminate;
+        set => this.RaiseAndSetIfChanged(ref _isIndeterminate, value);
+    }
+
+    private double _progressValue;
+    public double ProgressValue
+    {
+        get => _progressValue;
+        set => this.RaiseAndSetIfChanged(ref _progressValue, value);
+    }
+
     public Color ThemeColor => _mainVm?.ThemeColor ?? Colors.Red;
     public Color ThemeDeepColor 
     {
@@ -697,6 +711,9 @@ public class SnipWindowViewModel : ViewModelBase
         CopyRecordingCommand = ReactiveCommand.CreateFromTask(CopyRecording);
         CopyRecordingCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
 
+        AIScanCommand = ReactiveCommand.CreateFromTask(RunAIScanAsync);
+        AIScanCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"AI Scan error: {ex}"));
+
         Annotations.CollectionChanged += (s, e) =>
         {
             if (!_isUndoingOrRedoing)
@@ -1236,4 +1253,97 @@ public class SnipWindowViewModel : ViewModelBase
     public Action? HideAction { get; set; }
     public Func<Task<string?>>? PickSaveFileAction { get; set; }
     public System.Action<Avalonia.Media.Imaging.Bitmap, Rect, Color, double, bool>? OpenPinWindowAction { get; set; }
+
+    public ReactiveCommand<Unit, Unit> AIScanCommand { get; private set; } = null!;
+
+    private async Task RunAIScanAsync()
+    {
+        if (_mainVm == null) 
+        {
+            Console.WriteLine("[AI Scan] ABORT: _mainVm is null");
+            return;
+        }
+
+        IsProcessing = true;
+        ProcessingText = "AI Scanning...";
+        Console.WriteLine("[AI Scan] Starting...");
+        
+        try
+        {
+            // Check AI resources first
+            var aiReady = _mainVm.AIResourceService.IsSAM2Ready(_mainVm.AppSettingsService.Settings.SelectedSAM2Variant);
+            Console.WriteLine($"[AI Scan] SAM2 Ready: {aiReady}");
+            
+            if (!aiReady)
+            {
+                Console.WriteLine("[AI Scan] ABORT: SAM2 not ready - model may not be downloaded");
+                return;
+            }
+
+            // 1. Capture full screen for SAM2 encoding
+            var originalOpacity = MaskOpacity;
+            MaskOpacity = 0;
+            await Task.Delay(100); // Let mask hide
+
+            var regionToCapture = new Rect(0, 0, ViewportSize.Width, ViewportSize.Height);
+            Console.WriteLine($"[AI Scan] Capturing region: {regionToCapture}");
+            
+            using var skBitmap = await _captureService.CaptureScreenAsync(regionToCapture, ScreenOffset, VisualScaling, false);
+            
+            MaskOpacity = originalOpacity;
+            
+            if (skBitmap == null) 
+            {
+                Console.WriteLine("[AI Scan] ABORT: Capture returned null");
+                return;
+            }
+            
+            Console.WriteLine($"[AI Scan] Captured bitmap: {skBitmap.Width}x{skBitmap.Height}");
+
+            // 2. Encode image to PNG bytes for SAM2
+            using var image = SkiaSharp.SKImage.FromBitmap(skBitmap);
+            using var data = image.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
+            var imageBytes = data.ToArray();
+            Console.WriteLine($"[AI Scan] Encoded PNG: {imageBytes.Length} bytes");
+
+            // 3. Initialize SAM2 and run scan
+            var sam2 = new SAM2Service(_mainVm.AIResourceService, _mainVm.AppSettingsService);
+            Console.WriteLine("[AI Scan] Initializing SAM2...");
+            await sam2.InitializeAsync();
+            Console.WriteLine("[AI Scan] SAM2 Initialized. Setting image...");
+            await sam2.SetImageAsync(imageBytes);
+            Console.WriteLine("[AI Scan] Image set. Running AutoDetect...");
+
+            var rects = await sam2.AutoDetectObjectsAsync(16); // Grid Density 16 = 225 points
+            sam2.Dispose();
+            
+            Console.WriteLine($"[AI Scan] AutoDetect returned {rects.Count} rects");
+
+            // 4. Add detected rects to WindowRects
+            if (rects.Any())
+            {
+                foreach (var r in rects)
+                {
+                    WindowRects.Add(r);
+                    Console.WriteLine($"[AI Scan] Added rect: {r}");
+                }
+                
+                Console.WriteLine($"[AI Scan] Complete: {rects.Count} objects added");
+            }
+            else
+            {
+                Console.WriteLine("[AI Scan] No objects detected");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[AI Scan] ERROR: {ex.Message}");
+            Console.WriteLine($"[AI Scan] Stack: {ex.StackTrace}");
+        }
+        finally
+        {
+            IsProcessing = false;
+            Console.WriteLine("[AI Scan] Finished");
+        }
+    }
 }

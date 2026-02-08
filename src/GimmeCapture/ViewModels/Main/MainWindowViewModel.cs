@@ -1047,12 +1047,12 @@ public class MainWindowViewModel : ViewModelBase
         };
 
         sam2.WhenAnyValue(x => x.SelectedVariant)
-            .Subscribe(v => 
+            .Subscribe(async v => 
             {
                 if (Enum.TryParse<SAM2Variant>(v, out var variant))
                 {
                     _settingsService.Settings.SelectedSAM2Variant = variant;
-                    _settingsService.SaveAsync(); 
+                    await _settingsService.SaveAsync(); 
                     sam2.IsInstalled = AIResourceService.IsSAM2Ready(variant);
                 }
             });

@@ -149,6 +149,177 @@ public class SAM2Service : IDisposable
         });
     }
 
+    public async Task<List<Avalonia.Rect>> AutoDetectObjectsAsync(int gridDensity = 32)
+    {
+        if (!_isInitialized || _decoderSession == null || _imageEmbeddings == null) return new List<Avalonia.Rect>();
+
+        return await Task.Run(() =>
+        {
+            var results = new List<Avalonia.Rect>();
+
+            // 1. Generate Grid Points (use lower density to avoid too many inference calls)
+            var points = new List<(float X, float Y)>();
+            int effectiveDensity = Math.Min(gridDensity, 8); // Limit to 8 = 49 points max for performance
+            for (int r = 1; r < effectiveDensity; r++)
+            {
+                for (int c = 1; c < effectiveDensity; c++)
+                {
+                    points.Add(((float)c / effectiveDensity * 1024f, (float)r / effectiveDensity * 1024f));
+                }
+            }
+            
+            Console.WriteLine($"[AI Scan] Processing {points.Count} grid points...");
+
+            var decInputMetaData = _decoderSession.InputMetadata;
+            var decInputNames = decInputMetaData.Keys.ToList();
+
+            // Process each point individually (batch=1)
+            int processedCount = 0;
+            foreach (var pt in points)
+            {
+                try
+                {
+                    // Create batch=1 tensors
+                    var coords = new DenseTensor<float>(new[] { 1, 1, 2 });
+                    coords[0, 0, 0] = pt.X;
+                    coords[0, 0, 1] = pt.Y;
+
+                    var maskInput = new DenseTensor<float>(new[] { 1, 1, 256, 256 });
+                    var hasMaskInput = new DenseTensor<float>(new[] { 1 });
+
+                    var inputs = new List<NamedOnnxValue>();
+
+                    // Helper to add tensor with correct type
+                    void AddInput(string[] aliases, DenseTensor<float> tensor)
+                    {
+                        var name = decInputNames.FirstOrDefault(n => aliases.Any(a => n == a || n.Contains(a)));
+                        if (name != null) inputs.Add(NamedOnnxValue.CreateFromTensor(name, tensor));
+                    }
+
+                    // Add embeddings (batch=1, no tiling needed)
+                    AddInput(new[] { "image_embeddings", "image_embed" }, _imageEmbeddings);
+                    if (_highResFeat0 != null) AddInput(new[] { "high_res_feats_0", "feat_0" }, _highResFeat0);
+                    if (_highResFeat1 != null) AddInput(new[] { "high_res_feats_1", "feat_1" }, _highResFeat1);
+
+                    // Add point inputs
+                    var coordName = decInputNames.FirstOrDefault(n => n.Contains("point_coords") || n.Contains("coords"));
+                    if (coordName != null) inputs.Add(NamedOnnxValue.CreateFromTensor(coordName, coords));
+
+                    // Labels with type conversion
+                    var labelName = decInputNames.FirstOrDefault(n => n.Contains("point_labels") || n.Contains("labels"));
+                    if (labelName != null)
+                    {
+                        var meta = decInputMetaData[labelName];
+                        if (meta.ElementType == typeof(int))
+                        {
+                            var intLabels = new DenseTensor<int>(new[] { 1, 1 });
+                            intLabels[0, 0] = 1;
+                            inputs.Add(NamedOnnxValue.CreateFromTensor(labelName, intLabels));
+                        }
+                        else
+                        {
+                            var labels = new DenseTensor<float>(new[] { 1, 1 });
+                            labels[0, 0] = 1f;
+                            inputs.Add(NamedOnnxValue.CreateFromTensor(labelName, labels));
+                        }
+                    }
+
+                    // Mask inputs
+                    var maskInName = decInputNames.FirstOrDefault(n => n.Contains("mask_input") && !n.Contains("has_mask"));
+                    if (maskInName != null) inputs.Add(NamedOnnxValue.CreateFromTensor(maskInName, maskInput));
+
+                    var hasMaskName = decInputNames.FirstOrDefault(n => n.Contains("has_mask"));
+                    if (hasMaskName != null) inputs.Add(NamedOnnxValue.CreateFromTensor(hasMaskName, hasMaskInput));
+
+                    // orig_im_size with type conversion
+                    var sizeName = decInputNames.FirstOrDefault(n => n.Contains("orig_im_size") || n.Contains("im_size"));
+                    if (sizeName != null)
+                    {
+                        var sizeMeta = decInputMetaData[sizeName];
+                        if (sizeMeta.ElementType == typeof(int))
+                        {
+                            var intSizes = new DenseTensor<int>(new[] { 2 });
+                            intSizes[0] = 1024; intSizes[1] = 1024;
+                            inputs.Add(NamedOnnxValue.CreateFromTensor(sizeName, intSizes));
+                        }
+                        else
+                        {
+                            var sizes = new DenseTensor<float>(new[] { 2 });
+                            sizes[0] = 1024f; sizes[1] = 1024f;
+                            inputs.Add(NamedOnnxValue.CreateFromTensor(sizeName, sizes));
+                        }
+                    }
+
+                    using var result = _decoderSession.Run(inputs);
+                    var masksOutput = result.FirstOrDefault(r => r.Name.Contains("mask") && !r.Name.Contains("low_res"))?.AsTensor<float>();
+                    var iouOutput = result.FirstOrDefault(r => r.Name.Contains("iou"))?.AsTensor<float>();
+
+                    if (masksOutput != null && iouOutput != null)
+                    {
+                        int mh = masksOutput.Dimensions[2], mw = masksOutput.Dimensions[3];
+
+                        // Pick best mask
+                        int bestM = 0;
+                        float bestIou = -1;
+                        for (int m = 0; m < iouOutput.Dimensions[1]; m++)
+                        {
+                            if (iouOutput[0, m] > bestIou) { bestIou = iouOutput[0, m]; bestM = m; }
+                        }
+
+                        if (bestIou >= 0.7f) // Accept moderately confident masks
+                        {
+                            // Extract bounding box from mask
+                            float minX = mw, minY = mh, maxX = 0, maxY = 0;
+                            int count = 0;
+                            for (int y = 0; y < mh; y += 4)
+                            for (int x = 0; x < mw; x += 4)
+                            {
+                                if (masksOutput[0, bestM, y, x] > 0)
+                                {
+                                    if (x < minX) minX = x;
+                                    if (x > maxX) maxX = x;
+                                    if (y < minY) minY = y;
+                                    if (y > maxY) maxY = y;
+                                    count++;
+                                }
+                            }
+
+                            if (count > 5)
+                            {
+                                var rect = new Avalonia.Rect(
+                                    minX / mw * _originalWidth,
+                                    minY / mh * _originalHeight,
+                                    (maxX - minX) / mw * _originalWidth,
+                                    (maxY - minY) / mh * _originalHeight);
+
+                                // Filter noise
+                                if (rect.Width > 15 && rect.Height > 15 &&
+                                    rect.Width < _originalWidth * 0.95 && rect.Height < _originalHeight * 0.95)
+                                {
+                                    if (!results.Any(existing => IoU(existing, rect) > 0.5f))
+                                    {
+                                        results.Add(rect);
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    processedCount++;
+                    if (processedCount % 10 == 0)
+                        Console.WriteLine($"[AI Scan] Processed {processedCount}/{points.Count} points, found {results.Count} objects");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[AI Scan] Point ({pt.X:F0},{pt.Y:F0}) failed: {ex.Message}");
+                }
+            }
+
+            Console.WriteLine($"[AI Scan] Complete: {results.Count} objects found");
+            return results;
+        });
+    }
+
     public async Task<byte[]> GetMaskAsync(IEnumerable<(double X, double Y, bool IsPositive)> points)
     {
         if (!_isInitialized || _decoderSession == null || _imageEmbeddings == null || _highResFeat0 == null || _highResFeat1 == null) 
@@ -352,6 +523,17 @@ public class SAM2Service : IDisposable
             resizedMask.Encode(ms, SKEncodedImageFormat.Png, 100);
             return ms.ToArray();
         });
+    }
+
+
+    private float IoU(Avalonia.Rect a, Avalonia.Rect b)
+    {
+        var intersect = a.Intersect(b);
+        if (intersect.Width <= 0 || intersect.Height <= 0) return 0;
+        float areaA = (float)(a.Width * a.Height);
+        float areaB = (float)(b.Width * b.Height);
+        float areaI = (float)(intersect.Width * intersect.Height);
+        return areaI / (areaA + areaB - areaI);
     }
 
     public void ResetMaskInput() => _lowResMask = null;

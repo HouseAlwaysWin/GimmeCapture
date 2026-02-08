@@ -74,6 +74,15 @@ public partial class SnipWindow : Window
                 extraRegions.Add(new Rect(scaledRect.X - hHalf, scaledRect.Bottom - hHalf, hSize, hSize)); // BL
                 extraRegions.Add(new Rect(scaledRect.Right - hHalf, scaledRect.Bottom - hHalf, hSize, hSize)); // BR
 
+                // 2b. Corner Decoration Icons (hearts/skulls) - positioned 4px inside selection with SelectionIconSize
+                // Add extra padding (8px) to ensure entire icon is visible including any anti-aliasing
+                double iconSize = (_viewModel.SelectionIconSize + 8) * scaling;
+                double iconMargin = 2 * scaling; // Reduce margin to capture more of the icon
+                extraRegions.Add(new Rect(scaledRect.X + iconMargin, scaledRect.Y + iconMargin, iconSize, iconSize)); // TL heart
+                extraRegions.Add(new Rect(scaledRect.Right - iconMargin - iconSize, scaledRect.Y + iconMargin, iconSize, iconSize)); // TR skull
+                extraRegions.Add(new Rect(scaledRect.X + iconMargin, scaledRect.Bottom - iconMargin - iconSize, iconSize, iconSize)); // BL heart
+                extraRegions.Add(new Rect(scaledRect.Right - iconMargin - iconSize, scaledRect.Bottom - iconMargin - iconSize, iconSize, iconSize)); // BR skull
+
                 // 3. Side Handles (15px thick)
                 double sThick = 15 * scaling;
                 double sHalf = 7.5 * scaling;
