@@ -48,4 +48,6 @@ public class AppSettings
     [System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter))]
     public SAM2Variant SelectedSAM2Variant { get; set; } = SAM2Variant.Tiny;
     public bool ShowAIScanBox { get; set; } = true;
+    public int SAM2GridDensity { get; set; } = 8;
+    public int SAM2MaxObjects { get; set; } = 20;
 }

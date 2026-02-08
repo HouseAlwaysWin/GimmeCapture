@@ -602,6 +602,20 @@ public class MainWindowViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _showAIScanBox, value);
     }
 
+    private int _sam2GridDensity = 8;
+    public int SAM2GridDensity
+    {
+        get => _sam2GridDensity;
+        set => this.RaiseAndSetIfChanged(ref _sam2GridDensity, value);
+    }
+
+    private int _sam2MaxObjects = 20;
+    public int SAM2MaxObjects
+    {
+        get => _sam2MaxObjects;
+        set => this.RaiseAndSetIfChanged(ref _sam2MaxObjects, value);
+    }
+
 
 
     private bool _showRecordCursor = true;
@@ -668,6 +682,8 @@ public class MainWindowViewModel : ViewModelBase
         ShowRecordCursor = s.ShowRecordCursor;
         TempDirectory = s.TempDirectory;
         ShowAIScanBox = s.ShowAIScanBox;
+        SAM2GridDensity = s.SAM2GridDensity;
+        SAM2MaxObjects = s.SAM2MaxObjects;
         if (string.IsNullOrEmpty(TempDirectory))
         {
             TempDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Temp");
@@ -767,6 +783,8 @@ public class MainWindowViewModel : ViewModelBase
             s.ShowRecordCursor = ShowRecordCursor;
             s.TempDirectory = TempDirectory;
             s.ShowAIScanBox = ShowAIScanBox;
+            s.SAM2GridDensity = SAM2GridDensity;
+            s.SAM2MaxObjects = SAM2MaxObjects;
             
             await _settingsService.SaveAsync();
             IsModified = false;

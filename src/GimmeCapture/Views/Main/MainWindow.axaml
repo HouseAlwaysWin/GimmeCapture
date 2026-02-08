@@ -282,6 +282,27 @@
                                                 Margin="10,0,0,0"/>
                                         <TextBox Text="{Binding AIResourcesDirectory}" Margin="0,0,10,0"/>
                                     </DockPanel>
+                                    
+                                    <TextBlock Text="{Binding [AIScanSettings], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold" Margin="0,15,0,5"/>
+                                    <!-- Grid Density -->
+                                    <StackPanel Spacing="5" Margin="24,0,0,10">
+                                        <TextBlock Text="{Binding [AIScanDensity], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>
+                                        <StackPanel Orientation="Horizontal" Spacing="10">
+                                            <Slider Minimum="4" Maximum="32" Value="{Binding SAM2GridDensity}" 
+                                                    TickFrequency="1" IsSnapToTickEnabled="True" HorizontalAlignment="Stretch" Width="250"/>
+                                            <TextBlock Text="{Binding SAM2GridDensity}" VerticalAlignment="Center" Width="30"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                    
+                                    <!-- Max Objects -->
+                                    <StackPanel Spacing="5" Margin="24,0,0,10">
+                                        <TextBlock Text="{Binding [AIScanMaxObjects], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>
+                                        <StackPanel Orientation="Horizontal" Spacing="10">
+                                            <Slider Minimum="5" Maximum="100" Value="{Binding SAM2MaxObjects}" 
+                                                    TickFrequency="5" IsSnapToTickEnabled="True" HorizontalAlignment="Stretch" Width="250"/>
+                                            <TextBlock Text="{Binding SAM2MaxObjects}" VerticalAlignment="Center" Width="30"/>
+                                        </StackPanel>
+                                    </StackPanel>
                                 </StackPanel>
                             </StackPanel>
                         </StackPanel>

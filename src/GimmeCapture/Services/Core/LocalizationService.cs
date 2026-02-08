@@ -173,6 +173,9 @@ namespace GimmeCapture.Services.Core;
                     ["MenuPinSelection"] = "Pin Selection",
                     ["MenuSaveImage"] = "Save Image",
                     ["MenuShowToolbar"] = "Show Toolbar",
+                    ["AIScanDensity"] = "AI Scan Grid Density:",
+                    ["AIScanMaxObjects"] = "Max Detected Objects:",
+                    ["AIScanSettings"] = "AI Scan Settings",
                 },
                 [Language.Chinese] = new Dictionary<string, string>
                 {
@@ -290,6 +293,9 @@ namespace GimmeCapture.Services.Core;
                     ["MenuPinSelection"] = "釘選選取區域",
                     ["MenuSaveImage"] = "儲存圖片",
                     ["MenuShowToolbar"] = "顯示工具列",
+                    ["AIScanDensity"] = "AI 掃描網格密度:",
+                    ["AIScanMaxObjects"] = "掃描物件數量上限:",
+                    ["AIScanSettings"] = "AI 掃描設定",
                 },
                 [Language.Japanese] = new Dictionary<string, string>
                 {
@@ -403,6 +409,9 @@ namespace GimmeCapture.Services.Core;
                     ["MenuPinSelection"] = "選択範囲をピン留め",
                     ["MenuSaveImage"] = "画像を保存",
                     ["MenuShowToolbar"] = "ツールバーを表示",
+                    ["AIScanDensity"] = "AI スキャン網格密度:",
+                    ["AIScanMaxObjects"] = "最大検出オブジェクト数:",
+                    ["AIScanSettings"] = "AI スキャン設定",
                 },
             };
 

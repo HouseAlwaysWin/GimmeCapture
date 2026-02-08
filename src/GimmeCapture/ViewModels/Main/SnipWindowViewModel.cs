@@ -1406,7 +1406,7 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable
 
             token.ThrowIfCancellationRequested();
 
-            var rects = await _sam2Service.AutoDetectObjectsAsync(12, token); 
+            var rects = await _sam2Service.AutoDetectObjectsAsync(_mainVm.SAM2GridDensity, _mainVm.SAM2MaxObjects, token); 
             // Do NOT dispose persistent service here
             
             Console.WriteLine($"[AI Scan] AutoDetect returned {rects.Count} rects");

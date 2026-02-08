@@ -190,7 +190,7 @@ public class SAM2Service : IDisposable
         });
     }
 
-    public async Task<List<Avalonia.Rect>> AutoDetectObjectsAsync(int gridDensity = 32, CancellationToken cancellationToken = default)
+    public async Task<List<Avalonia.Rect>> AutoDetectObjectsAsync(int gridDensity = 32, int maxObjects = 20, CancellationToken cancellationToken = default)
     {
         if (!_isInitialized || _decoderSession == null || _imageEmbeddings == null) return new List<Avalonia.Rect>();
 
@@ -219,9 +219,19 @@ public class SAM2Service : IDisposable
             int processedCount = 0;
             var lockObj = new object();
 
-            Parallel.ForEach(points, new ParallelOptions { MaxDegreeOfParallelism = 4, CancellationToken = cancellationToken }, (pt) =>
+            Parallel.ForEach(points, new ParallelOptions { MaxDegreeOfParallelism = 4, CancellationToken = cancellationToken }, (pt, state) =>
             {
                 if (cancellationToken.IsCancellationRequested) return;
+                
+                // Early exit if we already have enough objects
+                lock (lockObj)
+                {
+                    if (results.Count >= maxObjects)
+                    {
+                        state.Stop();
+                        return;
+                    }
+                }
                 
                 try
                 {
@@ -332,7 +342,14 @@ public class SAM2Service : IDisposable
                                     {
                                         if (!results.Any(existing => IoU(existing, rect) > 0.5f))
                                         {
-                                            results.Add(rect);
+                                            if (results.Count < maxObjects)
+                                            {
+                                                results.Add(rect);
+                                            }
+                                            else
+                                            {
+                                                state.Stop();
+                                            }
                                         }
                                     }
                                 }
@@ -343,7 +360,7 @@ public class SAM2Service : IDisposable
                     lock (lockObj)
                     {
                         processedCount++;
-                        if (processedCount % 10 == 0)
+                        if (processedCount % 10 == 0 || processedCount == points.Count)
                             Console.WriteLine($"[AI Scan] Processed {processedCount}/{points.Count} points, found {results.Count} objects");
                     }
                 }
