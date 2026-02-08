@@ -189,14 +189,7 @@ public class SAM2Service : IDisposable
 
                     var inputs = new List<NamedOnnxValue>();
 
-                    // Helper to add tensor with correct type
-                    void AddInput(string[] aliases, DenseTensor<float> tensor)
-                    {
-                        var name = decInputNames.FirstOrDefault(n => aliases.Any(a => n == a || n.Contains(a)));
-                        if (name != null) inputs.Add(NamedOnnxValue.CreateFromTensor(name, tensor));
-                    }
-
-                    // Add embeddings (batch=1, no tiling needed)
+                     // Add embeddings (batch=1, no tiling needed)
                     // SAM2 CRITICAL: Check for 5D input [B, 1, C, H, W] required by some ONNX exports
                     void AddTensorInput(string[] aliases, DenseTensor<float> tensor)
                     {
@@ -311,7 +304,7 @@ public class SAM2Service : IDisposable
                                     (maxY - minY) / mh * _originalHeight);
 
                                 // Filter noise 
-                                if (rect.Width > 10 && rect.Height > 10 &&
+                                if (rect.Width >= 20 && rect.Height >= 20 &&
                                     rect.Width < _originalWidth * 0.95 && rect.Height < _originalHeight * 0.95)
                                 {
                                     lock (lockObj)

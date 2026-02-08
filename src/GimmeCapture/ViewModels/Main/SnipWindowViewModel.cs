@@ -1442,7 +1442,7 @@ public class SnipWindowViewModel : ViewModelBase
                             double viewportArea = ViewportSize.Width * ViewportSize.Height;
                             
                             // Filter tiny objects AND full-screen objects (> 95% of screen)
-                            if (area > 2500 && area < (viewportArea * 0.95))
+                            if (logicalWidth >= 20 && logicalHeight >= 20 && area < (viewportArea * 0.95))
                             {
                                 // Convert to logical coordinates for display
                                 var logicalRect = new Rect(r.X / scale, r.Y / scale, logicalWidth, logicalHeight);
