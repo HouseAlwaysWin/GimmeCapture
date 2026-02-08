@@ -32,6 +32,7 @@ public class SAM2Service : IDisposable
     public string ModelVariantName { get; private set; } = "Unknown";
 
     private readonly AppSettingsService _settingsService;
+    private readonly SemaphoreSlim _initLock = new(1, 1);
 
     public SAM2Service(AIResourceService resourceService, AppSettingsService settingsService)
     {
@@ -43,74 +44,34 @@ public class SAM2Service : IDisposable
     {
         if (_isInitialized) return;
 
-        _resourceService.SetupNativeResolvers();
-
-        var variant = _settingsService.Settings.SelectedSAM2Variant;
-        ModelVariantName = variant.ToString();
-
-        // Use cached sessions from Resource Service to avoid redundant loading
-        await _resourceService.LoadSAM2ModelsAsync(variant);
-        var sessions = _resourceService.GetSAM2Sessions();
-        
-        _encoderSession = sessions.Encoder;
-        _decoderSession = sessions.Decoder;
-
-        if (_encoderSession == null || _decoderSession == null)
-            throw new Exception($"SAM2 models for {variant} failed to load from cache.");
-
-        // New: Warmup models to avoid first-run lag (kernels initialization, etc)
-        await WarmupAsync();
-
-        _isInitialized = true;
-    }
-
-    public async Task WarmupAsync()
-    {
-        if (_encoderSession == null || _decoderSession == null) return;
-
-        System.Diagnostics.Debug.WriteLine("[AI] Warming up SAM2 models...");
-        await Task.Run(() =>
+        await _initLock.WaitAsync();
+        try
         {
-            try
-            {
-                // Encoder Warmup
-                var encoderInput = new DenseTensor<float>(new[] { 1, 3, 1024, 1024 });
-                var encInputs = new List<NamedOnnxValue> { NamedOnnxValue.CreateFromTensor("image", encoderInput) };
-                
-                // Note: Models might have different input names, but InitializeAsync handles finding them
-                // Here we just use a generic set to trigger kernel loading for typical shapes
-                using var encResults = _encoderSession.Run(encInputs);
+            if (_isInitialized) return;
 
-                // Decoder Warmup (Requires mock embeddings and points)
-                var decInputMetaData = _decoderSession.InputMetadata;
-                var decInputNames = decInputMetaData.Keys.ToList();
-                var decInputs = new List<NamedOnnxValue>();
+            _resourceService.SetupNativeResolvers();
 
-                void AddMock(string[] aliases, int[] dims)
-                {
-                    var name = decInputNames.FirstOrDefault(n => aliases.Any(a => n == a || n.Contains(a)));
-                    if (name == null) return;
-                    decInputs.Add(NamedOnnxValue.CreateFromTensor(name, new DenseTensor<float>(dims)));
-                }
+            var variant = _settingsService.Settings.SelectedSAM2Variant;
+            ModelVariantName = variant.ToString();
 
-                AddMock(new[] { "image_embeddings" }, new[] { 1, 256, 64, 64 });
-                AddMock(new[] { "high_res_feats_0" }, new[] { 1, 32, 256, 256 });
-                AddMock(new[] { "high_res_feats_1" }, new[] { 1, 64, 128, 128 });
-                AddMock(new[] { "point_coords" }, new[] { 1, 1, 2 });
-                AddMock(new[] { "point_labels" }, new[] { 1, 1 });
-                AddMock(new[] { "mask_input" }, new[] { 1, 1, 256, 256 });
-                AddMock(new[] { "has_mask_input" }, new[] { 1 });
-                AddMock(new[] { "orig_im_size" }, new[] { 2 });
+            // Use cached sessions from Resource Service (already warmed up there)
+            await _resourceService.LoadSAM2ModelsAsync(variant);
+            var sessions = _resourceService.GetSAM2Sessions();
+            
+            _encoderSession = sessions.Encoder;
+            _decoderSession = sessions.Decoder;
 
-                using var decResults = _decoderSession.Run(decInputs);
-                System.Diagnostics.Debug.WriteLine("[AI] SAM2 Warmup complete.");
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"[AI] Warmup Warning (Non-fatal): {ex.Message}");
-            }
-        });
+            if (_encoderSession == null || _decoderSession == null)
+                throw new Exception($"SAM2 models for {variant} failed to load from cache.");
+
+            _isInitialized = true;
+        }
+        finally
+        {
+            _initLock.Release();
+        }
     }
+
 
     public async Task SetImageAsync(byte[] imageBytes)
     {
@@ -265,86 +226,61 @@ public class SAM2Service : IDisposable
                 try
                 {
                     // Create batch=1 tensors
-                    var coords = new DenseTensor<float>(new[] { 1, 1, 2 });
-                    coords[0, 0, 0] = pt.X;
-                    coords[0, 0, 1] = pt.Y;
+                    var decCoords = new DenseTensor<float>(new[] { 1, 1, 2 });
+                    decCoords[0, 0, 0] = pt.X;
+                    decCoords[0, 0, 1] = pt.Y;
+
+                    var decLabels = new DenseTensor<float>(new[] { 1, 1 });
+                    decLabels[0, 0] = 1f;
 
                     var maskInput = new DenseTensor<float>(new[] { 1, 1, 256, 256 });
                     var hasMaskInput = new DenseTensor<float>(new[] { 1 });
 
+                    var decInputMetaData = _decoderSession.InputMetadata;
+                    var decInputNames = decInputMetaData.Keys.ToList();
                     var inputs = new List<NamedOnnxValue>();
 
-                     // Add embeddings (batch=1, no tiling needed)
-                    // SAM2 CRITICAL: Check for 5D input [B, 1, C, H, W] required by some ONNX exports
-                    void AddTensorInput(string[] aliases, DenseTensor<float> tensor)
-                    {
-                        var name = decInputNames.FirstOrDefault(n => aliases.Any(a => n == a || n.Contains(a)));
+                    void AddInput(string[] aliases, float[] data, int[] dimensions) {
+                        var name = decInputNames.FirstOrDefault(n => aliases.Any(a => n == a || n == a.Replace("_", "") || n.Contains(a)));
                         if (name == null) return;
+                        
+                        var meta = decInputMetaData[name];
+                        var expectedDims = meta.Dimensions;
+                        int[] finalDims = dimensions;
+                        
+                        // Handle batching/extra dimension if model expects it
+                        if (expectedDims.Length == dimensions.Length + 1 && expectedDims.Length > 2)
+                        {
+                            finalDims = new int[expectedDims.Length];
+                            finalDims[0] = dimensions[0];
+                            finalDims[1] = 1;
+                            for (int i = 1; i < dimensions.Length; i++) finalDims[i + 1] = dimensions[i];
+                        }
 
+                        if (meta.ElementType == typeof(int)) inputs.Add(NamedOnnxValue.CreateFromTensor(name, new DenseTensor<int>(data.Select(x => (int)x).ToArray(), finalDims)));
+                        else if (meta.ElementType == typeof(long)) inputs.Add(NamedOnnxValue.CreateFromTensor(name, new DenseTensor<long>(data.Select(x => (long)x).ToArray(), finalDims)));
+                        else inputs.Add(NamedOnnxValue.CreateFromTensor(name, new DenseTensor<float>(data, finalDims)));
+                    }
+
+                    void AddTensorInput(string[] aliases, DenseTensor<float> tensor) {
+                        var name = decInputNames.FirstOrDefault(n => aliases.Any(a => n == a || n == a.Replace("_", "") || n.Contains(a)));
+                        if (name == null) return;
+                        
                         var expectedDims = decInputMetaData[name].Dimensions;
-                        if (expectedDims.Length == 5 && tensor.Dimensions.Length == 4)
-                        {
-                            var reshaped = new DenseTensor<float>(tensor.ToArray(), new[] { 1, 1, tensor.Dimensions[1], tensor.Dimensions[2], tensor.Dimensions[3] });
+                        if (expectedDims.Length == 5 && tensor.Dimensions.Length == 4) {
+                            var reshaped = new DenseTensor<float>(tensor.ToArray(), new int[5] { 1, 1, tensor.Dimensions[1], tensor.Dimensions[2], tensor.Dimensions[3] });
                             inputs.Add(NamedOnnxValue.CreateFromTensor(name, reshaped));
-                        }
-                        else
-                        {
-                            inputs.Add(NamedOnnxValue.CreateFromTensor(name, tensor));
-                        }
+                        } else inputs.Add(NamedOnnxValue.CreateFromTensor(name, tensor));
                     }
 
-                    AddTensorInput(new[] { "image_embeddings", "image_embed" }, _imageEmbeddings);
-                    if (_highResFeat0 != null) AddTensorInput(new[] { "high_res_feats_0", "feat_0" }, _highResFeat0);
-                    if (_highResFeat1 != null) AddTensorInput(new[] { "high_res_feats_1", "feat_1" }, _highResFeat1);
-
-                    // Add point inputs
-                    var coordName = decInputNames.FirstOrDefault(n => n.Contains("point_coords") || n.Contains("coords"));
-                    if (coordName != null) inputs.Add(NamedOnnxValue.CreateFromTensor(coordName, coords));
-
-                    // Labels with type conversion
-                    var labelName = decInputNames.FirstOrDefault(n => n.Contains("point_labels") || n.Contains("labels"));
-                    if (labelName != null)
-                    {
-                        var meta = decInputMetaData[labelName];
-                        if (meta.ElementType == typeof(int))
-                        {
-                            var intLabels = new DenseTensor<int>(new[] { 1, 1 });
-                            intLabels[0, 0] = 1;
-                            inputs.Add(NamedOnnxValue.CreateFromTensor(labelName, intLabels));
-                        }
-                        else
-                        {
-                            var labels = new DenseTensor<float>(new[] { 1, 1 });
-                            labels[0, 0] = 1f;
-                            inputs.Add(NamedOnnxValue.CreateFromTensor(labelName, labels));
-                        }
-                    }
-
-                    // Mask inputs
-                    var maskInName = decInputNames.FirstOrDefault(n => n.Contains("mask_input") && !n.Contains("has_mask"));
-                    if (maskInName != null) inputs.Add(NamedOnnxValue.CreateFromTensor(maskInName, maskInput));
-
-                    var hasMaskName = decInputNames.FirstOrDefault(n => n.Contains("has_mask"));
-                    if (hasMaskName != null) inputs.Add(NamedOnnxValue.CreateFromTensor(hasMaskName, hasMaskInput));
-
-                    // orig_im_size with type conversion
-                    var sizeName = decInputNames.FirstOrDefault(n => n.Contains("orig_im_size") || n.Contains("im_size"));
-                    if (sizeName != null)
-                    {
-                        var sizeMeta = decInputMetaData[sizeName];
-                        if (sizeMeta.ElementType == typeof(int))
-                        {
-                            var intSizes = new DenseTensor<int>(new[] { 2 });
-                            intSizes[0] = 1024; intSizes[1] = 1024;
-                            inputs.Add(NamedOnnxValue.CreateFromTensor(sizeName, intSizes));
-                        }
-                        else
-                        {
-                            var sizes = new DenseTensor<float>(new[] { 2 });
-                            sizes[0] = 1024f; sizes[1] = 1024f;
-                            inputs.Add(NamedOnnxValue.CreateFromTensor(sizeName, sizes));
-                        }
-                    }
+                    AddTensorInput(new[] { "image_embeddings", "image_embed", "embeddings", "image_embedding" }, _imageEmbeddings);
+                    AddTensorInput(new[] { "high_res_feats_0", "feat_0", "high_res_feat_0" }, _highResFeat0!);
+                    AddTensorInput(new[] { "high_res_feats_1", "feat_1", "high_res_feat_1" }, _highResFeat1!);
+                    AddInput(new[] { "point_coords", "coords" }, decCoords.ToArray(), decCoords.Dimensions.ToArray());
+                    AddInput(new[] { "point_labels", "labels" }, decLabels.ToArray(), decLabels.Dimensions.ToArray());
+                    AddInput(new[] { "mask_input", "mask" }, maskInput.ToArray(), maskInput.Dimensions.ToArray());
+                    AddInput(new[] { "has_mask_input", "has_mask" }, hasMaskInput.ToArray(), hasMaskInput.Dimensions.ToArray());
+                    AddInput(new[] { "orig_im_size", "im_size" }, new float[] { 1024f, 1024f }, new[] { 2 });
 
                     using var result = _decoderSession.Run(inputs);
                     var masksOutput = result.FirstOrDefault(r => r.Name.Contains("mask") && !r.Name.Contains("low_res"))?.AsTensor<float>();
@@ -437,17 +373,17 @@ public class SAM2Service : IDisposable
             float scaleX = 1024f / (float)_originalWidth;
             float scaleY = 1024f / (float)_originalHeight;
             
-            var coords = new DenseTensor<float>(new[] { 1, n, 2 });
-            var labels = new DenseTensor<float>(new[] { 1, n });
+            var decCoords = new DenseTensor<float>(new[] { 1, n, 2 });
+            var decLabels = new DenseTensor<float>(new[] { 1, n });
 
             for (int i = 0; i < n; i++)
             {
                 var p = pointList[i];
                 float aiX = (float)(p.X * scaleX);
                 float aiY = (float)(p.Y * scaleY);
-                coords[0, i, 0] = aiX;
-                coords[0, i, 1] = aiY;
-                labels[0, i] = p.IsPositive ? 1f : 0f;
+                decCoords[0, i, 0] = aiX;
+                decCoords[0, i, 1] = aiY;
+                decLabels[0, i] = p.IsPositive ? 1f : 0f;
                 System.Diagnostics.Debug.WriteLine($"[AI MATH] Click({p.X:F0},{p.Y:F0}) -> AI_StretchGrid({aiX:F0},{aiY:F0}) Size=(1024x1024) BGR=1 Normal=0-1");
             }
 
@@ -461,10 +397,7 @@ public class SAM2Service : IDisposable
             
             void AddInput(string[] aliases, float[] data, int[] dimensions) {
                 var name = decInputNames.FirstOrDefault(n => aliases.Any(a => n == a || n == a.Replace("_", "") || n.Contains(a)));
-                if (name == null) {
-                    System.Diagnostics.Debug.WriteLine($"[AI] Skipping input {aliases.First()} - Not required by model");
-                    return;
-                }
+                if (name == null) return;
                 
                 var meta = decInputMetaData[name];
                 var expectedDims = meta.Dimensions;
@@ -483,10 +416,7 @@ public class SAM2Service : IDisposable
 
             void AddTensorInput(string[] aliases, DenseTensor<float> tensor) {
                var name = decInputNames.FirstOrDefault(n => aliases.Any(a => n == a || n == a.Replace("_", "") || n.Contains(a)));
-               if (name == null) {
-                   System.Diagnostics.Debug.WriteLine($"[AI] Skipping tensor {aliases.First()} - Not required by model");
-                   return;
-               }
+               if (name == null) return;
                
                var expectedDims = decInputMetaData[name].Dimensions;
                if (expectedDims.Length == 5 && tensor.Dimensions.Length == 4) {
@@ -495,11 +425,11 @@ public class SAM2Service : IDisposable
                } else inputs.Add(NamedOnnxValue.CreateFromTensor(name, tensor));
             }
 
-            AddTensorInput(new[] { "image_embeddings", "image_embed", "embeddings" }, _imageEmbeddings);
-            AddTensorInput(new[] { "high_res_feats_0", "feat_0", "high_res_feat_0" }, _highResFeat0);
-            AddTensorInput(new[] { "high_res_feats_1", "feat_1", "high_res_feat_1" }, _highResFeat1);
-            AddInput(new[] { "point_coords", "coords" }, coords.ToArray(), coords.Dimensions.ToArray());
-            AddInput(new[] { "point_labels", "labels" }, labels.ToArray(), labels.Dimensions.ToArray());
+            AddTensorInput(new[] { "image_embeddings", "image_embed", "embeddings", "image_embedding" }, _imageEmbeddings);
+            AddTensorInput(new[] { "high_res_feats_0", "feat_0", "high_res_feat_0" }, _highResFeat0!);
+            AddTensorInput(new[] { "high_res_feats_1", "feat_1", "high_res_feat_1" }, _highResFeat1!);
+            AddInput(new[] { "point_coords", "coords" }, decCoords.ToArray(), decCoords.Dimensions.ToArray());
+            AddInput(new[] { "point_labels", "labels" }, decLabels.ToArray(), decLabels.Dimensions.ToArray());
             AddInput(new[] { "mask_input", "mask" }, maskInput.ToArray(), maskInput.Dimensions.ToArray());
             AddInput(new[] { "has_mask_input", "has_mask" }, hasMaskInput.ToArray(), hasMaskInput.Dimensions.ToArray());
             // SAM2 CRITICAL: orig_im_size must be [1024, 1024] when using stretching

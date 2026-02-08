@@ -7,6 +7,9 @@ using System.Threading.Tasks;
 using ReactiveUI;
 using GimmeCapture.Models;
 using Microsoft.ML.OnnxRuntime;
+using Microsoft.ML.OnnxRuntime.Tensors;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace GimmeCapture.Services.Core;
 
@@ -393,6 +396,7 @@ public class AIResourceService : ReactiveObject
     private InferenceSession? _cachedEncoder;
     private InferenceSession? _cachedDecoder;
     private SAM2Variant? _cachedVariant;
+    private bool _isWarmedUp = false;
     private readonly SemaphoreSlim _modelLoadingLock = new(1, 1);
 
     public async Task LoadSAM2ModelsAsync(SAM2Variant variant)
@@ -413,7 +417,7 @@ public class AIResourceService : ReactiveObject
                  return;
              }
 
-             await Task.Run(() =>
+             await Task.Run(async () =>
              {
                  try
                  {
@@ -434,7 +438,11 @@ public class AIResourceService : ReactiveObject
                      _cachedDecoder = new InferenceSession(paths.Decoder, options);
                      
                      _cachedVariant = variant;
+                     _isWarmedUp = false; // Reset for new variant
                      System.Diagnostics.Debug.WriteLine("[AI] Models Loaded Successfully");
+                     
+                     // Centralized Warmup: Trigger it once when sessions are created
+                     await WarmupSessionsAsync();
                  }
                  catch (Exception ex)
                  {
@@ -447,6 +455,71 @@ public class AIResourceService : ReactiveObject
         finally
         {
             _modelLoadingLock.Release();
+        }
+    }
+
+    private async Task WarmupSessionsAsync()
+    {
+        if (_isWarmedUp || _cachedEncoder == null || _cachedDecoder == null) return;
+
+        System.Diagnostics.Debug.WriteLine("[AI] Warming up SAM2 sessions centralized...");
+        try
+        {
+            // Encoder Warmup
+            var encoderInput = new DenseTensor<float>(new[] { 1, 3, 1024, 1024 });
+            var encInputMetaData = _cachedEncoder.InputMetadata;
+            var encInputName = encInputMetaData.Keys.FirstOrDefault(k => k == "image" || k == "pixel_values") ?? "image";
+            var encInputs = new List<NamedOnnxValue> { NamedOnnxValue.CreateFromTensor(encInputName, encoderInput) };
+            using var encResults = _cachedEncoder.Run(encInputs);
+
+            // Decoder Warmup (Requires mock embeddings and points)
+            var decInputMetaData = _cachedDecoder.InputMetadata;
+            var decInputNames = decInputMetaData.Keys.ToList();
+            var decInputs = new List<NamedOnnxValue>();
+
+            void AddMock(string[] aliases, int[] dims, float val = 0f)
+            {
+                var name = decInputNames.FirstOrDefault(n => aliases.Any(a => n == a || n == a.Replace("_", "") || n.Contains(a)));
+                if (name == null) return;
+                
+                var meta = decInputMetaData[name];
+                if (meta.ElementType == typeof(int))
+                {
+                    var data = new int[dims.Aggregate(1, (a, b) => a * b)];
+                    if (val != 0) Array.Fill(data, (int)val);
+                    decInputs.Add(NamedOnnxValue.CreateFromTensor(name, new DenseTensor<int>(data, dims)));
+                }
+                else if (meta.ElementType == typeof(long))
+                {
+                    var data = new long[dims.Aggregate(1, (a, b) => a * b)];
+                    if (val != 0) Array.Fill(data, (long)val);
+                    decInputs.Add(NamedOnnxValue.CreateFromTensor(name, new DenseTensor<long>(data, dims)));
+                }
+                else
+                {
+                    var data = new float[dims.Aggregate(1, (a, b) => a * b)];
+                    if (val != 0) Array.Fill(data, val);
+                    decInputs.Add(NamedOnnxValue.CreateFromTensor(name, new DenseTensor<float>(data, dims)));
+                }
+            }
+
+            AddMock(new[] { "image_embeddings", "image_embed", "embeddings", "image_embedding" }, new[] { 1, 256, 64, 64 });
+            AddMock(new[] { "high_res_feats_0", "feat_0", "high_res_feat_0" }, new[] { 1, 32, 256, 256 });
+            AddMock(new[] { "high_res_feats_1", "feat_1", "high_res_feat_1" }, new[] { 1, 64, 128, 128 });
+            AddMock(new[] { "point_coords", "coords" }, new[] { 1, 1, 2 });
+            AddMock(new[] { "point_labels", "labels" }, new[] { 1, 1 }, 1f);
+            AddMock(new[] { "mask_input", "mask" }, new[] { 1, 1, 256, 256 });
+            AddMock(new[] { "has_mask_input", "has_mask" }, new[] { 1 }, 0f);
+            AddMock(new[] { "orig_im_size", "im_size" }, new[] { 2 }, 1024f);
+            
+            using var decResults = _cachedDecoder.Run(decInputs);
+            
+            _isWarmedUp = true;
+            System.Diagnostics.Debug.WriteLine("[AI] Centralized warmup complete.");
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[AI] Session Warmup Warning (Non-fatal): {ex.Message}");
         }
     }
 
@@ -464,5 +537,6 @@ public class AIResourceService : ReactiveObject
         _cachedDecoder = null;
         
         _cachedVariant = null;
+        _isWarmedUp = false;
     }
 }
