@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using ReactiveUI;
 using GimmeCapture.Models;
+using Microsoft.ML.OnnxRuntime;
 
 namespace GimmeCapture.Services.Core;
 
@@ -387,5 +388,81 @@ public class AIResourceService : ReactiveObject
         {
             System.Diagnostics.Debug.WriteLine($"[AI] Failed to setup native resolvers: {ex.Message}");
         }
+    }
+
+    private InferenceSession? _cachedEncoder;
+    private InferenceSession? _cachedDecoder;
+    private SAM2Variant? _cachedVariant;
+    private readonly SemaphoreSlim _modelLoadingLock = new(1, 1);
+
+    public async Task LoadSAM2ModelsAsync(SAM2Variant variant)
+    {
+        if (_cachedVariant == variant && _cachedEncoder != null && _cachedDecoder != null) return;
+
+        await _modelLoadingLock.WaitAsync();
+        try
+        {
+             if (_cachedVariant == variant && _cachedEncoder != null && _cachedDecoder != null) return;
+
+             UnloadSAM2Models();
+
+             var paths = GetSAM2Paths(variant);
+             if (!File.Exists(paths.Encoder) || !File.Exists(paths.Decoder))
+             {
+                 System.Diagnostics.Debug.WriteLine("[AI] Check Model files missing, cannot load.");
+                 return;
+             }
+
+             await Task.Run(() =>
+             {
+                 try
+                 {
+                     var options = new SessionOptions
+                     {
+                         GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_BASIC,
+                         LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_ERROR
+                     };
+                     
+                     // Try GPU if available
+                     try { options.AppendExecutionProvider_CUDA(0); } catch { }
+                     try { options.AppendExecutionProvider_DML(0); } catch { }
+                     
+                     System.Diagnostics.Debug.WriteLine($"[AI] Loading Encoder: {paths.Encoder}");
+                     _cachedEncoder = new InferenceSession(paths.Encoder, options);
+                     
+                     System.Diagnostics.Debug.WriteLine($"[AI] Loading Decoder: {paths.Decoder}");
+                     _cachedDecoder = new InferenceSession(paths.Decoder, options);
+                     
+                     _cachedVariant = variant;
+                     System.Diagnostics.Debug.WriteLine("[AI] Models Loaded Successfully");
+                 }
+                 catch (Exception ex)
+                 {
+                     System.Diagnostics.Debug.WriteLine($"[AI] Model Load Error: {ex.Message}");
+                     UnloadSAM2Models();
+                     throw;
+                 }
+             });
+        }
+        finally
+        {
+            _modelLoadingLock.Release();
+        }
+    }
+
+    public (InferenceSession? Encoder, InferenceSession? Decoder) GetSAM2Sessions()
+    {
+        return (_cachedEncoder, _cachedDecoder);
+    }
+
+    public void UnloadSAM2Models()
+    {
+        _cachedEncoder?.Dispose();
+        _cachedEncoder = null;
+        
+        _cachedDecoder?.Dispose();
+        _cachedDecoder = null;
+        
+        _cachedVariant = null;
     }
 }

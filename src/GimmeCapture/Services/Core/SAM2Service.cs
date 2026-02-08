@@ -50,24 +50,18 @@ public class SAM2Service : IDisposable
 
         var variant = _settingsService.Settings.SelectedSAM2Variant;
         ModelVariantName = variant.ToString();
-        var paths = _resourceService.GetSAM2Paths(variant);
+
+        // Use cached sessions from Resource Service to avoid redundant loading
+        await _resourceService.LoadSAM2ModelsAsync(variant);
+        var sessions = _resourceService.GetSAM2Sessions();
         
-        var encoderPath = paths.Encoder;
-        var decoderPath = paths.Decoder;
+        _encoderSession = sessions.Encoder;
+        _decoderSession = sessions.Decoder;
 
-        if (!File.Exists(encoderPath) || !File.Exists(decoderPath))
-            throw new FileNotFoundException($"SAM2 models for {variant} not found. Please ensures resources are downloaded.");
+        if (_encoderSession == null || _decoderSession == null)
+            throw new Exception($"SAM2 models for {variant} failed to load from cache.");
 
-        await Task.Run(() =>
-        {
-            var options = new SessionOptions();
-            options.LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_ERROR; // Suppress lenient merge warnings
-            try { options.AppendExecutionProvider_CUDA(0); } catch { }
-
-            _encoderSession = new InferenceSession(encoderPath, options);
-            _decoderSession = new InferenceSession(decoderPath, options);
-            _isInitialized = true;
-        });
+        _isInitialized = true;
     }
 
     public async Task SetImageAsync(byte[] imageBytes)
@@ -175,11 +169,13 @@ public class SAM2Service : IDisposable
             var decInputMetaData = _decoderSession.InputMetadata;
             var decInputNames = decInputMetaData.Keys.ToList();
 
-            // Process each point individually (batch=1)
+            // Process each point individually (batch=1) in PARALLEL
             int processedCount = 0;
-            foreach (var pt in points)
+            var lockObj = new object();
+
+            Parallel.ForEach(points, new ParallelOptions { MaxDegreeOfParallelism = 4, CancellationToken = cancellationToken }, (pt) =>
             {
-                if (cancellationToken.IsCancellationRequested) break;
+                if (cancellationToken.IsCancellationRequested) return;
                 
                 try
                 {
@@ -201,9 +197,27 @@ public class SAM2Service : IDisposable
                     }
 
                     // Add embeddings (batch=1, no tiling needed)
-                    AddInput(new[] { "image_embeddings", "image_embed" }, _imageEmbeddings);
-                    if (_highResFeat0 != null) AddInput(new[] { "high_res_feats_0", "feat_0" }, _highResFeat0);
-                    if (_highResFeat1 != null) AddInput(new[] { "high_res_feats_1", "feat_1" }, _highResFeat1);
+                    // SAM2 CRITICAL: Check for 5D input [B, 1, C, H, W] required by some ONNX exports
+                    void AddTensorInput(string[] aliases, DenseTensor<float> tensor)
+                    {
+                        var name = decInputNames.FirstOrDefault(n => aliases.Any(a => n == a || n.Contains(a)));
+                        if (name == null) return;
+
+                        var expectedDims = decInputMetaData[name].Dimensions;
+                        if (expectedDims.Length == 5 && tensor.Dimensions.Length == 4)
+                        {
+                            var reshaped = new DenseTensor<float>(tensor.ToArray(), new[] { 1, 1, tensor.Dimensions[1], tensor.Dimensions[2], tensor.Dimensions[3] });
+                            inputs.Add(NamedOnnxValue.CreateFromTensor(name, reshaped));
+                        }
+                        else
+                        {
+                            inputs.Add(NamedOnnxValue.CreateFromTensor(name, tensor));
+                        }
+                    }
+
+                    AddTensorInput(new[] { "image_embeddings", "image_embed" }, _imageEmbeddings);
+                    if (_highResFeat0 != null) AddTensorInput(new[] { "high_res_feats_0", "feat_0" }, _highResFeat0);
+                    if (_highResFeat1 != null) AddTensorInput(new[] { "high_res_feats_1", "feat_1" }, _highResFeat1);
 
                     // Add point inputs
                     var coordName = decInputNames.FirstOrDefault(n => n.Contains("point_coords") || n.Contains("coords"));
@@ -270,7 +284,7 @@ public class SAM2Service : IDisposable
                             if (iouOutput[0, m] > bestIou) { bestIou = iouOutput[0, m]; bestM = m; }
                         }
 
-                        if (bestIou >= 0.60f) // Lower threshold to catch smaller/less confident objects
+                        if (bestIou >= 0.60f) 
                         {
                             // Extract bounding box from mask
                             float minX = mw, minY = mh, maxX = 0, maxY = 0;
@@ -296,28 +310,34 @@ public class SAM2Service : IDisposable
                                     (maxX - minX) / mw * _originalWidth,
                                     (maxY - minY) / mh * _originalHeight);
 
-                                // Filter noise - reduced min size to 10px for small icons
+                                // Filter noise 
                                 if (rect.Width > 10 && rect.Height > 10 &&
                                     rect.Width < _originalWidth * 0.95 && rect.Height < _originalHeight * 0.95)
                                 {
-                                    if (!results.Any(existing => IoU(existing, rect) > 0.5f))
+                                    lock (lockObj)
                                     {
-                                        results.Add(rect);
+                                        if (!results.Any(existing => IoU(existing, rect) > 0.5f))
+                                        {
+                                            results.Add(rect);
+                                        }
                                     }
                                 }
                             }
                         }
                     }
 
-                    processedCount++;
-                    if (processedCount % 10 == 0)
-                        Console.WriteLine($"[AI Scan] Processed {processedCount}/{points.Count} points, found {results.Count} objects");
+                    lock (lockObj)
+                    {
+                        processedCount++;
+                        if (processedCount % 10 == 0)
+                            Console.WriteLine($"[AI Scan] Processed {processedCount}/{points.Count} points, found {results.Count} objects");
+                    }
                 }
                 catch (Exception ex)
                 {
                     Console.WriteLine($"[AI Scan] Point ({pt.X:F0},{pt.Y:F0}) failed: {ex.Message}");
                 }
-            }
+            });
 
             Console.WriteLine($"[AI Scan] Complete: {results.Count} objects found");
             return results;
@@ -564,7 +584,8 @@ public class SAM2Service : IDisposable
 
     public void Dispose()
     {
-        _encoderSession?.Dispose();
-        _decoderSession?.Dispose();
+        // Do NOT dispose shared inference sessions as they are owned by AIResourceService now
+        // _imageEmbeddings is managed memory, no need to dispose
+        _imageEmbeddings = null; 
     }
 }

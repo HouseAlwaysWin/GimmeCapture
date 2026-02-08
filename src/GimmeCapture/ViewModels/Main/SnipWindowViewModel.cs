@@ -715,6 +715,25 @@ public class SnipWindowViewModel : ViewModelBase
             */
         }
 
+        // Preload SAM2 models in background to avoid delay on first scan
+        if (mainVm != null)
+        {
+            Task.Run(async () => 
+            {
+                try
+                {
+                   if (mainVm.AIResourceService.AreResourcesReady())
+                   {
+                       await mainVm.AIResourceService.LoadSAM2ModelsAsync(mainVm.AppSettingsService.Settings.SelectedSAM2Variant);
+                   }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[SAM2 Preload] Failed: {ex.Message}");
+                }
+            });
+        }
+
 
         CopyCommand = ReactiveCommand.CreateFromTask(Copy);
         CopyCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
