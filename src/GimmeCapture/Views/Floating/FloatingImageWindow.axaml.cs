@@ -150,8 +150,34 @@ public partial class FloatingImageWindow : Window
 
     private void SyncWindowSizeToImage()
     {
-        InvalidateMeasure();
-        InvalidateArrange();
+        if (DataContext is FloatingImageViewModel vm) 
+        {
+             // Fix for "Position Offset" issue:
+             // Do NOT use SizeToContent.WidthAndHeight as it can unpredictable shift the window origin 
+             // or render size on some platforms/setups, causing the "Pin ran off" visual glich.
+             // Instead, we manually calculate and set the size.
+             
+             SizeToContent = SizeToContent.Manual;
+
+             var padding = vm.WindowPadding;
+             // Calculate target content size (Image + Padding)
+             double contentW = vm.DisplayWidth + padding.Left + padding.Right;
+             double contentH = vm.DisplayHeight + padding.Top + padding.Bottom;
+             
+             // Add Toolbar allowance if visible
+             // Grid 'Auto' row will handle exact rendering, but we need to provide enough Window space
+             // so the '*' row (Image) gets its desired height.
+             if (vm.ShowToolbar)
+             {
+                 contentH += 42; // Estimated Toolbar Height (Standard)
+             }
+             
+             Width = contentW;
+             Height = contentH;
+             
+             InvalidateMeasure();
+             InvalidateArrange();
+        }
     }
 
     // Resize Fields
@@ -469,14 +495,10 @@ public partial class FloatingImageWindow : Window
                 Position = new PixelPoint((int)x, (int)y);
                 Width = w;
                 Height = h;
+                
+                // Content size will be updated automatically by the Grid layout
+                // We don't need to manually set DisplayWidth/Height here anymore
 
-                if (DataContext is FloatingImageViewModel fvm)
-                {
-                    var padding = fvm.WindowPadding;
-                    fvm.DisplayWidth = Math.Max(1, w - padding.Left - padding.Right);
-                    double toolbarHeight = fvm.ShowToolbar ? 42 : 0; 
-                    fvm.DisplayHeight = Math.Max(1, h - padding.Top - padding.Bottom - toolbarHeight);
-                }
                 
                 e.Handled = true;
                 InvalidateMeasure();
@@ -674,14 +696,14 @@ public partial class FloatingImageWindow : Window
     {
         base.OnPropertyChanged(change);
         
-        if (change.Property == BoundsProperty && DataContext is FloatingImageViewModel vm)
+        if (change.Property == BoundsProperty)
         {
-            var imageControl = this.FindControl<Image>("PinnedImage");
-            if (imageControl != null)
-            {
-                vm.DisplayWidth = imageControl.Bounds.Width;
-                vm.DisplayHeight = imageControl.Bounds.Height;
-            }
+             var imageControl = this.FindControl<Image>("PinnedImage");
+             if (imageControl != null && DataContext is FloatingImageViewModel vm)
+             {
+                 vm.DisplayWidth = imageControl.Bounds.Width;
+                 vm.DisplayHeight = imageControl.Bounds.Height;
+             }
         }
     }
 

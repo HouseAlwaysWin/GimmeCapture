@@ -135,6 +135,8 @@ public partial class FloatingVideoWindow : Window
     {
         if (DataContext is FloatingVideoViewModel vm)
         {
+            SizeToContent = SizeToContent.Manual; 
+            
             var padding = vm.WindowPadding;
             double toolbarHeight = vm.ShowToolbar ? 60 : 0;
             
@@ -457,14 +459,9 @@ public partial class FloatingVideoWindow : Window
             Position = new PixelPoint((int)x, (int)y);
             Width = w;
             Height = h;
-
-            if (DataContext is FloatingVideoViewModel fvm)
-            {
-                var padding = fvm.WindowPadding;
-                fvm.DisplayWidth = Math.Max(1, w - padding.Left - padding.Right);
-                double toolbarHeight = fvm.ShowToolbar ? 42 : 0; 
-                fvm.DisplayHeight = Math.Max(1, h - padding.Top - padding.Bottom - toolbarHeight);
-            }
+            
+            // Content size will be updated automatically by the Grid layout
+            // We don't need to manually set DisplayWidth/Height here anymore
             
             e.Handled = true;
             InvalidateMeasure();
@@ -532,6 +529,21 @@ public partial class FloatingVideoWindow : Window
         {
             vm.RedoCommand.Execute().Subscribe();
             e.Handled = true;
+        }
+    }
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        
+        if (change.Property == BoundsProperty)
+        {
+             var imageControl = this.FindControl<Image>("PinnedVideo");
+             if (imageControl != null && DataContext is FloatingVideoViewModel vm)
+             {
+                 vm.DisplayWidth = imageControl.Bounds.Width;
+                 vm.DisplayHeight = imageControl.Bounds.Height;
+             }
         }
     }
 
