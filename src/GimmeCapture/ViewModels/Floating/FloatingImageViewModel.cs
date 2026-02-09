@@ -26,8 +26,31 @@ public enum FloatingTool
     InteractiveSelection
 }
 
-public class FloatingImageViewModel : ViewModelBase, IDisposable
+public class FloatingImageViewModel : ViewModelBase, IDisposable, IDrawingToolViewModel
 {
+    public bool ShowIconSettings => false;
+    public ReactiveCommand<Unit, Unit> IncreaseCornerIconScaleCommand { get; } = ReactiveCommand.Create(() => {});
+    public ReactiveCommand<Unit, Unit> DecreaseCornerIconScaleCommand { get; } = ReactiveCommand.Create(() => {});
+    public ReactiveCommand<Unit, Unit> IncreaseWingScaleCommand { get; } = ReactiveCommand.Create(() => {});
+    public ReactiveCommand<Unit, Unit> DecreaseWingScaleCommand { get; } = ReactiveCommand.Create(() => {});
+    
+    // Commands regarding Font Size (needed for interface even if we use Slider, actually I removed them from interface? No I kept them?)
+    // Wait, I updated DrawingToolbar to use Slider, so I don't need Increase/DecreaseFontSizeCommand in interface?
+    // I KEPT them in interface in the previous step (Step 2552 failed, but I re-applied/modified).
+    // Let me check if they are in the interface.
+    // Yes, Step 2603 (this step) added them back?
+    // "ReactiveCommand<Unit, Unit> IncreaseFontSizeCommand { get; }"
+    // So I MUST implement them.
+    public ReactiveCommand<Unit, Unit> IncreaseFontSizeCommand { get; } 
+    public ReactiveCommand<Unit, Unit> DecreaseFontSizeCommand { get; }
+
+    public System.Collections.Generic.IEnumerable<Avalonia.Media.Color> PresetColors => GimmeCapture.ViewModels.Main.SnipWindowViewModel.StaticData.ColorsList;
+    public ReactiveCommand<Avalonia.Media.Color, Unit> ChangeColorCommand { get; }
+    public ReactiveCommand<Unit, Unit> IncreaseThicknessCommand { get; }
+    public ReactiveCommand<Unit, Unit> DecreaseThicknessCommand { get; }
+
+
+
     private Bitmap? _image;
     public Bitmap? Image
     {
@@ -144,8 +167,8 @@ public class FloatingImageViewModel : ViewModelBase, IDisposable
 
             this.RaiseAndSetIfChanged(ref _currentAnnotationTool, value);
             this.RaisePropertyChanged(nameof(IsShapeToolActive));
-            // this.RaisePropertyChanged(nameof(IsLineToolActive)); // Removed
             this.RaisePropertyChanged(nameof(IsTextToolActive));
+            this.RaisePropertyChanged(nameof(IsPenToolActive));
             this.RaisePropertyChanged(nameof(IsAnyToolActive));
         }
     }
@@ -153,7 +176,11 @@ public class FloatingImageViewModel : ViewModelBase, IDisposable
     public ObservableCollection<Annotation> Annotations { get; } = new();
 
     public bool IsShapeToolActive => CurrentAnnotationTool == AnnotationType.Rectangle || CurrentAnnotationTool == AnnotationType.Ellipse || CurrentAnnotationTool == AnnotationType.Arrow || CurrentAnnotationTool == AnnotationType.Line;
+    public bool IsPenToolActive => CurrentAnnotationTool == AnnotationType.Pen;
     public bool IsTextToolActive => CurrentAnnotationTool == AnnotationType.Text;
+
+    // Explicit interface implementation to resolve name clash
+
 
     private Avalonia.Media.Color _selectedColor = Avalonia.Media.Colors.Red;
     public Avalonia.Media.Color SelectedColor
@@ -276,9 +303,19 @@ public class FloatingImageViewModel : ViewModelBase, IDisposable
         set => this.RaiseAndSetIfChanged(ref _textInputPosition, value);
     }
 
-    public string CurrentFontFamily => GimmeCapture.Services.Core.LocalizationService.Instance.CurrentFontFamily.Name;
+    private string _currentFontFamily = "Arial";
+    public string CurrentFontFamily
+    {
+        get => _currentFontFamily;
+        set => this.RaiseAndSetIfChanged(ref _currentFontFamily, value);
+    }
 
     public ObservableCollection<double> Thicknesses { get; } = new() { 1, 2, 4, 6, 8, 12, 16, 24 };
+
+    public ObservableCollection<string> AvailableFonts { get; } = new ObservableCollection<string>
+    {
+        "Arial", "Segoe UI", "Consolas", "Times New Roman", "Comic Sans MS", "Microsoft JhengHei", "Meiryo"
+    };
 
     private double _progressValue;
     public double ProgressValue
@@ -653,7 +690,7 @@ public class FloatingImageViewModel : ViewModelBase, IDisposable
     
     public ReactiveCommand<AnnotationType, Unit> SelectToolCommand { get; }
     public ReactiveCommand<string, Unit> ToggleToolGroupCommand { get; }
-    public ReactiveCommand<Avalonia.Media.Color, Unit> ChangeColorCommand { get; }
+
     public ReactiveCommand<Unit, Unit> ClearAnnotationsCommand { get; }
     
     public ReactiveCommand<Unit, Unit> UndoCommand { get; }
@@ -779,7 +816,15 @@ public class FloatingImageViewModel : ViewModelBase, IDisposable
         _appSettingsService = appSettingsService;
 
         CloseCommand = ReactiveCommand.Create(() => CloseAction?.Invoke());
+
         ToggleToolbarCommand = ReactiveCommand.Create(() => { ShowToolbar = !ShowToolbar; });
+
+        // shared drawing commands
+        IncreaseFontSizeCommand = ReactiveCommand.Create(() => { CurrentFontSize = Math.Min(CurrentFontSize + 2, 72); });
+        DecreaseFontSizeCommand = ReactiveCommand.Create(() => { CurrentFontSize = Math.Max(CurrentFontSize - 2, 8); });
+        ChangeColorCommand = ReactiveCommand.Create<Avalonia.Media.Color>(c => SelectedColor = c);
+        IncreaseThicknessCommand = ReactiveCommand.Create(() => { CurrentThickness = Math.Min(CurrentThickness + 1, 30); });
+        DecreaseThicknessCommand = ReactiveCommand.Create(() => { CurrentThickness = Math.Max(CurrentThickness - 1, 1); });
         
         SelectionCommand = ReactiveCommand.Create(() => 
         {
@@ -864,7 +909,7 @@ public class FloatingImageViewModel : ViewModelBase, IDisposable
              {
                  targetTool = IsShapeToolActive ? AnnotationType.None : AnnotationType.Rectangle;
              }
-             else if (group == "Lines") // "Lines" here now effectively means "Pen" or separate group
+             else if (group == "Pen")
              {
                  targetTool = (CurrentAnnotationTool == AnnotationType.Pen) ? AnnotationType.None : AnnotationType.Pen;
              }

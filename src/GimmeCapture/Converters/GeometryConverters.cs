@@ -115,20 +115,24 @@ public class PenGeometryConverter : IValueConverter
 {
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
-        if (value is System.Collections.ObjectModel.ObservableCollection<Point> points && points.Any())
+        if (value is IEnumerable<Point> pointsEnumerable)
         {
-            var geometry = new StreamGeometry();
-            using (var context = geometry.Open())
+            var points = pointsEnumerable.ToList();
+            if (points.Count > 0)
             {
-                var first = points[0];
-                context.BeginFigure(first, false);
-                foreach (var point in points.Skip(1))
+                var geometry = new StreamGeometry();
+                using (var context = geometry.Open())
                 {
-                    context.LineTo(point);
+                    var first = points[0];
+                    context.BeginFigure(first, false);
+                    foreach (var point in points.Skip(1))
+                    {
+                        context.LineTo(point);
+                    }
+                    context.EndFigure(false);
                 }
-                context.EndFigure(false);
+                return geometry;
             }
-            return geometry;
         }
         return null;
     }

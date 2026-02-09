@@ -88,7 +88,7 @@ public class Annotation : ReactiveObject
         set => this.RaiseAndSetIfChanged(ref _isItalic, value);
     }
 
-    public ObservableCollection<Point> Points { get; } = new();
+    public Avalonia.Points Points { get; } = new();
 
     public void AddPoint(Point p)
     {

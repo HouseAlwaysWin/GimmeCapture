@@ -5,12 +5,25 @@
              xmlns:cv="using:GimmeCapture.Converters"
              xmlns:local="using:GimmeCapture.Views.Controls"
              x:Class="GimmeCapture.Views.Controls.AnnotationControl"
-             x:DataType="m:Annotation">
+             x:DataType="m:Annotation"
+             ClipToBounds="False">
 
-    <Panel>
+    <Canvas>
         <Rectangle Stroke="{Binding Color, Converter={StaticResource ColorToBrushConverter}}"
                    StrokeThickness="{Binding Thickness}"
                    IsVisible="{Binding Type, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Rectangle}}">
+            <Canvas.Left>
+                <MultiBinding Converter="{StaticResource RectXConverter}">
+                    <Binding Path="StartPoint"/>
+                    <Binding Path="EndPoint"/>
+                </MultiBinding>
+            </Canvas.Left>
+            <Canvas.Top>
+                <MultiBinding Converter="{StaticResource RectYConverter}">
+                    <Binding Path="StartPoint"/>
+                    <Binding Path="EndPoint"/>
+                </MultiBinding>
+            </Canvas.Top>
             <Rectangle.Width>
                 <MultiBinding Converter="{StaticResource RectWidthConverter}">
                     <Binding Path="StartPoint"/>
@@ -28,6 +41,18 @@
         <Ellipse Stroke="{Binding Color, Converter={StaticResource ColorToBrushConverter}}"
                  StrokeThickness="{Binding Thickness}"
                  IsVisible="{Binding Type, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Ellipse}}">
+            <Canvas.Left>
+                <MultiBinding Converter="{StaticResource RectXConverter}">
+                    <Binding Path="StartPoint"/>
+                    <Binding Path="EndPoint"/>
+                </MultiBinding>
+            </Canvas.Left>
+            <Canvas.Top>
+                <MultiBinding Converter="{StaticResource RectYConverter}">
+                    <Binding Path="StartPoint"/>
+                    <Binding Path="EndPoint"/>
+                </MultiBinding>
+            </Canvas.Top>
             <Ellipse.Width>
                 <MultiBinding Converter="{StaticResource RectWidthConverter}">
                     <Binding Path="StartPoint"/>
@@ -61,6 +86,8 @@
         </Path>
         
         <TextBlock Text="{Binding Text}"
+                   Canvas.Left="{Binding StartPoint.X}"
+                   Canvas.Top="{Binding StartPoint.Y}"
                    Foreground="{Binding Color, Converter={StaticResource ColorToBrushConverter}}"
                    FontSize="{Binding FontSize}"
                    FontFamily="{Binding FontFamily}"
@@ -74,5 +101,5 @@
               StrokeJoin="Round"
               Data="{Binding Points, Converter={StaticResource PenGeometryConverter}}"
               IsVisible="{Binding Type, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Pen}}"/>
-    </Panel>
+    </Canvas>
 </UserControl>

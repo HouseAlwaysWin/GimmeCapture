@@ -48,7 +48,7 @@ public partial class SnipWindow : Window
         var source = e.Source as Control;
 
         // 1. Text Interaction (Edit / Move) - High Priority
-        if (props.IsLeftButtonPressed && _viewModel.IsDrawingMode && _viewModel.CurrentTool == AnnotationType.Text)
+        if (props.IsLeftButtonPressed && _viewModel.IsDrawingMode && _viewModel.CurrentAnnotationTool == AnnotationType.Text)
         {
              // Convert Window Point to Selection Space for Hit Testing
              var selectionSpacePoint = new Point(point.X - _viewModel.SelectionRect.X, point.Y - _viewModel.SelectionRect.Y);
@@ -142,7 +142,7 @@ public partial class SnipWindow : Window
                 // Logic: If in drawing mode and clicked INSIDE the selection area, draw.
                 if (_viewModel.SelectionRect.Contains(point))
                 {
-                    if (_viewModel.CurrentTool == AnnotationType.Text)
+                    if (_viewModel.CurrentAnnotationTool == AnnotationType.Text)
                     {
                         // Start Text Entry
                         _viewModel.IsEnteringText = true;
@@ -162,7 +162,7 @@ public partial class SnipWindow : Window
                     
                     _currentAnnotation = new Annotation
                     {
-                        Type = _viewModel.CurrentTool,
+                        Type = _viewModel.CurrentAnnotationTool,
                         StartPoint = relPoint,
                         EndPoint = relPoint,
                         Color = _viewModel.SelectedColor,
@@ -170,7 +170,7 @@ public partial class SnipWindow : Window
                         FontSize = _viewModel.CurrentFontSize
                     };
 
-                    if (_viewModel.CurrentTool == AnnotationType.Pen)
+                    if (_viewModel.CurrentAnnotationTool == AnnotationType.Pen)
                     {
                         _currentAnnotation.AddPoint(relPoint);
                     }
@@ -286,7 +286,7 @@ public partial class SnipWindow : Window
             bool cursorSet = false;
 
             // 1. Text Annotation Hover (Hand Cursor)
-            if (_viewModel.IsDrawingMode && _viewModel.CurrentTool == AnnotationType.Text)
+            if (_viewModel.IsDrawingMode && _viewModel.CurrentAnnotationTool == AnnotationType.Text)
             {
                 var selectionSpacePoint = new Point(currentPoint.X - _viewModel.SelectionRect.X, currentPoint.Y - _viewModel.SelectionRect.Y);
                  for (int i = _viewModel.Annotations.Count - 1; i >= 0; i--)

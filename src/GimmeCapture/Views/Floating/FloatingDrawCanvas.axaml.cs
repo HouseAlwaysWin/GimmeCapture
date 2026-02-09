@@ -102,7 +102,7 @@ public partial class FloatingDrawCanvas : Window
         if (_viewModel == null || !_viewModel.IsDrawingMode) return;
         
         // Only handle Pen tool for now in floating canvas
-        if (_viewModel.CurrentTool != AnnotationType.Pen) return;
+        if (_viewModel.CurrentAnnotationTool != AnnotationType.Pen) return;
         
         var point = e.GetCurrentPoint(this);
         if (point.Properties.IsLeftButtonPressed)

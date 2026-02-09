@@ -23,7 +23,7 @@ namespace GimmeCapture.ViewModels.Main;
 
 public enum SnipState { Idle, Detecting, Selecting, Selected }
 
-public class SnipWindowViewModel : ViewModelBase, IDisposable
+public class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingToolViewModel
 {
     private SnipState _currentState = SnipState.Detecting;
     public SnipState CurrentState
@@ -369,7 +369,7 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable
     public ReactiveCommand<Color, Unit> ChangeColorCommand { get; set; }
     public ReactiveCommand<Unit, Unit> UndoCommand { get; set; }
     public ReactiveCommand<Unit, Unit> RedoCommand { get; set; }
-    public ReactiveCommand<Unit, Unit> ClearCommand { get; set; }
+    public ReactiveCommand<Unit, Unit> ClearAnnotationsCommand { get; set; }
     public ReactiveCommand<Unit, Unit> RemoveBackgroundCommand { get; set; }
     public ReactiveCommand<Unit, Unit> IncreaseThicknessCommand { get; set; }
     public ReactiveCommand<Unit, Unit> DecreaseThicknessCommand { get; set; }
@@ -418,13 +418,13 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable
     // Annotation Properties
     public ObservableCollection<Annotation> Annotations { get; } = new();
 
-    private AnnotationType _currentTool = AnnotationType.None;
-    public AnnotationType CurrentTool
+    private AnnotationType _currentAnnotationTool = AnnotationType.None;
+    public AnnotationType CurrentAnnotationTool
     {
-        get => _currentTool;
+        get => _currentAnnotationTool;
         set 
         {
-            this.RaiseAndSetIfChanged(ref _currentTool, value);
+            this.RaiseAndSetIfChanged(ref _currentAnnotationTool, value);
             this.RaisePropertyChanged(nameof(IsShapeToolActive));
             this.RaisePropertyChanged(nameof(IsPenToolActive));
             this.RaisePropertyChanged(nameof(IsTextToolActive));
@@ -434,9 +434,9 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable
     public bool IsAIDownloading => _mainVm?.AIResourceService.IsDownloading ?? false;
     public double AIResourceProgress => _mainVm?.AIResourceService.DownloadProgress ?? 0;
 
-    public bool IsShapeToolActive => CurrentTool == AnnotationType.Rectangle || CurrentTool == AnnotationType.Ellipse || CurrentTool == AnnotationType.Arrow || CurrentTool == AnnotationType.Line;
-    public bool IsPenToolActive => CurrentTool == AnnotationType.Pen;
-    public bool IsTextToolActive => CurrentTool == AnnotationType.Text;
+    public bool IsShapeToolActive => CurrentAnnotationTool == AnnotationType.Rectangle || CurrentAnnotationTool == AnnotationType.Ellipse || CurrentAnnotationTool == AnnotationType.Arrow || CurrentAnnotationTool == AnnotationType.Line;
+    public bool IsPenToolActive => CurrentAnnotationTool == AnnotationType.Pen;
+    public bool IsTextToolActive => CurrentAnnotationTool == AnnotationType.Text;
 
     public void ToggleToolGroup(string group)
     {
@@ -444,7 +444,7 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable
         {
             if (IsShapeToolActive)
             {
-                CurrentTool = AnnotationType.None;
+                CurrentAnnotationTool = AnnotationType.None;
                 IsDrawingMode = false;
             }
         }
@@ -452,12 +452,12 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable
         {
             if (IsPenToolActive)
             {
-                CurrentTool = AnnotationType.None;
+                CurrentAnnotationTool = AnnotationType.None;
                 IsDrawingMode = false;
             }
             else
             {
-                CurrentTool = AnnotationType.Pen;
+                CurrentAnnotationTool = AnnotationType.Pen;
                 IsDrawingMode = true;
             }
         }
@@ -465,12 +465,12 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable
         {
             if (IsTextToolActive)
             {
-                CurrentTool = AnnotationType.None;
+                CurrentAnnotationTool = AnnotationType.None;
                 IsDrawingMode = false;
             }
             else
             {
-                CurrentTool = AnnotationType.Text;
+                CurrentAnnotationTool = AnnotationType.Text;
                 IsDrawingMode = true;
             }
         }
@@ -503,6 +503,8 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable
         get => _currentFontSize;
         set => this.RaiseAndSetIfChanged(ref _currentFontSize, value);
     }
+
+    public bool ShowIconSettings => true;
 
     private string _currentFontFamily = "Arial";
     public string CurrentFontFamily
@@ -827,14 +829,14 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable
         });
         
         SelectToolCommand = ReactiveCommand.Create<AnnotationType>(t => {
-            if (CurrentTool == t)
+            if (CurrentAnnotationTool == t)
             {
-                CurrentTool = AnnotationType.None;
+                CurrentAnnotationTool = AnnotationType.None;
                 IsDrawingMode = false;
             }
             else
             {
-                CurrentTool = t;
+                CurrentAnnotationTool = t;
                 IsDrawingMode = true; 
             }
         });
@@ -845,11 +847,15 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable
         
         ChangeColorCommand = ReactiveCommand.Create<Color>(c => SelectedColor = c);
         ChangeColorCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
+        
+        IncreaseThicknessCommand = ReactiveCommand.Create(() => { CurrentThickness = Math.Min(CurrentThickness + 1, 30); });
+        DecreaseThicknessCommand = ReactiveCommand.Create(() => { CurrentThickness = Math.Max(CurrentThickness - 1, 1); });
+        
         UndoCommand = ReactiveCommand.Create(Undo);
         UndoCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
         RedoCommand = ReactiveCommand.Create(Redo);
         RedoCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
-        ClearCommand = ReactiveCommand.Create(() => Annotations.Clear());
+        ClearAnnotationsCommand = ReactiveCommand.Create(() => Annotations.Clear());
         
         var canRemoveBackground = this.WhenAnyValue(
             x => x.IsRecordingMode, 
@@ -1261,6 +1267,8 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable
             Colors.White, Colors.Black, Colors.Gray
         };
     }
+
+    public System.Collections.Generic.IEnumerable<Color> PresetColors => StaticData.ColorsList;
 
     private async Task Copy() 
     { 
