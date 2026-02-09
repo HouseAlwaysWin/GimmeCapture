@@ -377,6 +377,10 @@ public class MainWindowViewModel : ViewModelBase
         }
     }
 
+
+
+
+
     private bool _runOnStartup;
     public bool RunOnStartup
     {
@@ -659,6 +663,13 @@ public class MainWindowViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _sam2MaxObjects, value);
     }
 
+    private int _sam2MinObjectSize = 20;
+    public int SAM2MinObjectSize
+    {
+        get => _sam2MinObjectSize;
+        set => this.RaiseAndSetIfChanged(ref _sam2MinObjectSize, value);
+    }
+
 
 
     private bool _showRecordCursor = true;
@@ -728,6 +739,7 @@ public class MainWindowViewModel : ViewModelBase
         EnableAI = s.EnableAI;
         SAM2GridDensity = s.SAM2GridDensity;
         SAM2MaxObjects = s.SAM2MaxObjects;
+        SAM2MinObjectSize = s.SAM2MinObjectSize;
         if (string.IsNullOrEmpty(TempDirectory))
         {
             TempDirectory = Path.Combine(_settingsService.BaseDataDirectory, "Temp");
@@ -842,6 +854,7 @@ public class MainWindowViewModel : ViewModelBase
             s.EnableAI = EnableAI;
             s.SAM2GridDensity = SAM2GridDensity;
             s.SAM2MaxObjects = SAM2MaxObjects;
+            s.SAM2MinObjectSize = SAM2MinObjectSize;
             
             await _settingsService.SaveAsync();
             IsModified = false;

@@ -119,6 +119,7 @@
   "MenuShowToolbar": "Show Toolbar",
   "AIScanDensity": "AI Scan Grid Density:",
   "AIScanMaxObjects": "Max Detected Objects:",
+  "AIScanMinSize": "Scan Object Min Size:",
   "AIScanSettings": "AI Scan Settings",
   "IconScale": "Icon Scale:",
   "WingScale": "Wing Scale:",

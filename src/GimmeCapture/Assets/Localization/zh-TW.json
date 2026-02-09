@@ -119,6 +119,7 @@
   "MenuShowToolbar": "顯示工具列",
   "AIScanDensity": "AI 掃描網格密度:",
   "AIScanMaxObjects": "掃描物件數量上限:",
+  "AIScanMinSize": "掃描區塊範圍設定:",
   "AIScanSettings": "AI 掃描設定",
   "IconScale": "圖示縮放:",
   "WingScale": "翅膀縮放:",

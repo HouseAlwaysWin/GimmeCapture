@@ -190,7 +190,7 @@ public class SAM2Service : IDisposable
         });
     }
 
-    public async Task<List<Avalonia.Rect>> AutoDetectObjectsAsync(int gridDensity = 32, int maxObjects = 20, CancellationToken cancellationToken = default)
+    public async Task<List<Avalonia.Rect>> AutoDetectObjectsAsync(int gridDensity = 32, int maxObjects = 20, int minSize = 20, CancellationToken cancellationToken = default)
     {
         if (!_isInitialized || _decoderSession == null || _imageEmbeddings == null) return new List<Avalonia.Rect>();
 
@@ -335,7 +335,7 @@ public class SAM2Service : IDisposable
                                     (maxY - minY) / mh * _originalHeight);
 
                                 // Filter noise 
-                                if (rect.Width >= 20 && rect.Height >= 20 &&
+                                if (rect.Width >= minSize && rect.Height >= minSize &&
                                     rect.Width < _originalWidth * 0.95 && rect.Height < _originalHeight * 0.95)
                                 {
                                     lock (lockObj)

@@ -306,6 +306,16 @@
                                                 <TextBlock Text="{Binding SAM2MaxObjects}" VerticalAlignment="Center" Width="30"/>
                                             </StackPanel>
                                         </StackPanel>
+
+                                        <!-- Min Size -->
+                                        <StackPanel Spacing="5" Margin="24,0,0,10">
+                                            <TextBlock Text="{Binding [AIScanMinSize], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>
+                                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                                <Slider Minimum="5" Maximum="200" Value="{Binding SAM2MinObjectSize}" 
+                                                        TickFrequency="5" IsSnapToTickEnabled="True" HorizontalAlignment="Stretch" Width="250"/>
+                                                <TextBlock Text="{Binding SAM2MinObjectSize}" VerticalAlignment="Center" Width="30"/>
+                                            </StackPanel>
+                                        </StackPanel>
                                     </StackPanel>
                                 </StackPanel>
                             </StackPanel>
