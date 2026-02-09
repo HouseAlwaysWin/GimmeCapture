@@ -70,7 +70,7 @@ public partial class SnipWindow : Window
                          if (e.ClickCount == 2)
                          {
                              // Double Click -> Edit Mode
-                             _viewModel.Annotations.Remove(ann);
+                             _viewModel.RemoveAnnotation(ann);
                              
                              _viewModel.IsEnteringText = true;
                              _viewModel.TextInputPosition = new Point(ann.StartPoint.X + _viewModel.SelectionRect.X, ann.StartPoint.Y + _viewModel.SelectionRect.Y);
@@ -174,7 +174,7 @@ public partial class SnipWindow : Window
                         _currentAnnotation.AddPoint(relPoint);
                     }
                     
-                    _viewModel.Annotations.Add(_currentAnnotation);
+                    _viewModel.AddAnnotation(_currentAnnotation);
                     e.Handled = true;
                     return;
                 }
@@ -223,7 +223,7 @@ public partial class SnipWindow : Window
                 _viewModel.CurrentState = SnipState.Selecting;
                 _viewModel.SelectionRect = new Rect(_startPoint, new Size(0, 0));
                 _viewModel.IsDrawingMode = false;
-                _viewModel.Annotations.Clear();
+                _viewModel.ClearAnnotationsCommand.Execute().Subscribe();
             }
             else if (_viewModel.CurrentState == SnipState.Selected)
             {
@@ -240,7 +240,7 @@ public partial class SnipWindow : Window
                      _viewModel.CurrentState = SnipState.Selecting;
                      _viewModel.SelectionRect = new Rect(_startPoint, new Size(0, 0));
                      _viewModel.IsDrawingMode = false;
-                     _viewModel.Annotations.Clear();
+                     _viewModel.ClearAnnotationsCommand.Execute().Subscribe();
                 }
             }
         }

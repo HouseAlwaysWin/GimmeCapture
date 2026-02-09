@@ -4,7 +4,7 @@ using System.Collections.ObjectModel;
 using Avalonia.Media.Imaging;
 using GimmeCapture.Models;
 
-namespace GimmeCapture.ViewModels.Floating;
+namespace GimmeCapture.Models;
 
 public interface IHistoryAction
 {

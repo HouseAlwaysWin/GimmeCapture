@@ -96,7 +96,7 @@ public partial class FloatingVideoWindow : Window
                     {
                         SizeToContent = SizeToContent.Manual;
                         var padding = vm.WindowPadding;
-                        double toolbarHeight = vm.ShowToolbar ? 42 : 0;
+                        double toolbarHeight = vm.ShowToolbar ? 60 : 0;
                         Height = vm.DisplayHeight + padding.Top + padding.Bottom + toolbarHeight;
                     }
                     InvalidateMeasure();
@@ -136,7 +136,7 @@ public partial class FloatingVideoWindow : Window
         if (DataContext is FloatingVideoViewModel vm)
         {
             var padding = vm.WindowPadding;
-            double toolbarHeight = vm.ShowToolbar ? 42 : 0;
+            double toolbarHeight = vm.ShowToolbar ? 60 : 0;
             
             Width = vm.DisplayWidth + padding.Left + padding.Right;
             Height = vm.DisplayHeight + padding.Top + padding.Bottom + toolbarHeight;

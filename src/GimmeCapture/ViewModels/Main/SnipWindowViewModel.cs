@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
+using GimmeCapture.Models;
 using ReactiveUI;
 using System;
 using System.Reactive;
@@ -10,7 +11,6 @@ using System.IO;
 using System.Reactive.Linq;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using GimmeCapture.Models;
 using System.Linq;
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core;
@@ -390,31 +390,78 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingToolViewM
     public ReactiveCommand<Unit, Unit> TriggerAutoScanCommand { get; set; }
     public ReactiveCommand<Unit, Unit> ToggleAIScanBoxCommand { get; set; }
 
-    private readonly System.Collections.Generic.List<Annotation> _redoStack = new();
+    private Stack<IHistoryAction> _historyStack = new();
+    private Stack<IHistoryAction> _redoHistoryStack = new();
     private bool _isUndoingOrRedoing = false;
 
     private void Undo()
     {
-        if (Annotations.Count > 0)
-        {
-            var item = Annotations[Annotations.Count - 1];
-            _isUndoingOrRedoing = true;
-            Annotations.RemoveAt(Annotations.Count - 1);
-            _redoStack.Add(item);
-            _isUndoingOrRedoing = false;
-        }
+        if (_historyStack.Count == 0) return;
+        _isUndoingOrRedoing = true;
+        var action = _historyStack.Pop();
+        action.Undo();
+        _redoHistoryStack.Push(action);
+        _isUndoingOrRedoing = false;
+        UpdateHistoryStatus();
     }
 
     private void Redo()
     {
-        if (_redoStack.Count > 0)
-        {
-            var item = _redoStack[_redoStack.Count - 1];
-            _isUndoingOrRedoing = true;
-            _redoStack.RemoveAt(_redoStack.Count - 1);
-            Annotations.Add(item);
-            _isUndoingOrRedoing = false;
-        }
+        if (_redoHistoryStack.Count == 0) return;
+        _isUndoingOrRedoing = true;
+        var action = _redoHistoryStack.Pop();
+        action.Redo();
+        _historyStack.Push(action);
+        _isUndoingOrRedoing = false;
+        UpdateHistoryStatus();
+    }
+
+    private void PushUndoAction(IHistoryAction action)
+    {
+        if (_isUndoingOrRedoing) return;
+        _historyStack.Push(action);
+        _redoHistoryStack.Clear();
+        UpdateHistoryStatus();
+    }
+
+    public void AddAnnotation(Annotation annotation)
+    {
+        PushUndoAction(new AnnotationHistoryAction(Annotations, annotation, true));
+        Annotations.Add(annotation);
+    }
+
+    public void RemoveAnnotation(Annotation annotation)
+    {
+        PushUndoAction(new AnnotationHistoryAction(Annotations, annotation, false));
+        Annotations.Remove(annotation);
+    }
+
+    private void ClearAnnotations()
+    {
+        if (Annotations.Count == 0) return;
+        PushUndoAction(new ClearAnnotationsHistoryAction(Annotations));
+        Annotations.Clear();
+        UpdateHistoryStatus();
+    }
+
+    private bool _hasUndo;
+    public bool HasUndo
+    {
+        get => _hasUndo;
+        set => this.RaiseAndSetIfChanged(ref _hasUndo, value);
+    }
+
+    private bool _hasRedo;
+    public bool HasRedo
+    {
+        get => _hasRedo;
+        set => this.RaiseAndSetIfChanged(ref _hasRedo, value);
+    }
+
+    private void UpdateHistoryStatus()
+    {
+        HasUndo = _historyStack.Count > 0;
+        HasRedo = _redoHistoryStack.Count > 0;
     }
 
     // Annotation Properties
@@ -754,7 +801,7 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingToolViewM
             {
                 var relPoint = new Point(TextInputPosition.X - SelectionRect.X, TextInputPosition.Y - SelectionRect.Y);
                 
-                Annotations.Add(new Annotation
+                AddAnnotation(new Annotation
                 {
                     Type = AnnotationType.Text,
                     StartPoint = relPoint,
@@ -842,13 +889,7 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingToolViewM
         AIScanCommand = ReactiveCommand.CreateFromTask(RunAIScanAsync);
         AIScanCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"AI Scan error: {ex}"));
 
-        Annotations.CollectionChanged += (s, e) =>
-        {
-            if (!_isUndoingOrRedoing)
-            {
-                _redoStack.Clear();
-            }
-        };
+        ClearAnnotationsCommand = ReactiveCommand.Create(ClearAnnotations);
         
         ToggleToolGroupCommand = ReactiveCommand.Create<string>(ToggleToolGroup);
         TriggerAutoScanCommand = ReactiveCommand.CreateFromTask(RunAIScanAsync);
@@ -877,8 +918,6 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingToolViewM
         });
         SelectToolCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
         
-        ToggleToolGroupCommand = ReactiveCommand.Create<string>(ToggleToolGroup);
-        ToggleToolGroupCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
         
         ChangeColorCommand = ReactiveCommand.Create<Color>(c => SelectedColor = c);
         ChangeColorCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
@@ -886,11 +925,12 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingToolViewM
         IncreaseThicknessCommand = ReactiveCommand.Create(() => { CurrentThickness = Math.Min(CurrentThickness + 1, 30); });
         DecreaseThicknessCommand = ReactiveCommand.Create(() => { CurrentThickness = Math.Max(CurrentThickness - 1, 1); });
         
-        UndoCommand = ReactiveCommand.Create(Undo);
+        var canUndo = this.WhenAnyValue(x => x.HasUndo);
+        var canRedo = this.WhenAnyValue(x => x.HasRedo);
+        UndoCommand = ReactiveCommand.Create(Undo, canUndo);
         UndoCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
-        RedoCommand = ReactiveCommand.Create(Redo);
+        RedoCommand = ReactiveCommand.Create(Redo, canRedo);
         RedoCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
-        ClearAnnotationsCommand = ReactiveCommand.Create(() => Annotations.Clear());
         
         var canRemoveBackground = this.WhenAnyValue(
             x => x.IsRecordingMode, 
@@ -903,10 +943,6 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingToolViewM
         }, canRemoveBackground);
         RemoveBackgroundCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
 
-        IncreaseThicknessCommand = ReactiveCommand.Create(() => { if (CurrentThickness < 20) CurrentThickness += 1; });
-        IncreaseThicknessCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
-        DecreaseThicknessCommand = ReactiveCommand.Create(() => { if (CurrentThickness > 1) CurrentThickness -= 1; });
-        DecreaseThicknessCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
         IncreaseFontSizeCommand = ReactiveCommand.Create(() => { if (CurrentFontSize < 72) CurrentFontSize += 2; });
         IncreaseFontSizeCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
         DecreaseFontSizeCommand = ReactiveCommand.Create(() => { if (CurrentFontSize > 8) CurrentFontSize -= 2; });
