@@ -98,7 +98,7 @@ public class MainWindowViewModel : ViewModelBase
 
     public enum CaptureMode { Normal, Copy, Pin, Record }
 
-    public FFmpegDownloaderService FfmpegDownloader { get; } = new();
+    public FFmpegDownloaderService FfmpegDownloader { get; }
     public RecordingService RecordingService { get; }
     public UpdateService UpdateService { get; }
     public AIResourceService AIResourceService { get; }
@@ -141,12 +141,10 @@ public class MainWindowViewModel : ViewModelBase
     public MainWindowViewModel()
     {
         _settingsService = new AppSettingsService();
-        RecordingService = new RecordingService(FfmpegDownloader);
+        FfmpegDownloader = new FFmpegDownloaderService(_settingsService);
+        RecordingService = new RecordingService(FfmpegDownloader, _settingsService);
         UpdateService = new UpdateService(AppVersion);
         AIResourceService = new AIResourceService(_settingsService);
-        
-        InitializeModules();
-        
         // Sync ViewModel with Service using ReactiveUI
         // When Service language changes, notify ViewModel properties to update
         LocalizationService.Instance
@@ -344,7 +342,7 @@ public class MainWindowViewModel : ViewModelBase
     public string AIResourcesDirectory
     {
         get => string.IsNullOrEmpty(_settingsService.Settings.AIResourcesDirectory) 
-               ? Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "AI") 
+               ? Path.Combine(_settingsService.BaseDataDirectory, "AI") 
                : _settingsService.Settings.AIResourcesDirectory;
         set
         {
@@ -361,6 +359,7 @@ public class MainWindowViewModel : ViewModelBase
         {
             if (value != null && LocalizationService.Instance.CurrentLanguage != value.Value)
             {
+                // ALWAYS update the service first to ensure UI reflects change immediately
                 LocalizationService.Instance.CurrentLanguage = value.Value;
                 this.RaisePropertyChanged();
                 
@@ -368,6 +367,7 @@ public class MainWindowViewModel : ViewModelBase
                 if (!_isDataLoading)
                 {
                     _settingsService.Settings.Language = value.Value;
+                    IsModified = true;
                     _ = SaveSettingsAsync();
                 }
             }
@@ -727,7 +727,7 @@ public class MainWindowViewModel : ViewModelBase
         SAM2MaxObjects = s.SAM2MaxObjects;
         if (string.IsNullOrEmpty(TempDirectory))
         {
-            TempDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Temp");
+            TempDirectory = Path.Combine(_settingsService.BaseDataDirectory, "Temp");
             try { if (!Directory.Exists(TempDirectory)) Directory.CreateDirectory(TempDirectory); } catch { }
         }
         
@@ -748,14 +748,14 @@ public class MainWindowViewModel : ViewModelBase
         VideoSaveDirectory = s.VideoSaveDirectory;
         if (string.IsNullOrEmpty(VideoSaveDirectory))
         {
-            VideoSaveDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Recordings");
+            VideoSaveDirectory = Path.Combine(_settingsService.BaseDataDirectory, "Recordings");
             try { if (!Directory.Exists(VideoSaveDirectory)) Directory.CreateDirectory(VideoSaveDirectory); } catch { }
         }
 
         SaveDirectory = s.SaveDirectory;
         if (string.IsNullOrEmpty(SaveDirectory))
         {
-            SaveDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Captures");
+            SaveDirectory = Path.Combine(_settingsService.BaseDataDirectory, "Captures");
             try { if (!Directory.Exists(SaveDirectory)) Directory.CreateDirectory(SaveDirectory); } catch { }
         }
 
@@ -782,12 +782,17 @@ public class MainWindowViewModel : ViewModelBase
             _ = Task.Run(async () => await CheckForUpdates(silent: true));
         }
 
+        // Initialize modules ONLY after settings are loaded to avoid rogue saves with defaults
+        InitializeModules();
+
         _isDataLoading = false;
     }
 
     public async Task<bool> SaveSettingsAsync()
     {
-        // Don't save if we haven't even finished loading
+        // CRITICAL: Block any save attempts while loading to prevent old data from overwriting new files
+        if (_isDataLoading) return false;
+
         if (_loadTask != null && !_loadTask.IsCompleted)
             await _loadTask;
 
@@ -810,8 +815,12 @@ public class MainWindowViewModel : ViewModelBase
             s.RecordHotkey = RecordHotkey;
             s.BorderColorHex = BorderColor.ToString();
             s.ThemeColorHex = ThemeColor.ToString();
+            
+            // Sync current state of Singleton services
             s.Language = LocalizationService.Instance.CurrentLanguage;
+            s.AIResourcesDirectory = AIResourcesDirectory;
             s.VideoSaveDirectory = VideoSaveDirectory;
+            
             s.RecordFormat = RecordFormat;
             s.RecordFPS = RecordFPS;
             s.UseFixedRecordPath = UseFixedRecordPath;
@@ -1123,10 +1132,10 @@ public class MainWindowViewModel : ViewModelBase
         sam2.WhenAnyValue(x => x.SelectedVariant)
             .Subscribe(async v => 
             {
-                if (Enum.TryParse<SAM2Variant>(v, out var variant))
+                if (!_isDataLoading && Enum.TryParse<SAM2Variant>(v, out var variant))
                 {
                     _settingsService.Settings.SelectedSAM2Variant = variant;
-                    await _settingsService.SaveAsync(); 
+                    await SaveSettingsAsync(); 
                     sam2.IsInstalled = AIResourceService.IsSAM2Ready(variant);
                 }
             });

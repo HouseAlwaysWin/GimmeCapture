@@ -980,7 +980,7 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable
         string tempDir = _mainVm.TempDirectory;
         if (string.IsNullOrEmpty(tempDir))
         {
-            tempDir = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Temp");
+            tempDir = System.IO.Path.Combine(_mainVm.AppSettingsService.BaseDataDirectory, "Temp");
         }
         
         try { System.IO.Directory.CreateDirectory(tempDir); } catch { }

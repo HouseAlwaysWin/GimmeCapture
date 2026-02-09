@@ -11,8 +11,10 @@ namespace GimmeCapture.Services.Core;
 public class FFmpegDownloaderService : ReactiveObject
 {
     private const string FfmpegUrl = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip";
-    private readonly string _binFolder;
-    private readonly string _ffmpegPath;
+    private readonly AppSettingsService? _settingsService;
+    private string BinFolder => Path.Combine(_settingsService?.BaseDataDirectory ?? AppDomain.CurrentDomain.BaseDirectory, "bin");
+    private string LocalFfmpegPath => Path.Combine(BinFolder, "ffmpeg.exe");
+    private string LocalFfplayPath => Path.Combine(BinFolder, "ffplay.exe");
 
     private double _downloadProgress;
     public double DownloadProgress
@@ -28,12 +30,11 @@ public class FFmpegDownloaderService : ReactiveObject
         set => this.RaiseAndSetIfChanged(ref _isDownloading, value);
     }
 
-    public string FfmpegExecutablePath => _ffmpegPath;
+    public string FfmpegExecutablePath => GetFFmpegPath();
 
-    public FFmpegDownloaderService()
+    public FFmpegDownloaderService(AppSettingsService? settingsService = null)
     {
-        _binFolder = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "bin");
-        _ffmpegPath = Path.Combine(_binFolder, "ffmpeg.exe");
+        _settingsService = settingsService;
     }
 
     public bool IsFFmpegAvailable()
@@ -52,7 +53,7 @@ public class FFmpegDownloaderService : ReactiveObject
         var systemPath = GetFullPath("ffmpeg.exe");
         if (!string.IsNullOrEmpty(systemPath)) return systemPath;
         // 2. Check local bin folder
-        if (File.Exists(_ffmpegPath)) return _ffmpegPath;
+        if (File.Exists(LocalFfmpegPath)) return LocalFfmpegPath;
         return string.Empty;
     }
 
@@ -62,8 +63,7 @@ public class FFmpegDownloaderService : ReactiveObject
         var systemPath = GetFullPath("ffplay.exe");
         if (!string.IsNullOrEmpty(systemPath)) return systemPath;
         // 2. Check local bin folder
-        var localPath = Path.Combine(_binFolder, "ffplay.exe");
-        if (File.Exists(localPath)) return localPath;
+        if (File.Exists(LocalFfplayPath)) return LocalFfplayPath;
         return string.Empty;
     }
 
@@ -88,10 +88,10 @@ public class FFmpegDownloaderService : ReactiveObject
     {
         try
         {
-            if (File.Exists(_ffmpegPath)) File.Delete(_ffmpegPath);
-            var ffprobePath = Path.Combine(_binFolder, "ffprobe.exe");
+            if (File.Exists(LocalFfmpegPath)) File.Delete(LocalFfmpegPath);
+            var ffprobePath = Path.Combine(BinFolder, "ffprobe.exe");
             if (File.Exists(ffprobePath)) File.Delete(ffprobePath);
-            var ffplayPath = Path.Combine(_binFolder, "ffplay.exe");
+            var ffplayPath = Path.Combine(BinFolder, "ffplay.exe");
             if (File.Exists(ffplayPath)) File.Delete(ffplayPath);
             
             this.RaisePropertyChanged(nameof(IsFFmpegAvailable));
@@ -114,13 +114,13 @@ public class FFmpegDownloaderService : ReactiveObject
             IsDownloading = true;
             DownloadProgress = 0;
 
-            if (!Directory.Exists(_binFolder))
+            if (!Directory.Exists(BinFolder))
             {
-                Directory.CreateDirectory(_binFolder);
+                Directory.CreateDirectory(BinFolder);
             }
 
-            string extractPath = Path.Combine(_binFolder, "temp_ffmpeg");
-            string zipPath = Path.Combine(_binFolder, "ffmpeg.zip");
+            string extractPath = Path.Combine(BinFolder, "temp_ffmpeg");
+            string zipPath = Path.Combine(BinFolder, "ffmpeg.zip");
 
             // Check if we already have extracted files that satisfy our MISSING needs
             bool skipDownload = false;
@@ -202,15 +202,15 @@ public class FFmpegDownloaderService : ReactiveObject
                     // Safe delete and move ffmpeg.exe
                     try 
                     {
-                        if (File.Exists(_ffmpegPath)) File.Delete(_ffmpegPath);
-                        File.Move(files[0], _ffmpegPath);
+                        if (File.Exists(LocalFfmpegPath)) File.Delete(LocalFfmpegPath);
+                        File.Move(files[0], LocalFfmpegPath);
                     }
                     catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
                     {
                         // If file exists, we can assume it's usable (locked by us or system), so we skip overwriting it
-                        if (!File.Exists(_ffmpegPath))
+                        if (!File.Exists(LocalFfmpegPath))
                         {
-                            throw new IOException($"檔案被佔用或無權限，且無法建立新檔案 ({_ffmpegPath})。請關閉佔用程式。", ex);
+                            throw new IOException($"檔案被佔用或無權限，且無法建立新檔案 ({LocalFfmpegPath})。請關閉佔用程式。", ex);
                         }
                         System.Diagnostics.Debug.WriteLine($"Skipped overwriting locked ffmpeg.exe: {ex.Message}");
                     }
@@ -219,7 +219,7 @@ public class FFmpegDownloaderService : ReactiveObject
                     var ffprobeFiles = Directory.GetFiles(extractPath, "ffprobe.exe", SearchOption.AllDirectories);
                     if (ffprobeFiles.Length > 0)
                     {
-                        string ffprobePath = Path.Combine(_binFolder, "ffprobe.exe");
+                        string ffprobePath = Path.Combine(BinFolder, "ffprobe.exe");
                         try 
                         {
                             if (File.Exists(ffprobePath)) File.Delete(ffprobePath);
@@ -232,7 +232,7 @@ public class FFmpegDownloaderService : ReactiveObject
                     var ffplayFiles = Directory.GetFiles(extractPath, "ffplay.exe", SearchOption.AllDirectories);
                     if (ffplayFiles.Length > 0)
                     {
-                        string ffplayPath = Path.Combine(_binFolder, "ffplay.exe");
+                        string ffplayPath = Path.Combine(BinFolder, "ffplay.exe");
                         try
                         {
                             if (File.Exists(ffplayPath)) File.Delete(ffplayPath);

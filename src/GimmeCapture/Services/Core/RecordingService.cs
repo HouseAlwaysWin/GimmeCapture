@@ -16,6 +16,7 @@ public enum RecordingState { Idle, Recording, Paused }
 public class RecordingService : ReactiveObject
 {
     private readonly FFmpegDownloaderService _downloader;
+    private readonly AppSettingsService? _settingsService;
     private Process? _ffmpegProcess;
     private RecordingState _state = RecordingState.Idle;
     private readonly List<string> _segments = new();
@@ -28,11 +29,14 @@ public class RecordingService : ReactiveObject
     private int _fps = 30;
     private bool _isFinalizing;
     private double _finalizationProgress;
-    // Use local Temp folder in app directory instead of System Temp (usually C:\)
-    // This will be updated with a unique ID per session in StartAsync
-    private string _tempDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Temp", "Recordings");
+    private string _tempDir = string.Empty;
 
     // Windows API for sending Ctrl+C
+    // ... (omitting DllImports as they are in the file already)
+    // Wait, I should include the DllImports if they were part of the replaced block.
+    // Looking at the previous tool call, I replaced lines 17-79.
+    // The DllImports were in that range.
+
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool GenerateConsoleCtrlEvent(uint dwCtrlEvent, uint dwProcessGroupId);
 
@@ -55,7 +59,6 @@ public class RecordingService : ReactiveObject
         private set => this.RaiseAndSetIfChanged(ref _state, value);
     }
 
-    // Expose the actual output file path (may be modified during finalization)
     public string? OutputFilePath => _outputFile;
     public string? LastRecordingPath => _outputFile;
 
@@ -73,9 +76,12 @@ public class RecordingService : ReactiveObject
         private set => this.RaiseAndSetIfChanged(ref _finalizationProgress, value);
     }
 
-    public RecordingService(FFmpegDownloaderService downloader)
+    public string BaseTempDir => Path.Combine(_settingsService?.BaseDataDirectory ?? AppDomain.CurrentDomain.BaseDirectory, "Temp", "Recordings");
+
+    public RecordingService(FFmpegDownloaderService downloader, AppSettingsService? settingsService = null)
     {
         _downloader = downloader;
+        _settingsService = settingsService;
     }
 
     /// <summary>
@@ -97,7 +103,8 @@ public class RecordingService : ReactiveObject
         _segments.Clear();
 
         // Use a unique temp directory for THIS session to avoid conflicts with zombie processes
-        _tempDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Temp", $"Recordings_{Guid.NewGuid()}");
+        var baseDataDir = _settingsService?.BaseDataDirectory ?? AppDomain.CurrentDomain.BaseDirectory;
+        _tempDir = Path.Combine(baseDataDir, "Temp", $"Recordings_{Guid.NewGuid()}");
 
         // Ensure temp dir is clean (it's new so it should be, but just in case)
         try

@@ -69,7 +69,7 @@ public class AIResourceService : ReactiveObject
         var path = _settingsService.Settings.AIResourcesDirectory;
         if (string.IsNullOrEmpty(path))
         {
-            path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "AI");
+            path = Path.Combine(_settingsService.BaseDataDirectory, "AI");
         }
         return path;
     }
