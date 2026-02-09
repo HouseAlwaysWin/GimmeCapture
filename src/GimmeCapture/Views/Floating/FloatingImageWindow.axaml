@@ -256,14 +256,7 @@
 
                             <!-- 2. Processing / Interactive Tools -->
                             <StackPanel Orientation="Horizontal" Spacing="2" IsVisible="{Binding IsPointRemovalMode, Converter={StaticResource BoolInvertConverter}}">
-                                <!-- Interactive Selection (Magic Wand) -->
-                                <ToggleButton Theme="{StaticResource SnipToggleButton}" 
-                                              IsChecked="{Binding IsPointRemovalMode, Mode=TwoWay}"
-                                              ToolTip.Tip="{Binding [TipMagicWand], Source={x:Static services:LocalizationService.Instance}}">
-                                    <PathIcon Data="M7.5,5.6L5,7L6.4,4.5L5,2L7.5,3.4L10,2L8.6,4.5L10,7L7.5,5.6M19.5,15.4L22,14L20.6,16.5L22,19L19.5,17.6L17,19L18.4,16.5L17,14L19.5,15.4M22,2L20.6,4.5L22,7L19.5,5.6L17,7L18.4,4.5L17,2L19.5,3.4L22,2M13.34,12.78L15.78,10.34L13.66,8.22L11.22,10.66L13.34,12.78M14.37,7.29L16.71,9.63C17.1,10 17.1,10.65 16.71,11.04L5.04,22.71C4.65,23.1 4,23.1 3.63,22.71L1.29,20.37C0.9,20 0.9,19.35 1.29,18.96L12.96,7.29C13.35,6.9 14,6.9 14.37,7.29Z" Width="14" Height="14"/>
-                                </ToggleButton>
 
-                                <Rectangle Fill="#444444" Width="1" Height="16" Margin="2,0" VerticalAlignment="Center"/>
 
                                 <!-- Selection Tool -->
                                 <ToggleButton Theme="{StaticResource SnipToggleButton}" 
@@ -314,8 +307,18 @@
                                 </Button>
                             </StackPanel>
 
-                            <!-- 3. Remove Background Button -->
-                             <Rectangle Fill="#444444" Width="1" Height="16" Margin="2,0" VerticalAlignment="Center" IsVisible="{Binding CanRemoveBackground}"/>
+                             <!-- 3. AI Tools -->
+                             <Rectangle Fill="#444444" Width="1" Height="16" Margin="2,0" VerticalAlignment="Center"/>
+                             
+                             <!-- Interactive Selection (Target) -->
+                             <ToggleButton Theme="{StaticResource SnipToggleButton}" 
+                                           IsChecked="{Binding IsPointRemovalMode, Mode=TwoWay}"
+                                           ToolTip.Tip="{Binding [TipMagicWand], Source={x:Static services:LocalizationService.Instance}}">
+                                 <PathIcon Data="M12,2C6.47,2 2,6.47 2,12C2,17.53 6.47,22 12,22C17.53,22 22,17.53 22,12C22,6.47 17.53,2 12,2M12,20C7.58,20 4,16.42 4,12C4,7.58 7.58,4 12,4C16.42,4 20,7.58 20,12C20,16.42 16.42,20 12,20M12,7C9.24,7 7,9.24 7,12C7,14.76 9.24,17 12,17C14.76,17 17,14.76 17,12C17,9.24 14.76,7 12,7Z" Width="14" Height="14"/>
+                             </ToggleButton>
+
+                             <!-- Remove Background Button -->
+                              <Rectangle Fill="#444444" Width="1" Height="16" Margin="2,0" VerticalAlignment="Center" IsVisible="{Binding CanRemoveBackground}"/>
                              <Button Theme="{StaticResource SnipButton}" Command="{Binding RemoveBackgroundCommand}" ToolTip.Tip="{Binding [RemoveBackground], Source={x:Static services:LocalizationService.Instance}}" IsVisible="{Binding CanRemoveBackground}">
                                  <PathIcon Data="M7.5,5.6L5,7L6.4,4.5L5,2L7.5,3.4L10,2L8.6,4.5L10,7L7.5,5.6M19.5,15.4L22,14L20.6,16.5L22,19L19.5,17.6L17,19L18.4,16.5L17,14L19.5,15.4M22,2L20.6,4.5L22,7L19.5,5.6L17,7L18.4,4.5L17,2L19.5,3.4L22,2M13.34,12.78L15.78,10.34L13.66,8.22L11.22,10.66L13.34,12.78M14.37,7.29L16.71,9.63C17.1,10 17.1,10.65 16.71,11.04L5.04,22.71C4.65,23.1 4,23.1 3.63,22.71L1.29,20.37C0.9,20 0.9,19.35 1.29,18.96L12.96,7.29C13.35,6.9 14,6.9 14.37,7.29Z" Width="14" Height="14"/>
                              </Button>
