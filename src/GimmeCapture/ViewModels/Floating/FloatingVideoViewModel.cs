@@ -8,8 +8,13 @@ using System.Reactive;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using GimmeCapture.Models;
 using CliWrap;
 using CliWrap.Buffered;
+using System.Linq;
+using System.Reactive.Linq;
 
 namespace GimmeCapture.ViewModels.Floating;
 
@@ -158,16 +163,110 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable
         set => this.RaiseAndSetIfChanged(ref _displayHeight, value);
     }
 
+    private bool _isEnteringText;
+    public bool IsEnteringText
+    {
+        get => _isEnteringText;
+        set => this.RaiseAndSetIfChanged(ref _isEnteringText, value);
+    }
+
+    private string _pendingText = string.Empty;
+    public string PendingText
+    {
+        get => _pendingText;
+        set => this.RaiseAndSetIfChanged(ref _pendingText, value);
+    }
+
+    private Avalonia.Point _textInputPosition;
+    public Avalonia.Point TextInputPosition
+    {
+        get => _textInputPosition;
+        set => this.RaiseAndSetIfChanged(ref _textInputPosition, value);
+    }
+
+    public string CurrentFontFamily => GimmeCapture.Services.Core.LocalizationService.Instance.CurrentFontFamily.Name;
+
+    public ObservableCollection<double> Thicknesses { get; } = new() { 1, 2, 4, 6, 8, 12, 16, 24 };
+
     private FloatingTool _currentTool = FloatingTool.None;
     public FloatingTool CurrentTool
     {
         get => _currentTool;
         set 
         {
+            if (_currentTool == value) return;
+            
+            if (value != FloatingTool.None)
+            {
+                CurrentAnnotationTool = AnnotationType.None;
+            }
+
             this.RaiseAndSetIfChanged(ref _currentTool, value);
             this.RaisePropertyChanged(nameof(IsSelectionMode));
             this.RaisePropertyChanged(nameof(IsAnyToolActive));
         }
+    }
+
+    private AnnotationType _currentAnnotationTool = AnnotationType.None;
+    public AnnotationType CurrentAnnotationTool
+    {
+        get => _currentAnnotationTool;
+        set 
+        {
+            if (_currentAnnotationTool == value) return;
+            
+            if (value != AnnotationType.None)
+            {
+                CurrentTool = FloatingTool.None;
+            }
+
+            this.RaiseAndSetIfChanged(ref _currentAnnotationTool, value);
+            this.RaisePropertyChanged(nameof(IsShapeToolActive));
+            // this.RaisePropertyChanged(nameof(IsLineToolActive)); // Removed
+            this.RaisePropertyChanged(nameof(IsTextToolActive));
+            this.RaisePropertyChanged(nameof(IsAnyToolActive));
+        }
+    }
+
+    public ObservableCollection<Annotation> Annotations { get; } = new();
+
+    public bool IsShapeToolActive => CurrentAnnotationTool == AnnotationType.Rectangle || CurrentAnnotationTool == AnnotationType.Ellipse || CurrentAnnotationTool == AnnotationType.Arrow || CurrentAnnotationTool == AnnotationType.Line;
+    // public bool IsLineToolActive => CurrentAnnotationTool == AnnotationType.Arrow || CurrentAnnotationTool == AnnotationType.Line || CurrentAnnotationTool == AnnotationType.Pen; // Removed
+    public bool IsTextToolActive => CurrentAnnotationTool == AnnotationType.Text;
+
+    private Avalonia.Media.Color _selectedColor = Avalonia.Media.Colors.Red;
+    public Avalonia.Media.Color SelectedColor
+    {
+        get => _selectedColor;
+        set => this.RaiseAndSetIfChanged(ref _selectedColor, value);
+    }
+
+    private double _currentThickness = 2.0;
+    public double CurrentThickness
+    {
+        get => _currentThickness;
+        set => this.RaiseAndSetIfChanged(ref _currentThickness, value);
+    }
+
+    private double _currentFontSize = 24.0;
+    public double CurrentFontSize
+    {
+        get => _currentFontSize;
+        set => this.RaiseAndSetIfChanged(ref _currentFontSize, value);
+    }
+
+    private bool _isBold;
+    public bool IsBold
+    {
+        get => _isBold;
+        set => this.RaiseAndSetIfChanged(ref _isBold, value);
+    }
+
+    private bool _isItalic;
+    public bool IsItalic
+    {
+        get => _isItalic;
+        set => this.RaiseAndSetIfChanged(ref _isItalic, value);
     }
 
     public bool IsSelectionMode
@@ -176,7 +275,7 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable
         set => CurrentTool = value ? FloatingTool.Selection : (CurrentTool == FloatingTool.Selection ? FloatingTool.None : CurrentTool);
     }
 
-    public bool IsAnyToolActive => CurrentTool != FloatingTool.None;
+    public bool IsAnyToolActive => CurrentTool != FloatingTool.None || CurrentAnnotationTool != AnnotationType.None;
 
     private Avalonia.Rect _selectionRect = new Avalonia.Rect();
     public Avalonia.Rect SelectionRect
@@ -194,6 +293,15 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable
     public ReactiveCommand<Unit, Unit> SelectionCommand { get; }
     public ReactiveCommand<Unit, Unit> CropCommand { get; } // Future implementation
     public ReactiveCommand<Unit, Unit> PinSelectionCommand { get; } // Future implementation
+    
+    public ReactiveCommand<AnnotationType, Unit> SelectToolCommand { get; }
+    public ReactiveCommand<string, Unit> ToggleToolGroupCommand { get; }
+    public ReactiveCommand<Unit, Unit> ClearAnnotationsCommand { get; }
+    
+    public ReactiveCommand<Unit, Unit> UndoCommand { get; }
+    public ReactiveCommand<Unit, Unit> RedoCommand { get; }
+    public ReactiveCommand<Avalonia.Media.Color, Unit> ChangeColorCommand { get; }
+    public ReactiveCommand<Unit, Unit> CancelTextEntryCommand { get; }
     
     // Dependencies
     private readonly GimmeCapture.Services.Abstractions.IClipboardService _clipboardService;
@@ -234,12 +342,60 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable
 
         CopyCommand = ReactiveCommand.CreateFromTask(async () => 
         {
+            if (Annotations.Count > 0)
+            {
+                var flattened = await GetFlattenedBitmapAsync();
+                if (flattened != null)
+                {
+                    await _clipboardService.CopyImageAsync(flattened);
+                    return;
+                }
+            }
+            
             if (CopyAction != null) await CopyAction();
         });
 
         SaveCommand = ReactiveCommand.CreateFromTask(async () => 
         {
             if (SaveAction != null) await SaveAction();
+        });
+
+        SelectToolCommand = ReactiveCommand.Create<AnnotationType>(tool => 
+        {
+            CurrentAnnotationTool = CurrentAnnotationTool == tool ? AnnotationType.None : tool;
+        });
+
+        ToggleToolGroupCommand = ReactiveCommand.Create<string>(group => 
+        {
+             if (group == "Shapes")
+             {
+                 if (IsShapeToolActive) CurrentAnnotationTool = AnnotationType.None;
+                 else CurrentAnnotationTool = AnnotationType.Rectangle;
+             }
+             else if (group == "Lines") // "Lines" here now effectively means "Pen" or separate group
+             {
+                 CurrentAnnotationTool = (CurrentAnnotationTool == AnnotationType.Pen) ? AnnotationType.None : AnnotationType.Pen;
+             }
+             else if (group == "Text")
+             {
+                 if (IsTextToolActive) CurrentAnnotationTool = AnnotationType.None;
+                 else CurrentAnnotationTool = AnnotationType.Text;
+             }
+        });
+
+        ClearAnnotationsCommand = ReactiveCommand.Create(ClearAnnotations);
+        ChangeColorCommand = ReactiveCommand.Create<Avalonia.Media.Color>(c => SelectedColor = c);
+
+        var canUndo = this.WhenAnyValue(x => x.HasUndo).ObserveOn(RxApp.MainThreadScheduler);
+        UndoCommand = ReactiveCommand.Create(Undo, canUndo);
+
+        var canRedo = this.WhenAnyValue(x => x.HasRedo).ObserveOn(RxApp.MainThreadScheduler);
+        RedoCommand = ReactiveCommand.Create(Redo, canRedo);
+
+        CancelTextEntryCommand = ReactiveCommand.Create(() => 
+        {
+            IsEnteringText = false;
+            PendingText = string.Empty;
         });
 
         // Initialize bitmap
@@ -334,6 +490,70 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable
         public override void SetLength(long value) { }
     }
 
+    private Stack<IHistoryAction> _historyStack = new();
+    private Stack<IHistoryAction> _redoHistoryStack = new();
+
+    private bool _hasUndo;
+    public bool HasUndo
+    {
+        get => _hasUndo;
+        set => this.RaiseAndSetIfChanged(ref _hasUndo, value);
+    }
+
+    private bool _hasRedo;
+    public bool HasRedo
+    {
+        get => _hasRedo;
+        set => this.RaiseAndSetIfChanged(ref _hasRedo, value);
+    }
+
+    public bool CanUndo => HasUndo;
+    public bool CanRedo => HasRedo;
+
+    public void PushUndoAction(IHistoryAction action)
+    {
+        _historyStack.Push(action);
+        _redoHistoryStack.Clear();
+        UpdateHistoryStatus();
+    }
+
+    private void Undo()
+    {
+        if (_historyStack.Count == 0) return;
+        var action = _historyStack.Pop();
+        action.Undo();
+        _redoHistoryStack.Push(action);
+        UpdateHistoryStatus();
+    }
+
+    private void Redo()
+    {
+        if (_redoHistoryStack.Count == 0) return;
+        var action = _redoHistoryStack.Pop();
+        action.Redo();
+        _historyStack.Push(action);
+        UpdateHistoryStatus();
+    }
+
+    private void UpdateHistoryStatus()
+    {
+        HasUndo = _historyStack.Count > 0;
+        HasRedo = _redoHistoryStack.Count > 0;
+    }
+
+    public void AddAnnotation(Annotation annotation)
+    {
+        Annotations.Add(annotation);
+        PushUndoAction(new AnnotationHistoryAction(Annotations, annotation, true));
+    }
+
+    private void ClearAnnotations()
+    {
+        if (Annotations.Count == 0) return;
+        PushUndoAction(new ClearAnnotationsHistoryAction(Annotations));
+        Annotations.Clear();
+    }
+
     internal void UpdateBitmap(byte[] frameData)
     {
         if (VideoBitmap == null) return;
@@ -358,5 +578,154 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable
         _playCts?.Cancel();
         _playCts?.Dispose();
         VideoBitmap?.Dispose();
+    }
+
+
+    private async Task<Bitmap?> GetFlattenedBitmapAsync()
+    {
+        if (VideoBitmap == null) return null;
+        
+        return await Task.Run(() => 
+        {
+            try 
+            {
+                // 1. Snapshot the current WriteableBitmap
+                // Since WriteableBitmap is accessed by UI thread and background thread (via IL), we need to be careful.
+                // But typically we can just Lock and Copy.
+                
+                using var locked = VideoBitmap.Lock();
+                var info = new SkiaSharp.SKImageInfo(VideoBitmap.PixelSize.Width, VideoBitmap.PixelSize.Height, SkiaSharp.SKColorType.Bgra8888);
+                using var skBitmap = new SkiaSharp.SKBitmap(info);
+                
+                unsafe 
+                {
+                    // Copy pixels directly
+                    long len = (long)info.BytesSize;
+                    Buffer.MemoryCopy((void*)locked.Address, (void*)skBitmap.GetPixels(), len, len);
+                }
+                
+                // 2. Create surface
+                using var surface = SkiaSharp.SKSurface.Create(info);
+                using var canvas = surface.Canvas;
+                
+                // 3. Draw base image
+                canvas.DrawBitmap(skBitmap, 0, 0);
+                
+                // 4. Draw Annotations
+                // Coordinate mapping specific to Video which might be scaled in UI?
+                // `DisplayWidth` / `DisplayHeight` vs `_width` / `_height` (which are actual video dimensions).
+                
+                // If DisplayWidth == _width, scale is 1.
+                var refW = DisplayWidth > 0 ? DisplayWidth : OriginalWidth;
+                var refH = DisplayHeight > 0 ? DisplayHeight : OriginalHeight;
+                var scaleX = (double)_width / refW; 
+                var scaleY = (double)_height / refH;
+                
+                foreach (var ann in Annotations)
+                {
+                    var paint = new SkiaSharp.SKPaint
+                    {
+                        Color = new SkiaSharp.SKColor(ann.Color.R, ann.Color.G, ann.Color.B, ann.Color.A),
+                        StrokeWidth = (float)(ann.Thickness * scaleX),
+                        IsAntialias = true,
+                        Style = SkiaSharp.SKPaintStyle.Stroke
+                    };
+                    
+                    if (ann.Type == AnnotationType.Pen)
+                    {
+                        paint.StrokeCap = SkiaSharp.SKStrokeCap.Round;
+                        paint.StrokeJoin = SkiaSharp.SKStrokeJoin.Round;
+                    }
+
+                    switch (ann.Type)
+                    {
+                        case AnnotationType.Rectangle:
+                        case AnnotationType.Ellipse:
+                            var rect = new SkiaSharp.SKRect(
+                                (float)(Math.Min(ann.StartPoint.X, ann.EndPoint.X) * scaleX),
+                                (float)(Math.Min(ann.StartPoint.Y, ann.EndPoint.Y) * scaleY),
+                                (float)(Math.Max(ann.StartPoint.X, ann.EndPoint.X) * scaleX),
+                                (float)(Math.Max(ann.StartPoint.Y, ann.EndPoint.Y) * scaleY));
+                            
+                            if (ann.Type == AnnotationType.Rectangle)
+                                canvas.DrawRect(rect, paint);
+                            else
+                                canvas.DrawOval(rect, paint);
+                            break;
+                            
+                        case AnnotationType.Line:
+                            canvas.DrawLine(
+                                (float)(ann.StartPoint.X * scaleX), (float)(ann.StartPoint.Y * scaleY),
+                                (float)(ann.EndPoint.X * scaleX), (float)(ann.EndPoint.Y * scaleY),
+                                paint);
+                            break;
+                            
+                        case AnnotationType.Arrow:
+                            // Draw Line
+                            float x1 = (float)(ann.StartPoint.X * scaleX);
+                            float y1 = (float)(ann.StartPoint.Y * scaleY);
+                            float x2 = (float)(ann.EndPoint.X * scaleX);
+                            float y2 = (float)(ann.EndPoint.Y * scaleY);
+                            canvas.DrawLine(x1, y1, x2, y2, paint);
+                            
+                            // Draw Arrowhead
+                            double angle = Math.Atan2(y2 - y1, x2 - x1);
+                            double arrowLen = 15 * scaleX; 
+                            double arrowAngle = Math.PI / 6;
+                            
+                            float ax1 = (float)(x2 - arrowLen * Math.Cos(angle - arrowAngle));
+                            float ay1 = (float)(y2 - arrowLen * Math.Sin(angle - arrowAngle));
+                            float ax2 = (float)(x2 - arrowLen * Math.Cos(angle + arrowAngle));
+                            float ay2 = (float)(y2 - arrowLen * Math.Sin(angle + arrowAngle));
+                            
+                            var path = new SkiaSharp.SKPath();
+                            path.MoveTo(x2, y2);
+                            path.LineTo(ax1, ay1);
+                            path.LineTo(ax2, ay2);
+                            path.Close();
+                            
+                            paint.Style = SkiaSharp.SKPaintStyle.Fill;
+                            canvas.DrawPath(path, paint);
+                            break;
+
+                         case AnnotationType.Pen:
+                             // Snapshot points to avoid concurrent modification issues and use DrawPoints
+                             if (ann.Points.Count > 1)
+                             {
+                                 var points = ann.Points.Select(p => new SkiaSharp.SKPoint((float)(p.X * scaleX), (float)(p.Y * scaleY))).ToArray();
+                                 if (points.Length > 1)
+                                 {
+                                     canvas.DrawPoints(SkiaSharp.SKPointMode.Polygon, points, paint);
+                                 }
+                             }
+                             break;
+                             
+                         case AnnotationType.Text:
+                             var font = new SkiaSharp.SKFont(SkiaSharp.SKTypeface.Default, (float)(ann.FontSize * scaleX));
+                             var textPaint = new SkiaSharp.SKPaint
+                             {
+                                 Color = paint.Color,
+                                 IsAntialias = true,
+                             };
+                             canvas.DrawText(ann.Text, (float)(ann.StartPoint.X * scaleX), (float)(ann.StartPoint.Y * scaleY + ann.FontSize * scaleY), SkiaSharp.SKTextAlign.Left, font, textPaint);
+                             break;
+                    }
+                }
+                
+                // 5. Export
+                using var image = surface.Snapshot();
+                using var data = image.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
+                using var resultMs = new System.IO.MemoryStream();
+                data.SaveTo(resultMs);
+                resultMs.Position = 0;
+                
+                return new Bitmap(resultMs);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error flattening video frame: {ex}");
+                return null;
+            }
+        });
     }
 }

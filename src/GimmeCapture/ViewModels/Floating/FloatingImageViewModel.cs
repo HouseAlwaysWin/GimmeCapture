@@ -3,10 +3,11 @@ using ReactiveUI;
 using System.Reactive;
 using System.Threading.Tasks;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core;
 using GimmeCapture.Services.Platforms.Windows;
-
+using GimmeCapture.Models;
 using System.Linq;
 using System.Reactive.Linq;
 using System.Reactive.Threading.Tasks;
@@ -108,6 +109,11 @@ public class FloatingImageViewModel : ViewModelBase, IDisposable
                 SelectionRect = new Avalonia.Rect();
             }
 
+            if (value != FloatingTool.None)
+            {
+                CurrentAnnotationTool = AnnotationType.None;
+            }
+
             this.RaiseAndSetIfChanged(ref _currentTool, value);
             
             // Notify UI properties
@@ -121,6 +127,67 @@ public class FloatingImageViewModel : ViewModelBase, IDisposable
                 _ = StartInteractiveRemovalAsync();
             }
         }
+    }
+
+    private AnnotationType _currentAnnotationTool = AnnotationType.None;
+    public AnnotationType CurrentAnnotationTool
+    {
+        get => _currentAnnotationTool;
+        set 
+        {
+            if (_currentAnnotationTool == value) return;
+            
+            if (value != AnnotationType.None)
+            {
+                CurrentTool = FloatingTool.None;
+            }
+
+            this.RaiseAndSetIfChanged(ref _currentAnnotationTool, value);
+            this.RaisePropertyChanged(nameof(IsShapeToolActive));
+            // this.RaisePropertyChanged(nameof(IsLineToolActive)); // Removed
+            this.RaisePropertyChanged(nameof(IsTextToolActive));
+            this.RaisePropertyChanged(nameof(IsAnyToolActive));
+        }
+    }
+
+    public ObservableCollection<Annotation> Annotations { get; } = new();
+
+    public bool IsShapeToolActive => CurrentAnnotationTool == AnnotationType.Rectangle || CurrentAnnotationTool == AnnotationType.Ellipse || CurrentAnnotationTool == AnnotationType.Arrow || CurrentAnnotationTool == AnnotationType.Line;
+    public bool IsTextToolActive => CurrentAnnotationTool == AnnotationType.Text;
+
+    private Avalonia.Media.Color _selectedColor = Avalonia.Media.Colors.Red;
+    public Avalonia.Media.Color SelectedColor
+    {
+        get => _selectedColor;
+        set => this.RaiseAndSetIfChanged(ref _selectedColor, value);
+    }
+
+    private double _currentThickness = 2.0;
+    public double CurrentThickness
+    {
+        get => _currentThickness;
+        set => this.RaiseAndSetIfChanged(ref _currentThickness, value);
+    }
+
+    private double _currentFontSize = 24.0;
+    public double CurrentFontSize
+    {
+        get => _currentFontSize;
+        set => this.RaiseAndSetIfChanged(ref _currentFontSize, value);
+    }
+
+    private bool _isBold;
+    public bool IsBold
+    {
+        get => _isBold;
+        set => this.RaiseAndSetIfChanged(ref _isBold, value);
+    }
+
+    private bool _isItalic;
+    public bool IsItalic
+    {
+        get => _isItalic;
+        set => this.RaiseAndSetIfChanged(ref _isItalic, value);
     }
 
     private Avalonia.Rect _selectionRect = new Avalonia.Rect();
@@ -188,6 +255,31 @@ public class FloatingImageViewModel : ViewModelBase, IDisposable
         set => this.RaiseAndSetIfChanged(ref _diagnosticText, value);
     }
 
+    private bool _isEnteringText;
+    public bool IsEnteringText
+    {
+        get => _isEnteringText;
+        set => this.RaiseAndSetIfChanged(ref _isEnteringText, value);
+    }
+
+    private string _pendingText = string.Empty;
+    public string PendingText
+    {
+        get => _pendingText;
+        set => this.RaiseAndSetIfChanged(ref _pendingText, value);
+    }
+
+    private Avalonia.Point _textInputPosition;
+    public Avalonia.Point TextInputPosition
+    {
+        get => _textInputPosition;
+        set => this.RaiseAndSetIfChanged(ref _textInputPosition, value);
+    }
+
+    public string CurrentFontFamily => GimmeCapture.Services.Core.LocalizationService.Instance.CurrentFontFamily.Name;
+
+    public ObservableCollection<double> Thicknesses { get; } = new() { 1, 2, 4, 6, 8, 12, 16, 24 };
+
     private double _progressValue;
     public double ProgressValue
     {
@@ -221,7 +313,7 @@ public class FloatingImageViewModel : ViewModelBase, IDisposable
         }
     }
 
-    public bool IsAnyToolActive => CurrentTool != FloatingTool.None;
+    public bool IsAnyToolActive => CurrentTool != FloatingTool.None || CurrentAnnotationTool != AnnotationType.None;
 
     private readonly List<(double X, double Y, bool IsPositive)> _interactivePoints = new();
     private bool _invertSelectionMode = false; // Shift+Click sets this to true
@@ -559,6 +651,15 @@ public class FloatingImageViewModel : ViewModelBase, IDisposable
     public ReactiveCommand<Unit, Unit> ConfirmInteractiveCommand { get; }
     public ReactiveCommand<Unit, Unit> CancelInteractiveCommand { get; }
     
+    public ReactiveCommand<AnnotationType, Unit> SelectToolCommand { get; }
+    public ReactiveCommand<string, Unit> ToggleToolGroupCommand { get; }
+    public ReactiveCommand<Avalonia.Media.Color, Unit> ChangeColorCommand { get; }
+    public ReactiveCommand<Unit, Unit> ClearAnnotationsCommand { get; }
+    
+    public ReactiveCommand<Unit, Unit> UndoCommand { get; }
+    public ReactiveCommand<Unit, Unit> RedoCommand { get; }
+    public ReactiveCommand<Unit, Unit> CancelTextEntryCommand { get; }
+    
     public System.Action? CloseAction { get; set; }
     
     // Action to open a new pinned window, typically provided by the View/Window layer
@@ -687,7 +788,31 @@ public class FloatingImageViewModel : ViewModelBase, IDisposable
         
         SaveCommand = ReactiveCommand.CreateFromTask(async () => 
         {
-             if (SaveAction != null) await SaveAction();
+             if (SaveAction != null)
+             {
+                 // Temporary swap of Image for flattened version if we have annotations
+                 var originalImage = Image;
+                 var flattened = Annotations.Any() ? await GetFlattenedBitmapAsync() : null;
+                 
+                 if (flattened != null)
+                 {
+                     Image = flattened;
+                 }
+                 
+                 try 
+                 {
+                    await SaveAction();
+                 }
+                 finally
+                 {
+                     if (flattened != null)
+                     {
+                         Image = originalImage;
+                         // flattened.Dispose(); // Image property change might have disposed it or UI holds ref? 
+                         // To be safe, we let GC handle it or explicit dispose if we know no one else strictly needs it.
+                     }
+                 }
+             }
         });
 
         CopyCommand = ReactiveCommand.CreateFromTask(CopyAsync);
@@ -713,6 +838,52 @@ public class FloatingImageViewModel : ViewModelBase, IDisposable
         {
             IsPointRemovalMode = false;
         });
+
+        CancelTextEntryCommand = ReactiveCommand.Create(() => 
+        {
+            IsEnteringText = false;
+            PendingText = string.Empty;
+        });
+
+        SelectToolCommand = ReactiveCommand.Create<AnnotationType>(tool => 
+        {
+            var targetTool = CurrentAnnotationTool == tool ? AnnotationType.None : tool;
+            if (targetTool != AnnotationType.None)
+            {
+                CurrentTool = FloatingTool.None;
+                IsPointRemovalMode = false;
+                IsInteractiveSelectionMode = false;
+            }
+            CurrentAnnotationTool = targetTool;
+        });
+
+        ToggleToolGroupCommand = ReactiveCommand.Create<string>(group => 
+        {
+             AnnotationType targetTool = AnnotationType.None;
+             if (group == "Shapes")
+             {
+                 targetTool = IsShapeToolActive ? AnnotationType.None : AnnotationType.Rectangle;
+             }
+             else if (group == "Lines") // "Lines" here now effectively means "Pen" or separate group
+             {
+                 targetTool = (CurrentAnnotationTool == AnnotationType.Pen) ? AnnotationType.None : AnnotationType.Pen;
+             }
+             else if (group == "Text")
+             {
+                 targetTool = IsTextToolActive ? AnnotationType.None : AnnotationType.Text;
+             }
+
+             if (targetTool != AnnotationType.None)
+             {
+                 CurrentTool = FloatingTool.None;
+                 IsPointRemovalMode = false;
+                 IsInteractiveSelectionMode = false;
+             }
+             CurrentAnnotationTool = targetTool;
+        });
+
+        ChangeColorCommand = ReactiveCommand.Create<Avalonia.Media.Color>(c => SelectedColor = c);
+        ClearAnnotationsCommand = ReactiveCommand.Create(ClearAnnotations);
     }
 
     private async Task ConfirmInteractiveAsync()
@@ -798,8 +969,8 @@ public class FloatingImageViewModel : ViewModelBase, IDisposable
         }
     }
 
-    private Stack<Bitmap> _undoStack = new Stack<Bitmap>();
-    private Stack<Bitmap> _redoStack = new Stack<Bitmap>();
+    private Stack<IHistoryAction> _historyStack = new();
+    private Stack<IHistoryAction> _redoHistoryStack = new();
 
     private bool _hasUndo;
     public bool HasUndo
@@ -815,57 +986,70 @@ public class FloatingImageViewModel : ViewModelBase, IDisposable
         set => this.RaiseAndSetIfChanged(ref _hasRedo, value);
     }
 
-    public ReactiveCommand<Unit, Unit> UndoCommand { get; }
-    public ReactiveCommand<Unit, Unit> RedoCommand { get; }
+    public bool CanUndo => HasUndo;
+    public bool CanRedo => HasRedo;
+
+    public void PushUndoAction(IHistoryAction action)
+    {
+        _historyStack.Push(action);
+        _redoHistoryStack.Clear();
+        UpdateHistoryStatus();
+    }
 
     private void PushUndoState()
     {
         if (Image == null) return;
-        
-        // We need to clone the current bitmap, otherwise we just push a reference to the one we are about to change
-        // In Avalonia, Bitmap does not have a direct Clone(), but we can save to streams.
-        // Or simpler: Since we create NEW bitmaps on every change (immutable style), we *might* be able to just push the current reference 
-        // IF the change replaces the property with a NEW reference.
-        // Let's assume operation replaces property.
-        
-        _undoStack.Push(Image);
-        _redoStack.Clear();
-        
-        UpdateStackStatus();
+        PushUndoAction(new BitmapHistoryAction(b => Image = b, Image, null));
     }
 
     private void Undo()
     {
-        if (_undoStack.Count == 0) return;
-
-        var current = Image;
-        if (current != null) _redoStack.Push(current);
-
-        var prev = _undoStack.Pop();
-        // Set backing field directly or property? Property triggers change notification which is good, 
-        // BUT we need to avoid pushing to undo stack again if we had auto-push logic (we don't, it's manual).
-        Image = prev;
+        if (_historyStack.Count == 0) return;
+        var action = _historyStack.Pop();
         
-        UpdateStackStatus();
+        if (action is BitmapHistoryAction bh && bh.NewBitmap == null)
+        {
+            // If the action didn't have a new bitmap, it means it was a "capture state" action.
+            // We should update it with the CURRENT bitmap as the NEW state before undoing.
+            var actionWithNew = new BitmapHistoryAction(bh.SetBitmapAction, bh.OldBitmap, Image);
+            actionWithNew.Undo();
+            _redoHistoryStack.Push(actionWithNew);
+        }
+        else
+        {
+            action.Undo();
+            _redoHistoryStack.Push(action);
+        }
+        
+        UpdateHistoryStatus();
     }
 
     private void Redo()
     {
-        if (_redoStack.Count == 0) return;
-
-        var current = Image;
-        if (current != null) _undoStack.Push(current);
-
-        var next = _redoStack.Pop();
-        Image = next;
-
-        UpdateStackStatus();
+        if (_redoHistoryStack.Count == 0) return;
+        var action = _redoHistoryStack.Pop();
+        action.Redo();
+        _historyStack.Push(action);
+        UpdateHistoryStatus();
     }
 
-    private void UpdateStackStatus()
+    private void UpdateHistoryStatus()
     {
-        HasUndo = _undoStack.Count > 0;
-        HasRedo = _redoStack.Count > 0;
+        HasUndo = _historyStack.Count > 0;
+        HasRedo = _redoHistoryStack.Count > 0;
+    }
+
+    public void AddAnnotation(Annotation annotation)
+    {
+        Annotations.Add(annotation);
+        PushUndoAction(new AnnotationHistoryAction(Annotations, annotation, true));
+    }
+
+    private void ClearAnnotations()
+    {
+        if (Annotations.Count == 0) return;
+        PushUndoAction(new ClearAnnotationsHistoryAction(Annotations));
+        Annotations.Clear();
     }
 
     private async Task RemoveBackgroundAsync()
@@ -1031,19 +1215,229 @@ public class FloatingImageViewModel : ViewModelBase, IDisposable
     {
         if (Image == null) return;
 
+        // Use flattened bitmap if annotations exist, otherwise base image
+        var bitmapToCopy = Annotations.Any() ? await GetFlattenedBitmapAsync() : Image;
+        if (bitmapToCopy == null) bitmapToCopy = Image;
+
         if (IsSelectionActive)
         {
-            var selected = await GetSelectedBitmapAsync();
-            if (selected != null)
-            {
-                await _clipboardService.CopyImageAsync(selected);
-            }
+             // If selection is active, we should crop the FLATTENED bitmap, not just the base image
+             // But existing GetSelectedBitmapAsync uses Image.
+             // We need a version that uses bitmapToCopy.
+             // For simplicity, let's just use grid cropping on the flattened bitmap if we can,
+             // or just copy the whole thing if selection is not supported on flattened yet.
+             // Actually, `GetSelectedBitmapAsync` logic is complex (scaling). 
+             // Let's defer selection copy with annotations for a sec, or implement it properly.
+             
+             // Strategy: 
+             // 1. Get flattened bitmap (entire image + annotations)
+             // 2. Crop it using the same logic as GetSelectedBitmapAsync but operating on the new bitmap.
+             
+             var selected = await GetSelectedBitmapFromAsync(bitmapToCopy);
+             if (selected != null)
+             {
+                 await _clipboardService.CopyImageAsync(selected);
+             }
         }
         else
         {
-            await _clipboardService.CopyImageAsync(Image);
+            await _clipboardService.CopyImageAsync(bitmapToCopy);
         }
     }
+
+    private async Task<Bitmap?> GetFlattenedBitmapAsync()
+    {
+        if (Image == null) return null;
+        
+        return await Task.Run(() => 
+        {
+            try 
+            {
+                // 1. Save base image to stream to load into SKBitmap
+                using var ms = new System.IO.MemoryStream();
+                Image.Save(ms);
+                ms.Position = 0;
+                
+                using var skBitmap = SkiaSharp.SKBitmap.Decode(ms);
+                if (skBitmap == null) return null;
+                
+                // 2. Create a surface to draw on
+                using var surface = SkiaSharp.SKSurface.Create(new SkiaSharp.SKImageInfo(skBitmap.Width, skBitmap.Height));
+                using var canvas = surface.Canvas;
+                
+                // 3. Draw base image
+                canvas.DrawBitmap(skBitmap, 0, 0);
+                
+                // 4. Draw Annotations
+                // Need to map coordinates from Display (View) space to Image (Pixel) space
+                var refW = DisplayWidth > 0 ? DisplayWidth : OriginalWidth;
+                var refH = DisplayHeight > 0 ? DisplayHeight : OriginalHeight;
+                var scaleX = (double)skBitmap.Width / refW;
+                var scaleY = (double)skBitmap.Height / refH;
+                
+                foreach (var ann in Annotations)
+                {
+                    var paint = new SkiaSharp.SKPaint
+                    {
+                        Color = new SkiaSharp.SKColor(ann.Color.R, ann.Color.G, ann.Color.B, ann.Color.A),
+                        StrokeWidth = (float)(ann.Thickness * scaleX), // Scale thickness too?
+                        IsAntialias = true,
+                        Style = SkiaSharp.SKPaintStyle.Stroke
+                    };
+                    
+                    if (ann.Type == AnnotationType.Pen)
+                    {
+                        paint.StrokeCap = SkiaSharp.SKStrokeCap.Round;
+                        paint.StrokeJoin = SkiaSharp.SKStrokeJoin.Round;
+                    }
+
+                    switch (ann.Type)
+                    {
+                        case AnnotationType.Rectangle:
+                        case AnnotationType.Ellipse:
+                            var rect = new SkiaSharp.SKRect(
+                                (float)(Math.Min(ann.StartPoint.X, ann.EndPoint.X) * scaleX),
+                                (float)(Math.Min(ann.StartPoint.Y, ann.EndPoint.Y) * scaleY),
+                                (float)(Math.Max(ann.StartPoint.X, ann.EndPoint.X) * scaleX),
+                                (float)(Math.Max(ann.StartPoint.Y, ann.EndPoint.Y) * scaleY));
+                            
+                            if (ann.Type == AnnotationType.Rectangle)
+                                canvas.DrawRect(rect, paint);
+                            else
+                                canvas.DrawOval(rect, paint);
+                            break;
+                            
+                        case AnnotationType.Line:
+                            canvas.DrawLine(
+                                (float)(ann.StartPoint.X * scaleX), (float)(ann.StartPoint.Y * scaleY),
+                                (float)(ann.EndPoint.X * scaleX), (float)(ann.EndPoint.Y * scaleY),
+                                paint);
+                            break;
+                            
+                        case AnnotationType.Arrow:
+                            // Draw Line
+                            float x1 = (float)(ann.StartPoint.X * scaleX);
+                            float y1 = (float)(ann.StartPoint.Y * scaleY);
+                            float x2 = (float)(ann.EndPoint.X * scaleX);
+                            float y2 = (float)(ann.EndPoint.Y * scaleY);
+                            canvas.DrawLine(x1, y1, x2, y2, paint);
+                            
+                            // Draw Arrowhead (Simple approximation)
+                            // Calculate angle
+                            double angle = Math.Atan2(y2 - y1, x2 - x1);
+                            double arrowLen = 15 * scaleX; 
+                            double arrowAngle = Math.PI / 6;
+                            
+                            float ax1 = (float)(x2 - arrowLen * Math.Cos(angle - arrowAngle));
+                            float ay1 = (float)(y2 - arrowLen * Math.Sin(angle - arrowAngle));
+                            float ax2 = (float)(x2 - arrowLen * Math.Cos(angle + arrowAngle));
+                            float ay2 = (float)(y2 - arrowLen * Math.Sin(angle + arrowAngle));
+                            
+                            var path = new SkiaSharp.SKPath();
+                            path.MoveTo(x2, y2);
+                            path.LineTo(ax1, ay1);
+                            path.LineTo(ax2, ay2);
+                            path.Close();
+                            
+                            paint.Style = SkiaSharp.SKPaintStyle.Fill;
+                            canvas.DrawPath(path, paint);
+                            break;
+                         
+                         case AnnotationType.Pen:
+                             // Snapshot points to avoid concurrent modification issues and use DrawPoints
+                             if (ann.Points.Count > 1)
+                             {
+                                 var points = ann.Points.Select(p => new SkiaSharp.SKPoint((float)(p.X * scaleX), (float)(p.Y * scaleY))).ToArray();
+                                 if (points.Length > 1)
+                                 {
+                                     canvas.DrawPoints(SkiaSharp.SKPointMode.Polygon, points, paint);
+                                 }
+                             }
+                             break;
+                             
+                         case AnnotationType.Text:
+                             // Simplified text rendering
+                             var font = new SkiaSharp.SKFont(SkiaSharp.SKTypeface.Default, (float)(ann.FontSize * scaleX));
+                             var textPaint = new SkiaSharp.SKPaint
+                             {
+                                 Color = paint.Color,
+                                 IsAntialias = true,
+                             };
+                             // Adjust for font family/weight if needed, keeping simple for now
+                             // canvas.DrawText(ann.Text, (float)(ann.StartPoint.X * scaleX), (float)(ann.StartPoint.Y * scaleY + ann.FontSize * scaleY), font, textPaint);
+                             // DrawText(text, x, y, font, paint) 
+                             canvas.DrawText(ann.Text, (float)(ann.StartPoint.X * scaleX), (float)(ann.StartPoint.Y * scaleY + ann.FontSize * scaleY), SkiaSharp.SKTextAlign.Left, font, textPaint);
+                             break;
+                    }
+                }
+                
+                // 5. Export result
+                using var image = surface.Snapshot();
+                using var data = image.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
+                using var resultMs = new System.IO.MemoryStream();
+                data.SaveTo(resultMs);
+                resultMs.Position = 0;
+                
+                return new Bitmap(resultMs);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error flattening bitmap: {ex}");
+                return null;
+            }
+        });
+    }
+
+    private async Task<Bitmap?> GetSelectedBitmapFromAsync(Bitmap sourceBitmap)
+    {
+         if (sourceBitmap == null) return null;
+         
+         return await Task.Run(() =>
+         {
+             try
+             {
+                 using var ms = new System.IO.MemoryStream();
+                 sourceBitmap.Save(ms);
+                 ms.Position = 0;
+                 using var original = SkiaSharp.SKBitmap.Decode(ms);
+                 if (original == null) return null;
+
+                var refW = DisplayWidth > 0 ? DisplayWidth : OriginalWidth;
+                var refH = DisplayHeight > 0 ? DisplayHeight : OriginalHeight;
+                var scaleX = (double)original.Width / refW; 
+                // Note: using original.Width because sourceBitmap might be same size as Image, or different if we flattened. 
+                // Actually GetFlattenedBitmap returns same size as original Image. 
+                // So scale factors should be calculated against the Display dimensions which represent the full image.
+                
+                var scaleY = (double)original.Height / refH;
+
+                int x = (int)Math.Round(Math.Max(0, SelectionRect.X * scaleX));
+                int y = (int)Math.Round(Math.Max(0, SelectionRect.Y * scaleY));
+                int w = (int)Math.Round(Math.Min(original.Width - x, SelectionRect.Width * scaleX));
+                int h = (int)Math.Round(Math.Min(original.Height - y, SelectionRect.Height * scaleY));
+
+                if (w <= 0 || h <= 0) return null;
+
+                var cropped = new SkiaSharp.SKBitmap(w, h);
+                if (original.ExtractSubset(cropped, new SkiaSharp.SKRectI(x, y, x + w, y + h)))
+                {
+                    using var cms = new System.IO.MemoryStream();
+                    using var image = SkiaSharp.SKImage.FromBitmap(cropped);
+                    using var data = image.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
+                    data.SaveTo(cms);
+                    cms.Position = 0;
+                    return new Bitmap(cms);
+                }
+             }
+             catch(Exception ex)
+             {
+                 System.Diagnostics.Debug.WriteLine($"Error extracting selection from bitmap: {ex}");
+             }
+             return null;
+         });
+    }
+
+
 
     private async Task CutAsync()
     {
@@ -1067,7 +1461,10 @@ public class FloatingImageViewModel : ViewModelBase, IDisposable
         var cropped = await GetSelectedBitmapAsync();
         if (cropped != null)
         {
-            PushUndoState();
+            var oldImage = Image;
+            var newImage = cropped;
+            PushUndoAction(new BitmapHistoryAction(b => Image = b, oldImage, newImage));
+
             Image = cropped;
             SelectionRect = new Avalonia.Rect();
             IsSelectionMode = false;

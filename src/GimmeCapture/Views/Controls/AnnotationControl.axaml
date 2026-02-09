@@ -1,0 +1,78 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:m="using:GimmeCapture.Models"
+             xmlns:cv="using:GimmeCapture.Converters"
+             xmlns:local="using:GimmeCapture.Views.Controls"
+             x:Class="GimmeCapture.Views.Controls.AnnotationControl"
+             x:DataType="m:Annotation">
+
+    <Panel>
+        <Rectangle Stroke="{Binding Color, Converter={StaticResource ColorToBrushConverter}}"
+                   StrokeThickness="{Binding Thickness}"
+                   IsVisible="{Binding Type, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Rectangle}}">
+            <Rectangle.Width>
+                <MultiBinding Converter="{StaticResource RectWidthConverter}">
+                    <Binding Path="StartPoint"/>
+                    <Binding Path="EndPoint"/>
+                </MultiBinding>
+            </Rectangle.Width>
+            <Rectangle.Height>
+                <MultiBinding Converter="{StaticResource RectHeightConverter}">
+                    <Binding Path="StartPoint"/>
+                    <Binding Path="EndPoint"/>
+                </MultiBinding>
+            </Rectangle.Height>
+        </Rectangle>
+        
+        <Ellipse Stroke="{Binding Color, Converter={StaticResource ColorToBrushConverter}}"
+                 StrokeThickness="{Binding Thickness}"
+                 IsVisible="{Binding Type, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Ellipse}}">
+            <Ellipse.Width>
+                <MultiBinding Converter="{StaticResource RectWidthConverter}">
+                    <Binding Path="StartPoint"/>
+                    <Binding Path="EndPoint"/>
+                </MultiBinding>
+            </Ellipse.Width>
+            <Ellipse.Height>
+                <MultiBinding Converter="{StaticResource RectHeightConverter}">
+                    <Binding Path="StartPoint"/>
+                    <Binding Path="EndPoint"/>
+                </MultiBinding>
+            </Ellipse.Height>
+        </Ellipse>
+        
+        <Line StartPoint="{Binding StartPoint}" EndPoint="{Binding EndPoint}"
+               Stroke="{Binding Color, Converter={StaticResource ColorToBrushConverter}}"
+               StrokeThickness="{Binding Thickness}"
+               IsVisible="{Binding Type, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Line}}"/>
+               
+        <Path Stroke="{Binding Color, Converter={StaticResource ColorToBrushConverter}}"
+               StrokeThickness="{Binding Thickness}"
+               Fill="{Binding Color, Converter={StaticResource ColorToBrushConverter}}"
+               IsVisible="{Binding Type, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Arrow}}">
+            <Path.Data>
+                <MultiBinding Converter="{StaticResource ArrowGeometryConverter}">
+                    <Binding Path="StartPoint"/>
+                    <Binding Path="EndPoint"/>
+                    <Binding Path="Thickness"/>
+                </MultiBinding>
+            </Path.Data>
+        </Path>
+        
+        <TextBlock Text="{Binding Text}"
+                   Foreground="{Binding Color, Converter={StaticResource ColorToBrushConverter}}"
+                   FontSize="{Binding FontSize}"
+                   FontFamily="{Binding FontFamily}"
+                   FontWeight="{Binding IsBold, Converter={StaticResource BoolToFontWeightConverter}}"
+                   FontStyle="{Binding IsItalic, Converter={StaticResource BoolToFontStyleConverter}}"
+                   IsVisible="{Binding Type, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Text}}"/>
+                   
+        <Path Stroke="{Binding Color, Converter={StaticResource ColorToBrushConverter}}"
+              StrokeThickness="{Binding Thickness}"
+              StrokeLineCap="Round"
+              StrokeJoin="Round"
+              Data="{Binding Points, Converter={StaticResource PenGeometryConverter}}"
+              IsVisible="{Binding Type, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Pen}}"/>
+    </Panel>
+</UserControl>

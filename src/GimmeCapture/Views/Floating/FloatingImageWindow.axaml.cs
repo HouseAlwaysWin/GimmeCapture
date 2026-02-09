@@ -4,6 +4,7 @@ using Avalonia.Input;
 using Avalonia.VisualTree;
 using Avalonia.Controls.Primitives;
 using GimmeCapture.ViewModels.Floating;
+using GimmeCapture.Models;
 using System;
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core;
@@ -20,8 +21,7 @@ public partial class FloatingImageWindow : Window
     {
         InitializeComponent();
         
-        // Use Tunneling for PointerPressed to catch events before children can swallow them,
-        // although here we mostly want to catch them BEFORE they bubble up to Tapped.
+        // Use Tunneling for PointerPressed to catch events before children can swallow them
         AddHandler(PointerPressedEvent, OnPointerPressed, RoutingStrategies.Tunnel);
         AddHandler(TappedEvent, OnTapped, RoutingStrategies.Bubble);
         
@@ -36,9 +36,6 @@ public partial class FloatingImageWindow : Window
         if (DataContext is FloatingImageViewModel vm)
         {
             vm.CloseAction = Close;
-            
-            // CopyAction handled by IClipboardService in ViewModel
-
             
             vm.SaveAction = async () =>
             {
@@ -73,8 +70,6 @@ public partial class FloatingImageWindow : Window
                     ev.PropertyName == nameof(FloatingImageViewModel.WindowPadding) ||
                     ev.PropertyName == nameof(FloatingImageViewModel.ShowToolbar))
                 {
-                    // If toolbar visibility changed, we MUST restore SizeToContent 
-                    // to ensure the window grows to show it correctly.
                     if (ev.PropertyName == nameof(FloatingImageViewModel.ShowToolbar))
                     {
                         SizeToContent = SizeToContent.WidthAndHeight;
@@ -84,20 +79,14 @@ public partial class FloatingImageWindow : Window
                 }
             };
 
-            // Implementation for spawning a NEW pinned window from selection
             vm.OpenPinWindowAction = (bitmap, rect, color, thickness, runAI) =>
             {
-                // Reuse the same logic as SnipWindow to spawn new windows
                 var newVm = new FloatingImageViewModel(bitmap, rect.Width, rect.Height, color, thickness, vm.HidePinDecoration, vm.HidePinBorder, 
                     vm.ClipboardService, vm.AIResourceService, vm.AppSettingsService);
                 
                 newVm.WingScale = vm.WingScale;
                 newVm.CornerIconScale = vm.CornerIconScale;
                 
-                var padding = newVm.WindowPadding;
-                
-                // Position the new window near the current one for feedback, 
-                // but offset it so it's clearly a new window.
                 var newWin = new FloatingImageWindow
                 {
                     DataContext = newVm,
@@ -120,7 +109,6 @@ public partial class FloatingImageWindow : Window
     {
         if (DataContext is FloatingImageViewModel vm)
         {
-            // 1. Filter out interactive elements (Buttons, ToggleButtons, etc.)
             var visualSource = e.Source as Avalonia.Visual;
             while (visualSource != null)
             {
@@ -129,27 +117,24 @@ public partial class FloatingImageWindow : Window
                 visualSource = visualSource.GetVisualParent();
             }
 
-            // Prevent diagnostic overwrite if AI just triggered or is processing
             if (vm.IsProcessing || vm.DiagnosticText.Contains("AI Trigger"))
             {
                 System.Diagnostics.Debug.WriteLine("FloatingWindow: Skipping Tap Diagnostic (AI Active)");
             }
             else
             {
-                vm.DiagnosticText = $"Tap: Tool={vm.CurrentTool}, AI={vm.IsInteractiveSelectionMode}";
+                vm.DiagnosticText = $"Tap: Tool={vm.CurrentTool}, AnnotTool={vm.CurrentAnnotationTool}, AI={vm.IsInteractiveSelectionMode}";
             }
-            System.Diagnostics.Debug.WriteLine($"FloatingWindow: OnTapped. Source: {e.Source}. Tool: {vm.CurrentTool}. AI: {vm.IsInteractiveSelectionMode}");
+
+            if (vm.ShowToolbar) return; // Don't toggle off via tap (as per user request: "打開後不關閉")
             
-            // 2. Toggle toolbar on single click ONLY if no tool is active
-            if (!_isResizing && !_isSelecting && !_isMaybeMoving && !_isAIPointing &&
-                vm.CurrentTool == FloatingTool.None && !vm.IsInteractiveSelectionMode)
+            if (!_isResizing && !_isSelecting && !_isMaybeMoving && !_isAIPointing && !_isDrawing &&
+                vm.CurrentTool == FloatingTool.None && vm.CurrentAnnotationTool == AnnotationType.None && !vm.IsInteractiveSelectionMode)
             {
-                System.Diagnostics.Debug.WriteLine("FloatingWindow: Toggling toolbar");
-                vm.ToggleToolbarCommand.Execute().Subscribe();
+                vm.ShowToolbar = true;
             }
             else
             {
-                System.Diagnostics.Debug.WriteLine("FloatingWindow: Blocking toolbar toggle (Tool Active)");
                 e.Handled = true;
             }
         }
@@ -157,7 +142,6 @@ public partial class FloatingImageWindow : Window
 
     private void SyncWindowSizeToImage()
     {
-        // Now using SizeToContent="WidthAndHeight", so we just need to ensure layout is refreshed
         InvalidateMeasure();
         InvalidateArrange();
     }
@@ -165,12 +149,10 @@ public partial class FloatingImageWindow : Window
     // Resize Fields
     private bool _isResizing;
     private ResizeDirection _resizeDirection;
-    private Point _resizeStartPoint; // Screen Coordinates
-    
-    // Start State
+    private Point _resizeStartPoint; 
     private PixelPoint _startPosition;
-    private Size _startSize; // Logical
-    private Point _pointerPressedPoint; // Screen Coordinates for drag threshold
+    private Size _startSize;
+
     private bool _isMaybeMoving;
     private PointerPressedEventArgs? _pendingMoveEvent;
 
@@ -178,7 +160,16 @@ public partial class FloatingImageWindow : Window
     private bool _isSelecting;
     private Point _selectionStartPoint;
     private bool _isAIPointing;
-    private PointerUpdateKind _lastAIPointType;
+
+    // Drawing State
+    private Annotation? _currentAnnotation;
+    private bool _isDrawing;
+    private Point _startPoint;
+    private DateTime _lastTextFinishTime = DateTime.MinValue;
+    private bool _isDraggingAnnotation;
+    private Annotation? _draggingAnnotation;
+    private Point _dragOffset;
+    private Point _mouseDownPoint;
 
     private enum ResizeDirection
     {
@@ -189,10 +180,12 @@ public partial class FloatingImageWindow : Window
     {
         if (DataContext is not FloatingImageViewModel vm) return;
         var source = e.Source as Control;
-        var pointerPos = e.GetCurrentPoint(this).Position;
+        var pCurrentPoint = e.GetCurrentPoint(this);
+        var pointerPos = pCurrentPoint.Position;
+        var pProperties = pCurrentPoint.Properties;
 
-        // 1. Resize handles priority
-        if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed && 
+        // 1. Resize handles check
+        if (pProperties.IsLeftButtonPressed && 
             vm.CurrentTool == FloatingTool.None && 
             source != null && source.Classes.Contains("Handle"))
         {
@@ -200,11 +193,8 @@ public partial class FloatingImageWindow : Window
             _resizeDirection = GetDirectionFromName(source.Name);
             try
             {
-                // 關閉 SizeToContent 以允許手動 resize
                 SizeToContent = SizeToContent.Manual;
-                
-                var p = e.GetCurrentPoint(this);
-                _resizeStartPoint = this.PointToScreen(p.Position).ToPoint(1.0);
+                _resizeStartPoint = this.PointToScreen(pointerPos).ToPoint(1.0);
                 _startPosition = Position;
                 _startSize = Bounds.Size;
                 e.Pointer.Capture(this);
@@ -224,198 +214,332 @@ public partial class FloatingImageWindow : Window
             vFallback = vFallback.GetVisualParent();
         }
 
-        // 3. Selection Tool vs Movement Preparation
-        var pProperties = e.GetCurrentPoint(this).Properties;
-        if (pProperties.IsLeftButtonPressed)
+        // 3. Drawing / Text Interaction
+        if (pProperties.IsLeftButtonPressed && vm.CurrentAnnotationTool != AnnotationType.None && !vm.IsProcessing)
         {
             var imageControl = this.FindControl<Image>("PinnedImage");
-            
-            if (vm.CurrentTool == FloatingTool.Selection && imageControl != null && !vm.IsProcessing)
+            if (imageControl == null) 
+            {
+               System.Diagnostics.Debug.WriteLine("[Drawing Debug] PinnedImage control not found!");
+               return;
+            }
+            var pointerPosOnImage = e.GetPosition(imageControl);
+
+            // Restrict drawing interaction to the image area to allow toolbar clicks
+            if (pointerPosOnImage.X < 0 || pointerPosOnImage.Y < 0 || 
+                pointerPosOnImage.X > imageControl.Bounds.Width || 
+                pointerPosOnImage.Y > imageControl.Bounds.Height)
+            {
+                System.Diagnostics.Debug.WriteLine($"[Drawing Debug] Pointer outside image area: {pointerPosOnImage}");
+                return;
+            }
+
+            System.Diagnostics.Debug.WriteLine($"[Drawing Debug] PointerPressed on image at {pointerPosOnImage}, Tool={vm.CurrentAnnotationTool}");
+
+            if ((DateTime.Now - _lastTextFinishTime).TotalMilliseconds < 300) return;
+
+            if (vm.IsEnteringText)
+            {
+                var src = e.Source as Control;
+                if (src != null && (src.Name == "TextInputOverlay" || src.FindAncestorOfType<TextBox>() != null)) return;
+                if (src is Button b && b.Content as string == "OK") return;
+                FinishTextEntry();
+                e.Handled = true;
+                return;
+            }
+
+            if (vm.CurrentAnnotationTool == AnnotationType.Text)
+            {
+                for (int i = vm.Annotations.Count - 1; i >= 0; i--)
+                {
+                    var ann = vm.Annotations[i];
+                    if (ann.Type == AnnotationType.Text)
+                    {
+                        double estimatedWidth = ann.Text.Length * ann.FontSize * 0.6;
+                        double estimatedHeight = ann.FontSize * 1.5;
+                        var rect = new Rect(ann.StartPoint.X, ann.StartPoint.Y, estimatedWidth, estimatedHeight);
+                        if (rect.Contains(pointerPosOnImage))
+                        {
+                            if (e.ClickCount == 2)
+                            {
+                                vm.Annotations.Remove(ann);
+                                vm.IsEnteringText = true;
+                                vm.TextInputPosition = ann.StartPoint;
+                                vm.PendingText = ann.Text;
+                                vm.CurrentFontSize = ann.FontSize;
+                                vm.IsBold = ann.IsBold;
+                                vm.IsItalic = ann.IsItalic;
+                                vm.SelectedColor = ann.Color;
+
+                                var textBox = this.FindControl<TextBox>("TextInputOverlay");
+                                Avalonia.Threading.Dispatcher.UIThread.Post(() => textBox?.Focus());
+                                e.Handled = true;
+                                return;
+                            }
+                            else
+                            {
+                                _isDraggingAnnotation = true;
+                                _draggingAnnotation = ann;
+                                _dragOffset = new Point(pointerPosOnImage.X - ann.StartPoint.X, pointerPosOnImage.Y - ann.StartPoint.Y);
+                                e.Pointer.Capture(this);
+                                e.Handled = true;
+                                return;
+                            }
+                        }
+                    }
+                }
+                
+                // Start NEW Text Entry
+                vm.IsEnteringText = true;
+                vm.TextInputPosition = pointerPosOnImage;
+                vm.PendingText = string.Empty;
+                var textBoxNew = this.FindControl<TextBox>("TextInputOverlay");
+                textBoxNew?.Focus();
+                e.Handled = true;
+                return;
+            }
+
+            // Start Drawing Shape/Pen
+            _isDrawing = true;
+            _startPoint = pointerPosOnImage;
+            _currentAnnotation = new Annotation
+            {
+                Type = vm.CurrentAnnotationTool,
+                StartPoint = pointerPosOnImage,
+                EndPoint = pointerPosOnImage,
+                Color = vm.SelectedColor,
+                Thickness = vm.CurrentThickness,
+                FontSize = vm.CurrentFontSize,
+                IsBold = vm.IsBold,
+                IsItalic = vm.IsItalic
+            };
+
+            System.Diagnostics.Debug.WriteLine($"[Drawing Debug] Starting drawing: {_currentAnnotation.Type} at {_startPoint}");
+
+            if (_currentAnnotation.Type == AnnotationType.Pen)
+                _currentAnnotation.AddPoint(pointerPosOnImage);
+
+            vm.AddAnnotation(_currentAnnotation);
+            e.Pointer.Capture(this);
+            e.Handled = true;
+            return;
+        }
+
+        // 4. Selection Tool 
+        if (pProperties.IsLeftButtonPressed && vm.CurrentTool == FloatingTool.Selection && !vm.IsProcessing)
+        {
+            var imageControl = this.FindControl<Image>("PinnedImage");
+            if (imageControl != null)
             {
                 var pos = e.GetPosition(imageControl);
-                // Only start selecting if click is within image bounds
                 if (new Rect(0, 0, imageControl.Bounds.Width, imageControl.Bounds.Height).Contains(pos))
                 {
                     _isSelecting = true;
-                    _selectionStartPoint = new Point(
-                        Math.Max(0, Math.Min(imageControl.Bounds.Width, pos.X)),
-                        Math.Max(0, Math.Min(imageControl.Bounds.Height, pos.Y))
-                    );
+                    _selectionStartPoint = pos;
                     e.Pointer.Capture(this);
                     e.Handled = true;
                     return;
                 }
             }
-            
-            if (vm.IsPointRemovalMode && !vm.IsProcessing)
-            {
-                vm.DiagnosticText = "AI Pressed: Capturing...";
-                _isAIPointing = true;
-                _lastAIPointType = pProperties.PointerUpdateKind;
-                e.Pointer.Capture(this);
-                e.Handled = true;
-                return;
-            }
+        }
 
-            // Default: Drag preparation (Only if no AI mode/Selection mode OR if Processing)
-            if (vm.CurrentTool == FloatingTool.None || vm.IsProcessing)
-            {
-                _isMaybeMoving = true;
-                _pointerPressedPoint = this.PointToScreen(pointerPos).ToPoint(1.0);
-                _pendingMoveEvent = e;
-                e.Pointer.Capture(this);
-            }
+        // 5. AI Interaction
+        if (pProperties.IsLeftButtonPressed && vm.IsPointRemovalMode && !vm.IsProcessing)
+        {
+            _isAIPointing = true;
+            e.Pointer.Capture(this);
+            e.Handled = true;
+            return;
+        }
+
+        // 6. Default: Window Move preparation
+        if (pProperties.IsLeftButtonPressed)
+        {
+            _isMaybeMoving = true;
+            _startPosition = Position;
+            _mouseDownPoint = e.GetPosition(this); // Using window coordinates
+            // Don't capture yet, waiting for drag threshold
+            _pendingMoveEvent = e; 
         }
         else if (pProperties.IsRightButtonPressed)
         {
             if (vm.IsPointRemovalMode)
             {
-                // RIGHT-CLICK = UNDO LAST POINT (not negative selection)
-                vm.DiagnosticText = "AI: Undo Last Point";
                 vm.UndoLastInteractivePoint();
                 e.Handled = true;
-                return;
             }
             else if (vm.IsSelectionMode)
             {
-                // Reset selection
                 vm.SelectionRect = new Rect();
                 e.Handled = true;
-                System.Diagnostics.Debug.WriteLine("FloatingWindow: Selection Reset via Right-Click");
             }
         }
     }
-    
+
+    private void BeginMoveDrag(PointerEventArgs e)
+    {
+        // Workaround: initiate drag from saved event if available
+        if (_pendingMoveEvent != null)
+        {
+             BeginMoveDrag(_pendingMoveEvent);
+             _pendingMoveEvent = null;
+        }
+    }
+
+    private new void BeginMoveDrag(PointerPressedEventArgs e)
+    {
+        e.Pointer.Capture(null);
+        base.BeginMoveDrag(e);
+    }
+
     protected override void OnPointerMoved(PointerEventArgs e)
     {
         base.OnPointerMoved(e);
         if (DataContext is not FloatingImageViewModel vm) return;
-        var pointerPos = e.GetCurrentPoint(this).Position;
+
+        var currentPoint = e.GetCurrentPoint(this);
+        var pointerPos = currentPoint.Position;
 
         if (_isResizing)
         {
-            PerformResizing(e);
+            try
+            {
+                var screenPos = this.PointToScreen(pointerPos).ToPoint(1.0);
+                var deltaX = screenPos.X - _resizeStartPoint.X;
+                var deltaY = screenPos.Y - _resizeStartPoint.Y;
+
+                var scaling = RenderScaling;
+                var deltaWidth = deltaX / scaling;
+                var deltaHeight = deltaY / scaling;
+
+                double x = _startPosition.X;
+                double y = _startPosition.Y;
+                double w = _startSize.Width;
+                double h = _startSize.Height;
+
+                switch (_resizeDirection)
+                {
+                    case ResizeDirection.TopLeft:
+                        x = _startPosition.X + deltaX; 
+                        y = _startPosition.Y + deltaY; 
+                        w = _startSize.Width - deltaWidth; 
+                        h = _startSize.Height - deltaHeight; 
+                        break;
+                    case ResizeDirection.TopRight:
+                        y = _startPosition.Y + deltaY; 
+                        w = _startSize.Width + deltaWidth; 
+                        h = _startSize.Height - deltaHeight; 
+                        break;
+                    case ResizeDirection.BottomLeft:
+                        x = _startPosition.X + deltaX; 
+                        w = _startSize.Width - deltaWidth; 
+                        h = _startSize.Height + deltaHeight; 
+                        break;
+                    case ResizeDirection.BottomRight:
+                        w = _startSize.Width + deltaWidth; 
+                        h = _startSize.Height + deltaHeight; 
+                        break;
+                    case ResizeDirection.Top:
+                        y = _startPosition.Y + deltaY; 
+                        h = _startSize.Height - deltaHeight; 
+                        break;
+                    case ResizeDirection.Bottom:
+                        h = _startSize.Height + deltaHeight; 
+                        break;
+                    case ResizeDirection.Left:
+                        x = _startPosition.X + deltaX; 
+                        w = _startSize.Width - deltaWidth; 
+                        break;
+                    case ResizeDirection.Right:
+                        w = _startSize.Width + deltaWidth; 
+                        break;
+                }
+
+                w = Math.Max(50, w);
+                h = Math.Max(50, h);
+
+                Position = new PixelPoint((int)x, (int)y);
+                Width = w;
+                Height = h;
+
+                if (DataContext is FloatingImageViewModel fvm)
+                {
+                    var padding = fvm.WindowPadding;
+                    fvm.DisplayWidth = Math.Max(1, w - padding.Left - padding.Right);
+                    double toolbarHeight = fvm.ShowToolbar ? 42 : 0; 
+                    fvm.DisplayHeight = Math.Max(1, h - padding.Top - padding.Bottom - toolbarHeight);
+                }
+                
+                e.Handled = true;
+                InvalidateMeasure();
+                InvalidateArrange();
+            }
+            catch (Exception) { }
         }
         else if (_isSelecting)
         {
-            // Update Selection Rect (Coordinates should be relative to PinnedImage or its container)
             var imageControl = this.FindControl<Image>("PinnedImage");
-            if (imageControl == null) return;
-
-            var relativePos = e.GetPosition(imageControl);
-            var startPos = _selectionStartPoint;
-            
-            // Clamp current point to image bounds
-            double clampedX = Math.Max(0, Math.Min(imageControl.Bounds.Width, relativePos.X));
-            double clampedY = Math.Max(0, Math.Min(imageControl.Bounds.Height, relativePos.Y));
-            
-            double x = Math.Min(startPos.X, clampedX);
-            double y = Math.Min(startPos.Y, clampedY);
-            double w = Math.Abs(startPos.X - clampedX);
-            double h = Math.Abs(startPos.Y - clampedY);
-            
-            vm.SelectionRect = new Rect(x, y, w, h);
-            e.Handled = true;
-        }
-        else if (_isMaybeMoving)
-        {
-            var currentScreenPoint = this.PointToScreen(e.GetPosition(this)).ToPoint(1.0);
-            var distance = Math.Sqrt(Math.Pow(currentScreenPoint.X - _pointerPressedPoint.X, 2) + 
-                                     Math.Pow(currentScreenPoint.Y - _pointerPressedPoint.Y, 2));
-            
-            // Movement threshold (3 pixels) to distinguish between Click and Drag
-            if (distance > 3 && _pendingMoveEvent != null)
+            if (imageControl != null)
             {
-                _isMaybeMoving = false;
-                var ev = _pendingMoveEvent;
-                _pendingMoveEvent = null;
-                e.Pointer.Capture(null); // Release capture so BeginMoveDrag works
-                BeginMoveDrag(ev);
-            }
-        }
-    }
+                var pos = e.GetPosition(imageControl);
+                // Clamp to image bounds
+                double x = Math.Max(0, Math.Min(pos.X, imageControl.Bounds.Width));
+                double y = Math.Max(0, Math.Min(pos.Y, imageControl.Bounds.Height));
+                var currentPos = new Point(x, y);
 
-    private void PerformResizing(PointerEventArgs e)
-    {
-        try
-        {
-            var p = e.GetCurrentPoint(this);
-            var currentScreenPoint = this.PointToScreen(p.Position).ToPoint(1.0);
-            
-            var deltaX = currentScreenPoint.X - _resizeStartPoint.X;
-            var deltaY = currentScreenPoint.Y - _resizeStartPoint.Y;
-
-            var scaling = RenderScaling;
-            var deltaWidth = deltaX / scaling;
-            var deltaHeight = deltaY / scaling;
-
-            double x = _startPosition.X;
-            double y = _startPosition.Y;
-            double w = _startSize.Width;
-            double h = _startSize.Height;
-
-            switch (_resizeDirection)
-            {
-                case ResizeDirection.TopLeft:
-                    x = _startPosition.X + (int)deltaX; 
-                    y = _startPosition.Y + (int)deltaY; 
-                    w = _startSize.Width - deltaWidth; 
-                    h = _startSize.Height - deltaHeight; 
-                    break;
-                case ResizeDirection.TopRight:
-                    y = _startPosition.Y + (int)deltaY; 
-                    w = _startSize.Width + deltaWidth; 
-                    h = _startSize.Height - deltaHeight; 
-                    break;
-                case ResizeDirection.BottomLeft:
-                    x = _startPosition.X + (int)deltaX; 
-                    w = _startSize.Width - deltaWidth; 
-                    h = _startSize.Height + deltaHeight; 
-                    break;
-                case ResizeDirection.BottomRight:
-                    w = _startSize.Width + deltaWidth; 
-                    h = _startSize.Height + deltaHeight; 
-                    break;
-                case ResizeDirection.Top:
-                    y = _startPosition.Y + (int)deltaY; 
-                    h = _startSize.Height - deltaHeight; 
-                    break;
-                case ResizeDirection.Bottom:
-                    h = _startSize.Height + deltaHeight; 
-                    break;
-                case ResizeDirection.Left:
-                    x = _startPosition.X + (int)deltaX; 
-                    w = _startSize.Width - deltaWidth; 
-                    break;
-                case ResizeDirection.Right:
-                    w = _startSize.Width + deltaWidth; 
-                    break;
-            }
-
-            w = Math.Max(50, w);
-            h = Math.Max(50, h);
-
-            Position = new PixelPoint((int)x, (int)y);
-            Width = w;
-            Height = h;
-
-            // 更新 ViewModel 中的顯示尺寸
-            if (DataContext is FloatingImageViewModel vm)
-            {
-                var padding = vm.WindowPadding;
-                vm.DisplayWidth = Math.Max(1, w - padding.Left - padding.Right);
+                var rect = new Rect(
+                    Math.Min(_selectionStartPoint.X, currentPos.X),
+                    Math.Min(_selectionStartPoint.Y, currentPos.Y),
+                    Math.Abs(currentPos.X - _selectionStartPoint.X),
+                    Math.Abs(currentPos.Y - _selectionStartPoint.Y));
                 
-                double toolbarHeight = vm.ShowToolbar ? 42 : 0; // 預估工具列高度
-                vm.DisplayHeight = Math.Max(1, h - padding.Top - padding.Bottom - toolbarHeight);
+                vm.SelectionRect = rect;
             }
-            
-            e.Handled = true;
-            InvalidateMeasure();
-            InvalidateArrange();
         }
-        catch (Exception) { }
+        else if (_isDrawing && _currentAnnotation != null)
+        {
+            var imageControl = this.FindControl<Image>("PinnedImage");
+            if (imageControl != null)
+            {
+                var pointerPosOnImage = e.GetPosition(imageControl);
+                // System.Diagnostics.Debug.WriteLine($"[Drawing Debug] PointerMoved drawing at {pointerPosOnImage}");
+                if (_currentAnnotation.Type == AnnotationType.Pen)
+                {
+                    _currentAnnotation.AddPoint(pointerPosOnImage);
+                }
+                else
+                {
+                    _currentAnnotation.EndPoint = pointerPosOnImage;
+                }
+                e.Handled = true;
+            }
+        }
+        else if (_isDraggingAnnotation && _draggingAnnotation != null)
+        {
+             var imageControl = this.FindControl<Image>("PinnedImage");
+            if (imageControl != null)
+            {
+                var pointerPosOnImage = e.GetPosition(imageControl);
+                var newStart = new Point(pointerPosOnImage.X - _dragOffset.X, pointerPosOnImage.Y - _dragOffset.Y);
+                
+                var deltaX = newStart.X - _draggingAnnotation.StartPoint.X;
+                var deltaY = newStart.Y - _draggingAnnotation.StartPoint.Y;
+
+                _draggingAnnotation.StartPoint = newStart;
+                _draggingAnnotation.EndPoint = new Point(_draggingAnnotation.EndPoint.X + deltaX, _draggingAnnotation.EndPoint.Y + deltaY);
+            }
+        }
+        if (_isMaybeMoving)
+        {
+             var delta = pointerPos - _mouseDownPoint;
+             if (Math.Abs(delta.X) > 5 || Math.Abs(delta.Y) > 5)
+             {
+                 _isMaybeMoving = false;
+                 BeginMoveDrag(e);
+             }
+        }
     }
-    
+
     protected override async void OnPointerReleased(PointerReleasedEventArgs e)
     {
         base.OnPointerReleased(e);
@@ -429,6 +553,18 @@ public partial class FloatingImageWindow : Window
             e.Pointer.Capture(null);
             _isSelecting = false;
         }
+        else if (_isDrawing)
+        {
+            e.Pointer.Capture(null);
+            _isDrawing = false;
+            _currentAnnotation = null;
+        }
+        else if (_isDraggingAnnotation)
+        {
+            e.Pointer.Capture(null);
+            _isDraggingAnnotation = false;
+            _draggingAnnotation = null;
+        }
         else if (_isAIPointing)
         {
             var imageControl = this.FindControl<Image>("PinnedImage");
@@ -439,20 +575,13 @@ public partial class FloatingImageWindow : Window
                 
                 if (renderedRect.Contains(pos))
                 {
-                    // Calculate position relative to the ACTUAL image content
                     var relativeX = pos.X - renderedRect.X;
                     var relativeY = pos.Y - renderedRect.Y;
-                    
-                    // CRITICAL: Convert UI units to PHYSICAL PIXELS of the original image
                     var sourceSize = vm.Image.PixelSize;
                     var pixelX = relativeX * (sourceSize.Width / renderedRect.Width);
                     var pixelY = relativeY * (sourceSize.Height / renderedRect.Height);
-                    
-                    // SHIFT+Click = Negative selection (exclude from mask)
-                    // Normal Click = Positive selection (include in mask)
                     bool isPositive = !e.KeyModifiers.HasFlag(KeyModifiers.Shift);
 
-                    vm.DiagnosticText = $"AI Trigger: {(isPositive ? "+" : "-")} {pixelX:F0},{pixelY:F0}";
                     await vm.HandlePointClickAsync(pixelX, pixelY, isPositive);
                 }
             }
@@ -472,11 +601,9 @@ public partial class FloatingImageWindow : Window
     {
         if (DataContext is FloatingImageViewModel vm)
         {
-            // Block context menu if any interactive tool is active
             if (vm.IsPointRemovalMode || vm.IsSelectionMode)
             {
                 e.Handled = true;
-                System.Diagnostics.Debug.WriteLine("FloatingWindow: Blocking ContextMenu because a tool is active.");
             }
         }
     }
@@ -499,6 +626,54 @@ public partial class FloatingImageWindow : Window
             vm.CutCommand.Execute().Subscribe();
             e.Handled = true;
         }
+        else if (e.Key == Key.Z && e.KeyModifiers.HasFlag(KeyModifiers.Control))
+        {
+            vm.UndoCommand.Execute().Subscribe();
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Y && e.KeyModifiers.HasFlag(KeyModifiers.Control))
+        {
+            vm.RedoCommand.Execute().Subscribe();
+            e.Handled = true;
+        }
+    }
+
+    private void OnTextConfirmClick(object? sender, RoutedEventArgs e)
+    {
+        FinishTextEntry();
+    }
+
+    private void FinishTextEntry()
+    {
+        if (DataContext is not FloatingImageViewModel vm) return;
+        if (!vm.IsEnteringText) return;
+
+        if (!string.IsNullOrWhiteSpace(vm.PendingText))
+        {
+            vm.AddAnnotation(new Annotation
+            {
+                Type = AnnotationType.Text,
+                StartPoint = vm.TextInputPosition,
+                EndPoint = vm.TextInputPosition,
+                Text = vm.PendingText,
+                Color = vm.SelectedColor,
+                FontSize = vm.CurrentFontSize,
+                FontFamily = vm.CurrentFontFamily,
+                IsBold = vm.IsBold,
+                IsItalic = vm.IsItalic
+            });
+        }
+
+        CancelTextEntry();
+    }
+
+    private void CancelTextEntry()
+    {
+        if (DataContext is not FloatingImageViewModel vm) return;
+        vm.IsEnteringText = false;
+        vm.PendingText = string.Empty;
+        _lastTextFinishTime = DateTime.Now;
+        this.Focus();
     }
 
     private ResizeDirection GetDirectionFromName(string? name)

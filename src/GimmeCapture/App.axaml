@@ -38,6 +38,8 @@
             <cv:StatusToColorConverter x:Key="StatusToColorConverter"/>
             <cv:StatusToTextConverter x:Key="StatusToTextConverter"/>
             <cv:LanguageKeyConverter x:Key="LanguageKeyConverter"/>
+            <cv:BoolToFontWeightConverter x:Key="BoolToFontWeightConverter"/>
+            <cv:BoolToFontStyleConverter x:Key="BoolToFontStyleConverter"/>
         </ResourceDictionary>
     </Application.Resources>
 

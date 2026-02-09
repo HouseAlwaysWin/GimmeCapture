@@ -426,7 +426,7 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable
         {
             this.RaiseAndSetIfChanged(ref _currentTool, value);
             this.RaisePropertyChanged(nameof(IsShapeToolActive));
-            this.RaisePropertyChanged(nameof(IsLineToolActive));
+            this.RaisePropertyChanged(nameof(IsPenToolActive));
             this.RaisePropertyChanged(nameof(IsTextToolActive));
         }
     }
@@ -434,8 +434,8 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable
     public bool IsAIDownloading => _mainVm?.AIResourceService.IsDownloading ?? false;
     public double AIResourceProgress => _mainVm?.AIResourceService.DownloadProgress ?? 0;
 
-    public bool IsShapeToolActive => CurrentTool == AnnotationType.Rectangle || CurrentTool == AnnotationType.Ellipse;
-    public bool IsLineToolActive => CurrentTool == AnnotationType.Arrow || CurrentTool == AnnotationType.Line || CurrentTool == AnnotationType.Pen;
+    public bool IsShapeToolActive => CurrentTool == AnnotationType.Rectangle || CurrentTool == AnnotationType.Ellipse || CurrentTool == AnnotationType.Arrow || CurrentTool == AnnotationType.Line;
+    public bool IsPenToolActive => CurrentTool == AnnotationType.Pen;
     public bool IsTextToolActive => CurrentTool == AnnotationType.Text;
 
     public void ToggleToolGroup(string group)
@@ -448,12 +448,17 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable
                 IsDrawingMode = false;
             }
         }
-        else if (group == "Lines")
+        else if (group == "Pen")
         {
-            if (IsLineToolActive)
+            if (IsPenToolActive)
             {
                 CurrentTool = AnnotationType.None;
                 IsDrawingMode = false;
+            }
+            else
+            {
+                CurrentTool = AnnotationType.Pen;
+                IsDrawingMode = true;
             }
         }
         else if (group == "Text")
