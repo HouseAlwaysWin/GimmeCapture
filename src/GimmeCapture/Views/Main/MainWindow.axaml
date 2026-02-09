@@ -155,7 +155,7 @@
 
                                     <!-- Style Preview Area -->
                                     <StackPanel Grid.Column="1" Spacing="10" VerticalAlignment="Top" Margin="20,0,0,0">
-                                        <TextBlock Text="樣式預覽" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="{Binding [StylePreview], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold" HorizontalAlignment="Center"/>
                                         <Border Background="#1A1A1A" Width="550" Height="250" CornerRadius="4" BorderBrush="#333333" BorderThickness="1" ClipToBounds="True">
                                             <Grid>
                                                 <!-- Mock Background -->
@@ -275,7 +275,7 @@
                                     <CheckBox IsChecked="{Binding EnableAI}" Content="{Binding [EnableAI], Source={x:Static services:LocalizationService.Instance}}" Margin="0,15,0,0" FontWeight="SemiBold"/>
                                     <CheckBox IsChecked="{Binding ShowAIScanBox}" Content="{Binding [ShowAIScanBox], Source={x:Static services:LocalizationService.Instance}}" IsEnabled="{Binding EnableAI}" Margin="24,0,0,0"/>
                                     
-                                    <TextBlock Text="AI 資源路徑 (AI Resources Path)" FontSize="12" Foreground="#888888" Margin="24,10,0,0"/>
+                                    <TextBlock Text="{Binding [AIResourcesPath], Source={x:Static services:LocalizationService.Instance}}" FontSize="12" Foreground="#888888" Margin="24,10,0,0"/>
                                     <DockPanel Margin="24,0,0,10" IsEnabled="{Binding EnableAI}">
                                         <Button Content="{Binding [SelectPath], Source={x:Static services:LocalizationService.Instance}}" 
                                                 DockPanel.Dock="Right" 
@@ -342,7 +342,7 @@
                                             Theme="{StaticResource SmallGothicMetalButton}"
                                             Command="{Binding SelectTempPath}" 
                                             Margin="10,0,0,0"/>
-                                    <TextBox Text="{Binding TempDirectory}" Margin="0,0,10,0" Watermark="預設為程式目錄下的 Temp 資料夾"/>
+                                    <TextBox Text="{Binding TempDirectory}" Margin="0,0,10,0" Watermark="{Binding [TempDirectoryWatermark], Source={x:Static services:LocalizationService.Instance}}"/>
                                 </DockPanel>
 
                                 <DockPanel Margin="0,10,0,10">
@@ -382,7 +382,7 @@ IsChecked="{Binding ShowRecordCursor}" Margin="0,5,0,0"/>
                         <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding [SnipHotkey], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center"/>
                         <TextBox Grid.Row="0" Grid.Column="2" 
                                  Text="{Binding SnipHotkey, Mode=OneWay}" 
-                                 Watermark="點擊此處並按下按鈕進行設定"
+                                 Watermark="{Binding [HotkeyWatermark], Source={x:Static services:LocalizationService.Instance}}"
                                  IsReadOnly="True"
                                  Name="SnipHotkeyBox"
                                  KeyDown="HotkeyTextBox_KeyDown"/>
@@ -390,7 +390,7 @@ IsChecked="{Binding ShowRecordCursor}" Margin="0,5,0,0"/>
                         <TextBlock Grid.Row="1" Grid.Column="0" Text="{Binding [RecordHotkey], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,10,0,0"/>
                         <TextBox Grid.Row="1" Grid.Column="2" 
                                  Text="{Binding RecordHotkey, Mode=OneWay}" 
-                                 Watermark="點擊此處並按下按鈕進行設定"
+                                 Watermark="{Binding [HotkeyWatermark], Source={x:Static services:LocalizationService.Instance}}"
                                  IsReadOnly="True"
                                  Name="RecordHotkeyBox"
                                  Margin="0,10,0,0"
@@ -399,7 +399,7 @@ IsChecked="{Binding ShowRecordCursor}" Margin="0,5,0,0"/>
                         <TextBlock Grid.Row="2" Grid.Column="0" Text="{Binding [CopyHotkey], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,10,0,0"/>
                         <TextBox Grid.Row="2" Grid.Column="2" 
                                  Text="{Binding CopyHotkey, Mode=OneWay}" 
-                                 Watermark="點擊此處並按下按鈕進行設定"
+                                 Watermark="{Binding [HotkeyWatermark], Source={x:Static services:LocalizationService.Instance}}"
                                  IsReadOnly="True"
                                  Name="CopyHotkeyBox"
                                  Margin="0,10,0,0"
@@ -408,7 +408,7 @@ IsChecked="{Binding ShowRecordCursor}" Margin="0,5,0,0"/>
                         <TextBlock Grid.Row="3" Grid.Column="0" Text="{Binding [PinHotkey], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,10,0,0"/>
                         <TextBox Grid.Row="3" Grid.Column="2" 
                                  Text="{Binding PinHotkey, Mode=OneWay}" 
-                                 Watermark="點擊此處並按下按鈕進行設定"
+                                 Watermark="{Binding [HotkeyWatermark], Source={x:Static services:LocalizationService.Instance}}"
                                  IsReadOnly="True"
                                  Name="PinHotkeyBox"
                                  Margin="0,10,0,0"

@@ -95,7 +95,7 @@
                                    Width="400"
                                    BoxShadow="0 10 30 0 #A0000000">
                                <StackPanel Spacing="15">
-                                   <TextBlock Text="Add Text" Foreground="White" FontSize="18" FontWeight="Bold" HorizontalAlignment="Center"/>
+                                   <TextBlock Text="{Binding [AddText], Source={x:Static services:LocalizationService.Instance}}" Foreground="White" FontSize="18" FontWeight="Bold" HorizontalAlignment="Center"/>
                                    
                                    <TextBox Name="TextInputOverlay" 
                                             Text="{Binding PendingText, Mode=TwoWay}" 
@@ -104,7 +104,7 @@
                                             FontStyle="{Binding IsItalic, Converter={StaticResource BoolToFontStyleConverter}}"
                                             Foreground="{Binding SelectedColor, Converter={StaticResource ColorToBrushConverter}}"
                                             AcceptsReturn="True" 
-                                            Watermark="Type something..."
+                                            Watermark="{Binding [TypeText], Source={x:Static services:LocalizationService.Instance}}"
                                             MinHeight="80"
                                             Background="#2D2D2D"
                                             BorderThickness="0"
@@ -122,8 +122,8 @@
                                             <NumericUpDown Value="{Binding CurrentFontSize}" Minimum="8" Maximum="144" Width="70" ClipValueToMinMax="True"/>
                                        </StackPanel>
                                        
-                                       <Button Grid.Column="1" Content="OK" Click="OnTextConfirmClick" Classes="accent" Margin="10,0,0,0" Width="60" IsDefault="True"/>
-                                       <Button Grid.Column="2" Content="Cancel" Command="{Binding CancelTextEntryCommand}" Margin="10,0,0,0" Width="80"/>
+                                       <Button Grid.Column="1" Content="{Binding [Yes], Source={x:Static services:LocalizationService.Instance}}" Click="OnTextConfirmClick" Classes="accent" Margin="10,0,0,0" Width="60" IsDefault="True"/>
+                                       <Button Grid.Column="2" Content="{Binding [Cancel], Source={x:Static services:LocalizationService.Instance}}" Command="{Binding CancelTextEntryCommand}" Margin="10,0,0,0" Width="80"/>
                                    </Grid>
                                </StackPanel>
                            </Border>
@@ -224,10 +224,10 @@
                 BoxShadow="0 4 15 0 #D0000000">
             <StackPanel Orientation="Horizontal" Spacing="4">
                 <!-- Undo / Redo -->
-                <Button Theme="{StaticResource SnipButton}" Command="{Binding UndoCommand}" ToolTip.Tip="Undo (Ctrl+Z)" IsEnabled="{Binding CanUndo}">
+                <Button Theme="{StaticResource SnipButton}" Command="{Binding UndoCommand}" ToolTip.Tip="{Binding [Undo], Source={x:Static services:LocalizationService.Instance}}" IsEnabled="{Binding CanUndo}">
                     <PathIcon Data="M12.5,8C9.85,8 7.45,9 5.6,10.6L2,7V16H11L7.38,12.38C8.77,11.22 10.54,10.5 12.5,10.5C16.04,10.5 19.05,12.81 20.1,16L22.47,15.22C21.08,11.03 17.13,8 12.5,8Z" Width="14" Height="14"/>
                 </Button>
-                <Button Theme="{StaticResource SnipButton}" Command="{Binding RedoCommand}" ToolTip.Tip="Redo (Ctrl+Y)" IsEnabled="{Binding CanRedo}">
+                <Button Theme="{StaticResource SnipButton}" Command="{Binding RedoCommand}" ToolTip.Tip="{Binding [Redo], Source={x:Static services:LocalizationService.Instance}}" IsEnabled="{Binding CanRedo}">
                     <PathIcon Data="M18.4,10.6C16.55,9 14.15,8 11.5,8C6.87,8 2.92,11.03 1.53,15.22L3.9,16C4.95,12.81 7.96,10.5 11.5,10.5C13.46,10.5 15.23,11.22 16.62,12.38L13,16H22V7L18.4,10.6Z" Width="14" Height="14"/>
                 </Button>
                 

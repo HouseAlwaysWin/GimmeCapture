@@ -275,7 +275,8 @@ public class MainWindowViewModel : ViewModelBase
                     else
                     {
                         // Generic aggregate message
-                        ProcessingText = $"{LocalizationService.Instance["ComponentDownloadingProgress"]?.Split('.')[0] ?? "Downloading"} ({activeCount})... {(int)avgProgress}%";
+                        var prefix = LocalizationService.Instance["ComponentDownloadingProgress"].Replace("...", "").Replace("中", "");
+                        ProcessingText = $"{prefix} ({activeCount})... {(int)avgProgress}%";
                     }
                     
                     StatusText = ProcessingText;

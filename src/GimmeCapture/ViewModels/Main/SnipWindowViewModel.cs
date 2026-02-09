@@ -114,7 +114,7 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingToolViewM
         set => this.RaiseAndSetIfChanged(ref _isProcessing, value);
     }
 
-    private string _processingText = "Processing...";
+    private string _processingText = LocalizationService.Instance["StatusProcessing"];
     public string ProcessingText
     {
         get => _processingText;
@@ -704,7 +704,7 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingToolViewM
                 {
                     if (isFinalizing)
                     {
-                         ProcessingText = LocalizationService.Instance["StatusProcessing"] ?? "Processing...";
+                         ProcessingText = LocalizationService.Instance["StatusProcessing"];
                     }
                     IsProcessing = isFinalizing;
                 });

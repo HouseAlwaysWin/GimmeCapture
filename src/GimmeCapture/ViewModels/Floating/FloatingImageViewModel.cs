@@ -104,7 +104,7 @@ public class FloatingImageViewModel : ViewModelBase, IDisposable, IDrawingToolVi
         set => this.RaiseAndSetIfChanged(ref _isProcessing, value);
     }
 
-    private string _processingText = "Processing...";
+    private string _processingText = LocalizationService.Instance["StatusProcessing"];
     public string ProcessingText
     {
         get => _processingText;
@@ -362,11 +362,14 @@ public class FloatingImageViewModel : ViewModelBase, IDisposable, IDrawingToolVi
         // Check if AI is enabled
         if (!_appSettingsService.Settings.EnableAI)
         {
-            DiagnosticText = "AI Disabled";
+            DiagnosticText = LocalizationService.Instance["AIDisabled"];
             CurrentTool = FloatingTool.None;
             
              Avalonia.Threading.Dispatcher.UIThread.Post(() => {
-                 var dialogVm = new GothicDialogViewModel { Title = "AI Disabled", Message = "AI features are currently disabled in Settings." };
+                 var dialogVm = new GothicDialogViewModel { 
+                     Title = LocalizationService.Instance["AIDisabledTitle"], 
+                     Message = LocalizationService.Instance["AIDisabledMessage"] 
+                 };
                  var dialog = new GimmeCapture.Views.Shared.GothicDialog { DataContext = dialogVm };
                  
                  var desktop = Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime;
@@ -398,7 +401,7 @@ public class FloatingImageViewModel : ViewModelBase, IDisposable, IDrawingToolVi
         try
         {
             IsProcessing = true;
-            ProcessingText = LocalizationService.Instance["ProcessingAI"] ?? "Initializing AI...";
+            ProcessingText = LocalizationService.Instance["StatusInitializingAI"];
             
             // Image is already set by GetSAM2ServiceAsync using direct SKBitmap conversion
             
@@ -406,19 +409,19 @@ public class FloatingImageViewModel : ViewModelBase, IDisposable, IDrawingToolVi
             _interactivePoints.Clear();
             IsInteractiveSelectionMode = true; 
             
-            DiagnosticText = $"AI Ready [{sam2.ModelVariantName}]";
+            DiagnosticText = $"{LocalizationService.Instance["StatusReady"]} [{sam2.ModelVariantName}]";
             System.Diagnostics.Debug.WriteLine("FloatingVM: Interactive Selection Ready");
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"FloatingVM: Failed to start interactive removal: {ex}");
-            DiagnosticText = "AI Init Failed";
+            DiagnosticText = LocalizationService.Instance["StatusError"]; // Or specify a new one
             CurrentTool = FloatingTool.None;
             
             Avalonia.Threading.Dispatcher.UIThread.Post(() => {
                  var dialogVm = new GothicDialogViewModel { 
-                     Title = "AI Initialization Error", 
-                     Message = "Failed to start AI: " + ex.Message 
+                     Title = LocalizationService.Instance["AIInitErrorTitle"], 
+                     Message = string.Format(LocalizationService.Instance["AIInitErrorMessage"], ex.Message)
                  };
                  var dialog = new GimmeCapture.Views.Shared.GothicDialog { DataContext = dialogVm };
                  var desktop = Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime;
@@ -478,7 +481,7 @@ public class FloatingImageViewModel : ViewModelBase, IDisposable, IDrawingToolVi
         try
         {
             IsProcessing = true;
-            ProcessingText = LocalizationService.Instance["ProcessingAI"] ?? "Refining selection...";
+            ProcessingText = LocalizationService.Instance["StatusProcessing"];
             
             var maskBytes = await sam2.GetMaskAsync(_interactivePoints);
             var iouInfo = sam2.LastIouInfo;
@@ -718,7 +721,7 @@ public class FloatingImageViewModel : ViewModelBase, IDisposable, IDrawingToolVi
         if (_sam2Service != null && _sam2Service.ModelVariantName != "Unknown") return _sam2Service;
 
         _sam2Service = new SAM2Service(_aiResourceService, _appSettingsService);
-        ProcessingText = LocalizationService.Instance["StatusInitializingAI"] ?? "Initializing AI...";
+        ProcessingText = LocalizationService.Instance["StatusInitializingAI"];
         IsProcessing = true;
         try
         {

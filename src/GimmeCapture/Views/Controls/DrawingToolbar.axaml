@@ -66,7 +66,7 @@
         <Button Theme="{StaticResource SnipToolButton}" FontSize="12" BorderThickness="1" 
                         Classes.active="{Binding IsTextToolActive}"
                         Command="{Binding ToggleToolGroupCommand}" CommandParameter="Text"
-                        ToolTip.Tip="{Binding [Text], Source={x:Static services:LocalizationService.Instance}}">
+                        ToolTip.Tip="{Binding [TipText], Source={x:Static services:LocalizationService.Instance}}">
             <Button.Flyout>
                 <Flyout Placement="Top">
                     <!-- Note: Placement Top for floating windows, might differ for SnipWindow but Top is generally safe or auto-adjusted -->
