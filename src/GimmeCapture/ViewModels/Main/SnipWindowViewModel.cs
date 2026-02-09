@@ -496,6 +496,11 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingToolViewM
                 CurrentAnnotationTool = AnnotationType.None;
                 IsDrawingMode = false;
             }
+            else
+            {
+                CurrentAnnotationTool = AnnotationType.Rectangle;
+                IsDrawingMode = true;
+            }
         }
         else if (group == "Pen")
         {
