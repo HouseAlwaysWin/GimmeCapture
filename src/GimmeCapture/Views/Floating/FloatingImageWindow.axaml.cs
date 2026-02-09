@@ -723,4 +723,12 @@ public partial class FloatingImageWindow : Window
 
         return new Rect(x, y, w, h);
     }
+
+    private void OnAIToolSelected(object sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        Avalonia.Threading.Dispatcher.UIThread.Post(() => {
+            var aiToolsButton = this.FindControl<Button>("AIToolsButton");
+            aiToolsButton?.Flyout?.Hide();
+        });
+    }
 }
