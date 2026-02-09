@@ -37,6 +37,7 @@ git tag -a $version -m "Release $version"
 
 # 5. Push to GitHub
 Write-Host "Pushing to GitHub..." -ForegroundColor Cyan
-git push origin main --follow-tags
+git push origin main
+git push origin $version
 
 Write-Host "Successfully triggered release! Check GitHub Actions tab." -ForegroundColor Green
