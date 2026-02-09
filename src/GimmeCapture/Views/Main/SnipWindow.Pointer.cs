@@ -9,6 +9,8 @@ using GimmeCapture.Services; // For RecordingState if it's there
 using System;
 using GimmeCapture.Services.Core;
 using System.Linq;
+using System.Reactive;
+using ReactiveUI;
 
 namespace GimmeCapture.Views.Main;
 
@@ -37,8 +39,8 @@ public partial class SnipWindow : Window
              
              // If clicking the OK button
              if (src is Button b && b.Content as string == "OK") return;
-
-             FinishTextEntry();
+ 
+             _viewModel.ConfirmTextEntryCommand.Execute(Unit.Default).Subscribe();
              e.Handled = true;
              return;
         }
@@ -149,9 +151,6 @@ public partial class SnipWindow : Window
                         _viewModel.TextInputPosition = point;
                         _viewModel.PendingText = string.Empty;
                         
-                        // Focus Textbox
-                        var textBox = this.FindControl<TextBox>("TextInputOverlay");
-                        textBox?.Focus();
                         e.Handled = true;
                         return;
                     }

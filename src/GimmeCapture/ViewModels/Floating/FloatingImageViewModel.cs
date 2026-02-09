@@ -282,6 +282,8 @@ public class FloatingImageViewModel : ViewModelBase, IDisposable, IDrawingToolVi
         set => this.RaiseAndSetIfChanged(ref _diagnosticText, value);
     }
 
+    public System.Action FocusWindowAction { get; set; } = () => { };
+
     private bool _isEnteringText;
     public bool IsEnteringText
     {
@@ -698,6 +700,7 @@ public class FloatingImageViewModel : ViewModelBase, IDisposable, IDrawingToolVi
     
     public ReactiveCommand<Unit, Unit> UndoCommand { get; }
     public ReactiveCommand<Unit, Unit> RedoCommand { get; }
+    public ReactiveCommand<Unit, Unit> ConfirmTextEntryCommand { get; }
     public ReactiveCommand<Unit, Unit> CancelTextEntryCommand { get; }
     
     public System.Action? CloseAction { get; set; }
@@ -887,10 +890,33 @@ public class FloatingImageViewModel : ViewModelBase, IDisposable, IDrawingToolVi
             IsPointRemovalMode = false;
         });
 
+        ConfirmTextEntryCommand = ReactiveCommand.Create(() => 
+        {
+            if (!string.IsNullOrWhiteSpace(PendingText))
+            {
+                AddAnnotation(new Annotation
+                {
+                    Type = AnnotationType.Text,
+                    StartPoint = TextInputPosition,
+                    EndPoint = TextInputPosition,
+                    Text = PendingText,
+                    Color = SelectedColor,
+                    FontSize = CurrentFontSize,
+                    FontFamily = CurrentFontFamily,
+                    IsBold = IsBold,
+                    IsItalic = IsItalic
+                });
+            }
+            IsEnteringText = false;
+            PendingText = string.Empty;
+            FocusWindowAction?.Invoke();
+        });
+
         CancelTextEntryCommand = ReactiveCommand.Create(() => 
         {
             IsEnteringText = false;
             PendingText = string.Empty;
+            FocusWindowAction?.Invoke();
         });
 
         SelectToolCommand = ReactiveCommand.Create<AnnotationType>(tool => 

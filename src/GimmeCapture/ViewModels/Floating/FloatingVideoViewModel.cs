@@ -262,6 +262,8 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable, IDrawingToolVi
     // Explicit interface implementation to resolve name clash
 
 
+    public System.Action FocusWindowAction { get; set; } = () => { };
+
     private Avalonia.Media.Color _selectedColor = Avalonia.Media.Colors.Red;
     public Avalonia.Media.Color SelectedColor
     {
@@ -328,6 +330,7 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable, IDrawingToolVi
     
     public ReactiveCommand<Unit, Unit> UndoCommand { get; }
     public ReactiveCommand<Unit, Unit> RedoCommand { get; }
+    public ReactiveCommand<Unit, Unit> ConfirmTextEntryCommand { get; }
     public ReactiveCommand<Unit, Unit> CancelTextEntryCommand { get; }
 
     
@@ -427,10 +430,33 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable, IDrawingToolVi
         var canRedo = this.WhenAnyValue(x => x.HasRedo).ObserveOn(RxApp.MainThreadScheduler);
         RedoCommand = ReactiveCommand.Create(Redo, canRedo);
 
+        ConfirmTextEntryCommand = ReactiveCommand.Create(() => 
+        {
+            if (!string.IsNullOrWhiteSpace(PendingText))
+            {
+                AddAnnotation(new Annotation
+                {
+                    Type = AnnotationType.Text,
+                    StartPoint = TextInputPosition,
+                    EndPoint = TextInputPosition,
+                    Text = PendingText,
+                    Color = SelectedColor,
+                    FontSize = CurrentFontSize,
+                    FontFamily = CurrentFontFamily,
+                    IsBold = IsBold,
+                    IsItalic = IsItalic
+                });
+            }
+            IsEnteringText = false;
+            PendingText = string.Empty;
+            FocusWindowAction?.Invoke();
+        });
+
         CancelTextEntryCommand = ReactiveCommand.Create(() => 
         {
             IsEnteringText = false;
             PendingText = string.Empty;
+            FocusWindowAction?.Invoke();
         });
 
         // Initialize bitmap

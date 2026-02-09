@@ -370,6 +370,8 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingToolViewM
     public ReactiveCommand<Unit, Unit> UndoCommand { get; set; }
     public ReactiveCommand<Unit, Unit> RedoCommand { get; set; }
     public ReactiveCommand<Unit, Unit> ClearAnnotationsCommand { get; set; }
+    public ReactiveCommand<Unit, Unit> ConfirmTextEntryCommand { get; set; }
+    public ReactiveCommand<Unit, Unit> CancelTextEntryCommand { get; set; }
     public ReactiveCommand<Unit, Unit> RemoveBackgroundCommand { get; set; }
     public ReactiveCommand<Unit, Unit> IncreaseThicknessCommand { get; set; }
     public ReactiveCommand<Unit, Unit> DecreaseThicknessCommand { get; set; }
@@ -597,6 +599,8 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingToolViewM
         set => this.RaiseAndSetIfChanged(ref _drawingModeSnapshot, value);
     }
 
+    public System.Action FocusWindowAction { get; set; } = () => { };
+
     private bool _isEnteringText = false;
     public bool IsEnteringText
     {
@@ -743,6 +747,37 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingToolViewM
                 .Subscribe(_ => this.RaisePropertyChanged(nameof(AIResourceProgress)));
             */
         }
+
+        ConfirmTextEntryCommand = ReactiveCommand.Create(() => 
+        {
+            if (!string.IsNullOrWhiteSpace(PendingText))
+            {
+                var relPoint = new Point(TextInputPosition.X - SelectionRect.X, TextInputPosition.Y - SelectionRect.Y);
+                
+                Annotations.Add(new Annotation
+                {
+                    Type = AnnotationType.Text,
+                    StartPoint = relPoint,
+                    EndPoint = relPoint,
+                    Text = PendingText,
+                    Color = SelectedColor,
+                    FontSize = CurrentFontSize,
+                    FontFamily = CurrentFontFamily,
+                    IsBold = IsBold,
+                    IsItalic = IsItalic
+                });
+            }
+            IsEnteringText = false;
+            PendingText = string.Empty;
+            FocusWindowAction?.Invoke();
+        });
+
+        CancelTextEntryCommand = ReactiveCommand.Create(() => 
+        {
+            IsEnteringText = false;
+            PendingText = string.Empty;
+            FocusWindowAction?.Invoke();
+        });
 
         // Preload SAM2 models in background if AI is enabled
         if (mainVm != null)

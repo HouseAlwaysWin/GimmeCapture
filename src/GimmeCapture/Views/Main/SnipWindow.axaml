@@ -275,14 +275,10 @@
             </Grid>
             
             <!-- Text Overlay -->
-            <StackPanel Name="TextEntryPanel" Canvas.Left="{Binding TextInputPosition.X}" Canvas.Top="{Binding TextInputPosition.Y}" IsVisible="{Binding IsEnteringText}" Orientation="Vertical" Spacing="2">
-                <TextBox Name="TextInputOverlay" Text="{Binding PendingText, Mode=TwoWay}" FontFamily="{Binding CurrentFontFamily}" FontSize="{Binding CurrentFontSize}"
-                         FontWeight="{Binding IsBold, Converter={StaticResource BoolToFontWeightConverter}}" FontStyle="{Binding IsItalic, Converter={StaticResource BoolToFontStyleConverter}}"
-                         Foreground="{Binding SelectedColor, Converter={StaticResource ColorToBrushConverter}}" Background="#80000000" BorderThickness="1" BorderBrush="White"
-                         Padding="4" MinWidth="100" MaxWidth="600" AcceptsReturn="True" TextWrapping="Wrap"/>
-                <Button Content="{Binding [Yes], Source={x:Static services:LocalizationService.Instance}}" HorizontalAlignment="Right" Theme="{StaticResource SnipButton}" Background="#333333" BorderBrush="#555555" BorderThickness="1"
-                        Padding="10,2" Margin="0,2,0,0" Click="OnTextConfirmClick" Cursor="Hand"/>
-            </StackPanel>
+            <!-- Text Input Overlay -->
+            <ctl:TextEntryOverlay DataContext="{Binding}"
+                                  Canvas.Left="{Binding TextInputPosition.X}"
+                                  Canvas.Top="{Binding TextInputPosition.Y}"/>
                     <ctl:SnipToolbar Name="Toolbar" Canvas.Left="{Binding ToolbarLeft}" Canvas.Top="{Binding ToolbarTop}" IsVisible="{Binding CurrentState, Converter={StaticResource StateToBoolConverter}}"/>
         </Canvas>
         

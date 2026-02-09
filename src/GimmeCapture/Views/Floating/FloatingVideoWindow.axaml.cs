@@ -79,6 +79,11 @@ public partial class FloatingVideoWindow : Window
                 }
             };
 
+            vm.FocusWindowAction = () =>
+            {
+                this.Focus();
+            };
+
             // Force initial sync
             SyncWindowSizeToVideo();
             
@@ -228,8 +233,8 @@ public partial class FloatingVideoWindow : Window
             {
                 var src = e.Source as Control;
                 if (src != null && (src.Name == "TextInputOverlay" || src.FindAncestorOfType<TextBox>() != null)) return;
-                if (src is Button b && b.Content as string == "OK") return;
-                FinishTextEntry();
+                // Confirm text if clicking elsewhere
+                vm.ConfirmTextEntryCommand.Execute(System.Reactive.Unit.Default).Subscribe();
                 e.Handled = true;
                 return;
             }
@@ -508,7 +513,15 @@ public partial class FloatingVideoWindow : Window
 
         if (e.Key == Key.Escape)
         {
-            Close();
+            if (vm.IsEnteringText)
+            {
+                vm.CancelTextEntryCommand.Execute(System.Reactive.Unit.Default).Subscribe();
+                e.Handled = true;
+            }
+            else
+            {
+                Close();
+            }
         }
         else if (e.Key == Key.Z && e.KeyModifiers.HasFlag(KeyModifiers.Control))
         {
@@ -520,44 +533,6 @@ public partial class FloatingVideoWindow : Window
             vm.RedoCommand.Execute().Subscribe();
             e.Handled = true;
         }
-    }
-
-    private void OnTextConfirmClick(object? sender, RoutedEventArgs e)
-    {
-        FinishTextEntry();
-    }
-
-    private void FinishTextEntry()
-    {
-        if (DataContext is not FloatingVideoViewModel vm) return;
-        if (!vm.IsEnteringText) return;
-
-        if (!string.IsNullOrWhiteSpace(vm.PendingText))
-        {
-            vm.AddAnnotation(new Annotation
-            {
-                Type = AnnotationType.Text,
-                StartPoint = vm.TextInputPosition,
-                EndPoint = vm.TextInputPosition,
-                Text = vm.PendingText,
-                Color = vm.SelectedColor,
-                FontSize = vm.CurrentFontSize,
-                FontFamily = vm.CurrentFontFamily,
-                IsBold = vm.IsBold,
-                IsItalic = vm.IsItalic
-            });
-        }
-
-        CancelTextEntry();
-    }
-
-    private void CancelTextEntry()
-    {
-        if (DataContext is not FloatingVideoViewModel vm) return;
-        vm.IsEnteringText = false;
-        vm.PendingText = string.Empty;
-        _lastTextFinishTime = DateTime.Now;
-        this.Focus();
     }
 
     private ResizeDirection GetDirectionFromName(string? name)

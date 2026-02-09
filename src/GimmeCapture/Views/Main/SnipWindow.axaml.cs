@@ -54,36 +54,12 @@ public partial class SnipWindow : Window
         PointerMoved += OnPointerMoved;
         PointerReleased += OnPointerReleased;
         
-        // Text Input Events
-        var textBox = this.FindControl<TextBox>("TextInputOverlay");
-        if (textBox != null)
-        {
-            textBox.KeyDown += (s, e) =>
-            {
-                if (e.Key == Key.Enter && e.KeyModifiers.HasFlag(KeyModifiers.Control))
-                {
-                    FinishTextEntry();
-                    e.Handled = true;
-                }
-                // Allow normal Enter for new lines
-                else if (e.Key == Key.Escape)
-                {
-                    CancelTextEntry();
-                    e.Handled = true;
-                }
-            };
-        }
+        PointerReleased += OnPointerReleased;
         
         // Close on Escape
         KeyDown += OnKeyDown;
     }
     
-    // Add Click Handler for OK Button
-    private void OnTextConfirmClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
-    {
-        FinishTextEntry();
-    }
-
     private System.Collections.Generic.List<Window> _hiddenTopmostWindows = new();
 
     protected override void OnOpened(EventArgs e)
@@ -216,7 +192,10 @@ public partial class SnipWindow : Window
                 .ObserveOn(RxApp.MainThreadScheduler)
                 .Subscribe(tuple => UpdateWindowRegion(tuple.Item1, tuple.Item2, tuple.Item3));
             
-
+            _viewModel.FocusWindowAction = () =>
+            {
+                this.Focus();
+            };
 
             _viewModel.PickSaveFileAction = async () =>
             {
@@ -359,7 +338,15 @@ public partial class SnipWindow : Window
         {
             if (_viewModel == null) return;
 
-            // NEW: Prevent resetting or closing if we are actively recording
+            // If currently entering text, cancel it
+            if (_viewModel.IsEnteringText)
+            {
+                _viewModel.CancelTextEntryCommand.Execute(System.Reactive.Unit.Default).Subscribe();
+                e.Handled = true;
+                return;
+            }
+
+            // Prevent resetting or closing if we are actively recording
             if (_viewModel.RecState != RecordingState.Idle)
             {
                 e.Handled = true;
@@ -414,41 +401,5 @@ public partial class SnipWindow : Window
             "HandleRight" => ResizeDirection.Right,
             _ => ResizeDirection.None
         };
-    }
-
-    private void FinishTextEntry()
-    {
-        if (_viewModel == null || !_viewModel.IsEnteringText) return;
-        
-        if (!string.IsNullOrWhiteSpace(_viewModel.PendingText))
-        {
-            var relPoint = new Point(_viewModel.TextInputPosition.X - _viewModel.SelectionRect.X, _viewModel.TextInputPosition.Y - _viewModel.SelectionRect.Y);
-            
-            _viewModel.Annotations.Add(new Annotation
-            {
-                Type = AnnotationType.Text,
-                StartPoint = relPoint,
-                EndPoint = relPoint,
-                Text = _viewModel.PendingText,
-                Color = _viewModel.SelectedColor,
-                FontSize = _viewModel.CurrentFontSize,
-                FontFamily = _viewModel.CurrentFontFamily,
-                IsBold = _viewModel.IsBold,
-                IsItalic = _viewModel.IsItalic
-            });
-        }
-        
-        CancelTextEntry();
-    }
-
-    private void CancelTextEntry()
-    {
-        var vm = _viewModel;
-        if (vm == null) return;
-        vm.IsEnteringText = false;
-        vm.PendingText = string.Empty;
-        _lastTextFinishTime = DateTime.Now; // Set debounce timestamp
-        // Shift focus back to window to allow hotkeys etc.
-        this.Focus();
     }
 }

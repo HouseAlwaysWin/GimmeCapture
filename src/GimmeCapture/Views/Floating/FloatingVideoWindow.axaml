@@ -83,51 +83,13 @@
 
 
 
-                        <!-- Text Entry Overlay -->
-                        <Panel IsVisible="{Binding IsEnteringText}" Background="#80000000">
-                           <Border Background="#1E1E1E" 
-                                   BorderBrush="{Binding SelectedColor, Converter={StaticResource ColorToBrushConverter}}" 
-                                   BorderThickness="2" 
-                                   CornerRadius="8" 
-                                   Padding="15" 
-                                   VerticalAlignment="Center" 
-                                   HorizontalAlignment="Center"
-                                   Width="400"
-                                   BoxShadow="0 10 30 0 #A0000000">
-                               <StackPanel Spacing="15">
-                                   <TextBlock Text="{Binding [AddText], Source={x:Static services:LocalizationService.Instance}}" Foreground="White" FontSize="18" FontWeight="Bold" HorizontalAlignment="Center"/>
-                                   
-                                   <TextBox Name="TextInputOverlay" 
-                                            Text="{Binding PendingText, Mode=TwoWay}" 
-                                            FontSize="{Binding CurrentFontSize}"
-                                            FontWeight="{Binding IsBold, Converter={StaticResource BoolToFontWeightConverter}}"
-                                            FontStyle="{Binding IsItalic, Converter={StaticResource BoolToFontStyleConverter}}"
-                                            Foreground="{Binding SelectedColor, Converter={StaticResource ColorToBrushConverter}}"
-                                            AcceptsReturn="True" 
-                                            Watermark="{Binding [TypeText], Source={x:Static services:LocalizationService.Instance}}"
-                                            MinHeight="80"
-                                            Background="#2D2D2D"
-                                            BorderThickness="0"
-                                            CornerRadius="4"
-                                            Padding="10"/>
-
-                                   <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,5,0,0">
-                                       <StackPanel Orientation="Horizontal" Spacing="10">
-                                            <ToggleButton IsChecked="{Binding IsBold}" Theme="{StaticResource SnipButton}">
-                                                <TextBlock Text="B" FontWeight="Bold" Width="20" HorizontalAlignment="Center"/>
-                                            </ToggleButton>
-                                            <ToggleButton IsChecked="{Binding IsItalic}" Theme="{StaticResource SnipButton}">
-                                                <TextBlock Text="I" FontStyle="Italic" Width="20" HorizontalAlignment="Center"/>
-                                            </ToggleButton>
-                                            <NumericUpDown Value="{Binding CurrentFontSize}" Minimum="8" Maximum="144" Width="70" ClipValueToMinMax="True"/>
-                                       </StackPanel>
-                                       
-                                       <Button Grid.Column="1" Content="{Binding [Yes], Source={x:Static services:LocalizationService.Instance}}" Click="OnTextConfirmClick" Classes="accent" Margin="10,0,0,0" Width="60" IsDefault="True"/>
-                                       <Button Grid.Column="2" Content="{Binding [Cancel], Source={x:Static services:LocalizationService.Instance}}" Command="{Binding CancelTextEntryCommand}" Margin="10,0,0,0" Width="80"/>
-                                   </Grid>
-                               </StackPanel>
-                           </Border>
-                        </Panel>
+                        <!-- Text Entry Overlay (Unified Style) -->
+                        <Canvas IsHitTestVisible="True">
+                     <!-- Text Input Overlay -->
+                     <controls:TextEntryOverlay DataContext="{Binding}"
+                                                Canvas.Left="{Binding TextInputPosition.X}"
+                                                Canvas.Top="{Binding TextInputPosition.Y}"/>
+                        </Canvas>
 
                         <!-- Inner Border Line -->
                         <Border BorderBrush="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" 

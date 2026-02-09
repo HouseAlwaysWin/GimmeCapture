@@ -79,28 +79,36 @@ public partial class FloatingImageWindow : Window
                 }
             };
 
-            vm.OpenPinWindowAction = (bitmap, rect, color, thickness, runAI) =>
+            if (vm.OpenPinWindowAction == null)
             {
-                var newVm = new FloatingImageViewModel(bitmap, rect.Width, rect.Height, color, thickness, vm.HidePinDecoration, vm.HidePinBorder, 
-                    vm.ClipboardService, vm.AIResourceService, vm.AppSettingsService);
-                
-                newVm.WingScale = vm.WingScale;
-                newVm.CornerIconScale = vm.CornerIconScale;
-                
-                var newWin = new FloatingImageWindow
+                vm.OpenPinWindowAction = (bitmap, rect, color, thickness, runAI) =>
                 {
-                    DataContext = newVm,
-                    Position = new PixelPoint(Position.X + 40, Position.Y + 40)
+                    var newVm = new FloatingImageViewModel(bitmap, rect.Width, rect.Height, color, thickness, vm.HidePinDecoration, vm.HidePinBorder, 
+                        vm.ClipboardService, vm.AIResourceService, vm.AppSettingsService);
+                    
+                    newVm.WingScale = vm.WingScale;
+                    newVm.CornerIconScale = vm.CornerIconScale;
+                    
+                    var newWin = new FloatingImageWindow
+                    {
+                        DataContext = newVm,
+                        Position = new PixelPoint(Position.X + 40, Position.Y + 40)
+                    };
+                    
+                    newWin.Show();
+                    
+                    if (runAI)
+                    {
+                        Avalonia.Threading.Dispatcher.UIThread.Post(() => {
+                            newVm.RemoveBackgroundCommand.Execute().Subscribe();
+                        });
+                    }
                 };
-                
-                newWin.Show();
-                
-                if (runAI)
-                {
-                    Avalonia.Threading.Dispatcher.UIThread.Post(() => {
-                        newVm.RemoveBackgroundCommand.Execute().Subscribe();
-                    });
-                }
+            }
+
+            vm.FocusWindowAction = () =>
+            {
+                this.Focus();
             };
         }
     }
@@ -242,8 +250,8 @@ public partial class FloatingImageWindow : Window
             {
                 var src = e.Source as Control;
                 if (src != null && (src.Name == "TextInputOverlay" || src.FindAncestorOfType<TextBox>() != null)) return;
-                if (src is Button b && b.Content as string == "OK") return;
-                FinishTextEntry();
+                // If clicking outside, confirm text
+                vm.ConfirmTextEntryCommand.Execute(System.Reactive.Unit.Default).Subscribe();
                 e.Handled = true;
                 return;
             }
@@ -614,7 +622,15 @@ public partial class FloatingImageWindow : Window
 
         if (e.Key == Key.Escape)
         {
-            Close();
+            if (vm.IsEnteringText)
+            {
+                vm.CancelTextEntryCommand.Execute(System.Reactive.Unit.Default).Subscribe();
+                e.Handled = true;
+            }
+            else
+            {
+                Close();
+            }
         }
         else if (e.Key == Key.C && e.KeyModifiers.HasFlag(KeyModifiers.Control))
         {
@@ -636,44 +652,6 @@ public partial class FloatingImageWindow : Window
             vm.RedoCommand.Execute().Subscribe();
             e.Handled = true;
         }
-    }
-
-    private void OnTextConfirmClick(object? sender, RoutedEventArgs e)
-    {
-        FinishTextEntry();
-    }
-
-    private void FinishTextEntry()
-    {
-        if (DataContext is not FloatingImageViewModel vm) return;
-        if (!vm.IsEnteringText) return;
-
-        if (!string.IsNullOrWhiteSpace(vm.PendingText))
-        {
-            vm.AddAnnotation(new Annotation
-            {
-                Type = AnnotationType.Text,
-                StartPoint = vm.TextInputPosition,
-                EndPoint = vm.TextInputPosition,
-                Text = vm.PendingText,
-                Color = vm.SelectedColor,
-                FontSize = vm.CurrentFontSize,
-                FontFamily = vm.CurrentFontFamily,
-                IsBold = vm.IsBold,
-                IsItalic = vm.IsItalic
-            });
-        }
-
-        CancelTextEntry();
-    }
-
-    private void CancelTextEntry()
-    {
-        if (DataContext is not FloatingImageViewModel vm) return;
-        vm.IsEnteringText = false;
-        vm.PendingText = string.Empty;
-        _lastTextFinishTime = DateTime.Now;
-        this.Focus();
     }
 
     private ResizeDirection GetDirectionFromName(string? name)
