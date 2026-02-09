@@ -112,6 +112,7 @@
   "MenuShowToolbar": "ツールバーを表示",
   "AIScanDensity": "AI スキャン網格密度:",
   "AIScanMaxObjects": "最大検出オブジェクト数:",
+  "AIScanMinSize": "スキャン領域の最小サイズ:",
   "AIScanSettings": "AI スキャン設定",
   "RecordFormat": "録画フォーマット:",
   "RecordFPS": "録画フレームレート (FPS):",
