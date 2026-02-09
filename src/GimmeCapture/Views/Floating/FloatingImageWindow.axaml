@@ -149,15 +149,7 @@
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
 
-                        <!-- Diagnostic Overlay -->
-                        <Border Background="#A0000000" CornerRadius="4" Padding="4" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="10,40,0,0" IsHitTestVisible="False">
-                            <StackPanel>
-                                <TextBlock Text="{Binding Annotations.Count, StringFormat='Annotations: {0}'}" Foreground="Lime" FontSize="10"/>
-                                <TextBlock Text="{Binding CurrentAnnotationTool, StringFormat='Tool: {0}'}" Foreground="Cyan" FontSize="10"/>
-                                <TextBlock Text="{Binding DisplayWidth, StringFormat='VW: {0:F0}'}" Foreground="White" FontSize="10"/>
-                                <TextBlock Text="{Binding DisplayHeight, StringFormat='VH: {0:F0}'}" Foreground="White" FontSize="10"/>
-                            </StackPanel>
-                        </Border>
+
 
                             <!-- Interactive Mask Preview (Over Image Area) -->
                             <Image Source="{Binding InteractiveMask}"
