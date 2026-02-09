@@ -56,6 +56,13 @@ public class AIResourceService : ReactiveObject
         set => this.RaiseAndSetIfChanged(ref _isDownloading, value);
     }
 
+    private string _currentDownloadName = "AI Component";
+    public string CurrentDownloadName
+    {
+        get => _currentDownloadName;
+        set => this.RaiseAndSetIfChanged(ref _currentDownloadName, value);
+    }
+
     private readonly AppSettingsService _settingsService;
 
     public AIResourceService(AppSettingsService settingsService)
@@ -163,14 +170,32 @@ public class AIResourceService : ReactiveObject
         }
     }
 
+    private readonly SemaphoreSlim _downloadLock = new(1, 1);
+
+
     public async Task<bool> EnsureAICoreAsync(CancellationToken ct = default)
     {
         if (IsAICoreReady()) return true;
-        if (IsDownloading) return true; 
+
+        await _downloadLock.WaitAsync(ct);
+        try
+        {
+            return await DownloadAICoreInternal(ct);
+        }
+        finally
+        {
+            _downloadLock.Release();
+        }
+    }
+
+    private async Task<bool> DownloadAICoreInternal(CancellationToken ct)
+    {
+        if (IsAICoreReady()) return true;
 
         try
         {
             IsDownloading = true;
+            CurrentDownloadName = "AI Core";
             DownloadProgress = 0;
 
             var baseDir = GetAIResourcesPath();
@@ -224,11 +249,26 @@ public class AIResourceService : ReactiveObject
     public async Task<bool> EnsureSAM2Async(SAM2Variant variant, CancellationToken ct = default)
     {
         if (IsSAM2Ready(variant)) return true;
-        if (IsDownloading) return true;
+
+        await _downloadLock.WaitAsync(ct);
+        try
+        {
+            return await DownloadSAM2Internal(variant, ct);
+        }
+        finally
+        {
+            _downloadLock.Release();
+        }
+    }
+
+    private async Task<bool> DownloadSAM2Internal(SAM2Variant variant, CancellationToken ct)
+    {
+         if (IsSAM2Ready(variant)) return true;
 
         try
         {
             IsDownloading = true;
+            CurrentDownloadName = $"SAM2 Model ({variant})";
             DownloadProgress = 0;
 
             var baseDir = GetAIResourcesPath();

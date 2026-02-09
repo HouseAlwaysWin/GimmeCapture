@@ -250,12 +250,17 @@ public class MainWindowViewModel : ViewModelBase
             .ObserveOn(RxApp.MainThreadScheduler)
             .Subscribe(states => 
             {
-                var activeDownloads = states.Where(s => s.Item2).ToList();
-                int activeCount = activeDownloads.Count;
+                // Find update state from the combined sources
+                var updateState = states.FirstOrDefault(s => s.Item1 == "Update");
+                bool isUpdateDownloading = updateState.Item2;
+                double updateProgress = updateState.Item3;
+
+                var activeModules = Modules.Where(m => m.IsProcessing).ToList();
+                int activeCount = activeModules.Count + (isUpdateDownloading ? 1 : 0);
 
                 if (activeCount > 0)
                 {
-                    double totalProgress = activeDownloads.Sum(s => s.Item3);
+                    double totalProgress = activeModules.Sum(m => m.Progress) + (isUpdateDownloading ? updateProgress : 0);
                     double avgProgress = totalProgress / activeCount;
                     
                     // Update main processing state
@@ -265,12 +270,16 @@ public class MainWindowViewModel : ViewModelBase
 
                     if (activeCount == 1)
                     {
-                        // Specific message if only one
-                        var item = activeDownloads[0];
-                        if (item.Item1 == "Update")
+                        // Specific message
+                        if (isUpdateDownloading)
+                        {
                              ProcessingText = string.Format(LocalizationService.Instance["UpdateDownloading"], (int)avgProgress);
+                        }
                         else
-                             ProcessingText = string.Format(LocalizationService.Instance["ComponentDownloadingProgress"], (int)avgProgress);
+                        {
+                             var module = activeModules.First();
+                             ProcessingText = $"{module.Name}... {(int)avgProgress}%";
+                        }
                     }
                     else
                     {
@@ -283,15 +292,8 @@ public class MainWindowViewModel : ViewModelBase
                 }
                 else
                 {
-                    // If we were processing but now strictly nothing is active, turn it off.
-                    // Note: This relies on the fact that if activeCount == 0, IsProcessing should be false.
-                    // But we also have the separate 'isAnyProcessing' subscription below. 
-                    // Let's rely on this unified block for TEXT and VALUE, but let 'isAnyProcessing' handle the Bool?
-                    // actually, let's keep it simple.
-                    
                     if (IsProcessing)
                     {
-                         // only reset if we were previously processing
                          if (StatusText.Contains("Downloading") || StatusText.Contains("下載"))
                              SetStatus("StatusReady");
                     }
@@ -1078,12 +1080,6 @@ public class MainWindowViewModel : ViewModelBase
             CancelCommand = ReactiveCommand.CreateFromTask(() => CancelModuleAsync("FFmpeg")),
             RemoveCommand = ReactiveCommand.CreateFromTask(() => RemoveModuleAsync("FFmpeg"))
         };
-        FfmpegDownloader.WhenAnyValue(x => x.IsDownloading)
-            .Subscribe(isDown => 
-            {
-                ffmpeg.IsProcessing = isDown;
-                if (!isDown) ffmpeg.IsInstalled = FfmpegDownloader.IsFFmpegAvailable();
-            });
         FfmpegDownloader.WhenAnyValue(x => x.DownloadProgress)
             .Subscribe(p => ffmpeg.Progress = p);
             
@@ -1093,6 +1089,8 @@ public class MainWindowViewModel : ViewModelBase
             .Subscribe(status => 
             {
                 ffmpeg.IsPending = status == QueueItemStatus.Pending;
+                ffmpeg.IsProcessing = status == QueueItemStatus.Downloading;
+                if (status == QueueItemStatus.Completed) ffmpeg.IsInstalled = FfmpegDownloader.IsFFmpegAvailable();
             });
 
         // AI Core Module
@@ -1104,18 +1102,14 @@ public class MainWindowViewModel : ViewModelBase
             RemoveCommand = ReactiveCommand.CreateFromTask(() => RemoveModuleAsync("AICore"))
         };
         
-        AIResourceService.WhenAnyValue(x => x.IsDownloading)
-            .Subscribe(isDown => 
-            {
-                if (isDown && !AIResourceService.IsAICoreReady()) aiCore.IsProcessing = true;
-                else aiCore.IsProcessing = false;
-                
-                if (!isDown) aiCore.IsInstalled = AIResourceService.IsAICoreReady();
-            });
-
         ResourceQueue.ObserveStatus("AICore")
             .ObserveOn(RxApp.MainThreadScheduler)
-            .Subscribe(status => aiCore.IsPending = status == QueueItemStatus.Pending);
+            .Subscribe(status => 
+            {
+                aiCore.IsPending = status == QueueItemStatus.Pending;
+                aiCore.IsProcessing = status == QueueItemStatus.Downloading;
+                if (status == QueueItemStatus.Completed) aiCore.IsInstalled = AIResourceService.IsAICoreReady();
+            });
 
         // SAM2 Model Module
         var sam2 = new ModuleItem("SAM2 Model", "ModuleSAM2Description")
@@ -1141,24 +1135,25 @@ public class MainWindowViewModel : ViewModelBase
                 }
             });
 
-        AIResourceService.WhenAnyValue(x => x.IsDownloading)
-            .Subscribe(isDown => 
+        ResourceQueue.ObserveStatus("SAM2")
+            .ObserveOn(RxApp.MainThreadScheduler)
+            .Subscribe(status => 
             {
-                if (isDown && AIResourceService.IsAICoreReady()) sam2.IsProcessing = true;
-                else sam2.IsProcessing = false;
-
-                if (!isDown) sam2.IsInstalled = AIResourceService.IsSAM2Ready(_settingsService.Settings.SelectedSAM2Variant);
+                sam2.IsPending = status == QueueItemStatus.Pending;
+                sam2.IsProcessing = status == QueueItemStatus.Downloading;
+                if (status == QueueItemStatus.Completed) sam2.IsInstalled = AIResourceService.IsSAM2Ready(_settingsService.Settings.SelectedSAM2Variant);
             });
-        // Linked progress for both
+
+        // Linked progress for both (Route progress to whoever is active)
         AIResourceService.WhenAnyValue(x => x.DownloadProgress)
             .Subscribe(p => {
                 if (aiCore.IsProcessing) aiCore.Progress = p;
                 if (sam2.IsProcessing) sam2.Progress = p;
             });
 
-        ResourceQueue.ObserveStatus("SAM2")
-            .ObserveOn(RxApp.MainThreadScheduler)
-            .Subscribe(status => sam2.IsPending = status == QueueItemStatus.Pending);
+        ffmpeg.UpdateDescription();
+        aiCore.UpdateDescription();
+        sam2.UpdateDescription();
 
         Modules.Add(ffmpeg);
         Modules.Add(aiCore);
@@ -1177,10 +1172,7 @@ public class MainWindowViewModel : ViewModelBase
         }
         else if (type == "SAM2")
         {
-             if (!AIResourceService.IsAICoreReady())
-             {
-                 await ResourceQueue.EnqueueAsync("AICore", (ct) => AIResourceService.EnsureAICoreAsync(ct));
-             }
+             // Dependency handled internally by EnsureSAM2Async
              var variant = _settingsService.Settings.SelectedSAM2Variant;
              await ResourceQueue.EnqueueAsync("SAM2", (ct) => AIResourceService.EnsureSAM2Async(variant, ct));
         }
@@ -1337,7 +1329,7 @@ public class MainWindowViewModel : ViewModelBase
             UpdateDescription();
         }
         
-        private void UpdateDescription()
+        public void UpdateDescription()
         {
             // Update Description and Status Text
             Description = LocalizationService.Instance[DescriptionKey];

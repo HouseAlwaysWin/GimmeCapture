@@ -82,6 +82,11 @@ public partial class MainWindow : Window
                 Hide();
             }
         }
+        
+        if (e.Property == Window.WindowStateProperty || e.Property == Window.IsVisibleProperty)
+        {
+            UpdateDownloadWindow();
+        }
     }
 
     private void HotkeyTextBox_KeyDown(object? sender, Avalonia.Input.KeyEventArgs e)
@@ -202,34 +207,52 @@ public partial class MainWindow : Window
             // Monitor Downloading Status to show/hide separate window
             vm.WhenAnyValue(x => x.IsProcessing)
               .ObserveOn(RxApp.MainThreadScheduler)
-              .Subscribe(isProcessing => 
-              {
-                  // Only show global download window if MainWindow is visible and active
-                  // This prevents double UI when using Floating Windows
-                  if (isProcessing && this.IsVisible && this.WindowState != WindowState.Minimized)
-                  {
-                      if (_downloadWindow == null)
-                      {
-                          try
-                          {
-                              _downloadWindow = new ResourceDownloadWindow
-                              {
-                                  DataContext = vm
-                              };
-                              _downloadWindow.Show(this);
-                          }
-                          catch (Exception ex)
-                          {
-                              System.Diagnostics.Debug.WriteLine($"Failed to show download window: {ex}");
-                          }
-                      }
-                  }
-                  else
-                  {
-                      _downloadWindow?.Close();
-                      _downloadWindow = null;
-                  }
-              });
+              .Subscribe(_ => UpdateDownloadWindow());
+        }
+    }
+
+    private void UpdateDownloadWindow()
+    {
+        if (DataContext is not MainWindowViewModel vm) return;
+        
+        // Show ONLY when minimized (background)
+        bool isMinimized = this.WindowState == WindowState.Minimized || !this.IsVisible;
+
+        if (vm.IsProcessing)
+        {
+            if (isMinimized)
+            {
+                if (_downloadWindow == null)
+                {
+                    try 
+                    {
+                        _downloadWindow = new ResourceDownloadWindow
+                        {
+                            DataContext = vm
+                        };
+                        _downloadWindow.Show(); 
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Failed to show download window: {ex}");
+                    }
+                }
+                else
+                {
+                    _downloadWindow.Show();
+                    _downloadWindow.WindowState = WindowState.Normal;
+                    _downloadWindow.Activate();
+                }
+            }
+            else
+            {
+                _downloadWindow?.Hide();
+            }
+        }
+        else
+        {
+            _downloadWindow?.Close();
+            _downloadWindow = null;
         }
     }
 
