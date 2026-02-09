@@ -282,9 +282,15 @@
                     <ctl:SnipToolbar Name="Toolbar" Canvas.Left="{Binding ToolbarLeft}" Canvas.Top="{Binding ToolbarTop}" IsVisible="{Binding CurrentState, Converter={StaticResource StateToBoolConverter}}"/>
         </Canvas>
         
-        <!-- Processing Overlay - outside Canvas for proper centering, wrapped in Panel with high ZIndex -->
-        <Panel IsHitTestVisible="False" ZIndex="999">
-             <ctl:ProcessingOverlay DataContext="{Binding}" IsVisible="{Binding IsProcessing}"/>
-        </Panel>
+        <!-- Processing Overlay - centered on the ACTIVE MONITOR -->
+        <Canvas IsHitTestVisible="False" ZIndex="999">
+             <Grid Width="{Binding ActiveScreenBounds.Width}" 
+                   Height="{Binding ActiveScreenBounds.Height}" 
+                   Canvas.Left="{Binding ActiveScreenBounds.X}" 
+                   Canvas.Top="{Binding ActiveScreenBounds.Y}"
+                   IsVisible="{Binding IsProcessing}">
+                 <ctl:ProcessingOverlay DataContext="{Binding}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+             </Grid>
+        </Canvas>
     </Grid>
 </Window>

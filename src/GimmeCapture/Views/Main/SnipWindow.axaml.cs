@@ -45,6 +45,17 @@ public partial class SnipWindow : Window
         None, TopLeft, TopRight, BottomLeft, BottomRight, Top, Bottom, Left, Right
     }
 
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+    public static extern bool GetCursorPos(out POINT lpPoint);
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    public struct POINT
+    {
+        public int X;
+        public int Y;
+    }
+
     public SnipWindow()
     {
         InitializeComponent();
@@ -79,6 +90,15 @@ public partial class SnipWindow : Window
                 _viewModel.VisualScaling = this.RenderScaling;
                 _viewModel.ScreenOffset = this.Position;
                 _viewModel.RefreshWindowRects(this.TryGetPlatformHandle()?.Handle);
+                
+                // Initial Active Screen Update
+                if (GetCursorPos(out POINT p))
+                {
+                     // p is Screen Physical. PointToClient expects Screen Physical? 
+                     // No, PointToClient converts Screen Physical -> Client Logical.
+                     var clientPoint = this.PointToClient(new PixelPoint(p.X, p.Y));
+                     UpdateActiveScreenBounds(clientPoint);
+                }
                 
                 // Trigger AI Auto-Scan in background
                 Console.WriteLine("[SnipWindow] About to execute AIScanCommand");
@@ -387,6 +407,44 @@ public partial class SnipWindow : Window
         }
     }
     
+    private void UpdateActiveScreenBounds(Point point)
+    {
+        if (_viewModel == null) return;
+        
+        // Point is in Window Logical Coordinates (if from PointerMoved args) or Screen Physical (if from desktop).
+        // Let's assume input 'point' is Screen Physical for consistency with ScreenFromPoint, 
+        // OR we use the Window-relative point and `PointToScreen`.
+        
+        // Easier: Use `Screens.ScreenFromPointer(this)`? No, window spans multiple.
+        // Use `Screens.ScreenFromPoint(this.PointToScreen(point))`?
+        
+        // Let's get the absolute physical point from the event or cursor.
+        var pixelPoint = new PixelPoint((int)point.X, (int)point.Y); // Rough conversion if point is logical? No.
+        
+        // Actually, let's just use the mouse position from the event which is relative to window.
+        // Convert to Screen Physical
+        var screenPoint = this.PointToScreen(point);
+        
+        var screen = Screens.ScreenFromPoint(screenPoint);
+        if (screen != null)
+        {
+             // Calculate Bounds relative to the Window's TopLeft (which is MinX, MinY of virtual desktop)
+             // Window Position: this.Position
+             // Screen Bounds: screen.Bounds
+             
+             double scaling = _viewModel.VisualScaling; // Should be 1.0 if we set it right, or whatever the window scaling is.
+             // Wait, `VisualScaling` in VM is set from `this.RenderScaling`.
+             
+             // Relative Position = (ScreenX - WindowX) / Scaling
+             double relX = (screen.Bounds.X - this.Position.X) / scaling;
+             double relY = (screen.Bounds.Y - this.Position.Y) / scaling;
+             double relW = screen.Bounds.Width / scaling;
+             double relH = screen.Bounds.Height / scaling;
+             
+             _viewModel.ActiveScreenBounds = new Rect(relX, relY, relW, relH);
+        }
+    }
+
     private ResizeDirection GetDirectionFromName(string? name)
     {
         return name switch

@@ -666,6 +666,32 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingToolViewM
         get => _textInputPosition;
         set => this.RaiseAndSetIfChanged(ref _textInputPosition, value);
     }
+    
+    private Rect _activeScreenBounds = new Rect(0,0,1920,1080); // Default
+    public Rect ActiveScreenBounds
+    {
+        get => _activeScreenBounds;
+        set => this.RaiseAndSetIfChanged(ref _activeScreenBounds, value);
+    }
+
+    private Point _loadingOverlayPosition;
+    public Point LoadingOverlayPosition
+    {
+        get => _loadingOverlayPosition;
+        set => this.RaiseAndSetIfChanged(ref _loadingOverlayPosition, value);
+    }
+    
+    public void UpdateLoadingOverlayPosition(Point cursorPoint, Avalonia.Platform.Screen? screen = null)
+    {
+        // If screen is provided, center on that screen
+        // Otherwise, find screen containing cursorPoint
+        // If no screen found, center on Viewport
+        
+        // This logic will be called from CodeBehind or via binding if we track referencing view
+        
+        // For now, let's just default to centering on the screen that contains the cursor
+        // The View logic (CodeBehind) is best place to determine "Screen from Point"
+    }
 
     private string _pendingText = string.Empty;
     public string PendingText

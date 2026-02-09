@@ -158,29 +158,29 @@ public partial class MainWindow : Window
 
                 var snip = new SnipWindow();
                 
-                // Multi-monitor support: Determine target screen based on cursor position
-                POINT p;
-                PixelPoint cursorPoint = new PixelPoint(0, 0);
-                if (GetCursorPos(out p))
+                // Multi-monitor support: Span ALL screens
+                // Calculate the union of all screen bounds (Physical Pixels)
+                var allScreens = snip.Screens.All;
+                if (allScreens.Count > 0)
                 {
-                    cursorPoint = new PixelPoint(p.X, p.Y);
-                }
-                else if (desktop?.MainWindow != null)
-                {
-                    cursorPoint = desktop.MainWindow.Position;
-                }
-
-                var targetScreen = snip.Screens.ScreenFromPoint(cursorPoint) ?? snip.Screens.All.FirstOrDefault();
-                
-                if (targetScreen != null)
-                {
-                    snip.WindowStartupLocation = WindowStartupLocation.Manual;
+                    int minX = allScreens.Min(s => s.Bounds.X);
+                    int minY = allScreens.Min(s => s.Bounds.Y);
+                    int maxRight = allScreens.Max(s => s.Bounds.Right);
+                    int maxBottom = allScreens.Max(s => s.Bounds.Bottom);
                     
-                    // Position and Size SnipWindow to match target screen's bounds, accounting for DPI scaling
-                    double scaling = targetScreen.Scaling;
-                    snip.Position = targetScreen.Bounds.TopLeft;
-                    snip.Width = targetScreen.Bounds.Width / scaling;
-                    snip.Height = targetScreen.Bounds.Height / scaling;
+                    int totalW = maxRight - minX;
+                    int totalH = maxBottom - minY;
+                    
+                    // We need to determine the scaling factor to convert Physical -> Logical
+                    // We'll use the screen at the origin (minX, minY) or the first screen as reference
+                    // For mixed DPI, this is a compromise, but standard for spanning windows.
+                    var originScreen = allScreens.FirstOrDefault(s => s.Bounds.Contains(new PixelPoint(minX, minY))) ?? allScreens.First();
+                    double scaling = originScreen.Scaling;
+
+                    snip.WindowStartupLocation = WindowStartupLocation.Manual;
+                    snip.Position = new PixelPoint(minX, minY);
+                    snip.Width = totalW / scaling;
+                    snip.Height = totalH / scaling;
                 }
                 
                 var snipVm = new SnipWindowViewModel(

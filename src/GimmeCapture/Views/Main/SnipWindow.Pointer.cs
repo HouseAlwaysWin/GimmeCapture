@@ -269,6 +269,7 @@ public partial class SnipWindow : Window
         if (_viewModel == null) return;
 
         var currentPoint = e.GetPosition(this);
+        UpdateActiveScreenBounds(currentPoint);
         var sourceControl = e.Source as Control;
 
         // --- Cursor Logic ---
