@@ -496,6 +496,52 @@ public partial class FloatingImageWindow : Window
                         break;
                 }
 
+                if (e.KeyModifiers.HasFlag(KeyModifiers.Shift))
+                {
+                    var padding = vm.WindowPadding;
+                    double hPad = padding.Left + padding.Right;
+                    double vPad = padding.Top + padding.Bottom;
+                    if (vm.ShowToolbar) vPad += 42;
+
+                    double aspectRatio = vm.OriginalWidth / vm.OriginalHeight;
+                    
+                    // Use the dimension that changed most relative to its start size if both changed,
+                    // or the dimension that is meant to change for edge-only handles.
+                    bool useWidthAsBasis;
+                    if (_resizeDirection == ResizeDirection.Top || _resizeDirection == ResizeDirection.Bottom)
+                        useWidthAsBasis = false;
+                    else if (_resizeDirection == ResizeDirection.Left || _resizeDirection == ResizeDirection.Right)
+                        useWidthAsBasis = true;
+                    else // Corner handles
+                    {
+                        double dW = Math.Abs(w - _startSize.Width);
+                        double dH = Math.Abs(h - _startSize.Height);
+                        useWidthAsBasis = dW >= dH;
+                    }
+
+                    if (useWidthAsBasis)
+                    {
+                        double imageW = Math.Max(1, w - hPad);
+                        double imageH = imageW / aspectRatio;
+                        w = imageW + hPad;
+                        h = imageH + vPad;
+                    }
+                    else
+                    {
+                        double imageH = Math.Max(1, h - vPad);
+                        double imageW = imageH * aspectRatio;
+                        h = imageH + vPad;
+                        w = imageW + hPad;
+                    }
+
+                    // Re-calculate X/Y for handles that move the origin
+                    if (_resizeDirection == ResizeDirection.TopLeft || _resizeDirection == ResizeDirection.Top || _resizeDirection == ResizeDirection.TopRight)
+                        y = _startPosition.Y + (_startSize.Height - h) * scaling;
+                    
+                    if (_resizeDirection == ResizeDirection.TopLeft || _resizeDirection == ResizeDirection.Left || _resizeDirection == ResizeDirection.BottomLeft)
+                        x = _startPosition.X + (_startSize.Width - w) * scaling;
+                }
+
                 w = Math.Max(50, w);
                 h = Math.Max(50, h);
 

@@ -405,6 +405,8 @@ public partial class FloatingVideoWindow : Window
 
     private void PerformResizing(PointerEventArgs e)
     {
+        if (DataContext is not FloatingVideoViewModel vm) return;
+
         try
         {
             var p = e.GetCurrentPoint(this);
@@ -458,6 +460,50 @@ public partial class FloatingVideoWindow : Window
                 case ResizeDirection.Right:
                     w = _startSize.Width + deltaWidth; 
                     break;
+            }
+
+            if (e.KeyModifiers.HasFlag(KeyModifiers.Shift))
+            {
+                var padding = vm.WindowPadding;
+                double hPad = padding.Left + padding.Right;
+                double vPad = padding.Top + padding.Bottom;
+                if (vm.ShowToolbar) vPad += 60; // Video toolbar is 60
+
+                double aspectRatio = vm.OriginalWidth / vm.OriginalHeight;
+                
+                bool useWidthAsBasis;
+                if (_resizeDirection == ResizeDirection.Top || _resizeDirection == ResizeDirection.Bottom)
+                    useWidthAsBasis = false;
+                else if (_resizeDirection == ResizeDirection.Left || _resizeDirection == ResizeDirection.Right)
+                    useWidthAsBasis = true;
+                else 
+                {
+                    double dW = Math.Abs(w - _startSize.Width);
+                    double dH = Math.Abs(h - _startSize.Height);
+                    useWidthAsBasis = dW >= dH;
+                }
+
+                if (useWidthAsBasis)
+                {
+                    double contentW = Math.Max(1, w - hPad);
+                    double contentH = contentW / aspectRatio;
+                    w = contentW + hPad;
+                    h = contentH + vPad;
+                }
+                else
+                {
+                    double contentH = Math.Max(1, h - vPad);
+                    double contentW = contentH * aspectRatio;
+                    h = contentH + vPad;
+                    w = contentW + hPad;
+                }
+
+                // Re-calculate X/Y for handles that move the origin
+                if (_resizeDirection == ResizeDirection.TopLeft || _resizeDirection == ResizeDirection.Top || _resizeDirection == ResizeDirection.TopRight)
+                    y = _startPosition.Y + (_startSize.Height - h) * scaling;
+                
+                if (_resizeDirection == ResizeDirection.TopLeft || _resizeDirection == ResizeDirection.Left || _resizeDirection == ResizeDirection.BottomLeft)
+                    x = _startPosition.X + (_startSize.Width - w) * scaling;
             }
 
             w = Math.Max(50, w);
