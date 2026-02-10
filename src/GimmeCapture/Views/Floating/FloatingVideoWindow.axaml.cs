@@ -87,7 +87,7 @@ public partial class FloatingVideoWindow : Window
                 this.Focus();
             };
 
-            vm.RequestSetWindowRect = (pos, w, h) =>
+            vm.RequestSetWindowRect = (pos, w, h, cw, ch) =>
             {
                 Position = pos;
                 Width = w;
@@ -535,7 +535,8 @@ public partial class FloatingVideoWindow : Window
 
             if (DataContext is FloatingVideoViewModel videoVm)
             {
-                videoVm.PushResizeAction(_startPosition, _startSize.Width, _startSize.Height, Position, Width, Height);
+                videoVm.PushResizeAction(_startPosition, _startSize.Width, _startSize.Height, _startContentWidth, _startContentHeight,
+                                       Position, Width, Height, videoVm.DisplayWidth, videoVm.DisplayHeight);
             }
         }
         else if (_isDrawing)

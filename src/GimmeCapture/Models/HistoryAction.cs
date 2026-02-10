@@ -79,27 +79,36 @@ public class ClearAnnotationsHistoryAction : IHistoryAction
 
 public class WindowTransformHistoryAction : IHistoryAction
 {
-    private readonly Action<Avalonia.PixelPoint, double, double> _setter;
+    private readonly Action<Avalonia.PixelPoint, double, double, double, double> _setter;
     private readonly Avalonia.PixelPoint _oldPos;
     private readonly double _oldWidth;
     private readonly double _oldHeight;
+    private readonly double _oldContentWidth;
+    private readonly double _oldContentHeight;
+
     private readonly Avalonia.PixelPoint _newPos;
     private readonly double _newWidth;
     private readonly double _newHeight;
+    private readonly double _newContentWidth;
+    private readonly double _newContentHeight;
 
-    public WindowTransformHistoryAction(Action<Avalonia.PixelPoint, double, double> setter, 
-        Avalonia.PixelPoint oldPos, double oldWidth, double oldHeight,
-        Avalonia.PixelPoint newPos, double newWidth, double newHeight)
+    public WindowTransformHistoryAction(Action<Avalonia.PixelPoint, double, double, double, double> setter, 
+        Avalonia.PixelPoint oldPos, double oldWidth, double oldHeight, double oldContentWidth, double oldContentHeight,
+        Avalonia.PixelPoint newPos, double newWidth, double newHeight, double newContentWidth, double newContentHeight)
     {
         _setter = setter;
         _oldPos = oldPos;
         _oldWidth = oldWidth;
         _oldHeight = oldHeight;
+        _oldContentWidth = oldContentWidth;
+        _oldContentHeight = oldContentHeight;
         _newPos = newPos;
         _newWidth = newWidth;
         _newHeight = newHeight;
+        _newContentWidth = newContentWidth;
+        _newContentHeight = newContentHeight;
     }
 
-    public void Undo() => _setter(_oldPos, _oldWidth, _oldHeight);
-    public void Redo() => _setter(_newPos, _newWidth, _newHeight);
+    public void Undo() => _setter(_oldPos, _oldWidth, _oldHeight, _oldContentWidth, _oldContentHeight);
+    public void Redo() => _setter(_newPos, _newWidth, _newHeight, _newContentWidth, _newContentHeight);
 }

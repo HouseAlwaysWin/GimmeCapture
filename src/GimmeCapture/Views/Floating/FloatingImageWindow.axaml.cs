@@ -127,7 +127,7 @@ public partial class FloatingImageWindow : Window
                 this.Focus();
             };
 
-            vm.RequestSetWindowRect = (pos, w, h) =>
+            vm.RequestSetWindowRect = (pos, w, h, cw, ch) =>
             {
                 Position = pos;
                 Width = w;
@@ -629,7 +629,8 @@ public partial class FloatingImageWindow : Window
 
             if (DataContext is FloatingImageViewModel imageVm)
             {
-                imageVm.PushResizeAction(_startPosition, _startSize.Width, _startSize.Height, Position, Width, Height);
+                imageVm.PushResizeAction(_startPosition, _startSize.Width, _startSize.Height, _startContentWidth, _startContentHeight,
+                                       Position, Width, Height, imageVm.DisplayWidth, imageVm.DisplayHeight);
             }
         }
         else if (_isSelecting)
