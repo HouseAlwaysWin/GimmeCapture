@@ -892,7 +892,7 @@ public class FloatingImageViewModel : ViewModelBase, IDisposable, IDrawingToolVi
             // If they are visible, we need enough space for the wings (WingWidth).
             // We use Math.Max(10, WingWidth) to be safe, though WingWidth is usually ~100.
             double hPad = _hidePinDecoration ? 10 : System.Math.Max(10, WingWidth);
-            double vPad = 10;
+            double vPad = 25;
             
             // RESERVE space for floating toolbar if visible
             // Toolbar Height(32) + Bottom Margin(10) = 42px

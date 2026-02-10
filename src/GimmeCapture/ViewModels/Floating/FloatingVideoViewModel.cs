@@ -189,7 +189,7 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable, IDrawingToolVi
             // If decorations are hidden, we just need the standard margin (e.g. 10 for shadow/resize handles).
             // If they are visible, we need enough space for the wings (WingWidth).
             double hPad = _hidePinDecoration ? 10 : System.Math.Max(10, WingWidth);
-            double vPad = 10;
+            double vPad = 25;
             
             // RESERVE space for floating toolbar if visible
             // Toolbar Height(32) + Bottom Margin(10) = 42px

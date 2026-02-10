@@ -72,7 +72,7 @@
         <Border Height="0" IsVisible="False"/>
 
 
-        <Border
+        <Border x:Name="MainBorder"
 
                 Margin="{Binding WindowPadding}"
                 Classes="MainBorder"
@@ -264,26 +264,15 @@
             </ContextMenu>
         </Grid.ContextMenu>
 
-        <!-- Debug Overlay (Moved to end of RootGrid for Z-Order) -->
-        <StackPanel Orientation="Vertical" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="10,10,0,0" IsHitTestVisible="False" ZIndex="15">
-             <TextBlock Text="{Binding $parent[Window].Bounds.Width, StringFormat='Win W: {0:F0}'}" Foreground="Cyan" FontWeight="Bold" FontSize="14">
+        <!-- Debug Overlay (Centered Actual Size) -->
+        <StackPanel Orientation="Horizontal" VerticalAlignment="Top" HorizontalAlignment="Center" Margin="0,5,0,0" IsHitTestVisible="False" ZIndex="15">
+             <TextBlock Text="{Binding #MainBorder.Bounds.Width, StringFormat='{}{0:F0}'}" Foreground="Lime" FontWeight="Bold" FontSize="14">
                  <TextBlock.Effect><DropShadowEffect BlurRadius="2" Color="Black"/></TextBlock.Effect>
              </TextBlock>
-             <TextBlock Text="{Binding $parent[Window].Bounds.Height, StringFormat='Win H: {0:F0}'}" Foreground="Cyan" FontWeight="Bold" FontSize="14">
+             <TextBlock Text=" x " Foreground="Lime" FontWeight="Bold" FontSize="14">
                  <TextBlock.Effect><DropShadowEffect BlurRadius="2" Color="Black"/></TextBlock.Effect>
              </TextBlock>
-             
-             <TextBlock Text="{Binding DisplayWidth, StringFormat='VM W: {0:F0}'}" Foreground="Yellow" FontWeight="Bold" FontSize="12">
-                 <TextBlock.Effect><DropShadowEffect BlurRadius="2" Color="Black"/></TextBlock.Effect>
-             </TextBlock>
-             <TextBlock Text="{Binding DisplayHeight, StringFormat='VM H: {0:F0}'}" Foreground="Yellow" FontWeight="Bold" FontSize="12">
-                 <TextBlock.Effect><DropShadowEffect BlurRadius="2" Color="Black"/></TextBlock.Effect>
-             </TextBlock>
- 
-             <TextBlock Text="{Binding #PinnedVideo.Bounds.Width, StringFormat='Real W: {0:F0}'}" Foreground="Lime" FontWeight="Bold" FontSize="12">
-                 <TextBlock.Effect><DropShadowEffect BlurRadius="2" Color="Black"/></TextBlock.Effect>
-             </TextBlock>
-             <TextBlock Text="{Binding #PinnedVideo.Bounds.Height, StringFormat='Real H: {0:F0}'}" Foreground="Lime" FontWeight="Bold" FontSize="12">
+             <TextBlock Text="{Binding #MainBorder.Bounds.Height, StringFormat='{}{0:F0}'}" Foreground="Lime" FontWeight="Bold" FontSize="14">
                  <TextBlock.Effect><DropShadowEffect BlurRadius="2" Color="Black"/></TextBlock.Effect>
              </TextBlock>
         </StackPanel>
