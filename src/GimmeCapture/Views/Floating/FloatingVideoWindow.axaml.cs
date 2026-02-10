@@ -84,6 +84,13 @@ public partial class FloatingVideoWindow : Window
                 this.Focus();
             };
 
+            vm.RequestSetWindowRect = (pos, w, h) =>
+            {
+                Position = pos;
+                Width = w;
+                Height = h;
+            };
+
             // Force initial sync
             SyncWindowSizeToVideo();
             
@@ -483,6 +490,11 @@ public partial class FloatingVideoWindow : Window
         {
             e.Pointer.Capture(null); 
             _isResizing = false;
+
+            if (DataContext is FloatingVideoViewModel videoVm)
+            {
+                videoVm.PushResizeAction(_startPosition, _startSize.Width, _startSize.Height, Position, Width, Height);
+            }
         }
         else if (_isDrawing)
         {

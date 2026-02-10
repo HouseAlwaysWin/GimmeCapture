@@ -110,6 +110,13 @@ public partial class FloatingImageWindow : Window
             {
                 this.Focus();
             };
+
+            vm.RequestSetWindowRect = (pos, w, h) =>
+            {
+                Position = pos;
+                Width = w;
+                Height = h;
+            };
         }
     }
 
@@ -577,6 +584,11 @@ public partial class FloatingImageWindow : Window
         {
             e.Pointer.Capture(null); 
             _isResizing = false;
+
+            if (DataContext is FloatingImageViewModel imageVm)
+            {
+                imageVm.PushResizeAction(_startPosition, _startSize.Width, _startSize.Height, Position, Width, Height);
+            }
         }
         else if (_isSelecting)
         {

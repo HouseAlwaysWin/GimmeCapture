@@ -76,3 +76,30 @@ public class ClearAnnotationsHistoryAction : IHistoryAction
         _annotations.Clear();
     }
 }
+
+public class WindowTransformHistoryAction : IHistoryAction
+{
+    private readonly Action<Avalonia.PixelPoint, double, double> _setter;
+    private readonly Avalonia.PixelPoint _oldPos;
+    private readonly double _oldWidth;
+    private readonly double _oldHeight;
+    private readonly Avalonia.PixelPoint _newPos;
+    private readonly double _newWidth;
+    private readonly double _newHeight;
+
+    public WindowTransformHistoryAction(Action<Avalonia.PixelPoint, double, double> setter, 
+        Avalonia.PixelPoint oldPos, double oldWidth, double oldHeight,
+        Avalonia.PixelPoint newPos, double newWidth, double newHeight)
+    {
+        _setter = setter;
+        _oldPos = oldPos;
+        _oldWidth = oldWidth;
+        _oldHeight = oldHeight;
+        _newPos = newPos;
+        _newWidth = newWidth;
+        _newHeight = newHeight;
+    }
+
+    public void Undo() => _setter(_oldPos, _oldWidth, _oldHeight);
+    public void Redo() => _setter(_newPos, _newWidth, _newHeight);
+}

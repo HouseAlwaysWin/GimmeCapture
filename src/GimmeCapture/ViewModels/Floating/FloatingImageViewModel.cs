@@ -1064,11 +1064,23 @@ public class FloatingImageViewModel : ViewModelBase, IDisposable, IDrawingToolVi
     public bool CanUndo => HasUndo;
     public bool CanRedo => HasRedo;
 
+    public Action<Avalonia.PixelPoint, double, double>? RequestSetWindowRect { get; set; }
+
     public void PushUndoAction(IHistoryAction action)
     {
         _historyStack.Push(action);
         _redoHistoryStack.Clear();
         UpdateHistoryStatus();
+    }
+
+    public void PushResizeAction(Avalonia.PixelPoint oldPos, double oldW, double oldH, Avalonia.PixelPoint newPos, double newW, double newH)
+    {
+        if (oldPos == newPos && oldW == newW && oldH == newH) return;
+        
+        PushUndoAction(new WindowTransformHistoryAction(
+            (pos, w, h) => RequestSetWindowRect?.Invoke(pos, w, h),
+            oldPos, oldW, oldH,
+            newPos, newW, newH));
     }
 
     private void PushUndoState()
