@@ -103,6 +103,47 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable, IDrawingToolVi
         set => this.RaiseAndSetIfChanged(ref _showToolbar, value);
     }
 
+    // Hotkey Proxies
+    public string CopyHotkey => _appSettingsService?.Settings.CopyHotkey ?? "Ctrl+C";
+    public string PinHotkey => _appSettingsService?.Settings.PinHotkey ?? "F3";
+    public string UndoHotkey => _appSettingsService?.Settings.UndoHotkey ?? "Ctrl+Z";
+    public string RedoHotkey => _appSettingsService?.Settings.RedoHotkey ?? "Ctrl+Y";
+    public string ClearHotkey => _appSettingsService?.Settings.ClearHotkey ?? "Delete";
+    public string SaveHotkey => _appSettingsService?.Settings.SaveHotkey ?? "Ctrl+S";
+    public string CloseHotkey => _appSettingsService?.Settings.CloseHotkey ?? "Escape";
+    public string PlaybackHotkey => _appSettingsService?.Settings.TogglePlaybackHotkey ?? "Space";
+    
+    public string RectangleHotkey => _appSettingsService?.Settings.RectangleHotkey ?? "R";
+    public string EllipseHotkey => _appSettingsService?.Settings.EllipseHotkey ?? "E";
+    public string ArrowHotkey => _appSettingsService?.Settings.ArrowHotkey ?? "A";
+    public string LineHotkey => _appSettingsService?.Settings.LineHotkey ?? "L";
+    public string PenHotkey => _appSettingsService?.Settings.PenHotkey ?? "P";
+    public string TextHotkey => _appSettingsService?.Settings.TextHotkey ?? "T";
+    public string MosaicHotkey => _appSettingsService?.Settings.MosaicHotkey ?? "M";
+    public string BlurHotkey => _appSettingsService?.Settings.BlurHotkey ?? "B";
+
+    // Tooltip Hints
+    public string UndoTooltip => $"{GimmeCapture.Services.Core.LocalizationService.Instance["Undo"]} ({UndoHotkey})";
+    public string RedoTooltip => $"{GimmeCapture.Services.Core.LocalizationService.Instance["Redo"]} ({RedoHotkey})";
+    public string ClearTooltip => $"{GimmeCapture.Services.Core.LocalizationService.Instance["Clear"]} ({ClearHotkey})";
+    public string SaveTooltip => $"{GimmeCapture.Services.Core.LocalizationService.Instance["TipSave"]} ({SaveHotkey})";
+    public string CopyTooltip => $"{GimmeCapture.Services.Core.LocalizationService.Instance["TipCopy"]} ({CopyHotkey})";
+    public string PinTooltip => $"{GimmeCapture.Services.Core.LocalizationService.Instance["TipPin"]} ({PinHotkey})";
+    public string RectangleTooltip => $"{GimmeCapture.Services.Core.LocalizationService.Instance["TipRectangle"]} ({RectangleHotkey})";
+    public string EllipseTooltip => $"{GimmeCapture.Services.Core.LocalizationService.Instance["TipEllipse"]} ({EllipseHotkey})";
+    public string ArrowTooltip => $"{GimmeCapture.Services.Core.LocalizationService.Instance["TipArrow"]} ({ArrowHotkey})";
+    public string LineTooltip => $"{GimmeCapture.Services.Core.LocalizationService.Instance["TipLine"]} ({LineHotkey})";
+    public string PenTooltip => $"{GimmeCapture.Services.Core.LocalizationService.Instance["TipPen"]} ({PenHotkey})";
+    public string TextTooltip => $"{GimmeCapture.Services.Core.LocalizationService.Instance["TipText"]} ({TextHotkey})";
+    public string MosaicTooltip => $"{GimmeCapture.Services.Core.LocalizationService.Instance["TipMosaic"]} ({MosaicHotkey})";
+    public string BlurTooltip => $"{GimmeCapture.Services.Core.LocalizationService.Instance["TipBlur"]} ({BlurHotkey})";
+    public string PlaybackTooltip => $"{GimmeCapture.Services.Core.LocalizationService.Instance["ActionPlayback"]} ({PlaybackHotkey})";
+    public string ToggleToolbarTooltip => $"{GimmeCapture.Services.Core.LocalizationService.Instance["ActionToolbar"]} ({_appSettingsService?.Settings.ToggleToolbarHotkey ?? "H"})";
+    public string CloseTooltip => $"{GimmeCapture.Services.Core.LocalizationService.Instance["ActionClose"]} ({CloseHotkey})";
+    public string SelectionTooltip => $"{GimmeCapture.Services.Core.LocalizationService.Instance["TipSelectionArea"]} (S)";
+    public string CropTooltip => $"{GimmeCapture.Services.Core.LocalizationService.Instance["TipCrop"]} (C)";
+    public string PinSelectionTooltip => $"{GimmeCapture.Services.Core.LocalizationService.Instance["TipPinSelection"]} (F3)";
+
     private double _wingScale = 1.0;
     public double WingScale
     {
@@ -342,8 +383,9 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable, IDrawingToolVi
     // Dependencies
     private readonly GimmeCapture.Services.Abstractions.IClipboardService _clipboardService;
     public GimmeCapture.Services.Abstractions.IClipboardService ClipboardService => _clipboardService;
+    private readonly Services.Core.AppSettingsService? _appSettingsService;
 
-    public FloatingVideoViewModel(string videoPath, string ffmpegPath, int width, int height, double originalWidth, double originalHeight, Avalonia.Media.Color borderColor, double borderThickness, bool hideDecoration, bool hideBorder, GimmeCapture.Services.Abstractions.IClipboardService clipboardService)
+    public FloatingVideoViewModel(string videoPath, string ffmpegPath, int width, int height, double originalWidth, double originalHeight, Avalonia.Media.Color borderColor, double borderThickness, bool hideDecoration, bool hideBorder, GimmeCapture.Services.Abstractions.IClipboardService clipboardService, Services.Core.AppSettingsService? appSettingsService)
     {
         VideoPath = videoPath;
         _ffmpegPath = ffmpegPath;
@@ -358,6 +400,7 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable, IDrawingToolVi
         HidePinDecoration = hideDecoration;
         HidePinBorder = hideBorder;
         _clipboardService = clipboardService;
+        _appSettingsService = appSettingsService;
 
         CloseCommand = ReactiveCommand.Create(() => 
         {

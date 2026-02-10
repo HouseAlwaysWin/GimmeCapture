@@ -161,7 +161,16 @@
   "ActionCopy": "複製 (Copy)",
   "ActionStart": "開始錄影 (Start)",
   "ActionStopPin": "停止並釘選 (Stop & Pin)",
-  "ActionCopyVideo": "複製錄影 (Stop & Copy)"
+  "ActionCopyVideo": "複製錄影 (Stop & Copy)",
+  "HotkeyDrawingGroup": "繪圖工具快捷鍵",
+  "HotkeyCommonGroup": "常用功能快捷鍵",
+  "ActionClose": "關閉視窗",
+  "ActionPlayback": "播放/暫停影片",
+  "ActionToolbar": "顯示/隱藏工具列",
+  "ActionSelectionMode": "選取模式",
+  "ActionCropMode": "裁切模式",
+  "TipMosaic": "馬賽克",
+  "TipBlur": "模糊"
 }
 
 

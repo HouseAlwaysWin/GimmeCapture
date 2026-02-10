@@ -499,6 +499,7 @@ public class MainWindowViewModel : ViewModelBase
         {
             this.RaiseAndSetIfChanged(ref _snipHotkey, value);
             HotkeyService.Register(ID_SNIP, value);
+            this.RaisePropertyChanged(nameof(SnipTooltip));
         }
     }
 
@@ -506,14 +507,22 @@ public class MainWindowViewModel : ViewModelBase
     public string CopyHotkey
     {
         get => _copyHotkey;
-        set => this.RaiseAndSetIfChanged(ref _copyHotkey, value);
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _copyHotkey, value);
+            this.RaisePropertyChanged(nameof(CopyTooltip));
+        }
     }
 
     private string _pinHotkey = "F3";
     public string PinHotkey
     {
         get => _pinHotkey;
-        set => this.RaiseAndSetIfChanged(ref _pinHotkey, value);
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _pinHotkey, value);
+            this.RaisePropertyChanged(nameof(PinTooltip));
+        }
     }
 
     private string _recordHotkey = "F2";
@@ -524,7 +533,134 @@ public class MainWindowViewModel : ViewModelBase
         {
             this.RaiseAndSetIfChanged(ref _recordHotkey, value);
             HotkeyService.Register(ID_RECORD, value);
+            this.RaisePropertyChanged(nameof(RecordTooltip));
         }
+    }
+
+    public string SnipTooltip => $"{LocalizationService.Instance["StartCapture"]} ({SnipHotkey})";
+    public string RecordTooltip => $"{LocalizationService.Instance["CaptureModeRecord"]} ({RecordHotkey})";
+    public string CopyTooltip => $"{LocalizationService.Instance["TipCopy"]} ({CopyHotkey})";
+    public string PinTooltip => $"{LocalizationService.Instance["TipPin"]} ({PinHotkey})";
+
+    // Drawing Tool Hotkeys
+    private string _rectangleHotkey = "R";
+    public string RectangleHotkey
+    {
+        get => _rectangleHotkey;
+        set => this.RaiseAndSetIfChanged(ref _rectangleHotkey, value);
+    }
+
+    private string _ellipseHotkey = "E";
+    public string EllipseHotkey
+    {
+        get => _ellipseHotkey;
+        set => this.RaiseAndSetIfChanged(ref _ellipseHotkey, value);
+    }
+
+    private string _arrowHotkey = "A";
+    public string ArrowHotkey
+    {
+        get => _arrowHotkey;
+        set => this.RaiseAndSetIfChanged(ref _arrowHotkey, value);
+    }
+
+    private string _lineHotkey = "L";
+    public string LineHotkey
+    {
+        get => _lineHotkey;
+        set => this.RaiseAndSetIfChanged(ref _lineHotkey, value);
+    }
+
+    private string _penHotkey = "P";
+    public string PenHotkey
+    {
+        get => _penHotkey;
+        set => this.RaiseAndSetIfChanged(ref _penHotkey, value);
+    }
+
+    private string _textHotkey = "T";
+    public string TextHotkey
+    {
+        get => _textHotkey;
+        set => this.RaiseAndSetIfChanged(ref _textHotkey, value);
+    }
+
+    private string _mosaicHotkey = "M";
+    public string MosaicHotkey
+    {
+        get => _mosaicHotkey;
+        set => this.RaiseAndSetIfChanged(ref _mosaicHotkey, value);
+    }
+
+    private string _blurHotkey = "B";
+    public string BlurHotkey
+    {
+        get => _blurHotkey;
+        set => this.RaiseAndSetIfChanged(ref _blurHotkey, value);
+    }
+
+    // Action Hotkeys
+    private string _undoHotkey = "Ctrl+Z";
+    public string UndoHotkey
+    {
+        get => _undoHotkey;
+        set => this.RaiseAndSetIfChanged(ref _undoHotkey, value);
+    }
+
+    private string _redoHotkey = "Ctrl+Y";
+    public string RedoHotkey
+    {
+        get => _redoHotkey;
+        set => this.RaiseAndSetIfChanged(ref _redoHotkey, value);
+    }
+
+    private string _clearHotkey = "Delete";
+    public string ClearHotkey
+    {
+        get => _clearHotkey;
+        set => this.RaiseAndSetIfChanged(ref _clearHotkey, value);
+    }
+
+    private string _saveHotkey = "Ctrl+S";
+    public string SaveHotkey
+    {
+        get => _saveHotkey;
+        set => this.RaiseAndSetIfChanged(ref _saveHotkey, value);
+    }
+
+    private string _closeHotkey = "Escape";
+    public string CloseHotkey
+    {
+        get => _closeHotkey;
+        set => this.RaiseAndSetIfChanged(ref _closeHotkey, value);
+    }
+
+    private string _togglePlaybackHotkey = "Space";
+    public string TogglePlaybackHotkey
+    {
+        get => _togglePlaybackHotkey;
+        set => this.RaiseAndSetIfChanged(ref _togglePlaybackHotkey, value);
+    }
+
+    private string _toggleToolbarHotkey = "F4";
+    public string ToggleToolbarHotkey
+    {
+        get => _toggleToolbarHotkey;
+        set => this.RaiseAndSetIfChanged(ref _toggleToolbarHotkey, value);
+    }
+
+    private string _selectionModeHotkey = "S";
+    public string SelectionModeHotkey
+    {
+        get => _selectionModeHotkey;
+        set => this.RaiseAndSetIfChanged(ref _selectionModeHotkey, value);
+    }
+
+    private string _cropModeHotkey = "C";
+    public string CropModeHotkey
+    {
+        get => _cropModeHotkey;
+        set => this.RaiseAndSetIfChanged(ref _cropModeHotkey, value);
     }
 
     private string _videoSaveDirectory = string.Empty;
@@ -779,6 +915,27 @@ public class MainWindowViewModel : ViewModelBase
         UseFixedRecordPath = s.UseFixedRecordPath;
         RecordHotkey = s.RecordHotkey;
 
+        // Drawing Tools
+        RectangleHotkey = s.RectangleHotkey;
+        EllipseHotkey = s.EllipseHotkey;
+        ArrowHotkey = s.ArrowHotkey;
+        LineHotkey = s.LineHotkey;
+        PenHotkey = s.PenHotkey;
+        TextHotkey = s.TextHotkey;
+        MosaicHotkey = s.MosaicHotkey;
+        BlurHotkey = s.BlurHotkey;
+
+        // Actions
+        UndoHotkey = s.UndoHotkey;
+        RedoHotkey = s.RedoHotkey;
+        ClearHotkey = s.ClearHotkey;
+        SaveHotkey = s.SaveHotkey;
+        CloseHotkey = s.CloseHotkey;
+        TogglePlaybackHotkey = s.TogglePlaybackHotkey;
+        ToggleToolbarHotkey = s.ToggleToolbarHotkey;
+        SelectionModeHotkey = s.SelectionModeHotkey;
+        CropModeHotkey = s.CropModeHotkey;
+
         // Load Language
         LocalizationService.Instance.CurrentLanguage = s.Language;
 
@@ -828,6 +985,23 @@ public class MainWindowViewModel : ViewModelBase
             s.CopyHotkey = CopyHotkey;
             s.PinHotkey = PinHotkey;
             s.RecordHotkey = RecordHotkey;
+            s.RectangleHotkey = RectangleHotkey;
+            s.EllipseHotkey = EllipseHotkey;
+            s.ArrowHotkey = ArrowHotkey;
+            s.LineHotkey = LineHotkey;
+            s.PenHotkey = PenHotkey;
+            s.TextHotkey = TextHotkey;
+            s.MosaicHotkey = MosaicHotkey;
+            s.BlurHotkey = BlurHotkey;
+            s.UndoHotkey = UndoHotkey;
+            s.RedoHotkey = RedoHotkey;
+            s.ClearHotkey = ClearHotkey;
+            s.SaveHotkey = SaveHotkey;
+            s.CloseHotkey = CloseHotkey;
+            s.TogglePlaybackHotkey = TogglePlaybackHotkey;
+            s.ToggleToolbarHotkey = ToggleToolbarHotkey;
+            s.SelectionModeHotkey = SelectionModeHotkey;
+            s.CropModeHotkey = CropModeHotkey;
             s.BorderColorHex = BorderColor.ToString();
             s.ThemeColorHex = ThemeColor.ToString();
             
@@ -926,6 +1100,26 @@ public class MainWindowViewModel : ViewModelBase
         SnipHotkey = defaultSettings.SnipHotkey;
         CopyHotkey = defaultSettings.CopyHotkey;
         PinHotkey = defaultSettings.PinHotkey;
+        RecordHotkey = defaultSettings.RecordHotkey;
+        
+        RectangleHotkey = defaultSettings.RectangleHotkey;
+        EllipseHotkey = defaultSettings.EllipseHotkey;
+        ArrowHotkey = defaultSettings.ArrowHotkey;
+        LineHotkey = defaultSettings.LineHotkey;
+        PenHotkey = defaultSettings.PenHotkey;
+        TextHotkey = defaultSettings.TextHotkey;
+        MosaicHotkey = defaultSettings.MosaicHotkey;
+        BlurHotkey = defaultSettings.BlurHotkey;
+        
+        UndoHotkey = defaultSettings.UndoHotkey;
+        RedoHotkey = defaultSettings.RedoHotkey;
+        ClearHotkey = defaultSettings.ClearHotkey;
+        SaveHotkey = defaultSettings.SaveHotkey;
+        CloseHotkey = defaultSettings.CloseHotkey;
+        TogglePlaybackHotkey = defaultSettings.TogglePlaybackHotkey;
+        ToggleToolbarHotkey = defaultSettings.ToggleToolbarHotkey;
+        SelectionModeHotkey = defaultSettings.SelectionModeHotkey;
+        CropModeHotkey = defaultSettings.CropModeHotkey;
         HideSnipPinDecoration = false;
         HideSnipPinBorder = false;
         HideRecordPinDecoration = false;

@@ -39,10 +39,32 @@ public class AppSettings
     public string TempDirectory { get; set; } = string.Empty;
     
     // Hotkeys
+    // Global Hotkeys
     public string SnipHotkey { get; set; } = "F1";
-    public string CopyHotkey { get; set; } = "Ctrl+C";
-    public string PinHotkey { get; set; } = "F3";
     public string RecordHotkey { get; set; } = "F2";
+    public string PinHotkey { get; set; } = "F3";
+    public string CopyHotkey { get; set; } = "Ctrl+C";
+
+    // Drawing Tool Hotkeys
+    public string RectangleHotkey { get; set; } = "R";
+    public string EllipseHotkey { get; set; } = "E";
+    public string ArrowHotkey { get; set; } = "A";
+    public string LineHotkey { get; set; } = "L";
+    public string PenHotkey { get; set; } = "P";
+    public string TextHotkey { get; set; } = "T";
+    public string MosaicHotkey { get; set; } = "M";
+    public string BlurHotkey { get; set; } = "B";
+
+    // Action Hotkeys
+    public string UndoHotkey { get; set; } = "Ctrl+Z";
+    public string RedoHotkey { get; set; } = "Ctrl+Y";
+    public string ClearHotkey { get; set; } = "Delete";
+    public string SaveHotkey { get; set; } = "Ctrl+S";
+    public string CloseHotkey { get; set; } = "Escape";
+    public string TogglePlaybackHotkey { get; set; } = "Space";
+    public string ToggleToolbarHotkey { get; set; } = "F4";
+    public string SelectionModeHotkey { get; set; } = "S";
+    public string CropModeHotkey { get; set; } = "C";
     
     // AI
     public string AIResourcesDirectory { get; set; } = string.Empty;

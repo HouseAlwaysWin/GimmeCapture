@@ -162,7 +162,16 @@
   "ActionCopy": "Copy Image",
   "ActionStart": "Start Recording",
   "ActionStopPin": "Stop & Pin Video",
-  "ActionCopyVideo": "Stop & Copy Video"
+  "ActionCopyVideo": "Stop & Copy Video",
+  "HotkeyDrawingGroup": "Drawing Tool Hotkeys",
+  "HotkeyCommonGroup": "Common Action Hotkeys",
+  "ActionClose": "Close Window",
+  "ActionPlayback": "Play/Pause Video",
+  "ActionToolbar": "Toggle Toolbar",
+  "ActionSelectionMode": "Selection Mode",
+  "ActionCropMode": "Crop Mode",
+  "TipMosaic": "Mosaic",
+  "TipBlur": "Blur"
 }
 
 

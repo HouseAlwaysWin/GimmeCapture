@@ -148,7 +148,16 @@
   "AIDisabledMessage": "AI機能は現在設定で無効になっています。",
   "AIInitErrorTitle": "AI 初期化エラー",
   "AIInitErrorMessage": "AIの起動に失敗しました：{0}",
-  "StatusError": "エラー"
+  "StatusError": "エラー",
+  "HotkeyDrawingGroup": "描画ツールのショートカット",
+  "HotkeyCommonGroup": "共通アクションのショートカット",
+  "ActionClose": "ウィンドウを閉じる",
+  "ActionPlayback": "再生/一時停止",
+  "ActionToolbar": "ツールバーを表示/非表示",
+  "ActionSelectionMode": "選択モード",
+  "ActionCropMode": "クロップモード",
+  "TipMosaic": "モザイク",
+  "TipBlur": "ぼかし"
 }
 
 

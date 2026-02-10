@@ -385,94 +385,132 @@ IsChecked="{Binding ShowRecordCursor}" Margin="0,5,0,0"/>
             
             <!-- 控制 (Control/Hotkeys) -->
             <TabItem Header="{Binding [TabControl], Source={x:Static services:LocalizationService.Instance}}">
-                <StackPanel Spacing="10" Margin="10">
-                    <TextBlock Text="{Binding [GlobalHotkeys], Source={x:Static services:LocalizationService.Instance}}" FontWeight="Bold" Margin="0,0,0,10"/>
-                    
-                    <!-- 1. Startup Hotkeys -->
-                    <Border Background="#1A1A1A" Padding="15" CornerRadius="4" BorderBrush="#333333" BorderThickness="1" Margin="0,0,0,10">
-                        <StackPanel Spacing="10">
-                            <TextBlock Text="{Binding [HotkeyStartupGroup], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold" Foreground="{StaticResource AccentRedBrush}"/>
-                            <Grid ColumnDefinitions="Auto, 10, *" RowDefinitions="Auto, Auto">
-                                <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding [SnipHotkey], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center"/>
-                                <TextBox Grid.Row="0" Grid.Column="2" 
-                                         Text="{Binding SnipHotkey, Mode=OneWay}" 
-                                         Watermark="{Binding [HotkeyWatermark], Source={x:Static services:LocalizationService.Instance}}"
-                                         IsReadOnly="True"
-                                         Name="SnipHotkeyBox"
-                                         KeyDown="HotkeyTextBox_KeyDown"/>
-
-                                <TextBlock Grid.Row="1" Grid.Column="0" Text="{Binding [RecordHotkey], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,10,0,0"/>
-                                <TextBox Grid.Row="1" Grid.Column="2" 
-                                         Text="{Binding RecordHotkey, Mode=OneWay}" 
-                                         Watermark="{Binding [HotkeyWatermark], Source={x:Static services:LocalizationService.Instance}}"
-                                         IsReadOnly="True"
-                                         Name="RecordHotkeyBox"
-                                         Margin="0,10,0,0"
-                                         KeyDown="HotkeyTextBox_KeyDown"/>
-                            </Grid>
-                        </StackPanel>
-                    </Border>
-
-                    <!-- 2. Mode Action Hotkeys -->
-                    <Grid ColumnDefinitions="*, 10, *">
-                        <!-- Snip Mode -->
-                        <Border Grid.Column="0" Background="#1A1A1A" Padding="15" CornerRadius="4" BorderBrush="#333333" BorderThickness="1">
+                <ScrollViewer>
+                    <StackPanel Spacing="10" Margin="10">
+                        <TextBlock Text="{Binding [GlobalHotkeys], Source={x:Static services:LocalizationService.Instance}}" FontWeight="Bold" Margin="0,0,0,10"/>
+                        
+                        <!-- 1. Startup Hotkeys -->
+                        <Border Background="#1A1A1A" Padding="15" CornerRadius="4" BorderBrush="#333333" BorderThickness="1" Margin="0,0,0,10">
                             <StackPanel Spacing="10">
-                                <TextBlock Text="{Binding [HotkeySnipGroup], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold" Foreground="{StaticResource AccentRedBrush}"/>
+                                <TextBlock Text="{Binding [HotkeyStartupGroup], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold" Foreground="{StaticResource AccentRedBrush}"/>
                                 <Grid ColumnDefinitions="Auto, 10, *" RowDefinitions="Auto, Auto">
-                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding [ActionPin], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding [SnipHotkey], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center"/>
                                     <TextBox Grid.Row="0" Grid.Column="2" 
-                                             Text="{Binding PinHotkey, Mode=OneWay}" 
+                                             Text="{Binding SnipHotkey, Mode=OneWay}" 
+                                             Watermark="{Binding [HotkeyWatermark], Source={x:Static services:LocalizationService.Instance}}"
                                              IsReadOnly="True"
-                                             Name="PinHotkeyBox_Snip" 
+                                             Name="SnipHotkeyBox"
                                              KeyDown="HotkeyTextBox_KeyDown"/>
 
-                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="{Binding [ActionCopy], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,10,0,0"/>
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="{Binding [RecordHotkey], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,10,0,0"/>
                                     <TextBox Grid.Row="1" Grid.Column="2" 
-                                             Text="{Binding CopyHotkey, Mode=OneWay}" 
+                                             Text="{Binding RecordHotkey, Mode=OneWay}" 
+                                             Watermark="{Binding [HotkeyWatermark], Source={x:Static services:LocalizationService.Instance}}"
                                              IsReadOnly="True"
-                                             Name="CopyHotkeyBox_Snip"
+                                             Name="RecordHotkeyBox"
                                              Margin="0,10,0,0"
                                              KeyDown="HotkeyTextBox_KeyDown"/>
                                 </Grid>
                             </StackPanel>
                         </Border>
 
-                        <!-- Record Mode -->
-                        <Border Grid.Column="2" Background="#1A1A1A" Padding="15" CornerRadius="4" BorderBrush="#333333" BorderThickness="1">
+                        <!-- 2. Drawing Tool Hotkeys -->
+                        <Border Background="#1A1A1A" Padding="15" CornerRadius="4" BorderBrush="#333333" BorderThickness="1" Margin="0,0,0,10">
                             <StackPanel Spacing="10">
-                                <TextBlock Text="{Binding [HotkeyRecordGroup], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold" Foreground="{StaticResource AccentRedBrush}"/>
-                                <Grid ColumnDefinitions="Auto, 10, *" RowDefinitions="Auto, Auto, Auto">
-                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding [ActionStart], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center"/>
-                                    <TextBox Grid.Row="0" Grid.Column="2" 
-                                             Text="{Binding PinHotkey, Mode=OneWay}" 
-                                             IsReadOnly="True"
-                                             Name="PinHotkeyBox_Record"
-                                             KeyDown="HotkeyTextBox_KeyDown"/>
+                                <TextBlock Text="{Binding [HotkeyDrawingGroup], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold" Foreground="{StaticResource AccentRedBrush}"/>
+                                <UniformGrid Columns="2">
+                                    <Grid ColumnDefinitions="Auto, 10, *" RowDefinitions="Auto, Auto, Auto, Auto" Margin="0,0,10,0">
+                                        <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding [TipRectangle], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center"/>
+                                        <TextBox Grid.Row="0" Grid.Column="2" Text="{Binding RectangleHotkey, Mode=OneWay}" IsReadOnly="True" Name="RectHotkeyBox" KeyDown="HotkeyTextBox_KeyDown"/>
+                                        
+                                        <TextBlock Grid.Row="1" Grid.Column="0" Text="{Binding [TipEllipse], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,10,0,0"/>
+                                        <TextBox Grid.Row="1" Grid.Column="2" Text="{Binding EllipseHotkey, Mode=OneWay}" IsReadOnly="True" Name="EllipseHotkeyBox" Margin="0,10,0,0" KeyDown="HotkeyTextBox_KeyDown"/>
 
-                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="{Binding [HotkeyRecordingGroup], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,10,0,0"/>
-                                    <TextBox Grid.Row="1" Grid.Column="2" 
-                                             Text="{Binding PinHotkey, Mode=OneWay}" 
-                                             IsReadOnly="True"
-                                             Name="PinHotkeyBox_Recording"
-                                             ToolTip.Tip="{Binding [ActionStopPin], Source={x:Static services:LocalizationService.Instance}}"
-                                             Margin="0,10,0,0"
-                                             KeyDown="HotkeyTextBox_KeyDown"/>
+                                        <TextBlock Grid.Row="2" Grid.Column="0" Text="{Binding [TipArrow], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,10,0,0"/>
+                                        <TextBox Grid.Row="2" Grid.Column="2" Text="{Binding ArrowHotkey, Mode=OneWay}" IsReadOnly="True" Name="ArrowHotkeyBox" Margin="0,10,0,0" KeyDown="HotkeyTextBox_KeyDown"/>
 
-                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="{Binding [ActionCopyVideo], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,10,0,0"/>
-                                    <TextBox Grid.Row="2" Grid.Column="2" 
-                                             Text="{Binding CopyHotkey, Mode=OneWay}" 
-                                             IsReadOnly="True"
-                                             Name="CopyHotkeyBox_Recording"
-                                             Margin="0,10,0,0"
-                                             KeyDown="HotkeyTextBox_KeyDown"/>
-                                </Grid>
+                                        <TextBlock Grid.Row="3" Grid.Column="0" Text="{Binding [TipLine], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,10,0,0"/>
+                                        <TextBox Grid.Row="3" Grid.Column="2" Text="{Binding LineHotkey, Mode=OneWay}" IsReadOnly="True" Name="LineHotkeyBox" Margin="0,10,0,0" KeyDown="HotkeyTextBox_KeyDown"/>
+                                    </Grid>
+                                    <Grid ColumnDefinitions="Auto, 10, *" RowDefinitions="Auto, Auto, Auto, Auto">
+                                        <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding [TipPen], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center"/>
+                                        <TextBox Grid.Row="0" Grid.Column="2" Text="{Binding PenHotkey, Mode=OneWay}" IsReadOnly="True" Name="PenHotkeyBox" KeyDown="HotkeyTextBox_KeyDown"/>
+
+                                        <TextBlock Grid.Row="1" Grid.Column="0" Text="{Binding [TipText], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,10,0,0"/>
+                                        <TextBox Grid.Row="1" Grid.Column="2" Text="{Binding TextHotkey, Mode=OneWay}" IsReadOnly="True" Name="TextHotkeyBox" Margin="0,10,0,0" KeyDown="HotkeyTextBox_KeyDown"/>
+
+                                        <TextBlock Grid.Row="2" Grid.Column="0" Text="{Binding [TipMosaic], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,10,0,0"/>
+                                        <TextBox Grid.Row="2" Grid.Column="2" Text="{Binding MosaicHotkey, Mode=OneWay}" IsReadOnly="True" Name="MosaicHotkeyBox" Margin="0,10,0,0" KeyDown="HotkeyTextBox_KeyDown"/>
+
+                                        <TextBlock Grid.Row="3" Grid.Column="0" Text="{Binding [TipBlur], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,10,0,0"/>
+                                        <TextBox Grid.Row="3" Grid.Column="2" Text="{Binding BlurHotkey, Mode=OneWay}" IsReadOnly="True" Name="BlurHotkeyBox" Margin="0,10,0,0" KeyDown="HotkeyTextBox_KeyDown"/>
+                                    </Grid>
+                                </UniformGrid>
                             </StackPanel>
                         </Border>
-                    </Grid>
-                    
-                    <TextBlock Text="{Binding [HotkeysActive], Source={x:Static services:LocalizationService.Instance}}" Foreground="{StaticResource AccentRedBrush}" FontStyle="Italic" FontSize="11"/>
-                </StackPanel>
+
+                        <!-- 3. Common Action Hotkeys -->
+                        <Border Background="#1A1A1A" Padding="15" CornerRadius="4" BorderBrush="#333333" BorderThickness="1" Margin="0,0,0,10">
+                            <StackPanel Spacing="10">
+                                <TextBlock Text="{Binding [HotkeyCommonGroup], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold" Foreground="{StaticResource AccentRedBrush}"/>
+                                <UniformGrid Columns="2">
+                                    <Grid ColumnDefinitions="Auto, 10, *" RowDefinitions="Auto, Auto, Auto, Auto, Auto" Margin="0,0,10,0">
+                                        <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding [Undo], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center"/>
+                                        <TextBox Grid.Row="0" Grid.Column="2" Text="{Binding UndoHotkey, Mode=OneWay}" IsReadOnly="True" Name="UndoHotkeyBox" KeyDown="HotkeyTextBox_KeyDown"/>
+
+                                        <TextBlock Grid.Row="1" Grid.Column="0" Text="{Binding [Redo], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,10,0,0"/>
+                                        <TextBox Grid.Row="1" Grid.Column="2" Text="{Binding RedoHotkey, Mode=OneWay}" IsReadOnly="True" Name="RedoHotkeyBox" Margin="0,10,0,0" KeyDown="HotkeyTextBox_KeyDown"/>
+
+                                        <TextBlock Grid.Row="2" Grid.Column="0" Text="{Binding [Clear], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,10,0,0"/>
+                                        <TextBox Grid.Row="2" Grid.Column="2" Text="{Binding ClearHotkey, Mode=OneWay}" IsReadOnly="True" Name="ClearHotkeyBox" Margin="0,10,0,0" KeyDown="HotkeyTextBox_KeyDown"/>
+
+                                        <TextBlock Grid.Row="3" Grid.Column="0" Text="{Binding [TipSave], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,10,0,0"/>
+                                        <TextBox Grid.Row="3" Grid.Column="2" Text="{Binding SaveHotkey, Mode=OneWay}" IsReadOnly="True" Name="SaveHotkeyBox" Margin="0,10,0,0" KeyDown="HotkeyTextBox_KeyDown"/>
+
+                                        <TextBlock Grid.Row="4" Grid.Column="0" Text="{Binding [TipCopy], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,10,0,0"/>
+                                        <TextBox Grid.Row="4" Grid.Column="2" Text="{Binding CopyHotkey, Mode=OneWay}" IsReadOnly="True" Name="CopyHotkeyBox_Generic" Margin="0,10,0,0" KeyDown="HotkeyTextBox_KeyDown"/>
+                                    </Grid>
+                                    <Grid ColumnDefinitions="Auto, 10, *" RowDefinitions="Auto, Auto, Auto, Auto, Auto">
+                                        <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding [ActionClose], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center"/>
+                                        <TextBox Grid.Row="0" Grid.Column="2" Text="{Binding CloseHotkey, Mode=OneWay}" IsReadOnly="True" Name="CloseHotkeyBox" KeyDown="HotkeyTextBox_KeyDown"/>
+
+                                        <TextBlock Grid.Row="1" Grid.Column="0" Text="{Binding [ActionPlayback], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,10,0,0"/>
+                                        <TextBox Grid.Row="1" Grid.Column="2" Text="{Binding TogglePlaybackHotkey, Mode=OneWay}" IsReadOnly="True" Name="PlaybackHotkeyBox" Margin="0,10,0,0" KeyDown="HotkeyTextBox_KeyDown"/>
+
+                                        <TextBlock Grid.Row="2" Grid.Column="0" Text="{Binding [ActionToolbar], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,10,0,0"/>
+                                        <TextBox Grid.Row="2" Grid.Column="2" Text="{Binding ToggleToolbarHotkey, Mode=OneWay}" IsReadOnly="True" Name="ToolbarHotkeyBox" Margin="0,10,0,0" KeyDown="HotkeyTextBox_KeyDown"/>
+
+                                        <TextBlock Grid.Row="3" Grid.Column="0" Text="{Binding [ActionSelectionMode], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,10,0,0"/>
+                                        <TextBox Grid.Row="3" Grid.Column="2" Text="{Binding SelectionModeHotkey, Mode=OneWay}" IsReadOnly="True" Name="SelectionModeHotkeyBox" Margin="0,10,0,0" KeyDown="HotkeyTextBox_KeyDown"/>
+
+                                        <TextBlock Grid.Row="4" Grid.Column="0" Text="{Binding [ActionCropMode], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,10,0,0"/>
+                                        <TextBox Grid.Row="4" Grid.Column="2" Text="{Binding CropModeHotkey, Mode=OneWay}" IsReadOnly="True" Name="CropModeHotkeyBox" Margin="0,10,0,0" KeyDown="HotkeyTextBox_KeyDown"/>
+                                    </Grid>
+                                </UniformGrid>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Original Mode Specific (Keeping for backward compatibility/clarity if needed, but the generic ones above covers a lot) -->
+                        <Grid ColumnDefinitions="*, 10, *">
+                            <!-- Global Actions -->
+                            <Border Grid.Column="0" Background="#1A1A1A" Padding="15" CornerRadius="4" BorderBrush="#333333" BorderThickness="1">
+                                <StackPanel Spacing="10">
+                                    <TextBlock Text="{Binding [ActionPin], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold" Foreground="{StaticResource AccentRedBrush}"/>
+                                    <Grid ColumnDefinitions="Auto, 10, *" RowDefinitions="Auto">
+                                        <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding [PinHotkey], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center"/>
+                                        <TextBox Grid.Row="0" Grid.Column="2" 
+                                                 Text="{Binding PinHotkey, Mode=OneWay}" 
+                                                 IsReadOnly="True"
+                                                 Name="PinHotkeyBox_Snip" 
+                                                 KeyDown="HotkeyTextBox_KeyDown"/>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+                        
+                        <TextBlock Text="{Binding [HotkeysActive], Source={x:Static services:LocalizationService.Instance}}" Foreground="{StaticResource AccentRedBrush}" FontStyle="Italic" FontSize="11"/>
+                    </StackPanel>
+                </ScrollViewer>
             </TabItem>
             
             <!-- 模組管理 (Modules) -->
@@ -553,7 +591,10 @@ IsChecked="{Binding ShowRecordCursor}" Margin="0,5,0,0"/>
         <Border Grid.Row="1" BorderBrush="#1E1E1E" BorderThickness="0,1,0,0" Padding="0,10,0,0">
             <Grid ColumnDefinitions="Auto,*,Auto,Auto">
                 <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10">
-                    <Button Content="{Binding [StartCapture], Source={x:Static services:LocalizationService.Instance}}" Theme="{StaticResource GothicMetalButton}" Command="{Binding StartCaptureCommand}" />
+                    <Button Content="{Binding [StartCapture], Source={x:Static services:LocalizationService.Instance}}" 
+                            Theme="{StaticResource GothicMetalButton}" 
+                            Command="{Binding StartCaptureCommand}" 
+                            ToolTip.Tip="{Binding SnipTooltip}"/>
                 </StackPanel>
                 
                 <TextBlock Grid.Column="1" 

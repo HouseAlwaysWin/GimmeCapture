@@ -133,6 +133,27 @@ public partial class MainWindow : Window
             else if (tb.Name == "RecordHotkeyBox") vm.RecordHotkey = hotkeyStr;
             else if (tb.Name == "CopyHotkeyBox_Snip" || tb.Name == "CopyHotkeyBox_Recording") vm.CopyHotkey = hotkeyStr;
             else if (tb.Name == "PinHotkeyBox_Snip" || tb.Name == "PinHotkeyBox_Record" || tb.Name == "PinHotkeyBox_Recording") vm.PinHotkey = hotkeyStr;
+            
+            // Drawing Tools
+            else if (tb.Name == "RectHotkeyBox") vm.RectangleHotkey = hotkeyStr;
+            else if (tb.Name == "EllipseHotkeyBox") vm.EllipseHotkey = hotkeyStr;
+            else if (tb.Name == "ArrowHotkeyBox") vm.ArrowHotkey = hotkeyStr;
+            else if (tb.Name == "LineHotkeyBox") vm.LineHotkey = hotkeyStr;
+            else if (tb.Name == "PenHotkeyBox") vm.PenHotkey = hotkeyStr;
+            else if (tb.Name == "TextHotkeyBox") vm.TextHotkey = hotkeyStr;
+            else if (tb.Name == "MosaicHotkeyBox") vm.MosaicHotkey = hotkeyStr;
+            else if (tb.Name == "BlurHotkeyBox") vm.BlurHotkey = hotkeyStr;
+            
+            // Actions
+            else if (tb.Name == "UndoHotkeyBox") vm.UndoHotkey = hotkeyStr;
+            else if (tb.Name == "RedoHotkeyBox") vm.RedoHotkey = hotkeyStr;
+            else if (tb.Name == "ClearHotkeyBox") vm.ClearHotkey = hotkeyStr;
+            else if (tb.Name == "SaveHotkeyBox") vm.SaveHotkey = hotkeyStr;
+            else if (tb.Name == "CloseHotkeyBox") vm.CloseHotkey = hotkeyStr;
+            else if (tb.Name == "PlaybackHotkeyBox") vm.TogglePlaybackHotkey = hotkeyStr;
+            else if (tb.Name == "ToolbarHotkeyBox") vm.ToggleToolbarHotkey = hotkeyStr;
+            else if (tb.Name == "SelectionModeHotkeyBox") vm.SelectionModeHotkey = hotkeyStr;
+            else if (tb.Name == "CropModeHotkeyBox") vm.CropModeHotkey = hotkeyStr;
         }
 
         e.Handled = true;

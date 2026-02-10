@@ -59,4 +59,16 @@ public interface IDrawingToolViewModel
     
     ReactiveCommand<Unit, Unit> IncreaseWingScaleCommand { get; }
     ReactiveCommand<Unit, Unit> DecreaseWingScaleCommand { get; }
+
+    // Tooltip Hints
+    string UndoTooltip { get; }
+    string RedoTooltip { get; }
+    string RectangleTooltip { get; }
+    string EllipseTooltip { get; }
+    string ArrowTooltip { get; }
+    string LineTooltip { get; }
+    string PenTooltip { get; }
+    string TextTooltip { get; }
+    string MosaicTooltip { get; }
+    string BlurTooltip { get; }
 }

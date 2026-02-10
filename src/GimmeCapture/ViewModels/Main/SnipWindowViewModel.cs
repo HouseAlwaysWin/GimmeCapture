@@ -109,6 +109,39 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingToolViewM
     public string RecordHotkey => _mainVm?.RecordHotkey ?? "F2";
     public string PinHotkey => _mainVm?.PinHotkey ?? "F3";
     public string CopyHotkey => _mainVm?.CopyHotkey ?? "Ctrl+C";
+
+    public string UndoHotkey => _mainVm?.UndoHotkey ?? "Ctrl+Z";
+    public string RedoHotkey => _mainVm?.RedoHotkey ?? "Ctrl+Y";
+    public string ClearHotkey => _mainVm?.ClearHotkey ?? "Delete";
+    public string SaveHotkey => _mainVm?.SaveHotkey ?? "Ctrl+S";
+    public string CloseHotkey => _mainVm?.CloseHotkey ?? "Escape";
+    public string RectangleHotkey => _mainVm?.RectangleHotkey ?? "R";
+    public string EllipseHotkey => _mainVm?.EllipseHotkey ?? "E";
+    public string ArrowHotkey => _mainVm?.ArrowHotkey ?? "A";
+    public string LineHotkey => _mainVm?.LineHotkey ?? "L";
+    public string PenHotkey => _mainVm?.PenHotkey ?? "P";
+    public string TextHotkey => _mainVm?.TextHotkey ?? "T";
+    public string MosaicHotkey => _mainVm?.MosaicHotkey ?? "M";
+    public string BlurHotkey => _mainVm?.BlurHotkey ?? "B";
+
+    // Tooltip Hints
+    public string UndoTooltip => $"{LocalizationService.Instance["Undo"]} ({UndoHotkey})";
+    public string RedoTooltip => $"{LocalizationService.Instance["Redo"]} ({RedoHotkey})";
+    public string ClearTooltip => $"{LocalizationService.Instance["Clear"]} ({ClearHotkey})";
+    public string SaveTooltip => $"{LocalizationService.Instance["TipSave"]} ({SaveHotkey})";
+    public string CopyTooltip => $"{LocalizationService.Instance["TipCopy"]} ({CopyHotkey})";
+    public string PinTooltip => $"{LocalizationService.Instance["TipPin"]} ({PinHotkey})";
+    public string RectangleTooltip => $"{LocalizationService.Instance["TipRectangle"]} ({RectangleHotkey})";
+    public string EllipseTooltip => $"{LocalizationService.Instance["TipEllipse"]} ({EllipseHotkey})";
+    public string ArrowTooltip => $"{LocalizationService.Instance["TipArrow"]} ({ArrowHotkey})";
+    public string LineTooltip => $"{LocalizationService.Instance["TipLine"]} ({LineHotkey})";
+    public string PenTooltip => $"{LocalizationService.Instance["TipPen"]} ({PenHotkey})";
+    public string TextTooltip => $"{LocalizationService.Instance["TipText"]} ({TextHotkey})";
+    public string MosaicTooltip => $"{LocalizationService.Instance["TipMosaic"]} ({MosaicHotkey})";
+    public string BlurTooltip => $"{LocalizationService.Instance["TipBlur"]} ({BlurHotkey})";
+    public string SnipTooltip => $"{LocalizationService.Instance["CaptureModeNormal"]} ({SnipHotkey})";
+    public string RecordTooltip => $"{LocalizationService.Instance["CaptureModeRecord"]} ({RecordHotkey})";
+
     public bool HideSelectionDecoration => IsRecordingMode ? (_mainVm?.HideRecordSelectionDecoration ?? false) : (_mainVm?.HideSnipSelectionDecoration ?? false);
     public bool HideFrameBorder => IsRecordingMode ? (_mainVm?.HideRecordSelectionBorder ?? false) : (_mainVm?.HideSnipSelectionBorder ?? false);
 
@@ -1372,16 +1405,17 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingToolViewM
                  // Create and show FloatingVideoWindow instead of raw ffplay
                  Avalonia.Threading.Dispatcher.UIThread.Post(() => 
                  {
-                      var videoVm = new FloatingVideoViewModel(
-                          recordingPath, 
-                          ffplayPath.Replace("ffplay.exe", "ffmpeg.exe"), // We need ffmpeg for streaming
-                          w, h, 
-                          logW, logH,
-                          SelectionBorderColor, 
-                          SelectionBorderThickness,
-                          _mainVm?.HideRecordPinDecoration ?? false,
-                          _mainVm?.HideRecordPinBorder ?? false,
-                          new ClipboardService());
+                       var videoVm = new FloatingVideoViewModel(
+                           recordingPath, 
+                           ffplayPath.Replace("ffplay.exe", "ffmpeg.exe"), // We need ffmpeg for streaming
+                           w, h, 
+                           logW, logH,
+                           SelectionBorderColor, 
+                           SelectionBorderThickness,
+                           _mainVm?.HideRecordPinDecoration ?? false,
+                           _mainVm?.HideRecordPinBorder ?? false,
+                           new ClipboardService(),
+                           _mainVm?.AppSettingsService);
 
                       // Calculate logic-consistent padding (matches FloatingVideoViewModel.WindowPadding)
                       double hPad = videoVm.HidePinDecoration ? 10 : Math.Max(10, videoVm.WingWidth);
