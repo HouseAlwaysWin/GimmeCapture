@@ -16,6 +16,8 @@ namespace GimmeCapture.Views.Floating;
 
 public partial class FloatingVideoWindow : Window
 {
+    private double _startContentWidth;
+    private double _startContentHeight;
 
     public FloatingVideoWindow()
     {
@@ -152,8 +154,12 @@ public partial class FloatingVideoWindow : Window
 
 
             
-            Width = contentW;
-            Height = contentH;
+            // Dynamic MinWidth to protect toolbar without breaking tiny snips
+            MinWidth = vm.ShowToolbar ? (380 + padding.Left + padding.Right) : 50;
+            MinHeight = vm.ShowToolbar ? (150 + padding.Top + padding.Bottom) : 50;
+
+            Width = System.Math.Max(contentW, MinWidth);
+            Height = System.Math.Max(contentH, MinHeight);
             
             InvalidateMeasure();
         }
@@ -202,6 +208,8 @@ public partial class FloatingVideoWindow : Window
                 _resizeStartPoint = this.PointToScreen(pointerPos).ToPoint(1.0);
                 _startPosition = Position;
                 _startSize = Bounds.Size;
+                _startContentWidth = vm.DisplayWidth;
+                _startContentHeight = vm.DisplayHeight;
                 e.Pointer.Capture(this);
                 e.Handled = true;
             }
@@ -414,6 +422,7 @@ public partial class FloatingVideoWindow : Window
 
         try
         {
+            var padding = vm.WindowPadding;
             var p = e.GetCurrentPoint(this);
             var currentScreenPoint = this.PointToScreen(p.Position).ToPoint(1.0);
             
@@ -424,57 +433,11 @@ public partial class FloatingVideoWindow : Window
             var deltaWidth = deltaX / scaling;
             var deltaHeight = deltaY / scaling;
 
-            double x = _startPosition.X;
-            double y = _startPosition.Y;
-            double w = _startSize.Width;
-            double h = _startSize.Height;
-
-            switch (_resizeDirection)
-            {
-                case ResizeDirection.TopLeft:
-                    x = _startPosition.X + deltaX; 
-                    y = _startPosition.Y + deltaY; 
-                    w = _startSize.Width - deltaWidth; 
-                    h = _startSize.Height - deltaHeight; 
-                    break;
-                case ResizeDirection.TopRight:
-                    y = _startPosition.Y + deltaY; 
-                    w = _startSize.Width + deltaWidth; 
-                    h = _startSize.Height - deltaHeight; 
-                    break;
-                case ResizeDirection.BottomLeft:
-                    x = _startPosition.X + deltaX; 
-                    w = _startSize.Width - deltaWidth; 
-                    h = _startSize.Height + deltaHeight; 
-                    break;
-                case ResizeDirection.BottomRight:
-                    w = _startSize.Width + deltaWidth; 
-                    h = _startSize.Height + deltaHeight; 
-                    break;
-                case ResizeDirection.Top:
-                    y = _startPosition.Y + deltaY; 
-                    h = _startSize.Height - deltaHeight; 
-                    break;
-                case ResizeDirection.Bottom:
-                    h = _startSize.Height + deltaHeight; 
-                    break;
-                case ResizeDirection.Left:
-                    x = _startPosition.X + deltaX; 
-                    w = _startSize.Width - deltaWidth; 
-                    break;
-                case ResizeDirection.Right:
-                    w = _startSize.Width + deltaWidth; 
-                    break;
-            }
+            double contentW = _startContentWidth;
+            double contentH = _startContentHeight;
 
             if (e.KeyModifiers.HasFlag(KeyModifiers.Shift))
             {
-                var padding = vm.WindowPadding;
-                double hPad = padding.Left + padding.Right;
-                double vPad = padding.Top + padding.Bottom;
-                // Note: WindowPadding already includes the 42px for toolbar if visible.
-
-
                 double aspectRatio = vm.OriginalWidth / vm.OriginalHeight;
                 
                 bool useWidthAsBasis;
@@ -484,49 +447,76 @@ public partial class FloatingVideoWindow : Window
                     useWidthAsBasis = true;
                 else 
                 {
-                    double dW = Math.Abs(w - _startSize.Width);
-                    double dH = Math.Abs(h - _startSize.Height);
+                    double dW = Math.Abs(deltaWidth);
+                    double dH = Math.Abs(deltaHeight);
                     useWidthAsBasis = dW >= dH;
                 }
 
                 if (useWidthAsBasis)
                 {
-                    double contentW = Math.Max(1, w - hPad);
-                    double contentH = contentW / aspectRatio;
-                    w = contentW + hPad;
-                    h = contentH + vPad;
+                    double dragDir = (_resizeDirection == ResizeDirection.Left || _resizeDirection == ResizeDirection.TopLeft || _resizeDirection == ResizeDirection.BottomLeft) ? -1 : 1;
+                    contentW = Math.Max(1, _startContentWidth + (deltaWidth * dragDir));
+                    contentH = contentW / aspectRatio;
                 }
                 else
                 {
-                    double contentH = Math.Max(1, h - vPad);
-                    double contentW = contentH * aspectRatio;
-                    h = contentH + vPad;
-                    w = contentW + hPad;
+                    double dragDir = (_resizeDirection == ResizeDirection.Top || _resizeDirection == ResizeDirection.TopLeft || _resizeDirection == ResizeDirection.TopRight) ? -1 : 1;
+                    contentH = Math.Max(1, _startContentHeight + (deltaHeight * dragDir));
+                    contentW = contentH * aspectRatio;
                 }
+            }
+            else
+            {
+                if (_resizeDirection == ResizeDirection.Right || _resizeDirection == ResizeDirection.BottomRight || _resizeDirection == ResizeDirection.TopRight)
+                    contentW += deltaWidth;
+                else if (_resizeDirection == ResizeDirection.Left || _resizeDirection == ResizeDirection.BottomLeft || _resizeDirection == ResizeDirection.TopLeft)
+                    contentW -= deltaWidth;
 
-                // Re-calculate X/Y for handles that move the origin
-                if (_resizeDirection == ResizeDirection.TopLeft || _resizeDirection == ResizeDirection.Top || _resizeDirection == ResizeDirection.TopRight)
-                    y = _startPosition.Y + (_startSize.Height - h) * scaling;
-                
-                if (_resizeDirection == ResizeDirection.TopLeft || _resizeDirection == ResizeDirection.Left || _resizeDirection == ResizeDirection.BottomLeft)
-                    x = _startPosition.X + (_startSize.Width - w) * scaling;
+                if (_resizeDirection == ResizeDirection.Bottom || _resizeDirection == ResizeDirection.BottomLeft || _resizeDirection == ResizeDirection.BottomRight)
+                    contentH += deltaHeight;
+                else if (_resizeDirection == ResizeDirection.Top || _resizeDirection == ResizeDirection.TopLeft || _resizeDirection == ResizeDirection.TopRight)
+                    contentH -= deltaHeight;
             }
 
-            w = Math.Max(50, w);
-            h = Math.Max(50, h);
+            // Update ViewModel
+            vm.DisplayWidth = Math.Max(1, contentW);
+            vm.DisplayHeight = Math.Max(1, contentH);
 
-            Position = new PixelPoint((int)x, (int)y);
-            Width = w;
-            Height = h;
+            // Update Window Size
+            double hPad = padding.Left + padding.Right;
+            double vPad = padding.Top + padding.Bottom;
             
-            // Content size will be updated automatically by the Grid layout
-            // We don't need to manually set DisplayWidth/Height here anymore
+            double targetWindowW = vm.DisplayWidth + hPad;
+            double targetWindowH = vm.DisplayHeight + vPad;
+
+            MinWidth = vm.ShowToolbar ? (380 + hPad) : 50;
+            MinHeight = vm.ShowToolbar ? (150 + vPad) : 50;
+
+            Width = Math.Max(targetWindowW, MinWidth);
+            Height = Math.Max(targetWindowH, MinHeight);
+
+            // Re-calculate X/Y
+            double deltaWinW = Width - _startSize.Width;
+            double deltaWinH = Height - _startSize.Height;
+
+            double newX = _startPosition.X;
+            double newY = _startPosition.Y;
+
+            if (_resizeDirection == ResizeDirection.TopLeft || _resizeDirection == ResizeDirection.Top || _resizeDirection == ResizeDirection.TopRight)
+                newY = _startPosition.Y - deltaWinH * scaling;
             
-            e.Handled = true;
+            if (_resizeDirection == ResizeDirection.TopLeft || _resizeDirection == ResizeDirection.Left || _resizeDirection == ResizeDirection.BottomLeft)
+                newX = _startPosition.X - deltaWinW * scaling;
+
+            Position = new PixelPoint((int)newX, (int)newY);
+            
             InvalidateMeasure();
             InvalidateArrange();
         }
-        catch (Exception) { }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Resize error: {ex.Message}");
+        }
     }
 
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
@@ -602,16 +592,8 @@ public partial class FloatingVideoWindow : Window
         
         if (change.Property == BoundsProperty)
         {
-             // CRITICAL FIX: Only update the ViewModel source-of-truth when the USER explicitly resizes.
-             if (!_isResizing) return;
-
-             var borderControl = this.FindControl<Border>("MainBorder");
-             if (borderControl != null && DataContext is FloatingVideoViewModel vm)
-             {
-                 vm.DisplayWidth = borderControl.Bounds.Width;
-                 vm.DisplayHeight = borderControl.Bounds.Height;
-             }
-
+             // ACTIVE SYNC: We no longer update the VM from bounds.
+             // Everything flows from VM -> XAML and Resize -> VM -> XAML.
         }
     }
 

@@ -73,7 +73,10 @@
 
 
         <Border x:Name="MainBorder"
-
+                HorizontalAlignment="Center"
+                VerticalAlignment="Top"
+                Width="{Binding DisplayWidth}"
+                Height="{Binding DisplayHeight}"
                 Margin="{Binding WindowPadding}"
                 Classes="MainBorder"
                 Classes.hidden-border="{Binding HidePinBorder}"
