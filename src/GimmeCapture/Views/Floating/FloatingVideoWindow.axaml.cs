@@ -100,7 +100,9 @@ public partial class FloatingVideoWindow : Window
             vm.PropertyChanged += (s, ev) =>
             {
                 if (ev.PropertyName == nameof(FloatingVideoViewModel.ShowToolbar) || 
-                    ev.PropertyName == nameof(FloatingVideoViewModel.WindowPadding))
+                    ev.PropertyName == nameof(FloatingVideoViewModel.WindowPadding) ||
+                    ev.PropertyName == nameof(FloatingVideoViewModel.DisplayWidth) ||
+                    ev.PropertyName == nameof(FloatingVideoViewModel.DisplayHeight))
                 {
                     // Ensure the window resizes to accommodate the toolbar/padding changes
                     SyncWindowSizeToVideo();
@@ -139,21 +141,17 @@ public partial class FloatingVideoWindow : Window
     {
         if (DataContext is FloatingVideoViewModel vm)
         {
+            // Mirroring FloatingImageWindow.axaml.cs precisely:
+            // Manual sizing is more predictable for preventing origin shift and clipping 
+            // when decorations or toolbar visibility change.
             SizeToContent = SizeToContent.Manual; 
             
             var padding = vm.WindowPadding;
             // Calculate target content size (MainBorder + Padding)
-            // We use 0 for border here because DisplayWidth/Height now tracks the MainBorder's bounds directly.
             double border = 0;
-            
             double contentW = vm.DisplayWidth + padding.Left + padding.Right + border;
             double contentH = vm.DisplayHeight + padding.Top + padding.Bottom + border;
 
-            // WindowPadding already accounts for the extra 42px for the toolbar if visible.
-            // Redundant adding here causes double expansion and distortion.
-
-
-            
             // Dynamic MinWidth to protect toolbar without breaking tiny snips
             MinWidth = vm.ShowToolbar ? (380 + padding.Left + padding.Right) : 50;
             MinHeight = vm.ShowToolbar ? (150 + padding.Top + padding.Bottom) : 50;
@@ -162,6 +160,7 @@ public partial class FloatingVideoWindow : Window
             Height = System.Math.Max(contentH, MinHeight);
             
             InvalidateMeasure();
+            InvalidateArrange();
         }
     }
 

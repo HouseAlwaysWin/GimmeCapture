@@ -1455,16 +1455,14 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingToolViewM
                            new ClipboardService(),
                            _mainVm?.AppSettingsService);
 
-                      // Calculate logic-consistent padding (matches FloatingVideoViewModel.WindowPadding)
-                      double hPad = videoVm.HidePinDecoration ? 10 : Math.Max(10, videoVm.WingWidth);
-                      double vPad = 10;
+                      // Use WindowPadding from VM directly to guarantee consistency
+                      var pad = videoVm.WindowPadding;
                           
                       var videoWin = new FloatingVideoWindow
                       {
                           DataContext = videoVm,
-                          Width = logW + (hPad * 2),
-                          Height = logH + (vPad * 2),
-                          Position = new PixelPoint(x - (int)(hPad * scaling), y - (int)(vPad * scaling))
+                          // Let SyncWindowSizeToVideo() handle Width/Height via OnDataContextChanged
+                          Position = new PixelPoint(x - (int)(pad.Left * scaling), y - (int)(pad.Top * scaling))
                       };
                      
                       videoWin.Show();
