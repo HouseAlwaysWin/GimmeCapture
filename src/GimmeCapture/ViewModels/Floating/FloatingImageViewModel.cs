@@ -174,6 +174,48 @@ public class FloatingImageViewModel : ViewModelBase, IDisposable, IDrawingToolVi
         }
     }
 
+    public void ToggleToolGroup(string group)
+    {
+        if (group == "Shapes")
+        {
+            if (IsShapeToolActive)
+            {
+                CurrentAnnotationTool = AnnotationType.None;
+            }
+            else
+            {
+                CurrentAnnotationTool = AnnotationType.Rectangle;
+            }
+        }
+        else if (group == "Pen")
+        {
+            if (IsPenToolActive)
+            {
+                CurrentAnnotationTool = AnnotationType.None;
+            }
+            else
+            {
+                CurrentAnnotationTool = AnnotationType.Pen;
+            }
+        }
+        else if (group == "Text")
+        {
+            if (IsTextToolActive)
+            {
+                CurrentAnnotationTool = AnnotationType.None;
+            }
+            else
+            {
+                CurrentAnnotationTool = AnnotationType.Text;
+            }
+        }
+    }
+
+    public void SelectTool(AnnotationType type)
+    {
+        CurrentAnnotationTool = type;
+    }
+
     public ObservableCollection<Annotation> Annotations { get; } = new();
 
     public bool IsShapeToolActive => CurrentAnnotationTool == AnnotationType.Rectangle || CurrentAnnotationTool == AnnotationType.Ellipse || CurrentAnnotationTool == AnnotationType.Arrow || CurrentAnnotationTool == AnnotationType.Line;

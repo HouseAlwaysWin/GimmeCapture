@@ -152,6 +152,10 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable, IDrawingToolVi
     public ReactiveCommand<Unit, Unit> CopyCommand { get; }
     public ReactiveCommand<Unit, Unit> SaveCommand { get; }
     public ReactiveCommand<Unit, Unit> ToggleToolbarCommand { get; }
+    public ReactiveCommand<Unit, Unit> TogglePlaybackCommand { get; }
+
+    public bool IsPlaying => _isPlaybackActive;
+    private bool _isPlaybackActive = true;
     
     public System.Action? CloseAction { get; set; }
     public System.Action? RequestRedraw { get; set; }
@@ -399,27 +403,45 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable, IDrawingToolVi
             if (SaveAction != null) await SaveAction();
         });
 
+        TogglePlaybackCommand = ReactiveCommand.Create(() => 
+        {
+            _isPlaybackActive = !_isPlaybackActive;
+            if (_isPlaybackActive) StartPlayback();
+            else _playCts?.Cancel();
+            this.RaisePropertyChanged(nameof(IsPlaying));
+        });
+
         SelectToolCommand = ReactiveCommand.Create<AnnotationType>(tool => 
         {
-            CurrentAnnotationTool = CurrentAnnotationTool == tool ? AnnotationType.None : tool;
+            var targetTool = CurrentAnnotationTool == tool ? AnnotationType.None : tool;
+            if (targetTool != AnnotationType.None)
+            {
+                CurrentTool = FloatingTool.None;
+            }
+            CurrentAnnotationTool = targetTool;
         });
 
         ToggleToolGroupCommand = ReactiveCommand.Create<string>(group => 
         {
+             AnnotationType targetTool = AnnotationType.None;
              if (group == "Shapes")
              {
-                 if (IsShapeToolActive) CurrentAnnotationTool = AnnotationType.None;
-                 else CurrentAnnotationTool = AnnotationType.Rectangle;
+                 targetTool = IsShapeToolActive ? AnnotationType.None : AnnotationType.Rectangle;
              }
              else if (group == "Pen")
              {
-                 CurrentAnnotationTool = (CurrentAnnotationTool == AnnotationType.Pen) ? AnnotationType.None : AnnotationType.Pen;
+                 targetTool = (CurrentAnnotationTool == AnnotationType.Pen) ? AnnotationType.None : AnnotationType.Pen;
              }
              else if (group == "Text")
              {
-                 if (IsTextToolActive) CurrentAnnotationTool = AnnotationType.None;
-                 else CurrentAnnotationTool = AnnotationType.Text;
+                 targetTool = IsTextToolActive ? AnnotationType.None : AnnotationType.Text;
              }
+
+             if (targetTool != AnnotationType.None)
+             {
+                 CurrentTool = FloatingTool.None;
+             }
+             CurrentAnnotationTool = targetTool;
         });
 
         ClearAnnotationsCommand = ReactiveCommand.Create(ClearAnnotations);

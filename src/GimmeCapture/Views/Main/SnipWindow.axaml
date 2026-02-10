@@ -30,11 +30,31 @@
     </Window.Resources>
     
     <Window.KeyBindings>
-        <KeyBinding Gesture="{Binding CopyHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding CopyCommand}" />
-        <KeyBinding Gesture="Ctrl+S" Command="{Binding SaveCommand}" />
-        <KeyBinding Gesture="{Binding PinHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding PinCommand}" />
+        <!-- Mode & Core Logic -->
         <KeyBinding Gesture="{Binding SnipHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding HandleF1Command}" />
         <KeyBinding Gesture="{Binding RecordHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding HandleF2Command}" />
+        <KeyBinding Gesture="{Binding PinHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding PinCommand}" />
+        <KeyBinding Gesture="{Binding CopyHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding CopyCommand}" />
+        <KeyBinding Gesture="Ctrl+S" Command="{Binding SaveCommand}" />
+        <KeyBinding Gesture="Escape" Command="{Binding CloseCommand}" />
+        <KeyBinding Gesture="Delete" Command="{Binding ClearAnnotationsCommand}" />
+
+        <!-- Drawing Tools -->
+        <KeyBinding Gesture="R" Command="{Binding SelectToolCommand}" CommandParameter="{x:Static m:AnnotationType.Rectangle}" />
+        <KeyBinding Gesture="E" Command="{Binding SelectToolCommand}" CommandParameter="{x:Static m:AnnotationType.Ellipse}" />
+        <KeyBinding Gesture="A" Command="{Binding SelectToolCommand}" CommandParameter="{x:Static m:AnnotationType.Arrow}" />
+        <KeyBinding Gesture="L" Command="{Binding SelectToolCommand}" CommandParameter="{x:Static m:AnnotationType.Line}" />
+        <KeyBinding Gesture="P" Command="{Binding ToggleToolGroupCommand}" CommandParameter="Pen" />
+        <KeyBinding Gesture="T" Command="{Binding ToggleToolGroupCommand}" CommandParameter="Text" />
+        <KeyBinding Gesture="M" Command="{Binding SelectToolCommand}" CommandParameter="{x:Static m:AnnotationType.Mosaic}" />
+        <KeyBinding Gesture="B" Command="{Binding SelectToolCommand}" CommandParameter="{x:Static m:AnnotationType.Blur}" />
+
+        <!-- History -->
+        <KeyBinding Gesture="Ctrl+Z" Command="{Binding UndoCommand}" />
+        <KeyBinding Gesture="Ctrl+Y" Command="{Binding RedoCommand}" />
+
+        <!-- Recording Controls -->
+        <KeyBinding Gesture="Space" Command="{Binding PauseRecordingCommand}" />
     </Window.KeyBindings>
 
     <Window.Styles>

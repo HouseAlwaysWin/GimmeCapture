@@ -18,6 +18,36 @@
         ShowInTaskbar="False"
         SizeToContent="WidthAndHeight">
         
+    <Window.KeyBindings>
+        <!-- Drawing Tools -->
+        <KeyBinding Gesture="R" Command="{Binding SelectToolCommand}" CommandParameter="{x:Static m:AnnotationType.Rectangle}" />
+        <KeyBinding Gesture="E" Command="{Binding SelectToolCommand}" CommandParameter="{x:Static m:AnnotationType.Ellipse}" />
+        <KeyBinding Gesture="A" Command="{Binding SelectToolCommand}" CommandParameter="{x:Static m:AnnotationType.Arrow}" />
+        <KeyBinding Gesture="L" Command="{Binding SelectToolCommand}" CommandParameter="{x:Static m:AnnotationType.Line}" />
+        <KeyBinding Gesture="P" Command="{Binding ToggleToolGroupCommand}" CommandParameter="Pen" />
+        <KeyBinding Gesture="T" Command="{Binding ToggleToolGroupCommand}" CommandParameter="Text" />
+        <KeyBinding Gesture="M" Command="{Binding SelectToolCommand}" CommandParameter="{x:Static m:AnnotationType.Mosaic}" />
+        <KeyBinding Gesture="B" Command="{Binding SelectToolCommand}" CommandParameter="{x:Static m:AnnotationType.Blur}" />
+
+        <!-- History -->
+        <KeyBinding Gesture="Ctrl+Z" Command="{Binding UndoCommand}" />
+        <KeyBinding Gesture="Ctrl+Y" Command="{Binding RedoCommand}" />
+        <KeyBinding Gesture="Delete" Command="{Binding ClearAnnotationsCommand}" />
+
+        <!-- Mode Actions -->
+        <KeyBinding Gesture="S" Command="{Binding SelectionCommand}" />
+        <KeyBinding Gesture="C" Command="{Binding CropCommand}" />
+        <KeyBinding Gesture="F3" Command="{Binding PinSelectionCommand}" />
+        <KeyBinding Gesture="F4" Command="{Binding ToggleToolbarCommand}" />
+        <KeyBinding Gesture="W" Command="{Binding ToggleToolGroupCommand}" CommandParameter="MagicWand" /> 
+        <KeyBinding Gesture="Shift+R" Command="{Binding RemoveBackgroundCommand}" />
+
+        <!-- Core Actions -->
+        <KeyBinding Gesture="Ctrl+S" Command="{Binding SaveCommand}" />
+        <KeyBinding Gesture="Ctrl+C" Command="{Binding CopyCommand}" />
+        <KeyBinding Gesture="Escape" Command="{Binding CloseCommand}" />
+    </Window.KeyBindings>
+
     <Window.Styles>
         <Style Selector="Grid.Handle">
             <Setter Property="Background" Value="Transparent"/>

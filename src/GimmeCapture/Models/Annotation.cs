@@ -13,7 +13,9 @@ public enum AnnotationType
     Arrow,
     Line,
     Text,
-    Pen
+    Pen,
+    Mosaic,
+    Blur
 }
 
 public class Annotation : ReactiveObject
