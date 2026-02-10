@@ -67,10 +67,12 @@
         </Style>
     </Window.Styles>
     
-    <Grid Name="RootGrid" Background="Transparent" RowDefinitions="Auto, *, Auto">
+    <Grid Name="RootGrid" Background="Transparent" ClipToBounds="False">
 
-        <!-- Diagnostic Overlay (Moved to Row 0) -->
+
+        <!-- Diagnostic Overlay -->
         <Border Grid.Row="0"
+
                 Background="#CC000000" 
                 VerticalAlignment="Bottom" 
                 HorizontalAlignment="Left" 
@@ -78,7 +80,9 @@
                 Padding="5" 
                 CornerRadius="4"
                 IsHitTestVisible="False"
-                IsVisible="{Binding IsPointRemovalMode}">
+                IsVisible="{Binding IsPointRemovalMode}"
+                ZIndex="10">
+
             <TextBlock Text="{Binding DiagnosticText}" 
                        Foreground="#00FF00" 
                        FontSize="12" 
@@ -86,7 +90,8 @@
         </Border>
 
         <!-- BABYMETAL Style Border (Wraps IMAGE ONLY) -->
-        <Border Grid.Row="1"
+        <Border
+
                 Margin="{Binding WindowPadding}"
                 Classes="MainBorder"
                 Classes.hidden-border="{Binding HidePinBorder}"
@@ -272,12 +277,14 @@
         </Border>
 
         <!-- Bottom Toolbar (Grown OUTSIDE the main border) -->
-        <Border Grid.Row="2" x:Name="ToolbarBorder" IsVisible="{Binding ShowToolbar}" 
+        <Border x:Name="ToolbarBorder" IsVisible="{Binding ShowToolbar}" 
                 Background="#1A1A1A" BorderBrush="#333333" BorderThickness="1" 
-                CornerRadius="4" Padding="2" Margin="0,4,0,0"
+                CornerRadius="4" Padding="2" Margin="0,0,0,10"
                 Height="32"
-                HorizontalAlignment="Center" VerticalAlignment="Top"
-                BoxShadow="0 2 8 0 #A0000000">
+                HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                BoxShadow="0 2 8 0 #A0000000"
+                ZIndex="20">
+
                         <StackPanel Orientation="Horizontal" Spacing="2">
                             <!-- 1. Drawing Tools -->
                             <StackPanel Orientation="Horizontal" Spacing="2" IsVisible="{Binding IsPointRemovalMode, Converter={StaticResource BoolInvertConverter}}">
@@ -390,12 +397,14 @@
                         </StackPanel>
         </Border>
 
-        <Border Grid.Row="0" Grid.RowSpan="3" IsVisible="{Binding IsProcessing}" Background="#80000000">
+        <Border IsVisible="{Binding IsProcessing}" Background="#80000000" ZIndex="100">
              <ctl:ProcessingOverlay DataContext="{Binding}"/>
         </Border>
 
+
         <!-- Text Overlay -->
-        <Canvas Grid.Row="1" IsHitTestVisible="True" Margin="{Binding WindowPadding}">
+        <Canvas IsHitTestVisible="True" Margin="{Binding WindowPadding}" ZIndex="5">
+
 
                         <!-- Text Entry Overlay (Unified Style) -->
                 <ctl:TextEntryOverlay DataContext="{Binding}"
@@ -422,7 +431,7 @@
         </Grid.ContextMenu>
 
         <!-- Debug Overlay (Moved to end of RootGrid for Z-Order) -->
-        <StackPanel Grid.Row="1" Orientation="Vertical" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="4,4,0,0" IsHitTestVisible="False">
+        <StackPanel Orientation="Vertical" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="10,10,0,0" IsHitTestVisible="False" ZIndex="15">
              <TextBlock Text="{Binding $parent[Window].Bounds.Width, StringFormat='Win W: {0:F0}'}" Foreground="Cyan" FontWeight="Bold" FontSize="14">
                  <TextBlock.Effect><DropShadowEffect BlurRadius="2" Color="Black"/></TextBlock.Effect>
              </TextBlock>
@@ -436,7 +445,7 @@
              <TextBlock Text="{Binding DisplayHeight, StringFormat='VM H: {0:F0}'}" Foreground="Yellow" FontWeight="Bold" FontSize="12">
                  <TextBlock.Effect><DropShadowEffect BlurRadius="2" Color="Black"/></TextBlock.Effect>
              </TextBlock>
-
+ 
              <TextBlock Text="{Binding #PinnedImage.Bounds.Width, StringFormat='Real W: {0:F0}'}" Foreground="Lime" FontWeight="Bold" FontSize="12">
                  <TextBlock.Effect><DropShadowEffect BlurRadius="2" Color="Black"/></TextBlock.Effect>
              </TextBlock>
@@ -444,6 +453,7 @@
                  <TextBlock.Effect><DropShadowEffect BlurRadius="2" Color="Black"/></TextBlock.Effect>
              </TextBlock>
         </StackPanel>
+
         
 
     </Grid>

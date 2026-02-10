@@ -65,12 +65,15 @@
         </Style>
     </Window.Styles>
     
-    <Grid Name="RootGrid" Background="Transparent" RowDefinitions="Auto, *, Auto">
-        
-        <!-- Row 0: Placeholder for Diagnostic/Overlay -->
-        <Border Grid.Row="0" Height="0" IsVisible="False"/>
+    <Grid Name="RootGrid" Background="Transparent" ClipToBounds="False">
 
-        <Border Grid.Row="1"
+        
+        <!-- Placeholder for Diagnostic/Overlay -->
+        <Border Height="0" IsVisible="False"/>
+
+
+        <Border
+
                 Margin="{Binding WindowPadding}"
                 Classes="MainBorder"
                 Classes.hidden-border="{Binding HidePinBorder}"
@@ -115,7 +118,8 @@
 
 
                         <!-- Text Entry Overlay (Unified Style) -->
-                        <Canvas IsHitTestVisible="True">
+                        <Canvas IsHitTestVisible="True" ZIndex="5">
+
                      <!-- Text Input Overlay -->
                      <controls:TextEntryOverlay DataContext="{Binding}"
                                                 Canvas.Left="{Binding TextInputPosition.X}"
@@ -210,11 +214,13 @@
         </Border>
 
          <!-- Row 2: Bottom Toolbar (Unified Image+Video Drawing Tools) -->
-        <Border Grid.Row="2" IsVisible="{Binding ShowToolbar}" 
+        <Border IsVisible="{Binding ShowToolbar}" 
                 Background="#1A1A1A" BorderBrush="#333333" BorderThickness="1" 
-                CornerRadius="8" Padding="4" Margin="0,4,0,0" Height="32"
-                HorizontalAlignment="Center" VerticalAlignment="Top"
-                BoxShadow="0 4 15 0 #D0000000">
+                CornerRadius="8" Padding="4" Margin="0,0,0,10" Height="32"
+                HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                BoxShadow="0 4 15 0 #D0000000"
+                ZIndex="20">
+
             <StackPanel Orientation="Horizontal" Spacing="4">
                 <!-- Drawings Tools -->
                 <controls:DrawingToolbar DataContext="{Binding}"/>
@@ -259,7 +265,7 @@
         </Grid.ContextMenu>
 
         <!-- Debug Overlay (Moved to end of RootGrid for Z-Order) -->
-        <StackPanel Grid.Row="1" Orientation="Vertical" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="4,4,0,0" IsHitTestVisible="False">
+        <StackPanel Orientation="Vertical" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="10,10,0,0" IsHitTestVisible="False" ZIndex="15">
              <TextBlock Text="{Binding $parent[Window].Bounds.Width, StringFormat='Win W: {0:F0}'}" Foreground="Cyan" FontWeight="Bold" FontSize="14">
                  <TextBlock.Effect><DropShadowEffect BlurRadius="2" Color="Black"/></TextBlock.Effect>
              </TextBlock>
@@ -273,7 +279,7 @@
              <TextBlock Text="{Binding DisplayHeight, StringFormat='VM H: {0:F0}'}" Foreground="Yellow" FontWeight="Bold" FontSize="12">
                  <TextBlock.Effect><DropShadowEffect BlurRadius="2" Color="Black"/></TextBlock.Effect>
              </TextBlock>
-
+ 
              <TextBlock Text="{Binding #PinnedVideo.Bounds.Width, StringFormat='Real W: {0:F0}'}" Foreground="Lime" FontWeight="Bold" FontSize="12">
                  <TextBlock.Effect><DropShadowEffect BlurRadius="2" Color="Black"/></TextBlock.Effect>
              </TextBlock>
@@ -281,5 +287,6 @@
                  <TextBlock.Effect><DropShadowEffect BlurRadius="2" Color="Black"/></TextBlock.Effect>
              </TextBlock>
         </StackPanel>
+
     </Grid>
 </Window>

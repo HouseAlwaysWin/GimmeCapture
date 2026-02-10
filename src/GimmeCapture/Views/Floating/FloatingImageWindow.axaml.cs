@@ -176,21 +176,16 @@ public partial class FloatingImageWindow : Window
              SizeToContent = SizeToContent.Manual;
 
              var padding = vm.WindowPadding;
-             // Calculate target content size (Image + Padding)
-             // Calculate target content size (Image + Padding + Border Adjustment)
-             // Empirical fix: 56px shrank, 58px grew. 57px is the target.
-             // We use a fixed 1px adjustment instead of BorderThickness (which is 2px).
-             double border = vm.HidePinBorder ? 0 : 1;
+             // Calculate target content size (MainBorder + Padding)
+             // We use 0 for border here because DisplayWidth/Height now tracks the MainBorder's bounds directly.
+             double border = 0;
              double contentW = vm.DisplayWidth + padding.Left + padding.Right + border;
              double contentH = vm.DisplayHeight + padding.Top + padding.Bottom + border;
              
-             if (vm.ShowToolbar)
-             {
-                 // Use a fixed constant matching the explicit Height="32" + Margin-Top="4" in XAML.
-                 // Total Delta required = Padding(20) + Border(4) + Toolbar(36) = 60px.
-                 double toolbarHeight = 36; 
-                 contentH += toolbarHeight;
-             }
+             // WindowPadding already accounts for the extra 42px for the toolbar if visible.
+             // Redundant adding here causes double expansion and distortion.
+
+
              
              Width = contentW;
              Height = contentH;
@@ -514,7 +509,9 @@ public partial class FloatingImageWindow : Window
                     var padding = vm.WindowPadding;
                     double hPad = padding.Left + padding.Right;
                     double vPad = padding.Top + padding.Bottom;
-                    if (vm.ShowToolbar) vPad += 42;
+                    // Note: WindowPadding already includes the 42px for toolbar if visible.
+
+
 
                     double aspectRatio = vm.OriginalWidth / vm.OriginalHeight;
                     
@@ -775,11 +772,11 @@ public partial class FloatingImageWindow : Window
              // updates the Image size, causing shrinking/growing loops.
              if (!_isResizing) return;
 
-             var imageControl = this.FindControl<Image>("PinnedImage");
-             if (imageControl != null && DataContext is FloatingImageViewModel vm)
+             var borderControl = this.FindControl<Border>("MainBorder");
+             if (borderControl != null && DataContext is FloatingImageViewModel vm)
              {
-                 vm.DisplayWidth = imageControl.Bounds.Width;
-                 vm.DisplayHeight = imageControl.Bounds.Height;
+                 vm.DisplayWidth = borderControl.Bounds.Width;
+                 vm.DisplayHeight = borderControl.Bounds.Height;
              }
         }
     }

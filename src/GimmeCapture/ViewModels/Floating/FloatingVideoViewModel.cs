@@ -100,8 +100,13 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable, IDrawingToolVi
     public bool ShowToolbar
     {
         get => _showToolbar;
-        set => this.RaiseAndSetIfChanged(ref _showToolbar, value);
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _showToolbar, value);
+            this.RaisePropertyChanged(nameof(WindowPadding));
+        }
     }
+
 
     // Hotkey Proxies
     public string CopyHotkey => _appSettingsService?.Settings.CopyHotkey ?? "Ctrl+C";
@@ -185,9 +190,16 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable, IDrawingToolVi
             // If they are visible, we need enough space for the wings (WingWidth).
             double hPad = _hidePinDecoration ? 10 : System.Math.Max(10, WingWidth);
             double vPad = 10;
-            return new Avalonia.Thickness(hPad, vPad, hPad, vPad);
+            
+            // RESERVE space for floating toolbar if visible
+            // Toolbar Height(32) + Bottom Margin(10) = 42px
+            double bottomPad = vPad;
+            if (ShowToolbar) bottomPad += 42;
+            
+            return new Avalonia.Thickness(hPad, vPad, hPad, bottomPad);
         }
     }
+
 
     public ReactiveCommand<Unit, Unit> CloseCommand { get; }
     public ReactiveCommand<Unit, Unit> CopyCommand { get; }

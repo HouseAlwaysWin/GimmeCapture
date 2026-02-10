@@ -140,19 +140,17 @@ public partial class FloatingVideoWindow : Window
             SizeToContent = SizeToContent.Manual; 
             
             var padding = vm.WindowPadding;
-            // Calculate target content size (Video + Padding + Border Adjustment)
-            // Empirical: Video Window needs full border accounting (Top+Bottom = 4px) to avoid squeezing.
-            double borderThickness = vm.BorderThickness * 2;
-            double border = vm.HidePinBorder ? 0 : borderThickness;
+            // Calculate target content size (MainBorder + Padding)
+            // We use 0 for border here because DisplayWidth/Height now tracks the MainBorder's bounds directly.
+            double border = 0;
             
             double contentW = vm.DisplayWidth + padding.Left + padding.Right + border;
             double contentH = vm.DisplayHeight + padding.Top + padding.Bottom + border;
 
-            if (vm.ShowToolbar)
-            {
-                double toolbarHeight = 36; // Matches 32px height + 4px margin
-                contentH += toolbarHeight;
-            }
+            // WindowPadding already accounts for the extra 42px for the toolbar if visible.
+            // Redundant adding here causes double expansion and distortion.
+
+
             
             Width = contentW;
             Height = contentH;
@@ -474,7 +472,8 @@ public partial class FloatingVideoWindow : Window
                 var padding = vm.WindowPadding;
                 double hPad = padding.Left + padding.Right;
                 double vPad = padding.Top + padding.Bottom;
-                if (vm.ShowToolbar) vPad += 60; // Video toolbar is 60
+                // Note: WindowPadding already includes the 42px for toolbar if visible.
+
 
                 double aspectRatio = vm.OriginalWidth / vm.OriginalHeight;
                 
@@ -606,12 +605,13 @@ public partial class FloatingVideoWindow : Window
              // CRITICAL FIX: Only update the ViewModel source-of-truth when the USER explicitly resizes.
              if (!_isResizing) return;
 
-             var imageControl = this.FindControl<Image>("PinnedVideo");
-             if (imageControl != null && DataContext is FloatingVideoViewModel vm)
+             var borderControl = this.FindControl<Border>("MainBorder");
+             if (borderControl != null && DataContext is FloatingVideoViewModel vm)
              {
-                 vm.DisplayWidth = imageControl.Bounds.Width;
-                 vm.DisplayHeight = imageControl.Bounds.Height;
+                 vm.DisplayWidth = borderControl.Bounds.Width;
+                 vm.DisplayHeight = borderControl.Bounds.Height;
              }
+
         }
     }
 
