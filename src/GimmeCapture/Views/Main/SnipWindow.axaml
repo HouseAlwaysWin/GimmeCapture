@@ -279,7 +279,9 @@
             <ctl:TextEntryOverlay DataContext="{Binding}"
                                   Canvas.Left="{Binding TextInputPosition.X}"
                                   Canvas.Top="{Binding TextInputPosition.Y}"/>
-                    <ctl:SnipToolbar Name="Toolbar" Canvas.Left="{Binding ToolbarLeft}" Canvas.Top="{Binding ToolbarTop}" IsVisible="{Binding CurrentState, Converter={StaticResource StateToBoolConverter}}"/>
+                    <ctl:SnipToolbar Name="Toolbar" Canvas.Left="{Binding ToolbarLeft}" Canvas.Top="{Binding ToolbarTop}" 
+                                     MaxWidth="{Binding ToolbarMaxWidth}"
+                                     IsVisible="{Binding CurrentState, Converter={StaticResource StateToBoolConverter}}"/>
         </Canvas>
         
         <!-- Processing Overlay - centered on the ACTIVE MONITOR -->

@@ -281,6 +281,22 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingToolViewM
         set => this.RaiseAndSetIfChanged(ref _toolbarLeft, value);
     }
 
+    private double _toolbarWidth;
+    public double ToolbarWidth
+    {
+        get => _toolbarWidth;
+        set => this.RaiseAndSetIfChanged(ref _toolbarWidth, value);
+    }
+
+    private double _toolbarHeight;
+    public double ToolbarHeight
+    {
+        get => _toolbarHeight;
+        set => this.RaiseAndSetIfChanged(ref _toolbarHeight, value);
+    }
+
+    public double ToolbarMaxWidth => Math.Max(ViewportSize.Width - 40, 100);
+
     private Rect _selectionRect;
     public Rect SelectionRect
     {
@@ -295,32 +311,37 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingToolViewM
 
     private void UpdateToolbarPosition()
     {
-        // Use ViewportSize if available, otherwise assume a standard FHD height for initial positioning
+        // Use ViewportSize if available
         double vh = ViewportSize.Height > 0 ? ViewportSize.Height : 1080;
         double vw = ViewportSize.Width > 0 ? ViewportSize.Width : 1920;
 
-        const double toolbarHeight = 35; // More accurate estimated height
-        const double toolbarWidth = 400; // Estimated max width
+        // Ensure we notified View about MaxWidth change if ViewportSize changed
+        this.RaisePropertyChanged(nameof(ToolbarMaxWidth));
+
+        // Use live measured bounds. Add buffer for shadow/border.
+        double tw = ToolbarWidth > 0 ? (ToolbarWidth + 20) : 600;
+        double th = ToolbarHeight > 0 ? ToolbarHeight : 45;
 
         // Position below by default
         double top = SelectionRect.Bottom + 4; 
         double left = SelectionRect.Left;
 
         // If bottom overflows, position above selection
-        if (top + toolbarHeight > vh - 10)
+        if (top + th > vh - 10)
         {
-            top = SelectionRect.Top - toolbarHeight - 4;
+            top = SelectionRect.Top - th - 4;
         }
 
         // Final safety clamps to keep toolbar within viewport
-        if (top < 4) top = 4;
-        if (top + toolbarHeight > vh - 4) top = vh - toolbarHeight - 4;
+        if (top < 10) top = 10;
+        if (top + th > vh - 10) top = vh - th - 10;
 
-        if (left + toolbarWidth > vw - 10)
+        // Clamping horizontal to keep it on screen
+        if (left + tw > vw - 20)
         {
-            left = vw - toolbarWidth - 10;
+            left = vw - tw - 20;
         }
-        if (left < 10) left = 10;
+        if (left < 20) left = 20;
 
         ToolbarTop = top;
         ToolbarLeft = left;
@@ -790,6 +811,10 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingToolViewM
                     }
                     IsProcessing = isFinalizing;
                 });
+
+            // Reposition toolbar when its bounds change
+            this.WhenAnyValue(x => x.ToolbarWidth, x => x.ToolbarHeight)
+                .Subscribe(_ => UpdateToolbarPosition());
         }
 
         // Initial loads

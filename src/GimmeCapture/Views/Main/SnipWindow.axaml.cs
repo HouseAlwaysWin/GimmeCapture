@@ -191,6 +191,14 @@ public partial class SnipWindow : Window
         if (_viewModel != null)
         {
             this.GetObservable(Visual.BoundsProperty).Subscribe(b => _viewModel.ViewportSize = b.Size);
+            
+            // Sync Toolbar size to VM for adaptive positioning
+            this.Toolbar.GetObservable(Visual.BoundsProperty).Subscribe(b =>
+            {
+                _viewModel.ToolbarWidth = b.Width;
+                _viewModel.ToolbarHeight = b.Height;
+            });
+
             _viewModel.IsMagnifierEnabled = true;
             _viewModel.CloseAction = () => 
             {
@@ -207,7 +215,9 @@ public partial class SnipWindow : Window
             _selectionRectSubscription = _viewModel.WhenAnyValue(
                 x => x.SelectionRect, 
                 x => x.CurrentState, 
-                x => x.IsDrawingMode)
+                x => x.IsDrawingMode,
+                x => x.ToolbarWidth,
+                x => x.ToolbarHeight)
                 .Throttle(TimeSpan.FromMilliseconds(16)) // ~60fps Limit
                 .ObserveOn(RxApp.MainThreadScheduler)
                 .Subscribe(tuple => UpdateWindowRegion(tuple.Item1, tuple.Item2, tuple.Item3));

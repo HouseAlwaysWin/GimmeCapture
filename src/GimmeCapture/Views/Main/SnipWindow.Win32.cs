@@ -43,16 +43,17 @@ public partial class SnipWindow : Window
             
             // Calculate toolbar rect in physical pixels (prevents toolbar from being clipped)
             Rect? toolbarRect = null;
-            if (_viewModel != null)
+            if (_viewModel != null && _viewModel.ToolbarWidth > 0)
             {
-                // Toolbar position is stored in ViewModel, size is approximately 400x40
-                const double toolbarWidth = 500;  // Slightly larger to account for flyouts
-                const double toolbarHeight = 50;
+                // Use measured bounds with a safety buffer for shadows/borders
+                double tw = _viewModel.ToolbarWidth + 20; 
+                double th = _viewModel.ToolbarHeight + 20;
+                
                 toolbarRect = new Rect(
-                    _viewModel.ToolbarLeft * scaling,
-                    _viewModel.ToolbarTop * scaling,
-                    toolbarWidth * scaling,
-                    toolbarHeight * scaling
+                    (_viewModel.ToolbarLeft - 10) * scaling,
+                    (_viewModel.ToolbarTop - 10) * scaling,
+                    tw * scaling,
+                    th * scaling
                 );
             }
 

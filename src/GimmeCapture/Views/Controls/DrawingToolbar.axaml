@@ -12,7 +12,7 @@
              x:DataType="shared:IDrawingToolViewModel"
              TextElement.FontSize="12">
 
-    <StackPanel Orientation="Horizontal" Spacing="2">
+    <StackPanel Orientation="Horizontal">
         <!-- Undo / Redo (Unified) -->
         <Button Theme="{StaticResource SnipButton}" FontSize="12" BorderThickness="1" 
                 Command="{Binding UndoCommand}" ToolTip.Tip="{Binding [Undo], Source={x:Static services:LocalizationService.Instance}}">
