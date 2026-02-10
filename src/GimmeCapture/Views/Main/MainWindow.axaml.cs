@@ -36,6 +36,12 @@ public partial class MainWindow : Window
         
         this.PropertyChanged += OnPropertyChanged;
         this.Closing += OnClosing;
+
+        var tabControl = this.FindControl<TabControl>("MainTabControl");
+        if (tabControl != null)
+        {
+            tabControl.SelectionChanged += (s, e) => UpdateDownloadWindow();
+        }
     }
 
     private bool _isClosingFromDialog = false;
@@ -83,7 +89,7 @@ public partial class MainWindow : Window
             }
         }
         
-        if (e.Property == Window.WindowStateProperty || e.Property == Window.IsVisibleProperty)
+        if (e.Property == Window.WindowStateProperty || e.Property == Window.IsVisibleProperty || e.Property == Window.BoundsProperty)
         {
             UpdateDownloadWindow();
         }
@@ -215,12 +221,26 @@ public partial class MainWindow : Window
     {
         if (DataContext is not MainWindowViewModel vm) return;
         
-        // Show ONLY when minimized (background)
+        // Show when minimized, hidden, or "shrunk" (small size)
         bool isMinimized = this.WindowState == WindowState.Minimized || !this.IsVisible;
+        bool isShrunk = this.Bounds.Width < 500 || this.Bounds.Height < 400;
+        bool isBackground = isMinimized || isShrunk;
 
         if (vm.IsProcessing)
         {
-            if (isMinimized)
+            // If main window is visible and large, check if we're on a download tab
+            bool showingDownloadScreen = false;
+            if (!isBackground)
+            {
+                var tabControl = this.FindControl<TabControl>("MainTabControl");
+                if (tabControl != null)
+                {
+                    // Index 4: Modules, Index 5: About
+                    showingDownloadScreen = tabControl.SelectedIndex == 4 || tabControl.SelectedIndex == 5;
+                }
+            }
+
+            if (isBackground || !showingDownloadScreen)
             {
                 if (_downloadWindow == null)
                 {

@@ -24,7 +24,7 @@
 
     <Grid RowDefinitions="*,Auto" Margin="10">
         <!-- Settings Tabs -->
-        <TabControl Grid.Row="0">
+        <TabControl Grid.Row="0" x:Name="MainTabControl">
             <!-- 一般 (General) -->
             <TabItem Header="{Binding [TabGeneral], Source={x:Static services:LocalizationService.Instance}}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
@@ -493,6 +493,12 @@ IsChecked="{Binding ShowRecordCursor}" Margin="0,5,0,0"/>
                             HorizontalAlignment="Center" 
                             Margin="0,20,0,0"
                             Command="{Binding CheckUpdateCommand}"/>
+
+                    <!-- Version Update Progress -->
+                    <StackPanel IsVisible="{Binding UpdateService.IsDownloading}" Spacing="5" Margin="0,15,0,0" Width="300">
+                        <ProgressBar Value="{Binding UpdateService.DownloadProgress}" Height="4" Foreground="{DynamicResource AccentRedBrush}" Minimum="0" Maximum="100"/>
+                        <TextBlock Text="{Binding UpdateService.DownloadProgress, StringFormat='{}{0:0}%'}" FontSize="10" HorizontalAlignment="Right" Foreground="White" Opacity="0.8"/>
+                    </StackPanel>
                 </StackPanel>
             </TabItem>
         </TabControl>
