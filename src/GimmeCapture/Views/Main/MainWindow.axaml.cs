@@ -44,6 +44,17 @@ public partial class MainWindow : Window
         }
     }
 
+    protected override void OnOpened(EventArgs e)
+    {
+        base.OnOpened(e);
+
+        if (DataContext is MainWindowViewModel vm)
+        {
+            // Initialize Hotkey Service with this Window AFTER it has a handle
+            vm.HotkeyService.Initialize(this);
+        }
+    }
+
     private bool _isClosingFromDialog = false;
     private async void OnClosing(object? sender, WindowClosingEventArgs e)
     {
@@ -119,8 +130,9 @@ public partial class MainWindow : Window
         if (DataContext is MainWindowViewModel vm && sender is TextBox tb)
         {
             if (tb.Name == "SnipHotkeyBox") vm.SnipHotkey = hotkeyStr;
-            else if (tb.Name == "CopyHotkeyBox") vm.CopyHotkey = hotkeyStr;
-            else if (tb.Name == "PinHotkeyBox") vm.PinHotkey = hotkeyStr;
+            else if (tb.Name == "RecordHotkeyBox") vm.RecordHotkey = hotkeyStr;
+            else if (tb.Name == "CopyHotkeyBox_Snip" || tb.Name == "CopyHotkeyBox_Recording") vm.CopyHotkey = hotkeyStr;
+            else if (tb.Name == "PinHotkeyBox_Snip" || tb.Name == "PinHotkeyBox_Record" || tb.Name == "PinHotkeyBox_Recording") vm.PinHotkey = hotkeyStr;
         }
 
         e.Handled = true;
@@ -131,8 +143,6 @@ public partial class MainWindow : Window
         base.OnDataContextChanged(e);
         if (DataContext is MainWindowViewModel vm)
         {
-            // Initialize Hotkey Service with this Window
-            vm.HotkeyService.Initialize(this);
 
             vm.PickFolderAction = async () =>
             {

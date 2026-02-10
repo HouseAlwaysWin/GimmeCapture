@@ -153,7 +153,16 @@
   "AIDisabledMessage": "AI features are currently disabled in Settings.",
   "AIInitErrorTitle": "AI Initialization Error",
   "AIInitErrorMessage": "Failed to start AI: {0}",
-  "StatusError": "Error"
+  "StatusError": "Error",
+  "HotkeyStartupGroup": "Global Startup Hotkeys",
+  "HotkeySnipGroup": "Snip Mode Actions",
+  "HotkeyRecordGroup": "Record Mode Actions",
+  "HotkeyRecordingGroup": "Active Recording Actions",
+  "ActionPin": "Pin Image",
+  "ActionCopy": "Copy Image",
+  "ActionStart": "Start Recording",
+  "ActionStopPin": "Stop & Pin Video",
+  "ActionCopyVideo": "Stop & Copy Video"
 }
 
 

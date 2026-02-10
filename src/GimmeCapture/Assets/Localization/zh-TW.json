@@ -152,7 +152,16 @@
   "AIDisabledMessage": "AI 功能目前在設定中被停用。",
   "AIInitErrorTitle": "AI 初始化錯誤",
   "AIInitErrorMessage": "無法啟動 AI：{0}",
-  "StatusError": "錯誤"
+  "StatusError": "錯誤",
+  "HotkeyStartupGroup": "啟動快捷鍵 (Global Startup)",
+  "HotkeySnipGroup": "截圖模式功能 (Snip Mode)",
+  "HotkeyRecordGroup": "錄影模式功能 (Record Mode)",
+  "HotkeyRecordingGroup": "錄影進行中 (Recording)",
+  "ActionPin": "釘選 (Pin)",
+  "ActionCopy": "複製 (Copy)",
+  "ActionStart": "開始錄影 (Start)",
+  "ActionStopPin": "停止並釘選 (Stop & Pin)",
+  "ActionCopyVideo": "複製錄影 (Stop & Copy)"
 }
 
 

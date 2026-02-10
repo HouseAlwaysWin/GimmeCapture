@@ -104,6 +104,11 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingToolViewM
     public RecordingService? RecordingService => _recordingService;
     private readonly MainWindowViewModel? _mainVm;
     public MainWindowViewModel? MainVm => _mainVm;
+
+    public string SnipHotkey => _mainVm?.SnipHotkey ?? "F1";
+    public string RecordHotkey => _mainVm?.RecordHotkey ?? "F2";
+    public string PinHotkey => _mainVm?.PinHotkey ?? "F3";
+    public string CopyHotkey => _mainVm?.CopyHotkey ?? "Ctrl+C";
     public bool HideSelectionDecoration => IsRecordingMode ? (_mainVm?.HideRecordSelectionDecoration ?? false) : (_mainVm?.HideSnipSelectionDecoration ?? false);
     public bool HideFrameBorder => IsRecordingMode ? (_mainVm?.HideRecordSelectionBorder ?? false) : (_mainVm?.HideSnipSelectionBorder ?? false);
 
@@ -408,8 +413,10 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingToolViewM
     public ReactiveCommand<Unit, Unit> IncreaseCornerIconScaleCommand { get; set; }
     public ReactiveCommand<Unit, Unit> DecreaseCornerIconScaleCommand { get; set; }
     public ReactiveCommand<Unit, Unit> AIScanCommand { get; set; }
-    public ReactiveCommand<Unit, Unit> TriggerAutoScanCommand { get; set; }
     public ReactiveCommand<Unit, Unit> ToggleAIScanBoxCommand { get; set; }
+    public ReactiveCommand<Unit, Unit> TriggerAutoScanCommand { get; set; }
+    public ReactiveCommand<Unit, Unit> HandleF1Command { get; set; }
+    public ReactiveCommand<Unit, Unit> HandleF2Command { get; set; }
 
     private Stack<IHistoryAction> _historyStack = new();
     private Stack<IHistoryAction> _redoHistoryStack = new();
@@ -941,6 +948,27 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingToolViewM
         StopRecordingCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
         CopyRecordingCommand = ReactiveCommand.CreateFromTask(CopyRecording);
         CopyRecordingCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
+
+        HandleF1Command = ReactiveCommand.Create(() => { if (RecState == RecordingState.Idle) IsRecordingMode = false; });
+        HandleF2Command = ReactiveCommand.Create(() => { if (RecState == RecordingState.Idle) IsRecordingMode = true; });
+
+        // Action key (F3) logic
+        PinCommand = ReactiveCommand.CreateFromTask(async () => 
+        {
+            if (!IsRecordingMode) await Pin(false);
+            else 
+            {
+                if (RecState == RecordingState.Idle) await StartRecording();
+                else await PinRecording(); // Handles Stop and Pin
+            }
+        });
+        
+        // Copy key (Ctrl+C) logic
+        CopyCommand = ReactiveCommand.CreateFromTask(async () => 
+        {
+            if (!IsRecordingMode) await Copy();
+            else await CopyRecording(); // Handles Stop and Copy
+        });
 
         AIScanCommand = ReactiveCommand.CreateFromTask(RunAIScanAsync);
         AIScanCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"AI Scan error: {ex}"));

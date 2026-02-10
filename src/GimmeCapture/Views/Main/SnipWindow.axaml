@@ -26,12 +26,15 @@
         <cv:StateToBoolConverter x:Key="StateToBoolConverter"/>
         <cv:BoolToFontWeightConverter x:Key="BoolToFontWeightConverter"/>
         <cv:BoolToFontStyleConverter x:Key="BoolToFontStyleConverter"/>
+        <cv:StringToKeyGestureConverter x:Key="StringToKeyGestureConverter"/>
     </Window.Resources>
     
     <Window.KeyBindings>
-        <KeyBinding Gesture="Ctrl+C" Command="{Binding CopyCommand}" />
+        <KeyBinding Gesture="{Binding CopyHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding CopyCommand}" />
         <KeyBinding Gesture="Ctrl+S" Command="{Binding SaveCommand}" />
-        <KeyBinding Gesture="F3" Command="{Binding PinCommand}" />
+        <KeyBinding Gesture="{Binding PinHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding PinCommand}" />
+        <KeyBinding Gesture="{Binding SnipHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding HandleF1Command}" />
+        <KeyBinding Gesture="{Binding RecordHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding HandleF2Command}" />
     </Window.KeyBindings>
 
     <Window.Styles>
