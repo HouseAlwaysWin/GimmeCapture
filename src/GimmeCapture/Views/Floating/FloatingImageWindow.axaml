@@ -68,6 +68,7 @@
     </Window.Styles>
     
     <Grid Name="RootGrid" Background="Transparent" RowDefinitions="Auto, *, Auto">
+
         <!-- Diagnostic Overlay (Moved to Row 0) -->
         <Border Grid.Row="0"
                 Background="#CC000000" 
@@ -274,7 +275,7 @@
         <Border Grid.Row="2" x:Name="ToolbarBorder" IsVisible="{Binding ShowToolbar}" 
                 Background="#1A1A1A" BorderBrush="#333333" BorderThickness="1" 
                 CornerRadius="4" Padding="2" Margin="0,4,0,0"
-                Height="40"
+                Height="32"
                 HorizontalAlignment="Center" VerticalAlignment="Top"
                 BoxShadow="0 2 8 0 #A0000000">
                         <StackPanel Orientation="Horizontal" Spacing="2">
@@ -395,13 +396,14 @@
 
         <!-- Text Overlay -->
         <Canvas Grid.Row="1" IsHitTestVisible="True" Margin="{Binding WindowPadding}">
-                      <!-- Text Input Overlay -->
+
+                        <!-- Text Entry Overlay (Unified Style) -->
                 <ctl:TextEntryOverlay DataContext="{Binding}"
                                       Canvas.Left="{Binding TextInputPosition.X}"
                                       Canvas.Top="{Binding TextInputPosition.Y}"/>
         </Canvas>
 
-        <Grid.ContextMenu>
+         <Grid.ContextMenu>
             <ContextMenu>
                 <MenuItem Header="{Binding [MenuCopyImage], Source={x:Static services:LocalizationService.Instance}}" Command="{Binding CopyCommand}"/>
                 <MenuItem Header="{Binding [MenuCrop], Source={x:Static services:LocalizationService.Instance}}" Command="{Binding CropCommand}" IsVisible="{Binding IsSelectionActive}"/>
@@ -418,6 +420,30 @@
                 <MenuItem Header="{Binding [MenuClose], Source={x:Static services:LocalizationService.Instance}}" Command="{Binding CloseCommand}"/>
             </ContextMenu>
         </Grid.ContextMenu>
+
+        <!-- Debug Overlay (Moved to end of RootGrid for Z-Order) -->
+        <StackPanel Grid.Row="1" Orientation="Vertical" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="4,4,0,0" IsHitTestVisible="False">
+             <TextBlock Text="{Binding $parent[Window].Bounds.Width, StringFormat='Win W: {0:F0}'}" Foreground="Cyan" FontWeight="Bold" FontSize="14">
+                 <TextBlock.Effect><DropShadowEffect BlurRadius="2" Color="Black"/></TextBlock.Effect>
+             </TextBlock>
+             <TextBlock Text="{Binding $parent[Window].Bounds.Height, StringFormat='Win H: {0:F0}'}" Foreground="Cyan" FontWeight="Bold" FontSize="14">
+                 <TextBlock.Effect><DropShadowEffect BlurRadius="2" Color="Black"/></TextBlock.Effect>
+             </TextBlock>
+             
+             <TextBlock Text="{Binding DisplayWidth, StringFormat='VM W: {0:F0}'}" Foreground="Yellow" FontWeight="Bold" FontSize="12">
+                 <TextBlock.Effect><DropShadowEffect BlurRadius="2" Color="Black"/></TextBlock.Effect>
+             </TextBlock>
+             <TextBlock Text="{Binding DisplayHeight, StringFormat='VM H: {0:F0}'}" Foreground="Yellow" FontWeight="Bold" FontSize="12">
+                 <TextBlock.Effect><DropShadowEffect BlurRadius="2" Color="Black"/></TextBlock.Effect>
+             </TextBlock>
+
+             <TextBlock Text="{Binding #PinnedImage.Bounds.Width, StringFormat='Real W: {0:F0}'}" Foreground="Lime" FontWeight="Bold" FontSize="12">
+                 <TextBlock.Effect><DropShadowEffect BlurRadius="2" Color="Black"/></TextBlock.Effect>
+             </TextBlock>
+             <TextBlock Text="{Binding #PinnedImage.Bounds.Height, StringFormat='Real H: {0:F0}'}" Foreground="Lime" FontWeight="Bold" FontSize="12">
+                 <TextBlock.Effect><DropShadowEffect BlurRadius="2" Color="Black"/></TextBlock.Effect>
+             </TextBlock>
+        </StackPanel>
         
 
     </Grid>

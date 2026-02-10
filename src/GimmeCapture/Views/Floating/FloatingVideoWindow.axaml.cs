@@ -16,7 +16,6 @@ namespace GimmeCapture.Views.Floating;
 
 public partial class FloatingVideoWindow : Window
 {
-    private bool _isInternalSizing = false;
 
     public FloatingVideoWindow()
     {
@@ -101,20 +100,8 @@ public partial class FloatingVideoWindow : Window
                 if (ev.PropertyName == nameof(FloatingVideoViewModel.ShowToolbar) || 
                     ev.PropertyName == nameof(FloatingVideoViewModel.WindowPadding))
                 {
-                    bool isToolbarToggle = ev.PropertyName == nameof(FloatingVideoViewModel.ShowToolbar);
-                    
-                    if (isToolbarToggle)
-                    {
-                        _isInternalSizing = true;
-                        SizeToContent = SizeToContent.Manual;
-                        var padding = vm.WindowPadding;
-                        double toolbarHeight = vm.ShowToolbar ? 60 : 0;
-                        Height = vm.DisplayHeight + padding.Top + padding.Bottom + toolbarHeight;
-
-                        // Reset after layout has likely settled
-                        Avalonia.Threading.Dispatcher.UIThread.Post(() => _isInternalSizing = false, Avalonia.Threading.DispatcherPriority.Loaded);
-                    }
-                    InvalidateMeasure();
+                    // Ensure the window resizes to accommodate the toolbar/padding changes
+                    SyncWindowSizeToVideo();
                 }
             };
         }
@@ -153,10 +140,22 @@ public partial class FloatingVideoWindow : Window
             SizeToContent = SizeToContent.Manual; 
             
             var padding = vm.WindowPadding;
-            double toolbarHeight = vm.ShowToolbar ? 60 : 0;
+            // Calculate target content size (Video + Padding + Border Adjustment)
+            // Empirical: Video Window needs full border accounting (Top+Bottom = 4px) to avoid squeezing.
+            double borderThickness = vm.BorderThickness * 2;
+            double border = vm.HidePinBorder ? 0 : borderThickness;
             
-            Width = vm.DisplayWidth + padding.Left + padding.Right;
-            Height = vm.DisplayHeight + padding.Top + padding.Bottom + toolbarHeight;
+            double contentW = vm.DisplayWidth + padding.Left + padding.Right + border;
+            double contentH = vm.DisplayHeight + padding.Top + padding.Bottom + border;
+
+            if (vm.ShowToolbar)
+            {
+                double toolbarHeight = 36; // Matches 32px height + 4px margin
+                contentH += toolbarHeight;
+            }
+            
+            Width = contentW;
+            Height = contentH;
             
             InvalidateMeasure();
         }
@@ -604,7 +603,8 @@ public partial class FloatingVideoWindow : Window
         
         if (change.Property == BoundsProperty)
         {
-             if (_isInternalSizing) return;
+             // CRITICAL FIX: Only update the ViewModel source-of-truth when the USER explicitly resizes.
+             if (!_isResizing) return;
 
              var imageControl = this.FindControl<Image>("PinnedVideo");
              if (imageControl != null && DataContext is FloatingVideoViewModel vm)

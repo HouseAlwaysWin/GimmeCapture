@@ -17,7 +17,7 @@ namespace GimmeCapture.Views.Floating;
 
 public partial class FloatingImageWindow : Window
 {
-    private bool _isInternalSizing = false;
+
 
     public FloatingImageWindow()
     {
@@ -76,8 +76,6 @@ public partial class FloatingImageWindow : Window
                     
                     if (isToolbarToggle)
                     {
-                        _isInternalSizing = true;
-                        SizeToContent = SizeToContent.Manual;
                     }
                     
                     SyncWindowSizeToImage();
@@ -85,7 +83,7 @@ public partial class FloatingImageWindow : Window
                     if (isToolbarToggle)
                     {
                         // Reset after layout has likely settled
-                        Avalonia.Threading.Dispatcher.UIThread.Post(() => _isInternalSizing = false, Avalonia.Threading.DispatcherPriority.Loaded);
+                        // _isInternalSizing removed as we now use _isResizing for lock
                     }
                 }
             };
@@ -179,18 +177,18 @@ public partial class FloatingImageWindow : Window
 
              var padding = vm.WindowPadding;
              // Calculate target content size (Image + Padding)
-             double contentW = vm.DisplayWidth + padding.Left + padding.Right;
-             double contentH = vm.DisplayHeight + padding.Top + padding.Bottom;
+             // Calculate target content size (Image + Padding + Border Adjustment)
+             // Empirical fix: 56px shrank, 58px grew. 57px is the target.
+             // We use a fixed 1px adjustment instead of BorderThickness (which is 2px).
+             double border = vm.HidePinBorder ? 0 : 1;
+             double contentW = vm.DisplayWidth + padding.Left + padding.Right + border;
+             double contentH = vm.DisplayHeight + padding.Top + padding.Bottom + border;
              
-             // Add Toolbar allowance if visible
-             // Grid 'Auto' row will handle exact rendering, but we need to provide enough Window space
-             // so the '*' row (Image) gets its desired height.
              if (vm.ShowToolbar)
              {
-                 // Use a fixed constant matching the explicit Height="40" + Margin-Top="4" in XAML.
-                 // This ensures the window grows exactly enough for the toolbar, preventing image stretching.
-                 double toolbarHeight = 44; 
-                 
+                 // Use a fixed constant matching the explicit Height="32" + Margin-Top="4" in XAML.
+                 // Total Delta required = Padding(20) + Border(4) + Toolbar(36) = 60px.
+                 double toolbarHeight = 36; 
                  contentH += toolbarHeight;
              }
              
@@ -771,7 +769,11 @@ public partial class FloatingImageWindow : Window
         
         if (change.Property == BoundsProperty)
         {
-             if (_isInternalSizing) return;
+             // CRITICAL FIX: Only update the ViewModel source-of-truth when the USER explicitly resizes.
+             // We ignore layout-driven changes (like Toolbar toggling, OS snapping, or "Correction" passes).
+             // This prevents the "Feedback Loop" where the window reacting to the toolbar accidentally 
+             // updates the Image size, causing shrinking/growing loops.
+             if (!_isResizing) return;
 
              var imageControl = this.FindControl<Image>("PinnedImage");
              if (imageControl != null && DataContext is FloatingImageViewModel vm)
