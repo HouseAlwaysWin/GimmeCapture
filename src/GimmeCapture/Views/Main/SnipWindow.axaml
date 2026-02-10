@@ -284,7 +284,8 @@
                                      IsVisible="{Binding CurrentState, Converter={StaticResource StateToBoolConverter}}"/>
         </Canvas>
         
-        <!-- Processing Overlay - centered on the ACTIVE MONITOR -->
+        <!-- Processing Overlay - Hidden in favor of Toolbar integration -->
+        <!--
         <Canvas IsHitTestVisible="False" ZIndex="999">
              <Grid Width="{Binding ActiveScreenBounds.Width}" 
                    Height="{Binding ActiveScreenBounds.Height}" 
@@ -294,5 +295,6 @@
                  <ctl:ProcessingOverlay DataContext="{Binding}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
              </Grid>
         </Canvas>
+        -->
     </Grid>
 </Window>

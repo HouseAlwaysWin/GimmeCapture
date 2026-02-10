@@ -94,6 +94,20 @@
                 <PathIcon Data="M16,12V4H17V2H7V4H8V12L6,14V16H11.2V22H12.8V16H18V14L16,12Z" Width="14" Height="14"/>
             </Button>
 
+            <!-- 6. Integrated Loading Indicator -->
+            <StackPanel Orientation="Horizontal" IsVisible="{Binding IsProcessing}" VerticalAlignment="Center" Margin="4,0">
+                <Rectangle Fill="#444444" Width="1" Height="16" Margin="0,0,4,0"/>
+                <StackPanel Spacing="2">
+                    <TextBlock Text="{Binding ProcessingText}" Foreground="White" FontSize="10" HorizontalAlignment="Center"/>
+                    <ProgressBar IsIndeterminate="{Binding IsIndeterminate}"
+                                 Value="{Binding ProgressValue}"
+                                 Minimum="0" Maximum="100"
+                                 Height="2" MinWidth="60"
+                                 Foreground="{Binding ThemeColor, Converter={StaticResource ColorToBrushConverter}}"
+                                 Background="#333333"/>
+                </StackPanel>
+            </StackPanel>
+
         </WrapPanel>
     </Border>
 </UserControl>
