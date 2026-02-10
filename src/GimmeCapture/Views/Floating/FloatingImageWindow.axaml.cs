@@ -17,6 +17,8 @@ namespace GimmeCapture.Views.Floating;
 
 public partial class FloatingImageWindow : Window
 {
+    private bool _isInternalSizing = false;
+
     public FloatingImageWindow()
     {
         InitializeComponent();
@@ -70,12 +72,21 @@ public partial class FloatingImageWindow : Window
                     ev.PropertyName == nameof(FloatingImageViewModel.WindowPadding) ||
                     ev.PropertyName == nameof(FloatingImageViewModel.ShowToolbar))
                 {
-                    if (ev.PropertyName == nameof(FloatingImageViewModel.ShowToolbar))
+                    bool isToolbarToggle = ev.PropertyName == nameof(FloatingImageViewModel.ShowToolbar);
+                    
+                    if (isToolbarToggle)
                     {
-                        SizeToContent = SizeToContent.WidthAndHeight;
+                        _isInternalSizing = true;
+                        SizeToContent = SizeToContent.Manual;
                     }
                     
                     SyncWindowSizeToImage();
+
+                    if (isToolbarToggle)
+                    {
+                        // Reset after layout has likely settled
+                        Avalonia.Threading.Dispatcher.UIThread.Post(() => _isInternalSizing = false, Avalonia.Threading.DispatcherPriority.Loaded);
+                    }
                 }
             };
 
@@ -176,7 +187,11 @@ public partial class FloatingImageWindow : Window
              // so the '*' row (Image) gets its desired height.
              if (vm.ShowToolbar)
              {
-                 contentH += 42; // Estimated Toolbar Height (Standard)
+                 // Use a fixed constant matching the explicit Height="40" + Margin-Top="4" in XAML.
+                 // This ensures the window grows exactly enough for the toolbar, preventing image stretching.
+                 double toolbarHeight = 44; 
+                 
+                 contentH += toolbarHeight;
              }
              
              Width = contentW;
@@ -756,6 +771,8 @@ public partial class FloatingImageWindow : Window
         
         if (change.Property == BoundsProperty)
         {
+             if (_isInternalSizing) return;
+
              var imageControl = this.FindControl<Image>("PinnedImage");
              if (imageControl != null && DataContext is FloatingImageViewModel vm)
              {

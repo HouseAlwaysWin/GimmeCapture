@@ -271,11 +271,12 @@
         </Border>
 
         <!-- Bottom Toolbar (Grown OUTSIDE the main border) -->
-        <Border Grid.Row="2" IsVisible="{Binding ShowToolbar}" 
-                            Background="#1A1A1A" BorderBrush="#333333" BorderThickness="1" 
-                            CornerRadius="4" Padding="2" Margin="0,4,0,0"
-                            HorizontalAlignment="Center" VerticalAlignment="Top"
-                            BoxShadow="0 2 8 0 #A0000000">
+        <Border Grid.Row="2" x:Name="ToolbarBorder" IsVisible="{Binding ShowToolbar}" 
+                Background="#1A1A1A" BorderBrush="#333333" BorderThickness="1" 
+                CornerRadius="4" Padding="2" Margin="0,4,0,0"
+                Height="40"
+                HorizontalAlignment="Center" VerticalAlignment="Top"
+                BoxShadow="0 2 8 0 #A0000000">
                         <StackPanel Orientation="Horizontal" Spacing="2">
                             <!-- 1. Drawing Tools -->
                             <StackPanel Orientation="Horizontal" Spacing="2" IsVisible="{Binding IsPointRemovalMode, Converter={StaticResource BoolInvertConverter}}">

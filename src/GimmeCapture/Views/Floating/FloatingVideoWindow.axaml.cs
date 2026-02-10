@@ -16,6 +16,8 @@ namespace GimmeCapture.Views.Floating;
 
 public partial class FloatingVideoWindow : Window
 {
+    private bool _isInternalSizing = false;
+
     public FloatingVideoWindow()
     {
         InitializeComponent();
@@ -99,12 +101,18 @@ public partial class FloatingVideoWindow : Window
                 if (ev.PropertyName == nameof(FloatingVideoViewModel.ShowToolbar) || 
                     ev.PropertyName == nameof(FloatingVideoViewModel.WindowPadding))
                 {
-                    if (ev.PropertyName == nameof(FloatingVideoViewModel.ShowToolbar))
+                    bool isToolbarToggle = ev.PropertyName == nameof(FloatingVideoViewModel.ShowToolbar);
+                    
+                    if (isToolbarToggle)
                     {
+                        _isInternalSizing = true;
                         SizeToContent = SizeToContent.Manual;
                         var padding = vm.WindowPadding;
                         double toolbarHeight = vm.ShowToolbar ? 60 : 0;
                         Height = vm.DisplayHeight + padding.Top + padding.Bottom + toolbarHeight;
+
+                        // Reset after layout has likely settled
+                        Avalonia.Threading.Dispatcher.UIThread.Post(() => _isInternalSizing = false, Avalonia.Threading.DispatcherPriority.Loaded);
                     }
                     InvalidateMeasure();
                 }
@@ -596,6 +604,8 @@ public partial class FloatingVideoWindow : Window
         
         if (change.Property == BoundsProperty)
         {
+             if (_isInternalSizing) return;
+
              var imageControl = this.FindControl<Image>("PinnedVideo");
              if (imageControl != null && DataContext is FloatingVideoViewModel vm)
              {

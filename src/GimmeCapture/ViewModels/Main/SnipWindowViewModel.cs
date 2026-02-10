@@ -292,6 +292,17 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingToolViewM
         {
             Avalonia.Threading.Dispatcher.UIThread.Post(async () => await Pin());
         }
+        else if (AutoActionMode == 3) // Record
+        {
+             // Switch to Record mode if not already
+             if (!IsRecordingMode) IsRecordingMode = true;
+             
+             // Check requirements before starting
+             if (_recordingService != null && _recordingService.Downloader.IsFFmpegAvailable())
+             {
+                 Avalonia.Threading.Dispatcher.UIThread.Post(async () => await StartRecording());
+             }
+        }
     }
 
     private Size _viewportSize;
@@ -983,7 +994,24 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingToolViewM
         CopyRecordingCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
 
         HandleF1Command = ReactiveCommand.Create(() => { if (RecState == RecordingState.Idle) IsRecordingMode = false; });
-        HandleF2Command = ReactiveCommand.Create(() => { if (RecState == RecordingState.Idle) IsRecordingMode = true; });
+        HandleF2Command = ReactiveCommand.Create(() => 
+        { 
+            if (RecState == RecordingState.Idle) 
+            {
+                if (!IsRecordingMode)
+                {
+                    IsRecordingMode = true;
+                }
+                else
+                {
+                    // Already in Record Mode -> Check if we can start recording
+                    if (CurrentState == SnipState.Selected)
+                    {
+                        StartRecordingCommand.Execute(Unit.Default).Subscribe();
+                    }
+                }
+            }
+        });
 
         // Action key (F3) logic
         PinCommand = ReactiveCommand.CreateFromTask(async () => 
@@ -991,8 +1019,18 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingToolViewM
             if (!IsRecordingMode) await Pin(false);
             else 
             {
-                if (RecState == RecordingState.Idle) await StartRecording();
-                else await PinRecording(); // Handles Stop and Pin
+                if (RecState == RecordingState.Idle)
+                {
+                     // If we have a selection, start recording
+                     if (CurrentState == SnipState.Selected)
+                     {
+                         await StartRecording();
+                     }
+                }
+                else 
+                {
+                    await PinRecording(); // Handles Stop and Pin
+                }
             }
         });
         
