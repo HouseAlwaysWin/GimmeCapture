@@ -216,8 +216,8 @@ public partial class SnipWindow : Window
                 }
             }
             
-            if (_viewModel.CurrentState == SnipState.Idle || 
-                _viewModel.CurrentState == SnipState.Detecting)
+            if (_viewModel.RecState == RecordingState.Idle && 
+                (_viewModel.CurrentState == SnipState.Idle || _viewModel.CurrentState == SnipState.Detecting))
             {
                 _startPoint = point;
                 _viewModel.CurrentState = SnipState.Selecting;
@@ -225,7 +225,7 @@ public partial class SnipWindow : Window
                 _viewModel.IsDrawingMode = false;
                 _viewModel.ClearAnnotationsCommand.Execute().Subscribe();
             }
-            else if (_viewModel.CurrentState == SnipState.Selected)
+            else if (_viewModel.RecState == RecordingState.Idle && _viewModel.CurrentState == SnipState.Selected)
             {
                 var expandedBounds = _viewModel.SelectionRect.Inflate(120);
                 if (expandedBounds.Contains(point) && !_viewModel.SelectionRect.Contains(point))
