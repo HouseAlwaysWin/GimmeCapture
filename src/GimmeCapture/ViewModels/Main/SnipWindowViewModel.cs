@@ -565,7 +565,7 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingToolViewM
     public bool IsAIDownloading => _mainVm?.AIResourceService.IsDownloading ?? false;
     public double AIResourceProgress => _mainVm?.AIResourceService.DownloadProgress ?? 0;
 
-    public bool IsShapeToolActive => CurrentAnnotationTool == AnnotationType.Rectangle || CurrentAnnotationTool == AnnotationType.Ellipse || CurrentAnnotationTool == AnnotationType.Arrow || CurrentAnnotationTool == AnnotationType.Line;
+    public bool IsShapeToolActive => CurrentAnnotationTool == AnnotationType.Rectangle || CurrentAnnotationTool == AnnotationType.Ellipse || CurrentAnnotationTool == AnnotationType.Arrow || CurrentAnnotationTool == AnnotationType.Line || CurrentAnnotationTool == AnnotationType.Mosaic || CurrentAnnotationTool == AnnotationType.Blur;
     public bool IsPenToolActive => CurrentAnnotationTool == AnnotationType.Pen;
     public bool IsTextToolActive => CurrentAnnotationTool == AnnotationType.Text;
 

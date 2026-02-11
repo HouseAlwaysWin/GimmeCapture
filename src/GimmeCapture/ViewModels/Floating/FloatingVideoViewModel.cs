@@ -313,7 +313,7 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable, IDrawingToolVi
 
     public ObservableCollection<Annotation> Annotations { get; } = new();
 
-    public bool IsShapeToolActive => CurrentAnnotationTool == AnnotationType.Rectangle || CurrentAnnotationTool == AnnotationType.Ellipse || CurrentAnnotationTool == AnnotationType.Arrow || CurrentAnnotationTool == AnnotationType.Line;
+    public bool IsShapeToolActive => CurrentAnnotationTool == AnnotationType.Rectangle || CurrentAnnotationTool == AnnotationType.Ellipse || CurrentAnnotationTool == AnnotationType.Arrow || CurrentAnnotationTool == AnnotationType.Line || CurrentAnnotationTool == AnnotationType.Mosaic || CurrentAnnotationTool == AnnotationType.Blur;
     public bool IsPenToolActive => CurrentAnnotationTool == AnnotationType.Pen;
     public bool IsTextToolActive => CurrentAnnotationTool == AnnotationType.Text;
 

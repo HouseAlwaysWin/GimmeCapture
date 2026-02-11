@@ -11,6 +11,7 @@ using System.IO;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using System.Reactive.Linq;
+using Avalonia.Media.Imaging;
 
 namespace GimmeCapture.Views.Floating;
 
@@ -314,6 +315,20 @@ public partial class FloatingVideoWindow : Window
             // Start Drawing Shape/Pen
             _isDrawing = true;
             _startPoint = pointerPosOnImage;
+            // Capture current frame for Mosaic/Blur background
+            Bitmap? frameSnapshot = null;
+            if (vm.VideoBitmap is { } videoBitmap)
+            {
+                using var locked = videoBitmap.Lock();
+                // To be safe, we should clone it.
+                var clone = new WriteableBitmap(videoBitmap.PixelSize, videoBitmap.Dpi, videoBitmap.Format, videoBitmap.AlphaFormat);
+                using (var destLock = clone.Lock())
+                {
+                    unsafe { Buffer.MemoryCopy((void*)locked.Address, (void*)destLock.Address, (long)destLock.RowBytes * clone.PixelSize.Height, (long)locked.RowBytes * videoBitmap.PixelSize.Height); }
+                }
+                frameSnapshot = clone;
+            }
+
             _currentAnnotation = new Annotation
             {
                 Type = vm.CurrentAnnotationTool,
@@ -323,7 +338,8 @@ public partial class FloatingVideoWindow : Window
                 Thickness = vm.CurrentThickness,
                 FontSize = vm.CurrentFontSize,
                 IsBold = vm.IsBold,
-                IsItalic = vm.IsItalic
+                IsItalic = vm.IsItalic,
+                DrawingModeSnapshot = frameSnapshot
             };
 
             System.Diagnostics.Debug.WriteLine($"[Video Drawing Debug] Starting drawing: {_currentAnnotation.Type} at {_startPoint}");

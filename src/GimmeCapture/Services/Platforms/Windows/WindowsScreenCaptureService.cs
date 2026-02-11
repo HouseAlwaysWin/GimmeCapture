@@ -361,7 +361,7 @@ public class WindowsScreenCaptureService : IScreenCaptureService
                             // We use a high blur sigma for strong effect
                             using var blurPaint = new SKPaint
                             {
-                                ImageFilter = SKImageFilter.CreateBlur(15, 15)
+                                ImageFilter = SKImageFilter.CreateBlur(20, 20)
                             };
                             
                             // Draw the region from the bitmap into the canvas via a layer or temp image

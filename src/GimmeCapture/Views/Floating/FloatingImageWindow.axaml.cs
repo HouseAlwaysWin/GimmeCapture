@@ -367,7 +367,8 @@ public partial class FloatingImageWindow : Window
                 Thickness = vm.CurrentThickness,
                 FontSize = vm.CurrentFontSize,
                 IsBold = vm.IsBold,
-                IsItalic = vm.IsItalic
+                IsItalic = vm.IsItalic,
+                DrawingModeSnapshot = vm.Image
             };
 
             System.Diagnostics.Debug.WriteLine($"[Drawing Debug] Starting drawing: {_currentAnnotation.Type} at {_startPoint}");

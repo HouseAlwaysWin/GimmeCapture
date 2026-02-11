@@ -139,3 +139,35 @@ public class PenGeometryConverter : IValueConverter
 
     public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => throw new NotImplementedException();
 }
+
+public class PointsToRectConverter : IMultiValueConverter
+{
+    public object? Convert(IList<object?> values, Type targetType, object? parameter, CultureInfo culture)
+    {
+        if (values.Count >= 2 && values[0] is Point p1 && values[1] is Point p2)
+        {
+            return new Rect(
+                Math.Min(p1.X, p2.X),
+                Math.Min(p1.Y, p2.Y),
+                Math.Abs(p1.X - p2.X),
+                Math.Abs(p1.Y - p2.Y)
+            );
+        }
+        return new Rect(0, 0, 0, 0);
+    }
+
+    public object?[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture) => throw new NotImplementedException();
+}
+public class PointsToInverseTranslateConverter : IMultiValueConverter
+{
+    public object? Convert(IList<object?> values, Type targetType, object? parameter, CultureInfo culture)
+    {
+        if (values.Count >= 2 && values[0] is Point p1 && values[1] is Point p2)
+        {
+            return new TranslateTransform(-Math.Min(p1.X, p2.X), -Math.Min(p1.Y, p2.Y));
+        }
+        return new TranslateTransform(0, 0);
+    }
+
+    public object?[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture) => throw new NotImplementedException();
+}

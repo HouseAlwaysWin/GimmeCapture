@@ -41,6 +41,8 @@
             <cv:BoolToFontWeightConverter x:Key="BoolToFontWeightConverter"/>
             <cv:BoolToFontStyleConverter x:Key="BoolToFontStyleConverter"/>
             <cv:SnapshotOffsetConverter x:Key="SnapshotOffsetConverter"/>
+            <cv:PointsToRectConverter x:Key="PointsToRectConverter"/>
+            <cv:PointsToInverseTranslateConverter x:Key="PointsToInverseTranslateConverter"/>
         </ResourceDictionary>
     </Application.Resources>
 
