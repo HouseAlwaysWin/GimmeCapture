@@ -192,9 +192,9 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable, IDrawingToolVi
             double vPad = 25;
             
             // RESERVE space for floating toolbar if visible
-            // Toolbar Height(32) + Bottom Margin(10) = 42px
+            // Two rows: Toolbar Height(32*2) + Spacing(4) + Bottom Margin(10) = 78px
             double bottomPad = vPad;
-            if (ShowToolbar) bottomPad += 42;
+            if (ShowToolbar) bottomPad += 78;
             
             return new Avalonia.Thickness(hPad, vPad, hPad, bottomPad);
         }
@@ -235,6 +235,32 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable, IDrawingToolVi
         get => _displayHeight;
         set => this.RaiseAndSetIfChanged(ref _displayHeight, value);
     }
+
+    private TimeSpan _totalDuration = TimeSpan.Zero;
+    public TimeSpan TotalDuration
+    {
+        get => _totalDuration;
+        set 
+        {
+            this.RaiseAndSetIfChanged(ref _totalDuration, value);
+            this.RaisePropertyChanged(nameof(FormattedTime));
+        }
+    }
+
+    private TimeSpan _currentTime = TimeSpan.Zero;
+    public TimeSpan CurrentTime
+    {
+        get => _currentTime;
+        set 
+        {
+            this.RaiseAndSetIfChanged(ref _currentTime, value);
+            this.RaisePropertyChanged(nameof(FormattedTime));
+        }
+    }
+
+    public string FormattedTime => $"{_currentTime:mm\\:ss} / {_totalDuration:mm\\:ss}";
+
+    private double _seekTargetSeconds = -1;
 
     private bool _isEnteringText;
     public bool IsEnteringText
@@ -388,6 +414,7 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable, IDrawingToolVi
     
     public ReactiveCommand<Unit, Unit> UndoCommand { get; }
     public ReactiveCommand<Unit, Unit> RedoCommand { get; }
+    public ReactiveCommand<Unit, Unit> FastForwardCommand { get; }
     public ReactiveCommand<Unit, Unit> ConfirmTextEntryCommand { get; }
     public ReactiveCommand<Unit, Unit> CancelTextEntryCommand { get; }
 
@@ -464,6 +491,21 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable, IDrawingToolVi
             if (_isPlaybackActive) StartPlayback();
             else _playCts?.Cancel();
             this.RaisePropertyChanged(nameof(IsPlaying));
+        });
+
+        FastForwardCommand = ReactiveCommand.Create(() => 
+        {
+            var target = _currentTime.TotalSeconds + 5;
+            if (target >= _totalDuration.TotalSeconds) target = 0;
+            _seekTargetSeconds = target;
+            
+            // Restart if paused to reflect seek immediately
+            if (!_isPlaybackActive)
+            {
+                _isPlaybackActive = true;
+                this.RaisePropertyChanged(nameof(IsPlaying));
+            }
+            StartPlayback();
         });
 
         SelectToolCommand = ReactiveCommand.Create<AnnotationType>(tool => 
@@ -545,6 +587,29 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable, IDrawingToolVi
             AlphaFormat.Premul);
 
         StartPlayback();
+        _ = DetectDurationAsync();
+    }
+
+    private async Task DetectDurationAsync()
+    {
+        try
+        {
+            var ffprobePath = _ffmpegPath.Replace("ffmpeg.exe", "ffprobe.exe");
+            if (!File.Exists(ffprobePath)) ffprobePath = "ffprobe.exe";
+
+            var result = await Cli.Wrap(ffprobePath)
+                .WithArguments($"-v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 \"{VideoPath}\"")
+                .ExecuteBufferedAsync();
+
+            if (double.TryParse(result.StandardOutput.Trim(), out double seconds))
+            {
+                TotalDuration = TimeSpan.FromSeconds(seconds);
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"DetectDuration Error: {ex.Message}");
+        }
     }
 
     private void StartPlayback()
@@ -560,12 +625,33 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable, IDrawingToolVi
         {
             try
             {
+                var seekArg = "";
+                if (_seekTargetSeconds >= 0)
+                {
+                    seekArg = $"-ss {_seekTargetSeconds} ";
+                    _currentTime = TimeSpan.FromSeconds(_seekTargetSeconds);
+                    _seekTargetSeconds = -1;
+                }
+                else
+                {
+                    _currentTime = TimeSpan.Zero;
+                }
+
                 using var pipe = new MemoryStream();
                 var frameSize = _width * _height * 4;
-                var buffer = new byte[frameSize];
+                
+                // Track frame rate to update CurrentTime
+                // double fps = 30; // Default fallback (unused)
+                try
+                {
+                     var info = await Cli.Wrap(_ffmpegPath)
+                        .WithArguments($"-i \"{VideoPath}\"")
+                        .ExecuteBufferedAsync();
+                     // Actually detecting FPS is complex from stderr, let's assume 30 or track via frames
+                } catch {}
 
                 var cmd = Cli.Wrap(_ffmpegPath)
-                    .WithArguments($"-re -i \"{VideoPath}\" -f image2pipe -vcodec rawvideo -pix_fmt bgra -s {_width}x{_height} -sws_flags lanczos -loglevel quiet -")
+                    .WithArguments($"{seekArg}-re -i \"{VideoPath}\" -f image2pipe -vcodec rawvideo -pix_fmt bgra -s {_width}x{_height} -sws_flags lanczos -loglevel quiet -")
                     .WithStandardOutputPipe(PipeTarget.ToStream(new FrameStreamWriter(this, frameSize)));
 
                 await cmd.ExecuteAsync(ct);
@@ -614,6 +700,10 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable, IDrawingToolVi
                 {
                     _vm.UpdateBitmap(_buffer);
                     _totalRead = 0;
+                    
+                    // Increment current time (rough estimation based on 30fps if not specified)
+                    // Better: use progress from ffmpeg or calculate based on frames
+                    _vm.CurrentTime += TimeSpan.FromSeconds(1.0 / 30.0);
                 }
             }
         }
