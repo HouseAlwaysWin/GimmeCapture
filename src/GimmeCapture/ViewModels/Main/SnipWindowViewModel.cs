@@ -370,12 +370,9 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingToolViewM
 
     private void UpdateToolbarPosition()
     {
-        // Use ViewportSize if available
+        // Default viewport fallback
         double vh = ViewportSize.Height > 0 ? ViewportSize.Height : 1080;
         double vw = ViewportSize.Width > 0 ? ViewportSize.Width : 1920;
-
-        // Ensure we notified View about MaxWidth change if ViewportSize changed
-        this.RaisePropertyChanged(nameof(ToolbarMaxWidth));
 
         // Use live measured bounds. Add buffer for shadow/border.
         double tw = ToolbarWidth > 0 ? (ToolbarWidth + 20) : 600;
@@ -385,25 +382,47 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingToolViewM
         double top = SelectionRect.Bottom + 4; 
         double left = SelectionRect.Left;
 
-        // If bottom overflows, position above selection
-        if (top + th > vh - 10)
+        // Multi-monitor clamping: Find which monitor the selection is mostly on
+        var targetMonitor = AllScreenBounds?.FirstOrDefault(s => 
+            new Rect(s.X, s.Y, s.W, s.H).Intersects(SelectionRect)) 
+            ?? new ScreenBoundsViewModel { X = 0, Y = 0, W = vw, H = vh };
+
+        double monitorLeft = targetMonitor.X;
+        double monitorTop = targetMonitor.Y;
+        double monitorRight = targetMonitor.X + targetMonitor.W;
+        double monitorBottom = targetMonitor.Y + targetMonitor.H;
+
+        // If bottom overflows monitor, position above selection
+        if (top + th > monitorBottom - 10)
         {
             top = SelectionRect.Top - th - 4;
         }
 
-        // Final safety clamps to keep toolbar within viewport
-        if (top < 10) top = 10;
-        if (top + th > vh - 10) top = vh - th - 10;
-
-        // Clamping horizontal to keep it on screen
-        if (left + tw > vw - 20)
+        // Horizontal Clamping to monitor bounds
+        if (left + tw > monitorRight - 20)
         {
-            left = vw - tw - 20;
+            left = monitorRight - tw - 20;
         }
-        if (left < 20) left = 20;
+        if (left < monitorLeft + 20)
+        {
+            left = monitorLeft + 20;
+        }
+
+        // Vertical Clamping to monitor bounds
+        if (top < monitorTop + 10)
+        {
+            top = monitorTop + 10;
+        }
+        if (top + th > monitorBottom - 10)
+        {
+            top = monitorBottom - th - 10;
+        }
 
         ToolbarTop = top;
         ToolbarLeft = left;
+        
+        // Ensure MaxWidth allows full toolbar on smaller monitors
+        this.RaisePropertyChanged(nameof(ToolbarMaxWidth));
     }
 
     private void UpdateMask()
@@ -1695,7 +1714,7 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingToolViewM
         var token = _scanCts.Token;
 
         IsProcessing = true;
-        ProcessingText = "AI Scanning...";
+        ProcessingText = LocalizationService.Instance["StatusAIScanning"] ?? "AI Scanning...";
         await Task.Delay(50, token); // Ensure UI renders the loading bar
         Console.WriteLine("[AI Scan] Starting...");
         

@@ -37,6 +37,24 @@ public partial class FloatingImageWindow : Window
         // Use Tunneling for ContextRequested to catch it before the RootGrid opens the menu
         AddHandler(ContextRequestedEvent, OnContextRequested, RoutingStrategies.Tunnel);
         KeyDown += OnKeyDown;
+
+        // Sync Position to ViewModel for edge detection
+        PositionChanged += (s, e) => {
+            if (DataContext is FloatingImageViewModel vm) vm.ScreenPosition = Position;
+        };
+
+        // Sync Toolbar measured size to ViewModel
+        var toolbar = this.FindControl<Border>("ToolbarBorder");
+        if (toolbar != null)
+        {
+            toolbar.GetObservable(Visual.BoundsProperty).Subscribe(bounds => {
+                if (DataContext is FloatingImageViewModel vm)
+                {
+                    vm.ToolbarWidth = bounds.Width;
+                    vm.ToolbarHeight = bounds.Height;
+                }
+            });
+        }
     }
 
     protected override void OnDataContextChanged(EventArgs e)
@@ -157,17 +175,10 @@ public partial class FloatingImageWindow : Window
                 vm.DiagnosticText = $"Tap: Tool={vm.CurrentTool}, AnnotTool={vm.CurrentAnnotationTool}, AI={vm.IsInteractiveSelectionMode}";
             }
 
-            if (vm.ShowToolbar) return; // Don't toggle off via tap (as per user request: "打開後不關閉")
+            if (vm.ShowToolbar) return; 
             
-            if (!_isResizing && !_isSelecting && !_isMaybeMoving && !_isAIPointing && !_isDrawing &&
-                vm.CurrentTool == FloatingTool.None && vm.CurrentAnnotationTool == AnnotationType.None && !vm.IsInteractiveSelectionMode)
-            {
-                vm.ShowToolbar = true;
-            }
-            else
-            {
-                e.Handled = true;
-            }
+            // Relaxed: Always allow showing toolbar if not already visible
+            vm.ShowToolbar = true;
         }
     }
 

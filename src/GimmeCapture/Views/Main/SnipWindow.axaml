@@ -336,6 +336,9 @@
             <ItemsControl.ItemTemplate>
                 <DataTemplate>
                     <ctl:TopLoadingBar Width="{Binding W}" Height="6" 
+                                     Canvas.Left="{Binding X}"
+                                     Canvas.Top="{Binding Y}"
+                                     VerticalAlignment="Top"
                                      DataContext="{Binding $parent[Window].DataContext}"/>
                 </DataTemplate>
             </ItemsControl.ItemTemplate>

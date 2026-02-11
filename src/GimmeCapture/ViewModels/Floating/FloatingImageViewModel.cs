@@ -146,6 +146,101 @@ public class FloatingImageViewModel : ViewModelBase, IDisposable, IDrawingToolVi
     public string ConfirmRemovalTooltip => $"{LocalizationService.Instance["TipConfirmRemoval"]} (Enter)";
     public string CancelRemovalTooltip => $"{LocalizationService.Instance["Cancel"]} (Esc)";
 
+    private double _toolbarTop;
+    public double ToolbarTop
+    {
+        get => _toolbarTop;
+        set => this.RaiseAndSetIfChanged(ref _toolbarTop, value);
+    }
+
+    private double _toolbarLeft;
+    public double ToolbarLeft
+    {
+        get => _toolbarLeft;
+        set => this.RaiseAndSetIfChanged(ref _toolbarLeft, value);
+    }
+
+    private double _toolbarWidth;
+    public double ToolbarWidth
+    {
+        get => _toolbarWidth;
+        set 
+        {
+            this.RaiseAndSetIfChanged(ref _toolbarWidth, value);
+            UpdateToolbarPosition();
+        }
+    }
+
+    private double _toolbarHeight;
+    public double ToolbarHeight
+    {
+        get => _toolbarHeight;
+        set 
+        {
+            this.RaiseAndSetIfChanged(ref _toolbarHeight, value);
+            UpdateToolbarPosition();
+        }
+    }
+
+    private void UpdateToolbarPosition()
+    {
+        if (!ShowToolbar || ToolbarWidth <= 0 || ToolbarHeight <= 0) return;
+
+        // Toolbar is relative to the window content
+        // Default: Bottom, Centered
+        double paddingLeft = WindowPadding.Left;
+        double paddingTop = WindowPadding.Top;
+        double paddingBottom = WindowPadding.Bottom;
+        
+        double left = (DisplayWidth + paddingLeft + WindowPadding.Right - ToolbarWidth) / 2;
+        
+        // POSITTION INSIDE THE PADDING AREA
+        // Window is size = DisplayHeight + TopPadding + BottomPadding
+        // We want it a few pixels above the bottom edge.
+        // paddingBottom is usually 45 or 45+42.
+        double top = DisplayHeight + paddingTop + 5; 
+
+        // Verify with screen bounds to see if we should flip
+        // We need the window's screen position. This is usually provided by the View to the ViewModel.
+        if (ScreenPosition.HasValue)
+        {
+            var desktop = Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime;
+            var window = desktop?.Windows.FirstOrDefault(w => w.DataContext == this);
+            if (window != null && window.Screens != null)
+            {
+                var screen = window.Screens.ScreenFromVisual(window) ?? window.Screens.Primary;
+                if (screen != null)
+                {
+                    // Calculate toolbar's absolute bottom
+                    // window.Position is in Physical pixels.
+                    double scaling = screen.Scaling;
+                    double absTop = window.Position.Y + (top * scaling);
+                    double absBottom = absTop + (ToolbarHeight * scaling);
+
+                    // If it goes beyond screen work area bottom, flip to top
+                    if (absBottom > screen.WorkingArea.Bottom - (10 * scaling))
+                    {
+                        top = -ToolbarHeight - 5;
+                    }
+                }
+            }
+        }
+
+        ToolbarLeft = left;
+        ToolbarTop = top;
+    }
+
+    private Avalonia.PixelPoint? _screenPosition;
+    public Avalonia.PixelPoint? ScreenPosition
+    {
+        get => _screenPosition;
+        set 
+        {
+            this.RaiseAndSetIfChanged(ref _screenPosition, value);
+            UpdateToolbarPosition();
+        }
+    }
+
     private bool _isProcessing;
     public bool IsProcessing
     {
