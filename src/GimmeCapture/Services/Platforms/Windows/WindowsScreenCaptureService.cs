@@ -210,6 +210,9 @@ public class WindowsScreenCaptureService : IScreenCaptureService
         var bitmap = await CaptureScreenAsync(region, screenOffset, visualScaling, includeCursor);
         if (annotations == null || !annotations.Any()) return bitmap;
 
+        // Use the visualScaling to adjust all logical coordinates to physical coordinates
+        float scale = (float)visualScaling;
+
         using (var canvas = new SKCanvas(bitmap))
         {
             foreach (var ann in annotations)
@@ -218,12 +221,12 @@ public class WindowsScreenCaptureService : IScreenCaptureService
                 {
                     Color = new SKColor(ann.Color.R, ann.Color.G, ann.Color.B, ann.Color.A),
                     IsAntialias = true,
-                    StrokeWidth = (float)ann.Thickness,
+                    StrokeWidth = (float)(ann.Thickness * visualScaling),
                     Style = SKPaintStyle.Stroke
                 };
 
-                var p1 = new SKPoint((float)ann.StartPoint.X, (float)ann.StartPoint.Y);
-                var p2 = new SKPoint((float)ann.EndPoint.X, (float)ann.EndPoint.Y);
+                var p1 = new SKPoint((float)(ann.StartPoint.X * visualScaling), (float)(ann.StartPoint.Y * visualScaling));
+                var p2 = new SKPoint((float)(ann.EndPoint.X * visualScaling), (float)(ann.EndPoint.Y * visualScaling));
 
                 switch (ann.Type)
                 {
@@ -245,7 +248,7 @@ public class WindowsScreenCaptureService : IScreenCaptureService
                         canvas.DrawLine(p1, p2, paint);
                         break;
                     case AnnotationType.Arrow:
-                        DrawArrow(canvas, p1, p2, paint);
+                        DrawArrow(canvas, p1, p2, paint, scale);
                         break;
                     case AnnotationType.Text:
                         paint.Style = SKPaintStyle.Fill;
@@ -284,8 +287,8 @@ public class WindowsScreenCaptureService : IScreenCaptureService
 
                         using (typeface)
                         {
-                            // Create SKFont for drawing
-                            using var font = new SKFont(typeface, (float)ann.FontSize);
+                            // Create SKFont for drawing - Apply scale to FontSize
+                            using var font = new SKFont(typeface, (float)(ann.FontSize * visualScaling));
                             
                             // Draw using new API
                             canvas.DrawText(ann.Text ?? string.Empty, p1, SKTextAlign.Left, font, paint);
@@ -296,10 +299,10 @@ public class WindowsScreenCaptureService : IScreenCaptureService
                         {
                             using var path = new SKPath();
                             var first = ann.Points.First();
-                            path.MoveTo((float)first.X, (float)first.Y);
+                            path.MoveTo((float)(first.X * visualScaling), (float)(first.Y * visualScaling));
                             foreach (var p in ann.Points.Skip(1))
                             {
-                                path.LineTo((float)p.X, (float)p.Y);
+                                path.LineTo((float)(p.X * visualScaling), (float)(p.Y * visualScaling));
                             }
                             canvas.DrawPath(path, paint);
                         }
@@ -314,7 +317,7 @@ public class WindowsScreenCaptureService : IScreenCaptureService
                             
                             if (rect.Width <= 0 || rect.Height <= 0) break;
 
-                            int cellSize = 12; // 12px mosaic cells
+                            int cellSize = (int)(12 * visualScaling); // Scale mosaic cells
                             
                             canvas.Save();
                             canvas.ClipRect(rect);
@@ -358,10 +361,11 @@ public class WindowsScreenCaptureService : IScreenCaptureService
                             canvas.ClipRect(rect);
                             
                             // Apply blur by drawing the bitmap onto itself with a blur filter
-                            // We use a high blur sigma for strong effect
+                            // Scale blur sigma for visual consistency
+                            float blurSigma = (float)(20 * visualScaling);
                             using var blurPaint = new SKPaint
                             {
-                                ImageFilter = SKImageFilter.CreateBlur(20, 20)
+                                ImageFilter = SKImageFilter.CreateBlur(blurSigma, blurSigma)
                             };
                             
                             // Draw the region from the bitmap into the canvas via a layer or temp image
@@ -378,12 +382,12 @@ public class WindowsScreenCaptureService : IScreenCaptureService
         return bitmap;
     }
 
-    private void DrawArrow(SKCanvas canvas, SKPoint p1, SKPoint p2, SKPaint paint)
+    private void DrawArrow(SKCanvas canvas, SKPoint p1, SKPoint p2, SKPaint paint, float scale)
     {
         canvas.DrawLine(p1, p2, paint);
         
         var angle = (float)Math.Atan2(p2.Y - p1.Y, p2.X - p1.X);
-        var arrowSize = 15.0f + paint.StrokeWidth;
+        var arrowSize = (15.0f * scale) + paint.StrokeWidth; // Scale arrow head size
         var arrowAngle = (float)Math.PI / 6;
 
         var ap1 = new SKPoint(
