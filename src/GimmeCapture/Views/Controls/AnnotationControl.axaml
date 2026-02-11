@@ -105,10 +105,6 @@
         <Border IsVisible="{Binding Type, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Blur}}"
                 ClipToBounds="True"
                 CornerRadius="2">
-            <Border.Effect>
-                <BlurEffect Radius="20"/>
-            </Border.Effect>
-            <!-- ... bindings omitted for brevity but they are there ... -->
             <Canvas.Left>
                 <MultiBinding Converter="{StaticResource RectXConverter}">
                     <Binding Path="StartPoint"/>
@@ -134,22 +130,22 @@
                 </MultiBinding>
             </Border.Height>
             
-            <Panel>
+            <Panel ClipToBounds="True">
                 <Panel.Effect>
                     <BlurEffect Radius="20"/>
                 </Panel.Effect>
-                <Rectangle HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
-                    <Rectangle.Fill>
-                        <ImageBrush Source="{Binding DrawingModeSnapshot}" Stretch="Fill">
-                            <ImageBrush.SourceRect>
-                                <MultiBinding Converter="{StaticResource PointsToRectConverter}">
-                                    <Binding Path="StartPoint"/>
-                                    <Binding Path="EndPoint"/>
-                                </MultiBinding>
-                            </ImageBrush.SourceRect>
-                        </ImageBrush>
-                    </Rectangle.Fill>
-                </Rectangle>
+                <!-- Render the full snapshot at logical selection size, then translate so annotation region aligns -->
+                <Image Source="{Binding DrawingModeSnapshot}" Stretch="Fill"
+                       Width="{Binding $parent[local:AnnotationControl].Width}"
+                       Height="{Binding $parent[local:AnnotationControl].Height}"
+                       HorizontalAlignment="Left" VerticalAlignment="Top">
+                    <Image.RenderTransform>
+                        <MultiBinding Converter="{StaticResource PointsToInverseTranslateConverter}">
+                            <Binding Path="StartPoint"/>
+                            <Binding Path="EndPoint"/>
+                        </MultiBinding>
+                    </Image.RenderTransform>
+                </Image>
                 <Rectangle Fill="Black" Opacity="0.05"/>
                 <Rectangle Fill="Transparent" Stroke="White" StrokeThickness="1" StrokeDashArray="2,2"/>
             </Panel>
@@ -195,8 +191,8 @@
                      </Panel.RenderTransform>
                      
                      <Image Source="{Binding DrawingModeSnapshot}" Stretch="Fill"
-                            Width="{Binding $parent[UserControl].Bounds.Width}"
-                            Height="{Binding $parent[UserControl].Bounds.Height}"
+                            Width="{Binding $parent[local:AnnotationControl].Width}"
+                            Height="{Binding $parent[local:AnnotationControl].Height}"
                             HorizontalAlignment="Left" VerticalAlignment="Top">
                          <Image.RenderTransform>
                              <MultiBinding Converter="{StaticResource PointsToInverseTranslateConverter}">
