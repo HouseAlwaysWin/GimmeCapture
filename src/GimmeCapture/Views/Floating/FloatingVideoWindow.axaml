@@ -241,28 +241,39 @@
 
                 <Rectangle Fill="#333333" Height="1" Margin="2,0" HorizontalAlignment="Stretch"/>
 
-                <!-- Row 2: Playback Controls - flat row, centered as a group -->
-                <StackPanel Orientation="Horizontal" Spacing="4" HorizontalAlignment="Center" Margin="0,2">
-                    <Button Theme="{StaticResource SnipButton}" Width="30" Height="30" Command="{Binding RewindCommand}" ToolTip.Tip="Rewind 5s">
-                        <PathIcon Data="M11,18V6L2.5,12L11,18M18,18V6L9.5,12L18,18Z" Width="12" Height="12"/>
-                    </Button>
-                    <Button Theme="{StaticResource SnipButton}" Width="30" Height="30" Command="{Binding TogglePlaybackCommand}" ToolTip.Tip="{Binding PlaybackTooltip}">
-                        <Panel>
-                            <PathIcon Data="M14,19H18V5H14M6,19H10V5H6V19Z" Width="12" Height="12" IsVisible="{Binding IsPlaying}"/>
-                            <PathIcon Data="M8,5.14V19.14L19,12.14L8,5.14Z" Width="12" Height="12" IsVisible="{Binding !IsPlaying}"/>
-                        </Panel>
-                    </Button>
-                    <Button Theme="{StaticResource SnipButton}" Width="30" Height="30" Command="{Binding FastForwardCommand}" ToolTip.Tip="Fast Forward 5s">
-                        <PathIcon Data="M13,6V18L21.5,12L13,6M6,6V18L14.5,12L6,6Z" Width="12" Height="12"/>
-                    </Button>
+                <!-- Row 2: Playback Controls -->
+                <DockPanel Margin="4,2" Height="32">
+                    <!-- Left: Playback buttons -->
+                    <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+                        <Button Theme="{StaticResource SnipButton}" Width="30" Height="30" Command="{Binding RewindCommand}" ToolTip.Tip="Rewind 5s">
+                            <PathIcon Data="M11,18V6L2.5,12L11,18M18,18V6L9.5,12L18,18Z" Width="12" Height="12"/>
+                        </Button>
+                        <Button Theme="{StaticResource SnipButton}" Width="30" Height="30" Command="{Binding TogglePlaybackCommand}" ToolTip.Tip="{Binding PlaybackTooltip}">
+                            <Panel>
+                                <PathIcon Data="M14,19H18V5H14M6,19H10V5H6V19Z" Width="12" Height="12" IsVisible="{Binding IsPlaying}"/>
+                                <PathIcon Data="M8,5.14V19.14L19,12.14L8,5.14Z" Width="12" Height="12" IsVisible="{Binding !IsPlaying}"/>
+                            </Panel>
+                        </Button>
+                        <Button Theme="{StaticResource SnipButton}" Width="30" Height="30" Command="{Binding FastForwardCommand}" ToolTip.Tip="Fast Forward 5s">
+                            <PathIcon Data="M13,6V18L21.5,12L13,6M6,6V18L14.5,12L6,6Z" Width="12" Height="12"/>
+                        </Button>
+                    </StackPanel>
+                    <!-- Right: Time + Speed -->
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding FormattedTime}" VerticalAlignment="Center" Foreground="#E0E0E0" FontSize="10" FontFamily="Consolas"/>
+                        <Button Theme="{StaticResource SnipToolButton}" Content="{Binding PlaybackSpeedText}" 
+                                Command="{Binding CycleSpeedCommand}" 
+                                Padding="4,2" FontSize="11" Width="40" Height="26" VerticalAlignment="Center"/>
+                    </StackPanel>
+                    <!-- Center: Slider fills remaining space, vertically centered via RenderTransform -->
                     <Slider Minimum="0" Maximum="{Binding TotalDuration.TotalSeconds}" 
                             Value="{Binding CurrentTimeSeconds}" 
-                            Width="120" VerticalAlignment="Center"/>
-                    <TextBlock Text="{Binding FormattedTime}" VerticalAlignment="Center" Foreground="#E0E0E0" FontSize="10" FontFamily="Consolas"/>
-                    <Button Theme="{StaticResource SnipToolButton}" Content="{Binding PlaybackSpeedText}" 
-                            Command="{Binding CycleSpeedCommand}" 
-                            Padding="4,2" FontSize="11" Width="40" Height="26" VerticalAlignment="Center"/>
-                </StackPanel>
+                            VerticalAlignment="Center" Margin="8,0">
+                        <Slider.RenderTransform>
+                            <TranslateTransform Y="-6"/>
+                        </Slider.RenderTransform>
+                    </Slider>
+                </DockPanel>
             </StackPanel>
         </Border>
 
