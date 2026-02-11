@@ -145,6 +145,7 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable, IDrawingToolVi
     public string PlaybackTooltip => $"{GimmeCapture.Services.Core.LocalizationService.Instance["ActionPlayback"]} ({PlaybackHotkey})";
     public string ToggleToolbarTooltip => $"{GimmeCapture.Services.Core.LocalizationService.Instance["ActionToolbar"]} ({_appSettingsService?.Settings.ToggleToolbarHotkey ?? "H"})";
     public string CloseTooltip => $"{GimmeCapture.Services.Core.LocalizationService.Instance["ActionClose"]} ({CloseHotkey})";
+    public string RepeatTooltip => $"{GimmeCapture.Services.Core.LocalizationService.Instance["ActionRepeat"]}";
     public string SelectionTooltip => $"{GimmeCapture.Services.Core.LocalizationService.Instance["TipSelectionArea"]} (S)";
     public string CropTooltip => $"{GimmeCapture.Services.Core.LocalizationService.Instance["TipCrop"]} (C)";
     public string PinSelectionTooltip => $"{GimmeCapture.Services.Core.LocalizationService.Instance["TipPinSelection"]} (F3)";
@@ -479,6 +480,7 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable, IDrawingToolVi
     public ReactiveCommand<Unit, Unit> RedoCommand { get; }
     public ReactiveCommand<Unit, Unit> FastForwardCommand { get; }
     public ReactiveCommand<Unit, Unit> RewindCommand { get; }
+    public ReactiveCommand<Unit, Unit> ToggleLoopCommand { get; }
     public ReactiveCommand<Unit, Unit> CycleSpeedCommand { get; }
     public ReactiveCommand<Unit, Unit> ConfirmTextEntryCommand { get; }
     public ReactiveCommand<Unit, Unit> CancelTextEntryCommand { get; }
@@ -598,6 +600,11 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable, IDrawingToolVi
                 2.0 => 0.5,
                 _ => 1.0
             };
+        });
+
+        ToggleLoopCommand = ReactiveCommand.Create(() => 
+        {
+            IsLooping = !IsLooping;
         });
 
         SelectToolCommand = ReactiveCommand.Create<AnnotationType>(tool => 
@@ -728,7 +735,14 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable, IDrawingToolVi
                     _playCts = null;
                 }
             }
-
+            
+            // If we are at the end, restart from zero
+            if (_currentTime >= TotalDuration)
+            {
+                _currentTime = TimeSpan.Zero;
+                this.RaisePropertyChanged(nameof(CurrentTimeSeconds));
+            }
+            
             _playCts = new CancellationTokenSource();
             _playbackTask = PlaybackLoopFixed(_playCts.Token);
         }
@@ -783,7 +797,16 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable, IDrawingToolVi
 
                 await cmd.ExecuteAsync(ct);
 
-                if (!IsLooping) break;
+                if (!IsLooping) 
+                {
+                    _isPlaybackActive = false;
+                    this.RaisePropertyChanged(nameof(IsPlaying));
+                    break;
+                }
+                
+                // Reset for next loop
+                _currentTime = TimeSpan.Zero;
+                Avalonia.Threading.Dispatcher.UIThread.Post(() => this.RaisePropertyChanged(nameof(CurrentTimeSeconds)));
             }
             catch (OperationCanceledException) { break; }
             catch (Exception ex)

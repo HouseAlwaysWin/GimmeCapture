@@ -170,6 +170,7 @@
   "HotkeyCommonGroup": "常用功能快捷鍵",
   "ActionClose": "關閉視窗",
   "ActionPlayback": "播放/暫停影片",
+  "ActionRepeat": "重複播放",
   "ActionToolbar": "顯示/隱藏工具列",
   "ActionSelectionMode": "選取模式",
   "ActionCropMode": "裁切模式",

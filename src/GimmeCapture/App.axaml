@@ -34,6 +34,7 @@
             <cv:AnnotationToTopConverter x:Key="AnnotationToTopConverter"/>
             <cv:PenGeometryConverter x:Key="PenGeometryConverter"/>
             <cv:BoolToCrossCursorConverter x:Key="BoolToCrossCursorConverter"/>
+            <cv:BoolToOpacityConverter x:Key="BoolToOpacityConverter"/>
             <cv:ThicknessToLeftTopMarginConverter x:Key="ThicknessToLeftTopMarginConverter"/>
             <cv:StatusToColorConverter x:Key="StatusToColorConverter"/>
             <cv:StatusToTextConverter x:Key="StatusToTextConverter"/>

@@ -257,6 +257,10 @@
                         <Button Theme="{StaticResource SnipButton}" Width="30" Height="30" Command="{Binding FastForwardCommand}" ToolTip.Tip="Fast Forward 5s">
                             <PathIcon Data="M13,6V18L21.5,12L13,6M6,6V18L14.5,12L6,6Z" Width="12" Height="12"/>
                         </Button>
+                        <Button Theme="{StaticResource SnipButton}" Width="30" Height="30" Command="{Binding ToggleLoopCommand}" ToolTip.Tip="{Binding RepeatTooltip}">
+                            <PathIcon Data="M17,17H7V14L3,18L7,22V19H19V13H17V17M7,7H17V10L21,6L17,2V5H5V11H7V7Z" Width="12" Height="12" 
+                                      Opacity="{Binding IsLooping, Converter={StaticResource BoolToOpacityConverter}}"/>
+                        </Button>
                     </StackPanel>
                     <!-- Right: Time + Speed -->
                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">

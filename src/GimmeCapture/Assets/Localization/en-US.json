@@ -170,6 +170,7 @@
   "HotkeyCommonGroup": "Common Action Hotkeys",
   "ActionClose": "Close Window",
   "ActionPlayback": "Play/Pause Video",
+  "ActionRepeat": "Repeat Playback",
   "ActionToolbar": "Toggle Toolbar",
   "ActionSelectionMode": "Selection Mode",
   "ActionCropMode": "Crop Mode",
