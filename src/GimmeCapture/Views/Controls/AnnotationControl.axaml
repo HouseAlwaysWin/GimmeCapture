@@ -181,38 +181,9 @@
             </Border.Height>
             
             <Panel ClipToBounds="True">
-                 <!-- Consistent 12px Mosaic: Downscale and Upscale with NO interpolation -->
-                 <Panel RenderOptions.BitmapInterpolationMode="None">
-                     <Panel.RenderTransform>
-                         <TransformGroup>
-                             <ScaleTransform ScaleX="0.0833" ScaleY="0.0833"/>
-                             <ScaleTransform ScaleX="12" ScaleY="12"/>
-                         </TransformGroup>
-                     </Panel.RenderTransform>
-                     
-                     <Image Source="{Binding DrawingModeSnapshot}" Stretch="Fill"
-                            Width="{Binding $parent[local:AnnotationControl].Width}"
-                            Height="{Binding $parent[local:AnnotationControl].Height}"
-                            HorizontalAlignment="Left" VerticalAlignment="Top">
-                         <Image.RenderTransform>
-                             <MultiBinding Converter="{StaticResource PointsToInverseTranslateConverter}">
-                                 <Binding Path="StartPoint"/>
-                                 <Binding Path="EndPoint"/>
-                             </MultiBinding>
-                         </Image.RenderTransform>
-                     </Image>
-                 </Panel>
-                 
-                 <!-- Grid overlay to enhance the mosaic feel -->
-                 <Rectangle Opacity="0.1">
-                     <Rectangle.Fill>
-                         <VisualBrush TileMode="Tile" SourceRect="0,0,12,12" DestinationRect="0,0,12,12">
-                             <VisualBrush.Visual>
-                                 <Border BorderBrush="Black" BorderThickness="0,0,1,1" Width="12" Height="12"/>
-                             </VisualBrush.Visual>
-                         </VisualBrush>
-                     </Rectangle.Fill>
-                 </Rectangle>
+                 <!-- Pre-pixelated bitmap generated in code-behind, matching SkiaSharp output exactly -->
+                 <Image Source="{Binding $parent[local:AnnotationControl].MosaicPreviewBitmap}"
+                        Stretch="Fill" RenderOptions.BitmapInterpolationMode="None"/>
                  <Rectangle Stroke="White" StrokeThickness="1" StrokeDashArray="4,4"/>
              </Panel>
         </Border>
