@@ -287,20 +287,40 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable, IDrawingToolVi
 
     public string PlaybackSpeedText => $"{_playbackSpeed:F1}x";
 
+    private bool _isDraggingSlider;
+    private CancellationTokenSource? _seekDebounceCts;
+
     public double CurrentTimeSeconds
     {
         get => _currentTime.TotalSeconds;
         set
         {
-            if (Math.Abs(_currentTime.TotalSeconds - value) > 0.5)
+            if (Math.Abs(_currentTime.TotalSeconds - value) > 0.01)
             {
-                _seekTargetSeconds = value;
-                if (!_isPlaybackActive)
+                // Mark as user-dragging to suppress playback loop updates
+                _isDraggingSlider = true;
+                _currentTime = TimeSpan.FromSeconds(value);
+                this.RaisePropertyChanged(nameof(FormattedTime));
+                
+                // Debounce the actual seek — only fire after user stops dragging for 300ms
+                _seekDebounceCts?.Cancel();
+                _seekDebounceCts = new CancellationTokenSource();
+                var token = _seekDebounceCts.Token;
+                _ = Task.Delay(300, token).ContinueWith(t =>
                 {
-                    _isPlaybackActive = true;
-                    this.RaisePropertyChanged(nameof(IsPlaying));
-                }
-                StartPlayback();
+                    if (!t.IsCanceled)
+                    {
+                        _isDraggingSlider = false;
+                        _seekTargetSeconds = value;
+                        if (!_isPlaybackActive)
+                        {
+                            _isPlaybackActive = true;
+                            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                                this.RaisePropertyChanged(nameof(IsPlaying)));
+                        }
+                        StartPlayback();
+                    }
+                }, TaskScheduler.Default);
             }
         }
     }
@@ -810,10 +830,15 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable, IDrawingToolVi
                     
                     // Increment time based on output frames (30fps) scaled by speed
                     // Each output frame represents (1/30 * Speed) seconds of the source video
-                    var newTime = _vm.CurrentTime + TimeSpan.FromSeconds((1.0 / 30.0) * _vm.PlaybackSpeed);
-                    if (newTime > _vm.TotalDuration) newTime = _vm.TotalDuration;
-                    _vm.CurrentTime = newTime;
-                    _vm.RaisePropertyChanged(nameof(_vm.CurrentTimeSeconds));
+                    // Skip time update while user is dragging the slider
+                    if (!_vm._isDraggingSlider)
+                    {
+                        var newTime = _vm.CurrentTime + TimeSpan.FromSeconds((1.0 / 30.0) * _vm.PlaybackSpeed);
+                        if (newTime > _vm.TotalDuration) newTime = _vm.TotalDuration;
+                        _vm.CurrentTime = newTime;
+                        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                            _vm.RaisePropertyChanged(nameof(_vm.CurrentTimeSeconds)));
+                    }
                 }
             }
         }
