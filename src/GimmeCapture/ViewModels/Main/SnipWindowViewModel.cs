@@ -1247,6 +1247,11 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingToolViewM
 
     private async Task StartRecording()
     {
+        // Cancel any pending AI scans immediately
+        _scanCts?.Cancel();
+        IsProcessing = false;
+        ProcessingText = string.Empty;
+
         if (_recordingService == null || _mainVm == null) return;
 
         // Check if FFmpeg is available
@@ -1442,12 +1447,12 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingToolViewM
     private async Task PinRecording()
     {
         if (IsProcessing || _recordingService == null) return;
-        
+
         // Capture state BEFORE stopping, because StopAsync sets it to Idle
         bool wasRecording = _recordingService.State == RecordingState.Recording;
 
         IsProcessing = true;
-        ProcessingText = "Finalizing Recording..."; // Optional: Add localization later
+        ProcessingText = LocalizationService.Instance["FinalizingRecording"] ?? "Finalizing..."; // Use correct key
         try
         {
             _recordTimer?.Stop();
@@ -1702,6 +1707,10 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingToolViewM
 
     private async Task RunAIScanAsync()
     {
+        // Don't run AI detection if we are actually recording (RecState is not Idle)
+        // But ALLOW it if we are just in "Recording Mode" (preparing to record)
+        if (RecState != RecordingState.Idle) return;
+
         if (_mainVm == null || !_mainVm.EnableAI) 
         {
             // Console.WriteLine("[AI Scan] ABORT: _mainVm is null OR AI Disabled");

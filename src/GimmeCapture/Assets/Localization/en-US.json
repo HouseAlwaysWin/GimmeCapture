@@ -147,6 +147,7 @@
   "CaptureModeNormal": "Capture Mode: Normal",
   "CaptureModeRecord": "Capture Mode: Record",
   "StatusInitializingAI": "Initializing AI...",
+  "StatusAIScanning": "AI Scanning...",
   "StylePreview": "Style Preview",
   "AIResourcesPath": "AI Resources Path",
   "TempDirectoryWatermark": "Defaults to Temp folder in app directory",
