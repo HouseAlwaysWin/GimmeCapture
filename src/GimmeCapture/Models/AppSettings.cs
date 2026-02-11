@@ -2,6 +2,8 @@ using GimmeCapture.Services.Core;
 
 namespace GimmeCapture.Models;
 
+public enum VideoCodec { H264, H265 }
+
 public class AppSettings
 {
     public Language Language { get; set; } = Language.English;
@@ -34,6 +36,7 @@ public class AppSettings
     public bool ShowRecordCursor { get; set; } = true;
     public string VideoSaveDirectory { get; set; } = string.Empty;
     public string RecordFormat { get; set; } = "gif";
+    public VideoCodec VideoCodec { get; set; } = VideoCodec.H264;
     public int RecordFPS { get; set; } = 30;
     public bool UseFixedRecordPath { get; set; }
     public string TempDirectory { get; set; } = string.Empty;

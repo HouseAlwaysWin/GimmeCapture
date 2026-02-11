@@ -8,6 +8,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Avalonia;
 using ReactiveUI;
+using GimmeCapture.Models;
 
 namespace GimmeCapture.Services.Core;
 
@@ -132,8 +133,10 @@ public class RecordingService : ReactiveObject
 
         // Use MKV with zerolatency for instant pause response
         string drawMouse = _includeCursor ? "1" : "0";
+        // Use selected codec for segment recording
+        string codec = _settingsService?.Settings.VideoCodec == VideoCodec.H265 ? "libx265" : "libx264";
         string args = $"-y -f gdigrab -draw_mouse {drawMouse} -framerate {_fps} -offset_x {x} -offset_y {y} -video_size {w}x{h} -i desktop " +
-                      $"-c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p \"{segmentFile}\"";
+                      $"-c:v {codec} -preset ultrafast -tune zerolatency -pix_fmt yuv420p \"{segmentFile}\"";
 
         var startInfo = new ProcessStartInfo
         {
@@ -385,11 +388,14 @@ public class RecordingService : ReactiveObject
                     _outputFile = outputPath;
                 }
 
+                string codec = _settingsService?.Settings.VideoCodec == VideoCodec.H265 ? "libx265" : "libx264";
+                string crf = _settingsService?.Settings.VideoCodec == VideoCodec.H265 ? "24" : "20"; // H265 is more efficient, can use higher CRF
+
                 string convertArgs = _targetFormat switch
                 {
                     "webm" => $"-y -i \"{mergedMkv}\" -c:v libvpx-vp9 -crf 25 -b:v 0 -c:a libopus \"{_outputFile}\"",
-                    "mov" => $"-y -i \"{mergedMkv}\" -c:v libx264 -preset fast -crf 20 -pix_fmt yuv420p -f mov \"{_outputFile}\"",
-                    _ => $"-y -i \"{mergedMkv}\" -c:v libx264 -preset fast -crf 20 -movflags +faststart \"{_outputFile}\""
+                    "mov" => $"-y -i \"{mergedMkv}\" -c:v {codec} -preset fast -crf {crf} -pix_fmt yuv420p -f mov \"{_outputFile}\"",
+                    _ => $"-y -i \"{mergedMkv}\" -c:v {codec} -preset fast -crf {crf} -movflags +faststart \"{_outputFile}\""
                 };
 
                 var convertInfo = new ProcessStartInfo { FileName = _downloader.FfmpegExecutablePath, Arguments = convertArgs, UseShellExecute = false, CreateNoWindow = true };

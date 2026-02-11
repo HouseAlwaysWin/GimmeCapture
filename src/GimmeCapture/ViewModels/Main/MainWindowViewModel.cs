@@ -684,6 +684,37 @@ public class MainWindowViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _recordFPS, value);
     }
 
+    private VideoCodec _videoCodec = VideoCodec.H264;
+    public VideoCodec VideoCodec
+    {
+        get => _videoCodec;
+        set => this.RaiseAndSetIfChanged(ref _videoCodec, value);
+    }
+
+    public VideoCodec[] AvailableVideoCodecs { get; } = { Models.VideoCodec.H264, Models.VideoCodec.H265 };
+
+    public class VideoCodecOption
+    {
+        public VideoCodec Value { get; set; }
+        public string Name => LocalizationService.Instance[$"VideoCodec{Value}"];
+    }
+
+    public VideoCodecOption[] VideoCodecOptions { get; } = {
+        new VideoCodecOption { Value = VideoCodec.H264 },
+        new VideoCodecOption { Value = VideoCodec.H265 }
+    };
+
+    private VideoCodecOption? _selectedVideoCodecOption;
+    public VideoCodecOption? SelectedVideoCodecOption
+    {
+        get => _selectedVideoCodecOption;
+        set 
+        {
+            this.RaiseAndSetIfChanged(ref _selectedVideoCodecOption, value);
+            if (value != null) VideoCodec = value.Value;
+        }
+    }
+
     private bool _useFixedRecordPath;
     public bool UseFixedRecordPath
     {
@@ -897,6 +928,10 @@ public class MainWindowViewModel : ViewModelBase
         }
 
         VideoSaveDirectory = s.VideoSaveDirectory;
+        RecordFormat = s.RecordFormat;
+        VideoCodec = s.VideoCodec;
+        SelectedVideoCodecOption = VideoCodecOptions.FirstOrDefault(o => o.Value == VideoCodec) ?? VideoCodecOptions[0];
+        RecordFPS = s.RecordFPS;
         if (string.IsNullOrEmpty(VideoSaveDirectory))
         {
             VideoSaveDirectory = Path.Combine(_settingsService.BaseDataDirectory, "Recordings");
@@ -1011,6 +1046,7 @@ public class MainWindowViewModel : ViewModelBase
             s.VideoSaveDirectory = VideoSaveDirectory;
             
             s.RecordFormat = RecordFormat;
+            s.VideoCodec = VideoCodec;
             s.RecordFPS = RecordFPS;
             s.UseFixedRecordPath = UseFixedRecordPath;
             s.HideSnipPinDecoration = HideSnipPinDecoration;
@@ -1101,6 +1137,8 @@ public class MainWindowViewModel : ViewModelBase
         CopyHotkey = defaultSettings.CopyHotkey;
         PinHotkey = defaultSettings.PinHotkey;
         RecordHotkey = defaultSettings.RecordHotkey;
+        RecordFormat = defaultSettings.RecordFormat;
+        VideoCodec = defaultSettings.VideoCodec;
         
         RectangleHotkey = defaultSettings.RectangleHotkey;
         EllipseHotkey = defaultSettings.EllipseHotkey;
