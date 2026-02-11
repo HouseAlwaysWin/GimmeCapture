@@ -261,23 +261,36 @@
             </Border>
         </Border>
 
-        <!-- Bottom Toolbar (Grown OUTSIDE the main border) -->
+        <!-- Bottom Toolbar (Grown OUTSIDE the main border container, inside window padding) -->
         <Border x:Name="ToolbarBorder" IsVisible="{Binding ShowToolbar}" 
+                Margin="{Binding ToolbarMargin}"
                 Background="#1A1A1A" BorderBrush="#333333" BorderThickness="1" 
-                CornerRadius="4" Padding="2" Margin="0,0,0,10"
-                HorizontalAlignment="Center" VerticalAlignment="Bottom"
-                BoxShadow="0 2 8 0 #A0000000"
+                CornerRadius="4" Padding="6,2"
+                HorizontalAlignment="Center" 
+                VerticalAlignment="Bottom"
+                MinWidth="420"
+                BoxShadow="0 4 15 0 #D0000000"
                 ZIndex="20">
+            <Border.Styles>
+                <Style Selector="Border">
+                    <Setter Property="Transitions">
+                        <Transitions>
+                            <ThicknessTransition Property="Margin" Duration="0:0:0.05" Easing="LinearEasing"/>
+                            <DoubleTransition Property="Opacity" Duration="0:0:0.2"/>
+                        </Transitions>
+                    </Setter>
+                </Style>
+            </Border.Styles>
 
-                        <StackPanel Orientation="Horizontal" Spacing="2">
-                            <!-- 1. Drawing Tools -->
-                            <StackPanel Orientation="Horizontal" Spacing="2" IsVisible="{Binding IsPointRemovalMode, Converter={StaticResource BoolInvertConverter}}">
-                                <ctl:DrawingToolbar DataContext="{Binding}"/>
-                            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="2">
+                <!-- 1. Drawing Tools -->
+                <StackPanel Orientation="Horizontal" Spacing="2" IsVisible="{Binding IsPointRemovalMode, Converter={StaticResource BoolInvertConverter}}">
+                    <ctl:DrawingToolbar DataContext="{Binding}"/>
+                </StackPanel>
 
-                            <Rectangle Fill="#444444" Width="1" Height="16" Margin="2,0" VerticalAlignment="Center"/>
+                <Rectangle Fill="#444444" Width="1" Height="16" Margin="2,0" VerticalAlignment="Center"/>
 
-                            <!-- 2. Processing / Interactive Tools -->
+                <!-- 2. Processing / Interactive Tools -->
                             <StackPanel Orientation="Horizontal" Spacing="2" IsVisible="{Binding IsPointRemovalMode, Converter={StaticResource BoolInvertConverter}}">
 
 
@@ -381,9 +394,9 @@
                         </StackPanel>
         </Border>
 
-        <!-- <Border IsVisible="{Binding IsProcessing}" Background="#80000000" ZIndex="100">
+        <Border IsVisible="{Binding IsProcessing}" Background="#80000000" ZIndex="100">
              <ctl:ProcessingOverlay DataContext="{Binding}"/>
-        </Border> -->
+        </Border>
 
 
         <!-- Text Overlay -->

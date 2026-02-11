@@ -102,8 +102,13 @@ public class FloatingImageViewModel : ViewModelBase, IDisposable, IDrawingToolVi
         }
     }
 
+    private Avalonia.Thickness _toolbarMargin = new Avalonia.Thickness(0, 0, 0, 10);
+    public Avalonia.Thickness ToolbarMargin
+    {
+        get => _toolbarMargin;
+        set => this.RaiseAndSetIfChanged(ref _toolbarMargin, value);
+    }
 
-    // Hotkey Proxies
     public string CopyHotkey => _appSettingsService?.Settings.CopyHotkey ?? "Ctrl+C";
     public string PinHotkey => _appSettingsService?.Settings.PinHotkey ?? "F3";
     public string UndoHotkey => _appSettingsService?.Settings.UndoHotkey ?? "Ctrl+Z";
@@ -988,14 +993,17 @@ public class FloatingImageViewModel : ViewModelBase, IDisposable, IDrawingToolVi
             // We use Math.Max(10, WingWidth) to be safe, though WingWidth is usually ~100.
             double hPad = _hidePinDecoration ? 10 : System.Math.Max(10, WingWidth);
             // Increased top padding to accommodate AI diagnostic text (spaced above size display)
-            double vPad = 45;
+            double topPad = 45;
+            
+            // Base bottom padding doesn't need to be as large as top
+            double baseBottomPad = 15;
             
             // RESERVE space for floating toolbar if visible
-            // Toolbar Height(32) + Bottom Margin(10) = 42px
-            double bottomPad = vPad;
-            if (ShowToolbar) bottomPad += 42;
+            // Toolbar Height(~32-35) + Bottom Margin(10) = ~45px
+            double bottomPad = baseBottomPad;
+            if (ShowToolbar) bottomPad += 45;
             
-            return new Avalonia.Thickness(hPad, vPad, hPad, bottomPad);
+            return new Avalonia.Thickness(hPad, topPad, hPad, bottomPad);
         }
     }
 

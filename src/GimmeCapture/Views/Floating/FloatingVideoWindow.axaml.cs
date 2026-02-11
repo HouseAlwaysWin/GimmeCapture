@@ -32,6 +32,8 @@ public partial class FloatingVideoWindow : Window
         AddHandler(TappedEvent, OnTapped, RoutingStrategies.Bubble);
         
         KeyDown += OnKeyDown;
+        
+        PositionChanged += (s, e) => UpdateToolbarClamping();
     }
 
     protected override void OnDataContextChanged(EventArgs e)
@@ -164,7 +166,8 @@ public partial class FloatingVideoWindow : Window
             double contentH = vm.DisplayHeight + padding.Top + padding.Bottom + border;
 
             // Dynamic MinWidth to protect toolbar without breaking tiny snips
-            MinWidth = vm.ShowToolbar ? (380 + padding.Left + padding.Right) : 50;
+            // Toolbar is approx 420-450px wide. We need at least 480 to be safe.
+            MinWidth = vm.ShowToolbar ? (480 + padding.Left + padding.Right) : 50;
             MinHeight = vm.ShowToolbar ? (150 + padding.Top + padding.Bottom) : 50;
 
             Width = System.Math.Max(contentW, MinWidth);
@@ -637,6 +640,52 @@ public partial class FloatingVideoWindow : Window
             "HandleRight" => ResizeDirection.Right,
             _ => ResizeDirection.None
         };
+    }
+
+    private void UpdateToolbarClamping()
+    {
+        if (DataContext is FloatingVideoViewModel vm)
+        {
+            if (!vm.ShowToolbar) return;
+
+            var screen = Screens.ScreenFromWindow(this);
+            if (screen != null)
+            {
+                double scaling = screen.Scaling;
+                
+                // Position.Y is physical pixels. Bounds.Height is logical pixels.
+                // WindowBottom = Physical Top + (Logical Height * Scaling)
+                double windowBottomPhysical = Position.Y + (Bounds.Height * scaling);
+                double screenBottomPhysical = screen.WorkingArea.Bottom;
+
+                // Default Margin in VM is 10.
+                double defaultBottomMargin = 10;
+                
+                // If Window Bottom is below Screen Bottom, we need to push the toolbar UP.
+                // Overlap = WindowBottom - ScreenBottom.
+                // We add this overlap to the default margin.
+                if (windowBottomPhysical > screenBottomPhysical)
+                {
+                    double overlapPhysical = windowBottomPhysical - screenBottomPhysical;
+                    double overlapLogical = overlapPhysical / scaling;
+                    
+                    double newBottomMargin = defaultBottomMargin + overlapLogical;
+                    
+                    // Cap it so it doesn't fly away (e.g. max window height - buffer)
+                    if (newBottomMargin > Bounds.Height - 50) newBottomMargin = Bounds.Height - 50;
+
+                    vm.ToolbarMargin = new Avalonia.Thickness(0, 0, 0, newBottomMargin);
+                }
+                else
+                {
+                    // Reset to default if fully on screen
+                    if (vm.ToolbarMargin.Bottom != defaultBottomMargin)
+                    {
+                         vm.ToolbarMargin = new Avalonia.Thickness(0, 0, 0, defaultBottomMargin);
+                    }
+                }
+            }
+        }
     }
 
     private async Task<bool> ProcessVideoWithEffectsAsync(FloatingVideoViewModel vm, string targetPath)

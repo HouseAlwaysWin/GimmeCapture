@@ -107,6 +107,13 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable, IDrawingToolVi
         }
     }
 
+    private Avalonia.Thickness _toolbarMargin = new Avalonia.Thickness(0, 0, 0, 10);
+    public Avalonia.Thickness ToolbarMargin
+    {
+        get => _toolbarMargin;
+        set => this.RaiseAndSetIfChanged(ref _toolbarMargin, value);
+    }
+
 
     // Hotkey Proxies
     public string CopyHotkey => _appSettingsService?.Settings.CopyHotkey ?? "Ctrl+C";

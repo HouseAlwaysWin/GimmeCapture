@@ -40,7 +40,11 @@ public partial class FloatingImageWindow : Window
 
         // Sync Position to ViewModel for edge detection
         PositionChanged += (s, e) => {
-            if (DataContext is FloatingImageViewModel vm) vm.ScreenPosition = Position;
+            if (DataContext is FloatingImageViewModel vm) 
+            {
+                vm.ScreenPosition = Position;
+                UpdateToolbarFlipping();
+            }
         };
 
         // Sync Toolbar measured size to ViewModel
@@ -98,10 +102,6 @@ public partial class FloatingImageWindow : Window
                     ev.PropertyName == nameof(FloatingImageViewModel.ShowToolbar))
                 {
                     bool isToolbarToggle = ev.PropertyName == nameof(FloatingImageViewModel.ShowToolbar);
-                    
-                    if (isToolbarToggle)
-                    {
-                    }
                     
                     SyncWindowSizeToImage();
 
@@ -206,7 +206,8 @@ public partial class FloatingImageWindow : Window
 
              
              // Dynamic MinWidth to protect toolbar without breaking tiny snips
-             MinWidth = vm.ShowToolbar ? (380 + padding.Left + padding.Right) : 50;
+             // Toolbar is approx 420-450px wide. We need at least 480 to be safe.
+             MinWidth = vm.ShowToolbar ? (480 + padding.Left + padding.Right) : 50;
              MinHeight = vm.ShowToolbar ? (150 + padding.Top + padding.Bottom) : 50;
 
              Width = System.Math.Max(contentW, MinWidth);
@@ -795,5 +796,59 @@ public partial class FloatingImageWindow : Window
             var aiToolsButton = this.FindControl<Button>("AIToolsButton");
             aiToolsButton?.Flyout?.Hide();
         });
+
+    }
+
+    private void UpdateToolbarFlipping()
+    {
+        if (DataContext is FloatingImageViewModel vm)
+        {
+            var screen = Screens.ScreenFromVisual(this) ?? Screens.Primary;
+            if (screen != null)
+            {
+                double scaling = screen.Scaling;
+                
+                // Position.Y is physical pixels. Bounds.Height is logical pixels.
+                // WindowBottom = Physical Top + (Logical Height * Scaling)
+                double windowBottomPhysical = Position.Y + (Bounds.Height * scaling);
+                double screenBottomPhysical = screen.WorkingArea.Bottom;
+
+                // Default Margin in VM is 10.
+                double defaultBottomMargin = 10;
+                
+                // If Window Bottom is below Screen Bottom, we need to push the toolbar UP.
+                // Overlap = WindowBottom - ScreenBottom.
+                // We add this overlap to the default margin.
+                if (windowBottomPhysical > screenBottomPhysical)
+                {
+                    double overlapPhysical = windowBottomPhysical - screenBottomPhysical;
+                    double overlapLogical = overlapPhysical / scaling;
+                    
+                    double newBottomMargin = defaultBottomMargin + overlapLogical;
+                    
+                    // Clamp max margin to avoid pushing it off the top of the image?
+                    // Actually, let's just let it slide up. 
+                    // Maybe clamp to Window Height - Toolbar Height?
+                    // WindowPadding.Bottom is ~45. Toolbar is ~35. Total bottom buffer is ~80.
+                    // If it slides up more than ~80, it starts overlapping the image.
+                    // User wants it to "stick" to the edge, so we allow it to go up indefinitely (or until window top).
+                    // But effectively it stops when the window stops moving.
+                    
+                    // Let's cap it reasonably so it doesn't fly away if something glitches.
+                    // e.g. Height of window.
+                    if (newBottomMargin > Bounds.Height - 50) newBottomMargin = Bounds.Height - 50;
+
+                    vm.ToolbarMargin = new Avalonia.Thickness(0, 0, 0, newBottomMargin);
+                }
+                else
+                {
+                    // Reset to default if fully on screen
+                    if (vm.ToolbarMargin.Bottom != defaultBottomMargin)
+                    {
+                         vm.ToolbarMargin = new Avalonia.Thickness(0, 0, 0, defaultBottomMargin);
+                    }
+                }
+            }
+        }
     }
 }

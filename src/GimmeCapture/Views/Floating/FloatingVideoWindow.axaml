@@ -232,12 +232,23 @@
 
         <!-- Bottom Toolbar -->
         <Border x:Name="ToolbarBorder" IsVisible="{Binding ShowToolbar}" 
+                Margin="{Binding ToolbarMargin}"
                 Background="#1A1A1A" BorderBrush="#333333" BorderThickness="1" 
-                CornerRadius="4" Padding="6,2" Margin="0,0,0,10"
+                CornerRadius="4" Padding="6,2"
                 HorizontalAlignment="Center" VerticalAlignment="Bottom"
                 MinWidth="420"
                 BoxShadow="0 4 15 0 #D0000000"
                 ZIndex="20">
+            <Border.Styles>
+                <Style Selector="Border">
+                    <Setter Property="Transitions">
+                        <Transitions>
+                            <ThicknessTransition Property="Margin" Duration="0:0:0.05" Easing="LinearEasing"/>
+                            <DoubleTransition Property="Opacity" Duration="0:0:0.2"/>
+                        </Transitions>
+                    </Setter>
+                </Style>
+            </Border.Styles>
 
             <StackPanel Orientation="Vertical" Spacing="4" HorizontalAlignment="Stretch">
                 <!-- Row 1: Drawing Tools -->
