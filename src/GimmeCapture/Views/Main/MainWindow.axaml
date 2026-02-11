@@ -392,7 +392,7 @@ IsChecked="{Binding ShowRecordCursor}" Margin="0,5,0,0"/>
                         <!-- 1. Startup Hotkeys -->
                         <Border Background="#1A1A1A" Padding="15" CornerRadius="4" BorderBrush="#333333" BorderThickness="1" Margin="0,0,0,10">
                             <StackPanel Spacing="10">
-                                <TextBlock Text="{Binding [HotkeyStartupGroup], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold" Foreground="{StaticResource AccentRedBrush}"/>
+                                <TextBlock Text="{Binding [HotkeyStartupGroup], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold" Foreground="{Binding ThemeColor, Converter={StaticResource ColorToBrushConverter}}"/>
                                 <Grid ColumnDefinitions="Auto, 10, *" RowDefinitions="Auto, Auto">
                                     <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding [SnipHotkey], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center"/>
                                     <TextBox Grid.Row="0" Grid.Column="2" 
@@ -417,7 +417,7 @@ IsChecked="{Binding ShowRecordCursor}" Margin="0,5,0,0"/>
                         <!-- 2. Drawing Tool Hotkeys -->
                         <Border Background="#1A1A1A" Padding="15" CornerRadius="4" BorderBrush="#333333" BorderThickness="1" Margin="0,0,0,10">
                             <StackPanel Spacing="10">
-                                <TextBlock Text="{Binding [HotkeyDrawingGroup], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold" Foreground="{StaticResource AccentRedBrush}"/>
+                                <TextBlock Text="{Binding [HotkeyDrawingGroup], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold" Foreground="{Binding ThemeColor, Converter={StaticResource ColorToBrushConverter}}"/>
                                 <UniformGrid Columns="2">
                                     <Grid ColumnDefinitions="Auto, 10, *" RowDefinitions="Auto, Auto, Auto, Auto" Margin="0,0,10,0">
                                         <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding [TipRectangle], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center"/>
@@ -452,7 +452,7 @@ IsChecked="{Binding ShowRecordCursor}" Margin="0,5,0,0"/>
                         <!-- 3. Common Action Hotkeys -->
                         <Border Background="#1A1A1A" Padding="15" CornerRadius="4" BorderBrush="#333333" BorderThickness="1" Margin="0,0,0,10">
                             <StackPanel Spacing="10">
-                                <TextBlock Text="{Binding [HotkeyCommonGroup], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold" Foreground="{StaticResource AccentRedBrush}"/>
+                                <TextBlock Text="{Binding [HotkeyCommonGroup], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold" Foreground="{Binding ThemeColor, Converter={StaticResource ColorToBrushConverter}}"/>
                                 <UniformGrid Columns="2">
                                     <Grid ColumnDefinitions="Auto, 10, *" RowDefinitions="Auto, Auto, Auto, Auto, Auto" Margin="0,0,10,0">
                                         <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding [Undo], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center"/>
@@ -495,7 +495,7 @@ IsChecked="{Binding ShowRecordCursor}" Margin="0,5,0,0"/>
                             <!-- Global Actions -->
                             <Border Grid.Column="0" Background="#1A1A1A" Padding="15" CornerRadius="4" BorderBrush="#333333" BorderThickness="1">
                                 <StackPanel Spacing="10">
-                                    <TextBlock Text="{Binding [ActionPin], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold" Foreground="{StaticResource AccentRedBrush}"/>
+                                    <TextBlock Text="{Binding [ActionPin], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold" Foreground="{Binding ThemeColor, Converter={StaticResource ColorToBrushConverter}}"/>
                                     <Grid ColumnDefinitions="Auto, 10, *" RowDefinitions="Auto">
                                         <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding [PinHotkey], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center"/>
                                         <TextBox Grid.Row="0" Grid.Column="2" 
@@ -508,7 +508,7 @@ IsChecked="{Binding ShowRecordCursor}" Margin="0,5,0,0"/>
                             </Border>
                         </Grid>
                         
-                        <TextBlock Text="{Binding [HotkeysActive], Source={x:Static services:LocalizationService.Instance}}" Foreground="{StaticResource AccentRedBrush}" FontStyle="Italic" FontSize="11"/>
+                        <TextBlock Text="{Binding [HotkeysActive], Source={x:Static services:LocalizationService.Instance}}" Foreground="{Binding ThemeColor, Converter={StaticResource ColorToBrushConverter}}" FontStyle="Italic" FontSize="11"/>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
