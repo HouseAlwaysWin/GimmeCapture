@@ -70,24 +70,6 @@
     <Grid Name="RootGrid" Background="Transparent" ClipToBounds="False">
 
 
-        <!-- Diagnostic Overlay -->
-        <Border Grid.Row="0"
-
-                Background="#CC000000" 
-                VerticalAlignment="Bottom" 
-                HorizontalAlignment="Left" 
-                Margin="{Binding WindowPadding}" 
-                Padding="5" 
-                CornerRadius="4"
-                IsHitTestVisible="False"
-                IsVisible="{Binding IsPointRemovalMode}"
-                ZIndex="10">
-
-            <TextBlock Text="{Binding DiagnosticText}" 
-                       Foreground="#00FF00" 
-                       FontSize="12" 
-                       FontWeight="Bold"/>
-        </Border>
 
         <!-- BABYMETAL Style Border (Wraps IMAGE ONLY) -->
         <Border x:Name="MainBorder"
@@ -432,8 +414,19 @@
             </ContextMenu>
         </Grid.ContextMenu>
 
+        <!-- AI Diagnostic Overlay (above size display, outside image) -->
+        <Border Background="#CC000000" Padding="5" CornerRadius="4"
+                VerticalAlignment="Top" HorizontalAlignment="Center"
+                Margin="0,5,0,0"
+                IsHitTestVisible="False"
+                IsVisible="{Binding IsPointRemovalMode}"
+                ZIndex="15">
+            <TextBlock Text="{Binding DiagnosticText}" 
+                       Foreground="#00FF00" FontSize="12" FontWeight="Bold"/>
+        </Border>
+
         <!-- Debug Overlay (Centered Actual Size) -->
-        <StackPanel Orientation="Horizontal" VerticalAlignment="Top" HorizontalAlignment="Center" Margin="0,5,0,0" IsHitTestVisible="False" ZIndex="15">
+        <StackPanel Orientation="Horizontal" VerticalAlignment="Top" HorizontalAlignment="Center" Margin="0,25,0,0" IsHitTestVisible="False" ZIndex="15">
              <TextBlock Text="{Binding #MainBorder.Bounds.Width, StringFormat='{}{0:F0}'}" Foreground="Lime" FontWeight="Bold" FontSize="14">
                  <TextBlock.Effect><DropShadowEffect BlurRadius="2" Color="Black"/></TextBlock.Effect>
              </TextBlock>
