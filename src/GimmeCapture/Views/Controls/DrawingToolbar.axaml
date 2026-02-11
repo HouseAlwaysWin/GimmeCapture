@@ -175,7 +175,9 @@
                     </Border>
                 </Flyout>
             </Button.Flyout>
-            <Ellipse Width="10" Height="10" Fill="{Binding SelectedColor, Converter={StaticResource ColorToBrushConverter}}"/>
+            <PathIcon Data="M12,2C6.49,2 2,6.49 2,12C2,17.51 6.49,22 12,22C13.91,22 15.46,20.45 15.46,18.54C15.46,18.11 15.37,17.7 15.22,17.33C15.07,16.96 15,16.57 15,16.15C15,14.97 15.97,14 17.15,14H19C20.65,14 22,12.65 22,11C22,6.04 17.51,2 12,2M5.5,13A1.5,1.5 0 0,1 4,11.5A1.5,1.5 0 0,1 5.5,10A1.5,1.5 0 0,1 7,11.5A1.5,1.5 0 0,1 5.5,13M7.5,8A1.5,1.5 0 0,1 6,6.5A1.5,1.5 0 0,1 7.5,5A1.5,1.5 0 0,1 9,6.5A1.5,1.5 0 0,1 7.5,8M12.5,7A1.5,1.5 0 0,1 11,5.5A1.5,1.5 0 0,1 12.5,4A1.5,1.5 0 0,1 14,5.5A1.5,1.5 0 0,1 12.5,7M16.5,10A1.5,1.5 0 0,1 15,8.5A1.5,1.5 0 0,1 16.5,7A1.5,1.5 0 0,1 18,8.5A1.5,1.5 0 0,1 16.5,10Z" 
+                      Width="14" Height="14"
+                      Foreground="{Binding SelectedColor, Converter={StaticResource ColorToBrushConverter}}"/>
         </Button>
     </StackPanel>
 </UserControl>

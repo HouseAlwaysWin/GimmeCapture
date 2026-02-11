@@ -46,20 +46,30 @@
             <!-- Record Buttons -->
             <Button Theme="{StaticResource SnipButton}" Width="32" BorderThickness="1" 
                     Command="{Binding StartRecordingCommand}" 
-                    IsVisible="{Binding RecState, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static services:RecordingState.Idle}}"
                     ToolTip.Tip="{Binding RecordTooltip}">
+                <Button.IsVisible>
+                    <MultiBinding Converter="{x:Static BoolConverters.And}">
+                        <Binding Path="IsRecordingMode"/>
+                        <Binding Path="RecState" Converter="{StaticResource EnumMatchConverter}" ConverterParameter="{x:Static services:RecordingState.Idle}"/>
+                    </MultiBinding>
+                </Button.IsVisible>
                 <Ellipse Fill="#E60012" Width="12" Height="12"/>
             </Button>
             
             <Button Theme="{StaticResource SnipButton}" Width="32" BorderThickness="1" 
                     Command="{Binding PauseRecordingCommand}" 
-                    IsVisible="{Binding RecState, Converter={StaticResource EnumNotMatchConverter}, ConverterParameter={x:Static services:RecordingState.Idle}}"
                     ToolTip.Tip="{Binding [Pause], Source={x:Static services:LocalizationService.Instance}}">
+                 <Button.IsVisible>
+                    <MultiBinding Converter="{x:Static BoolConverters.And}">
+                        <Binding Path="IsRecordingMode"/>
+                        <Binding Path="RecState" Converter="{StaticResource EnumNotMatchConverter}" ConverterParameter="{x:Static services:RecordingState.Idle}"/>
+                    </MultiBinding>
+                </Button.IsVisible>
                 <Panel>
                     <PathIcon Data="M14,19H18V5H14M6,19H10V5H6V19Z" Width="14" Height="14" 
-                               IsVisible="{Binding RecState, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static services:RecordingState.Recording}}"/>
+                                IsVisible="{Binding RecState, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static services:RecordingState.Recording}}"/>
                     <PathIcon Data="M8,5.14V19.14L19,12.14L8,5.14Z" Width="14" Height="14" 
-                               IsVisible="{Binding RecState, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static services:RecordingState.Paused}}"/>
+                                IsVisible="{Binding RecState, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static services:RecordingState.Paused}}"/>
                 </Panel>
             </Button>
 
