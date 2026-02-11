@@ -6,6 +6,7 @@ using GimmeCapture.ViewModels.Main;
 using GimmeCapture.ViewModels.Floating;
 using GimmeCapture.Views.Floating;
 using GimmeCapture.Views.Main;
+using GimmeCapture.Views.Shared;
 using GimmeCapture.Models;
 using System;
 using System.Linq;
@@ -27,6 +28,7 @@ public partial class SnipWindow : Window
     private Point _startPoint;
     private SnipWindowViewModel? _viewModel;
     private Annotation? _currentAnnotation;
+    private RecordingProgressWindow? _progressWindow;
     
     // Resize State
     private bool _isResizing;
@@ -63,8 +65,6 @@ public partial class SnipWindow : Window
         // Listen to pointer events on the window or canvas
         PointerPressed += OnPointerPressed;
         PointerMoved += OnPointerMoved;
-        PointerReleased += OnPointerReleased;
-        
         PointerReleased += OnPointerReleased;
         
         // Close on Escape
@@ -157,6 +157,9 @@ public partial class SnipWindow : Window
         // Cleanup subscriptions
         _selectionRectSubscription?.Dispose();
         
+        // Release ViewModel resources
+        _viewModel?.Dispose();
+        
         // Clear window region before closing
         var hwnd = this.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
         if (hwnd != IntPtr.Zero && OperatingSystem.IsWindows())
@@ -205,9 +208,36 @@ public partial class SnipWindow : Window
                 Close();
             };
             
-            _viewModel.HideAction = () =>
+            _viewModel.HideAction = () => Hide();
+            _viewModel.ShowAction = () => Show();
+
+            _viewModel.OpenRecordingProgressWindowAction = () =>
             {
-                Hide();
+                if (_progressWindow != null) return;
+                
+                _progressWindow = new RecordingProgressWindow
+                {
+                    DataContext = _viewModel,
+                    WindowStartupLocation = WindowStartupLocation.CenterScreen
+                };
+                _progressWindow.Show();
+                Hide(); // Hide main window to allow user interaction
+            };
+
+            _viewModel.CloseRecordingProgressWindowAction = () =>
+            {
+                if (_progressWindow != null)
+                {
+                    _progressWindow.Close();
+                    _progressWindow = null;
+                }
+                
+                // Show main window back after finalization (e.g. for file picker)
+                // Unless it was already closed/closing
+                if (this.IsVisible)
+                {
+                    Show();
+                }
             };
             
             // Subscribe to SelectionRect, CurrentState, and IsDrawingMode changes to update window region

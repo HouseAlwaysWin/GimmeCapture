@@ -320,7 +320,7 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable, IDrawingToolVi
     // Explicit interface implementation to resolve name clash
 
 
-    public System.Action FocusWindowAction { get; set; } = () => { };
+    public System.Action? FocusWindowAction { get; set; }
 
     private Avalonia.Media.Color _selectedColor = Avalonia.Media.Colors.Red;
     public Avalonia.Media.Color SelectedColor

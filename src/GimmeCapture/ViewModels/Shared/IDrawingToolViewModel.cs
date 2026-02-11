@@ -21,7 +21,7 @@ public interface IDrawingToolViewModel
     bool IsItalic { get; set; }
     System.Collections.ObjectModel.ObservableCollection<string> AvailableFonts { get; }
     string CurrentFontFamily { get; set; }
-    System.Action FocusWindowAction { get; set; }
+    System.Action? FocusWindowAction { get; set; }
     
     // Text Entry State
     bool IsEnteringText { get; set; }

@@ -88,7 +88,8 @@
     
     <Grid>
         <!-- 背景遮罩層 -->
-        <Path Fill="Black" Data="{Binding MaskGeometry}" Opacity="{Binding MaskOpacity}" IsHitTestVisible="False"/>
+        <Path Fill="Black" Data="{Binding MaskGeometry}" Opacity="{Binding MaskOpacity}" IsHitTestVisible="False"
+              IsVisible="{Binding !IsRecordingFinalizing}"/>
         
             <!-- AI Scan Results Layer (Background Candidates) -->
             <ItemsControl ItemsSource="{Binding WindowRects}" IsHitTestVisible="True"
@@ -303,8 +304,14 @@
                                   Canvas.Left="{Binding TextInputPosition.X}"
                                   Canvas.Top="{Binding TextInputPosition.Y}"/>
                     <ctl:SnipToolbar Name="Toolbar" Canvas.Left="{Binding ToolbarLeft}" Canvas.Top="{Binding ToolbarTop}" 
-                                     MaxWidth="{Binding ToolbarMaxWidth}"
-                                     IsVisible="{Binding CurrentState, Converter={StaticResource StateToBoolConverter}}"/>
+                                     MaxWidth="{Binding ToolbarMaxWidth}">
+                        <ctl:SnipToolbar.IsVisible>
+                            <MultiBinding Converter="{x:Static BoolConverters.And}">
+                                <Binding Path="CurrentState" Converter="{StaticResource StateToBoolConverter}"/>
+                                <Binding Path="!IsRecordingFinalizing"/>
+                            </MultiBinding>
+                        </ctl:SnipToolbar.IsVisible>
+                    </ctl:SnipToolbar>
         </Canvas>
         
         <!-- Processing Overlay - Hidden in favor of Toolbar integration -->

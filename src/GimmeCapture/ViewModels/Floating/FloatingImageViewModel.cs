@@ -373,7 +373,7 @@ public class FloatingImageViewModel : ViewModelBase, IDisposable, IDrawingToolVi
         set => this.RaiseAndSetIfChanged(ref _diagnosticText, value);
     }
 
-    public System.Action FocusWindowAction { get; set; } = () => { };
+    public System.Action? FocusWindowAction { get; set; }
 
     private bool _isEnteringText;
     public bool IsEnteringText

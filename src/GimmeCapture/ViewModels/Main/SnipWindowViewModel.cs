@@ -18,6 +18,7 @@ using GimmeCapture.Services.Platforms.Windows;
 using GimmeCapture.ViewModels.Floating;
 using GimmeCapture.ViewModels.Shared;
 using GimmeCapture.Views.Floating;
+using System.Reactive.Disposables;
 
 namespace GimmeCapture.ViewModels.Main;
 
@@ -145,6 +146,13 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingToolViewM
     public bool HideSelectionDecoration => IsRecordingMode ? (_mainVm?.HideRecordSelectionDecoration ?? false) : (_mainVm?.HideSnipSelectionDecoration ?? false);
     public bool HideFrameBorder => IsRecordingMode ? (_mainVm?.HideRecordSelectionBorder ?? false) : (_mainVm?.HideSnipSelectionBorder ?? false);
 
+    private bool _isRecordingFinalizing;
+    public bool IsRecordingFinalizing
+    {
+        get => _isRecordingFinalizing;
+        set => this.RaiseAndSetIfChanged(ref _isRecordingFinalizing, value);
+    }
+
     private bool _isProcessing;
     public bool IsProcessing
     {
@@ -158,6 +166,8 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingToolViewM
         get => _processingText;
         set => this.RaiseAndSetIfChanged(ref _processingText, value);
     }
+
+    private readonly CompositeDisposable _disposables = new();
 
     private bool _isIndeterminate = true;
     public bool IsIndeterminate
@@ -723,7 +733,7 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingToolViewM
         set => this.RaiseAndSetIfChanged(ref _drawingModeSnapshot, value);
     }
 
-    public System.Action FocusWindowAction { get; set; } = () => { };
+    public Action? FocusWindowAction { get; set; }
 
     private bool _isEnteringText = false;
     public bool IsEnteringText
@@ -850,22 +860,37 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingToolViewM
                 {
                     this.RaisePropertyChanged(nameof(RecState));
                     this.RaisePropertyChanged(nameof(IsRecordingActive));
-                });
+                }).DisposeWith(_disposables);
 
             _recordingService.WhenAnyValue(x => x.IsFinalizing)
                 .ObserveOn(RxApp.MainThreadScheduler)
                 .Subscribe(isFinalizing => 
                 {
+                    IsRecordingFinalizing = isFinalizing;
                     if (isFinalizing)
                     {
                          ProcessingText = LocalizationService.Instance["StatusProcessing"];
+                         OpenRecordingProgressWindowAction?.Invoke();
+                    }
+                    else
+                    {
+                         CloseRecordingProgressWindowAction?.Invoke();
                     }
                     IsProcessing = isFinalizing;
-                });
+                }).DisposeWith(_disposables);
+            
+            _recordingService.WhenAnyValue(x => x.FinalizationProgress)
+                .ObserveOn(RxApp.MainThreadScheduler)
+                .Subscribe(progress => 
+                {
+                    ProgressValue = progress;
+                    IsIndeterminate = progress <= 0 || progress >= 100;
+                }).DisposeWith(_disposables);
 
             // Reposition toolbar when its bounds change
             this.WhenAnyValue(x => x.ToolbarWidth, x => x.ToolbarHeight)
-                .Subscribe(_ => UpdateToolbarPosition());
+                .Subscribe(_ => UpdateToolbarPosition())
+                .DisposeWith(_disposables);
         }
 
         // Initial loads
@@ -1640,8 +1665,12 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingToolViewM
     
     public Action? CloseAction { get; set; }
     public Action? HideAction { get; set; }
-    public Func<Task<string?>>? PickSaveFileAction { get; set; }
+    public Action? ShowAction { get; set; }
+    public Action? OpenRecordingProgressWindowAction { get; set; }
+    public Action? CloseRecordingProgressWindowAction { get; set; }
+    public Action? SaveAction { get; set; }
     public System.Action<Avalonia.Media.Imaging.Bitmap, Rect, Color, double, bool>? OpenPinWindowAction { get; set; }
+    public Func<Task<string?>>? PickSaveFileAction { get; set; }
 
     private System.Threading.CancellationTokenSource? _scanCts;
 
@@ -1785,7 +1814,17 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingToolViewM
 
     public void Dispose()
     {
+        _disposables.Dispose();
         _sam2Service?.Dispose();
         _recordTimer?.Stop();
+        
+        // Release action references to avoid keeping the View alive
+        CloseAction = null;
+        HideAction = null;
+        ShowAction = null;
+        OpenRecordingProgressWindowAction = null;
+        CloseRecordingProgressWindowAction = null;
+        FocusWindowAction = null;
+        PickSaveFileAction = null;
     }
 }
