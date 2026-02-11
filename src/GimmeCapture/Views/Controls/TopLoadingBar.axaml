@@ -1,0 +1,56 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:GimmeCapture.ViewModels.Main"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="6"
+             x:Class="GimmeCapture.Views.Controls.TopLoadingBar"
+             x:DataType="vm:SnipWindowViewModel"
+             Height="6"
+             IsHitTestVisible="False"
+             IsVisible="{Binding IsProcessing}">
+
+    <!-- Single cohesive bar with ambient glow -->
+    <Panel Height="6" VerticalAlignment="Top">
+        
+        <!-- Subtle Glow Layer -->
+        <Border Height="8" VerticalAlignment="Top" Margin="0,-2,0,0" Opacity="0.4">
+            <Border.Background>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                    <GradientStop Offset="0" Color="{DynamicResource ThemeAccentColor}"/>
+                    <GradientStop Offset="1" Color="Transparent"/>
+                </LinearGradientBrush>
+            </Border.Background>
+            <Border.Effect>
+                <BlurEffect Radius="10"/>
+            </Border.Effect>
+        </Border>
+
+        <!-- Main Solid Animated Bar -->
+        <Panel HorizontalAlignment="Stretch" VerticalAlignment="Top" Height="4" ClipToBounds="True">
+            <Rectangle Name="Indicator" 
+                       Width="3000" 
+                       Height="4" 
+                       Fill="{DynamicResource ThemeAccentBrush}"
+                       HorizontalAlignment="Left">
+                <Rectangle.RenderTransform>
+                    <TranslateTransform X="-3000"/>
+                </Rectangle.RenderTransform>
+                <Rectangle.Styles>
+                    <Style Selector="Rectangle">
+                        <Style.Animations>
+                            <Animation Duration="0:0:3" IterationCount="Infinite">
+                                <KeyFrame Cue="0%">
+                                    <Setter Property="TranslateTransform.X" Value="-3000"/>
+                                </KeyFrame>
+                                <KeyFrame Cue="100%">
+                                    <Setter Property="TranslateTransform.X" Value="4000"/>
+                                </KeyFrame>
+                            </Animation>
+                        </Style.Animations>
+                    </Style>
+                </Rectangle.Styles>
+            </Rectangle>
+        </Panel>
+    </Panel>
+</UserControl>

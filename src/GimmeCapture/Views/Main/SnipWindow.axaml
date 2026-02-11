@@ -314,17 +314,31 @@
                     </ctl:SnipToolbar>
         </Canvas>
         
-        <!-- Processing Overlay - Hidden in favor of Toolbar integration -->
-        <!--
-        <Canvas IsHitTestVisible="False" ZIndex="999">
-             <Grid Width="{Binding ActiveScreenBounds.Width}" 
-                   Height="{Binding ActiveScreenBounds.Height}" 
-                   Canvas.Left="{Binding ActiveScreenBounds.X}" 
-                   Canvas.Top="{Binding ActiveScreenBounds.Y}"
-                   IsVisible="{Binding IsProcessing}">
-                 <ctl:ProcessingOverlay DataContext="{Binding}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-             </Grid>
-        </Canvas>
-        -->
+        <!-- Multi-monitor Loading Bars -->
+        <ItemsControl ItemsSource="{Binding AllScreenBounds}" 
+                      ZIndex="10000" 
+                      HorizontalAlignment="Stretch" 
+                      VerticalAlignment="Stretch"
+                      IsHitTestVisible="False"
+                      ClipToBounds="False"
+                      x:CompileBindings="False">
+            <ItemsControl.Styles>
+                <Style Selector="ItemsControl > ContentPresenter">
+                    <Setter Property="Canvas.Left" Value="{Binding X}"/>
+                    <Setter Property="Canvas.Top" Value="{Binding Y}"/>
+                </Style>
+            </ItemsControl.Styles>
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <Canvas ClipToBounds="False"/>
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                    <ctl:TopLoadingBar Width="{Binding W}" Height="6" 
+                                     DataContext="{Binding $parent[Window].DataContext}"/>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
     </Grid>
 </Window>

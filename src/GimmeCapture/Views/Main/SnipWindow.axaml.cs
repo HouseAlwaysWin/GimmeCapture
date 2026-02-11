@@ -90,6 +90,24 @@ public partial class SnipWindow : Window
                 _viewModel.VisualScaling = this.RenderScaling;
                 _viewModel.ScreenOffset = this.Position;
                 _viewModel.RefreshWindowRects(this.TryGetPlatformHandle()?.Handle);
+
+                // Populate AllScreenBounds for multi-monitor UI
+                double scaling = this.RenderScaling;
+                var allScreens = this.Screens.All;
+                Console.WriteLine($"[SnipWindow] Detected {allScreens.Count} screens for multi-monitor UI.");
+                var screenBoundsList = new System.Collections.Generic.List<ScreenBoundsViewModel>();
+                foreach (var s in allScreens)
+                {
+                    Console.WriteLine($"[SnipWindow] Screen: {s.Bounds}, Scaling: {s.Scaling}");
+                    screenBoundsList.Add(new ScreenBoundsViewModel
+                    {
+                        X = (s.Bounds.X - this.Position.X) / scaling,
+                        Y = (s.Bounds.Y - this.Position.Y) / scaling,
+                        W = s.Bounds.Width / scaling,
+                        H = s.Bounds.Height / scaling
+                    });
+                }
+                _viewModel.AllScreenBounds = new System.Collections.ObjectModel.ObservableCollection<ScreenBoundsViewModel>(screenBoundsList);
                 
                 // Initial Active Screen Update
                 if (GetCursorPos(out POINT p))

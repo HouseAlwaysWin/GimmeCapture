@@ -756,6 +756,13 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingToolViewM
         set => this.RaiseAndSetIfChanged(ref _activeScreenBounds, value);
     }
 
+    private ObservableCollection<ScreenBoundsViewModel> _allScreenBounds = new();
+    public ObservableCollection<ScreenBoundsViewModel> AllScreenBounds
+    {
+        get => _allScreenBounds;
+        set => this.RaiseAndSetIfChanged(ref _allScreenBounds, value);
+    }
+
     private Point _loadingOverlayPosition;
     public Point LoadingOverlayPosition
     {
@@ -1689,6 +1696,7 @@ public class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingToolViewM
 
         IsProcessing = true;
         ProcessingText = "AI Scanning...";
+        await Task.Delay(50, token); // Ensure UI renders the loading bar
         Console.WriteLine("[AI Scan] Starting...");
         
         try

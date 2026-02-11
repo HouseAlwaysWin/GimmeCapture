@@ -200,30 +200,30 @@ public partial class MainWindow : Window
 
                 var snip = new SnipWindow();
                 
-                // Multi-monitor support: Span ALL screens
-                // Calculate the union of all screen bounds (Physical Pixels)
-                var allScreens = snip.Screens.All;
-                if (allScreens.Count > 0)
-                {
-                    int minX = allScreens.Min(s => s.Bounds.X);
-                    int minY = allScreens.Min(s => s.Bounds.Y);
-                    int maxRight = allScreens.Max(s => s.Bounds.Right);
-                    int maxBottom = allScreens.Max(s => s.Bounds.Bottom);
-                    
-                    int totalW = maxRight - minX;
-                    int totalH = maxBottom - minY;
-                    
-                    // We need to determine the scaling factor to convert Physical -> Logical
-                    // We'll use the screen at the origin (minX, minY) or the first screen as reference
-                    // For mixed DPI, this is a compromise, but standard for spanning windows.
-                    var originScreen = allScreens.FirstOrDefault(s => s.Bounds.Contains(new PixelPoint(minX, minY))) ?? allScreens.First();
-                    double scaling = originScreen.Scaling;
+                    // Multi-monitor support: Span ALL screens
+                    var allScreens = snip.Screens.All;
+                    if (allScreens.Count > 0)
+                    {
+                        // Calculate the union of all screen bounds in PHYSICAL pixels
+                        int physMinX = allScreens.Min(s => s.Bounds.X);
+                        int physMinY = allScreens.Min(s => s.Bounds.Y);
+                        int physMaxR = allScreens.Max(s => s.Bounds.Right);
+                        int physMaxB = allScreens.Max(s => s.Bounds.Bottom);
 
-                    snip.WindowStartupLocation = WindowStartupLocation.Manual;
-                    snip.Position = new PixelPoint(minX, minY);
-                    snip.Width = totalW / scaling;
-                    snip.Height = totalH / scaling;
-                }
+                        snip.WindowStartupLocation = WindowStartupLocation.Manual;
+                        snip.Position = new PixelPoint(physMinX, physMinY);
+                        
+                        // We use the primary screen's scaling for the entire spanning window.
+                        // This is consistent with how Avalonia handles coordinates within a single window.
+                        var primaryScreen = snip.Screens.Primary ?? allScreens.First();
+                        double unifiedScaling = primaryScreen.Scaling;
+                        
+                        // Set logical width/height to cover the entire physical range
+                        snip.Width = (physMaxR - physMinX) / unifiedScaling;
+                        snip.Height = (physMaxB - physMinY) / unifiedScaling;
+
+                        Console.WriteLine($"[MainWindow] SnipWindow spanning: {snip.Position} size: {snip.Width}x{snip.Height} (Scaling: {unifiedScaling})");
+                    }
                 
                 var snipVm = new SnipWindowViewModel(
                     vm?.BorderColor ?? Color.Parse("#E60012"), 

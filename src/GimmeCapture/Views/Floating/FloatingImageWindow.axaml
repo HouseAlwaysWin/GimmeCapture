@@ -381,9 +381,8 @@
                         </StackPanel>
         </Border>
 
-        <Border IsVisible="{Binding IsProcessing}" Background="#80000000" ZIndex="100">
-             <ctl:ProcessingOverlay DataContext="{Binding}"/>
-        </Border>
+        <!-- Top Loading Bar -->
+        <ctl:TopLoadingBar DataContext="{Binding}" IsHitTestVisible="False" ZIndex="10000"/>
 
 
         <!-- Text Overlay -->
