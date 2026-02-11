@@ -218,6 +218,8 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable, IDrawingToolVi
     public string VideoPath { get; }
     private readonly string _ffmpegPath;
     private CancellationTokenSource? _playCts;
+    private Task? _playbackTask;
+    private readonly SemaphoreSlim _playSemaphore = new(1, 1);
     private readonly int _width;
     private readonly int _height;
 
@@ -261,6 +263,39 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable, IDrawingToolVi
     public string FormattedTime => $"{_currentTime:mm\\:ss} / {_totalDuration:mm\\:ss}";
 
     private double _seekTargetSeconds = -1;
+
+    private double _playbackSpeed = 1.0;
+    public double PlaybackSpeed
+    {
+        get => _playbackSpeed;
+        set 
+        {
+            this.RaiseAndSetIfChanged(ref _playbackSpeed, value);
+            this.RaisePropertyChanged(nameof(PlaybackSpeedText));
+            // Speed change requires restarting the ffmpeg process to apply filters
+            if (_isPlaybackActive) StartPlayback();
+        }
+    }
+
+    public string PlaybackSpeedText => $"{_playbackSpeed:F1}x";
+
+    public double CurrentTimeSeconds
+    {
+        get => _currentTime.TotalSeconds;
+        set
+        {
+            if (Math.Abs(_currentTime.TotalSeconds - value) > 0.5)
+            {
+                _seekTargetSeconds = value;
+                if (!_isPlaybackActive)
+                {
+                    _isPlaybackActive = true;
+                    this.RaisePropertyChanged(nameof(IsPlaying));
+                }
+                StartPlayback();
+            }
+        }
+    }
 
     private bool _isEnteringText;
     public bool IsEnteringText
@@ -415,6 +450,8 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable, IDrawingToolVi
     public ReactiveCommand<Unit, Unit> UndoCommand { get; }
     public ReactiveCommand<Unit, Unit> RedoCommand { get; }
     public ReactiveCommand<Unit, Unit> FastForwardCommand { get; }
+    public ReactiveCommand<Unit, Unit> RewindCommand { get; }
+    public ReactiveCommand<Unit, Unit> CycleSpeedCommand { get; }
     public ReactiveCommand<Unit, Unit> ConfirmTextEntryCommand { get; }
     public ReactiveCommand<Unit, Unit> CancelTextEntryCommand { get; }
 
@@ -496,7 +533,7 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable, IDrawingToolVi
         FastForwardCommand = ReactiveCommand.Create(() => 
         {
             var target = _currentTime.TotalSeconds + 5;
-            if (target >= _totalDuration.TotalSeconds) target = 0;
+            if (target >= _totalDuration.TotalSeconds) target = _totalDuration.TotalSeconds - 0.1;
             _seekTargetSeconds = target;
             
             // Restart if paused to reflect seek immediately
@@ -506,6 +543,35 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable, IDrawingToolVi
                 this.RaisePropertyChanged(nameof(IsPlaying));
             }
             StartPlayback();
+        });
+
+        RewindCommand = ReactiveCommand.Create(() => 
+        {
+            var target = _currentTime.TotalSeconds - 5;
+            if (target < 0) target = 0;
+            _seekTargetSeconds = target;
+            
+            if (!_isPlaybackActive)
+            {
+                _isPlaybackActive = true;
+                this.RaisePropertyChanged(nameof(IsPlaying));
+            }
+            StartPlayback();
+        });
+
+        CycleSpeedCommand = ReactiveCommand.Create(() => 
+        {
+            PlaybackSpeed = PlaybackSpeed switch
+            {
+                0.5 => 1.0,
+                1.0 => 1.5,
+                1.5 => 2.0,
+                2.0 => 0.5,
+                _ => 1.0
+            };
+            
+            // Apply speed change immediately by restarting playback if active
+            if (_isPlaybackActive) StartPlayback();
         });
 
         SelectToolCommand = ReactiveCommand.Create<AnnotationType>(tool => 
@@ -614,8 +680,36 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable, IDrawingToolVi
 
     private void StartPlayback()
     {
-        _playCts = new CancellationTokenSource();
-        _ = PlaybackLoopFixed(_playCts.Token);
+        _ = StartPlaybackInternal();
+    }
+
+    private async Task StartPlaybackInternal()
+    {
+        await _playSemaphore.WaitAsync();
+        try
+        {
+            if (_playCts != null)
+            {
+                _playCts.Cancel();
+                try 
+                {
+                    if (_playbackTask != null) await _playbackTask;
+                } 
+                catch { }
+                finally 
+                {
+                    _playCts.Dispose();
+                    _playCts = null;
+                }
+            }
+
+            _playCts = new CancellationTokenSource();
+            _playbackTask = PlaybackLoopFixed(_playCts.Token);
+        }
+        finally
+        {
+            _playSemaphore.Release();
+        }
     }
 
     // Improved Playback with fixed-size frame reading
@@ -631,6 +725,8 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable, IDrawingToolVi
                     seekArg = $"-ss {_seekTargetSeconds} ";
                     _currentTime = TimeSpan.FromSeconds(_seekTargetSeconds);
                     _seekTargetSeconds = -1;
+                    // Force property update
+                    this.RaisePropertyChanged(nameof(CurrentTime));
                 }
                 else
                 {
@@ -650,8 +746,14 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable, IDrawingToolVi
                      // Actually detecting FPS is complex from stderr, let's assume 30 or track via frames
                 } catch {}
 
+                // Speed filters + Realtime throttling
+                // setpts=1/speed*PTS stretches/shrinks the timestamps
+                // fps=30 ensures consistent output frame rate
+                // realtime filter then throttles the output to match those timestamps
+                var filter = $"[0:v]setpts={1.0/_playbackSpeed}*PTS,fps=30,realtime[v]";
+
                 var cmd = Cli.Wrap(_ffmpegPath)
-                    .WithArguments($"{seekArg}-re -i \"{VideoPath}\" -f image2pipe -vcodec rawvideo -pix_fmt bgra -s {_width}x{_height} -sws_flags lanczos -loglevel quiet -")
+                    .WithArguments($"{seekArg}-i \"{VideoPath}\" -filter_complex \"{filter}\" -map \"[v]\" -f image2pipe -vcodec rawvideo -pix_fmt bgra -s {_width}x{_height} -sws_flags lanczos -loglevel quiet -")
                     .WithStandardOutputPipe(PipeTarget.ToStream(new FrameStreamWriter(this, frameSize)));
 
                 await cmd.ExecuteAsync(ct);
@@ -701,9 +803,12 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable, IDrawingToolVi
                     _vm.UpdateBitmap(_buffer);
                     _totalRead = 0;
                     
-                    // Increment current time (rough estimation based on 30fps if not specified)
-                    // Better: use progress from ffmpeg or calculate based on frames
-                    _vm.CurrentTime += TimeSpan.FromSeconds(1.0 / 30.0);
+                    // Increment time based on output frames (30fps) scaled by speed
+                    // Each output frame represents (1/30 * Speed) seconds of the source video
+                    var newTime = _vm.CurrentTime + TimeSpan.FromSeconds((1.0 / 30.0) * _vm.PlaybackSpeed);
+                    if (newTime > _vm.TotalDuration) newTime = _vm.TotalDuration;
+                    _vm.CurrentTime = newTime;
+                    _vm.RaisePropertyChanged(nameof(_vm.CurrentTimeSeconds));
                 }
             }
         }

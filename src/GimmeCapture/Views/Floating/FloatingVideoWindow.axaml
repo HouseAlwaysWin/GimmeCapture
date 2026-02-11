@@ -215,12 +215,13 @@
                 Background="#1A1A1A" BorderBrush="#333333" BorderThickness="1" 
                 CornerRadius="4" Padding="2" Margin="0,0,0,10"
                 HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                MinWidth="420"
                 BoxShadow="0 4 15 0 #D0000000"
                 ZIndex="20">
 
-            <StackPanel Orientation="Vertical" Spacing="4">
+            <StackPanel Orientation="Vertical" Spacing="4" HorizontalAlignment="Stretch">
                 <!-- Row 1: Drawing Tools -->
-                <StackPanel Orientation="Horizontal" Spacing="4">
+                <StackPanel Orientation="Horizontal" Spacing="4" HorizontalAlignment="Center">
                     <controls:DrawingToolbar DataContext="{Binding}"/>
                     <Rectangle Fill="#444444" Width="1" Height="20" Margin="4,0" VerticalAlignment="Center"/>
                     <Button Theme="{StaticResource SnipButton}" Command="{Binding ClearAnnotationsCommand}" ToolTip.Tip="{Binding ClearTooltip}">
@@ -240,19 +241,38 @@
 
                 <Rectangle Fill="#333333" Height="1" Margin="2,0" HorizontalAlignment="Stretch"/>
 
-                <!-- Row 2: Playback Controls -->
-                <StackPanel Orientation="Horizontal" Spacing="4">
-                    <Button Theme="{StaticResource SnipButton}" Width="32" Command="{Binding TogglePlaybackCommand}" ToolTip.Tip="{Binding PlaybackTooltip}">
-                        <Panel>
-                            <PathIcon Data="M14,19H18V5H14M6,19H10V5H6V19Z" Width="14" Height="14" IsVisible="{Binding IsPlaying}"/>
-                            <PathIcon Data="M8,5.14V19.14L19,12.14L8,5.14Z" Width="14" Height="14" IsVisible="{Binding !IsPlaying}"/>
-                        </Panel>
-                    </Button>
-                    <Button Theme="{StaticResource SnipButton}" Width="32" Command="{Binding FastForwardCommand}" ToolTip.Tip="Skip 5s">
-                        <PathIcon Data="M13,6V18L21.5,12L13,6M6,6V18L14.5,12L6,6Z" Width="14" Height="14"/>
-                    </Button>
-                    <TextBlock Text="{Binding FormattedTime}" VerticalAlignment="Center" Margin="8,0" Foreground="White" FontSize="11" FontFamily="Consolas"/>
-                </StackPanel>
+                <!-- Row 2: Playback Controls (Precision Centering) -->
+                <!-- Use 120px for both side columns to guarantee the center column is at the absolute midpoint -->
+                <Grid ColumnDefinitions="120, *, 120" Margin="0,2" Height="36" HorizontalAlignment="Stretch">
+                    <!-- Left: Navigation Group -->
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="2" HorizontalAlignment="Left" VerticalAlignment="Center">
+                        <Button Theme="{StaticResource SnipButton}" Width="30" Height="30" Command="{Binding RewindCommand}" ToolTip.Tip="Rewind 5s">
+                            <PathIcon Data="M11,18V6L2.5,12L11,18M18,18V6L9.5,12L18,18Z" Width="12" Height="12"/>
+                        </Button>
+                        <Button Theme="{StaticResource SnipButton}" Width="30" Height="30" Command="{Binding TogglePlaybackCommand}" ToolTip.Tip="{Binding PlaybackTooltip}">
+                            <Panel>
+                                <PathIcon Data="M14,19H18V5H14M6,19H10V5H6V19Z" Width="12" Height="12" IsVisible="{Binding IsPlaying}"/>
+                                <PathIcon Data="M8,5.14V19.14L19,12.14L8,5.14Z" Width="12" Height="12" IsVisible="{Binding !IsPlaying}"/>
+                            </Panel>
+                        </Button>
+                        <Button Theme="{StaticResource SnipButton}" Width="30" Height="30" Command="{Binding FastForwardCommand}" ToolTip.Tip="Fast Forward 5s">
+                            <PathIcon Data="M13,6V18L21.5,12L13,6M6,6V18L14.5,12L6,6Z" Width="12" Height="12"/>
+                        </Button>
+                    </StackPanel>
+                    
+                    <!-- Center: Timeline Slider (Absolute Centering) -->
+                    <Slider Grid.Column="1" Minimum="0" Maximum="{Binding TotalDuration.TotalSeconds}" 
+                            Value="{Binding CurrentTimeSeconds}" 
+                            HorizontalAlignment="Stretch" VerticalAlignment="Center" Margin="10,0"/>
+ 
+                    <!-- Right: Info & Speed Group -->
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" HorizontalAlignment="Right" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding FormattedTime}" VerticalAlignment="Center" Foreground="#E0E0E0" FontSize="10" FontFamily="Consolas" TextAlignment="Right"/>
+                        <Button Theme="{StaticResource SnipToolButton}" Content="{Binding PlaybackSpeedText}" 
+                                Command="{Binding CycleSpeedCommand}" 
+                                Padding="4,2" FontSize="11" Width="40" Height="26" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Grid>
             </StackPanel>
         </Border>
 
