@@ -56,10 +56,10 @@ public partial class FloatingVideoViewModel
         set => this.RaiseAndSetIfChanged(ref _toolbarMargin, value);
     }
 
-    public ReactiveCommand<Unit, Unit> ToggleToolbarCommand { get; private set; }
-    public ReactiveCommand<AnnotationType, Unit> SelectToolCommand { get; private set; }
-    public ReactiveCommand<string, Unit> ToggleToolGroupCommand { get; private set; }
-    public ReactiveCommand<Unit, Unit> SelectionCommand { get; private set; }
+    public ReactiveCommand<Unit, Unit> ToggleToolbarCommand { get; private set; } = null!;
+    public ReactiveCommand<AnnotationType, Unit> SelectToolCommand { get; private set; } = null!;
+    public ReactiveCommand<string, Unit> ToggleToolGroupCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> SelectionCommand { get; private set; } = null!;
 
     private void InitializeToolbarCommands()
     {

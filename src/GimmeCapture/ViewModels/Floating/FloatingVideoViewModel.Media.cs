@@ -145,11 +145,11 @@ public partial class FloatingVideoViewModel
         }
     }
 
-    public ReactiveCommand<Unit, Unit> TogglePlaybackCommand { get; private set; }
-    public ReactiveCommand<Unit, Unit> FastForwardCommand { get; private set; }
-    public ReactiveCommand<Unit, Unit> RewindCommand { get; private set; }
-    public ReactiveCommand<Unit, Unit> ToggleLoopCommand { get; private set; }
-    public ReactiveCommand<Unit, Unit> CycleSpeedCommand { get; private set; }
+    public ReactiveCommand<Unit, Unit> TogglePlaybackCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> FastForwardCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> RewindCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> ToggleLoopCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> CycleSpeedCommand { get; private set; } = null!;
 
     private void InitializeMediaCommands()
     {

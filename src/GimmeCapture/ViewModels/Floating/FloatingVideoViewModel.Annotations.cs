@@ -114,18 +114,18 @@ public partial class FloatingVideoViewModel
     // Shared preset colors from Main ViewModel
     public System.Collections.Generic.IEnumerable<Avalonia.Media.Color> PresetColors => GimmeCapture.ViewModels.Main.SnipWindowViewModel.StaticData.ColorsList;
 
-    public ReactiveCommand<Unit, Unit> IncreaseFontSizeCommand { get; private set; }
-    public ReactiveCommand<Unit, Unit> DecreaseFontSizeCommand { get; private set; }
-    public ReactiveCommand<Avalonia.Media.Color, Unit> ChangeColorCommand { get; private set; }
-    public ReactiveCommand<Unit, Unit> IncreaseThicknessCommand { get; private set; }
-    public ReactiveCommand<Unit, Unit> DecreaseThicknessCommand { get; private set; }
+    public ReactiveCommand<Unit, Unit> IncreaseFontSizeCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> DecreaseFontSizeCommand { get; private set; } = null!;
+    public ReactiveCommand<Avalonia.Media.Color, Unit> ChangeColorCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> IncreaseThicknessCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> DecreaseThicknessCommand { get; private set; } = null!;
 
-    public ReactiveCommand<Unit, Unit> ConfirmTextEntryCommand { get; private set; }
-    public ReactiveCommand<Unit, Unit> CancelTextEntryCommand { get; private set; }
+    public ReactiveCommand<Unit, Unit> ConfirmTextEntryCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> CancelTextEntryCommand { get; private set; } = null!;
     
-    public ReactiveCommand<Unit, Unit> ClearAnnotationsCommand { get; private set; }
-    public ReactiveCommand<Unit, Unit> UndoCommand { get; private set; }
-    public ReactiveCommand<Unit, Unit> RedoCommand { get; private set; }
+    public ReactiveCommand<Unit, Unit> ClearAnnotationsCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> UndoCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> RedoCommand { get; private set; } = null!;
 
     private Stack<IHistoryAction> _historyStack = new();
     private Stack<IHistoryAction> _redoHistoryStack = new();

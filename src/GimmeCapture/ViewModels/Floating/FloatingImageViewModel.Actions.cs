@@ -29,12 +29,12 @@ public partial class FloatingImageViewModel
     }
     public bool IsSelectionActive => SelectionRect.Width > 0 && SelectionRect.Height > 0;
 
-    public ReactiveCommand<Unit, Unit> CopyCommand { get; private set; }
-    public ReactiveCommand<Unit, Unit> CutCommand { get; private set; }
-    public ReactiveCommand<Unit, Unit> CropCommand { get; private set; }
-    public ReactiveCommand<Unit, Unit> PinSelectionCommand { get; private set; }
-    public ReactiveCommand<Unit, Unit> SaveCommand { get; private set; }
-    public ReactiveCommand<Unit, Unit> CloseCommand { get; private set; }
+    public ReactiveCommand<Unit, Unit> CopyCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> CutCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> CropCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> PinSelectionCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> SaveCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> CloseCommand { get; private set; } = null!;
 
     public System.Action? CloseAction { get; set; }
     public System.Action<Bitmap, Avalonia.Rect, Avalonia.Media.Color, double, bool>? OpenPinWindowAction { get; set; }

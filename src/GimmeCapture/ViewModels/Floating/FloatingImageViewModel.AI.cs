@@ -83,9 +83,9 @@ public partial class FloatingImageViewModel
     private readonly ObservableAsPropertyHelper<bool> _canRemoveBackground;
     public bool CanRemoveBackground => _canRemoveBackground.Value;
 
-    public ReactiveCommand<Unit, Unit> RemoveBackgroundCommand { get; }
-    public ReactiveCommand<Unit, Unit> ConfirmInteractiveCommand { get; }
-    public ReactiveCommand<Unit, Unit> CancelInteractiveCommand { get; }
+    public ReactiveCommand<Unit, Unit> RemoveBackgroundCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> ConfirmInteractiveCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> CancelInteractiveCommand { get; private set; } = null!;
 
     private void InitializeAICommands()
     {
