@@ -479,6 +479,18 @@ public partial class SnipWindowViewModel
     public ReactiveCommand<Unit, Unit> TriggerAutoScanCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> ToggleAIScanBoxCommand { get; set; } = null!;
 
+    private void InitializeSelectionCommands()
+    {
+        AIScanCommand = ReactiveCommand.CreateFromTask(RunAIScanAsync);
+        AIScanCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"AI Scan Command error: {ex}"));
+
+        TriggerAutoScanCommand = ReactiveCommand.CreateFromTask(RunAIScanAsync);
+        TriggerAutoScanCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Auto Scan Command error: {ex}"));
+
+        ToggleAIScanBoxCommand = ReactiveCommand.Create(() => { ShowAIScanBox = !ShowAIScanBox; return Unit.Default; });
+        ToggleAIScanBoxCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Toggle AI Box error: {ex}"));
+    }
+
     private SAM2Service? _sam2Service;
 
     private void InitializeSAM2(MainWindowViewModel mainVm)

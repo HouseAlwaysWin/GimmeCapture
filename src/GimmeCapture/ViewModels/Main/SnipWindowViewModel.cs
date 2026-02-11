@@ -140,6 +140,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
 
         InitializeActionCommands();
         InitializeToolbarCommands();
+        InitializeSelectionCommands();
         if (mainVm != null)
         {
             InitializeSAM2(mainVm);
