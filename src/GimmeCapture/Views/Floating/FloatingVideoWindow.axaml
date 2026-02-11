@@ -98,6 +98,26 @@
                                Stretch="Fill" 
                                Name="PinnedVideo"/>
                         
+                        <!-- Processing/Export Overlay -->
+                        <Border IsVisible="{Binding IsExporting}" 
+                                Background="#AA000000" 
+                                CornerRadius="4">
+                            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="10">
+                                <TextBlock Text="Processing Export..." 
+                                           HorizontalAlignment="Center" 
+                                           Foreground="White" 
+                                           FontSize="14" FontWeight="Bold"/>
+                                <ProgressBar Value="{Binding ExportProgress}" 
+                                             Minimum="0" Maximum="100" 
+                                             Width="150" Height="8" 
+                                             Foreground="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}"/>
+                                <TextBlock Text="{Binding ExportProgress, StringFormat={}{0:F1}%}" 
+                                           HorizontalAlignment="Center" 
+                                           Foreground="#CCCCCC" 
+                                           FontSize="10"/>
+                            </StackPanel>
+                        </Border>
+                        
                         <!-- Annotation Layer -->
                         <ItemsControl ItemsSource="{Binding Annotations}" IsHitTestVisible="False">
                             <ItemsControl.ItemsPanel>

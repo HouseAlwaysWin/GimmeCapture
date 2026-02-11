@@ -218,6 +218,8 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable, IDrawingToolVi
 
     public string VideoPath { get; }
     private readonly string _ffmpegPath;
+    public string FFmpegPath => _ffmpegPath;
+    public VideoCodec VideoCodec => _appSettingsService?.Settings.VideoCodec ?? VideoCodec.H264;
     private CancellationTokenSource? _playCts;
     private Task? _playbackTask;
     private readonly SemaphoreSlim _playSemaphore = new(1, 1);
@@ -237,6 +239,20 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable, IDrawingToolVi
     {
         get => _displayHeight;
         set => this.RaiseAndSetIfChanged(ref _displayHeight, value);
+    }
+
+    private bool _isExporting;
+    public bool IsExporting
+    {
+        get => _isExporting;
+        set => this.RaiseAndSetIfChanged(ref _isExporting, value);
+    }
+
+    private double _exportProgress;
+    public double ExportProgress
+    {
+        get => _exportProgress;
+        set => this.RaiseAndSetIfChanged(ref _exportProgress, value);
     }
 
     private TimeSpan _totalDuration = TimeSpan.Zero;
@@ -534,16 +550,6 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable, IDrawingToolVi
 
         CopyCommand = ReactiveCommand.CreateFromTask(async () => 
         {
-            if (Annotations.Count > 0)
-            {
-                var flattened = await GetFlattenedBitmapAsync();
-                if (flattened != null)
-                {
-                    await _clipboardService.CopyImageAsync(flattened);
-                    return;
-                }
-            }
-            
             if (CopyAction != null) await CopyAction();
         });
 

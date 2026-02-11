@@ -97,17 +97,51 @@ public class ClipboardService : IClipboardService
 
     public async Task CopyFileAsync(string filePath)
     {
-        var topLevel = GetTopLevel();
-        var clipboard = topLevel?.Clipboard;
-        var storageProvider = topLevel?.StorageProvider;
+        if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath)) return;
 
-        if (clipboard != null && storageProvider != null)
+        if (OperatingSystem.IsWindows())
         {
-             var file = await storageProvider.TryGetFileFromPathAsync(new Uri(filePath));
-             if (file != null)
-             {
-                 await Avalonia.Input.Platform.ClipboardExtensions.SetFilesAsync(clipboard, new[] { file });
-             }
+            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => 
+            {
+                try
+                {
+                    var fileList = new System.Collections.Specialized.StringCollection();
+                    fileList.Add(Path.GetFullPath(filePath));
+                    
+                    // Use WinForms for reliable file copy (standard Windows way)
+                    for (int i = 0; i < 5; i++)
+                    {
+                        try
+                        {
+                            System.Windows.Forms.Clipboard.SetFileDropList(fileList);
+                            return;
+                        }
+                        catch (System.Runtime.InteropServices.ExternalException)
+                        {
+                            System.Threading.Thread.Sleep(100);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Failed to set clipboard file drop: {ex}");
+                }
+            });
+        }
+        else
+        {
+            var topLevel = GetTopLevel();
+            var clipboard = topLevel?.Clipboard;
+            var storageProvider = topLevel?.StorageProvider;
+
+            if (clipboard != null && storageProvider != null)
+            {
+                var file = await storageProvider.TryGetFileFromPathAsync(new Uri(filePath));
+                if (file != null)
+                {
+                    await Avalonia.Input.Platform.ClipboardExtensions.SetFilesAsync(clipboard, new[] { file });
+                }
+            }
         }
     }
 

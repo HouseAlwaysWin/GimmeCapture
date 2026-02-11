@@ -12,6 +12,9 @@ using Avalonia.Interactivity;
 using Avalonia.Threading;
 using System.Reactive.Linq;
 using Avalonia.Media.Imaging;
+using System.Linq;
+using System.Collections.Generic;
+using CliWrap;
 
 namespace GimmeCapture.Views.Floating;
 
@@ -47,18 +50,25 @@ public partial class FloatingVideoWindow : Window
             {
                 if (string.IsNullOrEmpty(vm.VideoPath)) return;
                 
-                await Task.Run(() => 
+                // If speed is 1.0 and no annotations, just copy the original file path
+                if (Math.Abs(vm.PlaybackSpeed - 1.0) < 0.01 && vm.Annotations.Count == 0)
                 {
-                    var escapedPath = vm.VideoPath.Replace("'", "''");
-                    var command = $"Set-Clipboard -Path '{escapedPath}'";
-                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                    {
-                        FileName = "powershell",
-                        Arguments = $"-Command \"{command}\"",
-                        CreateNoWindow = true,
-                        UseShellExecute = false
-                    });
-                });
+                    await vm.ClipboardService.CopyFileAsync(vm.VideoPath);
+                    return;
+                }
+
+                // Process with effects to a temp file
+                var tempDir = Path.Combine(Path.GetTempPath(), "GimmeCapture");
+                if (!Directory.Exists(tempDir)) Directory.CreateDirectory(tempDir);
+                
+                var extension = Path.GetExtension(vm.VideoPath);
+                var tempPath = Path.Combine(tempDir, $"gc_copy_{Guid.NewGuid():N}{extension}");
+                
+                bool success = await ProcessVideoWithEffectsAsync(vm, tempPath);
+                if (success)
+                {
+                    await vm.ClipboardService.CopyFileAsync(tempPath);
+                }
             };
 
             vm.SaveAction = async () => 
@@ -79,7 +89,7 @@ public partial class FloatingVideoWindow : Window
                 if (file != null)
                 {
                     var targetPath = file.Path.LocalPath;
-                    File.Copy(vm.VideoPath, targetPath, true);
+                    await ProcessVideoWithEffectsAsync(vm, targetPath);
                 }
             };
 
@@ -627,5 +637,212 @@ public partial class FloatingVideoWindow : Window
             "HandleRight" => ResizeDirection.Right,
             _ => ResizeDirection.None
         };
+    }
+
+    private async Task<bool> ProcessVideoWithEffectsAsync(FloatingVideoViewModel vm, string targetPath)
+    {
+        // If speed is 1.0 and no annotations, just copy
+        if (Math.Abs(vm.PlaybackSpeed - 1.0) < 0.01 && vm.Annotations.Count == 0)
+        {
+            File.Copy(vm.VideoPath, targetPath, true);
+            return true;
+        }
+
+        // Otherwise, we need to Re-Encode with FFmpeg
+        vm.IsExporting = true;
+        vm.ExportProgress = 0;
+
+        try
+        {
+            string? overlayPath = null;
+            if (vm.Annotations.Count > 0)
+            {
+                // 1. Render Annotations to a transparent PNG
+                var info = new SkiaSharp.SKImageInfo(vm.VideoBitmap!.PixelSize.Width, vm.VideoBitmap.PixelSize.Height, SkiaSharp.SKColorType.Bgra8888);
+                using var surface = SkiaSharp.SKSurface.Create(info);
+                var canvas = surface.Canvas;
+                canvas.Clear(SkiaSharp.SKColors.Transparent);
+
+                var scaleX = (double)info.Width / (vm.DisplayWidth > 0 ? vm.DisplayWidth : vm.OriginalWidth);
+                var scaleY = (double)info.Height / (vm.DisplayHeight > 0 ? vm.DisplayHeight : vm.OriginalHeight);
+
+                foreach (var ann in vm.Annotations)
+                {
+                    var paint = new SkiaSharp.SKPaint
+                    {
+                        Color = new SkiaSharp.SKColor(ann.Color.R, ann.Color.G, ann.Color.B, ann.Color.A),
+                        StrokeWidth = (float)(ann.Thickness * scaleX),
+                        IsAntialias = true,
+                        Style = SkiaSharp.SKPaintStyle.Stroke
+                    };
+                    if (ann.Type == AnnotationType.Pen)
+                    {
+                        paint.StrokeCap = SkiaSharp.SKStrokeCap.Round;
+                        paint.StrokeJoin = SkiaSharp.SKStrokeJoin.Round;
+                    }
+
+                    switch (ann.Type)
+                    {
+                        case AnnotationType.Rectangle:
+                        case AnnotationType.Ellipse:
+                            var rect = new SkiaSharp.SKRect(
+                                (float)(Math.Min(ann.StartPoint.X, ann.EndPoint.X) * scaleX),
+                                (float)(Math.Min(ann.StartPoint.Y, ann.EndPoint.Y) * scaleY),
+                                (float)(Math.Max(ann.StartPoint.X, ann.EndPoint.X) * scaleX),
+                                (float)(Math.Max(ann.StartPoint.Y, ann.EndPoint.Y) * scaleY));
+                            if (ann.Type == AnnotationType.Rectangle) canvas.DrawRect(rect, paint);
+                            else canvas.DrawOval(rect, paint);
+                            break;
+                        case AnnotationType.Line:
+                            canvas.DrawLine((float)(ann.StartPoint.X * scaleX), (float)(ann.StartPoint.Y * scaleY), (float)(ann.EndPoint.X * scaleX), (float)(ann.EndPoint.Y * scaleY), paint);
+                            break;
+                        case AnnotationType.Arrow:
+                            float x1 = (float)(ann.StartPoint.X * scaleX), y1 = (float)(ann.StartPoint.Y * scaleY);
+                            float x2 = (float)(ann.EndPoint.X * scaleX), y2 = (float)(ann.EndPoint.Y * scaleY);
+                            canvas.DrawLine(x1, y1, x2, y2, paint);
+                            double angle = Math.Atan2(y2 - y1, x2 - x1), arrowLen = 15 * scaleX, arrowAngle = Math.PI / 6;
+                            var path = new SkiaSharp.SKPath();
+                            path.MoveTo(x2, y2);
+                            path.LineTo((float)(x2 - arrowLen * Math.Cos(angle - arrowAngle)), (float)(y2 - arrowLen * Math.Sin(angle - arrowAngle)));
+                            path.LineTo((float)(x2 - arrowLen * Math.Cos(angle + arrowAngle)), (float)(y2 - arrowLen * Math.Sin(angle + arrowAngle)));
+                            path.Close();
+                            paint.Style = SkiaSharp.SKPaintStyle.Fill;
+                            canvas.DrawPath(path, paint);
+                            break;
+                        case AnnotationType.Pen:
+                            if (ann.Points.Any())
+                            {
+                                var pts = ann.Points.Select(p => new SkiaSharp.SKPoint((float)(p.X * scaleX), (float)(p.Y * scaleY))).ToArray();
+                                canvas.DrawPoints(SkiaSharp.SKPointMode.Polygon, pts, paint);
+                            }
+                            break;
+                        case AnnotationType.Text:
+                            var font = new SkiaSharp.SKFont(SkiaSharp.SKTypeface.Default, (float)(ann.FontSize * scaleX));
+                            var textPaint = new SkiaSharp.SKPaint { Color = paint.Color, IsAntialias = true };
+                            canvas.DrawText(ann.Text, (float)(ann.StartPoint.X * scaleX), (float)(ann.StartPoint.Y * scaleY + ann.FontSize * scaleY), SkiaSharp.SKTextAlign.Left, font, textPaint);
+                            break;
+                    }
+                }
+
+                overlayPath = Path.Combine(Path.GetTempPath(), $"gc_overlay_{Guid.NewGuid():N}.png");
+                using var image = surface.Snapshot();
+                using var data = image.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
+                using var fs = File.OpenWrite(overlayPath);
+                data.SaveTo(fs);
+            }
+
+            // 2. Build FFmpeg command
+            var extension = Path.GetExtension(targetPath).ToLowerInvariant();
+            var isGif = extension == ".gif";
+            
+            var filterParts = new List<string>();
+            if (Math.Abs(vm.PlaybackSpeed - 1.0) > 0.01)
+                filterParts.Add($"setpts={1.0 / vm.PlaybackSpeed:F4}*PTS");
+            
+            var speedFactor = vm.PlaybackSpeed;
+            var inputArgs = $"-i \"{vm.VideoPath}\" ";
+            var filterStr = "";
+            
+            if (isGif)
+            {
+                // GIF Specific high-quality processing
+                string baseVf = "";
+                if (overlayPath != null)
+                {
+                    inputArgs += $"-i \"{overlayPath}\" ";
+                    var speedFilter = filterParts.Count > 0 ? string.Join(",", filterParts) + "[v];[v]" : "[0:v]";
+                    baseVf = $"{speedFilter}[1:v]overlay=0:0";
+                }
+                else
+                {
+                    baseVf = filterParts.Count > 0 ? string.Join(",", filterParts) : "copy";
+                    if (baseVf == "copy") baseVf = "split[a][b];[a]palettegen[p];[b][p]paletteuse";
+                    else baseVf += ",split[a][b];[a]palettegen[p];[b][p]paletteuse";
+                }
+
+                if (overlayPath != null)
+                {
+                    // If overlay exists, we need to split after overlay
+                    filterStr = $"-filter_complex \"{baseVf},split[a][b];[a]palettegen[p];[b][p]paletteuse\"";
+                }
+                else
+                {
+                    filterStr = $"-vf \"{baseVf}\"";
+                }
+                
+                // For GIF, we don't force video codecs or pixel formats
+                var gifArgs = $"-y {inputArgs} {filterStr} \"{targetPath}\"";
+                var totalDurationGif = vm.TotalDuration.TotalSeconds / speedFactor;
+                await Cli.Wrap(vm.FFmpegPath)
+                    .WithArguments(gifArgs)
+                    .WithStandardErrorPipe(PipeTarget.ToDelegate(line => 
+                    {
+                        if (line.Contains("time="))
+                        {
+                            var match = System.Text.RegularExpressions.Regex.Match(line, @"time=(\d+:\d+:\d+\.\d+)");
+                            if (match.Success && TimeSpan.TryParse(match.Groups[1].Value, out var currentPos))
+                            {
+                                var progress = (currentPos.TotalSeconds / totalDurationGif) * 100;
+                                vm.ExportProgress = Math.Min(99.9, progress);
+                            }
+                        }
+                    }))
+                    .ExecuteAsync();
+            }
+            else
+            {
+                // Video Format (H264/H265)
+                if (overlayPath != null)
+                {
+                    inputArgs += $"-i \"{overlayPath}\" ";
+                    var vf = filterParts.Count > 0 ? string.Join(",", filterParts) + "[v];[v]" : "[0:v]";
+                    filterStr = $"-filter_complex \"{vf}[1:v]overlay=0:0\"";
+                }
+                else if (filterParts.Count > 0)
+                {
+                    filterStr = $"-vf \"{string.Join(",", filterParts)}\"";
+                }
+
+                string codec = vm.VideoCodec == VideoCodec.H265 ? "libx265" : "libx264";
+                string crf = vm.VideoCodec == VideoCodec.H265 ? "24" : "20";
+
+                var args = $"-y {inputArgs} {filterStr} -c:v {codec} -preset fast -crf {crf} -pix_fmt yuv420p \"{targetPath}\"";
+
+                // 3. Execute
+                var totalDuration = vm.TotalDuration.TotalSeconds / speedFactor;
+                await Cli.Wrap(vm.FFmpegPath)
+                    .WithArguments(args)
+                    .WithStandardErrorPipe(PipeTarget.ToDelegate(line => 
+                    {
+                        if (line.Contains("time="))
+                        {
+                            var match = System.Text.RegularExpressions.Regex.Match(line, @"time=(\d+:\d+:\d+\.\d+)");
+                            if (match.Success && TimeSpan.TryParse(match.Groups[1].Value, out var currentPos))
+                            {
+                                var progress = (currentPos.TotalSeconds / totalDuration) * 100;
+                                vm.ExportProgress = Math.Min(99.9, progress);
+                            }
+                        }
+                    }))
+                    .ExecuteAsync();
+            }
+
+            vm.ExportProgress = 100;
+            await Task.Delay(500); 
+
+            if (overlayPath != null && File.Exists(overlayPath))
+                File.Delete(overlayPath);
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Export Error: {ex}");
+            return false;
+        }
+        finally
+        {
+            vm.IsExporting = false;
+        }
     }
 }
