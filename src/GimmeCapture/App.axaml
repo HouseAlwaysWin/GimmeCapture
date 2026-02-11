@@ -40,6 +40,7 @@
             <cv:LanguageKeyConverter x:Key="LanguageKeyConverter"/>
             <cv:BoolToFontWeightConverter x:Key="BoolToFontWeightConverter"/>
             <cv:BoolToFontStyleConverter x:Key="BoolToFontStyleConverter"/>
+            <cv:SnapshotOffsetConverter x:Key="SnapshotOffsetConverter"/>
         </ResourceDictionary>
     </Application.Resources>
 

@@ -56,7 +56,19 @@
                                            Command="{Binding SelectToolCommand}" CommandParameter="{x:Static m:AnnotationType.Line}" ToolTip.Tip="{Binding LineTooltip}"
                                            Click="OnShapeSelected">
                                  <PathIcon Data="M3,11h18v2H3V11z" Width="14" Height="14"/>
-                             </Button>
+                            </Button>
+                            <Button Theme="{StaticResource SnipToolButton}" FontSize="12" BorderThickness="1" 
+                                           Classes.active="{Binding CurrentAnnotationTool, ConverterParameter={x:Static m:AnnotationType.Mosaic}, Converter={StaticResource EnumToBoolConverter}}"
+                                           Command="{Binding SelectToolCommand}" CommandParameter="{x:Static m:AnnotationType.Mosaic}" ToolTip.Tip="{Binding MosaicTooltip}"
+                                           Click="OnShapeSelected">
+                                <PathIcon Data="M3,3v18h18V3H3z M19,19H5V5h14V19z M11,7h2v2h-2V7z M7,7h2v2H7V7z M15,7h2v2h-2V7z M7,11h2v2H7V11z M11,11h2v2h-2V11z M15,11h2v2h-2V11z M7,15h2v2H7V15z M11,15h2v2h-2V15z M15,15h2v2h-2V15z" Width="14" Height="14"/>
+                            </Button>
+                            <Button Theme="{StaticResource SnipToolButton}" FontSize="12" BorderThickness="1" 
+                                           Classes.active="{Binding CurrentAnnotationTool, ConverterParameter={x:Static m:AnnotationType.Blur}, Converter={StaticResource EnumToBoolConverter}}"
+                                           Command="{Binding SelectToolCommand}" CommandParameter="{x:Static m:AnnotationType.Blur}" ToolTip.Tip="{Binding BlurTooltip}"
+                                           Click="OnShapeSelected">
+                                <PathIcon Data="M12,2c-5.33,4.55-8,8.48-8,11.8c0,4.98,3.8,8.2,8,8.2s8-3.22,8-8.2C20,10.48,17.33,6.55,12,2z" Width="14" Height="14"/>
+                            </Button>
                         </StackPanel>
                     </Border>
                 </Flyout>
@@ -66,6 +78,8 @@
                 <TextBlock Text="○" IsVisible="{Binding CurrentAnnotationTool, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Ellipse}}" FontSize="14"/>
                 <TextBlock Text="↗" IsVisible="{Binding CurrentAnnotationTool, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Arrow}}" FontSize="14"/>
                 <TextBlock Text="—" IsVisible="{Binding CurrentAnnotationTool, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Line}}" FontSize="14"/>
+                <TextBlock Text="::" IsVisible="{Binding CurrentAnnotationTool, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Mosaic}}" FontSize="14"/>
+                <TextBlock Text="░" IsVisible="{Binding CurrentAnnotationTool, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Blur}}" FontSize="14"/>
                 <TextBlock Text="⬚" IsVisible="{Binding IsShapeToolActive, Converter={StaticResource BoolInvertConverter}}" FontSize="14"/>
             </Panel>
         </Button>

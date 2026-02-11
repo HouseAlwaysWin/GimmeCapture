@@ -304,6 +304,73 @@ public class WindowsScreenCaptureService : IScreenCaptureService
                             canvas.DrawPath(path, paint);
                         }
                         break;
+                    case AnnotationType.Mosaic:
+                        {
+                            var rect = SKRect.Create(
+                                (float)Math.Min(p1.X, p2.X), 
+                                (float)Math.Min(p1.Y, p2.Y), 
+                                Math.Abs(p1.X - p2.X), 
+                                Math.Abs(p1.Y - p2.Y));
+                            
+                            if (rect.Width <= 0 || rect.Height <= 0) break;
+
+                            int cellSize = 12; // 12px mosaic cells
+                            
+                            canvas.Save();
+                            canvas.ClipRect(rect);
+
+                            for (float y = rect.Top; y < rect.Bottom; y += cellSize)
+                            {
+                                for (float x = rect.Left; x < rect.Right; x += cellSize)
+                                {
+                                    float cw = Math.Min(cellSize, rect.Right - x);
+                                    float ch = Math.Min(cellSize, rect.Bottom - y);
+                                    
+                                    // Get average color of the cell from original bitmap
+                                    // Simpler approach: sample the center pixel of the cell
+                                    var sampleX = (int)(x + cw / 2);
+                                    var sampleY = (int)(y + ch / 2);
+                                    
+                                    // Clamp sample points
+                                    sampleX = Math.Clamp(sampleX, 0, bitmap.Width - 1);
+                                    sampleY = Math.Clamp(sampleY, 0, bitmap.Height - 1);
+                                    
+                                    var color = bitmap.GetPixel(sampleX, sampleY);
+                                    
+                                    using var fillPaint = new SKPaint { Color = color, Style = SKPaintStyle.Fill };
+                                    canvas.DrawRect(SKRect.Create(x, y, cw, ch), fillPaint);
+                                }
+                            }
+                            canvas.Restore();
+                        }
+                        break;
+                    case AnnotationType.Blur:
+                        {
+                            var rect = SKRect.Create(
+                                (float)Math.Min(p1.X, p2.X), 
+                                (float)Math.Min(p1.Y, p2.Y), 
+                                Math.Abs(p1.X - p2.X), 
+                                Math.Abs(p1.Y - p2.Y));
+
+                            if (rect.Width <= 0 || rect.Height <= 0) break;
+
+                            canvas.Save();
+                            canvas.ClipRect(rect);
+                            
+                            // Apply blur by drawing the bitmap onto itself with a blur filter
+                            // We use a high blur sigma for strong effect
+                            using var blurPaint = new SKPaint
+                            {
+                                ImageFilter = SKImageFilter.CreateBlur(15, 15)
+                            };
+                            
+                            // Draw the region from the bitmap into the canvas via a layer or temp image
+                            // Actually, drawing the bitmap onto its own canvas with a blur filter is standard
+                            canvas.DrawBitmap(bitmap, 0, 0, blurPaint);
+                            
+                            canvas.Restore();
+                        }
+                        break;
                 }
             }
         }

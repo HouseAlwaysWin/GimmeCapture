@@ -166,7 +166,8 @@ public partial class SnipWindow : Window
                         EndPoint = relPoint,
                         Color = _viewModel.SelectedColor,
                         Thickness = _viewModel.CurrentThickness,
-                        FontSize = _viewModel.CurrentFontSize
+                        FontSize = _viewModel.CurrentFontSize,
+                        DrawingModeSnapshot = _viewModel.DrawingModeSnapshot
                     };
 
                     if (_viewModel.CurrentAnnotationTool == AnnotationType.Pen)

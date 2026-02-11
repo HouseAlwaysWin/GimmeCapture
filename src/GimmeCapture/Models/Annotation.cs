@@ -90,6 +90,13 @@ public class Annotation : ReactiveObject
         set => this.RaiseAndSetIfChanged(ref _isItalic, value);
     }
 
+    private Avalonia.Media.Imaging.Bitmap? _drawingModeSnapshot;
+    public Avalonia.Media.Imaging.Bitmap? DrawingModeSnapshot
+    {
+        get => _drawingModeSnapshot;
+        set => this.RaiseAndSetIfChanged(ref _drawingModeSnapshot, value);
+    }
+
     public Avalonia.Points Points { get; } = new();
 
     public void AddPoint(Point p)

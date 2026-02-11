@@ -101,5 +101,106 @@
               StrokeJoin="Round"
               Data="{Binding Points, Converter={StaticResource PenGeometryConverter}}"
               IsVisible="{Binding Type, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Pen}}"/>
+
+        <!-- Blur Preview -->
+        <Border IsVisible="{Binding Type, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Blur}}"
+                ClipToBounds="True"
+                CornerRadius="2">
+            <Canvas.Left>
+                <MultiBinding Converter="{StaticResource RectXConverter}">
+                    <Binding Path="StartPoint"/>
+                    <Binding Path="EndPoint"/>
+                </MultiBinding>
+            </Canvas.Left>
+            <Canvas.Top>
+                <MultiBinding Converter="{StaticResource RectYConverter}">
+                    <Binding Path="StartPoint"/>
+                    <Binding Path="EndPoint"/>
+                </MultiBinding>
+            </Canvas.Top>
+            <Border.Width>
+                <MultiBinding Converter="{StaticResource RectWidthConverter}">
+                    <Binding Path="StartPoint"/>
+                    <Binding Path="EndPoint"/>
+                </MultiBinding>
+            </Border.Width>
+            <Border.Height>
+                <MultiBinding Converter="{StaticResource RectHeightConverter}">
+                    <Binding Path="StartPoint"/>
+                    <Binding Path="EndPoint"/>
+                </MultiBinding>
+            </Border.Height>
+            
+            <Panel>
+                <!-- We use the Snapshot as background -->
+                <Image Source="{Binding $parent[local:AnnotationControl].Annotation.DrawingModeSnapshot}"
+                       Stretch="None">
+                    <Image.RenderTransform>
+                        <MultiBinding Converter="{StaticResource SnapshotOffsetConverter}">
+                             <Binding Path="StartPoint"/>
+                             <Binding Path="EndPoint"/>
+                             <Binding Path="$parent[Canvas].Bounds"/>
+                        </MultiBinding>
+                    </Image.RenderTransform>
+                </Image>
+                <Border Background="White" Opacity="0.1">
+                    <Border.Effect>
+                        <BlurEffect Radius="15"/>
+                    </Border.Effect>
+                </Border>
+                <Rectangle Fill="Transparent" Stroke="White" StrokeThickness="1" StrokeDashArray="2,2"/>
+            </Panel>
+            <Border.Effect>
+                <BlurEffect Radius="10"/>
+            </Border.Effect>
+        </Border>
+
+        <!-- Mosaic Preview -->
+        <Border IsVisible="{Binding Type, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Mosaic}}"
+                ClipToBounds="True"
+                CornerRadius="0">
+            <Canvas.Left>
+                <MultiBinding Converter="{StaticResource RectXConverter}">
+                    <Binding Path="StartPoint"/>
+                    <Binding Path="EndPoint"/>
+                </MultiBinding>
+            </Canvas.Left>
+            <Canvas.Top>
+                <MultiBinding Converter="{StaticResource RectYConverter}">
+                    <Binding Path="StartPoint"/>
+                    <Binding Path="EndPoint"/>
+                </MultiBinding>
+            </Canvas.Top>
+            <Border.Width>
+                <MultiBinding Converter="{StaticResource RectWidthConverter}">
+                    <Binding Path="StartPoint"/>
+                    <Binding Path="EndPoint"/>
+                </MultiBinding>
+            </Border.Width>
+            <Border.Height>
+                <MultiBinding Converter="{StaticResource RectHeightConverter}">
+                    <Binding Path="StartPoint"/>
+                    <Binding Path="EndPoint"/>
+                </MultiBinding>
+            </Border.Height>
+            
+            <Panel>
+                 <Rectangle Fill="#888888" Opacity="0.3"/>
+                 <Rectangle Stroke="White" StrokeThickness="1" StrokeDashArray="4,4"/>
+                 <!-- Simplified Mosaic Pattern for preview -->
+                 <Rectangle>
+                     <Rectangle.Fill>
+                         <VisualBrush TileMode="Tile" SourceRect="0,0,10,10" DestinationRect="0,0,10,10">
+                             <VisualBrush.Visual>
+                                 <Canvas Width="10" Height="10">
+                                     <Rectangle Width="5" Height="5" Fill="Gray" Opacity="0.5"/>
+                                     <Rectangle Width="5" Height="5" Canvas.Left="5" Canvas.Top="5" Fill="Gray" Opacity="0.5"/>
+                                 </Canvas>
+                             </VisualBrush.Visual>
+                         </VisualBrush>
+                     </Rectangle.Fill>
+                 </Rectangle>
+            </Panel>
+        </Border>
     </Canvas>
 </UserControl>
