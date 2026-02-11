@@ -263,17 +263,25 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable, IDrawingToolVi
     public string FormattedTime => $"{_currentTime:mm\\:ss} / {_totalDuration:mm\\:ss}";
 
     private double _seekTargetSeconds = -1;
-
     private double _playbackSpeed = 1.0;
+
     public double PlaybackSpeed
     {
         get => _playbackSpeed;
         set 
         {
-            this.RaiseAndSetIfChanged(ref _playbackSpeed, value);
+            if (Math.Abs(_playbackSpeed - value) < 0.01) return;
+            
+            _playbackSpeed = value;
+            this.RaisePropertyChanged(nameof(PlaybackSpeed));
             this.RaisePropertyChanged(nameof(PlaybackSpeedText));
-            // Speed change requires restarting the ffmpeg process to apply filters
-            if (_isPlaybackActive) StartPlayback();
+            
+            // Speed change entails seeking from current point to avoid restart
+            if (_isPlaybackActive)
+            {
+                _seekTargetSeconds = _currentTime.TotalSeconds;
+                StartPlayback();
+            }
         }
     }
 
@@ -561,6 +569,7 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable, IDrawingToolVi
 
         CycleSpeedCommand = ReactiveCommand.Create(() => 
         {
+            // Just change the property, the setter handles the restart/seek logic
             PlaybackSpeed = PlaybackSpeed switch
             {
                 0.5 => 1.0,
@@ -569,9 +578,6 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable, IDrawingToolVi
                 2.0 => 0.5,
                 _ => 1.0
             };
-            
-            // Apply speed change immediately by restarting playback if active
-            if (_isPlaybackActive) StartPlayback();
         });
 
         SelectToolCommand = ReactiveCommand.Create<AnnotationType>(tool => 
@@ -722,15 +728,14 @@ public class FloatingVideoViewModel : ViewModelBase, IDisposable, IDrawingToolVi
                 var seekArg = "";
                 if (_seekTargetSeconds >= 0)
                 {
-                    seekArg = $"-ss {_seekTargetSeconds} ";
+                    seekArg = $"-ss {_seekTargetSeconds:F3} ";
                     _currentTime = TimeSpan.FromSeconds(_seekTargetSeconds);
                     _seekTargetSeconds = -1;
-                    // Force property update
-                    this.RaisePropertyChanged(nameof(CurrentTime));
                 }
                 else
                 {
-                    _currentTime = TimeSpan.Zero;
+                    // Only reset to zero on a fresh start (not a speed-change restart)
+                    seekArg = $"-ss {_currentTime.TotalSeconds:F3} ";
                 }
 
                 using var pipe = new MemoryStream();
