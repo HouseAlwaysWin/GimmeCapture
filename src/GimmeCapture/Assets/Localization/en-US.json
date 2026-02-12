@@ -21,6 +21,7 @@
   "TabOutput": "Output",
   "TabControl": "Control",
   "TabRecord": "Record",
+  "TabAI": "AI Settings",
   "TabAbout": "About",
   "RunOnStartup": "Run On Startup",
   "AutoCheckUpdates": "Auto Check Updates",
