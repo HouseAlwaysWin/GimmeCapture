@@ -9,6 +9,10 @@ using Avalonia.Media;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Core;
 using ReactiveUI;
+using System.Net.Http;
+using System.Text.Json;
+using System.Collections.ObjectModel;
+using System.Reactive;
 
 namespace GimmeCapture.ViewModels.Main;
 
@@ -579,6 +583,93 @@ public partial class MainWindowViewModel
         set => this.RaiseAndSetIfChanged(ref _autoTranslate, value);
     }
 
+    private string _ollamaModel = "qwen2.5:3b";
+    public string OllamaModel
+    {
+        get => _ollamaModel;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _ollamaModel, value);
+            if (!_isDataLoading)
+            {
+                _settingsService.Settings.OllamaModel = value;
+                IsModified = true;
+                _ = SaveSettingsAsync();
+            }
+        }
+    }
+
+    private string _ollamaApiUrl = "http://localhost:11434/api/generate";
+    public string OllamaApiUrl
+    {
+        get => _ollamaApiUrl;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _ollamaApiUrl, value);
+            if (!_isDataLoading)
+            {
+                _settingsService.Settings.OllamaApiUrl = value;
+                IsModified = true;
+                _ = SaveSettingsAsync();
+            }
+        }
+    }
+
+    public ObservableCollection<string> AvailableOllamaModels { get; } = new();
+    public ReactiveCommand<Unit, Unit> RefreshOllamaModelsCommand { get; private set; }
+
+    public async Task RefreshOllamaModelsAsync()
+    {
+        try
+        {
+            StatusText = "Refreshing Ollama Models...";
+            string baseUrl = OllamaApiUrl.Replace("/api/generate", "");
+            if (baseUrl.EndsWith("/")) baseUrl = baseUrl.TrimEnd('/');
+            
+            using var client = new HttpClient();
+            client.Timeout = TimeSpan.FromSeconds(3);
+            var response = await client.GetStringAsync($"{baseUrl}/api/tags");
+            
+            using var doc = JsonDocument.Parse(response);
+            if (doc.RootElement.TryGetProperty("models", out var models))
+            {
+                var names = new List<string>();
+                foreach (var model in models.EnumerateArray())
+                {
+                    if (model.TryGetProperty("name", out var name))
+                    {
+                        names.Add(name.GetString() ?? "");
+                    }
+                }
+                
+                Avalonia.Threading.Dispatcher.UIThread.Post(() => 
+                {
+                    AvailableOllamaModels.Clear();
+                    foreach (var name in names) AvailableOllamaModels.Add(name);
+
+                    // If current model exists in the list, keep it.
+                    // If not, and we have available models, switch to the first one (Auto-pick).
+                    if (AvailableOllamaModels.Count > 0 && !AvailableOllamaModels.Contains(OllamaModel))
+                    {
+                         OllamaModel = AvailableOllamaModels[0];
+                         StatusText = $"Auto-selected model: {OllamaModel}";
+                    }
+                    else if (!AvailableOllamaModels.Contains(OllamaModel) && !string.IsNullOrEmpty(OllamaModel))
+                    {
+                        // Fallback: If no models found or strictly custom, keep it in the list
+                        AvailableOllamaModels.Add(OllamaModel);
+                    }
+                    StatusText = "Ollama Models Refreshed";
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Failed to fetch Ollama models: {ex.Message}");
+            StatusText = "Failed to fetch Ollama models";
+        }
+    }
+
     private bool _showRecordCursor = true;
     public bool ShowRecordCursor
     {
@@ -630,6 +721,8 @@ public partial class MainWindowViewModel
             CornerIconScale = settings.CornerIconScale;
             RecordFPS = settings.RecordFPS;
             AutoTranslate = settings.AutoTranslate;
+            OllamaModel = settings.OllamaModel;
+            OllamaApiUrl = settings.OllamaApiUrl;
 
             if (Color.TryParse(settings.BorderColorHex, out var color))
                 BorderColor = color;
@@ -695,6 +788,8 @@ public partial class MainWindowViewModel
             settings.CornerIconScale = CornerIconScale;
             settings.RecordFPS = RecordFPS;
             settings.AutoTranslate = AutoTranslate;
+            settings.OllamaModel = OllamaModel;
+            settings.OllamaApiUrl = OllamaApiUrl;
             settings.BorderColorHex = BorderColor.ToString();
             settings.ThemeColorHex = ThemeColor.ToString();
             settings.Language = SelectedLanguageOption.Value;

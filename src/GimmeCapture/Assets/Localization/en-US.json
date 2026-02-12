@@ -194,7 +194,11 @@
   "LangSimplifiedChinese": "Simplified Chinese",
   "LangEnglish": "English",
   "LangJapanese": "Japanese",
-  "LangKorean": "Korean"
+  "LangKorean": "Korean",
+  "InstallModule": "Install",
+  "RemoveModule": "Remove",
+  "OllamaModel": "Ollama Model:",
+  "OllamaApiUrl": "Ollama API URL:"
 }
 
 

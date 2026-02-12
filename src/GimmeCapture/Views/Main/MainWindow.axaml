@@ -343,6 +343,27 @@
                                             </StackPanel>
                                         </StackPanel>
                                     </StackPanel>
+
+                                    <!-- Ollama Settings -->
+                                    <StackPanel Spacing="5" Margin="24,10,0,10" IsEnabled="{Binding EnableAI}">
+                                        <TextBlock Text="{Binding [OllamaModel], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>
+                                        <Grid ColumnDefinitions="*, Auto">
+                                            <ComboBox Grid.Column="0" 
+                                                      ItemsSource="{Binding AvailableOllamaModels}" 
+                                                      SelectedItem="{Binding OllamaModel}"
+                                                      IsEditable="True"
+                                                      HorizontalAlignment="Stretch"
+                                                      Margin="0,0,10,0"/>
+                                            <Button Grid.Column="1" 
+                                                    Content="↻" 
+                                                    Command="{Binding RefreshOllamaModelsCommand}"
+                                                    ToolTip.Tip="Refresh Models"
+                                                    Theme="{StaticResource SmallGothicMetalButton}"/>
+                                        </Grid>
+                                        
+                                        <TextBlock Text="{Binding [OllamaApiUrl], Source={x:Static services:LocalizationService.Instance}}" FontSize="12" Margin="0,5,0,0"/>
+                                        <TextBox Text="{Binding OllamaApiUrl}" Watermark="http://localhost:11434/api/generate"/>
+                                    </StackPanel>
                                 </StackPanel>
                             </StackPanel>
                         </StackPanel>
@@ -584,7 +605,7 @@ IsChecked="{Binding ShowRecordCursor}" Margin="0,5,0,0"/>
                                             <Button Content="{Binding ActionButtonText}" 
                                                     Command="{Binding MainActionCommand}"
                                                     Theme="{StaticResource SmallGothicMetalButton}"
-                                                    Width="80"/>
+                                                    MinWidth="80"/>
                                             
                                             <!-- Variant Selector -->
                                             <ComboBox ItemsSource="{Binding Variants}" 

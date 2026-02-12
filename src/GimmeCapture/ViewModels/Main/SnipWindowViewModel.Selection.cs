@@ -638,19 +638,24 @@ public partial class SnipWindowViewModel
                     {
                         if (bitmap != null)
                         {
-                            // Check if OCR is actually ready to avoid silent hangs
-                            if (_mainVm != null && !_mainVm.AIResourceService.IsOCRReady())
+                            // Check and Ensure OCR resources are ready
+                            if (_mainVm != null)
                             {
-                                Console.WriteLine("[Translation] OCR not ready.");
-                                Avalonia.Threading.Dispatcher.UIThread.Post(() => {
-                                    IsIndeterminate = true;
-                                    IsProcessing = true;
-                                    ProcessingText = "OCR Module Required";
-                                });
-                                await Task.Delay(2000, token);
-                                Avalonia.Threading.Dispatcher.UIThread.Post(() => IsProcessing = false);
-                                await Task.Delay(5000, token);
-                                continue;
+                                bool ready = await _mainVm.AIResourceService.EnsureOCRAsync();
+                                if (!ready)
+                                {
+                                    Console.WriteLine("[Translation] OCR not ready (Download failed or cancelled).");
+                                    Console.WriteLine("[Translation] OCR not ready (Download failed or cancelled).");
+                                    Avalonia.Threading.Dispatcher.UIThread.Post(() => {
+                                        IsIndeterminate = false;
+                                        IsProcessing = false;
+                                        ProcessingText = "";
+                                        IsTranslationActive = false; // Stop the loop
+                                        // Ideally show a toast here, for now relying on status
+                                        if (_mainVm != null) _mainVm.StatusText = "OCR resources missing. Translation stopped.";
+                                    });
+                                    break; // Exit the loop
+                                }
                             }
 
                             Console.WriteLine("[Translation] Starting OCR/Ollama...");

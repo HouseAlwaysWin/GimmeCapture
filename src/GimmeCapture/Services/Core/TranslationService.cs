@@ -38,7 +38,7 @@ public class TranslationService
     {
         _aiResourceService = aiResourceService ?? throw new ArgumentNullException(nameof(aiResourceService));
         _settings = settingsService?.Settings ?? new AppSettings(); // Fallback if null, though unlikely in DI
-        _httpClient.Timeout = TimeSpan.FromSeconds(5); 
+        _httpClient.Timeout = TimeSpan.FromSeconds(60); 
     }
 
     private async Task EnsureLoadedAsync()
@@ -57,7 +57,9 @@ public class TranslationService
         }
 
         System.Diagnostics.Debug.WriteLine("[OCR] Loading models...");
+        Console.WriteLine("[OCR] EnsuresOCRAsync calling...");
         await _aiResourceService.EnsureOCRAsync();
+        Console.WriteLine("[OCR] EnsuresOCRAsync finished.");
         var paths = _aiResourceService.GetOCRPaths(targetLang);
 
         if (!File.Exists(paths.Det) || !File.Exists(paths.Rec) || !File.Exists(paths.Dict))
@@ -67,20 +69,31 @@ public class TranslationService
         }
 
         var options = new SessionOptions();
+        // Re-enable optimizations as the crash was shape-related, not optimization-related
+        options.GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL;
+        
+        System.Diagnostics.Debug.WriteLine($"[OCR] Rec Model Size: {new FileInfo(paths.Rec).Length} bytes");
+        Console.WriteLine($"[OCR] Rec Model Size: {new FileInfo(paths.Rec).Length} bytes");
+
         try 
         { 
             options.AppendExecutionProvider_DML(0); 
             System.Diagnostics.Debug.WriteLine("[OCR] Using DirectML");
+            Console.WriteLine("[OCR] Using DirectML");
         } 
         catch 
         {
             System.Diagnostics.Debug.WriteLine("[OCR] Using CPU");
+            Console.WriteLine("[OCR] Using CPU");
         }
 
+        Console.WriteLine($"[OCR] Creating DetSession from {paths.Det}...");
         _detSession = new InferenceSession(paths.Det, options);
+        Console.WriteLine($"[OCR] Creating RecSession from {paths.Rec}...");
         _recSession = new InferenceSession(paths.Rec, options);
         _currentOCRLanguage = targetLang;
         System.Diagnostics.Debug.WriteLine($"[OCR] Sessions initialized ({targetLang})");
+        Console.WriteLine($"[OCR] Sessions initialized ({targetLang})");
         
         _dict = File.ReadAllLines(paths.Dict).ToList();
         // PaddleOCR dict starts from index 1, index 0 is blank
@@ -102,10 +115,12 @@ public class TranslationService
         
         var boxes = DetectText(bitmap);
         System.Diagnostics.Debug.WriteLine($"[OCR] Detected {boxes.Count} boxes");
+        Console.WriteLine($"[OCR] Detected {boxes.Count} boxes");
         
         foreach (var box in boxes)
         {
             var text = RecognizeText(bitmap, box);
+            Console.WriteLine($"[OCR] Recognized: {text}");
             if (!string.IsNullOrWhiteSpace(text))
             {
                 var translated = await TranslateAsync(text);
@@ -145,7 +160,9 @@ public class TranslationService
         }
 
         var inputs = new List<NamedOnnxValue> { NamedOnnxValue.CreateFromTensor("x", input) };
+        Console.WriteLine("[OCR] Running DetSession...");
         using var outputs = _detSession!.Run(inputs);
+        Console.WriteLine("[OCR] DetSession Finished.");
         var outputTensor = outputs.First().AsTensor<float>();
 
         // Post-processing: Simple thresholding and bounding box finding
@@ -166,37 +183,94 @@ public class TranslationService
 
     private string RecognizeText(SKBitmap bitmap, SKRectI box)
     {
-        // Crop and Prepare for CRNN
-        using var cropped = new SKBitmap(box.Width, box.Height);
-        using var canvas = new SKCanvas(cropped);
-        canvas.DrawBitmap(bitmap, box, new SKRect(0, 0, box.Width, box.Height));
-        
-        // CRNN expects fixed height 48
-        int recWidth = (int)(box.Width * (48.0 / box.Height));
-        using var resized = cropped.Resize(new SKImageInfo(recWidth, 48), SKSamplingOptions.Default);
-        
-        var input = new DenseTensor<float>(new[] { 1, 3, 48, recWidth });
-        for (int y = 0; y < 48; y++)
+        try
         {
-            for (int x = 0; x < recWidth; x++)
+            Console.WriteLine($"[OCR] RecognizeText Box: {box.Left},{box.Top} {box.Width}x{box.Height}");
+            
+            if (box.Width <= 0 || box.Height <= 0) 
             {
-                var color = resized.GetPixel(x, y);
-                input[0, 0, y, x] = (color.Red / 255.0f - 0.5f) / 0.5f;
-                input[0, 1, y, x] = (color.Green / 255.0f - 0.5f) / 0.5f;
-                input[0, 2, y, x] = (color.Blue / 255.0f - 0.5f) / 0.5f;
+                Console.WriteLine("[OCR] Skip: Box has invalid dimensions.");
+                return "";
             }
+
+            // Crop and Prepare for CRNN
+            using var cropped = new SKBitmap(box.Width, box.Height);
+            using var canvas = new SKCanvas(cropped);
+            canvas.DrawBitmap(bitmap, box, new SKRect(0, 0, box.Width, box.Height));
+            
+            // Ensure height 48 (Standard for many PP-OCRv4 models)
+            int targetWidth = (int)(box.Width * (48.0 / box.Height));
+            if (targetWidth < 4) targetWidth = 4;
+            
+            // Limit max width
+            if (targetWidth > 960) targetWidth = 960;
+
+            int paddedWidth = 320;
+            if (targetWidth > 320)
+            {
+                paddedWidth = (targetWidth + 31) / 32 * 32;
+            }
+            
+            Console.WriteLine($"[OCR] TargetWidth: {targetWidth}, TensorWidth: {paddedWidth} (Fixed 48H/Padded)");
+
+            using var tensorBitmap = new SKBitmap(paddedWidth, 48);
+            using (var tCanvas = new SKCanvas(tensorBitmap))
+            {
+                // Fill with White (255,255,255) which maps to 1.0f
+                // Most OCR models are trained with white backgrounds.
+                tCanvas.Clear(SKColors.White);
+                
+                // Draw the actual image
+                using var rResized = cropped.Resize(new SKImageInfo(targetWidth, 48), SKSamplingOptions.Default);
+                if (rResized != null)
+                {
+                    tCanvas.DrawBitmap(rResized, 0, 0);
+                }
+            }
+            
+            var input = new DenseTensor<float>(new[] { 1, 3, 48, paddedWidth });
+            for (int y = 0; y < 48; y++)
+            {
+                for (int x = 0; x < paddedWidth; x++)
+                {
+                    var color = tensorBitmap.GetPixel(x, y);
+                    input[0, 0, y, x] = (color.Red / 255.0f - 0.5f) / 0.5f;
+                    input[0, 1, y, x] = (color.Green / 255.0f - 0.5f) / 0.5f;
+                    input[0, 2, y, x] = (color.Blue / 255.0f - 0.5f) / 0.5f;
+                }
+            }
+
+            string inputName = "x";
+            if (_recSession != null && _recSession.InputMetadata.Count > 0)
+            {
+                inputName = _recSession.InputMetadata.Keys.First();
+                var meta = _recSession.InputMetadata[inputName];
+                Console.WriteLine($"[OCR] Model Input: {inputName} Shape: [{string.Join(",", meta.Dimensions)}]");
+            }
+
+            var inputs = new List<NamedOnnxValue> { NamedOnnxValue.CreateFromTensor(inputName, input) };
+            
+            using var outputs = _recSession!.Run(inputs);
+            var outputTensor = outputs.First().AsTensor<float>();
+
+            // Decode CTC
+            return DecodeCTC(outputTensor);
         }
-
-        var inputs = new List<NamedOnnxValue> { NamedOnnxValue.CreateFromTensor("x", input) };
-        using var outputs = _recSession!.Run(inputs);
-        var outputTensor = outputs.First().AsTensor<float>();
-
-        // Decode CTC
-        return DecodeCTC(outputTensor);
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[OCR] CRITICAL RecognizeText Error: {ex.GetType().Name} - {ex.Message} at {ex.StackTrace}");
+            return "";
+        }
     }
 
     private string DecodeCTC(Tensor<float> tensor)
     {
+        if (_dict == null || _dict.Count == 0)
+        {
+            Console.WriteLine("[OCR] Dictionary is empty/null during DecodeCTC");
+            return "";
+        }
+
         var sb = new StringBuilder();
         int prevIdx = -1;
         
