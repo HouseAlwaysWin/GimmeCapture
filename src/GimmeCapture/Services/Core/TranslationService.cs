@@ -31,12 +31,13 @@ public class TranslationService
     private List<string> _dict = new();
     
     private readonly HttpClient _httpClient = new();
-    private const string OllamaUrl = "http://localhost:11434/api/generate";
+    private readonly AppSettings _settings;
 
-    public TranslationService()
+    public TranslationService(AIResourceService aiResourceService, AppSettingsService settingsService)
     {
-        _aiResourceService = Locator.Current.GetService<AIResourceService>() ?? throw new Exception("AIResourceService not found");
-        _httpClient.Timeout = TimeSpan.FromSeconds(5); // Don't hang the loop if Ollama is slow/missing
+        _aiResourceService = aiResourceService ?? throw new ArgumentNullException(nameof(aiResourceService));
+        _settings = settingsService?.Settings ?? new AppSettings(); // Fallback if null, though unlikely in DI
+        _httpClient.Timeout = TimeSpan.FromSeconds(5); 
     }
 
     private async Task EnsureLoadedAsync()
@@ -217,19 +218,41 @@ public class TranslationService
     {
         try
         {
-             var request = new
+            string targetLang = _settings.TargetLanguage switch
             {
-                model = "qwen2.5:3b",
-                prompt = $"Translate the following text to Traditional Chinese. Only provide the translation, no explanation: \"{text}\"",
+                TranslationLanguage.TraditionalChinese => "Traditional Chinese (Taiwan)",
+                TranslationLanguage.SimplifiedChinese => "Simplified Chinese",
+                TranslationLanguage.English => "English",
+                TranslationLanguage.Japanese => "Japanese",
+                TranslationLanguage.Korean => "Korean",
+                _ => "Traditional Chinese"
+            };
+
+            var request = new
+            {
+                model = _settings.OllamaModel,
+                prompt = $"Translate the following text to {targetLang}. Only provide the translation, no explanation: \"{text}\"",
                 stream = false
             };
 
+            string url = !string.IsNullOrEmpty(_settings.OllamaApiUrl) ? _settings.OllamaApiUrl : "http://localhost:11434/api/generate";
             var content = new StringContent(JsonSerializer.Serialize(request), Encoding.UTF8, "application/json");
-            var response = await _httpClient.PostAsync(OllamaUrl, content);
-            response.EnsureSuccessStatusCode();
+            var response = await _httpClient.PostAsync(url, content);
+            
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                System.Diagnostics.Debug.WriteLine($"[Ollama Error] {response.StatusCode}: {errorContent}");
+                Console.WriteLine($"[Ollama Error] {response.StatusCode}: {errorContent}");
+                
+                if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+                {
+                    return $"Error: Model '{request.model}' not found. Please run 'ollama pull {request.model}' in terminal.";
+                }
+                return $"Error: Ollama returned {response.StatusCode}";
+            }
 
             var json = await response.Content.ReadAsStringAsync();
-            System.Diagnostics.Debug.WriteLine($"[Ollama] Response: {json}");
             using var doc = JsonDocument.Parse(json);
             return doc.RootElement.GetProperty("response").GetString()?.Trim() ?? text;
         }

@@ -13,6 +13,7 @@
         Background="{DynamicResource GothicBlackBrush}"
         FontFamily="{Binding CurrentFontFamily, Source={x:Static services:LocalizationService.Instance}}"
         xmlns:c="using:GimmeCapture.Views.Controls"
+        xmlns:converters="using:GimmeCapture.Converters"
         Foreground="White"
         MinWidth="720" MinHeight="500">
 
@@ -276,6 +277,17 @@
                                     <CheckBox IsChecked="{Binding ShowAIScanBox}" Content="{Binding [ShowAIScanBox], Source={x:Static services:LocalizationService.Instance}}" IsEnabled="{Binding EnableAI}" Margin="24,0,0,0"/>
                                     <CheckBox IsChecked="{Binding EnableAIScan}" Content="{Binding [EnableAIScan], Source={x:Static services:LocalizationService.Instance}}" IsEnabled="{Binding EnableAI}" Margin="24,0,0,0"/>
                                     <CheckBox IsChecked="{Binding AutoTranslate}" Content="{Binding [AutoTranslate], Source={x:Static services:LocalizationService.Instance}}" IsEnabled="{Binding EnableAI}" Margin="24,0,0,0"/>
+                                    
+                                    <DockPanel Margin="48,5,0,0" IsEnabled="{Binding AutoTranslate}">
+                                        <TextBlock Text="{Binding [TranslationLanguage], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                        <ComboBox ItemsSource="{Binding AvailableTranslationLanguages}" SelectedItem="{Binding TargetLanguage}" Width="200">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding Converter={x:Static converters:EnumToLocalizedConverter.Instance}, ConverterParameter='Lang'}"/>
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+                                    </DockPanel>
                                     
                                     <TextBlock Text="{Binding [AIResourcesPath], Source={x:Static services:LocalizationService.Instance}}" FontSize="12" Foreground="#888888" Margin="24,10,0,0"/>
                                     <DockPanel Margin="24,0,0,10" IsEnabled="{Binding EnableAI}">

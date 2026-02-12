@@ -1,6 +1,8 @@
 using System;
 using System.Linq;
+using System.Reactive.Linq;
 using System.Threading.Tasks;
+using System.Collections.Generic;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
@@ -17,6 +19,27 @@ public partial class MainWindowViewModel
     {
         public string Name { get; set; } = string.Empty;
         public Language Value { get; set; }
+    }
+
+    public List<TranslationLanguage> AvailableTranslationLanguages { get; } = Enum.GetValues<TranslationLanguage>().ToList();
+
+    public TranslationLanguage TargetLanguage
+    {
+        get => _settingsService.Settings.TargetLanguage;
+        set
+        {
+            if (_settingsService.Settings.TargetLanguage != value)
+            {
+                _settingsService.Settings.TargetLanguage = value;
+                this.RaisePropertyChanged();
+                
+                if (!_isDataLoading)
+                {
+                   IsModified = true; // Mark as modified so Save can happen if auto-save or manual save
+                   _ = SaveSettingsAsync(); // Auto-save for convenience
+                }
+            }
+        }
     }
 
     public LanguageOption[] AvailableLanguages { get; } = new[]

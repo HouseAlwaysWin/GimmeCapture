@@ -577,7 +577,13 @@ public partial class SnipWindowViewModel
         {
             if (_translationService == null)
             {
-                _translationService = new TranslationService();
+                if (_mainVm?.AIResourceService == null)
+                {
+                     Console.WriteLine("[Translation] Optimization skipped: MainVM or AIResourceService not ready.");
+                     return;
+                }
+
+                _translationService = new TranslationService(_mainVm.AIResourceService, _mainVm.AppSettingsService);
                 Console.WriteLine("[Translation] Service Created.");
             }
         }

@@ -3,6 +3,7 @@ using GimmeCapture.Services.Core;
 namespace GimmeCapture.Models;
 
 public enum VideoCodec { H264, H265 }
+public enum TranslationLanguage { TraditionalChinese, SimplifiedChinese, English, Japanese, Korean }
 
 public class AppSettings
 {
@@ -80,4 +81,8 @@ public class AppSettings
     public int SAM2MaxObjects { get; set; } = 20;
     public int SAM2MinObjectSize { get; set; } = 20;
     public bool AutoTranslate { get; set; } = false;
+    [System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter))]
+    public TranslationLanguage TargetLanguage { get; set; } = TranslationLanguage.TraditionalChinese;
+    public string OllamaModel { get; set; } = "qwen2.5:3b";
+    public string OllamaApiUrl { get; set; } = "http://localhost:11434/api/generate";
 }

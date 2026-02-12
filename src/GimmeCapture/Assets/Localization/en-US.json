@@ -181,7 +181,13 @@
   "ActionCropMode": "Crop Mode",
   "TipMosaic": "Mosaic",
   "TipBlur": "Blur",
-  "AutoTranslate": "Auto Translate (Ollama)"
+  "AutoTranslate": "Auto Translate (Ollama)",
+  "TranslationLanguage": "Target Language:",
+  "LangTraditionalChinese": "Traditional Chinese (Taiwan)",
+  "LangSimplifiedChinese": "Simplified Chinese",
+  "LangEnglish": "English",
+  "LangJapanese": "Japanese",
+  "LangKorean": "Korean"
 }
 
 
