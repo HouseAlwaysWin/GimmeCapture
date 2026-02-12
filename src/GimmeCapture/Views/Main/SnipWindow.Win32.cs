@@ -50,8 +50,8 @@ public partial class SnipWindow : Window
                 double th = _viewModel.ToolbarHeight + 20;
                 
                 toolbarRect = new Rect(
-                    (_viewModel.ToolbarLeft - 10) * scaling,
-                    (_viewModel.ToolbarTop - 10) * scaling,
+                    (_viewModel.ToolbarLeft - 2) * scaling,
+                    (_viewModel.ToolbarTop - 2) * scaling,
                     tw * scaling,
                     th * scaling
                 );

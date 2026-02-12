@@ -27,6 +27,7 @@
         <cv:BoolToFontWeightConverter x:Key="BoolToFontWeightConverter"/>
         <cv:BoolToFontStyleConverter x:Key="BoolToFontStyleConverter"/>
         <cv:StringToKeyGestureConverter x:Key="StringToKeyGestureConverter"/>
+        <cv:BoolToHiddenOpacityConverter x:Key="BoolToHiddenOpacityConverter"/>
     </Window.Resources>
     
     <Window.KeyBindings>
@@ -209,7 +210,8 @@
                   Canvas.Left="{Binding SelectionRect.X}"
                   Canvas.Top="{Binding SelectionRect.Y}"
                   IsVisible="{Binding CurrentState, Converter={StaticResource StateToBoolConverter}}"
-                  ClipToBounds="False">
+                  ClipToBounds="False"
+                  ZIndex="2">
                   
                 <!-- Selection Border -->
                 <Border CornerRadius="0" Background="#01FFFFFF"
@@ -248,8 +250,8 @@
                       IsVisible="{Binding IsDrawingMode, Converter={StaticResource BoolInvertConverter}}"/>
 
                 <!-- Move Handles -->
-                <Grid IsVisible="{Binding IsRecordingActive, Converter={StaticResource BoolInvertConverter}}" ClipToBounds="False">
-                    <Grid IsVisible="{Binding HideSelectionDecoration, Converter={StaticResource BoolInvertConverter}}" ClipToBounds="False">
+                <Grid IsVisible="{Binding IsRecordingActive, Converter={StaticResource BoolInvertConverter}}" ClipToBounds="False" ZIndex="10">
+                    <Grid Opacity="{Binding HideSelectionDecoration, Converter={StaticResource BoolToHiddenOpacityConverter}}" ClipToBounds="False">
                         <Border BorderThickness="{Binding SelectionBorderThickness, Converter={StaticResource ThicknessConverter}}" ClipToBounds="False">
                             <Border BorderThickness="1" Margin="-1" ClipToBounds="False">
                                 <Grid Name="AccentCornersGrid" ClipToBounds="False">

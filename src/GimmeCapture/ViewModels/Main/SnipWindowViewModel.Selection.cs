@@ -199,7 +199,7 @@ public partial class SnipWindowViewModel
         double th = ToolbarHeight > 0 ? ToolbarHeight : 45;
 
         // Position below by default
-        double top = SelectionRect.Bottom + 4; 
+        double top = SelectionRect.Bottom + 12; 
         double left = SelectionRect.Left;
 
         // Multi-monitor clamping: Find which monitor the selection is mostly on
@@ -215,7 +215,7 @@ public partial class SnipWindowViewModel
         // If bottom overflows monitor, position above selection
         if (top + th > monitorBottom - 10)
         {
-            top = SelectionRect.Top - th - 4;
+            top = SelectionRect.Top - th - 12;
         }
 
         // Horizontal Clamping to monitor bounds

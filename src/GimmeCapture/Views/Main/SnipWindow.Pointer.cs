@@ -110,6 +110,18 @@ public partial class SnipWindow : Window
         bool isResizeHandle = sourceControl != null && sourceControl.Classes.Contains("Handle");
         bool isMoveHandle = sourceControl != null && (sourceControl.Classes.Contains("MoveHandle") || sourceControl.Name?.Contains("InnerCorner") == true);
 
+        if (props.IsLeftButtonPressed && isMoveHandle)
+        {
+            if (_viewModel.RecState == RecordingState.Idle && _viewModel.CurrentState == SnipState.Selected)
+            {
+                _isMovingSelection = true;
+                _moveStartPoint = point;
+                _originalRect = _viewModel.SelectionRect;
+                e.Handled = true;
+                return;
+            }
+        }
+
         if (props.IsLeftButtonPressed && isResizeHandle)
         {
             if (_viewModel.RecState != RecordingState.Idle)
@@ -123,18 +135,6 @@ public partial class SnipWindow : Window
             _originalRect = _viewModel.SelectionRect;
             e.Handled = true;
             return;
-        }
-
-        if (props.IsLeftButtonPressed && isMoveHandle)
-        {
-            if (_viewModel.RecState == RecordingState.Idle && _viewModel.CurrentState == SnipState.Selected)
-            {
-                _isMovingSelection = true;
-                _moveStartPoint = point;
-                _originalRect = _viewModel.SelectionRect;
-                e.Handled = true;
-                return;
-            }
         }
 
         if (props.IsLeftButtonPressed)
