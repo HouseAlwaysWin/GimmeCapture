@@ -262,6 +262,20 @@ public partial class SnipWindowViewModel
         set => this.RaiseAndSetIfChanged(ref _toolbarHeight, value);
     }
 
+    private double _translationOverlayTop;
+    public double TranslationOverlayTop
+    {
+        get => _translationOverlayTop;
+        set => this.RaiseAndSetIfChanged(ref _translationOverlayTop, value);
+    }
+
+    private double _translationOverlayLeft;
+    public double TranslationOverlayLeft
+    {
+        get => _translationOverlayLeft;
+        set => this.RaiseAndSetIfChanged(ref _translationOverlayLeft, value);
+    }
+
     public double ToolbarMaxWidth => Math.Max(ViewportSize.Width - 40, 100);
 
     private void UpdateToolbarPosition()
@@ -316,6 +330,10 @@ public partial class SnipWindowViewModel
 
         ToolbarTop = top;
         ToolbarLeft = left;
+
+        // Position Translation Overlay below the toolbar
+        TranslationOverlayTop = top + th + 8;
+        TranslationOverlayLeft = left;
         
         // Ensure MaxWidth allows full toolbar on smaller monitors
         this.RaisePropertyChanged(nameof(ToolbarMaxWidth));

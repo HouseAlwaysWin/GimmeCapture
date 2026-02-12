@@ -304,17 +304,17 @@
             <!-- Translation Overlay (Outside Selection Box) -->
             <ItemsControl ItemsSource="{Binding TranslatedBlocks}" 
                           IsHitTestVisible="False"
-                          Canvas.Left="{Binding SelectionRect.Left}"
-                          Canvas.Top="{Binding SelectionRect.Bottom}"
+                          Canvas.Left="{Binding TranslationOverlayLeft}"
+                          Canvas.Top="{Binding TranslationOverlayTop}"
                           ZIndex="999">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
-                        <Canvas Width="{Binding ViewportSize.Width}" Height="{Binding ViewportSize.Height}"/>
+                        <StackPanel Spacing="4"/>
                     </ItemsPanelTemplate>
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.Styles>
                     <Style Selector="ItemsControl > ContentPresenter" x:DataType="services:TranslatedBlock">
-                        <Setter Property="Canvas.Top" Value="10"/> <!-- Small gap from bottom -->
+                        <!-- No hardcoded top offset, VM handles the gap from toolbar -->
                     </Style>
                 </ItemsControl.Styles>
                 <ItemsControl.ItemTemplate>

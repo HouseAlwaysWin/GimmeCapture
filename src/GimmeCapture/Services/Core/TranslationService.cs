@@ -12,6 +12,7 @@ using GimmeCapture.Models;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
 using SkiaSharp;
+using ReactiveUI;
 using SKRectI = SkiaSharp.SKRectI;
 using Splat;
 
@@ -306,8 +307,8 @@ public class TranslationService
             }
 
             // Crop and Prepare for CRNN
-            using var cropped = new SKBitmap(box.Width, box.Height);
-            using var canvas = new SKCanvas(cropped);
+            using var cropped = new global::SkiaSharp.SKBitmap(box.Width, box.Height);
+            using var canvas = new global::SkiaSharp.SKCanvas(cropped);
             canvas.DrawBitmap(bitmap, box, new SKRect(0, 0, box.Width, box.Height));
             
             // Ensure height 48 (Standard for many PP-OCRv4 models)
