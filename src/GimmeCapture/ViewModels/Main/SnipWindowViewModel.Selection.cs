@@ -35,8 +35,8 @@ public partial class SnipWindowViewModel
             else
             {
                 // Re-entering Detecting state (e.g. from Cancel/Reset)
-                // Restart scan if enabled
-                if (ShowAIScanBox)
+                // Restart scan if enabled (only after AllScreenBounds is populated)
+                if (ShowAIScanBox && AllScreenBounds?.Count > 0)
                 {
                     TriggerAutoScanCommand?.Execute(Unit.Default).Subscribe();
                 }
@@ -52,11 +52,26 @@ public partial class SnipWindowViewModel
         }
     }
 
-    private bool _isProcessing;
-    public bool IsProcessing
+
+    private bool _showSnipToolBar;
+    public bool ShowSnipToolBar
     {
-        get => _isProcessing;
-        set => this.RaiseAndSetIfChanged(ref _isProcessing, value);
+        get => _showSnipToolBar;
+        set => this.RaiseAndSetIfChanged(ref _showSnipToolBar, value);
+    }
+
+    private bool _showTopLoadingBar;
+    public bool ShowTopLoadingBar
+    {
+        get => _showTopLoadingBar;
+        set => this.RaiseAndSetIfChanged(ref _showTopLoadingBar, value);
+    }
+
+    private bool _showProcessingOverlay;
+    public bool ShowProcessingOverlay
+    {
+        get => _showProcessingOverlay;
+        set => this.RaiseAndSetIfChanged(ref _showProcessingOverlay, value);
     }
 
     private string _processingText = LocalizationService.Instance["StatusProcessing"];
@@ -106,14 +121,10 @@ public partial class SnipWindowViewModel
                 }
                 else
                 {
-                    // Trigger scan if enabled
-                    if (CurrentState == SnipState.Detecting)
+                    // Trigger scan if enabled (only after AllScreenBounds is populated)
+                    if (CurrentState == SnipState.Detecting && AllScreenBounds?.Count > 0)
                     {
-                        // We use a safe invoke to avoid crashing if command isn't ready
-                        Avalonia.Threading.Dispatcher.UIThread.Post(() => {
-                             if (TriggerAutoScanCommand != null)
-                                 TriggerAutoScanCommand.Execute(Unit.Default).Subscribe();
-                        });
+                        TriggerAutoScanCommand?.Execute(Unit.Default).Subscribe();
                     }
                 }
             }
@@ -386,12 +397,19 @@ public partial class SnipWindowViewModel
 
     private async Task RunAIScanAsync()
     {
+        System.Diagnostics.Debug.WriteLine("[AI Scan] RunAIScanAsync started");
+
         // Don't run AI detection if we are actually recording (RecState is not Idle)
         // But ALLOW it if we are just in "Recording Mode" (preparing to record)
-        if (RecState != RecordingState.Idle) return;
+        if (RecState != RecordingState.Idle) 
+        {
+            System.Diagnostics.Debug.WriteLine($"[AI Scan] Abort: RecState is {RecState}");
+            return;
+        }
 
         if (_mainVm == null || !_mainVm.EnableAI) 
         {
+            System.Diagnostics.Debug.WriteLine($"[AI Scan] Abort: EnableAI is false or MainVm is null");
             return;
         }
 
@@ -399,6 +417,7 @@ public partial class SnipWindowViewModel
         // If disabled, we do NOT run the expensive SAM2 detection.
         if (!_mainVm.EnableAIScan)
         {
+            System.Diagnostics.Debug.WriteLine("[AI Scan] Abort: EnableAIScan is false");
             return;
         }
 
@@ -407,7 +426,8 @@ public partial class SnipWindowViewModel
         _scanCts = new System.Threading.CancellationTokenSource();
         var token = _scanCts.Token;
 
-        IsProcessing = true;
+        ShowTopLoadingBar = true;
+        Console.WriteLine("[AI Scan] ShowTopLoadingBar set to TRUE");
         
         try
         {
@@ -421,7 +441,7 @@ public partial class SnipWindowViewModel
                 ProcessingText = "ABORT: SAM2 models not found. Please download in settings.";
                 Console.WriteLine("[AI Scan] ABORT: SAM2 not ready - model may not be downloaded");
                 await Task.Delay(2000, token);
-                IsProcessing = false;
+                ShowTopLoadingBar = false;
                 return;
             }
 
@@ -531,7 +551,7 @@ public partial class SnipWindowViewModel
         }
         finally
         {
-            IsProcessing = false;
+            ShowTopLoadingBar = false;
             Console.WriteLine("[AI Scan] Finished");
             _scanCts?.Dispose();
             _scanCts = null;
@@ -613,18 +633,20 @@ public partial class SnipWindowViewModel
         if (!models.Any())
         {
             Avalonia.Threading.Dispatcher.UIThread.Post(() => {
-                IsProcessing = true;
+                ShowSnipToolBar = true;
                 ProcessingText = "請先安裝 Ollama 並下載模型";
                 IsIndeterminate = false;
                 ProgressValue = 100;
             });
             await Task.Delay(3000);
-            Avalonia.Threading.Dispatcher.UIThread.Post(() => IsProcessing = false);
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => {
+                ShowSnipToolBar = false;
+            });
             return;
         }
 
         IsTranslationActive = true;
-        IsProcessing = true;
+        ShowSnipToolBar = true;
         ProcessingText = LocalizationService.Instance["StatusTranslating"] ?? "Translating...";
         IsIndeterminate = true;
 
@@ -641,7 +663,7 @@ public partial class SnipWindowViewModel
                         if (!ready)
                         {
                             Avalonia.Threading.Dispatcher.UIThread.Post(() => {
-                                IsProcessing = true;
+                                ShowSnipToolBar = true;
                                 ProcessingText = "OCR 資源未就緒 (下載失敗或取消)";
                                 IsIndeterminate = false;
                                 ProgressValue = 100;
@@ -671,7 +693,7 @@ public partial class SnipWindowViewModel
         }
         finally
         {
-            IsProcessing = false;
+            ShowSnipToolBar = false;
         }
     }
 }

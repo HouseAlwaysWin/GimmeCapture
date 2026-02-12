@@ -108,35 +108,28 @@ public partial class SnipWindow : Window
                     });
                 }
                 _viewModel.AllScreenBounds = new System.Collections.ObjectModel.ObservableCollection<ScreenBoundsViewModel>(screenBoundsList);
+                Console.WriteLine($"[SnipWindow] AllScreenBounds populated with {_viewModel.AllScreenBounds.Count} items.");
                 
                 // Initial Active Screen Update
                 if (GetCursorPos(out POINT p))
                 {
-                     // p is Screen Physical. PointToClient expects Screen Physical? 
-                     // No, PointToClient converts Screen Physical -> Client Logical.
                      var clientPoint = this.PointToClient(new PixelPoint(p.X, p.Y));
                      UpdateActiveScreenBounds(clientPoint);
                 }
                 
-                // Trigger AI Auto-Scan in background
-                Console.WriteLine("[SnipWindow] About to execute AIScanCommand");
-                try
+                // Trigger AI Auto-Scan (single entry point after AllScreenBounds is ready)
+                if (_viewModel.ShowAIScanBox && _viewModel.CurrentState == SnipState.Detecting)
                 {
-                    if (_viewModel.AIScanCommand == null)
+                    Console.WriteLine("[SnipWindow] Triggering AI Scan after AllScreenBounds ready");
+                    try
                     {
-                        Console.WriteLine("[SnipWindow] ERROR: AIScanCommand is null!");
-                    }
-                    else
-                    {
-                        Console.WriteLine("[SnipWindow] Executing AIScanCommand...");
                         await _viewModel.AIScanCommand.Execute();
                         Console.WriteLine("[SnipWindow] AIScanCommand completed");
                     }
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"[SnipWindow] AI Scan exception: {ex.Message}");
-                    Console.WriteLine($"[SnipWindow] Stack: {ex.StackTrace}");
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[SnipWindow] AI Scan exception: {ex.Message}");
+                    }
                 }
             }
             else

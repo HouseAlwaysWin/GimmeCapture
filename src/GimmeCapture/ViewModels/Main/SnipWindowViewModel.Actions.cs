@@ -197,7 +197,7 @@ public partial class SnipWindowViewModel
 
         var canRemoveBackground = this.WhenAnyValue(
             x => x.IsRecordingMode, 
-            x => x.IsProcessing, 
+            x => x.ShowProcessingOverlay, 
             (isRec, isProc) => !isRec && !isProc);
 
         RemoveBackgroundCommand = ReactiveCommand.CreateFromTask(async () => {
@@ -211,7 +211,7 @@ public partial class SnipWindowViewModel
     {
         // Cancel any pending AI scans immediately
         _scanCts?.Cancel();
-        IsProcessing = false;
+        ShowProcessingOverlay = false;
         ProcessingText = string.Empty;
 
         if (_recordingService == null || _mainVm == null) return;
@@ -398,11 +398,11 @@ public partial class SnipWindowViewModel
 
     private async Task PinRecording()
     {
-        if (IsProcessing || _recordingService == null) return;
+        if (ShowProcessingOverlay || _recordingService == null) return;
 
         bool wasRecording = _recordingService.State == RecordingState.Recording;
 
-        IsProcessing = true;
+        ShowProcessingOverlay = true;
         ProcessingText = LocalizationService.Instance["FinalizingRecording"] ?? "Finalizing..."; 
         try
         {
@@ -415,7 +415,7 @@ public partial class SnipWindowViewModel
                   if (string.IsNullOrEmpty(recordingPath) || !System.IO.File.Exists(recordingPath)) 
                   {
                       System.Diagnostics.Debug.WriteLine($"找不到錄影檔案: {recordingPath}");
-                      IsProcessing = false;
+                      ShowProcessingOverlay = false;
                       return;
                   }
 
@@ -424,7 +424,7 @@ public partial class SnipWindowViewModel
                   if (string.IsNullOrEmpty(ffplayPath) || !System.IO.File.Exists(ffplayPath))
                   {
                       System.Diagnostics.Debug.WriteLine($"找不到播放器組件 (ffplay.exe)");
-                      IsProcessing = false;
+                      ShowProcessingOverlay = false;
                       return;
                   }
 
@@ -471,7 +471,7 @@ public partial class SnipWindowViewModel
         }
         finally
         {
-            IsProcessing = false;
+            ShowProcessingOverlay = false;
         }
     }
 
@@ -494,7 +494,7 @@ public partial class SnipWindowViewModel
 
             try 
             {
-                IsProcessing = true;
+                ShowProcessingOverlay = true;
                 ProcessingText = LocalizationService.Instance["StatusProcessing"] ?? "Processing...";
                 var bitmap = await _captureService.CaptureScreenWithAnnotationsAsync(SelectionRect, ScreenOffset, VisualScaling, Annotations, _mainVm?.ShowSnipCursor ?? false);
                 await _captureService.CopyToClipboardAsync(bitmap);
@@ -502,7 +502,7 @@ public partial class SnipWindowViewModel
             }
             finally
             {
-                IsProcessing = false;
+                ShowProcessingOverlay = false;
                 CloseAction?.Invoke();
             }
         }
@@ -524,7 +524,7 @@ public partial class SnipWindowViewModel
 
              try
              {
-                 IsProcessing = true;
+                 ShowProcessingOverlay = true;
                  ProcessingText = LocalizationService.Instance["StatusSaving"] ?? "Saving...";
                  var bitmap = await _captureService.CaptureScreenWithAnnotationsAsync(SelectionRect, ScreenOffset, VisualScaling, Annotations, _mainVm?.ShowSnipCursor ?? false);
                  
@@ -563,7 +563,7 @@ public partial class SnipWindowViewModel
              }
              finally
              {
-                 IsProcessing = false;
+                 ShowProcessingOverlay = false;
                  CloseAction?.Invoke(); 
              }
          }

@@ -9,7 +9,7 @@
              Height="6"
              VerticalAlignment="Top"
              IsHitTestVisible="False"
-             IsVisible="{Binding IsProcessing}">
+             IsVisible="{Binding ShowTopLoadingBar}">
 
     <!-- Single cohesive bar with ambient glow -->
     <Panel Height="6" VerticalAlignment="Top">

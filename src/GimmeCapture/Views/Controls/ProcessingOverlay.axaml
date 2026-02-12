@@ -6,7 +6,7 @@
              mc:Ignorable="d" d:DesignWidth="300" d:DesignHeight="100"
              x:Class="GimmeCapture.Views.Controls.ProcessingOverlay"
              x:CompileBindings="False"
-             IsVisible="{Binding IsProcessing}">
+             IsVisible="{Binding ShowProcessingOverlay}">
 
     <UserControl.Styles>
         <Style Selector="ProgressBar /template/ Border#ProgressBarRoot">

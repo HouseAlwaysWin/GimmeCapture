@@ -111,7 +111,7 @@
             </Button>
 
             <!-- 6. Integrated Loading Indicator -->
-            <StackPanel Orientation="Horizontal" IsVisible="{Binding IsProcessing}" VerticalAlignment="Center" Margin="4,0">
+            <StackPanel Orientation="Horizontal" IsVisible="{Binding ShowSnipToolBar}" VerticalAlignment="Center" Margin="4,0">
                 <Rectangle Fill="#444444" Width="1" Height="16" Margin="0,0,4,0"/>
                 <StackPanel Spacing="2">
                     <TextBlock Text="{Binding ProcessingText}" Foreground="White" FontSize="10" HorizontalAlignment="Center"/>
