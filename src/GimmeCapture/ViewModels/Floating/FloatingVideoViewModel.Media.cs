@@ -30,7 +30,6 @@ public partial class FloatingVideoViewModel
     public VideoCodec VideoCodec => _appSettingsService?.Settings.VideoCodec ?? VideoCodec.H264;
     private CancellationTokenSource? _playCts;
     private Task? _playbackTask;
-    private readonly SemaphoreSlim _playSemaphore = new(1, 1);
     private readonly int _width;
     private readonly int _height;
 
@@ -156,8 +155,15 @@ public partial class FloatingVideoViewModel
         TogglePlaybackCommand = ReactiveCommand.Create(() => 
         {
             _isPlaybackActive = !_isPlaybackActive;
-            if (_isPlaybackActive) StartPlayback();
-            else _playCts?.Cancel();
+            if (_isPlaybackActive) 
+            {
+                StartPlayback();
+            }
+            else
+            {
+                // Fire-and-forget cancel: don't block UI thread
+                CancelPlaybackInBackground();
+            }
             this.RaisePropertyChanged(nameof(IsPlaying));
         });
 
@@ -241,45 +247,33 @@ public partial class FloatingVideoViewModel
         }
     }
 
-    private void StartPlayback()
+    /// <summary>
+    /// 在背景取消目前播放，不阻塞呼叫端。
+    /// </summary>
+    private void CancelPlaybackInBackground()
     {
-        _ = StartPlaybackInternal();
+        var oldCts = _playCts;
+        _playCts = null;
+        if (oldCts != null)
+        {
+            Task.Run(() => { try { oldCts.Cancel(); oldCts.Dispose(); } catch { } });
+        }
     }
 
-    private async Task StartPlaybackInternal()
+    private void StartPlayback()
     {
-        await _playSemaphore.WaitAsync();
-        try
+        // Cancel old playback in background (never blocks)
+        CancelPlaybackInBackground();
+
+        // If we are at the end, restart from zero
+        if (_currentTime >= TotalDuration && TotalDuration > TimeSpan.Zero)
         {
-            if (_playCts != null)
-            {
-                _playCts.Cancel();
-                try 
-                {
-                    if (_playbackTask != null) await _playbackTask;
-                } 
-                catch { }
-                finally 
-                {
-                    _playCts.Dispose();
-                    _playCts = null;
-                }
-            }
-            
-            // If we are at the end, restart from zero
-            if (_currentTime >= TotalDuration)
-            {
-                _currentTime = TimeSpan.Zero;
-                this.RaisePropertyChanged(nameof(CurrentTimeSeconds));
-            }
-            
-            _playCts = new CancellationTokenSource();
-            _playbackTask = PlaybackLoopFixed(_playCts.Token);
+            _currentTime = TimeSpan.Zero;
+            this.RaisePropertyChanged(nameof(CurrentTimeSeconds));
         }
-        finally
-        {
-            _playSemaphore.Release();
-        }
+        
+        _playCts = new CancellationTokenSource();
+        _playbackTask = PlaybackLoopFixed(_playCts.Token);
     }
 
     private async Task PlaybackLoopFixed(CancellationToken ct)

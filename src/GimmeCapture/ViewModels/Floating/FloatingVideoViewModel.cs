@@ -208,7 +208,11 @@ public partial class FloatingVideoViewModel : ViewModelBase, IDisposable, IDrawi
 
     public void Dispose()
     {
-        _playCts?.Cancel();
+        var cts = _playCts;
+        if (cts != null)
+        {
+            Task.Run(() => { try { cts.Cancel(); } catch { } });
+        }
         _playCts?.Dispose();
         VideoBitmap?.Dispose();
     }

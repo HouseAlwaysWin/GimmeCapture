@@ -9,8 +9,8 @@
     <Version>0.10.0</Version>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <DebugType>portable</DebugType>
-    <Optimize Condition="'$(Configuration)' == 'Debug'">false</Optimize>
+    <!-- <DebugType>portable</DebugType> -->
+    <!-- <Optimize Condition="'$(Configuration)' == 'Debug'">false</Optimize> -->
   </PropertyGroup>
 
   <ItemGroup>
