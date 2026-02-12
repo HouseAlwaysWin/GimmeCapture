@@ -437,7 +437,18 @@ public class TranslationService
             };
 
             string model = _settings.OllamaModel;
-            if (string.IsNullOrEmpty(model)) model = "qwen2.5:3b";
+            if (string.IsNullOrEmpty(model)) 
+            {
+                var availableModels = await GetAvailableModelsAsync();
+                if (availableModels.Any())
+                {
+                    model = availableModels.First();
+                }
+                else
+                {
+                    return "Error: No Ollama models found. Please install one first.";
+                }
+            }
             
             var request = new
             {
@@ -476,5 +487,36 @@ public class TranslationService
             Console.WriteLine($"[Translation Error] {ex.Message}");
             return text;
         }
+    }
+
+    public async Task<List<string>> GetAvailableModelsAsync()
+    {
+        try
+        {
+            string url = !string.IsNullOrEmpty(_settings.OllamaApiUrl) ? _settings.OllamaApiUrl.Replace("/generate", "/tags") : "http://localhost:11434/api/tags";
+            var response = await _httpClient.GetAsync(url);
+            if (response.IsSuccessStatusCode)
+            {
+                var json = await response.Content.ReadAsStringAsync();
+                using var doc = JsonDocument.Parse(json);
+                var models = new List<string>();
+                if (doc.RootElement.TryGetProperty("models", out var modelsElement))
+                {
+                    foreach (var model in modelsElement.EnumerateArray())
+                    {
+                        if (model.TryGetProperty("name", out var nameElement))
+                        {
+                            models.Add(nameElement.GetString() ?? "");
+                        }
+                    }
+                }
+                return models;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Translation] Failed to fetch models: {ex.Message}");
+        }
+        return new List<string>();
     }
 }

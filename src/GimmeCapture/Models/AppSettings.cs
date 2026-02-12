@@ -86,6 +86,6 @@ public class AppSettings
     public OCRLanguage SourceLanguage { get; set; } = OCRLanguage.Auto;
     [System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter))]
     public TranslationLanguage TargetLanguage { get; set; } = TranslationLanguage.TraditionalChinese;
-    public string OllamaModel { get; set; } = "qwen2.5:3b";
+    public string OllamaModel { get; set; } = "";
     public string OllamaApiUrl { get; set; } = "http://localhost:11434/api/generate";
 }

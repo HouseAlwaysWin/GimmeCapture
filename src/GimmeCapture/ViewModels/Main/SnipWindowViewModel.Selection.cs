@@ -46,9 +46,8 @@ public partial class SnipWindowViewModel
             {
                 TriggerAutoAction();
                 
-                // Trigger translation loop if active
-                if (IsTranslationActive)
-                    _ = RunTranslationLoopAsync();
+                // Clear translated blocks when selection changes
+                TranslatedBlocks.Clear();
             }
         }
     }
@@ -141,15 +140,15 @@ public partial class SnipWindowViewModel
         {
             System.Diagnostics.Debug.WriteLine($"[Translation] IsTranslationActive -> {value}");
             this.RaiseAndSetIfChanged(ref _isTranslationActive, value);
-            if (value)
-                _ = RunTranslationLoopAsync();
-            else
-                _translationCts?.Cancel();
+            // Just toggle visibility, the actual translation is triggered by TranslateCommand
+            if (!value)
+            {
+                TranslatedBlocks.Clear();
+            }
         }
     }
 
     public ObservableCollection<TranslatedBlock> TranslatedBlocks { get; } = new();
-    private System.Threading.CancellationTokenSource? _translationCts;
     private TranslationService? _translationService;
 
     private Rect _selectionRect;
@@ -557,6 +556,7 @@ public partial class SnipWindowViewModel
     public ReactiveCommand<Unit, Unit> AIScanCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> TriggerAutoScanCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> ToggleAIScanBoxCommand { get; set; } = null!;
+    public ReactiveCommand<Unit, Unit> TranslateCommand { get; set; } = null!;
 
     private void InitializeSelectionCommands()
     {
@@ -568,6 +568,9 @@ public partial class SnipWindowViewModel
 
         ToggleAIScanBoxCommand = ReactiveCommand.Create(() => { ShowAIScanBox = !ShowAIScanBox; return Unit.Default; });
         ToggleAIScanBoxCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Toggle AI Box error: {ex}"));
+
+        TranslateCommand = ReactiveCommand.CreateFromTask(PerformTranslationAsync);
+        TranslateCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Translate Command error: {ex}"));
     }
 
     private SAM2Service? _sam2Service;
@@ -590,142 +593,85 @@ public partial class SnipWindowViewModel
         });
     }
 
-    private async Task RunTranslationLoopAsync()
+    private async Task PerformTranslationAsync()
     {
-        Console.WriteLine("[Translation] Entering RunTranslationLoopAsync");
-        System.Diagnostics.Debug.WriteLine("[Translation] Entering RunTranslationLoopAsync");
+        Console.WriteLine("[Translation] PerformTranslationAsync triggered");
         
-        Console.WriteLine("[Translation] Service Init...");
-        try
+        if (CurrentState != SnipState.Selected || SelectionRect.Width <= 10 || SelectionRect.Height <= 10)
         {
-            if (_translationService == null)
-            {
-                if (_mainVm?.AIResourceService == null)
-                {
-                     Console.WriteLine("[Translation] Optimization skipped: MainVM or AIResourceService not ready.");
-                     return;
-                }
-
-                _translationService = new TranslationService(_mainVm.AIResourceService, _mainVm.AppSettingsService);
-                Console.WriteLine("[Translation] Service Created.");
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[Translation] Failed to init service: {ex.Message}");
             return;
         }
 
-        _translationCts?.Cancel();
-        _translationCts = new System.Threading.CancellationTokenSource();
-        var token = _translationCts.Token;
+        if (_translationService == null)
+        {
+            if (_mainVm?.AIResourceService == null) return;
+            _translationService = new TranslationService(_mainVm.AIResourceService, _mainVm.AppSettingsService);
+        }
 
-        Console.WriteLine("[Translation] Loop Started");
+        // 1. Check if Ollama is running and has models
+        var models = await _translationService.GetAvailableModelsAsync();
+        if (!models.Any())
+        {
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => {
+                IsProcessing = true;
+                ProcessingText = "請先安裝 Ollama 並下載模型";
+                IsIndeterminate = false;
+                ProgressValue = 100;
+            });
+            await Task.Delay(3000);
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => IsProcessing = false);
+            return;
+        }
 
-        // SHOW READY STATUS FOR DEBUGGING
-        Avalonia.Threading.Dispatcher.UIThread.Post(() => {
-             IsProcessing = true;
-             ProcessingText = "Translation Ready (Waiting for Snip)";
-             IsIndeterminate = false; // Show full bar or empty?
-             ProgressValue = 100;
-        });
+        IsTranslationActive = true;
+        IsProcessing = true;
+        ProcessingText = LocalizationService.Instance["StatusTranslating"] ?? "Translating...";
+        IsIndeterminate = true;
 
         try
         {
-            while (!token.IsCancellationRequested && IsTranslationActive)
+            using (var bitmap = await _captureService.CaptureScreenAsync(SelectionRect, ScreenOffset, VisualScaling, false))
             {
-                // Console.WriteLine($"[Translation] Loop Tick. State: {CurrentState}"); // Too spammy? Maybe every 1s
-                
-                // If not selected yet, wait briefly and check again
-                if (CurrentState != SnipState.Selected)
+                if (bitmap != null)
                 {
-                    // DEBUG: Enforce status visibility every tick while waiting
-                    Avalonia.Threading.Dispatcher.UIThread.Post(() => {
-                         if (!IsProcessing || ProcessingText != "Translation Ready (Waiting for Snip)")
-                         {
-                             IsProcessing = true;
-                             ProcessingText = "Translation Ready (Waiting for Snip)";
-                             IsIndeterminate = false;
-                             ProgressValue = 100;
-                         }
-                    });
-
-                    await Task.Delay(1000, token); // Check every second
-                    continue;
-                }
-
-                if (SelectionRect.Width > 10 && SelectionRect.Height > 10)
-                {
-                    Console.WriteLine("[Translation] Loop: Capture screen...");
-                    using (var bitmap = await _captureService.CaptureScreenAsync(SelectionRect, ScreenOffset, VisualScaling, false))
+                    // Check and Ensure OCR resources are ready
+                    if (_mainVm != null)
                     {
-                        if (bitmap != null)
+                        bool ready = await _mainVm.AIResourceService.EnsureOCRAsync();
+                        if (!ready)
                         {
-                            // Check and Ensure OCR resources are ready
-                            if (_mainVm != null)
-                            {
-                                bool ready = await _mainVm.AIResourceService.EnsureOCRAsync();
-                                if (!ready)
-                                {
-                                    Console.WriteLine("[Translation] OCR not ready (Download failed or cancelled).");
-                                    Console.WriteLine("[Translation] OCR not ready (Download failed or cancelled).");
-                                    Avalonia.Threading.Dispatcher.UIThread.Post(() => {
-                                        IsIndeterminate = false;
-                                        IsProcessing = false;
-                                        ProcessingText = "";
-                                        IsTranslationActive = false; // Stop the loop
-                                        // Ideally show a toast here, for now relying on status
-                                        if (_mainVm != null) _mainVm.StatusText = "OCR resources missing. Translation stopped.";
-                                    });
-                                    break; // Exit the loop
-                                }
-                            }
-
-                            Console.WriteLine("[Translation] Starting OCR/Ollama...");
                             Avalonia.Threading.Dispatcher.UIThread.Post(() => {
-                                IsIndeterminate = true;
                                 IsProcessing = true;
-                                ProcessingText = LocalizationService.Instance["StatusTranslating"] ?? "Translating...";
+                                ProcessingText = "OCR 資源未就緒 (下載失敗或取消)";
+                                IsIndeterminate = false;
+                                ProgressValue = 100;
                             });
-                            
-                            try 
-                            {
-                                var blocks = await _translationService.AnalyzeAndTranslateAsync(bitmap);
-                                System.Diagnostics.Debug.WriteLine($"[Translation] Blocks found: {blocks.Count}");
-                                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                                {
-                                    TranslatedBlocks.Clear();
-                                    foreach (var block in blocks)
-                                    {
-                                        TranslatedBlocks.Add(block);
-                                    }
-                                });
-                            }
-                            finally
-                            {
-                                Avalonia.Threading.Dispatcher.UIThread.Post(() => IsProcessing = false);
-                            }
+                            await Task.Delay(3000);
+                            return;
                         }
                     }
-                }
 
-                await Task.Delay(2000, token); 
+                    var blocks = await _translationService.AnalyzeAndTranslateAsync(bitmap);
+                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                    {
+                        TranslatedBlocks.Clear();
+                        foreach (var block in blocks)
+                        {
+                            TranslatedBlocks.Add(block);
+                        }
+                    });
+                }
             }
         }
-        catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            Console.WriteLine($"[Translation Loop Error] {ex.Message}");
-            System.Diagnostics.Debug.WriteLine($"[Translation Loop Error] {ex.Message}");
-            Avalonia.Threading.Dispatcher.UIThread.Post(() => 
-            {
-                IsTranslationActive = false;
-                IsProcessing = false;
-            });
+            Console.WriteLine($"[Translation Error] {ex.Message}");
+            ProcessingText = $"翻譯出錯: {ex.Message}";
+            await Task.Delay(3000);
         }
         finally
         {
-            Avalonia.Threading.Dispatcher.UIThread.Post(() => TranslatedBlocks.Clear());
+            IsProcessing = false;
         }
     }
 }

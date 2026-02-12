@@ -13,6 +13,7 @@ using System.Net.Http;
 using System.Text.Json;
 using System.Collections.ObjectModel;
 using System.Reactive;
+using System.Threading;
 
 namespace GimmeCapture.ViewModels.Main;
 
@@ -587,7 +588,7 @@ public partial class MainWindowViewModel
         set => this.RaiseAndSetIfChanged(ref _autoTranslate, value);
     }
 
-    private string _ollamaModel = "qwen2.5:3b";
+    private string _ollamaModel = "";
     public string OllamaModel
     {
         get => _ollamaModel;
@@ -658,7 +659,7 @@ public partial class MainWindowViewModel
                          OllamaModel = AvailableOllamaModels[0];
                          StatusText = $"Auto-selected model: {OllamaModel}";
                     }
-                    else if (!AvailableOllamaModels.Contains(OllamaModel) && !string.IsNullOrEmpty(OllamaModel))
+                    else if (!AvailableOllamaModels.Contains(OllamaModel) && !string.IsNullOrEmpty(OllamaModel) && OllamaModel != "qwen2.5:3b")
                     {
                         // Fallback: If no models found or strictly custom, keep it in the list
                         AvailableOllamaModels.Add(OllamaModel);
@@ -727,7 +728,7 @@ public partial class MainWindowViewModel
             EnableAIScan = settings.EnableAIScan;
             AIResourcesDirectory = settings.AIResourcesDirectory;
             AutoTranslate = settings.AutoTranslate;
-            OllamaModel = settings.OllamaModel;
+            OllamaModel = settings.OllamaModel == "qwen2.5:3b" ? "" : settings.OllamaModel;
             OllamaApiUrl = settings.OllamaApiUrl;
 
             if (Color.TryParse(settings.BorderColorHex, out var color))
