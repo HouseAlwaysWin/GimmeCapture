@@ -299,41 +299,46 @@
                     </Rectangle>
                 </Grid>
                 
-                <!-- Translation Overlay -->
-                <ItemsControl ItemsSource="{Binding TranslatedBlocks}" IsHitTestVisible="False">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <Canvas Width="{Binding SelectionRect.Width}" Height="{Binding SelectionRect.Height}"/>
-                        </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                    <ItemsControl.Styles>
-                        <Style Selector="ItemsControl > ContentPresenter" x:DataType="services:TranslatedBlock">
-                            <Setter Property="Canvas.Left" Value="{Binding Bounds.X}"/>
-                            <Setter Property="Canvas.Top" Value="{Binding Bounds.Y}"/>
-                        </Style>
-                    </ItemsControl.Styles>
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate DataType="services:TranslatedBlock">
-                            <Border BorderBrush="{Binding $parent[Window].((vm:SnipWindowViewModel)DataContext).ThemeColor, Converter={StaticResource ColorToBrushConverter}}"
-                                    BorderThickness="1"
-                                    Background="#CC000000"
-                                    CornerRadius="2"
-                                    Padding="4"
-                                    MaxWidth="{Binding Bounds.Width}"
-                                    MaxHeight="{Binding Bounds.Height}">
-                                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                                    <TextBlock Text="{Binding TranslatedText}" 
-                                               Foreground="White" 
-                                               FontSize="11" 
-                                               TextWrapping="Wrap"
-                                               HorizontalAlignment="Center"
-                                               VerticalAlignment="Center"/>
-                                </ScrollViewer>
-                            </Border>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
             </Grid>
+            
+            <!-- Translation Overlay (Outside Selection Box) -->
+            <ItemsControl ItemsSource="{Binding TranslatedBlocks}" 
+                          IsHitTestVisible="False"
+                          Canvas.Left="{Binding SelectionRect.Left}"
+                          Canvas.Top="{Binding SelectionRect.Bottom}"
+                          ZIndex="999">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <Canvas Width="{Binding ViewportSize.Width}" Height="{Binding ViewportSize.Height}"/>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.Styles>
+                    <Style Selector="ItemsControl > ContentPresenter" x:DataType="services:TranslatedBlock">
+                        <Setter Property="Canvas.Top" Value="10"/> <!-- Small gap from bottom -->
+                    </Style>
+                </ItemsControl.Styles>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="services:TranslatedBlock">
+                        <Border BorderBrush="#66FFFFFF"
+                                BorderThickness="1"
+                                Background="#DD000000"
+                                CornerRadius="4"
+                                Padding="12"
+                                BoxShadow="0 4 8 0 #40000000"
+                                MaxWidth="400">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <TextBlock Text="{Binding TranslatedText}" 
+                                           Foreground="White" 
+                                           FontSize="15" 
+                                           FontWeight="Medium"
+                                           TextWrapping="Wrap"
+                                           HorizontalAlignment="Left"
+                                           VerticalAlignment="Center"/>
+                            </ScrollViewer>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
             
             <!-- Text Overlay -->
             <!-- Text Input Overlay -->

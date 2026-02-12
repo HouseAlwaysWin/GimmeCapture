@@ -95,10 +95,12 @@ public class TranslationService
         System.Diagnostics.Debug.WriteLine($"[OCR] Sessions initialized ({targetLang})");
         Console.WriteLine($"[OCR] Sessions initialized ({targetLang})");
         
-        _dict = File.ReadAllLines(paths.Dict).ToList();
+        _dict = File.ReadAllLines(paths.Dict, Encoding.UTF8).ToList();
         // PaddleOCR dict starts from index 1, index 0 is blank
         _dict.Insert(0, "");
         _dict.Add(" ");
+        var sample = string.Join(", ", _dict.Skip(1).Take(10).Select(c => $"[{c}] (U+{(c.Length > 0 ? ((int)c[0]).ToString("X4") : "0000")})"));
+        Console.WriteLine($"[OCR] Dictionary Loaded: {_dict.Count} items. Sample: {sample}");
     }
 
     public async Task<List<TranslatedBlock>> AnalyzeAndTranslateAsync(SKBitmap bitmap)
@@ -199,19 +201,14 @@ public class TranslationService
             canvas.DrawBitmap(bitmap, box, new SKRect(0, 0, box.Width, box.Height));
             
             // Ensure height 48 (Standard for many PP-OCRv4 models)
+            // Maintain aspect ratio but prevent extreme squashing for tall boxes
             int targetWidth = (int)(box.Width * (48.0 / box.Height));
+            if (targetWidth < 64 && box.Width > 20) targetWidth = 64; 
             if (targetWidth < 4) targetWidth = 4;
-            
-            // Limit max width
-            if (targetWidth > 960) targetWidth = 960;
+            if (targetWidth > 1280) targetWidth = 1280;
 
-            int paddedWidth = 320;
-            if (targetWidth > 320)
-            {
-                paddedWidth = (targetWidth + 31) / 32 * 32;
-            }
-            
-            Console.WriteLine($"[OCR] TargetWidth: {targetWidth}, TensorWidth: {paddedWidth} (Fixed 48H/Padded)");
+            int paddedWidth = Math.Max(320, (targetWidth + 31) / 32 * 32);
+            Console.WriteLine($"[OCR] Input: {box.Width}x{box.Height}, Target: {targetWidth}x48, Padded: {paddedWidth}");
 
             using var tensorBitmap = new SKBitmap(paddedWidth, 48);
             using (var tCanvas = new SKCanvas(tensorBitmap))
@@ -278,6 +275,9 @@ public class TranslationService
         int seqLen = tensor.Dimensions[1];
         int dictSize = tensor.Dimensions[2];
 
+        bool hasNonBlank = false;
+        var topIndices = new List<int>();
+
         for (int i = 0; i < seqLen; i++)
         {
             int maxIdx = 0;
@@ -291,12 +291,22 @@ public class TranslationService
                 }
             }
 
+            if (maxIdx > 0)
+            {
+                hasNonBlank = true;
+                if (maxIdx != prevIdx) topIndices.Add(maxIdx);
+            }
+            
             if (maxIdx > 0 && maxIdx != prevIdx && maxIdx < _dict.Count)
             {
-                sb.Append(_dict[maxIdx]);
+                var chr = _dict[maxIdx];
+                sb.Append(chr);
             }
             prevIdx = maxIdx;
         }
+
+        if (!hasNonBlank) Console.WriteLine("[OCR] DecodeCTC: No characters found (all blank).");
+        else Console.WriteLine($"[OCR] DecodeCTC: Found indices [{string.Join(",", topIndices.Take(20))}]");
 
         return sb.ToString();
     }
@@ -315,33 +325,40 @@ public class TranslationService
                 _ => "Traditional Chinese"
             };
 
+            string model = _settings.OllamaModel;
+            if (string.IsNullOrEmpty(model)) model = "qwen2.5:3b";
+            
             var request = new
             {
-                model = _settings.OllamaModel,
+                model = model,
                 prompt = $"Translate the following text to {targetLang}. Only provide the translation, no explanation: \"{text}\"",
                 stream = false
             };
 
             string url = !string.IsNullOrEmpty(_settings.OllamaApiUrl) ? _settings.OllamaApiUrl : "http://localhost:11434/api/generate";
+            Console.WriteLine($"[Translation] Ollama Request: model={request.model}, prompt=\"{request.prompt.Substring(0, Math.Min(30, request.prompt.Length))}...\"");
+            
             var content = new StringContent(JsonSerializer.Serialize(request), Encoding.UTF8, "application/json");
             var response = await _httpClient.PostAsync(url, content);
             
+            Console.WriteLine($"[Translation] Ollama Response Status: {response.StatusCode}");
             if (!response.IsSuccessStatusCode)
             {
                 var errorContent = await response.Content.ReadAsStringAsync();
-                System.Diagnostics.Debug.WriteLine($"[Ollama Error] {response.StatusCode}: {errorContent}");
                 Console.WriteLine($"[Ollama Error] {response.StatusCode}: {errorContent}");
                 
                 if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
                 {
-                    return $"Error: Model '{request.model}' not found. Please run 'ollama pull {request.model}' in terminal.";
+                    return $"Error: Model '{request.model}' not found.";
                 }
-                return $"Error: Ollama returned {response.StatusCode}";
+                return $"Error: Ollama {response.StatusCode}";
             }
 
             var json = await response.Content.ReadAsStringAsync();
             using var doc = JsonDocument.Parse(json);
-            return doc.RootElement.GetProperty("response").GetString()?.Trim() ?? text;
+            var resultText = doc.RootElement.GetProperty("response").GetString()?.Trim() ?? text;
+            Console.WriteLine($"[Translation] Result: {resultText}");
+            return resultText;
         }
         catch (Exception ex)
         {
