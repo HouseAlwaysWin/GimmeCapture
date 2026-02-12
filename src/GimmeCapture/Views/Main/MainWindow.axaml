@@ -274,6 +274,8 @@
                                     
                                     <CheckBox IsChecked="{Binding EnableAI}" Content="{Binding [EnableAI], Source={x:Static services:LocalizationService.Instance}}" Margin="0,15,0,0" FontWeight="SemiBold"/>
                                     <CheckBox IsChecked="{Binding ShowAIScanBox}" Content="{Binding [ShowAIScanBox], Source={x:Static services:LocalizationService.Instance}}" IsEnabled="{Binding EnableAI}" Margin="24,0,0,0"/>
+                                    <CheckBox IsChecked="{Binding EnableAIScan}" Content="{Binding [EnableAIScan], Source={x:Static services:LocalizationService.Instance}}" IsEnabled="{Binding EnableAI}" Margin="24,0,0,0"/>
+                                    <CheckBox IsChecked="{Binding AutoTranslate}" Content="{Binding [AutoTranslate], Source={x:Static services:LocalizationService.Instance}}" IsEnabled="{Binding EnableAI}" Margin="24,0,0,0"/>
                                     
                                     <TextBlock Text="{Binding [AIResourcesPath], Source={x:Static services:LocalizationService.Instance}}" FontSize="12" Foreground="#888888" Margin="24,10,0,0"/>
                                     <DockPanel Margin="24,0,0,10" IsEnabled="{Binding EnableAI}">

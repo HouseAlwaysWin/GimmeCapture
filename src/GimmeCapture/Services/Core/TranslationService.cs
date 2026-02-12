@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -35,23 +36,38 @@ public class TranslationService
     public TranslationService()
     {
         _aiResourceService = Locator.Current.GetService<AIResourceService>() ?? throw new Exception("AIResourceService not found");
+        _httpClient.Timeout = TimeSpan.FromSeconds(5); // Don't hang the loop if Ollama is slow/missing
     }
 
     private async Task EnsureLoadedAsync()
     {
         if (_detSession != null && _recSession != null) return;
 
+        System.Diagnostics.Debug.WriteLine("[OCR] Loading models...");
         await _aiResourceService.EnsureOCRAsync();
         var paths = _aiResourceService.GetOCRPaths();
 
         if (!File.Exists(paths.Det) || !File.Exists(paths.Rec) || !File.Exists(paths.Dict))
+        {
+            System.Diagnostics.Debug.WriteLine("[OCR] ABORT: Model files missing even after EnsureOCRAsync");
             throw new FileNotFoundException("OCR model files missing");
+        }
 
         var options = new SessionOptions();
-        try { options.AppendExecutionProvider_DML(0); } catch { }
+        try 
+        { 
+            options.AppendExecutionProvider_DML(0); 
+            System.Diagnostics.Debug.WriteLine("[OCR] Using DirectML");
+        } 
+        catch 
+        {
+            System.Diagnostics.Debug.WriteLine("[OCR] Using CPU");
+        }
 
         _detSession = new InferenceSession(paths.Det, options);
         _recSession = new InferenceSession(paths.Rec, options);
+        System.Diagnostics.Debug.WriteLine("[OCR] Sessions initialized");
+        
         _dict = File.ReadAllLines(paths.Dict).ToList();
         // PaddleOCR dict starts from index 1, index 0 is blank
         _dict.Insert(0, "");
@@ -71,6 +87,7 @@ public class TranslationService
         // Actually, let's try to implement a basic DB pre-post processing.
         
         var boxes = DetectText(bitmap);
+        System.Diagnostics.Debug.WriteLine($"[OCR] Detected {boxes.Count} boxes");
         
         foreach (var box in boxes)
         {
@@ -212,6 +229,7 @@ public class TranslationService
             response.EnsureSuccessStatusCode();
 
             var json = await response.Content.ReadAsStringAsync();
+            System.Diagnostics.Debug.WriteLine($"[Ollama] Response: {json}");
             using var doc = JsonDocument.Parse(json);
             return doc.RootElement.GetProperty("response").GetString()?.Trim() ?? text;
         }

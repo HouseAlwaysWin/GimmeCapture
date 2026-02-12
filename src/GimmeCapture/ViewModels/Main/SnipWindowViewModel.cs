@@ -144,6 +144,21 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         if (mainVm != null)
         {
             InitializeSAM2(mainVm);
+            
+            // Sync translation activation with global settings in real-time
+            mainVm.WhenAnyValue(x => x.AutoTranslate)
+                  .Subscribe(val => IsTranslationActive = val)
+                  .DisposeWith(_disposables);
+
+            // Sync AI Scan Box visibility
+            mainVm.WhenAnyValue(x => x.ShowAIScanBox)
+                  .Subscribe(val => ShowAIScanBox = val)
+                  .DisposeWith(_disposables);
+
+            // Sync Enable AI Scan
+            mainVm.WhenAnyValue(x => x.EnableAIScan)
+                  .Subscribe(val => EnableAIScan = val)
+                  .DisposeWith(_disposables);
         }
 
         UpdateMask();

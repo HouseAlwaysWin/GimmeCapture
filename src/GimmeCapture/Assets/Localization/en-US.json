@@ -110,6 +110,7 @@
   "HideRecordSelectionBorder": "Hide Selection Window Border (Record)",
   "ShowRecordCursor": "Show Cursor in Record",
   "ShowAIScanBox": "Show AI Scan Box",
+  "EnableAIScan": "Enable AI Object Detection",
   "AIScan": "AI Scan",
   "TipCopy": "Copy to Clipboard",
   "TipSave": "Save to File",
@@ -179,7 +180,8 @@
   "ActionSelectionMode": "Selection Mode",
   "ActionCropMode": "Crop Mode",
   "TipMosaic": "Mosaic",
-  "TipBlur": "Blur"
+  "TipBlur": "Blur",
+  "AutoTranslate": "Auto Translate (Ollama)"
 }
 
 

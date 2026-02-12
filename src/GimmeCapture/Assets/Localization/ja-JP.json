@@ -99,6 +99,7 @@
   "HideRecordSelectionBorder": "選択ウィンドウの枠線を隠す (録画)",
   "ShowRecordCursor": "録画時にカーソルを表示",
   "ShowAIScanBox": "AI 検出枠を表示",
+  "EnableAIScan": "AI オブジェクト検出を有効化",
   "AIScan": "AI 自動スキャン",
   "TipCopy": "クリップボードにコピー",
   "TipSave": "ファイルに保存",
@@ -161,7 +162,8 @@
   "ActionSelectionMode": "選択モード",
   "ActionCropMode": "クロップモード",
   "TipMosaic": "モザイク",
-  "TipBlur": "ぼかし"
+  "TipBlur": "ぼかし",
+  "AutoTranslate": "自動翻訳 (Ollama)"
 }
 
 

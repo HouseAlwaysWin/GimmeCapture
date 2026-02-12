@@ -467,11 +467,30 @@ public partial class MainWindowViewModel
         set => this.RaiseAndSetIfChanged(ref _showSnipCursor, value);
     }
 
-    private bool _showAIScanBox = true;
     public bool ShowAIScanBox
     {
-        get => _showAIScanBox;
-        set => this.RaiseAndSetIfChanged(ref _showAIScanBox, value);
+        get => _settingsService.Settings.ShowAIScanBox;
+        set
+        {
+            if (_settingsService.Settings.ShowAIScanBox != value)
+            {
+                _settingsService.Settings.ShowAIScanBox = value;
+                this.RaisePropertyChanged();
+            }
+        }
+    }
+
+    public bool EnableAIScan
+    {
+        get => _settingsService.Settings.EnableAIScan;
+        set
+        {
+            if (_settingsService.Settings.EnableAIScan != value)
+            {
+                _settingsService.Settings.EnableAIScan = value;
+                this.RaisePropertyChanged();
+            }
+        }
     }
     
     private bool _enableAI = true;
@@ -508,6 +527,13 @@ public partial class MainWindowViewModel
     {
         get => _sam2MinObjectSize;
         set => this.RaiseAndSetIfChanged(ref _sam2MinObjectSize, value);
+    }
+
+    private bool _autoTranslate;
+    public bool AutoTranslate
+    {
+        get => _autoTranslate;
+        set => this.RaiseAndSetIfChanged(ref _autoTranslate, value);
     }
 
     private bool _showRecordCursor = true;
@@ -560,6 +586,7 @@ public partial class MainWindowViewModel
             WingScale = settings.WingScale;
             CornerIconScale = settings.CornerIconScale;
             RecordFPS = settings.RecordFPS;
+            AutoTranslate = settings.AutoTranslate;
 
             if (Color.TryParse(settings.BorderColorHex, out var color))
                 BorderColor = color;
@@ -624,6 +651,7 @@ public partial class MainWindowViewModel
             settings.WingScale = WingScale;
             settings.CornerIconScale = CornerIconScale;
             settings.RecordFPS = RecordFPS;
+            settings.AutoTranslate = AutoTranslate;
             settings.BorderColorHex = BorderColor.ToString();
             settings.ThemeColorHex = ThemeColor.ToString();
             settings.Language = SelectedLanguageOption.Value;

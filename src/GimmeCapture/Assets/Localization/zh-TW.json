@@ -110,6 +110,7 @@
   "HideRecordSelectionBorder": "隱藏選取視窗邊框 (錄影)",
   "ShowRecordCursor": "錄影時顯示游標",
   "ShowAIScanBox": "顯示 AI 偵測框",
+  "EnableAIScan": "啟用 AI 物件偵測",
   "AIScan": "AI 全自動掃描",
   "TipCopy": "複製到剪貼簿",
   "TipSave": "儲存檔案",
@@ -179,7 +180,8 @@
   "ActionSelectionMode": "選取模式",
   "ActionCropMode": "裁切模式",
   "TipMosaic": "馬賽克",
-  "TipBlur": "模糊"
+  "TipBlur": "模糊",
+  "AutoTranslate": "自動翻譯 (Ollama)"
 }
 
 

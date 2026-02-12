@@ -22,6 +22,7 @@ public partial class SnipWindowViewModel
         get => _currentState;
         set
         {
+            System.Diagnostics.Debug.WriteLine($"[SnipState] {_currentState} -> {value}");
             this.RaiseAndSetIfChanged(ref _currentState, value);
             
             // If we leave Detecting state (e.g. start selecting), cancel any running scan
@@ -44,11 +45,10 @@ public partial class SnipWindowViewModel
             if (value == SnipState.Selected)
             {
                 TriggerAutoAction();
-            }
-
-            if (value != SnipState.Selected)
-            {
-                IsTranslationActive = false;
+                
+                // Trigger translation loop if active
+                if (IsTranslationActive)
+                    _ = RunTranslationLoopAsync();
             }
         }
     }
@@ -81,12 +81,65 @@ public partial class SnipWindowViewModel
         set => this.RaiseAndSetIfChanged(ref _progressValue, value);
     }
 
+    // Feature Flags (Synced)
+    private bool _autoTranslate;
+    public bool AutoTranslate
+    {
+        get => _autoTranslate;
+        set => this.RaiseAndSetIfChanged(ref _autoTranslate, value);
+    }
+
+    private bool _showAIScanBox;
+    public bool ShowAIScanBox
+    {
+        get => _showAIScanBox;
+        set 
+        {
+            this.RaiseAndSetIfChanged(ref _showAIScanBox, value);
+            if (_mainVm != null) 
+            {
+                _mainVm.ShowAIScanBox = value;
+                
+                if (!value)
+                {
+                    WindowRects.Clear();
+                    _scanCts?.Cancel();
+                }
+                else
+                {
+                    // Trigger scan if enabled
+                    if (CurrentState == SnipState.Detecting)
+                    {
+                        // We use a safe invoke to avoid crashing if command isn't ready
+                        Avalonia.Threading.Dispatcher.UIThread.Post(() => {
+                             if (TriggerAutoScanCommand != null)
+                                 TriggerAutoScanCommand.Execute(Unit.Default).Subscribe();
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    private bool _enableAIScan;
+    public bool EnableAIScan
+    {
+        get => _enableAIScan;
+        set 
+        {
+            this.RaiseAndSetIfChanged(ref _enableAIScan, value);
+            if (_mainVm != null) _mainVm.EnableAIScan = value;
+        }
+    }
+
+    // Restore Missing Properties
     private bool _isTranslationActive;
     public bool IsTranslationActive
     {
         get => _isTranslationActive;
         set
         {
+            System.Diagnostics.Debug.WriteLine($"[Translation] IsTranslationActive -> {value}");
             this.RaiseAndSetIfChanged(ref _isTranslationActive, value);
             if (value)
                 _ = RunTranslationLoopAsync();
@@ -268,33 +321,6 @@ public partial class SnipWindowViewModel
         this.RaisePropertyChanged(nameof(ToolbarMaxWidth));
     }
 
-    // Window Detection / AI Scan Box
-    public bool ShowAIScanBox
-    {
-        get => _mainVm?.ShowAIScanBox ?? true;
-        set
-        {
-            if (_mainVm != null)
-            {
-                _mainVm.ShowAIScanBox = value;
-                this.RaisePropertyChanged();
-                
-                if (!value)
-                {
-                    WindowRects.Clear();
-                    _scanCts?.Cancel();
-                }
-                else
-                {
-                    // Trigger scan if enabled
-                    if (CurrentState == SnipState.Detecting)
-                    {
-                        TriggerAutoScanCommand?.Execute(Unit.Default).Subscribe();
-                    }
-                }
-            }
-        }
-    }
 
     private Rect _detectedRect;
     public Rect DetectedRect
@@ -348,6 +374,13 @@ public partial class SnipWindowViewModel
         if (RecState != RecordingState.Idle) return;
 
         if (_mainVm == null || !_mainVm.EnableAI) 
+        {
+            return;
+        }
+
+        // USER REQUEST: This setting controls the SCANNING PROCESS itself.
+        // If disabled, we do NOT run the expensive SAM2 detection.
+        if (!_mainVm.EnableAIScan)
         {
             return;
         }
@@ -536,30 +569,95 @@ public partial class SnipWindowViewModel
 
     private async Task RunTranslationLoopAsync()
     {
-        if (_translationService == null)
-            _translationService = new TranslationService();
+        Console.WriteLine("[Translation] Entering RunTranslationLoopAsync");
+        System.Diagnostics.Debug.WriteLine("[Translation] Entering RunTranslationLoopAsync");
+        
+        Console.WriteLine("[Translation] Service Init...");
+        try
+        {
+            if (_translationService == null)
+            {
+                _translationService = new TranslationService();
+                Console.WriteLine("[Translation] Service Created.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Translation] Failed to init service: {ex.Message}");
+            return;
+        }
 
         _translationCts?.Cancel();
         _translationCts = new System.Threading.CancellationTokenSource();
         var token = _translationCts.Token;
 
+        Console.WriteLine("[Translation] Loop Started");
+
+        // SHOW READY STATUS FOR DEBUGGING
+        Avalonia.Threading.Dispatcher.UIThread.Post(() => {
+             IsProcessing = true;
+             ProcessingText = "Translation Ready (Waiting for Snip)";
+             IsIndeterminate = false; // Show full bar or empty?
+             ProgressValue = 100;
+        });
+
         try
         {
-            while (!token.IsCancellationRequested && IsTranslationActive && CurrentState == SnipState.Selected)
+            while (!token.IsCancellationRequested && IsTranslationActive)
             {
+                // Console.WriteLine($"[Translation] Loop Tick. State: {CurrentState}"); // Too spammy? Maybe every 1s
+                
+                // If not selected yet, wait briefly and check again
+                if (CurrentState != SnipState.Selected)
+                {
+                    // DEBUG: Enforce status visibility every tick while waiting
+                    Avalonia.Threading.Dispatcher.UIThread.Post(() => {
+                         if (!IsProcessing || ProcessingText != "Translation Ready (Waiting for Snip)")
+                         {
+                             IsProcessing = true;
+                             ProcessingText = "Translation Ready (Waiting for Snip)";
+                             IsIndeterminate = false;
+                             ProgressValue = 100;
+                         }
+                    });
+
+                    await Task.Delay(1000, token); // Check every second
+                    continue;
+                }
+
                 if (SelectionRect.Width > 10 && SelectionRect.Height > 10)
                 {
+                    Console.WriteLine("[Translation] Loop: Capture screen...");
                     using (var bitmap = await _captureService.CaptureScreenAsync(SelectionRect, ScreenOffset, VisualScaling, false))
                     {
                         if (bitmap != null)
                         {
-                            IsProcessing = true;
-                            ProcessingText = LocalizationService.Instance["StatusTranslating"] ?? "Translating...";
+                            // Check if OCR is actually ready to avoid silent hangs
+                            if (_mainVm != null && !_mainVm.AIResourceService.IsOCRReady())
+                            {
+                                Console.WriteLine("[Translation] OCR not ready.");
+                                Avalonia.Threading.Dispatcher.UIThread.Post(() => {
+                                    IsIndeterminate = true;
+                                    IsProcessing = true;
+                                    ProcessingText = "OCR Module Required";
+                                });
+                                await Task.Delay(2000, token);
+                                Avalonia.Threading.Dispatcher.UIThread.Post(() => IsProcessing = false);
+                                await Task.Delay(5000, token);
+                                continue;
+                            }
+
+                            Console.WriteLine("[Translation] Starting OCR/Ollama...");
+                            Avalonia.Threading.Dispatcher.UIThread.Post(() => {
+                                IsIndeterminate = true;
+                                IsProcessing = true;
+                                ProcessingText = LocalizationService.Instance["StatusTranslating"] ?? "Translating...";
+                            });
                             
                             try 
                             {
                                 var blocks = await _translationService.AnalyzeAndTranslateAsync(bitmap);
-                                
+                                System.Diagnostics.Debug.WriteLine($"[Translation] Blocks found: {blocks.Count}");
                                 Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                                 {
                                     TranslatedBlocks.Clear();
@@ -571,7 +669,7 @@ public partial class SnipWindowViewModel
                             }
                             finally
                             {
-                                IsProcessing = false;
+                                Avalonia.Threading.Dispatcher.UIThread.Post(() => IsProcessing = false);
                             }
                         }
                     }
@@ -584,7 +682,12 @@ public partial class SnipWindowViewModel
         catch (Exception ex)
         {
             Console.WriteLine($"[Translation Loop Error] {ex.Message}");
-            IsTranslationActive = false;
+            System.Diagnostics.Debug.WriteLine($"[Translation Loop Error] {ex.Message}");
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => 
+            {
+                IsTranslationActive = false;
+                IsProcessing = false;
+            });
         }
         finally
         {
