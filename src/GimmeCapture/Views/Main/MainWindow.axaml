@@ -547,6 +547,11 @@ IsChecked="{Binding ShowRecordCursor}" Margin="0,5,0,0"/>
                                                 <ProgressBar Value="{Binding Progress}" Height="4" Foreground="{DynamicResource AccentRedBrush}" Minimum="0" Maximum="100"/>
                                                 <TextBlock Text="{Binding Progress, StringFormat='{}{0:0}%'}" FontSize="10" HorizontalAlignment="Right"/>
                                             </StackPanel>
+
+                                            <!-- Error Section -->
+                                            <StackPanel IsVisible="{Binding HasError}" Spacing="5" Margin="0,5,0,0">
+                                                <TextBlock Text="{Binding ErrorMessage}" Foreground="#FF5555" FontSize="11" TextWrapping="Wrap" FontWeight="SemiBold"/>
+                                            </StackPanel>
                                         </StackPanel>
                                         
                                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="10" Margin="20,0,0,0">

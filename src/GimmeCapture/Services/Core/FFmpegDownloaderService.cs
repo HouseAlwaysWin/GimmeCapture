@@ -23,6 +23,13 @@ public class FFmpegDownloaderService : ReactiveObject
         set => this.RaiseAndSetIfChanged(ref _downloadProgress, value);
     }
 
+    private string _lastErrorMessage = "";
+    public string LastErrorMessage
+    {
+        get => _lastErrorMessage;
+        set => this.RaiseAndSetIfChanged(ref _lastErrorMessage, value);
+    }
+
     private bool _isDownloading;
     public bool IsDownloading
     {
@@ -268,6 +275,7 @@ public class FFmpegDownloaderService : ReactiveObject
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"FFmpeg Download/Install Failed: {ex.Message}");
+            LastErrorMessage = ex.Message;
             DownloadProgress = 0; // Reset progress on failure
             return false;
         }

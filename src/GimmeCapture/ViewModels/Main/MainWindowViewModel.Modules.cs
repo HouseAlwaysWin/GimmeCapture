@@ -33,6 +33,9 @@ public partial class MainWindowViewModel
             {
                 ffmpeg.IsPending = status == QueueItemStatus.Pending;
                 ffmpeg.IsProcessing = status == QueueItemStatus.Downloading;
+                ffmpeg.HasError = status == QueueItemStatus.Failed;
+                if (status == QueueItemStatus.Failed) 
+                    ffmpeg.ErrorMessage = FfmpegDownloader.LastErrorMessage ?? "FFmpeg download failed. Please check your connection.";
                 if (status == QueueItemStatus.Completed) ffmpeg.IsInstalled = FfmpegDownloader.IsFFmpegAvailable();
             });
 
@@ -51,6 +54,8 @@ public partial class MainWindowViewModel
             {
                 aiCore.IsPending = status == QueueItemStatus.Pending;
                 aiCore.IsProcessing = status == QueueItemStatus.Downloading;
+                aiCore.HasError = status == QueueItemStatus.Failed;
+                if (status == QueueItemStatus.Failed) aiCore.ErrorMessage = AIResourceService.LastErrorMessage;
                 if (status == QueueItemStatus.Completed) aiCore.IsInstalled = AIResourceService.IsAICoreReady();
             });
 
@@ -78,12 +83,34 @@ public partial class MainWindowViewModel
                 }
             });
 
+        // PaddleOCR v5 Module
+        var ocr = new ModuleItem("PaddleOCR v5", "ModuleOCRDescription")
+        {
+            IsInstalled = AIResourceService.IsOCRReady(),
+            InstallCommand = ReactiveCommand.CreateFromTask(() => InstallModuleAsync("OCR")),
+            CancelCommand = ReactiveCommand.CreateFromTask(() => CancelModuleAsync("OCR")),
+            RemoveCommand = ReactiveCommand.CreateFromTask(() => RemoveModuleAsync("OCR"))
+        };
+
+        ResourceQueue.ObserveStatus("OCR")
+            .ObserveOn(RxApp.MainThreadScheduler)
+            .Subscribe(status => 
+            {
+                ocr.IsPending = status == QueueItemStatus.Pending;
+                ocr.IsProcessing = status == QueueItemStatus.Downloading;
+                ocr.HasError = status == QueueItemStatus.Failed;
+                if (status == QueueItemStatus.Failed) ocr.ErrorMessage = AIResourceService.LastErrorMessage;
+                if (status == QueueItemStatus.Completed) ocr.IsInstalled = AIResourceService.IsOCRReady();
+            });
+
         ResourceQueue.ObserveStatus("SAM2")
             .ObserveOn(RxApp.MainThreadScheduler)
             .Subscribe(status => 
             {
                 sam2.IsPending = status == QueueItemStatus.Pending;
                 sam2.IsProcessing = status == QueueItemStatus.Downloading;
+                sam2.HasError = status == QueueItemStatus.Failed;
+                if (status == QueueItemStatus.Failed) sam2.ErrorMessage = AIResourceService.LastErrorMessage;
                 if (status == QueueItemStatus.Completed) sam2.IsInstalled = AIResourceService.IsSAM2Ready(_settingsService.Settings.SelectedSAM2Variant);
             });
 
@@ -91,19 +118,34 @@ public partial class MainWindowViewModel
             .Subscribe(p => {
                 if (aiCore.IsProcessing) aiCore.Progress = p;
                 if (sam2.IsProcessing) sam2.Progress = p;
+                if (ocr.IsProcessing) ocr.Progress = p;
             });
 
         ffmpeg.UpdateDescription();
         aiCore.UpdateDescription();
         sam2.UpdateDescription();
+        ocr.UpdateDescription();
 
         Modules.Add(ffmpeg);
         Modules.Add(aiCore);
         Modules.Add(sam2);
+        Modules.Add(ocr);
     }
 
     private async Task InstallModuleAsync(string type)
     {
+        foreach (var m in Modules)
+        {
+            if ((m.Name == "FFmpeg" && type == "FFmpeg") ||
+                (m.Name == "AI Core" && type == "AICore") ||
+                (m.Name == "SAM2 Model" && type == "SAM2") ||
+                (m.Name == "PaddleOCR v5" && type == "OCR"))
+            {
+                m.HasError = false;
+                m.ErrorMessage = "";
+            }
+        }
+
         if (type == "FFmpeg")
         {
             await ResourceQueue.EnqueueAsync("FFmpeg", (ct) => FfmpegDownloader.EnsureFFmpegAsync(ct));
@@ -116,6 +158,10 @@ public partial class MainWindowViewModel
         {
              var variant = _settingsService.Settings.SelectedSAM2Variant;
              await ResourceQueue.EnqueueAsync("SAM2", (ct) => AIResourceService.EnsureSAM2Async(variant, ct));
+        }
+        else if (type == "OCR")
+        {
+            await ResourceQueue.EnqueueAsync("OCR", (ct) => AIResourceService.EnsureOCRAsync(ct));
         }
     }
 
@@ -156,12 +202,17 @@ public partial class MainWindowViewModel
             {
                  AIResourceService.RemoveSAM2Resources(_settingsService.Settings.SelectedSAM2Variant);
             }
+            else if (type == "OCR")
+            {
+                AIResourceService.RemoveOCRResources();
+            }
             
             foreach (var m in Modules)
             {
                 if (m.Name == "FFmpeg") m.IsInstalled = FfmpegDownloader.IsFFmpegAvailable();
                 if (m.Name == "AI Core") m.IsInstalled = AIResourceService.IsAICoreReady();
                 if (m.Name == "SAM2 Model") m.IsInstalled = AIResourceService.IsSAM2Ready(_settingsService.Settings.SelectedSAM2Variant);
+                if (m.Name == "PaddleOCR v5") m.IsInstalled = AIResourceService.IsOCRReady();
             }
         }
         catch (Exception ex)
@@ -227,6 +278,20 @@ public partial class MainWindowViewModel
         {
             get => _progress;
             set => this.RaiseAndSetIfChanged(ref _progress, value);
+        }
+
+        private bool _hasError;
+        public bool HasError
+        {
+            get => _hasError;
+            set => this.RaiseAndSetIfChanged(ref _hasError, value);
+        }
+
+        private string _errorMessage = "";
+        public string ErrorMessage
+        {
+            get => _errorMessage;
+            set => this.RaiseAndSetIfChanged(ref _errorMessage, value);
         }
 
         public bool HasVariants { get; init; } = false;

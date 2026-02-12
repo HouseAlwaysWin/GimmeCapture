@@ -298,6 +298,37 @@
                         <Rectangle.OpacityMask><ImageBrush Source="avares://GimmeCapture/Assets/wing_right.png" Stretch="Uniform" AlignmentX="Left"/></Rectangle.OpacityMask>
                     </Rectangle>
                 </Grid>
+                
+                <!-- Translation Overlay -->
+                <ItemsControl ItemsSource="{Binding TranslatedBlocks}" IsHitTestVisible="False">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <Canvas Width="{Binding SelectionRect.Width}" Height="{Binding SelectionRect.Height}"/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="services:TranslatedBlock">
+                            <Border BorderBrush="{Binding $parent[Window].((vm:SnipWindowViewModel)DataContext).ThemeColor, Converter={StaticResource ColorToBrushConverter}}"
+                                    BorderThickness="1"
+                                    Background="#CC000000"
+                                    CornerRadius="2"
+                                    Padding="2"
+                                    Canvas.Left="{Binding Bounds.X}"
+                                    Canvas.Top="{Binding Bounds.Y}"
+                                    MaxWidth="{Binding Bounds.Width}"
+                                    MaxHeight="{Binding Bounds.Height}">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                    <TextBlock Text="{Binding TranslatedText}" 
+                                               Foreground="White" 
+                                               FontSize="11" 
+                                               TextWrapping="Wrap"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"/>
+                                </ScrollViewer>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
             </Grid>
             
             <!-- Text Overlay -->

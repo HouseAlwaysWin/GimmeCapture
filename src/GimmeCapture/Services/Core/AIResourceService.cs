@@ -31,11 +31,16 @@ public class AIResourceService : ReactiveObject
     
     private const string Sam2LargeEncoderUrl = "https://huggingface.co/SharpAI/sam2-hiera-large-onnx/resolve/main/encoder.onnx";
     private const string Sam2LargeDecoderUrl = "https://huggingface.co/SharpAI/sam2-hiera-large-onnx/resolve/main/decoder.onnx";
+    
+    // PaddleOCR v5 Models (Using standard Latin/English models from Hugging Face)
+    private const string OcrDetUrl = "https://huggingface.co/monkt/paddleocr-onnx/resolve/main/detection/v5/det.onnx";
+    private const string OcrRecUrl = "https://huggingface.co/monkt/paddleocr-onnx/resolve/main/languages/english/rec.onnx";
+    private const string OcrDictUrl = "https://huggingface.co/monkt/paddleocr-onnx/resolve/main/languages/english/dict.txt";
 
     // Using a reliable direct link to ONNX Runtime GPU (Win x64)
     private const string OnnxRuntimeZipUrl = "https://github.com/microsoft/onnxruntime/releases/download/v1.20.1/onnxruntime-win-x64-gpu-1.20.1.zip";
 
-    private string _lastErrorMessage;
+    private string _lastErrorMessage = "";
     public string LastErrorMessage
     {
         get => _lastErrorMessage;
@@ -96,6 +101,17 @@ public class AIResourceService : ReactiveObject
         };
     }
 
+    public (string Det, string Rec, string Dict) GetOCRPaths()
+    {
+        var baseDir = GetAIResourcesPath();
+        var ocrDir = Path.Combine(baseDir, "ocr");
+        return (
+            Path.Combine(ocrDir, "ocr_det.onnx"),
+            Path.Combine(ocrDir, "ocr_rec.onnx"),
+            Path.Combine(ocrDir, "ocr_dict.txt")
+        );
+    }
+
     public bool IsAICoreReady()
     {
         var baseDir = GetAIResourcesPath();
@@ -110,10 +126,16 @@ public class AIResourceService : ReactiveObject
         return File.Exists(paths.Encoder) && File.Exists(paths.Decoder);
     }
 
+    public bool IsOCRReady()
+    {
+        var paths = GetOCRPaths();
+        return File.Exists(paths.Det) && File.Exists(paths.Rec) && File.Exists(paths.Dict);
+    }
+
     // Deprecated monolithic check, keeping for compatibility if needed, but logic should move to specific checks
     public bool AreResourcesReady()
     {
-        return IsAICoreReady() && IsSAM2Ready(_settingsService.Settings.SelectedSAM2Variant);
+        return IsAICoreReady() && IsSAM2Ready(_settingsService.Settings.SelectedSAM2Variant) && IsOCRReady();
     }
 
     public void RemoveAICoreResources()
@@ -153,6 +175,24 @@ public class AIResourceService : ReactiveObject
         catch (Exception ex)
         {
              System.Diagnostics.Debug.WriteLine($"SAM2 Removal Failed: {ex.Message}");
+        }
+    }
+
+    public void RemoveOCRResources()
+    {
+        try
+        {
+            var baseDir = GetAIResourcesPath();
+            var ocrDir = Path.Combine(baseDir, "ocr");
+
+            if (Directory.Exists(ocrDir)) Directory.Delete(ocrDir, true);
+
+            this.RaisePropertyChanged(nameof(IsOCRReady));
+            this.RaisePropertyChanged(nameof(AreResourcesReady));
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"OCR Removal Failed: {ex.Message}");
         }
     }
 
@@ -334,10 +374,79 @@ public class AIResourceService : ReactiveObject
         }
     }
 
+    public async Task<bool> EnsureOCRAsync(CancellationToken ct = default)
+    {
+        if (IsOCRReady()) return true;
+
+        await _downloadLock.WaitAsync(ct);
+        try
+        {
+            return await DownloadOCRInternal(ct);
+        }
+        finally
+        {
+            _downloadLock.Release();
+        }
+    }
+
+    private async Task<bool> DownloadOCRInternal(CancellationToken ct)
+    {
+        if (IsOCRReady()) return true;
+
+        try
+        {
+            IsDownloading = true;
+            CurrentDownloadName = "OCR Models (PaddleOCR v5)";
+            DownloadProgress = 0;
+
+            var baseDir = GetAIResourcesPath();
+            var ocrDir = Path.Combine(baseDir, "ocr");
+            Directory.CreateDirectory(ocrDir);
+
+            var paths = GetOCRPaths();
+
+            // 1. Download Detection
+            if (!File.Exists(paths.Det))
+                await DownloadFile(OcrDetUrl, paths.Det, 0, 40, ct);
+            else
+                DownloadProgress = 40;
+
+            // 2. Download Recognition
+            if (!File.Exists(paths.Rec))
+                await DownloadFile(OcrRecUrl, paths.Rec, 40, 50, ct);
+            else
+                DownloadProgress = 90;
+
+            // 3. Download Dictionary
+            if (!File.Exists(paths.Dict))
+                await DownloadFile(OcrDictUrl, paths.Dict, 90, 10, ct);
+            else
+                DownloadProgress = 100;
+
+            return IsOCRReady();
+        }
+        catch (OperationCanceledException)
+        {
+            System.Diagnostics.Debug.WriteLine("OCR Download Cancelled");
+            return false;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"OCR Download Failed: {ex.Message}");
+            LastErrorMessage = ex.Message;
+            return false;
+        }
+        finally
+        {
+            IsDownloading = false;
+        }
+    }
+
     private async Task DownloadFile(string url, string destination, double progressOffset, double progressWeight, CancellationToken ct)
     {
         using var client = new HttpClient();
         client.Timeout = TimeSpan.FromMinutes(15);
+        client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36");
         
         using var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
         response.EnsureSuccessStatusCode();

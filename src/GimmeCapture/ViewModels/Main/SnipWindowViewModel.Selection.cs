@@ -41,9 +41,14 @@ public partial class SnipWindowViewModel
                 }
             }
 
-            if (value == SnipState.Selected && AutoActionMode > 0 && AutoActionMode < 3)
+            if (value == SnipState.Selected)
             {
                 TriggerAutoAction();
+            }
+
+            if (value != SnipState.Selected)
+            {
+                IsTranslationActive = false;
             }
         }
     }
@@ -75,6 +80,24 @@ public partial class SnipWindowViewModel
         get => _progressValue;
         set => this.RaiseAndSetIfChanged(ref _progressValue, value);
     }
+
+    private bool _isTranslationActive;
+    public bool IsTranslationActive
+    {
+        get => _isTranslationActive;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _isTranslationActive, value);
+            if (value)
+                _ = RunTranslationLoopAsync();
+            else
+                _translationCts?.Cancel();
+        }
+    }
+
+    public ObservableCollection<TranslatedBlock> TranslatedBlocks { get; } = new();
+    private System.Threading.CancellationTokenSource? _translationCts;
+    private TranslationService? _translationService;
 
     private Rect _selectionRect;
     public Rect SelectionRect
@@ -509,5 +532,63 @@ public partial class SnipWindowViewModel
                 System.Diagnostics.Debug.WriteLine($"[SAM2 Preload] Failed: {ex.Message}");
             }
         });
+    }
+
+    private async Task RunTranslationLoopAsync()
+    {
+        if (_translationService == null)
+            _translationService = new TranslationService();
+
+        _translationCts?.Cancel();
+        _translationCts = new System.Threading.CancellationTokenSource();
+        var token = _translationCts.Token;
+
+        try
+        {
+            while (!token.IsCancellationRequested && IsTranslationActive && CurrentState == SnipState.Selected)
+            {
+                if (SelectionRect.Width > 10 && SelectionRect.Height > 10)
+                {
+                    using (var bitmap = await _captureService.CaptureScreenAsync(SelectionRect, ScreenOffset, VisualScaling, false))
+                    {
+                        if (bitmap != null)
+                        {
+                            IsProcessing = true;
+                            ProcessingText = LocalizationService.Instance["StatusTranslating"] ?? "Translating...";
+                            
+                            try 
+                            {
+                                var blocks = await _translationService.AnalyzeAndTranslateAsync(bitmap);
+                                
+                                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                                {
+                                    TranslatedBlocks.Clear();
+                                    foreach (var block in blocks)
+                                    {
+                                        TranslatedBlocks.Add(block);
+                                    }
+                                });
+                            }
+                            finally
+                            {
+                                IsProcessing = false;
+                            }
+                        }
+                    }
+                }
+
+                await Task.Delay(2000, token); 
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Translation Loop Error] {ex.Message}");
+            IsTranslationActive = false;
+        }
+        finally
+        {
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => TranslatedBlocks.Clear());
+        }
     }
 }
