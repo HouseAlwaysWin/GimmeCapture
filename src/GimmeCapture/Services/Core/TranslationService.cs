@@ -118,16 +118,17 @@ public class TranslationService
         // Actually, let's try to implement a basic DB pre-post processing.
         
         var boxes = DetectText(bitmap);
-        System.Diagnostics.Debug.WriteLine($"[OCR] Detected {boxes.Count} boxes");
-        Console.WriteLine($"[OCR] Detected {boxes.Count} boxes");
+        Console.WriteLine($"[OCR] Detected {boxes.Count} boxes. Target Output Language: {_settings.TargetLanguage}");
         
         foreach (var box in boxes)
         {
             var text = RecognizeText(bitmap, box);
-            Console.WriteLine($"[OCR] Recognized: {text}");
+            Console.WriteLine($"[OCR] Raw Recognized Text: \"{text}\""); // Diagnostic Logging
+            
             if (!string.IsNullOrWhiteSpace(text))
             {
                 var translated = await TranslateAsync(text);
+                Console.WriteLine($"[Translation] From \"{text}\" -> To \"{translated}\""); // Diagnostic Logging
                 results.Add(new TranslatedBlock
                 {
                     OriginalText = text,
@@ -318,8 +319,8 @@ public class TranslationService
             if (targetWidth < 4) targetWidth = 4;
             if (targetWidth > 1280) targetWidth = 1280;
 
-            int paddedWidth = Math.Max(320, (targetWidth + 31) / 32 * 32);
-            Console.WriteLine($"[OCR] Input: {box.Width}x{box.Height}, Target: {targetWidth}x48, Padded: {paddedWidth}");
+            int paddedWidth = Math.Max(64, (targetWidth + 31) / 32 * 32); // Reduced min width from 320 to 64
+            Console.WriteLine($"[OCR] Recognize Box: {box.Left},{box.Top} {box.Width}x{box.Height} -> Target: {targetWidth}x48, Padded: {paddedWidth}");
 
             using var tensorBitmap = new SKBitmap(paddedWidth, 48);
             using (var tCanvas = new SKCanvas(tensorBitmap))
@@ -450,10 +451,30 @@ public class TranslationService
                 }
             }
             
+            string sourceLang = _settings.SourceLanguage switch
+            {
+                OCRLanguage.Japanese => "Japanese",
+                OCRLanguage.Korean => "Korean",
+                OCRLanguage.English => "English",
+                OCRLanguage.TraditionalChinese => "Traditional Chinese",
+                OCRLanguage.SimplifiedChinese => "Simplified Chinese",
+                _ => "Auto-detect"
+            };
+
             var request = new
             {
                 model = model,
-                prompt = $"Translate the following text to {targetLang}. Only provide the translation, no explanation: \"{text}\"",
+                prompt = $@"You are a professional translator. Translate the following text from {sourceLang} to {targetLang}. 
+### Instructions:
+- Only provide the translated text.
+- Do not include any explanations, notes, or original text.
+- Maintain the original tone and context.
+- If the text is already in the target language, return it as is.
+
+### Text to translate:
+""{text}""
+
+### Translation:",
                 stream = false
             };
 

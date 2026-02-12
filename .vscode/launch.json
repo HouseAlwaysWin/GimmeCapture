@@ -18,6 +18,17 @@
             "stopAtEntry": false
         },
         {
+            "name": "Debug GimmeCapture (Direct)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build",
+            "program": "${workspaceFolder}/src/GimmeCapture/bin/Debug/net10.0-windows/GimmeCapture.exe",
+            "args": [],
+            "cwd": "${workspaceFolder}/src/GimmeCapture",
+            "console": "internalConsole",
+            "stopAtEntry": false
+        },
+        {
             "name": ".NET Core Attach",
             "type": "coreclr",
             "request": "attach"
