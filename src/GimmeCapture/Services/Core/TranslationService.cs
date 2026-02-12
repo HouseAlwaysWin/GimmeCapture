@@ -28,6 +28,7 @@ public class TranslationService
     private readonly AIResourceService _aiResourceService;
     private InferenceSession? _detSession;
     private InferenceSession? _recSession;
+    private OCRLanguage? _currentOCRLanguage;
     private List<string> _dict = new();
     
     private readonly HttpClient _httpClient = new();
@@ -42,11 +43,22 @@ public class TranslationService
 
     private async Task EnsureLoadedAsync()
     {
-        if (_detSession != null && _recSession != null) return;
+        var targetLang = _settings.SourceLanguage;
+        
+        // Reload if language changed or sessions missing
+        if (_currentOCRLanguage == targetLang && _detSession != null && _recSession != null) return;
+
+        // Dispose previous if switching
+        if (_currentOCRLanguage != targetLang)
+        {
+            _detSession?.Dispose(); _detSession = null;
+            _recSession?.Dispose(); _recSession = null;
+            System.Diagnostics.Debug.WriteLine($"[OCR] Switching language to {targetLang}");
+        }
 
         System.Diagnostics.Debug.WriteLine("[OCR] Loading models...");
         await _aiResourceService.EnsureOCRAsync();
-        var paths = _aiResourceService.GetOCRPaths();
+        var paths = _aiResourceService.GetOCRPaths(targetLang);
 
         if (!File.Exists(paths.Det) || !File.Exists(paths.Rec) || !File.Exists(paths.Dict))
         {
@@ -67,7 +79,8 @@ public class TranslationService
 
         _detSession = new InferenceSession(paths.Det, options);
         _recSession = new InferenceSession(paths.Rec, options);
-        System.Diagnostics.Debug.WriteLine("[OCR] Sessions initialized");
+        _currentOCRLanguage = targetLang;
+        System.Diagnostics.Debug.WriteLine($"[OCR] Sessions initialized ({targetLang})");
         
         _dict = File.ReadAllLines(paths.Dict).ToList();
         // PaddleOCR dict starts from index 1, index 0 is blank

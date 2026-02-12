@@ -276,8 +276,20 @@
                                     <CheckBox IsChecked="{Binding EnableAI}" Content="{Binding [EnableAI], Source={x:Static services:LocalizationService.Instance}}" Margin="0,15,0,0" FontWeight="SemiBold"/>
                                     <CheckBox IsChecked="{Binding ShowAIScanBox}" Content="{Binding [ShowAIScanBox], Source={x:Static services:LocalizationService.Instance}}" IsEnabled="{Binding EnableAI}" Margin="24,0,0,0"/>
                                     <CheckBox IsChecked="{Binding EnableAIScan}" Content="{Binding [EnableAIScan], Source={x:Static services:LocalizationService.Instance}}" IsEnabled="{Binding EnableAI}" Margin="24,0,0,0"/>
-                                    <CheckBox IsChecked="{Binding AutoTranslate}" Content="{Binding [AutoTranslate], Source={x:Static services:LocalizationService.Instance}}" IsEnabled="{Binding EnableAI}" Margin="24,0,0,0"/>
                                     
+                                    <CheckBox IsChecked="{Binding AutoTranslate}" Content="{Binding [AutoTranslate], Source={x:Static services:LocalizationService.Instance}}" IsEnabled="{Binding EnableAI}" Margin="24,10,0,0"/>
+                                    
+                                    <DockPanel Margin="48,5,0,0" IsEnabled="{Binding AutoTranslate}">
+                                        <TextBlock Text="{Binding [OCRLanguage], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                        <ComboBox ItemsSource="{Binding AvailableOCRLanguages}" SelectedItem="{Binding SourceLanguage}" Width="250">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding Converter={x:Static converters:EnumToLocalizedConverter.Instance}, ConverterParameter='OCRLang'}"/>
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+                                    </DockPanel>
+
                                     <DockPanel Margin="48,5,0,0" IsEnabled="{Binding AutoTranslate}">
                                         <TextBlock Text="{Binding [TranslationLanguage], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,0,10,0"/>
                                         <ComboBox ItemsSource="{Binding AvailableTranslationLanguages}" SelectedItem="{Binding TargetLanguage}" Width="200">

@@ -22,6 +22,26 @@ public partial class MainWindowViewModel
     }
 
     public List<TranslationLanguage> AvailableTranslationLanguages { get; } = Enum.GetValues<TranslationLanguage>().ToList();
+    public List<OCRLanguage> AvailableOCRLanguages { get; } = Enum.GetValues<OCRLanguage>().ToList();
+
+    public OCRLanguage SourceLanguage
+    {
+        get => _settingsService.Settings.SourceLanguage;
+        set
+        {
+            if (_settingsService.Settings.SourceLanguage != value)
+            {
+                _settingsService.Settings.SourceLanguage = value;
+                this.RaisePropertyChanged();
+                
+                if (!_isDataLoading)
+                {
+                   IsModified = true;
+                   _ = SaveSettingsAsync();
+                }
+            }
+        }
+    }
 
     public TranslationLanguage TargetLanguage
     {

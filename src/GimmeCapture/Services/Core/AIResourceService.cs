@@ -32,10 +32,31 @@ public class AIResourceService : ReactiveObject
     private const string Sam2LargeEncoderUrl = "https://huggingface.co/SharpAI/sam2-hiera-large-onnx/resolve/main/encoder.onnx";
     private const string Sam2LargeDecoderUrl = "https://huggingface.co/SharpAI/sam2-hiera-large-onnx/resolve/main/decoder.onnx";
     
-    // PaddleOCR v5 Models (Using standard Latin/English models from Hugging Face)
-    private const string OcrDetUrl = "https://huggingface.co/monkt/paddleocr-onnx/resolve/main/detection/v5/det.onnx";
-    private const string OcrRecUrl = "https://huggingface.co/monkt/paddleocr-onnx/resolve/main/languages/english/rec.onnx";
-    private const string OcrDictUrl = "https://huggingface.co/monkt/paddleocr-onnx/resolve/main/languages/english/dict.txt";
+    // PaddleOCR v4 ONNX Models (Using standard models from verified sources/Hugging Face mirrors)
+    // Universal Detection Model (ch_PP-OCRv4_det - supports all)
+    private const string OcrDetUrl = "https://github.com/RapidAI/RapidOCR/releases/download/v1.1.0/ch_PP-OCRv4_det_infer.onnx"; 
+    
+    // Recognition Models
+    // English
+    private const string OcrRecEnUrl = "https://github.com/RapidAI/RapidOCR/releases/download/v1.1.0/en_PP-OCRv3_rec_infer.onnx";
+    private const string OcrDictEnUrl = "https://github.com/RapidAI/RapidOCR/raw/main/python/rapidocr_onnxruntime/models/en_dict.txt";
+    
+    // Chinese Simplified (Standard for Chinese/English mixed)
+    private const string OcrRecChsUrl = "https://github.com/RapidAI/RapidOCR/releases/download/v1.1.0/ch_PP-OCRv4_rec_infer.onnx";
+    private const string OcrDictChsUrl = "https://github.com/RapidAI/RapidOCR/raw/main/python/rapidocr_onnxruntime/models/ppocr_keys_v1.txt";
+
+    // Chinese Traditional (No direct v4 ONNX widely avail, using ch_PP-OCRv4 is usually fine or v3, let's stick to v4 chs for now as it handles TC reasonably well, or try find specific)
+    // Actually RapidOCR has specific models. Let's use the standard "ch" one as default for both Source variants for now to ensure stability, 
+    // unless I find a specific "chinese_cht" one.
+    // For now, mapping TC to the main CH model creates less friction.
+    
+    // Japanese
+    private const string OcrRecJpUrl = "https://github.com/RapidAI/RapidOCR/releases/download/v1.1.0/japan_PP-OCRv3_rec_infer.onnx";
+    private const string OcrDictJpUrl = "https://github.com/RapidAI/RapidOCR/raw/main/python/rapidocr_onnxruntime/models/japan_dict.txt";
+    
+    // Korean
+    private const string OcrRecKoUrl = "https://github.com/RapidAI/RapidOCR/releases/download/v1.1.0/korean_PP-OCRv3_rec_infer.onnx";
+    private const string OcrDictKoUrl = "https://github.com/RapidAI/RapidOCR/raw/main/python/rapidocr_onnxruntime/models/korean_dict.txt";
 
     // Using a reliable direct link to ONNX Runtime GPU (Win x64)
     private const string OnnxRuntimeZipUrl = "https://github.com/microsoft/onnxruntime/releases/download/v1.20.1/onnxruntime-win-x64-gpu-1.20.1.zip";
@@ -101,14 +122,24 @@ public class AIResourceService : ReactiveObject
         };
     }
 
-    public (string Det, string Rec, string Dict) GetOCRPaths()
+    public (string Det, string Rec, string Dict) GetOCRPaths(OCRLanguage language)
     {
         var baseDir = GetAIResourcesPath();
         var ocrDir = Path.Combine(baseDir, "ocr");
+        
+        string langSuffix = language switch
+        {
+            OCRLanguage.Japanese => "jp",
+            OCRLanguage.Korean => "ko",
+            OCRLanguage.English => "en",
+            OCRLanguage.Auto => "ch", // Auto defaults to the most capable multi-lingual model (CH covers EN/CH)
+            _ => "ch" 
+        };
+
         return (
             Path.Combine(ocrDir, "ocr_det.onnx"),
-            Path.Combine(ocrDir, "ocr_rec.onnx"),
-            Path.Combine(ocrDir, "ocr_dict.txt")
+            Path.Combine(ocrDir, $"ocr_rec_{langSuffix}.onnx"),
+            Path.Combine(ocrDir, $"ocr_dict_{langSuffix}.txt")
         );
     }
 
@@ -128,7 +159,14 @@ public class AIResourceService : ReactiveObject
 
     public bool IsOCRReady()
     {
-        var paths = GetOCRPaths();
+        // Check if CURRENT selected language model exists
+        var paths = GetOCRPaths(_settingsService.Settings.SourceLanguage);
+        return File.Exists(paths.Det) && File.Exists(paths.Rec) && File.Exists(paths.Dict);
+    }
+
+    public bool IsOCRReady(OCRLanguage language)
+    {
+        var paths = GetOCRPaths(language);
         return File.Exists(paths.Det) && File.Exists(paths.Rec) && File.Exists(paths.Dict);
     }
 
@@ -403,7 +441,31 @@ public class AIResourceService : ReactiveObject
             var ocrDir = Path.Combine(baseDir, "ocr");
             Directory.CreateDirectory(ocrDir);
 
-            var paths = GetOCRPaths();
+            var language = _settingsService.Settings.SourceLanguage;
+            var paths = GetOCRPaths(language);
+            
+            string recUrl, dictUrl;
+            
+            switch (language)
+            {
+                case OCRLanguage.Japanese:
+                    recUrl = OcrRecJpUrl;
+                    dictUrl = OcrDictJpUrl;
+                    break;
+                case OCRLanguage.Korean:
+                    recUrl = OcrRecKoUrl;
+                    dictUrl = OcrDictKoUrl;
+                    break;
+                case OCRLanguage.English:
+                    recUrl = OcrRecEnUrl;
+                    dictUrl = OcrDictEnUrl;
+                    break;
+                case OCRLanguage.Auto:     // Auto
+                default:                   // Chinese (Traditional/Simplified)
+                    recUrl = OcrRecChsUrl;
+                    dictUrl = OcrDictChsUrl;
+                    break;
+            }
 
             // 1. Download Detection
             if (!File.Exists(paths.Det))
@@ -413,17 +475,17 @@ public class AIResourceService : ReactiveObject
 
             // 2. Download Recognition
             if (!File.Exists(paths.Rec))
-                await DownloadFile(OcrRecUrl, paths.Rec, 40, 50, ct);
+                await DownloadFile(recUrl, paths.Rec, 40, 50, ct);
             else
                 DownloadProgress = 90;
 
             // 3. Download Dictionary
             if (!File.Exists(paths.Dict))
-                await DownloadFile(OcrDictUrl, paths.Dict, 90, 10, ct);
+                await DownloadFile(dictUrl, paths.Dict, 90, 10, ct);
             else
                 DownloadProgress = 100;
 
-            return IsOCRReady();
+            return IsOCRReady(language);
         }
         catch (OperationCanceledException)
         {
