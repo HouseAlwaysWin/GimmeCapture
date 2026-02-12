@@ -93,16 +93,10 @@ public partial class SnipWindowViewModel
         {
             Avalonia.Threading.Dispatcher.UIThread.Post(async () => await Pin());
         }
-        else if (AutoActionMode == 3) // Record
+        else if (AutoActionMode == 3) // Record mode entry, do NOT auto-start
         {
-             // Switch to Record mode if not already
              if (!IsRecordingMode) IsRecordingMode = true;
-             
-             // Check requirements before starting
-             if (_recordingService != null && _recordingService.Downloader.IsFFmpegAvailable())
-             {
-                 Avalonia.Threading.Dispatcher.UIThread.Post(async () => await StartRecording());
-             }
+             // USER REQUEST: Selection only, record manually or via F3
         }
     }
 
@@ -165,17 +159,10 @@ public partial class SnipWindowViewModel
         { 
             if (RecState == RecordingState.Idle) 
             {
+                // USER REQUEST: F2 always switches/sets Record Mode, never auto-starts recording
                 if (!IsRecordingMode)
                 {
                     IsRecordingMode = true;
-                }
-                else
-                {
-                    // Already in Record Mode -> Check if we can start recording
-                    if (CurrentState == SnipState.Selected)
-                    {
-                        StartRecordingCommand.Execute(Unit.Default).Subscribe();
-                    }
                 }
             }
         });
