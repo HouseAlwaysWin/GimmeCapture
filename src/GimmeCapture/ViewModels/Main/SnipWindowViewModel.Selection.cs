@@ -391,19 +391,20 @@ public partial class SnipWindowViewModel
         var token = _scanCts.Token;
 
         IsProcessing = true;
-        ProcessingText = LocalizationService.Instance["StatusAIScanning"] ?? "AI Scanning...";
-        await Task.Delay(50, token); // Ensure UI renders the loading bar
-        Console.WriteLine("[AI Scan] Starting...");
         
         try
         {
+            ProcessingText = LocalizationService.Instance["StatusAIInitializing"] ?? "Initializing AI Models...";
             // Check AI resources first
             var aiReady = _mainVm.AIResourceService.IsSAM2Ready(_mainVm.AppSettingsService.Settings.SelectedSAM2Variant);
             Console.WriteLine($"[AI Scan] SAM2 Ready: {aiReady}");
             
             if (!aiReady)
             {
+                ProcessingText = "ABORT: SAM2 models not found. Please download in settings.";
                 Console.WriteLine("[AI Scan] ABORT: SAM2 not ready - model may not be downloaded");
+                await Task.Delay(2000, token);
+                IsProcessing = false;
                 return;
             }
 
@@ -438,12 +439,16 @@ public partial class SnipWindowViewModel
             await _sam2Service.InitializeAsync(); // Ensures it's ready if preload was slow
             
             Console.WriteLine("[AI Scan] Setting image (Fast path)...");
+            ProcessingText = "AI Encoding Image...";
             await _sam2Service.SetImageAsync(skBitmap);
             Console.WriteLine("[AI Scan] Image set. Running AutoDetect...");
+            ProcessingText = "Detecting Objects...";
 
             token.ThrowIfCancellationRequested();
 
-            var rects = await _sam2Service.AutoDetectObjectsAsync(_mainVm.SAM2GridDensity, _mainVm.SAM2MaxObjects, _mainVm.SAM2MinObjectSize, token); 
+            // Use higher grid density for better detection on high-res screens
+            int gridDensity = Math.Max(24, _mainVm.SAM2GridDensity);
+            var rects = await _sam2Service.AutoDetectObjectsAsync(gridDensity, _mainVm.SAM2MaxObjects, _mainVm.SAM2MinObjectSize, token); 
             // Do NOT dispose persistent service here
             
             Console.WriteLine($"[AI Scan] AutoDetect returned {rects.Count} rects");

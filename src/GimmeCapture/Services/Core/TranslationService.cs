@@ -12,6 +12,7 @@ using GimmeCapture.Models;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
 using SkiaSharp;
+using SKRectI = SkiaSharp.SKRectI;
 using Splat;
 
 namespace GimmeCapture.Services.Core;
@@ -138,7 +139,7 @@ public class TranslationService
         return results;
     }
 
-    private List<SKRectI> DetectText(SKBitmap bitmap)
+    private List<SkiaSharp.SKRectI> DetectText(SKBitmap bitmap)
     {
         // DB Model Pre-processing
         int targetWidth = (bitmap.Width + 31) / 32 * 32;
@@ -178,12 +179,121 @@ public class TranslationService
 
     private List<SKRectI> FindBoxesFromMask(Tensor<float> mask, int targetW, int targetH, int origW, int origH)
     {
-        // Simple implementation: Just return the whole area for now to verify recognition/translation
-        // We will refine this with actual contour detection later.
-        return new List<SKRectI> { new SKRectI(0, 0, origW, origH) };
+        // Simple threshold-based blob detection
+        // mask is [1, 1, H, W] or similar. PaddleOCR det output is probability map.
+        var boxes = new List<SKRectI>();
+        float threshold = 0.3f;
+        
+        int h = mask.Dimensions[2];
+        int w = mask.Dimensions[3];
+        
+        var visited = new bool[h, w];
+        float scaleX = (float)origW / w;
+        float scaleY = (float)origH / h;
+
+        for (int y = 0; y < h; y += 2) // Step for performance
+        {
+            for (int x = 0; x < w; x += 2)
+            {
+                if (mask[0, 0, y, x] > threshold && !visited[y, x])
+                {
+                    // Flood fill to find blob bounds
+                    int minX = x, maxX = x, minY = y, maxY = y;
+                    var queue = new Queue<(int, int)>();
+                    queue.Enqueue((x, y));
+                    visited[y, x] = true;
+
+                    while (queue.Count > 0)
+                    {
+                        var (cx, cy) = queue.Dequeue();
+                        minX = Math.Min(minX, cx);
+                        maxX = Math.Max(maxX, cx);
+                        minY = Math.Min(minY, cy);
+                        maxY = Math.Max(maxY, cy);
+
+                        // Check 4-neighbors
+                        int[] dx = { 0, 0, 1, -1 };
+                        int[] dy = { 1, -1, 0, 0 };
+                        for (int i = 0; i < 4; i++)
+                        {
+                            int nx = cx + dx[i];
+                            int ny = cy + dy[i];
+                            if (nx >= 0 && nx < w && ny >= 0 && ny < h && !visited[ny, nx] && mask[0, 0, ny, nx] > threshold)
+                            {
+                                visited[ny, nx] = true;
+                                queue.Enqueue((nx, ny));
+                            }
+                        }
+                    }
+
+                    // Convert to original coordinates and add padding
+                    int rectX = (int)(minX * scaleX);
+                    int rectY = (int)(minY * scaleY);
+                    int rectW = (int)((maxX - minX + 1) * scaleX);
+                    int rectH = (int)((maxY - minY + 1) * scaleY);
+                    
+                    if (rectW > 4 && rectH > 4) // Filter noise
+                    {
+                        // Add some padding
+                        int left = Math.Max(0, rectX - 2);
+                        int top = Math.Max(0, rectY - 2);
+                        int right = Math.Min(origW, rectX + rectW + 2);
+                        int bottom = Math.Min(origH, rectY + rectH + 2);
+                        boxes.Add(new SKRectI(left, top, right, bottom));
+                    }
+                }
+            }
+        }
+
+        // If no boxes found or too many (noise), fallback to whole area for verification
+        if (!boxes.Any())
+            return new List<SKRectI> { new SKRectI(0, 0, origW, origH) };
+
+        // Post-processing: Merge overlapping boxes
+        return MergeOverlappingBoxes(boxes);
     }
 
-    private string RecognizeText(SKBitmap bitmap, SKRectI box)
+    private List<SKRectI> MergeOverlappingBoxes(List<SKRectI> boxes)
+    {
+        bool merged = true;
+        while (merged)
+        {
+            merged = false;
+            for (int i = 0; i < boxes.Count; i++)
+            {
+                for (int j = i + 1; j < boxes.Count; j++)
+                {
+                    var r1 = boxes[i];
+                    var r2 = boxes[j];
+                    
+                    // Check if they are close or overlapping
+                    // Use manual intersection check for maximum compatibility
+                    int eLeft = r1.Left - 5;
+                    int eTop = r1.Top - 5;
+                    int eRight = r1.Right + 5;
+                    int eBottom = r1.Bottom + 5;
+                    
+                    if (eLeft < r2.Right && eRight > r2.Left && eTop < r2.Bottom && eBottom > r2.Top)
+                    {
+                        // Manual Union
+                        int uLeft = Math.Min(r1.Left, r2.Left);
+                        int uTop = Math.Min(r1.Top, r2.Top);
+                        int uRight = Math.Max(r1.Right, r2.Right);
+                        int uBottom = Math.Max(r1.Bottom, r2.Bottom);
+                        
+                        boxes[i] = new SKRectI(uLeft, uTop, uRight, uBottom);
+                        boxes.RemoveAt(j);
+                        merged = true;
+                        break;
+                    }
+                }
+                if (merged) break;
+            }
+        }
+        return boxes;
+    }
+
+    private string RecognizeText(SKBitmap bitmap, SkiaSharp.SKRectI box)
     {
         try
         {

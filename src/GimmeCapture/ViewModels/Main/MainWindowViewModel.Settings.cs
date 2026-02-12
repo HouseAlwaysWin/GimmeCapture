@@ -536,6 +536,10 @@ public partial class MainWindowViewModel
             {
                 _settingsService.Settings.EnableAIScan = value;
                 this.RaisePropertyChanged();
+                if (!_isDataLoading)
+                {
+                    _ = SaveSettingsAsync();
+                }
             }
         }
     }
@@ -720,6 +724,8 @@ public partial class MainWindowViewModel
             WingScale = settings.WingScale;
             CornerIconScale = settings.CornerIconScale;
             RecordFPS = settings.RecordFPS;
+            EnableAIScan = settings.EnableAIScan;
+            AIResourcesDirectory = settings.AIResourcesDirectory;
             AutoTranslate = settings.AutoTranslate;
             OllamaModel = settings.OllamaModel;
             OllamaApiUrl = settings.OllamaApiUrl;
