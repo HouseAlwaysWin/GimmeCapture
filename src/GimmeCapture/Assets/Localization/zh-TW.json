@@ -161,6 +161,8 @@
   "StatusSAM2NotFound": "找不到 SAM2 模型。請在設定中下載。",
   "StatusOCRNotReady": "OCR 資源未就緒 (下載失敗或取消)。",
   "StatusOllamaRequired": "請先安裝 Ollama 並下載模型。",
+  "StatusDownloadingNMT": "正在下載離線翻譯模組...",
+  "StatusMarianMTNotReady": "離線翻譯資源未就緒。",
   "StatusTranslationError": "翻譯出錯: {0}",
   "StylePreview": "樣式預覽",
   "AIResourcesPath": "AI 資源路徑",
@@ -211,7 +213,8 @@
   "OllamaApiUrl": "Ollama API 網址:",
   "TranslationEngine": "翻譯引擎 (Engine):",
   "TranslationEngineOllama": "Ollama (線上 LLM)",
-  "TranslationEngineMarianMT": "MarianMT (離線 日翻中)"
+  "TranslationEngineMarianMT": "MarianMT (離線 日翻中)",
+  "MarianMTDownloadConfirm": "離線翻譯功能需要下載專用模組 (約 400MB)。現在要下載嗎？"
 }
 
 

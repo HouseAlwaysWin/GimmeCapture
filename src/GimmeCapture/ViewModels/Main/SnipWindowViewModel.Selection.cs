@@ -669,22 +669,64 @@ public partial class SnipWindowViewModel
         _translationCts = new CancellationTokenSource();
         var token = _translationCts.Token;
 
-        // 1. Check if Ollama is running and has models
-        var models = await _translationService.GetAvailableModelsAsync();
-        if (!models.Any())
+        // 1. Engine specific readiness check
+        var settings = _mainVm?.AppSettingsService.Settings ?? new AppSettings();
+        if (settings.SelectedTranslationEngine == TranslationEngine.Ollama)
         {
-            Avalonia.Threading.Dispatcher.UIThread.Post(() => {
-                ShowSnipToolBar = true;
-                ProcessingText = LocalizationService.Instance["StatusOllamaRequired"] ?? "Please install Ollama and download a model first.";
-                IsIndeterminate = false;
-                ProgressValue = 100;
-            });
-            await Task.Delay(3000);
-            Avalonia.Threading.Dispatcher.UIThread.Post(() => {
-                ShowSnipToolBar = false;
-                IsTranslationActive = false; // Add reset here as well
-            });
-            return;
+            var models = await _translationService.GetAvailableModelsAsync();
+            if (!models.Any())
+            {
+                Avalonia.Threading.Dispatcher.UIThread.Post(() => {
+                    ShowSnipToolBar = true;
+                    ProcessingText = LocalizationService.Instance["StatusOllamaRequired"] ?? "Please install Ollama and download a model first.";
+                    IsIndeterminate = false;
+                    ProgressValue = 100;
+                });
+                await Task.Delay(3000);
+                Avalonia.Threading.Dispatcher.UIThread.Post(() => {
+                    ShowSnipToolBar = false;
+                    IsTranslationActive = false;
+                });
+                return;
+            }
+        }
+        else if (settings.SelectedTranslationEngine == TranslationEngine.MarianMT)
+        {
+            if (_mainVm != null && !_mainVm.AIResourceService.IsNmtReady())
+            {
+                if (_mainVm.ConfirmAction != null)
+                {
+                    var confirmed = await _mainVm.ConfirmAction(
+                        LocalizationService.Instance["AIDownloadTitle"],
+                        LocalizationService.Instance["MarianMTDownloadConfirm"]);
+                    
+                    if (confirmed)
+                    {
+                        // 1. Close SnipWindow immediately
+                        Close();
+
+                        // 2. Trigger background download in MainWindow (don't await so we can finish this task)
+                        _ = _mainVm.InstallModuleAsync("MarianMT");
+                        return;
+                    }
+                    else
+                    {
+                        IsTranslationActive = false;
+                        ShowSnipToolBar = false;
+                        return;
+                    }
+                }
+            }
+            
+            // Final check
+            if (_mainVm != null && !_mainVm.AIResourceService.IsNmtReady())
+            {
+                 ProcessingText = LocalizationService.Instance["StatusMarianMTNotReady"] ?? "Offline translation resources not ready.";
+                 await Task.Delay(2000);
+                 IsTranslationActive = false;
+                 ShowSnipToolBar = false;
+                 return;
+            }
         }
 
         try
@@ -703,7 +745,7 @@ public partial class SnipWindowViewModel
                         {
                             Avalonia.Threading.Dispatcher.UIThread.Post(() => {
                                 ShowSnipToolBar = true;
-                                ProcessingText = LocalizationService.Instance["StatusOCRNotReady"] ?? "OCR resources not ready (download failed or cancelled).";
+                                ProcessingText = LocalizationService.Instance["StatusOCRNotReady"] ?? "OCR resources not ready.";
                                 IsIndeterminate = false;
                                 ProgressValue = 100;
                             });
@@ -712,8 +754,12 @@ public partial class SnipWindowViewModel
                         }
                     }
 
+                    // Proceed with actual analysis and translation
+                    ProcessingText = LocalizationService.Instance["StatusTranslating"] ?? "Translating...";
+                    IsIndeterminate = true;
                     var blocks = await _translationService.AnalyzeAndTranslateAsync(bitmap, token);
                     if (currentVersion != _translationVersion || token.IsCancellationRequested) return;
+                    
                     Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                     {
                         if (currentVersion != _translationVersion || token.IsCancellationRequested) return;

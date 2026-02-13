@@ -1018,6 +1018,12 @@ public class TranslationService
                 return text;
             }
 
+            if (_settings.SelectedTranslationEngine == TranslationEngine.MarianMT)
+            {
+                Debug.WriteLine("[Translation] Using MarianMT (Offline) engine.");
+                return await _marianMTService.TranslateAsync(text, _settings.TargetLanguage, ct);
+            }
+
             string model = _settings.OllamaModel;
             if (string.IsNullOrEmpty(model)) 
             {
@@ -1033,12 +1039,6 @@ public class TranslationService
             }
             
             string sourceLang = ResolveSourceLanguageForPrompt(text);
-
-        if (_settings.SelectedTranslationEngine == TranslationEngine.MarianMT)
-        {
-            Debug.WriteLine("[Translation] Using MarianMT (Offline) engine.");
-            return await _marianMTService.TranslateAsync(text, _settings.TargetLanguage, ct);
-        }
 
             var request = new
             {

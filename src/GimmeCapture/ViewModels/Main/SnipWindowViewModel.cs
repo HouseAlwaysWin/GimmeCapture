@@ -157,6 +157,11 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
             mainVm.WhenAnyValue(x => x.EnableAIScan)
                   .Subscribe(val => EnableAIScan = val)
                   .DisposeWith(_disposables);
+
+            // Sync AI Download Progress
+            mainVm.AIResourceService.WhenAnyValue(x => x.DownloadProgress)
+                  .Subscribe(val => ProgressValue = val)
+                  .DisposeWith(_disposables);
         }
 
         // Initialize Debug Compatibility

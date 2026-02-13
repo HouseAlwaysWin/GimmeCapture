@@ -153,6 +153,8 @@
   "StatusSAM2NotFound": "SAM2 モデルが見つかりません。設定からダウンロードしてください。",
   "StatusOCRNotReady": "OCR リソースの準備ができていません (ダウンロード失敗またはキャンセル)。",
   "StatusOllamaRequired": "Ollama をインストールしてモデルをダウンロードしてください。",
+  "StatusDownloadingNMT": "オフライン翻訳モジュールをダウンロード中...",
+  "StatusMarianMTNotReady": "オフライン翻訳リソースの準備ができていません。",
   "StatusTranslationError": "翻訳エラー: {0}",
   "StylePreview": "スタイルプレビュー",
   "AIResourcesPath": "AIリソースのパス",
@@ -192,7 +194,8 @@
   "OllamaApiUrl": "Ollama API URL:",
   "TranslationEngine": "翻訳エンジン (Engine):",
   "TranslationEngineOllama": "Ollama (オンライン LLM)",
-  "TranslationEngineMarianMT": "MarianMT (オフライン 日->中)"
+  "TranslationEngineMarianMT": "MarianMT (オフライン 日->中)",
+  "MarianMTDownloadConfirm": "オフライン翻訳機能には専用モジュールのダウンロードが必要です (約 400MB)。今すぐダウンロードしますか？"
 }
 
 

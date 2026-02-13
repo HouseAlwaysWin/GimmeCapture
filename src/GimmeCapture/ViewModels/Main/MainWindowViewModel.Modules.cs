@@ -155,7 +155,7 @@ public partial class MainWindowViewModel
         Modules.Add(marian);
     }
 
-    private async Task InstallModuleAsync(string type)
+    public async Task InstallModuleAsync(string type)
     {
         foreach (var m in Modules)
         {

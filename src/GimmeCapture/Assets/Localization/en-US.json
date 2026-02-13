@@ -161,6 +161,8 @@
   "StatusSAM2NotFound": "SAM2 models not found. Please download in settings.",
   "StatusOCRNotReady": "OCR resources not ready (download failed or cancelled).",
   "StatusOllamaRequired": "Please install Ollama and download a model first.",
+  "StatusDownloadingNMT": "Downloading offline translation modules...",
+  "StatusMarianMTNotReady": "Offline translation resources not ready.",
   "StatusTranslationError": "Translation Error: {0}",
   "StylePreview": "Style Preview",
   "AIResourcesPath": "AI Resources Path",
@@ -211,7 +213,8 @@
   "OllamaApiUrl": "Ollama API URL:",
   "TranslationEngine": "Translation Engine:",
   "TranslationEngineOllama": "Ollama (Online LLM)",
-  "TranslationEngineMarianMT": "MarianMT (Offline Ja->Zh)"
+  "TranslationEngineMarianMT": "MarianMT (Offline Ja->Zh)",
+  "MarianMTDownloadConfirm": "Offline translation requires a dedicated module (~400MB). Download now?"
 }
 
 
