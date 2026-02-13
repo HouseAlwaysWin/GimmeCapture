@@ -81,7 +81,6 @@ public class AppSettings
     public int SAM2GridDensity { get; set; } = 8;
     public int SAM2MaxObjects { get; set; } = 20;
     public int SAM2MinObjectSize { get; set; } = 20;
-    public bool AutoTranslate { get; set; } = false;
     [System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter))]
     public OCRLanguage SourceLanguage { get; set; } = OCRLanguage.Auto;
     [System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter))]

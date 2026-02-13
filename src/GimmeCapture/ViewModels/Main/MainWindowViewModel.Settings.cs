@@ -581,12 +581,7 @@ public partial class MainWindowViewModel
         set => this.RaiseAndSetIfChanged(ref _sam2MinObjectSize, value);
     }
 
-    private bool _autoTranslate;
-    public bool AutoTranslate
-    {
-        get => _autoTranslate;
-        set => this.RaiseAndSetIfChanged(ref _autoTranslate, value);
-    }
+
 
     private string _ollamaModel = "";
     public string OllamaModel
@@ -772,7 +767,6 @@ public partial class MainWindowViewModel
             RecordFPS = settings.RecordFPS;
             EnableAIScan = settings.EnableAIScan;
             AIResourcesDirectory = settings.AIResourcesDirectory;
-            AutoTranslate = settings.AutoTranslate;
             OllamaApiUrl = settings.OllamaApiUrl;
             
             // Seed the list so ComboBox can show the value immediately
@@ -852,7 +846,6 @@ public partial class MainWindowViewModel
             settings.WingScale = WingScale;
             settings.CornerIconScale = CornerIconScale;
             settings.RecordFPS = RecordFPS;
-            settings.AutoTranslate = AutoTranslate;
             settings.SourceLanguage = SourceLanguage;
             settings.TargetLanguage = TargetLanguage;
             settings.OllamaModel = OllamaModel;

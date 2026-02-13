@@ -142,7 +142,6 @@ public class AppSettingsService
         dest.SAM2GridDensity = source.SAM2GridDensity;
         dest.SAM2MaxObjects = source.SAM2MaxObjects;
         dest.SAM2MinObjectSize = source.SAM2MinObjectSize;
-        dest.AutoTranslate = source.AutoTranslate;
         dest.SourceLanguage = source.SourceLanguage;
         dest.TargetLanguage = source.TargetLanguage;
         dest.OllamaModel = source.OllamaModel;

@@ -97,12 +97,7 @@ public partial class SnipWindowViewModel
     }
 
     // Feature Flags (Synced)
-    private bool _autoTranslate;
-    public bool AutoTranslate
-    {
-        get => _autoTranslate;
-        set => this.RaiseAndSetIfChanged(ref _autoTranslate, value);
-    }
+
 
     private bool _showAIScanBox;
     public bool ShowAIScanBox
@@ -734,6 +729,7 @@ public partial class SnipWindowViewModel
             if (currentVersion == _translationVersion)
             {
                 ShowSnipToolBar = false;
+                IsTranslationActive = false;
             }
         }
     }

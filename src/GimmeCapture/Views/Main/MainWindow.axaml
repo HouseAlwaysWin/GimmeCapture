@@ -290,10 +290,7 @@
                                 <StackPanel Spacing="5" IsEnabled="{Binding EnableAI}">
                                     <CheckBox IsChecked="{Binding ShowAIScanBox}" Content="{Binding [ShowAIScanBox], Source={x:Static services:LocalizationService.Instance}}" Margin="24,0,0,0"/>
                                     <CheckBox IsChecked="{Binding EnableAIScan}" Content="{Binding [EnableAIScan], Source={x:Static services:LocalizationService.Instance}}" Margin="24,0,0,0"/>
-                                    
-                                    <CheckBox IsChecked="{Binding AutoTranslate}" Content="{Binding [AutoTranslate], Source={x:Static services:LocalizationService.Instance}}" Margin="24,10,0,0"/>
-                                    
-                                    <DockPanel Margin="48,5,0,0" IsEnabled="{Binding AutoTranslate}">
+                                    <DockPanel Margin="48,5,0,0">
                                         <TextBlock Text="{Binding [OCRLanguage], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,0,10,0"/>
                                         <ComboBox ItemsSource="{Binding AvailableOCRLanguages}" SelectedItem="{Binding SourceLanguage}" Width="250">
                                             <ComboBox.ItemTemplate>
@@ -304,7 +301,7 @@
                                         </ComboBox>
                                     </DockPanel>
 
-                                    <DockPanel Margin="48,5,0,0" IsEnabled="{Binding AutoTranslate}">
+                                    <DockPanel Margin="48,5,0,0">
                                         <TextBlock Text="{Binding [TranslationLanguage], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,0,10,0"/>
                                         <ComboBox ItemsSource="{Binding AvailableTranslationLanguages}" SelectedItem="{Binding TargetLanguage}" Width="200">
                                             <ComboBox.ItemTemplate>
