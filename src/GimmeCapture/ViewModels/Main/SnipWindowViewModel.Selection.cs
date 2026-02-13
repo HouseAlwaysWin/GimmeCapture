@@ -279,6 +279,13 @@ public partial class SnipWindowViewModel
         set => this.RaiseAndSetIfChanged(ref _translationOverlayTop, value);
     }
 
+    private bool _isTranslationOverlayManuallyPositioned;
+    public bool IsTranslationOverlayManuallyPositioned
+    {
+        get => _isTranslationOverlayManuallyPositioned;
+        set => this.RaiseAndSetIfChanged(ref _isTranslationOverlayManuallyPositioned, value);
+    }
+
     private double _translationOverlayLeft;
     public double TranslationOverlayLeft
     {
@@ -340,13 +347,16 @@ public partial class SnipWindowViewModel
 
         ToolbarTop = top;
         ToolbarLeft = left;
-
-        // Position Translation Overlay below the toolbar
-        TranslationOverlayTop = top + th + 8;
-        TranslationOverlayLeft = left;
         
         // Ensure MaxWidth allows full toolbar on smaller monitors
         this.RaisePropertyChanged(nameof(ToolbarMaxWidth));
+       
+        // Default to positioning translation below the toolbar
+        if (!IsTranslationOverlayManuallyPositioned)
+        {
+            TranslationOverlayTop = top + th + 8;
+            TranslationOverlayLeft = left;
+        }
     }
 
 

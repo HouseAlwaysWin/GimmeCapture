@@ -318,13 +318,18 @@
                 </ItemsControl.Styles>
                 <ItemsControl.ItemTemplate>
                     <DataTemplate DataType="services:TranslatedBlock">
-                        <Border BorderBrush="#66FFFFFF"
+                        <Border Name="TranslationBorder"
+                                BorderBrush="#66FFFFFF"
                                 BorderThickness="1"
                                 Background="#DD000000"
                                 CornerRadius="4"
                                 Padding="12"
                                 BoxShadow="0 4 8 0 #40000000"
-                                MaxWidth="400">
+                                MaxWidth="400"
+                                Cursor="SizeAll"
+                                PointerPressed="Translation_PointerPressed"
+                                PointerMoved="Translation_PointerMoved"
+                                PointerReleased="Translation_PointerReleased">
                             <ScrollViewer VerticalScrollBarVisibility="Auto">
                                 <SelectableTextBlock Text="{Binding TranslatedText}" 
                                                    Foreground="White" 

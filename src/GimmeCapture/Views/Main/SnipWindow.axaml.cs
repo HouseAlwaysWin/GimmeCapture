@@ -511,6 +511,50 @@ public partial class SnipWindow : Window
         }
     }
 
+    // Translation Dragging State
+    private bool _isDraggingTranslation;
+    private Point _translationDragOffset;
+
+    private void Translation_PointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (_viewModel == null || sender is not Border border) return;
+        
+        var props = e.GetCurrentPoint(this).Properties;
+        if (props.IsLeftButtonPressed)
+        {
+            _isDraggingTranslation = true;
+            _translationDragOffset = e.GetPosition(this);
+            _translationDragOffset = new Point(
+                _translationDragOffset.X - _viewModel.TranslationOverlayLeft,
+                _translationDragOffset.Y - _viewModel.TranslationOverlayTop);
+            
+            e.Pointer.Capture(border);
+            e.Handled = true;
+        }
+    }
+
+    private void Translation_PointerMoved(object? sender, PointerEventArgs e)
+    {
+        if (!_isDraggingTranslation || _viewModel == null) return;
+
+        var currentPos = e.GetPosition(this);
+        _viewModel.TranslationOverlayLeft = currentPos.X - _translationDragOffset.X;
+        _viewModel.TranslationOverlayTop = currentPos.Y - _translationDragOffset.Y;
+        _viewModel.IsTranslationOverlayManuallyPositioned = true;
+        
+        e.Handled = true;
+    }
+
+    private void Translation_PointerReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        if (_isDraggingTranslation && sender is Border border)
+        {
+            _isDraggingTranslation = false;
+            e.Pointer.Capture(null);
+            e.Handled = true;
+        }
+    }
+
     private ResizeDirection GetDirectionFromName(string? name)
     {
         return name switch
