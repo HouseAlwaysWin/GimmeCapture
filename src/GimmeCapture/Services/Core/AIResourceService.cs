@@ -613,6 +613,7 @@ public class AIResourceService : ReactiveObject
                 await DownloadFile(NmtGenerationConfigUrl, paths.GenConfig, 97.5, 2.5, ct);
 
             DownloadProgress = 100;
+            IsDownloading = false;
             return IsNmtReady();
         }
         catch (OperationCanceledException)

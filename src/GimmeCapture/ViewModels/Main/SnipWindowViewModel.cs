@@ -162,6 +162,15 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
             mainVm.AIResourceService.WhenAnyValue(x => x.DownloadProgress)
                   .Subscribe(val => ProgressValue = val)
                   .DisposeWith(_disposables);
+
+            // Sync Theme Color
+            mainVm.WhenAnyValue(x => x.ThemeColor)
+                  .Subscribe(_ => 
+                  {
+                      this.RaisePropertyChanged(nameof(ThemeColor));
+                      this.RaisePropertyChanged(nameof(ThemeDeepColor));
+                  })
+                  .DisposeWith(_disposables);
         }
 
         // Initialize Debug Compatibility

@@ -82,7 +82,7 @@ public partial class SnipWindowViewModel
         set => this.RaiseAndSetIfChanged(ref _processingText, value);
     }
     
-    private bool _isIndeterminate = true;
+    private bool _isIndeterminate = false;
     public bool IsIndeterminate
     {
         get => _isIndeterminate;
@@ -637,6 +637,7 @@ public partial class SnipWindowViewModel
         ShowSnipToolBar = true;
         ProcessingText = LocalizationService.Instance["StatusTranslating"] ?? "Translating...";
         IsIndeterminate = true;
+        ProgressValue = 0;
 
         if (_translationService == null)
         {

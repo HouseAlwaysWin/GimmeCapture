@@ -144,9 +144,10 @@ public class AppSettingsService
         dest.SAM2MinObjectSize = source.SAM2MinObjectSize;
         dest.SourceLanguage = source.SourceLanguage;
         dest.TargetLanguage = source.TargetLanguage;
+        dest.SelectedTranslationEngine = source.SelectedTranslationEngine;
         dest.OllamaModel = source.OllamaModel;
         dest.OllamaApiUrl = source.OllamaApiUrl;
-        DebugLog($"UpdateSettings: OllamaModel from source is '{source.OllamaModel}', dest is now '{dest.OllamaModel}'");
+        DebugLog($"UpdateSettings: OllamaModel from source is '{source.OllamaModel}', SelectedTranslationEngine is {dest.SelectedTranslationEngine}, dest is now '{dest.OllamaModel}'");
     }
 
 

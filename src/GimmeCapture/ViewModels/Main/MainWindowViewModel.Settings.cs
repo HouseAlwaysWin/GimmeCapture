@@ -29,15 +29,15 @@ public partial class MainWindowViewModel
     public List<TranslationLanguage> AvailableTranslationLanguages { get; } = Enum.GetValues<TranslationLanguage>().ToList();
     public List<OCRLanguage> AvailableOCRLanguages { get; } = Enum.GetValues<OCRLanguage>().ToList();
 
+    private OCRLanguage _sourceLanguage;
     public OCRLanguage SourceLanguage
     {
-        get => _settingsService.Settings.SourceLanguage;
+        get => _sourceLanguage;
         set
         {
-            if (_settingsService.Settings.SourceLanguage != value)
+            if (_sourceLanguage != value)
             {
-                _settingsService.Settings.SourceLanguage = value;
-                this.RaisePropertyChanged();
+                this.RaiseAndSetIfChanged(ref _sourceLanguage, value);
                 
                 if (!_isDataLoading)
                 {
@@ -48,15 +48,15 @@ public partial class MainWindowViewModel
         }
     }
 
+    private TranslationLanguage _targetLanguage;
     public TranslationLanguage TargetLanguage
     {
-        get => _settingsService.Settings.TargetLanguage;
+        get => _targetLanguage;
         set
         {
-            if (_settingsService.Settings.TargetLanguage != value)
+            if (_targetLanguage != value)
             {
-                _settingsService.Settings.TargetLanguage = value;
-                this.RaisePropertyChanged();
+                this.RaiseAndSetIfChanged(ref _targetLanguage, value);
                 
                 if (!_isDataLoading)
                 {
@@ -69,15 +69,15 @@ public partial class MainWindowViewModel
 
     public List<TranslationEngine> AvailableTranslationEngines { get; } = Enum.GetValues<TranslationEngine>().ToList();
     
+    private TranslationEngine _selectedTranslationEngine;
     public TranslationEngine SelectedTranslationEngine
     {
-        get => _settingsService.Settings.SelectedTranslationEngine;
+        get => _selectedTranslationEngine;
         set
         {
-            if (_settingsService.Settings.SelectedTranslationEngine != value)
+            if (_selectedTranslationEngine != value)
             {
-                _settingsService.Settings.SelectedTranslationEngine = value;
-                this.RaisePropertyChanged();
+                this.RaiseAndSetIfChanged(ref _selectedTranslationEngine, value);
                 this.RaisePropertyChanged(nameof(IsOllamaVisible));
                 if (!_isDataLoading)
                 {
@@ -792,6 +792,10 @@ public partial class MainWindowViewModel
             AIResourcesDirectory = settings.AIResourcesDirectory;
             OllamaApiUrl = settings.OllamaApiUrl;
             SelectedTranslationEngine = settings.SelectedTranslationEngine;
+            SourceLanguage = settings.SourceLanguage;
+            TargetLanguage = settings.TargetLanguage;
+            SourceLanguage = settings.SourceLanguage;
+            TargetLanguage = settings.TargetLanguage;
             
             // Seed the list so ComboBox can show the value immediately
             if (!string.IsNullOrEmpty(settings.OllamaModel))
@@ -870,8 +874,8 @@ public partial class MainWindowViewModel
             settings.WingScale = WingScale;
             settings.CornerIconScale = CornerIconScale;
             settings.RecordFPS = RecordFPS;
-            settings.SourceLanguage = SourceLanguage;
             settings.TargetLanguage = TargetLanguage;
+            settings.SourceLanguage = SourceLanguage;
             settings.OllamaModel = OllamaModel;
             settings.OllamaApiUrl = OllamaApiUrl;
             settings.SelectedTranslationEngine = SelectedTranslationEngine;

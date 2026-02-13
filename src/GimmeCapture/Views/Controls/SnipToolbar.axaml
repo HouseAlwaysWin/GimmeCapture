@@ -119,8 +119,8 @@
                     <ProgressBar IsIndeterminate="{Binding IsIndeterminate}"
                                  Value="{Binding ProgressValue}"
                                  Minimum="0" Maximum="100"
-                                 Height="2" MinWidth="60"
-                                 Foreground="{Binding ThemeColor, Converter={StaticResource ColorToBrushConverter}}"
+                                 Height="3" MinWidth="60"
+                                 Foreground="{DynamicResource ThemeAccentBrush}"
                                  Background="#333333"/>
                 </StackPanel>
             </StackPanel>

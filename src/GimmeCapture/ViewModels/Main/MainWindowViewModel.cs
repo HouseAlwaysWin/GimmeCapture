@@ -238,7 +238,7 @@ public partial class MainWindowViewModel : ViewModelBase
                 }
                 else if (IsProcessing)
                 {
-                    if (StatusText.Contains("Downloading") || StatusText.Contains("下載")) SetStatus("StatusReady");
+                    SetStatus("StatusReady");
                     IsProcessing = false;
                     ProgressValue = 0;
                     ProcessingText = "";
