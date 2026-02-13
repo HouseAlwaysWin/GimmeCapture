@@ -114,14 +114,15 @@
             <!-- 6. Integrated Loading Indicator -->
             <StackPanel Orientation="Horizontal" IsVisible="{Binding ShowSnipToolBar}" VerticalAlignment="Center" Margin="4,0">
                 <Rectangle Fill="#444444" Width="1" Height="16" Margin="0,0,4,0"/>
-                <StackPanel Spacing="2">
+                <StackPanel Spacing="2" VerticalAlignment="Center" Margin="0,0,4,0">
                     <TextBlock Text="{Binding ProcessingText}" Foreground="White" FontSize="10" HorizontalAlignment="Center"/>
                     <ProgressBar IsIndeterminate="{Binding IsIndeterminate}"
                                  Value="{Binding ProgressValue}"
                                  Minimum="0" Maximum="100"
-                                 Height="3" MinWidth="60"
+                                 Height="4" MinWidth="70"
                                  Foreground="{DynamicResource ThemeAccentBrush}"
-                                 Background="#333333"/>
+                                 Background="#333333"
+                                 VerticalAlignment="Center"/>
                 </StackPanel>
             </StackPanel>
 

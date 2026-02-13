@@ -758,7 +758,10 @@ public partial class SnipWindowViewModel
                     // Proceed with actual analysis and translation
                     ProcessingText = LocalizationService.Instance["StatusTranslating"] ?? "Translating...";
                     IsIndeterminate = true;
-                    var blocks = await _translationService.AnalyzeAndTranslateAsync(bitmap, token);
+                    
+                    // Task.Run to offload CPU-intensive OCR from UI thread
+                    var blocks = await Task.Run(() => _translationService.AnalyzeAndTranslateAsync(bitmap, token), token);
+                    
                     if (currentVersion != _translationVersion || token.IsCancellationRequested) return;
                     
                     Avalonia.Threading.Dispatcher.UIThread.Post(() =>
@@ -790,6 +793,9 @@ public partial class SnipWindowViewModel
         {
             if (currentVersion == _translationVersion)
             {
+                // Add a small delay so the user can see the "Translating..." status 
+                // and result before the toolbar disappears.
+                await Task.Delay(500);
                 ShowSnipToolBar = false;
                 IsTranslationActive = false;
             }
