@@ -18,6 +18,7 @@ using GimmeCapture.Services.Platforms.Windows;
 using GimmeCapture.Services.Interop;
 
 using ReactiveUI;
+using Avalonia.Interactivity;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
 
@@ -158,6 +159,20 @@ public partial class SnipWindow : Window
             // Re-assert Topmost for self just in case
             this.Topmost = false;
             this.Topmost = true;
+
+            // Track Focus to fix Ctrl+C conflict with SelectableTextBlock
+            this.AddHandler(InputElement.GotFocusEvent, (s, ev) => 
+            {
+                if (_viewModel == null) return;
+                bool isTextControl = ev.Source is SelectableTextBlock || ev.Source is TextBox;
+                _viewModel.IsInputFocused = isTextControl;
+            }, RoutingStrategies.Bubble);
+
+            this.AddHandler(InputElement.LostFocusEvent, (s, ev) => 
+            {
+                if (_viewModel == null) return;
+                _viewModel.IsInputFocused = false;
+            }, RoutingStrategies.Bubble);
         }, Avalonia.Threading.DispatcherPriority.Input);
     }
 

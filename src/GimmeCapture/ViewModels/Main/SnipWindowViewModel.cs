@@ -162,6 +162,13 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         UpdateMask();
     }
 
+    private bool _isInputFocused;
+    public bool IsInputFocused
+    {
+        get => _isInputFocused;
+        set => this.RaiseAndSetIfChanged(ref _isInputFocused, value);
+    }
+
     public void Dispose()
     {
         _disposables.Dispose();

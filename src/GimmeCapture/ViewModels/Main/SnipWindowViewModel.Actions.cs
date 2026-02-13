@@ -189,11 +189,12 @@ public partial class SnipWindowViewModel
         });
         
         // Copy key (Ctrl+C) logic re-definition
+        var canCopyImage = this.WhenAnyValue(x => x.IsInputFocused, x => !x);
         CopyCommand = ReactiveCommand.CreateFromTask(async () => 
         {
             if (!IsRecordingMode) await Copy();
             else await CopyRecording(); // Handles Stop and Copy
-        });
+        }, canCopyImage);
 
         var canRemoveBackground = this.WhenAnyValue(
             x => x.IsRecordingMode, 
