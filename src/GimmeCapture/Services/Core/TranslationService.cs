@@ -7,6 +7,7 @@ using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+using System.Threading;
 using System.Text.RegularExpressions;
 using System.Globalization;
 using Avalonia;
@@ -33,7 +34,8 @@ public class TranslationService
     private const float DetMinAreaRatio = 0.00005f;
     private const int DetMaxBoxes = 256;
     private const float RecMinAcceptConfidence = 0.10f;
-    private const int MaxTranslationBlocks = 2;
+    private const int MaxTranslationBlocks = 1;
+    private static readonly bool SaveOcrDebugImages = false;
     private static readonly Regex LatinOrCjkRegex = new(@"[\p{IsCJKUnifiedIdeographs}\p{IsHiragana}\p{IsKatakana}\p{IsHangulSyllables}A-Za-z0-9]", RegexOptions.Compiled);
 
     private readonly AIResourceService _aiResourceService;
@@ -45,12 +47,14 @@ public class TranslationService
     private readonly HttpClient _httpClient = new();
     private readonly AppSettingsService _settingsService;
     private AppSettings _settings => _settingsService.Settings;
+    private DateTime _modelsCacheAtUtc = DateTime.MinValue;
+    private List<string> _cachedModels = new();
  
     public TranslationService(AIResourceService aiResourceService, AppSettingsService settingsService)
     {
         _aiResourceService = aiResourceService ?? throw new ArgumentNullException(nameof(aiResourceService));
         _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
-        _httpClient.Timeout = TimeSpan.FromSeconds(60); 
+        _httpClient.Timeout = TimeSpan.FromSeconds(20); 
     }
 
 
@@ -105,8 +109,9 @@ public class TranslationService
     }
 
 
-    public async Task<List<TranslatedBlock>> AnalyzeAndTranslateAsync(SKBitmap bitmap)
+    public async Task<List<TranslatedBlock>> AnalyzeAndTranslateAsync(SKBitmap bitmap, CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         await EnsureLoadedAsync();
         if (_detSession == null || _recSession == null) return new();
 
@@ -118,6 +123,7 @@ public class TranslationService
         
         foreach (var box in boxes)
         {
+            ct.ThrowIfCancellationRequested();
             var (text, confidence) = RecognizeTextWithConfidence(bitmap, box);
             Console.WriteLine($"[OCR] Raw Text: \"{text}\" (Conf: {confidence:F3})");
             
@@ -132,6 +138,7 @@ public class TranslationService
         {
             foreach (var fallbackBox in BuildFallbackRecognitionBoxes(bitmap.Width, bitmap.Height, boxes))
             {
+                ct.ThrowIfCancellationRequested();
                 var (text, confidence) = RecognizeTextWithConfidence(bitmap, fallbackBox);
                 Console.WriteLine($"[OCR][Fallback] Raw Text: \"{text}\" (Conf: {confidence:F3})");
                 if (IsUsefulOcrText(text, confidence))
@@ -147,7 +154,25 @@ public class TranslationService
             .Select(g => g.First())
             .Take(MaxTranslationBlocks))
         {
-            var translated = await TranslateAsync(item.Text);
+            ct.ThrowIfCancellationRequested();
+            var translated = await TranslateAsync(item.Text, ct);
+            if (!IsTranslationAcceptable(item.Text, translated, _settings.TargetLanguage))
+            {
+                if (_settings.TargetLanguage == TranslationLanguage.English)
+                {
+                    var forced = await ForceTranslateTraditionalChineseToEnglishAsync(item.Text, ct);
+                    if (IsTranslationAcceptable(item.Text, forced, _settings.TargetLanguage))
+                    {
+                        translated = forced;
+                    }
+                }
+            }
+
+            if (!IsTranslationAcceptable(item.Text, translated, _settings.TargetLanguage))
+            {
+                Console.WriteLine($"[Translation] Skip low-quality result: \"{item.Text}\" -> \"{translated}\"");
+                continue;
+            }
             Console.WriteLine($"[Translation] From \"{item.Text}\" -> To \"{translated}\"");
             results.Add(new TranslatedBlock
             {
@@ -155,6 +180,25 @@ public class TranslationService
                 TranslatedText = translated,
                 Bounds = new Rect(item.Box.Left, item.Box.Top, item.Box.Width, item.Box.Height)
             });
+        }
+
+        // Do not return empty UI when OCR found text but translation was rejected.
+        if (results.Count == 0 && recognizedBlocks.Count > 0)
+        {
+            var fallback = recognizedBlocks
+                .OrderByDescending(x => ScoreRecognizedBlock(x))
+                .First();
+            var fallbackText = BuildTargetLanguageFallbackText(fallback.Text, _settings.TargetLanguage);
+            if (!string.IsNullOrWhiteSpace(fallbackText))
+            {
+                Console.WriteLine($"[Translation] Fallback display using OCR text: \"{fallbackText}\"");
+                results.Add(new TranslatedBlock
+                {
+                    OriginalText = fallback.Text,
+                    TranslatedText = fallbackText,
+                    Bounds = new Rect(fallback.Box.Left, fallback.Box.Top, fallback.Box.Width, fallback.Box.Height)
+                });
+            }
         }
 
         return results;
@@ -589,16 +633,19 @@ public class TranslationService
 
 
             // [Diagnostic] Save tensor input images for accuracy analysis
-            try
+            if (SaveOcrDebugImages)
             {
-                string debugDir = Path.Combine(_settingsService.BaseDataDirectory, "OCR_Debug");
-                Directory.CreateDirectory(debugDir);
-                string fileName = $"rec_{DateTime.Now:HHmmss_fff}_{Guid.NewGuid().ToString().Substring(0, 4)}.png";
-                using var image = SKImage.FromBitmap(normalBitmap);
-                using var dataData = image.Encode(SKEncodedImageFormat.Png, 100);
-                File.WriteAllBytes(Path.Combine(debugDir, fileName), dataData.ToArray());
+                try
+                {
+                    string debugDir = Path.Combine(_settingsService.BaseDataDirectory, "OCR_Debug");
+                    Directory.CreateDirectory(debugDir);
+                    string fileName = $"rec_{DateTime.Now:HHmmss_fff}_{Guid.NewGuid().ToString().Substring(0, 4)}.png";
+                    using var image = SKImage.FromBitmap(normalBitmap);
+                    using var dataData = image.Encode(SKEncodedImageFormat.Png, 100);
+                    File.WriteAllBytes(Path.Combine(debugDir, fileName), dataData.ToArray());
+                }
+                catch { }
             }
-            catch { }
 
             return bestResult;
         }
@@ -919,7 +966,7 @@ public class TranslationService
     }
 
 
-    private async Task<string> TranslateAsync(string text)
+    private async Task<string> TranslateAsync(string text, CancellationToken ct = default)
     {
         try
         {
@@ -977,9 +1024,23 @@ public class TranslationService
 
             string url = !string.IsNullOrEmpty(_settings.OllamaApiUrl) ? _settings.OllamaApiUrl : "http://localhost:11434/api/generate";
             Console.WriteLine($"[Translation] Ollama Request: model={request.model}, prompt=\"{request.prompt.Substring(0, Math.Min(30, request.prompt.Length))}...\"");
-            
-            var content = new StringContent(JsonSerializer.Serialize(request), Encoding.UTF8, "application/json");
-            var response = await _httpClient.PostAsync(url, content);
+
+            var requestJson = JsonSerializer.Serialize(request);
+            var firstTimeout = IsLikelySlowModel(model) ? TimeSpan.FromSeconds(28) : TimeSpan.FromSeconds(12);
+            var retryTimeout = IsLikelySlowModel(model) ? TimeSpan.FromSeconds(45) : TimeSpan.FromSeconds(20);
+
+            var response = await PostGenerateAsync(url, requestJson, firstTimeout, ct);
+            if (response == null && !ct.IsCancellationRequested)
+            {
+                Console.WriteLine($"[Translation] Primary request timed out, retrying with {retryTimeout.TotalSeconds:F0}s timeout...");
+                response = await PostGenerateAsync(url, requestJson, retryTimeout, ct);
+            }
+
+            if (response == null)
+            {
+                Console.WriteLine("[Translation] Request timed out, fallback to OCR text.");
+                return text;
+            }
             
             Console.WriteLine($"[Translation] Ollama Response Status: {response.StatusCode}");
             if (!response.IsSuccessStatusCode)
@@ -1002,8 +1063,32 @@ public class TranslationService
             {
                 return text;
             }
+
+            if (_settings.TargetLanguage == TranslationLanguage.English
+                && string.Equals(resultText, text, StringComparison.Ordinal)
+                && ContainsCjk(text))
+            {
+                var retried = await TranslateStrictToEnglishRetryAsync(model, url, text, ct);
+                if (!string.IsNullOrWhiteSpace(retried))
+                {
+                    resultText = retried;
+                }
+            }
             Console.WriteLine($"[Translation] Result: {resultText}");
             return resultText;
+        }
+        catch (OperationCanceledException)
+        {
+            // Distinguish external cancellation vs request-timeout cancellation.
+            // External cancellation (newer request/user action) should stop immediately.
+            if (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+
+            // Timeout/cancel from request-internal timeout: degrade gracefully.
+            Console.WriteLine("[Translation] Request timed out, fallback to OCR text.");
+            return text;
         }
         catch (Exception ex)
         {
@@ -1040,6 +1125,71 @@ Output:";
         return s;
     }
 
+    private async Task<string> TranslateStrictToEnglishRetryAsync(string model, string url, string text, CancellationToken ct = default)
+    {
+        try
+        {
+            var retryRequest = new
+            {
+                model,
+                prompt = $@"Translate this text to English only.
+Rules:
+1) Output English only.
+2) Do not keep original language.
+3) If unreadable, output [unreadable].
+Input:
+{text}
+Output:",
+                stream = false,
+                options = new
+                {
+                    temperature = 0.0,
+                    top_p = 0.1,
+                    repeat_penalty = 1.0,
+                    num_predict = 64,
+                    seed = 43
+                }
+            };
+
+            var retryJsonBody = JsonSerializer.Serialize(retryRequest);
+            var retryResponse = await PostGenerateAsync(url, retryJsonBody, TimeSpan.FromSeconds(20), ct);
+            if (retryResponse == null) return string.Empty;
+            if (!retryResponse.IsSuccessStatusCode) return string.Empty;
+
+            var retryJson = await retryResponse.Content.ReadAsStringAsync();
+            using var retryDoc = JsonDocument.Parse(retryJson);
+            var retryText = retryDoc.RootElement.GetProperty("response").GetString()?.Trim() ?? string.Empty;
+            return CleanupTranslationResult(retryText);
+        }
+        catch
+        {
+            return string.Empty;
+        }
+    }
+
+    private static bool IsLikelySlowModel(string model)
+    {
+        if (string.IsNullOrWhiteSpace(model)) return false;
+        var m = model.ToLowerInvariant();
+        return m.Contains("cloud") || m.Contains("vl") || m.Contains("235b");
+    }
+
+    private async Task<HttpResponseMessage?> PostGenerateAsync(string url, string jsonBody, TimeSpan timeout, CancellationToken ct)
+    {
+        try
+        {
+            using var reqCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            reqCts.CancelAfter(timeout);
+            var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
+            return await _httpClient.PostAsync(url, content, reqCts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            if (ct.IsCancellationRequested) throw;
+            return null;
+        }
+    }
+
     private static bool ShouldBypassTranslation(string text, TranslationLanguage target)
     {
         if (string.IsNullOrWhiteSpace(text)) return true;
@@ -1065,8 +1215,145 @@ Output:";
         };
     }
 
+    private static bool ContainsCjk(string text)
+    {
+        return text.Any(IsCjk);
+    }
+
+    private static bool IsTranslationAcceptable(string source, string translated, TranslationLanguage target)
+    {
+        if (string.IsNullOrWhiteSpace(translated)) return false;
+
+        // For English target, reject outputs that are still mostly CJK or unchanged CJK.
+        if (target == TranslationLanguage.English)
+        {
+            if (string.Equals(source.Trim(), translated.Trim(), StringComparison.Ordinal) && ContainsCjk(source))
+            {
+                return false;
+            }
+
+            int total = Math.Max(1, translated.Count(ch => !char.IsWhiteSpace(ch)));
+            int latin = translated.Count(ch => (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z'));
+            int cjk = translated.Count(IsCjk);
+            double latinRatio = (double)latin / total;
+            double cjkRatio = (double)cjk / total;
+            if (latinRatio < 0.45 || cjkRatio > 0.2) return false;
+        }
+
+        return true;
+    }
+
+    private static string BuildTargetLanguageFallbackText(string sourceText, TranslationLanguage targetLanguage)
+    {
+        if (string.IsNullOrWhiteSpace(sourceText)) return string.Empty;
+        var s = sourceText.Trim();
+        if (s.Length == 0) return string.Empty;
+
+        // Keep safe characters only.
+        var filtered = new string(s.Where(ch =>
+            ch != '\uFFFD' &&
+            (char.IsLetterOrDigit(ch) || IsCjk(ch) || ch == ' ' || ch == '-' || ch == '_' || ch == ':' || ch == '.'))
+            .ToArray()).Trim();
+
+        if (string.IsNullOrWhiteSpace(filtered)) return GetLanguagePlaceholder(targetLanguage);
+
+        int total = Math.Max(1, filtered.Count(ch => !char.IsWhiteSpace(ch)));
+        int latin = filtered.Count(ch => (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z'));
+        int cjk = filtered.Count(IsCjk);
+        double latinRatio = (double)latin / total;
+        double cjkRatio = (double)cjk / total;
+
+        // Enforce target language style for fallback output.
+        if (targetLanguage == TranslationLanguage.English)
+        {
+            // If not mostly latin, avoid showing source CJK/garbled text.
+            if (latinRatio < 0.4) return "[unreadable]";
+            return filtered;
+        }
+
+        if (targetLanguage == TranslationLanguage.TraditionalChinese || targetLanguage == TranslationLanguage.SimplifiedChinese)
+        {
+            if (cjkRatio < 0.3 && latinRatio > 0.6)
+            {
+                return targetLanguage == TranslationLanguage.TraditionalChinese ? "[無法辨識]" : "[无法识别]";
+            }
+            return filtered;
+        }
+
+        // Japanese/Korean: if no corresponding script, give neutral placeholder.
+        if (targetLanguage == TranslationLanguage.Japanese || targetLanguage == TranslationLanguage.Korean)
+        {
+            if (cjkRatio < 0.3 && latinRatio > 0.6) return GetLanguagePlaceholder(targetLanguage);
+            return filtered;
+        }
+
+        return filtered;
+    }
+
+    private static string GetLanguagePlaceholder(TranslationLanguage targetLanguage)
+    {
+        return targetLanguage switch
+        {
+            TranslationLanguage.English => "[translation unavailable]",
+            TranslationLanguage.TraditionalChinese => "[無法辨識]",
+            TranslationLanguage.SimplifiedChinese => "[无法识别]",
+            TranslationLanguage.Japanese => "[判読不能]",
+            TranslationLanguage.Korean => "[판독 불가]",
+            _ => "[translation unavailable]"
+        };
+    }
+
+    private async Task<string> ForceTranslateTraditionalChineseToEnglishAsync(string text, CancellationToken ct)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(text)) return string.Empty;
+            string model = _settings.OllamaModel;
+            if (string.IsNullOrWhiteSpace(model)) return string.Empty;
+
+            string url = !string.IsNullOrEmpty(_settings.OllamaApiUrl) ? _settings.OllamaApiUrl : "http://localhost:11434/api/generate";
+            var req = new
+            {
+                model,
+                prompt = $@"Translate the following Traditional Chinese UI text into natural English.
+Rules:
+1) Output English only.
+2) Keep concise UI wording.
+3) If partially unreadable, still translate what you can.
+Input:
+{text}
+Output:",
+                stream = false,
+                options = new
+                {
+                    temperature = 0.0,
+                    top_p = 0.1,
+                    num_predict = 64,
+                    seed = 44
+                }
+            };
+
+            var jsonBody = JsonSerializer.Serialize(req);
+            var resp = await PostGenerateAsync(url, jsonBody, TimeSpan.FromSeconds(20), ct);
+            if (resp == null || !resp.IsSuccessStatusCode) return string.Empty;
+            var payload = await resp.Content.ReadAsStringAsync();
+            using var doc = JsonDocument.Parse(payload);
+            var result = doc.RootElement.GetProperty("response").GetString()?.Trim() ?? string.Empty;
+            return CleanupTranslationResult(result);
+        }
+        catch
+        {
+            return string.Empty;
+        }
+    }
+
     public async Task<List<string>> GetAvailableModelsAsync()
     {
+        if (_cachedModels.Count > 0 && DateTime.UtcNow - _modelsCacheAtUtc < TimeSpan.FromMinutes(2))
+        {
+            return new List<string>(_cachedModels);
+        }
+
         try
         {
             string url = !string.IsNullOrEmpty(_settings.OllamaApiUrl) ? _settings.OllamaApiUrl.Replace("/generate", "/tags") : "http://localhost:11434/api/tags";
@@ -1086,7 +1373,9 @@ Output:";
                         }
                     }
                 }
-                return models;
+                _cachedModels = models;
+                _modelsCacheAtUtc = DateTime.UtcNow;
+                return new List<string>(_cachedModels);
             }
         }
         catch (Exception ex)

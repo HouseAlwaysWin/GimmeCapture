@@ -9,6 +9,7 @@ using System.Reactive.Linq;
 using System.Collections.ObjectModel;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using System.Threading;
 using GimmeCapture.Services.Core;
 using GimmeCapture.Services.Platforms.Windows;
 
@@ -161,6 +162,10 @@ public partial class SnipWindowViewModel
 
     public ObservableCollection<TranslatedBlock> TranslatedBlocks { get; } = new();
     private TranslationService? _translationService;
+    private CancellationTokenSource? _translationCts;
+    private int _translationVersion = 0;
+    private DateTime _lastTranslationRequestAt = DateTime.MinValue;
+    private Rect _lastTranslationRect = new Rect(0, 0, 0, 0);
 
     private Rect _selectionRect;
     public Rect SelectionRect
@@ -628,6 +633,31 @@ public partial class SnipWindowViewModel
             _translationService = new TranslationService(_mainVm.AIResourceService, _mainVm.AppSettingsService);
         }
 
+        // Ensure translation uses the latest values from Settings UI.
+        if (_mainVm != null)
+        {
+            _mainVm.AppSettingsService.Settings.TargetLanguage = _mainVm.TargetLanguage;
+            _mainVm.AppSettingsService.Settings.SourceLanguage = _mainVm.SourceLanguage;
+            Console.WriteLine($"[Translation] Effective languages => OCR:{_mainVm.SourceLanguage}, Target:{_mainVm.TargetLanguage}");
+        }
+
+        // Debounce repeated trigger storms from UI/events.
+        var now = DateTime.UtcNow;
+        if (now - _lastTranslationRequestAt < TimeSpan.FromMilliseconds(500) &&
+            AreRectsSimilar(_lastTranslationRect, SelectionRect))
+        {
+            Console.WriteLine("[Translation] Ignored duplicated trigger (debounced)");
+            return;
+        }
+        _lastTranslationRequestAt = now;
+        _lastTranslationRect = SelectionRect;
+
+        var currentVersion = Interlocked.Increment(ref _translationVersion);
+        _translationCts?.Cancel();
+        _translationCts?.Dispose();
+        _translationCts = new CancellationTokenSource();
+        var token = _translationCts.Token;
+
         // 1. Check if Ollama is running and has models
         var models = await _translationService.GetAvailableModelsAsync();
         if (!models.Any())
@@ -652,10 +682,12 @@ public partial class SnipWindowViewModel
 
         try
         {
+            token.ThrowIfCancellationRequested();
             using (var bitmap = await _captureService.CaptureScreenAsync(SelectionRect, ScreenOffset, VisualScaling, false))
             {
                 if (bitmap != null)
                 {
+                    token.ThrowIfCancellationRequested();
                     // Check and Ensure OCR resources are ready
                     if (_mainVm != null)
                     {
@@ -673,9 +705,11 @@ public partial class SnipWindowViewModel
                         }
                     }
 
-                    var blocks = await _translationService.AnalyzeAndTranslateAsync(bitmap);
+                    var blocks = await _translationService.AnalyzeAndTranslateAsync(bitmap, token);
+                    if (currentVersion != _translationVersion || token.IsCancellationRequested) return;
                     Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                     {
+                        if (currentVersion != _translationVersion || token.IsCancellationRequested) return;
                         TranslatedBlocks.Clear();
                         foreach (var block in blocks)
                         {
@@ -685,6 +719,10 @@ public partial class SnipWindowViewModel
                 }
             }
         }
+        catch (OperationCanceledException)
+        {
+            Console.WriteLine("[Translation] Request cancelled");
+        }
         catch (Exception ex)
         {
             Console.WriteLine($"[Translation Error] {ex.Message}");
@@ -693,7 +731,19 @@ public partial class SnipWindowViewModel
         }
         finally
         {
-            ShowSnipToolBar = false;
+            if (currentVersion == _translationVersion)
+            {
+                ShowSnipToolBar = false;
+            }
         }
+    }
+
+    private static bool AreRectsSimilar(Rect a, Rect b)
+    {
+        const double tol = 2.0;
+        return Math.Abs(a.X - b.X) <= tol &&
+               Math.Abs(a.Y - b.Y) <= tol &&
+               Math.Abs(a.Width - b.Width) <= tol &&
+               Math.Abs(a.Height - b.Height) <= tol;
     }
 }
