@@ -253,7 +253,7 @@ public class TranslationService
                     results.Add(new TranslatedBlock
                     {
                         OriginalText = mergedText,
-                        TranslatedText = $"(Fail) {fallbackText}", // Prefix to indicate translation might have failed/skipped
+                        TranslatedText = fallbackText, // [FIX] Removed (Fail) prefix to keep clean UI
                         Bounds = new Rect(unionBox.Left, unionBox.Top, unionBox.Width, unionBox.Height)
                     });
                 }
@@ -1399,7 +1399,7 @@ Output:",
         // Keep safe characters only.
         var filtered = new string(s.Where(ch =>
             ch != '\uFFFD' &&
-            (char.IsLetterOrDigit(ch) || IsCjk(ch) || ch == ' ' || ch == '-' || ch == '_' || ch == ':' || ch == '.'))
+            (char.IsLetterOrDigit(ch) || IsCjk(ch) || ch == ' ' || ch == '-' || ch == '_' || ch == ':' || ch == '.' || ch == '\n' || ch == '\r'))
             .ToArray()).Trim();
 
         if (string.IsNullOrWhiteSpace(filtered)) return GetLanguagePlaceholder(targetLanguage);
