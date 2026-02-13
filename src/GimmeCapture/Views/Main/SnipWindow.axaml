@@ -303,7 +303,6 @@
             
             <!-- Translation Overlay (Outside Selection Box) -->
             <ItemsControl ItemsSource="{Binding TranslatedBlocks}" 
-                          IsHitTestVisible="False"
                           Canvas.Left="{Binding TranslationOverlayLeft}"
                           Canvas.Top="{Binding TranslationOverlayTop}"
                           ZIndex="999">
@@ -327,13 +326,13 @@
                                 BoxShadow="0 4 8 0 #40000000"
                                 MaxWidth="400">
                             <ScrollViewer VerticalScrollBarVisibility="Auto">
-                                <TextBlock Text="{Binding TranslatedText}" 
-                                           Foreground="White" 
-                                           FontSize="15" 
-                                           FontWeight="Medium"
-                                           TextWrapping="Wrap"
-                                           HorizontalAlignment="Left"
-                                           VerticalAlignment="Center"/>
+                                <SelectableTextBlock Text="{Binding TranslatedText}" 
+                                                   Foreground="White" 
+                                                   FontSize="15" 
+                                                   FontWeight="Medium"
+                                                   TextWrapping="Wrap"
+                                                   HorizontalAlignment="Left"
+                                                   VerticalAlignment="Center"/>
                             </ScrollViewer>
                         </Border>
                     </DataTemplate>
