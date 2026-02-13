@@ -431,14 +431,14 @@ public partial class SnipWindowViewModel
         
         try
         {
-            ProcessingText = LocalizationService.Instance["StatusAIInitializing"] ?? "Initializing AI Models...";
+            if (CurrentState == SnipState.Detecting) ProcessingText = LocalizationService.Instance["StatusInitializingAI"] ?? "Initializing AI Models...";
             // Check AI resources first
             var aiReady = _mainVm.AIResourceService.IsSAM2Ready(_mainVm.AppSettingsService.Settings.SelectedSAM2Variant);
             Console.WriteLine($"[AI Scan] SAM2 Ready: {aiReady}");
             
             if (!aiReady)
             {
-                ProcessingText = "ABORT: SAM2 models not found. Please download in settings.";
+                if (CurrentState == SnipState.Detecting) ProcessingText = LocalizationService.Instance["StatusSAM2NotFound"] ?? "ABORT: SAM2 models not found. Please download in settings.";
                 Console.WriteLine("[AI Scan] ABORT: SAM2 not ready - model may not be downloaded");
                 await Task.Delay(2000, token);
                 ShowTopLoadingBar = false;
@@ -476,10 +476,10 @@ public partial class SnipWindowViewModel
             await _sam2Service.InitializeAsync(); // Ensures it's ready if preload was slow
             
             Console.WriteLine("[AI Scan] Setting image (Fast path)...");
-            ProcessingText = "AI Encoding Image...";
+            if (CurrentState == SnipState.Detecting) ProcessingText = LocalizationService.Instance["StatusAIEncoding"] ?? "AI Encoding Image...";
             await _sam2Service.SetImageAsync(skBitmap);
             Console.WriteLine("[AI Scan] Image set. Running AutoDetect...");
-            ProcessingText = "Detecting Objects...";
+            if (CurrentState == SnipState.Detecting) ProcessingText = LocalizationService.Instance["StatusAIDetecting"] ?? "Detecting Objects...";
 
             token.ThrowIfCancellationRequested();
 
@@ -622,6 +622,12 @@ public partial class SnipWindowViewModel
             return;
         }
 
+        // 0. Update UI state immediately for responsiveness
+        IsTranslationActive = true;
+        ShowSnipToolBar = true;
+        ProcessingText = LocalizationService.Instance["StatusTranslating"] ?? "Translating...";
+        IsIndeterminate = true;
+
         if (_translationService == null)
         {
             if (_mainVm?.AIResourceService == null) return;
@@ -659,21 +665,17 @@ public partial class SnipWindowViewModel
         {
             Avalonia.Threading.Dispatcher.UIThread.Post(() => {
                 ShowSnipToolBar = true;
-                ProcessingText = "請先安裝 Ollama 並下載模型";
+                ProcessingText = LocalizationService.Instance["StatusOllamaRequired"] ?? "Please install Ollama and download a model first.";
                 IsIndeterminate = false;
                 ProgressValue = 100;
             });
             await Task.Delay(3000);
             Avalonia.Threading.Dispatcher.UIThread.Post(() => {
                 ShowSnipToolBar = false;
+                IsTranslationActive = false; // Add reset here as well
             });
             return;
         }
-
-        IsTranslationActive = true;
-        ShowSnipToolBar = true;
-        ProcessingText = LocalizationService.Instance["StatusTranslating"] ?? "Translating...";
-        IsIndeterminate = true;
 
         try
         {
@@ -691,7 +693,7 @@ public partial class SnipWindowViewModel
                         {
                             Avalonia.Threading.Dispatcher.UIThread.Post(() => {
                                 ShowSnipToolBar = true;
-                                ProcessingText = "OCR 資源未就緒 (下載失敗或取消)";
+                                ProcessingText = LocalizationService.Instance["StatusOCRNotReady"] ?? "OCR resources not ready (download failed or cancelled).";
                                 IsIndeterminate = false;
                                 ProgressValue = 100;
                             });
@@ -720,8 +722,11 @@ public partial class SnipWindowViewModel
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[Translation Error] {ex.Message}");
-            ProcessingText = $"翻譯出錯: {ex.Message}";
+            Console.WriteLine($"[Translation] Error: {ex}");
+            var errorFmt = LocalizationService.Instance["StatusTranslationError"] ?? "Translation Error: {0}";
+            ProcessingText = string.Format(errorFmt, ex.Message);
+            IsIndeterminate = false;
+            ProgressValue = 100;
             await Task.Delay(3000);
         }
         finally
