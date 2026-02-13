@@ -62,6 +62,7 @@ public class AIResourceService : ReactiveObject
     private const string NmtEncoderUrl = "https://huggingface.co/Xenova/m2m100_418M/resolve/main/onnx/encoder_model.onnx?download=true";
     private const string NmtDecoderUrl = "https://huggingface.co/Xenova/m2m100_418M/resolve/main/onnx/decoder_model.onnx?download=true";
     private const string NmtTokenizerUrl = "https://huggingface.co/Xenova/m2m100_418M/resolve/main/tokenizer.json?download=true";
+    private const string NmtSpmUrl = "https://huggingface.co/facebook/m2m100_418M/resolve/main/sentencepiece.bpe.model?download=true";
     private const string NmtConfigUrl = "https://huggingface.co/Xenova/m2m100_418M/resolve/main/config.json?download=true";
     private const string NmtGenerationConfigUrl = "https://huggingface.co/Xenova/m2m100_418M/resolve/main/generation_config.json?download=true";
 
@@ -154,7 +155,7 @@ public class AIResourceService : ReactiveObject
     public virtual bool IsNmtReady()
     {
         var paths = GetNmtPaths();
-        string[] files = { paths.Encoder, paths.Decoder, paths.Tokenizer, paths.Config };
+        string[] files = { paths.Encoder, paths.Decoder, paths.Spm, paths.Config };
         
         foreach (var file in files)
         {
@@ -164,12 +165,12 @@ public class AIResourceService : ReactiveObject
             // Rough size checks to prevent corrupted/empty files
             if (file.EndsWith("encoder_model.onnx") && info.Length < 100 * 1024 * 1024) return false;
             if (file.EndsWith("decoder_model.onnx") && info.Length < 100 * 1024 * 1024) return false;
-            if (file.EndsWith("tokenizer.json") && info.Length < 1 * 1024 * 1024) return false;
+            // Tokenizer JSON check removed as we rely on SPM now
         }
         return true;
     }
 
-    public virtual (string Encoder, string Decoder, string Tokenizer, string Config, string GenConfig) GetNmtPaths()
+    public virtual (string Encoder, string Decoder, string Tokenizer, string Spm, string Config, string GenConfig) GetNmtPaths()
     {
         var baseDir = GetAIResourcesPath();
         var nmtDir = Path.Combine(baseDir, "nmt");
@@ -177,6 +178,7 @@ public class AIResourceService : ReactiveObject
             Path.Combine(nmtDir, "encoder_model.onnx"),
             Path.Combine(nmtDir, "decoder_model.onnx"),
             Path.Combine(nmtDir, "tokenizer.json"),
+            Path.Combine(nmtDir, "sentencepiece.bpe.model"),
             Path.Combine(nmtDir, "config.json"),
             Path.Combine(nmtDir, "generation_config.json")
         );
@@ -614,11 +616,13 @@ public class AIResourceService : ReactiveObject
 
             // 3. Tokenizer
             if (!File.Exists(paths.Tokenizer))
-                await DownloadFile(NmtTokenizerUrl, paths.Tokenizer, 90, 5, ct);
-            else
-                DownloadProgress = 95;
+                await DownloadFile(NmtTokenizerUrl, paths.Tokenizer, 90, 2.5, ct);
+
+            // 4. SentencePiece Model
+            if (!File.Exists(paths.Spm))
+                await DownloadFile(NmtSpmUrl, paths.Spm, 92.5, 2.5, ct);
             
-            // 4. Configs
+            // 5. Configs
             if (!File.Exists(paths.Config))
                 await DownloadFile(NmtConfigUrl, paths.Config, 95, 2.5, ct);
             if (!File.Exists(paths.GenConfig))

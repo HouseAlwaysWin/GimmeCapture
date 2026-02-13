@@ -3,13 +3,16 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
+using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
 using GimmeCapture.Models;
-using Tokenizers.DotNet;
+using Microsoft.ML.Tokenizers;
 
 namespace GimmeCapture.Services.Core;
 
@@ -18,13 +21,19 @@ public class MarianMTService : IDisposable
     private readonly AIResourceService _aiResourceService;
     private InferenceSession? _encoderSession;
     private InferenceSession? _decoderSession;
-    private Tokenizer? _tokenizer;
     
-    private int _padTokenId = 0;
+    // SPM tokenizer for subword splitting (text → token strings)
+    private Tokenizer? _spmTokenizer;
+    
+    // Vocab from tokenizer.json for correct ID mapping (token string ↔ model ID)
+    private Dictionary<string, int>? _vocab;       // token → model_id
+    private Dictionary<int, string>? _reverseVocab; // model_id → token
+    
+    private int _padTokenId = 1;
     private int _eosTokenId = 2;
-    private int _bosTokenId = 1;
-    private int _zhTokenId = 250025; // Default for M2M100 Chinese
-    private int _jaTokenId = 250012; // Default for M2M100 Japanese
+    private int _bosTokenId = 0;
+    private int _zhTokenId = 128102; // __zh__ from tokenizer.json
+    private int _jaTokenId = 128046; // __ja__ from tokenizer.json
 
     public MarianMTService(AIResourceService aiResourceService)
     {
@@ -33,14 +42,14 @@ public class MarianMTService : IDisposable
 
     public async Task EnsureLoadedAsync(CancellationToken ct = default)
     {
-        if (_encoderSession != null && _decoderSession != null && _tokenizer != null) return;
+        if (_encoderSession != null && _decoderSession != null && _spmTokenizer != null && _vocab != null) return;
 
         await _aiResourceService.EnsureNmtAsync(ct);
         var paths = _aiResourceService.GetNmtPaths();
 
-        if (!File.Exists(paths.Encoder) || !File.Exists(paths.Decoder) || !File.Exists(paths.Tokenizer))
+        if (!File.Exists(paths.Encoder) || !File.Exists(paths.Decoder) || !File.Exists(paths.Spm) || !File.Exists(paths.Tokenizer))
         {
-            throw new FileNotFoundException($"MarianMT model files not found: {paths.Encoder}");
+            throw new FileNotFoundException("MarianMT model files not found.");
         }
 
         var options = new SessionOptions();
@@ -49,9 +58,58 @@ public class MarianMTService : IDisposable
 
         _encoderSession = new InferenceSession(paths.Encoder, options);
         _decoderSession = new InferenceSession(paths.Decoder, options);
-        _tokenizer = new Tokenizer(paths.Tokenizer);
+        
+        // Load SPM for subword splitting only (text → token strings)
+        try 
+        {
+            using var stream = File.OpenRead(paths.Spm);
+            _spmTokenizer = SentencePieceTokenizer.Create(stream);
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[MarianMT] Failed to load SentencePiece tokenizer: {ex.Message}");
+            throw;
+        }
 
+        // Load vocab from tokenizer.json for correct model ID mapping
+        LoadVocab(paths.Tokenizer);
         LoadConfig(paths.Config);
+    }
+
+    /// <summary>
+    /// Load the full vocabulary from tokenizer.json for correct SPM token → model ID mapping.
+    /// The tokenizer.json "model.vocab" contains the exact mapping the ONNX model expects.
+    /// </summary>
+    private void LoadVocab(string tokenizerJsonPath)
+    {
+        try
+        {
+            var json = File.ReadAllText(tokenizerJsonPath);
+            var doc = JsonNode.Parse(json);
+            var vocabNode = doc?["model"]?["vocab"]?.AsObject();
+            
+            if (vocabNode == null)
+            {
+                Debug.WriteLine("[MarianMT] No vocab found in tokenizer.json");
+                return;
+            }
+
+            _vocab = new Dictionary<string, int>(vocabNode.Count);
+            _reverseVocab = new Dictionary<int, string>(vocabNode.Count);
+
+            foreach (var kv in vocabNode)
+            {
+                int id = kv.Value!.GetValue<int>();
+                _vocab[kv.Key] = id;
+                _reverseVocab[id] = kv.Key;
+            }
+
+            Debug.WriteLine($"[MarianMT] Loaded vocab: {_vocab.Count} entries");
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[MarianMT] Failed to load vocab: {ex.Message}");
+        }
     }
 
     private void LoadConfig(string configPath)
@@ -65,21 +123,72 @@ public class MarianMTService : IDisposable
             if (doc.RootElement.TryGetProperty("eos_token_id", out var eos)) _eosTokenId = eos.GetInt32();
             if (doc.RootElement.TryGetProperty("bos_token_id", out var bos)) _bosTokenId = bos.GetInt32();
             
-            _zhTokenId = GetTokenId("__zh__", 250025);
-            _jaTokenId = GetTokenId("__ja__", 250012);
+            // Verify language token IDs from vocab if loaded
+            if (_vocab != null)
+            {
+                if (_vocab.TryGetValue("__zh__", out var zhId)) _zhTokenId = zhId;
+                if (_vocab.TryGetValue("__ja__", out var jaId)) _jaTokenId = jaId;
+            }
+            Debug.WriteLine($"[MarianMT] Config: pad={_padTokenId}, eos={_eosTokenId}, bos={_bosTokenId}, ja={_jaTokenId}, zh={_zhTokenId}");
         }
         catch { }
     }
 
-    private int GetTokenId(string token, int fallback)
+    /// <summary>
+    /// Encode text to model token IDs using SPM subword splitting + tokenizer.json vocab mapping.
+    /// SPM splits text into subword strings, then each string is looked up in the vocab for
+    /// the correct model ID that the ONNX model expects.
+    /// </summary>
+    private List<int> EncodeText(string text)
     {
-        try
+        if (_spmTokenizer == null || _vocab == null) return new List<int>();
+        
+        // Use SPM EncodeToTokens to get subword token strings
+        var tokens = _spmTokenizer.EncodeToTokens(text, out _, false, false);
+        var modelIds = new List<int>();
+        
+        foreach (var token in tokens)
         {
-            var ids = _tokenizer?.Encode(token);
-            if (ids != null && ids.Length > 0) return (int)ids[0];
+            var tokenStr = token.Value;
+            
+            // Skip BOS/EOS control tokens added by SPM
+            if (tokenStr == "<s>" || tokenStr == "</s>") continue;
+            
+            if (_vocab.TryGetValue(tokenStr, out int modelId))
+            {
+                modelIds.Add(modelId);
+            }
+            else
+            {
+                // Unknown token - map to <unk> (ID=3)
+                modelIds.Add(3);
+                Debug.WriteLine($"[MarianMT] Token not in vocab: '{tokenStr}'");
+            }
         }
-        catch { }
-        return fallback;
+        
+        return modelIds;
+    }
+
+    /// <summary>
+    /// Decode model token IDs back to text using tokenizer.json reverse vocab.
+    /// </summary>
+    private string DecodeIds(IEnumerable<int> ids)
+    {
+        if (_reverseVocab == null) return "";
+        
+        var tokens = new List<string>();
+        foreach (var id in ids)
+        {
+            if (_reverseVocab.TryGetValue(id, out var token))
+            {
+                tokens.Add(token);
+            }
+        }
+        
+        // SentencePiece uses ▁ (U+2581) as word separator prefix
+        var text = string.Join("", tokens);
+        text = text.Replace("\u2581", " ");
+        return text;
     }
 
     public async Task<string> TranslateAsync(string text, TranslationLanguage target, CancellationToken ct = default)
@@ -87,9 +196,11 @@ public class MarianMTService : IDisposable
         try
         {
             await EnsureLoadedAsync(ct);
-            if (_encoderSession == null || _decoderSession == null || _tokenizer == null) return text;
+            if (_encoderSession == null || _decoderSession == null || _spmTokenizer == null || _vocab == null) return text;
 
-            // [FIX] Split by newlines to handle multi-line text correctly
+            Debug.WriteLine($"[MarianMT] === Translation Start ===");
+            Debug.WriteLine($"[MarianMT] Input: '{text}'");
+
             var lines = text.Split(new[] { '\r', '\n' }, StringSplitOptions.None);
             var translatedLines = new List<string>();
 
@@ -101,25 +212,32 @@ public class MarianMTService : IDisposable
                     continue;
                 }
 
-                var ids = _tokenizer.Encode(line);
-                var inputIds = new List<long> { _jaTokenId }; 
-                inputIds.AddRange(ids.Select(id => (long)id));
+                var tokenIds = EncodeText(line);
+                Debug.WriteLine($"[MarianMT] Encoded '{line}' -> {tokenIds.Count} model IDs: [{string.Join(",", tokenIds.Take(20))}]");
+
+                // Build encoder input: [source_lang_token, ...token_ids, eos]
+                var inputIds = new List<long> { _jaTokenId };
+                inputIds.AddRange(tokenIds.Select(id => (long)id));
                 inputIds.Add(_eosTokenId);
+                Debug.WriteLine($"[MarianMT] Encoder input ({inputIds.Count}): [{string.Join(",", inputIds.Take(30))}]");
+
+                var attentionMask = Enumerable.Repeat(1L, inputIds.Count).ToArray();
+                var attentionMaskTensor = new DenseTensor<long>(attentionMask, new[] { 1, inputIds.Count });
 
                 var encoderInputs = new List<NamedOnnxValue>
                 {
                     NamedOnnxValue.CreateFromTensor("input_ids", new DenseTensor<long>(inputIds.ToArray(), new[] { 1, inputIds.Count })),
-                    NamedOnnxValue.CreateFromTensor("attention_mask", new DenseTensor<long>(Enumerable.Repeat(1L, inputIds.Count).ToArray(), new[] { 1, inputIds.Count }))
+                    NamedOnnxValue.CreateFromTensor("attention_mask", attentionMaskTensor)
                 };
 
                 using var encoderResults = _encoderSession.Run(encoderInputs);
                 var lastHiddenState = encoderResults.First().AsTensor<float>();
 
-                var outputIds = new List<long> { _padTokenId, _zhTokenId }; 
-                
-                // [FIX] Increased maxLen from ~128 to fixed 512 to support longer lines
-                int maxLen = 512; 
-                
+                // Decoder seed: [eos, target_lang_token] per M2M100 spec (decoder_start_token_id=2)
+                var outputIds = new List<long> { _eosTokenId, _zhTokenId };
+                int maxLen = Math.Min(inputIds.Count * 3, 128);
+                Debug.WriteLine($"[MarianMT] Decoder seed: [{string.Join(",", outputIds)}], maxLen={maxLen}");
+
                 for (int i = 0; i < maxLen; i++)
                 {
                     ct.ThrowIfCancellationRequested();
@@ -127,7 +245,8 @@ public class MarianMTService : IDisposable
                     var decoderInputs = new List<NamedOnnxValue>
                     {
                         NamedOnnxValue.CreateFromTensor("input_ids", new DenseTensor<long>(outputIds.ToArray(), new[] { 1, outputIds.Count })),
-                        NamedOnnxValue.CreateFromTensor("encoder_hidden_states", lastHiddenState)
+                        NamedOnnxValue.CreateFromTensor("encoder_hidden_states", lastHiddenState),
+                        NamedOnnxValue.CreateFromTensor("encoder_attention_mask", attentionMaskTensor)
                     };
 
                     using var decoderResults = _decoderSession.Run(decoderInputs);
@@ -139,7 +258,7 @@ public class MarianMTService : IDisposable
                     int nextToken = 0;
                     float maxLogit = float.MinValue;
                     
-                    // Greedy Search
+                    // Greedy search: pick the token with highest logit
                     for (int v = 0; v < vocabSize; v++)
                     {
                         float logit = logitsTensor[0, seqLen - 1, v];
@@ -150,25 +269,43 @@ public class MarianMTService : IDisposable
                         }
                     }
 
-                    if (nextToken == _eosTokenId) break;
+                    if (i < 10 || i % 10 == 0) Debug.WriteLine($"[MarianMT] Step {i}: token={nextToken}, logit={maxLogit:F2}");
+
+                    if (nextToken == _eosTokenId)
+                    {
+                        Debug.WriteLine($"[MarianMT] EOS at step {i}");
+                        break;
+                    }
                     outputIds.Add(nextToken);
-                    // Safe break to prevent infinite loops even if maxLen is high
-                    if (outputIds.Count > 512) break;
                 }
 
-                var actualOutputIds = outputIds.Skip(2).Select(id => (uint)id).ToArray();
-                if (actualOutputIds.Length > 0)
+                // Skip the 2 seed tokens (eos, target_lang)
+                var resultIds = outputIds.Skip(2).Select(id => (int)id).ToArray();
+                Debug.WriteLine($"[MarianMT] Output IDs ({resultIds.Length}): [{string.Join(",", resultIds.Take(30))}]");
+                
+                if (resultIds.Length > 0)
                 {
-                    translatedLines.Add(_tokenizer.Decode(actualOutputIds).Trim());
+                    var decoded = DecodeIds(resultIds);
+                    Debug.WriteLine($"[MarianMT] Decoded: '{decoded}'");
+                    translatedLines.Add(decoded.Trim());
                 }
                 else
                 {
-                    translatedLines.Add(line); // Fallback to original if translation is empty
+                    translatedLines.Add(line);
                 }
             }
 
-            // Join back with newlines
-            return string.Join("\n", translatedLines);
+            var result = string.Join("\n", translatedLines);
+            
+            // M2M100 outputs Simplified Chinese; convert to Traditional if needed
+            if (target == TranslationLanguage.TraditionalChinese)
+            {
+                result = ConvertToTraditional(result);
+                Debug.WriteLine($"[MarianMT] After S2T: '{result}'");
+            }
+            
+            Debug.WriteLine($"[MarianMT] === Result: '{result}' ===");
+            return result;
         }
         catch (Exception ex)
         {
@@ -177,10 +314,43 @@ public class MarianMTService : IDisposable
         }
     }
 
+    // Windows LCMapStringEx for Simplified → Traditional Chinese conversion
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern int LCMapStringEx(
+        string lpLocaleName, uint dwMapFlags,
+        string lpSrcStr, int cchSrc,
+        StringBuilder? lpDestStr, int cchDest,
+        IntPtr lpVersionInformation, IntPtr lpReserved, IntPtr sortHandle);
+
+    private const uint LCMAP_TRADITIONAL_CHINESE = 0x04000000;
+
+    /// <summary>
+    /// Convert Simplified Chinese text to Traditional Chinese using Windows API.
+    /// </summary>
+    private static string ConvertToTraditional(string simplified)
+    {
+        if (string.IsNullOrEmpty(simplified)) return simplified;
+        
+        try
+        {
+            int len = LCMapStringEx("zh-TW", LCMAP_TRADITIONAL_CHINESE,
+                simplified, simplified.Length, null, 0, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
+            if (len <= 0) return simplified;
+            
+            var sb = new StringBuilder(len);
+            LCMapStringEx("zh-TW", LCMAP_TRADITIONAL_CHINESE,
+                simplified, simplified.Length, sb, len, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
+            return sb.ToString();
+        }
+        catch
+        {
+            return simplified;
+        }
+    }
+
     public void Dispose()
     {
         _encoderSession?.Dispose();
         _decoderSession?.Dispose();
-        _tokenizer?.Dispose();
     }
 }
