@@ -60,9 +60,9 @@ public class TranslationService
     }
 
 
-    private async Task EnsureLoadedAsync()
+    private async Task EnsureLoadedAsync(OCRLanguage? targetLangOverride = null)
     {
-        var targetLang = _settings.SourceLanguage;
+        var targetLang = targetLangOverride ?? _settings.SourceLanguage;
         
         // Reload if language changed or sessions missing
         if (_currentOCRLanguage == targetLang && _detSession != null && _recSession != null) return;
@@ -114,7 +114,46 @@ public class TranslationService
     public async Task<List<TranslatedBlock>> AnalyzeAndTranslateAsync(SKBitmap bitmap, CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
-        await EnsureLoadedAsync();
+        
+        // Determine the OCR language to load
+        OCRLanguage ocrLanguageToLoad = _settings.SourceLanguage;
+        if (_settings.SourceLanguage == OCRLanguage.Auto)
+        {
+            // First, load with a default (e.g., TraditionalChinese) to detect boxes
+            await EnsureLoadedAsync(OCRLanguage.TraditionalChinese);
+            
+            var tempBoxes = DetectText(bitmap);
+            var sampleBlocks = tempBoxes.Take(5).ToList(); // Take a few boxes for script detection
+            bool detectedJapanese = false;
+
+            foreach (var box in sampleBlocks)
+            {
+                ct.ThrowIfCancellationRequested();
+                var (text, confidence) = RecognizeTextWithConfidence(bitmap, box, ct);
+                if (!string.IsNullOrEmpty(text))
+                {
+                    // Japanese Hiragana: 3040–309F, Katakana: 30A0–30FF
+                    if (text.Any(c => (c >= 0x3040 && c <= 0x309F) || (c >= 0x30A0 && c <= 0x30FF)))
+                    {
+                        detectedJapanese = true;
+                        break;
+                    }
+                }
+            }
+
+            if (detectedJapanese)
+            {
+                Debug.WriteLine("[OCR] Auto detected Japanese script, switching model.");
+                ocrLanguageToLoad = OCRLanguage.Japanese;
+            }
+            else
+            {
+                Debug.WriteLine("[OCR] Auto defaulting to Chinese/English model.");
+                ocrLanguageToLoad = OCRLanguage.TraditionalChinese; // Default to Traditional for TC/SC
+            }
+        }
+        
+        await EnsureLoadedAsync(ocrLanguageToLoad);
         if (_detSession == null || _recSession == null) return new();
 
         var results = new List<TranslatedBlock>();
@@ -126,7 +165,7 @@ public class TranslationService
         foreach (var box in boxes)
         {
             ct.ThrowIfCancellationRequested();
-            var (text, confidence) = RecognizeTextWithConfidence(bitmap, box);
+            var (text, confidence) = RecognizeTextWithConfidence(bitmap, box, ct);
             Debug.WriteLine($"[OCR] Box at ({box.Left},{box.Top},{box.Width},{box.Height}) -> Text: \"{text}\" (Conf: {confidence:F3})");
             
             if (IsUsefulOcrText(text, confidence))
@@ -145,7 +184,7 @@ public class TranslationService
             foreach (var fallbackBox in BuildFallbackRecognitionBoxes(bitmap.Width, bitmap.Height, boxes))
             {
                 ct.ThrowIfCancellationRequested();
-                var (text, confidence) = RecognizeTextWithConfidence(bitmap, fallbackBox);
+                var (text, confidence) = RecognizeTextWithConfidence(bitmap, fallbackBox, ct);
                 Debug.WriteLine($"[OCR][Fallback] Raw Text: \"{text}\" (Conf: {confidence:F3})");
                 if (IsUsefulOcrText(text, confidence))
                 {
@@ -553,10 +592,11 @@ public class TranslationService
             .ToList();
     }
 
-    private (string text, float confidence) RecognizeTextWithConfidence(SKBitmap bitmap, SkiaSharp.SKRectI box)
+    private (string text, float confidence) RecognizeTextWithConfidence(SKBitmap bitmap, SkiaSharp.SKRectI box, CancellationToken ct = default)
     {
         try
         {
+            ct.ThrowIfCancellationRequested();
             if (box.Width <= 0 || box.Height <= 0) return ("", 0f);
 
             // 1. Crop
@@ -608,7 +648,8 @@ public class TranslationService
             {
                 tCanvas.Clear(SKColors.White);
 
-                using var resized = cropped.Resize(new SKImageInfo(textWidth, targetHeight), SKSamplingOptions.Default);
+                // Use High sampling for better quality on small text
+                using var resized = cropped.Resize(new SKImageInfo(textWidth, targetHeight), new SKSamplingOptions(SKCubicResampler.Mitchell));
                 if (resized != null)
                 {
                     tCanvas.DrawBitmap(resized, 0, 0);
@@ -635,7 +676,8 @@ public class TranslationService
                         })
                     };
 
-                    using var resized = cropped.Resize(new SKImageInfo(textWidth, targetHeight), SKSamplingOptions.Default);
+                    // Use High sampling for better quality on small text
+                    using var resized = cropped.Resize(new SKImageInfo(textWidth, targetHeight), new SKSamplingOptions(SKCubicResampler.Mitchell));
                     if (resized != null)
                     {
                         iCanvas.DrawBitmap(resized, 0, 0, paint);

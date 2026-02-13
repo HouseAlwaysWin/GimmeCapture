@@ -194,10 +194,6 @@
   "OllamaApiUrl": "Ollama API URL:",
   "TranslationEngine": "翻訳エンジン (Engine):",
   "TranslationEngineOllama": "Ollama (オンライン LLM)",
-  "TranslationEngineMarianMT": "MarianMT (オフライン 日->中)",
+  "TranslationEngineMarianMT": "MarianMT (オフライン)",
   "MarianMTDownloadConfirm": "オフライン翻訳機能には専用モジュールのダウンロードが必要です (約 400MB)。今すぐダウンロードしますか？"
 }
-
-
-
-

@@ -213,10 +213,6 @@
   "OllamaApiUrl": "Ollama API URL:",
   "TranslationEngine": "Translation Engine:",
   "TranslationEngineOllama": "Ollama (Online LLM)",
-  "TranslationEngineMarianMT": "MarianMT (Offline Ja->Zh)",
+  "TranslationEngineMarianMT": "MarianMT (Offline)",
   "MarianMTDownloadConfirm": "Offline translation requires a dedicated module (~400MB). Download now?"
 }
-
-
-
-

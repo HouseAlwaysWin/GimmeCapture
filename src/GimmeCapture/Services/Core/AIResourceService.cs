@@ -16,21 +16,21 @@ namespace GimmeCapture.Services.Core;
 public class AIResourceService : ReactiveObject
 {
     private const string ModelUrl = "https://github.com/danielgatis/rembg/releases/download/v0.0.0/u2net.onnx";
-    private const string MobileSamEncoderUrl = "https://huggingface.co/Acly/MobileSAM/resolve/main/mobile_sam_image_encoder.onnx";
-    private const string MobileSamDecoderUrl = "https://huggingface.co/Acly/MobileSAM/resolve/main/sam_mask_decoder_multi.onnx";
+    private const string MobileSamEncoderUrl = "https://huggingface.co/Acly/MobileSAM/resolve/main/mobile_sam_image_encoder.onnx?download=true";
+    private const string MobileSamDecoderUrl = "https://huggingface.co/Acly/MobileSAM/resolve/main/sam_mask_decoder_multi.onnx?download=true";
     
-    private const string Sam2TinyEncoderUrl = "https://huggingface.co/shubham0204/sam2-onnx-models/resolve/main/sam2_hiera_tiny_encoder.onnx";
-    private const string Sam2TinyDecoderUrl = "https://huggingface.co/shubham0204/sam2-onnx-models/resolve/main/sam2_hiera_tiny_decoder.onnx";
+    private const string Sam2TinyEncoderUrl = "https://huggingface.co/shubham0204/sam2-onnx-models/resolve/main/sam2_hiera_tiny_encoder.onnx?download=true";
+    private const string Sam2TinyDecoderUrl = "https://huggingface.co/shubham0204/sam2-onnx-models/resolve/main/sam2_hiera_tiny_decoder.onnx?download=true";
     
-    private const string Sam2SmallEncoderUrl = "https://huggingface.co/shubham0204/sam2-onnx-models/resolve/main/sam2_hiera_small_encoder.onnx";
-    private const string Sam2SmallDecoderUrl = "https://huggingface.co/shubham0204/sam2-onnx-models/resolve/main/sam2_hiera_small_decoder.onnx";
+    private const string Sam2SmallEncoderUrl = "https://huggingface.co/shubham0204/sam2-onnx-models/resolve/main/sam2_hiera_small_encoder.onnx?download=true";
+    private const string Sam2SmallDecoderUrl = "https://huggingface.co/shubham0204/sam2-onnx-models/resolve/main/sam2_hiera_small_decoder.onnx?download=true";
     
     // Note: Base Plus is significantly larger
-    private const string Sam2BasePlusEncoderUrl = "https://huggingface.co/shubham0204/sam2-onnx-models/resolve/main/sam2_hiera_base_plus_encoder.onnx";
-    private const string Sam2BasePlusDecoderUrl = "https://huggingface.co/shubham0204/sam2-onnx-models/resolve/main/sam2_hiera_base_plus_decoder.onnx";
+    private const string Sam2BasePlusEncoderUrl = "https://huggingface.co/shubham0204/sam2-onnx-models/resolve/main/sam2_hiera_base_plus_encoder.onnx?download=true";
+    private const string Sam2BasePlusDecoderUrl = "https://huggingface.co/shubham0204/sam2-onnx-models/resolve/main/sam2_hiera_base_plus_decoder.onnx?download=true";
     
-    private const string Sam2LargeEncoderUrl = "https://huggingface.co/SharpAI/sam2-hiera-large-onnx/resolve/main/encoder.onnx";
-    private const string Sam2LargeDecoderUrl = "https://huggingface.co/SharpAI/sam2-hiera-large-onnx/resolve/main/decoder.onnx";
+    private const string Sam2LargeEncoderUrl = "https://huggingface.co/SharpAI/sam2-hiera-large-onnx/resolve/main/encoder.onnx?download=true";
+    private const string Sam2LargeDecoderUrl = "https://huggingface.co/SharpAI/sam2-hiera-large-onnx/resolve/main/decoder.onnx?download=true";
     
     // PaddleOCR v4 ONNX Models (Using verified ModelScope mirrors for ONNX and PaddleOCR GitHub for Dicts)
     // Universal Detection Model (ch_PP-OCRv4_det - supports all)
@@ -59,11 +59,11 @@ public class AIResourceService : ReactiveObject
     private const string OcrDictKoUrl = "https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/release/2.7/ppocr/utils/dict/korean_dict.txt";
 
     // MarianMT (M2M100 fallback for high quality ja-zh)
-    private const string NmtEncoderUrl = "https://huggingface.co/Xenova/m2m100_418M/resolve/main/onnx/encoder_model.onnx";
-    private const string NmtDecoderUrl = "https://huggingface.co/Xenova/m2m100_418M/resolve/main/onnx/decoder_model_merged.onnx";
-    private const string NmtTokenizerUrl = "https://huggingface.co/Xenova/m2m100_418M/resolve/main/tokenizer.json";
-    private const string NmtConfigUrl = "https://huggingface.co/Xenova/m2m100_418M/resolve/main/config.json";
-    private const string NmtGenerationConfigUrl = "https://huggingface.co/Xenova/m2m100_418M/resolve/main/generation_config.json";
+    private const string NmtEncoderUrl = "https://huggingface.co/Xenova/m2m100_418M/resolve/main/onnx/encoder_model.onnx?download=true";
+    private const string NmtDecoderUrl = "https://huggingface.co/Xenova/m2m100_418M/resolve/main/onnx/decoder_model.onnx?download=true";
+    private const string NmtTokenizerUrl = "https://huggingface.co/Xenova/m2m100_418M/resolve/main/tokenizer.json?download=true";
+    private const string NmtConfigUrl = "https://huggingface.co/Xenova/m2m100_418M/resolve/main/config.json?download=true";
+    private const string NmtGenerationConfigUrl = "https://huggingface.co/Xenova/m2m100_418M/resolve/main/generation_config.json?download=true";
 
     // Using a reliable direct link to ONNX Runtime GPU (Win x64)
     private const string OnnxRuntimeZipUrl = "https://github.com/microsoft/onnxruntime/releases/download/v1.20.1/onnxruntime-win-x64-gpu-1.20.1.zip";
@@ -636,31 +636,56 @@ public class AIResourceService : ReactiveObject
     private async Task DownloadFile(string url, string destination, double progressOffset, double progressWeight, CancellationToken ct)
     {
         using var client = new HttpClient();
-        client.Timeout = TimeSpan.FromMinutes(15);
+        // Increase timeout to 60 minutes for large models
+        client.Timeout = TimeSpan.FromMinutes(60);
         client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36");
+        
         System.Diagnostics.Debug.WriteLine($"[AIResourceService] Downloading {url} to {destination}");
         Console.WriteLine($"[AIResourceService] Downloading {url} to {destination}");
         
-        using var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
-        response.EnsureSuccessStatusCode();
-
-        var totalBytes = response.Content.Headers.ContentLength ?? -1L;
-        using var contentStream = await response.Content.ReadAsStreamAsync(ct);
-        using var fileStream = new FileStream(destination, FileMode.Create, FileAccess.Write, FileShare.None, 8192, true);
-
-        var buffer = new byte[8192];
-        long totalRead = 0;
-        int read;
-
-        while ((read = await contentStream.ReadAsync(buffer, 0, buffer.Length, ct)) > 0)
+        string tempPath = destination + ".tmp";
+        
+        try
         {
-            await fileStream.WriteAsync(buffer, 0, read, ct);
-            totalRead += read;
+            using var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
+            response.EnsureSuccessStatusCode();
 
-            if (totalBytes != -1)
+            var totalBytes = response.Content.Headers.ContentLength ?? -1L;
+            using var contentStream = await response.Content.ReadAsStreamAsync(ct);
+            using var fileStream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None, 8192, true);
+
+            var buffer = new byte[8192];
+            long totalRead = 0;
+            int read;
+
+            while ((read = await contentStream.ReadAsync(buffer, 0, buffer.Length, ct)) > 0)
             {
-                DownloadProgress = progressOffset + ((double)totalRead / totalBytes * progressWeight);
+                await fileStream.WriteAsync(buffer, 0, read, ct);
+                totalRead += read;
+
+                if (totalBytes != -1)
+                {
+                    DownloadProgress = progressOffset + ((double)totalRead / totalBytes * progressWeight);
+                }
             }
+            
+            await fileStream.FlushAsync(ct);
+            fileStream.Close();
+
+            // Verify integrity
+            if (totalBytes != -1 && totalRead < totalBytes)
+            {
+                throw new IOException($"Download truncated: Expected {totalBytes} bytes but only received {totalRead} bytes.");
+            }
+
+            // Success: Move to final destination
+            if (File.Exists(destination)) File.Delete(destination);
+            File.Move(tempPath, destination);
+        }
+        catch (Exception)
+        {
+            if (File.Exists(tempPath)) try { File.Delete(tempPath); } catch { }
+            throw;
         }
     }
 
