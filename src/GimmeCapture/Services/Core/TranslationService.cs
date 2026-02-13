@@ -74,9 +74,9 @@ public class TranslationService
         }
 
         System.Diagnostics.Debug.WriteLine("[OCR] Loading models...");
-        Console.WriteLine("[OCR] EnsuresOCRAsync calling...");
+        Debug.WriteLine("[OCR] EnsuresOCRAsync calling...");
         await _aiResourceService.EnsureOCRAsync();
-        Console.WriteLine("[OCR] EnsuresOCRAsync finished.");
+        Debug.WriteLine("[OCR] EnsuresOCRAsync finished.");
         var paths = _aiResourceService.GetOCRPaths(targetLang);
 
         var options = new SessionOptions();
@@ -85,14 +85,14 @@ public class TranslationService
         try 
         { 
             options.AppendExecutionProvider_CUDA(0);
-            Console.WriteLine("[OCR] CUDA Provider enabled.");
+            Debug.WriteLine("[OCR] CUDA Provider enabled.");
         } 
         catch { /* CUDA not available */ }
 
         try 
         {
             options.AppendExecutionProvider_DML(0); 
-            Console.WriteLine("[OCR] DirectML Provider enabled.");
+            Debug.WriteLine("[OCR] DirectML Provider enabled.");
         }
         catch { /* DirectML not available */ }
 
@@ -104,8 +104,8 @@ public class TranslationService
         _dict = LoadDictionaryWithEncodingFallback(paths.Dict);
         // PaddleOCR index 0 is CTC blank
         _dict.Insert(0, "");
-        Console.WriteLine($"[OCR] Sessions initialized. Selected: {targetLang}. Dictionary: {_dict.Count} items.");
-        Console.WriteLine($"[OCR] Dict sample: {string.Join(", ", _dict.Skip(1).Take(8))}");
+        Debug.WriteLine($"[OCR] Sessions initialized. Selected: {targetLang}. Dictionary: {_dict.Count} items.");
+        Debug.WriteLine($"[OCR] Dict sample: {string.Join(", ", _dict.Skip(1).Take(8))}");
     }
 
 
@@ -119,17 +119,21 @@ public class TranslationService
         var recognizedBlocks = new List<(SKRectI Box, string Text, float Confidence)>();
 
         var boxes = DetectText(bitmap);
-        Console.WriteLine($"[OCR] Detected {boxes.Count} boxes. Target Output Language: {_settings.TargetLanguage}");
+        Debug.WriteLine($"[OCR] Detected {boxes.Count} boxes. Target Output Language: {_settings.TargetLanguage}");
         
         foreach (var box in boxes)
         {
             ct.ThrowIfCancellationRequested();
             var (text, confidence) = RecognizeTextWithConfidence(bitmap, box);
-            Console.WriteLine($"[OCR] Raw Text: \"{text}\" (Conf: {confidence:F3})");
+            Debug.WriteLine($"[OCR] Box at ({box.Left},{box.Top},{box.Width},{box.Height}) -> Text: \"{text}\" (Conf: {confidence:F3})");
             
             if (IsUsefulOcrText(text, confidence))
             {
                 recognizedBlocks.Add((box, text, confidence));
+            }
+            else
+            {
+                Debug.WriteLine($"[OCR] Rejected block: \"{text}\" (Confidence too low or not useful)");
             }
         }
 
@@ -140,7 +144,7 @@ public class TranslationService
             {
                 ct.ThrowIfCancellationRequested();
                 var (text, confidence) = RecognizeTextWithConfidence(bitmap, fallbackBox);
-                Console.WriteLine($"[OCR][Fallback] Raw Text: \"{text}\" (Conf: {confidence:F3})");
+                Debug.WriteLine($"[OCR][Fallback] Raw Text: \"{text}\" (Conf: {confidence:F3})");
                 if (IsUsefulOcrText(text, confidence))
                 {
                     recognizedBlocks.Add((fallbackBox, text, confidence));
@@ -167,23 +171,31 @@ public class TranslationService
         var unionBox = new SKRectI(minX, minY, maxX, maxY);
 
         ct.ThrowIfCancellationRequested();
+        Debug.WriteLine($"[Translation] Calling TranslateAsync for text: \"{mergedText.Replace("\n", " ")}\"");
         var translated = await TranslateAsync(mergedText, ct);
+        Debug.WriteLine($"[Translation] TranslateAsync returned: \"{translated}\"");
         
-        if (!IsTranslationAcceptable(mergedText, translated, _settings.TargetLanguage))
+        bool acceptable = IsTranslationAcceptable(mergedText, translated, _settings.TargetLanguage);
+        Debug.WriteLine($"[Translation] Result acceptable: {acceptable}");
+
+        if (!acceptable)
         {
             if (_settings.TargetLanguage == TranslationLanguage.English)
             {
+                Debug.WriteLine("[Translation] Attempting ForceTranslate to English...");
                 var forced = await ForceTranslateTraditionalChineseToEnglishAsync(mergedText, ct);
                 if (IsTranslationAcceptable(mergedText, forced, _settings.TargetLanguage))
                 {
                     translated = forced;
+                    acceptable = true;
+                    Debug.WriteLine($"[Translation] ForceTranslate success: {translated}");
                 }
             }
         }
 
-        if (IsTranslationAcceptable(mergedText, translated, _settings.TargetLanguage))
+        if (acceptable)
         {
-            Console.WriteLine($"[Translation] Merged result: \"{mergedText.Replace("\n", " ")}\" -> \"{translated.Replace("\n", " ")}\"");
+            Debug.WriteLine($"[Translation] Merged result: \"{mergedText.Replace("\n", " ")}\" -> \"{translated.Replace("\n", " ")}\"");
             results.Add(new TranslatedBlock
             {
                 OriginalText = mergedText,
@@ -194,16 +206,16 @@ public class TranslationService
         else
         {
             // Fallback to simple OCR text if translation is rejected
-            var fallbackText = BuildTargetLanguageFallbackText(mergedText, _settings.TargetLanguage);
-            if (!string.IsNullOrWhiteSpace(fallbackText))
-            {
-                results.Add(new TranslatedBlock
+                var fallbackText = BuildTargetLanguageFallbackText(mergedText, _settings.TargetLanguage);
+                if (!string.IsNullOrWhiteSpace(fallbackText))
                 {
-                    OriginalText = mergedText,
-                    TranslatedText = fallbackText,
-                    Bounds = new Rect(unionBox.Left, unionBox.Top, unionBox.Width, unionBox.Height)
-                });
-            }
+                    results.Add(new TranslatedBlock
+                    {
+                        OriginalText = mergedText,
+                        TranslatedText = $"(Fail) {fallbackText}", // Prefix to indicate translation might have failed/skipped
+                        Bounds = new Rect(unionBox.Left, unionBox.Top, unionBox.Width, unionBox.Height)
+                    });
+                }
         }
 
         return results;
@@ -211,8 +223,8 @@ public class TranslationService
 
     private List<SkiaSharp.SKRectI> DetectText(SKBitmap bitmap)
     {
-        // DB Model Pre-processing: Scale to 960 limit (standard for RapidOCR)
-        int limitSideLen = 960;
+        // DB Model Pre-processing: Scale to 1280 limit (better for high-res screens)
+        int limitSideLen = 1280;
         int w = bitmap.Width;
         int h = bitmap.Height;
         float ratio = 1.0f;
@@ -248,9 +260,9 @@ public class TranslationService
 
         string inputName = _detSession!.InputMetadata.Keys.FirstOrDefault() ?? "x";
         var inputs = new List<NamedOnnxValue> { NamedOnnxValue.CreateFromTensor(inputName, input) };
-        Console.WriteLine("[OCR] Running DetSession...");
+        Debug.WriteLine("[OCR] Running DetSession...");
         using var outputs = _detSession!.Run(inputs);
-        Console.WriteLine("[OCR] DetSession Finished.");
+        Debug.WriteLine("[OCR] DetSession Finished.");
         var outputTensor = outputs.First().AsTensor<float>();
 
         return FindBoxesFromMask(outputTensor, targetWidth, targetHeight, bitmap.Width, bitmap.Height);
@@ -656,7 +668,7 @@ public class TranslationService
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[OCR] Recognize Error: {ex.Message}");
+            Debug.WriteLine($"[OCR] Recognize Error: {ex.Message}");
             return ("", 0f);
         }
     }
@@ -690,7 +702,7 @@ public class TranslationService
             var outputTensor = outputs.First().AsTensor<float>();
             if (outputTensor.Dimensions.Length >= 3)
             {
-                Console.WriteLine($"[OCR] Rec Output Shape: [{string.Join(",", outputTensor.Dimensions.ToArray())}]");
+                Debug.WriteLine($"[OCR] Rec Output Shape: [{string.Join(",", outputTensor.Dimensions.ToArray())}]");
                 EnsureDictionaryAlignment(outputTensor.Dimensions[1], outputTensor.Dimensions[2]);
             }
 
@@ -698,7 +710,7 @@ public class TranslationService
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[OCR] Recognize Error: {ex.Message}");
+            Debug.WriteLine($"[OCR] Recognize Error: {ex.Message}");
             return ("", 0f);
         }
     }
@@ -818,7 +830,7 @@ public class TranslationService
             var utf8Lines = File.ReadAllLines(path, utf8Strict).ToList();
             if (IsLikelyValidDictionary(utf8Lines))
             {
-                Console.WriteLine("[OCR] Dictionary decode: UTF-8 strict");
+                Debug.WriteLine("[OCR] Dictionary decode: UTF-8 strict");
                 return utf8Lines;
             }
         }
@@ -840,7 +852,7 @@ public class TranslationService
                 var lines = File.ReadAllLines(path, enc).ToList();
                 if (IsLikelyValidDictionary(lines))
                 {
-                    Console.WriteLine($"[OCR] Dictionary decode fallback: {enc.WebName}");
+                    Debug.WriteLine($"[OCR] Dictionary decode fallback: {enc.WebName}");
                     return lines;
                 }
             }
@@ -851,7 +863,7 @@ public class TranslationService
         }
 
         // Last resort: return lenient UTF-8 decode result.
-        Console.WriteLine("[OCR] Dictionary decode: last-resort UTF-8 lenient");
+        Debug.WriteLine("[OCR] Dictionary decode: last-resort UTF-8 lenient");
         return File.ReadAllLines(path, new UTF8Encoding(false, false)).ToList();
     }
 
@@ -913,7 +925,7 @@ public class TranslationService
         int diff = classDimCandidate - _dict.Count;
         if (diff > 0 && diff <= 16)
         {
-            Console.WriteLine($"[OCR] Aligning dictionary: {_dict.Count} -> {classDimCandidate}");
+            Debug.WriteLine($"[OCR] Aligning dictionary: {_dict.Count} -> {classDimCandidate}");
             // PaddleOCR often expects a trailing space token.
             if (!_dict.Contains(" "))
             {
@@ -928,7 +940,7 @@ public class TranslationService
         }
         else if (diff < 0 && Math.Abs(diff) <= 16)
         {
-            Console.WriteLine($"[OCR] Trimming dictionary: {_dict.Count} -> {classDimCandidate}");
+            Debug.WriteLine($"[OCR] Trimming dictionary: {_dict.Count} -> {classDimCandidate}");
             _dict = _dict.Take(classDimCandidate).ToList();
         }
     }
@@ -936,9 +948,12 @@ public class TranslationService
     private static bool IsCjk(char ch)
     {
         return (ch >= '\u4E00' && ch <= '\u9FFF')   // CJK Unified Ideographs
-            || (ch >= '\u3040' && ch <= '\u30FF')   // Japanese Hiragana/Katakana
-            || (ch >= '\uAC00' && ch <= '\uD7AF');  // Hangul
+            || IsHiraganaKatakana(ch)
+            || IsHangul(ch);
     }
+
+    private static bool IsHiraganaKatakana(char ch) => (ch >= '\u3040' && ch <= '\u30FF');
+    private static bool IsHangul(char ch) => (ch >= '\uAC00' && ch <= '\uD7AF');
 
     private string ResolveSourceLanguageForPrompt(string text)
     {
@@ -948,6 +963,9 @@ public class TranslationService
 
         double cjkRatio = (double)cjkCount / total;
         double latinRatio = (double)latinCount / total;
+
+        if (text.Any(IsHiraganaKatakana)) return "Japanese";
+        if (text.Any(IsHangul)) return "Korean";
 
         if (cjkRatio > 0.45)
         {
@@ -991,7 +1009,9 @@ public class TranslationService
                 _ => "Traditional Chinese"
             };
 
-            if (ShouldBypassTranslation(text, _settings.TargetLanguage))
+            bool bypass = ShouldBypassTranslation(text, _settings.TargetLanguage);
+            Debug.WriteLine($"[Translation] ShouldBypassTranslation: {bypass}");
+            if (bypass)
             {
                 return text;
             }
@@ -1022,13 +1042,13 @@ public class TranslationService
                     temperature = 0.0,
                     top_p = 0.1,
                     repeat_penalty = 1.0,
-                    num_predict = 96,
+                    num_predict = 128,
                     seed = 42
                 }
             };
 
             string url = !string.IsNullOrEmpty(_settings.OllamaApiUrl) ? _settings.OllamaApiUrl : "http://localhost:11434/api/generate";
-            Console.WriteLine($"[Translation] Ollama Request: model={request.model}, prompt=\"{request.prompt.Substring(0, Math.Min(30, request.prompt.Length))}...\"");
+            Debug.WriteLine($"[Translation] Ollama Request: model={request.model}, prompt=\"{request.prompt.Substring(0, Math.Min(30, request.prompt.Length))}...\"");
 
             var requestJson = JsonSerializer.Serialize(request);
             var firstTimeout = IsLikelySlowModel(model) ? TimeSpan.FromSeconds(28) : TimeSpan.FromSeconds(12);
@@ -1037,21 +1057,21 @@ public class TranslationService
             var response = await PostGenerateAsync(url, requestJson, firstTimeout, ct);
             if (response == null && !ct.IsCancellationRequested)
             {
-                Console.WriteLine($"[Translation] Primary request timed out, retrying with {retryTimeout.TotalSeconds:F0}s timeout...");
+                Debug.WriteLine($"[Translation] Primary request timed out, retrying with {retryTimeout.TotalSeconds:F0}s timeout...");
                 response = await PostGenerateAsync(url, requestJson, retryTimeout, ct);
             }
 
             if (response == null)
             {
-                Console.WriteLine("[Translation] Request timed out, fallback to OCR text.");
+                Debug.WriteLine("[Translation] Request timed out, fallback to OCR text.");
                 return text;
             }
             
-            Console.WriteLine($"[Translation] Ollama Response Status: {response.StatusCode}");
+            Debug.WriteLine($"[Translation] Ollama Response Status: {response.StatusCode}");
             if (!response.IsSuccessStatusCode)
             {
                 var errorContent = await response.Content.ReadAsStringAsync();
-                Console.WriteLine($"[Ollama Error] {response.StatusCode}: {errorContent}");
+                Debug.WriteLine($"[Ollama Error] {response.StatusCode}: {errorContent}");
                 
                 if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
                 {
@@ -1063,61 +1083,117 @@ public class TranslationService
             var json = await response.Content.ReadAsStringAsync();
             using var doc = JsonDocument.Parse(json);
             var resultText = doc.RootElement.GetProperty("response").GetString()?.Trim() ?? text;
+            Debug.WriteLine($"[Translation] Ollama Raw Result: \"{resultText}\"");
+            
             resultText = CleanupTranslationResult(resultText);
+            
             if (string.IsNullOrWhiteSpace(resultText))
             {
                 return text;
             }
 
-            if (_settings.TargetLanguage == TranslationLanguage.English
-                && string.Equals(resultText, text, StringComparison.Ordinal)
-                && ContainsCjk(text))
+            // Validation: If target is Chinese but result still has Japanese/Korean, it failed.
+            if (!IsTranslationAcceptable(text, resultText, _settings.TargetLanguage))
             {
-                var retried = await TranslateStrictToEnglishRetryAsync(model, url, text, ct);
-                if (!string.IsNullOrWhiteSpace(retried))
+                Debug.WriteLine($"[Translation] Validation failed for result: \"{resultText}\". Retrying with forceful prompt...");
+                var retried = await TranslateStrictRetryForCjkAsync(model, url, text, _settings.TargetLanguage, ct);
+                if (!string.IsNullOrWhiteSpace(retried) && IsTranslationAcceptable(text, retried, _settings.TargetLanguage))
                 {
                     resultText = retried;
                 }
+                else
+                {
+                    Debug.WriteLine("[Translation] Retry also failed or returned invalid result.");
+                }
             }
-            Console.WriteLine($"[Translation] Result: {resultText}");
+
+            Debug.WriteLine($"[Translation] Final Result: {resultText}");
             return resultText;
         }
         catch (OperationCanceledException)
         {
-            // Distinguish external cancellation vs request-timeout cancellation.
-            // External cancellation (newer request/user action) should stop immediately.
             if (ct.IsCancellationRequested)
             {
                 throw;
             }
-
-            // Timeout/cancel from request-internal timeout: degrade gracefully.
-            Console.WriteLine("[Translation] Request timed out, fallback to OCR text.");
+            Debug.WriteLine("[Translation] Request timed out, fallback to OCR text.");
             return text;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[Translation Error] {ex.Message}");
+            Debug.WriteLine($"[Translation Error] {ex.Message}");
             return text;
         }
     }
 
     private static string BuildStrictTranslationPrompt(string sourceLang, string targetLang, string text)
     {
-        return $@"You are a translation engine.
-Translate exactly from {sourceLang} to {targetLang}.
+        return $@"You are an expert translator. 
+Translate the following {sourceLang} text into {targetLang} accurately.
 
 Rules:
-1) Output only translated text.
-2) No explanation, no notes, no quotes.
-3) Do not infer extra context.
-4) Keep proper nouns, numbers, punctuation.
-5) If already in target language, return input unchanged.
+1) Output ONLY the translated text.
+2) NO explanations, NO quotes, NO original text.
+3) Do NOT say ""Translation:"", ""Sure"", or ""Here is the translation"".
+4) Preserve formatting and punctuation.
+5) If the text is already in {targetLang}, return it as is.
 
 Input:
 {text}
 
 Output:";
+    }
+
+    private async Task<string> TranslateStrictRetryForCjkAsync(string model, string url, string text, TranslationLanguage target, CancellationToken ct)
+    {
+        string targetName = target switch
+        {
+            TranslationLanguage.TraditionalChinese => "Traditional Chinese (Taiwan)",
+            TranslationLanguage.SimplifiedChinese => "Simplified Chinese",
+            TranslationLanguage.English => "English",
+            TranslationLanguage.Japanese => "Japanese",
+            TranslationLanguage.Korean => "Korean",
+            _ => "Traditional Chinese"
+        };
+
+        var retryRequest = new
+        {
+            model,
+            prompt = $@"SYSTEM: You are a professional translator specializing in CJK languages.
+USER: Translate the following text into natural, idiomatic {targetName}. 
+
+MANDATORY RULES:
+1) Output *ONLY* the translation. DO NOT provide any preamble, explanation, or notes.
+2) DO NOT output any Japanese Hiragana or Katakana characters in the translation.
+3) Use formal {targetName} vocabulary.
+4) If the input is already {targetName}, return it unchanged.
+
+Original Text:
+{text}
+
+Translation:",
+            stream = false,
+            options = new
+            {
+                temperature = 0.0,
+                top_p = 0.1,
+                num_predict = 128,
+                seed = 42
+            }
+        };
+
+        try
+        {
+            var json = JsonSerializer.Serialize(retryRequest);
+            var response = await PostGenerateAsync(url, json, TimeSpan.FromSeconds(25), ct);
+            if (response == null || !response.IsSuccessStatusCode) return string.Empty;
+            var payload = await response.Content.ReadAsStringAsync();
+            using var doc = JsonDocument.Parse(payload);
+            var result = doc.RootElement.GetProperty("response").GetString()?.Trim() ?? string.Empty;
+            Debug.WriteLine($"[Translation] Retry Raw Result: \"{result}\"");
+            return CleanupTranslationResult(result);
+        }
+        catch { return string.Empty; }
     }
 
     private static string CleanupTranslationResult(string text)
@@ -1195,7 +1271,7 @@ Output:",
         }
     }
 
-    private static bool ShouldBypassTranslation(string text, TranslationLanguage target)
+    private bool ShouldBypassTranslation(string text, TranslationLanguage target)
     {
         if (string.IsNullOrWhiteSpace(text)) return true;
 
@@ -1209,15 +1285,17 @@ Output:",
         double cjkRatio = (double)cjkCount / total;
         double latinRatio = (double)latinCount / total;
 
-        return target switch
+        bool res = target switch
         {
             TranslationLanguage.English => latinRatio > 0.8,
-            TranslationLanguage.TraditionalChinese => cjkRatio > 0.8,
-            TranslationLanguage.SimplifiedChinese => cjkRatio > 0.8,
-            TranslationLanguage.Japanese => cjkRatio > 0.8,
-            TranslationLanguage.Korean => cjkRatio > 0.8,
+            TranslationLanguage.TraditionalChinese => cjkRatio > 0.8 && !text.Any(IsHiraganaKatakana) && !text.Any(IsHangul),
+            TranslationLanguage.SimplifiedChinese => cjkRatio > 0.8 && !text.Any(IsHiraganaKatakana) && !text.Any(IsHangul),
+            TranslationLanguage.Japanese => text.Any(IsHiraganaKatakana) || (cjkRatio > 0.8 && _settings.SourceLanguage == OCRLanguage.Japanese),
+            TranslationLanguage.Korean => text.Any(IsHangul) || (cjkRatio > 0.8 && _settings.SourceLanguage == OCRLanguage.Korean),
             _ => false
         };
+        Debug.WriteLine($"[Translation] ShouldBypass: {res} (CJK:{cjkRatio:F2}, Latin:{latinRatio:F2}, Target:{target})");
+        return res;
     }
 
     private static bool ContainsCjk(string text)
@@ -1225,9 +1303,21 @@ Output:",
         return text.Any(IsCjk);
     }
 
-    private static bool IsTranslationAcceptable(string source, string translated, TranslationLanguage target)
+    private bool IsTranslationAcceptable(string source, string translated, TranslationLanguage target)
     {
         if (string.IsNullOrWhiteSpace(translated)) return false;
+
+        // Reject if target is not Japanese but result has Japanese Hiragana/Katakana
+        if (target != TranslationLanguage.Japanese && translated.Any(IsHiraganaKatakana))
+        {
+            // Allowed if source also has it and it's a very short string (might be a logo/name kept)
+            if (source.Any(IsHiraganaKatakana) && translated.Length > 2)
+            {
+                 // Check if it's mostly still Japanese
+                 int kanaCount = translated.Count(IsHiraganaKatakana);
+                 if (kanaCount > translated.Length / 4) return false;
+            }
+        }
 
         // For English target, reject outputs that are still mostly CJK or unchanged CJK.
         if (target == TranslationLanguage.English)
@@ -1280,7 +1370,7 @@ Output:",
         {
             if (cjkRatio < 0.3 && latinRatio > 0.6)
             {
-                return targetLanguage == TranslationLanguage.TraditionalChinese ? "[無法辨識]" : "[无法识别]";
+                return targetLanguage == TranslationLanguage.TraditionalChinese ? "[?��?辨�?]" : "[?��?识别]";
             }
             return filtered;
         }
@@ -1300,10 +1390,10 @@ Output:",
         return targetLanguage switch
         {
             TranslationLanguage.English => "[translation unavailable]",
-            TranslationLanguage.TraditionalChinese => "[無法辨識]",
-            TranslationLanguage.SimplifiedChinese => "[无法识别]",
-            TranslationLanguage.Japanese => "[判読不能]",
-            TranslationLanguage.Korean => "[판독 불가]",
+            TranslationLanguage.TraditionalChinese => "[?��?辨�?]",
+            TranslationLanguage.SimplifiedChinese => "[?��?识别]",
+            TranslationLanguage.Japanese => "[?�読不能]",
+            TranslationLanguage.Korean => "[?��? 불�?]",
             _ => "[translation unavailable]"
         };
     }
@@ -1385,7 +1475,7 @@ Output:",
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[Translation] Failed to fetch models: {ex.Message}");
+            Debug.WriteLine($"[Translation] Failed to fetch models: {ex.Message}");
         }
         return new List<string>();
     }
