@@ -48,3 +48,5 @@ artifacts/
 # JetBrains Rider
 .idea/
 *.sln.iml
+*.tmpbuild
+*.dll

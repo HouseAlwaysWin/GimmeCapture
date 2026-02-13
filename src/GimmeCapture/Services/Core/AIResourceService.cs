@@ -132,9 +132,11 @@ public class AIResourceService : ReactiveObject
             OCRLanguage.Japanese => "jp",
             OCRLanguage.Korean => "ko",
             OCRLanguage.English => "en",
-            OCRLanguage.Auto => "ch", // Auto defaults to the most capable multi-lingual model (CH covers EN/CH)
+            OCRLanguage.TraditionalChinese => "ch",
+            OCRLanguage.SimplifiedChinese => "ch",
             _ => "ch" 
         };
+
 
         return (
             Path.Combine(ocrDir, "ocr_det.onnx"),

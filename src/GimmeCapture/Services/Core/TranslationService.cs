@@ -7,6 +7,8 @@ using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+using System.Text.RegularExpressions;
+using System.Globalization;
 using Avalonia;
 using GimmeCapture.Models;
 using Microsoft.ML.OnnxRuntime;
@@ -27,6 +29,13 @@ public class TranslatedBlock
 
 public class TranslationService
 {
+    private const float DetBoxThreshold = 0.3f;
+    private const float DetMinAreaRatio = 0.00005f;
+    private const int DetMaxBoxes = 256;
+    private const float RecMinAcceptConfidence = 0.10f;
+    private const int MaxTranslationBlocks = 2;
+    private static readonly Regex LatinOrCjkRegex = new(@"[\p{IsCJKUnifiedIdeographs}\p{IsHiragana}\p{IsKatakana}\p{IsHangulSyllables}A-Za-z0-9]", RegexOptions.Compiled);
+
     private readonly AIResourceService _aiResourceService;
     private InferenceSession? _detSession;
     private InferenceSession? _recSession;
@@ -34,14 +43,16 @@ public class TranslationService
     private List<string> _dict = new();
     
     private readonly HttpClient _httpClient = new();
-    private readonly AppSettings _settings;
-
+    private readonly AppSettingsService _settingsService;
+    private AppSettings _settings => _settingsService.Settings;
+ 
     public TranslationService(AIResourceService aiResourceService, AppSettingsService settingsService)
     {
         _aiResourceService = aiResourceService ?? throw new ArgumentNullException(nameof(aiResourceService));
-        _settings = settingsService?.Settings ?? new AppSettings(); // Fallback if null, though unlikely in DI
+        _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
         _httpClient.Timeout = TimeSpan.FromSeconds(60); 
     }
+
 
     private async Task EnsureLoadedAsync()
     {
@@ -64,46 +75,35 @@ public class TranslationService
         Console.WriteLine("[OCR] EnsuresOCRAsync finished.");
         var paths = _aiResourceService.GetOCRPaths(targetLang);
 
-        if (!File.Exists(paths.Det) || !File.Exists(paths.Rec) || !File.Exists(paths.Dict))
-        {
-            System.Diagnostics.Debug.WriteLine("[OCR] ABORT: Model files missing even after EnsureOCRAsync");
-            throw new FileNotFoundException("OCR model files missing");
-        }
-
         var options = new SessionOptions();
-        // Re-enable optimizations as the crash was shape-related, not optimization-related
         options.GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL;
         
-        System.Diagnostics.Debug.WriteLine($"[OCR] Rec Model Size: {new FileInfo(paths.Rec).Length} bytes");
-        Console.WriteLine($"[OCR] Rec Model Size: {new FileInfo(paths.Rec).Length} bytes");
-
         try 
         { 
-            options.AppendExecutionProvider_DML(0); 
-            System.Diagnostics.Debug.WriteLine("[OCR] Using DirectML");
-            Console.WriteLine("[OCR] Using DirectML");
+            options.AppendExecutionProvider_CUDA(0);
+            Console.WriteLine("[OCR] CUDA Provider enabled.");
         } 
-        catch 
-        {
-            System.Diagnostics.Debug.WriteLine("[OCR] Using CPU");
-            Console.WriteLine("[OCR] Using CPU");
-        }
+        catch { /* CUDA not available */ }
 
-        Console.WriteLine($"[OCR] Creating DetSession from {paths.Det}...");
+        try 
+        {
+            options.AppendExecutionProvider_DML(0); 
+            Console.WriteLine("[OCR] DirectML Provider enabled.");
+        }
+        catch { /* DirectML not available */ }
+
+
         _detSession = new InferenceSession(paths.Det, options);
-        Console.WriteLine($"[OCR] Creating RecSession from {paths.Rec}...");
         _recSession = new InferenceSession(paths.Rec, options);
         _currentOCRLanguage = targetLang;
-        System.Diagnostics.Debug.WriteLine($"[OCR] Sessions initialized ({targetLang})");
-        Console.WriteLine($"[OCR] Sessions initialized ({targetLang})");
         
-        _dict = File.ReadAllLines(paths.Dict, Encoding.UTF8).ToList();
-        // PaddleOCR dict starts from index 1, index 0 is blank
+        _dict = LoadDictionaryWithEncodingFallback(paths.Dict);
+        // PaddleOCR index 0 is CTC blank
         _dict.Insert(0, "");
-        _dict.Add(" ");
-        var sample = string.Join(", ", _dict.Skip(1).Take(10).Select(c => $"[{c}] (U+{(c.Length > 0 ? ((int)c[0]).ToString("X4") : "0000")})"));
-        Console.WriteLine($"[OCR] Dictionary Loaded: {_dict.Count} items. Sample: {sample}");
+        Console.WriteLine($"[OCR] Sessions initialized. Selected: {targetLang}. Dictionary: {_dict.Count} items.");
+        Console.WriteLine($"[OCR] Dict sample: {string.Join(", ", _dict.Skip(1).Take(8))}");
     }
+
 
     public async Task<List<TranslatedBlock>> AnalyzeAndTranslateAsync(SKBitmap bitmap)
     {
@@ -111,31 +111,50 @@ public class TranslationService
         if (_detSession == null || _recSession == null) return new();
 
         var results = new List<TranslatedBlock>();
+        var recognizedBlocks = new List<(SKRectI Box, string Text, float Confidence)>();
 
-        // 1. Detection (Simplified: For now, we'll implement a basic detection bypass or single box if it gets too complex)
-        // In a real implementation, we'd run DB model and find contours.
-        // For the sake of moving forward, let's implement the core logic for a single pass or mock detection if needed.
-        // Actually, let's try to implement a basic DB pre-post processing.
-        
         var boxes = DetectText(bitmap);
         Console.WriteLine($"[OCR] Detected {boxes.Count} boxes. Target Output Language: {_settings.TargetLanguage}");
         
         foreach (var box in boxes)
         {
-            var text = RecognizeText(bitmap, box);
-            Console.WriteLine($"[OCR] Raw Recognized Text: \"{text}\""); // Diagnostic Logging
+            var (text, confidence) = RecognizeTextWithConfidence(bitmap, box);
+            Console.WriteLine($"[OCR] Raw Text: \"{text}\" (Conf: {confidence:F3})");
             
-            if (!string.IsNullOrWhiteSpace(text))
+            if (IsUsefulOcrText(text, confidence))
             {
-                var translated = await TranslateAsync(text);
-                Console.WriteLine($"[Translation] From \"{text}\" -> To \"{translated}\""); // Diagnostic Logging
-                results.Add(new TranslatedBlock
-                {
-                    OriginalText = text,
-                    TranslatedText = translated,
-                    Bounds = new Rect(box.Left, box.Top, box.Width, box.Height)
-                });
+                recognizedBlocks.Add((box, text, confidence));
             }
+        }
+
+        // Fallback: if all detected boxes fail, try merged box and full image.
+        if (recognizedBlocks.Count == 0)
+        {
+            foreach (var fallbackBox in BuildFallbackRecognitionBoxes(bitmap.Width, bitmap.Height, boxes))
+            {
+                var (text, confidence) = RecognizeTextWithConfidence(bitmap, fallbackBox);
+                Console.WriteLine($"[OCR][Fallback] Raw Text: \"{text}\" (Conf: {confidence:F3})");
+                if (IsUsefulOcrText(text, confidence))
+                {
+                    recognizedBlocks.Add((fallbackBox, text, confidence));
+                }
+            }
+        }
+
+        foreach (var item in recognizedBlocks
+            .OrderByDescending(x => ScoreRecognizedBlock(x))
+            .GroupBy(x => x.Text)
+            .Select(g => g.First())
+            .Take(MaxTranslationBlocks))
+        {
+            var translated = await TranslateAsync(item.Text);
+            Console.WriteLine($"[Translation] From \"{item.Text}\" -> To \"{translated}\"");
+            results.Add(new TranslatedBlock
+            {
+                OriginalText = item.Text,
+                TranslatedText = translated,
+                Bounds = new Rect(item.Box.Left, item.Box.Top, item.Box.Width, item.Box.Height)
+            });
         }
 
         return results;
@@ -143,13 +162,25 @@ public class TranslationService
 
     private List<SkiaSharp.SKRectI> DetectText(SKBitmap bitmap)
     {
-        // DB Model Pre-processing
-        int targetWidth = (bitmap.Width + 31) / 32 * 32;
-        int targetHeight = (bitmap.Height + 31) / 32 * 32;
+        // DB Model Pre-processing: Scale to 960 limit (standard for RapidOCR)
+        int limitSideLen = 960;
+        int w = bitmap.Width;
+        int h = bitmap.Height;
+        float ratio = 1.0f;
+        if (Math.Max(h, w) > limitSideLen)
+        {
+            if (h > w) ratio = (float)limitSideLen / h;
+            else ratio = (float)limitSideLen / w;
+        }
+        int targetWidth = (int)(w * ratio);
+        int targetHeight = (int)(h * ratio);
+        targetWidth = (targetWidth + 31) / 32 * 32;
+        targetHeight = (targetHeight + 31) / 32 * 32;
         
         using var resized = bitmap.Resize(new SKImageInfo(targetWidth, targetHeight), SKSamplingOptions.Default);
         var input = new DenseTensor<float>(new[] { 1, 3, targetHeight, targetWidth });
         
+        // ImageNet Normalization for Detection
         float[] mean = { 0.485f, 0.456f, 0.406f };
         float[] std = { 0.229f, 0.224f, 0.225f };
 
@@ -164,95 +195,233 @@ public class TranslationService
             }
         }
 
-        var inputs = new List<NamedOnnxValue> { NamedOnnxValue.CreateFromTensor("x", input) };
+
+
+        string inputName = _detSession!.InputMetadata.Keys.FirstOrDefault() ?? "x";
+        var inputs = new List<NamedOnnxValue> { NamedOnnxValue.CreateFromTensor(inputName, input) };
         Console.WriteLine("[OCR] Running DetSession...");
         using var outputs = _detSession!.Run(inputs);
         Console.WriteLine("[OCR] DetSession Finished.");
         var outputTensor = outputs.First().AsTensor<float>();
 
-        // Post-processing: Simple thresholding and bounding box finding
-        // For high performance, we should use a proper contour finder, but here we'll do a simple greedy scan
-        // or just return one big box if detection is too complex for a single step.
-        // Actually, let's just use the whole area as a fallback if we can't find clear boxes.
-        
-        // Better yet, let's implement a very simple grid-based blob detector for now
         return FindBoxesFromMask(outputTensor, targetWidth, targetHeight, bitmap.Width, bitmap.Height);
     }
 
     private List<SKRectI> FindBoxesFromMask(Tensor<float> mask, int targetW, int targetH, int origW, int origH)
     {
-        // Simple threshold-based blob detection
-        // mask is [1, 1, H, W] or similar. PaddleOCR det output is probability map.
         var boxes = new List<SKRectI>();
-        float threshold = 0.3f;
-        
-        int h = mask.Dimensions[2];
-        int w = mask.Dimensions[3];
-        
+        if (!TryBuildDetProbabilityMap(mask, out var probMap, out var h, out var w))
+        {
+            return new List<SKRectI> { new SKRectI(0, 0, origW, origH) };
+        }
+
         var visited = new bool[h, w];
         float scaleX = (float)origW / w;
         float scaleY = (float)origH / h;
+        float minBlobArea = h * w * DetMinAreaRatio;
 
-        for (int y = 0; y < h; y += 2) // Step for performance
+        for (int y = 0; y < h; y++)
         {
-            for (int x = 0; x < w; x += 2)
+            for (int x = 0; x < w; x++)
             {
-                if (mask[0, 0, y, x] > threshold && !visited[y, x])
+                if (visited[y, x] || probMap[y, x] <= DetBoxThreshold)
                 {
-                    // Flood fill to find blob bounds
-                    int minX = x, maxX = x, minY = y, maxY = y;
-                    var queue = new Queue<(int, int)>();
-                    queue.Enqueue((x, y));
-                    visited[y, x] = true;
+                    continue;
+                }
 
-                    while (queue.Count > 0)
+                // Flood fill to find blob bounds
+                int minX = x, maxX = x, minY = y, maxY = y;
+                int area = 0;
+                var queue = new Queue<(int X, int Y)>();
+                queue.Enqueue((x, y));
+                visited[y, x] = true;
+
+                while (queue.Count > 0)
+                {
+                    var (cx, cy) = queue.Dequeue();
+                    area++;
+                    minX = Math.Min(minX, cx);
+                    maxX = Math.Max(maxX, cx);
+                    minY = Math.Min(minY, cy);
+                    maxY = Math.Max(maxY, cy);
+
+                    // 4-neighbors
+                    int[] dx = { 0, 0, 1, -1 };
+                    int[] dy = { 1, -1, 0, 0 };
+                    for (int i = 0; i < 4; i++)
                     {
-                        var (cx, cy) = queue.Dequeue();
-                        minX = Math.Min(minX, cx);
-                        maxX = Math.Max(maxX, cx);
-                        minY = Math.Min(minY, cy);
-                        maxY = Math.Max(maxY, cy);
-
-                        // Check 4-neighbors
-                        int[] dx = { 0, 0, 1, -1 };
-                        int[] dy = { 1, -1, 0, 0 };
-                        for (int i = 0; i < 4; i++)
+                        int nx = cx + dx[i];
+                        int ny = cy + dy[i];
+                        if (nx >= 0 && nx < w && ny >= 0 && ny < h && !visited[ny, nx] && probMap[ny, nx] > DetBoxThreshold)
                         {
-                            int nx = cx + dx[i];
-                            int ny = cy + dy[i];
-                            if (nx >= 0 && nx < w && ny >= 0 && ny < h && !visited[ny, nx] && mask[0, 0, ny, nx] > threshold)
-                            {
-                                visited[ny, nx] = true;
-                                queue.Enqueue((nx, ny));
-                            }
+                            visited[ny, nx] = true;
+                            queue.Enqueue((nx, ny));
                         }
                     }
+                }
 
-                    // Convert to original coordinates and add padding
-                    int rectX = (int)(minX * scaleX);
-                    int rectY = (int)(minY * scaleY);
-                    int rectW = (int)((maxX - minX + 1) * scaleX);
-                    int rectH = (int)((maxY - minY + 1) * scaleY);
-                    
-                    if (rectW > 4 && rectH > 4) // Filter noise
-                    {
-                        // Add some padding
-                        int left = Math.Max(0, rectX - 2);
-                        int top = Math.Max(0, rectY - 2);
-                        int right = Math.Min(origW, rectX + rectW + 2);
-                        int bottom = Math.Min(origH, rectY + rectH + 2);
-                        boxes.Add(new SKRectI(left, top, right, bottom));
-                    }
+                int blobW = maxX - minX + 1;
+                int blobH = maxY - minY + 1;
+                if (area < minBlobArea || blobW < 3 || blobH < 3)
+                {
+                    continue;
+                }
+
+                // Approximate DB unclip expansion.
+                int perimeter = 2 * (blobW + blobH);
+                float expansion = perimeter > 0 ? area * 1.6f / perimeter : 0f;
+
+                int rectX = (int)((minX - expansion) * scaleX);
+                int rectY = (int)((minY - expansion) * scaleY);
+                int rectW = (int)((blobW + 2 * expansion) * scaleX);
+                int rectH = (int)((blobH + 2 * expansion) * scaleY);
+
+                if (rectW > 6 && rectH > 6)
+                {
+                    var rect = new SKRectI(
+                        Math.Max(0, rectX),
+                        Math.Max(0, rectY),
+                        Math.Min(origW, rectX + rectW),
+                        Math.Min(origH, rectY + rectH)
+                    );
+                    boxes.Add(rect);
+                    if (boxes.Count >= DetMaxBoxes) break;
                 }
             }
+            if (boxes.Count >= DetMaxBoxes) break;
         }
 
-        // If no boxes found or too many (noise), fallback to whole area for verification
         if (!boxes.Any())
             return new List<SKRectI> { new SKRectI(0, 0, origW, origH) };
 
-        // Post-processing: Merge overlapping boxes
-        return MergeOverlappingBoxes(boxes);
+        return SortBoxesByReadingOrder(MergeOverlappingBoxes(boxes));
+    }
+
+    private static bool TryBuildDetProbabilityMap(Tensor<float> mask, out float[,] probMap, out int h, out int w)
+    {
+        probMap = new float[1, 1];
+        h = 0;
+        w = 0;
+
+        if (mask.Dimensions.Length < 2) return false;
+
+        // Common Paddle OCR det outputs:
+        // [1,1,H,W], [1,H,W,1], [1,H,W], [H,W]
+        if (mask.Dimensions.Length == 4)
+        {
+            int d0 = mask.Dimensions[0];
+            int d1 = mask.Dimensions[1];
+            int d2 = mask.Dimensions[2];
+            int d3 = mask.Dimensions[3];
+
+            if (d1 == 1) // NCHW
+            {
+                h = d2;
+                w = d3;
+                probMap = new float[h, w];
+                for (int y = 0; y < h; y++)
+                {
+                    for (int x = 0; x < w; x++)
+                    {
+                        probMap[y, x] = ToProbability(mask[0, 0, y, x]);
+                    }
+                }
+                return true;
+            }
+
+            if (d3 == 1) // NHWC
+            {
+                h = d1;
+                w = d2;
+                probMap = new float[h, w];
+                for (int y = 0; y < h; y++)
+                {
+                    for (int x = 0; x < w; x++)
+                    {
+                        probMap[y, x] = ToProbability(mask[0, y, x, 0]);
+                    }
+                }
+                return true;
+            }
+
+            // Unknown 4D layout, try treating last two as H/W.
+            h = d2;
+            w = d3;
+            probMap = new float[h, w];
+            for (int y = 0; y < h; y++)
+            {
+                for (int x = 0; x < w; x++)
+                {
+                    probMap[y, x] = ToProbability(mask[0, 0, y, x]);
+                }
+            }
+            return true;
+        }
+
+        if (mask.Dimensions.Length == 3)
+        {
+            // [1,H,W] or [H,W,1]
+            if (mask.Dimensions[0] == 1)
+            {
+                h = mask.Dimensions[1];
+                w = mask.Dimensions[2];
+                probMap = new float[h, w];
+                for (int y = 0; y < h; y++)
+                {
+                    for (int x = 0; x < w; x++)
+                    {
+                        probMap[y, x] = ToProbability(mask[0, y, x]);
+                    }
+                }
+                return true;
+            }
+
+            if (mask.Dimensions[2] == 1)
+            {
+                h = mask.Dimensions[0];
+                w = mask.Dimensions[1];
+                probMap = new float[h, w];
+                for (int y = 0; y < h; y++)
+                {
+                    for (int x = 0; x < w; x++)
+                    {
+                        probMap[y, x] = ToProbability(mask[y, x, 0]);
+                    }
+                }
+                return true;
+            }
+        }
+
+        if (mask.Dimensions.Length == 2)
+        {
+            h = mask.Dimensions[0];
+            w = mask.Dimensions[1];
+            probMap = new float[h, w];
+            for (int y = 0; y < h; y++)
+            {
+                for (int x = 0; x < w; x++)
+                {
+                    probMap[y, x] = ToProbability(mask[y, x]);
+                }
+            }
+            return true;
+        }
+
+        return false;
+    }
+
+    private static float ToProbability(float value)
+    {
+        if (value >= 0f && value <= 1f) return value;
+        return 1f / (1f + MathF.Exp(-value));
+    }
+
+    private static List<SKRectI> SortBoxesByReadingOrder(List<SKRectI> boxes)
+    {
+        return boxes
+            .OrderBy(b => b.Top / 16)
+            .ThenBy(b => b.Left)
+            .ToList();
     }
 
     private List<SKRectI> MergeOverlappingBoxes(List<SKRectI> boxes)
@@ -295,50 +464,161 @@ public class TranslationService
         return boxes;
     }
 
-    private string RecognizeText(SKBitmap bitmap, SkiaSharp.SKRectI box)
+    private List<SKRectI> BuildFallbackRecognitionBoxes(int width, int height, List<SKRectI> detectedBoxes)
+    {
+        var fallback = new List<SKRectI>();
+        if (detectedBoxes.Count > 0)
+        {
+            int left = detectedBoxes.Min(b => b.Left);
+            int top = detectedBoxes.Min(b => b.Top);
+            int right = detectedBoxes.Max(b => b.Right);
+            int bottom = detectedBoxes.Max(b => b.Bottom);
+            fallback.Add(new SKRectI(
+                Math.Clamp(left, 0, width),
+                Math.Clamp(top, 0, height),
+                Math.Clamp(right, 0, width),
+                Math.Clamp(bottom, 0, height)));
+        }
+
+        fallback.Add(new SKRectI(0, 0, width, height));
+
+        // Keep unique boxes only.
+        return fallback
+            .Where(b => b.Width > 0 && b.Height > 0)
+            .GroupBy(b => $"{b.Left},{b.Top},{b.Right},{b.Bottom}")
+            .Select(g => g.First())
+            .ToList();
+    }
+
+    private (string text, float confidence) RecognizeTextWithConfidence(SKBitmap bitmap, SkiaSharp.SKRectI box)
     {
         try
         {
-            Console.WriteLine($"[OCR] RecognizeText Box: {box.Left},{box.Top} {box.Width}x{box.Height}");
-            
-            if (box.Width <= 0 || box.Height <= 0) 
+            if (box.Width <= 0 || box.Height <= 0) return ("", 0f);
+
+            // 1. Crop
+            using var cropped = new SKBitmap(box.Width, box.Height);
+            using (var canvas = new SKCanvas(cropped))
             {
-                Console.WriteLine("[OCR] Skip: Box has invalid dimensions.");
-                return "";
+                canvas.DrawBitmap(bitmap, box, new SKRect(0, 0, box.Width, box.Height));
             }
 
-            // Crop and Prepare for CRNN
-            using var cropped = new global::SkiaSharp.SKBitmap(box.Width, box.Height);
-            using var canvas = new global::SkiaSharp.SKCanvas(cropped);
-            canvas.DrawBitmap(bitmap, box, new SKRect(0, 0, box.Width, box.Height));
-            
-            // Ensure height 48 (Standard for many PP-OCRv4 models)
-            // Maintain aspect ratio but prevent extreme squashing for tall boxes
-            int targetWidth = (int)(box.Width * (48.0 / box.Height));
-            if (targetWidth < 64 && box.Width > 20) targetWidth = 64; 
-            if (targetWidth < 4) targetWidth = 4;
-            if (targetWidth > 1280) targetWidth = 1280;
-
-            int paddedWidth = Math.Max(64, (targetWidth + 31) / 32 * 32); // Reduced min width from 320 to 64
-            Console.WriteLine($"[OCR] Recognize Box: {box.Left},{box.Top} {box.Width}x{box.Height} -> Target: {targetWidth}x48, Padded: {paddedWidth}");
-
-            using var tensorBitmap = new SKBitmap(paddedWidth, 48);
-            using (var tCanvas = new SKCanvas(tensorBitmap))
+            // 2. Adaptive Inversion Analysis
+            bool shouldInvert = false;
+            float avgLuminance = 128f;
+            using (var grayscale = new SKBitmap(cropped.Width, cropped.Height, SKColorType.Gray8, SKAlphaType.Opaque))
             {
-                // Fill with White (255,255,255) which maps to 1.0f
-                // Most OCR models are trained with white backgrounds.
-                tCanvas.Clear(SKColors.White);
-                
-                // Draw the actual image
-                using var rResized = cropped.Resize(new SKImageInfo(targetWidth, 48), SKSamplingOptions.Default);
-                if (rResized != null)
+                using (var grayCanvas = new SKCanvas(grayscale))
                 {
-                    tCanvas.DrawBitmap(rResized, 0, 0);
+                    using var paint = new SKPaint { ColorFilter = SKColorFilter.CreateColorMatrix(new float[] {
+                        0.2126f, 0.7152f, 0.0722f, 0, 0,
+                        0.2126f, 0.7152f, 0.0722f, 0, 0,
+                        0.2126f, 0.7152f, 0.0722f, 0, 0,
+                        0, 0, 0, 1, 0
+                    }) };
+                    grayCanvas.DrawBitmap(cropped, 0, 0, paint);
+                }
+
+                long totalLuminous = 0;
+                for (int y = 0; y < grayscale.Height; y++)
+                    for (int x = 0; x < grayscale.Width; x++)
+                        totalLuminous += grayscale.GetPixel(x, y).Red;
+                
+                avgLuminance = totalLuminous / (float)(cropped.Width * cropped.Height);
+                shouldInvert = avgLuminance < 120; 
+            }
+
+            // 3. Tensor Prepping
+            int targetHeight = 48;
+            int textWidth = (int)(box.Width * ((float)targetHeight / box.Height));
+            
+            // Limit width for stability and performance
+            if (textWidth < 16) textWidth = 16; 
+            if (textWidth > 1536) textWidth = 1536;
+
+            // PP-OCRv4 REC handles variable width, but padding to 32 is often safer for some ONNX backends
+            // However, RapidOCR usually just uses textWidth directly. Let's use textWidth but ensure it's reasonable.
+            int paddedWidth = (textWidth + 31) / 32 * 32;
+
+            using var normalBitmap = new SKBitmap(paddedWidth, targetHeight);
+            using (var tCanvas = new SKCanvas(normalBitmap))
+            {
+                tCanvas.Clear(SKColors.White);
+
+                using var resized = cropped.Resize(new SKImageInfo(textWidth, targetHeight), SKSamplingOptions.Default);
+                if (resized != null)
+                {
+                    tCanvas.DrawBitmap(resized, 0, 0);
                 }
             }
-            
-            var input = new DenseTensor<float>(new[] { 1, 3, 48, paddedWidth });
-            for (int y = 0; y < 48; y++)
+
+            var normalResult = RunRecognitionOnPreparedBitmap(normalBitmap);
+            var bestResult = normalResult;
+
+            if (shouldInvert)
+            {
+                using var invertedBitmap = new SKBitmap(paddedWidth, targetHeight);
+                using (var iCanvas = new SKCanvas(invertedBitmap))
+                {
+                    iCanvas.Clear(SKColors.White);
+                    using var paint = new SKPaint
+                    {
+                        ColorFilter = SKColorFilter.CreateColorMatrix(new float[]
+                        {
+                            -1,  0,  0, 0, 255,
+                             0, -1,  0, 0, 255,
+                             0,  0, -1, 0, 255,
+                             0,  0,  0, 1, 0
+                        })
+                    };
+
+                    using var resized = cropped.Resize(new SKImageInfo(textWidth, targetHeight), SKSamplingOptions.Default);
+                    if (resized != null)
+                    {
+                        iCanvas.DrawBitmap(resized, 0, 0, paint);
+                    }
+                }
+
+                var invertedResult = RunRecognitionOnPreparedBitmap(invertedBitmap);
+                if (invertedResult.confidence > bestResult.confidence ||
+                    (string.IsNullOrWhiteSpace(bestResult.text) && !string.IsNullOrWhiteSpace(invertedResult.text)))
+                {
+                    bestResult = invertedResult;
+                }
+            }
+
+
+            // [Diagnostic] Save tensor input images for accuracy analysis
+            try
+            {
+                string debugDir = Path.Combine(_settingsService.BaseDataDirectory, "OCR_Debug");
+                Directory.CreateDirectory(debugDir);
+                string fileName = $"rec_{DateTime.Now:HHmmss_fff}_{Guid.NewGuid().ToString().Substring(0, 4)}.png";
+                using var image = SKImage.FromBitmap(normalBitmap);
+                using var dataData = image.Encode(SKEncodedImageFormat.Png, 100);
+                File.WriteAllBytes(Path.Combine(debugDir, fileName), dataData.ToArray());
+            }
+            catch { }
+
+            return bestResult;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[OCR] Recognize Error: {ex.Message}");
+            return ("", 0f);
+        }
+    }
+
+    private (string text, float confidence) RunRecognitionOnPreparedBitmap(SKBitmap tensorBitmap)
+    {
+        int targetHeight = tensorBitmap.Height;
+        int paddedWidth = tensorBitmap.Width;
+
+        // Tensor Conversion
+        try
+        {
+            var input = new DenseTensor<float>(new[] { 1, 3, targetHeight, paddedWidth });
+            for (int y = 0; y < targetHeight; y++)
             {
                 for (int x = 0; x < paddedWidth; x++)
                 {
@@ -351,82 +631,304 @@ public class TranslationService
 
             string inputName = "x";
             if (_recSession != null && _recSession.InputMetadata.Count > 0)
-            {
                 inputName = _recSession.InputMetadata.Keys.First();
-                var meta = _recSession.InputMetadata[inputName];
-                Console.WriteLine($"[OCR] Model Input: {inputName} Shape: [{string.Join(",", meta.Dimensions)}]");
-            }
 
             var inputs = new List<NamedOnnxValue> { NamedOnnxValue.CreateFromTensor(inputName, input) };
-            
             using var outputs = _recSession!.Run(inputs);
             var outputTensor = outputs.First().AsTensor<float>();
+            if (outputTensor.Dimensions.Length >= 3)
+            {
+                Console.WriteLine($"[OCR] Rec Output Shape: [{string.Join(",", outputTensor.Dimensions.ToArray())}]");
+                EnsureDictionaryAlignment(outputTensor.Dimensions[1], outputTensor.Dimensions[2]);
+            }
 
-            // Decode CTC
-            return DecodeCTC(outputTensor);
+            return DecodeCTCAuto(outputTensor);
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[OCR] CRITICAL RecognizeText Error: {ex.GetType().Name} - {ex.Message} at {ex.StackTrace}");
-            return "";
+            Console.WriteLine($"[OCR] Recognize Error: {ex.Message}");
+            return ("", 0f);
         }
     }
 
-    private string DecodeCTC(Tensor<float> tensor)
+    private (string text, float confidence) DecodeCTCAuto(Tensor<float> tensor)
     {
-        if (_dict == null || _dict.Count == 0)
-        {
-            Console.WriteLine("[OCR] Dictionary is empty/null during DecodeCTC");
-            return "";
-        }
+        if (_dict == null || _dict.Count == 0 || tensor.Dimensions.Length != 3) return ("", 0f);
 
+        int d1 = tensor.Dimensions[1];
+        int d2 = tensor.Dimensions[2];
+
+        var ntc = DecodeCTCLayoutNTC(tensor, d1, d2);
+        var nct = DecodeCTCLayoutNCT(tensor, d1, d2);
+
+        bool ntcPlausible = IsDictSizePlausible(d2);
+        bool nctPlausible = IsDictSizePlausible(d1);
+
+        if (ntcPlausible && !nctPlausible) return ntc;
+        if (!ntcPlausible && nctPlausible) return nct;
+
+        if (nct.text.Length > ntc.text.Length) return nct;
+        if (ntc.text.Length > nct.text.Length) return ntc;
+        return nct.confidence > ntc.confidence ? nct : ntc;
+    }
+
+    private (string text, float confidence) DecodeCTCLayoutNTC(Tensor<float> tensor, int seqLen, int classCount)
+    {
         var sb = new StringBuilder();
         int prevIdx = -1;
-        
-        // Tensor shape: [1, seq_len, dict_size]
-        int seqLen = tensor.Dimensions[1];
-        int dictSize = tensor.Dimensions[2];
+        float totalConf = 0f;
+        int charCount = 0;
 
-        bool hasNonBlank = false;
-        var topIndices = new List<int>();
-
-        for (int i = 0; i < seqLen; i++)
+        for (int t = 0; t < seqLen; t++)
         {
             int maxIdx = 0;
-            float maxVal = tensor[0, i, 0];
-            for (int j = 1; j < dictSize; j++)
+            float maxVal = tensor[0, t, 0];
+            for (int c = 1; c < classCount; c++)
             {
-                if (tensor[0, i, j] > maxVal)
+                float v = tensor[0, t, c];
+                if (v > maxVal)
                 {
-                    maxVal = tensor[0, i, j];
-                    maxIdx = j;
+                    maxVal = v;
+                    maxIdx = c;
                 }
             }
 
-            if (maxIdx > 0)
-            {
-                hasNonBlank = true;
-                if (maxIdx != prevIdx) topIndices.Add(maxIdx);
-            }
-            
             if (maxIdx > 0 && maxIdx != prevIdx && maxIdx < _dict.Count)
             {
-                var chr = _dict[maxIdx];
-                sb.Append(chr);
+                sb.Append(_dict[maxIdx]);
+                totalConf += ToStepProbability(maxVal);
+                charCount++;
             }
             prevIdx = maxIdx;
         }
 
-        if (!hasNonBlank) Console.WriteLine("[OCR] DecodeCTC: No characters found (all blank).");
-        else Console.WriteLine($"[OCR] DecodeCTC: Found indices [{string.Join(",", topIndices.Take(20))}]");
-
-        return sb.ToString();
+        float avgConf = charCount > 0 ? totalConf / charCount : 0f;
+        return (sb.ToString(), avgConf);
     }
+
+    private (string text, float confidence) DecodeCTCLayoutNCT(Tensor<float> tensor, int classCount, int seqLen)
+    {
+        var sb = new StringBuilder();
+        int prevIdx = -1;
+        float totalConf = 0f;
+        int charCount = 0;
+
+        for (int t = 0; t < seqLen; t++)
+        {
+            int maxIdx = 0;
+            float maxVal = tensor[0, 0, t];
+            for (int c = 1; c < classCount; c++)
+            {
+                float v = tensor[0, c, t];
+                if (v > maxVal)
+                {
+                    maxVal = v;
+                    maxIdx = c;
+                }
+            }
+
+            if (maxIdx > 0 && maxIdx != prevIdx && maxIdx < _dict.Count)
+            {
+                sb.Append(_dict[maxIdx]);
+                totalConf += ToStepProbability(maxVal);
+                charCount++;
+            }
+            prevIdx = maxIdx;
+        }
+
+        float avgConf = charCount > 0 ? totalConf / charCount : 0f;
+        return (sb.ToString(), avgConf);
+    }
+
+    private bool IsDictSizePlausible(int candidate)
+    {
+        if (candidate <= 1) return false;
+        if (_dict.Count == 0) return false;
+        int tolerance = Math.Max(64, (int)(_dict.Count * 0.2f));
+        return Math.Abs(candidate - _dict.Count) <= tolerance;
+    }
+
+    private static float ToStepProbability(float value)
+    {
+        if (value >= 0f && value <= 1f) return value;
+        return 1f / (1f + MathF.Exp(-value));
+    }
+
+    private List<string> LoadDictionaryWithEncodingFallback(string path)
+    {
+        // Register legacy code pages (GB18030) once for non-UTF8 dict files.
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+        // RapidOCR/Paddle dictionaries are UTF-8 in practice.
+        // Prefer UTF-8 and only fallback when it fails validation.
+        var utf8Strict = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
+        try
+        {
+            var utf8Lines = File.ReadAllLines(path, utf8Strict).ToList();
+            if (IsLikelyValidDictionary(utf8Lines))
+            {
+                Console.WriteLine("[OCR] Dictionary decode: UTF-8 strict");
+                return utf8Lines;
+            }
+        }
+        catch
+        {
+            // Continue to fallback logic.
+        }
+
+        var candidates = new List<Encoding>
+        {
+            new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: false),
+            Encoding.GetEncoding("GB18030")
+        };
+
+        foreach (var enc in candidates)
+        {
+            try
+            {
+                var lines = File.ReadAllLines(path, enc).ToList();
+                if (IsLikelyValidDictionary(lines))
+                {
+                    Console.WriteLine($"[OCR] Dictionary decode fallback: {enc.WebName}");
+                    return lines;
+                }
+            }
+            catch
+            {
+                // try next
+            }
+        }
+
+        // Last resort: return lenient UTF-8 decode result.
+        Console.WriteLine("[OCR] Dictionary decode: last-resort UTF-8 lenient");
+        return File.ReadAllLines(path, new UTF8Encoding(false, false)).ToList();
+    }
+
+    private static bool IsLikelyValidDictionary(List<string> lines)
+    {
+        if (lines.Count < 1000) return false;
+
+        int replacementCount = lines.Sum(l => l.Count(ch => ch == '\uFFFD'));
+        if (replacementCount > 0) return false;
+
+        // Most entries should be single-char tokens for PP-OCR dicts.
+        int nonEmptyCount = lines.Count(l => l.Length > 0);
+        if (nonEmptyCount == 0) return false;
+        int singleCharCount = lines.Count(l => l.Length == 1);
+        double singleRatio = (double)singleCharCount / nonEmptyCount;
+
+        return singleRatio > 0.90;
+    }
+
+    private bool IsUsefulOcrText(string text, float confidence)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return false;
+        if (confidence < RecMinAcceptConfidence) return false;
+
+        string trimmed = text.Trim();
+        if (trimmed.Length == 0) return false;
+
+        int replacementCount = trimmed.Count(ch => ch == '\uFFFD');
+        if (replacementCount > 0) return false;
+        if (trimmed.All(ch => ch == '?' || ch == '.' || ch == '-' || ch == '_' || ch == '*')) return false;
+        int qCount = trimmed.Count(ch => ch == '?');
+        if (qCount > 0 && qCount >= Math.Max(1, trimmed.Length / 3)) return false;
+
+        int useful = trimmed.Count(ch => char.IsLetterOrDigit(ch) || IsCjk(ch));
+        if (useful == 0) return false;
+        double usefulRatio = (double)useful / Math.Max(1, trimmed.Length);
+        if (usefulRatio < 0.5) return false;
+        if (trimmed.Length <= 2 && useful == 1 && confidence < 0.35f) return false;
+        if (trimmed.Length <= 4 && confidence < 0.5f) return false;
+
+        return true;
+    }
+
+    private static double ScoreRecognizedBlock((SKRectI Box, string Text, float Confidence) item)
+    {
+        int area = Math.Max(1, item.Box.Width * item.Box.Height);
+        int textLen = Math.Max(1, item.Text.Trim().Length);
+        return item.Confidence * Math.Log(area + 1) * Math.Log(textLen + 1);
+    }
+
+    private void EnsureDictionaryAlignment(int dim1, int dim2)
+    {
+        if (_dict.Count == 0) return;
+
+        int classDimCandidate = Math.Max(dim1, dim2);
+        // seq length is usually small (<100). class count should be large.
+        if (classDimCandidate < 128) return;
+
+        int diff = classDimCandidate - _dict.Count;
+        if (diff > 0 && diff <= 16)
+        {
+            Console.WriteLine($"[OCR] Aligning dictionary: {_dict.Count} -> {classDimCandidate}");
+            // PaddleOCR often expects a trailing space token.
+            if (!_dict.Contains(" "))
+            {
+                _dict.Add(" ");
+                diff--;
+            }
+
+            for (int i = 0; i < diff; i++)
+            {
+                _dict.Add($"<unk{i}>");
+            }
+        }
+        else if (diff < 0 && Math.Abs(diff) <= 16)
+        {
+            Console.WriteLine($"[OCR] Trimming dictionary: {_dict.Count} -> {classDimCandidate}");
+            _dict = _dict.Take(classDimCandidate).ToList();
+        }
+    }
+
+    private static bool IsCjk(char ch)
+    {
+        return (ch >= '\u4E00' && ch <= '\u9FFF')   // CJK Unified Ideographs
+            || (ch >= '\u3040' && ch <= '\u30FF')   // Japanese Hiragana/Katakana
+            || (ch >= '\uAC00' && ch <= '\uD7AF');  // Hangul
+    }
+
+    private string ResolveSourceLanguageForPrompt(string text)
+    {
+        int cjkCount = text.Count(IsCjk);
+        int latinCount = text.Count(ch => (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z'));
+        int total = Math.Max(1, text.Count(ch => !char.IsWhiteSpace(ch)));
+
+        double cjkRatio = (double)cjkCount / total;
+        double latinRatio = (double)latinCount / total;
+
+        if (cjkRatio > 0.45)
+        {
+            return _settings.SourceLanguage == OCRLanguage.TraditionalChinese
+                ? "Traditional Chinese"
+                : "Chinese";
+        }
+
+        if (latinRatio > 0.5) return "English";
+
+        return _settings.SourceLanguage switch
+        {
+            OCRLanguage.Japanese => "Japanese",
+            OCRLanguage.Korean => "Korean",
+            OCRLanguage.English => "English",
+            OCRLanguage.TraditionalChinese => "Traditional Chinese",
+            OCRLanguage.SimplifiedChinese => "Simplified Chinese",
+            OCRLanguage.Auto => "Chinese",
+            _ => "Chinese"
+        };
+    }
+
 
     private async Task<string> TranslateAsync(string text)
     {
         try
         {
+            text = (text ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return text;
+            }
+
             string targetLang = _settings.TargetLanguage switch
             {
                 TranslationLanguage.TraditionalChinese => "Traditional Chinese (Taiwan)",
@@ -436,6 +938,11 @@ public class TranslationService
                 TranslationLanguage.Korean => "Korean",
                 _ => "Traditional Chinese"
             };
+
+            if (ShouldBypassTranslation(text, _settings.TargetLanguage))
+            {
+                return text;
+            }
 
             string model = _settings.OllamaModel;
             if (string.IsNullOrEmpty(model)) 
@@ -451,31 +958,21 @@ public class TranslationService
                 }
             }
             
-            string sourceLang = _settings.SourceLanguage switch
-            {
-                OCRLanguage.Japanese => "Japanese",
-                OCRLanguage.Korean => "Korean",
-                OCRLanguage.English => "English",
-                OCRLanguage.TraditionalChinese => "Traditional Chinese",
-                OCRLanguage.SimplifiedChinese => "Simplified Chinese",
-                _ => "Auto-detect"
-            };
+            string sourceLang = ResolveSourceLanguageForPrompt(text);
 
             var request = new
             {
                 model = model,
-                prompt = $@"You are a professional translator. Translate the following text from {sourceLang} to {targetLang}. 
-### Instructions:
-- Only provide the translated text.
-- Do not include any explanations, notes, or original text.
-- Maintain the original tone and context.
-- If the text is already in the target language, return it as is.
-
-### Text to translate:
-""{text}""
-
-### Translation:",
-                stream = false
+                prompt = BuildStrictTranslationPrompt(sourceLang, targetLang, text),
+                stream = false,
+                options = new
+                {
+                    temperature = 0.0,
+                    top_p = 0.1,
+                    repeat_penalty = 1.0,
+                    num_predict = 96,
+                    seed = 42
+                }
             };
 
             string url = !string.IsNullOrEmpty(_settings.OllamaApiUrl) ? _settings.OllamaApiUrl : "http://localhost:11434/api/generate";
@@ -500,6 +997,11 @@ public class TranslationService
             var json = await response.Content.ReadAsStringAsync();
             using var doc = JsonDocument.Parse(json);
             var resultText = doc.RootElement.GetProperty("response").GetString()?.Trim() ?? text;
+            resultText = CleanupTranslationResult(resultText);
+            if (string.IsNullOrWhiteSpace(resultText))
+            {
+                return text;
+            }
             Console.WriteLine($"[Translation] Result: {resultText}");
             return resultText;
         }
@@ -508,6 +1010,59 @@ public class TranslationService
             Console.WriteLine($"[Translation Error] {ex.Message}");
             return text;
         }
+    }
+
+    private static string BuildStrictTranslationPrompt(string sourceLang, string targetLang, string text)
+    {
+        return $@"You are a translation engine.
+Translate exactly from {sourceLang} to {targetLang}.
+
+Rules:
+1) Output only translated text.
+2) No explanation, no notes, no quotes.
+3) Do not infer extra context.
+4) Keep proper nouns, numbers, punctuation.
+5) If already in target language, return input unchanged.
+
+Input:
+{text}
+
+Output:";
+    }
+
+    private static string CleanupTranslationResult(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return string.Empty;
+        var s = text.Trim();
+        // Remove common wrapper artifacts from LLM output.
+        s = s.Trim('"', '\'', '`');
+        s = s.Replace("Translation:", "", StringComparison.OrdinalIgnoreCase).Trim();
+        return s;
+    }
+
+    private static bool ShouldBypassTranslation(string text, TranslationLanguage target)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return true;
+
+        int letterOrDigit = text.Count(char.IsLetterOrDigit);
+        if (letterOrDigit == 0) return true;
+
+        int cjkCount = text.Count(IsCjk);
+        int latinCount = text.Count(ch => (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z'));
+        int total = Math.Max(1, text.Count(ch => !char.IsWhiteSpace(ch)));
+
+        double cjkRatio = (double)cjkCount / total;
+        double latinRatio = (double)latinCount / total;
+
+        return target switch
+        {
+            TranslationLanguage.English => latinRatio > 0.8,
+            TranslationLanguage.TraditionalChinese => cjkRatio > 0.8,
+            TranslationLanguage.SimplifiedChinese => cjkRatio > 0.8,
+            TranslationLanguage.Japanese => cjkRatio > 0.8,
+            TranslationLanguage.Korean => cjkRatio > 0.8,
+            _ => false
+        };
     }
 
     public async Task<List<string>> GetAvailableModelsAsync()

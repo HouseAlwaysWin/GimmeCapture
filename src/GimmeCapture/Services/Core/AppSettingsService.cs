@@ -72,7 +72,7 @@ public class AppSettingsService
                 var settings = JsonSerializer.Deserialize<AppSettings>(json, GetJsonOptions());
                 if (settings != null)
                 {
-                    Settings = settings;
+                    UpdateSettings(settings);
                     DebugLog($"Successfully loaded settings from {targetPath}. Language value: {Settings.Language}");
                 }
             }
@@ -82,6 +82,73 @@ public class AppSettingsService
             }
         }
     }
+
+    private void UpdateSettings(AppSettings source)
+    {
+        var dest = Settings;
+        dest.Language = source.Language;
+        dest.RunOnStartup = source.RunOnStartup;
+        dest.AutoCheckUpdates = source.AutoCheckUpdates;
+        dest.BorderThickness = source.BorderThickness;
+        dest.MaskOpacity = source.MaskOpacity;
+        dest.BorderColorHex = source.BorderColorHex;
+        dest.ThemeColorHex = source.ThemeColorHex;
+        dest.WingScale = source.WingScale;
+        dest.CornerIconScale = source.CornerIconScale;
+        dest.HideSnipPinDecoration = source.HideSnipPinDecoration;
+        dest.HideSnipPinBorder = source.HideSnipPinBorder;
+        dest.HideSnipSelectionDecoration = source.HideSnipSelectionDecoration;
+        dest.HideSnipSelectionBorder = source.HideSnipSelectionBorder;
+        dest.HideRecordPinDecoration = source.HideRecordPinDecoration;
+        dest.HideRecordPinBorder = source.HideRecordPinBorder;
+        dest.HideRecordSelectionDecoration = source.HideRecordSelectionDecoration;
+        dest.HideRecordSelectionBorder = source.HideRecordSelectionBorder;
+        dest.AutoSave = source.AutoSave;
+        dest.SaveDirectory = source.SaveDirectory;
+        dest.ShowSnipCursor = source.ShowSnipCursor;
+        dest.ShowRecordCursor = source.ShowRecordCursor;
+        dest.VideoSaveDirectory = source.VideoSaveDirectory;
+        dest.RecordFormat = source.RecordFormat;
+        dest.VideoCodec = source.VideoCodec;
+        dest.RecordFPS = source.RecordFPS;
+        dest.UseFixedRecordPath = source.UseFixedRecordPath;
+        dest.TempDirectory = source.TempDirectory;
+        dest.SnipHotkey = source.SnipHotkey;
+        dest.RecordHotkey = source.RecordHotkey;
+        dest.PinHotkey = source.PinHotkey;
+        dest.CopyHotkey = source.CopyHotkey;
+        dest.RectangleHotkey = source.RectangleHotkey;
+        dest.EllipseHotkey = source.EllipseHotkey;
+        dest.ArrowHotkey = source.ArrowHotkey;
+        dest.LineHotkey = source.LineHotkey;
+        dest.PenHotkey = source.PenHotkey;
+        dest.TextHotkey = source.TextHotkey;
+        dest.MosaicHotkey = source.MosaicHotkey;
+        dest.BlurHotkey = source.BlurHotkey;
+        dest.UndoHotkey = source.UndoHotkey;
+        dest.RedoHotkey = source.RedoHotkey;
+        dest.ClearHotkey = source.ClearHotkey;
+        dest.SaveHotkey = source.SaveHotkey;
+        dest.CloseHotkey = source.CloseHotkey;
+        dest.TogglePlaybackHotkey = source.TogglePlaybackHotkey;
+        dest.ToggleToolbarHotkey = source.ToggleToolbarHotkey;
+        dest.SelectionModeHotkey = source.SelectionModeHotkey;
+        dest.CropModeHotkey = source.CropModeHotkey;
+        dest.AIResourcesDirectory = source.AIResourcesDirectory;
+        dest.EnableAI = source.EnableAI;
+        dest.SelectedSAM2Variant = source.SelectedSAM2Variant;
+        dest.ShowAIScanBox = source.ShowAIScanBox;
+        dest.EnableAIScan = source.EnableAIScan;
+        dest.SAM2GridDensity = source.SAM2GridDensity;
+        dest.SAM2MaxObjects = source.SAM2MaxObjects;
+        dest.SAM2MinObjectSize = source.SAM2MinObjectSize;
+        dest.AutoTranslate = source.AutoTranslate;
+        dest.SourceLanguage = source.SourceLanguage;
+        dest.TargetLanguage = source.TargetLanguage;
+        dest.OllamaModel = source.OllamaModel;
+        dest.OllamaApiUrl = source.OllamaApiUrl;
+    }
+
 
     public void LoadSync()
     {
@@ -112,11 +179,12 @@ public class AppSettingsService
             {
                 var json = File.ReadAllText(targetPath);
                 var settings = JsonSerializer.Deserialize<AppSettings>(json, GetJsonOptions());
-                if (settings != null) Settings = settings;
+                if (settings != null) UpdateSettings(settings);
             }
             catch { }
         }
     }
+
 
     public async Task SaveAsync()
     {

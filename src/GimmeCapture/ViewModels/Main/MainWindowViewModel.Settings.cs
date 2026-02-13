@@ -739,8 +739,12 @@ public partial class MainWindowViewModel
 
             SelectedLanguageOption = AvailableLanguages.FirstOrDefault(x => x.Value == settings.Language) ?? AvailableLanguages[0];
             SelectedVideoCodecOption = VideoCodecOptions.FirstOrDefault(x => x.Value == settings.VideoCodec);
+            
+            this.RaisePropertyChanged(nameof(SourceLanguage));
+            this.RaisePropertyChanged(nameof(TargetLanguage));
 
             IsModified = false;
+
         }
         catch (Exception ex)
         {
@@ -795,11 +799,14 @@ public partial class MainWindowViewModel
             settings.CornerIconScale = CornerIconScale;
             settings.RecordFPS = RecordFPS;
             settings.AutoTranslate = AutoTranslate;
+            settings.SourceLanguage = SourceLanguage;
+            settings.TargetLanguage = TargetLanguage;
             settings.OllamaModel = OllamaModel;
             settings.OllamaApiUrl = OllamaApiUrl;
             settings.BorderColorHex = BorderColor.ToString();
             settings.ThemeColorHex = ThemeColor.ToString();
             settings.Language = SelectedLanguageOption.Value;
+
 
             await _settingsService.SaveAsync();
             IsModified = false;
