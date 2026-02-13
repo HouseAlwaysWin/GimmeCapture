@@ -159,7 +159,30 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
                   .DisposeWith(_disposables);
         }
 
+        // Initialize Debug Compatibility
+        _isTopmost = !System.Diagnostics.Debugger.IsAttached;
+        _isMaskVisible = true;
+        
+        if (System.Diagnostics.Debugger.IsAttached)
+        {
+            Console.WriteLine("[SnipWindow] Debugger detected. IsTopmost = false. Press Ctrl+Alt+T to toggle.");
+        }
+
         UpdateMask();
+    }
+
+    private bool _isTopmost = true;
+    public bool IsTopmost
+    {
+        get => _isTopmost;
+        set => this.RaiseAndSetIfChanged(ref _isTopmost, value);
+    }
+
+    private bool _isMaskVisible = true;
+    public bool IsMaskVisible
+    {
+        get => _isMaskVisible;
+        set => this.RaiseAndSetIfChanged(ref _isMaskVisible, value);
     }
 
     private bool _isInputFocused;

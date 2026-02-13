@@ -120,6 +120,8 @@ public partial class SnipWindowViewModel
     public ReactiveCommand<Unit, Unit> HandleF1Command { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> HandleF2Command { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> RemoveBackgroundCommand { get; set; } = null!;
+    public ReactiveCommand<Unit, Unit> ToggleTopmostCommand { get; set; } = null!;
+    public ReactiveCommand<Unit, Unit> ToggleMaskCommand { get; set; } = null!;
 
     // Init Method
     private void InitializeActionCommands()
@@ -206,6 +208,19 @@ public partial class SnipWindowViewModel
              await Pin(true);
         }, canRemoveBackground);
         RemoveBackgroundCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
+
+        ToggleTopmostCommand = ReactiveCommand.Create(() => 
+        {
+            IsTopmost = !IsTopmost;
+            System.Diagnostics.Debug.WriteLine($"[SnipWindow] Topmost toggled to: {IsTopmost}");
+            _mainVm?.SetStatus(IsTopmost ? "Topmost ON" : "Topmost OFF");
+        });
+        
+        ToggleMaskCommand = ReactiveCommand.Create(() => 
+        {
+            IsMaskVisible = !IsMaskVisible;
+            System.Diagnostics.Debug.WriteLine($"[SnipWindow] Mask toggled to: {IsMaskVisible}");
+        });
     }
 
     private async Task StartRecording()

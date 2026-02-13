@@ -138,8 +138,6 @@ public partial class SnipWindow : Window
                 Console.WriteLine("[SnipWindow] WARNING: _viewModel is null in OnOpened!");
             }
 
-            // Ensure SnipWindow is absolutely on top of everything
-            this.Topmost = true;
             this.Activate(); 
             this.Focus();
 
@@ -155,10 +153,6 @@ public partial class SnipWindow : Window
                     }
                 }
             }
-            
-            // Re-assert Topmost for self just in case
-            this.Topmost = false;
-            this.Topmost = true;
 
             // Track Focus to fix Ctrl+C conflict with SelectableTextBlock
             this.AddHandler(InputElement.GotFocusEvent, (s, ev) => 

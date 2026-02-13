@@ -14,7 +14,7 @@
         TransparencyLevelHint="Transparent"
         SystemDecorations="None"
         WindowState="Normal"
-        Topmost="True"
+        Topmost="{Binding IsTopmost}"
         Background="Transparent"
         ExtendClientAreaToDecorationsHint="True"
         ExtendClientAreaChromeHints="NoChrome"
@@ -56,6 +56,10 @@
 
         <!-- Recording Controls -->
         <KeyBinding Gesture="Space" Command="{Binding PauseRecordingCommand}" />
+
+        <!-- Debug / Compatibility -->
+        <KeyBinding Gesture="Ctrl+Alt+T" Command="{Binding ToggleTopmostCommand}" />
+        <KeyBinding Gesture="Ctrl+Alt+M" Command="{Binding ToggleMaskCommand}" />
     </Window.KeyBindings>
 
     <Window.Styles>
@@ -89,8 +93,14 @@
     
     <Grid>
         <!-- 背景遮罩層 -->
-        <Path Fill="Black" Data="{Binding MaskGeometry}" Opacity="{Binding MaskOpacity}" IsHitTestVisible="False"
-              IsVisible="{Binding !IsRecordingFinalizing}"/>
+        <Path Fill="Black" Data="{Binding MaskGeometry}" Opacity="{Binding MaskOpacity}" IsHitTestVisible="False">
+            <Path.IsVisible>
+                <MultiBinding Converter="{x:Static BoolConverters.And}">
+                    <Binding Path="IsMaskVisible"/>
+                    <Binding Path="!IsRecordingFinalizing"/>
+                </MultiBinding>
+            </Path.IsVisible>
+        </Path>
         
             <!-- AI Scan Results Layer (Background Candidates) -->
             <ItemsControl ItemsSource="{Binding WindowRects}" IsHitTestVisible="True"
