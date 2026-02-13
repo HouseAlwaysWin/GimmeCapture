@@ -541,10 +541,12 @@ public class TranslationService
                     
                     // Check if they are close or overlapping
                     // Use manual intersection check for maximum compatibility
+                    // [FIX] Reduced vertical buffer to 0 to prevent merging separate lines of text verticaly.
+                    // Horizontal buffer kept at 5 to merge split characters/words on the same line.
                     int eLeft = r1.Left - 5;
-                    int eTop = r1.Top - 5;
+                    int eTop = r1.Top;     // was -5
                     int eRight = r1.Right + 5;
-                    int eBottom = r1.Bottom + 5;
+                    int eBottom = r1.Bottom; // was +5
                     
                     if (eLeft < r2.Right && eRight > r2.Left && eTop < r2.Bottom && eBottom > r2.Top)
                     {
@@ -1092,7 +1094,7 @@ public class TranslationService
                     temperature = 0.0,
                     top_p = 0.1,
                     repeat_penalty = 1.0,
-                    num_predict = 128,
+                    num_predict = 512, // [FIX] Increased from 128 for multi-line support
                     seed = 42
                 }
             };
@@ -1185,7 +1187,7 @@ Rules:
 1) Output ONLY the translated text.
 2) NO explanations, NO quotes, NO original text.
 3) Do NOT say ""Translation:"", ""Sure"", or ""Here is the translation"".
-4) Preserve formatting and punctuation.
+4) Preserve formatting, punctuation, and ORIGINAL LINE BREAKS.
 5) If the text is already in {targetLang}, return it as is.
 
 Input:
@@ -1227,7 +1229,7 @@ Translation:",
             {
                 temperature = 0.0,
                 top_p = 0.1,
-                num_predict = 128,
+                num_predict = 512, // [FIX] Increased for retry as well
                 seed = 42
             }
         };

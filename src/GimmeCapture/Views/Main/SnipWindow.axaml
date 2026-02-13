@@ -346,6 +346,7 @@
                                                    FontSize="15" 
                                                    FontWeight="Medium"
                                                    TextWrapping="Wrap"
+                                                   xml:space="preserve"
                                                    HorizontalAlignment="Left"
                                                    VerticalAlignment="Center"/>
                             </ScrollViewer>

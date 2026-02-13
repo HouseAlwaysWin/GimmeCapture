@@ -147,11 +147,7 @@ public partial class SnipWindowViewModel
         {
             System.Diagnostics.Debug.WriteLine($"[Translation] IsTranslationActive -> {value}");
             this.RaiseAndSetIfChanged(ref _isTranslationActive, value);
-            // Just toggle visibility, the actual translation is triggered by TranslateCommand
-            if (!value)
-            {
-                TranslatedBlocks.Clear();
-            }
+
         }
     }
 
@@ -633,8 +629,10 @@ public partial class SnipWindowViewModel
         }
 
         // 0. Update UI state immediately for responsiveness
+        TranslatedBlocks.Clear(); // Clear old results at start of new translation
         IsTranslationActive = true;
         ShowSnipToolBar = true;
+        ShowProcessingOverlay = true; // Show wings
         ProcessingText = LocalizationService.Instance["StatusTranslating"] ?? "Translating...";
         IsIndeterminate = true;
         ProgressValue = 0;
@@ -797,7 +795,10 @@ public partial class SnipWindowViewModel
                 // and result before the toolbar disappears.
                 await Task.Delay(500);
                 ShowSnipToolBar = false;
+                ShowProcessingOverlay = false;
                 IsTranslationActive = false;
+                IsIndeterminate = false;
+                ProgressValue = 0;
             }
         }
     }

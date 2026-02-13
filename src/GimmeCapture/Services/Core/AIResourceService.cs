@@ -154,7 +154,19 @@ public class AIResourceService : ReactiveObject
     public virtual bool IsNmtReady()
     {
         var paths = GetNmtPaths();
-        return File.Exists(paths.Encoder) && File.Exists(paths.Decoder) && File.Exists(paths.Tokenizer);
+        string[] files = { paths.Encoder, paths.Decoder, paths.Tokenizer, paths.Config };
+        
+        foreach (var file in files)
+        {
+            if (!File.Exists(file)) return false;
+            
+            var info = new FileInfo(file);
+            // Rough size checks to prevent corrupted/empty files
+            if (file.EndsWith("encoder_model.onnx") && info.Length < 100 * 1024 * 1024) return false;
+            if (file.EndsWith("decoder_model.onnx") && info.Length < 100 * 1024 * 1024) return false;
+            if (file.EndsWith("tokenizer.json") && info.Length < 1 * 1024 * 1024) return false;
+        }
+        return true;
     }
 
     public virtual (string Encoder, string Decoder, string Tokenizer, string Config, string GenConfig) GetNmtPaths()

@@ -89,61 +89,86 @@ public class MarianMTService : IDisposable
             await EnsureLoadedAsync(ct);
             if (_encoderSession == null || _decoderSession == null || _tokenizer == null) return text;
 
-            var ids = _tokenizer.Encode(text);
-            var inputIds = new List<long> { _jaTokenId }; 
-            inputIds.AddRange(ids.Select(id => (long)id));
-            inputIds.Add(_eosTokenId);
+            // [FIX] Split by newlines to handle multi-line text correctly
+            var lines = text.Split(new[] { '\r', '\n' }, StringSplitOptions.None);
+            var translatedLines = new List<string>();
 
-            var encoderInputs = new List<NamedOnnxValue>
+            foreach (var line in lines)
             {
-                NamedOnnxValue.CreateFromTensor("input_ids", new DenseTensor<long>(inputIds.ToArray(), new[] { 1, inputIds.Count })),
-                NamedOnnxValue.CreateFromTensor("attention_mask", new DenseTensor<long>(Enumerable.Repeat(1L, inputIds.Count).ToArray(), new[] { 1, inputIds.Count }))
-            };
-
-            using var encoderResults = _encoderSession.Run(encoderInputs);
-            var lastHiddenState = encoderResults.First().AsTensor<float>();
-
-            var outputIds = new List<long> { _padTokenId, _zhTokenId }; 
-            int maxLen = Math.Min(128, inputIds.Count * 2 + 10);
-            
-            for (int i = 0; i < maxLen; i++)
-            {
-                ct.ThrowIfCancellationRequested();
-
-                var decoderInputs = new List<NamedOnnxValue>
+                if (string.IsNullOrWhiteSpace(line))
                 {
-                    NamedOnnxValue.CreateFromTensor("input_ids", new DenseTensor<long>(outputIds.ToArray(), new[] { 1, outputIds.Count })),
-                    NamedOnnxValue.CreateFromTensor("encoder_hidden_states", lastHiddenState)
-                };
-
-                using var decoderResults = _decoderSession.Run(decoderInputs);
-                var logitsTensor = decoderResults.First().AsTensor<float>();
-                
-                int seqLen = (int)logitsTensor.Dimensions[1];
-                int vocabSize = (int)logitsTensor.Dimensions[2];
-                
-                int nextToken = 0;
-                float maxLogit = float.MinValue;
-
-                for (int v = 0; v < vocabSize; v++)
-                {
-                    float logit = logitsTensor[0, seqLen - 1, v];
-                    if (logit > maxLogit)
-                    {
-                        maxLogit = logit;
-                        nextToken = v;
-                    }
+                    translatedLines.Add(line);
+                    continue;
                 }
 
-                if (nextToken == _eosTokenId) break;
-                outputIds.Add(nextToken);
-                if (outputIds.Count > 256) break;
+                var ids = _tokenizer.Encode(line);
+                var inputIds = new List<long> { _jaTokenId }; 
+                inputIds.AddRange(ids.Select(id => (long)id));
+                inputIds.Add(_eosTokenId);
+
+                var encoderInputs = new List<NamedOnnxValue>
+                {
+                    NamedOnnxValue.CreateFromTensor("input_ids", new DenseTensor<long>(inputIds.ToArray(), new[] { 1, inputIds.Count })),
+                    NamedOnnxValue.CreateFromTensor("attention_mask", new DenseTensor<long>(Enumerable.Repeat(1L, inputIds.Count).ToArray(), new[] { 1, inputIds.Count }))
+                };
+
+                using var encoderResults = _encoderSession.Run(encoderInputs);
+                var lastHiddenState = encoderResults.First().AsTensor<float>();
+
+                var outputIds = new List<long> { _padTokenId, _zhTokenId }; 
+                
+                // [FIX] Increased maxLen from ~128 to fixed 512 to support longer lines
+                int maxLen = 512; 
+                
+                for (int i = 0; i < maxLen; i++)
+                {
+                    ct.ThrowIfCancellationRequested();
+
+                    var decoderInputs = new List<NamedOnnxValue>
+                    {
+                        NamedOnnxValue.CreateFromTensor("input_ids", new DenseTensor<long>(outputIds.ToArray(), new[] { 1, outputIds.Count })),
+                        NamedOnnxValue.CreateFromTensor("encoder_hidden_states", lastHiddenState)
+                    };
+
+                    using var decoderResults = _decoderSession.Run(decoderInputs);
+                    var logitsTensor = decoderResults.First().AsTensor<float>();
+                    
+                    int seqLen = (int)logitsTensor.Dimensions[1];
+                    int vocabSize = (int)logitsTensor.Dimensions[2];
+                    
+                    int nextToken = 0;
+                    float maxLogit = float.MinValue;
+                    
+                    // Greedy Search
+                    for (int v = 0; v < vocabSize; v++)
+                    {
+                        float logit = logitsTensor[0, seqLen - 1, v];
+                        if (logit > maxLogit)
+                        {
+                            maxLogit = logit;
+                            nextToken = v;
+                        }
+                    }
+
+                    if (nextToken == _eosTokenId) break;
+                    outputIds.Add(nextToken);
+                    // Safe break to prevent infinite loops even if maxLen is high
+                    if (outputIds.Count > 512) break;
+                }
+
+                var actualOutputIds = outputIds.Skip(2).Select(id => (uint)id).ToArray();
+                if (actualOutputIds.Length > 0)
+                {
+                    translatedLines.Add(_tokenizer.Decode(actualOutputIds).Trim());
+                }
+                else
+                {
+                    translatedLines.Add(line); // Fallback to original if translation is empty
+                }
             }
 
-            var actualOutputIds = outputIds.Skip(2).Select(id => (uint)id).ToArray();
-            if (actualOutputIds.Length == 0) return text;
-            
-            return _tokenizer.Decode(actualOutputIds).Trim();
+            // Join back with newlines
+            return string.Join("\n", translatedLines);
         }
         catch (Exception ex)
         {

@@ -52,6 +52,13 @@ public partial class MainWindowViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _processingText, value);
     }
 
+    private bool _showProcessingOverlay;
+    public bool ShowProcessingOverlay
+    {
+        get => _showProcessingOverlay;
+        set => this.RaiseAndSetIfChanged(ref _showProcessingOverlay, value);
+    }
+
     private double _progressValue;
     public double ProgressValue
     {
@@ -192,7 +199,11 @@ public partial class MainWindowViewModel : ViewModelBase
             (a, b, c) => a || b || c
         );
 
-        isAnyProcessing.ObserveOn(RxApp.MainThreadScheduler).Subscribe(busy => IsProcessing = busy);
+        isAnyProcessing.ObserveOn(RxApp.MainThreadScheduler).Subscribe(busy => 
+        {
+            IsProcessing = busy;
+            ShowProcessingOverlay = busy;
+        });
 
         var processingSources = new[] 
         {
@@ -240,6 +251,7 @@ public partial class MainWindowViewModel : ViewModelBase
                 {
                     SetStatus("StatusReady");
                     IsProcessing = false;
+                    ShowProcessingOverlay = false;
                     ProgressValue = 0;
                     ProcessingText = "";
                 }
