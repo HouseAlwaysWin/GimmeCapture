@@ -16,8 +16,8 @@ public class AppSettingsService
     private string ConfigPath => Path.Combine(BaseDataDirectory, "config.json");
     
     public AppSettings Settings { get; private set; } = new();
-
-    private void DebugLog(string message)
+    
+    public void DebugLog(string message)
     {
         try
         {
@@ -147,6 +147,7 @@ public class AppSettingsService
         dest.TargetLanguage = source.TargetLanguage;
         dest.OllamaModel = source.OllamaModel;
         dest.OllamaApiUrl = source.OllamaApiUrl;
+        DebugLog($"UpdateSettings: OllamaModel from source is '{source.OllamaModel}', dest is now '{dest.OllamaModel}'");
     }
 
 

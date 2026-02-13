@@ -594,6 +594,18 @@ public partial class MainWindowViewModel
         get => _ollamaModel;
         set
         {
+            _settingsService.DebugLog($"[Ollama] Setter called with: '{value}' (Current: '{_ollamaModel}', Loading: {_isDataLoading})");
+            if (string.IsNullOrWhiteSpace(value)) 
+            {
+                // If UI tries to null it out (e.g. during binding reset), force it back to the current value
+                if (!_isDataLoading) 
+                {
+                    _settingsService.DebugLog($"[Ollama] Rejecting empty value and notifying UI to revert to '{_ollamaModel}'");
+                    this.RaisePropertyChanged(nameof(OllamaModel));
+                }
+                return; 
+            }
+            
             this.RaiseAndSetIfChanged(ref _ollamaModel, value);
             if (!_isDataLoading)
             {
@@ -631,6 +643,8 @@ public partial class MainWindowViewModel
             string baseUrl = OllamaApiUrl.Replace("/api/generate", "");
             if (baseUrl.EndsWith("/")) baseUrl = baseUrl.TrimEnd('/');
             
+            _settingsService.DebugLog($"[Ollama] Refreshing models from {baseUrl}...");
+            
             using var client = new HttpClient();
             client.Timeout = TimeSpan.FromSeconds(3);
             var response = await client.GetStringAsync($"{baseUrl}/api/tags");
@@ -647,31 +661,62 @@ public partial class MainWindowViewModel
                     }
                 }
                 
-                Avalonia.Threading.Dispatcher.UIThread.Post(() => 
-                {
-                    AvailableOllamaModels.Clear();
-                    foreach (var name in names) AvailableOllamaModels.Add(name);
+                var savedModel = _ollamaModel; 
+                _settingsService.DebugLog($"[Ollama] API returned {names.Count} models. Current internal value is '{savedModel}'");
 
-                    // If current model exists in the list, keep it.
-                    // If not, and we have available models, switch to the first one (Auto-pick).
-                    if (AvailableOllamaModels.Count > 0 && !AvailableOllamaModels.Contains(OllamaModel))
+                await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => 
+                {
+                    // Surgical update to avoid triggering ComboBox reset
+                    var currentItems = AvailableOllamaModels.ToList();
+                    
+                    // Remove items not in the new list, but KEEP the currently selected one
+                    foreach (var item in currentItems)
                     {
-                         OllamaModel = AvailableOllamaModels[0];
-                         StatusText = $"Auto-selected model: {OllamaModel}";
+                        if (!names.Contains(item) && item != savedModel)
+                        {
+                            AvailableOllamaModels.Remove(item);
+                        }
                     }
-                    else if (!AvailableOllamaModels.Contains(OllamaModel) && !string.IsNullOrEmpty(OllamaModel) && OllamaModel != "qwen2.5:3b")
+
+                    // Add new items
+                    foreach (var name in names)
                     {
-                        // Fallback: If no models found or strictly custom, keep it in the list
-                        AvailableOllamaModels.Add(OllamaModel);
+                        if (!AvailableOllamaModels.Contains(name))
+                        {
+                            AvailableOllamaModels.Add(name);
+                        }
                     }
-                    StatusText = "Ollama Models Refreshed";
+
+                    // Re-assert selection if it drifted or was empty
+                    if (string.IsNullOrEmpty(OllamaModel) && !string.IsNullOrEmpty(savedModel))
+                    {
+                        _settingsService.DebugLog($"[Ollama] Selection lost during refresh, restoring to '{savedModel}'");
+                        OllamaModel = savedModel;
+                    }
+                    else if (string.IsNullOrEmpty(OllamaModel) && AvailableOllamaModels.Count > 0)
+                    {
+                        OllamaModel = AvailableOllamaModels[0];
+                    }
+                    
+                    this.RaisePropertyChanged(nameof(OllamaModel));
                 });
             }
+            StatusText = "Ollama Models Refreshed";
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Failed to fetch Ollama models: {ex.Message}");
-            StatusText = "Failed to fetch Ollama models";
+            _settingsService.DebugLog($"[Ollama] ERROR during refresh: {ex.Message}");
+            StatusText = "Failed to refresh Ollama models";
+            
+            // Backup: Ensure the UI still knows about our loaded model
+            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => 
+            {
+                if (!string.IsNullOrEmpty(_ollamaModel) && !AvailableOllamaModels.Contains(_ollamaModel))
+                {
+                    AvailableOllamaModels.Add(_ollamaModel);
+                    this.RaisePropertyChanged(nameof(OllamaModel));
+                }
+            });
         }
     }
 
@@ -728,8 +773,15 @@ public partial class MainWindowViewModel
             EnableAIScan = settings.EnableAIScan;
             AIResourcesDirectory = settings.AIResourcesDirectory;
             AutoTranslate = settings.AutoTranslate;
-            OllamaModel = settings.OllamaModel == "qwen2.5:3b" ? "" : settings.OllamaModel;
             OllamaApiUrl = settings.OllamaApiUrl;
+            
+            // Seed the list so ComboBox can show the value immediately
+            if (!string.IsNullOrEmpty(settings.OllamaModel))
+            {
+                if (!AvailableOllamaModels.Contains(settings.OllamaModel))
+                    AvailableOllamaModels.Add(settings.OllamaModel);
+                OllamaModel = settings.OllamaModel;
+            }
 
             if (Color.TryParse(settings.BorderColorHex, out var color))
                 BorderColor = color;
@@ -754,7 +806,9 @@ public partial class MainWindowViewModel
         {
             _isDataLoading = false;
             InitializeModules();
+            this.RaisePropertyChanged(nameof(OllamaModel)); // Final defensive sync
             if (AutoCheckUpdates) _ = CheckForUpdates(true);
+            _ = RefreshOllamaModelsAsync(); // Load settings first, THEN refresh models
         }
     }
 
@@ -823,7 +877,7 @@ public partial class MainWindowViewModel
     {
         if (Application.Current?.Resources is { } resources)
         {
-            resources["ThemeColor"] = themeColor;
+            resources["ThemeAccentColor"] = themeColor;
             resources["ThemeDeepColor"] = ThemeDeepColor;
         }
     }

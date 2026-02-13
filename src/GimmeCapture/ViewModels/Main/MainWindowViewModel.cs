@@ -175,8 +175,6 @@ public partial class MainWindowViewModel : ViewModelBase
         });
 
         RefreshOllamaModelsCommand = ReactiveCommand.CreateFromTask(RefreshOllamaModelsAsync);
-        // Auto-refresh on start
-        _ = RefreshOllamaModelsAsync();
 
         HotkeyService.OnHotkeyPressed = (id) => 
         {
