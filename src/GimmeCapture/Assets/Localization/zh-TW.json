@@ -80,6 +80,7 @@
   "ModuleAICoreDescription": "基礎 AI 執行環境與視覺任務相關通用組件。",
   "ModuleSAM2Description": "Segment Anything Model v2，用於智慧物體選取與去背。",
   "ModuleOCRDescription": "PaddleOCR v5 模型，用於即時文字偵測與識別。",
+  "ModuleMarianMTDescription": "MarianMT 翻譯模型，專為完全離線環境下的日翻中優化。",
   "Installed": "已安裝",
   "NotInstalled": "未安裝",
   "Install": "安裝",
@@ -129,6 +130,8 @@
   "AIScanMaxObjects": "掃描物件數量上限:",
   "AIScanMinSize": "掃描區塊範圍設定:",
   "AIScanSettings": "AI 掃描設定",
+  "DetectionSettings": "偵測與掃描設定",
+  "TranslationSettings": "翻譯與引擎設定",
   "IconScale": "圖示縮放:",
   "WingScale": "翅膀縮放:",
   "TipShapes": "圖形與直線",
@@ -205,7 +208,10 @@
   "InstallModule": "安裝",
   "RemoveModule": "移除",
   "OllamaModel": "Ollama 模型名稱:",
-  "OllamaApiUrl": "Ollama API 網址:"
+  "OllamaApiUrl": "Ollama API 網址:",
+  "TranslationEngine": "翻譯引擎 (Engine):",
+  "TranslationEngineOllama": "Ollama (線上 LLM)",
+  "TranslationEngineMarianMT": "MarianMT (離線 日翻中)"
 }
 
 

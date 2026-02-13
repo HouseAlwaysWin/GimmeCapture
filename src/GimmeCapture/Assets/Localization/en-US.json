@@ -80,6 +80,7 @@
   "ModuleAICoreDescription": "Base AI runtime and common utilities required for vision tasks.",
   "ModuleSAM2Description": "Segment Anything Model v2 for smart object selection and background removal.",
   "ModuleOCRDescription": "PaddleOCR v5 models for real-time text detection and recognition.",
+  "ModuleMarianMTDescription": "MarianMT translation model, optimized for offline Japanese-to-Chinese translation.",
   "Installed": "Installed",
   "NotInstalled": "Not Installed",
   "Install": "Install",
@@ -129,6 +130,8 @@
   "AIScanMaxObjects": "Max Detected Objects:",
   "AIScanMinSize": "Scan Object Min Size:",
   "AIScanSettings": "AI Scan Settings",
+  "DetectionSettings": "Detection & Scanning",
+  "TranslationSettings": "Translation & Engine",
   "IconScale": "Icon Scale:",
   "WingScale": "Wing Scale:",
   "TipShapes": "Shapes & Lines",
@@ -205,7 +208,10 @@
   "InstallModule": "Install",
   "RemoveModule": "Remove",
   "OllamaModel": "Ollama Model:",
-  "OllamaApiUrl": "Ollama API URL:"
+  "OllamaApiUrl": "Ollama API URL:",
+  "TranslationEngine": "Translation Engine:",
+  "TranslationEngineOllama": "Ollama (Online LLM)",
+  "TranslationEngineMarianMT": "MarianMT (Offline Ja->Zh)"
 }
 
 

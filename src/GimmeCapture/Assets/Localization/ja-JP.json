@@ -73,6 +73,7 @@
   "TabModules": "モジュール管理",
   "ModuleFFmpegDescription": "動画の録画と再生に必要なマルチメディアフレームワーク (FFmpeg)。",
   "ModuleAIDescription": "背景削除とオブジェクト選択用の AI 模型 (U2Net/SAM2)。",
+  "ModuleMarianMTDescription": "MarianMT 翻訳モデル。完全オフライン環境での日中翻訳に特化しています。",
   "Installed": "インストール済み",
   "NotInstalled": "未インストール",
   "Install": "インストール",
@@ -119,6 +120,8 @@
   "AIScanMaxObjects": "最大検出オブジェクト数:",
   "AIScanMinSize": "スキャン領域の最小サイズ:",
   "AIScanSettings": "AI スキャン設定",
+  "DetectionSettings": "検出とスキャン設定",
+  "TranslationSettings": "翻訳と言語エンジン設定",
   "RecordFormat": "録画フォーマット:",
   "RecordFPS": "録画フレームレート (FPS):",
   "EnableAI": "AI 機能を有効にする (高メモリ使用)",
@@ -186,7 +189,10 @@
   "LangJapanese": "日本語",
   "LangKorean": "韓国語",
   "OllamaModel": "Ollama モデル名:",
-  "OllamaApiUrl": "Ollama API URL:"
+  "OllamaApiUrl": "Ollama API URL:",
+  "TranslationEngine": "翻訳エンジン (Engine):",
+  "TranslationEngineOllama": "Ollama (オンライン LLM)",
+  "TranslationEngineMarianMT": "MarianMT (オフライン 日->中)"
 }
 
 

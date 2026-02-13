@@ -58,6 +58,13 @@ public class AIResourceService : ReactiveObject
     private const string OcrRecKoUrl = "https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.6.0/onnx/PP-OCRv4/rec/korean_PP-OCRv4_rec_infer.onnx";
     private const string OcrDictKoUrl = "https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/release/2.7/ppocr/utils/dict/korean_dict.txt";
 
+    // MarianMT (M2M100 fallback for high quality ja-zh)
+    private const string NmtEncoderUrl = "https://huggingface.co/Xenova/m2m100_418M/resolve/main/onnx/encoder_model.onnx";
+    private const string NmtDecoderUrl = "https://huggingface.co/Xenova/m2m100_418M/resolve/main/onnx/decoder_model_merged.onnx";
+    private const string NmtTokenizerUrl = "https://huggingface.co/Xenova/m2m100_418M/resolve/main/tokenizer.json";
+    private const string NmtConfigUrl = "https://huggingface.co/Xenova/m2m100_418M/resolve/main/config.json";
+    private const string NmtGenerationConfigUrl = "https://huggingface.co/Xenova/m2m100_418M/resolve/main/generation_config.json";
+
     // Using a reliable direct link to ONNX Runtime GPU (Win x64)
     private const string OnnxRuntimeZipUrl = "https://github.com/microsoft/onnxruntime/releases/download/v1.20.1/onnxruntime-win-x64-gpu-1.20.1.zip";
 
@@ -137,11 +144,29 @@ public class AIResourceService : ReactiveObject
             _ => "ch" 
         };
 
-
         return (
             Path.Combine(ocrDir, "ocr_det.onnx"),
             Path.Combine(ocrDir, $"ocr_rec_{langSuffix}.onnx"),
             Path.Combine(ocrDir, $"ocr_dict_{langSuffix}.txt")
+        );
+    }
+
+    public virtual bool IsNmtReady()
+    {
+        var paths = GetNmtPaths();
+        return File.Exists(paths.Encoder) && File.Exists(paths.Decoder) && File.Exists(paths.Tokenizer);
+    }
+
+    public virtual (string Encoder, string Decoder, string Tokenizer, string Config, string GenConfig) GetNmtPaths()
+    {
+        var baseDir = GetAIResourcesPath();
+        var nmtDir = Path.Combine(baseDir, "nmt");
+        return (
+            Path.Combine(nmtDir, "encoder_model.onnx"),
+            Path.Combine(nmtDir, "decoder_model.onnx"),
+            Path.Combine(nmtDir, "tokenizer.json"),
+            Path.Combine(nmtDir, "config.json"),
+            Path.Combine(nmtDir, "generation_config.json")
         );
     }
 
@@ -175,7 +200,18 @@ public class AIResourceService : ReactiveObject
     // Deprecated monolithic check, keeping for compatibility if needed, but logic should move to specific checks
     public bool AreResourcesReady()
     {
-        return IsAICoreReady() && IsSAM2Ready(_settingsService.Settings.SelectedSAM2Variant) && IsOCRReady();
+        bool ready = IsAICoreReady() && IsSAM2Ready(_settingsService.Settings.SelectedSAM2Variant) && IsOCRReady();
+        if (_settingsService.Settings.SelectedTranslationEngine == TranslationEngine.MarianMT)
+        {
+            ready = ready && IsNmtReady();
+        }
+        return ready;
+    }
+
+    public bool IsNmtResourcesPresent()
+    {
+        var paths = GetNmtPaths();
+        return File.Exists(paths.Encoder) && File.Exists(paths.Decoder) && File.Exists(paths.Tokenizer);
     }
 
     public void RemoveAICoreResources()
@@ -233,6 +269,21 @@ public class AIResourceService : ReactiveObject
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"OCR Removal Failed: {ex.Message}");
+        }
+    }
+
+    public void RemoveNmtResources()
+    {
+        try
+        {
+            var baseDir = GetAIResourcesPath();
+            var nmtDir = Path.Combine(baseDir, "nmt");
+            if (Directory.Exists(nmtDir)) Directory.Delete(nmtDir, true);
+            this.RaisePropertyChanged(nameof(IsNmtReady));
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"NMT Removal Failed: {ex.Message}");
         }
     }
 
@@ -497,6 +548,81 @@ public class AIResourceService : ReactiveObject
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"OCR Download Failed: {ex.Message}");
+            LastErrorMessage = ex.Message;
+            return false;
+        }
+        finally
+        {
+            IsDownloading = false;
+        }
+    }
+
+    public virtual async Task<bool> EnsureNmtAsync(CancellationToken ct = default)
+    {
+        if (IsNmtReady()) return true;
+
+        await _downloadLock.WaitAsync(ct);
+        try
+        {
+            return await DownloadNmtInternal(ct);
+        }
+        finally
+        {
+            _downloadLock.Release();
+        }
+    }
+
+    private async Task<bool> DownloadNmtInternal(CancellationToken ct)
+    {
+        if (IsNmtReady()) return true;
+
+        try
+        {
+            IsDownloading = true;
+            CurrentDownloadName = "NMT Translation Models (MarianMT)";
+            DownloadProgress = 0;
+
+            var baseDir = GetAIResourcesPath();
+            var nmtDir = Path.Combine(baseDir, "nmt");
+            Directory.CreateDirectory(nmtDir);
+
+            var paths = GetNmtPaths();
+
+            // 1. Encoder
+            if (!File.Exists(paths.Encoder))
+                await DownloadFile(NmtEncoderUrl, paths.Encoder, 0, 40, ct);
+            else
+                DownloadProgress = 40;
+
+            // 2. Decoder
+            if (!File.Exists(paths.Decoder))
+                await DownloadFile(NmtDecoderUrl, paths.Decoder, 40, 50, ct);
+            else
+                DownloadProgress = 90;
+
+            // 3. Tokenizer
+            if (!File.Exists(paths.Tokenizer))
+                await DownloadFile(NmtTokenizerUrl, paths.Tokenizer, 90, 5, ct);
+            else
+                DownloadProgress = 95;
+            
+            // 4. Configs
+            if (!File.Exists(paths.Config))
+                await DownloadFile(NmtConfigUrl, paths.Config, 95, 2.5, ct);
+            if (!File.Exists(paths.GenConfig))
+                await DownloadFile(NmtGenerationConfigUrl, paths.GenConfig, 97.5, 2.5, ct);
+
+            DownloadProgress = 100;
+            return IsNmtReady();
+        }
+        catch (OperationCanceledException)
+        {
+            System.Diagnostics.Debug.WriteLine("NMT Download Cancelled");
+            return false;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"NMT Download Failed: {ex.Message}");
             LastErrorMessage = ex.Message;
             return false;
         }

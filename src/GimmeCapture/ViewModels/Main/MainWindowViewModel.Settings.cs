@@ -67,6 +67,29 @@ public partial class MainWindowViewModel
         }
     }
 
+    public List<TranslationEngine> AvailableTranslationEngines { get; } = Enum.GetValues<TranslationEngine>().ToList();
+    
+    public TranslationEngine SelectedTranslationEngine
+    {
+        get => _settingsService.Settings.SelectedTranslationEngine;
+        set
+        {
+            if (_settingsService.Settings.SelectedTranslationEngine != value)
+            {
+                _settingsService.Settings.SelectedTranslationEngine = value;
+                this.RaisePropertyChanged();
+                this.RaisePropertyChanged(nameof(IsOllamaVisible));
+                if (!_isDataLoading)
+                {
+                    IsModified = true;
+                    _ = SaveSettingsAsync();
+                }
+            }
+        }
+    }
+
+    public bool IsOllamaVisible => SelectedTranslationEngine == TranslationEngine.Ollama;
+
     public LanguageOption[] AvailableLanguages { get; } = new[]
     {
         new LanguageOption { Name = "English (US)", Value = Language.English },
@@ -768,6 +791,7 @@ public partial class MainWindowViewModel
             EnableAIScan = settings.EnableAIScan;
             AIResourcesDirectory = settings.AIResourcesDirectory;
             OllamaApiUrl = settings.OllamaApiUrl;
+            SelectedTranslationEngine = settings.SelectedTranslationEngine;
             
             // Seed the list so ComboBox can show the value immediately
             if (!string.IsNullOrEmpty(settings.OllamaModel))
@@ -850,6 +874,7 @@ public partial class MainWindowViewModel
             settings.TargetLanguage = TargetLanguage;
             settings.OllamaModel = OllamaModel;
             settings.OllamaApiUrl = OllamaApiUrl;
+            settings.SelectedTranslationEngine = SelectedTranslationEngine;
             settings.BorderColorHex = BorderColor.ToString();
             settings.ThemeColorHex = ThemeColor.ToString();
             settings.Language = SelectedLanguageOption.Value;

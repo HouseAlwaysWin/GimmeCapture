@@ -641,7 +641,7 @@ public partial class SnipWindowViewModel
         if (_translationService == null)
         {
             if (_mainVm?.AIResourceService == null) return;
-            _translationService = new TranslationService(_mainVm.AIResourceService, _mainVm.AppSettingsService);
+            _translationService = new TranslationService(_mainVm.AIResourceService, _mainVm.AppSettingsService, _mainVm.MarianMTService);
         }
 
         // Ensure translation uses the latest values from Settings UI.

@@ -95,6 +95,7 @@ public partial class MainWindowViewModel : ViewModelBase
     public RecordingService RecordingService { get; }
     public UpdateService UpdateService { get; }
     public AIResourceService AIResourceService { get; }
+    public MarianMTService MarianMTService { get; }
     public ResourceQueueService ResourceQueue => ResourceQueueService.Instance;
     
     public ObservableCollection<ModuleItem> Modules { get; } = new();
@@ -135,6 +136,7 @@ public partial class MainWindowViewModel : ViewModelBase
         RecordingService = new RecordingService(FfmpegDownloader, _settingsService);
         UpdateService = new UpdateService(AppVersion);
         AIResourceService = new AIResourceService(_settingsService);
+        MarianMTService = new MarianMTService(AIResourceService);
 
         LocalizationService.Instance
             .WhenAnyValue(x => x.CurrentLanguage)

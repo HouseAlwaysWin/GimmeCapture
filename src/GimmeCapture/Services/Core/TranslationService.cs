@@ -1,4 +1,4 @@
-using System;
+ï»¿using System;
 using System.Diagnostics;
 using System.Collections.Generic;
 using System.IO;
@@ -46,14 +46,16 @@ public class TranslationService
     
     private readonly HttpClient _httpClient = new();
     private readonly AppSettingsService _settingsService;
+    private readonly MarianMTService _marianMTService;
     private AppSettings _settings => _settingsService.Settings;
     private DateTime _modelsCacheAtUtc = DateTime.MinValue;
     private List<string> _cachedModels = new();
  
-    public TranslationService(AIResourceService aiResourceService, AppSettingsService settingsService)
+    public TranslationService(AIResourceService aiResourceService, AppSettingsService settingsService, MarianMTService marianMTService)
     {
         _aiResourceService = aiResourceService ?? throw new ArgumentNullException(nameof(aiResourceService));
         _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
+        _marianMTService = marianMTService ?? throw new ArgumentNullException(nameof(marianMTService));
         _httpClient.Timeout = TimeSpan.FromSeconds(20); 
     }
 
@@ -1032,6 +1034,12 @@ public class TranslationService
             
             string sourceLang = ResolveSourceLanguageForPrompt(text);
 
+        if (_settings.SelectedTranslationEngine == TranslationEngine.MarianMT)
+        {
+            Debug.WriteLine("[Translation] Using MarianMT (Offline) engine.");
+            return await _marianMTService.TranslateAsync(text, _settings.TargetLanguage, ct);
+        }
+
             var request = new
             {
                 model = model,
@@ -1370,7 +1378,7 @@ Output:",
         {
             if (cjkRatio < 0.3 && latinRatio > 0.6)
             {
-                return targetLanguage == TranslationLanguage.TraditionalChinese ? "[?¡æ?è¾¨è?]" : "[? æ?è¯†åˆ«]";
+                return targetLanguage == TranslationLanguage.TraditionalChinese ? "[?ï¿½ï¿½?è¾¨ï¿½?]" : "[?ï¿½ï¿½?è¯†åˆ«]";
             }
             return filtered;
         }
@@ -1390,10 +1398,10 @@ Output:",
         return targetLanguage switch
         {
             TranslationLanguage.English => "[translation unavailable]",
-            TranslationLanguage.TraditionalChinese => "[?¡æ?è¾¨è?]",
-            TranslationLanguage.SimplifiedChinese => "[? æ?è¯†åˆ«]",
-            TranslationLanguage.Japanese => "[?¤èª­ä¸èƒ½]",
-            TranslationLanguage.Korean => "[?ë? ë¶ˆê?]",
+            TranslationLanguage.TraditionalChinese => "[?ï¿½ï¿½?è¾¨ï¿½?]",
+            TranslationLanguage.SimplifiedChinese => "[?ï¿½ï¿½?è¯†åˆ«]",
+            TranslationLanguage.Japanese => "[?ï¿½èª­ä¸èƒ½]",
+            TranslationLanguage.Korean => "[?ï¿½ï¿½? ë¶ˆï¿½?]",
             _ => "[translation unavailable]"
         };
     }

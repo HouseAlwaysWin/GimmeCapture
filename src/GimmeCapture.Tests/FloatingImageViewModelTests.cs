@@ -1,11 +1,16 @@
 using Xunit;
+using Moq;
 using GimmeCapture.ViewModels;
+using GimmeCapture.ViewModels.Floating;
 using GimmeCapture.Services;
+using GimmeCapture.Services.Abstractions;
+using GimmeCapture.Services.Core;
 using Avalonia.Media.Imaging;
 using Avalonia;
 using System.Threading.Tasks;
-using Avalonia.Platform;
+using System.Reactive;
 using System.Reactive.Linq;
+using System.Reactive.Threading.Tasks;
 
 namespace GimmeCapture.Tests;
 
@@ -32,7 +37,9 @@ public class FloatingImageViewModelTests
     {
         // Arrange
         var mockService = new MockClipboardService();
-        var vm = new FloatingImageViewModel(null!, Avalonia.Media.Colors.Red, 2.0, false, false, mockService);
+        var mockSettings = new Mock<AppSettingsService>();
+        var mockAi = new Mock<AIResourceService>(mockSettings.Object);
+        var vm = new FloatingImageViewModel(null!, 0, 0, Avalonia.Media.Colors.Red, 2.0, false, false, mockService, mockAi.Object, mockSettings.Object);
 
         // Act
         await vm.CopyCommand.Execute();

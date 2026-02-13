@@ -114,22 +114,45 @@ public partial class MainWindowViewModel
                 if (status == QueueItemStatus.Completed) sam2.IsInstalled = AIResourceService.IsSAM2Ready(_settingsService.Settings.SelectedSAM2Variant);
             });
 
+        // MarianMT Module
+        var marian = new ModuleItem("MarianMT", "ModuleMarianMTDescription")
+        {
+            IsInstalled = AIResourceService.IsNmtReady(),
+            InstallCommand = ReactiveCommand.CreateFromTask(() => InstallModuleAsync("MarianMT")),
+            CancelCommand = ReactiveCommand.CreateFromTask(() => CancelModuleAsync("MarianMT")),
+            RemoveCommand = ReactiveCommand.CreateFromTask(() => RemoveModuleAsync("MarianMT"))
+        };
+        
+        ResourceQueue.ObserveStatus("MarianMT")
+            .ObserveOn(RxApp.MainThreadScheduler)
+            .Subscribe(status => 
+            {
+                marian.IsPending = status == QueueItemStatus.Pending;
+                marian.IsProcessing = status == QueueItemStatus.Downloading;
+                marian.HasError = status == QueueItemStatus.Failed;
+                if (status == QueueItemStatus.Failed) marian.ErrorMessage = AIResourceService.LastErrorMessage;
+                if (status == QueueItemStatus.Completed) marian.IsInstalled = AIResourceService.IsNmtReady();
+            });
+
         AIResourceService.WhenAnyValue(x => x.DownloadProgress)
             .Subscribe(p => {
                 if (aiCore.IsProcessing) aiCore.Progress = p;
                 if (sam2.IsProcessing) sam2.Progress = p;
                 if (ocr.IsProcessing) ocr.Progress = p;
+                if (marian.IsProcessing) marian.Progress = p;
             });
 
         ffmpeg.UpdateDescription();
         aiCore.UpdateDescription();
         sam2.UpdateDescription();
         ocr.UpdateDescription();
+        marian.UpdateDescription();
 
         Modules.Add(ffmpeg);
         Modules.Add(aiCore);
         Modules.Add(sam2);
         Modules.Add(ocr);
+        Modules.Add(marian);
     }
 
     private async Task InstallModuleAsync(string type)
@@ -139,7 +162,8 @@ public partial class MainWindowViewModel
             if ((m.Name == "FFmpeg" && type == "FFmpeg") ||
                 (m.Name == "AI Core" && type == "AICore") ||
                 (m.Name == "SAM2 Model" && type == "SAM2") ||
-                (m.Name == "PaddleOCR v5" && type == "OCR"))
+                (m.Name == "PaddleOCR v5" && type == "OCR") ||
+                (m.Name == "MarianMT" && type == "MarianMT"))
             {
                 m.HasError = false;
                 m.ErrorMessage = "";
@@ -162,6 +186,10 @@ public partial class MainWindowViewModel
         else if (type == "OCR")
         {
             await ResourceQueue.EnqueueAsync("OCR", (ct) => AIResourceService.EnsureOCRAsync(ct));
+        }
+        else if (type == "MarianMT")
+        {
+            await ResourceQueue.EnqueueAsync("MarianMT", (ct) => AIResourceService.EnsureNmtAsync(ct));
         }
     }
 
@@ -206,6 +234,10 @@ public partial class MainWindowViewModel
             {
                 AIResourceService.RemoveOCRResources();
             }
+            else if (type == "MarianMT")
+            {
+                AIResourceService.RemoveNmtResources();
+            }
             
             foreach (var m in Modules)
             {
@@ -213,6 +245,7 @@ public partial class MainWindowViewModel
                 if (m.Name == "AI Core") m.IsInstalled = AIResourceService.IsAICoreReady();
                 if (m.Name == "SAM2 Model") m.IsInstalled = AIResourceService.IsSAM2Ready(_settingsService.Settings.SelectedSAM2Variant);
                 if (m.Name == "PaddleOCR v5") m.IsInstalled = AIResourceService.IsOCRReady();
+                if (m.Name == "MarianMT") m.IsInstalled = AIResourceService.IsNmtReady();
             }
         }
         catch (Exception ex)
