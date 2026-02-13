@@ -148,55 +148,60 @@ public class TranslationService
             }
         }
 
-        foreach (var item in recognizedBlocks
-            .OrderByDescending(x => ScoreRecognizedBlock(x))
-            .GroupBy(x => x.Text)
-            .Select(g => g.First())
-            .Take(MaxTranslationBlocks))
+        // Merge all recognized blocks into one multi-line block for better context and cleaner UI
+        if (recognizedBlocks.Count == 0) return results;
+
+        // Sort by reading order before merging
+        var sortedBlocks = recognizedBlocks
+            .OrderBy(b => b.Box.Top / 16)
+            .ThenBy(b => b.Box.Left)
+            .ToList();
+
+        var mergedText = string.Join("\n", sortedBlocks.Select(b => b.Text));
+        
+        // Calculate Union Bounding Box
+        int minX = sortedBlocks.Min(b => b.Box.Left);
+        int minY = sortedBlocks.Min(b => b.Box.Top);
+        int maxX = sortedBlocks.Max(b => b.Box.Right);
+        int maxY = sortedBlocks.Max(b => b.Box.Bottom);
+        var unionBox = new SKRectI(minX, minY, maxX, maxY);
+
+        ct.ThrowIfCancellationRequested();
+        var translated = await TranslateAsync(mergedText, ct);
+        
+        if (!IsTranslationAcceptable(mergedText, translated, _settings.TargetLanguage))
         {
-            ct.ThrowIfCancellationRequested();
-            var translated = await TranslateAsync(item.Text, ct);
-            if (!IsTranslationAcceptable(item.Text, translated, _settings.TargetLanguage))
+            if (_settings.TargetLanguage == TranslationLanguage.English)
             {
-                if (_settings.TargetLanguage == TranslationLanguage.English)
+                var forced = await ForceTranslateTraditionalChineseToEnglishAsync(mergedText, ct);
+                if (IsTranslationAcceptable(mergedText, forced, _settings.TargetLanguage))
                 {
-                    var forced = await ForceTranslateTraditionalChineseToEnglishAsync(item.Text, ct);
-                    if (IsTranslationAcceptable(item.Text, forced, _settings.TargetLanguage))
-                    {
-                        translated = forced;
-                    }
+                    translated = forced;
                 }
             }
-
-            if (!IsTranslationAcceptable(item.Text, translated, _settings.TargetLanguage))
-            {
-                Console.WriteLine($"[Translation] Skip low-quality result: \"{item.Text}\" -> \"{translated}\"");
-                continue;
-            }
-            Console.WriteLine($"[Translation] From \"{item.Text}\" -> To \"{translated}\"");
-            results.Add(new TranslatedBlock
-            {
-                OriginalText = item.Text,
-                TranslatedText = translated,
-                Bounds = new Rect(item.Box.Left, item.Box.Top, item.Box.Width, item.Box.Height)
-            });
         }
 
-        // Do not return empty UI when OCR found text but translation was rejected.
-        if (results.Count == 0 && recognizedBlocks.Count > 0)
+        if (IsTranslationAcceptable(mergedText, translated, _settings.TargetLanguage))
         {
-            var fallback = recognizedBlocks
-                .OrderByDescending(x => ScoreRecognizedBlock(x))
-                .First();
-            var fallbackText = BuildTargetLanguageFallbackText(fallback.Text, _settings.TargetLanguage);
+            Console.WriteLine($"[Translation] Merged result: \"{mergedText.Replace("\n", " ")}\" -> \"{translated.Replace("\n", " ")}\"");
+            results.Add(new TranslatedBlock
+            {
+                OriginalText = mergedText,
+                TranslatedText = translated,
+                Bounds = new Rect(unionBox.Left, unionBox.Top, unionBox.Width, unionBox.Height)
+            });
+        }
+        else
+        {
+            // Fallback to simple OCR text if translation is rejected
+            var fallbackText = BuildTargetLanguageFallbackText(mergedText, _settings.TargetLanguage);
             if (!string.IsNullOrWhiteSpace(fallbackText))
             {
-                Console.WriteLine($"[Translation] Fallback display using OCR text: \"{fallbackText}\"");
                 results.Add(new TranslatedBlock
                 {
-                    OriginalText = fallback.Text,
+                    OriginalText = mergedText,
                     TranslatedText = fallbackText,
-                    Bounds = new Rect(fallback.Box.Left, fallback.Box.Top, fallback.Box.Width, fallback.Box.Height)
+                    Bounds = new Rect(unionBox.Left, unionBox.Top, unionBox.Width, unionBox.Height)
                 });
             }
         }
