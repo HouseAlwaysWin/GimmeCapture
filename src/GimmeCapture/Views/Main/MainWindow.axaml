@@ -401,8 +401,7 @@
                                             <Grid ColumnDefinitions="*, Auto">
                                                 <ComboBox Grid.Column="0" 
                                                           ItemsSource="{Binding AvailableOllamaModels}" 
-                                                          Text="{Binding OllamaModel}"
-                                                          IsEditable="True"
+                                                          SelectedItem="{Binding OllamaModel}"
                                                           HorizontalAlignment="Stretch"
                                                           Margin="0,0,10,0"/>
                                                 <Button Grid.Column="1" 

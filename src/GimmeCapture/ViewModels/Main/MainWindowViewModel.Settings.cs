@@ -732,15 +732,22 @@ public partial class MainWindowViewModel
                         }
                     }
 
-                    // Re-assert selection if it drifted or was empty
-                    if (string.IsNullOrEmpty(OllamaModel) && !string.IsNullOrEmpty(savedModel))
+                    // Force ComboBox to re-evaluate by clearing then re-setting.
+                    // Avalonia ComboBox won't update SelectedItem unless it sees a real change.
+                    _ollamaModel = null!;
+                    this.RaisePropertyChanged(nameof(OllamaModel));
+
+                    if (!string.IsNullOrEmpty(savedModel) && AvailableOllamaModels.Contains(savedModel))
                     {
-                        _settingsService.DebugLog($"[Ollama] Selection lost during refresh, restoring to '{savedModel}'");
-                        OllamaModel = savedModel;
+                        _ollamaModel = savedModel;
                     }
-                    else if (string.IsNullOrEmpty(OllamaModel) && AvailableOllamaModels.Count > 0)
+                    else if (AvailableOllamaModels.Count > 0)
                     {
-                        OllamaModel = AvailableOllamaModels[0];
+                        _ollamaModel = AvailableOllamaModels[0];
+                    }
+                    else
+                    {
+                        _ollamaModel = savedModel ?? "";
                     }
                     
                     this.RaisePropertyChanged(nameof(OllamaModel));
@@ -756,9 +763,15 @@ public partial class MainWindowViewModel
             // Backup: Ensure the UI still knows about our loaded model
             await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => 
             {
-                if (!string.IsNullOrEmpty(_ollamaModel) && !AvailableOllamaModels.Contains(_ollamaModel))
+                if (!string.IsNullOrEmpty(_ollamaModel))
                 {
-                    AvailableOllamaModels.Add(_ollamaModel);
+                    if (!AvailableOllamaModels.Contains(_ollamaModel))
+                    {
+                        AvailableOllamaModels.Add(_ollamaModel);
+                    }
+                    // Ensure _ollamaModel points to the collection instance
+                    var match = AvailableOllamaModels.FirstOrDefault(m => m == _ollamaModel);
+                    if (match != null) _ollamaModel = match;
                     this.RaisePropertyChanged(nameof(OllamaModel));
                 }
             });
@@ -823,12 +836,11 @@ public partial class MainWindowViewModel
             SourceLanguage = settings.SourceLanguage;
             TargetLanguage = settings.TargetLanguage;
             
-            // Seed the list so ComboBox can show the value immediately
+            // Seed the list so ComboBox can show the value immediately.
             if (!string.IsNullOrEmpty(settings.OllamaModel))
             {
                 if (!AvailableOllamaModels.Contains(settings.OllamaModel))
                     AvailableOllamaModels.Add(settings.OllamaModel);
-                OllamaModel = settings.OllamaModel;
             }
 
             if (Color.TryParse(settings.BorderColorHex, out var color))
@@ -854,7 +866,15 @@ public partial class MainWindowViewModel
         {
             _isDataLoading = false;
             InitializeModules();
-            this.RaisePropertyChanged(nameof(OllamaModel)); // Final defensive sync
+
+            // Force ComboBox to pick up OllamaModel by toggling null -> value.
+            // This must happen AFTER _isDataLoading=false so the UI binding is active.
+            var savedOllamaModel = _ollamaModel;
+            _ollamaModel = null!;
+            this.RaisePropertyChanged(nameof(OllamaModel));
+            _ollamaModel = savedOllamaModel;
+            this.RaisePropertyChanged(nameof(OllamaModel));
+
             if (AutoCheckUpdates) _ = CheckForUpdates(true);
             _ = RefreshOllamaModelsAsync(); // Load settings first, THEN refresh models
         }
