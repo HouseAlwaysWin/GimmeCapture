@@ -262,6 +262,19 @@ public class MarianMTService : IDisposable
         };
     }
 
+    private int GetTargetLangToken(TranslationLanguage target)
+    {
+        return target switch
+        {
+            TranslationLanguage.Japanese => _jaTokenId,
+            TranslationLanguage.English => _enTokenId,
+            TranslationLanguage.Korean => _koTokenId, // Should not happen if UI filtered correctly, but safe fallback
+            TranslationLanguage.TraditionalChinese => _zhTokenId,
+            TranslationLanguage.SimplifiedChinese => _zhTokenId,
+            _ => _zhTokenId
+        };
+    }
+
     public async Task<string> TranslateAsync(string text, TranslationLanguage target, OCRLanguage source = OCRLanguage.Auto, CancellationToken ct = default)
     {
         try
@@ -349,7 +362,8 @@ public class MarianMTService : IDisposable
                 var lastHiddenState = encoderResults.First().AsTensor<float>();
 
                 // Decoder seed: [eos, target_lang_token] per M2M100 spec (decoder_start_token_id=2)
-                var outputIds = new List<long> { _eosTokenId, _zhTokenId };
+                int targetLangToken = GetTargetLangToken(target);
+                var outputIds = new List<long> { _eosTokenId, targetLangToken };
                 int maxLen = Math.Min(inputIds.Count * 3, 128);
                 Debug.WriteLine($"[MarianMT] Decoder seed: [{string.Join(",", outputIds)}], maxLen={maxLen}");
 
