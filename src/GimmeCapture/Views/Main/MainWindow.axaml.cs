@@ -64,13 +64,14 @@ public partial class MainWindow : Window
         Close();
     }
 
-    private async void OnClosing(object? sender, WindowClosingEventArgs e)
+    private void OnClosing(object? sender, WindowClosingEventArgs e)
     {
         if (_isExiting || _isClosingFromDialog) return;
 
         // 點擊 X 關閉視窗時，攔截事件並隱藏視窗（縮小至系統匣）
         e.Cancel = true;
         Hide();
+        UpdateDownloadWindow();
         
         // 如果有修改，仍可以在後台提示
         if (DataContext is MainWindowViewModel vm && vm.IsModified)
@@ -82,7 +83,10 @@ public partial class MainWindow : Window
 
     private void OnPropertyChanged(object? sender, Avalonia.AvaloniaPropertyChangedEventArgs e)
     {
-        // 移除「最小化時隱藏視窗」的邏輯，讓其正常縮小至工作列
+        if (e.Property == Window.WindowStateProperty || e.Property == Window.IsVisibleProperty || e.Property == Window.BoundsProperty)
+        {
+            UpdateDownloadWindow();
+        }
     }
 
     private void HotkeyTextBox_KeyDown(object? sender, Avalonia.Input.KeyEventArgs e)
@@ -245,7 +249,16 @@ public partial class MainWindow : Window
                     {
                         DataContext = vm
                     };
-                    _downloadWindow.Show(this); // 使用 Show(owner) 替代直接設定屬性
+
+                    if (this.IsVisible)
+                    {
+                        _downloadWindow.Show(this);
+                    }
+                    else
+                    {
+                        // 如果主視窗隱藏中（如在系統匣），不能設定為 Owner 否則會拋出 InvalidOperationException
+                        _downloadWindow.Show();
+                    }
                 }
                 catch (Exception ex)
                 {
