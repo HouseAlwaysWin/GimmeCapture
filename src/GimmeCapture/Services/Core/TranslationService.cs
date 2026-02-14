@@ -158,7 +158,23 @@ public class TranslationService
         return text;
     }
 
-    private bool IsUsefulOcrText(string text, float confidence) => !string.IsNullOrWhiteSpace(text) && confidence > 0.1f;
+    private bool IsUsefulOcrText(string text, float confidence)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return false;
+        if (confidence < 0.10f) return false;
+
+        string trimmed = text.Trim();
+        if (trimmed.Length == 0) return false;
+
+        int replacementCount = trimmed.Count(ch => ch == '\uFFFD');
+        if (replacementCount > 0) return false;
+        if (trimmed.All(ch => ch == '?' || ch == '.' || ch == '-' || ch == '_' || ch == '*')) return false;
+
+        int useful = trimmed.Count(ch => char.IsLetterOrDigit(ch) || (ch >= 0x4E00 && ch <= 0x9FFF) || (ch >= 0x3040 && ch <= 0x309F) || (ch >= 0x30A0 && ch <= 0x30FF));
+        if (useful == 0) return false;
+        
+        return true;
+    }
 
     private bool IsTranslationAcceptable(string original, string translated, TranslationLanguage target)
     {
