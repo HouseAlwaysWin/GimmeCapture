@@ -23,7 +23,7 @@ public class MarianMTService : IDisposable
     private InferenceSession? _decoderSession;
     
     // SPM tokenizer for subword splitting (text → token strings)
-    private Tokenizer? _spmTokenizer;
+    private Microsoft.ML.Tokenizers.SentencePieceTokenizer? _spmTokenizer;
     
     // Vocab from tokenizer.json for correct ID mapping (token string ↔ model ID)
     private Dictionary<string, int>? _vocab;       // token → model_id
@@ -57,25 +57,22 @@ public class MarianMTService : IDisposable
         var options = new SessionOptions();
         try { options.AppendExecutionProvider_CUDA(0); } catch { }
         try { options.AppendExecutionProvider_DML(0); } catch { }
-
-        _encoderSession = new InferenceSession(paths.Encoder, options);
-        _decoderSession = new InferenceSession(paths.Decoder, options);
-        
-        // Load SPM for subword splitting only (text → token strings)
-        try 
+        try
         {
+            _encoderSession = new InferenceSession(paths.Encoder, options);
+            _decoderSession = new InferenceSession(paths.Decoder, options);
+            
             using var stream = File.OpenRead(paths.Spm);
-            _spmTokenizer = SentencePieceTokenizer.Create(stream);
+            _spmTokenizer = Microsoft.ML.Tokenizers.SentencePieceTokenizer.Create(stream);
+
+            LoadVocab(paths.Tokenizer);
+            LoadConfig(paths.Config);
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[MarianMT] Failed to load SentencePiece tokenizer: {ex.Message}");
+            Debug.WriteLine($"[MarianMT] Failed to load ONNX sessions or tokenizer: {ex.Message}");
             throw;
         }
-
-        // Load vocab from tokenizer.json for correct model ID mapping
-        LoadVocab(paths.Tokenizer);
-        LoadConfig(paths.Config);
     }
 
     /// <summary>
@@ -106,11 +103,12 @@ public class MarianMTService : IDisposable
                 _reverseVocab[id] = kv.Key;
             }
 
-            Debug.WriteLine($"[MarianMT] Loaded vocab: {_vocab.Count} entries");
+            Debug.WriteLine($"[MarianMT] Loaded vocab: {_vocab.Count} entries.");
         }
         catch (Exception ex)
         {
             Debug.WriteLine($"[MarianMT] Failed to load vocab: {ex.Message}");
+            throw;
         }
     }
 
@@ -128,10 +126,10 @@ public class MarianMTService : IDisposable
             // Verify language token IDs from vocab if loaded
             if (_vocab != null)
             {
-                if (_vocab.TryGetValue("__zh__", out var zhId)) _zhTokenId = zhId;
                 if (_vocab.TryGetValue("__ja__", out var jaId)) _jaTokenId = jaId;
                 if (_vocab.TryGetValue("__en__", out var enId)) _enTokenId = enId;
                 if (_vocab.TryGetValue("__ko__", out var koId)) _koTokenId = koId;
+                if (_vocab.TryGetValue("__zh__", out var zhId)) _zhTokenId = zhId;
             }
             Debug.WriteLine($"[MarianMT] Config: pad={_padTokenId}, eos={_eosTokenId}, bos={_bosTokenId}, ja={_jaTokenId}, en={_enTokenId}, ko={_koTokenId}, zh={_zhTokenId}");
         }
@@ -139,76 +137,52 @@ public class MarianMTService : IDisposable
     }
 
     /// <summary>
-    /// Encode text to model token IDs using SPM subword splitting + tokenizer.json vocab mapping.
-    /// SPM splits text into subword strings, then each string is looked up in the vocab for
-    /// the correct model ID that the ONNX model expects.
+    /// Encode text to model token IDs using the official Tokenizer.
     /// </summary>
     private List<int> EncodeText(string text)
     {
         if (_spmTokenizer == null || _vocab == null) return new List<int>();
         
-        // Use SPM EncodeToTokens to get subword token strings
         var tokens = _spmTokenizer.EncodeToTokens(text, out _, false, false);
         var modelIds = new List<int>();
         
-        foreach (var token in tokens)
+        for (int i = 0; i < tokens.Count; i++)
         {
-            var tokenStr = token.Value;
+            var tokenStr = tokens[i].Value;
             
-            // Skip BOS/EOS control tokens added by SPM
-            if (tokenStr == "<s>" || tokenStr == "</s>") continue;
-            
+            // Rejoin logic: if current is lone space prefix and next is word, check combined vocab
+            if (tokenStr == "\u2581" && i + 1 < tokens.Count)
+            {
+                var combined = "\u2581" + tokens[i+1].Value;
+                if (_vocab.TryGetValue(combined, out int combinedId))
+                {
+                    modelIds.Add(combinedId);
+                    i++; // skip next
+                    continue;
+                }
+            }
+
             if (_vocab.TryGetValue(tokenStr, out int modelId))
             {
                 modelIds.Add(modelId);
-                // Log tokens that map to unk (3) even though they're in the vocab
-                if (modelId == 3)
-                {
-                    var hexBytes = string.Join(" ", System.Text.Encoding.UTF8.GetBytes(tokenStr).Select(b => $"{b:X2}"));
-                    Debug.WriteLine($"[MarianMT] WARNING: Vocab maps to unk(3): '{tokenStr}' hex=[{hexBytes}] spmId={token.Id}");
-                }
             }
             else
             {
-                // Fallback: M2M100 uses fairseq_offset=1, so model_id = spm_id + 1
-                int fallbackId = token.Id + 1;
-                if (fallbackId >= 0 && fallbackId < 128112)
-                {
-                    modelIds.Add(fallbackId);
-                    var hexBytes = string.Join(" ", System.Text.Encoding.UTF8.GetBytes(tokenStr).Select(b => $"{b:X2}"));
-                    Debug.WriteLine($"[MarianMT] Vocab miss, fallback: '{tokenStr}' hex=[{hexBytes}] spm={token.Id} -> model={fallbackId}");
-                }
-                else
-                {
-                    modelIds.Add(3);
-                    Debug.WriteLine($"[MarianMT] Token not in vocab: '{tokenStr}' (spm={token.Id}, out of range)");
-                }
+                // Truly unknown
+                modelIds.Add(3);
+                Debug.WriteLine($"[MarianMT] Token not in vocab: '{tokenStr}'");
             }
         }
         
         return modelIds;
     }
 
-    /// <summary>
-    /// Decode model token IDs back to text using tokenizer.json reverse vocab.
-    /// </summary>
     private string DecodeIds(IEnumerable<int> ids)
     {
-        if (_reverseVocab == null) return "";
-        
-        var tokens = new List<string>();
-        foreach (var id in ids)
-        {
-            if (_reverseVocab.TryGetValue(id, out var token))
-            {
-                tokens.Add(token);
-            }
-        }
-        
-        // SentencePiece uses ▁ (U+2581) as word separator prefix
+        if (_reverseVocab == null) return string.Empty;
+        var tokens = ids.Select(id => _reverseVocab.TryGetValue(id, out var t) ? t : "<unk>");
         var text = string.Join("", tokens);
-        text = text.Replace("\u2581", " ");
-        return text;
+        return text.Replace("\u2581", " ").Trim();
     }
 
     /// <summary>
