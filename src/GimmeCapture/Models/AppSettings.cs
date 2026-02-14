@@ -7,6 +7,13 @@ public enum TranslationLanguage { TraditionalChinese, SimplifiedChinese, English
 public enum OCRLanguage { Auto, English, TraditionalChinese, SimplifiedChinese, Japanese, Korean }
 public enum TranslationEngine { Ollama, MarianMT }
 
+public class TranslatedBlock
+{
+    public string OriginalText { get; set; } = string.Empty;
+    public string TranslatedText { get; set; } = string.Empty;
+    public Avalonia.Rect Bounds { get; set; }
+}
+
 public class AppSettings
 {
     public Language Language { get; set; } = Language.English;

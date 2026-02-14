@@ -324,12 +324,12 @@
                     </ItemsPanelTemplate>
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.Styles>
-                    <Style Selector="ItemsControl > ContentPresenter" x:DataType="services:TranslatedBlock">
+                    <Style Selector="ItemsControl > ContentPresenter" x:DataType="m:TranslatedBlock">
                         <!-- No hardcoded top offset, VM handles the gap from toolbar -->
                     </Style>
                 </ItemsControl.Styles>
                 <ItemsControl.ItemTemplate>
-                    <DataTemplate DataType="services:TranslatedBlock">
+                    <DataTemplate DataType="m:TranslatedBlock">
                         <Border Name="TranslationBorder"
                                 BorderBrush="#66FFFFFF"
                                 BorderThickness="1"
