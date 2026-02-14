@@ -42,7 +42,7 @@ public class MarianMTService : IDisposable
         _aiResourceService = aiResourceService;
     }
 
-    public async Task EnsureLoadedAsync(CancellationToken ct = default)
+    public virtual async Task EnsureLoadedAsync(CancellationToken ct = default)
     {
         if (_encoderSession != null && _decoderSession != null && _spmTokenizer != null && _vocab != null) return;
 
@@ -275,7 +275,7 @@ public class MarianMTService : IDisposable
         };
     }
 
-    public async Task<string> TranslateAsync(string text, TranslationLanguage target, OCRLanguage source = OCRLanguage.Auto, CancellationToken ct = default)
+    public virtual async Task<string?> TranslateAsync(string text, TranslationLanguage target, OCRLanguage source = OCRLanguage.Auto, CancellationToken ct = default)
     {
         try
         {

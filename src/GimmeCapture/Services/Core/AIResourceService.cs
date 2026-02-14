@@ -131,7 +131,7 @@ public class AIResourceService : ReactiveObject
         };
     }
 
-    public (string Det, string Rec, string Dict) GetOCRPaths(OCRLanguage language)
+    public virtual (string Det, string Rec, string Dict) GetOCRPaths(OCRLanguage language)
     {
         var baseDir = GetAIResourcesPath();
         var ocrDir = Path.Combine(baseDir, "ocr");
@@ -479,7 +479,7 @@ public class AIResourceService : ReactiveObject
         }
     }
 
-    public async Task<bool> EnsureOCRAsync(CancellationToken ct = default)
+    public virtual async Task<bool> EnsureOCRAsync(CancellationToken ct = default)
     {
         if (IsOCRReady()) return true;
 

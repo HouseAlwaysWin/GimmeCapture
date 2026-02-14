@@ -32,7 +32,7 @@ public class MarianMTServiceTests
         _mockAiResourceService.Setup(x => x.EnsureNmtAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
         _mockAiResourceService.Setup(x => x.GetNmtPaths())
-            .Returns(("nonexistent_encoder", "nonexistent_decoder", "nonexistent_tokenizer", "nonexistent_config", "nonexistent_gen_config"));
+            .Returns(("enc", "dec", "tok", "spm", "cfg", "gen"));
 
         // Act & Assert
         // Since files don't exist, it should throw FileNotFoundException, but but it must have called EnsureNmtAsync

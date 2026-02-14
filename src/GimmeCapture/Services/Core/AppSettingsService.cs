@@ -15,7 +15,14 @@ public class AppSettingsService
     public string BaseDataDirectory { get; private set; } = AppDomain.CurrentDomain.BaseDirectory;
     private string ConfigPath => Path.Combine(BaseDataDirectory, "config.json");
     
-    public AppSettings Settings { get; private set; } = new();
+    public virtual AppSettings Settings { get; protected set; } = new();
+
+    public AppSettingsService() { }
+
+    public AppSettingsService(string baseDataDirectory)
+    {
+        BaseDataDirectory = baseDataDirectory;
+    }
     
     public void DebugLog(string message)
     {

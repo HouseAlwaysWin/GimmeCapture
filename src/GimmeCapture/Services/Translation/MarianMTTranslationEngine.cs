@@ -22,8 +22,9 @@ public class MarianMTTranslationEngine : ITranslationEngine
     {
         try
         {
-            await _marianMTService.EnsureLoadedAsync();
-            return await _marianMTService.TranslateAsync(text, targetLang, sourceLang, ct);
+            await _marianMTService.EnsureLoadedAsync(ct);
+            var result = await _marianMTService.TranslateAsync(text, targetLang, sourceLang, ct);
+            return string.IsNullOrEmpty(result) ? text : result;
         }
         catch (Exception)
         {
