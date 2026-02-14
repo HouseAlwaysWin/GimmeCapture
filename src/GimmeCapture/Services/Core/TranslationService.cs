@@ -1509,8 +1509,11 @@ Output:",
                 return "Error: Gemini API Key is missing. Please set it in settings.";
             }
 
-            string model = _settings.GeminiModel;
-            string apiKey = _settings.GeminiApiKey;
+            string model = _settings.GeminiModel?.Trim() ?? "";
+            string apiKey = _settings.GeminiApiKey?.Trim() ?? "";
+            
+            if (string.IsNullOrWhiteSpace(model)) return "Error: Gemini Model is not set.";
+            
             string targetLang = _settings.TargetLanguage switch
             {
                 TranslationLanguage.TraditionalChinese => "Traditional Chinese (Taiwan)",
@@ -1541,11 +1544,21 @@ Output:",
                     temperature = 0.0,
                     topP = 0.95,
                     maxOutputTokens = 1024
+                },
+                // Add safety settings to be less restrictive for translation tasks
+                safetySettings = new[]
+                {
+                    new { category = "HARM_CATEGORY_HARASSMENT", threshold = "BLOCK_NONE" },
+                    new { category = "HARM_CATEGORY_HATE_SPEECH", threshold = "BLOCK_NONE" },
+                    new { category = "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold = "BLOCK_NONE" },
+                    new { category = "HARM_CATEGORY_DANGEROUS_CONTENT", threshold = "BLOCK_NONE" }
                 }
             };
 
+            string requestJson = JsonSerializer.Serialize(request);
+            
+            // Attempt v1beta first
             string url = $"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={apiKey}";
-            var requestJson = JsonSerializer.Serialize(request);
             var content = new StringContent(requestJson, Encoding.UTF8, "application/json");
             var response = await _httpClient.PostAsync(url, content, ct);
 
@@ -1565,16 +1578,17 @@ Output:",
                 
                 if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
                 {
-                    if (error.Contains("limit: 0"))
-                    {
-                        return "Error: Gemini API Quota is 0. Try switching to 'gemini-1.5-flash' in settings.";
-                    }
-                    return "Error: Gemini API Rate Limit Exceeded (429). Please wait a moment.";
+                    return "Error: Gemini API Rate Limit Exceeded (429).";
                 }
                 
                 if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
                 {
-                    return $"Error: Gemini Model '{model}' not found (404). Try switching models or checking the ID.";
+                    return $"Error: Gemini Model '{model}' not found (404) in both v1 and v1beta.";
+                }
+
+                if (response.StatusCode == System.Net.HttpStatusCode.Forbidden)
+                {
+                    return "Error: Gemini API Key invalid or restricted (403).";
                 }
                 
                 return $"Error: Gemini API {response.StatusCode}";
@@ -1584,21 +1598,30 @@ Output:",
             using var doc = JsonDocument.Parse(json);
             
             if (doc.RootElement.TryGetProperty("candidates", out var candidates) && 
-                candidates.GetArrayLength() > 0 &&
-                candidates[0].TryGetProperty("content", out var resContent) &&
-                resContent.TryGetProperty("parts", out var parts) &&
-                parts.GetArrayLength() > 0)
+                candidates.GetArrayLength() > 0)
             {
-                var resultText = parts[0].GetProperty("text").GetString()?.Trim() ?? text;
-                return CleanupTranslationResult(resultText);
+                var candidate = candidates[0];
+                if (candidate.TryGetProperty("content", out var resContent) &&
+                    resContent.TryGetProperty("parts", out var parts) &&
+                    parts.GetArrayLength() > 0)
+                {
+                    var resultText = parts[0].GetProperty("text").GetString()?.Trim() ?? text;
+                    return CleanupTranslationResult(resultText);
+                }
+                
+                // Check for safety finish reason
+                if (candidate.TryGetProperty("finishReason", out var reason))
+                {
+                    return $"Error: Gemini blocked result (Reason: {reason.GetString()})";
+                }
             }
 
-            return text;
+            return "Error: Gemini returned empty result.";
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[Gemini Error] {ex.Message}");
-            return text;
+            Debug.WriteLine($"[Gemini Exception] {ex.Message}");
+            return $"Error: Gemini call failed - {ex.Message}";
         }
     }
 
