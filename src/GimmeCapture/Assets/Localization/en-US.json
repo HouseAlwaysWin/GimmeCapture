@@ -215,5 +215,8 @@
   "TranslationEngine": "Translation Engine:",
   "TranslationEngineOllama": "Ollama (Online LLM)",
   "TranslationEngineMarianMT": "MarianMT (Offline)",
-  "MarianMTDownloadConfirm": "Offline translation requires a dedicated module (~400MB). Download now?"
+  "TranslationEngineGemini": "Gemini (Google AI)",
+  "GeminiModel": "Gemini Model Name:",
+  "GeminiApiKey": "Gemini API Key:",
+  "MarianMTDownloadConfirm": "Offline translation requires downloading a special module (~400MB). Download now?"
 }

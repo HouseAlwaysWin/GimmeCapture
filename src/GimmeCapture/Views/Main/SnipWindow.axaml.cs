@@ -140,6 +140,21 @@ public partial class SnipWindow : Window
 
             this.Activate(); 
             this.Focus();
+            
+            // Z-Order nudge: Some popups (like ComboBox dropdowns) might be stubborn.
+            // Toggling Topmost and re-activating after a short delay helps.
+            _ = Task.Run(async () => 
+            {
+                await Task.Delay(500);
+                await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => 
+                {
+                    this.Topmost = false;
+                    this.Topmost = true;
+                    this.Activate();
+                    this.Focus();
+                    Console.WriteLine("[SnipWindow] Z-Order nudge applied.");
+                });
+            });
 
             // Temporarily lower existing Pin windows
             if (Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)

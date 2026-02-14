@@ -196,5 +196,8 @@
   "TranslationEngine": "翻訳エンジン (Engine):",
   "TranslationEngineOllama": "Ollama (オンライン LLM)",
   "TranslationEngineMarianMT": "MarianMT (オフライン)",
-  "MarianMTDownloadConfirm": "オフライン翻訳機能には専用モジュールのダウンロードが必要です (約 400MB)。今すぐダウンロードしますか？"
+  "TranslationEngineGemini": "Gemini (Google AI)",
+  "GeminiModel": "Gemini モデル名:",
+  "GeminiApiKey": "Gemini API キー:",
+  "MarianMTDownloadConfirm": "オフライン翻訳機能には専用モジュールのダウンロード (~400MB) が必要です。今すぐダウンロードしますか？"
 }

@@ -416,6 +416,22 @@
                                             <TextBox Text="{Binding OllamaApiUrl}" Watermark="http://localhost:11434/api/generate"/>
                                         </StackPanel>
                                     </StackPanel>
+
+                                    <!-- Gemini Specific Settings -->
+                                    <StackPanel IsVisible="{Binding IsGeminiVisible}" Spacing="10" Margin="0,5,0,0">
+                                        <Separator Background="#333333" Height="1" Margin="0,5"/>
+                                        <TextBlock Text="Gemini" FontWeight="SemiBold" Foreground="{DynamicResource AccentRedBrush}"/>
+                                        <StackPanel Spacing="5">
+                                            <TextBlock Text="{Binding [GeminiModel], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>
+                                            <ComboBox ItemsSource="{Binding AvailableGeminiModels}" 
+                                                      SelectedItem="{Binding GeminiModel}" 
+                                                      IsEditable="True"
+                                                      HorizontalAlignment="Stretch"/>
+                                            
+                                            <TextBlock Text="{Binding [GeminiApiKey], Source={x:Static services:LocalizationService.Instance}}" FontSize="12" Margin="0,5,0,0"/>
+                                            <TextBox Text="{Binding GeminiApiKey, UpdateSourceTrigger=PropertyChanged}" PasswordChar="*" Watermark="Enter your Gemini API Key"/>
+                                        </StackPanel>
+                                    </StackPanel>
                                 </StackPanel>
                             </Border>
                         </StackPanel>

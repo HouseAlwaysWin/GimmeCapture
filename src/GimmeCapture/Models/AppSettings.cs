@@ -5,7 +5,7 @@ namespace GimmeCapture.Models;
 public enum VideoCodec { H264, H265 }
 public enum TranslationLanguage { TraditionalChinese, SimplifiedChinese, English, Japanese, Korean }
 public enum OCRLanguage { Auto, English, TraditionalChinese, SimplifiedChinese, Japanese, Korean }
-public enum TranslationEngine { Ollama, MarianMT }
+public enum TranslationEngine { Ollama, MarianMT, Gemini }
 
 public class AppSettings
 {
@@ -90,4 +90,6 @@ public class AppSettings
     public TranslationEngine SelectedTranslationEngine { get; set; } = TranslationEngine.Ollama;
     public string OllamaModel { get; set; } = "";
     public string OllamaApiUrl { get; set; } = "http://localhost:11434/api/generate";
+    public string GeminiApiKey { get; set; } = "";
+    public string GeminiModel { get; set; } = "gemini-2.0-flash";
 }

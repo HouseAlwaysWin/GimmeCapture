@@ -1068,6 +1068,12 @@ public class TranslationService
                 return await _marianMTService.TranslateAsync(text, _settings.TargetLanguage, _settings.SourceLanguage, ct);
             }
 
+            if (_settings.SelectedTranslationEngine == TranslationEngine.Gemini)
+            {
+                Debug.WriteLine("[Translation] Using Gemini (Google AI) engine.");
+                return await TranslateWithGeminiAsync(text, ct);
+            }
+
             string model = _settings.OllamaModel;
             if (string.IsNullOrEmpty(model)) 
             {
@@ -1491,6 +1497,108 @@ Output:",
         catch
         {
             return string.Empty;
+        }
+    }
+
+    private async Task<string> TranslateWithGeminiAsync(string text, CancellationToken ct)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(_settings.GeminiApiKey))
+            {
+                return "Error: Gemini API Key is missing. Please set it in settings.";
+            }
+
+            string model = _settings.GeminiModel;
+            string apiKey = _settings.GeminiApiKey;
+            string targetLang = _settings.TargetLanguage switch
+            {
+                TranslationLanguage.TraditionalChinese => "Traditional Chinese (Taiwan)",
+                TranslationLanguage.SimplifiedChinese => "Simplified Chinese",
+                TranslationLanguage.English => "English",
+                TranslationLanguage.Japanese => "Japanese",
+                TranslationLanguage.Korean => "Korean",
+                _ => "Traditional Chinese"
+            };
+            string sourceLang = ResolveSourceLanguageForPrompt(text);
+
+            var prompt = BuildStrictTranslationPrompt(sourceLang, targetLang, text);
+            
+            var request = new
+            {
+                contents = new[]
+                {
+                    new
+                    {
+                        parts = new[]
+                        {
+                            new { text = prompt }
+                        }
+                    }
+                },
+                generationConfig = new
+                {
+                    temperature = 0.0,
+                    topP = 0.95,
+                    maxOutputTokens = 1024
+                }
+            };
+
+            string url = $"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={apiKey}";
+            var requestJson = JsonSerializer.Serialize(request);
+            var content = new StringContent(requestJson, Encoding.UTF8, "application/json");
+            var response = await _httpClient.PostAsync(url, content, ct);
+
+            // Fallback to v1 if v1beta fails with 404
+            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                Debug.WriteLine($"[Gemini] v1beta for {model} returned 404, trying v1...");
+                url = $"https://generativelanguage.googleapis.com/v1/models/{model}:generateContent?key={apiKey}";
+                content = new StringContent(requestJson, Encoding.UTF8, "application/json");
+                response = await _httpClient.PostAsync(url, content, ct);
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                Debug.WriteLine($"[Gemini Error] {response.StatusCode}: {error}");
+                
+                if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
+                {
+                    if (error.Contains("limit: 0"))
+                    {
+                        return "Error: Gemini API Quota is 0. Try switching to 'gemini-1.5-flash' in settings.";
+                    }
+                    return "Error: Gemini API Rate Limit Exceeded (429). Please wait a moment.";
+                }
+                
+                if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+                {
+                    return $"Error: Gemini Model '{model}' not found (404). Try switching models or checking the ID.";
+                }
+                
+                return $"Error: Gemini API {response.StatusCode}";
+            }
+
+            var json = await response.Content.ReadAsStringAsync();
+            using var doc = JsonDocument.Parse(json);
+            
+            if (doc.RootElement.TryGetProperty("candidates", out var candidates) && 
+                candidates.GetArrayLength() > 0 &&
+                candidates[0].TryGetProperty("content", out var resContent) &&
+                resContent.TryGetProperty("parts", out var parts) &&
+                parts.GetArrayLength() > 0)
+            {
+                var resultText = parts[0].GetProperty("text").GetString()?.Trim() ?? text;
+                return CleanupTranslationResult(resultText);
+            }
+
+            return text;
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[Gemini Error] {ex.Message}");
+            return text;
         }
     }
 

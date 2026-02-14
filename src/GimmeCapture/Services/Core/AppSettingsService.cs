@@ -147,7 +147,9 @@ public class AppSettingsService
         dest.SelectedTranslationEngine = source.SelectedTranslationEngine;
         dest.OllamaModel = source.OllamaModel;
         dest.OllamaApiUrl = source.OllamaApiUrl;
-        DebugLog($"UpdateSettings: OllamaModel from source is '{source.OllamaModel}', SelectedTranslationEngine is {dest.SelectedTranslationEngine}, dest is now '{dest.OllamaModel}'");
+        dest.GeminiApiKey = source.GeminiApiKey;
+        dest.GeminiModel = source.GeminiModel;
+        DebugLog($"UpdateSettings: OllamaModel: '{dest.OllamaModel}', GeminiModel: '{dest.GeminiModel}', Engine: {dest.SelectedTranslationEngine}");
     }
 
 
