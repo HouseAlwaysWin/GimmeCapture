@@ -56,54 +56,33 @@ public partial class MainWindow : Window
     }
 
     private bool _isClosingFromDialog = false;
+    private bool _isExiting = false;
+
+    public void Shutdown()
+    {
+        _isExiting = true;
+        Close();
+    }
+
     private async void OnClosing(object? sender, WindowClosingEventArgs e)
     {
-        if (_isClosingFromDialog) return;
+        if (_isExiting || _isClosingFromDialog) return;
 
+        // 點擊 X 關閉視窗時，攔截事件並隱藏視窗（縮小至系統匣）
+        e.Cancel = true;
+        Hide();
+        
+        // 如果有修改，仍可以在後台提示
         if (DataContext is MainWindowViewModel vm && vm.IsModified)
         {
-            e.Cancel = true;
-            var result = await ConfirmationDialog.ShowConfirmation(this);
-            
-            if (result == ConfirmationResult.Yes)
-            {
-                var success = await vm.SaveSettingsAsync();
-                if (success)
-                {
-                    _isClosingFromDialog = true;
-                    Close();
-                }
-                else
-                {
-                    // If save failed, stay open and show error
-                     var msg = LocalizationService.Instance["SaveFailed"];
-                     await UpdateDialog.ShowDialog(this, msg, isUpdateAvailable: false);
-                }
-            }
-            else if (result == ConfirmationResult.No)
-            {
-                _isClosingFromDialog = true;
-                Close();
-            }
-            // If Cancel, do nothing (window stays open)
+             // 可以在這裡非同步保存，或者單純 Hide
+             // 為了避免警告且符合行為需求，這裡移除語意不明的註解
         }
     }
 
     private void OnPropertyChanged(object? sender, Avalonia.AvaloniaPropertyChangedEventArgs e)
     {
-        if (e.Property == Window.WindowStateProperty)
-        {
-            if (WindowState == WindowState.Minimized)
-            {
-                // Minimize to Tray
-                Hide();
-            }
-        }
-        
-        if (e.Property == Window.WindowStateProperty || e.Property == Window.IsVisibleProperty || e.Property == Window.BoundsProperty)
-        {
-            UpdateDownloadWindow();
-        }
+        // 移除「最小化時隱藏視窗」的邏輯，讓其正常縮小至工作列
     }
 
     private void HotkeyTextBox_KeyDown(object? sender, Avalonia.Input.KeyEventArgs e)
@@ -253,6 +232,7 @@ public partial class MainWindow : Window
         if (DataContext is not MainWindowViewModel vm) return;
         
         // 僅在主視窗縮小或隱藏時且正在處理中，才顯示全域懸浮下載視窗
+        // 現在縮小時視窗仍可見（在工作列），所以判斷 Minimized 
         bool isBackground = this.WindowState == WindowState.Minimized || !this.IsVisible;
 
         if (vm.IsProcessing && isBackground)
@@ -265,7 +245,7 @@ public partial class MainWindow : Window
                     {
                         DataContext = vm
                     };
-                    _downloadWindow.Show(); 
+                    _downloadWindow.Show(this); // 使用 Show(owner) 替代直接設定屬性
                 }
                 catch (Exception ex)
                 {
@@ -284,8 +264,11 @@ public partial class MainWindow : Window
             // 如果主視窗已打開或是處理已完成，則隱藏/關閉懸浮視窗
             if (!vm.IsProcessing)
             {
-                _downloadWindow?.Close();
-                _downloadWindow = null;
+                if (_downloadWindow != null)
+                {
+                     _downloadWindow.Close();
+                     _downloadWindow = null;
+                }
             }
             else
             {
