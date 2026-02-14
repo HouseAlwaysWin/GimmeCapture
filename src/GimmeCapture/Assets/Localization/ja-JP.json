@@ -22,6 +22,7 @@
   "TabControl": "操作",
   "TabRecord": "錄画",
   "TabAI": "AI 設定",
+  "TabTranslation": "翻訳",
   "TabAbout": "バージョン",
   "RunOnStartup": "スタートアップ起動",
   "AutoCheckUpdates": "自動更新チェック",

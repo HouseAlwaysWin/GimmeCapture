@@ -26,8 +26,15 @@ public partial class MainWindowViewModel
         public Language Value { get; set; }
     }
 
-    public List<TranslationLanguage> AvailableTranslationLanguages { get; } = Enum.GetValues<TranslationLanguage>().ToList();
-    public List<OCRLanguage> AvailableOCRLanguages { get; } = Enum.GetValues<OCRLanguage>().ToList();
+    public List<TranslationLanguage> AvailableTranslationLanguages => 
+        _selectedTranslationEngine == TranslationEngine.MarianMT
+            ? Enum.GetValues<TranslationLanguage>().Where(l => l != TranslationLanguage.Korean).ToList()
+            : Enum.GetValues<TranslationLanguage>().ToList();
+
+    public List<OCRLanguage> AvailableOCRLanguages => 
+        _selectedTranslationEngine == TranslationEngine.MarianMT
+            ? Enum.GetValues<OCRLanguage>().Where(l => l != OCRLanguage.Korean).ToList()
+            : Enum.GetValues<OCRLanguage>().ToList();
 
     private OCRLanguage _sourceLanguage;
     public OCRLanguage SourceLanguage
@@ -79,6 +86,24 @@ public partial class MainWindowViewModel
             {
                 this.RaiseAndSetIfChanged(ref _selectedTranslationEngine, value);
                 this.RaisePropertyChanged(nameof(IsOllamaVisible));
+                
+                // Notify language lists changed
+                this.RaisePropertyChanged(nameof(AvailableOCRLanguages));
+                this.RaisePropertyChanged(nameof(AvailableTranslationLanguages));
+
+                // Auto-reset illegal selections for MarianMT
+                if (value == TranslationEngine.MarianMT)
+                {
+                    if (SourceLanguage == OCRLanguage.Korean)
+                    {
+                        SourceLanguage = OCRLanguage.Auto;
+                    }
+                    if (TargetLanguage == TranslationLanguage.Korean)
+                    {
+                        TargetLanguage = TranslationLanguage.TraditionalChinese;
+                    }
+                }
+
                 if (!_isDataLoading)
                 {
                     IsModified = true;

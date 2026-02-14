@@ -22,6 +22,7 @@
   "TabControl": "Control",
   "TabRecord": "Record",
   "TabAI": "AI Settings",
+  "TabTranslation": "Translation",
   "TabAbout": "About",
   "RunOnStartup": "Run On Startup",
   "AutoCheckUpdates": "Auto Check Updates",

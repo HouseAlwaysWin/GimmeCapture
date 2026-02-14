@@ -279,140 +279,6 @@
                 </ScrollViewer>
             </TabItem>
 
-            <!-- AI Settings (AI) -->
-            <TabItem Header="{Binding [TabAI], Source={x:Static services:LocalizationService.Instance}}">
-                <ScrollViewer>
-                    <Grid ColumnDefinitions="*, Auto" Margin="10">
-                        <StackPanel Grid.Column="0" Spacing="15" Margin="0,0,20,0">
-                            <StackPanel Spacing="10">
-                                <CheckBox IsChecked="{Binding EnableAI}" Content="{Binding [EnableAI], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold"/>
-                                
-                                <StackPanel Spacing="5" IsEnabled="{Binding EnableAI}">
-                                    <!-- 1. Translation & Engine Group (First) -->
-                                    <Border Background="#1A1A1A" Padding="15" CornerRadius="4" BorderBrush="#333333" BorderThickness="1" Margin="24,10,0,10">
-                                        <StackPanel Spacing="10">
-                                            <TextBlock Text="{Binding [TranslationSettings], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold" Foreground="{DynamicResource AccentRedBrush}"/>
-                                            
-                                            <DockPanel>
-                                                <TextBlock Text="{Binding [OCRLanguage], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                                                <ComboBox ItemsSource="{Binding AvailableOCRLanguages}" SelectedItem="{Binding SourceLanguage}" HorizontalAlignment="Stretch">
-                                                    <ComboBox.ItemTemplate>
-                                                        <DataTemplate>
-                                                            <TextBlock Text="{Binding Converter={x:Static converters:EnumToLocalizedConverter.Instance}, ConverterParameter='OCRLang'}"/>
-                                                        </DataTemplate>
-                                                    </ComboBox.ItemTemplate>
-                                                </ComboBox>
-                                            </DockPanel>
-
-                                            <DockPanel>
-                                                <TextBlock Text="{Binding [TranslationLanguage], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                                                <ComboBox ItemsSource="{Binding AvailableTranslationLanguages}" SelectedItem="{Binding TargetLanguage}" HorizontalAlignment="Stretch">
-                                                    <ComboBox.ItemTemplate>
-                                                        <DataTemplate>
-                                                            <TextBlock Text="{Binding Converter={x:Static converters:EnumToLocalizedConverter.Instance}, ConverterParameter='Lang'}"/>
-                                                        </DataTemplate>
-                                                    </ComboBox.ItemTemplate>
-                                                </ComboBox>
-                                            </DockPanel>
-
-                                            <DockPanel>
-                                                <TextBlock Text="{Binding [TranslationEngine], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                                                <ComboBox ItemsSource="{Binding AvailableTranslationEngines}" SelectedItem="{Binding SelectedTranslationEngine, Mode=TwoWay}" HorizontalAlignment="Stretch">
-                                                    <ComboBox.ItemTemplate>
-                                                        <DataTemplate>
-                                                            <TextBlock Text="{Binding Converter={x:Static converters:EnumToLocalizedConverter.Instance}, ConverterParameter='TranslationEngine'}"/>
-                                                        </DataTemplate>
-                                                    </ComboBox.ItemTemplate>
-                                                </ComboBox>
-                                            </DockPanel>
-
-                                            <!-- Ollama Specific Settings -->
-                                            <StackPanel IsVisible="{Binding IsOllamaVisible}" Spacing="10" Margin="0,5,0,0">
-                                                <Separator Background="#333333" Height="1" Margin="0,5"/>
-                                                <TextBlock Text="Ollama" FontWeight="SemiBold" Foreground="{DynamicResource AccentRedBrush}"/>
-                                                <StackPanel Spacing="5">
-                                                    <TextBlock Text="{Binding [OllamaModel], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>
-                                                    <Grid ColumnDefinitions="*, Auto">
-                                                        <ComboBox Grid.Column="0" 
-                                                                  ItemsSource="{Binding AvailableOllamaModels}" 
-                                                                  Text="{Binding OllamaModel}"
-                                                                  IsEditable="True"
-                                                                  HorizontalAlignment="Stretch"
-                                                                  Margin="0,0,10,0"/>
-                                                        <Button Grid.Column="1" 
-                                                                Content="↻" 
-                                                                Command="{Binding RefreshOllamaModelsCommand}"
-                                                                ToolTip.Tip="Refresh Models"
-                                                                Theme="{StaticResource SmallGothicMetalButton}"/>
-                                                    </Grid>
-                                                    
-                                                    <TextBlock Text="{Binding [OllamaApiUrl], Source={x:Static services:LocalizationService.Instance}}" FontSize="12" Margin="0,5,0,0"/>
-                                                    <TextBox Text="{Binding OllamaApiUrl}" Watermark="http://localhost:11434/api/generate"/>
-                                                </StackPanel>
-                                            </StackPanel>
-                                        </StackPanel>
-                                    </Border>
-
-                                    <!-- 2. Detection & Scanning Group (Second) -->
-                                    <Border Background="#1A1A1A" Padding="15" CornerRadius="4" BorderBrush="#333333" BorderThickness="1" Margin="24,10,0,10">
-                                        <StackPanel Spacing="10">
-                                            <TextBlock Text="{Binding [DetectionSettings], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold" Foreground="{DynamicResource AccentRedBrush}"/>
-                                            
-                                            <StackPanel Spacing="5">
-                                                <CheckBox IsChecked="{Binding ShowAIScanBox}" Content="{Binding [ShowAIScanBox], Source={x:Static services:LocalizationService.Instance}}"/>
-                                                <CheckBox IsChecked="{Binding EnableAIScan}" Content="{Binding [EnableAIScan], Source={x:Static services:LocalizationService.Instance}}"/>
-                                            </StackPanel>
-
-                                            <Separator Background="#333333" Height="1" Margin="0,5"/>
-
-                                            <StackPanel Spacing="5">
-                                                <TextBlock Text="{Binding [AIScanDensity], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>
-                                                <StackPanel Orientation="Horizontal" Spacing="10">
-                                                    <Slider Minimum="4" Maximum="32" Value="{Binding SAM2GridDensity}" 
-                                                            TickFrequency="1" IsSnapToTickEnabled="True" HorizontalAlignment="Stretch" Width="250"/>
-                                                    <TextBlock Text="{Binding SAM2GridDensity}" VerticalAlignment="Center" Width="30"/>
-                                                </StackPanel>
-                                            </StackPanel>
-                                            
-                                            <StackPanel Spacing="5">
-                                                <TextBlock Text="{Binding [AIScanMaxObjects], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>
-                                                <StackPanel Orientation="Horizontal" Spacing="10">
-                                                    <Slider Minimum="5" Maximum="200" Value="{Binding SAM2MaxObjects}" 
-                                                            TickFrequency="5" IsSnapToTickEnabled="True" HorizontalAlignment="Stretch" Width="250"/>
-                                                    <TextBlock Text="{Binding SAM2MaxObjects}" VerticalAlignment="Center" Width="30"/>
-                                                </StackPanel>
-                                            </StackPanel>
-
-                                            <StackPanel Spacing="5">
-                                                <TextBlock Text="{Binding [AIScanMinSize], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>
-                                                <StackPanel Orientation="Horizontal" Spacing="10">
-                                                    <Slider Minimum="5" Maximum="200" Value="{Binding SAM2MinObjectSize}" 
-                                                            TickFrequency="5" IsSnapToTickEnabled="True" HorizontalAlignment="Stretch" Width="250"/>
-                                                    <TextBlock Text="{Binding SAM2MinObjectSize}" VerticalAlignment="Center" Width="30"/>
-                                                </StackPanel>
-                                            </StackPanel>
-                                        </StackPanel>
-                                    </Border>
-                                    
-                                    <!-- 3. Resource Path -->
-                                    <TextBlock Text="{Binding [AIResourcesPath], Source={x:Static services:LocalizationService.Instance}}" FontSize="12" Foreground="#888888" Margin="24,10,0,0"/>
-                                    <DockPanel Margin="24,0,0,10">
-                                        <Button Content="{Binding [SelectPath], Source={x:Static services:LocalizationService.Instance}}" 
-                                                DockPanel.Dock="Right" 
-                                                Theme="{StaticResource SmallGothicMetalButton}"
-                                                Command="{Binding PickAIFolderCommand}" 
-                                                Margin="10,0,0,0"/>
-                                        <TextBox Text="{Binding AIResourcesDirectory}" Margin="0,0,10,0"/>
-                                    </DockPanel>
-                                </StackPanel>
-                            </StackPanel>
-                        </StackPanel>
-                    </Grid>
-                </ScrollViewer>
-            </TabItem>
-            
-            <!-- Output Tab Removed (Merged to Snip) -->
-            
             <!-- Recording Tab -->
             <TabItem Header="{Binding [TabRecord], Source={x:Static services:LocalizationService.Instance}}">
                 <ScrollViewer>
@@ -473,10 +339,150 @@
                                     </StackPanel>
 
                                     <CheckBox Content="{Binding [ShowRecordCursor], Source={x:Static services:LocalizationService.Instance}}" 
-IsChecked="{Binding ShowRecordCursor}" Margin="0,5,0,0"/>
+ IsChecked="{Binding ShowRecordCursor}" Margin="0,5,0,0"/>
                             </StackPanel>
                         </StackPanel>
                     </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- 翻譯設定 (Translation) -->
+            <TabItem Header="{Binding [TabTranslation], Source={x:Static services:LocalizationService.Instance}}">
+                <ScrollViewer>
+                    <Grid ColumnDefinitions="*, Auto" Margin="10">
+                        <StackPanel Grid.Column="0" Spacing="15" Margin="0,0,20,0">
+                            <!-- Translation & Engine Group -->
+                            <Border Background="#1A1A1A" Padding="15" CornerRadius="4" BorderBrush="#333333" BorderThickness="1" Margin="10,10,0,10">
+                                <StackPanel Spacing="10">
+                                    <TextBlock Text="{Binding [TranslationSettings], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold" Foreground="{DynamicResource AccentRedBrush}"/>
+                                    
+                                    <!-- Engine First -->
+                                    <DockPanel>
+                                        <TextBlock Text="{Binding [TranslationEngine], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                        <ComboBox ItemsSource="{Binding AvailableTranslationEngines}" SelectedItem="{Binding SelectedTranslationEngine, Mode=TwoWay}" HorizontalAlignment="Stretch">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding Converter={x:Static converters:EnumToLocalizedConverter.Instance}, ConverterParameter='TranslationEngine'}"/>
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+                                    </DockPanel>
+
+                                    <!-- OCR Source Language -->
+                                    <DockPanel>
+                                        <TextBlock Text="{Binding [OCRLanguage], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                        <ComboBox ItemsSource="{Binding AvailableOCRLanguages}" SelectedItem="{Binding SourceLanguage}" HorizontalAlignment="Stretch">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding Converter={x:Static converters:EnumToLocalizedConverter.Instance}, ConverterParameter='OCRLang'}"/>
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+                                    </DockPanel>
+
+                                    <!-- Target Language -->
+                                    <DockPanel>
+                                        <TextBlock Text="{Binding [TranslationLanguage], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                        <ComboBox ItemsSource="{Binding AvailableTranslationLanguages}" SelectedItem="{Binding TargetLanguage}" HorizontalAlignment="Stretch">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding Converter={x:Static converters:EnumToLocalizedConverter.Instance}, ConverterParameter='Lang'}"/>
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+                                    </DockPanel>
+
+                                    <!-- Ollama Specific Settings -->
+                                    <StackPanel IsVisible="{Binding IsOllamaVisible}" Spacing="10" Margin="0,5,0,0">
+                                        <Separator Background="#333333" Height="1" Margin="0,5"/>
+                                        <TextBlock Text="Ollama" FontWeight="SemiBold" Foreground="{DynamicResource AccentRedBrush}"/>
+                                        <StackPanel Spacing="5">
+                                            <TextBlock Text="{Binding [OllamaModel], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>
+                                            <Grid ColumnDefinitions="*, Auto">
+                                                <ComboBox Grid.Column="0" 
+                                                          ItemsSource="{Binding AvailableOllamaModels}" 
+                                                          Text="{Binding OllamaModel}"
+                                                          IsEditable="True"
+                                                          HorizontalAlignment="Stretch"
+                                                          Margin="0,0,10,0"/>
+                                                <Button Grid.Column="1" 
+                                                        Content="↻" 
+                                                        Command="{Binding RefreshOllamaModelsCommand}"
+                                                        ToolTip.Tip="Refresh Models"
+                                                        Theme="{StaticResource SmallGothicMetalButton}"/>
+                                            </Grid>
+                                            
+                                            <TextBlock Text="{Binding [OllamaApiUrl], Source={x:Static services:LocalizationService.Instance}}" FontSize="12" Margin="0,5,0,0"/>
+                                            <TextBox Text="{Binding OllamaApiUrl}" Watermark="http://localhost:11434/api/generate"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </Grid>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- AI Settings (AI) -->
+            <TabItem Header="{Binding [TabAI], Source={x:Static services:LocalizationService.Instance}}">
+                <ScrollViewer>
+                    <Grid ColumnDefinitions="*, Auto" Margin="10">
+                        <StackPanel Grid.Column="0" Spacing="15" Margin="0,0,20,0">
+                            <StackPanel Spacing="10">
+                                <CheckBox IsChecked="{Binding EnableAI}" Content="{Binding [EnableAI], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold"/>
+                                
+                                <StackPanel Spacing="5" IsEnabled="{Binding EnableAI}">
+                                    <!-- Detection & Scanning Group (First in AI Tab now) -->
+                                    <Border Background="#1A1A1A" Padding="15" CornerRadius="4" BorderBrush="#333333" BorderThickness="1" Margin="24,10,0,10">
+                                        <StackPanel Spacing="10">
+                                            <TextBlock Text="{Binding [DetectionSettings], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold" Foreground="{DynamicResource AccentRedBrush}"/>
+                                            
+                                            <StackPanel Spacing="5">
+                                                <CheckBox IsChecked="{Binding ShowAIScanBox}" Content="{Binding [ShowAIScanBox], Source={x:Static services:LocalizationService.Instance}}"/>
+                                                <CheckBox IsChecked="{Binding EnableAIScan}" Content="{Binding [EnableAIScan], Source={x:Static services:LocalizationService.Instance}}"/>
+                                            </StackPanel>
+                                            <Separator Background="#333333" Height="1" Margin="0,5"/>
+                                            <StackPanel Spacing="5">
+                                                <TextBlock Text="{Binding [AIScanDensity], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>
+                                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                                    <Slider Minimum="4" Maximum="32" Value="{Binding SAM2GridDensity}" 
+                                                            TickFrequency="1" IsSnapToTickEnabled="True" HorizontalAlignment="Stretch" Width="250"/>
+                                                    <TextBlock Text="{Binding SAM2GridDensity}" VerticalAlignment="Center" Width="30"/>
+                                                </StackPanel>
+                                            </StackPanel>
+                                            <StackPanel Spacing="5">
+                                                <TextBlock Text="{Binding [AIScanMaxObjects], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>
+                                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                                    <Slider Minimum="5" Maximum="200" Value="{Binding SAM2MaxObjects}" 
+                                                            TickFrequency="5" IsSnapToTickEnabled="True" HorizontalAlignment="Stretch" Width="250"/>
+                                                    <TextBlock Text="{Binding SAM2MaxObjects}" VerticalAlignment="Center" Width="30"/>
+                                                </StackPanel>
+                                            </StackPanel>
+                                            <StackPanel Spacing="5">
+                                                <TextBlock Text="{Binding [AIScanMinSize], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>
+                                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                                    <Slider Minimum="5" Maximum="200" Value="{Binding SAM2MinObjectSize}" 
+                                                            TickFrequency="5" IsSnapToTickEnabled="True" HorizontalAlignment="Stretch" Width="250"/>
+                                                    <TextBlock Text="{Binding SAM2MinObjectSize}" VerticalAlignment="Center" Width="30"/>
+                                                </StackPanel>
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
+                                    
+                                    <!-- Resource Path -->
+                                    <TextBlock Text="{Binding [AIResourcesPath], Source={x:Static services:LocalizationService.Instance}}" FontSize="12" Foreground="#888888" Margin="24,10,0,0"/>
+                                    <DockPanel Margin="24,0,0,10">
+                                        <Button Content="{Binding [SelectPath], Source={x:Static services:LocalizationService.Instance}}" 
+                                                DockPanel.Dock="Right" 
+                                                Theme="{StaticResource SmallGothicMetalButton}"
+                                                Command="{Binding PickAIFolderCommand}" 
+                                                Margin="10,0,0,0"/>
+                                        <TextBox Text="{Binding AIResourcesDirectory}" Margin="0,0,10,0"/>
+                                    </DockPanel>
+                                </StackPanel>
+                            </StackPanel>
+                        </StackPanel>
+                    </Grid>
                 </ScrollViewer>
             </TabItem>
             
