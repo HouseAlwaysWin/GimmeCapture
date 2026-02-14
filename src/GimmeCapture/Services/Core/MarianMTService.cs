@@ -34,6 +34,8 @@ public class MarianMTService : IDisposable
     private int _bosTokenId = 0;
     private int _zhTokenId = 128102; // __zh__ from tokenizer.json
     private int _jaTokenId = 128046; // __ja__ from tokenizer.json
+    private int _enTokenId = 128022; // __en__ from tokenizer.json
+    private int _koTokenId = 128052; // __ko__ from tokenizer.json
 
     public MarianMTService(AIResourceService aiResourceService)
     {
@@ -128,8 +130,10 @@ public class MarianMTService : IDisposable
             {
                 if (_vocab.TryGetValue("__zh__", out var zhId)) _zhTokenId = zhId;
                 if (_vocab.TryGetValue("__ja__", out var jaId)) _jaTokenId = jaId;
+                if (_vocab.TryGetValue("__en__", out var enId)) _enTokenId = enId;
+                if (_vocab.TryGetValue("__ko__", out var koId)) _koTokenId = koId;
             }
-            Debug.WriteLine($"[MarianMT] Config: pad={_padTokenId}, eos={_eosTokenId}, bos={_bosTokenId}, ja={_jaTokenId}, zh={_zhTokenId}");
+            Debug.WriteLine($"[MarianMT] Config: pad={_padTokenId}, eos={_eosTokenId}, bos={_bosTokenId}, ja={_jaTokenId}, en={_enTokenId}, ko={_koTokenId}, zh={_zhTokenId}");
         }
         catch { }
     }
@@ -157,12 +161,28 @@ public class MarianMTService : IDisposable
             if (_vocab.TryGetValue(tokenStr, out int modelId))
             {
                 modelIds.Add(modelId);
+                // Log tokens that map to unk (3) even though they're in the vocab
+                if (modelId == 3)
+                {
+                    var hexBytes = string.Join(" ", System.Text.Encoding.UTF8.GetBytes(tokenStr).Select(b => $"{b:X2}"));
+                    Debug.WriteLine($"[MarianMT] WARNING: Vocab maps to unk(3): '{tokenStr}' hex=[{hexBytes}] spmId={token.Id}");
+                }
             }
             else
             {
-                // Unknown token - map to <unk> (ID=3)
-                modelIds.Add(3);
-                Debug.WriteLine($"[MarianMT] Token not in vocab: '{tokenStr}'");
+                // Fallback: M2M100 uses fairseq_offset=1, so model_id = spm_id + 1
+                int fallbackId = token.Id + 1;
+                if (fallbackId >= 0 && fallbackId < 128112)
+                {
+                    modelIds.Add(fallbackId);
+                    var hexBytes = string.Join(" ", System.Text.Encoding.UTF8.GetBytes(tokenStr).Select(b => $"{b:X2}"));
+                    Debug.WriteLine($"[MarianMT] Vocab miss, fallback: '{tokenStr}' hex=[{hexBytes}] spm={token.Id} -> model={fallbackId}");
+                }
+                else
+                {
+                    modelIds.Add(3);
+                    Debug.WriteLine($"[MarianMT] Token not in vocab: '{tokenStr}' (spm={token.Id}, out of range)");
+                }
             }
         }
         
@@ -191,7 +211,84 @@ public class MarianMTService : IDisposable
         return text;
     }
 
-    public async Task<string> TranslateAsync(string text, TranslationLanguage target, CancellationToken ct = default)
+    /// <summary>
+    /// Check if text contains any CJK (Chinese/Japanese/Korean) characters.
+    /// Used to skip pure-Latin lines that don't need translation.
+    /// </summary>
+    private static bool HasCjk(string text)
+    {
+        foreach (char c in text)
+        {
+            // CJK Unified Ideographs, Hiragana, Katakana, Hangul
+            if ((c >= '\u4E00' && c <= '\u9FFF') ||  // CJK Unified Ideographs
+                (c >= '\u3040' && c <= '\u309F') ||  // Hiragana
+                (c >= '\u30A0' && c <= '\u30FF') ||  // Katakana
+                (c >= '\uAC00' && c <= '\uD7A3') ||  // Hangul
+                (c >= '\u3400' && c <= '\u4DBF') ||  // CJK Extension A
+                (c >= '\uF900' && c <= '\uFAFF'))    // CJK Compatibility
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Detect the language of a line by analyzing its characters.
+    /// Returns the M2M100 source language token ID.
+    /// Priority: Hiragana/Katakana → ja, Hangul → ko, CJK Ideographs → zh, otherwise → en
+    /// </summary>
+    private int DetectLineLang(string text)
+    {
+        bool hasHiraganaKatakana = false;
+        bool hasHangul = false;
+        bool hasCjkIdeograph = false;
+
+        foreach (char c in text)
+        {
+            if ((c >= '\u3040' && c <= '\u309F') || // Hiragana
+                (c >= '\u30A0' && c <= '\u30FF'))    // Katakana
+            {
+                hasHiraganaKatakana = true;
+            }
+            else if (c >= '\uAC00' && c <= '\uD7A3') // Hangul
+            {
+                hasHangul = true;
+            }
+            else if ((c >= '\u4E00' && c <= '\u9FFF') || // CJK Unified Ideographs
+                     (c >= '\u3400' && c <= '\u4DBF') || // CJK Extension A
+                     (c >= '\uF900' && c <= '\uFAFF'))   // CJK Compatibility
+            {
+                hasCjkIdeograph = true;
+            }
+        }
+
+        // Hiragana/Katakana is unique to Japanese
+        if (hasHiraganaKatakana) return _jaTokenId;
+        // Hangul is unique to Korean
+        if (hasHangul) return _koTokenId;
+        // CJK Ideographs without Japanese/Korean markers → Chinese
+        if (hasCjkIdeograph) return _zhTokenId;
+        // No CJK at all → English
+        return _enTokenId;
+    }
+
+    /// <summary>
+    /// Map OCRLanguage to M2M100 source language token ID.
+    /// Returns -1 for Auto (per-line detection).
+    /// </summary>
+    private int GetSourceLangToken(OCRLanguage source)
+    {
+        return source switch
+        {
+            OCRLanguage.Japanese => _jaTokenId,
+            OCRLanguage.English => _enTokenId,
+            OCRLanguage.Korean => _koTokenId,
+            OCRLanguage.TraditionalChinese => _zhTokenId,
+            OCRLanguage.SimplifiedChinese => _zhTokenId,
+            _ => -1 // Auto: per-line detection
+        };
+    }
+
+    public async Task<string> TranslateAsync(string text, TranslationLanguage target, OCRLanguage source = OCRLanguage.Auto, CancellationToken ct = default)
     {
         try
         {
@@ -199,7 +296,17 @@ public class MarianMTService : IDisposable
             if (_encoderSession == null || _decoderSession == null || _spmTokenizer == null || _vocab == null) return text;
 
             Debug.WriteLine($"[MarianMT] === Translation Start ===");
-            Debug.WriteLine($"[MarianMT] Input: '{text}'");
+            Debug.WriteLine($"[MarianMT] Input: '{text}', source={source}");
+
+            // Clean OCR artifacts: <unk0>, <unk1>, etc. → spaces
+            text = System.Text.RegularExpressions.Regex.Replace(text, @"<unk\d*>", " ");
+            text = System.Text.RegularExpressions.Regex.Replace(text, @"\s{2,}", " ");
+
+            // Determine fixed source language token (or -1 for auto-detection)
+            int fixedSourceToken = GetSourceLangToken(source);
+            // Check if fixed source is a CJK language (ja/ko/zh)
+            bool sourceIsCjkLanguage = source == OCRLanguage.Japanese || source == OCRLanguage.Korean ||
+                                       source == OCRLanguage.TraditionalChinese || source == OCRLanguage.SimplifiedChinese;
 
             var lines = text.Split(new[] { '\r', '\n' }, StringSplitOptions.None);
             var translatedLines = new List<string>();
@@ -212,11 +319,45 @@ public class MarianMTService : IDisposable
                     continue;
                 }
 
+                // Determine source language token for this line
+                int sourceLangToken;
+                if (fixedSourceToken > 0)
+                {
+                    // Explicit source language: skip lines that don't match
+                    bool lineHasCjk = HasCjk(line);
+                    if (sourceIsCjkLanguage && !lineHasCjk)
+                    {
+                        // Source is CJK language but line is pure Latin → skip
+                        Debug.WriteLine($"[MarianMT] Skip non-CJK line (source={source}): '{line}'");
+                        translatedLines.Add(line.Trim());
+                        continue;
+                    }
+                    if (!sourceIsCjkLanguage && lineHasCjk)
+                    {
+                        // Source is English but line is CJK → skip
+                        Debug.WriteLine($"[MarianMT] Skip CJK line (source={source}): '{line}'");
+                        translatedLines.Add(line.Trim());
+                        continue;
+                    }
+                    sourceLangToken = fixedSourceToken;
+                }
+                else
+                {
+                    // Auto-detect per line: ja/ko/zh/en
+                    sourceLangToken = DetectLineLang(line);
+                    string langName = sourceLangToken == _jaTokenId ? "ja" :
+                                      sourceLangToken == _koTokenId ? "ko" :
+                                      sourceLangToken == _zhTokenId ? "zh" :
+                                      sourceLangToken == _enTokenId ? "en" : "??";
+                    Debug.WriteLine($"[MarianMT] Auto-detect: {langName}");
+                }
+                Debug.WriteLine($"[MarianMT] Line src={sourceLangToken}: '{line}'");
+
                 var tokenIds = EncodeText(line);
-                Debug.WriteLine($"[MarianMT] Encoded '{line}' -> {tokenIds.Count} model IDs: [{string.Join(",", tokenIds.Take(20))}]");
+                Debug.WriteLine($"[MarianMT] Encoded -> {tokenIds.Count} model IDs: [{string.Join(",", tokenIds.Take(20))}]");
 
                 // Build encoder input: [source_lang_token, ...token_ids, eos]
-                var inputIds = new List<long> { _jaTokenId };
+                var inputIds = new List<long> { sourceLangToken };
                 inputIds.AddRange(tokenIds.Select(id => (long)id));
                 inputIds.Add(_eosTokenId);
                 Debug.WriteLine($"[MarianMT] Encoder input ({inputIds.Count}): [{string.Join(",", inputIds.Take(30))}]");
@@ -276,6 +417,21 @@ public class MarianMTService : IDisposable
                         Debug.WriteLine($"[MarianMT] EOS at step {i}");
                         break;
                     }
+                    
+                    // Early termination: detect loops
+                    // Check for 3+ consecutive identical tokens (e.g., 3,3,3)
+                    if (outputIds.Count >= 2 && outputIds[^1] == nextToken && outputIds[^2] == nextToken)
+                    {
+                        Debug.WriteLine($"[MarianMT] Repeated token loop at step {i}, stopping.");
+                        break;
+                    }
+                    // Check for alternating 2-token pattern (e.g., 22,3,22,3)
+                    if (outputIds.Count >= 3 && outputIds[^2] == nextToken && outputIds[^1] == outputIds[^3])
+                    {
+                        Debug.WriteLine($"[MarianMT] Alternating token loop at step {i}, stopping.");
+                        break;
+                    }
+                    
                     outputIds.Add(nextToken);
                 }
 
@@ -286,6 +442,9 @@ public class MarianMTService : IDisposable
                 if (resultIds.Length > 0)
                 {
                     var decoded = DecodeIds(resultIds);
+                    // Clean up <unk> tokens from output
+                    decoded = decoded.Replace("<unk>", "");
+                    decoded = System.Text.RegularExpressions.Regex.Replace(decoded, @"\s{2,}", " ");
                     Debug.WriteLine($"[MarianMT] Decoded: '{decoded}'");
                     translatedLines.Add(decoded.Trim());
                 }

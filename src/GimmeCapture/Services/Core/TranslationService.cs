@@ -1065,7 +1065,7 @@ public class TranslationService
             if (_settings.SelectedTranslationEngine == TranslationEngine.MarianMT)
             {
                 Debug.WriteLine("[Translation] Using MarianMT (Offline) engine.");
-                return await _marianMTService.TranslateAsync(text, _settings.TargetLanguage, ct);
+                return await _marianMTService.TranslateAsync(text, _settings.TargetLanguage, _settings.SourceLanguage, ct);
             }
 
             string model = _settings.OllamaModel;
