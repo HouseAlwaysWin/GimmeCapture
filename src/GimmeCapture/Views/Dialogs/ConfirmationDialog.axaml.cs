@@ -59,18 +59,21 @@ namespace GimmeCapture.Views.Dialogs
 
         private void OnYesClick(object? sender, RoutedEventArgs e)
         {
+            e.Handled = true;
             Result = ConfirmationResult.Yes;
             Close();
         }
 
         private void OnNoClick(object? sender, RoutedEventArgs e)
         {
+            e.Handled = true;
             Result = ConfirmationResult.No;
             Close();
         }
 
         private void OnCancelClick(object? sender, RoutedEventArgs e)
         {
+            e.Handled = true;
             Result = ConfirmationResult.Cancel;
             Close();
         }
