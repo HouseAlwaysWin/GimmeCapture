@@ -1,9 +1,9 @@
-<Window xmlns="https://github.com/avaloniaui"
+﻿<Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:vm="using:GimmeCapture.ViewModels.Main"
-        xmlns:services="using:GimmeCapture.Services.Core"
+        xmlns:services="using:GimmeCapture.Services.Core.Infrastructure"
         mc:Ignorable="d" d:DesignWidth="350" d:DesignHeight="100"
         x:Class="GimmeCapture.Views.Shared.RecordingProgressWindow"
         x:DataType="vm:SnipWindowViewModel"
@@ -126,3 +126,5 @@
         </Grid>
     </Grid>
 </Window>
+
+

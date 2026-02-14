@@ -4,7 +4,8 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:GimmeCapture.ViewModels.Main"
              xmlns:m="using:GimmeCapture.Models"
-             xmlns:services="using:GimmeCapture.Services.Core"
+             xmlns:services="using:GimmeCapture.Services.Core.Media"
+             xmlns:infra="using:GimmeCapture.Services.Core.Infrastructure"
              xmlns:media="using:Avalonia.Media"
              xmlns:c="using:GimmeCapture.Views.Controls"
              mc:Ignorable="d" d:DesignWidth="300" d:DesignHeight="36"
@@ -58,7 +59,7 @@
             
             <Button Theme="{StaticResource SnipButton}" Width="32" BorderThickness="1" 
                     Command="{Binding PauseRecordingCommand}" 
-                    ToolTip.Tip="{Binding [Pause], Source={x:Static services:LocalizationService.Instance}}">
+                    ToolTip.Tip="{Binding [Pause], Source={x:Static infra:LocalizationService.Instance}}">
                  <Button.IsVisible>
                     <MultiBinding Converter="{x:Static BoolConverters.And}">
                         <Binding Path="IsRecordingMode"/>
@@ -77,7 +78,7 @@
                     Command="{Binding StopRecordingCommand}" 
                     IsEnabled="{Binding RecState, Converter={StaticResource EnumNotMatchConverter}, ConverterParameter={x:Static services:RecordingState.Idle}}"
                     IsVisible="{Binding IsRecordingMode}"
-                    ToolTip.Tip="{Binding [Stop], Source={x:Static services:LocalizationService.Instance}}">
+                    ToolTip.Tip="{Binding [Stop], Source={x:Static infra:LocalizationService.Instance}}">
                 <Rectangle Fill="White" Width="10" Height="10"/>
             </Button>
 

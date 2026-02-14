@@ -1,4 +1,4 @@
-using Avalonia.Controls;
+﻿using Avalonia.Controls;
 using Avalonia.Interactivity;
 using System.Threading.Tasks;
 using Avalonia;
@@ -42,7 +42,7 @@ namespace GimmeCapture.Views.Dialogs
 
         public static async Task<ConfirmationResult> ShowConfirmation(Window owner)
         {
-            var loc = Services.Core.LocalizationService.Instance;
+            var loc = LocalizationService.Instance;
             return await ShowConfirmation(owner, loc["UnsavedTitle"], loc["UnsavedMessage"]);
         }
 
@@ -87,3 +87,4 @@ namespace GimmeCapture.Views.Dialogs
         }
     }
 }
+

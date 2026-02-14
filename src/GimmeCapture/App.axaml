@@ -1,7 +1,7 @@
-<Application xmlns="https://github.com/avaloniaui"
+﻿<Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:cv="using:GimmeCapture.Converters"
-             xmlns:services="using:GimmeCapture.Services.Core"
+             xmlns:services="using:GimmeCapture.Services.Core.Infrastructure"
              x:Class="GimmeCapture.App"
              RequestedThemeVariant="Dark">
              <!-- "Default" ThemeVariant follows system theme variant. "Dark" or "Light" are other available options. -->
@@ -61,3 +61,4 @@
         </Style>
     </Application.Styles>
 </Application>
+

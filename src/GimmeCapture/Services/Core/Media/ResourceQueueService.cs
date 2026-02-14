@@ -7,7 +7,7 @@ using System.Reactive.Linq;
 using System.Reactive.Disposables;
 using System.Reactive.Subjects;
 
-namespace GimmeCapture.Services.Core;
+namespace GimmeCapture.Services.Core.Media;
 
 public enum QueueItemStatus
 {

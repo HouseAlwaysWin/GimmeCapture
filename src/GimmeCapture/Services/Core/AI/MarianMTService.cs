@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -14,7 +14,7 @@ using Microsoft.ML.OnnxRuntime.Tensors;
 using GimmeCapture.Models;
 using Microsoft.ML.Tokenizers;
 
-namespace GimmeCapture.Services.Core;
+namespace GimmeCapture.Services.Core.AI;
 
 public class MarianMTService : IDisposable
 {

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.IO.Compression;
 using System.Net.Http;
@@ -6,7 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using ReactiveUI;
 
-namespace GimmeCapture.Services.Core;
+namespace GimmeCapture.Services.Core.AI;
 
 public class AIModelDownloader : ReactiveObject
 {

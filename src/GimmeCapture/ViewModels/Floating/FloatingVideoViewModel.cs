@@ -1,4 +1,4 @@
-using Avalonia;
+﻿using Avalonia;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using ReactiveUI;
@@ -87,27 +87,27 @@ public partial class FloatingVideoViewModel : ViewModelBase, IDisposable, IDrawi
     public string BlurHotkey => _appSettingsService?.Settings.BlurHotkey ?? "B";
 
     // Tooltip Hints
-    public string UndoTooltip => $"{GimmeCapture.Services.Core.LocalizationService.Instance["Undo"]} ({UndoHotkey})";
-    public string RedoTooltip => $"{GimmeCapture.Services.Core.LocalizationService.Instance["Redo"]} ({RedoHotkey})";
-    public string ClearTooltip => $"{GimmeCapture.Services.Core.LocalizationService.Instance["Clear"]} ({ClearHotkey})";
-    public string SaveTooltip => $"{GimmeCapture.Services.Core.LocalizationService.Instance["TipSave"]} ({SaveHotkey})";
-    public string CopyTooltip => $"{GimmeCapture.Services.Core.LocalizationService.Instance["TipCopy"]} ({CopyHotkey})";
-    public string PinTooltip => $"{GimmeCapture.Services.Core.LocalizationService.Instance["TipPin"]} ({PinHotkey})";
-    public string RectangleTooltip => $"{GimmeCapture.Services.Core.LocalizationService.Instance["TipRectangle"]} ({RectangleHotkey})";
-    public string EllipseTooltip => $"{GimmeCapture.Services.Core.LocalizationService.Instance["TipEllipse"]} ({EllipseHotkey})";
-    public string ArrowTooltip => $"{GimmeCapture.Services.Core.LocalizationService.Instance["TipArrow"]} ({ArrowHotkey})";
-    public string LineTooltip => $"{GimmeCapture.Services.Core.LocalizationService.Instance["TipLine"]} ({LineHotkey})";
-    public string PenTooltip => $"{GimmeCapture.Services.Core.LocalizationService.Instance["TipPen"]} ({PenHotkey})";
-    public string TextTooltip => $"{GimmeCapture.Services.Core.LocalizationService.Instance["TipText"]} ({TextHotkey})";
-    public string MosaicTooltip => $"{GimmeCapture.Services.Core.LocalizationService.Instance["TipMosaic"]} ({MosaicHotkey})";
-    public string BlurTooltip => $"{GimmeCapture.Services.Core.LocalizationService.Instance["TipBlur"]} ({BlurHotkey})";
-    public string PlaybackTooltip => $"{GimmeCapture.Services.Core.LocalizationService.Instance["ActionPlayback"]} ({PlaybackHotkey})";
-    public string ToggleToolbarTooltip => $"{GimmeCapture.Services.Core.LocalizationService.Instance["ActionToolbar"]} ({_appSettingsService?.Settings.ToggleToolbarHotkey ?? "H"})";
-    public string CloseTooltip => $"{GimmeCapture.Services.Core.LocalizationService.Instance["ActionClose"]} ({CloseHotkey})";
-    public string RepeatTooltip => $"{GimmeCapture.Services.Core.LocalizationService.Instance["ActionRepeat"]}";
-    public string SelectionTooltip => $"{GimmeCapture.Services.Core.LocalizationService.Instance["TipSelectionArea"]} (S)";
-    public string CropTooltip => $"{GimmeCapture.Services.Core.LocalizationService.Instance["TipCrop"]} (C)";
-    public string PinSelectionTooltip => $"{GimmeCapture.Services.Core.LocalizationService.Instance["TipPinSelection"]} (F3)";
+    public string UndoTooltip => $"{LocalizationService.Instance["Undo"]} ({UndoHotkey})";
+    public string RedoTooltip => $"{LocalizationService.Instance["Redo"]} ({RedoHotkey})";
+    public string ClearTooltip => $"{LocalizationService.Instance["Clear"]} ({ClearHotkey})";
+    public string SaveTooltip => $"{LocalizationService.Instance["TipSave"]} ({SaveHotkey})";
+    public string CopyTooltip => $"{LocalizationService.Instance["TipCopy"]} ({CopyHotkey})";
+    public string PinTooltip => $"{LocalizationService.Instance["TipPin"]} ({PinHotkey})";
+    public string RectangleTooltip => $"{LocalizationService.Instance["TipRectangle"]} ({RectangleHotkey})";
+    public string EllipseTooltip => $"{LocalizationService.Instance["TipEllipse"]} ({EllipseHotkey})";
+    public string ArrowTooltip => $"{LocalizationService.Instance["TipArrow"]} ({ArrowHotkey})";
+    public string LineTooltip => $"{LocalizationService.Instance["TipLine"]} ({LineHotkey})";
+    public string PenTooltip => $"{LocalizationService.Instance["TipPen"]} ({PenHotkey})";
+    public string TextTooltip => $"{LocalizationService.Instance["TipText"]} ({TextHotkey})";
+    public string MosaicTooltip => $"{LocalizationService.Instance["TipMosaic"]} ({MosaicHotkey})";
+    public string BlurTooltip => $"{LocalizationService.Instance["TipBlur"]} ({BlurHotkey})";
+    public string PlaybackTooltip => $"{LocalizationService.Instance["ActionPlayback"]} ({PlaybackHotkey})";
+    public string ToggleToolbarTooltip => $"{LocalizationService.Instance["ActionToolbar"]} ({_appSettingsService?.Settings.ToggleToolbarHotkey ?? "H"})";
+    public string CloseTooltip => $"{LocalizationService.Instance["ActionClose"]} ({CloseHotkey})";
+    public string RepeatTooltip => $"{LocalizationService.Instance["ActionRepeat"]}";
+    public string SelectionTooltip => $"{LocalizationService.Instance["TipSelectionArea"]} (S)";
+    public string CropTooltip => $"{LocalizationService.Instance["TipCrop"]} (C)";
+    public string PinSelectionTooltip => $"{LocalizationService.Instance["TipPinSelection"]} (F3)";
 
     private double _wingScale = 1.0;
     public double WingScale
@@ -181,9 +181,9 @@ public partial class FloatingVideoViewModel : ViewModelBase, IDisposable, IDrawi
     // Dependencies
     private readonly GimmeCapture.Services.Abstractions.IClipboardService _clipboardService;
     public GimmeCapture.Services.Abstractions.IClipboardService ClipboardService => _clipboardService;
-    private readonly Services.Core.AppSettingsService? _appSettingsService;
+    private readonly AppSettingsService? _appSettingsService;
 
-    public FloatingVideoViewModel(string videoPath, string ffmpegPath, int width, int height, double originalWidth, double originalHeight, Avalonia.Media.Color borderColor, double borderThickness, bool hideDecoration, bool hideBorder, GimmeCapture.Services.Abstractions.IClipboardService clipboardService, Services.Core.AppSettingsService? appSettingsService)
+    public FloatingVideoViewModel(string videoPath, string ffmpegPath, int width, int height, double originalWidth, double originalHeight, Avalonia.Media.Color borderColor, double borderThickness, bool hideDecoration, bool hideBorder, GimmeCapture.Services.Abstractions.IClipboardService clipboardService, AppSettingsService? appSettingsService)
     {
         VideoPath = videoPath;
         _ffmpegPath = ffmpegPath;
@@ -217,3 +217,5 @@ public partial class FloatingVideoViewModel : ViewModelBase, IDisposable, IDrawi
         VideoBitmap?.Dispose();
     }
 }
+
+

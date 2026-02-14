@@ -1,6 +1,6 @@
-<Window xmlns="https://github.com/avaloniaui"
+﻿<Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:services="using:GimmeCapture.Services.Core"
+        xmlns:services="using:GimmeCapture.Services.Core.Infrastructure"
         xmlns:views="using:GimmeCapture.Views.Dialogs"
         x:Class="GimmeCapture.Views.Dialogs.ConfirmationDialog"
         x:DataType="views:ConfirmationDialog"
@@ -84,3 +84,5 @@
         </Panel>
     </Panel>
 </Window>
+
+

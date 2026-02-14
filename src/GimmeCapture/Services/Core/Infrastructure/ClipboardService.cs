@@ -1,4 +1,4 @@
-using Avalonia;
+﻿using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media.Imaging;
@@ -10,7 +10,7 @@ using System.IO;
 using System.Threading.Tasks;
 using GimmeCapture.Services.Abstractions;
 
-namespace GimmeCapture.Services.Core;
+namespace GimmeCapture.Services.Core.Infrastructure;
 
 public class ClipboardService : IClipboardService
 {

@@ -1,4 +1,4 @@
-<Window xmlns="https://github.com/avaloniaui"
+﻿<Window xmlns="https://github.com/avaloniaui"
         x:Name="root"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -7,7 +7,7 @@
         xmlns:cv="using:GimmeCapture.Converters"
         xmlns:ctl="using:GimmeCapture.Views.Controls"
         xmlns:m="using:GimmeCapture.Models"
-        xmlns:services="using:GimmeCapture.Services.Core"
+        xmlns:services="using:GimmeCapture.Services.Core.Infrastructure"
         mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
         x:Class="GimmeCapture.Views.Main.SnipWindow"
         x:DataType="vm:SnipWindowViewModel"
@@ -404,3 +404,5 @@
         </ItemsControl>
     </Grid>
 </Window>
+
+

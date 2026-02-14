@@ -1,10 +1,10 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Text.Json;
 using System.Threading.Tasks;
 using GimmeCapture.Models;
 
-namespace GimmeCapture.Services.Core;
+namespace GimmeCapture.Services.Core.Infrastructure;
 
 public class AppSettingsService
 {

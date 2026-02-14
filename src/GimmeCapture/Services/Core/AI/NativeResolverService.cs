@@ -1,8 +1,8 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Runtime.InteropServices;
 
-namespace GimmeCapture.Services.Core;
+namespace GimmeCapture.Services.Core.AI;
 
 public class NativeResolverService
 {

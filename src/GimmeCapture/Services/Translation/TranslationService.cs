@@ -27,7 +27,7 @@ using SKRectI = SkiaSharp.SKRectI;
 // As it's not present, I will assume the instruction is about its logical location
 // and that the `using` statement correctly reflects its new location.
 
-namespace GimmeCapture.Services.Core;
+namespace GimmeCapture.Services.Translation;
 
 public class TranslationService
 {

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
@@ -8,7 +8,7 @@ using Avalonia.Media;
 using Avalonia.Platform;
 using ReactiveUI;
 
-namespace GimmeCapture.Services.Core;
+namespace GimmeCapture.Services.Core.Infrastructure;
     public enum Language
     {
         English,

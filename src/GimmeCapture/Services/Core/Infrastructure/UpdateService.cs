@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -14,7 +14,7 @@ using System.Threading.Tasks;
 using Avalonia.Media;
 using ReactiveUI;
 
-namespace GimmeCapture.Services.Core;
+namespace GimmeCapture.Services.Core.Infrastructure;
 
 public class ReleaseInfo
 {

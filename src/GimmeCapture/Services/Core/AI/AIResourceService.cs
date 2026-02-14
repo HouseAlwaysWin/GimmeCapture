@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.IO.Compression;
 using System.Net.Http;
@@ -11,7 +11,7 @@ using Microsoft.ML.OnnxRuntime.Tensors;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace GimmeCapture.Services.Core;
+namespace GimmeCapture.Services.Core.AI;
 
 public class AIResourceService : ReactiveObject
 {

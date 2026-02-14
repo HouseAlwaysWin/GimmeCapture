@@ -10,7 +10,7 @@ using Avalonia;
 using ReactiveUI;
 using GimmeCapture.Models;
 
-namespace GimmeCapture.Services.Core;
+namespace GimmeCapture.Services.Core.Media;
 
 public enum RecordingState { Idle, Recording, Paused }
 
