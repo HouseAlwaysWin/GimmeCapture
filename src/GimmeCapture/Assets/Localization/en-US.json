@@ -195,7 +195,7 @@
   "TipMosaic": "Mosaic",
   "TipBlur": "Blur",
   "OCRLanguage": "OCR Source Language:",
-  "OCRLangAuto": "Auto Detect (General/Chinese)",
+  "OCRLangAuto": "Auto Detect",
   "OCRLangEnglish": "English",
   "OCRLangTraditionalChinese": "Traditional Chinese",
   "OCRLangSimplifiedChinese": "Simplified Chinese",
@@ -215,8 +215,5 @@
   "TranslationEngine": "Translation Engine:",
   "TranslationEngineOllama": "Ollama (Online LLM)",
   "TranslationEngineMarianMT": "MarianMT (Offline)",
-  "TranslationEngineGemini": "Gemini (Google AI)",
-  "GeminiModel": "Gemini Model Name:",
-  "GeminiApiKey": "Gemini API Key:",
   "MarianMTDownloadConfirm": "Offline translation requires downloading a special module (~400MB). Download now?"
 }

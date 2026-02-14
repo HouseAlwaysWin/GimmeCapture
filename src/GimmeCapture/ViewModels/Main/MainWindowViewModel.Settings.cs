@@ -86,7 +86,6 @@ public partial class MainWindowViewModel
             {
                 this.RaiseAndSetIfChanged(ref _selectedTranslationEngine, value);
                 this.RaisePropertyChanged(nameof(IsOllamaVisible));
-                this.RaisePropertyChanged(nameof(IsGeminiVisible));
                 
                 // Notify language lists changed
                 this.RaisePropertyChanged(nameof(AvailableOCRLanguages));
@@ -115,7 +114,6 @@ public partial class MainWindowViewModel
     }
 
     public bool IsOllamaVisible => SelectedTranslationEngine == TranslationEngine.Ollama;
-    public bool IsGeminiVisible => SelectedTranslationEngine == TranslationEngine.Gemini;
 
     public LanguageOption[] AvailableLanguages { get; } = new[]
     {
@@ -677,48 +675,9 @@ public partial class MainWindowViewModel
         }
     }
 
-    private string _geminiApiKey = "";
-    public string GeminiApiKey
-    {
-        get => _geminiApiKey;
-        set
-        {
-            this.RaiseAndSetIfChanged(ref _geminiApiKey, value);
-            if (!_isDataLoading)
-            {
-                _settingsService.Settings.GeminiApiKey = value;
-                IsModified = true;
-                _ = SaveSettingsAsync();
-            }
-        }
-    }
-
-    private string _geminiModel = "gemini-2.0-flash";
-    public string GeminiModel
-    {
-        get => _geminiModel;
-        set
-        {
-            this.RaiseAndSetIfChanged(ref _geminiModel, value);
-            if (!_isDataLoading)
-            {
-                _settingsService.Settings.GeminiModel = value;
-                IsModified = true;
-                _ = SaveSettingsAsync();
-            }
-        }
-    }
 
     public ObservableCollection<string> AvailableOllamaModels { get; } = new();
 
-    public string[] AvailableGeminiModels { get; } = { 
-        "gemini-2.0-flash", 
-        "gemini-2.0-flash-exp",
-        "gemini-1.5-flash",
-        "gemini-1.5-flash-8b",
-        "gemini-1.5-pro",
-        "gemini-2.0-pro-exp-02-05"
-    };
     public ReactiveCommand<Unit, Unit> RefreshOllamaModelsCommand { get; private set; }
 
     public async Task RefreshOllamaModelsAsync()
@@ -861,8 +820,6 @@ public partial class MainWindowViewModel
             OllamaApiUrl = settings.OllamaApiUrl;
             SelectedTranslationEngine = settings.SelectedTranslationEngine;
             OllamaModel = settings.OllamaModel;
-            GeminiApiKey = settings.GeminiApiKey;
-            GeminiModel = settings.GeminiModel;
             SourceLanguage = settings.SourceLanguage;
             TargetLanguage = settings.TargetLanguage;
             
@@ -947,8 +904,6 @@ public partial class MainWindowViewModel
             settings.SourceLanguage = SourceLanguage;
             settings.OllamaModel = OllamaModel;
             settings.OllamaApiUrl = OllamaApiUrl;
-            settings.GeminiApiKey = GeminiApiKey;
-            settings.GeminiModel = GeminiModel;
             settings.SelectedTranslationEngine = SelectedTranslationEngine;
             settings.BorderColorHex = BorderColor.ToString();
             settings.ThemeColorHex = ThemeColor.ToString();

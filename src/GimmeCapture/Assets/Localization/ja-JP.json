@@ -178,7 +178,7 @@
   "TipMosaic": "モザイク",
   "TipBlur": "ぼかし",
   "OCRLanguage": "OCR 言語:",
-  "OCRLangAuto": "自動検出 (中/英)",
+  "OCRLangAuto": "自動検出",
   "OCRLangEnglish": "英語 (English)",
   "OCRLangTraditionalChinese": "繁体字中国語 (Traditional Chinese)",
   "OCRLangSimplifiedChinese": "簡体字中国語 (Simplified Chinese)",
@@ -196,8 +196,5 @@
   "TranslationEngine": "翻訳エンジン (Engine):",
   "TranslationEngineOllama": "Ollama (オンライン LLM)",
   "TranslationEngineMarianMT": "MarianMT (オフライン)",
-  "TranslationEngineGemini": "Gemini (Google AI)",
-  "GeminiModel": "Gemini モデル名:",
-  "GeminiApiKey": "Gemini API キー:",
   "MarianMTDownloadConfirm": "オフライン翻訳機能には専用モジュールのダウンロード (~400MB) が必要です。今すぐダウンロードしますか？"
 }
