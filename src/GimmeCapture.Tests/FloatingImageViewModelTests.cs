@@ -1,10 +1,7 @@
-using Xunit;
-using Moq;
 using GimmeCapture.ViewModels;
 using GimmeCapture.ViewModels.Floating;
 using GimmeCapture.Services;
 using GimmeCapture.Services.Abstractions;
-using GimmeCapture.Services.Core;
 using Avalonia.Media.Imaging;
 using Avalonia;
 using System.Threading.Tasks;
@@ -42,7 +39,7 @@ public class FloatingImageViewModelTests
         var mockAiResolver = new Mock<NativeResolverService>(mockAiPath.Object);
         var mockAiDownloader = new Mock<AIModelDownloader>();
         var mockAi = new Mock<AIResourceService>(mockSettings.Object, mockAiPath.Object, mockAiResolver.Object, mockAiDownloader.Object);
-        var vm = new FloatingImageViewModel(null!, 0, 0, Avalonia.Media.Colors.Red, 2.0, false, false, mockService, mockAi.Object, mockSettings.Object);
+        var vm = new FloatingImageViewModel(null!, 0, 0, Avalonia.Media.Colors.Red, 2.0, false, false, mockService, mockAi.Object, mockSettings.Object, mockAiPath.Object);
 
         // Act
         await vm.CopyCommand.Execute();

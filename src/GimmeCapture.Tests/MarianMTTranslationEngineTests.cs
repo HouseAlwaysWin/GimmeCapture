@@ -1,10 +1,10 @@
-using System.Threading;
+﻿using System.Threading;
 using System.Threading.Tasks;
-using Moq;
+
 using GimmeCapture.Models;
-using GimmeCapture.Services.Core;
+
 using GimmeCapture.Services.Translation;
-using Xunit;
+
 
 namespace GimmeCapture.Tests;
 

@@ -1,12 +1,12 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using Moq;
+
 using SkiaSharp;
 using GimmeCapture.Models;
-using GimmeCapture.Services.Core;
+
 using GimmeCapture.Services.OCR;
-using Xunit;
+
 
 using GimmeCapture.Services.Core.Interfaces;
 

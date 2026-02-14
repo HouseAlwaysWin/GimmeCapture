@@ -1,6 +1,4 @@
-using Moq;
-using GimmeCapture.Services.Core;
-using GimmeCapture.Models;
+﻿using GimmeCapture.Models;
 using System.Threading;
 using System.Threading.Tasks;
 

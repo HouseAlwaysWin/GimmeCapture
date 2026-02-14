@@ -1,5 +1,4 @@
-using Xunit;
-using GimmeCapture.ViewModels;
+﻿using GimmeCapture.ViewModels;
 using GimmeCapture.ViewModels.Main;
 using GimmeCapture.Models;
 using Avalonia; // For Rect

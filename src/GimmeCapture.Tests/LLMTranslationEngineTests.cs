@@ -1,15 +1,15 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Net.Http;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using Moq;
+
 using Moq.Protected;
 using GimmeCapture.Models;
-using GimmeCapture.Services.Core;
+
 using GimmeCapture.Services.Translation;
-using Xunit;
+
 
 namespace GimmeCapture.Tests;
 
