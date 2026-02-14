@@ -120,6 +120,8 @@ public class FFmpegDownloaderService : ReactiveObject
         {
             IsDownloading = true;
             DownloadProgress = 0;
+            System.Diagnostics.Debug.WriteLine("[FFmpeg] Starting download check...");
+            DownloadProgress = 0;
 
             if (!Directory.Exists(BinFolder))
             {
@@ -172,6 +174,7 @@ public class FFmpegDownloaderService : ReactiveObject
 
                             while ((read = await contentStream.ReadAsync(buffer, 0, buffer.Length, ct)) > 0)
                             {
+                                System.Diagnostics.Debug.WriteLine($"[FFmpeg] Downloading from {FfmpegUrl} to {zipPath}");
                                 await fileStream.WriteAsync(buffer, 0, read, ct);
                                 totalRead += read;
 

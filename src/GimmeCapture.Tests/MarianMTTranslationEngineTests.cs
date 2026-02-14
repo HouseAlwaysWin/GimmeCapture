@@ -16,7 +16,10 @@ public class MarianMTTranslationEngineTests
     public MarianMTTranslationEngineTests()
     {
         var mockSettings = new Mock<AppSettingsService>();
-        var mockAiResource = new Mock<AIResourceService>(mockSettings.Object);
+        var mockPath = new Mock<AIPathService>(mockSettings.Object);
+        var mockResolver = new Mock<NativeResolverService>(mockPath.Object);
+        var mockDownloader = new Mock<AIModelDownloader>();
+        var mockAiResource = new Mock<AIResourceService>(mockSettings.Object, mockPath.Object, mockResolver.Object, mockDownloader.Object);
         _mockService = new Mock<MarianMTService>(mockAiResource.Object);
         _sut = new MarianMTTranslationEngine(_mockService.Object);
     }

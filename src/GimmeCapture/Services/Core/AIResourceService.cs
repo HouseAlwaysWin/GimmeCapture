@@ -70,88 +70,49 @@ public class AIResourceService : ReactiveObject
     // Using a reliable direct link to ONNX Runtime GPU (Win x64)
     private const string OnnxRuntimeZipUrl = "https://github.com/microsoft/onnxruntime/releases/download/v1.20.1/onnxruntime-win-x64-gpu-1.20.1.zip";
 
-    private string _lastErrorMessage = "";
+    private readonly AppSettingsService _settingsService;
+    private readonly AIPathService _pathService;
+    private readonly NativeResolverService _resolverService;
+    private readonly AIModelDownloader _downloader;
+
+    public AIResourceService(
+        AppSettingsService settingsService,
+        AIPathService pathService,
+        NativeResolverService resolverService,
+        AIModelDownloader downloader)
+    {
+        _settingsService = settingsService;
+        _pathService = pathService;
+        _resolverService = resolverService;
+        _downloader = downloader;
+
+        // Redirect progress changes
+        _downloader.PropertyChanged += (s, e) =>
+        {
+            if (e.PropertyName == nameof(AIModelDownloader.DownloadProgress)) this.RaisePropertyChanged(nameof(DownloadProgress));
+            if (e.PropertyName == nameof(AIModelDownloader.IsDownloading)) this.RaisePropertyChanged(nameof(IsDownloading));
+            if (e.PropertyName == nameof(AIModelDownloader.CurrentDownloadName)) this.RaisePropertyChanged(nameof(CurrentDownloadName));
+        };
+    }
+
+    public string GetAIResourcesPath() => _pathService.GetAIResourcesPath();
+
+    private string _lastErrorMessage = string.Empty;
     public string LastErrorMessage
     {
         get => _lastErrorMessage;
         set => this.RaiseAndSetIfChanged(ref _lastErrorMessage, value);
     }
 
-    private double _downloadProgress;
-    public double DownloadProgress
-    {
-        get => _downloadProgress;
-        set => this.RaiseAndSetIfChanged(ref _downloadProgress, value);
-    }
+    public static event Action? RequestGlobalUnload;
 
-    private bool _isDownloading;
-    public bool IsDownloading
-    {
-        get => _isDownloading;
-        set => this.RaiseAndSetIfChanged(ref _isDownloading, value);
-    }
+    public double DownloadProgress => _downloader.DownloadProgress;
+    public bool IsDownloading => _downloader.IsDownloading;
+    public string CurrentDownloadName => _downloader.CurrentDownloadName;
 
-    private string _currentDownloadName = "AI Component";
-    public string CurrentDownloadName
-    {
-        get => _currentDownloadName;
-        set => this.RaiseAndSetIfChanged(ref _currentDownloadName, value);
-    }
+    public (string Encoder, string Decoder) GetSAM2Paths(SAM2Variant variant) => _pathService.GetSAM2Paths(variant);
 
-    private readonly AppSettingsService _settingsService;
-
-    public AIResourceService(AppSettingsService settingsService)
-    {
-        _settingsService = settingsService;
-        _lastErrorMessage = string.Empty;
-    }
-
-    public string GetAIResourcesPath()
-    {
-        var path = _settingsService.Settings.AIResourcesDirectory;
-        if (string.IsNullOrEmpty(path))
-        {
-            path = Path.Combine(_settingsService.BaseDataDirectory, "AI");
-        }
-        return path;
-    }
-
-    public (string Encoder, string Decoder) GetSAM2Paths(SAM2Variant variant)
-    {
-        var baseDir = GetAIResourcesPath();
-        var modelsDir = Path.Combine(baseDir, "models");
-        
-        return variant switch
-        {
-            SAM2Variant.Tiny => (Path.Combine(modelsDir, "sam2_hiera_tiny_encoder.onnx"), Path.Combine(modelsDir, "sam2_hiera_tiny_decoder.onnx")),
-            SAM2Variant.Small => (Path.Combine(modelsDir, "sam2_hiera_small_encoder.onnx"), Path.Combine(modelsDir, "sam2_hiera_small_decoder.onnx")),
-            SAM2Variant.BasePlus => (Path.Combine(modelsDir, "sam2_hiera_base_plus_encoder.onnx"), Path.Combine(modelsDir, "sam2_hiera_base_plus_decoder.onnx")),
-            SAM2Variant.Large => (Path.Combine(modelsDir, "sam2_hiera_large_encoder.onnx"), Path.Combine(modelsDir, "sam2_hiera_large_decoder.onnx")),
-            _ => (Path.Combine(modelsDir, "sam2_hiera_tiny_encoder.onnx"), Path.Combine(modelsDir, "sam2_hiera_tiny_decoder.onnx"))
-        };
-    }
-
-    public virtual (string Det, string Rec, string Dict) GetOCRPaths(OCRLanguage language)
-    {
-        var baseDir = GetAIResourcesPath();
-        var ocrDir = Path.Combine(baseDir, "ocr");
-        
-        string langSuffix = language switch
-        {
-            OCRLanguage.Japanese => "jp",
-            OCRLanguage.Korean => "ko",
-            OCRLanguage.English => "en",
-            OCRLanguage.TraditionalChinese => "ch",
-            OCRLanguage.SimplifiedChinese => "ch",
-            _ => "ch" 
-        };
-
-        return (
-            Path.Combine(ocrDir, "ocr_det.onnx"),
-            Path.Combine(ocrDir, $"ocr_rec_{langSuffix}.onnx"),
-            Path.Combine(ocrDir, $"ocr_dict_{langSuffix}.txt")
-        );
-    }
+    public virtual (string Det, string Rec, string Dict) GetOCRPaths(OCRLanguage language) => _pathService.GetOCRPaths(language);
 
     public virtual bool IsNmtReady()
     {
@@ -170,25 +131,12 @@ public class AIResourceService : ReactiveObject
         return true;
     }
 
-    public virtual (string Encoder, string Decoder, string Tokenizer, string Spm, string Config, string GenConfig) GetNmtPaths()
-    {
-        var baseDir = GetAIResourcesPath();
-        var nmtDir = Path.Combine(baseDir, "nmt");
-        return (
-            Path.Combine(nmtDir, "encoder_model.onnx"),
-            Path.Combine(nmtDir, "decoder_model.onnx"),
-            Path.Combine(nmtDir, "tokenizer.json"),
-            Path.Combine(nmtDir, "sentencepiece.bpe.model"),
-            Path.Combine(nmtDir, "config.json"),
-            Path.Combine(nmtDir, "generation_config.json")
-        );
-    }
+    public virtual (string Encoder, string Decoder, string Tokenizer, string Spm, string Config, string GenConfig) GetNmtPaths() => _pathService.GetNmtPaths();
 
     public bool IsAICoreReady()
     {
-        var baseDir = GetAIResourcesPath();
-        var modelPath = Path.Combine(baseDir, "models", "u2net.onnx");
-        var onnxDll = Path.Combine(baseDir, "runtime", "onnxruntime.dll");
+        var modelPath = _pathService.GetAICoreModelPath();
+        var onnxDll = _pathService.GetOnnxDllPath();
         return File.Exists(modelPath) && File.Exists(onnxDll);
     }
 
@@ -214,12 +162,8 @@ public class AIResourceService : ReactiveObject
     // Deprecated monolithic check, keeping for compatibility if needed, but logic should move to specific checks
     public bool AreResourcesReady()
     {
-        bool ready = IsAICoreReady() && IsSAM2Ready(_settingsService.Settings.SelectedSAM2Variant) && IsOCRReady();
-        if (_settingsService.Settings.SelectedTranslationEngine == TranslationEngine.MarianMT)
-        {
-            ready = ready && IsNmtReady();
-        }
-        return ready;
+        return IsAICoreReady() && IsSAM2Ready(_settingsService.Settings.SelectedSAM2Variant) && IsOCRReady() && 
+               (_settingsService.Settings.SelectedTranslationEngine != TranslationEngine.MarianMT || IsNmtReady());
     }
 
     public bool IsNmtResourcesPresent()
@@ -228,76 +172,94 @@ public class AIResourceService : ReactiveObject
         return File.Exists(paths.Encoder) && File.Exists(paths.Decoder) && File.Exists(paths.Tokenizer);
     }
 
-    public void RemoveAICoreResources()
+    public bool RemoveAICoreResources()
     {
         try
         {
-            var baseDir = GetAIResourcesPath();
-            var runtimeDir = Path.Combine(baseDir, "runtime");
-            var modelsDir = Path.Combine(baseDir, "models");
+            RequestGlobalUnload?.Invoke();
+            UnloadAllSessions();
 
-            if (Directory.Exists(runtimeDir)) Directory.Delete(runtimeDir, true);
-            
-            var u2net = Path.Combine(modelsDir, "u2net.onnx");
+            var runtimeDir = _pathService.GetRuntimeDir();
+            var modelsDir = _pathService.GetAIModelsDir();
+            var u2net = _pathService.GetAICoreModelPath();
+
             if (File.Exists(u2net)) File.Delete(u2net);
+            if (Directory.Exists(runtimeDir)) Directory.Delete(runtimeDir, true);
 
             this.RaisePropertyChanged(nameof(IsAICoreReady));
             this.RaisePropertyChanged(nameof(AreResourcesReady));
+            return true;
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"AI Core Removal Failed: {ex.Message}");
+            LastErrorMessage = $"AI Core Removal Failed: {ex.Message}";
+            System.Diagnostics.Debug.WriteLine(LastErrorMessage);
+            return false;
         }
     }
 
-    public void RemoveSAM2Resources(SAM2Variant variant)
+    public bool RemoveSAM2Resources(SAM2Variant variant)
     {
         try
         {
-            var paths = GetSAM2Paths(variant);
+            RequestGlobalUnload?.Invoke();
+            UnloadSAM2Models();
+
+            var paths = _pathService.GetSAM2Paths(variant);
             
             if (File.Exists(paths.Encoder)) File.Delete(paths.Encoder);
             if (File.Exists(paths.Decoder)) File.Delete(paths.Decoder);
 
             this.RaisePropertyChanged(nameof(IsSAM2Ready));
             this.RaisePropertyChanged(nameof(AreResourcesReady));
+            return true;
         }
         catch (Exception ex)
         {
-             System.Diagnostics.Debug.WriteLine($"SAM2 Removal Failed: {ex.Message}");
+            LastErrorMessage = $"SAM2 Removal Failed: {ex.Message}";
+            System.Diagnostics.Debug.WriteLine(LastErrorMessage);
+            return false;
         }
     }
 
-    public void RemoveOCRResources()
+    public bool RemoveOCRResources()
     {
         try
         {
-            var baseDir = GetAIResourcesPath();
+            RequestGlobalUnload?.Invoke();
+            
+            var baseDir = _pathService.GetAIResourcesPath();
             var ocrDir = Path.Combine(baseDir, "ocr");
 
             if (Directory.Exists(ocrDir)) Directory.Delete(ocrDir, true);
 
             this.RaisePropertyChanged(nameof(IsOCRReady));
             this.RaisePropertyChanged(nameof(AreResourcesReady));
+            return true;
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"OCR Removal Failed: {ex.Message}");
+            LastErrorMessage = $"OCR Removal Failed: {ex.Message}";
+            System.Diagnostics.Debug.WriteLine(LastErrorMessage);
+            return false;
         }
     }
 
-    public void RemoveNmtResources()
+    public bool RemoveNmtResources()
     {
         try
         {
-            var baseDir = GetAIResourcesPath();
+            var baseDir = _pathService.GetAIResourcesPath();
             var nmtDir = Path.Combine(baseDir, "nmt");
             if (Directory.Exists(nmtDir)) Directory.Delete(nmtDir, true);
             this.RaisePropertyChanged(nameof(IsNmtReady));
+            return true;
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"NMT Removal Failed: {ex.Message}");
+            LastErrorMessage = $"NMT Removal Failed: {ex.Message}";
+            System.Diagnostics.Debug.WriteLine(LastErrorMessage);
+            return false;
         }
     }
 
@@ -305,14 +267,12 @@ public class AIResourceService : ReactiveObject
     public void RemoveResources()
     {
         RemoveAICoreResources();
-        // Default to removing all if generic called, or maybe just log warning
-        var baseDir = GetAIResourcesPath();
-        var modelsDir = Path.Combine(baseDir, "models");
-        if (Directory.Exists(modelsDir))
-        {
-            var files = Directory.GetFiles(modelsDir, "sam2_*.onnx");
-            foreach (var f in files) try { File.Delete(f); } catch { }
-        }
+    }
+
+    public void UnloadAllSessions()
+    {
+        UnloadSAM2Models();
+        // BackgroundRemovalService will handle its own _session via RequestGlobalUnload
     }
 
     private readonly SemaphoreSlim _downloadLock = new(1, 1);
@@ -325,69 +285,56 @@ public class AIResourceService : ReactiveObject
         await _downloadLock.WaitAsync(ct);
         try
         {
-            return await DownloadAICoreInternal(ct);
-        }
-        finally
-        {
-            _downloadLock.Release();
-        }
-    }
+            if (IsAICoreReady()) return true;
 
-    private async Task<bool> DownloadAICoreInternal(CancellationToken ct)
-    {
-        if (IsAICoreReady()) return true;
+            _downloader.IsDownloading = true;
+            _downloader.CurrentDownloadName = "AI Core";
+            _downloader.DownloadProgress = 0;
 
-        try
-        {
-            IsDownloading = true;
-            CurrentDownloadName = "AI Core";
-            DownloadProgress = 0;
-
-            var baseDir = GetAIResourcesPath();
-            var runtimeDir = Path.Combine(baseDir, "runtime");
-            var modelsDir = Path.Combine(baseDir, "models");
+            var baseDir = _pathService.GetAIResourcesPath();
+            var runtimeDir = _pathService.GetRuntimeDir();
+            var modelsDir = _pathService.GetAIModelsDir();
 
             Directory.CreateDirectory(runtimeDir);
             Directory.CreateDirectory(modelsDir);
 
             // 1. Download Runtime
-            var onnxDll = Path.Combine(runtimeDir, "onnxruntime.dll");
+            var onnxDll = _pathService.GetOnnxDllPath();
             if (!File.Exists(onnxDll))
             {
-                await DownloadAndExtractZip(OnnxRuntimeZipUrl, runtimeDir, 0, 60, ct); 
+                await _downloader.DownloadAndExtractZipAsync(OnnxRuntimeZipUrl, runtimeDir, 0, 60, ct); 
             }
             else
             {
-                DownloadProgress = 60;
+                _downloader.DownloadProgress = 60;
             }
 
             // 2. Download U2Net Model
-            var modelPath = Path.Combine(modelsDir, "u2net.onnx");
+            var modelPath = _pathService.GetAICoreModelPath();
             if (!File.Exists(modelPath))
             {
-                await DownloadFile(ModelUrl, modelPath, 60, 40, ct);
+                await _downloader.DownloadFileAsync(ModelUrl, modelPath, 60, 40, ct);
             }
             else
             {
-                DownloadProgress = 100;
+                _downloader.DownloadProgress = 100;
             }
 
             return IsAICoreReady();
         }
         catch (OperationCanceledException)
         {
-            System.Diagnostics.Debug.WriteLine("AI Core Download Cancelled");
             return false;
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"AI Core Download Failed: {ex.Message}");
             LastErrorMessage = ex.Message;
             return false;
         }
         finally
         {
-            IsDownloading = false;
+            _downloader.IsDownloading = false;
+            _downloadLock.Release();
         }
     }
 
@@ -398,29 +345,17 @@ public class AIResourceService : ReactiveObject
         await _downloadLock.WaitAsync(ct);
         try
         {
-            return await DownloadSAM2Internal(variant, ct);
-        }
-        finally
-        {
-            _downloadLock.Release();
-        }
-    }
+            if (IsSAM2Ready(variant)) return true;
 
-    private async Task<bool> DownloadSAM2Internal(SAM2Variant variant, CancellationToken ct)
-    {
-         if (IsSAM2Ready(variant)) return true;
+            _downloader.IsDownloading = true;
+            _downloader.CurrentDownloadName = $"SAM2 Model ({variant})";
+            _downloader.DownloadProgress = 0;
 
-        try
-        {
-            IsDownloading = true;
-            CurrentDownloadName = $"SAM2 Model ({variant})";
-            DownloadProgress = 0;
-
-            var baseDir = GetAIResourcesPath();
-            var modelsDir = Path.Combine(baseDir, "models");
+            var baseDir = _pathService.GetAIResourcesPath();
+            var modelsDir = _pathService.GetAIModelsDir();
             Directory.CreateDirectory(modelsDir);
 
-            var paths = GetSAM2Paths(variant);
+            var paths = _pathService.GetSAM2Paths(variant);
             
             // Determine URLs
             string encoderUrl = variant switch {
@@ -442,40 +377,38 @@ public class AIResourceService : ReactiveObject
             // 1. Download Encoder
             if (!File.Exists(paths.Encoder))
             {
-                // Encoder is much larger (~90%)
-                await DownloadFile(encoderUrl, paths.Encoder, 0, 90, ct);
+                await _downloader.DownloadFileAsync(encoderUrl, paths.Encoder, 0, 90, ct);
             }
             else
             {
-                DownloadProgress = 90;
+                _downloader.DownloadProgress = 90;
             }
 
             // 2. Download Decoder
             if (!File.Exists(paths.Decoder))
             {
-                await DownloadFile(decoderUrl, paths.Decoder, 90, 10, ct);
+                await _downloader.DownloadFileAsync(decoderUrl, paths.Decoder, 90, 10, ct);
             }
             else
             {
-                DownloadProgress = 100;
+                _downloader.DownloadProgress = 100;
             }
 
             return IsSAM2Ready(variant);
         }
         catch (OperationCanceledException)
         {
-            System.Diagnostics.Debug.WriteLine("SAM2 Download Cancelled");
             return false;
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"SAM2 Download Failed: {ex.Message}");
             LastErrorMessage = ex.Message;
             return false;
         }
         finally
         {
-            IsDownloading = false;
+            _downloader.IsDownloading = false;
+            _downloadLock.Release();
         }
     }
 
@@ -486,30 +419,18 @@ public class AIResourceService : ReactiveObject
         await _downloadLock.WaitAsync(ct);
         try
         {
-            return await DownloadOCRInternal(ct);
-        }
-        finally
-        {
-            _downloadLock.Release();
-        }
-    }
+            if (IsOCRReady()) return true;
 
-    private async Task<bool> DownloadOCRInternal(CancellationToken ct)
-    {
-        if (IsOCRReady()) return true;
+            _downloader.IsDownloading = true;
+            _downloader.CurrentDownloadName = "OCR Models (PaddleOCR v5)";
+            _downloader.DownloadProgress = 0;
 
-        try
-        {
-            IsDownloading = true;
-            CurrentDownloadName = "OCR Models (PaddleOCR v5)";
-            DownloadProgress = 0;
-
-            var baseDir = GetAIResourcesPath();
+            var baseDir = _pathService.GetAIResourcesPath();
             var ocrDir = Path.Combine(baseDir, "ocr");
             Directory.CreateDirectory(ocrDir);
 
             var language = _settingsService.Settings.SourceLanguage;
-            var paths = GetOCRPaths(language);
+            var paths = _pathService.GetOCRPaths(language);
             
             string recUrl, dictUrl;
             
@@ -527,47 +448,42 @@ public class AIResourceService : ReactiveObject
                     recUrl = OcrRecEnUrl;
                     dictUrl = OcrDictEnUrl;
                     break;
-                case OCRLanguage.Auto:     // Auto
-                default:                   // Chinese (Traditional/Simplified)
+                default:
                     recUrl = OcrRecChsUrl;
                     dictUrl = OcrDictChsUrl;
                     break;
             }
 
-            // 1. Download Detection
             if (!File.Exists(paths.Det))
-                await DownloadFile(OcrDetUrl, paths.Det, 0, 40, ct);
+                await _downloader.DownloadFileAsync(OcrDetUrl, paths.Det, 0, 40, ct);
             else
-                DownloadProgress = 40;
+                _downloader.DownloadProgress = 40;
 
-            // 2. Download Recognition
             if (!File.Exists(paths.Rec))
-                await DownloadFile(recUrl, paths.Rec, 40, 50, ct);
+                await _downloader.DownloadFileAsync(recUrl, paths.Rec, 40, 50, ct);
             else
-                DownloadProgress = 90;
+                _downloader.DownloadProgress = 90;
 
-            // 3. Download Dictionary
             if (!File.Exists(paths.Dict))
-                await DownloadFile(dictUrl, paths.Dict, 90, 10, ct);
+                await _downloader.DownloadFileAsync(dictUrl, paths.Dict, 90, 10, ct);
             else
-                DownloadProgress = 100;
+                _downloader.DownloadProgress = 100;
 
             return IsOCRReady(language);
         }
         catch (OperationCanceledException)
         {
-            System.Diagnostics.Debug.WriteLine("OCR Download Cancelled");
             return false;
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"OCR Download Failed: {ex.Message}");
             LastErrorMessage = ex.Message;
             return false;
         }
         finally
         {
-            IsDownloading = false;
+            _downloader.IsDownloading = false;
+            _downloadLock.Release();
         }
     }
 
@@ -578,202 +494,62 @@ public class AIResourceService : ReactiveObject
         await _downloadLock.WaitAsync(ct);
         try
         {
-            return await DownloadNmtInternal(ct);
-        }
-        finally
-        {
-            _downloadLock.Release();
-        }
-    }
+            if (IsNmtReady()) return true;
 
-    private async Task<bool> DownloadNmtInternal(CancellationToken ct)
-    {
-        if (IsNmtReady()) return true;
+            _downloader.IsDownloading = true;
+            _downloader.CurrentDownloadName = "NMT Translation Models (MarianMT)";
+            _downloader.DownloadProgress = 0;
 
-        try
-        {
-            IsDownloading = true;
-            CurrentDownloadName = "NMT Translation Models (MarianMT)";
-            DownloadProgress = 0;
-
-            var baseDir = GetAIResourcesPath();
+            var baseDir = _pathService.GetAIResourcesPath();
             var nmtDir = Path.Combine(baseDir, "nmt");
             Directory.CreateDirectory(nmtDir);
 
-            var paths = GetNmtPaths();
+            var paths = _pathService.GetNmtPaths();
 
-            // 1. Encoder
             if (!File.Exists(paths.Encoder))
-                await DownloadFile(NmtEncoderUrl, paths.Encoder, 0, 40, ct);
+                await _downloader.DownloadFileAsync(NmtEncoderUrl, paths.Encoder, 0, 40, ct);
             else
-                DownloadProgress = 40;
+                _downloader.DownloadProgress = 40;
 
-            // 2. Decoder
             if (!File.Exists(paths.Decoder))
-                await DownloadFile(NmtDecoderUrl, paths.Decoder, 40, 50, ct);
+                await _downloader.DownloadFileAsync(NmtDecoderUrl, paths.Decoder, 40, 50, ct);
             else
-                DownloadProgress = 90;
+                _downloader.DownloadProgress = 90;
 
-            // 3. Tokenizer
             if (!File.Exists(paths.Tokenizer))
-                await DownloadFile(NmtTokenizerUrl, paths.Tokenizer, 90, 2.5, ct);
+                await _downloader.DownloadFileAsync(NmtTokenizerUrl, paths.Tokenizer, 90, 2.5, ct);
 
-            // 4. SentencePiece Model
             if (!File.Exists(paths.Spm))
-                await DownloadFile(NmtSpmUrl, paths.Spm, 92.5, 2.5, ct);
+                await _downloader.DownloadFileAsync(NmtSpmUrl, paths.Spm, 92.5, 2.5, ct);
             
-            // 5. Configs
             if (!File.Exists(paths.Config))
-                await DownloadFile(NmtConfigUrl, paths.Config, 95, 2.5, ct);
+                await _downloader.DownloadFileAsync(NmtConfigUrl, paths.Config, 95, 2.5, ct);
             if (!File.Exists(paths.GenConfig))
-                await DownloadFile(NmtGenerationConfigUrl, paths.GenConfig, 97.5, 2.5, ct);
+                await _downloader.DownloadFileAsync(NmtGenerationConfigUrl, paths.GenConfig, 97.5, 2.5, ct);
 
-            DownloadProgress = 100;
-            IsDownloading = false;
+            _downloader.DownloadProgress = 100;
             return IsNmtReady();
         }
         catch (OperationCanceledException)
         {
-            System.Diagnostics.Debug.WriteLine("NMT Download Cancelled");
             return false;
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"NMT Download Failed: {ex.Message}");
             LastErrorMessage = ex.Message;
             return false;
         }
         finally
         {
-            IsDownloading = false;
+            _downloader.IsDownloading = false;
+            _downloadLock.Release();
         }
     }
 
-    private async Task DownloadFile(string url, string destination, double progressOffset, double progressWeight, CancellationToken ct)
-    {
-        using var client = new HttpClient();
-        // Increase timeout to 60 minutes for large models
-        client.Timeout = TimeSpan.FromMinutes(60);
-        client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36");
-        
-        System.Diagnostics.Debug.WriteLine($"[AIResourceService] Downloading {url} to {destination}");
-        Console.WriteLine($"[AIResourceService] Downloading {url} to {destination}");
-        
-        string tempPath = destination + ".tmp";
-        
-        try
-        {
-            using var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
-            response.EnsureSuccessStatusCode();
-
-            var totalBytes = response.Content.Headers.ContentLength ?? -1L;
-            using var contentStream = await response.Content.ReadAsStreamAsync(ct);
-            using var fileStream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None, 8192, true);
-
-            var buffer = new byte[8192];
-            long totalRead = 0;
-            int read;
-
-            while ((read = await contentStream.ReadAsync(buffer, 0, buffer.Length, ct)) > 0)
-            {
-                await fileStream.WriteAsync(buffer, 0, read, ct);
-                totalRead += read;
-
-                if (totalBytes != -1)
-                {
-                    DownloadProgress = progressOffset + ((double)totalRead / totalBytes * progressWeight);
-                }
-            }
-            
-            await fileStream.FlushAsync(ct);
-            fileStream.Close();
-
-            // Verify integrity
-            if (totalBytes != -1 && totalRead < totalBytes)
-            {
-                throw new IOException($"Download truncated: Expected {totalBytes} bytes but only received {totalRead} bytes.");
-            }
-
-            // Success: Move to final destination
-            if (File.Exists(destination)) File.Delete(destination);
-            File.Move(tempPath, destination);
-        }
-        catch (Exception)
-        {
-            if (File.Exists(tempPath)) try { File.Delete(tempPath); } catch { }
-            throw;
-        }
-    }
-
-    private async Task DownloadAndExtractZip(string url, string outputDir, double progressOffset, double progressWeight, CancellationToken ct)
-    {
-        string zipPath = Path.Combine(outputDir, "temp_ai.zip");
-        await DownloadFile(url, zipPath, progressOffset, progressWeight, ct);
-
-        await Task.Run(() =>
-        {
-            if (ct.IsCancellationRequested) return;
-
-            // Official zip has subfolders like onnxruntime-win-x64-gpu-1.20.1/lib/
-            // We want to extract just the DLLs from /lib into outputDir
-            using (ZipArchive archive = ZipFile.OpenRead(zipPath))
-            {
-                foreach (ZipArchiveEntry entry in archive.Entries)
-                {
-                    if (entry.FullName.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
-                    {
-                        // Get only filename
-                        string fileName = Path.GetFileName(entry.FullName);
-                        string destinationPath = Path.Combine(outputDir, fileName);
-                        entry.ExtractToFile(destinationPath, true);
-                    }
-                }
-            }
-            File.Delete(zipPath);
-        }, ct);
-    }
-    private static bool _isResolverSet = false;
 
     public void SetupNativeResolvers()
     {
-        if (_isResolverSet) return;
-        _isResolverSet = true;
-
-        try
-        {
-            // Use .NET's modern DllImportResolver to point directly to the AI/runtime folder.
-            // This is much more reliable than modifying PATH at runtime.
-            // We only need to set this once for the onnxruntime assembly.
-            var onnxAssembly = typeof(Microsoft.ML.OnnxRuntime.InferenceSession).Assembly;
-            
-            System.Runtime.InteropServices.NativeLibrary.SetDllImportResolver(onnxAssembly, (libraryName, assembly, searchPath) =>
-            {
-                if (libraryName == "onnxruntime")
-                {
-                    var runtimeDir = Path.Combine(GetAIResourcesPath(), "runtime");
-                    var dllPath = Path.Combine(runtimeDir, "onnxruntime.dll");
-                    
-                    if (File.Exists(dllPath))
-                    {
-                        System.Diagnostics.Debug.WriteLine($"[AI] Custom Resolver loading: {dllPath}");
-                        return System.Runtime.InteropServices.NativeLibrary.Load(dllPath);
-                    }
-                }
-                return IntPtr.Zero;
-            });
-
-            // Also add to PATH as fallback for dependencies of onnxruntime.dll (like zlib, etc)
-            var runtimeDirFallback = Path.Combine(GetAIResourcesPath(), "runtime");
-            var path = Environment.GetEnvironmentVariable("PATH") ?? "";
-            if (!path.Contains(runtimeDirFallback))
-            {
-                Environment.SetEnvironmentVariable("PATH", runtimeDirFallback + Path.PathSeparator + path);
-            }
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"[AI] Failed to setup native resolvers: {ex.Message}");
-        }
+        _resolverService.SetupNativeResolvers();
     }
 
     private InferenceSession? _cachedEncoder;

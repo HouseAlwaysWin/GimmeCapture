@@ -39,8 +39,8 @@ public partial class MainWindowViewModel
                 if (status == QueueItemStatus.Completed) ffmpeg.IsInstalled = FfmpegDownloader.IsFFmpegAvailable();
             });
 
-        // AI Core Module
-        var aiCore = new ModuleItem("AI Core", "ModuleAICoreDescription")
+        // ONNX Runtime & U2Net Module (Renamed from AI Core)
+        var aiCore = new ModuleItem("ONNX Runtime & U2Net", "ModuleAICoreDescription")
         {
             IsInstalled = AIResourceService.IsAICoreReady(),
             InstallCommand = ReactiveCommand.CreateFromTask(() => InstallModuleAsync("AICore")),
@@ -160,7 +160,7 @@ public partial class MainWindowViewModel
         foreach (var m in Modules)
         {
             if ((m.Name == "FFmpeg" && type == "FFmpeg") ||
-                (m.Name == "AI Core" && type == "AICore") ||
+                (m.Name == "ONNX Runtime & U2Net" && type == "AICore") ||
                 (m.Name == "SAM2 Model" && type == "SAM2") ||
                 (m.Name == "PaddleOCR v5" && type == "OCR") ||
                 (m.Name == "MarianMT" && type == "MarianMT"))
@@ -242,7 +242,7 @@ public partial class MainWindowViewModel
             foreach (var m in Modules)
             {
                 if (m.Name == "FFmpeg") m.IsInstalled = FfmpegDownloader.IsFFmpegAvailable();
-                if (m.Name == "AI Core") m.IsInstalled = AIResourceService.IsAICoreReady();
+                if (m.Name == "ONNX Runtime & U2Net") m.IsInstalled = AIResourceService.IsAICoreReady();
                 if (m.Name == "SAM2 Model") m.IsInstalled = AIResourceService.IsSAM2Ready(_settingsService.Settings.SelectedSAM2Variant);
                 if (m.Name == "PaddleOCR v5") m.IsInstalled = AIResourceService.IsOCRReady();
                 if (m.Name == "MarianMT") m.IsInstalled = AIResourceService.IsNmtReady();

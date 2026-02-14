@@ -102,6 +102,7 @@ public partial class MainWindowViewModel : ViewModelBase
     public RecordingService RecordingService { get; }
     public UpdateService UpdateService { get; }
     public AIResourceService AIResourceService { get; }
+    public AIPathService AIPathService { get; }
     public MarianMTService MarianMTService { get; }
     public ResourceQueueService ResourceQueue => ResourceQueueService.Instance;
     
@@ -142,7 +143,10 @@ public partial class MainWindowViewModel : ViewModelBase
         FfmpegDownloader = new FFmpegDownloaderService(_settingsService);
         RecordingService = new RecordingService(FfmpegDownloader, _settingsService);
         UpdateService = new UpdateService(AppVersion);
-        AIResourceService = new AIResourceService(_settingsService);
+        AIPathService = new AIPathService(_settingsService);
+        var nativeResolverService = new NativeResolverService(AIPathService);
+        var aiModelDownloader = new AIModelDownloader();
+        AIResourceService = new AIResourceService(_settingsService, AIPathService, nativeResolverService, aiModelDownloader);
         MarianMTService = new MarianMTService(AIResourceService);
 
         LocalizationService.Instance

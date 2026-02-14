@@ -13,9 +13,12 @@ public class MarianMTServiceTests
 
     public MarianMTServiceTests()
     {
-        // We need a dummy AppSettingsService for AIResourceService
+        // We need dummy services for AIResourceService
         var mockSettings = new Mock<AppSettingsService>();
-        _mockAiResourceService = new Mock<AIResourceService>(mockSettings.Object);
+        var mockPath = new Mock<AIPathService>(mockSettings.Object);
+        var mockResolver = new Mock<NativeResolverService>(mockPath.Object);
+        var mockDownloader = new Mock<AIModelDownloader>();
+        _mockAiResourceService = new Mock<AIResourceService>(mockSettings.Object, mockPath.Object, mockResolver.Object, mockDownloader.Object);
         _sut = new MarianMTService(_mockAiResourceService.Object);
     }
 

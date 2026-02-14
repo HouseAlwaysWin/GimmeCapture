@@ -14,13 +14,22 @@ namespace GimmeCapture.Services.Core;
 public class BackgroundRemovalService : IDisposable
 {
     private InferenceSession? _session;
-    private readonly AIResourceService _resourceService;
+    private readonly AIResourceService _aiResourceService;
+    private readonly AIPathService _pathService;
     private bool _isInitialized = false;
 
 
-    public BackgroundRemovalService(AIResourceService resourceService)
+    public BackgroundRemovalService(AIResourceService aiResourceService, AIPathService pathService)
     {
-        _resourceService = resourceService;
+        _aiResourceService = aiResourceService;
+        _pathService = pathService;
+        
+        AIResourceService.RequestGlobalUnload += HandleGlobalUnload;
+    }
+
+    private void HandleGlobalUnload()
+    {
+        Dispose();
     }
 
     public async Task InitializeAsync()
@@ -28,10 +37,10 @@ public class BackgroundRemovalService : IDisposable
         if (_isInitialized) return;
 
         // Ensure we load the native libraries from the custom path
-        _resourceService.SetupNativeResolvers();
+        _aiResourceService.SetupNativeResolvers();
 
-        var baseDir = _resourceService.GetAIResourcesPath();
-        var modelPath = Path.Combine(baseDir, "models", "u2net.onnx");
+        var baseDir = _aiResourceService.GetAIResourcesPath();
+        var modelPath = _pathService.GetAICoreModelPath();
 
         if (!File.Exists(modelPath))
             throw new FileNotFoundException("AI Model not found. Please download it first.");
@@ -490,6 +499,8 @@ public class BackgroundRemovalService : IDisposable
 
     public void Dispose()
     {
+        AIResourceService.RequestGlobalUnload -= HandleGlobalUnload;
         _session?.Dispose();
+        _session = null;
     }
 }

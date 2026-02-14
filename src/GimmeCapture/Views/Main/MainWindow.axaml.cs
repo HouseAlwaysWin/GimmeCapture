@@ -252,58 +252,45 @@ public partial class MainWindow : Window
     {
         if (DataContext is not MainWindowViewModel vm) return;
         
-        // Show when minimized, hidden, or "shrunk" (small size)
-        bool isMinimized = this.WindowState == WindowState.Minimized || !this.IsVisible;
-        bool isShrunk = this.Bounds.Width < 500 || this.Bounds.Height < 400;
-        bool isBackground = isMinimized || isShrunk;
+        // 僅在主視窗縮小或隱藏時且正在處理中，才顯示全域懸浮下載視窗
+        bool isBackground = this.WindowState == WindowState.Minimized || !this.IsVisible;
 
-        if (vm.IsProcessing)
+        if (vm.IsProcessing && isBackground)
         {
-            // If main window is visible and large, check if we're on a download tab
-            bool showingDownloadScreen = false;
-            if (!isBackground)
+            if (_downloadWindow == null)
             {
-                var tabControl = this.FindControl<TabControl>("MainTabControl");
-                if (tabControl != null)
+                try 
                 {
-                    // Index 4: Modules, Index 5: About
-                    showingDownloadScreen = tabControl.SelectedIndex == 4 || tabControl.SelectedIndex == 5;
+                    _downloadWindow = new ResourceDownloadWindow
+                    {
+                        DataContext = vm
+                    };
+                    _downloadWindow.Show(); 
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Failed to show download window: {ex}");
                 }
             }
-
-            if (isBackground || !showingDownloadScreen)
+            else
             {
-                if (_downloadWindow == null)
-                {
-                    try 
-                    {
-                        _downloadWindow = new ResourceDownloadWindow
-                        {
-                            DataContext = vm
-                        };
-                        _downloadWindow.Show(); 
-                    }
-                    catch (Exception ex)
-                    {
-                        System.Diagnostics.Debug.WriteLine($"Failed to show download window: {ex}");
-                    }
-                }
-                else
-                {
-                    _downloadWindow.Show();
-                    _downloadWindow.WindowState = WindowState.Normal;
-                    _downloadWindow.Activate();
-                }
+                _downloadWindow.Show();
+                _downloadWindow.WindowState = WindowState.Normal;
+                _downloadWindow.Activate();
+            }
+        }
+        else
+        {
+            // 如果主視窗已打開或是處理已完成，則隱藏/關閉懸浮視窗
+            if (!vm.IsProcessing)
+            {
+                _downloadWindow?.Close();
+                _downloadWindow = null;
             }
             else
             {
                 _downloadWindow?.Hide();
             }
-        }
-        else
-        {
-            _downloadWindow?.Close();
-            _downloadWindow = null;
         }
     }
 

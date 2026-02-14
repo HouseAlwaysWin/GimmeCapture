@@ -471,7 +471,7 @@ public partial class FloatingImageViewModel
             }
 
             // 2. Process
-            using var aiService = new BackgroundRemovalService(_aiResourceService);
+            using var aiService = new BackgroundRemovalService(_aiResourceService, _pathService);
             
             // SelectionRect is in logical pixels (UI space). 
             // We need to scale it to physical image pixels for BackgroundRemovalService.

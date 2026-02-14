@@ -152,10 +152,12 @@ public partial class FloatingImageViewModel : ViewModelBase, IDisposable, IDrawi
 
     public IClipboardService ClipboardService => _clipboardService;
     public AIResourceService AIResourceService => _aiResourceService;
+    public AIPathService AIPathService => _pathService;
     public AppSettingsService AppSettingsService => _appSettingsService;
 
     private readonly IClipboardService _clipboardService;
     private readonly AIResourceService _aiResourceService;
+    private readonly AIPathService _pathService;
     private readonly AppSettingsService _appSettingsService;
 
     private double _wingScale = 1.0;
@@ -204,7 +206,7 @@ public partial class FloatingImageViewModel : ViewModelBase, IDisposable, IDrawi
         }
     }
 
-    public FloatingImageViewModel(Bitmap image, double originalWidth, double originalHeight, Avalonia.Media.Color borderColor, double borderThickness, bool hideDecoration, bool hideBorder, IClipboardService clipboardService, AIResourceService aiResourceService, AppSettingsService appSettingsService)
+    public FloatingImageViewModel(Bitmap image, double originalWidth, double originalHeight, Avalonia.Media.Color borderColor, double borderThickness, bool hideDecoration, bool hideBorder, IClipboardService clipboardService, AIResourceService aiResourceService, AppSettingsService appSettingsService, AIPathService pathService)
     {
         Image = image;
         OriginalWidth = originalWidth;
@@ -217,6 +219,7 @@ public partial class FloatingImageViewModel : ViewModelBase, IDisposable, IDrawi
         HidePinBorder = hideBorder;
         _clipboardService = clipboardService;
         _aiResourceService = aiResourceService;
+        _pathService = pathService;
         _appSettingsService = appSettingsService;
 
         InitializeActionCommands();

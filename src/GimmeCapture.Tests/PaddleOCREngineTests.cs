@@ -21,7 +21,10 @@ public class PaddleOCREngineTests
     public PaddleOCREngineTests()
     {
         _mockSettings = new Mock<AppSettingsService>();
-        _mockAiResource = new Mock<AIResourceService>(_mockSettings.Object);
+        var mockPath = new Mock<AIPathService>(_mockSettings.Object);
+        var mockResolver = new Mock<NativeResolverService>(mockPath.Object);
+        var mockDownloader = new Mock<AIModelDownloader>();
+        _mockAiResource = new Mock<AIResourceService>(_mockSettings.Object, mockPath.Object, mockResolver.Object, mockDownloader.Object);
         _sut = new PaddleOCREngine(_mockAiResource.Object, _mockSettings.Object);
     }
 
