@@ -259,7 +259,7 @@ public class WindowsScreenCaptureService : IScreenCaptureService
                         var slant = ann.IsItalic ? SKFontStyleSlant.Italic : SKFontStyleSlant.Upright;
                         var style = new SKFontStyle(weight, SKFontStyleWidth.Normal, slant);
                         
-                        SKTypeface typeface = SKTypeface.FromFamilyName(ann.FontFamily, style);
+                        SKTypeface typeface = SKTypeface.FromFamilyName(ann.FontFamily.Name, style);
                         
                         // Fallback Check
                         if (!string.IsNullOrEmpty(ann.Text))

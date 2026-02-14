@@ -97,8 +97,8 @@ public partial class FloatingVideoViewModel
         set => this.RaiseAndSetIfChanged(ref _textInputPosition, value);
     }
 
-    private string _currentFontFamily = "Arial";
-    public string CurrentFontFamily
+    private FontFamily _currentFontFamily = new FontFamily("Arial");
+    public FontFamily CurrentFontFamily
     {
         get => _currentFontFamily;
         set => this.RaiseAndSetIfChanged(ref _currentFontFamily, value);
@@ -106,9 +106,15 @@ public partial class FloatingVideoViewModel
 
     public ObservableCollection<double> Thicknesses { get; } = new() { 1, 2, 4, 6, 8, 12, 16, 24 };
 
-    public ObservableCollection<string> AvailableFonts { get; } = new ObservableCollection<string>
+    public ObservableCollection<FontFamily> AvailableFonts { get; } = new ObservableCollection<FontFamily>
     {
-        "Arial", "Segoe UI", "Consolas", "Times New Roman", "Comic Sans MS", "Microsoft JhengHei", "Meiryo"
+        new FontFamily("Arial"), 
+        new FontFamily("Segoe UI"), 
+        new FontFamily("Consolas"), 
+        new FontFamily("Times New Roman"), 
+        new FontFamily("Comic Sans MS"), 
+        new FontFamily("Microsoft JhengHei"), 
+        new FontFamily("Meiryo")
     };
 
     // Shared preset colors from Main ViewModel

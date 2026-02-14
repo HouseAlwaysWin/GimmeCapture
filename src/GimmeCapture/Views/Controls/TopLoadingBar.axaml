@@ -8,8 +8,7 @@
              x:DataType="vm:SnipWindowViewModel"
              Height="6"
              VerticalAlignment="Top"
-             IsHitTestVisible="False"
-             IsVisible="{Binding ShowTopLoadingBar}">
+             IsHitTestVisible="False">
 
     <!-- Single cohesive bar with ambient glow -->
     <Panel Height="6" VerticalAlignment="Top">

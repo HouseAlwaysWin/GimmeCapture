@@ -1,4 +1,5 @@
 <Window xmlns="https://github.com/avaloniaui"
+        x:Name="root"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -19,7 +20,8 @@
         ExtendClientAreaToDecorationsHint="True"
         ExtendClientAreaChromeHints="NoChrome"
         ClipToBounds="False"
-        FontFamily="{Binding CurrentFontFamily, Source={x:Static services:LocalizationService.Instance}}">
+        FontFamily="{Binding CurrentFontFamily, Source={x:Static services:LocalizationService.Instance}}"
+        x:CompileBindings="False">
 
     <Window.Resources>
         <cv:DoubleToBoolConverter x:Key="SizeToBoolConverter"/>
@@ -391,12 +393,12 @@
                 </ItemsPanelTemplate>
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
-                <DataTemplate>
+                <DataTemplate x:DataType="vm:ScreenBoundsViewModel">
                     <ctl:TopLoadingBar Width="{Binding W}" Height="6" 
                                      Canvas.Left="{Binding X}"
                                      Canvas.Top="{Binding Y}"
                                      VerticalAlignment="Top"
-                                     DataContext="{Binding $parent[Window].DataContext}"/>
+                                     IsVisible="{Binding #root.DataContext.ShowTopLoadingBar}"/>
                 </DataTemplate>
             </ItemsControl.ItemTemplate>
         </ItemsControl>

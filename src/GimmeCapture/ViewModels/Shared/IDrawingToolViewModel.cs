@@ -19,8 +19,8 @@ public interface IDrawingToolViewModel
     double CurrentFontSize { get; set; }
     bool IsBold { get; set; }
     bool IsItalic { get; set; }
-    System.Collections.ObjectModel.ObservableCollection<string> AvailableFonts { get; }
-    string CurrentFontFamily { get; set; }
+    System.Collections.ObjectModel.ObservableCollection<FontFamily> AvailableFonts { get; }
+    FontFamily CurrentFontFamily { get; set; }
     System.Action? FocusWindowAction { get; set; }
     
     // Text Entry State

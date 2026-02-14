@@ -69,8 +69,8 @@ public class Annotation : ReactiveObject
         set => this.RaiseAndSetIfChanged(ref _fontSize, value);
     }
 
-    private string _fontFamily = "Arial";
-    public string FontFamily
+    private FontFamily _fontFamily = new FontFamily("Arial");
+    public FontFamily FontFamily
     {
         get => _fontFamily;
         set => this.RaiseAndSetIfChanged(ref _fontFamily, value);

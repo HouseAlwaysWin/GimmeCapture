@@ -1578,6 +1578,10 @@ Output:",
                 
                 if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
                 {
+                    if (error.Contains("limit: 0"))
+                    {
+                        return "Error: Gemini Quota is 0. Try a different model (e.g. -exp) or check your API plan/region.";
+                    }
                     return "Error: Gemini API Rate Limit Exceeded (429).";
                 }
                 
