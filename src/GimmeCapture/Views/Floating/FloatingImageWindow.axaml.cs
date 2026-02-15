@@ -148,8 +148,9 @@ public partial class FloatingImageWindow : Window
             vm.RequestSetWindowRect = (pos, w, h, cw, ch) =>
             {
                 Position = pos;
-                Width = w;
-                Height = h;
+                // Use SyncWindowSizeToImage to ensure padding/toolbar are accounted for 
+                // based on the new content size (cw/ch or VM properties)
+                SyncWindowSizeToImage();
             };
         }
     }

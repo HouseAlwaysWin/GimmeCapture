@@ -116,14 +116,37 @@ public partial class FloatingImageViewModel
             // Push Undo State of OLD image
             PushUndoState();
             
+            // Capture current state for layout update
+            var oldRect = SelectionRect;
+            var oldPos = ScreenPosition ?? new Avalonia.PixelPoint(0, 0);
+            
+            // Calculate new position (align top-left of crop to where it was on screen)
+            // Note: Mixing Logical (Rect) and Device (PixelPoint) coordinates. 
+            // Assuming 1:1 or let the platform handle it, but ideally needs RenderScaling.
+            // For now, adding the logical offset to the pixel position is the best best-effort without scaling info.
+            var newPos = new Avalonia.PixelPoint(oldPos.X + (int)oldRect.X, oldPos.Y + (int)oldRect.Y);
+
             // Set new image
             Image = selected;
+            
+            // Update Data Dimensions
+            OriginalWidth = selected.Size.Width;
+            OriginalHeight = selected.Size.Height;
+            
+            // Update Display Dimensions (Resize window)
+            DisplayWidth = oldRect.Width;
+            DisplayHeight = oldRect.Height;
+            
+            // Update Position
+            ScreenPosition = newPos;
+
+            // Force Window Update
+            RequestSetWindowRect?.Invoke(newPos, DisplayWidth, DisplayHeight, DisplayWidth, DisplayHeight);
             
             // Reset Selection
             SelectionRect = new Avalonia.Rect();
             
-            // Clear Annotations? Or adjust them? 
-            // For now, clear annotations as they won't align.
+            // Clear Annotations as they won't align
             ClearAnnotations();
         }
     }
@@ -136,12 +159,12 @@ public partial class FloatingImageViewModel
         if (selected != null && OpenPinWindowAction != null)
         {
             // Open new Pin Window with selected content
-            OpenPinWindowAction(selected, SelectionRect, BorderColor, BorderThickness, true);
+            // arg5: runAI = false (Do NOT auto-remove background)
+            OpenPinWindowAction(selected, SelectionRect, BorderColor, BorderThickness, false);
             
-            // Close current? Or keep it? usually Pin duplicates.
-            // CloseAction?.Invoke(); 
-            // Snip tool usually closes after action.
-            CloseAction?.Invoke();
+            // Do NOT close the current window.
+            // User expects "Pin" to create a NEW window, preserving the source.
+            // CloseAction?.Invoke();
         }
     }
 
