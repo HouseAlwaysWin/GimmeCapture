@@ -103,6 +103,7 @@ public partial class FloatingImageViewModel
     {
         _interactivePoints.Clear();
         InteractiveMask = null;
+        _cleanMaskBytes = null;
         DiagnosticText = "AI: Points Reset";
         System.Diagnostics.Debug.WriteLine("FloatingVM: Resetting interactive points");
     }
@@ -248,17 +249,17 @@ public partial class FloatingImageViewModel
         try
         {
             // First point determines the mode:
-            // - Positive (normal click) = Remove selected area
-            // - Negative (Shift+click) = Keep selected area (invert result)
+            // - Positive (normal click) = Keep selected area (True) -> Green
+            // - Negative (Shift+click) = Remove selected area (False) -> Red
+            bool sam2Positive = isPositive;
             if (_interactivePoints.Count == 0)
             {
-                _invertSelectionMode = !isPositive;
-                System.Diagnostics.Debug.WriteLine($"[AI MODE] First point. Invert mode = {_invertSelectionMode}");
+                _invertSelectionMode = isPositive;
+                sam2Positive = true; // First point always defines the subject for SAM2
+                System.Diagnostics.Debug.WriteLine($"[AI MODE] First point. Keep mode = {_invertSelectionMode}");
             }
             
-            // CRITICAL: Always send POSITIVE points to SAM2 (so it selects something)
-            // The Shift key only affects how we interpret the FINAL result, not SAM2 input
-            _interactivePoints.Add((physicalX, physicalY, true)); // Always true for SAM2
+            _interactivePoints.Add((physicalX, physicalY, sam2Positive));
 
             await RefineMaskAsync();
         }
@@ -338,6 +339,53 @@ public partial class FloatingImageViewModel
         }
     }
 
+    private async Task<bool> EnsureAICoreResourcesAsync()
+    {
+        // 1. Check if already ready - Fast path
+        if (_aiResourceService.IsAICoreReady()) return true;
+
+        // 2. Check if already downloading (Background)
+        var currentStatus = ResourceQueueService.Instance.GetStatus("AI Core");
+        if (currentStatus == QueueItemStatus.Pending || currentStatus == QueueItemStatus.Downloading)
+        {
+             Avalonia.Threading.Dispatcher.UIThread.Post(() => {
+                 var dialogVm = new GothicDialogViewModel { 
+                     Title = "Download in Progress", 
+                     Message = "AI Core components are currently downloading..." 
+                 };
+                 var dialog = new GimmeCapture.Views.Shared.GothicDialog { DataContext = dialogVm };
+                 var desktop = Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime;
+                 var owner = desktop?.Windows.FirstOrDefault(w => w.DataContext == this) as Avalonia.Controls.Window;
+                 if (owner != null) dialog.ShowDialog<bool>(owner);
+            });
+            return false;
+        }
+
+        // 3. Not ready, Not downloading -> Ask for permission
+        var msg = LocalizationService.Instance["AIDownloadConfirm"] ?? "Background Removal requires additional modules. Download now?";
+        bool confirmed = false;
+
+        await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
+        {
+            var desktop = Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime;
+            var owner = desktop?.Windows.FirstOrDefault(w => w.DataContext == this);
+             if (owner != null)
+            {
+                confirmed = await GimmeCapture.Views.Dialogs.UpdateDialog.ShowDialog(owner, msg, isUpdateAvailable: true);
+            }
+        });
+        
+        if (!confirmed) return false;
+
+        // 4. Start Download
+        _ = ResourceQueueService.Instance.EnqueueAsync("AI Core", async () =>
+        {
+             return await _aiResourceService.EnsureAICoreAsync();
+        });
+
+        return false;
+    }
+
     private async Task RemoveBackgroundAsync()
     {
         if (Image == null) return;
@@ -377,8 +425,8 @@ public partial class FloatingImageViewModel
             return;
         }
         
-        // Check Resources and download if needed
-        if (!await EnsureAIResourcesAsync()) return;
+        // Check Resources and download if needed (Core only, not SAM2)
+        if (!await EnsureAICoreResourcesAsync()) return;
 
         try
         {
@@ -469,7 +517,7 @@ public partial class FloatingImageViewModel
                 using var originalBmp = SkiaSharp.SKBitmap.Decode(originalMs.ToArray());
 
                 // Use CLEAN mask without crosshairs!
-                if (_cleanMaskBytes == null) return null!; // Return empty if no clean mask
+                if (_cleanMaskBytes == null) throw new Exception("No valid mask generated.");
                 using var maskBmp = SkiaSharp.SKBitmap.Decode(_cleanMaskBytes);
                 
                 // RESIZE MASK TO MATCH ORIGINAL BITMAP EXACTLY with Nearest sampling to avoid blurring edges
@@ -526,6 +574,13 @@ public partial class FloatingImageViewModel
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"Failed to confirm interactive: {ex}");
+             Avalonia.Threading.Dispatcher.UIThread.Post(() => {
+                 var dialogVm = new GothicDialogViewModel { Title = "Error", Message = $"Failed to apply background removal: {ex.Message}" };
+                 var dialog = new GimmeCapture.Views.Shared.GothicDialog { DataContext = dialogVm };
+                 var desktop = Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime;
+                 var owner = desktop?.Windows.FirstOrDefault(w => w.DataContext == this) as Avalonia.Controls.Window;
+                 if (owner != null) dialog.ShowDialog<bool>(owner);
+            });
         }
         finally
         {

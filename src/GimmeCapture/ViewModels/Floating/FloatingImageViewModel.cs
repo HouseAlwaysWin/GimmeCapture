@@ -128,6 +128,7 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
             {
                 IsInteractiveSelectionMode = false;
                 InteractiveMask = null;
+                _cleanMaskBytes = null;
                 _interactivePoints.Clear();
             }
             else if (base.CurrentTool == FloatingTool.Selection)
@@ -199,6 +200,18 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
     public ReactiveCommand<Unit, Unit> CropCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> PinSelectionCommand { get; private set; } = null!;
 
+    // AI Interactive Mode
+    public bool IsPointRemovalMode
+    {
+        get => CurrentTool == FloatingTool.PointRemoval;
+        set 
+        {
+            if (value) CurrentTool = FloatingTool.PointRemoval;
+            else if (CurrentTool == FloatingTool.PointRemoval) CurrentTool = FloatingTool.None;
+            this.RaisePropertyChanged();
+        }
+    }
+
     public FloatingImageViewModel(Bitmap image, double originalWidth, double originalHeight, Avalonia.Media.Color borderColor, double borderThickness, bool hideDecoration, bool hideBorder, IClipboardService clipboardService, AIResourceService aiResourceService, AppSettingsService appSettingsService, AIPathService pathService)
     {
         Image = image;
@@ -221,7 +234,7 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
         InitializeBaseCommands();
         InitializeAnnotationCommands();
         // InitializeToolbarCommands(); // Moved to Base
-        InitializeActionCommands(); // Keep for specific commands
+        InitializeActionCommands();
         InitializeAICommands();
 
         _canRemoveBackground = this.WhenAnyValue(x => x.IsProcessing)
@@ -237,6 +250,15 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
         });
         
         ConfirmInteractiveCommand = ReactiveCommand.CreateFromTask(ConfirmInteractiveAsync, this.WhenAnyValue(x => x.InteractiveMask).Select(m => m != null));
+
+        // CRITICAL: Invalidate SAM2 service when Image changes (e.g. Crop, Undo)
+        this.WhenAnyValue(x => x.Image)
+            .Subscribe(_ =>
+            {
+                _sam2Service?.Dispose();
+                _sam2Service = null;
+                ResetInteractivePoints();
+            });
     }
 
     public override void Dispose()

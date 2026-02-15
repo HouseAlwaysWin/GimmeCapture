@@ -29,13 +29,21 @@ public partial class FloatingVideoViewModel
         CropCommand = ReactiveCommand.Create(() => { });
         PinSelectionCommand = ReactiveCommand.Create(() => { });
 
-        CopyCommand = ReactiveCommand.CreateFromTask(async () => 
+        CopyCommand = ReactiveCommand.CreateFromTask(CopyAsync);
+    }
+    
+    private async Task CopyAsync()
+    {
+        // Use flattened bitmap if annotations exist, otherwise base (but base is VideoBitmap, not directly copyable?)
+        // Actually, VideoBitmap is WriteableBitmap, we should flatten or copy it anyway to be safe.
+        // GetFlattenedBitmapAsync handles both drawing the video frame (from VideoBitmap) + Annotations.
+        // Even without annotations, it correctly snapshot the video frame.
+        
+        var bitmapToCopy = await GetFlattenedBitmapAsync();
+        if (bitmapToCopy != null)
         {
-            if (CopyAction != null)
-            {
-                await CopyAction();
-            }
-        });
+             await _clipboardService.CopyImageAsync(bitmapToCopy);
+        }
     }
 
     private async Task<Bitmap?> GetFlattenedBitmapAsync()
