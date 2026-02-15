@@ -11,12 +11,6 @@ namespace GimmeCapture.ViewModels.Floating;
 
 public partial class FloatingImageViewModel
 {
-    public bool IsSelectionMode
-    {
-        get => CurrentTool == FloatingTool.Selection;
-        set => CurrentTool = value ? FloatingTool.Selection : (CurrentTool == FloatingTool.Selection ? FloatingTool.None : CurrentTool);
-    }
-
     public bool IsPointRemovalMode
     {
         get => CurrentTool == FloatingTool.PointRemoval;
@@ -30,57 +24,10 @@ public partial class FloatingImageViewModel
         }
     }
 
-    public bool IsAnyToolActive => CurrentTool != FloatingTool.None || CurrentAnnotationTool != AnnotationType.None;
+    // IsSelectionMode and IsAnyToolActive are in Base.
 
-    public ReactiveCommand<string, Unit> ToggleToolGroupCommand { get; private set; } = null!;
-    public ReactiveCommand<Unit, Unit> SelectionCommand { get; private set; } = null!;
+    // Commands in Base.
 
-    private void InitializeToolbarCommands()
-    {
-        ToggleToolbarCommand = ReactiveCommand.Create(() => { ShowToolbar = !ShowToolbar; });
-
-        SelectionCommand = ReactiveCommand.Create(() => 
-        {
-            CurrentTool = CurrentTool == FloatingTool.Selection ? FloatingTool.None : FloatingTool.Selection;
-        });
-
-        SelectToolCommand = ReactiveCommand.Create<AnnotationType>(tool => 
-        {
-            var targetTool = CurrentAnnotationTool == tool ? AnnotationType.None : tool;
-            if (targetTool != AnnotationType.None)
-            {
-                CurrentTool = FloatingTool.None;
-                IsPointRemovalMode = false;
-                IsInteractiveSelectionMode = false;
-            }
-            CurrentAnnotationTool = targetTool;
-        });
-
-        ToggleToolGroupCommand = ReactiveCommand.Create<string>(group => 
-        {
-             AnnotationType targetTool = AnnotationType.None;
-             if (group == "Shapes")
-             {
-                 targetTool = IsShapeToolActive ? AnnotationType.None : AnnotationType.Rectangle;
-             }
-             else if (group == "Pen")
-             {
-                 targetTool = (CurrentAnnotationTool == AnnotationType.Pen) ? AnnotationType.None : AnnotationType.Pen;
-             }
-             else if (group == "Text")
-             {
-                 targetTool = IsTextToolActive ? AnnotationType.None : AnnotationType.Text;
-             }
-
-             if (targetTool != AnnotationType.None)
-             {
-                 CurrentTool = FloatingTool.None;
-                 IsPointRemovalMode = false;
-                 IsInteractiveSelectionMode = false;
-             }
-             CurrentAnnotationTool = targetTool;
-        });
-    }
 
     public override void UpdateToolbarPosition()
     {

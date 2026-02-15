@@ -116,8 +116,7 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
         }
     }
 
-    public System.Action<Avalonia.PixelPoint, double, double, double, double>? RequestSetWindowRect { get; set; }
-    public System.Action? FocusWindowAction { get; set; }
+
 
 
     // Dependencies
@@ -145,8 +144,9 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
         // Apply Default Toolbar Visibility
         ShowToolbar = !(_appSettingsService?.Settings.DefaultHideRecordToolbar ?? false);
 
+        InitializeBaseCommands();
         InitializeActionCommands();
-        InitializeToolbarCommands();
+        // InitializeToolbarCommands(); // Handled by Base
         InitializeAnnotationCommands();
         InitializeMediaCommands(); // Media init last as it starts playback
     }

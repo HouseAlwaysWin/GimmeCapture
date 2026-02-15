@@ -1,26 +1,16 @@
-using ReactiveUI;
-using System.Reactive;
-using System.Linq;
-using GimmeCapture.Models;
-using GimmeCapture.Services.Core;
-using System.Collections.ObjectModel;
 using System;
+using System.Collections.Generic;
+using System.Reactive;
 using System.Reactive.Linq;
+using GimmeCapture.Models;
+using ReactiveUI;
 
 namespace GimmeCapture.ViewModels.Floating;
 
 public partial class FloatingVideoViewModel
 {
-    public bool IsSelectionMode
-    {
-        get => CurrentTool == FloatingTool.Selection;
-        set => CurrentTool = value ? FloatingTool.Selection : (CurrentTool == FloatingTool.Selection ? FloatingTool.None : CurrentTool);
-    }
-
-    public bool IsAnyToolActive => CurrentTool != FloatingTool.None || CurrentAnnotationTool != AnnotationType.None;
-
-    public ReactiveCommand<string, Unit> ToggleToolGroupCommand { get; private set; } = null!;
-    public ReactiveCommand<Unit, Unit> SelectionCommand { get; private set; } = null!;
+    // IsSelectionMode, IsAnyToolActive are in Base.
+    // Commands are in Base.
 
     public override void UpdateToolbarPosition()
     {
@@ -30,54 +20,16 @@ public partial class FloatingVideoViewModel
 
     private void InitializeToolbarCommands()
     {
-        ToggleToolbarCommand = ReactiveCommand.Create(() => { ShowToolbar = !ShowToolbar; });
-
-        SelectionCommand = ReactiveCommand.Create(() => 
-        {
-            CurrentTool = CurrentTool == FloatingTool.Selection ? FloatingTool.None : FloatingTool.Selection;
-        });
-
-        SelectToolCommand = ReactiveCommand.Create<AnnotationType>(tool => 
-        {
-            var targetTool = CurrentAnnotationTool == tool ? AnnotationType.None : tool;
-            if (targetTool != AnnotationType.None)
-            {
-                CurrentTool = FloatingTool.None;
-            }
-            CurrentAnnotationTool = targetTool;
-        });
-
-        ToggleToolGroupCommand = ReactiveCommand.Create<string>(group => 
-        {
-             AnnotationType targetTool = AnnotationType.None;
-             if (group == "Shapes")
-             {
-                 targetTool = IsShapeToolActive ? AnnotationType.None : AnnotationType.Rectangle;
-             }
-             else if (group == "Pen")
-             {
-                 targetTool = (CurrentAnnotationTool == AnnotationType.Pen) ? AnnotationType.None : AnnotationType.Pen;
-             }
-             else if (group == "Text")
-             {
-                 targetTool = IsTextToolActive ? AnnotationType.None : AnnotationType.Text;
-             }
-
-             if (targetTool != AnnotationType.None)
-             {
-                 CurrentTool = FloatingTool.None;
-             }
-             CurrentAnnotationTool = targetTool;
-        });
+        // Handled by Base InitializeBaseCommands
     }
 
      public void ToggleToolGroup(string group)
-    {
-        ToggleToolGroupCommand.Execute(group).Subscribe();
-    }
-
-    public void SelectTool(AnnotationType type)
-    {
-        CurrentAnnotationTool = type;
-    }
+     {
+         // This might be called from View? 
+         // If so, we should use the Command. 
+         // If View calls this method directly, we need to implement it or redirect to Command.
+         // Base has ToggleToolGroupCommand. 
+         
+         ToggleToolGroupCommand.Execute(group).Subscribe();
+     }
 }

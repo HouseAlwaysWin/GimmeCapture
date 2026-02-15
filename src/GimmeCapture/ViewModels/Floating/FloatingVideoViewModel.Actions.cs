@@ -17,36 +17,20 @@ namespace GimmeCapture.ViewModels.Floating;
 
 public partial class FloatingVideoViewModel
 {
-    private Avalonia.Rect _selectionRect = new Avalonia.Rect();
-    public Avalonia.Rect SelectionRect
-    {
-        get => _selectionRect;
-        set 
-        {
-            this.RaiseAndSetIfChanged(ref _selectionRect, value);
-            this.RaisePropertyChanged(nameof(IsSelectionActive));
-        }
-    }
-    public bool IsSelectionActive => SelectionRect.Width > 0 && SelectionRect.Height > 0;
+    // Base has CloseAction, SaveAction.
+    // Base has SelectionRect, IsSelectionActive.
+    // Base has CloseCommand, SaveCommand.
 
-    public ReactiveCommand<Unit, Unit> CloseCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> CopyCommand { get; private set; } = null!;
-    public ReactiveCommand<Unit, Unit> SaveCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> CropCommand { get; private set; } = null!; // Future implementation
     public ReactiveCommand<Unit, Unit> PinSelectionCommand { get; private set; } = null!; // Future implementation
 
-    public System.Action? CloseAction { get; set; }
     public System.Func<Task>? CopyAction { get; set; }
-    public System.Func<Task>? SaveAction { get; set; }
 
     private void InitializeActionCommands()
     {
-        CloseCommand = ReactiveCommand.Create(() => 
-        {
-            Dispose();
-            CloseAction?.Invoke();
-        });
-
+        // CloseCommand, SaveCommand are in Base.
+        
         // Placeholders for now
         CropCommand = ReactiveCommand.Create(() => { });
         PinSelectionCommand = ReactiveCommand.Create(() => { });
@@ -55,17 +39,8 @@ public partial class FloatingVideoViewModel
         {
             if (CopyAction != null)
             {
-                // We don't have direct image access in CopyAction from here usually, 
-                // but if we did, we'd handle the flattening here.
-                // Currently CopyAction in FloatingVideoWindow probably handles the snapshot?
-                // Actually, logic is: CopyAction uses CreateSnapshotFromVideo()
                 await CopyAction();
             }
-        });
-
-        SaveCommand = ReactiveCommand.CreateFromTask(async () => 
-        {
-            if (SaveAction != null) await SaveAction();
         });
     }
 

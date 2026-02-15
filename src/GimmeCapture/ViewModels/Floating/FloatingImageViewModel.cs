@@ -78,7 +78,7 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
     public string ConfirmRemovalTooltip => $"{LocalizationService.Instance["TipConfirmRemoval"]} (Enter)";
     public string CancelRemovalTooltip => $"{LocalizationService.Instance["Cancel"]} (Esc)";
 
-    public System.Action? FocusWindowAction { get; set; }
+
 
     public IClipboardService ClipboardService => _clipboardService;
     public AIResourceService AIResourceService => _aiResourceService;
@@ -185,9 +185,10 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
         // Apply Default Toolbar Visibility
         ShowToolbar = !(_appSettingsService.Settings.DefaultHideSnipToolbar);
 
-        InitializeActionCommands();
+        InitializeBaseCommands();
         InitializeAnnotationCommands();
-        InitializeToolbarCommands();
+        // InitializeToolbarCommands(); // Moved to Base
+        InitializeActionCommands(); // Keep for specific commands
         InitializeAICommands();
 
         _canRemoveBackground = this.WhenAnyValue(x => x.IsProcessing)

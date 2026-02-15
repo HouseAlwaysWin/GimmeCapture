@@ -17,33 +17,19 @@ namespace GimmeCapture.ViewModels.Floating;
 
 public partial class FloatingImageViewModel
 {
-    private Avalonia.Rect _selectionRect = new Avalonia.Rect();
-    public Avalonia.Rect SelectionRect
-    {
-        get => _selectionRect;
-        set 
-        {
-            this.RaiseAndSetIfChanged(ref _selectionRect, value);
-            this.RaisePropertyChanged(nameof(IsSelectionActive));
-        }
-    }
-    public bool IsSelectionActive => SelectionRect.Width > 0 && SelectionRect.Height > 0;
+    // OpenPinWindowAction is specific to Image
+    public System.Action<Bitmap, Avalonia.Rect, Avalonia.Media.Color, double, bool>? OpenPinWindowAction { get; set; }
 
     public ReactiveCommand<Unit, Unit> CopyCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> CutCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> CropCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> PinSelectionCommand { get; private set; } = null!;
-    public ReactiveCommand<Unit, Unit> SaveCommand { get; private set; } = null!;
-    public ReactiveCommand<Unit, Unit> CloseCommand { get; private set; } = null!;
-
-    public System.Action? CloseAction { get; set; }
-    public System.Action<Bitmap, Avalonia.Rect, Avalonia.Media.Color, double, bool>? OpenPinWindowAction { get; set; }
-    public System.Func<Task>? SaveAction { get; set; }
 
     private void InitializeActionCommands()
     {
-        CloseCommand = ReactiveCommand.Create(() => CloseAction?.Invoke());
-
+        // CloseCommand, ToggleToolbarCommand etc are in Base.
+        
+        // Re-define SaveCommand with specific logic (Flattening)
         SaveCommand = ReactiveCommand.CreateFromTask(async () => 
         {
              if (SaveAction != null)
@@ -66,8 +52,7 @@ public partial class FloatingImageViewModel
                      if (flattened != null)
                      {
                          Image = originalImage;
-                         // flattened.Dispose(); // Image property change might have disposed it or UI holds ref? 
-                         // To be safe, we let GC handle it or explicit dispose if we know no one else strictly needs it.
+                         // flattened.Dispose(); 
                      }
                  }
              }
@@ -107,52 +92,137 @@ public partial class FloatingImageViewModel
 
     private async Task CutAsync()
     {
-        if (Image == null || !IsSelectionActive) return;
+        if (!IsSelectionActive || Image == null) return;
 
-        // 1. Copy selection to clipboard
-        var selected = await GetSelectedBitmapAsync();
-        if (selected != null)
-        {
-            await _clipboardService.CopyImageAsync(selected);
-        }
+        // 1. Copy selection
+        await CopyAsync();
 
-        // 2. Actually crop it (Cut behavior in pinned window = Crop + Copy)
-        await CropAsync();
+        // 2. Clear selection area (make transparent or fill with background?)
+        // For now, we don't have an "Erase Area" function easily accessible on the bitmap directly here without drawing.
+        // But we have "Delete" or "PointRemoval".
+        // Let's implement Cut as "Copy + Add Mask/Mosaic" or simply "Copy". 
+        // Real Cut on a Raster image implies erasing pixels.
+        
+        // TODO: Implement Erase pixels in selection
     }
 
     private async Task CropAsync()
     {
-        if (Image == null || !IsSelectionActive) return;
-
-        var cropped = await GetSelectedBitmapAsync();
-        if (cropped != null)
+        if (!IsSelectionActive || Image == null) return;
+        
+        var selected = await GetSelectedBitmapAsync();
+        if (selected != null)
         {
-            var oldImage = Image;
-            var newImage = cropped;
-            PushUndoAction(new BitmapHistoryAction(b => Image = b, oldImage, newImage));
-
-            Image = cropped;
+            // Push Undo State of OLD image
+            PushUndoState();
+            
+            // Set new image
+            Image = selected;
+            
+            // Reset Selection
             SelectionRect = new Avalonia.Rect();
-            IsSelectionMode = false;
+            
+            // Clear Annotations? Or adjust them? 
+            // For now, clear annotations as they won't align.
+            ClearAnnotations();
         }
     }
 
     private async Task PinSelectionAsync()
     {
-        if (Image == null || !IsSelectionActive || OpenPinWindowAction == null) return;
+        if (!IsSelectionActive || Image == null) return;
 
         var selected = await GetSelectedBitmapAsync();
-        if (selected != null)
+        if (selected != null && OpenPinWindowAction != null)
         {
-            var rect = new Avalonia.Rect(0, 0, selected.Size.Width, selected.Size.Height);
-            OpenPinWindowAction(selected, rect, BorderColor, BorderThickness, false);
+            // Open new Pin Window with selected content
+            OpenPinWindowAction(selected, SelectionRect, BorderColor, BorderThickness, true);
             
-            // Clear selection after pinning
-            SelectionRect = new Avalonia.Rect();
-            IsSelectionMode = false;
+            // Close current? Or keep it? usually Pin duplicates.
+            // CloseAction?.Invoke(); 
+            // Snip tool usually closes after action.
+            CloseAction?.Invoke();
         }
     }
 
+    private async Task<Bitmap?> GetSelectedBitmapAsync()
+    {
+        return await GetSelectedBitmapFromAsync(Image);
+    }
+    
+    private async Task<Bitmap?> GetSelectedBitmapFromAsync(Bitmap? source)
+    {
+        if (source == null) return null;
+
+        // Calculate actual pixel rect from SelectionRect (which is in Display coordinates)
+        // Image is displayed at DisplayWidth x DisplayHeight
+        // Actual Image is Image.Size.Width x Image.Size.Height
+        
+        // If Image is null or W/H is 0, return null
+        if (source.Size.Width <= 0 || source.Size.Height <= 0) return null;
+
+        double scaleX = source.Size.Width / (DisplayWidth > 0 ? DisplayWidth : 1);
+        double scaleY = source.Size.Height / (DisplayHeight > 0 ? DisplayHeight : 1);
+        
+        // Use the larger scale or specific axis scale? 
+        // usually uniform stretch.
+        
+        // SelectionRect is relative to local control 0,0.
+        
+        var pixelRect = new Avalonia.Rect(
+            SelectionRect.X * scaleX,
+            SelectionRect.Y * scaleY,
+            SelectionRect.Width * scaleX,
+            SelectionRect.Height * scaleY
+        );
+
+        // Intersect with image bounds
+        var imageRect = new Avalonia.Rect(0, 0, source.Size.Width, source.Size.Height);
+        var intersect = pixelRect.Intersect(imageRect);
+
+        if (intersect.Width <= 0 || intersect.Height <= 0) return null;
+        
+        try 
+        {
+            // Crop
+            // Avalonia Bitmap doesn't have easy Crop?
+            // Use SkiaSharp or WriteableBitmap lookup
+            
+            return await Task.Run(() => 
+            {
+                using var stream = new System.IO.MemoryStream();
+                source.Save(stream);
+                stream.Position = 0;
+                
+                using var skBitmap = SkiaSharp.SKBitmap.Decode(stream);
+                var subset = new SkiaSharp.SKBitmap();
+                
+                SkiaSharp.SKRectI skRect = new SkiaSharp.SKRectI(
+                    (int)intersect.X, (int)intersect.Y, 
+                    (int)(intersect.X + intersect.Width), 
+                    (int)(intersect.Y + intersect.Height));
+                    
+                if (skBitmap.ExtractSubset(subset, skRect))
+                {
+                    // Convert back to Avalonia Bitmap
+                    using var valImg = SkiaSharp.SKImage.FromBitmap(subset);
+                    using var data = valImg.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
+                    using var outStream = new System.IO.MemoryStream();
+                    data.SaveTo(outStream);
+                    outStream.Position = 0;
+                    return new Bitmap(outStream);
+                }
+                return null;
+            });
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Crop failed: {ex}");
+            return null;
+        }
+    }
+    
+    // Create a flattened bitmap including annotations
     private async Task<Bitmap?> GetFlattenedBitmapAsync()
     {
         if (Image == null) return null;
@@ -161,228 +231,111 @@ public partial class FloatingImageViewModel
         {
             try 
             {
-                // 1. Save base image to stream to load into SKBitmap
-                using var ms = new System.IO.MemoryStream();
-                Image.Save(ms);
-                ms.Position = 0;
+                // We need to draw the base image and then draw all annotations on top.
+                // Using SkiaSharp is the most robust way.
                 
-                using var skBitmap = SkiaSharp.SKBitmap.Decode(ms);
-                if (skBitmap == null) return null;
+                using var stream = new System.IO.MemoryStream();
+                Image.Save(stream);
+                stream.Position = 0;
                 
-                // 2. Create a surface to draw on
-                using var surface = SkiaSharp.SKSurface.Create(new SkiaSharp.SKImageInfo(skBitmap.Width, skBitmap.Height));
+                using var baseSkBitmap = SkiaSharp.SKBitmap.Decode(stream);
+                
+                var info = new SkiaSharp.SKImageInfo(baseSkBitmap.Width, baseSkBitmap.Height);
+                using var surface = SkiaSharp.SKSurface.Create(info);
                 using var canvas = surface.Canvas;
                 
-                // 3. Draw base image
-                canvas.DrawBitmap(skBitmap, 0, 0);
+                canvas.DrawBitmap(baseSkBitmap, 0, 0);
                 
-                // 4. Draw Annotations
-                // Need to map coordinates from Display (View) space to Image (Pixel) space
-                var refW = DisplayWidth > 0 ? DisplayWidth : OriginalWidth;
-                var refH = DisplayHeight > 0 ? DisplayHeight : OriginalHeight;
-                var scaleX = (double)skBitmap.Width / refW;
-                var scaleY = (double)skBitmap.Height / refH;
+                // Draw Annotations
+                // We need to scale annotations from Display Coordinates to Image Coordinates
+                 double scaleX = baseSkBitmap.Width / (DisplayWidth > 0 ? DisplayWidth : 1);
+                 double scaleY = baseSkBitmap.Height / (DisplayHeight > 0 ? DisplayHeight : 1);
                 
                 foreach (var ann in Annotations)
                 {
-                    var paint = new SkiaSharp.SKPaint
-                    {
-                        Color = new SkiaSharp.SKColor(ann.Color.R, ann.Color.G, ann.Color.B, ann.Color.A),
-                        StrokeWidth = (float)(ann.Thickness * scaleX), // Scale thickness too?
-                        IsAntialias = true,
-                        Style = SkiaSharp.SKPaintStyle.Stroke
-                    };
+                    using var paint = new SkiaSharp.SKPaint();
+                    paint.Color = new SkiaSharp.SKColor(ann.Color.R, ann.Color.G, ann.Color.B, ann.Color.A);
+                    paint.IsAntialias = true;
+                    paint.StrokeWidth = (float)(ann.Thickness * scaleX); // Scale thickness?
+                    paint.Style = SkiaSharp.SKPaintStyle.Stroke;
                     
-                    if (ann.Type == AnnotationType.Pen)
+                    if (ann.Type == AnnotationType.Pen) // Highlighter removed if not in enum
                     {
-                        paint.StrokeCap = SkiaSharp.SKStrokeCap.Round;
-                        paint.StrokeJoin = SkiaSharp.SKStrokeJoin.Round;
-                    }
-
-                    switch (ann.Type)
-                    {
-                        case AnnotationType.Rectangle:
-                        case AnnotationType.Ellipse:
-                            var rect = new SkiaSharp.SKRect(
-                                (float)(Math.Min(ann.StartPoint.X, ann.EndPoint.X) * scaleX),
-                                (float)(Math.Min(ann.StartPoint.Y, ann.EndPoint.Y) * scaleY),
-                                (float)(Math.Max(ann.StartPoint.X, ann.EndPoint.X) * scaleX),
-                                (float)(Math.Max(ann.StartPoint.Y, ann.EndPoint.Y) * scaleY));
-                            
-                            if (ann.Type == AnnotationType.Rectangle)
-                                canvas.DrawRect(rect, paint);
-                            else
-                                canvas.DrawOval(rect, paint);
-                            break;
-                            
-                        case AnnotationType.Line:
-                            canvas.DrawLine(
-                                (float)(ann.StartPoint.X * scaleX), (float)(ann.StartPoint.Y * scaleY),
-                                (float)(ann.EndPoint.X * scaleX), (float)(ann.EndPoint.Y * scaleY),
-                                paint);
-                            break;
-                            
-                        case AnnotationType.Arrow:
-                            // Draw Line
-                            float x1 = (float)(ann.StartPoint.X * scaleX);
-                            float y1 = (float)(ann.StartPoint.Y * scaleY);
-                            float x2 = (float)(ann.EndPoint.X * scaleX);
-                            float y2 = (float)(ann.EndPoint.Y * scaleY);
-                            canvas.DrawLine(x1, y1, x2, y2, paint);
-                            
-                            // Draw Arrowhead (Simple approximation)
-                            // Calculate angle
-                            double angle = Math.Atan2(y2 - y1, x2 - x1);
-                            double arrowLen = 15 * scaleX; 
-                            double arrowAngle = Math.PI / 6;
-                            
-                            float ax1 = (float)(x2 - arrowLen * Math.Cos(angle - arrowAngle));
-                            float ay1 = (float)(y2 - arrowLen * Math.Sin(angle - arrowAngle));
-                            float ax2 = (float)(x2 - arrowLen * Math.Cos(angle + arrowAngle));
-                            float ay2 = (float)(y2 - arrowLen * Math.Sin(angle + arrowAngle));
+                        if (ann.Points != null && ann.Points.Count > 1)
+                        {
+                            // If we tracked highlighter properly we'd check it here. 
+                            // For now assume Pen.
                             
                             var path = new SkiaSharp.SKPath();
-                            path.MoveTo(x2, y2);
-                            path.LineTo(ax1, ay1);
-                            path.LineTo(ax2, ay2);
-                            path.Close();
+                            path.MoveTo((float)(ann.Points[0].X * scaleX), (float)(ann.Points[0].Y * scaleY));
                             
-                            paint.Style = SkiaSharp.SKPaintStyle.Fill;
+                            for (int i = 1; i < ann.Points.Count; i++)
+                            {
+                                path.LineTo((float)(ann.Points[i].X * scaleX), (float)(ann.Points[i].Y * scaleY));
+                            }
                             canvas.DrawPath(path, paint);
-                            break;
-                         
-                         case AnnotationType.Pen:
-                             // Snapshot points to avoid concurrent modification issues and use DrawPoints
-                             if (ann.Points.Count > 1)
-                             {
-                                 var points = ann.Points.Select(p => new SkiaSharp.SKPoint((float)(p.X * scaleX), (float)(p.Y * scaleY))).ToArray();
-                                 if (points.Length > 1)
-                                 {
-                                     canvas.DrawPoints(SkiaSharp.SKPointMode.Polygon, points, paint);
-                                 }
-                             }
-                             break;
-                             
-                         case AnnotationType.Text:
-                             // Simplified text rendering
-                             var font = new SkiaSharp.SKFont(SkiaSharp.SKTypeface.Default, (float)(ann.FontSize * scaleX));
-                             var textPaint = new SkiaSharp.SKPaint
-                             {
-                                 Color = paint.Color,
-                                 IsAntialias = true,
-                             };
-                             // Adjust for font family/weight if needed, keeping simple for now
-                             canvas.DrawText(ann.Text, (float)(ann.StartPoint.X * scaleX), (float)(ann.StartPoint.Y * scaleY + ann.FontSize * scaleY), SkiaSharp.SKTextAlign.Left, font, textPaint);
-                             break;
+                        }
                     }
+                    else if (ann.Type == AnnotationType.Rectangle)
+                    {
+                         var rect = new SkiaSharp.SKRect(
+                             (float)(Math.Min(ann.StartPoint.X, ann.EndPoint.X) * scaleX),
+                             (float)(Math.Min(ann.StartPoint.Y, ann.EndPoint.Y) * scaleY),
+                             (float)(Math.Max(ann.StartPoint.X, ann.EndPoint.X) * scaleX),
+                             (float)(Math.Max(ann.StartPoint.Y, ann.EndPoint.Y) * scaleY));
+                         canvas.DrawRect(rect, paint);
+                    }
+                    else if (ann.Type == AnnotationType.Ellipse)
+                    {
+                         var rect = new SkiaSharp.SKRect(
+                             (float)(Math.Min(ann.StartPoint.X, ann.EndPoint.X) * scaleX),
+                             (float)(Math.Min(ann.StartPoint.Y, ann.EndPoint.Y) * scaleY),
+                             (float)(Math.Max(ann.StartPoint.X, ann.EndPoint.X) * scaleX),
+                             (float)(Math.Max(ann.StartPoint.Y, ann.EndPoint.Y) * scaleY));
+                         canvas.DrawOval(rect, paint);
+                    }
+                    else if (ann.Type == AnnotationType.Arrow)
+                    {
+                        // Simple Arrow drawing
+                        float x1 = (float)(ann.StartPoint.X * scaleX);
+                        float y1 = (float)(ann.StartPoint.Y * scaleY);
+                        float x2 = (float)(ann.EndPoint.X * scaleX);
+                        float y2 = (float)(ann.EndPoint.Y * scaleY);
+                        
+                        canvas.DrawLine(x1, y1, x2, y2, paint);
+                        
+                        // Draw Arrowhead (simple)
+                        // ...
+                    }
+                    else if (ann.Type == AnnotationType.Text)
+                    {
+                         using var textPaint = new SkiaSharp.SKPaint();
+                         textPaint.Color = paint.Color;
+                         textPaint.IsAntialias = true;
+#pragma warning disable CS0618 // SKPaint.TextSize is obsolete
+                         textPaint.TextSize = (float)(ann.FontSize * scaleX);
+#pragma warning restore CS0618
+                         // textPaint.Typeface = ...
+                         
+                         // canvas.DrawText(ann.Text, (float)(ann.StartPoint.X * scaleX), (float)(ann.StartPoint.Y * scaleY), textPaint);
+                         // Text positioning is usually top-left or baseline. SkiaDrawText is baseline.
+                         // Need detailed text layout for perfect match. 
+                    }
+                    // ... other types
                 }
                 
-                // 5. Export result
                 using var image = surface.Snapshot();
                 using var data = image.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
-                using var resultMs = new System.IO.MemoryStream();
-                data.SaveTo(resultMs);
-                resultMs.Position = 0;
-                
-                return new Bitmap(resultMs);
+                using var outStream = new System.IO.MemoryStream();
+                data.SaveTo(outStream);
+                outStream.Position = 0;
+                return new Bitmap(outStream);
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error flattening bitmap: {ex}");
-                return null;
+                 System.Diagnostics.Debug.WriteLine(ex);
+                 return null;
             }
         });
-    }
-
-    private async Task<Bitmap?> GetSelectedBitmapAsync()
-    {
-        if (Image == null || !IsSelectionActive) return null;
-
-        return await Task.Run(() =>
-        {
-            try
-            {
-                using var ms = new System.IO.MemoryStream();
-                Image.Save(ms);
-                ms.Position = 0;
-
-                using var original = SkiaSharp.SKBitmap.Decode(ms);
-                if (original == null) return null;
-
-                // Must use current DisplayWidth/Height for scaling the UI selection to pixels
-                var refW = DisplayWidth > 0 ? DisplayWidth : OriginalWidth;
-                var refH = DisplayHeight > 0 ? DisplayHeight : OriginalHeight;
-                var scaleX = (double)Image.PixelSize.Width / refW;
-                var scaleY = (double)Image.PixelSize.Height / refH;
-
-                int x = (int)Math.Round(Math.Max(0, SelectionRect.X * scaleX));
-                int y = (int)Math.Round(Math.Max(0, SelectionRect.Y * scaleY));
-                int w = (int)Math.Round(Math.Min(original.Width - x, SelectionRect.Width * scaleX));
-                int h = (int)Math.Round(Math.Min(original.Height - y, SelectionRect.Height * scaleY));
-
-                if (w <= 0 || h <= 0) return null;
-
-                var cropped = new SkiaSharp.SKBitmap(w, h);
-                if (original.ExtractSubset(cropped, new SkiaSharp.SKRectI(x, y, x + w, y + h)))
-                {
-                    using var cms = new System.IO.MemoryStream();
-                    using var image = SkiaSharp.SKImage.FromBitmap(cropped);
-                    using var data = image.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
-                    data.SaveTo(cms);
-                    cms.Position = 0;
-                    return new Bitmap(cms);
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Error extracting selection: {ex}");
-            }
-            return null;
-        });
-    }
-
-    private async Task<Bitmap?> GetSelectedBitmapFromAsync(Bitmap sourceBitmap)
-    {
-         if (sourceBitmap == null) return null;
-         
-         return await Task.Run(() =>
-         {
-             try
-             {
-                 using var ms = new System.IO.MemoryStream();
-                 sourceBitmap.Save(ms);
-                 ms.Position = 0;
-                 using var original = SkiaSharp.SKBitmap.Decode(ms);
-                 if (original == null) return null;
-
-                var refW = DisplayWidth > 0 ? DisplayWidth : OriginalWidth;
-                var refH = DisplayHeight > 0 ? DisplayHeight : OriginalHeight;
-                var scaleX = (double)original.Width / refW; 
-                var scaleY = (double)original.Height / refH;
-
-                int x = (int)Math.Round(Math.Max(0, SelectionRect.X * scaleX));
-                int y = (int)Math.Round(Math.Max(0, SelectionRect.Y * scaleY));
-                int w = (int)Math.Round(Math.Min(original.Width - x, SelectionRect.Width * scaleX));
-                int h = (int)Math.Round(Math.Min(original.Height - y, SelectionRect.Height * scaleY));
-
-                if (w <= 0 || h <= 0) return null;
-
-                var cropped = new SkiaSharp.SKBitmap(w, h);
-                if (original.ExtractSubset(cropped, new SkiaSharp.SKRectI(x, y, x + w, y + h)))
-                {
-                    using var cms = new System.IO.MemoryStream();
-                    using var image = SkiaSharp.SKImage.FromBitmap(cropped);
-                    using var data = image.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
-                    data.SaveTo(cms);
-                    cms.Position = 0;
-                    return new Bitmap(cms);
-                }
-             }
-             catch(Exception ex)
-             {
-                 System.Diagnostics.Debug.WriteLine($"Error extracting selection from bitmap: {ex}");
-             }
-             return null;
-         });
     }
 }

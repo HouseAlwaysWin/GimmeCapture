@@ -43,47 +43,6 @@ public partial class FloatingImageViewModel
         set => this.RaiseAndSetIfChanged(ref _interactiveMask, value);
     }
 
-    private bool _isProcessing;
-    public bool IsProcessing
-    {
-        get => _isProcessing;
-        set 
-        {
-            this.RaiseAndSetIfChanged(ref _isProcessing, value);
-            this.RaisePropertyChanged(nameof(ShowProcessingOverlay));
-        }
-    }
-
-    public bool ShowProcessingOverlay => IsProcessing;
-
-    private string _processingText = LocalizationService.Instance["StatusProcessing"];
-    public string ProcessingText
-    {
-        get => _processingText;
-        set => this.RaiseAndSetIfChanged(ref _processingText, value);
-    }
-
-    private string _diagnosticText = "Ready";
-    public string DiagnosticText
-    {
-        get => _diagnosticText;
-        set => this.RaiseAndSetIfChanged(ref _diagnosticText, value);
-    }
-
-    private double _progressValue;
-    public double ProgressValue
-    {
-        get => _progressValue;
-        set => this.RaiseAndSetIfChanged(ref _progressValue, value);
-    }
-    
-    private bool _isIndeterminate = true;
-    public bool IsIndeterminate
-    {
-        get => _isIndeterminate;
-        set => this.RaiseAndSetIfChanged(ref _isIndeterminate, value);
-    }
-
     // Only allow background removal if not processing.
     // We could also check if already transparent, but that's harder to detect cheaply.
     private readonly ObservableAsPropertyHelper<bool> _canRemoveBackground;
