@@ -14,67 +14,15 @@ namespace GimmeCapture.ViewModels.Floating;
 
 public partial class FloatingVideoViewModel
 {
-    private AnnotationType _currentAnnotationTool = AnnotationType.None;
-    public AnnotationType CurrentAnnotationTool
-    {
-        get => _currentAnnotationTool;
-        set 
-        {
-            if (_currentAnnotationTool == value) return;
-            
-            if (value != AnnotationType.None)
-            {
-                CurrentTool = FloatingTool.None;
-            }
 
-            this.RaiseAndSetIfChanged(ref _currentAnnotationTool, value);
-            this.RaisePropertyChanged(nameof(IsShapeToolActive));
-            this.RaisePropertyChanged(nameof(IsTextToolActive));
-            this.RaisePropertyChanged(nameof(IsPenToolActive));
-            this.RaisePropertyChanged(nameof(IsAnyToolActive));
-        }
-    }
 
-    public ObservableCollection<Annotation> Annotations { get; } = new();
+
 
     public bool IsShapeToolActive => CurrentAnnotationTool == AnnotationType.Rectangle || CurrentAnnotationTool == AnnotationType.Ellipse || CurrentAnnotationTool == AnnotationType.Arrow || CurrentAnnotationTool == AnnotationType.Line || CurrentAnnotationTool == AnnotationType.Mosaic || CurrentAnnotationTool == AnnotationType.Blur;
     public bool IsPenToolActive => CurrentAnnotationTool == AnnotationType.Pen;
     public bool IsTextToolActive => CurrentAnnotationTool == AnnotationType.Text;
 
-    private Avalonia.Media.Color _selectedColor = Avalonia.Media.Colors.Red;
-    public Avalonia.Media.Color SelectedColor
-    {
-        get => _selectedColor;
-        set => this.RaiseAndSetIfChanged(ref _selectedColor, value);
-    }
 
-    private double _currentThickness = 2.0;
-    public double CurrentThickness
-    {
-        get => _currentThickness;
-        set => this.RaiseAndSetIfChanged(ref _currentThickness, value);
-    }
-
-    private double _currentFontSize = 24.0;
-    public double CurrentFontSize
-    {
-        get => _currentFontSize;
-        set => this.RaiseAndSetIfChanged(ref _currentFontSize, value);
-    }
-
-    private bool _isBold;
-    public bool IsBold
-    {
-        get => _isBold;
-        set => this.RaiseAndSetIfChanged(ref _isBold, value);
-    }
-
-    private bool _isItalic;
-    public bool IsItalic
-    {
-        get => _isItalic;
-        set => this.RaiseAndSetIfChanged(ref _isItalic, value);
-    }
 
     private bool _isEnteringText;
     public bool IsEnteringText
@@ -126,29 +74,9 @@ public partial class FloatingVideoViewModel
     public ReactiveCommand<Unit, Unit> IncreaseThicknessCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> DecreaseThicknessCommand { get; private set; } = null!;
 
-    public ReactiveCommand<Unit, Unit> ConfirmTextEntryCommand { get; private set; } = null!;
-    public ReactiveCommand<Unit, Unit> CancelTextEntryCommand { get; private set; } = null!;
-    
-    public ReactiveCommand<Unit, Unit> ClearAnnotationsCommand { get; private set; } = null!;
-    public ReactiveCommand<Unit, Unit> UndoCommand { get; private set; } = null!;
-    public ReactiveCommand<Unit, Unit> RedoCommand { get; private set; } = null!;
 
-    private Stack<IHistoryAction> _historyStack = new();
-    private Stack<IHistoryAction> _redoHistoryStack = new();
 
-    private bool _hasUndo;
-    public bool HasUndo
-    {
-        get => _hasUndo;
-        set => this.RaiseAndSetIfChanged(ref _hasUndo, value);
-    }
 
-    private bool _hasRedo;
-    public bool HasRedo
-    {
-        get => _hasRedo;
-        set => this.RaiseAndSetIfChanged(ref _hasRedo, value);
-    }
 
     public bool CanUndo => HasUndo;
     public bool CanRedo => HasRedo;
@@ -252,9 +180,5 @@ public partial class FloatingVideoViewModel
         UpdateHistoryStatus();
     }
 
-    private void UpdateHistoryStatus()
-    {
-        HasUndo = _historyStack.Count > 0;
-        HasRedo = _redoHistoryStack.Count > 0;
-    }
+
 }

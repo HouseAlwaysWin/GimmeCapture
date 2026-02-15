@@ -15,67 +15,9 @@ namespace GimmeCapture.ViewModels.Floating;
 
 public partial class FloatingImageViewModel
 {
-    private AnnotationType _currentAnnotationTool = AnnotationType.None;
-    public AnnotationType CurrentAnnotationTool
-    {
-        get => _currentAnnotationTool;
-        set 
-        {
-            if (_currentAnnotationTool == value) return;
-            
-            if (value != AnnotationType.None)
-            {
-                CurrentTool = FloatingTool.None;
-            }
-
-            this.RaiseAndSetIfChanged(ref _currentAnnotationTool, value);
-            this.RaisePropertyChanged(nameof(IsShapeToolActive));
-            this.RaisePropertyChanged(nameof(IsTextToolActive));
-            this.RaisePropertyChanged(nameof(IsPenToolActive));
-            this.RaisePropertyChanged(nameof(IsAnyToolActive));
-        }
-    }
-
-    public ObservableCollection<Annotation> Annotations { get; } = new();
-
     public bool IsShapeToolActive => CurrentAnnotationTool == AnnotationType.Rectangle || CurrentAnnotationTool == AnnotationType.Ellipse || CurrentAnnotationTool == AnnotationType.Arrow || CurrentAnnotationTool == AnnotationType.Line || CurrentAnnotationTool == AnnotationType.Mosaic || CurrentAnnotationTool == AnnotationType.Blur;
     public bool IsPenToolActive => CurrentAnnotationTool == AnnotationType.Pen;
     public bool IsTextToolActive => CurrentAnnotationTool == AnnotationType.Text;
-
-    private Avalonia.Media.Color _selectedColor = Avalonia.Media.Colors.Red;
-    public Avalonia.Media.Color SelectedColor
-    {
-        get => _selectedColor;
-        set => this.RaiseAndSetIfChanged(ref _selectedColor, value);
-    }
-
-    private double _currentThickness = 2.0;
-    public double CurrentThickness
-    {
-        get => _currentThickness;
-        set => this.RaiseAndSetIfChanged(ref _currentThickness, value);
-    }
-
-    private double _currentFontSize = 24.0;
-    public double CurrentFontSize
-    {
-        get => _currentFontSize;
-        set => this.RaiseAndSetIfChanged(ref _currentFontSize, value);
-    }
-
-    private bool _isBold;
-    public bool IsBold
-    {
-        get => _isBold;
-        set => this.RaiseAndSetIfChanged(ref _isBold, value);
-    }
-
-    private bool _isItalic;
-    public bool IsItalic
-    {
-        get => _isItalic;
-        set => this.RaiseAndSetIfChanged(ref _isItalic, value);
-    }
 
     private bool _isEnteringText;
     public bool IsEnteringText
@@ -126,34 +68,7 @@ public partial class FloatingImageViewModel
     public ReactiveCommand<Unit, Unit> IncreaseThicknessCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> DecreaseThicknessCommand { get; private set; } = null!;
 
-    public ReactiveCommand<Unit, Unit> ConfirmTextEntryCommand { get; private set; } = null!;
-    public ReactiveCommand<Unit, Unit> CancelTextEntryCommand { get; private set; } = null!;
-    
-    public ReactiveCommand<Unit, Unit> ClearAnnotationsCommand { get; private set; } = null!;
-    public ReactiveCommand<Unit, Unit> UndoCommand { get; private set; } = null!;
-    public ReactiveCommand<Unit, Unit> RedoCommand { get; private set; } = null!;
-
-    // History Logic
-    private Stack<IHistoryAction> _historyStack = new();
-    private Stack<IHistoryAction> _redoHistoryStack = new();
-
-    private bool _hasUndo;
-    public bool HasUndo
-    {
-        get => _hasUndo;
-        set => this.RaiseAndSetIfChanged(ref _hasUndo, value);
-    }
-
-    private bool _hasRedo;
-    public bool HasRedo
-    {
-        get => _hasRedo;
-        set => this.RaiseAndSetIfChanged(ref _hasRedo, value);
-    }
-
-    public bool CanUndo => HasUndo;
-    public bool CanRedo => HasRedo;
-
+    // InitializeAnnotationCommands is called from Constructor.
     private void InitializeAnnotationCommands()
     {
         IncreaseFontSizeCommand = ReactiveCommand.Create(() => { CurrentFontSize = Math.Min(CurrentFontSize + 2, 72); });
@@ -220,6 +135,7 @@ public partial class FloatingImageViewModel
         UpdateHistoryStatus();
     }
 
+    // Used for window resizing history
     public void PushResizeAction(Avalonia.PixelPoint oldPos, double oldW, double oldH, double oldContentW, double oldContentH,
                                 Avalonia.PixelPoint newPos, double newW, double newH, double newContentW, double newContentH)
     {
@@ -234,10 +150,14 @@ public partial class FloatingImageViewModel
             oldPos, oldW, oldH, oldContentW, oldContentH,
             newPos, newW, newH, newContentW, newContentH));
     }
+    
+    // Action to set window rect, usually bound from view
+    public Action<Avalonia.PixelPoint, double, double, double, double>? RequestSetWindowRect { get; set; }
 
     private void PushUndoState()
     {
         if (Image == null) return;
+        // Correctly capture current state for undo
         PushUndoAction(new BitmapHistoryAction(b => Image = b, Image, null));
     }
 
@@ -248,16 +168,18 @@ public partial class FloatingImageViewModel
         
         if (action is BitmapHistoryAction bh && bh.NewBitmap == null)
         {
-            // If the action didn't have a new bitmap, it means it was a "capture state" action.
-            // We should update it with the CURRENT bitmap as the NEW state before undoing.
-            // But we actually save the 'old' bitmap in OldBitmap. 
-            // The 'NewBitmap' is null because we captured state *before* change.
-            // To properly undo, we just restore OldBitmap? 
-            // But to support Redo, we need to know what the 'New' state was (which is current state before undo).
-            
-            var actionWithNew = new BitmapHistoryAction(bh.SetBitmapAction, bh.OldBitmap, Image);
-            actionWithNew.Undo();
-            _redoHistoryStack.Push(actionWithNew);
+             // Special handling for legacy BitmapHistoryAction that might be missing NewBitmap if we just captured old state?
+             // Actually, if we use the standard IHistoryAction pattern, we should rely on that.
+             // But here we are constructing a NEW action to push to Redo stack?
+             
+             // If NewBitmap is null, it means we don't have the "after" state saved in the action itself directly?
+             // No, BitmapHistoryAction (Old, New).
+             // When we push UndoState, we explicitly passed 'null' as NewBitmap in `PushUndoState`.
+             // This implies "Current State" is the "New State".
+             
+             var actionWithNew = new BitmapHistoryAction(bh.SetBitmapAction, bh.OldBitmap, Image);
+             actionWithNew.Undo();
+             _redoHistoryStack.Push(actionWithNew);
         }
         else
         {
@@ -275,11 +197,5 @@ public partial class FloatingImageViewModel
         action.Redo();
         _historyStack.Push(action);
         UpdateHistoryStatus();
-    }
-
-    private void UpdateHistoryStatus()
-    {
-        HasUndo = _historyStack.Count > 0;
-        HasRedo = _redoHistoryStack.Count > 0;
     }
 }

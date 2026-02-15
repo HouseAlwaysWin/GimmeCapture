@@ -15,30 +15,65 @@ namespace GimmeCapture.ViewModels.Floating;
 
 public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDrawingToolViewModel
 {
+    // Overrides
+    public override FloatingTool CurrentTool
+    {
+        get => base.CurrentTool;
+        set 
+        {
+            if (base.CurrentTool == value) return;
+            
+            if (value != FloatingTool.None)
+            {
+                CurrentAnnotationTool = AnnotationType.None;
+            }
+
+            base.CurrentTool = value;
+            this.RaisePropertyChanged(nameof(IsSelectionMode));
+            this.RaisePropertyChanged(nameof(IsAnyToolActive));
+        }
+    }
+
+    public override AnnotationType CurrentAnnotationTool
+    {
+        get => base.CurrentAnnotationTool;
+        set 
+        {
+            if (base.CurrentAnnotationTool == value) return;
+            
+            if (value != AnnotationType.None)
+            {
+                CurrentTool = FloatingTool.None;
+            }
+
+            base.CurrentAnnotationTool = value;
+            this.RaisePropertyChanged(nameof(IsShapeToolActive));
+            this.RaisePropertyChanged(nameof(IsTextToolActive));
+            this.RaisePropertyChanged(nameof(IsPenToolActive));
+            this.RaisePropertyChanged(nameof(IsAnyToolActive));
+        }
+    }
     public bool ShowIconSettings => false;
-    public ReactiveCommand<Unit, Unit> IncreaseCornerIconScaleCommand { get; } = ReactiveCommand.Create(() => {});
-    public ReactiveCommand<Unit, Unit> DecreaseCornerIconScaleCommand { get; } = ReactiveCommand.Create(() => {});
-    public ReactiveCommand<Unit, Unit> IncreaseWingScaleCommand { get; } = ReactiveCommand.Create(() => {});
-    public ReactiveCommand<Unit, Unit> DecreaseWingScaleCommand { get; } = ReactiveCommand.Create(() => {});
+    // Scale Commands inherited from Base
 
     // Hotkey Proxies
-    public string CopyHotkey => _appSettingsService?.Settings.CopyHotkey ?? "Ctrl+C";
-    public string PinHotkey => _appSettingsService?.Settings.PinHotkey ?? "F3";
-    public string UndoHotkey => _appSettingsService?.Settings.UndoHotkey ?? "Ctrl+Z";
-    public string RedoHotkey => _appSettingsService?.Settings.RedoHotkey ?? "Ctrl+Y";
-    public string ClearHotkey => _appSettingsService?.Settings.ClearHotkey ?? "Delete";
-    public string SaveHotkey => _appSettingsService?.Settings.SaveHotkey ?? "Ctrl+S";
-    public string CloseHotkey => _appSettingsService?.Settings.CloseHotkey ?? "Escape";
-    public string PlaybackHotkey => _appSettingsService?.Settings.TogglePlaybackHotkey ?? "Space";
+    public override string CopyHotkey => _appSettingsService?.Settings.CopyHotkey ?? base.CopyHotkey;
+    public override string PinHotkey => _appSettingsService?.Settings.PinHotkey ?? base.PinHotkey;
+    public override string UndoHotkey => _appSettingsService?.Settings.UndoHotkey ?? base.UndoHotkey;
+    public override string RedoHotkey => _appSettingsService?.Settings.RedoHotkey ?? base.RedoHotkey;
+    public override string ClearHotkey => _appSettingsService?.Settings.ClearHotkey ?? base.ClearHotkey;
+    public override string SaveHotkey => _appSettingsService?.Settings.SaveHotkey ?? base.SaveHotkey;
+    public override string CloseHotkey => _appSettingsService?.Settings.CloseHotkey ?? base.CloseHotkey;
+    public string PlaybackHotkey => _appSettingsService?.Settings.TogglePlaybackHotkey ?? "Space"; // Specific to Video
     
-    public string RectangleHotkey => _appSettingsService?.Settings.RectangleHotkey ?? "R";
-    public string EllipseHotkey => _appSettingsService?.Settings.EllipseHotkey ?? "E";
-    public string ArrowHotkey => _appSettingsService?.Settings.ArrowHotkey ?? "A";
-    public string LineHotkey => _appSettingsService?.Settings.LineHotkey ?? "L";
-    public string PenHotkey => _appSettingsService?.Settings.PenHotkey ?? "P";
-    public string TextHotkey => _appSettingsService?.Settings.TextHotkey ?? "T";
-    public string MosaicHotkey => _appSettingsService?.Settings.MosaicHotkey ?? "M";
-    public string BlurHotkey => _appSettingsService?.Settings.BlurHotkey ?? "B";
+    public override string RectangleHotkey => _appSettingsService?.Settings.RectangleHotkey ?? base.RectangleHotkey;
+    public override string EllipseHotkey => _appSettingsService?.Settings.EllipseHotkey ?? base.EllipseHotkey;
+    public override string ArrowHotkey => _appSettingsService?.Settings.ArrowHotkey ?? base.ArrowHotkey;
+    public override string LineHotkey => _appSettingsService?.Settings.LineHotkey ?? base.LineHotkey;
+    public override string PenHotkey => _appSettingsService?.Settings.PenHotkey ?? base.PenHotkey;
+    public override string TextHotkey => _appSettingsService?.Settings.TextHotkey ?? base.TextHotkey;
+    public override string MosaicHotkey => _appSettingsService?.Settings.MosaicHotkey ?? base.MosaicHotkey;
+    public override string BlurHotkey => _appSettingsService?.Settings.BlurHotkey ?? base.BlurHotkey;
 
     // Tooltip Hints
     public string UndoTooltip => $"{LocalizationService.Instance["Undo"]} ({UndoHotkey})";

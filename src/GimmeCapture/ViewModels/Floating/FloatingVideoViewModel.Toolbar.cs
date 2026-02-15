@@ -11,25 +11,6 @@ namespace GimmeCapture.ViewModels.Floating;
 
 public partial class FloatingVideoViewModel
 {
-    private FloatingTool _currentTool = FloatingTool.None;
-    public FloatingTool CurrentTool
-    {
-        get => _currentTool;
-        set 
-        {
-            if (_currentTool == value) return;
-            
-            if (value != FloatingTool.None)
-            {
-                CurrentAnnotationTool = AnnotationType.None;
-            }
-
-            this.RaiseAndSetIfChanged(ref _currentTool, value);
-            this.RaisePropertyChanged(nameof(IsSelectionMode));
-            this.RaisePropertyChanged(nameof(IsAnyToolActive));
-        }
-    }
-
     public bool IsSelectionMode
     {
         get => CurrentTool == FloatingTool.Selection;
@@ -38,8 +19,6 @@ public partial class FloatingVideoViewModel
 
     public bool IsAnyToolActive => CurrentTool != FloatingTool.None || CurrentAnnotationTool != AnnotationType.None;
 
-    public ReactiveCommand<Unit, Unit> ToggleToolbarCommand { get; private set; } = null!;
-    public ReactiveCommand<AnnotationType, Unit> SelectToolCommand { get; private set; } = null!;
     public ReactiveCommand<string, Unit> ToggleToolGroupCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> SelectionCommand { get; private set; } = null!;
 
@@ -48,7 +27,6 @@ public partial class FloatingVideoViewModel
         // Video toolbar uses Margin-based positioning in XAML, 
         // Logic can be added here if dynamic clamping is needed.
     }
-
 
     private void InitializeToolbarCommands()
     {

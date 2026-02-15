@@ -39,7 +39,6 @@ public partial class FloatingImageViewModel
     public System.Action? CloseAction { get; set; }
     public System.Action<Bitmap, Avalonia.Rect, Avalonia.Media.Color, double, bool>? OpenPinWindowAction { get; set; }
     public System.Func<Task>? SaveAction { get; set; }
-    public Action<Avalonia.PixelPoint, double, double, double, double>? RequestSetWindowRect { get; set; }
 
     private void InitializeActionCommands()
     {

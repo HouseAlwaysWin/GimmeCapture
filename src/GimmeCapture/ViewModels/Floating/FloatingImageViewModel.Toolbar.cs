@@ -11,47 +11,6 @@ namespace GimmeCapture.ViewModels.Floating;
 
 public partial class FloatingImageViewModel
 {
-    private FloatingTool _currentTool = FloatingTool.None;
-    public FloatingTool CurrentTool
-    {
-        get => _currentTool;
-        set 
-        {
-            if (_currentTool == value) return;
-            System.Diagnostics.Debug.WriteLine($"FloatingVM: Tool changing: {_currentTool} -> {value}");
-            
-            // Cleanup previous tool state
-            if (_currentTool == FloatingTool.PointRemoval)
-            {
-                IsInteractiveSelectionMode = false;
-                InteractiveMask = null;
-                _interactivePoints.Clear();
-            }
-            else if (_currentTool == FloatingTool.Selection)
-            {
-                SelectionRect = new Avalonia.Rect();
-            }
-
-            if (value != FloatingTool.None)
-            {
-                CurrentAnnotationTool = AnnotationType.None;
-            }
-
-            this.RaiseAndSetIfChanged(ref _currentTool, value);
-            
-            // Notify UI properties
-            this.RaisePropertyChanged(nameof(IsSelectionMode));
-            this.RaisePropertyChanged(nameof(IsPointRemovalMode));
-            this.RaisePropertyChanged(nameof(IsAnyToolActive));
-            
-            // Initialization for new tool
-            if (value == FloatingTool.PointRemoval)
-            {
-                _ = StartInteractiveRemovalAsync();
-            }
-        }
-    }
-
     public bool IsSelectionMode
     {
         get => CurrentTool == FloatingTool.Selection;
@@ -73,46 +32,6 @@ public partial class FloatingImageViewModel
 
     public bool IsAnyToolActive => CurrentTool != FloatingTool.None || CurrentAnnotationTool != AnnotationType.None;
 
-    // Position properties
-    private double _toolbarTop;
-    public double ToolbarTop
-    {
-        get => _toolbarTop;
-        set => this.RaiseAndSetIfChanged(ref _toolbarTop, value);
-    }
-
-    private double _toolbarLeft;
-    public double ToolbarLeft
-    {
-        get => _toolbarLeft;
-        set => this.RaiseAndSetIfChanged(ref _toolbarLeft, value);
-    }
-
-    private double _toolbarWidth;
-    public double ToolbarWidth
-    {
-        get => _toolbarWidth;
-        set 
-        {
-            this.RaiseAndSetIfChanged(ref _toolbarWidth, value);
-            UpdateToolbarPosition();
-        }
-    }
-
-    private double _toolbarHeight;
-    public double ToolbarHeight
-    {
-        get => _toolbarHeight;
-        set 
-        {
-            this.RaiseAndSetIfChanged(ref _toolbarHeight, value);
-            UpdateToolbarPosition();
-        }
-    }
-
-
-    public ReactiveCommand<Unit, Unit> ToggleToolbarCommand { get; private set; } = null!;
-    public ReactiveCommand<AnnotationType, Unit> SelectToolCommand { get; private set; } = null!;
     public ReactiveCommand<string, Unit> ToggleToolGroupCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> SelectionCommand { get; private set; } = null!;
 
