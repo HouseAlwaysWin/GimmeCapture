@@ -506,6 +506,20 @@ public partial class MainWindowViewModel
         get => _hideSnipPinBorder;
         set => this.RaiseAndSetIfChanged(ref _hideSnipPinBorder, value);
     }
+    
+    private bool _defaultHideSnipToolbar = false;
+    public bool DefaultHideSnipToolbar
+    {
+        get => _defaultHideSnipToolbar;
+        set => this.RaiseAndSetIfChanged(ref _defaultHideSnipToolbar, value);
+    }
+
+    private bool _defaultHideRecordToolbar = false;
+    public bool DefaultHideRecordToolbar
+    {
+        get => _defaultHideRecordToolbar;
+        set => this.RaiseAndSetIfChanged(ref _defaultHideRecordToolbar, value);
+    }
 
     private bool _hideRecordPinDecoration = false;
     public bool HideRecordPinDecoration
@@ -811,6 +825,8 @@ public partial class MainWindowViewModel
             UseFixedRecordPath = settings.UseFixedRecordPath;
             HideSnipPinDecoration = settings.HideSnipPinDecoration;
             HideSnipPinBorder = settings.HideSnipPinBorder;
+            DefaultHideSnipToolbar = settings.DefaultHideSnipToolbar;
+            DefaultHideRecordToolbar = settings.DefaultHideRecordToolbar;
             HideRecordPinDecoration = settings.HideRecordPinDecoration;
             HideRecordPinBorder = settings.HideRecordPinBorder;
             HideSnipSelectionDecoration = settings.HideSnipSelectionDecoration;
@@ -903,6 +919,8 @@ public partial class MainWindowViewModel
             settings.UseFixedRecordPath = UseFixedRecordPath;
             settings.HideSnipPinDecoration = HideSnipPinDecoration;
             settings.HideSnipPinBorder = HideSnipPinBorder;
+            settings.DefaultHideSnipToolbar = DefaultHideSnipToolbar;
+            settings.DefaultHideRecordToolbar = DefaultHideRecordToolbar;
             settings.HideRecordPinDecoration = HideRecordPinDecoration;
             settings.HideRecordPinBorder = HideRecordPinBorder;
             settings.HideSnipSelectionDecoration = HideSnipSelectionDecoration;

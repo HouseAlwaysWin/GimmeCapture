@@ -215,5 +215,7 @@
   "TranslationEngine": "Translation Engine:",
   "TranslationEngineOllama": "Ollama (Online LLM)",
   "TranslationEngineMarianMT": "MarianMT (Offline)",
-  "MarianMTDownloadConfirm": "Offline translation requires downloading a special module (~400MB). Download now?"
+  "MarianMTDownloadConfirm": "Offline translation requires downloading a special module (~400MB). Download now?",
+  "DefaultHideSnipToolbar": "Hide Snip Toolbar by Default",
+  "DefaultHideRecordToolbar": "Hide Record Toolbar by Default"
 }

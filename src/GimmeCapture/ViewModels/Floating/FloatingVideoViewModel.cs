@@ -142,6 +142,9 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
         _clipboardService = clipboardService;
         _appSettingsService = appSettingsService;
 
+        // Apply Default Toolbar Visibility
+        ShowToolbar = !(_appSettingsService?.Settings.DefaultHideRecordToolbar ?? false);
+
         InitializeActionCommands();
         InitializeToolbarCommands();
         InitializeAnnotationCommands();

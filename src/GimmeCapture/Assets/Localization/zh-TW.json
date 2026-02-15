@@ -215,7 +215,9 @@
   "TranslationEngine": "翻譯引擎 (Engine):",
   "TranslationEngineOllama": "Ollama (線上 LLM)",
   "TranslationEngineMarianMT": "MarianMT (離線)",
-  "MarianMTDownloadConfirm": "離線翻譯功能需要下載專用模組 (約 400MB)。現在要下載嗎？"
+  "MarianMTDownloadConfirm": "離線翻譯功能需要下載專用模組 (約 400MB)。現在要下載嗎？",
+  "DefaultHideSnipToolbar": "預設隱藏截圖工具列",
+  "DefaultHideRecordToolbar": "預設隱藏錄影工具列"
 }
 
 

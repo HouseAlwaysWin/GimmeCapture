@@ -196,5 +196,7 @@
   "TranslationEngine": "翻訳エンジン (Engine):",
   "TranslationEngineOllama": "Ollama (オンライン LLM)",
   "TranslationEngineMarianMT": "MarianMT (オフライン)",
-  "MarianMTDownloadConfirm": "オフライン翻訳機能には専用モジュールのダウンロード (~400MB) が必要です。今すぐダウンロードしますか？"
+  "MarianMTDownloadConfirm": "オフライン翻訳機能には専用モジュールのダウンロード (~400MB) が必要です。今すぐダウンロードしますか？",
+  "DefaultHideSnipToolbar": "デフォルトでキャプチャツールバーを隠す",
+  "DefaultHideRecordToolbar": "デフォルトで録画ツールバーを隠す"
 }

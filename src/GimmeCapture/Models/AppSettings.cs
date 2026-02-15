@@ -38,6 +38,10 @@ public class AppSettings
     public bool HideRecordSelectionDecoration { get; set; } = false;
     public bool HideRecordSelectionBorder { get; set; } = false;
     
+    // Default State
+    public bool DefaultHideSnipToolbar { get; set; } = false;
+    public bool DefaultHideRecordToolbar { get; set; } = false;
+    
     // Output
     public bool AutoSave { get; set; }
     public string SaveDirectory { get; set; } = "";

@@ -88,7 +88,7 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
     private readonly IClipboardService _clipboardService;
     private readonly AIResourceService _aiResourceService;
     private readonly AIPathService _pathService;
-    private readonly AppSettingsService _appSettingsService;
+    private readonly AppSettingsService _appSettingsService = null!;
 
     // Overrides
     public override FloatingTool CurrentTool
@@ -181,6 +181,9 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
         _aiResourceService = aiResourceService;
         _pathService = pathService;
         _appSettingsService = appSettingsService;
+
+        // Apply Default Toolbar Visibility
+        ShowToolbar = !(_appSettingsService.Settings.DefaultHideSnipToolbar);
 
         InitializeActionCommands();
         InitializeAnnotationCommands();
