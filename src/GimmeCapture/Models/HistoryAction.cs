@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using Avalonia.Media.Imaging;
 using GimmeCapture.Models;
+using System.Linq;
 
 namespace GimmeCapture.Models;
 
@@ -111,4 +112,33 @@ public class WindowTransformHistoryAction : IHistoryAction
 
     public void Undo() => _setter(_oldPos, _oldWidth, _oldHeight, _oldContentWidth, _oldContentHeight);
     public void Redo() => _setter(_newPos, _newWidth, _newHeight, _newContentWidth, _newContentHeight);
+}
+
+
+public class CompositeHistoryAction : IHistoryAction
+{
+    private readonly List<IHistoryAction> _actions;
+
+    public CompositeHistoryAction(IEnumerable<IHistoryAction> actions)
+    {
+        _actions = actions.ToList();
+    }
+
+    public void Undo()
+    {
+        // Undo in reverse order
+        for (int i = _actions.Count - 1; i >= 0; i--)
+        {
+            _actions[i].Undo();
+        }
+    }
+
+    public void Redo()
+    {
+        // Redo in order
+        for (int i = 0; i < _actions.Count; i++)
+        {
+            _actions[i].Redo();
+        }
+    }
 }

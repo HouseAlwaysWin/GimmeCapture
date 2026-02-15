@@ -113,17 +113,14 @@ public partial class FloatingImageViewModel
         var selected = await GetSelectedBitmapAsync();
         if (selected != null)
         {
-            // Push Undo State of OLD image
-            PushUndoState();
-            
-            // Capture current state for layout update
+            // Capture state BEFORE changes for Undo
+            var oldImage = Image;
             var oldRect = SelectionRect;
             var oldPos = ScreenPosition ?? new Avalonia.PixelPoint(0, 0);
+            var oldDisplayWidth = DisplayWidth;
+            var oldDisplayHeight = DisplayHeight;
             
             // Calculate new position (align top-left of crop to where it was on screen)
-            // Note: Mixing Logical (Rect) and Device (PixelPoint) coordinates. 
-            // Assuming 1:1 or let the platform handle it, but ideally needs RenderScaling.
-            // For now, adding the logical offset to the pixel position is the best best-effort without scaling info.
             var newPos = new Avalonia.PixelPoint(oldPos.X + (int)oldRect.X, oldPos.Y + (int)oldRect.Y);
 
             // Set new image
@@ -142,6 +139,25 @@ public partial class FloatingImageViewModel
 
             // Force Window Update
             RequestSetWindowRect?.Invoke(newPos, DisplayWidth, DisplayHeight, DisplayWidth, DisplayHeight);
+
+            // Create History Actions
+            // Use captured oldImage
+            var bitmapAction = new BitmapHistoryAction(b => Image = b, oldImage, selected);
+            
+            // Window Transform Action
+            var transformAction = new WindowTransformHistoryAction(
+                (pos, w, h, cw, ch) => {
+                    DisplayWidth = cw;
+                    DisplayHeight = ch;
+                    ScreenPosition = pos; 
+                    RequestSetWindowRect?.Invoke(pos, w, h, cw, ch);
+                },
+                oldPos, oldDisplayWidth, oldDisplayHeight, oldDisplayWidth, oldDisplayHeight, 
+                newPos, DisplayWidth, DisplayHeight, DisplayWidth, DisplayHeight
+            );
+
+            // Push Composite Action
+            PushUndoAction(new CompositeHistoryAction(new IHistoryAction[] { bitmapAction, transformAction }));
             
             // Reset Selection
             SelectionRect = new Avalonia.Rect();
