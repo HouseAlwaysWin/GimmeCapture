@@ -3,153 +3,18 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using ReactiveUI;
 using System;
-using System.IO;
 using System.Reactive;
+using System.Threading.Tasks;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading;
-using System.Threading.Tasks;
 using CliWrap;
 using CliWrap.Buffered;
-using GimmeCapture.Models;
-using System.Linq; // For Enumerable/List if needed
 
 namespace GimmeCapture.ViewModels.Floating;
 
 public partial class FloatingVideoViewModel
 {
-    private WriteableBitmap? _videoBitmap;
-    public WriteableBitmap? VideoBitmap
-    {
-        get => _videoBitmap;
-        set => this.RaiseAndSetIfChanged(ref _videoBitmap, value);
-    }
-
-    public string VideoPath { get; }
-    private readonly string _ffmpegPath;
-    public string FFmpegPath => _ffmpegPath;
-    public VideoCodec VideoCodec => _appSettingsService?.Settings.VideoCodec ?? VideoCodec.H264;
-    private CancellationTokenSource? _playCts;
-    private Task? _playbackTask;
-    private readonly int _width;
-    private readonly int _height;
-
-    private bool _isExporting;
-    public bool IsExporting
-    {
-        get => _isExporting;
-        set => this.RaiseAndSetIfChanged(ref _isExporting, value);
-    }
-
-    private double _exportProgress;
-    public double ExportProgress
-    {
-        get => _exportProgress;
-        set => this.RaiseAndSetIfChanged(ref _exportProgress, value);
-    }
-
-    public bool IsPlaying => _isPlaybackActive;
-    private bool _isPlaybackActive = true;
-
-    private bool _isLooping = true;
-    public bool IsLooping
-    {
-        get => _isLooping;
-        set => this.RaiseAndSetIfChanged(ref _isLooping, value);
-    }
-
-    private TimeSpan _totalDuration = TimeSpan.Zero;
-    public TimeSpan TotalDuration
-    {
-        get => _totalDuration;
-        set 
-        {
-            this.RaiseAndSetIfChanged(ref _totalDuration, value);
-            this.RaisePropertyChanged(nameof(FormattedTime));
-        }
-    }
-
-    private TimeSpan _currentTime = TimeSpan.Zero;
-    public TimeSpan CurrentTime
-    {
-        get => _currentTime;
-        set 
-        {
-            this.RaiseAndSetIfChanged(ref _currentTime, value);
-            this.RaisePropertyChanged(nameof(FormattedTime));
-        }
-    }
-
-    public string FormattedTime => $"{_currentTime:mm\\:ss} / {_totalDuration:mm\\:ss}";
-
-    private double _seekTargetSeconds = -1;
-    private double _playbackSpeed = 1.0;
-
-    public double PlaybackSpeed
-    {
-        get => _playbackSpeed;
-        set 
-        {
-            if (Math.Abs(_playbackSpeed - value) < 0.01) return;
-            
-            _playbackSpeed = value;
-            this.RaisePropertyChanged(nameof(PlaybackSpeed));
-            this.RaisePropertyChanged(nameof(PlaybackSpeedText));
-            
-            // Speed change entails seeking from current point to avoid restart
-            if (_isPlaybackActive)
-            {
-                _seekTargetSeconds = _currentTime.TotalSeconds;
-                StartPlayback();
-            }
-        }
-    }
-
-    public string PlaybackSpeedText => $"{_playbackSpeed:F1}x";
-
-    private bool _isDraggingSlider;
-    private CancellationTokenSource? _seekDebounceCts;
-
-    public double CurrentTimeSeconds
-    {
-        get => _currentTime.TotalSeconds;
-        set
-        {
-            if (Math.Abs(_currentTime.TotalSeconds - value) > 0.01)
-            {
-                // Mark as user-dragging to suppress playback loop updates
-                _isDraggingSlider = true;
-                _currentTime = TimeSpan.FromSeconds(value);
-                this.RaisePropertyChanged(nameof(FormattedTime));
-                
-                // Debounce the actual seek — only fire after user stops dragging for 300ms
-                _seekDebounceCts?.Cancel();
-                _seekDebounceCts = new CancellationTokenSource();
-                var token = _seekDebounceCts.Token;
-                _ = Task.Delay(300, token).ContinueWith(t =>
-                {
-                    if (!t.IsCanceled)
-                    {
-                        _isDraggingSlider = false;
-                        _seekTargetSeconds = value;
-                        if (!_isPlaybackActive)
-                        {
-                            _isPlaybackActive = true;
-                            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                                this.RaisePropertyChanged(nameof(IsPlaying)));
-                        }
-                        StartPlayback();
-                    }
-                }, TaskScheduler.Default);
-            }
-        }
-    }
-
-    public ReactiveCommand<Unit, Unit> TogglePlaybackCommand { get; private set; } = null!;
-    public ReactiveCommand<Unit, Unit> FastForwardCommand { get; private set; } = null!;
-    public ReactiveCommand<Unit, Unit> RewindCommand { get; private set; } = null!;
-    public ReactiveCommand<Unit, Unit> ToggleLoopCommand { get; private set; } = null!;
-    public ReactiveCommand<Unit, Unit> CycleSpeedCommand { get; private set; } = null!;
-
     private void InitializeMediaCommands()
     {
         TogglePlaybackCommand = ReactiveCommand.Create(() => 
@@ -345,8 +210,6 @@ public partial class FloatingVideoViewModel
             catch { /* Handle potential disposal during update */ }
         });
     }
-
-    public System.Action? RequestRedraw { get; set; }
 
     // Helper class to handle fixed-size frame writes
     private class FrameStreamWriter : Stream

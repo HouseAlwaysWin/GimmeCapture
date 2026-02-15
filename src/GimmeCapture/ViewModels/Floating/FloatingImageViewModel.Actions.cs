@@ -17,14 +17,6 @@ namespace GimmeCapture.ViewModels.Floating;
 
 public partial class FloatingImageViewModel
 {
-    // OpenPinWindowAction is specific to Image
-    public System.Action<Bitmap, Avalonia.Rect, Avalonia.Media.Color, double, bool>? OpenPinWindowAction { get; set; }
-
-    public ReactiveCommand<Unit, Unit> CopyCommand { get; private set; } = null!;
-    public ReactiveCommand<Unit, Unit> CutCommand { get; private set; } = null!;
-    public ReactiveCommand<Unit, Unit> CropCommand { get; private set; } = null!;
-    public ReactiveCommand<Unit, Unit> PinSelectionCommand { get; private set; } = null!;
-
     private void InitializeActionCommands()
     {
         // CloseCommand, ToggleToolbarCommand etc are in Base.

@@ -24,8 +24,7 @@ public enum FloatingTool
 public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDrawingToolViewModel
 {
     public bool ShowIconSettings => false;
-    // Scale Commands are inherited from Base
-
+    
     private Bitmap? _image;
     public Bitmap? Image
     {
@@ -33,10 +32,37 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
         set => this.RaiseAndSetIfChanged(ref _image, value);
     }
     
-    // Tooltips (Hotkeys are now in Base or accessed via AppSettingsService directly or we can keep proxies if needed, 
-    // but Base doesn't have the *Service* reference by default unless we pass it or make it protected. 
-    // Let's keep the specific Tooltips here for now but use the Services which are available here.)
+    // AI / SAM2 Properties & State
+    private SAM2Service? _sam2Service;
+    private readonly List<(double X, double Y, bool IsPositive)> _interactivePoints = new();
+    private bool _invertSelectionMode = false; // Shift+Click sets this to true
     
+    // Clean mask without crosshairs for actual removal
+    private byte[]? _cleanMaskBytes;
+
+    private bool _isInteractiveSelectionMode;
+    public bool IsInteractiveSelectionMode
+    {
+        get => _isInteractiveSelectionMode;
+        set => this.RaiseAndSetIfChanged(ref _isInteractiveSelectionMode, value);
+    }
+
+    private Bitmap? _interactiveMask;
+    public Bitmap? InteractiveMask
+    {
+        get => _interactiveMask;
+        set => this.RaiseAndSetIfChanged(ref _interactiveMask, value);
+    }
+
+    // Only allow background removal if not processing.
+    private readonly ObservableAsPropertyHelper<bool> _canRemoveBackground;
+    public bool CanRemoveBackground => _canRemoveBackground.Value;
+
+    public ReactiveCommand<Unit, Unit> RemoveBackgroundCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> ConfirmInteractiveCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> CancelInteractiveCommand { get; private set; } = null!;
+
+    // Tooltips 
     public override string CopyHotkey => _appSettingsService?.Settings.CopyHotkey ?? base.CopyHotkey;
     public override string PinHotkey => _appSettingsService?.Settings.PinHotkey ?? base.PinHotkey;
     public override string UndoHotkey => _appSettingsService?.Settings.UndoHotkey ?? base.UndoHotkey;
@@ -77,8 +103,6 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
     public string RemoveBackgroundTooltip => $"{LocalizationService.Instance["RemoveBackground"]} (Shift+R)";
     public string ConfirmRemovalTooltip => $"{LocalizationService.Instance["TipConfirmRemoval"]} (Enter)";
     public string CancelRemovalTooltip => $"{LocalizationService.Instance["Cancel"]} (Esc)";
-
-
 
     public IClipboardService ClipboardService => _clipboardService;
     public AIResourceService AIResourceService => _aiResourceService;
@@ -165,6 +189,15 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
         }
     }
 
+
+    // Actions
+    public System.Action<Bitmap, Avalonia.Rect, Avalonia.Media.Color, double, bool>? OpenPinWindowAction { get; set; }
+
+    // Commands
+    public ReactiveCommand<Unit, Unit> CopyCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> CutCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> CropCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> PinSelectionCommand { get; private set; } = null!;
 
     public FloatingImageViewModel(Bitmap image, double originalWidth, double originalHeight, Avalonia.Media.Color borderColor, double borderThickness, bool hideDecoration, bool hideBorder, IClipboardService clipboardService, AIResourceService aiResourceService, AppSettingsService appSettingsService, AIPathService pathService)
     {

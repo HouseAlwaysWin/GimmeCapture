@@ -21,12 +21,6 @@ public partial class FloatingVideoViewModel
     // Base has SelectionRect, IsSelectionActive.
     // Base has CloseCommand, SaveCommand.
 
-    public ReactiveCommand<Unit, Unit> CopyCommand { get; private set; } = null!;
-    public ReactiveCommand<Unit, Unit> CropCommand { get; private set; } = null!; // Future implementation
-    public ReactiveCommand<Unit, Unit> PinSelectionCommand { get; private set; } = null!; // Future implementation
-
-    public System.Func<Task>? CopyAction { get; set; }
-
     private void InitializeActionCommands()
     {
         // CloseCommand, SaveCommand are in Base.

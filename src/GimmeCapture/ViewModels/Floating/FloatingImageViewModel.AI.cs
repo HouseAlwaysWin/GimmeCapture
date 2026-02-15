@@ -1,57 +1,19 @@
 using Avalonia.Media.Imaging;
 using ReactiveUI;
 using System.Reactive;
-using System.Threading.Tasks;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using Avalonia.Media;
 using GimmeCapture.Models;
-using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core;
-using GimmeCapture.Services.Platforms.Windows;
 using System.Linq;
 using System.Reactive.Linq;
-using System.Reactive.Threading.Tasks;
-using GimmeCapture.ViewModels.Main;
-using GimmeCapture.ViewModels.Shared;
 using System;
-using SkiaSharp;
-using Avalonia.Threading;
+using System.Threading.Tasks;
+using GimmeCapture.ViewModels.Shared;
 
 namespace GimmeCapture.ViewModels.Floating;
 
 public partial class FloatingImageViewModel
 {
-    private SAM2Service? _sam2Service;
-    private readonly List<(double X, double Y, bool IsPositive)> _interactivePoints = new();
-    private bool _invertSelectionMode = false; // Shift+Click sets this to true
-    
-    // Clean mask without crosshairs for actual removal
-    private byte[]? _cleanMaskBytes;
-
-    private bool _isInteractiveSelectionMode;
-    public bool IsInteractiveSelectionMode
-    {
-        get => _isInteractiveSelectionMode;
-        set => this.RaiseAndSetIfChanged(ref _isInteractiveSelectionMode, value);
-    }
-
-    private Bitmap? _interactiveMask;
-    public Bitmap? InteractiveMask
-    {
-        get => _interactiveMask;
-        set => this.RaiseAndSetIfChanged(ref _interactiveMask, value);
-    }
-
-    // Only allow background removal if not processing.
-    // We could also check if already transparent, but that's harder to detect cheaply.
-    private readonly ObservableAsPropertyHelper<bool> _canRemoveBackground;
-    public bool CanRemoveBackground => _canRemoveBackground.Value;
-
-    public ReactiveCommand<Unit, Unit> RemoveBackgroundCommand { get; private set; } = null!;
-    public ReactiveCommand<Unit, Unit> ConfirmInteractiveCommand { get; private set; } = null!;
-    public ReactiveCommand<Unit, Unit> CancelInteractiveCommand { get; private set; } = null!;
-
     private void InitializeAICommands()
     {
         // _canRemoveBackground is initialized in main constructor
@@ -194,15 +156,15 @@ public partial class FloatingImageViewModel
                 // Store clean mask for actual removal (without crosshairs)
                 _cleanMaskBytes = maskBytes;
                 
-                using var grayMask = SKBitmap.Decode(maskBytes);
+                using var grayMask = SkiaSharp.SKBitmap.Decode(maskBytes);
                 
                 // CRITICAL FIX: Convert grayscale mask to RGBA with transparency
                 // Color based on mode: Red (remove) vs Green (keep)
-                SKColor overlayColor = _invertSelectionMode 
-                    ? new SKColor(0, 255, 100, 150)   // Green for "Keep mode" (Shift+Click)
-                    : new SKColor(255, 80, 80, 150);  // Red for "Remove mode" (Normal)
+                SkiaSharp.SKColor overlayColor = _invertSelectionMode 
+                    ? new SkiaSharp.SKColor(0, 255, 100, 150)   // Green for "Keep mode" (Shift+Click)
+                    : new SkiaSharp.SKColor(255, 80, 80, 150);  // Red for "Remove mode" (Normal)
                     
-                using var coloredMask = new SKBitmap(grayMask.Width, grayMask.Height, SKColorType.Rgba8888, SKAlphaType.Premul);
+                using var coloredMask = new SkiaSharp.SKBitmap(grayMask.Width, grayMask.Height, SkiaSharp.SKColorType.Rgba8888, SkiaSharp.SKAlphaType.Premul);
                 for (int y = 0; y < grayMask.Height; y++)
                 {
                     for (int x = 0; x < grayMask.Width; x++)
@@ -216,15 +178,15 @@ public partial class FloatingImageViewModel
                         else
                         {
                             // Unselected area: Fully transparent
-                            coloredMask.SetPixel(x, y, SKColors.Transparent);
+                            coloredMask.SetPixel(x, y, SkiaSharp.SKColors.Transparent);
                         }
                     }
                 }
                 
-                using (var canvas = new SKCanvas(coloredMask))
+                using (var canvas = new SkiaSharp.SKCanvas(coloredMask))
                 {
-                    var posPaint = new SKPaint { Color = SKColors.LimeGreen, Style = SKPaintStyle.Fill, IsAntialias = true };
-                    var negPaint = new SKPaint { Color = SKColors.Red, Style = SKPaintStyle.Fill, IsAntialias = true };
+                    var posPaint = new SkiaSharp.SKPaint { Color = SkiaSharp.SKColors.LimeGreen, Style = SkiaSharp.SKPaintStyle.Fill, IsAntialias = true };
+                    var negPaint = new SkiaSharp.SKPaint { Color = SkiaSharp.SKColors.Red, Style = SkiaSharp.SKPaintStyle.Fill, IsAntialias = true };
                     
                     // Scale points to match the mask bitmap size
                     float scaleX = (float)coloredMask.Width / (Image?.PixelSize.Width ?? 1);
@@ -239,23 +201,23 @@ public partial class FloatingImageViewModel
                         canvas.DrawCircle(px, py, 6, pt.IsPositive ? posPaint : negPaint);
                         
                         // DRAW CALIBRATION CROSSHAIR
-                        using var crossPaint = new SKPaint { 
-                            Color = pt.IsPositive ? SKColors.Lime : SKColors.DeepPink, 
+                        using var crossPaint = new SkiaSharp.SKPaint { 
+                            Color = pt.IsPositive ? SkiaSharp.SKColors.Lime : SkiaSharp.SKColors.DeepPink, 
                             StrokeWidth = 2, 
-                            Style = SKPaintStyle.Stroke,
+                            Style = SkiaSharp.SKPaintStyle.Stroke,
                             IsAntialias = true
                         };
                         canvas.DrawLine(px - 20, py, px + 20, py, crossPaint);
                         canvas.DrawLine(px, py - 20, px, py + 20, crossPaint);
                         
                         // Draw a tiny center dot
-                        using var dotPaint = new SKPaint { Color = SKColors.Black.WithAlpha(180), Style = SKPaintStyle.Fill, IsAntialias = true };
+                        using var dotPaint = new SkiaSharp.SKPaint { Color = SkiaSharp.SKColors.Black.WithAlpha(180), Style = SkiaSharp.SKPaintStyle.Fill, IsAntialias = true };
                         canvas.DrawCircle(px, py, 1.5f, dotPaint);
                     }
                 }
 
                 using var finalMs = new System.IO.MemoryStream();
-                coloredMask.Encode(finalMs, SKEncodedImageFormat.Png, 100);
+                coloredMask.Encode(finalMs, SkiaSharp.SKEncodedImageFormat.Png, 100);
                 finalMs.Seek(0, System.IO.SeekOrigin.Begin);
                 InteractiveMask = new Bitmap(finalMs);
             }
@@ -426,7 +388,7 @@ public partial class FloatingImageViewModel
             // Save state for Undo
             PushUndoState();
 
-             // 1. Convert Avalonia Bitmap to Bytes
+            // 1. Convert Avalonia Bitmap to Bytes
             byte[] imageBytes;
             using (var ms = new System.IO.MemoryStream())
             {
@@ -504,17 +466,17 @@ public partial class FloatingImageViewModel
             {
                 using var originalMs = new System.IO.MemoryStream();
                 Image.Save(originalMs);
-                using var originalBmp = SKBitmap.Decode(originalMs.ToArray());
+                using var originalBmp = SkiaSharp.SKBitmap.Decode(originalMs.ToArray());
 
                 // Use CLEAN mask without crosshairs!
                 if (_cleanMaskBytes == null) return null!; // Return empty if no clean mask
-                using var maskBmp = SKBitmap.Decode(_cleanMaskBytes);
+                using var maskBmp = SkiaSharp.SKBitmap.Decode(_cleanMaskBytes);
                 
                 // RESIZE MASK TO MATCH ORIGINAL BITMAP EXACTLY with Nearest sampling to avoid blurring edges
                 // This ensures pixel-perfect alignment with the physical image
-                using var resizedMask = maskBmp.Resize(new SKImageInfo(originalBmp.Width, originalBmp.Height), new SKSamplingOptions(SKFilterMode.Nearest));
+                using var resizedMask = maskBmp.Resize(new SkiaSharp.SKImageInfo(originalBmp.Width, originalBmp.Height), new SkiaSharp.SKSamplingOptions(SkiaSharp.SKFilterMode.Nearest));
 
-                using var resultBmp = new SKBitmap(originalBmp.Width, originalBmp.Height, SKColorType.Bgra8888, SKAlphaType.Unpremul);
+                using var resultBmp = new SkiaSharp.SKBitmap(originalBmp.Width, originalBmp.Height, SkiaSharp.SKColorType.Bgra8888, SkiaSharp.SKAlphaType.Unpremul);
                 
                 for (int y = 0; y < originalBmp.Height; y++)
                 {
@@ -547,12 +509,12 @@ public partial class FloatingImageViewModel
                             alpha = color.Alpha;
                         }
                         
-                        resultBmp.SetPixel(x, y, new SKColor(color.Red, color.Green, color.Blue, alpha));
+                        resultBmp.SetPixel(x, y, new SkiaSharp.SKColor(color.Red, color.Green, color.Blue, alpha));
                     }
                 }
 
-                using var image = SKImage.FromBitmap(resultBmp);
-                using var data = image.Encode(SKEncodedImageFormat.Png, 100);
+                using var image = SkiaSharp.SKImage.FromBitmap(resultBmp);
+                using var data = image.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
                 return data.ToArray();
             });
 
@@ -600,7 +562,7 @@ public partial class FloatingImageViewModel
         return _sam2Service;
     }
 
-    private SKBitmap? ImageToSkia(Bitmap? avaloniaBitmap)
+    private SkiaSharp.SKBitmap? ImageToSkia(Bitmap? avaloniaBitmap)
     {
         if (avaloniaBitmap == null) return null;
         try 
@@ -608,8 +570,11 @@ public partial class FloatingImageViewModel
             using var ms = new System.IO.MemoryStream();
             avaloniaBitmap.Save(ms);
             ms.Seek(0, System.IO.SeekOrigin.Begin);
-            return SKBitmap.Decode(ms);
+            return SkiaSharp.SKBitmap.Decode(ms);
         }
-        catch { return null; }
+        catch 
+        {
+            return null;
+        }
     }
 }

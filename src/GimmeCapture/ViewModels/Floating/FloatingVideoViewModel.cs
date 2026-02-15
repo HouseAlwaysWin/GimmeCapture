@@ -10,11 +10,148 @@ using System.Linq;
 using System.Reactive.Linq;
 using GimmeCapture.ViewModels.Main;
 using GimmeCapture.ViewModels.Shared;
+using System.Threading;
 
 namespace GimmeCapture.ViewModels.Floating;
 
 public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDrawingToolViewModel
 {
+    // Media / Video Properties & State
+    private WriteableBitmap? _videoBitmap;
+    public WriteableBitmap? VideoBitmap
+    {
+        get => _videoBitmap;
+        set => this.RaiseAndSetIfChanged(ref _videoBitmap, value);
+    }
+
+    public string VideoPath { get; }
+    private readonly string _ffmpegPath;
+    public string FFmpegPath => _ffmpegPath;
+    public VideoCodec VideoCodec => _appSettingsService?.Settings.VideoCodec ?? VideoCodec.H264;
+    private CancellationTokenSource? _playCts;
+    private Task? _playbackTask;
+    private readonly int _width;
+    private readonly int _height;
+
+    private bool _isExporting;
+    public bool IsExporting
+    {
+        get => _isExporting;
+        set => this.RaiseAndSetIfChanged(ref _isExporting, value);
+    }
+
+    private double _exportProgress;
+    public double ExportProgress
+    {
+        get => _exportProgress;
+        set => this.RaiseAndSetIfChanged(ref _exportProgress, value);
+    }
+
+    public bool IsPlaying => _isPlaybackActive;
+    private bool _isPlaybackActive = true;
+
+    private bool _isLooping = true;
+    public bool IsLooping
+    {
+        get => _isLooping;
+        set => this.RaiseAndSetIfChanged(ref _isLooping, value);
+    }
+
+    private TimeSpan _totalDuration = TimeSpan.Zero;
+    public TimeSpan TotalDuration
+    {
+        get => _totalDuration;
+        set 
+        {
+            this.RaiseAndSetIfChanged(ref _totalDuration, value);
+            this.RaisePropertyChanged(nameof(FormattedTime));
+        }
+    }
+
+    private TimeSpan _currentTime = TimeSpan.Zero;
+    public TimeSpan CurrentTime
+    {
+        get => _currentTime;
+        set 
+        {
+            this.RaiseAndSetIfChanged(ref _currentTime, value);
+            this.RaisePropertyChanged(nameof(FormattedTime));
+        }
+    }
+
+    public string FormattedTime => $"{_currentTime:mm\\:ss} / {_totalDuration:mm\\:ss}";
+
+    private double _seekTargetSeconds = -1;
+    private double _playbackSpeed = 1.0;
+
+    public double PlaybackSpeed
+    {
+        get => _playbackSpeed;
+        set 
+        {
+            if (Math.Abs(_playbackSpeed - value) < 0.01) return;
+            
+            _playbackSpeed = value;
+            this.RaisePropertyChanged(nameof(PlaybackSpeed));
+            this.RaisePropertyChanged(nameof(PlaybackSpeedText));
+            
+            // Speed change entails seeking from current point to avoid restart
+            if (_isPlaybackActive)
+            {
+                _seekTargetSeconds = _currentTime.TotalSeconds;
+                StartPlayback();
+            }
+        }
+    }
+
+    public string PlaybackSpeedText => $"{_playbackSpeed:F1}x";
+
+    private bool _isDraggingSlider;
+    private CancellationTokenSource? _seekDebounceCts;
+
+    public double CurrentTimeSeconds
+    {
+        get => _currentTime.TotalSeconds;
+        set
+        {
+            if (Math.Abs(_currentTime.TotalSeconds - value) > 0.01)
+            {
+                // Mark as user-dragging to suppress playback loop updates
+                _isDraggingSlider = true;
+                _currentTime = TimeSpan.FromSeconds(value);
+                this.RaisePropertyChanged(nameof(FormattedTime));
+                
+                // Debounce the actual seek — only fire after user stops dragging for 300ms
+                _seekDebounceCts?.Cancel();
+                _seekDebounceCts = new CancellationTokenSource();
+                var token = _seekDebounceCts.Token;
+                _ = Task.Delay(300, token).ContinueWith(t =>
+                {
+                    if (!t.IsCanceled)
+                    {
+                        _isDraggingSlider = false;
+                        _seekTargetSeconds = value;
+                        if (!_isPlaybackActive)
+                        {
+                            _isPlaybackActive = true;
+                            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                                this.RaisePropertyChanged(nameof(IsPlaying)));
+                        }
+                        StartPlayback();
+                    }
+                }, TaskScheduler.Default);
+            }
+        }
+    }
+
+    public ReactiveCommand<Unit, Unit> TogglePlaybackCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> FastForwardCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> RewindCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> ToggleLoopCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> CycleSpeedCommand { get; private set; } = null!;
+
+    public System.Action? RequestRedraw { get; set; }
+
     // Overrides
     public override FloatingTool CurrentTool
     {
@@ -54,8 +191,7 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
         }
     }
     public bool ShowIconSettings => false;
-    // Scale Commands inherited from Base
-
+    
     // Hotkey Proxies
     public override string CopyHotkey => _appSettingsService?.Settings.CopyHotkey ?? base.CopyHotkey;
     public override string PinHotkey => _appSettingsService?.Settings.PinHotkey ?? base.PinHotkey;
@@ -117,12 +253,20 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
     }
 
 
-
-
     // Dependencies
     private readonly GimmeCapture.Services.Abstractions.IClipboardService _clipboardService;
     public GimmeCapture.Services.Abstractions.IClipboardService ClipboardService => _clipboardService;
     private readonly AppSettingsService? _appSettingsService;
+
+    // Actions & Commands
+    public System.Func<Task>? CopyAction { get; set; }
+    public ReactiveCommand<Unit, Unit> CopyCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> CropCommand { get; private set; } = null!; // Future implementation
+    public ReactiveCommand<Unit, Unit> PinSelectionCommand { get; private set; } = null!; // Future implementation
+
+    // Annotation Proxies
+    public bool CanUndo => HasUndo;
+    public bool CanRedo => HasRedo;
 
     public FloatingVideoViewModel(string videoPath, string ffmpegPath, int width, int height, double originalWidth, double originalHeight, Avalonia.Media.Color borderColor, double borderThickness, bool hideDecoration, bool hideBorder, GimmeCapture.Services.Abstractions.IClipboardService clipboardService, AppSettingsService? appSettingsService)
     {
@@ -162,5 +306,3 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
         VideoBitmap?.Dispose();
     }
 }
-
-
