@@ -168,9 +168,16 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
                   .Subscribe(val => IsIndeterminate = val)
                   .DisposeWith(_disposables);
 
-            // Sync ShowProcessingOverlay
+            // Sync ShowProcessingOverlay — only propagate 'true' from MainVM.
+            // When MainVM goes false, only clear overlay if no local operation is active.
             mainVm.WhenAnyValue(x => x.ShowProcessingOverlay)
-                  .Subscribe(val => ShowProcessingOverlay = val)
+                  .Subscribe(val =>
+                  {
+                      if (val)
+                          ShowProcessingOverlay = true;
+                      else if (!_isLocalProcessing)
+                          ShowProcessingOverlay = false;
+                  })
                   .DisposeWith(_disposables);
 
             // Sync Theme Color
@@ -207,6 +214,36 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     {
         get => _isMaskVisible;
         set => this.RaiseAndSetIfChanged(ref _isMaskVisible, value);
+    }
+
+    private bool _isIndeterminate;
+    public bool IsIndeterminate
+    {
+        get => _isIndeterminate;
+        set => this.RaiseAndSetIfChanged(ref _isIndeterminate, value);
+    }
+
+    private double _progressValue;
+    public double ProgressValue
+    {
+        get => _progressValue;
+        set => this.RaiseAndSetIfChanged(ref _progressValue, value);
+    }
+
+    private string _processingText = string.Empty;
+    public string ProcessingText
+    {
+        get => _processingText;
+        set => this.RaiseAndSetIfChanged(ref _processingText, value);
+    }
+
+    private bool _isLocalProcessing;
+    
+    private bool _showProcessingOverlay;
+    public bool ShowProcessingOverlay
+    {
+        get => _showProcessingOverlay;
+        set => this.RaiseAndSetIfChanged(ref _showProcessingOverlay, value);
     }
 
     private bool _isInputFocused;

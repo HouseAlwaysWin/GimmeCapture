@@ -395,7 +395,7 @@
         </Border>
 
         <Border IsVisible="{Binding IsProcessing}" Background="#80000000" ZIndex="100">
-             <ctl:ProcessingOverlay DataContext="{Binding}"/>
+             <ctl:ProcessingOverlay DataContext="{Binding}" IsVisible="{Binding ShowProcessingOverlay}"/>
         </Border>
 
 

@@ -38,28 +38,17 @@ public partial class FloatingVideoViewModel
 
     public bool IsAnyToolActive => CurrentTool != FloatingTool.None || CurrentAnnotationTool != AnnotationType.None;
 
-    private bool _showToolbar = false;
-    public bool ShowToolbar
-    {
-        get => _showToolbar;
-        set
-        {
-            this.RaiseAndSetIfChanged(ref _showToolbar, value);
-            this.RaisePropertyChanged(nameof(WindowPadding));
-        }
-    }
-
-    private Avalonia.Thickness _toolbarMargin = new Avalonia.Thickness(0, 0, 0, 10);
-    public Avalonia.Thickness ToolbarMargin
-    {
-        get => _toolbarMargin;
-        set => this.RaiseAndSetIfChanged(ref _toolbarMargin, value);
-    }
-
     public ReactiveCommand<Unit, Unit> ToggleToolbarCommand { get; private set; } = null!;
     public ReactiveCommand<AnnotationType, Unit> SelectToolCommand { get; private set; } = null!;
     public ReactiveCommand<string, Unit> ToggleToolGroupCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> SelectionCommand { get; private set; } = null!;
+
+    public override void UpdateToolbarPosition()
+    {
+        // Video toolbar uses Margin-based positioning in XAML, 
+        // Logic can be added here if dynamic clamping is needed.
+    }
+
 
     private void InitializeToolbarCommands()
     {

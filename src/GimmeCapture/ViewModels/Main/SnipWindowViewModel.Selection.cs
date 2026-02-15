@@ -68,33 +68,6 @@ public partial class SnipWindowViewModel
         set => this.RaiseAndSetIfChanged(ref _showTopLoadingBar, value);
     }
 
-    private bool _showProcessingOverlay;
-    public bool ShowProcessingOverlay
-    {
-        get => _showProcessingOverlay;
-        set => this.RaiseAndSetIfChanged(ref _showProcessingOverlay, value);
-    }
-
-    private string _processingText = LocalizationService.Instance["StatusProcessing"];
-    public string ProcessingText
-    {
-        get => _processingText;
-        set => this.RaiseAndSetIfChanged(ref _processingText, value);
-    }
-    
-    private bool _isIndeterminate = false;
-    public bool IsIndeterminate
-    {
-        get => _isIndeterminate;
-        set => this.RaiseAndSetIfChanged(ref _isIndeterminate, value);
-    }
-
-    private double _progressValue;
-    public double ProgressValue
-    {
-        get => _progressValue;
-        set => this.RaiseAndSetIfChanged(ref _progressValue, value);
-    }
 
     // Feature Flags (Synced)
 
@@ -632,6 +605,7 @@ public partial class SnipWindowViewModel
         TranslatedBlocks.Clear(); // Clear old results at start of new translation
         IsTranslationActive = true;
         ShowSnipToolBar = true;
+        _isLocalProcessing = true;
         ShowProcessingOverlay = true; // Show wings
         ProcessingText = LocalizationService.Instance["StatusTranslating"] ?? "Translating...";
         IsIndeterminate = true;
@@ -795,6 +769,7 @@ public partial class SnipWindowViewModel
                 // and result before the toolbar disappears.
                 await Task.Delay(500);
                 ShowSnipToolBar = false;
+                _isLocalProcessing = false;
                 ShowProcessingOverlay = false;
                 IsTranslationActive = false;
                 IsIndeterminate = false;

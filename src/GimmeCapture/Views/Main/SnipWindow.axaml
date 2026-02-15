@@ -402,6 +402,12 @@
                 </DataTemplate>
             </ItemsControl.ItemTemplate>
         </ItemsControl>
+        <!-- Processing Overlay (Top Layer) -->
+        <ctl:ProcessingOverlay IsVisible="{Binding ShowProcessingOverlay}"
+                               ZIndex="2000"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Top"
+                               Margin="0,150,0,0"/>
     </Grid>
 </Window>
 

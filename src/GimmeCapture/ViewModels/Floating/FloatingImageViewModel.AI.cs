@@ -47,8 +47,14 @@ public partial class FloatingImageViewModel
     public bool IsProcessing
     {
         get => _isProcessing;
-        set => this.RaiseAndSetIfChanged(ref _isProcessing, value);
+        set 
+        {
+            this.RaiseAndSetIfChanged(ref _isProcessing, value);
+            this.RaisePropertyChanged(nameof(ShowProcessingOverlay));
+        }
     }
+
+    public bool ShowProcessingOverlay => IsProcessing;
 
     private string _processingText = LocalizationService.Instance["StatusProcessing"];
     public string ProcessingText

@@ -21,7 +21,7 @@ public enum FloatingTool
     InteractiveSelection
 }
 
-public partial class FloatingImageViewModel : ViewModelBase, IDisposable, IDrawingToolViewModel
+public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDrawingToolViewModel
 {
     public bool ShowIconSettings => false;
     public ReactiveCommand<Unit, Unit> IncreaseCornerIconScaleCommand { get; } = ReactiveCommand.Create(() => {});
@@ -36,38 +36,6 @@ public partial class FloatingImageViewModel : ViewModelBase, IDisposable, IDrawi
         set => this.RaiseAndSetIfChanged(ref _image, value);
     }
     
-    private Avalonia.Media.Color _borderColor = Avalonia.Media.Colors.Red;
-    public Avalonia.Media.Color BorderColor
-    {
-        get => _borderColor;
-        set => this.RaiseAndSetIfChanged(ref _borderColor, value);
-    }
-
-    private double _borderThickness = 2.0;
-    public double BorderThickness
-    {
-        get => _borderThickness;
-        set => this.RaiseAndSetIfChanged(ref _borderThickness, value);
-    }
-
-    private bool _hidePinDecoration = false;
-    public bool HidePinDecoration
-    {
-        get => _hidePinDecoration;
-        set
-        {
-            this.RaiseAndSetIfChanged(ref _hidePinDecoration, value);
-            this.RaisePropertyChanged(nameof(WindowPadding));
-        }
-    }
-
-    private bool _hidePinBorder = false;
-    public bool HidePinBorder
-    {
-        get => _hidePinBorder;
-        set => this.RaiseAndSetIfChanged(ref _hidePinBorder, value);
-    }
-
     public string CopyHotkey => _appSettingsService?.Settings.CopyHotkey ?? "Ctrl+C";
     public string PinHotkey => _appSettingsService?.Settings.PinHotkey ?? "F3";
     public string UndoHotkey => _appSettingsService?.Settings.UndoHotkey ?? "Ctrl+Z";
@@ -109,46 +77,7 @@ public partial class FloatingImageViewModel : ViewModelBase, IDisposable, IDrawi
     public string ConfirmRemovalTooltip => $"{LocalizationService.Instance["TipConfirmRemoval"]} (Enter)";
     public string CancelRemovalTooltip => $"{LocalizationService.Instance["Cancel"]} (Esc)";
 
-    private Avalonia.PixelPoint? _screenPosition;
-    public Avalonia.PixelPoint? ScreenPosition
-    {
-        get => _screenPosition;
-        set 
-        {
-            this.RaiseAndSetIfChanged(ref _screenPosition, value);
-            UpdateToolbarPosition();
-        }
-    }
-
     public System.Action? FocusWindowAction { get; set; }
-
-    private double _originalWidth;
-    public double OriginalWidth
-    {
-        get => _originalWidth;
-        set => this.RaiseAndSetIfChanged(ref _originalWidth, value);
-    }
-
-    private double _originalHeight;
-    public double OriginalHeight
-    {
-        get => _originalHeight;
-        set => this.RaiseAndSetIfChanged(ref _originalHeight, value);
-    }
-
-    private double _displayWidth;
-    public double DisplayWidth
-    {
-        get => _displayWidth;
-        set => this.RaiseAndSetIfChanged(ref _displayWidth, value);
-    }
-
-    private double _displayHeight;
-    public double DisplayHeight
-    {
-        get => _displayHeight;
-        set => this.RaiseAndSetIfChanged(ref _displayHeight, value);
-    }
 
     public IClipboardService ClipboardService => _clipboardService;
     public AIResourceService AIResourceService => _aiResourceService;
@@ -160,43 +89,11 @@ public partial class FloatingImageViewModel : ViewModelBase, IDisposable, IDrawi
     private readonly AIPathService _pathService;
     private readonly AppSettingsService _appSettingsService;
 
-    private double _wingScale = 1.0;
-    public double WingScale
-    {
-        get => _wingScale;
-        set
-        {
-            this.RaiseAndSetIfChanged(ref _wingScale, value);
-            this.RaisePropertyChanged(nameof(WingWidth));
-            this.RaisePropertyChanged(nameof(WingHeight));
-            this.RaisePropertyChanged(nameof(LeftWingMargin));
-            this.RaisePropertyChanged(nameof(RightWingMargin));
-        }
-    }
-
-    private double _cornerIconScale = 1.0;
-    public double CornerIconScale
-    {
-        get => _cornerIconScale;
-        set
-        {
-            this.RaiseAndSetIfChanged(ref _cornerIconScale, value);
-            this.RaisePropertyChanged(nameof(SelectionIconSize));
-        }
-    }
-    
-    // Derived properties for UI binding
-    public double WingWidth => 100 * WingScale;
-    public double WingHeight => 60 * WingScale;
-    public double SelectionIconSize => 22 * CornerIconScale;
-    public Avalonia.Thickness LeftWingMargin => new Avalonia.Thickness(-WingWidth, 0, 0, 0);
-    public Avalonia.Thickness RightWingMargin => new Avalonia.Thickness(0, 0, -WingWidth, 0);
-
-    public Avalonia.Thickness WindowPadding
+    public override Avalonia.Thickness WindowPadding
     {
         get
         {
-            double hPad = _hidePinDecoration ? 10 : System.Math.Max(10, WingWidth);
+            double hPad = HidePinDecoration ? 10 : System.Math.Max(10, WingWidth);
             double topPad = 45;
             double baseBottomPad = 15;
             double bottomPad = baseBottomPad;
@@ -205,6 +102,7 @@ public partial class FloatingImageViewModel : ViewModelBase, IDisposable, IDrawi
             return new Avalonia.Thickness(hPad, topPad, hPad, bottomPad);
         }
     }
+
 
     public FloatingImageViewModel(Bitmap image, double originalWidth, double originalHeight, Avalonia.Media.Color borderColor, double borderThickness, bool hideDecoration, bool hideBorder, IClipboardService clipboardService, AIResourceService aiResourceService, AppSettingsService appSettingsService, AIPathService pathService)
     {
@@ -242,7 +140,7 @@ public partial class FloatingImageViewModel : ViewModelBase, IDisposable, IDrawi
         ConfirmInteractiveCommand = ReactiveCommand.CreateFromTask(ConfirmInteractiveAsync, this.WhenAnyValue(x => x.InteractiveMask).Select(m => m != null));
     }
 
-    public void Dispose()
+    public override void Dispose()
     {
         _sam2Service?.Dispose();
         _sam2Service = null;

@@ -73,24 +73,6 @@ public partial class FloatingImageViewModel
 
     public bool IsAnyToolActive => CurrentTool != FloatingTool.None || CurrentAnnotationTool != AnnotationType.None;
 
-    private bool _showToolbar = false;
-    public bool ShowToolbar
-    {
-        get => _showToolbar;
-        set
-        {
-            this.RaiseAndSetIfChanged(ref _showToolbar, value);
-            this.RaisePropertyChanged(nameof(WindowPadding));
-        }
-    }
-
-    private Avalonia.Thickness _toolbarMargin = new Avalonia.Thickness(0, 0, 0, 10);
-    public Avalonia.Thickness ToolbarMargin
-    {
-        get => _toolbarMargin;
-        set => this.RaiseAndSetIfChanged(ref _toolbarMargin, value);
-    }
-    
     // Position properties
     private double _toolbarTop;
     public double ToolbarTop
@@ -127,13 +109,7 @@ public partial class FloatingImageViewModel
             UpdateToolbarPosition();
         }
     }
-    
-    private bool _isToolbarFlipped;
-    public bool IsToolbarFlipped
-    {
-        get => _isToolbarFlipped;
-        set => this.RaiseAndSetIfChanged(ref _isToolbarFlipped, value);
-    }
+
 
     public ReactiveCommand<Unit, Unit> ToggleToolbarCommand { get; private set; } = null!;
     public ReactiveCommand<AnnotationType, Unit> SelectToolCommand { get; private set; } = null!;
@@ -187,7 +163,7 @@ public partial class FloatingImageViewModel
         });
     }
 
-    private void UpdateToolbarPosition()
+    public override void UpdateToolbarPosition()
     {
         if (!ShowToolbar || ToolbarWidth <= 0 || ToolbarHeight <= 0) return;
 

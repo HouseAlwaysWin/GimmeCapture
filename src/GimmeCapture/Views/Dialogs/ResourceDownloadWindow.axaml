@@ -24,7 +24,7 @@
             BoxShadow="0 0 20 2 #900000"
             PointerPressed="OnPointerPressed">
         <Grid Margin="10" HorizontalAlignment="Center" VerticalAlignment="Center">
-            <c:ProcessingOverlay />
+            <c:ProcessingOverlay IsVisible="{Binding ShowProcessingOverlay}" />
         </Grid>
     </Border>
 </Window>

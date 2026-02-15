@@ -227,6 +227,7 @@ public partial class SnipWindowViewModel
     {
         // Cancel any pending AI scans immediately
         _scanCts?.Cancel();
+        _isLocalProcessing = false;
         ShowProcessingOverlay = false;
         ProcessingText = string.Empty;
 
@@ -418,7 +419,9 @@ public partial class SnipWindowViewModel
 
         bool wasRecording = _recordingService.State == RecordingState.Recording;
 
+        _isLocalProcessing = true;
         ShowProcessingOverlay = true;
+        IsIndeterminate = true;
         ProcessingText = LocalizationService.Instance["FinalizingRecording"] ?? "Finalizing..."; 
         try
         {
@@ -431,6 +434,7 @@ public partial class SnipWindowViewModel
                   if (string.IsNullOrEmpty(recordingPath) || !System.IO.File.Exists(recordingPath)) 
                   {
                       System.Diagnostics.Debug.WriteLine($"找不到錄影檔案: {recordingPath}");
+                      _isLocalProcessing = false;
                       ShowProcessingOverlay = false;
                       return;
                   }
@@ -440,6 +444,7 @@ public partial class SnipWindowViewModel
                   if (string.IsNullOrEmpty(ffplayPath) || !System.IO.File.Exists(ffplayPath))
                   {
                       System.Diagnostics.Debug.WriteLine($"找不到播放器組件 (ffplay.exe)");
+                      _isLocalProcessing = false;
                       ShowProcessingOverlay = false;
                       return;
                   }
@@ -487,6 +492,7 @@ public partial class SnipWindowViewModel
         }
         finally
         {
+            _isLocalProcessing = false;
             ShowProcessingOverlay = false;
         }
     }
@@ -510,7 +516,9 @@ public partial class SnipWindowViewModel
 
             try 
             {
+                _isLocalProcessing = true;
                 ShowProcessingOverlay = true;
+                IsIndeterminate = true;
                 ProcessingText = LocalizationService.Instance["StatusProcessing"] ?? "Processing...";
                 var bitmap = await _captureService.CaptureScreenWithAnnotationsAsync(SelectionRect, ScreenOffset, VisualScaling, Annotations, _mainVm?.ShowSnipCursor ?? false);
                 await _captureService.CopyToClipboardAsync(bitmap);
@@ -518,6 +526,7 @@ public partial class SnipWindowViewModel
             }
             finally
             {
+                _isLocalProcessing = false;
                 ShowProcessingOverlay = false;
                 CloseAction?.Invoke();
             }
@@ -540,7 +549,9 @@ public partial class SnipWindowViewModel
 
              try
              {
+                 _isLocalProcessing = true;
                  ShowProcessingOverlay = true;
+                 IsIndeterminate = true;
                  ProcessingText = LocalizationService.Instance["StatusSaving"] ?? "Saving...";
                  var bitmap = await _captureService.CaptureScreenWithAnnotationsAsync(SelectionRect, ScreenOffset, VisualScaling, Annotations, _mainVm?.ShowSnipCursor ?? false);
                  
@@ -579,6 +590,7 @@ public partial class SnipWindowViewModel
              }
              finally
              {
+                 _isLocalProcessing = false;
                  ShowProcessingOverlay = false;
                  CloseAction?.Invoke(); 
              }

@@ -195,19 +195,6 @@ public partial class MainWindowViewModel : ViewModelBase
             else if (id == ID_RECORD) Avalonia.Threading.Dispatcher.UIThread.Post(() => StartCaptureCommand.Execute(CaptureMode.Record));
         };
 
-        // Download status aggregation
-        var isAnyProcessing = Observable.CombineLatest(
-            FfmpegDownloader.WhenAnyValue(x => x.IsDownloading),
-            UpdateService.WhenAnyValue(x => x.IsDownloading),
-            AIResourceService.WhenAnyValue(x => x.IsDownloading),
-            (a, b, c) => a || b || c
-        );
-
-        isAnyProcessing.ObserveOn(RxApp.MainThreadScheduler).Subscribe(busy => 
-        {
-            IsProcessing = busy;
-            ShowProcessingOverlay = busy;
-        });
 
         var processingSources = new[] 
         {
@@ -224,14 +211,36 @@ public partial class MainWindowViewModel : ViewModelBase
                 bool isUpdateDownloading = updateState.Item2;
                 double updateProgress = updateState.Item3;
 
-                var activeModules = Modules.Where(m => m.IsProcessing).ToList();
-                int activeCount = activeModules.Count + (isUpdateDownloading ? 1 : 0);
+                var aiState = states.FirstOrDefault(s => s.Item1 == "AI");
+                bool isAiDownloading = aiState.Item2;
+                
+                var ffmpegState = states.FirstOrDefault(s => s.Item1 == "FFmpeg");
+                bool isFfmpegDownloading = ffmpegState.Item2;
 
+                var activeModules = Modules.Where(m => m.IsProcessing).ToList();
+                
+                // Fix Race Condition: ResourceQueue updates lag behind Service.IsDownloading.
+                // Filter out stale modules based on service truth.
+                if (!isAiDownloading)
+                {
+                    // If AI service is done, remove all AI modules (everything except FFmpeg)
+                    activeModules = activeModules.Where(m => m.Name == "FFmpeg").ToList();
+                }
+                
+                if (!isFfmpegDownloading)
+                {
+                    // If FFmpeg service is done, remove FFmpeg module
+                    activeModules = activeModules.Where(m => m.Name != "FFmpeg").ToList();
+                }
+
+                int activeCount = activeModules.Count + (isUpdateDownloading ? 1 : 0);
+                
                 if (activeCount > 0)
                 {
                     double totalProgress = activeModules.Sum(m => m.Progress) + (isUpdateDownloading ? updateProgress : 0);
                     double avgProgress = totalProgress / activeCount;
                     IsProcessing = true;
+                    ShowProcessingOverlay = true;
                     ProgressValue = avgProgress;
                     IsIndeterminate = false;
 
@@ -251,7 +260,7 @@ public partial class MainWindowViewModel : ViewModelBase
                     }
                     StatusText = ProcessingText;
                 }
-                else if (IsProcessing)
+                else
                 {
                     SetStatus("StatusReady");
                     IsProcessing = false;
