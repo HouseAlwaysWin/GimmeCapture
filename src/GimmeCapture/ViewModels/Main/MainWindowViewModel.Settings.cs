@@ -184,7 +184,7 @@ public partial class MainWindowViewModel
         set => this.RaiseAndSetIfChanged(ref _maskOpacity, value);
     }
 
-    private double _wingScale;
+    private double _wingScale = 1.0;
     public double WingScale
     {
         get => _wingScale;

@@ -23,26 +23,75 @@ public partial class FloatingVideoViewModel
 
     private void InitializeActionCommands()
     {
-        // CloseCommand, SaveCommand are in Base.
+        // CloseCommand is in Base.
         
         // Placeholders for now
         CropCommand = ReactiveCommand.Create(() => { });
         PinSelectionCommand = ReactiveCommand.Create(() => { });
 
         CopyCommand = ReactiveCommand.CreateFromTask(CopyAsync);
+        SaveCommand = ReactiveCommand.CreateFromTask(SaveAsync);
     }
     
     private async Task CopyAsync()
     {
-        // Use flattened bitmap if annotations exist, otherwise base (but base is VideoBitmap, not directly copyable?)
-        // Actually, VideoBitmap is WriteableBitmap, we should flatten or copy it anyway to be safe.
-        // GetFlattenedBitmapAsync handles both drawing the video frame (from VideoBitmap) + Annotations.
-        // Even without annotations, it correctly snapshot the video frame.
-        
+        // If we want to copy the actual video file (as per USER REQUEST)
+        if (!string.IsNullOrEmpty(VideoPath) && System.IO.File.Exists(VideoPath))
+        {
+            try
+            {
+                var psi = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "powershell",
+                    Arguments = $"-noprofile -command \"Set-Clipboard -Path '{VideoPath}'\"",
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
+                var process = System.Diagnostics.Process.Start(psi);
+                if (process != null) await process.WaitForExitAsync();
+                return;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Failed to copy video to clipboard: {ex.Message}");
+            }
+        }
+
+        // Fallback to image copy if file doesn't exist or fails
         var bitmapToCopy = await GetFlattenedBitmapAsync();
         if (bitmapToCopy != null)
         {
              await _clipboardService.CopyImageAsync(bitmapToCopy);
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (PickSaveFileAction == null) return;
+
+        var targetPath = await PickSaveFileAction.Invoke();
+        if (string.IsNullOrEmpty(targetPath)) return;
+
+        try
+        {
+            if (System.IO.File.Exists(VideoPath))
+            {
+                System.IO.File.Copy(VideoPath, targetPath, true);
+            }
+            else
+            {
+                // Fallback to saving current frame as PNG if video file is missing
+                var bitmap = await GetFlattenedBitmapAsync();
+                if (bitmap != null)
+                {
+                    using var stream = new System.IO.FileStream(targetPath, System.IO.FileMode.Create);
+                    bitmap.Save(stream);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error saving video: {ex}");
         }
     }
 

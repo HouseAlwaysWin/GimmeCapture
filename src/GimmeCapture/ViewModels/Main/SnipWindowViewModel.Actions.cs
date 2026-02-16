@@ -126,14 +126,46 @@ public partial class SnipWindowViewModel
     // Init Method
     private void InitializeActionCommands()
     {
-        CopyCommand = ReactiveCommand.CreateFromTask(Copy);
-        CopyCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
+        PinCommand = ReactiveCommand.CreateFromTask(async () => 
+        {
+            if (!IsRecordingMode)
+            {
+                await Pin(false);
+            }
+            else 
+            {
+                if (RecState == RecordingState.Recording || RecState == RecordingState.Paused)
+                {
+                    await PinRecording();
+                }
+                else if (RecState == RecordingState.Idle)
+                {
+                     var lastPath = _recordingService?.LastRecordingPath;
+                     if (!string.IsNullOrEmpty(lastPath) && System.IO.File.Exists(lastPath))
+                     {
+                         await PinRecording();
+                     }
+                     else if (CurrentState == SnipState.Selected)
+                     {
+                         await StartRecording();
+                     }
+                }
+            }
+        });
+        PinCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"PinCommand error: {ex}"));
+
+        CopyCommand = ReactiveCommand.CreateFromTask(async () => 
+        {
+            if (!IsRecordingMode) await Copy();
+            else await CopyRecording();
+        }, this.WhenAnyValue(x => x.IsInputFocused, x => !x));
+        CopyCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"CopyCommand error: {ex}"));
+
         SaveCommand = ReactiveCommand.CreateFromTask(Save);
-        SaveCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
-        PinCommand = ReactiveCommand.CreateFromTask(() => Pin(false));
-        PinCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
+        SaveCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"SaveCommand error: {ex}"));
+        
         CloseCommand = ReactiveCommand.Create(Close);
-        CloseCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
+        CloseCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"CloseCommand error: {ex}"));
 
         ToggleModeCommand = ReactiveCommand.Create(() => 
         {
@@ -169,34 +201,7 @@ public partial class SnipWindowViewModel
             }
         });
 
-        // Action key (F3) logic re-definition for specific command
-        PinCommand = ReactiveCommand.CreateFromTask(async () => 
-        {
-            if (!IsRecordingMode) await Pin(false);
-            else 
-            {
-                if (RecState == RecordingState.Idle)
-                {
-                     // If we have a selection, start recording
-                     if (CurrentState == SnipState.Selected)
-                     {
-                         await StartRecording();
-                     }
-                }
-                else 
-                {
-                    await PinRecording(); // Handles Stop and Pin
-                }
-            }
-        });
-        
-        // Copy key (Ctrl+C) logic re-definition
-        var canCopyImage = this.WhenAnyValue(x => x.IsInputFocused, x => !x);
-        CopyCommand = ReactiveCommand.CreateFromTask(async () => 
-        {
-            if (!IsRecordingMode) await Copy();
-            else await CopyRecording(); // Handles Stop and Copy
-        }, canCopyImage);
+        // F3/Copy commands already initialized once above.
 
         var canRemoveBackground = this.WhenAnyValue(
             x => x.IsRecordingMode, 
@@ -472,6 +477,10 @@ public partial class SnipWindowViewModel
                            new ClipboardService(),
                            _mainVm?.AppSettingsService);
 
+                  // Set Save Actions
+                  videoVm.PickSaveFileAction = PickSaveFileAction;
+                  videoVm.SaveAction = async () => await videoVm.SaveCommand.Execute();
+
                       var pad = videoVm.WindowPadding;
                           
                       var videoWin = new FloatingVideoWindow
@@ -502,11 +511,17 @@ public partial class SnipWindowViewModel
         // If recording is processing, ignore copy command to prevent overwriting with screenshot
         if (_isProcessingRecording) return;
 
-        // If recording is active, copy recording instead of screenshot
-        if (RecState == RecordingState.Recording || RecState == RecordingState.Paused)
+        // If recording is active or we are in recording mode with a valid path, use CopyRecording
+        if (IsRecordingMode)
         {
-            await CopyRecording();
-            return;
+             var lastPath = _recordingService?.LastRecordingPath;
+             bool hasVideo = !string.IsNullOrEmpty(lastPath) && System.IO.File.Exists(lastPath);
+             
+             if (RecState == RecordingState.Recording || RecState == RecordingState.Paused || hasVideo)
+             {
+                 await CopyRecording();
+                 return;
+             }
         }
 
         if (SelectionRect.Width > 0 && SelectionRect.Height > 0)
@@ -605,11 +620,17 @@ public partial class SnipWindowViewModel
             runAI = false;
         }
 
-        // If recording is active, pin recording instead of screenshot
-        if (RecState == RecordingState.Recording || RecState == RecordingState.Paused)
+        // If recording is active or we are in recording mode with a valid path, use PinRecording
+        if (IsRecordingMode)
         {
-            await PinRecording();
-            return;
+            var lastPath = _recordingService?.LastRecordingPath;
+            bool hasVideo = !string.IsNullOrEmpty(lastPath) && System.IO.File.Exists(lastPath);
+            
+            if (RecState == RecordingState.Recording || RecState == RecordingState.Paused || hasVideo)
+            {
+                await PinRecording();
+                return;
+            }
         }
 
         if (SelectionRect.Width > 0 && SelectionRect.Height > 0)

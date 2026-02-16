@@ -1,0 +1,63 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:ctl="using:GimmeCapture.Views.Controls"
+             mc:Ignorable="d" d:DesignWidth="300" d:DesignHeight="300"
+             x:Class="GimmeCapture.Views.Controls.GothicDecoration"
+             x:DataType="ctl:GothicDecoration"
+             x:Name="root_deco"
+             ClipToBounds="False">
+    <Panel ClipToBounds="False" DataContext="{Binding #root_deco}">
+        <Panel.Styles>
+            <Style Selector="Rectangle.Corner">
+                <Setter Property="Width" Value="{Binding SelectionIconSize}"/>
+                <Setter Property="Height" Value="{Binding SelectionIconSize}"/>
+                <Setter Property="Fill" Value="{Binding DecorationBrush}"/>
+                <Setter Property="Margin" Value="4"/>
+            </Style>
+        </Panel.Styles>
+
+        <!-- Inner Border Line -->
+        <Border BorderBrush="{Binding DecorationBrush}" 
+                BorderThickness="1" Margin="-1" 
+                IsHitTestVisible="False"
+                IsVisible="{Binding ShowBorder}"
+                ClipToBounds="False"/>
+
+        <!-- Decoration Layer -->
+        <Grid IsVisible="{Binding ShowCorners}" ClipToBounds="False">
+            <!-- Corners -->
+            <Rectangle Classes="Corner" VerticalAlignment="Top" HorizontalAlignment="Left" IsHitTestVisible="True">
+                <Rectangle.OpacityMask><ImageBrush Source="avares://GimmeCapture/Assets/heart.png" Stretch="Uniform"/></Rectangle.OpacityMask>
+            </Rectangle>
+            <Rectangle Classes="Corner" VerticalAlignment="Bottom" HorizontalAlignment="Left" IsHitTestVisible="True">
+                <Rectangle.OpacityMask><ImageBrush Source="avares://GimmeCapture/Assets/heart.png" Stretch="Uniform"/></Rectangle.OpacityMask>
+            </Rectangle>
+            <Rectangle Classes="Corner" VerticalAlignment="Top" HorizontalAlignment="Right" IsHitTestVisible="True">
+                <Rectangle.OpacityMask><ImageBrush Source="avares://GimmeCapture/Assets/skull.png" Stretch="Uniform"/></Rectangle.OpacityMask>
+            </Rectangle>
+            <Rectangle Classes="Corner" VerticalAlignment="Bottom" HorizontalAlignment="Right" IsHitTestVisible="True">
+                <Rectangle.OpacityMask><ImageBrush Source="avares://GimmeCapture/Assets/skull.png" Stretch="Uniform"/></Rectangle.OpacityMask>
+            </Rectangle>
+        </Grid>
+
+        <!-- Wings Layer -->
+        <Grid IsVisible="{Binding ShowWings}" ClipToBounds="False">
+            <Rectangle Width="{Binding WingWidth}" 
+                       Height="{Binding WingHeight}" 
+                       VerticalAlignment="Center" HorizontalAlignment="Left" 
+                       Margin="{Binding LeftWingMargin}"
+                       Fill="{Binding DecorationBrush}">
+                <Rectangle.OpacityMask><ImageBrush Source="avares://GimmeCapture/Assets/wing_left.png" Stretch="Uniform" AlignmentX="Right"/></Rectangle.OpacityMask>
+            </Rectangle>
+            <Rectangle Width="{Binding WingWidth}" 
+                       Height="{Binding WingHeight}" 
+                       VerticalAlignment="Center" HorizontalAlignment="Right" 
+                       Margin="{Binding RightWingMargin}"
+                       Fill="{Binding DecorationBrush}">
+                <Rectangle.OpacityMask><ImageBrush Source="avares://GimmeCapture/Assets/wing_right.png" Stretch="Uniform" AlignmentX="Left"/></Rectangle.OpacityMask>
+            </Rectangle>
+        </Grid>
+    </Panel>
+</UserControl>

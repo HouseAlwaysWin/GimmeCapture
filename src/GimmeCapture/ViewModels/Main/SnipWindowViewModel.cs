@@ -199,6 +199,27 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
             Console.WriteLine("[SnipWindow] Debugger detected. IsTopmost = false. Press Ctrl+Alt+T to toggle.");
         }
 
+        // Real-time sync for decoration scales from MainVM
+        if (mainVm != null)
+        {
+            mainVm.WhenAnyValue(x => x.WingScale)
+                  .Subscribe(val => {
+                      this.RaisePropertyChanged(nameof(WingScale));
+                      this.RaisePropertyChanged(nameof(WingWidth));
+                      this.RaisePropertyChanged(nameof(WingHeight));
+                      this.RaisePropertyChanged(nameof(LeftWingMargin));
+                      this.RaisePropertyChanged(nameof(RightWingMargin));
+                  })
+                  .DisposeWith(_disposables);
+                  
+            mainVm.WhenAnyValue(x => x.CornerIconScale)
+                  .Subscribe(val => {
+                      this.RaisePropertyChanged(nameof(CornerIconScale));
+                      this.RaisePropertyChanged(nameof(SelectionIconSize));
+                  })
+                  .DisposeWith(_disposables);
+        }
+
         UpdateMask();
     }
 

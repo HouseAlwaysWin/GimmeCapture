@@ -143,70 +143,16 @@
                                 ClipToBounds="False"/>
                     </Grid>
 
-                    <!-- Accent Corners (Themed) - Integrated inside to match Image window -->
-                    <Grid IsVisible="{Binding HidePinDecoration, Converter={StaticResource BoolInvertConverter}}" Margin="0" ClipToBounds="False" IsHitTestVisible="False">
-                        <Border BorderThickness="{Binding BorderThickness, Converter={StaticResource ThicknessConverter}}" ClipToBounds="False">
-                            <Border BorderThickness="1" Margin="-1" ClipToBounds="False">
-                                <Grid Name="AccentCornersGrid" ClipToBounds="False">
-                                    <!-- Left Inner Corners: Hearts -->
-                                    <Rectangle Name="InnerCornerTopLeft" Width="{Binding SelectionIconSize}" Height="{Binding SelectionIconSize}" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="4"
-                                               Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}"
-                                               RenderOptions.BitmapInterpolationMode="HighQuality">
-                                        <Rectangle.OpacityMask>
-                                            <ImageBrush Source="/Assets/heart.png" Stretch="Uniform"/>
-                                        </Rectangle.OpacityMask>
-                                    </Rectangle>
-                                    <Rectangle Name="InnerCornerBottomLeft" Width="{Binding SelectionIconSize}" Height="{Binding SelectionIconSize}" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="4"
-                                               Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}"
-                                               RenderOptions.BitmapInterpolationMode="HighQuality">
-                                        <Rectangle.OpacityMask>
-                                            <ImageBrush Source="/Assets/heart.png" Stretch="Uniform"/>
-                                        </Rectangle.OpacityMask>
-                                    </Rectangle>
-
-                                    <!-- Right Inner Corners: Skulls -->
-                                    <Rectangle Name="InnerCornerTopRight" Width="{Binding SelectionIconSize}" Height="{Binding SelectionIconSize}" VerticalAlignment="Top" HorizontalAlignment="Right" Margin="4"
-                                               Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}"
-                                               RenderOptions.BitmapInterpolationMode="HighQuality">
-                                        <Rectangle.OpacityMask>
-                                            <ImageBrush Source="/Assets/skull.png" Stretch="Uniform"/>
-                                        </Rectangle.OpacityMask>
-                                    </Rectangle>
-                                    <Rectangle Name="InnerCornerBottomRight" Width="{Binding SelectionIconSize}" Height="{Binding SelectionIconSize}" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="4"
-                                               Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}"
-                                               RenderOptions.BitmapInterpolationMode="HighQuality">
-                                        <Rectangle.OpacityMask>
-                                            <ImageBrush Source="/Assets/skull.png" Stretch="Uniform"/>
-                                        </Rectangle.OpacityMask>
-                                    </Rectangle>
-                                </Grid>
-                            </Border>
-                        </Border>
-                    </Grid>
-
-                    <!-- Wings Decoration -->
-                    <Grid IsVisible="{Binding HidePinDecoration, Converter={StaticResource BoolInvertConverter}}"
-                          IsHitTestVisible="False"
-                          ClipToBounds="False">
-                        <!-- Wings -->
-                        <Rectangle Width="{Binding WingWidth}" Height="{Binding WingHeight}" VerticalAlignment="Center"
-                                   HorizontalAlignment="Left" Margin="{Binding LeftWingMargin}"
-                                   Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}"
-                                   RenderOptions.BitmapInterpolationMode="HighQuality">
-                            <Rectangle.OpacityMask>
-                                <ImageBrush Source="/Assets/wing_left.png" Stretch="Uniform" AlignmentX="Right"/>
-                            </Rectangle.OpacityMask>
-                        </Rectangle>
-                               
-                        <Rectangle Width="{Binding WingWidth}" Height="{Binding WingHeight}" VerticalAlignment="Center"
-                                   HorizontalAlignment="Right" Margin="{Binding RightWingMargin}"
-                                   Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}"
-                                   RenderOptions.BitmapInterpolationMode="HighQuality">
-                            <Rectangle.OpacityMask>
-                                <ImageBrush Source="/Assets/wing_right.png" Stretch="Uniform" AlignmentX="Left"/>
-                            </Rectangle.OpacityMask>
-                        </Rectangle>
-                    </Grid>
+                    <!-- Decoration Layer (Unified) -->
+                    <controls:GothicDecoration DecorationBrush="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" 
+                                               ShowWings="{Binding !HidePinDecoration}"
+                                               ShowCorners="{Binding !HidePinDecoration}"
+                                               ShowBorder="{Binding !HidePinBorder}"
+                                               WingWidth="{Binding WingWidth}"
+                                               WingHeight="{Binding WingHeight}"
+                                               SelectionIconSize="{Binding SelectionIconSize}"
+                                               LeftWingMargin="{Binding LeftWingMargin}"
+                                               RightWingMargin="{Binding RightWingMargin}" />
 
                     <!-- Resize Handles -->
                     <Grid ClipToBounds="False">

@@ -263,6 +263,7 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
     public ReactiveCommand<Unit, Unit> CopyCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> CropCommand { get; private set; } = null!; // Future implementation
     public ReactiveCommand<Unit, Unit> PinSelectionCommand { get; private set; } = null!; // Future implementation
+    public System.Func<Task<string?>>? PickSaveFileAction { get; set; }
 
     // Annotation Proxies
     public bool CanUndo => HasUndo;
