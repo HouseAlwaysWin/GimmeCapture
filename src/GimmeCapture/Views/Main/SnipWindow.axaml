@@ -198,7 +198,7 @@
                        IsVisible="{Binding !!DrawingModeSnapshot}"
                        IsHitTestVisible="False"/>
 
-                <ItemsControl ItemsSource="{Binding Annotations}">
+                <ItemsControl ItemsSource="{Binding Annotations}" x:CompileBindings="False">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
                             <Canvas Width="{Binding SelectionRect.Width}" Height="{Binding SelectionRect.Height}"/>
@@ -207,8 +207,8 @@
                     <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="m:Annotation">
                             <ctl:AnnotationControl Annotation="{Binding}" 
-                                                   Width="{Binding $parent[Window].((vm:SnipWindowViewModel)DataContext).SelectionRect.Width}"
-                                                   Height="{Binding $parent[Window].((vm:SnipWindowViewModel)DataContext).SelectionRect.Height}"/>
+                                                   Width="{Binding $parent[Window].DataContext.SelectionRect.Width}"
+                                                   Height="{Binding $parent[Window].DataContext.SelectionRect.Height}"/>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
