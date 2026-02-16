@@ -454,12 +454,14 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
             if (SaveAction != null) await SaveAction();
         });
 
-        ToggleToolbarCommand = ReactiveCommand.Create(() => { ShowToolbar = !ShowToolbar; });
+        var notEnteringText = this.WhenAnyValue(x => x.IsEnteringText).Select(x => !x).ObserveOn(RxApp.MainThreadScheduler);
+
+        ToggleToolbarCommand = ReactiveCommand.Create(() => { ShowToolbar = !ShowToolbar; }, notEnteringText);
 
         SelectionCommand = ReactiveCommand.Create(() => 
         {
             CurrentTool = CurrentTool == FloatingTool.Selection ? FloatingTool.None : FloatingTool.Selection;
-        });
+        }, notEnteringText);
 
         SelectToolCommand = ReactiveCommand.Create<AnnotationType>(tool => 
         {
@@ -469,7 +471,7 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
                 CurrentTool = FloatingTool.None;
             }
             CurrentAnnotationTool = targetTool;
-        });
+        }, notEnteringText);
 
         ToggleToolGroupCommand = ReactiveCommand.Create<string>(group => 
         {
@@ -492,23 +494,25 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
                  CurrentTool = FloatingTool.None;
              }
              CurrentAnnotationTool = targetTool;
-        });
+        }, notEnteringText);
     }
 
     protected void InitializeAnnotationCommands()
     {
+        var notEnteringText = this.WhenAnyValue(x => x.IsEnteringText).Select(x => !x).ObserveOn(RxApp.MainThreadScheduler);
+
         IncreaseFontSizeCommand = ReactiveCommand.Create(() => { CurrentFontSize = Math.Min(CurrentFontSize + 2, 72); });
         DecreaseFontSizeCommand = ReactiveCommand.Create(() => { CurrentFontSize = Math.Max(CurrentFontSize - 2, 8); });
         ChangeColorCommand = ReactiveCommand.Create<Avalonia.Media.Color>(c => SelectedColor = c);
         IncreaseThicknessCommand = ReactiveCommand.Create(() => { CurrentThickness = Math.Min(CurrentThickness + 1, 30); });
         DecreaseThicknessCommand = ReactiveCommand.Create(() => { CurrentThickness = Math.Max(CurrentThickness - 1, 1); });
         
-        ClearAnnotationsCommand = ReactiveCommand.Create(ClearAnnotations);
+        ClearAnnotationsCommand = ReactiveCommand.Create(ClearAnnotations, notEnteringText);
 
-        var canUndo = this.WhenAnyValue(x => x.HasUndo).ObserveOn(RxApp.MainThreadScheduler);
+        var canUndo = this.WhenAnyValue(x => x.HasUndo, x => x.IsEnteringText, (u, t) => u && !t).ObserveOn(RxApp.MainThreadScheduler);
         UndoCommand = ReactiveCommand.Create(Undo, canUndo);
 
-        var canRedo = this.WhenAnyValue(x => x.HasRedo).ObserveOn(RxApp.MainThreadScheduler);
+        var canRedo = this.WhenAnyValue(x => x.HasRedo, x => x.IsEnteringText, (r, t) => r && !t).ObserveOn(RxApp.MainThreadScheduler);
         RedoCommand = ReactiveCommand.Create(Redo, canRedo);
 
         ConfirmTextEntryCommand = ReactiveCommand.Create(() => 

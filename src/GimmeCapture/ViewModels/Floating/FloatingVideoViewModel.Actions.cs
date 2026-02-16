@@ -35,8 +35,10 @@ public partial class FloatingVideoViewModel
     
     private async Task CopyAsync()
     {
-        // If we want to copy the actual video file (as per USER REQUEST)
-        if (!string.IsNullOrEmpty(VideoPath) && System.IO.File.Exists(VideoPath))
+        // If there are annotations, we MUST copy as an image to include them
+        bool hasAnnotations = Annotations.Any();
+
+        if (!hasAnnotations && !string.IsNullOrEmpty(VideoPath) && System.IO.File.Exists(VideoPath))
         {
             try
             {
@@ -57,7 +59,7 @@ public partial class FloatingVideoViewModel
             }
         }
 
-        // Fallback to image copy if file doesn't exist or fails
+        // Fallback to image copy if there are annotations, file doesn't exist, or file copy fails
         var bitmapToCopy = await GetFlattenedBitmapAsync();
         if (bitmapToCopy != null)
         {
