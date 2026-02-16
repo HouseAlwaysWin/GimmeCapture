@@ -606,7 +606,7 @@ public partial class SnipWindowViewModel
         IsTranslationActive = true;
         ShowSnipToolBar = true;
         _isLocalProcessing = true;
-        ShowProcessingOverlay = true; // Show wings
+        ShowProcessingOverlay = false; // Hidden to allow user to see current selection
         ProcessingText = LocalizationService.Instance["StatusTranslating"] ?? "Translating...";
         IsIndeterminate = true;
         ProgressValue = 0;
