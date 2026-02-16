@@ -13,6 +13,9 @@ using System.Reactive.Linq;
 using System;
 using System.IO;
 using SkiaSharp; 
+using CliWrap;
+using CliWrap.Buffered;
+using GimmeCapture.Services.Core.Infrastructure;
 
 namespace GimmeCapture.ViewModels.Floating;
 
@@ -36,82 +39,121 @@ public partial class FloatingVideoViewModel
     
     private async Task CopyAsync()
     {
-        bool hasAnnotations = Annotations.Any();
+        if (IsProcessing) return;
+        IsProcessing = true;
 
-        if (hasAnnotations)
+        // Use Dispatcher.Post to ensure we run AFTER the ContextMenu has fully closed.
+        // This is the "standard" way to avoid PlatformImpl null or focus issues.
+        Avalonia.Threading.Dispatcher.UIThread.Post(async () =>
         {
-            // NEW: Export burnt-in video if there are annotations
-            var burntPath = await ExportBurntInVideoAsync();
-            if (!string.IsNullOrEmpty(burntPath) && System.IO.File.Exists(burntPath))
+            try
             {
-                await _clipboardService.CopyFileAndImageAsync(burntPath, await GetFlattenedBitmapAsync() ?? VideoBitmap!);
-                return;
-            }
-        }
+                ProcessingText = LocalizationService.Instance["StatusExportingVideo"] ?? "Exporting Video...";
+                bool hasAnnotations = Annotations.Any();
 
-        // Standard logic for no annotations or export failure
-        if (!string.IsNullOrEmpty(VideoPath) && System.IO.File.Exists(VideoPath))
-        {
-            await _clipboardService.CopyFileAsync(VideoPath);
-        }
-        else
-        {
-            // Fallback for missing video file
-            var bitmapToCopy = await GetFlattenedBitmapAsync();
-            if (bitmapToCopy != null)
-            {
-                await _clipboardService.CopyImageAsync(bitmapToCopy);
+                if (hasAnnotations)
+                {
+                    var burntPath = await ExportBurntInVideoAsync();
+                    if (!string.IsNullOrEmpty(burntPath) && System.IO.File.Exists(burntPath))
+                    {
+                        await _clipboardService.CopyFileAndImageAsync(burntPath, await GetFlattenedBitmapAsync() ?? VideoBitmap!);
+                        return;
+                    }
+                }
+
+                if (!string.IsNullOrEmpty(VideoPath) && System.IO.File.Exists(VideoPath))
+                {
+                    await _clipboardService.CopyFileAsync(VideoPath);
+                }
+                else
+                {
+                    var bitmapToCopy = await GetFlattenedBitmapAsync();
+                    if (bitmapToCopy != null)
+                    {
+                        await _clipboardService.CopyImageAsync(bitmapToCopy);
+                    }
+                }
             }
-        }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error copying video: {ex}");
+            }
+            finally
+            {
+                IsProcessing = false;
+            }
+        });
+        
+        await Task.CompletedTask;
     }
 
     private async Task SaveAsync()
     {
-        if (PickSaveFileAction == null) return;
+        if (PickSaveFileAction == null || IsProcessing) return;
 
-        var targetPath = await PickSaveFileAction.Invoke();
-        if (string.IsNullOrEmpty(targetPath)) return;
-
-        try
+        // IMPORTANT: Let the UI event finish (menu close) before opening another modal dialog.
+        Avalonia.Threading.Dispatcher.UIThread.Post(async () =>
         {
-            bool hasAnnotations = Annotations.Any();
-            if (hasAnnotations)
+            var targetPath = await PickSaveFileAction.Invoke();
+            if (string.IsNullOrEmpty(targetPath)) return;
+
+            IsProcessing = true;
+            ProcessingText = LocalizationService.Instance["StatusProcessing"] ?? "Processing...";
+
+            try
             {
-                var burntPath = await ExportBurntInVideoAsync();
-                if (!string.IsNullOrEmpty(burntPath) && System.IO.File.Exists(burntPath))
+                bool hasAnnotations = Annotations.Any();
+                string sourceExt = Path.GetExtension(VideoPath).ToLowerInvariant();
+                string targetExt = Path.GetExtension(targetPath).ToLowerInvariant();
+                bool needsConversion = sourceExt != targetExt;
+
+                if (hasAnnotations || needsConversion)
                 {
-                    System.IO.File.Copy(burntPath, targetPath, true);
-                    return;
+                    var processedPath = await ExportBurntInVideoAsync(targetExt);
+                    if (!string.IsNullOrEmpty(processedPath) && System.IO.File.Exists(processedPath))
+                    {
+                        System.IO.File.Copy(processedPath, targetPath, true);
+                        return;
+                    }
+                }
+
+                if (System.IO.File.Exists(VideoPath))
+                {
+                    System.IO.File.Copy(VideoPath, targetPath, true);
+                }
+                else
+                {
+                    var bitmap = await GetFlattenedBitmapAsync();
+                    if (bitmap != null)
+                    {
+                        using var stream = new System.IO.FileStream(targetPath, System.IO.FileMode.Create);
+                        bitmap.Save(stream);
+                    }
                 }
             }
-
-            if (System.IO.File.Exists(VideoPath))
+            catch (Exception ex)
             {
-                System.IO.File.Copy(VideoPath, targetPath, true);
+                System.Diagnostics.Debug.WriteLine($"Error saving video: {ex}");
+                ProcessingText = "Save Failed: " + ex.Message;
+                IsProcessing = true;
+                await Task.Delay(2000);
             }
-            else
+            finally
             {
-                // Fallback to saving current frame as PNG if video file is missing
-                var bitmap = await GetFlattenedBitmapAsync();
-                if (bitmap != null)
-                {
-                    using var stream = new System.IO.FileStream(targetPath, System.IO.FileMode.Create);
-                    bitmap.Save(stream);
-                }
+                IsProcessing = false;
             }
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"Error saving video: {ex}");
-        }
+        });
+        
+        await Task.CompletedTask;
     }
 
-    private async Task<string?> ExportBurntInVideoAsync()
+    private async Task<string?> ExportBurntInVideoAsync(string? targetExtension = null)
     {
         if (string.IsNullOrEmpty(VideoPath) || !System.IO.File.Exists(VideoPath)) return null;
 
-        IsProcessing = true;
-        ProcessingText = LocalizationService.Instance["StatusExportingVideo"] ?? "Exporting Video...";
+        // IsProcessing controlled by caller (CopyAsync/SaveAsync) to prevent flickering
+        IsExporting = true;
+        ExportProgress = 0;
         
         try 
         {
@@ -120,15 +162,17 @@ public partial class FloatingVideoViewModel
             Directory.CreateDirectory(tempDir);
             
             string overlayPath = Path.Combine(tempDir, "overlay.png");
-            string outputPath = Path.Combine(tempDir, "output" + Path.GetExtension(VideoPath));
+            string ext = targetExtension ?? Path.GetExtension(VideoPath);
+            if (!ext.StartsWith(".")) ext = "." + ext;
+            string outputPath = Path.Combine(tempDir, "output" + ext);
             
-            // 2. Render Overlay PNG (at video resolution)
-            using (var surface = SKSurface.Create(new SKImageInfo(_width, _height, SKColorType.Bgra8888, SKAlphaType.Premul)))
+            // 2. Render Overlay PNG (using original resolution as base)
+            using (var surface = SKSurface.Create(new SKImageInfo((int)OriginalWidth, (int)OriginalHeight, SKColorType.Bgra8888, SKAlphaType.Premul)))
             {
                 var canvas = surface.Canvas;
                 canvas.Clear(SKColors.Transparent);
                 
-                await DrawAnnotationsOnCanvas(canvas, (float)_width, (float)_height);
+                DrawAnnotationsOnCanvas(canvas, (float)OriginalWidth, (float)OriginalHeight);
                 
                 using (var image = surface.Snapshot())
                 using (var data = image.Encode(SKEncodedImageFormat.Png, 100))
@@ -138,142 +182,165 @@ public partial class FloatingVideoViewModel
                 }
             }
             
-            // 3. Run FFmpeg overlay
-            // ffmpeg -i input.mp4 -i overlay.png -filter_complex "[0:v][1:v]overlay=0:0" -c:v libx264 -preset ultrafast -c:a copy output.mp4
-            var ffmpegPath = FFmpegPath.Replace("ffplay.exe", "ffmpeg.exe");
-            string args = $"-y -i \"{VideoPath}\" -i \"{overlayPath}\" -filter_complex \"[0:v][1:v]overlay=0:0\" -c:v libx264 -preset ultrafast -crf 23 -c:a copy \"{outputPath}\"";
+            // 3. Run FFmpeg overlay with robust scaling and audio preservation
+            var ffmpegPath = FFmpegPath;
+            if (ffmpegPath.Contains("ffplay.exe")) ffmpegPath = ffmpegPath.Replace("ffplay.exe", "ffmpeg.exe");
             
-            var psi = new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = ffmpegPath,
-                Arguments = args,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                RedirectStandardError = true
-            };
+            // Log for diagnostics
+            System.Diagnostics.Debug.WriteLine($"[Export] Start: {VideoPath} -> {outputPath}");
+
+            /* 
+               Filter Strategy:
+               Video (MP4/MKV etc):
+               [1:v][0:v]scale2ref[ovrl][refv];[refv][ovrl]overlay=0:0:shortest=1[outv]
+               -map "[outv]" -map 0:a? -c:v libx264 -c:a copy
+
+               GIF:
+               [1:v][0:v]scale2ref[ovrl][refv];[refv][ovrl]overlay=0:0:shortest=1,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse[outv]
+               -map "[outv]" (No audio, no libx264)
+            */
+            bool isOutputGif = ext.Equals(".gif", StringComparison.OrdinalIgnoreCase);
             
-            var process = System.Diagnostics.Process.Start(psi);
-            if (process != null)
-            {
-                // We could parse progress from stderr if needed, but ultrafast is usually stay-quick
-                await process.WaitForExitAsync();
-                
-                if (process.ExitCode == 0 && File.Exists(outputPath))
+            string filter = isOutputGif 
+                ? "[1:v][0:v]scale2ref[ovrl][refv];[refv][ovrl]overlay=0:0:shortest=1,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse[outv]"
+                : "[1:v][0:v]scale2ref[ovrl][refv];[refv][ovrl]overlay=0:0:shortest=1[outv]";
+            
+            var result = await Cli.Wrap(ffmpegPath)
+                .WithArguments(args => 
                 {
-                    return outputPath; // Return the path to the newly created video
-                }
+                    args.Add("-y")
+                        .Add("-i").Add(VideoPath)
+                        .Add("-loop").Add("1")
+                        .Add("-i").Add(overlayPath)
+                        .Add("-filter_complex").Add(filter)
+                        .Add("-map").Add("[outv]");
+
+                    if (!isOutputGif)
+                    {
+                        args.Add("-map").Add("0:a?")    // Keep audio if present
+                            .Add("-c:v").Add("libx264")
+                            .Add("-preset").Add("ultrafast")
+                            .Add("-pix_fmt").Add("yuv420p")
+                            .Add("-crf").Add("23")
+                            .Add("-c:a").Add("copy");    // Preserve audio quality
+                    }
+                    
+                    args.Add(outputPath);
+                })
+                .WithValidation(CommandResultValidation.None)
+                .ExecuteBufferedAsync();
+
+            if (result.ExitCode == 0 && File.Exists(outputPath) && new FileInfo(outputPath).Length > 0)
+            {
+                System.Diagnostics.Debug.WriteLine($"[Export] Success: {outputPath}");
+                return outputPath; 
+            }
+            else 
+            {
+                System.Diagnostics.Debug.WriteLine($"[Export] FFmpeg failed. Code: {result.ExitCode}");
+                System.Diagnostics.Debug.WriteLine($"[Export] Errors: {result.StandardError}");
+                // Fallback for non-critical exit codes if file exists
+                if (File.Exists(outputPath) && new FileInfo(outputPath).Length > 0) return outputPath;
             }
             
             return null;
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Export failed: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"Export failed: {ex}");
             return null;
         }
         finally
         {
-            IsProcessing = false;
+            IsExporting = false;
         }
     }
 
-    private async Task DrawAnnotationsOnCanvas(SKCanvas canvas, float targetW, float targetH)
+    private void DrawAnnotationsOnCanvas(SKCanvas canvas, float targetW, float targetH)
     {
-        // Use the actual current display dimensions for mapping
-        var refW = DisplayWidth > 0 ? DisplayWidth : OriginalWidth;
-        var refH = DisplayHeight > 0 ? DisplayHeight : OriginalHeight;
+        // IMPORTANT: Annotations are recorded relative to the DisplaySize.
+        // We must map them to the Target surface (Original video size during export).
+        var refW = DisplayWidth;
+        var refH = DisplayHeight;
         
         if (refW <= 0 || refH <= 0) return;
 
         float scaleX = targetW / (float)refW; 
         float scaleY = targetH / (float)refH;
 
-        foreach (var ann in Annotations)
+        var annotationsArray = Annotations.ToArray(); // Convert to array to get count for logging
+        System.Diagnostics.Debug.WriteLine($"[DrawAnnotations] Drawing {annotationsArray.Length} annotations. Target size: {targetW}x{targetH}, Ref size: {refW}x{refH}");
+
+        try
         {
-            var paint = new SKPaint
+            foreach (var ann in annotationsArray)
             {
-                Color = new SKColor(ann.Color.R, ann.Color.G, ann.Color.B, ann.Color.A),
-                StrokeWidth = (float)(ann.Thickness * scaleX),
-                IsAntialias = true,
-                Style = SKPaintStyle.Stroke
-            };
-            
-            if (ann.Type == AnnotationType.Pen)
-            {
-                paint.StrokeCap = SKStrokeCap.Round;
-                paint.StrokeJoin = SKStrokeJoin.Round;
-            }
+                // Create a fresh paint for each annotation to avoid state leakage (e.g. Fill vs Stroke)
+                using var paint = new SkiaSharp.SKPaint
+                {
+                    Color = new SkiaSharp.SKColor(ann.Color.R, ann.Color.G, ann.Color.B, ann.Color.A),
+                    StrokeWidth = (float)(ann.Thickness * scaleX),
+                    IsAntialias = true,
+                    Style = SkiaSharp.SKPaintStyle.Stroke,
+                    StrokeCap = SkiaSharp.SKStrokeCap.Round,
+                    StrokeJoin = SkiaSharp.SKStrokeJoin.Round
+                };
 
-            switch (ann.Type)
-            {
-                case AnnotationType.Rectangle:
-                case AnnotationType.Ellipse:
-                    var rect = new SKRect(
-                        (float)(Math.Min(ann.StartPoint.X, ann.EndPoint.X) * scaleX),
-                        (float)(Math.Min(ann.StartPoint.Y, ann.EndPoint.Y) * scaleY),
-                        (float)(Math.Max(ann.StartPoint.X, ann.EndPoint.X) * scaleX),
-                        (float)(Math.Max(ann.StartPoint.Y, ann.EndPoint.Y) * scaleY));
-                    
-                    if (ann.Type == AnnotationType.Rectangle)
-                        canvas.DrawRect(rect, paint);
-                    else
-                        canvas.DrawOval(rect, paint);
-                    break;
-                    
-                case AnnotationType.Line:
-                    canvas.DrawLine(
-                        (float)(ann.StartPoint.X * scaleX), (float)(ann.StartPoint.Y * scaleY),
-                        (float)(ann.EndPoint.X * scaleX), (float)(ann.EndPoint.Y * scaleY),
-                        paint);
-                    break;
-                    
-                case AnnotationType.Arrow:
-                    float x1 = (float)(ann.StartPoint.X * scaleX);
-                    float y1 = (float)(ann.StartPoint.Y * scaleY);
-                    float x2 = (float)(ann.EndPoint.X * scaleX);
-                    float y2 = (float)(ann.EndPoint.Y * scaleY);
-                    canvas.DrawLine(x1, y1, x2, y2, paint);
-                    
-                    double angle = Math.Atan2(y2 - y1, x2 - x1);
-                    double arrowLen = 15 * scaleX; 
-                    double arrowAngle = Math.PI / 6;
-                    
-                    float ax1 = (float)(x2 - arrowLen * Math.Cos(angle - arrowAngle));
-                    float ay1 = (float)(y2 - arrowLen * Math.Sin(angle - arrowAngle));
-                    float ax2 = (float)(x2 - arrowLen * Math.Cos(angle + arrowAngle));
-                    float ay2 = (float)(y2 - arrowLen * Math.Sin(angle + arrowAngle));
-                    
-                    var path = new SKPath();
-                    path.MoveTo(x2, y2);
-                    path.LineTo(ax1, ay1);
-                    path.LineTo(ax2, ay2);
-                    path.Close();
-                    
-                    paint.Style = SKPaintStyle.Fill;
-                    canvas.DrawPath(path, paint);
-                    break;
-
-                 case AnnotationType.Pen:
-                     if (ann.Points.Count > 1)
-                     {
-                         var points = ann.Points.Select(p => new SKPoint((float)(p.X * scaleX), (float)(p.Y * scaleY))).ToArray();
-                         if (points.Length > 1)
-                         {
-                             canvas.DrawPoints(SKPointMode.Polygon, points, paint);
-                         }
-                     }
-                     break;
-                     
-                 case AnnotationType.Text:
-                     var font = new SKFont(SKTypeface.Default, (float)(ann.FontSize * scaleX));
-                     var textPaint = new SKPaint
-                     {
-                         Color = paint.Color,
-                         IsAntialias = true,
-                     };
-                     canvas.DrawText(ann.Text, (float)(ann.StartPoint.X * scaleX), (float)(ann.StartPoint.Y * scaleY + ann.FontSize * scaleY), SKTextAlign.Left, font, textPaint);
-                     break;
+                switch (ann.Type)
+                {
+                    case AnnotationType.Rectangle:
+                    case AnnotationType.Ellipse:
+                        var rect = new SkiaSharp.SKRect(
+                            (float)(Math.Min(ann.StartPoint.X, ann.EndPoint.X) * scaleX),
+                            (float)(Math.Min(ann.StartPoint.Y, ann.EndPoint.Y) * scaleY),
+                            (float)(Math.Max(ann.StartPoint.X, ann.EndPoint.X) * scaleX),
+                            (float)(Math.Max(ann.StartPoint.Y, ann.EndPoint.Y) * scaleY));
+                        if (ann.Type == AnnotationType.Rectangle) canvas.DrawRect(rect, paint);
+                        else canvas.DrawOval(rect, paint);
+                        System.Diagnostics.Debug.WriteLine($"[DrawAnnotations] Drew {ann.Type} at {rect}");
+                        break;
+                    case AnnotationType.Line:
+                        canvas.DrawLine((float)(ann.StartPoint.X * scaleX), (float)(ann.StartPoint.Y * scaleY), (float)(ann.EndPoint.X * scaleX), (float)(ann.EndPoint.Y * scaleY), paint);
+                        System.Diagnostics.Debug.WriteLine($"[DrawAnnotations] Drew {ann.Type} from {ann.StartPoint} to {ann.EndPoint}");
+                        break;
+                    case AnnotationType.Arrow:
+                        float x1 = (float)(ann.StartPoint.X * scaleX), y1 = (float)(ann.StartPoint.Y * scaleY);
+                        float x2 = (float)(ann.EndPoint.X * scaleX), y2 = (float)(ann.EndPoint.Y * scaleY);
+                        canvas.DrawLine(x1, y1, x2, y2, paint);
+                        double angle = Math.Atan2(y2 - y1, x2 - x1), arrowLen = 15 * scaleX, arrowAngle = Math.PI / 6;
+                        var path = new SkiaSharp.SKPath();
+                        path.MoveTo(x2, y2);
+                        path.LineTo((float)(x2 - arrowLen * Math.Cos(angle - arrowAngle)), (float)(y2 - arrowLen * Math.Sin(angle - arrowAngle)));
+                        path.LineTo((float)(x2 - arrowLen * Math.Cos(angle + arrowAngle)), (float)(y2 - arrowLen * Math.Sin(angle + arrowAngle)));
+                        path.Close();
+                        paint.Style = SkiaSharp.SKPaintStyle.Fill;
+                        canvas.DrawPath(path, paint);
+                        System.Diagnostics.Debug.WriteLine($"[DrawAnnotations] Drew {ann.Type} from {ann.StartPoint} to {ann.EndPoint}");
+                        break;
+                    case AnnotationType.Pen:
+                        if (ann.Points.Any())
+                        {
+                            var pts = ann.Points.Select(p => new SkiaSharp.SKPoint((float)(p.X * scaleX), (float)(p.Y * scaleY))).ToArray();
+                            canvas.DrawPoints(SkiaSharp.SKPointMode.Polygon, pts, paint);
+                            System.Diagnostics.Debug.WriteLine($"[DrawAnnotations] Drew {ann.Type} with {pts.Length} points.");
+                        }
+                        break;
+                    case AnnotationType.Text:
+                        {
+                            using var font = new SkiaSharp.SKFont(SkiaSharp.SKTypeface.Default, (float)(ann.FontSize * scaleX));
+                            using var textPaint = new SkiaSharp.SKPaint { Color = paint.Color, IsAntialias = true };
+                            canvas.DrawText(ann.Text, (float)(ann.StartPoint.X * scaleX), (float)(ann.StartPoint.Y * scaleY + ann.FontSize * scaleY), SkiaSharp.SKTextAlign.Left, font, textPaint);
+                            System.Diagnostics.Debug.WriteLine($"[DrawAnnotations] Drew {ann.Type}: '{ann.Text}' at {ann.StartPoint}");
+                        }
+                        break;
+                }
             }
+            canvas.Flush();
+            System.Diagnostics.Debug.WriteLine($"[DrawAnnotations] Finished rendering {annotationsArray.Length} annotations to canvas.");
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[DrawAnnotations] Error: {ex}");
         }
     }
 
@@ -300,7 +367,7 @@ public partial class FloatingVideoViewModel
                 
                 canvas.DrawBitmap(skBitmap, 0, 0);
                 
-                await DrawAnnotationsOnCanvas(canvas, (float)VideoBitmap.PixelSize.Width, (float)VideoBitmap.PixelSize.Height);
+                DrawAnnotationsOnCanvas(canvas, (float)VideoBitmap.PixelSize.Width, (float)VideoBitmap.PixelSize.Height);
                 
                 using var image = surface.Snapshot();
                 using var data = image.Encode(SKEncodedImageFormat.Png, 100);

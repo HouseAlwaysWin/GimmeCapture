@@ -104,4 +104,27 @@ public class Annotation : ReactiveObject
         Points.Add(p);
         this.RaisePropertyChanged(nameof(Points));
     }
+
+    public Annotation Clone()
+    {
+        var clone = new Annotation
+        {
+            Type = this.Type,
+            StartPoint = this.StartPoint,
+            EndPoint = this.EndPoint,
+            Color = this.Color,
+            Thickness = this.Thickness,
+            Text = this.Text,
+            FontSize = this.FontSize,
+            FontFamily = this.FontFamily,
+            IsBold = this.IsBold,
+            IsItalic = this.IsItalic,
+            DrawingModeSnapshot = this.DrawingModeSnapshot
+        };
+        foreach (var p in this.Points)
+        {
+            clone.Points.Add(p);
+        }
+        return clone;
+    }
 }

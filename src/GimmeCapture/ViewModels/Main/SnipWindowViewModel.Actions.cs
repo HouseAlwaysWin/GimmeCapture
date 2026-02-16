@@ -143,7 +143,8 @@ public partial class SnipWindowViewModel
                      var lastPath = _recordingService?.LastRecordingPath;
                      if (!string.IsNullOrEmpty(lastPath) && System.IO.File.Exists(lastPath))
                      {
-                         await PinRecording();
+                          await PinRecording();
+                          _recordingService?.ClearLastRecording();
                      }
                      else if (CurrentState == SnipState.Selected)
                      {
@@ -480,6 +481,23 @@ public partial class SnipWindowViewModel
                   // Set Save Actions
                   videoVm.PickSaveFileAction = PickSaveFileAction;
                   videoVm.SaveAction = async () => await videoVm.SaveCommand.Execute();
+
+                  // Copy annotations from Snip window to the pinned video window
+                  var offsetX = SelectionRect.X;
+                  var offsetY = SelectionRect.Y;
+                  foreach (var ann in Annotations)
+                  {
+                      var cloned = ann.Clone();
+                      cloned.StartPoint = new Point(cloned.StartPoint.X - offsetX, cloned.StartPoint.Y - offsetY);
+                      cloned.EndPoint = new Point(cloned.EndPoint.X - offsetX, cloned.EndPoint.Y - offsetY);
+                      if (cloned.Points != null && cloned.Points.Count > 0)
+                       {
+                           var pts_copy = new System.Collections.Generic.List<Avalonia.Point>(cloned.Points);
+                           cloned.Points.Clear();
+                           foreach(var pt in pts_copy) cloned.Points.Add(new Avalonia.Point(pt.X - offsetX, pt.Y - offsetY));
+                       }
+                      videoVm.Annotations.Add(cloned);
+                  }
 
                       var pad = videoVm.WindowPadding;
                           

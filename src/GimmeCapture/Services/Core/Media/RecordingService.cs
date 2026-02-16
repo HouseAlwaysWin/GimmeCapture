@@ -61,7 +61,8 @@ public class RecordingService : ReactiveObject
     }
 
     public string? OutputFilePath => _outputFile;
-    public string? LastRecordingPath => _outputFile;
+    public string? LastRecordingPath => string.IsNullOrEmpty(_outputFile) ? null : _outputFile;
+    public void ClearLastRecording() { _outputFile = string.Empty; }
 
     public FFmpegDownloaderService Downloader => _downloader;
 

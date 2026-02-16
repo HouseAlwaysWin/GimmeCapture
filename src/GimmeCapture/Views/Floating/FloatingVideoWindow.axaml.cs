@@ -5,6 +5,7 @@ using Avalonia.VisualTree;
 using Avalonia.Controls.Primitives;
 using GimmeCapture.ViewModels.Floating;
 using GimmeCapture.Models;
+using GimmeCapture.Services.Core;
 using System;
 using System.Threading.Tasks;
 using System.IO;
@@ -48,53 +49,6 @@ public partial class FloatingVideoWindow : Window
                 image?.InvalidateVisual();
             };
 
-            vm.CopyAction = async () => 
-            {
-                if (string.IsNullOrEmpty(vm.VideoPath)) return;
-                
-                // If speed is 1.0 and no annotations, just copy the original file path
-                if (Math.Abs(vm.PlaybackSpeed - 1.0) < 0.01 && vm.Annotations.Count == 0)
-                {
-                    await vm.ClipboardService.CopyFileAsync(vm.VideoPath);
-                    return;
-                }
-
-                // Process with effects to a temp file
-                var tempDir = Path.Combine(Path.GetTempPath(), "GimmeCapture");
-                if (!Directory.Exists(tempDir)) Directory.CreateDirectory(tempDir);
-                
-                var extension = Path.GetExtension(vm.VideoPath);
-                var tempPath = Path.Combine(tempDir, $"gc_copy_{Guid.NewGuid():N}{extension}");
-                
-                bool success = await ProcessVideoWithEffectsAsync(vm, tempPath);
-                if (success)
-                {
-                    await vm.ClipboardService.CopyFileAsync(tempPath);
-                }
-            };
-
-            vm.SaveAction = async () => 
-            {
-                if (string.IsNullOrEmpty(vm.VideoPath)) return;
-
-                var storage = this.StorageProvider;
-                if (storage == null) return;
-
-                var extension = Path.GetExtension(vm.VideoPath).TrimStart('.');
-                var file = await storage.SaveFilePickerAsync(new Avalonia.Platform.Storage.FilePickerSaveOptions
-                {
-                    Title = "Save Video As",
-                    DefaultExtension = extension,
-                    FileTypeChoices = new[] { new Avalonia.Platform.Storage.FilePickerFileType(extension.ToUpper()) { Patterns = new[] { "*." + extension } } }
-                });
-
-                if (file != null)
-                {
-                    var targetPath = file.Path.LocalPath;
-                    await ProcessVideoWithEffectsAsync(vm, targetPath);
-                }
-            };
-
             vm.FocusWindowAction = () =>
             {
                 this.Focus();
@@ -105,6 +59,28 @@ public partial class FloatingVideoWindow : Window
                 Position = pos;
                 Width = w;
                 Height = h;
+            };
+
+            // FIX: Ensure the ViewModel uses THIS window's StorageProvider for saving files.
+            // Using a delegate from a closed window (e.g. SnipWindow) causes "PlatformImpl is null".
+            vm.PickSaveFileAction = async () =>
+            {
+                var topLevel = Avalonia.Controls.TopLevel.GetTopLevel(this);
+                if (topLevel == null) return null;
+
+                var file = await topLevel.StorageProvider.SaveFilePickerAsync(new Avalonia.Platform.Storage.FilePickerSaveOptions
+                {
+                    Title = GimmeCapture.Services.Core.Infrastructure.LocalizationService.Instance["SaveVideo"],
+                    DefaultExtension = System.IO.Path.GetExtension(vm.VideoPath).TrimStart('.'),
+                    ShowOverwritePrompt = true,
+                    FileTypeChoices = new[]
+                    {
+                        new Avalonia.Platform.Storage.FilePickerFileType("Video Files") { Patterns = new[] { "*.mp4", "*.mkv", "*.gif", "*.webm" } },
+                        new Avalonia.Platform.Storage.FilePickerFileType("All Files") { Patterns = new[] { "*.*" } }
+                    }
+                });
+
+                return file?.Path.LocalPath;
             };
 
             // Force initial sync
