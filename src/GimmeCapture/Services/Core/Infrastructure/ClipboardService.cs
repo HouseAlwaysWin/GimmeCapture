@@ -145,6 +145,73 @@ public class ClipboardService : IClipboardService
         }
     }
 
+    public async Task CopyFileAndImageAsync(string filePath, Bitmap bitmap)
+    {
+        if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath))
+        {
+            await CopyImageAsync(bitmap);
+            return;
+        }
+
+        try
+        {
+            if (OperatingSystem.IsWindows())
+            {
+                await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => 
+                {
+                    try 
+                    {
+                        // 1. Prepare Image
+                        using var ms = new System.IO.MemoryStream();
+                        bitmap.Save(ms);
+                        var pngBytes = ms.ToArray();
+                        using var msForBitmap = new System.IO.MemoryStream(pngBytes);
+                        using var winBitmap = new System.Drawing.Bitmap(msForBitmap);
+                        
+                        // 2. Prepare File List
+                        var fileList = new System.Collections.Specialized.StringCollection();
+                        fileList.Add(Path.GetFullPath(filePath));
+
+                        // 3. Combine in DataObject
+                        var data = new System.Windows.Forms.DataObject();
+                        data.SetFileDropList(fileList);
+                        data.SetData(System.Windows.Forms.DataFormats.Bitmap, true, winBitmap);
+                        
+                        using var pngStream = new System.IO.MemoryStream(pngBytes);
+                        data.SetData("PNG", false, pngStream);
+                        
+                        for (int i = 0; i < 5; i++)
+                        {
+                            try
+                            {
+                                System.Windows.Forms.Clipboard.SetDataObject(data, true);
+                                return;
+                            }
+                            catch (System.Runtime.InteropServices.ExternalException)
+                            {
+                                System.Threading.Thread.Sleep(100);
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"WinForms Multi-Copy failed: {ex}");
+                    }
+                });
+            }
+            else
+            {
+                // Fallback: Copy file first, then image (the second will likely win on non-Windows)
+                // or just copy image as it's the "richer" one for annotations
+                await CopyImageAsync(bitmap);
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Failed to multi-copy: {ex}");
+        }
+    }
+
     private TopLevel? GetTopLevel()
     {
         if (Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)

@@ -35,35 +35,32 @@ public partial class FloatingVideoViewModel
     
     private async Task CopyAsync()
     {
-        // If there are annotations, we MUST copy as an image to include them
         bool hasAnnotations = Annotations.Any();
 
-        if (!hasAnnotations && !string.IsNullOrEmpty(VideoPath) && System.IO.File.Exists(VideoPath))
+        if (hasAnnotations)
         {
-            try
+            // NEW: Copy BOTH video file and current frame image (with annotations)
+            var bitmap = await GetFlattenedBitmapAsync();
+            if (bitmap != null)
             {
-                var psi = new System.Diagnostics.ProcessStartInfo
-                {
-                    FileName = "powershell",
-                    Arguments = $"-noprofile -command \"Set-Clipboard -Path '{VideoPath}'\"",
-                    UseShellExecute = false,
-                    CreateNoWindow = true
-                };
-                var process = System.Diagnostics.Process.Start(psi);
-                if (process != null) await process.WaitForExitAsync();
+                await _clipboardService.CopyFileAndImageAsync(VideoPath, bitmap);
                 return;
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Failed to copy video to clipboard: {ex.Message}");
             }
         }
 
-        // Fallback to image copy if there are annotations, file doesn't exist, or file copy fails
-        var bitmapToCopy = await GetFlattenedBitmapAsync();
-        if (bitmapToCopy != null)
+        // Standard logic for no annotations or bitmap failure
+        if (!string.IsNullOrEmpty(VideoPath) && System.IO.File.Exists(VideoPath))
         {
-             await _clipboardService.CopyImageAsync(bitmapToCopy);
+            await _clipboardService.CopyFileAsync(VideoPath);
+        }
+        else
+        {
+            // Fallback for missing video file
+            var bitmapToCopy = await GetFlattenedBitmapAsync();
+            if (bitmapToCopy != null)
+            {
+                 await _clipboardService.CopyImageAsync(bitmapToCopy);
+            }
         }
     }
 

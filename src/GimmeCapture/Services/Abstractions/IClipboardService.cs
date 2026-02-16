@@ -8,4 +8,5 @@ public interface IClipboardService
     Task CopyImageAsync(Bitmap bitmap);
     Task CopyTextAsync(string text);
     Task CopyFileAsync(string filePath);
+    Task CopyFileAndImageAsync(string filePath, Bitmap bitmap);
 }
