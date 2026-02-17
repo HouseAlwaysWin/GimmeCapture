@@ -607,8 +607,14 @@ public class SAM2Service : IDisposable
 
     public void Dispose()
     {
-        // Do NOT dispose shared inference sessions as they are owned by AIResourceService now
-        // _imageEmbeddings is managed memory, no need to dispose
-        _imageEmbeddings = null; 
+        // 清除所有張量參考，允許 GC 回收大型記憶體區塊
+        _imageEmbeddings = null;
+        _highResFeat0 = null;
+        _highResFeat1 = null;
+        
+        // 清除 session 參考（不 Dispose，session 由 AIResourceService 管理）
+        _encoderSession = null;
+        _decoderSession = null;
+        _isInitialized = false;
     }
 }

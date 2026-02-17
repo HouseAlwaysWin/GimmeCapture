@@ -143,7 +143,11 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         InitializeSelectionCommands();
         if (mainVm != null)
         {
-            InitializeSAM2(mainVm);
+            // 只在 AI 功能啟用時才預載 SAM2 模型，避免不必要的記憶體消耗
+            if (mainVm.EnableAI)
+            {
+                InitializeSAM2(mainVm);
+            }
             
             // Sync translation activation with global settings in real-time
 

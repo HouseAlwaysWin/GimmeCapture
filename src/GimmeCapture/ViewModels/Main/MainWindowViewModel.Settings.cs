@@ -618,6 +618,12 @@ public partial class MainWindowViewModel
             {
                 _settingsService.Settings.EnableAI = value;
                 _ = SaveSettingsAsync();
+
+                // 使用者關閉 AI 時，主動釋放 SAM2 模型記憶體
+                if (!value)
+                {
+                    AIResourceService.UnloadSAM2Models();
+                }
             }
         }
     }
