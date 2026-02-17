@@ -121,7 +121,7 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
         set 
         {
             if (base.CurrentTool == value) return;
-            System.Diagnostics.Debug.WriteLine($"FloatingVM: Tool changing: {base.CurrentTool} -> {value}");
+            System.Console.WriteLine($"[FloatingVM] Tool Changing: {base.CurrentTool} -> {value}");
             
             // Cleanup previous tool state
             if (base.CurrentTool == FloatingTool.PointRemoval)
@@ -151,6 +151,7 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
             // Initialization for new tool
             if (value == FloatingTool.PointRemoval)
             {
+                System.Console.WriteLine("[FloatingVM] Starting Interactive Removal Async...");
                 _ = StartInteractiveRemovalAsync();
             }
         }
@@ -206,11 +207,14 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
         get => CurrentTool == FloatingTool.PointRemoval;
         set 
         {
+            System.Console.WriteLine($"[FloatingVM] IsPointRemovalMode set to {value}");
             if (value) CurrentTool = FloatingTool.PointRemoval;
             else if (CurrentTool == FloatingTool.PointRemoval) CurrentTool = FloatingTool.None;
             this.RaisePropertyChanged();
         }
     }
+
+    public override bool IsAnyToolActive => base.IsAnyToolActive || IsPointRemovalMode;
 
     public FloatingImageViewModel(Bitmap image, double originalWidth, double originalHeight, Avalonia.Media.Color borderColor, double borderThickness, bool hideDecoration, bool hideBorder, IClipboardService clipboardService, AIResourceService aiResourceService, AppSettingsService appSettingsService, AIPathService pathService)
     {

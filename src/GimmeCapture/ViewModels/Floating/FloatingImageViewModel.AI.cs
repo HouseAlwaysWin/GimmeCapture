@@ -21,11 +21,17 @@ public partial class FloatingImageViewModel
 
     private async Task StartInteractiveRemovalAsync()
     {
-        if (CurrentTool != FloatingTool.PointRemoval) return;
+        System.Console.WriteLine("[FloatingVM] StartInteractiveRemovalAsync Entered");
+        if (CurrentTool != FloatingTool.PointRemoval) 
+        {
+             System.Console.WriteLine($"[FloatingVM] CurrentTool is {CurrentTool}, not PointRemoval. Aborting.");
+             return;
+        }
 
         // Check if AI is enabled
         if (!_appSettingsService.Settings.EnableAI)
         {
+            System.Console.WriteLine("[FloatingVM] AI Disabled settings check failed.");
             DiagnosticText = LocalizationService.Instance["AIDisabled"];
             CurrentTool = FloatingTool.None;
             
@@ -59,11 +65,17 @@ public partial class FloatingImageViewModel
             return;
         }
 
+        System.Console.WriteLine("[FloatingVM] Getting SAM2 Service...");
         var sam2 = await GetSAM2ServiceAsync();
-        if (sam2 == null) return;
+        if (sam2 == null) 
+        {
+            System.Console.WriteLine("[FloatingVM] SAM2 Service returned null.");
+            return;
+        }
 
         try
         {
+            System.Console.WriteLine("[FloatingVM] SAM2 Service Ready. Setting up Interactive Mode.");
             IsProcessing = true;
             ProcessingText = LocalizationService.Instance["StatusInitializingAI"];
             
@@ -74,7 +86,7 @@ public partial class FloatingImageViewModel
             IsInteractiveSelectionMode = true; 
             
             DiagnosticText = $"{LocalizationService.Instance["StatusReady"]} [{sam2.ModelVariantName}]";
-            System.Diagnostics.Debug.WriteLine("FloatingVM: Interactive Selection Ready");
+            System.Console.WriteLine("[FloatingVM] Interactive Selection Ready");
         }
         catch (Exception ex)
         {
