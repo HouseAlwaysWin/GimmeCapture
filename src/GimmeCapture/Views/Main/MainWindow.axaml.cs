@@ -89,35 +89,6 @@ public partial class MainWindow : Window
         }
     }
 
-    private void HotkeyTextBox_KeyDown(object? sender, Avalonia.Input.KeyEventArgs e)
-    {
-        // Don't Record purely modifier keys
-        var key = e.Key;
-        if (key == Avalonia.Input.Key.LeftCtrl || key == Avalonia.Input.Key.RightCtrl ||
-            key == Avalonia.Input.Key.LeftAlt || key == Avalonia.Input.Key.RightAlt ||
-            key == Avalonia.Input.Key.LeftShift || key == Avalonia.Input.Key.RightShift ||
-            key == Avalonia.Input.Key.LWin || key == Avalonia.Input.Key.RWin)
-        {
-            return;
-        }
-
-        var modifiers = e.KeyModifiers;
-        var hotkeyStr = "";
-
-        if (modifiers.HasFlag(Avalonia.Input.KeyModifiers.Control)) hotkeyStr += "Ctrl+";
-        if (modifiers.HasFlag(Avalonia.Input.KeyModifiers.Alt)) hotkeyStr += "Alt+";
-        if (modifiers.HasFlag(Avalonia.Input.KeyModifiers.Shift)) hotkeyStr += "Shift+";
-
-        hotkeyStr += key.ToString();
-
-        if (DataContext is MainWindowViewModel vm && sender is TextBox tb && tb.Tag is string tag)
-        {
-            // 使用服務來映射標記與屬性更新邏輯
-            vm.HotkeyMappingService.UpdateViewModelHotkey(vm, tag, hotkeyStr);
-        }
-
-        e.Handled = true;
-    }
 
     protected override void OnDataContextChanged(System.EventArgs e)
     {

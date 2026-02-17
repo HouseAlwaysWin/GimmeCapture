@@ -1,0 +1,55 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:GimmeCapture.ViewModels.Main"
+             xmlns:services="using:GimmeCapture.Services.Core.Infrastructure"
+             xmlns:converters="using:GimmeCapture.Converters"
+             x:Class="GimmeCapture.Views.Main.Tabs.SettingsModulesTab"
+             x:DataType="vm:MainWindowViewModel">
+    <ScrollViewer>
+        <ItemsControl ItemsSource="{Binding Modules}" Margin="10">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                    <Border Background="#1A1A1A" BorderBrush="#333333" BorderThickness="1" CornerRadius="4" Margin="0,0,0,10" Padding="15">
+                        <Grid ColumnDefinitions="*, Auto">
+                            <StackPanel Grid.Column="0" Spacing="5">
+                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                    <TextBlock Text="{Binding Name}" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource AccentRedBrush}"/>
+                                    <Border Background="{Binding IsInstalled, Converter={StaticResource StatusToColorConverter}}" CornerRadius="10" Padding="8,2" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding StatusText}" FontSize="10" Foreground="White" FontWeight="Bold"/>
+                                    </Border>
+                                </StackPanel>
+                                <TextBlock Text="{Binding Description}" TextWrapping="Wrap" Opacity="0.7" FontSize="12"/>
+                                
+                                <!-- Progress Section -->
+                                <StackPanel IsVisible="{Binding IsProcessing}" Spacing="5" Margin="0,5,0,0">
+                                    <ProgressBar Value="{Binding Progress}" Height="4" Foreground="{DynamicResource AccentRedBrush}" Minimum="0" Maximum="100"/>
+                                    <TextBlock Text="{Binding Progress, StringFormat='{}{0:0}%'}" FontSize="10" HorizontalAlignment="Right"/>
+                                </StackPanel>
+
+                                <!-- Error Section -->
+                                <StackPanel IsVisible="{Binding HasError}" Spacing="5" Margin="0,5,0,0">
+                                    <TextBlock Text="{Binding ErrorMessage}" Foreground="#FF5555" FontSize="11" TextWrapping="Wrap" FontWeight="SemiBold"/>
+                                </StackPanel>
+                            </StackPanel>
+                            
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="10" Margin="20,0,0,0">
+                                <Button Content="{Binding ActionButtonText}" 
+                                        Command="{Binding MainActionCommand}"
+                                        Theme="{StaticResource SmallGothicMetalButton}"
+                                        MinWidth="80"/>
+                                
+                                <!-- Variant Selector -->
+                                <ComboBox ItemsSource="{Binding Variants}" 
+                                          SelectedItem="{Binding SelectedVariant}"
+                                          IsVisible="{Binding HasVariants}"
+                                          Width="80"
+                                          IsEnabled="{Binding !IsProcessing}"
+                                          Theme="{StaticResource SmallGothicMetalComboBox}"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+    </ScrollViewer>
+</UserControl>

@@ -1,0 +1,66 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:GimmeCapture.ViewModels.Main"
+             xmlns:services="using:GimmeCapture.Services.Core.Infrastructure"
+             x:Class="GimmeCapture.Views.Main.Tabs.SettingsAITab"
+             x:DataType="vm:MainWindowViewModel">
+    <ScrollViewer>
+        <Grid ColumnDefinitions="*, Auto" Margin="10">
+            <StackPanel Grid.Column="0" Spacing="15" Margin="0,0,20,0">
+                <StackPanel Spacing="10">
+                    <CheckBox IsChecked="{Binding EnableAI}" Content="{Binding [EnableAI], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold"/>
+                    
+                    <StackPanel Spacing="5" IsEnabled="{Binding EnableAI}">
+                        <!-- Detection & Scanning Group (First in AI Tab now) -->
+                        <Border Background="#1A1A1A" Padding="15" CornerRadius="4" BorderBrush="#333333" BorderThickness="1" Margin="24,10,0,10">
+                            <StackPanel Spacing="10">
+                                <TextBlock Text="{Binding [DetectionSettings], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold" Foreground="{DynamicResource AccentRedBrush}"/>
+                                
+                                <StackPanel Spacing="5">
+                                    <CheckBox IsChecked="{Binding ShowAIScanBox}" Content="{Binding [ShowAIScanBox], Source={x:Static services:LocalizationService.Instance}}"/>
+                                    <CheckBox IsChecked="{Binding EnableAIScan}" Content="{Binding [EnableAIScan], Source={x:Static services:LocalizationService.Instance}}"/>
+                                </StackPanel>
+                                <Separator Background="#333333" Height="1" Margin="0,5"/>
+                                <StackPanel Spacing="5">
+                                    <TextBlock Text="{Binding [AIScanDensity], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>
+                                    <StackPanel Orientation="Horizontal" Spacing="10">
+                                        <Slider Minimum="4" Maximum="32" Value="{Binding SAM2GridDensity}" 
+                                                TickFrequency="1" IsSnapToTickEnabled="True" HorizontalAlignment="Stretch" Width="250"/>
+                                        <TextBlock Text="{Binding SAM2GridDensity}" VerticalAlignment="Center" Width="30"/>
+                                    </StackPanel>
+                                </StackPanel>
+                                <StackPanel Spacing="5">
+                                    <TextBlock Text="{Binding [AIScanMaxObjects], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>
+                                    <StackPanel Orientation="Horizontal" Spacing="10">
+                                        <Slider Minimum="5" Maximum="200" Value="{Binding SAM2MaxObjects}" 
+                                                TickFrequency="5" IsSnapToTickEnabled="True" HorizontalAlignment="Stretch" Width="250"/>
+                                        <TextBlock Text="{Binding SAM2MaxObjects}" VerticalAlignment="Center" Width="30"/>
+                                    </StackPanel>
+                                </StackPanel>
+                                <StackPanel Spacing="5">
+                                    <TextBlock Text="{Binding [AIScanMinSize], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>
+                                    <StackPanel Orientation="Horizontal" Spacing="10">
+                                        <Slider Minimum="5" Maximum="200" Value="{Binding SAM2MinObjectSize}" 
+                                                TickFrequency="5" IsSnapToTickEnabled="True" HorizontalAlignment="Stretch" Width="250"/>
+                                        <TextBlock Text="{Binding SAM2MinObjectSize}" VerticalAlignment="Center" Width="30"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                        
+                        <!-- Resource Path -->
+                        <TextBlock Text="{Binding [AIResourcesPath], Source={x:Static services:LocalizationService.Instance}}" FontSize="12" Foreground="#888888" Margin="24,10,0,0"/>
+                        <DockPanel Margin="24,0,0,10">
+                            <Button Content="{Binding [SelectPath], Source={x:Static services:LocalizationService.Instance}}" 
+                                    DockPanel.Dock="Right" 
+                                    Theme="{StaticResource SmallGothicMetalButton}"
+                                    Command="{Binding PickAIFolderCommand}" 
+                                    Margin="10,0,0,0"/>
+                            <TextBox Text="{Binding AIResourcesDirectory}" Margin="0,0,10,0"/>
+                        </DockPanel>
+                    </StackPanel>
+                </StackPanel>
+            </StackPanel>
+        </Grid>
+    </ScrollViewer>
+</UserControl>

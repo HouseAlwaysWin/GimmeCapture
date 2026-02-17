@@ -1,0 +1,30 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:GimmeCapture.ViewModels.Main"
+             xmlns:services="using:GimmeCapture.Services.Core.Infrastructure"
+             x:Class="GimmeCapture.Views.Main.Tabs.SettingsAboutTab"
+             x:DataType="vm:MainWindowViewModel">
+    <StackPanel Spacing="10" Margin="10" HorizontalAlignment="Center" VerticalAlignment="Center">
+        <TextBlock Text="GimmeCapture!!" FontSize="24" FontWeight="Bold" Foreground="{DynamicResource AccentRedBrush}" HorizontalAlignment="Center"/>
+        <TextBlock Text="{Binding AppVersion, StringFormat='Version {0}'}" Foreground="White" HorizontalAlignment="Center"/>
+        <TextBlock Text="The One Tool to Snip &amp; Record" FontStyle="Italic" Foreground="{DynamicResource DeepRedBrush}" HorizontalAlignment="Center"/>
+        
+        <Button Content="{Binding [GitHubProject], Source={x:Static services:LocalizationService.Instance}}"
+                Theme="{StaticResource GothicMetalButton}"
+                HorizontalAlignment="Center"
+                Margin="0,10,0,0"
+                Command="{Binding OpenProjectCommand}"/>
+
+        <Button Content="{Binding [CheckForUpdates], Source={x:Static services:LocalizationService.Instance}}" 
+                Theme="{StaticResource GothicMetalButton}" 
+                HorizontalAlignment="Center" 
+                Margin="0,20,0,0"
+                Command="{Binding CheckUpdateCommand}"/>
+
+        <!-- Version Update Progress -->
+        <StackPanel IsVisible="{Binding UpdateService.IsDownloading}" Spacing="5" Margin="0,15,0,0" Width="300">
+            <ProgressBar Value="{Binding UpdateService.DownloadProgress}" Height="4" Foreground="{DynamicResource AccentRedBrush}" Minimum="0" Maximum="100"/>
+            <TextBlock Text="{Binding UpdateService.DownloadProgress, StringFormat='{}{0:0}%'}" FontSize="10" HorizontalAlignment="Right" Foreground="White" Opacity="0.8"/>
+        </StackPanel>
+    </StackPanel>
+</UserControl>

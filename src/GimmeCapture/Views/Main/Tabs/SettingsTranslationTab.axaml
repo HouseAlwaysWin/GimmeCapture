@@ -1,0 +1,81 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:GimmeCapture.ViewModels.Main"
+             xmlns:services="using:GimmeCapture.Services.Core.Infrastructure"
+             xmlns:converters="using:GimmeCapture.Converters"
+             x:Class="GimmeCapture.Views.Main.Tabs.SettingsTranslationTab"
+             x:DataType="vm:MainWindowViewModel">
+    <ScrollViewer>
+        <Grid ColumnDefinitions="*, Auto" Margin="10">
+            <StackPanel Grid.Column="0" Spacing="15" Margin="0,0,20,0">
+                <!-- Translation & Engine Group -->
+                <Border Background="#1A1A1A" Padding="15" CornerRadius="4" BorderBrush="#333333" BorderThickness="1" Margin="10,10,0,10">
+                    <StackPanel Spacing="10">
+                        <TextBlock Text="{Binding [TranslationSettings], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold" Foreground="{DynamicResource AccentRedBrush}"/>
+                        
+                        <!-- Engine First -->
+                        <DockPanel>
+                            <TextBlock Text="{Binding [TranslationEngine], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                            <ComboBox ItemsSource="{Binding AvailableTranslationEngines}" SelectedItem="{Binding SelectedTranslationEngine, Mode=TwoWay}" HorizontalAlignment="Stretch">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Converter={x:Static converters:EnumToLocalizedConverter.Instance}, ConverterParameter='TranslationEngine'}"/>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </DockPanel>
+
+                        <!-- OCR Source Language -->
+                        <DockPanel>
+                            <TextBlock Text="{Binding [OCRLanguage], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                            <ComboBox ItemsSource="{Binding AvailableOCRLanguages}" SelectedItem="{Binding SourceLanguage}" HorizontalAlignment="Stretch">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Converter={x:Static converters:EnumToLocalizedConverter.Instance}, ConverterParameter='OCRLang'}"/>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </DockPanel>
+
+                        <!-- Target Language -->
+                        <DockPanel>
+                            <TextBlock Text="{Binding [TranslationLanguage], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                            <ComboBox ItemsSource="{Binding AvailableTranslationLanguages}" SelectedItem="{Binding TargetLanguage}" HorizontalAlignment="Stretch">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Converter={x:Static converters:EnumToLocalizedConverter.Instance}, ConverterParameter='Lang'}"/>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </DockPanel>
+
+                        <!-- Ollama Specific Settings -->
+                        <StackPanel IsVisible="{Binding IsOllamaVisible}" Spacing="10" Margin="0,5,0,0">
+                            <Separator Background="#333333" Height="1" Margin="0,5"/>
+                            <TextBlock Text="Ollama" FontWeight="SemiBold" Foreground="{DynamicResource AccentRedBrush}"/>
+                            <StackPanel Spacing="5">
+                                <TextBlock Text="{Binding [OllamaModel], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>
+                                <Grid ColumnDefinitions="*, Auto">
+                                    <ComboBox Grid.Column="0" 
+                                              ItemsSource="{Binding AvailableOllamaModels}" 
+                                              SelectedItem="{Binding OllamaModel}"
+                                              HorizontalAlignment="Stretch"
+                                              Margin="0,0,10,0"/>
+                                    <Button Grid.Column="1" 
+                                            Content="↻" 
+                                            Command="{Binding RefreshOllamaModelsCommand}"
+                                            ToolTip.Tip="Refresh Models"
+                                            Theme="{StaticResource SmallGothicMetalButton}"/>
+                                </Grid>
+                                
+                                <TextBlock Text="{Binding [OllamaApiUrl], Source={x:Static services:LocalizationService.Instance}}" FontSize="12" Margin="0,5,0,0"/>
+                                <TextBox Text="{Binding OllamaApiUrl}" Watermark="http://localhost:11434/api/generate"/>
+                            </StackPanel>
+                        </StackPanel>
+
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </Grid>
+    </ScrollViewer>
+</UserControl>

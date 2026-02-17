@@ -1,0 +1,143 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:GimmeCapture.ViewModels.Main"
+             xmlns:services="using:GimmeCapture.Services.Core.Infrastructure"
+             xmlns:media="using:Avalonia.Media"
+             xmlns:c="using:GimmeCapture.Views.Controls"
+             xmlns:converters="using:GimmeCapture.Converters"
+             x:Class="GimmeCapture.Views.Main.Tabs.SettingsGeneralTab"
+             x:DataType="vm:MainWindowViewModel">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <Grid ColumnDefinitions="*, Auto" Margin="10">
+            <!-- Settings Controls -->
+            <StackPanel Grid.Column="0" Spacing="10">
+                <CheckBox IsChecked="{Binding RunOnStartup}" Content="{Binding [RunOnStartup], Source={x:Static services:LocalizationService.Instance}}"/>
+                <CheckBox IsChecked="{Binding AutoCheckUpdates}" Content="{Binding [AutoCheckUpdates], Source={x:Static services:LocalizationService.Instance}}"/>
+                
+                <TextBlock Text="{Binding [Language], Source={x:Static services:LocalizationService.Instance}}" Margin="0,10,0,5"/>
+                <ComboBox HorizontalAlignment="Stretch"
+                          ItemsSource="{Binding AvailableLanguages}"
+                          SelectedItem="{Binding SelectedLanguageOption, Mode=TwoWay}">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate x:DataType="vm:MainWindowViewModel+LanguageOption">
+                            <TextBlock Text="{Binding Name}"/>
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+
+                <!-- Theme Color -->
+                <StackPanel Spacing="10" Margin="0,10,0,0">
+                    <TextBlock Text="{Binding [ThemeColor], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold"/>
+                    <ItemsControl ItemsSource="{Binding SettingsColors}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Horizontal" Spacing="15"/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="media:Color">
+                                <Button Width="40" Height="40" Padding="0" CornerRadius="20"
+                                        Background="{Binding Converter={StaticResource ColorToBrushConverter}}"
+                                        Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ChangeThemeColorCommand}"
+                                        CommandParameter="{Binding}"
+                                        BorderThickness="0">
+                                    <Panel>
+                                        <Border BorderBrush="White" BorderThickness="2" CornerRadius="20" Margin="-2"
+                                                IsVisible="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ThemeColor, Converter={StaticResource ColorMatchConverter}, ConverterParameter={Binding}}"/>
+                                        <Border CornerRadius="20" BoxShadow="inset 0 0 5 0 #80000000"/>
+                                    </Panel>
+                                </Button>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+
+                <!-- Styling Section -->
+                <StackPanel Spacing="15" Margin="0,15,0,0">
+                    <TextBlock Text="{Binding [TabSnip], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold"/>
+                    
+                    <Grid ColumnDefinitions="Auto, Auto">
+                        <StackPanel Grid.Column="0" Spacing="15" Width="350">
+                            <!-- Border Thickness -->
+                            <StackPanel Spacing="5">
+                                <TextBlock Text="{Binding [BorderThickness], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>
+                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                    <Slider Minimum="1" Maximum="9" Value="{Binding BorderThickness}" 
+                                            TickFrequency="1" IsSnapToTickEnabled="True" HorizontalAlignment="Stretch" Width="250"/>
+                                    <c:CompactNumericStep Value="{Binding BorderThickness}"
+                                                          IncreaseCommand="{Binding IncreaseThicknessCommand}"
+                                                          DecreaseCommand="{Binding DecreaseThicknessCommand}"/>
+                                </StackPanel>
+                            </StackPanel>
+                            
+                            <!-- Mask Opacity -->
+                            <StackPanel Spacing="5">
+                                <TextBlock Text="{Binding [MaskOpacity], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>
+                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                    <Slider Minimum="0.05" Maximum="1.0" Value="{Binding MaskOpacity}" HorizontalAlignment="Stretch" Width="250" />
+                                    <c:CompactNumericStep Value="{Binding MaskOpacity}"
+                                                          IncreaseCommand="{Binding IncreaseOpacityCommand}"
+                                                          DecreaseCommand="{Binding DecreaseOpacityCommand}"/>
+                                </StackPanel>
+                            </StackPanel>
+
+                            <!-- Icon Scale -->
+                            <StackPanel Spacing="5">
+                                <TextBlock Text="{Binding [IconScale], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>
+                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                    <Slider Minimum="0.4" Maximum="1.0" Value="{Binding CornerIconScale}" 
+                                            TickFrequency="0.1" IsSnapToTickEnabled="True" HorizontalAlignment="Stretch" Width="250"/>
+                                    <c:CompactNumericStep Value="{Binding CornerIconScale}"
+                                                           IncreaseCommand="{Binding IncreaseCornerIconScaleCommand}"
+                                                           DecreaseCommand="{Binding DecreaseCornerIconScaleCommand}"/>
+                                </StackPanel>
+                            </StackPanel>
+
+                            <!-- Wing Scale -->
+                            <StackPanel Spacing="5">
+                                <TextBlock Text="{Binding [WingScale], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>
+                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                    <Slider Minimum="0.5" Maximum="3.0" Value="{Binding WingScale}" 
+                                            TickFrequency="0.1" IsSnapToTickEnabled="True" HorizontalAlignment="Stretch" Width="250"/>
+                                    <c:CompactNumericStep Value="{Binding WingScale}"
+                                                          IncreaseCommand="{Binding IncreaseWingScaleCommand}"
+                                                          DecreaseCommand="{Binding DecreaseWingScaleCommand}"/>
+                                </StackPanel>
+                            </StackPanel>
+                            
+                            <!-- Border Color -->
+                            <StackPanel Spacing="10">
+                                <TextBlock Text="{Binding [BorderColor], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>
+                                <ItemsControl ItemsSource="{Binding SettingsColors}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <StackPanel Orientation="Horizontal" Spacing="15"/>
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="media:Color">
+                                            <Button Width="32" Height="32" Padding="0" CornerRadius="16"
+                                                    Background="{Binding Converter={StaticResource ColorToBrushConverter}}"
+                                                    Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ChangeColorCommand}"
+                                                    CommandParameter="{Binding}"
+                                                    BorderThickness="0">
+                                                <Panel>
+                                                    <Border BorderBrush="White" BorderThickness="2" CornerRadius="16" Margin="-2"
+                                                            IsVisible="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).BorderColor, Converter={StaticResource ColorMatchConverter}, ConverterParameter={Binding}}"/>
+                                                    <Border CornerRadius="16" BoxShadow="inset 0 0 5 0 #80000000"/>
+                                                </Panel>
+                                            </Button>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- Style Preview Area -->
+                        <c:SnipStylePreview Grid.Column="1" DataContext="{Binding}" Margin="20,0,0,0"/>
+                    </Grid>
+                </StackPanel>
+            </StackPanel>
+        </Grid>
+    </ScrollViewer>
+</UserControl>

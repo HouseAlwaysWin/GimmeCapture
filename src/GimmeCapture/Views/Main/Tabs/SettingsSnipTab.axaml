@@ -1,0 +1,35 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:GimmeCapture.ViewModels.Main"
+             xmlns:services="using:GimmeCapture.Services.Core.Infrastructure"
+             x:Class="GimmeCapture.Views.Main.Tabs.SettingsSnipTab"
+             x:DataType="vm:MainWindowViewModel">
+    <ScrollViewer>
+        <Grid ColumnDefinitions="*, Auto" Margin="10">
+            <!-- Settings Controls -->
+            <StackPanel Grid.Column="0" Spacing="15" Margin="0,0,20,0">
+                <!-- Output Settings Back in Snip Tab -->
+                <StackPanel Spacing="10">
+                    <TextBlock Text="{Binding [TabOutput], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold"/>
+                    <StackPanel Spacing="5">
+                        <CheckBox IsChecked="{Binding AutoSave}" Content="{Binding [AutoSave], Source={x:Static services:LocalizationService.Instance}}"/>
+                        <DockPanel Margin="24,0,0,5">
+                            <Button Content="{Binding [SelectPath], Source={x:Static services:LocalizationService.Instance}}" 
+                                    DockPanel.Dock="Right" 
+                                    Theme="{StaticResource SmallGothicMetalButton}"
+                                    Command="{Binding SelectSavePath}" 
+                                    Margin="10,0,0,0"/>
+                            <TextBox Text="{Binding SaveDirectory}" Margin="0,0,10,0"/>
+                        </DockPanel>
+                        <CheckBox IsChecked="{Binding HideSnipPinDecoration}" Content="{Binding [HideSnipPinDecoration], Source={x:Static services:LocalizationService.Instance}}"/>
+                        <CheckBox IsChecked="{Binding HideSnipPinBorder}" Content="{Binding [HideSnipPinBorder], Source={x:Static services:LocalizationService.Instance}}"/>
+                        <CheckBox IsChecked="{Binding HideSnipSelectionDecoration}" Content="{Binding [HideSnipSelectionDecoration], Source={x:Static services:LocalizationService.Instance}}"/>
+                        <CheckBox IsChecked="{Binding HideSnipSelectionBorder}" Content="{Binding [HideSnipSelectionBorder], Source={x:Static services:LocalizationService.Instance}}"/>
+                        <CheckBox IsChecked="{Binding DefaultHideSnipToolbar}" Content="{Binding [DefaultHideSnipToolbar], Source={x:Static services:LocalizationService.Instance}}"/>
+                        <CheckBox IsChecked="{Binding ShowSnipCursor}" Content="{Binding [ShowSnipCursor], Source={x:Static services:LocalizationService.Instance}}"/>
+                    </StackPanel>
+                </StackPanel>
+            </StackPanel>
+        </Grid>
+    </ScrollViewer>
+</UserControl>
