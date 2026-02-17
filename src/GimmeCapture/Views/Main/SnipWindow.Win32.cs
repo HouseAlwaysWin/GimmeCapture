@@ -106,10 +106,4 @@ public partial class SnipWindow : Window
         }
     }
 
-    /// <summary>
-    /// Captures a snapshot of the selection area before closing the hole.
-    /// This allows the user to see what they're annotating while in drawing mode.
-    /// Optimized to use WriteableBitmap and raw pointer copy instead of intermediate GDI+ Bitmap/MemoryStream.
-    /// </summary>
-
 }
