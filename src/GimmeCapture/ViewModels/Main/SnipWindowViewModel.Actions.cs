@@ -126,6 +126,8 @@ public partial class SnipWindowViewModel
     // Init Method
     private void InitializeActionCommands()
     {
+        var canExecuteHotkeys = this.WhenAnyValue(x => x.IsInputFocused, x => !x);
+
         PinCommand = ReactiveCommand.CreateFromTask(async () => 
         {
             if (!IsRecordingMode)
@@ -152,7 +154,7 @@ public partial class SnipWindowViewModel
                      }
                 }
             }
-        });
+        }, canExecuteHotkeys);
         PinCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"PinCommand error: {ex}"));
 
         CopyCommand = ReactiveCommand.CreateFromTask(async () => 
@@ -162,22 +164,22 @@ public partial class SnipWindowViewModel
         }, this.WhenAnyValue(x => x.IsInputFocused, x => !x));
         CopyCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"CopyCommand error: {ex}"));
 
-        SaveCommand = ReactiveCommand.CreateFromTask(Save);
+        SaveCommand = ReactiveCommand.CreateFromTask(Save, canExecuteHotkeys);
         SaveCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"SaveCommand error: {ex}"));
         
-        CloseCommand = ReactiveCommand.Create(Close);
+        CloseCommand = ReactiveCommand.Create(Close, canExecuteHotkeys);
         CloseCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"CloseCommand error: {ex}"));
 
         ToggleModeCommand = ReactiveCommand.Create(() => 
         {
             if (RecState == RecordingState.Idle) IsRecordingMode = !IsRecordingMode;
-        });
+        }, canExecuteHotkeys);
         ToggleModeCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
 
         SetCaptureModeCommand = ReactiveCommand.Create<bool>(isRecord => 
         {
             if (RecState == RecordingState.Idle) IsRecordingMode = isRecord;
-        });
+        }, canExecuteHotkeys);
         SetCaptureModeCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
 
         StartRecordingCommand = ReactiveCommand.CreateFromTask(StartRecording);
@@ -189,7 +191,7 @@ public partial class SnipWindowViewModel
         CopyRecordingCommand = ReactiveCommand.CreateFromTask(CopyRecording);
         CopyRecordingCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
 
-        HandleF1Command = ReactiveCommand.Create(() => { if (RecState == RecordingState.Idle) IsRecordingMode = false; });
+        HandleF1Command = ReactiveCommand.Create(() => { if (RecState == RecordingState.Idle) IsRecordingMode = false; }, canExecuteHotkeys);
         HandleF2Command = ReactiveCommand.Create(() => 
         { 
             if (RecState == RecordingState.Idle) 
@@ -200,7 +202,7 @@ public partial class SnipWindowViewModel
                     IsRecordingMode = true;
                 }
             }
-        });
+        }, canExecuteHotkeys);
 
         // F3/Copy commands already initialized once above.
 

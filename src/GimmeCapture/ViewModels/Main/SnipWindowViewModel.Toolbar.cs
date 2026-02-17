@@ -315,6 +315,8 @@ public partial class SnipWindowViewModel
 
     private void InitializeToolbarCommands()
     {
+        var canExecuteHotkeys = this.WhenAnyValue(x => x.IsInputFocused, x => !x);
+
         ConfirmTextEntryCommand = ReactiveCommand.Create(() => 
         {
             if (!string.IsNullOrWhiteSpace(PendingText))
@@ -346,9 +348,9 @@ public partial class SnipWindowViewModel
             FocusWindowAction?.Invoke();
         });
 
-        ClearAnnotationsCommand = ReactiveCommand.Create(ClearAnnotations);
+        ClearAnnotationsCommand = ReactiveCommand.Create(ClearAnnotations, canExecuteHotkeys);
         
-        ToggleToolGroupCommand = ReactiveCommand.Create<string>(ToggleToolGroup);
+        ToggleToolGroupCommand = ReactiveCommand.Create<string>(ToggleToolGroup, canExecuteHotkeys);
         
         SelectToolCommand = ReactiveCommand.Create<AnnotationType>(t => {
             if (CurrentAnnotationTool == t)
@@ -361,7 +363,7 @@ public partial class SnipWindowViewModel
                 CurrentAnnotationTool = t;
                 IsDrawingMode = true; 
             }
-        });
+        }, canExecuteHotkeys);
         SelectToolCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
         
         ChangeColorCommand = ReactiveCommand.Create<Color>(c => SelectedColor = c);
@@ -377,9 +379,9 @@ public partial class SnipWindowViewModel
         RedoCommand = ReactiveCommand.Create(Redo, canRedo);
         RedoCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
 
-        IncreaseFontSizeCommand = ReactiveCommand.Create(() => { if (CurrentFontSize < 72) CurrentFontSize += 2; });
+        IncreaseFontSizeCommand = ReactiveCommand.Create(() => { if (CurrentFontSize < 72) CurrentFontSize += 2; }, canExecuteHotkeys);
         IncreaseFontSizeCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
-        DecreaseFontSizeCommand = ReactiveCommand.Create(() => { if (CurrentFontSize > 8) CurrentFontSize -= 2; });
+        DecreaseFontSizeCommand = ReactiveCommand.Create(() => { if (CurrentFontSize > 8) CurrentFontSize -= 2; }, canExecuteHotkeys);
         DecreaseFontSizeCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
         
         ApplyHexColorCommand = ReactiveCommand.Create(() => 
