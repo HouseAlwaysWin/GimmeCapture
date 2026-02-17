@@ -1,0 +1,106 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:GimmeCapture.ViewModels.Main"
+             xmlns:services="using:GimmeCapture.Services.Core.Infrastructure"
+             xmlns:converters="using:GimmeCapture.Converters"
+             mc:Ignorable="d" d:DesignWidth="550" d:DesignHeight="250"
+             x:Class="GimmeCapture.Views.Controls.SnipStylePreview"
+             x:DataType="vm:MainWindowViewModel">
+
+    <UserControl.Resources>
+        <converters:ColorToBrushConverter x:Key="ColorToBrushConverter"/>
+        <converters:ColorToBoxShadowConverter x:Key="ColorToBoxShadowConverter"/>
+        <converters:ThicknessConverter x:Key="ThicknessConverter"/>
+    </UserControl.Resources>
+
+    <StackPanel Spacing="10" VerticalAlignment="Top">
+        <TextBlock Text="{Binding [StylePreview], Source={x:Static services:LocalizationService.Instance}}" 
+                   FontWeight="SemiBold" HorizontalAlignment="Center"/>
+        <Border Background="#1A1A1A" Width="550" Height="250" CornerRadius="4" 
+                BorderBrush="#333333" BorderThickness="1" ClipToBounds="True">
+            <Grid>
+                <!-- Mock Background -->
+                <Image Source="avares://GimmeCapture/Assets/kitsune_icon.png" Opacity="0.1" Stretch="Uniform" Margin="20"/>
+                
+                <!-- Selection Preview Mask (Excludes Center Area) -->
+                <Path Fill="Black" Opacity="{Binding MaskOpacity}" IsHitTestVisible="False">
+                    <Path.Data>
+                        <CombinedGeometry GeometryCombineMode="Exclude">
+                            <CombinedGeometry.Geometry1>
+                                <RectangleGeometry Rect="0,0,550,250" />
+                            </CombinedGeometry.Geometry1>
+                            <CombinedGeometry.Geometry2>
+                                <RectangleGeometry Rect="175,65,200,120" />
+                            </CombinedGeometry.Geometry2>
+                        </CombinedGeometry>
+                    </Path.Data>
+                </Path>
+                
+                <!-- Selection Preview -->
+                <Grid Margin="15" VerticalAlignment="Center" HorizontalAlignment="Center" ClipToBounds="False">
+                    <Border CornerRadius="0"
+                            Background="#01FFFFFF"
+                            BoxShadow="{Binding BorderColor, Converter={StaticResource ColorToBoxShadowConverter}}">
+                        <Border.BorderBrush>
+                            <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+                                <GradientStop Offset="0" Color="{Binding BorderColor}"/>
+                                <GradientStop Offset="0.5" Color="{Binding BorderColor}"/>
+                                <GradientStop Offset="1" Color="{Binding BorderColor}"/>
+                            </LinearGradientBrush>
+                        </Border.BorderBrush>
+                        <Border BorderBrush="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" 
+                                BorderThickness="{Binding BorderThickness, Converter={StaticResource ThicknessConverter}}">
+                            <Border BorderBrush="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" BorderThickness="1" Margin="-1">
+                                <Grid Width="200" Height="120" ClipToBounds="False">
+                                    <!-- Wings -->
+                                    <Rectangle Width="{Binding PreviewWingWidth}" Height="{Binding PreviewWingHeight}" VerticalAlignment="Center"
+                                               HorizontalAlignment="Left" Margin="{Binding PreviewLeftWingMargin}"
+                                               Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}">
+                                        <Rectangle.OpacityMask>
+                                            <ImageBrush Source="avares://GimmeCapture/Assets/wing_left.png" Stretch="Uniform" AlignmentX="Right"/>
+                                        </Rectangle.OpacityMask>
+                                    </Rectangle>
+                                    <Rectangle Width="{Binding PreviewWingWidth}" Height="{Binding PreviewWingHeight}" VerticalAlignment="Center"
+                                               HorizontalAlignment="Right" Margin="{Binding PreviewRightWingMargin}"
+                                               Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}">
+                                        <Rectangle.OpacityMask>
+                                            <ImageBrush Source="avares://GimmeCapture/Assets/wing_right.png" Stretch="Uniform" AlignmentX="Left"/>
+                                        </Rectangle.OpacityMask>
+                                    </Rectangle>
+
+                                    <!-- Accent Corners: Hearts & Skulls -->
+                                    <Rectangle Width="{Binding PreviewIconSize}" Height="{Binding PreviewIconSize}" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="4"
+                                               Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}">
+                                        <Rectangle.OpacityMask>
+                                            <ImageBrush Source="avares://GimmeCapture/Assets/heart.png" Stretch="Uniform"/>
+                                        </Rectangle.OpacityMask>
+                                    </Rectangle>
+                                    <Rectangle Width="{Binding PreviewIconSize}" Height="{Binding PreviewIconSize}" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="4"
+                                               Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}">
+                                        <Rectangle.OpacityMask>
+                                            <ImageBrush Source="avares://GimmeCapture/Assets/heart.png" Stretch="Uniform" />
+                                        </Rectangle.OpacityMask>
+                                    </Rectangle>
+                                    <Rectangle Width="{Binding PreviewIconSize}" Height="{Binding PreviewIconSize}" VerticalAlignment="Top" HorizontalAlignment="Right" Margin="4"
+                                               Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}">
+                                        <Rectangle.OpacityMask>
+                                            <ImageBrush Source="avares://GimmeCapture/Assets/skull.png" Stretch="Uniform" />
+                                        </Rectangle.OpacityMask>
+                                    </Rectangle>
+                                    <Rectangle Width="{Binding PreviewIconSize}" Height="{Binding PreviewIconSize}" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="4"
+                                               Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}">
+                                        <Rectangle.OpacityMask>
+                                            <ImageBrush Source="avares://GimmeCapture/Assets/skull.png" Stretch="Uniform" />
+                                        </Rectangle.OpacityMask>
+                                    </Rectangle>
+                                </Grid>
+                            </Border>
+                        </Border>
+                    </Border>
+                </Grid>
+            </Grid>
+        </Border>
+    </StackPanel>
+</UserControl>

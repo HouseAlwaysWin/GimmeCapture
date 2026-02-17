@@ -110,33 +110,10 @@ public partial class MainWindow : Window
 
         hotkeyStr += key.ToString();
 
-        if (DataContext is MainWindowViewModel vm && sender is TextBox tb)
+        if (DataContext is MainWindowViewModel vm && sender is TextBox tb && tb.Tag is string tag)
         {
-            if (tb.Name == "SnipHotkeyBox") vm.SnipHotkey = hotkeyStr;
-            else if (tb.Name == "RecordHotkeyBox") vm.RecordHotkey = hotkeyStr;
-            else if (tb.Name == "CopyHotkeyBox_Snip" || tb.Name == "CopyHotkeyBox_Recording") vm.CopyHotkey = hotkeyStr;
-            else if (tb.Name == "PinHotkeyBox_Snip" || tb.Name == "PinHotkeyBox_Record" || tb.Name == "PinHotkeyBox_Recording") vm.PinHotkey = hotkeyStr;
-            
-            // Drawing Tools
-            else if (tb.Name == "RectHotkeyBox") vm.RectangleHotkey = hotkeyStr;
-            else if (tb.Name == "EllipseHotkeyBox") vm.EllipseHotkey = hotkeyStr;
-            else if (tb.Name == "ArrowHotkeyBox") vm.ArrowHotkey = hotkeyStr;
-            else if (tb.Name == "LineHotkeyBox") vm.LineHotkey = hotkeyStr;
-            else if (tb.Name == "PenHotkeyBox") vm.PenHotkey = hotkeyStr;
-            else if (tb.Name == "TextHotkeyBox") vm.TextHotkey = hotkeyStr;
-            else if (tb.Name == "MosaicHotkeyBox") vm.MosaicHotkey = hotkeyStr;
-            else if (tb.Name == "BlurHotkeyBox") vm.BlurHotkey = hotkeyStr;
-            
-            // Actions
-            else if (tb.Name == "UndoHotkeyBox") vm.UndoHotkey = hotkeyStr;
-            else if (tb.Name == "RedoHotkeyBox") vm.RedoHotkey = hotkeyStr;
-            else if (tb.Name == "ClearHotkeyBox") vm.ClearHotkey = hotkeyStr;
-            else if (tb.Name == "SaveHotkeyBox") vm.SaveHotkey = hotkeyStr;
-            else if (tb.Name == "CloseHotkeyBox") vm.CloseHotkey = hotkeyStr;
-            else if (tb.Name == "PlaybackHotkeyBox") vm.TogglePlaybackHotkey = hotkeyStr;
-            else if (tb.Name == "ToolbarHotkeyBox") vm.ToggleToolbarHotkey = hotkeyStr;
-            else if (tb.Name == "SelectionModeHotkeyBox") vm.SelectionModeHotkey = hotkeyStr;
-            else if (tb.Name == "CropModeHotkeyBox") vm.CropModeHotkey = hotkeyStr;
+            // 使用服務來映射標記與屬性更新邏輯
+            vm.HotkeyMappingService.UpdateViewModelHotkey(vm, tag, hotkeyStr);
         }
 
         e.Handled = true;
@@ -147,7 +124,6 @@ public partial class MainWindow : Window
         base.OnDataContextChanged(e);
         if (DataContext is MainWindowViewModel vm)
         {
-
             vm.PickFolderAction = async () =>
             {
                 var storage = this.StorageProvider;
@@ -166,63 +142,7 @@ public partial class MainWindow : Window
                 return result == ConfirmationResult.Yes;
             };
 
-            vm.RequestCaptureAction = (mode) =>
-            {
-                var desktop = Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime;
-                var existing = desktop?.Windows.OfType<SnipWindow>().FirstOrDefault();
-
-                if (existing != null)
-                {
-                    if (existing.DataContext is SnipWindowViewModel existingVm)
-                    {
-                        existingVm.AutoActionMode = (int)mode;
-                    }
-                    existing.Activate();
-                    return;
-                }
-
-                var snip = new SnipWindow();
-                
-                    // Multi-monitor support: Span ALL screens
-                    var allScreens = snip.Screens.All;
-                    if (allScreens.Count > 0)
-                    {
-                        // Calculate the union of all screen bounds in PHYSICAL pixels
-                        int physMinX = allScreens.Min(s => s.Bounds.X);
-                        int physMinY = allScreens.Min(s => s.Bounds.Y);
-                        int physMaxR = allScreens.Max(s => s.Bounds.Right);
-                        int physMaxB = allScreens.Max(s => s.Bounds.Bottom);
-
-                        snip.WindowStartupLocation = WindowStartupLocation.Manual;
-                        snip.Position = new PixelPoint(physMinX, physMinY);
-                        
-                        // We use the primary screen's scaling for the entire spanning window.
-                        // This is consistent with how Avalonia handles coordinates within a single window.
-                        var primaryScreen = snip.Screens.Primary ?? allScreens.First();
-                        double unifiedScaling = primaryScreen.Scaling;
-                        
-                        // Set logical width/height to cover the entire physical range
-                        snip.Width = (physMaxR - physMinX) / unifiedScaling;
-                        snip.Height = (physMaxB - physMinY) / unifiedScaling;
-
-                        Console.WriteLine($"[MainWindow] SnipWindow spanning: {snip.Position} size: {snip.Width}x{snip.Height} (Scaling: {unifiedScaling})");
-                    }
-                
-                var snipVm = new SnipWindowViewModel(
-                    vm?.BorderColor ?? Color.Parse("#E60012"), 
-                    vm?.BorderThickness ?? 2, 
-                    vm?.MaskOpacity ?? 0.5,
-                    vm?.RecordingService,
-                    vm
-                );
-                snipVm.AutoActionMode = (int)mode;
-                if (mode == MainWindowViewModel.CaptureMode.Record)
-                {
-                    snipVm.IsRecordingMode = true;
-                }
-                snip.DataContext = snipVm;
-                snip.Show();
-            };
+            vm.RequestCaptureAction = (mode) => OpenSnipWindow(mode);
 
             // Monitor Downloading Status to show/hide separate window
             vm.WhenAnyValue(x => x.IsProcessing)
@@ -230,6 +150,61 @@ public partial class MainWindow : Window
               .Subscribe(_ => UpdateDownloadWindow());
         }
     }
+
+    private void OpenSnipWindow(MainWindowViewModel.CaptureMode mode)
+    {
+        if (DataContext is not MainWindowViewModel vm) return;
+
+        var desktop = Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime;
+        var existing = desktop?.Windows.OfType<SnipWindow>().FirstOrDefault();
+
+        if (existing != null)
+        {
+            if (existing.DataContext is SnipWindowViewModel existingVm)
+            {
+                existingVm.AutoActionMode = (int)mode;
+            }
+            existing.Activate();
+            return;
+        }
+
+        var snip = new SnipWindow();
+        
+        // Multi-monitor support: Span ALL screens
+        var allScreens = snip.Screens.All;
+        if (allScreens.Count > 0)
+        {
+            int physMinX = allScreens.Min(s => s.Bounds.X);
+            int physMinY = allScreens.Min(s => s.Bounds.Y);
+            int physMaxR = allScreens.Max(s => s.Bounds.Right);
+            int physMaxB = allScreens.Max(s => s.Bounds.Bottom);
+
+            snip.WindowStartupLocation = WindowStartupLocation.Manual;
+            snip.Position = new PixelPoint(physMinX, physMinY);
+            
+            var primaryScreen = snip.Screens.Primary ?? allScreens.First();
+            double unifiedScaling = primaryScreen.Scaling;
+            
+            snip.Width = (physMaxR - physMinX) / unifiedScaling;
+            snip.Height = (physMaxB - physMinY) / unifiedScaling;
+        }
+        
+        var snipVm = new SnipWindowViewModel(
+            vm.BorderColor, 
+            vm.BorderThickness, 
+            vm.MaskOpacity,
+            vm.RecordingService,
+            vm
+        );
+        snipVm.AutoActionMode = (int)mode;
+        if (mode == MainWindowViewModel.CaptureMode.Record)
+        {
+            snipVm.IsRecordingMode = true;
+        }
+        snip.DataContext = snipVm;
+        snip.Show();
+    }
+
 
     private void UpdateDownloadWindow()
     {

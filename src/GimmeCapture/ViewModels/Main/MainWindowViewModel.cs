@@ -90,6 +90,7 @@ public partial class MainWindowViewModel : ViewModelBase
     public AppSettingsService AppSettingsService => _settingsService;
     private readonly AppSettingsService _settingsService;
     public WindowsGlobalHotkeyService HotkeyService { get; } = new();
+    public HotkeyMappingService HotkeyMappingService { get; } = new();
 
     private const int ID_SNIP = 9000;
     private const int ID_COPY = 9001;

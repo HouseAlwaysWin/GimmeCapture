@@ -155,92 +155,7 @@
                                     </StackPanel>
 
                                     <!-- Style Preview Area -->
-                                    <StackPanel Grid.Column="1" Spacing="10" VerticalAlignment="Top" Margin="20,0,0,0">
-                                        <TextBlock Text="{Binding [StylePreview], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold" HorizontalAlignment="Center"/>
-                                        <Border Background="#1A1A1A" Width="550" Height="250" CornerRadius="4" BorderBrush="#333333" BorderThickness="1" ClipToBounds="True">
-                                            <Grid>
-                                                <!-- Mock Background -->
-                                                <Image Source="avares://GimmeCapture/Assets/kitsune_icon.png" Opacity="0.1" Stretch="Uniform" Margin="20"/>
-                                                
-                                                <!-- Selection Preview Mask (Excludes Center Area) -->
-                                                <Path Fill="Black" Opacity="{Binding MaskOpacity}" IsHitTestVisible="False">
-                                                    <Path.Data>
-                                                        <CombinedGeometry GeometryCombineMode="Exclude">
-                                                            <CombinedGeometry.Geometry1>
-                                                                <RectangleGeometry Rect="0,0,550,250" />
-                                                            </CombinedGeometry.Geometry1>
-                                                            <CombinedGeometry.Geometry2>
-                                                                <RectangleGeometry Rect="175,65,200,120" />
-                                                            </CombinedGeometry.Geometry2>
-                                                        </CombinedGeometry>
-                                                    </Path.Data>
-                                                </Path>
-                                                
-                                                <!-- Selection Preview -->
-                                                <Grid Margin="15" VerticalAlignment="Center" HorizontalAlignment="Center" ClipToBounds="False">
-                                                    <Border CornerRadius="0"
-                                                            Background="#01FFFFFF"
-                                                            BoxShadow="{Binding BorderColor, Converter={StaticResource ColorToBoxShadowConverter}}">
-                                                        <Border.BorderBrush>
-                                                            <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
-                                                                <GradientStop Offset="0" Color="{Binding BorderColor}"/>
-                                                                <GradientStop Offset="0.5" Color="{Binding BorderColor}"/>
-                                                                <GradientStop Offset="1" Color="{Binding BorderColor}"/>
-                                                            </LinearGradientBrush>
-                                                        </Border.BorderBrush>
-                                                        <Border BorderBrush="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" 
-                                                                BorderThickness="{Binding BorderThickness, Converter={StaticResource ThicknessConverter}}">
-                                                            <Border BorderBrush="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" BorderThickness="1" Margin="-1">
-                                                                <Grid Width="200" Height="120" ClipToBounds="False">
-                                                                    <!-- Wings -->
-                                                                    <Rectangle Width="{Binding PreviewWingWidth}" Height="{Binding PreviewWingHeight}" VerticalAlignment="Center"
-                                                                               HorizontalAlignment="Left" Margin="{Binding PreviewLeftWingMargin}"
-                                                                               Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}">
-                                                                        <Rectangle.OpacityMask>
-                                                                            <ImageBrush Source="/Assets/wing_left.png" Stretch="Uniform" AlignmentX="Right"/>
-                                                                        </Rectangle.OpacityMask>
-                                                                    </Rectangle>
-                                                                    <Rectangle Width="{Binding PreviewWingWidth}" Height="{Binding PreviewWingHeight}" VerticalAlignment="Center"
-                                                                               HorizontalAlignment="Right" Margin="{Binding PreviewRightWingMargin}"
-                                                                               Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}">
-                                                                        <Rectangle.OpacityMask>
-                                                                            <ImageBrush Source="/Assets/wing_right.png" Stretch="Uniform" AlignmentX="Left"/>
-                                                                        </Rectangle.OpacityMask>
-                                                                    </Rectangle>
-
-                                                                    <!-- Accent Corners: Hearts & Skulls -->
-                                                                    <Rectangle Width="{Binding PreviewIconSize}" Height="{Binding PreviewIconSize}" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="4"
-                                                                               Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}">
-                                                                        <Rectangle.OpacityMask>
-                                                                            <ImageBrush Source="/Assets/heart.png" Stretch="Uniform"/>
-                                                                        </Rectangle.OpacityMask>
-                                                                    </Rectangle>
-                                                                    <Rectangle Width="{Binding PreviewIconSize}" Height="{Binding PreviewIconSize}" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="4"
-                                                                               Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}">
-                                                                        <Rectangle.OpacityMask>
-                                                                            <ImageBrush Source="/Assets/heart.png" Stretch="Uniform" />
-                                                                        </Rectangle.OpacityMask>
-                                                                    </Rectangle>
-                                                                    <Rectangle Width="{Binding PreviewIconSize}" Height="{Binding PreviewIconSize}" VerticalAlignment="Top" HorizontalAlignment="Right" Margin="4"
-                                                                               Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}">
-                                                                        <Rectangle.OpacityMask>
-                                                                            <ImageBrush Source="/Assets/skull.png" Stretch="Uniform" />
-                                                                        </Rectangle.OpacityMask>
-                                                                    </Rectangle>
-                                                                    <Rectangle Width="{Binding PreviewIconSize}" Height="{Binding PreviewIconSize}" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="4"
-                                                                               Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}">
-                                                                        <Rectangle.OpacityMask>
-                                                                            <ImageBrush Source="/Assets/skull.png" Stretch="Uniform" />
-                                                                        </Rectangle.OpacityMask>
-                                                                    </Rectangle>
-                                                                </Grid>
-                                                            </Border>
-                                                        </Border>
-                                                    </Border>
-                                                </Grid>
-                                            </Grid>
-                                        </Border>
-                                    </StackPanel>
+                                    <c:SnipStylePreview Grid.Column="1" DataContext="{Binding}" Margin="20,0,0,0"/>
                                 </Grid>
                             </StackPanel>
                         </StackPanel>
@@ -503,17 +418,17 @@
                                     <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding [SnipHotkey], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center"/>
                                     <TextBox Grid.Row="0" Grid.Column="2" 
                                              Text="{Binding SnipHotkey, Mode=OneWay}" 
+                                             Tag="SnipHotkey"
                                              Watermark="{Binding [HotkeyWatermark], Source={x:Static services:LocalizationService.Instance}}"
                                              IsReadOnly="True"
-                                             Name="SnipHotkeyBox"
                                              KeyDown="HotkeyTextBox_KeyDown"/>
 
                                     <TextBlock Grid.Row="1" Grid.Column="0" Text="{Binding [RecordHotkey], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,10,0,0"/>
                                     <TextBox Grid.Row="1" Grid.Column="2" 
                                              Text="{Binding RecordHotkey, Mode=OneWay}" 
+                                             Tag="RecordHotkey"
                                              Watermark="{Binding [HotkeyWatermark], Source={x:Static services:LocalizationService.Instance}}"
                                              IsReadOnly="True"
-                                             Name="RecordHotkeyBox"
                                              Margin="0,10,0,0"
                                              KeyDown="HotkeyTextBox_KeyDown"/>
                                 </Grid>
@@ -527,29 +442,29 @@
                                 <UniformGrid Columns="2">
                                     <Grid ColumnDefinitions="Auto, 10, *" RowDefinitions="Auto, Auto, Auto, Auto" Margin="0,0,10,0">
                                         <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding [TipRectangle], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center"/>
-                                        <TextBox Grid.Row="0" Grid.Column="2" Text="{Binding RectangleHotkey, Mode=OneWay}" IsReadOnly="True" Name="RectHotkeyBox" KeyDown="HotkeyTextBox_KeyDown"/>
+                                        <TextBox Grid.Row="0" Grid.Column="2" Text="{Binding RectangleHotkey, Mode=OneWay}" IsReadOnly="True" Tag="RectangleHotkey" KeyDown="HotkeyTextBox_KeyDown"/>
                                         
                                         <TextBlock Grid.Row="1" Grid.Column="0" Text="{Binding [TipEllipse], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,10,0,0"/>
-                                        <TextBox Grid.Row="1" Grid.Column="2" Text="{Binding EllipseHotkey, Mode=OneWay}" IsReadOnly="True" Name="EllipseHotkeyBox" Margin="0,10,0,0" KeyDown="HotkeyTextBox_KeyDown"/>
+                                        <TextBox Grid.Row="1" Grid.Column="2" Text="{Binding EllipseHotkey, Mode=OneWay}" IsReadOnly="True" Tag="EllipseHotkey" Margin="0,10,0,0" KeyDown="HotkeyTextBox_KeyDown"/>
 
                                         <TextBlock Grid.Row="2" Grid.Column="0" Text="{Binding [TipArrow], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,10,0,0"/>
-                                        <TextBox Grid.Row="2" Grid.Column="2" Text="{Binding ArrowHotkey, Mode=OneWay}" IsReadOnly="True" Name="ArrowHotkeyBox" Margin="0,10,0,0" KeyDown="HotkeyTextBox_KeyDown"/>
+                                        <TextBox Grid.Row="2" Grid.Column="2" Text="{Binding ArrowHotkey, Mode=OneWay}" IsReadOnly="True" Tag="ArrowHotkey" Margin="0,10,0,0" KeyDown="HotkeyTextBox_KeyDown"/>
 
                                         <TextBlock Grid.Row="3" Grid.Column="0" Text="{Binding [TipLine], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,10,0,0"/>
-                                        <TextBox Grid.Row="3" Grid.Column="2" Text="{Binding LineHotkey, Mode=OneWay}" IsReadOnly="True" Name="LineHotkeyBox" Margin="0,10,0,0" KeyDown="HotkeyTextBox_KeyDown"/>
+                                        <TextBox Grid.Row="3" Grid.Column="2" Text="{Binding LineHotkey, Mode=OneWay}" IsReadOnly="True" Tag="LineHotkey" Margin="0,10,0,0" KeyDown="HotkeyTextBox_KeyDown"/>
                                     </Grid>
                                     <Grid ColumnDefinitions="Auto, 10, *" RowDefinitions="Auto, Auto, Auto, Auto">
                                         <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding [TipPen], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center"/>
-                                        <TextBox Grid.Row="0" Grid.Column="2" Text="{Binding PenHotkey, Mode=OneWay}" IsReadOnly="True" Name="PenHotkeyBox" KeyDown="HotkeyTextBox_KeyDown"/>
+                                        <TextBox Grid.Row="0" Grid.Column="2" Text="{Binding PenHotkey, Mode=OneWay}" IsReadOnly="True" Tag="PenHotkey" KeyDown="HotkeyTextBox_KeyDown"/>
 
                                         <TextBlock Grid.Row="1" Grid.Column="0" Text="{Binding [TipText], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,10,0,0"/>
-                                        <TextBox Grid.Row="1" Grid.Column="2" Text="{Binding TextHotkey, Mode=OneWay}" IsReadOnly="True" Name="TextHotkeyBox" Margin="0,10,0,0" KeyDown="HotkeyTextBox_KeyDown"/>
+                                        <TextBox Grid.Row="1" Grid.Column="2" Text="{Binding TextHotkey, Mode=OneWay}" IsReadOnly="True" Tag="TextHotkey" Margin="0,10,0,0" KeyDown="HotkeyTextBox_KeyDown"/>
 
                                         <TextBlock Grid.Row="2" Grid.Column="0" Text="{Binding [TipMosaic], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,10,0,0"/>
-                                        <TextBox Grid.Row="2" Grid.Column="2" Text="{Binding MosaicHotkey, Mode=OneWay}" IsReadOnly="True" Name="MosaicHotkeyBox" Margin="0,10,0,0" KeyDown="HotkeyTextBox_KeyDown"/>
+                                        <TextBox Grid.Row="2" Grid.Column="2" Text="{Binding MosaicHotkey, Mode=OneWay}" IsReadOnly="True" Tag="MosaicHotkey" Margin="0,10,0,0" KeyDown="HotkeyTextBox_KeyDown"/>
 
                                         <TextBlock Grid.Row="3" Grid.Column="0" Text="{Binding [TipBlur], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,10,0,0"/>
-                                        <TextBox Grid.Row="3" Grid.Column="2" Text="{Binding BlurHotkey, Mode=OneWay}" IsReadOnly="True" Name="BlurHotkeyBox" Margin="0,10,0,0" KeyDown="HotkeyTextBox_KeyDown"/>
+                                        <TextBox Grid.Row="3" Grid.Column="2" Text="{Binding BlurHotkey, Mode=OneWay}" IsReadOnly="True" Tag="BlurHotkey" Margin="0,10,0,0" KeyDown="HotkeyTextBox_KeyDown"/>
                                     </Grid>
                                 </UniformGrid>
                             </StackPanel>
@@ -562,35 +477,35 @@
                                 <UniformGrid Columns="2">
                                     <Grid ColumnDefinitions="Auto, 10, *" RowDefinitions="Auto, Auto, Auto, Auto, Auto" Margin="0,0,10,0">
                                         <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding [Undo], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center"/>
-                                        <TextBox Grid.Row="0" Grid.Column="2" Text="{Binding UndoHotkey, Mode=OneWay}" IsReadOnly="True" Name="UndoHotkeyBox" KeyDown="HotkeyTextBox_KeyDown"/>
+                                        <TextBox Grid.Row="0" Grid.Column="2" Text="{Binding UndoHotkey, Mode=OneWay}" IsReadOnly="True" Tag="UndoHotkey" KeyDown="HotkeyTextBox_KeyDown"/>
 
                                         <TextBlock Grid.Row="1" Grid.Column="0" Text="{Binding [Redo], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,10,0,0"/>
-                                        <TextBox Grid.Row="1" Grid.Column="2" Text="{Binding RedoHotkey, Mode=OneWay}" IsReadOnly="True" Name="RedoHotkeyBox" Margin="0,10,0,0" KeyDown="HotkeyTextBox_KeyDown"/>
+                                        <TextBox Grid.Row="1" Grid.Column="2" Text="{Binding RedoHotkey, Mode=OneWay}" IsReadOnly="True" Tag="RedoHotkey" Margin="0,10,0,0" KeyDown="HotkeyTextBox_KeyDown"/>
 
                                         <TextBlock Grid.Row="2" Grid.Column="0" Text="{Binding [Clear], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,10,0,0"/>
-                                        <TextBox Grid.Row="2" Grid.Column="2" Text="{Binding ClearHotkey, Mode=OneWay}" IsReadOnly="True" Name="ClearHotkeyBox" Margin="0,10,0,0" KeyDown="HotkeyTextBox_KeyDown"/>
+                                        <TextBox Grid.Row="2" Grid.Column="2" Text="{Binding ClearHotkey, Mode=OneWay}" IsReadOnly="True" Tag="ClearHotkey" Margin="0,10,0,0" KeyDown="HotkeyTextBox_KeyDown"/>
 
                                         <TextBlock Grid.Row="3" Grid.Column="0" Text="{Binding [TipSave], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,10,0,0"/>
-                                        <TextBox Grid.Row="3" Grid.Column="2" Text="{Binding SaveHotkey, Mode=OneWay}" IsReadOnly="True" Name="SaveHotkeyBox" Margin="0,10,0,0" KeyDown="HotkeyTextBox_KeyDown"/>
+                                        <TextBox Grid.Row="3" Grid.Column="2" Text="{Binding SaveHotkey, Mode=OneWay}" IsReadOnly="True" Tag="SaveHotkey" Margin="0,10,0,0" KeyDown="HotkeyTextBox_KeyDown"/>
 
                                         <TextBlock Grid.Row="4" Grid.Column="0" Text="{Binding [TipCopy], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,10,0,0"/>
-                                        <TextBox Grid.Row="4" Grid.Column="2" Text="{Binding CopyHotkey, Mode=OneWay}" IsReadOnly="True" Name="CopyHotkeyBox_Generic" Margin="0,10,0,0" KeyDown="HotkeyTextBox_KeyDown"/>
+                                        <TextBox Grid.Row="4" Grid.Column="2" Text="{Binding CopyHotkey, Mode=OneWay}" IsReadOnly="True" Tag="CopyHotkey" Margin="0,10,0,0" KeyDown="HotkeyTextBox_KeyDown"/>
                                     </Grid>
                                     <Grid ColumnDefinitions="Auto, 10, *" RowDefinitions="Auto, Auto, Auto, Auto, Auto">
                                         <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding [ActionClose], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center"/>
-                                        <TextBox Grid.Row="0" Grid.Column="2" Text="{Binding CloseHotkey, Mode=OneWay}" IsReadOnly="True" Name="CloseHotkeyBox" KeyDown="HotkeyTextBox_KeyDown"/>
+                                        <TextBox Grid.Row="0" Grid.Column="2" Text="{Binding CloseHotkey, Mode=OneWay}" IsReadOnly="True" Tag="CloseHotkey" KeyDown="HotkeyTextBox_KeyDown"/>
 
                                         <TextBlock Grid.Row="1" Grid.Column="0" Text="{Binding [ActionPlayback], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,10,0,0"/>
-                                        <TextBox Grid.Row="1" Grid.Column="2" Text="{Binding TogglePlaybackHotkey, Mode=OneWay}" IsReadOnly="True" Name="PlaybackHotkeyBox" Margin="0,10,0,0" KeyDown="HotkeyTextBox_KeyDown"/>
+                                        <TextBox Grid.Row="1" Grid.Column="2" Text="{Binding TogglePlaybackHotkey, Mode=OneWay}" IsReadOnly="True" Tag="TogglePlaybackHotkey" Margin="0,10,0,0" KeyDown="HotkeyTextBox_KeyDown"/>
 
                                         <TextBlock Grid.Row="2" Grid.Column="0" Text="{Binding [ActionToolbar], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,10,0,0"/>
-                                        <TextBox Grid.Row="2" Grid.Column="2" Text="{Binding ToggleToolbarHotkey, Mode=OneWay}" IsReadOnly="True" Name="ToolbarHotkeyBox" Margin="0,10,0,0" KeyDown="HotkeyTextBox_KeyDown"/>
+                                        <TextBox Grid.Row="2" Grid.Column="2" Text="{Binding ToggleToolbarHotkey, Mode=OneWay}" IsReadOnly="True" Tag="ToggleToolbarHotkey" Margin="0,10,0,0" KeyDown="HotkeyTextBox_KeyDown"/>
 
                                         <TextBlock Grid.Row="3" Grid.Column="0" Text="{Binding [ActionSelectionMode], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,10,0,0"/>
-                                        <TextBox Grid.Row="3" Grid.Column="2" Text="{Binding SelectionModeHotkey, Mode=OneWay}" IsReadOnly="True" Name="SelectionModeHotkeyBox" Margin="0,10,0,0" KeyDown="HotkeyTextBox_KeyDown"/>
+                                        <TextBox Grid.Row="3" Grid.Column="2" Text="{Binding SelectionModeHotkey, Mode=OneWay}" IsReadOnly="True" Tag="SelectionModeHotkey" Margin="0,10,0,0" KeyDown="HotkeyTextBox_KeyDown"/>
 
                                         <TextBlock Grid.Row="4" Grid.Column="0" Text="{Binding [ActionCropMode], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,10,0,0"/>
-                                        <TextBox Grid.Row="4" Grid.Column="2" Text="{Binding CropModeHotkey, Mode=OneWay}" IsReadOnly="True" Name="CropModeHotkeyBox" Margin="0,10,0,0" KeyDown="HotkeyTextBox_KeyDown"/>
+                                        <TextBox Grid.Row="4" Grid.Column="2" Text="{Binding CropModeHotkey, Mode=OneWay}" IsReadOnly="True" Tag="CropModeHotkey" Margin="0,10,0,0" KeyDown="HotkeyTextBox_KeyDown"/>
                                     </Grid>
                                 </UniformGrid>
                             </StackPanel>
@@ -607,7 +522,7 @@
                                         <TextBox Grid.Row="0" Grid.Column="2" 
                                                  Text="{Binding PinHotkey, Mode=OneWay}" 
                                                  IsReadOnly="True"
-                                                 Name="PinHotkeyBox_Snip" 
+                                                 Tag="PinHotkey"
                                                  KeyDown="HotkeyTextBox_KeyDown"/>
                                     </Grid>
                                 </StackPanel>
