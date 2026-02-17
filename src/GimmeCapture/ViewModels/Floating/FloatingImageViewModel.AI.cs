@@ -66,10 +66,16 @@ public partial class FloatingImageViewModel
         }
 
         System.Console.WriteLine("[FloatingVM] Getting SAM2 Service...");
+        
+        IsProcessing = true;
+        ProcessingText = LocalizationService.Instance["StatusInitializingAI"];
+        
         var sam2 = await GetSAM2ServiceAsync();
         if (sam2 == null) 
         {
             System.Console.WriteLine("[FloatingVM] SAM2 Service returned null.");
+            IsProcessing = false;
+            IsPointRemovalMode = false;
             return;
         }
 
@@ -605,11 +611,12 @@ public partial class FloatingImageViewModel
         if (_sam2Service != null && _sam2Service.ModelVariantName != "Unknown") return _sam2Service;
 
         _sam2Service = new SAM2Service(_aiResourceService, _appSettingsService);
-        ProcessingText = LocalizationService.Instance["StatusInitializingAI"];
-        IsProcessing = true;
+        _sam2Service = new SAM2Service(_aiResourceService, _appSettingsService);
+        // ProcessingText is handled by caller
         try
         {
             await _sam2Service.InitializeAsync();
+            
              // Optimization: Pass current image to AI immediately after initialization
             var skImage = ImageToSkia(Image);
             if (skImage != null)
@@ -622,10 +629,7 @@ public partial class FloatingImageViewModel
             System.Diagnostics.Debug.WriteLine($"[AI] Init Failed: {ex.Message}");
             _sam2Service = null;
         }
-        finally
-        {
-            IsProcessing = false;
-        }
+        // Finally block removed - caller handles IsProcessing
         return _sam2Service;
     }
 
