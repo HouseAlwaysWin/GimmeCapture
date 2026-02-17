@@ -132,4 +132,12 @@ public partial class FloatingVideoWindow : FloatingWindowBase
             }
         }
     }
+    protected override void OnClosing(WindowClosingEventArgs e)
+    {
+        if (DataContext is FloatingVideoViewModel vm)
+        {
+            vm.Dispose();
+        }
+        base.OnClosing(e);
+    }
 }

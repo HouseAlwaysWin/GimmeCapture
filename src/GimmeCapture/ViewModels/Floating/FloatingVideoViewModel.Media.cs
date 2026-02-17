@@ -143,9 +143,13 @@ public partial class FloatingVideoViewModel
 
     private async Task PlaybackLoopFixed(CancellationToken ct)
     {
-        while (!ct.IsCancellationRequested)
+        // Ensure only one loop runs at a time
+        await _playSemaphore.WaitAsync(ct);
+        var generation = Interlocked.Increment(ref _playbackGeneration);
+        
+        try
         {
-            try
+            while (!ct.IsCancellationRequested && !_isDisposed)
             {
                 var seekArg = "";
                 if (_seekTargetSeconds >= 0)
@@ -156,48 +160,51 @@ public partial class FloatingVideoViewModel
                 }
                 else
                 {
-                    // Only reset to zero on a fresh start (not a speed-change restart)
                     seekArg = $"-ss {_currentTime.TotalSeconds:F3} ";
                 }
 
                 using var pipe = new MemoryStream();
                 var frameSize = _width * _height * 4;
                 
-                // Speed filters + Realtime throttling
                 var filter = $"[0:v]setpts={1.0/_playbackSpeed}*PTS,fps=30,realtime[v]";
 
                 var cmd = Cli.Wrap(_ffmpegPath)
-                    .WithArguments($"{seekArg}-i \"{VideoPath}\" -filter_complex \"{filter}\" -map \"[v]\" -f image2pipe -vcodec rawvideo -pix_fmt bgra -s {_width}x{_height} -sws_flags lanczos -loglevel quiet -")
-                    .WithStandardOutputPipe(PipeTarget.ToStream(new FrameStreamWriter(this, frameSize)));
+                    .WithArguments($"{seekArg}-i \"{VideoPath}\" -filter_complex \"{filter}\" -map \"[v]\" -f image2pipe -vcodec rawvideo -pix_fmt bgra -s {_width}x{_height} -sws_flags fast_bilinear -loglevel quiet -")
+                    .WithStandardOutputPipe(PipeTarget.ToStream(new FrameStreamWriter(this, frameSize, generation)));
 
                 await cmd.ExecuteAsync(ct);
 
-                if (!IsLooping) 
+                if (!IsLooping || ct.IsCancellationRequested) 
                 {
                     _isPlaybackActive = false;
                     this.RaisePropertyChanged(nameof(IsPlaying));
                     break;
                 }
                 
-                // Reset for next loop
                 _currentTime = TimeSpan.Zero;
                 Avalonia.Threading.Dispatcher.UIThread.Post(() => this.RaisePropertyChanged(nameof(CurrentTimeSeconds)));
             }
-            catch (OperationCanceledException) { break; }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Playback Error: {ex.Message}");
-                await Task.Delay(1000, ct);
-            }
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Playback Error: {ex.Message}");
+        }
+        finally
+        {
+            _playSemaphore.Release();
         }
     }
 
-    internal void UpdateBitmap(byte[] frameData)
+    internal void UpdateBitmap(byte[] frameData, int generation)
     {
-        if (VideoBitmap == null) return;
+        if (VideoBitmap == null || _isDisposed) return;
+        if (generation != Volatile.Read(ref _playbackGeneration)) return;
 
         Avalonia.Threading.Dispatcher.UIThread.Post(() => 
         {
+            if (generation != Volatile.Read(ref _playbackGeneration) || _isDisposed) return;
+            
             try 
             {
                 using (var lockedBitmap = VideoBitmap.Lock())
@@ -207,27 +214,34 @@ public partial class FloatingVideoViewModel
                 this.RaisePropertyChanged(nameof(VideoBitmap));
                 RequestRedraw?.Invoke();
             }
-            catch { /* Handle potential disposal during update */ }
+            catch { }
         });
     }
 
-    // Helper class to handle fixed-size frame writes
     private class FrameStreamWriter : Stream
     {
         private readonly FloatingVideoViewModel _vm;
         private readonly int _frameSize;
+        private readonly int _generation;
         private byte[] _buffer;
         private int _totalRead = 0;
 
-        public FrameStreamWriter(FloatingVideoViewModel vm, int frameSize)
+        public FrameStreamWriter(FloatingVideoViewModel vm, int frameSize, int generation)
         {
             _vm = vm;
             _frameSize = frameSize;
+            _generation = generation;
             _buffer = new byte[frameSize];
         }
 
         public override void Write(byte[] buffer, int offset, int count)
         {
+            if (_vm._isDisposed || _generation != Volatile.Read(ref _vm._playbackGeneration))
+            {
+                // Stop FFmpeg if this is a stale stream
+                throw new OperationCanceledException();
+            }
+
             int remaining = count;
             int currentOffset = offset;
 
@@ -242,12 +256,9 @@ public partial class FloatingVideoViewModel
 
                 if (_totalRead == _frameSize)
                 {
-                    _vm.UpdateBitmap(_buffer);
+                    _vm.UpdateBitmap(_buffer, _generation);
                     _totalRead = 0;
                     
-                    // Increment time based on output frames (30fps) scaled by speed
-                    // Each output frame represents (1/30 * Speed) seconds of the source video
-                    // Skip time update while user is dragging the slider
                     if (!_vm._isDraggingSlider)
                     {
                         var newTime = _vm.CurrentTime + TimeSpan.FromSeconds((1.0 / 30.0) * _vm.PlaybackSpeed);

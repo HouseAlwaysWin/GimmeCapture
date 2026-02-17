@@ -14,8 +14,11 @@ using System.Threading;
 
 namespace GimmeCapture.ViewModels.Floating;
 
-public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDrawingToolViewModel
+public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDrawingToolViewModel, IDisposable
 {
+    private readonly SemaphoreSlim _playSemaphore = new(1, 1);
+    private int _playbackGeneration = 0;
+    private bool _isDisposed;
     // Media / Video Properties & State
     private WriteableBitmap? _videoBitmap;
     public WriteableBitmap? VideoBitmap
@@ -296,14 +299,25 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
         InitializeMediaCommands(); // Media init last as it starts playback
     }
 
-    public override void Dispose()
+    public override async void Dispose()
     {
-        var cts = _playCts;
-        if (cts != null)
+        if (_isDisposed) return;
+        _isDisposed = true;
+
+        CancelPlaybackInBackground();
+        
+        try
         {
-            Task.Run(() => { try { cts.Cancel(); } catch { } });
+            if (_playbackTask != null)
+            {
+                await _playbackTask;
+            }
         }
-        _playCts?.Dispose();
-        VideoBitmap?.Dispose();
+        catch { }
+
+        _playSemaphore.Dispose();
+        _seekDebounceCts?.Dispose();
+        
+        VideoBitmap = null;
     }
 }
