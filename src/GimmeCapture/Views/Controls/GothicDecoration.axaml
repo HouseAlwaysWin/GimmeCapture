@@ -28,30 +28,32 @@
         <!-- Decoration Layer -->
         <Grid IsVisible="{Binding ShowCorners}" ClipToBounds="False">
             <!-- Corners -->
-            <Rectangle Classes="Corner" VerticalAlignment="Top" HorizontalAlignment="Left" IsHitTestVisible="True">
+            <Rectangle Classes="Corner MoveHandle" VerticalAlignment="Top" HorizontalAlignment="Left" IsHitTestVisible="True">
                 <Rectangle.OpacityMask><ImageBrush Source="avares://GimmeCapture/Assets/heart.png" Stretch="Uniform"/></Rectangle.OpacityMask>
             </Rectangle>
-            <Rectangle Classes="Corner" VerticalAlignment="Bottom" HorizontalAlignment="Left" IsHitTestVisible="True">
+            <Rectangle Classes="Corner MoveHandle" VerticalAlignment="Bottom" HorizontalAlignment="Left" IsHitTestVisible="True">
                 <Rectangle.OpacityMask><ImageBrush Source="avares://GimmeCapture/Assets/heart.png" Stretch="Uniform"/></Rectangle.OpacityMask>
             </Rectangle>
-            <Rectangle Classes="Corner" VerticalAlignment="Top" HorizontalAlignment="Right" IsHitTestVisible="True">
+            <Rectangle Classes="Corner MoveHandle" VerticalAlignment="Top" HorizontalAlignment="Right" IsHitTestVisible="True">
                 <Rectangle.OpacityMask><ImageBrush Source="avares://GimmeCapture/Assets/skull.png" Stretch="Uniform"/></Rectangle.OpacityMask>
             </Rectangle>
-            <Rectangle Classes="Corner" VerticalAlignment="Bottom" HorizontalAlignment="Right" IsHitTestVisible="True">
+            <Rectangle Classes="Corner MoveHandle" VerticalAlignment="Bottom" HorizontalAlignment="Right" IsHitTestVisible="True">
                 <Rectangle.OpacityMask><ImageBrush Source="avares://GimmeCapture/Assets/skull.png" Stretch="Uniform"/></Rectangle.OpacityMask>
             </Rectangle>
         </Grid>
 
         <!-- Wings Layer -->
         <Grid IsVisible="{Binding ShowWings}" ClipToBounds="False">
-            <Rectangle Width="{Binding WingWidth}" 
+            <Rectangle Classes="MoveHandle"
+                       Width="{Binding WingWidth}" 
                        Height="{Binding WingHeight}" 
                        VerticalAlignment="Center" HorizontalAlignment="Left" 
                        Margin="{Binding LeftWingMargin}"
                        Fill="{Binding DecorationBrush}">
                 <Rectangle.OpacityMask><ImageBrush Source="avares://GimmeCapture/Assets/wing_left.png" Stretch="Uniform" AlignmentX="Right"/></Rectangle.OpacityMask>
             </Rectangle>
-            <Rectangle Width="{Binding WingWidth}" 
+            <Rectangle Classes="MoveHandle"
+                       Width="{Binding WingWidth}" 
                        Height="{Binding WingHeight}" 
                        VerticalAlignment="Center" HorizontalAlignment="Right" 
                        Margin="{Binding RightWingMargin}"
