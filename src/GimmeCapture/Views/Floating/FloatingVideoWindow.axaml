@@ -266,7 +266,7 @@
                     <Rectangle Fill="#333333" Height="1" Margin="2,0" HorizontalAlignment="Stretch"/>
 
                     <!-- Trim Sliders (overlaid to create range slider) -->
-                    <Grid Height="28" Margin="4,0">
+                    <Grid x:Name="TrimTrackGrid" Height="28" Margin="4,0">
                         <!-- Track background -->
                         <Border Background="#333333" CornerRadius="2" Height="6" VerticalAlignment="Center" Margin="8,0"/>
                         
@@ -274,53 +274,27 @@
                         <Border Background="#555555" CornerRadius="2" Height="6" VerticalAlignment="Center" Margin="8,0"
                                 HorizontalAlignment="Stretch" IsHitTestVisible="False"/>
 
-                        <!-- Start Slider (both RepeatButtons pass-through so Thumbs are independently draggable) -->
-                        <Slider Minimum="0" Maximum="{Binding TotalDuration.TotalSeconds}" 
-                                Value="{Binding TrimStartSeconds}" 
-                                VerticalAlignment="Center" Margin="0">
-                            <Slider.Styles>
-                                <Style Selector="Slider /template/ Thumb">
-                                    <Setter Property="Width" Value="12"/>
-                                    <Setter Property="Height" Value="22"/>
-                                    <Setter Property="Template">
-                                        <ControlTemplate>
-                                            <Border Background="#FF4444" CornerRadius="2" Width="12" Height="22"/>
-                                        </ControlTemplate>
-                                    </Setter>
-                                </Style>
-                                <Style Selector="Slider /template/ Track">
-                                    <Setter Property="Height" Value="0"/>
-                                </Style>
-                                <Style Selector="Slider /template/ RepeatButton">
-                                    <Setter Property="Height" Value="0"/>
-                                    <Setter Property="IsHitTestVisible" Value="False"/>
-                                </Style>
-                            </Slider.Styles>
-                        </Slider>
+                        <!-- Start Thumb (custom Thumb control, positioned by code-behind) -->
+                        <Thumb x:Name="TrimStartThumb" Width="12" Height="22" 
+                               HorizontalAlignment="Left" VerticalAlignment="Center"
+                               Cursor="SizeWestEast">
+                            <Thumb.Template>
+                                <ControlTemplate>
+                                    <Border Background="#FF4444" CornerRadius="2" Width="12" Height="22"/>
+                                </ControlTemplate>
+                            </Thumb.Template>
+                        </Thumb>
 
-                        <!-- End Slider (both RepeatButtons pass-through) -->
-                        <Slider Minimum="0" Maximum="{Binding TotalDuration.TotalSeconds}" 
-                                Value="{Binding TrimEndSeconds}" 
-                                VerticalAlignment="Center" Margin="0">
-                            <Slider.Styles>
-                                <Style Selector="Slider /template/ Thumb">
-                                    <Setter Property="Width" Value="12"/>
-                                    <Setter Property="Height" Value="22"/>
-                                    <Setter Property="Template">
-                                        <ControlTemplate>
-                                            <Border Background="#4488FF" CornerRadius="2" Width="12" Height="22"/>
-                                        </ControlTemplate>
-                                    </Setter>
-                                </Style>
-                                <Style Selector="Slider /template/ Track">
-                                    <Setter Property="Height" Value="0"/>
-                                </Style>
-                                <Style Selector="Slider /template/ RepeatButton">
-                                    <Setter Property="Height" Value="0"/>
-                                    <Setter Property="IsHitTestVisible" Value="False"/>
-                                </Style>
-                            </Slider.Styles>
-                        </Slider>
+                        <!-- End Thumb (custom Thumb control, positioned by code-behind) -->
+                        <Thumb x:Name="TrimEndThumb" Width="12" Height="22" 
+                               HorizontalAlignment="Left" VerticalAlignment="Center"
+                               Cursor="SizeWestEast">
+                            <Thumb.Template>
+                                <ControlTemplate>
+                                    <Border Background="#4488FF" CornerRadius="2" Width="12" Height="22"/>
+                                </ControlTemplate>
+                            </Thumb.Template>
+                        </Thumb>
                     </Grid>
 
                     <!-- Time Input Panel -->

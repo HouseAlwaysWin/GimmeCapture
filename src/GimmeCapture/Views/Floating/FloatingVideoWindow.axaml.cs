@@ -15,6 +15,7 @@ using System.Reactive.Linq;
 using Avalonia.Media.Imaging;
 using System.Linq;
 using System.Collections.Generic;
+using ReactiveUI;
 
 namespace GimmeCapture.Views.Floating;
 
@@ -86,6 +87,9 @@ public partial class FloatingVideoWindow : FloatingWindowBase
 
                 return file?.Path.LocalPath;
             };
+
+            // 裁切拉桿初始化
+            InitializeTrimThumbs(vm);
         }
     }
 
@@ -132,8 +136,93 @@ public partial class FloatingVideoWindow : FloatingWindowBase
             }
         }
     }
+    // ── 裁切拉桿邏輯 ──
+    private Grid? _trimTrackGrid;
+    private Thumb? _trimStartThumb;
+    private Thumb? _trimEndThumb;
+    private IDisposable? _trimSubscription;
+
+    private void InitializeTrimThumbs(FloatingVideoViewModel vm)
+    {
+        _trimTrackGrid = this.FindControl<Grid>("TrimTrackGrid");
+        _trimStartThumb = this.FindControl<Thumb>("TrimStartThumb");
+        _trimEndThumb = this.FindControl<Thumb>("TrimEndThumb");
+
+        if (_trimStartThumb == null || _trimEndThumb == null || _trimTrackGrid == null) return;
+
+        _trimStartThumb.DragDelta += OnTrimStartDragDelta;
+        _trimEndThumb.DragDelta += OnTrimEndDragDelta;
+
+        // 監聽屬性變更 → 更新 Thumb 位置
+        _trimSubscription = vm.WhenAnyValue(
+            x => x.TrimStartSeconds,
+            x => x.TrimEndSeconds,
+            x => x.TotalDuration,
+            x => x.IsTrimmingMode)
+            .Subscribe(_ => Dispatcher.UIThread.Post(UpdateTrimThumbPositions));
+
+        // 尺寸變更時也更新位置
+        _trimTrackGrid.PropertyChanged += (s, e) =>
+        {
+            if (e.Property.Name == "Bounds")
+                Dispatcher.UIThread.Post(UpdateTrimThumbPositions);
+        };
+    }
+
+    private void OnTrimStartDragDelta(object? sender, VectorEventArgs e)
+    {
+        if (DataContext is not FloatingVideoViewModel vm || _trimTrackGrid == null) return;
+
+        double trackWidth = _trimTrackGrid.Bounds.Width - 12; // 扣除 Thumb 寬度
+        double totalSec = vm.TotalDuration.TotalSeconds;
+        if (totalSec <= 0 || trackWidth <= 0) return;
+
+        double pixelsPerSecond = trackWidth / totalSec;
+        double deltaSec = e.Vector.X / pixelsPerSecond;
+        double newValue = vm.TrimStartSeconds + deltaSec;
+
+        // 約束：不超過 end - 0.1，不低於 0
+        newValue = Math.Max(0, Math.Min(newValue, vm.TrimEndSeconds - 0.1));
+        vm.TrimStartSeconds = newValue;
+    }
+
+    private void OnTrimEndDragDelta(object? sender, VectorEventArgs e)
+    {
+        if (DataContext is not FloatingVideoViewModel vm || _trimTrackGrid == null) return;
+
+        double trackWidth = _trimTrackGrid.Bounds.Width - 12;
+        double totalSec = vm.TotalDuration.TotalSeconds;
+        if (totalSec <= 0 || trackWidth <= 0) return;
+
+        double pixelsPerSecond = trackWidth / totalSec;
+        double deltaSec = e.Vector.X / pixelsPerSecond;
+        double newValue = vm.TrimEndSeconds + deltaSec;
+
+        // 約束：不低於 start + 0.1，不超過總時長
+        newValue = Math.Max(vm.TrimStartSeconds + 0.1, Math.Min(newValue, totalSec));
+        vm.TrimEndSeconds = newValue;
+    }
+
+    private void UpdateTrimThumbPositions()
+    {
+        if (DataContext is not FloatingVideoViewModel vm) return;
+        if (_trimTrackGrid == null || _trimStartThumb == null || _trimEndThumb == null) return;
+        if (!vm.IsTrimmingMode) return;
+
+        double trackWidth = _trimTrackGrid.Bounds.Width - 12; // 可用滑動寬度
+        double totalSec = vm.TotalDuration.TotalSeconds;
+        if (totalSec <= 0 || trackWidth <= 0) return;
+
+        double startX = (vm.TrimStartSeconds / totalSec) * trackWidth;
+        double endX = (vm.TrimEndSeconds / totalSec) * trackWidth;
+
+        _trimStartThumb.RenderTransform = new Avalonia.Media.TranslateTransform(startX, 0);
+        _trimEndThumb.RenderTransform = new Avalonia.Media.TranslateTransform(endX, 0);
+    }
+
     protected override void OnClosing(WindowClosingEventArgs e)
     {
+        _trimSubscription?.Dispose();
         if (DataContext is FloatingVideoViewModel vm)
         {
             vm.Dispose();
