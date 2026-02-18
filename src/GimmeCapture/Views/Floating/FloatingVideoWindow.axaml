@@ -189,7 +189,6 @@
                 <Style Selector="Border">
                     <Setter Property="Transitions">
                         <Transitions>
-                            <ThicknessTransition Property="Margin" Duration="0:0:0.05" Easing="LinearEasing"/>
                             <DoubleTransition Property="Opacity" Duration="0:0:0.2"/>
                         </Transitions>
                     </Setter>
@@ -203,6 +202,12 @@
                     <Rectangle Fill="#444444" Width="1" Height="20" Margin="4,0" VerticalAlignment="Center"/>
                     <Button Theme="{StaticResource SnipButton}" Command="{Binding ClearAnnotationsCommand}" ToolTip.Tip="{Binding ClearTooltip}">
                         <PathIcon Data="M19,4h-3.5l-1-1h-5l-1,1H5v2h14V4z M6,19c0,1.1,0.9,2,2,2h8c1.1,0,2-0.9,2-2V7H6V19z" Width="14" Height="14"/>
+                    </Button>
+                    <Rectangle Fill="#444444" Width="1" Height="20" Margin="4,0" VerticalAlignment="Center"/>
+                    <!-- Trim Button -->
+                    <Button Theme="{StaticResource SnipButton}" Command="{Binding ToggleTrimCommand}" ToolTip.Tip="裁切時間"
+                            Opacity="{Binding IsTrimmingMode, Converter={StaticResource BoolToOpacityConverter}}">
+                        <PathIcon Data="M9.64,7.64C9.87,7.14 10,6.59 10,6A4,4 0 0,0 6,2A4,4 0 0,0 2,6A4,4 0 0,0 6,10C6.59,10 7.14,9.87 7.64,9.64L10,12L7.64,14.36C7.14,14.13 6.59,14 6,14A4,4 0 0,0 2,18A4,4 0 0,0 6,22A4,4 0 0,0 10,18C10,17.41 9.87,16.86 9.64,16.36L12,14L19,21H22V20L9.64,7.64M6,8A2,2 0 0,1 4,6A2,2 0 0,1 6,4A2,2 0 0,1 8,6A2,2 0 0,1 6,8M6,20A2,2 0 0,1 4,18A2,2 0 0,1 6,16A2,2 0 0,1 8,18A2,2 0 0,1 6,20M12,12.5A0.5,0.5 0 0,1 11.5,12A0.5,0.5 0 0,1 12,11.5A0.5,0.5 0 0,1 12.5,12A0.5,0.5 0 0,1 12,12.5M19,3L13,9L15,11L22,4V3H19Z" Width="14" Height="14"/>
                     </Button>
                     <Rectangle Fill="#444444" Width="1" Height="20" Margin="4,0" VerticalAlignment="Center"/>
                     <Button Theme="{StaticResource SnipButton}" Command="{Binding CopyCommand}" ToolTip.Tip="{Binding CopyTooltip}">
@@ -246,7 +251,7 @@
                                 Command="{Binding CycleSpeedCommand}" 
                                 Padding="4,2" FontSize="11" Width="40" Height="26" VerticalAlignment="Center"/>
                     </StackPanel>
-                    <!-- Center: Slider fills remaining space, vertically centered via RenderTransform -->
+                    <!-- Center: Slider fills remaining space -->
                     <Slider Minimum="0" Maximum="{Binding TotalDuration.TotalSeconds}" 
                             Value="{Binding CurrentTimeSeconds}" 
                             VerticalAlignment="Center" Margin="8,0">
@@ -255,6 +260,98 @@
                         </Slider.RenderTransform>
                     </Slider>
                 </DockPanel>
+
+                <!-- Row 3: Trim Panel (inside toolbar, appears when trimming mode is active) -->
+                <StackPanel IsVisible="{Binding IsTrimmingMode}" Orientation="Vertical" Spacing="4">
+                    <Rectangle Fill="#333333" Height="1" Margin="2,0" HorizontalAlignment="Stretch"/>
+
+                    <!-- Trim Sliders (overlaid to create range slider) -->
+                    <Grid Height="28" Margin="4,0">
+                        <!-- Track background -->
+                        <Border Background="#333333" CornerRadius="2" Height="6" VerticalAlignment="Center" Margin="8,0"/>
+                        
+                        <!-- Selected range highlight -->
+                        <Border Background="#555555" CornerRadius="2" Height="6" VerticalAlignment="Center" Margin="8,0"
+                                HorizontalAlignment="Stretch" IsHitTestVisible="False"/>
+
+                        <!-- Start Slider (both RepeatButtons pass-through so Thumbs are independently draggable) -->
+                        <Slider Minimum="0" Maximum="{Binding TotalDuration.TotalSeconds}" 
+                                Value="{Binding TrimStartSeconds}" 
+                                VerticalAlignment="Center" Margin="0">
+                            <Slider.Styles>
+                                <Style Selector="Slider /template/ Thumb">
+                                    <Setter Property="Width" Value="12"/>
+                                    <Setter Property="Height" Value="22"/>
+                                    <Setter Property="Template">
+                                        <ControlTemplate>
+                                            <Border Background="#FF4444" CornerRadius="2" Width="12" Height="22"/>
+                                        </ControlTemplate>
+                                    </Setter>
+                                </Style>
+                                <Style Selector="Slider /template/ Track">
+                                    <Setter Property="Height" Value="0"/>
+                                </Style>
+                                <Style Selector="Slider /template/ RepeatButton">
+                                    <Setter Property="Height" Value="0"/>
+                                    <Setter Property="IsHitTestVisible" Value="False"/>
+                                </Style>
+                            </Slider.Styles>
+                        </Slider>
+
+                        <!-- End Slider (both RepeatButtons pass-through) -->
+                        <Slider Minimum="0" Maximum="{Binding TotalDuration.TotalSeconds}" 
+                                Value="{Binding TrimEndSeconds}" 
+                                VerticalAlignment="Center" Margin="0">
+                            <Slider.Styles>
+                                <Style Selector="Slider /template/ Thumb">
+                                    <Setter Property="Width" Value="12"/>
+                                    <Setter Property="Height" Value="22"/>
+                                    <Setter Property="Template">
+                                        <ControlTemplate>
+                                            <Border Background="#4488FF" CornerRadius="2" Width="12" Height="22"/>
+                                        </ControlTemplate>
+                                    </Setter>
+                                </Style>
+                                <Style Selector="Slider /template/ Track">
+                                    <Setter Property="Height" Value="0"/>
+                                </Style>
+                                <Style Selector="Slider /template/ RepeatButton">
+                                    <Setter Property="Height" Value="0"/>
+                                    <Setter Property="IsHitTestVisible" Value="False"/>
+                                </Style>
+                            </Slider.Styles>
+                        </Slider>
+                    </Grid>
+
+                    <!-- Time Input Panel -->
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="8" Margin="0,0,0,2">
+                        <!-- Start Time -->
+                        <StackPanel Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+                            <TextBlock Text="起始" Foreground="#FF4444" FontSize="10" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                            <controls:CompactNumericStep Value="{Binding TrimStartMinutes}" 
+                                                         IncreaseCommand="{Binding IncTrimStartMinCmd}" 
+                                                         DecreaseCommand="{Binding DecTrimStartMinCmd}"/>
+                            <TextBlock Text=":" Foreground="#AAAAAA" FontSize="11" VerticalAlignment="Center" FontWeight="Bold"/>
+                            <controls:CompactNumericStep Value="{Binding TrimStartSecs}" 
+                                                         IncreaseCommand="{Binding IncTrimStartSecCmd}" 
+                                                         DecreaseCommand="{Binding DecTrimStartSecCmd}"/>
+                        </StackPanel>
+
+                        <Rectangle Fill="#444444" Width="1" Height="18" VerticalAlignment="Center"/>
+
+                        <!-- End Time -->
+                        <StackPanel Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+                            <TextBlock Text="終點" Foreground="#4488FF" FontSize="10" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                            <controls:CompactNumericStep Value="{Binding TrimEndMinutes}" 
+                                                         IncreaseCommand="{Binding IncTrimEndMinCmd}" 
+                                                         DecreaseCommand="{Binding DecTrimEndMinCmd}"/>
+                            <TextBlock Text=":" Foreground="#AAAAAA" FontSize="11" VerticalAlignment="Center" FontWeight="Bold"/>
+                            <controls:CompactNumericStep Value="{Binding TrimEndSecs}" 
+                                                         IncreaseCommand="{Binding IncTrimEndSecCmd}" 
+                                                         DecreaseCommand="{Binding DecTrimEndSecCmd}"/>
+                        </StackPanel>
+                    </StackPanel>
+                </StackPanel>
             </StackPanel>
         </Border>
 

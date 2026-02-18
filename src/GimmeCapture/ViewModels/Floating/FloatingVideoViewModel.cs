@@ -18,6 +18,7 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
 {
     private readonly SemaphoreSlim _playSemaphore = new(1, 1);
     private int _playbackGeneration = 0;
+    internal volatile bool _trimEndReached;
     private bool _isDisposed;
     // Media / Video Properties & State
     private WriteableBitmap? _videoBitmap;
@@ -251,6 +252,9 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
             double bottomPad = vPad;
             if (ShowToolbar) bottomPad += 78;
             
+            // 裁切面板額外空間：拉桿(28) + 時間輸入(28) + spacing + padding ≈ 75px
+            if (IsTrimmingMode) bottomPad += 75;
+            
             return new Avalonia.Thickness(hPad, vPad, hPad, bottomPad);
         }
     }
@@ -296,6 +300,7 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
         InitializeActionCommands();
         // InitializeToolbarCommands(); // Handled by Base
         InitializeAnnotationCommands();
+        InitializeTrimCommands();
         InitializeMediaCommands(); // Media init last as it starts playback
     }
 

@@ -130,10 +130,17 @@ public partial class FloatingVideoViewModel
         // Cancel old playback in background (never blocks)
         CancelPlaybackInBackground();
 
-        // If we are at the end, restart from zero
-        if (_currentTime >= TotalDuration && TotalDuration > TimeSpan.Zero)
+        // 裁切模式：判斷是否超過裁切終點或影片結尾
+        var effectiveEnd = IsTrimmingMode && TrimEndSeconds > 0 
+            ? TimeSpan.FromSeconds(TrimEndSeconds) 
+            : TotalDuration;
+        var effectiveStart = IsTrimmingMode && TrimStartSeconds > 0
+            ? TimeSpan.FromSeconds(TrimStartSeconds)
+            : TimeSpan.Zero;
+
+        if (_currentTime >= effectiveEnd && effectiveEnd > TimeSpan.Zero)
         {
-            _currentTime = TimeSpan.Zero;
+            _currentTime = effectiveStart;
             this.RaisePropertyChanged(nameof(CurrentTimeSeconds));
         }
         
@@ -151,6 +158,13 @@ public partial class FloatingVideoViewModel
         {
             while (!ct.IsCancellationRequested && !_isDisposed)
             {
+                // 每次迭代重新讀取裁切值，讓拉桿拖拽即時生效
+                var trimActive = IsTrimmingMode && _totalDuration.TotalSeconds > 0;
+                var trimStart = trimActive ? TrimStartSeconds : 0;
+                var trimEnd = trimActive ? TrimEndSeconds : double.MaxValue;
+
+                _trimEndReached = false;
+
                 var seekArg = "";
                 if (_seekTargetSeconds >= 0)
                 {
@@ -170,18 +184,30 @@ public partial class FloatingVideoViewModel
 
                 var cmd = Cli.Wrap(_ffmpegPath)
                     .WithArguments($"{seekArg}-i \"{VideoPath}\" -filter_complex \"{filter}\" -map \"[v]\" -f image2pipe -vcodec rawvideo -pix_fmt bgra -s {_width}x{_height} -sws_flags fast_bilinear -loglevel quiet -")
-                    .WithStandardOutputPipe(PipeTarget.ToStream(new FrameStreamWriter(this, frameSize, generation)));
+                    .WithStandardOutputPipe(PipeTarget.ToStream(new FrameStreamWriter(this, frameSize, generation, trimEnd)));
 
-                await cmd.ExecuteAsync(ct);
+                try
+                {
+                    await cmd.ExecuteAsync(ct);
+                }
+                catch (Exception) when (!ct.IsCancellationRequested && _trimEndReached)
+                {
+                    // 裁切終點到達，這是預期行為
+                }
 
-                if (!IsLooping || ct.IsCancellationRequested) 
+                if (ct.IsCancellationRequested)
+                    break;
+
+                if (!IsLooping) 
                 {
                     _isPlaybackActive = false;
-                    this.RaisePropertyChanged(nameof(IsPlaying));
+                    Avalonia.Threading.Dispatcher.UIThread.Post(() => this.RaisePropertyChanged(nameof(IsPlaying)));
                     break;
                 }
                 
-                _currentTime = TimeSpan.Zero;
+                // 循環播放：重新讀取最新的裁切起點
+                var loopStart = IsTrimmingMode ? TrimStartSeconds : 0;
+                _currentTime = TimeSpan.FromSeconds(loopStart);
                 Avalonia.Threading.Dispatcher.UIThread.Post(() => this.RaisePropertyChanged(nameof(CurrentTimeSeconds)));
             }
         }
@@ -223,14 +249,16 @@ public partial class FloatingVideoViewModel
         private readonly FloatingVideoViewModel _vm;
         private readonly int _frameSize;
         private readonly int _generation;
+        private readonly double _trimEndSeconds;
         private byte[] _buffer;
         private int _totalRead = 0;
 
-        public FrameStreamWriter(FloatingVideoViewModel vm, int frameSize, int generation)
+        public FrameStreamWriter(FloatingVideoViewModel vm, int frameSize, int generation, double trimEndSeconds = double.MaxValue)
         {
             _vm = vm;
             _frameSize = frameSize;
             _generation = generation;
+            _trimEndSeconds = trimEndSeconds;
             _buffer = new byte[frameSize];
         }
 
@@ -263,6 +291,17 @@ public partial class FloatingVideoViewModel
                     {
                         var newTime = _vm.CurrentTime + TimeSpan.FromSeconds((1.0 / 30.0) * _vm.PlaybackSpeed);
                         if (newTime > _vm.TotalDuration) newTime = _vm.TotalDuration;
+                        
+                        // 裁切模式：超過結束時間就停止
+                        if (newTime.TotalSeconds >= _trimEndSeconds)
+                        {
+                            _vm.CurrentTime = TimeSpan.FromSeconds(_trimEndSeconds);
+                            _vm._trimEndReached = true;
+                            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                                _vm.RaisePropertyChanged(nameof(_vm.CurrentTimeSeconds)));
+                            throw new OperationCanceledException();
+                        }
+                        
                         _vm.CurrentTime = newTime;
                         Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                             _vm.RaisePropertyChanged(nameof(_vm.CurrentTimeSeconds)));

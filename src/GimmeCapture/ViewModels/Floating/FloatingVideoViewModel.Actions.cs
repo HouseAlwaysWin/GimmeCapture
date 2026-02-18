@@ -50,8 +50,9 @@ public partial class FloatingVideoViewModel
             {
                 ProcessingText = LocalizationService.Instance["StatusExportingVideo"] ?? "Exporting Video...";
                 bool hasAnnotations = Annotations.Any();
+                bool needsTrim = IsTrimmingMode && (TrimStartSeconds > 0 || TrimEndSeconds < _totalDuration.TotalSeconds);
 
-                if (hasAnnotations)
+                if (hasAnnotations || needsTrim)
                 {
                     var burntPath = await ExportBurntInVideoAsync();
                     if (!string.IsNullOrEmpty(burntPath) && System.IO.File.Exists(burntPath))
@@ -106,8 +107,9 @@ public partial class FloatingVideoViewModel
                 string sourceExt = Path.GetExtension(VideoPath).ToLowerInvariant();
                 string targetExt = Path.GetExtension(targetPath).ToLowerInvariant();
                 bool needsConversion = sourceExt != targetExt;
+                bool needsTrim = IsTrimmingMode && (TrimStartSeconds > 0 || TrimEndSeconds < _totalDuration.TotalSeconds);
 
-                if (hasAnnotations || needsConversion)
+                if (hasAnnotations || needsConversion || needsTrim)
                 {
                     var processedPath = await ExportBurntInVideoAsync(targetExt);
                     if (!string.IsNullOrEmpty(processedPath) && System.IO.File.Exists(processedPath))
@@ -205,12 +207,29 @@ public partial class FloatingVideoViewModel
                 ? "[1:v][0:v]scale2ref[ovrl][refv];[refv][ovrl]overlay=0:0:shortest=1,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse[outv]"
                 : "[1:v][0:v]scale2ref[ovrl][refv];[refv][ovrl]overlay=0:0:shortest=1[outv]";
             
+            // 裁切參數：僅在裁切模式下套用
+            bool applyTrim = IsTrimmingMode && (TrimStartSeconds > 0 || TrimEndSeconds < _totalDuration.TotalSeconds);
+
             var result = await Cli.Wrap(ffmpegPath)
                 .WithArguments(args => 
                 {
-                    args.Add("-y")
-                        .Add("-i").Add(VideoPath)
-                        .Add("-loop").Add("1")
+                    args.Add("-y");
+
+                    // 加入裁切起始點
+                    if (applyTrim && TrimStartSeconds > 0)
+                    {
+                        args.Add("-ss").Add(TrimStartSeconds.ToString("F3"));
+                    }
+
+                    args.Add("-i").Add(VideoPath);
+
+                    // 加入裁切終點
+                    if (applyTrim)
+                    {
+                        args.Add("-to").Add((TrimEndSeconds - TrimStartSeconds).ToString("F3"));
+                    }
+
+                    args.Add("-loop").Add("1")
                         .Add("-i").Add(overlayPath)
                         .Add("-filter_complex").Add(filter)
                         .Add("-map").Add("[outv]");

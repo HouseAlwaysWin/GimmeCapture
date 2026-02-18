@@ -192,12 +192,12 @@ public abstract class FloatingWindowBase : Window
             return;
         }
 
-        // 2. Interactive elements (Buttons etc)
+        // 2. Interactive elements (Buttons, Sliders etc)
         var visualSource = e.Source as Avalonia.Visual;
         var vFallback = visualSource;
         while (vFallback != null)
         {
-            if (vFallback is Button || vFallback is ToggleButton || vFallback is ICommandSource || vFallback is ContextMenu || vFallback is TextBox)
+            if (vFallback is Button || vFallback is ToggleButton || vFallback is ICommandSource || vFallback is ContextMenu || vFallback is TextBox || vFallback is Slider || vFallback is Thumb)
                 return;
             vFallback = vFallback.GetVisualParent();
         }
