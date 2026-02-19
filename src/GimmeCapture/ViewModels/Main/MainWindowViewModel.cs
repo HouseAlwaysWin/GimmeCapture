@@ -194,6 +194,7 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             if (id == ID_SNIP) Avalonia.Threading.Dispatcher.UIThread.Post(() => StartCaptureCommand.Execute(CaptureMode.Normal));
             else if (id == ID_RECORD) Avalonia.Threading.Dispatcher.UIThread.Post(() => StartCaptureCommand.Execute(CaptureMode.Record));
+            else if (id == ID_PIN) Avalonia.Threading.Dispatcher.UIThread.Post(() => StartCaptureCommand.Execute(CaptureMode.Translate));
         };
 
 

@@ -21,6 +21,10 @@ public partial class SnipWindow : Window
     private Point _translationSelectionStart;
     private UserSelectionRect? _currentTranslationSelection;
 
+    // Toolbar dragging fields
+    private bool _isDraggingToolbar;
+    private Point _toolbarDragOffset;
+
     private void OnPointerPressed(object? sender, PointerPressedEventArgs e)
     {
         if (_viewModel == null) return;
@@ -144,17 +148,44 @@ public partial class SnipWindow : Window
 
         if (props.IsLeftButtonPressed)
         {
+            // Check if clicking on SnipToolbar
+            Control? toolbarAncestor = sourceControl;
+            while (toolbarAncestor != null && toolbarAncestor is not Views.Controls.SnipToolbar)
+            {
+                toolbarAncestor = toolbarAncestor.GetVisualParent() as Control;
+            }
+
+            if (toolbarAncestor is Views.Controls.SnipToolbar toolbar)
+            {
+                // If clicking a button, let the button handle it
+                if (sourceControl is Button || sourceControl?.FindAncestorOfType<Button>() != null)
+                {
+                    return;
+                }
+
+                // Otherwise, start dragging the toolbar
+                _isDraggingToolbar = true;
+                _toolbarDragOffset = e.GetPosition(toolbar); // Position relative to toolbar
+                e.Pointer.Capture(this);
+                e.Handled = true;
+                return;
+            }
+        }
+
+        if (props.IsLeftButtonPressed)
+        {
             // Translation mode: multi-selection logic
             if (_viewModel.IsTranslationMode)
             {
-                // Check if clicking on TranslationToolbar or existing selection
+                // Already handled toolbar above
+                
+                // Check if clicking on existing selection or popup
                 if (sourceControl != null)
                 {
                     Control? ancestor = sourceControl;
                     while (ancestor != null)
                     {
-                        if (ancestor is Views.Controls.SnipToolbar ||
-                            ancestor is Avalonia.Controls.Primitives.Popup)
+                        if (ancestor is Avalonia.Controls.Primitives.Popup)
                             return;
                         ancestor = ancestor.GetVisualParent() as Control;
                     }
@@ -304,52 +335,47 @@ public partial class SnipWindow : Window
 
         var currentPoint = e.GetPosition(this);
         UpdateActiveScreenBounds(currentPoint);
-        var sourceControl = e.Source as Control;
 
-        // --- Cursor Logic ---
-        if (_isMovingSelection || _isDraggingAnnotation)
-        {
-            SetCursorShape(StandardCursorType.SizeAll);
-        }
-        else if (_isResizing)
-        {
-             // Handled by XAML/Capture
-        }
-        else if (_viewModel.CurrentState == SnipState.Selected)
+        // --- Handle Cursors ---
+        if (!_isResizing && !_isMovingSelection && !_isDraggingAnnotation && !_isTranslationSelecting && !_isDraggingToolbar && !_isDraggingTranslation)
         {
             bool cursorSet = false;
-
-            // 1. Text Annotation Hover (Hand Cursor)
-            if (_viewModel.IsDrawingMode && _viewModel.CurrentAnnotationTool == AnnotationType.Text)
+            if (_viewModel.CurrentState == SnipState.Selected)
             {
-                var selectionSpacePoint = new Point(currentPoint.X - _viewModel.SelectionRect.X, currentPoint.Y - _viewModel.SelectionRect.Y);
-                 for (int i = _viewModel.Annotations.Count - 1; i >= 0; i--)
-                 {
-                     var ann = _viewModel.Annotations[i];
-                     if (ann.Type == AnnotationType.Text)
-                     {
-                         double estimatedWidth = ann.Text.Length * ann.FontSize * 0.6; 
-                         double estimatedHeight = ann.FontSize * 1.5;
-                         var rect = new Rect(ann.StartPoint.X, ann.StartPoint.Y, estimatedWidth, estimatedHeight);
-                         
-                         if (rect.Contains(selectionSpacePoint))
-                         {
-                             SetCursorShape(StandardCursorType.Hand);
-                             cursorSet = true;
-                             break;
-                         }
-                     }
-                 }
-            }
-
-            if (!cursorSet && !_viewModel.IsDrawingMode && _viewModel.SelectionRect.Contains(currentPoint))
-            {
-                bool isOverHandle = sourceControl != null && sourceControl.Classes.Contains("Handle");
-                
-                if (!isOverHandle)
+                // 1. Text Annotation Hover (Hand Cursor)
+                if (_viewModel.IsDrawingMode && _viewModel.CurrentAnnotationTool == AnnotationType.Text)
                 {
-                    SetCursorShape(StandardCursorType.SizeAll);
-                    cursorSet = true;
+                    var selectionSpacePoint = new Point(currentPoint.X - _viewModel.SelectionRect.X, currentPoint.Y - _viewModel.SelectionRect.Y);
+                    for (int i = _viewModel.Annotations.Count - 1; i >= 0; i--)
+                    {
+                        var ann = _viewModel.Annotations[i];
+                        if (ann.Type == AnnotationType.Text)
+                        {
+                            double estimatedWidth = ann.Text.Length * ann.FontSize * 0.6; 
+                            double estimatedHeight = ann.FontSize * 1.5;
+                            var rect = new Rect(ann.StartPoint.X, ann.StartPoint.Y, estimatedWidth, estimatedHeight);
+                            
+                            if (rect.Contains(selectionSpacePoint))
+                            {
+                                SetCursorShape(StandardCursorType.Hand);
+                                cursorSet = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                // 2. Handle Hover (SizeAll)
+                if (!cursorSet)
+                {
+                    var hit = this.InputHitTest(currentPoint) as Control;
+                    bool isOverHandle = hit != null && (hit.Classes.Contains("Handle") || hit.Classes.Contains("MoveHandle"));
+
+                    if (isOverHandle || _viewModel.SelectionRect.Contains(currentPoint))
+                    {
+                        SetCursorShape(StandardCursorType.SizeAll);
+                        cursorSet = true;
+                    }
                 }
             }
 
@@ -358,15 +384,25 @@ public partial class SnipWindow : Window
                 SetCursorShape(StandardCursorType.Arrow);
             }
         }
-        else
+        else if (!_isTranslationSelecting && !_isDraggingToolbar)
         {
             SetCursorShape(StandardCursorType.Cross);
         }
-        // ------------------
 
+        // --- Execution Logic ---
+
+        // 1. Toolbar Dragging
+        if (_isDraggingToolbar)
+        {
+            _viewModel.ToolbarLeft = currentPoint.X - _toolbarDragOffset.X;
+            _viewModel.ToolbarTop = currentPoint.Y - _toolbarDragOffset.Y;
+            _viewModel.IsToolbarManuallyPositioned = true;
+            return;
+        }
+
+        // 2. Selection Resizing
         if (_isResizing)
         {
-             // Calculate delta
              var deltaX = currentPoint.X - _resizeStartPoint.X;
              var deltaY = currentPoint.Y - _resizeStartPoint.Y;
              
@@ -402,6 +438,7 @@ public partial class SnipWindow : Window
              return;
         }
         
+        // 3. Selection Moving
         if (_isMovingSelection)
         {
              var deltaX = currentPoint.X - _moveStartPoint.X;
@@ -415,6 +452,7 @@ public partial class SnipWindow : Window
              return;
         }
         
+        // 4. Annotation Dragging
         if (_isDraggingAnnotation && _draggingAnnotation != null)
         {
              var selectionSpacePoint = new Point(currentPoint.X - _viewModel.SelectionRect.X, currentPoint.Y - _viewModel.SelectionRect.Y);
@@ -423,25 +461,24 @@ public partial class SnipWindow : Window
              return;
         }
 
+        // 5. Normal Selection / Translation Selection / Detecting
         if (_viewModel.CurrentState == SnipState.Selecting)
         {
             var x = Math.Min(_startPoint.X, currentPoint.X);
             var y = Math.Min(_startPoint.Y, currentPoint.Y);
             var width = Math.Abs(currentPoint.X - _startPoint.X);
             var height = Math.Abs(currentPoint.Y - _startPoint.Y);
-
             _viewModel.SelectionRect = new Rect(x, y, width, height);
         }
         else if (_isTranslationSelecting && _currentTranslationSelection != null)
         {
-            // Translation mode: update current selection rectangle
             var x = Math.Min(_translationSelectionStart.X, currentPoint.X);
             var y = Math.Min(_translationSelectionStart.Y, currentPoint.Y);
             var width = Math.Abs(currentPoint.X - _translationSelectionStart.X);
             var height = Math.Abs(currentPoint.Y - _translationSelectionStart.Y);
             _currentTranslationSelection.Bounds = new Rect(x, y, width, height);
         }
-        else if (_viewModel.CurrentState == SnipState.Detecting)
+        else if (_viewModel.CurrentState == SnipState.Detecting && !_viewModel.IsTranslationMode)
         {
             _viewModel.UpdateDetectedRect(currentPoint);
         }
@@ -449,13 +486,9 @@ public partial class SnipWindow : Window
         {
             var relPoint = new Point(currentPoint.X - _viewModel.SelectionRect.X, currentPoint.Y - _viewModel.SelectionRect.Y);
             if (_currentAnnotation.Type == AnnotationType.Pen)
-            {
                 _currentAnnotation.AddPoint(relPoint);
-            }
             else
-            {
                 _currentAnnotation.EndPoint = relPoint;
-            }
         }
     }
 
@@ -463,17 +496,27 @@ public partial class SnipWindow : Window
     {
         if (_viewModel == null) return;
         
+        if (_isDraggingToolbar)
+        {
+            _isDraggingToolbar = false;
+            e.Pointer.Capture(null);
+            e.Handled = true;
+            return;
+        }
+
         if (_isResizing)
         {
              _isResizing = false;
-            _resizeDirection = ResizeDirection.None;
+             _resizeDirection = ResizeDirection.None;
              _viewModel.CurrentState = SnipState.Selected;
+             e.Pointer.Capture(null);
              return;
         }
 
         if (_isMovingSelection)
         {
             _isMovingSelection = false;
+            e.Pointer.Capture(null);
             return;
         }
         
@@ -481,6 +524,7 @@ public partial class SnipWindow : Window
         {
             _isDraggingAnnotation = false;
             _draggingAnnotation = null;
+            e.Pointer.Capture(null);
             return;
         }
         

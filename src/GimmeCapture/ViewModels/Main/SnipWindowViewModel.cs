@@ -224,6 +224,17 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
                   .DisposeWith(_disposables);
         }
 
+        // Reactive toolbar positioning for translation mode
+        this.WhenAnyValue(x => x.ViewportSize, x => x.ToolbarWidth, x => x.IsTranslationMode, x => x.ActiveScreenBounds)
+            .Subscribe(_ => 
+            {
+                if (IsTranslationMode)
+                {
+                    InitializeTranslationToolbarPosition();
+                }
+            })
+            .DisposeWith(_disposables);
+
         UpdateMask();
     }
 

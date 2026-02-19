@@ -38,7 +38,8 @@ public partial class SnipWindowViewModel
             {
                 // Re-entering Detecting state (e.g. from Cancel/Reset)
                 // Restart scan if enabled (only after AllScreenBounds is populated)
-                if (ShowAIScanBox && AllScreenBounds?.Count > 0)
+                // 翻譯模式不使用 SAM2 掃描
+                if (ShowAIScanBox && !IsTranslationMode && AllScreenBounds?.Count > 0)
                 {
                     TriggerAutoScanCommand?.Execute(Unit.Default).Subscribe();
                 }
@@ -51,6 +52,8 @@ public partial class SnipWindowViewModel
                 // Clear translated blocks when selection changes
                 TranslatedBlocks.Clear();
             }
+            
+            this.RaisePropertyChanged(nameof(IsToolbarVisible));
         }
     }
 
@@ -92,7 +95,8 @@ public partial class SnipWindowViewModel
                 else
                 {
                     // Trigger scan if enabled (only after AllScreenBounds is populated)
-                    if (CurrentState == SnipState.Detecting && AllScreenBounds?.Count > 0)
+                    // 翻譯模式不使用 SAM2
+                    if (CurrentState == SnipState.Detecting && !IsTranslationMode && AllScreenBounds?.Count > 0)
                     {
                         TriggerAutoScanCommand?.Execute(Unit.Default).Subscribe();
                     }
@@ -264,7 +268,14 @@ public partial class SnipWindowViewModel
         set => this.RaiseAndSetIfChanged(ref _translationOverlayLeft, value);
     }
 
-    public double ToolbarMaxWidth => Math.Max(ViewportSize.Width - 40, 100);
+    public double ToolbarMaxWidth => (ViewportSize.Width > 100) ? ViewportSize.Width - 40 : 2000;
+
+    private bool _isToolbarManuallyPositioned;
+    public bool IsToolbarManuallyPositioned
+    {
+        get => _isToolbarManuallyPositioned;
+        set => this.RaiseAndSetIfChanged(ref _isToolbarManuallyPositioned, value);
+    }
 
     // 翻譯工具列位置（可拖曳，預設螢幕中間上方）
     private double _translationToolbarTop = 20;
@@ -283,14 +294,30 @@ public partial class SnipWindowViewModel
 
     public void InitializeTranslationToolbarPosition()
     {
-        // 居中上方
-        double vw = ViewportSize.Width > 0 ? ViewportSize.Width : 1920;
-        TranslationToolbarLeft = (vw - 200) / 2; // 200 = 估計工具列寬度
-        TranslationToolbarTop = 20;
+        // 如果使用者已經手動移動過，且還在同一個螢幕範圍內，可能不需要強行置中
+        // 但目前的邏輯是：只有在尚未手動移動時才自動置中
+        if (IsToolbarManuallyPositioned && IsTranslationMode)
+        {
+            return;
+        }
+
+        // 根據滑鼠所在的螢幕 (ActiveScreenBounds) 置中工具列
+        Rect bounds = ActiveScreenBounds.Width > 0 ? ActiveScreenBounds : new Rect(0, 0, ViewportSize.Width > 0 ? ViewportSize.Width : 1920, ViewportSize.Height > 0 ? ViewportSize.Height : 1080);
+        
+        double tw = ToolbarWidth > 0 ? ToolbarWidth : 200;
+        TranslationToolbarLeft = bounds.X + (bounds.Width - tw) / 2;
+        TranslationToolbarTop = bounds.Y + 20;
+
+        // 同步更新 XAML 綁定的工具列位置
+        ToolbarLeft = TranslationToolbarLeft;
+        ToolbarTop = TranslationToolbarTop;
     }
 
     private void UpdateToolbarPosition()
     {
+        // 翻譯模式下工具列位置由 InitializeTranslationToolbarPosition 管理
+        if (IsTranslationMode) return;
+
         // Default viewport fallback
         double vh = ViewportSize.Height > 0 ? ViewportSize.Height : 1080;
         double vw = ViewportSize.Width > 0 ? ViewportSize.Width : 1920;
@@ -956,6 +983,14 @@ public partial class SnipWindowViewModel
             await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
             {
                 UserSelections.Clear();
+
+                // 計算工具列區域（用於排除）
+                double tbLeft = TranslationToolbarLeft >= 0 ? TranslationToolbarLeft : (ViewportSize.Width - (ToolbarWidth > 0 ? ToolbarWidth : 200)) / 2;
+                double tbTop = TranslationToolbarTop;
+                double tbWidth = ToolbarWidth > 0 ? ToolbarWidth + 20 : 220;
+                double tbHeight = ToolbarHeight > 0 ? ToolbarHeight + 10 : 55;
+                var toolbarRect = new Rect(tbLeft, tbTop, tbWidth, tbHeight);
+
                 foreach (var box in textBoxes)
                 {
                     // 座標從 bitmap 空間轉換回螢幕邏輯座標
@@ -969,13 +1004,13 @@ public partial class SnipWindowViewModel
                         box.Height * scaleY
                     );
 
-                    // 過濾太小的區域
-                    if (bounds.Width > 10 && bounds.Height > 5)
+                    // 過濾太小的區域 + 排除工具列範圍
+                    if (bounds.Width > 10 && bounds.Height > 5 && !bounds.Intersects(toolbarRect))
                     {
                         UserSelections.Add(new UserSelectionRect { Bounds = bounds });
                     }
                 }
-                System.Diagnostics.Debug.WriteLine($"[TranslationMode] Added {UserSelections.Count} valid selections");
+                System.Diagnostics.Debug.WriteLine($"[TranslationMode] Added {UserSelections.Count} valid selections (excluded toolbar area)");
             });
 
             ocrEngine.Dispose();

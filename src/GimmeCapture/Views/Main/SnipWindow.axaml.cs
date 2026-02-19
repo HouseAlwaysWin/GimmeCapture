@@ -90,7 +90,11 @@ public partial class SnipWindow : Window
                 Console.WriteLine("[SnipWindow] ViewModel is not null, setting properties");
                 _viewModel.VisualScaling = this.RenderScaling;
                 _viewModel.ScreenOffset = this.Position;
-                _viewModel.RefreshWindowRects(this.TryGetPlatformHandle()?.Handle);
+                // 翻譯模式不需要 Win32 視窗偵測
+                if (!_viewModel.IsTranslationMode)
+                {
+                    _viewModel.RefreshWindowRects(this.TryGetPlatformHandle()?.Handle);
+                }
 
                 // Populate AllScreenBounds for multi-monitor UI
                 double scaling = this.RenderScaling;
@@ -119,7 +123,8 @@ public partial class SnipWindow : Window
                 }
                 
                 // Trigger AI Auto-Scan (single entry point after AllScreenBounds is ready)
-                if (_viewModel.ShowAIScanBox && _viewModel.CurrentState == SnipState.Detecting)
+                // 翻譯模式不使用 SAM2 掃描
+                if (_viewModel.ShowAIScanBox && !_viewModel.IsTranslationMode && _viewModel.CurrentState == SnipState.Detecting)
                 {
                     Console.WriteLine("[SnipWindow] Triggering AI Scan after AllScreenBounds ready");
                     try
@@ -131,6 +136,13 @@ public partial class SnipWindow : Window
                     {
                         Console.WriteLine($"[SnipWindow] AI Scan exception: {ex.Message}");
                     }
+                }
+                
+                // 翻譯模式：在 ViewportSize 和 AllScreenBounds 就緒後重新初始化工具列位置
+                if (_viewModel.IsTranslationMode)
+                {
+                    _viewModel.InitializeTranslationToolbarPosition();
+                    Console.WriteLine($"[SnipWindow] Translation toolbar at ({_viewModel.ToolbarLeft}, {_viewModel.ToolbarTop})");
                 }
             }
             else

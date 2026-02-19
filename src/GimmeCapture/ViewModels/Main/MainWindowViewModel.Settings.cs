@@ -294,6 +294,7 @@ public partial class MainWindowViewModel
         set
         {
             this.RaiseAndSetIfChanged(ref _pinHotkey, value);
+            HotkeyService.Register(ID_PIN, value);
             this.RaisePropertyChanged(nameof(PinTooltip));
         }
     }

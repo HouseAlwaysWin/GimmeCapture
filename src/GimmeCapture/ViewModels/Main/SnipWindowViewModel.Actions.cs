@@ -63,6 +63,7 @@ public partial class SnipWindowViewModel
             
             this.RaisePropertyChanged(nameof(ModeDisplayName));
             this.RaisePropertyChanged(nameof(IsScreenshotMode));
+            this.RaisePropertyChanged(nameof(IsToolbarVisible));
         }
     }
 
@@ -70,6 +71,11 @@ public partial class SnipWindowViewModel
     /// 截圖模式（非錄影且非翻譯）
     /// </summary>
     public bool IsScreenshotMode => !IsRecordingMode && !IsTranslationMode;
+
+    /// <summary>
+    /// 工具列是否可見：翻譯模式始終可見，其他模式需要在 Selected 狀態且未 Finalizing
+    /// </summary>
+    public bool IsToolbarVisible => IsTranslationMode || (CurrentState == SnipState.Selected && !IsRecordingFinalizing);
 
     public string ModeDisplayName => IsTranslationMode 
         ? LocalizationService.Instance["CaptureModeTranslation"] ?? "Translation"
@@ -102,7 +108,11 @@ public partial class SnipWindowViewModel
     public bool IsRecordingFinalizing
     {
         get => _isRecordingFinalizing;
-        set => this.RaiseAndSetIfChanged(ref _isRecordingFinalizing, value);
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _isRecordingFinalizing, value);
+            this.RaisePropertyChanged(nameof(IsToolbarVisible));
+        }
     }
 
     // Action Helpers
@@ -268,18 +278,14 @@ public partial class SnipWindowViewModel
             
             if (IsTranslationMode)
             {
-                // 已經在翻譯模式 -> 無動作
+                // 翻譯模式下 F3 無動作（翻譯模式已由全域快捷鍵進入）
                 return;
             }
-            else if (IsRecordingMode || (!IsRecordingMode && !IsTranslationMode && CurrentState == SnipState.Selected))
+            
+            if (CurrentState == SnipState.Selected)
             {
                 // 截圖/錄影模式且已選取 -> Pin
                 await Pin(false);
-            }
-            else
-            {
-                // 未進入任何模式 -> 進入翻譯模式
-                IsTranslationMode = true;
             }
         }, canExecuteHotkeys);
         HandleF3Command.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"HandleF3 error: {ex}"));
@@ -289,6 +295,11 @@ public partial class SnipWindowViewModel
             if (RecState == RecordingState.Idle)
             {
                 IsTranslationMode = true;
+                IsRecordingMode = false;
+                // 重置選取狀態
+                CurrentState = SnipState.Detecting;
+                SelectionRect = default;
+                InitializeTranslationToolbarPosition();
             }
         }, canExecuteHotkeys);
         SetTranslationModeCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));

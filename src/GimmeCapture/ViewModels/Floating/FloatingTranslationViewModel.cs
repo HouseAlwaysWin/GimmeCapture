@@ -88,13 +88,9 @@ public partial class FloatingTranslationViewModel : FloatingWindowViewModelBase,
     {
         get
         {
-            double hPad = HidePinDecoration ? 10 : Math.Max(10, WingWidth);
-            double topPad = 45;
-            double baseBottomPad = 15;
-            double bottomPad = baseBottomPad;
-            if (ShowToolbar) bottomPad += 45;
-
-            return new Thickness(hPad, topPad, hPad, bottomPad);
+            // 無裝飾，只需頂部給工具列留空間
+            double topPad = ShowToolbar ? 40 : 5;
+            return new Thickness(5, topPad, 5, 5);
         }
     }
 

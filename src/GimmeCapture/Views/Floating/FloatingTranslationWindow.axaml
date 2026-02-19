@@ -40,152 +40,44 @@
         <KeyBinding Gesture="Escape" Command="{Binding CloseCommand}" />
     </Window.KeyBindings>
 
-    <Window.Styles>
-        <Style Selector="Grid.Handle">
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="IsVisible" Value="{Binding !IsAnyToolActive}"/>
-        </Style>
-        <Style Selector="Border.MainBorder">
-            <Setter Property="BoxShadow" Value="{Binding BorderColor, Converter={StaticResource ColorToBoxShadowConverter}}"/>
-            <Setter Property="BorderThickness" Value="{Binding BorderThickness, Converter={StaticResource ThicknessConverter}}"/>
-        </Style>
-        <Style Selector="Border.MainBorder.hidden-border">
-            <Setter Property="BoxShadow" Value="0 0 0 0 Transparent"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Background" Value="Transparent"/>
-        </Style>
-        <Style Selector="Border.InnerBorder.hidden-border">
-            <Setter Property="BorderThickness" Value="0"/>
-        </Style>
-    </Window.Styles>
-
     <Grid Name="RootGrid" Background="Transparent" ClipToBounds="False">
 
-        <!-- Main Border -->
-        <Border x:Name="MainBorder"
-                HorizontalAlignment="Center"
-                VerticalAlignment="Top"
-                Width="{Binding DisplayWidth}"
-                Height="{Binding DisplayHeight}"
-                Margin="{Binding WindowPadding}"
-                Classes="MainBorder"
-                Classes.hidden-border="{Binding HidePinBorder}"
-                CornerRadius="0"
-                ClipToBounds="False"
-                Background="{DynamicResource GothicBlackBrush}">
-            <Border.BorderBrush>
-                <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%" Opacity="{Binding HidePinBorder, Converter={StaticResource BoolInvertConverter}}">
-                    <GradientStop Offset="0" Color="{Binding BorderColor}"/>
-                    <GradientStop Offset="0.5" Color="{Binding BorderColor}"/>
-                    <GradientStop Offset="1" Color="{Binding BorderColor}"/>
-                </LinearGradientBrush>
-            </Border.BorderBrush>
-            <Border Classes="InnerBorder">
-                <Grid>
-                    <Grid>
-                        <Border BorderBrush="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}"
-                                BorderThickness="1" Margin="-1"
-                                IsVisible="{Binding HidePinBorder, Converter={StaticResource BoolInvertConverter}}"/>
-
-                        <Grid HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
-                            <!-- 背景截圖 -->
-                            <Image Source="{Binding Image}"
-                                   Stretch="Fill"
-                                   Name="PinnedImage"/>
-
-                            <!-- 翻譯結果覆蓋層（多選區域）-->
-                            <ItemsControl ItemsSource="{Binding TranslatedBlocks}" IsHitTestVisible="False">
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate>
-                                        <Canvas Width="{Binding DisplayWidth}" Height="{Binding DisplayHeight}"/>
-                                    </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate DataType="m:TranslatedBlock">
-                                        <Border Canvas.Left="{Binding Bounds.X}"
-                                                Canvas.Top="{Binding Bounds.Y}"
-                                                Width="{Binding Bounds.Width}"
-                                                Height="{Binding Bounds.Height}"
-                                                Background="#E0000000"
-                                                CornerRadius="2"
-                                                Padding="4">
-                                            <TextBlock Text="{Binding TranslatedText}"
-                                                       Foreground="White"
-                                                       FontSize="12"
-                                                       TextWrapping="Wrap"
-                                                       VerticalAlignment="Center"
-                                                       HorizontalAlignment="Center"/>
-                                        </Border>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-
-                            <!-- 標註圖層 -->
-                            <ItemsControl ItemsSource="{Binding Annotations}" IsHitTestVisible="False">
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate>
-                                        <Canvas Width="{Binding DisplayWidth}" Height="{Binding DisplayHeight}"/>
-                                    </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate DataType="m:Annotation">
-                                        <ctl:AnnotationControl Annotation="{Binding}"
-                                                               Width="{Binding $parent[Window].((vm:FloatingTranslationViewModel)DataContext).DisplayWidth}"
-                                                               Height="{Binding $parent[Window].((vm:FloatingTranslationViewModel)DataContext).DisplayHeight}"/>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </Grid>
-
-                        <!-- Decoration Layer -->
-                        <ctl:GothicDecoration DecorationBrush="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}"
-                                              ShowWings="{Binding !HidePinDecoration}"
-                                              ShowCorners="{Binding !HidePinDecoration}"
-                                              ShowBorder="{Binding !HidePinBorder}"
-                                              WingWidth="{Binding WingWidth}"
-                                              WingHeight="{Binding WingHeight}"
-                                              SelectionIconSize="{Binding SelectionIconSize}"
-                                              LeftWingMargin="{Binding LeftWingMargin}"
-                                              RightWingMargin="{Binding RightWingMargin}" />
-
-                        <!-- Resize Handles -->
-                        <Grid Classes="Handle" Name="HandleTopLeft" Cursor="TopLeftCorner" Width="30" Height="30" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="-15"/>
-                        <Grid Classes="Handle" Name="HandleTopRight" Cursor="TopRightCorner" Width="30" Height="30" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="-15"/>
-                        <Grid Classes="Handle" Name="HandleBottomLeft" Cursor="BottomLeftCorner" Width="30" Height="30" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="-15"/>
-                        <Grid Classes="Handle" Name="HandleBottomRight" Cursor="BottomRightCorner" Width="30" Height="30" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="-15"/>
-                        <Grid Classes="Handle" Name="HandleTop" Cursor="TopSide" Height="15" HorizontalAlignment="Stretch" VerticalAlignment="Top" Margin="15,0"/>
-                        <Grid Classes="Handle" Name="HandleBottom" Cursor="BottomSide" Height="15" HorizontalAlignment="Stretch" VerticalAlignment="Bottom" Margin="15,0"/>
-                        <Grid Classes="Handle" Name="HandleLeft" Cursor="LeftSide" Width="15" HorizontalAlignment="Left" VerticalAlignment="Stretch" Margin="0,15"/>
-                        <Grid Classes="Handle" Name="HandleRight" Cursor="RightSide" Width="15" HorizontalAlignment="Right" VerticalAlignment="Stretch" Margin="0,15"/>
-                    </Grid>
-                </Grid>
-            </Border>
-        </Border>
-
-        <!-- Bottom Toolbar -->
+        <!-- 頂部浮動可拖曳工具列 -->
         <Border x:Name="ToolbarBorder" IsVisible="{Binding ShowToolbar}"
-                Margin="{Binding ToolbarMargin}"
-                Background="#1A1A1A" BorderBrush="#333333" BorderThickness="1"
+                Background="#CC1A1A1A" BorderBrush="#333333" BorderThickness="1"
                 CornerRadius="4" Padding="6,2"
                 HorizontalAlignment="Center"
-                VerticalAlignment="Bottom"
-                MinWidth="300"
+                VerticalAlignment="Top"
+                Margin="0,4,0,0"
                 BoxShadow="0 4 15 0 #D0000000"
-                ZIndex="20">
+                ZIndex="20"
+                Cursor="Hand">
             <StackPanel Orientation="Horizontal" Spacing="2">
-                <!-- 1. Drawing Tools -->
+                <!-- 拖曳把手 -->
+                <Border Width="14" Height="20" Margin="0,0,4,0" VerticalAlignment="Center" Cursor="Hand"
+                        Name="ToolbarDragHandle" Background="Transparent">
+                    <StackPanel VerticalAlignment="Center" Spacing="2">
+                        <Rectangle Fill="#666666" Height="2" Width="10"/>
+                        <Rectangle Fill="#666666" Height="2" Width="10"/>
+                        <Rectangle Fill="#666666" Height="2" Width="10"/>
+                    </StackPanel>
+                </Border>
+
+                <Rectangle Fill="#444444" Width="1" Height="16" Margin="0,0,2,0" VerticalAlignment="Center"/>
+
+                <!-- Drawing Tools -->
                 <ctl:DrawingToolbar DataContext="{Binding}"/>
 
                 <Rectangle Fill="#444444" Width="1" Height="16" Margin="2,0" VerticalAlignment="Center"/>
 
-                <!-- 2. Clear -->
+                <!-- Clear -->
                 <Button Theme="{StaticResource SnipButton}" Command="{Binding ClearAnnotationsCommand}" ToolTip.Tip="{Binding ClearTooltip}">
                     <PathIcon Data="M19,4h-3.5l-1-1h-5l-1,1H5v2h14V4z M6,19c0,1.1,0.9,2,2,2h8c1.1,0,2-0.9,2-2V7H6V19z" Width="14" Height="14"/>
                 </Button>
 
                 <Rectangle Fill="#444444" Width="1" Height="16" Margin="2,0" VerticalAlignment="Center"/>
 
-                <!-- 3. Core Actions -->
+                <!-- Core Actions -->
                 <Button Theme="{StaticResource SnipButton}" Command="{Binding CopyCommand}" ToolTip.Tip="{Binding CopyTooltip}">
                     <PathIcon Data="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z" Width="14" Height="14"/>
                 </Button>
@@ -200,6 +92,64 @@
                     <PathIcon Data="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z" Width="14" Height="14"/>
                 </Button>
             </StackPanel>
+        </Border>
+
+        <!-- 主要內容區域（無邊框裝飾） -->
+        <Border HorizontalAlignment="Center"
+                VerticalAlignment="Top"
+                Width="{Binding DisplayWidth}"
+                Height="{Binding DisplayHeight}"
+                Margin="{Binding WindowPadding}"
+                ClipToBounds="True">
+            <Grid HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                <!-- 背景截圖 -->
+                <Image Source="{Binding Image}"
+                       Stretch="Fill"
+                       Name="PinnedImage"/>
+
+                <!-- 翻譯結果覆蓋層（多選區域）-->
+                <ItemsControl ItemsSource="{Binding TranslatedBlocks}" IsHitTestVisible="False">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <Canvas Width="{Binding DisplayWidth}" Height="{Binding DisplayHeight}"/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="m:TranslatedBlock">
+                            <Border Canvas.Left="{Binding Bounds.X}"
+                                    Canvas.Top="{Binding Bounds.Y}"
+                                    Width="{Binding Bounds.Width}"
+                                    Height="{Binding Bounds.Height}"
+                                    Background="#E0000000"
+                                    CornerRadius="2"
+                                    Padding="4">
+                                <TextBlock Text="{Binding TranslatedText}"
+                                           Foreground="White"
+                                           FontSize="12"
+                                           TextWrapping="Wrap"
+                                           VerticalAlignment="Center"
+                                           HorizontalAlignment="Center"/>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <!-- 標註圖層 -->
+                <ItemsControl ItemsSource="{Binding Annotations}" IsHitTestVisible="False">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <Canvas Width="{Binding DisplayWidth}" Height="{Binding DisplayHeight}"/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="m:Annotation">
+                            <ctl:AnnotationControl Annotation="{Binding}"
+                                                   Width="{Binding $parent[Window].((vm:FloatingTranslationViewModel)DataContext).DisplayWidth}"
+                                                   Height="{Binding $parent[Window].((vm:FloatingTranslationViewModel)DataContext).DisplayHeight}"/>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Grid>
         </Border>
 
         <!-- Processing Overlay -->
@@ -229,19 +179,6 @@
                 <MenuItem Header="{Binding [MenuClose], Source={x:Static services:LocalizationService.Instance}}" Command="{Binding CloseCommand}"/>
             </ContextMenu>
         </Grid.ContextMenu>
-
-        <!-- Size Display -->
-        <StackPanel Orientation="Horizontal" VerticalAlignment="Top" HorizontalAlignment="Center" Margin="0,25,0,0" IsHitTestVisible="False" ZIndex="15">
-             <TextBlock Text="{Binding #MainBorder.Bounds.Width, StringFormat='{}{0:F0}'}" Foreground="Lime" FontWeight="Bold" FontSize="14">
-                 <TextBlock.Effect><DropShadowEffect BlurRadius="2" Color="Black"/></TextBlock.Effect>
-             </TextBlock>
-             <TextBlock Text=" x " Foreground="Lime" FontWeight="Bold" FontSize="14">
-                 <TextBlock.Effect><DropShadowEffect BlurRadius="2" Color="Black"/></TextBlock.Effect>
-             </TextBlock>
-             <TextBlock Text="{Binding #MainBorder.Bounds.Height, StringFormat='{}{0:F0}'}" Foreground="Lime" FontWeight="Bold" FontSize="14">
-                 <TextBlock.Effect><DropShadowEffect BlurRadius="2" Color="Black"/></TextBlock.Effect>
-             </TextBlock>
-        </StackPanel>
 
     </Grid>
 </Window>

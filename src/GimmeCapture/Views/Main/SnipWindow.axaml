@@ -94,6 +94,10 @@
     </Window.Styles>
     
     <Grid>
+        <!-- 翻譯模式：透明但可點擊的背景（防止滑鼠事件穿透視窗） -->
+        <!-- 使用 #01000000 而非 Transparent，確保 Windows 層級視窗能正確攔截滑鼠事件 -->
+        <Panel Background="#01000000" IsHitTestVisible="True" IsVisible="{Binding IsTranslationMode}" ZIndex="0"/>
+        
         <!-- 背景遮罩層 -->
         <Path Fill="Black" Data="{Binding MaskGeometry}" Opacity="{Binding MaskOpacity}" IsHitTestVisible="True">
             <Path.IsVisible>
@@ -109,14 +113,17 @@
             <ItemsControl ItemsSource="{Binding WindowRects}" IsHitTestVisible="True"
                           Width="{Binding ViewportSize.Width}" Height="{Binding ViewportSize.Height}">
                 <ItemsControl.IsVisible>
-                    <Binding Path="CurrentState">
-                        <Binding.Converter>
-                            <cv:EnumMatchConverter/>
-                        </Binding.Converter>
-                        <Binding.ConverterParameter>
-                            <x:Static Member="vm:SnipState.Detecting"/>
-                        </Binding.ConverterParameter>
-                    </Binding>
+                    <MultiBinding Converter="{x:Static BoolConverters.And}">
+                        <Binding Path="CurrentState">
+                            <Binding.Converter>
+                                <cv:EnumMatchConverter/>
+                            </Binding.Converter>
+                            <Binding.ConverterParameter>
+                                <x:Static Member="vm:SnipState.Detecting"/>
+                            </Binding.ConverterParameter>
+                        </Binding>
+                        <Binding Path="!IsTranslationMode"/>
+                    </MultiBinding>
                 </ItemsControl.IsVisible>
                 <ItemsControl.Styles>
                     <Style Selector="ItemsControl > ContentPresenter" x:DataType="m:VisualRect">
@@ -216,8 +223,8 @@
             </Panel>
         </Canvas>
 
-        <!-- 互動層 -->
-        <Canvas>
+        <!-- 互動層 (僅截圖/錄影模式) -->
+        <Canvas IsVisible="{Binding !IsTranslationMode}">
             <Grid Width="{Binding SelectionRect.Width}"
                   Height="{Binding SelectionRect.Height}"
                   Canvas.Left="{Binding SelectionRect.X}"
@@ -262,7 +269,7 @@
                       IsVisible="{Binding IsDrawingMode, Converter={StaticResource BoolInvertConverter}}"/>
                 <Grid Classes="Handle" Name="HandleRight" Cursor="SizeWestEast" Width="15" HorizontalAlignment="Right" VerticalAlignment="Stretch" Margin="0,15"
                       IsVisible="{Binding IsDrawingMode, Converter={StaticResource BoolInvertConverter}}"/>
-
+                
                 <!-- Decoration Layer (Unified) -->
                 <ctl:GothicDecoration DecorationBrush="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}"
                                       ShowWings="{Binding !IsRecordingActive}"
@@ -274,10 +281,12 @@
                                       SelectionIconSize="{Binding SelectionIconSize}"
                                       LeftWingMargin="{Binding LeftWingMargin}"
                                       RightWingMargin="{Binding RightWingMargin}" />
-                
             </Grid>
-            
-            <!-- Translation Overlay (Outside Selection Box) -->
+        </Canvas>
+
+        <!-- Translation Layers (Visible in Translation Mode) -->
+        <Canvas>
+            <!-- Translation Results (Standard) -->
             <ItemsControl ItemsSource="{Binding TranslatedBlocks}" 
                           Canvas.Left="{Binding TranslationOverlayLeft}"
                           Canvas.Top="{Binding TranslationOverlayTop}"
@@ -287,11 +296,6 @@
                         <StackPanel Spacing="4"/>
                     </ItemsPanelTemplate>
                 </ItemsControl.ItemsPanel>
-                <ItemsControl.Styles>
-                    <Style Selector="ItemsControl > ContentPresenter" x:DataType="m:TranslatedBlock">
-                        <!-- No hardcoded top offset, VM handles the gap from toolbar -->
-                    </Style>
-                </ItemsControl.Styles>
                 <ItemsControl.ItemTemplate>
                     <DataTemplate DataType="m:TranslatedBlock">
                         <Border Name="TranslationBorder"
@@ -320,21 +324,19 @@
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
-            
-            <!-- Text Overlay -->
-            <!-- Text Input Overlay -->
+
+            <!-- Text Entry Overlay -->
             <ctl:TextEntryOverlay DataContext="{Binding}"
                                   Canvas.Left="{Binding TextInputPosition.X}"
                                   Canvas.Top="{Binding TextInputPosition.Y}"/>
-                    <ctl:SnipToolbar Name="Toolbar" Canvas.Left="{Binding ToolbarLeft}" Canvas.Top="{Binding ToolbarTop}" 
-                                     MaxWidth="{Binding ToolbarMaxWidth}">
-                        <ctl:SnipToolbar.IsVisible>
-                            <MultiBinding Converter="{x:Static BoolConverters.And}">
-                                <Binding Path="CurrentState" Converter="{StaticResource StateToBoolConverter}"/>
-                                <Binding Path="!IsRecordingFinalizing"/>
-                            </MultiBinding>
-                        </ctl:SnipToolbar.IsVisible>
-                    </ctl:SnipToolbar>
+
+            <!-- Toolbar Layer -->
+            <Canvas IsHitTestVisible="True" ZIndex="1000">
+                <ctl:SnipToolbar Name="Toolbar" 
+                                 Canvas.Left="{Binding ToolbarLeft}" Canvas.Top="{Binding ToolbarTop}" 
+                                 MaxWidth="{Binding ToolbarMaxWidth}"
+                                 IsVisible="{Binding IsToolbarVisible}"/>
+            </Canvas>
 
             <!-- Translation Mode: Multi-Selection Layer -->
             <ItemsControl ItemsSource="{Binding UserSelections}"
