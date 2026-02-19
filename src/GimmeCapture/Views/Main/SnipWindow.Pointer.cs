@@ -187,24 +187,39 @@ public partial class SnipWindow : Window
 
         if (props.IsLeftButtonPressed)
         {
-            // Translation mode: selection and interaction
+            // Translation mode: selection and interaction (V7+ Restructured)
             if (_viewModel.IsTranslationMode)
             {
-                // A. Resize Handle Detection (High Priority)
-                if (sourceControl is Border b && b.Classes.Contains("TranslationHandle"))
+                // A. Drag Handle Detection (External Title Bar V7+)
+                if (sourceControl is Border db && db.Classes.Contains("TranslationDragHandle") && db.DataContext is UserSelectionRect dragItem)
                 {
-                    var dir = ResizeDirection.None;
-                    if (b.Classes.Contains("TopLeft")) dir = ResizeDirection.TopLeft;
-                    else if (b.Classes.Contains("TopRight")) dir = ResizeDirection.TopRight;
-                    else if (b.Classes.Contains("BottomLeft")) dir = ResizeDirection.BottomLeft;
-                    else if (b.Classes.Contains("BottomRight")) dir = ResizeDirection.BottomRight;
+                    _isMovingTranslationSelection = true;
+                    _movingTranslationSelection = dragItem;
+                    _translationMoveStart = point;
+                    _originalTranslationBounds = dragItem.Bounds;
+                    e.Pointer.Capture(this);
+                    e.Handled = true;
+                    return;
+                }
 
-                    if (dir != ResizeDirection.None && b.DataContext is UserSelectionRect item)
+                // B. Geometric Resize Detection (V7+ - Mathematical hit testing)
+                foreach (var sel in _viewModel.UserSelections)
+                {
+                    double tolerance = 12; 
+                    var rect = sel.Bounds;
+                    ResizeDirection dir = ResizeDirection.None;
+
+                    if (Math.Abs(point.X - rect.X) < tolerance && Math.Abs(point.Y - rect.Y) < tolerance) dir = ResizeDirection.TopLeft;
+                    else if (Math.Abs(point.X - rect.Right) < tolerance && Math.Abs(point.Y - rect.Y) < tolerance) dir = ResizeDirection.TopRight;
+                    else if (Math.Abs(point.X - rect.X) < tolerance && Math.Abs(point.Y - rect.Bottom) < tolerance) dir = ResizeDirection.BottomLeft;
+                    else if (Math.Abs(point.X - rect.Right) < tolerance && Math.Abs(point.Y - rect.Bottom) < tolerance) dir = ResizeDirection.BottomRight;
+
+                    if (dir != ResizeDirection.None)
                     {
                         _isResizingTranslation = true;
                         _translationResizeDirection = dir;
-                        _resizingTranslationItem = item;
-                        _originalTranslationRect = item.Bounds;
+                        _resizingTranslationItem = sel;
+                        _originalTranslationRect = rect;
                         _translationResizeStartPoint = point;
                         e.Pointer.Capture(this);
                         e.Handled = true;
@@ -212,187 +227,147 @@ public partial class SnipWindow : Window
                     }
                 }
 
-                // Hit test existing translation selections (Top-down)
-                UserSelectionRect? hitSelection = null;
-                for (int i = _viewModel.UserSelections.Count - 1; i >= 0; i--)
-                {
-                    if (_viewModel.UserSelections[i].Bounds.Contains(point))
-                    {
-                        hitSelection = _viewModel.UserSelections[i];
-                        break;
-                    }
-                }
-
-                if (hitSelection != null)
-                {
-                    // Hit an existing selection -> Start moving
-                    _isMovingTranslationSelection = true;
-                    _movingTranslationSelection = hitSelection;
-                    _translationMoveStart = point;
-                    _originalTranslationBounds = hitSelection.Bounds;
-                    e.Pointer.Capture(this);
-                    e.Handled = true;
-                    return;
-                }
-
-                // Not hit an existing selection -> Only start new one if manual selection is active
+                // C. Selection Creation (Only if no handle/corner hit and selection-active)
                 if (_viewModel.IsTranslationSelectionActive)
                 {
-                    // Start new selection
-                    _isTranslationSelecting = true;
-                    _translationSelectionStart = point;
-                    _currentTranslationSelection = new UserSelectionRect
+                    bool hitExisting = false;
+                    foreach (var sel in _viewModel.UserSelections)
                     {
-                        Bounds = new Rect(point, new Size(0, 0))
-                    };
-                    _viewModel.UserSelections.Add(_currentTranslationSelection);
-                    e.Pointer.Capture(this);
-                    e.Handled = true;
-                    return;
-                }
-                
-                // If not active, do nothing (maybe clicked background to clear focus etc)
-                return;
-            }
+                        if (sel.Bounds.Contains(point)) { hitExisting = true; break; }
+                    }
 
-            if (_viewModel.IsDrawingMode && _viewModel.CurrentState == SnipState.Selected)
-            {
-                // Logic: If in drawing mode and clicked INSIDE the selection area, draw.
-                if (_viewModel.SelectionRect.Contains(point))
-                {
-                    if (_viewModel.CurrentAnnotationTool == AnnotationType.Text)
+                    if (!hitExisting)
                     {
-                        // Start Text Entry
-                        _viewModel.IsEnteringText = true;
-                        _viewModel.TextInputPosition = point;
-                        _viewModel.PendingText = string.Empty;
-                        
+                        _isTranslationSelecting = true;
+                        _translationSelectionStart = point;
+                        _currentTranslationSelection = new UserSelectionRect { Bounds = new Rect(point, new Size(0, 0)) };
+                        _viewModel.UserSelections.Add(_currentTranslationSelection);
+                        e.Pointer.Capture(this);
                         e.Handled = true;
                         return;
                     }
-
-                    // Start Drawing
-                    _startPoint = point;
-                    var relPoint = new Point(point.X - _viewModel.SelectionRect.X, point.Y - _viewModel.SelectionRect.Y);
-                    
-                    _currentAnnotation = new Annotation
-                    {
-                        Type = _viewModel.CurrentAnnotationTool,
-                        StartPoint = relPoint,
-                        EndPoint = relPoint,
-                        Color = _viewModel.SelectedColor,
-                        Thickness = _viewModel.CurrentThickness,
-                        FontSize = _viewModel.CurrentFontSize,
-                        DrawingModeSnapshot = _viewModel.DrawingModeSnapshot
-                    };
-
-                    if (_viewModel.CurrentAnnotationTool == AnnotationType.Pen)
-                    {
-                        _currentAnnotation.AddPoint(relPoint);
-                    }
-                    
-                    _viewModel.AddAnnotation(_currentAnnotation);
-                    e.Handled = true;
-                    return;
                 }
-            }
-
-            // If clicking OUTSIDE or in Idle/Detecting, start NEW selection
-            // Check if the click is within the toolbar bounds (coordinate-based check)
-            var toolbar = this.FindControl<SnipToolbar>("Toolbar");
-            if (toolbar != null && toolbar.IsVisible)
-            {
-                // Get toolbar bounds in window coordinates
-                var toolbarBounds = toolbar.Bounds;
-                var toolbarPos = toolbar.TranslatePoint(new Point(0, 0), this);
-                if (toolbarPos.HasValue)
-                {
-                    var toolbarRect = new Rect(toolbarPos.Value, toolbarBounds.Size);
-                    // Expand the rect a bit to account for flyouts appearing below
-                    var expandedRect = new Rect(
-                        toolbarRect.X - 20, 
-                        toolbarRect.Y - 20, 
-                        toolbarRect.Width + 200,  // Flyouts can extend to the right
-                        toolbarRect.Height + 250  // Flyouts can extend down
-                    );
-                    if (expandedRect.Contains(point))
-                        return; // Don't start selection when clicking in toolbar area
-                }
-            }
-            
-            // Also check visual tree for popups
-            if (sourceControl != null)
-            {
-                Control? ancestor = sourceControl;
-                while (ancestor != null)
-                {
-                    if (ancestor is Views.Controls.SnipToolbar || 
-                        ancestor is Avalonia.Controls.Primitives.Popup)
-                        return;
-                    ancestor = ancestor.GetVisualParent() as Control;
-                }
-            }
-            
-            if (_viewModel.RecState == RecordingState.Idle && 
-                (_viewModel.CurrentState == SnipState.Idle || _viewModel.CurrentState == SnipState.Detecting))
-            {
-                _startPoint = point;
-                _viewModel.CurrentState = SnipState.Selecting;
-                _viewModel.SelectionRect = new Rect(_startPoint, new Size(0, 0));
-                _viewModel.IsDrawingMode = false;
-                _viewModel.ClearAnnotationsCommand.Execute().Subscribe();
-            }
-            else if (_viewModel.RecState == RecordingState.Idle && _viewModel.CurrentState == SnipState.Selected)
-            {
-                var expandedBounds = _viewModel.SelectionRect.Inflate(120);
-                if (expandedBounds.Contains(point) && !_viewModel.SelectionRect.Contains(point))
-                {
-                    e.Handled = true;
-                    return;
-                }
-
-                if (!_viewModel.SelectionRect.Contains(point))
-                {
-                     _startPoint = point;
-                     _viewModel.CurrentState = SnipState.Selecting;
-                     _viewModel.SelectionRect = new Rect(_startPoint, new Size(0, 0));
-                     _viewModel.IsDrawingMode = false;
-                     _viewModel.ClearAnnotationsCommand.Execute().Subscribe();
-                }
+                
+                // D. Fall-through: Let the click pass to the selection box (SelectableTextBlock)
+                return; 
             }
         }
+        
+        if (_viewModel.IsDrawingMode && _viewModel.CurrentState == SnipState.Selected)
+        {
+            // Logic: If in drawing mode and clicked INSIDE the selection area, draw.
+            if (_viewModel.SelectionRect.Contains(point))
+            {
+                if (_viewModel.CurrentAnnotationTool == AnnotationType.Text)
+                {
+                    // Start Text Entry
+                    _viewModel.IsEnteringText = true;
+                    _viewModel.TextInputPosition = point;
+                    _viewModel.PendingText = string.Empty;
+                    
+                    e.Handled = true;
+                    return;
+                }
+
+                // Start Drawing
+                _startPoint = point;
+                var relPoint = new Point(point.X - _viewModel.SelectionRect.X, point.Y - _viewModel.SelectionRect.Y);
+                
+                _currentAnnotation = new Annotation
+                {
+                    Type = _viewModel.CurrentAnnotationTool,
+                    StartPoint = relPoint,
+                    EndPoint = relPoint,
+                    Color = _viewModel.SelectedColor,
+                    Thickness = _viewModel.CurrentThickness,
+                    FontSize = _viewModel.CurrentFontSize,
+                    DrawingModeSnapshot = _viewModel.DrawingModeSnapshot
+                };
+
+                if (_viewModel.CurrentAnnotationTool == AnnotationType.Pen)
+                {
+                    _currentAnnotation.AddPoint(relPoint);
+                }
+                
+                _viewModel.AddAnnotation(_currentAnnotation);
+                e.Handled = true;
+                return;
+            }
+        }
+
+        // If clicking OUTSIDE or in Idle/Detecting, start NEW selection
+        // Check if the click is within the toolbar bounds (coordinate-based check)
+        var toolbarControl = this.FindControl<SnipToolbar>("Toolbar");
+        if (toolbarControl != null && toolbarControl.IsVisible)
+        {
+            // Get toolbar bounds in window coordinates
+            var toolbarBounds = toolbarControl.Bounds;
+            var toolbarPos = toolbarControl.TranslatePoint(new Point(0, 0), this);
+            if (toolbarPos.HasValue)
+            {
+                var toolbarRect = new Rect(toolbarPos.Value, toolbarBounds.Size);
+                // Expand the rect a bit to account for flyouts appearing below
+                var expandedRect = new Rect(
+                    toolbarRect.X - 20, 
+                    toolbarRect.Y - 20, 
+                    toolbarRect.Width + 200,  // Flyouts can extend to the right
+                    toolbarRect.Height + 250  // Flyouts can extend down
+                );
+                if (expandedRect.Contains(point))
+                    return; // Don't start selection when clicking in toolbar area
+            }
+        }
+        
+        // Also check visual tree for popups
+        if (sourceControl != null)
+        {
+            Control? ancestor = sourceControl;
+            while (ancestor != null)
+            {
+                if (ancestor is Views.Controls.SnipToolbar || 
+                    ancestor is Avalonia.Controls.Primitives.Popup)
+                    return;
+                ancestor = ancestor.GetVisualParent() as Control;
+            }
+        }
+        
+        if (_viewModel.RecState == RecordingState.Idle && 
+            (_viewModel.CurrentState == SnipState.Idle || _viewModel.CurrentState == SnipState.Detecting))
+        {
+            _startPoint = point;
+            _viewModel.CurrentState = SnipState.Selecting;
+            _viewModel.SelectionRect = new Rect(_startPoint, new Size(0, 0));
+            _viewModel.IsDrawingMode = false;
+            _viewModel.ClearAnnotationsCommand.Execute().Subscribe();
+            e.Handled = true;
+            return;
+        }
+        else if (_viewModel.RecState == RecordingState.Idle && _viewModel.CurrentState == SnipState.Selected)
+        {
+            var expandedBounds = _viewModel.SelectionRect.Inflate(120);
+            if (expandedBounds.Contains(point) && !_viewModel.SelectionRect.Contains(point))
+            {
+                e.Handled = true;
+                return;
+            }
+
+            if (!_viewModel.SelectionRect.Contains(point))
+            {
+                 _startPoint = point;
+                 _viewModel.CurrentState = SnipState.Selecting;
+                 _viewModel.SelectionRect = new Rect(_startPoint, new Size(0, 0));
+                 _viewModel.IsDrawingMode = false;
+                 _viewModel.ClearAnnotationsCommand.Execute().Subscribe();
+                 e.Handled = true;
+                 return;
+            }
+        }
+        
+        // Final Else-If for Right Button
         else if (props.IsRightButtonPressed)
         {
             if (_viewModel == null) return;
-
-            // Translation mode: Right-click on existing selection to delete it
-            if (_viewModel.IsTranslationMode)
-            {
-                var hitPoint = e.GetPosition(this);
-                UserSelectionRect? hitSelection = null;
-                for (int i = _viewModel.UserSelections.Count - 1; i >= 0; i--)
-                {
-                    if (_viewModel.UserSelections[i].Bounds.Contains(hitPoint))
-                    {
-                        hitSelection = _viewModel.UserSelections[i];
-                        break;
-                    }
-                }
-
-                if (hitSelection != null)
-                {
-                    // 在編輯模式下點擊右鍵不直接刪除，讓 ContextMenu 彈出
-                    if (_viewModel.CurrentTranslationTool == TranslationTool.Edit)
-                    {
-                        return;
-                    }
-                    
-                    _viewModel.UserSelections.Remove(hitSelection);
-                    e.Handled = true;
-                    return;
-                }
-            }
-
+            if (_viewModel.IsTranslationMode) return; // V7+: Handled by ContextMenu on Text
             _viewModel.HandleRightClick();
         }
     }
@@ -466,14 +441,24 @@ public partial class SnipWindow : Window
         }
         else if (_viewModel.IsTranslationMode)
         {
-            // 偵測是否懸停在翻譯控制點上
-            if (hitControl is Border handle && handle.Classes.Contains("TranslationHandle"))
+            // V7+ Geometric Cursor Detection
+            // Math-based corner detection because transparency breaks hit-testing
+            foreach (var sel in _viewModel.UserSelections)
             {
-                if (handle.Classes.Contains("TopLeft")) SetCursorShape(StandardCursorType.TopLeftCorner);
-                else if (handle.Classes.Contains("TopRight")) SetCursorShape(StandardCursorType.TopRightCorner);
-                else if (handle.Classes.Contains("BottomLeft")) SetCursorShape(StandardCursorType.BottomLeftCorner);
-                else if (handle.Classes.Contains("BottomRight")) SetCursorShape(StandardCursorType.BottomRightCorner);
-                specialCursorSet = true;
+                double tolerance = 12;
+                var rect = sel.Bounds;
+                if (Math.Abs(currentPoint.X - rect.X) < tolerance && Math.Abs(currentPoint.Y - rect.Y) < tolerance)
+                { SetCursorShape(StandardCursorType.TopLeftCorner); specialCursorSet = true; break; }
+                if (Math.Abs(currentPoint.X - rect.Right) < tolerance && Math.Abs(currentPoint.Y - rect.Y) < tolerance)
+                { SetCursorShape(StandardCursorType.TopRightCorner); specialCursorSet = true; break; }
+                if (Math.Abs(currentPoint.X - rect.X) < tolerance && Math.Abs(currentPoint.Y - rect.Bottom) < tolerance)
+                { SetCursorShape(StandardCursorType.BottomLeftCorner); specialCursorSet = true; break; }
+                if (Math.Abs(currentPoint.X - rect.Right) < tolerance && Math.Abs(currentPoint.Y - rect.Bottom) < tolerance)
+                { SetCursorShape(StandardCursorType.BottomRightCorner); specialCursorSet = true; break; }
+                
+                // Also check Drag Handle Area
+                if (currentPoint.X >= rect.X && currentPoint.X <= rect.Right && currentPoint.Y >= rect.Y - 20 && currentPoint.Y <= rect.Y)
+                { SetCursorShape(StandardCursorType.SizeAll); specialCursorSet = true; break; }
             }
         }
 
@@ -577,9 +562,9 @@ public partial class SnipWindow : Window
                     break;
             }
 
-            // Apply limits (Min size 10x10)
-            if (newW < 10) newW = 10;
-            if (newH < 10) newH = 10;
+            // Apply limits (Min size 40x40 for stability V7+)
+            if (newW < 40) newW = 40;
+            if (newH < 40) newH = 40;
             
             _resizingTranslationItem.Bounds = new Rect(newX, newY, Math.Max(0, newW), Math.Max(0, newH));
             _viewModel.UpdateMask();

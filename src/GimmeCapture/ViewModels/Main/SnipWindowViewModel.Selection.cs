@@ -165,42 +165,81 @@ public partial class SnipWindowViewModel
         }
 
         // 1. 建立基礎背景幾何 (覆蓋目前的視口區域)
-        // 使用一個比視口稍微大一點的矩形作為背景，座標從 0,0 開始，避免負數大解析度造成的渲染偏移
         double w = ViewportSize.Width > 0 ? ViewportSize.Width : 5000;
         double h = ViewportSize.Height > 0 ? ViewportSize.Height : 5000;
-        Geometry resultGeometry = new RectangleGeometry(new Rect(-100, -100, w + 200, h + 200));
+        Geometry mainMask = new RectangleGeometry(new Rect(-100, -100, w + 200, h + 200));
 
-        // 2. 遞迴減去每一個需要挖空的區域
-        // A. 當前正在選取的區域 (截圖模式)
+        // 2. 處理截圖模式選取框 (全挖空)
         if (SelectionRect.Width > 0 && SelectionRect.Height > 0)
         {
-            resultGeometry = new CombinedGeometry
+            mainMask = new CombinedGeometry
             {
                 GeometryCombineMode = GeometryCombineMode.Exclude,
-                Geometry1 = resultGeometry,
+                Geometry1 = mainMask,
                 Geometry2 = new RectangleGeometry(SelectionRect)
             };
         }
 
-        // B. 所有已選取的翻譯區域 (翻譯模式)
+        // 3. 處理翻譯模式選取框 (島嶼式挖空)
         if (IsTranslationMode)
         {
             foreach (var sel in UserSelections)
             {
-                if (sel.Bounds.Width > 0 && sel.Bounds.Height > 0)
+                if (sel.Bounds.Width > 10 && sel.Bounds.Height > 10)
                 {
-                    resultGeometry = new CombinedGeometry
+                    var rect = sel.Bounds;
+                    
+                    // 建立要挖掉的幾何體
+                    Geometry hole = new RectangleGeometry(rect);
+
+                    // 島嶼 A：端掛牆拖拽把手 (External Handle V6) -> 在挖空區域外
+                    Geometry dragBar = new RectangleGeometry(new Rect(rect.X, rect.Y - 20, rect.Width, 20));
+                    mainMask = new CombinedGeometry
                     {
                         GeometryCombineMode = GeometryCombineMode.Exclude,
-                        Geometry1 = resultGeometry,
-                        Geometry2 = new RectangleGeometry(sel.Bounds)
+                        Geometry1 = mainMask,
+                        Geometry2 = dragBar
+                    };
+
+                    // 島嶼 B：文字顯示區 (若已翻譯，則不挖空)
+                    if (sel.IsTranslated)
+                    {
+                        // 確保安全邊距，不因負數導致裁剪失敗
+                        double margin = 4;
+                        double safeW = Math.Max(0, rect.Width - margin * 2);
+                        double safeH = Math.Max(0, rect.Height - margin * 2);
+
+                        Geometry textIsland = new RectangleGeometry(new Rect(
+                            rect.X + margin,
+                            rect.Y + margin,
+                            safeW,
+                            safeH
+                        ));
+                        hole = new CombinedGeometry
+                        {
+                            GeometryCombineMode = GeometryCombineMode.Exclude,
+                            Geometry1 = hole,
+                            Geometry2 = textIsland
+                        };
+                    }
+
+                    // 島嶼 C：四個角落的無痕 Resize 感應區 (也要扣除主遮罩，讓滑鼠穿透點擊能觸發)
+                    // 這邊視覺上其實只要 hole 正確就好，但為了點擊與游標變化，Win32 Region 已經處理了。
+                    // 這裡僅處理視覺上的「不挖空」
+                    
+                    // 從主遮罩中減去最終確定的「洞」
+                    mainMask = new CombinedGeometry
+                    {
+                        GeometryCombineMode = GeometryCombineMode.Exclude,
+                        Geometry1 = mainMask,
+                        Geometry2 = hole
                     };
                 }
             }
         }
 
-        MaskGeometry = resultGeometry;
-        System.Diagnostics.Debug.WriteLine($"[Mask] UpdateMask (V3 CombinedGeometry) done. Viewport: {w}x{h}");
+        MaskGeometry = mainMask;
+        System.Diagnostics.Debug.WriteLine($"[Mask] UpdateMask (V4 Island-style) done. Viewport: {w}x{h}");
     }
 
     private double _maskOpacity = 0.5;
@@ -716,7 +755,7 @@ public partial class SnipWindowViewModel
             {
                 foreach (UserSelectionRect item in e.NewItems)
                 {
-                    item.WhenAnyValue(x => x.Bounds)
+                    item.WhenAnyValue(x => x.Bounds, x => x.IsTranslated)
                         .Subscribe(_ => UpdateMask());
                 }
             }

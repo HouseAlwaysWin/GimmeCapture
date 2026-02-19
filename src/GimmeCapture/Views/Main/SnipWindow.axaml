@@ -352,14 +352,22 @@
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="m:UserSelectionRect">
-                        <Grid ClipToBounds="False">
-                            <Border BorderBrush="#80FFAA00" 
+                        <Canvas ClipToBounds="False" Width="{Binding Bounds.Width}" Height="{Binding Bounds.Height}">
+                            <!-- 外掛式拖拽把手 (External Drag Handle V6) -->
+                            <Border Canvas.Top="-20" Canvas.Left="0" Height="18" Width="{Binding Bounds.Width}" 
+                                    Background="#66FFAA00" CornerRadius="4,4,0,0" 
+                                    IsHitTestVisible="True" Classes="TranslationDragHandle">
+                                <TextBlock Text="⋮⋮" Foreground="#AAFFFFFF" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="12" IsHitTestVisible="False"/>
+                            </Border>
+
+                            <Border BorderBrush="#AAFFAA00" 
                                     BorderThickness="1"
                                     Background="Transparent"
                                     Width="{Binding Bounds.Width}"
                                     Height="{Binding Bounds.Height}"
                                     CornerRadius="0"
-                                    Classes="TranslationItem">
+                                    Classes="TranslationItem"
+                                    IsHitTestVisible="True">
                                 <Border.ContextMenu>
                                     <ContextMenu>
                                         <MenuItem Header="複製翻譯文字" 
@@ -371,15 +379,12 @@
                                                   CommandParameter="{Binding}"/>
                                     </ContextMenu>
                                 </Border.ContextMenu>
-                                <Border.Styles>
-                                    <Style Selector="Border.TranslationItem:pointerover">
-                                        <Setter Property="BorderBrush" Value="#FFFFAA00"/>
-                                    </Style>
-                                </Border.Styles>
                                 
-                                <!-- 顯示翻譯結果 -->
-                                <Panel IsVisible="{Binding IsTranslated}" IsHitTestVisible="True">
-                                    <Border Background="#AA000000" CornerRadius="2" Padding="4"
+                                <!-- 顯示翻譯結果 (文字島嶼) -->
+                                <Panel IsVisible="{Binding IsTranslated}" IsHitTestVisible="True" VerticalAlignment="Center" HorizontalAlignment="Center">
+                                    <Border Background="#CC000000" CornerRadius="4" Padding="6"
+                                            BorderBrush="#44FFFFFF" BorderThickness="1"
+                                            Margin="4"
                                             HorizontalAlignment="Center" VerticalAlignment="Center"
                                             ContextMenu="{Binding $parent[Border].ContextMenu}">
                                         <SelectableTextBlock Text="{Binding TranslatedText}" 
@@ -393,14 +398,14 @@
                                 </Panel>
                             </Border>
 
-                            <!-- Resize Handles (Translation Mode) -->
+                            <!-- Resize Handles (Translation Mode) - Transparent but Detectable -->
                             <Canvas Width="{Binding Bounds.Width}" Height="{Binding Bounds.Height}" IsHitTestVisible="True" Background="Transparent">
-                                <Border Classes="TranslationHandle TopLeft" Canvas.Left="-4" Canvas.Top="-4" Width="8" Height="8" Background="#FFFFAA00" CornerRadius="4" BorderBrush="White" BorderThickness="1"/>
-                                <Border Classes="TranslationHandle TopRight" Canvas.Right="-4" Canvas.Top="-4" Width="8" Height="8" Background="#FFFFAA00" CornerRadius="4" BorderBrush="White" BorderThickness="1"/>
-                                <Border Classes="TranslationHandle BottomLeft" Canvas.Left="-4" Canvas.Bottom="-4" Width="8" Height="8" Background="#FFFFAA00" CornerRadius="4" BorderBrush="White" BorderThickness="1"/>
-                                <Border Classes="TranslationHandle BottomRight" Canvas.Right="-4" Canvas.Bottom="-4" Width="8" Height="8" Background="#FFFFAA00" CornerRadius="4" BorderBrush="White" BorderThickness="1"/>
+                                <Border Classes="TranslationHandle TopLeft" Canvas.Left="-10" Canvas.Top="-10" Width="20" Height="20" Background="#01000000"/>
+                                <Border Classes="TranslationHandle TopRight" Canvas.Right="-10" Canvas.Top="-10" Width="20" Height="20" Background="#01000000"/>
+                                <Border Classes="TranslationHandle BottomLeft" Canvas.Left="-10" Canvas.Bottom="-10" Width="20" Height="20" Background="#01000000"/>
+                                <Border Classes="TranslationHandle BottomRight" Canvas.Right="-10" Canvas.Bottom="-10" Width="20" Height="20" Background="#01000000"/>
                             </Canvas>
-                        </Grid>
+                        </Canvas>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
