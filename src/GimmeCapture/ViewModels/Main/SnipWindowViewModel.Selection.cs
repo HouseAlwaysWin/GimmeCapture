@@ -12,6 +12,7 @@ using System.Threading.Tasks;
 using System.Threading;
 using GimmeCapture.Services.Core;
 using GimmeCapture.Services.Platforms.Windows;
+using GimmeCapture.Services.OCR;
 
 namespace GimmeCapture.ViewModels.Main;
 
@@ -125,6 +126,7 @@ public partial class SnipWindowViewModel
     }
 
     public ObservableCollection<TranslatedBlock> TranslatedBlocks { get; } = new();
+    public ObservableCollection<UserSelectionRect> UserSelections { get; } = new();
     private TranslationService? _translationService;
     private CancellationTokenSource? _translationCts;
     private int _translationVersion = 0;
@@ -263,6 +265,29 @@ public partial class SnipWindowViewModel
     }
 
     public double ToolbarMaxWidth => Math.Max(ViewportSize.Width - 40, 100);
+
+    // 翻譯工具列位置（可拖曳，預設螢幕中間上方）
+    private double _translationToolbarTop = 20;
+    public double TranslationToolbarTop
+    {
+        get => _translationToolbarTop;
+        set => this.RaiseAndSetIfChanged(ref _translationToolbarTop, value);
+    }
+
+    private double _translationToolbarLeft = -1; // -1 = auto center
+    public double TranslationToolbarLeft
+    {
+        get => _translationToolbarLeft;
+        set => this.RaiseAndSetIfChanged(ref _translationToolbarLeft, value);
+    }
+
+    public void InitializeTranslationToolbarPosition()
+    {
+        // 居中上方
+        double vw = ViewportSize.Width > 0 ? ViewportSize.Width : 1920;
+        TranslationToolbarLeft = (vw - 200) / 2; // 200 = 估計工具列寬度
+        TranslationToolbarTop = 20;
+    }
 
     private void UpdateToolbarPosition()
     {
@@ -556,6 +581,10 @@ public partial class SnipWindowViewModel
     public ReactiveCommand<Unit, Unit> TriggerAutoScanCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> ToggleAIScanBoxCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> TranslateCommand { get; set; } = null!;
+    public ReactiveCommand<Unit, Unit> TranslateAllSelectionsCommand { get; set; } = null!;
+    public ReactiveCommand<Unit, Unit> ScanAllTextCommand { get; set; } = null!;
+    public ReactiveCommand<Unit, Unit> ClearAllSelectionsCommand { get; set; } = null!;
+    public ReactiveCommand<UserSelectionRect, Unit> RemoveUserSelectionCommand { get; set; } = null!;
 
     private void InitializeSelectionCommands()
     {
@@ -570,6 +599,19 @@ public partial class SnipWindowViewModel
 
         TranslateCommand = ReactiveCommand.CreateFromTask(PerformTranslationAsync);
         TranslateCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Translate Command error: {ex}"));
+
+        // 翻譯模式專用命令
+        TranslateAllSelectionsCommand = ReactiveCommand.CreateFromTask(TranslateAllSelectionsAsync);
+        TranslateAllSelectionsCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"TranslateAll error: {ex}"));
+
+        ScanAllTextCommand = ReactiveCommand.CreateFromTask(ScanAllTextAsync);
+        ScanAllTextCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"ScanAll error: {ex}"));
+
+        ClearAllSelectionsCommand = ReactiveCommand.Create(() => { UserSelections.Clear(); });
+        ClearAllSelectionsCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"ClearAll error: {ex}"));
+
+        RemoveUserSelectionCommand = ReactiveCommand.Create<UserSelectionRect>(item => { UserSelections.Remove(item); });
+        RemoveUserSelectionCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"RemoveSelection error: {ex}"));
     }
 
     private SAM2Service? _sam2Service;
@@ -785,5 +827,167 @@ public partial class SnipWindowViewModel
                Math.Abs(a.Y - b.Y) <= tol &&
                Math.Abs(a.Width - b.Width) <= tol &&
                Math.Abs(a.Height - b.Height) <= tol;
+    }
+
+    /// <summary>
+    /// 翻譯模式：翻譯所有 UserSelections 中的圈選區域
+    /// </summary>
+    private async Task TranslateAllSelectionsAsync()
+    {
+        if (UserSelections.Count == 0) return;
+
+        System.Diagnostics.Debug.WriteLine($"[TranslationMode] TranslateAllSelections: {UserSelections.Count} regions");
+
+        ShowTopLoadingBar = true;
+        IsIndeterminate = true;
+
+        if (_translationService == null)
+        {
+            if (_mainVm?.AIResourceService == null) return;
+            _translationService = new TranslationService(_mainVm.AIResourceService, _mainVm.AppSettingsService, _mainVm.MarianMTService);
+        }
+
+        // Sync language settings
+        if (_mainVm != null)
+        {
+            _mainVm.AppSettingsService.Settings.TargetLanguage = _mainVm.TargetLanguage;
+            _mainVm.AppSettingsService.Settings.SourceLanguage = _mainVm.SourceLanguage;
+        }
+
+        _translationCts?.Cancel();
+        _translationCts?.Dispose();
+        _translationCts = new CancellationTokenSource();
+        var token = _translationCts.Token;
+
+        // Ensure OCR resources
+        if (_mainVm != null)
+        {
+            bool ready = await _mainVm.AIResourceService.EnsureOCRAsync();
+            if (!ready)
+            {
+                System.Diagnostics.Debug.WriteLine("[TranslationMode] OCR not ready");
+                ShowTopLoadingBar = false;
+                IsIndeterminate = false;
+                return;
+            }
+        }
+
+        try
+        {
+            // 逐一翻譯每個選取區域
+            var selectionsCopy = UserSelections.ToList();
+            foreach (var sel in selectionsCopy)
+            {
+                if (token.IsCancellationRequested) break;
+                if (sel.IsTranslated) continue; // 已翻譯的跳過
+
+                using var bitmap = await _captureService.CaptureScreenAsync(sel.Bounds, ScreenOffset, VisualScaling, false);
+                if (bitmap == null) continue;
+
+                token.ThrowIfCancellationRequested();
+                var blocks = await Task.Run(() => _translationService.AnalyzeAndTranslateAsync(bitmap, token), token);
+                
+                if (token.IsCancellationRequested) break;
+
+                // 合併所有翻譯結果作為這個區域的翻譯文字
+                var combinedText = string.Join("\n", blocks.Select(b => b.TranslatedText).Where(t => !string.IsNullOrWhiteSpace(t)));
+                
+                await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    sel.TranslatedText = combinedText;
+                    sel.IsTranslated = !string.IsNullOrWhiteSpace(combinedText);
+                });
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            System.Diagnostics.Debug.WriteLine("[TranslationMode] TranslateAll cancelled");
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[TranslationMode] TranslateAll error: {ex}");
+        }
+        finally
+        {
+            ShowTopLoadingBar = false;
+            IsIndeterminate = false;
+        }
+    }
+
+    /// <summary>
+    /// 翻譯模式：PaddleOCR 掃描全螢幕偵測可翻譯文字區域
+    /// </summary>
+    private async Task ScanAllTextAsync()
+    {
+        System.Diagnostics.Debug.WriteLine("[TranslationMode] ScanAllText triggered");
+
+        ShowTopLoadingBar = true;
+        IsIndeterminate = true;
+
+        if (_mainVm?.AIResourceService == null) return;
+
+        // Ensure OCR resources
+        bool ready = await _mainVm.AIResourceService.EnsureOCRAsync();
+        if (!ready)
+        {
+            System.Diagnostics.Debug.WriteLine("[TranslationMode] OCR not ready for scan");
+            ShowTopLoadingBar = false;
+            IsIndeterminate = false;
+            return;
+        }
+
+        try
+        {
+            // 擷取全螢幕
+            var fullScreenRect = new Rect(0, 0, ViewportSize.Width, ViewportSize.Height);
+            using var bitmap = await _captureService.CaptureScreenAsync(fullScreenRect, ScreenOffset, VisualScaling, false);
+            if (bitmap == null) return;
+
+            // 使用 PaddleOCR 偵測文字區域
+            var ocrEngine = new PaddleOCREngine(_mainVm.AIResourceService, _mainVm.AppSettingsService);
+            var ocrLang = _mainVm.AppSettingsService.Settings.SourceLanguage;
+            await ocrEngine.EnsureLoadedAsync(ocrLang);
+            
+            var textBoxes = await Task.Run(() => ocrEngine.DetectText(bitmap));
+
+            System.Diagnostics.Debug.WriteLine($"[TranslationMode] Found {textBoxes.Count} text regions");
+
+            // 將偵測到的文字區域轉換為 UserSelectionRect
+            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                UserSelections.Clear();
+                foreach (var box in textBoxes)
+                {
+                    // 座標從 bitmap 空間轉換回螢幕邏輯座標
+                    double scaleX = ViewportSize.Width / bitmap.Width;
+                    double scaleY = ViewportSize.Height / bitmap.Height;
+
+                    var bounds = new Rect(
+                        box.Left * scaleX,
+                        box.Top * scaleY,
+                        box.Width * scaleX,
+                        box.Height * scaleY
+                    );
+
+                    // 過濾太小的區域
+                    if (bounds.Width > 10 && bounds.Height > 5)
+                    {
+                        UserSelections.Add(new UserSelectionRect { Bounds = bounds });
+                    }
+                }
+                System.Diagnostics.Debug.WriteLine($"[TranslationMode] Added {UserSelections.Count} valid selections");
+            });
+
+            ocrEngine.Dispose();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[TranslationMode] ScanAll error: {ex}");
+        }
+        finally
+        {
+            ShowTopLoadingBar = false;
+            IsIndeterminate = false;
+        }
     }
 }

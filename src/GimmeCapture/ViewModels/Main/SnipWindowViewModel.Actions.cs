@@ -24,18 +24,58 @@ public partial class SnipWindowViewModel
         {
             this.RaiseAndSetIfChanged(ref _isRecordingMode, value);
             
+            // Exiting recording mode should also exit translation mode
+            if (value) IsTranslationMode = false;
+            
             // Update border color based on mode
             SelectionBorderColor = _mainVm?.BorderColor ?? Colors.Red;
             
             this.RaisePropertyChanged(nameof(HideFrameBorder));
             this.RaisePropertyChanged(nameof(HideSelectionDecoration));
             this.RaisePropertyChanged(nameof(ModeDisplayName));
+            this.RaisePropertyChanged(nameof(IsScreenshotMode));
         }
     }
 
-    public string ModeDisplayName => IsRecordingMode 
-        ? LocalizationService.Instance["CaptureModeRecord"] 
-        : LocalizationService.Instance["CaptureModeNormal"];
+    private bool _isTranslationMode;
+    public bool IsTranslationMode
+    {
+        get => _isTranslationMode;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _isTranslationMode, value);
+            System.Diagnostics.Debug.WriteLine($"[Mode] IsTranslationMode -> {value}");
+            
+            if (value)
+            {
+                // 進入翻譯模式：隱藏遮罩、退出錄影模式
+                _isRecordingMode = false;
+                this.RaisePropertyChanged(nameof(IsRecordingMode));
+                IsMaskVisible = false;
+            }
+            else
+            {
+                // 退出翻譯模式：恢復遮罩
+                IsMaskVisible = true;
+                // 清除多重選取
+                UserSelections.Clear();
+            }
+            
+            this.RaisePropertyChanged(nameof(ModeDisplayName));
+            this.RaisePropertyChanged(nameof(IsScreenshotMode));
+        }
+    }
+
+    /// <summary>
+    /// 截圖模式（非錄影且非翻譯）
+    /// </summary>
+    public bool IsScreenshotMode => !IsRecordingMode && !IsTranslationMode;
+
+    public string ModeDisplayName => IsTranslationMode 
+        ? LocalizationService.Instance["CaptureModeTranslation"] ?? "Translation"
+        : IsRecordingMode 
+            ? LocalizationService.Instance["CaptureModeRecord"] 
+            : LocalizationService.Instance["CaptureModeNormal"];
 
     // True when actively recording (not idle, not paused) - used to hide selection border
     public bool IsRecordingActive => _recordingService?.State == RecordingState.Recording;
@@ -113,12 +153,14 @@ public partial class SnipWindowViewModel
     public ReactiveCommand<Unit, Unit> CloseCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> ToggleModeCommand { get; set; } = null!;
     public ReactiveCommand<bool, Unit> SetCaptureModeCommand { get; set; } = null!;
+    public ReactiveCommand<Unit, Unit> SetTranslationModeCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> StartRecordingCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> PauseRecordingCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> StopRecordingCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> CopyRecordingCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> HandleF1Command { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> HandleF2Command { get; set; } = null!;
+    public ReactiveCommand<Unit, Unit> HandleF3Command { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> RemoveBackgroundCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> ToggleTopmostCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> ToggleMaskCommand { get; set; } = null!;
@@ -178,7 +220,11 @@ public partial class SnipWindowViewModel
 
         SetCaptureModeCommand = ReactiveCommand.Create<bool>(isRecord => 
         {
-            if (RecState == RecordingState.Idle) IsRecordingMode = isRecord;
+            if (RecState == RecordingState.Idle)
+            {
+                IsTranslationMode = false;
+                IsRecordingMode = isRecord;
+            }
         }, canExecuteHotkeys);
         SetCaptureModeCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
 
@@ -191,7 +237,13 @@ public partial class SnipWindowViewModel
         CopyRecordingCommand = ReactiveCommand.CreateFromTask(CopyRecording);
         CopyRecordingCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
 
-        HandleF1Command = ReactiveCommand.Create(() => { if (RecState == RecordingState.Idle) IsRecordingMode = false; }, canExecuteHotkeys);
+        HandleF1Command = ReactiveCommand.Create(() => { 
+            if (RecState == RecordingState.Idle) 
+            {
+                IsRecordingMode = false;
+                IsTranslationMode = false;
+            }
+        }, canExecuteHotkeys);
         HandleF2Command = ReactiveCommand.Create(() => 
         { 
             if (RecState == RecordingState.Idle) 
@@ -199,12 +251,47 @@ public partial class SnipWindowViewModel
                 // USER REQUEST: F2 always switches/sets Record Mode, never auto-starts recording
                 if (!IsRecordingMode)
                 {
+                    IsTranslationMode = false;
                     IsRecordingMode = true;
                 }
             }
         }, canExecuteHotkeys);
 
-        // F3/Copy commands already initialized once above.
+        // F3: 模式選擇器
+        // 截圖模式 -> F3 -> Pin
+        // 錄影模式 -> F3 -> Pin  
+        // 翻譯模式 -> F3 -> 無動作
+        // 未進入模式 (Detecting) -> F3 -> 進入翻譯模式
+        HandleF3Command = ReactiveCommand.CreateFromTask(async () => 
+        {
+            if (RecState != RecordingState.Idle) return;
+            
+            if (IsTranslationMode)
+            {
+                // 已經在翻譯模式 -> 無動作
+                return;
+            }
+            else if (IsRecordingMode || (!IsRecordingMode && !IsTranslationMode && CurrentState == SnipState.Selected))
+            {
+                // 截圖/錄影模式且已選取 -> Pin
+                await Pin(false);
+            }
+            else
+            {
+                // 未進入任何模式 -> 進入翻譯模式
+                IsTranslationMode = true;
+            }
+        }, canExecuteHotkeys);
+        HandleF3Command.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"HandleF3 error: {ex}"));
+
+        SetTranslationModeCommand = ReactiveCommand.Create(() =>
+        {
+            if (RecState == RecordingState.Idle)
+            {
+                IsTranslationMode = true;
+            }
+        }, canExecuteHotkeys);
+        SetTranslationModeCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
 
         var canRemoveBackground = this.WhenAnyValue(
             x => x.IsRecordingMode, 

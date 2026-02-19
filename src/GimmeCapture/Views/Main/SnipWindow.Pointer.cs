@@ -16,6 +16,11 @@ namespace GimmeCapture.Views.Main;
 
 public partial class SnipWindow : Window
 {
+    // Translation mode multi-selection fields
+    private bool _isTranslationSelecting;
+    private Point _translationSelectionStart;
+    private UserSelectionRect? _currentTranslationSelection;
+
     private void OnPointerPressed(object? sender, PointerPressedEventArgs e)
     {
         if (_viewModel == null) return;
@@ -139,6 +144,34 @@ public partial class SnipWindow : Window
 
         if (props.IsLeftButtonPressed)
         {
+            // Translation mode: multi-selection logic
+            if (_viewModel.IsTranslationMode)
+            {
+                // Check if clicking on TranslationToolbar or existing selection
+                if (sourceControl != null)
+                {
+                    Control? ancestor = sourceControl;
+                    while (ancestor != null)
+                    {
+                        if (ancestor is Views.Controls.SnipToolbar ||
+                            ancestor is Avalonia.Controls.Primitives.Popup)
+                            return;
+                        ancestor = ancestor.GetVisualParent() as Control;
+                    }
+                }
+                
+                // Start new selection
+                _isTranslationSelecting = true;
+                _translationSelectionStart = point;
+                _currentTranslationSelection = new UserSelectionRect
+                {
+                    Bounds = new Rect(point, new Size(0, 0))
+                };
+                _viewModel.UserSelections.Add(_currentTranslationSelection);
+                e.Handled = true;
+                return;
+            }
+
             if (_viewModel.IsDrawingMode && _viewModel.CurrentState == SnipState.Selected)
             {
                 // Logic: If in drawing mode and clicked INSIDE the selection area, draw.
@@ -399,6 +432,15 @@ public partial class SnipWindow : Window
 
             _viewModel.SelectionRect = new Rect(x, y, width, height);
         }
+        else if (_isTranslationSelecting && _currentTranslationSelection != null)
+        {
+            // Translation mode: update current selection rectangle
+            var x = Math.Min(_translationSelectionStart.X, currentPoint.X);
+            var y = Math.Min(_translationSelectionStart.Y, currentPoint.Y);
+            var width = Math.Abs(currentPoint.X - _translationSelectionStart.X);
+            var height = Math.Abs(currentPoint.Y - _translationSelectionStart.Y);
+            _currentTranslationSelection.Bounds = new Rect(x, y, width, height);
+        }
         else if (_viewModel.CurrentState == SnipState.Detecting)
         {
             _viewModel.UpdateDetectedRect(currentPoint);
@@ -453,6 +495,22 @@ public partial class SnipWindow : Window
              }
              
              _viewModel.CurrentState = SnipState.Selected;
+        }
+
+        // Translation mode: finish selection
+        if (_isTranslationSelecting)
+        {
+            _isTranslationSelecting = false;
+            if (_currentTranslationSelection != null)
+            {
+                // Remove if too small (accidental clicks)
+                if (_currentTranslationSelection.Bounds.Width < 10 || _currentTranslationSelection.Bounds.Height < 5)
+                {
+                    _viewModel.UserSelections.Remove(_currentTranslationSelection);
+                }
+                _currentTranslationSelection = null;
+            }
+            return;
         }
 
         if (_currentAnnotation != null)

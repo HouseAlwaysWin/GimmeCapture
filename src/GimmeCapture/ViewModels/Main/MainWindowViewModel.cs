@@ -97,7 +97,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private const int ID_PIN = 9002;
     private const int ID_RECORD = 9003;
 
-    public enum CaptureMode { Normal, Copy, Pin, Record }
+    public enum CaptureMode { Normal, Copy, Pin, Record, Translate }
 
     public FFmpegDownloaderService FfmpegDownloader { get; }
     public RecordingService RecordingService { get; }

@@ -36,7 +36,7 @@
         <!-- Mode & Core Logic -->
         <KeyBinding Gesture="{Binding SnipHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding HandleF1Command}" />
         <KeyBinding Gesture="{Binding RecordHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding HandleF2Command}" />
-        <KeyBinding Gesture="{Binding PinHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding PinCommand}" />
+        <KeyBinding Gesture="{Binding PinHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding HandleF3Command}" />
         <KeyBinding Gesture="{Binding CopyHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding CopyCommand}" />
         <KeyBinding Gesture="Ctrl+S" Command="{Binding SaveCommand}" />
         <KeyBinding Gesture="Escape" Command="{Binding CloseCommand}" />
@@ -100,6 +100,7 @@
                 <MultiBinding Converter="{x:Static BoolConverters.And}">
                     <Binding Path="IsMaskVisible"/>
                     <Binding Path="!IsRecordingFinalizing"/>
+                    <Binding Path="!IsTranslationMode"/>
                 </MultiBinding>
             </Path.IsVisible>
         </Path>
@@ -334,6 +335,60 @@
                             </MultiBinding>
                         </ctl:SnipToolbar.IsVisible>
                     </ctl:SnipToolbar>
+
+            <!-- Translation Mode: Multi-Selection Layer -->
+            <ItemsControl ItemsSource="{Binding UserSelections}"
+                          IsVisible="{Binding IsTranslationMode}"
+                          ZIndex="998"
+                          Width="{Binding ViewportSize.Width}" Height="{Binding ViewportSize.Height}"
+                          x:CompileBindings="False">
+                <ItemsControl.Styles>
+                    <Style Selector="ItemsControl > ContentPresenter" x:DataType="m:UserSelectionRect">
+                        <Setter Property="Canvas.Left" Value="{Binding Bounds.X}"/>
+                        <Setter Property="Canvas.Top" Value="{Binding Bounds.Y}"/>
+                    </Style>
+                </ItemsControl.Styles>
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <Canvas />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="m:UserSelectionRect">
+                        <Border BorderBrush="#80FFAA00" 
+                                BorderThickness="2"
+                                Background="#15FFAA00"
+                                Width="{Binding Bounds.Width}"
+                                Height="{Binding Bounds.Height}"
+                                CornerRadius="2">
+                            <Border.ContextMenu>
+                                <ContextMenu>
+                                    <MenuItem Header="取消選取" 
+                                              Command="{Binding $parent[Window].DataContext.RemoveUserSelectionCommand}"
+                                              CommandParameter="{Binding}"/>
+                                </ContextMenu>
+                            </Border.ContextMenu>
+                            <Border.Styles>
+                                <Style Selector="Border:pointerover">
+                                    <Setter Property="BorderBrush" Value="#FFFFAA00"/>
+                                    <Setter Property="BorderThickness" Value="3"/>
+                                    <Setter Property="Background" Value="#25FFAA00"/>
+                                </Style>
+                            </Border.Styles>
+                            <!-- 顯示翻譯結果 -->
+                            <Panel IsVisible="{Binding IsTranslated}">
+                                <Border Background="#DD000000" CornerRadius="2" Padding="4">
+                                    <SelectableTextBlock Text="{Binding TranslatedText}" 
+                                                       Foreground="White" 
+                                                       FontSize="12" 
+                                                       TextWrapping="Wrap"
+                                                       xml:space="preserve"/>
+                                </Border>
+                            </Panel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
         </Canvas>
         
         <!-- Multi-monitor Loading Bars -->

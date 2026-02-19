@@ -172,6 +172,11 @@ public partial class MainWindow : Window
         {
             snipVm.IsRecordingMode = true;
         }
+        else if (mode == MainWindowViewModel.CaptureMode.Translate)
+        {
+            snipVm.IsTranslationMode = true;
+            snipVm.InitializeTranslationToolbarPosition();
+        }
         snip.DataContext = snipVm;
         snip.Show();
     }
