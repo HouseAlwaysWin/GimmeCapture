@@ -287,17 +287,18 @@ public partial class SnipWindow : Window
                 }
             };
             
-            // Subscribe to SelectionRect, CurrentState, and IsDrawingMode changes to update window region
-            // Added Throttle as per user request to prevent UI flickering during heavy updates
+            // Subscribe to Geometry and state changes to update window region
             _selectionRectSubscription = _viewModel.WhenAnyValue(
+                x => x.MaskGeometry,
                 x => x.SelectionRect, 
                 x => x.CurrentState, 
                 x => x.IsDrawingMode,
+                x => x.IsTranslationMode,
                 x => x.ToolbarWidth,
                 x => x.ToolbarHeight)
                 .Throttle(TimeSpan.FromMilliseconds(16)) // ~60fps Limit
                 .ObserveOn(RxApp.MainThreadScheduler)
-                .Subscribe(tuple => UpdateWindowRegion(tuple.Item1, tuple.Item2, tuple.Item3));
+                .Subscribe(tuple => UpdateWindowRegion(tuple.Item2, tuple.Item3, tuple.Item4));
             
             _viewModel.FocusWindowAction = () =>
             {

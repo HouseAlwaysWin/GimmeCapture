@@ -48,10 +48,12 @@ public partial class SnipWindowViewModel
             
             if (value)
             {
-                // 進入翻譯模式：隱藏遮罩、退出錄影模式
+                // 進入翻譯模式：啟用遮罩並更新挖空區域、退出錄影模式
                 _isRecordingMode = false;
                 this.RaisePropertyChanged(nameof(IsRecordingMode));
-                IsMaskVisible = false;
+                SelectionRect = new Rect(0, 0, 0, 0); // 確保清空標準選取框，避免干擾挖空
+                IsMaskVisible = true;
+                UpdateMask();
             }
             else
             {
@@ -59,6 +61,7 @@ public partial class SnipWindowViewModel
                 IsMaskVisible = true;
                 // 清除多重選取
                 UserSelections.Clear();
+                UpdateMask();
             }
             
             this.RaisePropertyChanged(nameof(IsTranslationMode));

@@ -94,17 +94,12 @@
     </Window.Styles>
     
     <Grid>
-        <!-- 翻譯模式：透明但可點擊的背景（防止滑鼠事件穿透視窗） -->
-        <!-- 使用 #01000000 而非 Transparent，確保 Windows 層級視窗能正確攔截滑鼠事件 -->
-        <Panel Background="#01000000" IsHitTestVisible="True" IsVisible="{Binding IsTranslationMode}" ZIndex="0"/>
-        
         <!-- 背景遮罩層 -->
-        <Path Fill="Black" Data="{Binding MaskGeometry}" Opacity="{Binding MaskOpacity}" IsHitTestVisible="True">
+        <Path Fill="Black" Data="{Binding MaskGeometry}" Opacity="{Binding MaskOpacity}" IsHitTestVisible="False" Stretch="None">
             <Path.IsVisible>
                 <MultiBinding Converter="{x:Static BoolConverters.And}">
                     <Binding Path="IsMaskVisible"/>
                     <Binding Path="!IsRecordingFinalizing"/>
-                    <Binding Path="!IsTranslationMode"/>
                 </MultiBinding>
             </Path.IsVisible>
         </Path>
@@ -357,44 +352,55 @@
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="m:UserSelectionRect">
-                        <Border BorderBrush="#80FFAA00" 
-                                BorderThickness="2"
-                                Background="#15FFAA00"
-                                Width="{Binding Bounds.Width}"
-                                Height="{Binding Bounds.Height}"
-                                CornerRadius="2"
-                                Classes="TranslationItem">
-                            <Border.ContextMenu>
-                                <ContextMenu>
-                                    <MenuItem Header="複製翻譯文字" 
-                                              Command="{Binding $parent[Window].DataContext.CopyTranslationTextCommand}"
-                                              CommandParameter="{Binding}"/>
-                                    <Separator/>
-                                    <MenuItem Header="刪除區域" 
-                                              Command="{Binding $parent[Window].DataContext.RemoveUserSelectionCommand}"
-                                              CommandParameter="{Binding}"/>
-                                </ContextMenu>
-                            </Border.ContextMenu>
-                            <Border.Styles>
-                                <Style Selector="Border.TranslationItem:pointerover">
-                                    <Setter Property="BorderBrush" Value="#FFFFAA00"/>
-                                    <Setter Property="Background" Value="#35FFAA00"/>
-                                </Style>
-                            </Border.Styles>
-                            <!-- 顯示翻譯結果 -->
-                            <Panel IsVisible="{Binding IsTranslated}">
-                                <Border Background="#DD000000" CornerRadius="2" Padding="4"
-                                        ContextMenu="{Binding $parent[Border].ContextMenu}">
-                                    <SelectableTextBlock Text="{Binding TranslatedText}" 
-                                                       Foreground="White" 
-                                                       FontSize="12" 
-                                                       TextWrapping="Wrap"
-                                                       xml:space="preserve"
-                                                       ContextFlyout="{x:Null}"
-                                                       ContextMenu="{Binding $parent[Border].ContextMenu}"/>
-                                </Border>
-                            </Panel>
-                        </Border>
+                        <Grid ClipToBounds="False">
+                            <Border BorderBrush="#80FFAA00" 
+                                    BorderThickness="1"
+                                    Background="Transparent"
+                                    Width="{Binding Bounds.Width}"
+                                    Height="{Binding Bounds.Height}"
+                                    CornerRadius="0"
+                                    Classes="TranslationItem">
+                                <Border.ContextMenu>
+                                    <ContextMenu>
+                                        <MenuItem Header="複製翻譯文字" 
+                                                  Command="{Binding $parent[Window].DataContext.CopyTranslationTextCommand}"
+                                                  CommandParameter="{Binding}"/>
+                                        <Separator/>
+                                        <MenuItem Header="刪除區域" 
+                                                  Command="{Binding $parent[Window].DataContext.RemoveUserSelectionCommand}"
+                                                  CommandParameter="{Binding}"/>
+                                    </ContextMenu>
+                                </Border.ContextMenu>
+                                <Border.Styles>
+                                    <Style Selector="Border.TranslationItem:pointerover">
+                                        <Setter Property="BorderBrush" Value="#FFFFAA00"/>
+                                    </Style>
+                                </Border.Styles>
+                                
+                                <!-- 顯示翻譯結果 -->
+                                <Panel IsVisible="{Binding IsTranslated}" IsHitTestVisible="True">
+                                    <Border Background="#AA000000" CornerRadius="2" Padding="4"
+                                            HorizontalAlignment="Center" VerticalAlignment="Center"
+                                            ContextMenu="{Binding $parent[Border].ContextMenu}">
+                                        <SelectableTextBlock Text="{Binding TranslatedText}" 
+                                                           Foreground="White" 
+                                                           FontSize="12" 
+                                                           TextWrapping="Wrap"
+                                                           xml:space="preserve"
+                                                           ContextFlyout="{x:Null}"
+                                                           ContextMenu="{Binding $parent[Border].ContextMenu}"/>
+                                    </Border>
+                                </Panel>
+                            </Border>
+
+                            <!-- Resize Handles (Translation Mode) -->
+                            <Canvas Width="{Binding Bounds.Width}" Height="{Binding Bounds.Height}" IsHitTestVisible="True" Background="Transparent">
+                                <Border Classes="TranslationHandle TopLeft" Canvas.Left="-4" Canvas.Top="-4" Width="8" Height="8" Background="#FFFFAA00" CornerRadius="4" BorderBrush="White" BorderThickness="1"/>
+                                <Border Classes="TranslationHandle TopRight" Canvas.Right="-4" Canvas.Top="-4" Width="8" Height="8" Background="#FFFFAA00" CornerRadius="4" BorderBrush="White" BorderThickness="1"/>
+                                <Border Classes="TranslationHandle BottomLeft" Canvas.Left="-4" Canvas.Bottom="-4" Width="8" Height="8" Background="#FFFFAA00" CornerRadius="4" BorderBrush="White" BorderThickness="1"/>
+                                <Border Classes="TranslationHandle BottomRight" Canvas.Right="-4" Canvas.Bottom="-4" Width="8" Height="8" Background="#FFFFAA00" CornerRadius="4" BorderBrush="White" BorderThickness="1"/>
+                            </Canvas>
+                        </Grid>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>

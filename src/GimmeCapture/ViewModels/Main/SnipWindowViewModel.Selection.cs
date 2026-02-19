@@ -156,14 +156,51 @@ public partial class SnipWindowViewModel
         set => this.RaiseAndSetIfChanged(ref _maskGeometry, value);
     }
 
-    private void UpdateMask()
+    public void UpdateMask()
     {
-        MaskGeometry = new CombinedGeometry
+        if (!Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
         {
-            GeometryCombineMode = GeometryCombineMode.Exclude,
-            Geometry1 = new RectangleGeometry(new Rect(-10000, -10000, 20000, 20000)),
-            Geometry2 = new RectangleGeometry(SelectionRect)
-        };
+            Avalonia.Threading.Dispatcher.UIThread.Post(UpdateMask);
+            return;
+        }
+
+        // 1. 建立基礎背景幾何 (覆蓋目前的視口區域)
+        // 使用一個比視口稍微大一點的矩形作為背景，座標從 0,0 開始，避免負數大解析度造成的渲染偏移
+        double w = ViewportSize.Width > 0 ? ViewportSize.Width : 5000;
+        double h = ViewportSize.Height > 0 ? ViewportSize.Height : 5000;
+        Geometry resultGeometry = new RectangleGeometry(new Rect(-100, -100, w + 200, h + 200));
+
+        // 2. 遞迴減去每一個需要挖空的區域
+        // A. 當前正在選取的區域 (截圖模式)
+        if (SelectionRect.Width > 0 && SelectionRect.Height > 0)
+        {
+            resultGeometry = new CombinedGeometry
+            {
+                GeometryCombineMode = GeometryCombineMode.Exclude,
+                Geometry1 = resultGeometry,
+                Geometry2 = new RectangleGeometry(SelectionRect)
+            };
+        }
+
+        // B. 所有已選取的翻譯區域 (翻譯模式)
+        if (IsTranslationMode)
+        {
+            foreach (var sel in UserSelections)
+            {
+                if (sel.Bounds.Width > 0 && sel.Bounds.Height > 0)
+                {
+                    resultGeometry = new CombinedGeometry
+                    {
+                        GeometryCombineMode = GeometryCombineMode.Exclude,
+                        Geometry1 = resultGeometry,
+                        Geometry2 = new RectangleGeometry(sel.Bounds)
+                    };
+                }
+            }
+        }
+
+        MaskGeometry = resultGeometry;
+        System.Diagnostics.Debug.WriteLine($"[Mask] UpdateMask (V3 CombinedGeometry) done. Viewport: {w}x{h}");
     }
 
     private double _maskOpacity = 0.5;
@@ -215,6 +252,7 @@ public partial class SnipWindowViewModel
         set 
         {
             this.RaiseAndSetIfChanged(ref _viewportSize, value);
+            UpdateMask();
             UpdateToolbarPosition();
         }
     }
@@ -670,6 +708,20 @@ public partial class SnipWindowViewModel
             }
         });
         CopyTranslationTextCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Copy Translation error: {ex}"));
+
+        // 監聽集合變更以即時更新遮罩挖空，並訂閱項目的屬性變更
+        UserSelections.CollectionChanged += (s, e) => 
+        {
+            if (e.NewItems != null)
+            {
+                foreach (UserSelectionRect item in e.NewItems)
+                {
+                    item.WhenAnyValue(x => x.Bounds)
+                        .Subscribe(_ => UpdateMask());
+                }
+            }
+            UpdateMask();
+        };
     }
 
     private SAM2Service? _sam2Service;

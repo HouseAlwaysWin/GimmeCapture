@@ -31,6 +31,13 @@ public partial class SnipWindow : Window
     private UserSelectionRect? _movingTranslationSelection;
     private Rect _originalTranslationBounds;
 
+    // Translation selection resize fields
+    private bool _isResizingTranslation;
+    private ResizeDirection _translationResizeDirection;
+    private UserSelectionRect? _resizingTranslationItem;
+    private Rect _originalTranslationRect;
+    private Point _translationResizeStartPoint;
+
     private void OnPointerPressed(object? sender, PointerPressedEventArgs e)
     {
         if (_viewModel == null) return;
@@ -183,8 +190,28 @@ public partial class SnipWindow : Window
             // Translation mode: selection and interaction
             if (_viewModel.IsTranslationMode)
             {
-                // Already handled toolbar above
-                
+                // A. Resize Handle Detection (High Priority)
+                if (sourceControl is Border b && b.Classes.Contains("TranslationHandle"))
+                {
+                    var dir = ResizeDirection.None;
+                    if (b.Classes.Contains("TopLeft")) dir = ResizeDirection.TopLeft;
+                    else if (b.Classes.Contains("TopRight")) dir = ResizeDirection.TopRight;
+                    else if (b.Classes.Contains("BottomLeft")) dir = ResizeDirection.BottomLeft;
+                    else if (b.Classes.Contains("BottomRight")) dir = ResizeDirection.BottomRight;
+
+                    if (dir != ResizeDirection.None && b.DataContext is UserSelectionRect item)
+                    {
+                        _isResizingTranslation = true;
+                        _translationResizeDirection = dir;
+                        _resizingTranslationItem = item;
+                        _originalTranslationRect = item.Bounds;
+                        _translationResizeStartPoint = point;
+                        e.Pointer.Capture(this);
+                        e.Handled = true;
+                        return;
+                    }
+                }
+
                 // Hit test existing translation selections (Top-down)
                 UserSelectionRect? hitSelection = null;
                 for (int i = _viewModel.UserSelections.Count - 1; i >= 0; i--)
@@ -416,14 +443,38 @@ public partial class SnipWindow : Window
             SetCursorShape(StandardCursorType.SizeAll);
             specialCursorSet = true;
         }
-        else if (_isResizing)
+        else if (_isResizing || _isResizingTranslation)
         {
-            // Handled by specific resize cursors if needed, or SizeAll for simplicity
+            var dir = _isResizing ? _resizeDirection : _translationResizeDirection;
+            switch (dir)
+            {
+                // 注意：這裡假設 ResizeDirection 已經定義了對應的方向
+                case ResizeDirection.TopLeft: SetCursorShape(StandardCursorType.TopLeftCorner); break;
+                case ResizeDirection.TopRight: SetCursorShape(StandardCursorType.TopRightCorner); break;
+                case ResizeDirection.BottomLeft: SetCursorShape(StandardCursorType.BottomLeftCorner); break;
+                case ResizeDirection.BottomRight: SetCursorShape(StandardCursorType.BottomRightCorner); break;
+                case ResizeDirection.Top: case ResizeDirection.Bottom: SetCursorShape(StandardCursorType.SizeNorthSouth); break;
+                case ResizeDirection.Left: case ResizeDirection.Right: SetCursorShape(StandardCursorType.SizeWestEast); break;
+                default: SetCursorShape(StandardCursorType.SizeAll); break;
+            }
+            specialCursorSet = true;
         }
         else if (_viewModel.CurrentState == SnipState.Selecting || _viewModel.CurrentState == SnipState.Detecting || _isTranslationSelecting)
         {
             SetCursorShape(StandardCursorType.Cross);
             specialCursorSet = true;
+        }
+        else if (_viewModel.IsTranslationMode)
+        {
+            // 偵測是否懸停在翻譯控制點上
+            if (hitControl is Border handle && handle.Classes.Contains("TranslationHandle"))
+            {
+                if (handle.Classes.Contains("TopLeft")) SetCursorShape(StandardCursorType.TopLeftCorner);
+                else if (handle.Classes.Contains("TopRight")) SetCursorShape(StandardCursorType.TopRightCorner);
+                else if (handle.Classes.Contains("BottomLeft")) SetCursorShape(StandardCursorType.BottomLeftCorner);
+                else if (handle.Classes.Contains("BottomRight")) SetCursorShape(StandardCursorType.BottomRightCorner);
+                specialCursorSet = true;
+            }
         }
 
         if (!specialCursorSet)
@@ -500,6 +551,42 @@ public partial class SnipWindow : Window
         }
 
         // Translation Selection Moving
+        if (_isResizingTranslation && _resizingTranslationItem != null)
+        {
+            var dx = currentPoint.X - _translationResizeStartPoint.X;
+            var dy = currentPoint.Y - _translationResizeStartPoint.Y;
+
+            double newX = _originalTranslationRect.X;
+            double newY = _originalTranslationRect.Y;
+            double newW = _originalTranslationRect.Width;
+            double newH = _originalTranslationRect.Height;
+
+            switch (_translationResizeDirection)
+            {
+                case ResizeDirection.TopLeft:
+                    newX += dx; newY += dy; newW -= dx; newH -= dy;
+                    break;
+                case ResizeDirection.TopRight:
+                    newY += dy; newW += dx; newH -= dy;
+                    break;
+                case ResizeDirection.BottomLeft:
+                    newX += dx; newW -= dx; newH += dy;
+                    break;
+                case ResizeDirection.BottomRight:
+                    newW += dx; newH += dy;
+                    break;
+            }
+
+            // Apply limits (Min size 10x10)
+            if (newW < 10) newW = 10;
+            if (newH < 10) newH = 10;
+            
+            _resizingTranslationItem.Bounds = new Rect(newX, newY, Math.Max(0, newW), Math.Max(0, newH));
+            _viewModel.UpdateMask();
+            e.Handled = true;
+            return;
+        }
+
         if (_isMovingTranslationSelection && _movingTranslationSelection != null)
         {
             var deltaX = currentPoint.X - _translationMoveStart.X;
@@ -632,6 +719,16 @@ public partial class SnipWindow : Window
              _viewModel.CurrentState = SnipState.Selected;
              e.Pointer.Capture(null);
              return;
+        }
+
+        if (_isResizingTranslation)
+        {
+            _isResizingTranslation = false;
+            _resizingTranslationItem = null;
+            _translationResizeDirection = ResizeDirection.None;
+            e.Pointer.Capture(null);
+            e.Handled = true;
+            return;
         }
 
         if (_isMovingSelection)

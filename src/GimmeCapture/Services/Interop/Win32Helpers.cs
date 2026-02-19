@@ -47,11 +47,17 @@ public static class Win32Helpers
     /// <returns>True if region was applied successfully</returns>
     public static bool SetWindowHoleRegion(IntPtr hwnd, int windowWidth, int windowHeight, Rect selectionRect, int borderWidth = 4, Rect? toolbarRect = null, System.Collections.Generic.IEnumerable<Rect>? extraOpaqueRects = null)
     {
+        return SetMultiWindowHoleRegion(hwnd, windowWidth, windowHeight, new[] { selectionRect }, borderWidth, toolbarRect, extraOpaqueRects);
+    }
+
+    /// <summary>
+    /// Creates a window region with multiple "holes" for mouse pass-through.
+    /// </summary>
+    public static bool SetMultiWindowHoleRegion(IntPtr hwnd, int windowWidth, int windowHeight, System.Collections.Generic.IEnumerable<Rect> selectionRects, int borderWidth = 4, Rect? toolbarRect = null, System.Collections.Generic.IEnumerable<Rect>? extraOpaqueRects = null)
+    {
         if (hwnd == IntPtr.Zero) return false;
-        if (selectionRect.Width <= borderWidth * 2 || selectionRect.Height <= borderWidth * 2) return false;
 
         IntPtr fullRegion = IntPtr.Zero;
-        IntPtr holeRegion = IntPtr.Zero;
         IntPtr tempRegion = IntPtr.Zero;
 
         try
@@ -60,23 +66,27 @@ public static class Win32Helpers
             fullRegion = CreateRectRgn(0, 0, windowWidth, windowHeight);
             if (fullRegion == IntPtr.Zero) return false;
 
-            // 2. Create hole region (shrunk by border width to keep border interactive)
-            int holeLeft = (int)(selectionRect.X + borderWidth);
-            int holeTop = (int)(selectionRect.Y + borderWidth);
-            int holeRight = (int)(selectionRect.Right - borderWidth);
-            int holeBottom = (int)(selectionRect.Bottom - borderWidth);
+            // 2. Subtract each selection hole (shrunk by border width)
+            foreach (var rect in selectionRects)
+            {
+                if (rect.Width <= borderWidth * 2 || rect.Height <= borderWidth * 2) continue;
 
-            // Ensure valid hole dimensions
-            if (holeRight <= holeLeft || holeBottom <= holeTop) return false;
+                int holeLeft = (int)(rect.X + borderWidth);
+                int holeTop = (int)(rect.Y + borderWidth);
+                int holeRight = (int)(rect.Right - borderWidth);
+                int holeBottom = (int)(rect.Bottom - borderWidth);
 
-            holeRegion = CreateRectRgn(holeLeft, holeTop, holeRight, holeBottom);
-            if (holeRegion == IntPtr.Zero) return false;
+                if (holeRight <= holeLeft || holeBottom <= holeTop) continue;
 
-            // 3. Subtract hole from full region (RGN_DIFF)
-            int result = CombineRgn(fullRegion, fullRegion, holeRegion, RGN_DIFF);
-            if (result == 0) return false;
+                IntPtr holeRegion = CreateRectRgn(holeLeft, holeTop, holeRight, holeBottom);
+                if (holeRegion != IntPtr.Zero)
+                {
+                    CombineRgn(fullRegion, fullRegion, holeRegion, RGN_DIFF);
+                    DeleteObject(holeRegion);
+                }
+            }
 
-            // 4. Add extra opaque rects back (islands like wings)
+            // 3. Add extra opaque rects back (islands like wings/handles)
             if (extraOpaqueRects != null)
             {
                 foreach (var rect in extraOpaqueRects)
@@ -92,7 +102,7 @@ public static class Win32Helpers
                 }
             }
 
-            // 5. If toolbar rect is provided, add it back to the region
+            // 4. Add toolbar rect back
             if (toolbarRect.HasValue && toolbarRect.Value.Width > 0 && toolbarRect.Value.Height > 0)
             {
                 var tbRect = toolbarRect.Value;
@@ -111,15 +121,14 @@ public static class Win32Helpers
                 }
             }
 
-            // 6. Apply region to window
+            // 5. Apply region to window
             int setResult = SetWindowRgn(hwnd, fullRegion, true);
-            fullRegion = IntPtr.Zero; // Owned by window now
+            fullRegion = IntPtr.Zero; 
             
             return setResult != 0;
         }
         finally
         {
-            if (holeRegion != IntPtr.Zero) DeleteObject(holeRegion);
             if (tempRegion != IntPtr.Zero) DeleteObject(tempRegion);
             if (fullRegion != IntPtr.Zero) DeleteObject(fullRegion);
         }

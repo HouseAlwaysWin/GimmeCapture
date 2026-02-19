@@ -23,32 +23,59 @@ public partial class SnipWindow : Window
         var hwnd = this.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
         if (hwnd == IntPtr.Zero) return;
 
-        // Only apply region when:
-        // 1. In Selected state with valid selection
-        // 2. NOT in drawing mode (SetWindowRgn hole prevents ANY window from receiving mouse in that area)
-        if (state == SnipState.Selected && selectionRect.Width > 10 && selectionRect.Height > 10 && !isDrawingMode)
+        bool isTranslation = _viewModel?.IsTranslationMode ?? false;
+
+        // Apply region when:
+        // 1. In Selected state (Screenshot mode)
+        // 2. OR In Translation mode
+        // 3. AND NOT in drawing mode (Full interactivity required for annotations)
+        if (!isDrawingMode && (isTranslation || (state == SnipState.Selected && selectionRect.Width > 10 && selectionRect.Height > 10)))
         {
-            // Get physical pixel dimensions (account for DPI scaling)
             double scaling = this.RenderScaling;
             int windowWidth = (int)(this.Bounds.Width * scaling);
             int windowHeight = (int)(this.Bounds.Height * scaling);
             
-            // Convert selection rect to physical pixels
-            var scaledRect = new Rect(
-                selectionRect.X * scaling,
-                selectionRect.Y * scaling,
-                selectionRect.Width * scaling,
-                selectionRect.Height * scaling
-            );
-            
-            // Calculate toolbar rect in physical pixels (prevents toolbar from being clipped)
+            // Collect all rectangles that should be "holes"
+            var holeRects = new System.Collections.Generic.List<Rect>();
+
+            if (isTranslation && _viewModel != null)
+            {
+                foreach (var sel in _viewModel.UserSelections)
+                {
+                    if (sel.Bounds.Width > 5 && sel.Bounds.Height > 5)
+                    {
+                        holeRects.Add(new Rect(
+                            sel.Bounds.X * scaling,
+                            sel.Bounds.Y * scaling,
+                            sel.Bounds.Width * scaling,
+                            sel.Bounds.Height * scaling
+                        ));
+                    }
+                }
+            }
+            else if (state == SnipState.Selected)
+            {
+                holeRects.Add(new Rect(
+                    selectionRect.X * scaling,
+                    selectionRect.Y * scaling,
+                    selectionRect.Width * scaling,
+                    selectionRect.Height * scaling
+                ));
+            }
+
+            // If no valid holes, clear region and return
+            if (holeRects.Count == 0)
+            {
+                Win32Helpers.ClearWindowRegion(hwnd);
+                return;
+            }
+
+            // Calculate toolbar rect
             Rect? toolbarRect = null;
             if (_viewModel != null && _viewModel.ToolbarWidth > 0)
             {
-                // Use measured bounds with a safety buffer for shadows/borders
                 double tw = _viewModel.ToolbarWidth + 20; 
                 double th = _viewModel.ToolbarHeight + 20;
-                
                 toolbarRect = new Rect(
                     (_viewModel.ToolbarLeft - 2) * scaling,
                     (_viewModel.ToolbarTop - 2) * scaling,
@@ -57,51 +84,66 @@ public partial class SnipWindow : Window
                 );
             }
 
-            // EXTRA OPAQUE REGIONS: Wings and Handles
-            // We must add handles back because narrowing the borderWidth makes them part of the hole (non-interactive)
+            // Collect UI elements to keep opaque (Handles, Wings, Icons)
             var extraRegions = new System.Collections.Generic.List<Rect>();
             if (_viewModel != null)
             {
-                // 1. Wings (centered vertically on selection edges)
-                double wingsY = selectionRect.Center.Y - (_viewModel.WingHeight / 2);
-                extraRegions.Add(new Rect((selectionRect.X - _viewModel.WingWidth) * scaling, wingsY * scaling, _viewModel.WingWidth * scaling, _viewModel.WingHeight * scaling));
-                extraRegions.Add(new Rect(selectionRect.Right * scaling, wingsY * scaling, _viewModel.WingWidth * scaling, _viewModel.WingHeight * scaling));
+                // In Normal/Screenshot mode, add handles etc.
+                if (!isTranslation)
+                {
+                    var scaledRect = holeRects[0];
+                    // 1. Wings
+                    double wingsY = selectionRect.Center.Y - (_viewModel.WingHeight / 2);
+                    extraRegions.Add(new Rect((selectionRect.X - _viewModel.WingWidth) * scaling, wingsY * scaling, _viewModel.WingWidth * scaling, _viewModel.WingHeight * scaling));
+                    extraRegions.Add(new Rect(selectionRect.Right * scaling, wingsY * scaling, _viewModel.WingWidth * scaling, _viewModel.WingHeight * scaling));
 
-                // 2. Corner Handles (30x30, centered on corners)
-                double hSize = 30 * scaling;
-                double hHalf = 15 * scaling;
-                extraRegions.Add(new Rect(scaledRect.X - hHalf, scaledRect.Y - hHalf, hSize, hSize)); // TL
-                extraRegions.Add(new Rect(scaledRect.Right - hHalf, scaledRect.Y - hHalf, hSize, hSize)); // TR
-                extraRegions.Add(new Rect(scaledRect.X - hHalf, scaledRect.Bottom - hHalf, hSize, hSize)); // BL
-                extraRegions.Add(new Rect(scaledRect.Right - hHalf, scaledRect.Bottom - hHalf, hSize, hSize)); // BR
+                    // 2. Corner Handles
+                    double hSize = 30 * scaling;
+                    double hHalf = 15 * scaling;
+                    extraRegions.Add(new Rect(scaledRect.X - hHalf, scaledRect.Y - hHalf, hSize, hSize)); // TL
+                    extraRegions.Add(new Rect(scaledRect.Right - hHalf, scaledRect.Y - hHalf, hSize, hSize)); // TR
+                    extraRegions.Add(new Rect(scaledRect.X - hHalf, scaledRect.Bottom - hHalf, hSize, hSize)); // BL
+                    extraRegions.Add(new Rect(scaledRect.Right - hHalf, scaledRect.Bottom - hHalf, hSize, hSize)); // BR
 
-                // 2b. Corner Decoration Icons (hearts/skulls) - positioned 4px inside selection with SelectionIconSize
-                // Add extra padding (8px) to ensure entire icon is visible including any anti-aliasing
-                double iconSize = (_viewModel.SelectionIconSize + 8) * scaling;
-                double iconMargin = 2 * scaling; // Reduce margin to capture more of the icon
-                extraRegions.Add(new Rect(scaledRect.X + iconMargin, scaledRect.Y + iconMargin, iconSize, iconSize)); // TL heart
-                extraRegions.Add(new Rect(scaledRect.Right - iconMargin - iconSize, scaledRect.Y + iconMargin, iconSize, iconSize)); // TR skull
-                extraRegions.Add(new Rect(scaledRect.X + iconMargin, scaledRect.Bottom - iconMargin - iconSize, iconSize, iconSize)); // BL heart
-                extraRegions.Add(new Rect(scaledRect.Right - iconMargin - iconSize, scaledRect.Bottom - iconMargin - iconSize, iconSize, iconSize)); // BR skull
+                    // 2b. Icons
+                    double iconSize = (_viewModel.SelectionIconSize + 8) * scaling;
+                    double iconMargin = 2 * scaling;
+                    extraRegions.Add(new Rect(scaledRect.X + iconMargin, scaledRect.Y + iconMargin, iconSize, iconSize)); // TL
+                    extraRegions.Add(new Rect(scaledRect.Right - iconMargin - iconSize, scaledRect.Y + iconMargin, iconSize, iconSize)); // TR
+                    extraRegions.Add(new Rect(scaledRect.X + iconMargin, scaledRect.Bottom - iconMargin - iconSize, iconSize, iconSize)); // BL
+                    extraRegions.Add(new Rect(scaledRect.Right - iconMargin - iconSize, scaledRect.Bottom - iconMargin - iconSize, iconSize, iconSize)); // BR
 
-                // 3. Side Handles (15px thick)
-                double sThick = 15 * scaling;
-                double sHalf = 7.5 * scaling;
-                extraRegions.Add(new Rect(scaledRect.X + hSize, scaledRect.Y - sHalf, scaledRect.Width - hSize * 2, sThick)); // Top
-                extraRegions.Add(new Rect(scaledRect.X + hSize, scaledRect.Bottom - sHalf, scaledRect.Width - hSize * 2, sThick)); // Bottom
-                extraRegions.Add(new Rect(scaledRect.X - sHalf, scaledRect.Y + hSize, sThick, scaledRect.Height - hSize * 2)); // Left
-                extraRegions.Add(new Rect(scaledRect.Right - sHalf, scaledRect.Y + hSize, sThick, scaledRect.Height - hSize * 2)); // Right
+                    // 3. Side Handles
+                    double sThick = 15 * scaling;
+                    double sHalf = 7.5 * scaling;
+                    extraRegions.Add(new Rect(scaledRect.X + hSize, scaledRect.Y - sHalf, scaledRect.Width - hSize * 2, sThick)); // Top
+                    extraRegions.Add(new Rect(scaledRect.X + hSize, scaledRect.Bottom - sHalf, scaledRect.Width - hSize * 2, sThick)); // Bottom
+                    extraRegions.Add(new Rect(scaledRect.X - sHalf, scaledRect.Y + hSize, sThick, scaledRect.Height - hSize * 2)); // Left
+                    extraRegions.Add(new Rect(scaledRect.Right - sHalf, scaledRect.Y + hSize, sThick, scaledRect.Height - hSize * 2)); // Right
+                }
+                else
+                {
+                    // In Translation mode, handles are handled separately in XAML or we add them here
+                    // Let's add the small handles back to region for multi-select
+                    foreach (var sel in _viewModel.UserSelections)
+                    {
+                        var rect = sel.Bounds;
+                        double hSize = 12 * scaling; // Multi-select handles are smaller
+                        double hHalf = 6 * scaling;
+                        extraRegions.Add(new Rect((rect.X - hHalf) * scaling, (rect.Y - hHalf) * scaling, hSize, hSize)); // TL
+                        extraRegions.Add(new Rect((rect.Right - hHalf) * scaling, (rect.Y - hHalf) * scaling, hSize, hSize)); // TR
+                        extraRegions.Add(new Rect((rect.X - hHalf) * scaling, (rect.Bottom - hHalf) * scaling, hSize, hSize)); // BL
+                        extraRegions.Add(new Rect((rect.Right - hHalf) * scaling, (rect.Bottom - hHalf) * scaling, hSize, hSize)); // BR
+                    }
+                }
             }
             
-            // Apply window region with hole.
-            // Use small borderWidth (2px) to match visual border, keep entire inner area clear.
+            // Use small borderWidth (2px)
             int borderWidth = (int)(2 * scaling);
-            Win32Helpers.SetWindowHoleRegion(hwnd, windowWidth, windowHeight, scaledRect, borderWidth, toolbarRect, extraRegions);
+            Win32Helpers.SetMultiWindowHoleRegion(hwnd, windowWidth, windowHeight, holeRects, borderWidth, toolbarRect, extraRegions);
         }
         else
         {
-            // Clear region when not in Selected state OR in drawing mode
-            // Drawing mode requires full window for mouse capture
             Win32Helpers.ClearWindowRegion(hwnd);
         }
     }
