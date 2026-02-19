@@ -362,29 +362,36 @@
                                 Background="#15FFAA00"
                                 Width="{Binding Bounds.Width}"
                                 Height="{Binding Bounds.Height}"
-                                CornerRadius="2">
+                                CornerRadius="2"
+                                Classes="TranslationItem">
                             <Border.ContextMenu>
                                 <ContextMenu>
-                                    <MenuItem Header="取消選取" 
+                                    <MenuItem Header="複製翻譯文字" 
+                                              Command="{Binding $parent[Window].DataContext.CopyTranslationTextCommand}"
+                                              CommandParameter="{Binding}"/>
+                                    <Separator/>
+                                    <MenuItem Header="刪除區域" 
                                               Command="{Binding $parent[Window].DataContext.RemoveUserSelectionCommand}"
                                               CommandParameter="{Binding}"/>
                                 </ContextMenu>
                             </Border.ContextMenu>
                             <Border.Styles>
-                                <Style Selector="Border:pointerover">
+                                <Style Selector="Border.TranslationItem:pointerover">
                                     <Setter Property="BorderBrush" Value="#FFFFAA00"/>
-                                    <Setter Property="BorderThickness" Value="3"/>
-                                    <Setter Property="Background" Value="#25FFAA00"/>
+                                    <Setter Property="Background" Value="#35FFAA00"/>
                                 </Style>
                             </Border.Styles>
                             <!-- 顯示翻譯結果 -->
                             <Panel IsVisible="{Binding IsTranslated}">
-                                <Border Background="#DD000000" CornerRadius="2" Padding="4">
+                                <Border Background="#DD000000" CornerRadius="2" Padding="4"
+                                        ContextMenu="{Binding $parent[Border].ContextMenu}">
                                     <SelectableTextBlock Text="{Binding TranslatedText}" 
                                                        Foreground="White" 
                                                        FontSize="12" 
                                                        TextWrapping="Wrap"
-                                                       xml:space="preserve"/>
+                                                       xml:space="preserve"
+                                                       ContextFlyout="{x:Null}"
+                                                       ContextMenu="{Binding $parent[Border].ContextMenu}"/>
                                 </Border>
                             </Panel>
                         </Border>

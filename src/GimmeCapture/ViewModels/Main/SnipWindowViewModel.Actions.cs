@@ -61,9 +61,10 @@ public partial class SnipWindowViewModel
                 UserSelections.Clear();
             }
             
-            this.RaisePropertyChanged(nameof(ModeDisplayName));
+            this.RaisePropertyChanged(nameof(IsTranslationMode));
             this.RaisePropertyChanged(nameof(IsScreenshotMode));
             this.RaisePropertyChanged(nameof(IsToolbarVisible));
+            this.RaisePropertyChanged(nameof(ModeDisplayName));
         }
     }
 
@@ -294,12 +295,21 @@ public partial class SnipWindowViewModel
         {
             if (RecState == RecordingState.Idle)
             {
-                IsTranslationMode = true;
-                IsRecordingMode = false;
-                // 重置選取狀態
-                CurrentState = SnipState.Detecting;
-                SelectionRect = default;
-                InitializeTranslationToolbarPosition();
+                if (IsTranslationMode)
+                {
+                    // 已在翻譯模式，點擊則切換回截圖模式
+                    IsTranslationMode = false;
+                }
+                else
+                {
+                    // 進入翻譯模式
+                    IsTranslationMode = true;
+                    IsRecordingMode = false;
+                    // 重置選取狀態
+                    CurrentState = SnipState.Detecting;
+                    SelectionRect = default;
+                    InitializeTranslationToolbarPosition();
+                }
             }
         }, canExecuteHotkeys);
         SetTranslationModeCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));

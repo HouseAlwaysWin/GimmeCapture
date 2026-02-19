@@ -354,6 +354,12 @@ public partial class SnipWindow : Window
 
                 if (hitSelection != null)
                 {
+                    // 在編輯模式下點擊右鍵不直接刪除，讓 ContextMenu 彈出
+                    if (_viewModel.CurrentTranslationTool == TranslationTool.Edit)
+                    {
+                        return;
+                    }
+                    
                     _viewModel.UserSelections.Remove(hitSelection);
                     e.Handled = true;
                     return;
@@ -386,7 +392,26 @@ public partial class SnipWindow : Window
         // --- Handle Cursors ---
         bool specialCursorSet = false;
 
-        if (_isDraggingToolbar || _isMovingTranslationSelection || _isMovingSelection || _isDraggingAnnotation)
+        // 如果在工具列上方，強制使用箭頭游標
+        var hitControl = this.InputHitTest(currentPoint) as Visual;
+        bool isOverToolbar = false;
+        var parent = hitControl;
+        while (parent != null)
+        {
+            if (parent is SnipToolbar || (parent is Control c && c.Name == "Toolbar"))
+            {
+                isOverToolbar = true;
+                break;
+            }
+            parent = parent.GetVisualParent();
+        }
+
+        if (isOverToolbar)
+        {
+            SetCursorShape(StandardCursorType.Arrow);
+            specialCursorSet = true;
+        }
+        else if (_isDraggingToolbar || _isMovingTranslationSelection || _isMovingSelection || _isDraggingAnnotation)
         {
             SetCursorShape(StandardCursorType.SizeAll);
             specialCursorSet = true;

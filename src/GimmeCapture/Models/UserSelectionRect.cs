@@ -4,6 +4,15 @@ using ReactiveUI;
 namespace GimmeCapture.Models;
 
 /// <summary>
+/// 翻譯模式下的操作工具類型
+/// </summary>
+public enum TranslationTool
+{
+    Select, // 手動選取模式
+    Edit    // 編輯與功能選單模式
+}
+
+/// <summary>
 /// 翻譯模式下使用者圈選的矩形區域
 /// </summary>
 public class UserSelectionRect : ReactiveObject

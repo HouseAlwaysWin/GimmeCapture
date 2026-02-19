@@ -125,19 +125,36 @@
             <!-- 5c. Translation Mode Actions (only visible in translation mode) -->
             <Rectangle Fill="#444444" Width="1" Height="16" Margin="4,0" VerticalAlignment="Center" IsVisible="{Binding IsTranslationMode}"/>
             
-            <ToggleButton Theme="{StaticResource SnipToggleButton}" FontSize="12" BorderThickness="1"
-                    IsChecked="{Binding IsTranslationSelectionActive, Mode=TwoWay}"
+            <Button Theme="{StaticResource SnipToolButton}" FontSize="12" BorderThickness="1"
                     IsVisible="{Binding IsTranslationMode}"
-                    ToolTip.Tip="手動選取模式 (開啟時可建立新區域，關閉時可拖移現有區域)">
+                    Classes.active="{Binding IsTranslationMode}"
+                    ToolTip.Tip="翻譯操作工具">
+                <Button.Flyout>
+                    <Flyout Placement="Top">
+                        <Border Background="#1A1A1A" BorderBrush="#333333" BorderThickness="1" Padding="2" CornerRadius="4">
+                            <StackPanel Orientation="Horizontal" Spacing="2">
+                                <Button Theme="{StaticResource SnipToolButton}" FontSize="12" BorderThickness="1" 
+                                               Classes.active="{Binding CurrentTranslationTool, ConverterParameter={x:Static m:TranslationTool.Select}, Converter={StaticResource EnumToBoolConverter}}"
+                                               Command="{Binding SelectTranslationToolCommand}" CommandParameter="{x:Static m:TranslationTool.Select}" ToolTip.Tip="選取模式">
+                                    <PathIcon Data="M19,13h-6v6h-2v-6H5v-2h6V5h2v6h6V13z" Width="14" Height="14"/>
+                                </Button>
+                                <Button Theme="{StaticResource SnipToolButton}" FontSize="12" BorderThickness="1" 
+                                               Classes.active="{Binding CurrentTranslationTool, ConverterParameter={x:Static m:TranslationTool.Edit}, Converter={StaticResource EnumToBoolConverter}}"
+                                               Command="{Binding SelectTranslationToolCommand}" CommandParameter="{x:Static m:TranslationTool.Edit}" ToolTip.Tip="編輯與選單模式">
+                                    <PathIcon Data="M13,10h-2V7H9l3,-3 3,3h-2v3zm0,4h-2v3H9l3,3 3,-3h-2v-3zm3,-1h3V11l3,3-3,3v-2h-3v-2zM8,13H5v2l-3,-3 3,-3v2h3v2z" Width="14" Height="14"/>
+                                </Button>
+                            </StackPanel>
+                        </Border>
+                    </Flyout>
+                </Button.Flyout>
                 <Panel>
-                    <!-- Crosshair for selection mode -->
+                    <!-- Current active tool icon -->
                     <PathIcon Data="M19,13h-6v6h-2v-6H5v-2h6V5h2v6h6V13z" Width="14" Height="14" 
                               IsVisible="{Binding IsTranslationSelectionActive}"/>
-                    <!-- Cursor for move mode -->
                     <PathIcon Data="M13,10h-2V7H9l3,-3 3,3h-2v3zm0,4h-2v3H9l3,3 3,-3h-2v-3zm3,-1h3V11l3,3-3,3v-2h-3v-2zM8,13H5v2l-3,-3 3,-3v2h3v2z" Width="14" Height="14" 
                               IsVisible="{Binding !IsTranslationSelectionActive}"/>
                 </Panel>
-            </ToggleButton>
+            </Button>
 
             <Button Theme="{StaticResource SnipButton}" FontSize="12" BorderThickness="1"
                     Command="{Binding TranslateAllSelectionsCommand}"

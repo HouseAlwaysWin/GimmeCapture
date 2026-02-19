@@ -464,6 +464,31 @@ public class WindowsScreenCaptureService : IScreenCaptureService
         });
     }
 
+    public async Task CopyToClipboardAsync(string text)
+    {
+        await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
+        {
+            if (OperatingSystem.IsWindows())
+            {
+                try
+                {
+                    System.Windows.Forms.Clipboard.SetText(text);
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"WinForms Clipboard (Text) failed: {ex.Message}");
+                }
+            }
+
+            var topLevel = TopLevel.GetTopLevel(Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop ? desktop.MainWindow : null);
+            if (topLevel?.Clipboard is { } clipboard)
+            {
+                await clipboard.SetTextAsync(text);
+            }
+        });
+    }
+
     public async Task SaveToFileAsync(SKBitmap bitmap, string path)
     {
         await Task.Run(() =>

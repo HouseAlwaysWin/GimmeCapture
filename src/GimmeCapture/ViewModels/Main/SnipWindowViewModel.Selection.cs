@@ -277,12 +277,18 @@ public partial class SnipWindowViewModel
         set => this.RaiseAndSetIfChanged(ref _isToolbarManuallyPositioned, value);
     }
 
-    private bool _isTranslationSelectionActive = true; // 預設開啟手動選取
-    public bool IsTranslationSelectionActive
+    private TranslationTool _currentTranslationTool = TranslationTool.Select;
+    public TranslationTool CurrentTranslationTool
     {
-        get => _isTranslationSelectionActive;
-        set => this.RaiseAndSetIfChanged(ref _isTranslationSelectionActive, value);
+        get => _currentTranslationTool;
+        set 
+        {
+            this.RaiseAndSetIfChanged(ref _currentTranslationTool, value);
+            this.RaisePropertyChanged(nameof(IsTranslationSelectionActive));
+        }
     }
+
+    public bool IsTranslationSelectionActive => CurrentTranslationTool == TranslationTool.Select;
 
     // 翻譯工具列位置（可拖曳，預設螢幕中間上方）
     private double _translationToolbarTop = 20;
@@ -619,7 +625,8 @@ public partial class SnipWindowViewModel
     public ReactiveCommand<Unit, Unit> ScanAllTextCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> ClearAllSelectionsCommand { get; set; } = null!;
     public ReactiveCommand<UserSelectionRect, Unit> RemoveUserSelectionCommand { get; set; } = null!;
-    public ReactiveCommand<Unit, Unit> ToggleTranslationSelectionModeCommand { get; set; } = null!;
+    public ReactiveCommand<TranslationTool, Unit> SelectTranslationToolCommand { get; set; } = null!;
+    public ReactiveCommand<UserSelectionRect, Unit> CopyTranslationTextCommand { get; set; } = null!;
 
     private void InitializeSelectionCommands()
     {
@@ -645,14 +652,24 @@ public partial class SnipWindowViewModel
         ClearAllSelectionsCommand = ReactiveCommand.Create(() => UserSelections.Clear());
         ClearAllSelectionsCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"ClearAll error: {ex}"));
         
-        ToggleTranslationSelectionModeCommand = ReactiveCommand.Create(() => 
+        SelectTranslationToolCommand = ReactiveCommand.Create<TranslationTool>(tool => 
         {
-            IsTranslationSelectionActive = !IsTranslationSelectionActive;
+            CurrentTranslationTool = tool;
         });
-        ToggleTranslationSelectionModeCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Toggle Selection error: {ex}"));
+        SelectTranslationToolCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Select Tool error: {ex}"));
 
         RemoveUserSelectionCommand = ReactiveCommand.Create<UserSelectionRect>(item => { UserSelections.Remove(item); });
         RemoveUserSelectionCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"RemoveSelection error: {ex}"));
+
+        CopyTranslationTextCommand = ReactiveCommand.CreateFromTask<UserSelectionRect>(async (UserSelectionRect item) => 
+        {
+            if (item != null && !string.IsNullOrEmpty(item.TranslatedText))
+            {
+                await _captureService.CopyToClipboardAsync(item.TranslatedText);
+                _mainVm?.SetStatus("StatusCopied");
+            }
+        });
+        CopyTranslationTextCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Copy Translation error: {ex}"));
     }
 
     private SAM2Service? _sam2Service;
