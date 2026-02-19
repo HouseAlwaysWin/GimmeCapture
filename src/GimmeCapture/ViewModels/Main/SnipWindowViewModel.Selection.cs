@@ -277,6 +277,13 @@ public partial class SnipWindowViewModel
         set => this.RaiseAndSetIfChanged(ref _isToolbarManuallyPositioned, value);
     }
 
+    private bool _isTranslationSelectionActive = true; // 預設開啟手動選取
+    public bool IsTranslationSelectionActive
+    {
+        get => _isTranslationSelectionActive;
+        set => this.RaiseAndSetIfChanged(ref _isTranslationSelectionActive, value);
+    }
+
     // 翻譯工具列位置（可拖曳，預設螢幕中間上方）
     private double _translationToolbarTop = 20;
     public double TranslationToolbarTop
@@ -612,6 +619,7 @@ public partial class SnipWindowViewModel
     public ReactiveCommand<Unit, Unit> ScanAllTextCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> ClearAllSelectionsCommand { get; set; } = null!;
     public ReactiveCommand<UserSelectionRect, Unit> RemoveUserSelectionCommand { get; set; } = null!;
+    public ReactiveCommand<Unit, Unit> ToggleTranslationSelectionModeCommand { get; set; } = null!;
 
     private void InitializeSelectionCommands()
     {
@@ -634,8 +642,14 @@ public partial class SnipWindowViewModel
         ScanAllTextCommand = ReactiveCommand.CreateFromTask(ScanAllTextAsync);
         ScanAllTextCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"ScanAll error: {ex}"));
 
-        ClearAllSelectionsCommand = ReactiveCommand.Create(() => { UserSelections.Clear(); });
+        ClearAllSelectionsCommand = ReactiveCommand.Create(() => UserSelections.Clear());
         ClearAllSelectionsCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"ClearAll error: {ex}"));
+        
+        ToggleTranslationSelectionModeCommand = ReactiveCommand.Create(() => 
+        {
+            IsTranslationSelectionActive = !IsTranslationSelectionActive;
+        });
+        ToggleTranslationSelectionModeCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Toggle Selection error: {ex}"));
 
         RemoveUserSelectionCommand = ReactiveCommand.Create<UserSelectionRect>(item => { UserSelections.Remove(item); });
         RemoveUserSelectionCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"RemoveSelection error: {ex}"));

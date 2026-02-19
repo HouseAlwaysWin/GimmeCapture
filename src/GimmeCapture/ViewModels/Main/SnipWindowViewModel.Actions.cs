@@ -789,6 +789,9 @@ public partial class SnipWindowViewModel
     {
         if (RecState != RecordingState.Idle) return;
 
+        // 翻譯模式下右鍵點擊空白處不關閉視窗 (避免與右鍵刪除選取框衝突)
+        if (IsTranslationMode) return;
+
         if (CurrentState == SnipState.Selecting || CurrentState == SnipState.Selected)
         {
             CurrentState = SnipState.Detecting;

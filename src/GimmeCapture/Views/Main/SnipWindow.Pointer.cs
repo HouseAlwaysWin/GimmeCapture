@@ -25,6 +25,12 @@ public partial class SnipWindow : Window
     private bool _isDraggingToolbar;
     private Point _toolbarDragOffset;
 
+    // Translation selection move fields
+    private bool _isMovingTranslationSelection;
+    private Point _translationMoveStart;
+    private UserSelectionRect? _movingTranslationSelection;
+    private Rect _originalTranslationBounds;
+
     private void OnPointerPressed(object? sender, PointerPressedEventArgs e)
     {
         if (_viewModel == null) return;
@@ -174,32 +180,51 @@ public partial class SnipWindow : Window
 
         if (props.IsLeftButtonPressed)
         {
-            // Translation mode: multi-selection logic
+            // Translation mode: selection and interaction
             if (_viewModel.IsTranslationMode)
             {
                 // Already handled toolbar above
                 
-                // Check if clicking on existing selection or popup
-                if (sourceControl != null)
+                // Hit test existing translation selections (Top-down)
+                UserSelectionRect? hitSelection = null;
+                for (int i = _viewModel.UserSelections.Count - 1; i >= 0; i--)
                 {
-                    Control? ancestor = sourceControl;
-                    while (ancestor != null)
+                    if (_viewModel.UserSelections[i].Bounds.Contains(point))
                     {
-                        if (ancestor is Avalonia.Controls.Primitives.Popup)
-                            return;
-                        ancestor = ancestor.GetVisualParent() as Control;
+                        hitSelection = _viewModel.UserSelections[i];
+                        break;
                     }
                 }
-                
-                // Start new selection
-                _isTranslationSelecting = true;
-                _translationSelectionStart = point;
-                _currentTranslationSelection = new UserSelectionRect
+
+                if (hitSelection != null)
                 {
-                    Bounds = new Rect(point, new Size(0, 0))
-                };
-                _viewModel.UserSelections.Add(_currentTranslationSelection);
-                e.Handled = true;
+                    // Hit an existing selection -> Start moving
+                    _isMovingTranslationSelection = true;
+                    _movingTranslationSelection = hitSelection;
+                    _translationMoveStart = point;
+                    _originalTranslationBounds = hitSelection.Bounds;
+                    e.Pointer.Capture(this);
+                    e.Handled = true;
+                    return;
+                }
+
+                // Not hit an existing selection -> Only start new one if manual selection is active
+                if (_viewModel.IsTranslationSelectionActive)
+                {
+                    // Start new selection
+                    _isTranslationSelecting = true;
+                    _translationSelectionStart = point;
+                    _currentTranslationSelection = new UserSelectionRect
+                    {
+                        Bounds = new Rect(point, new Size(0, 0))
+                    };
+                    _viewModel.UserSelections.Add(_currentTranslationSelection);
+                    e.Pointer.Capture(this);
+                    e.Handled = true;
+                    return;
+                }
+                
+                // If not active, do nothing (maybe clicked background to clear focus etc)
                 return;
             }
 
@@ -313,6 +338,28 @@ public partial class SnipWindow : Window
         {
             if (_viewModel == null) return;
 
+            // Translation mode: Right-click on existing selection to delete it
+            if (_viewModel.IsTranslationMode)
+            {
+                var hitPoint = e.GetPosition(this);
+                UserSelectionRect? hitSelection = null;
+                for (int i = _viewModel.UserSelections.Count - 1; i >= 0; i--)
+                {
+                    if (_viewModel.UserSelections[i].Bounds.Contains(hitPoint))
+                    {
+                        hitSelection = _viewModel.UserSelections[i];
+                        break;
+                    }
+                }
+
+                if (hitSelection != null)
+                {
+                    _viewModel.UserSelections.Remove(hitSelection);
+                    e.Handled = true;
+                    return;
+                }
+            }
+
             _viewModel.HandleRightClick();
         }
     }
@@ -337,9 +384,26 @@ public partial class SnipWindow : Window
         UpdateActiveScreenBounds(currentPoint);
 
         // --- Handle Cursors ---
-        if (!_isResizing && !_isMovingSelection && !_isDraggingAnnotation && !_isTranslationSelecting && !_isDraggingToolbar && !_isDraggingTranslation)
+        bool specialCursorSet = false;
+
+        if (_isDraggingToolbar || _isMovingTranslationSelection || _isMovingSelection || _isDraggingAnnotation)
         {
-            bool cursorSet = false;
+            SetCursorShape(StandardCursorType.SizeAll);
+            specialCursorSet = true;
+        }
+        else if (_isResizing)
+        {
+            // Handled by specific resize cursors if needed, or SizeAll for simplicity
+        }
+        else if (_viewModel.CurrentState == SnipState.Selecting || _viewModel.CurrentState == SnipState.Detecting || _isTranslationSelecting)
+        {
+            SetCursorShape(StandardCursorType.Cross);
+            specialCursorSet = true;
+        }
+
+        if (!specialCursorSet)
+        {
+            bool actionCursorSet = false;
             if (_viewModel.CurrentState == SnipState.Selected)
             {
                 // 1. Text Annotation Hover (Hand Cursor)
@@ -358,7 +422,7 @@ public partial class SnipWindow : Window
                             if (rect.Contains(selectionSpacePoint))
                             {
                                 SetCursorShape(StandardCursorType.Hand);
-                                cursorSet = true;
+                                actionCursorSet = true;
                                 break;
                             }
                         }
@@ -366,7 +430,7 @@ public partial class SnipWindow : Window
                 }
 
                 // 2. Handle Hover (SizeAll)
-                if (!cursorSet)
+                if (!actionCursorSet)
                 {
                     var hit = this.InputHitTest(currentPoint) as Control;
                     bool isOverHandle = hit != null && (hit.Classes.Contains("Handle") || hit.Classes.Contains("MoveHandle"));
@@ -374,19 +438,29 @@ public partial class SnipWindow : Window
                     if (isOverHandle || _viewModel.SelectionRect.Contains(currentPoint))
                     {
                         SetCursorShape(StandardCursorType.SizeAll);
-                        cursorSet = true;
+                        actionCursorSet = true;
+                    }
+                }
+            }
+            
+            // 3. Translation mode Hover over existing selections
+            if (!actionCursorSet && _viewModel.IsTranslationMode)
+            {
+                foreach (var sel in _viewModel.UserSelections)
+                {
+                    if (sel.Bounds.Contains(currentPoint))
+                    {
+                        SetCursorShape(StandardCursorType.SizeAll);
+                        actionCursorSet = true;
+                        break;
                     }
                 }
             }
 
-            if (!cursorSet)
+            if (!actionCursorSet)
             {
                 SetCursorShape(StandardCursorType.Arrow);
             }
-        }
-        else if (!_isTranslationSelecting && !_isDraggingToolbar)
-        {
-            SetCursorShape(StandardCursorType.Cross);
         }
 
         // --- Execution Logic ---
@@ -397,6 +471,19 @@ public partial class SnipWindow : Window
             _viewModel.ToolbarLeft = currentPoint.X - _toolbarDragOffset.X;
             _viewModel.ToolbarTop = currentPoint.Y - _toolbarDragOffset.Y;
             _viewModel.IsToolbarManuallyPositioned = true;
+            return;
+        }
+
+        // Translation Selection Moving
+        if (_isMovingTranslationSelection && _movingTranslationSelection != null)
+        {
+            var deltaX = currentPoint.X - _translationMoveStart.X;
+            var deltaY = currentPoint.Y - _translationMoveStart.Y;
+            _movingTranslationSelection.Bounds = new Rect(
+                _originalTranslationBounds.X + deltaX,
+                _originalTranslationBounds.Y + deltaY,
+                _originalTranslationBounds.Width,
+                _originalTranslationBounds.Height);
             return;
         }
 
@@ -499,6 +586,15 @@ public partial class SnipWindow : Window
         if (_isDraggingToolbar)
         {
             _isDraggingToolbar = false;
+            e.Pointer.Capture(null);
+            e.Handled = true;
+            return;
+        }
+
+        if (_isMovingTranslationSelection)
+        {
+            _isMovingTranslationSelection = false;
+            _movingTranslationSelection = null;
             e.Pointer.Capture(null);
             e.Handled = true;
             return;
