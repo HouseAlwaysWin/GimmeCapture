@@ -190,8 +190,9 @@ public partial class SnipWindow : Window
             // Translation mode: selection and interaction (V7+ Restructured)
             if (_viewModel.IsTranslationMode)
             {
-                // A. Drag Handle Detection (External Title Bar V7+)
-                if (sourceControl is Border db && db.Classes.Contains("TranslationDragHandle") && db.DataContext is UserSelectionRect dragItem)
+                // A. Drag Handle Detection — 選取模式時跳過
+                if (!_viewModel.IsTranslationSelectionActive &&
+                    sourceControl is Border db && db.Classes.Contains("TranslationDragHandle") && db.DataContext is UserSelectionRect dragItem)
                 {
                     _isMovingTranslationSelection = true;
                     _movingTranslationSelection = dragItem;
@@ -451,8 +452,9 @@ public partial class SnipWindow : Window
                 if (Math.Abs(currentPoint.X - rect.Right) < tolerance && Math.Abs(currentPoint.Y - rect.Bottom) < tolerance)
                 { SetCursorShape(StandardCursorType.BottomRightCorner); specialCursorSet = true; break; }
                 
-                // Drag Handle Area
-                if (currentPoint.X >= rect.X && currentPoint.X <= rect.Right && currentPoint.Y >= rect.Y - 20 && currentPoint.Y <= rect.Y)
+                // Drag Handle Area — 選取模式時跳過
+                if (!_viewModel.IsTranslationSelectionActive &&
+                    currentPoint.X >= rect.X && currentPoint.X <= rect.Right && currentPoint.Y >= rect.Y - 20 && currentPoint.Y <= rect.Y)
                 { SetCursorShape(StandardCursorType.SizeAll); specialCursorSet = true; break; }
 
                 // 已翻譯文字區域：Arrow（方便選取文字）

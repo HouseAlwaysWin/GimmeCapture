@@ -353,10 +353,11 @@
                 <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="m:UserSelectionRect">
                         <Canvas ClipToBounds="False" Width="{Binding Bounds.Width}" Height="{Binding Bounds.Height}">
-                            <!-- 外掛式拖拽把手 (External Drag Handle V6) -->
+                            <!-- 外掛式拖拽把手：僅在編輯模式（非選取模式）時顯示 -->
                             <Border Canvas.Top="-20" Canvas.Left="0" Height="18" Width="{Binding Bounds.Width}" 
                                     Background="#66FFAA00" CornerRadius="4,4,0,0" 
-                                    IsHitTestVisible="True" Classes="TranslationDragHandle">
+                                    IsHitTestVisible="True" Classes="TranslationDragHandle"
+                                    IsVisible="{Binding !$parent[Window].DataContext.IsTranslationSelectionActive}">
                                 <TextBlock Text="⋮⋮" Foreground="#AAFFFFFF" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="12" IsHitTestVisible="False"/>
                             </Border>
 
@@ -385,24 +386,29 @@
                                     <Border Background="#CC000000" CornerRadius="4" Padding="6"
                                             BorderBrush="#44FFFFFF" BorderThickness="1"
                                             Margin="4"
-                                            HorizontalAlignment="Center" VerticalAlignment="Center"
-                                            ContextMenu="{Binding $parent[Border].ContextMenu}">
+                                            HorizontalAlignment="Center" VerticalAlignment="Center">
                                         <SelectableTextBlock Text="{Binding TranslatedText}" 
                                                            Foreground="White" 
                                                            FontSize="12" 
                                                            TextWrapping="Wrap"
-                                                           xml:space="preserve"/>
+                                                           xml:space="preserve">
+                                            <SelectableTextBlock.ContextMenu>
+                                                <ContextMenu>
+                                                    <MenuItem Header="複製翻譯文字" 
+                                                              Command="{Binding $parent[Window].DataContext.CopyTranslationTextCommand}"
+                                                              CommandParameter="{Binding}"/>
+                                                    <Separator/>
+                                                    <MenuItem Header="刪除區域" 
+                                                              Command="{Binding $parent[Window].DataContext.RemoveUserSelectionCommand}"
+                                                              CommandParameter="{Binding}"/>
+                                                </ContextMenu>
+                                            </SelectableTextBlock.ContextMenu>
+                                        </SelectableTextBlock>
                                     </Border>
                                 </Panel>
                             </Border>
 
-                            <!-- Resize Handles (Translation Mode) - Transparent but Detectable -->
-                            <Canvas Width="{Binding Bounds.Width}" Height="{Binding Bounds.Height}" IsHitTestVisible="True" Background="Transparent">
-                                <Border Classes="TranslationHandle TopLeft" Canvas.Left="-10" Canvas.Top="-10" Width="20" Height="20" Background="#01000000"/>
-                                <Border Classes="TranslationHandle TopRight" Canvas.Right="-10" Canvas.Top="-10" Width="20" Height="20" Background="#01000000"/>
-                                <Border Classes="TranslationHandle BottomLeft" Canvas.Left="-10" Canvas.Bottom="-10" Width="20" Height="20" Background="#01000000"/>
-                                <Border Classes="TranslationHandle BottomRight" Canvas.Right="-10" Canvas.Bottom="-10" Width="20" Height="20" Background="#01000000"/>
-                            </Canvas>
+                            <!-- Resize 由幾何偵測 (OnPointerMoved/Pressed) 處理，不再使用覆蓋 Canvas -->
                         </Canvas>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
