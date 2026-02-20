@@ -357,7 +357,7 @@
 
                             <Border BorderBrush="{Binding $parent[Window].DataContext.SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" 
                                     BorderThickness="1"
-                                    Background="Transparent"
+                                    Background="#01000000"
                                     Width="{Binding Bounds.Width}"
                                     Height="{Binding Bounds.Height}"
                                     CornerRadius="0"
