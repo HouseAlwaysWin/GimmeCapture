@@ -135,6 +135,74 @@ public static class Win32Helpers
     }
 
     /// <summary>
+    /// Creates a window region that is fully click-through, EXCEPT for a single outer bounding box.
+    /// The bounding box itself has a hole in the middle defined by the holeRect.
+    /// This prevents DWM shadow glitches caused by complex disjoint extraRegions.
+    /// </summary>
+    public static bool SetBoundingBoxHoleRegion(IntPtr hwnd, Rect outerBoundingBox, Rect innerHole, Rect? toolbarRect = null)
+    {
+        if (hwnd == IntPtr.Zero) return false;
+
+        IntPtr fullRegion = IntPtr.Zero;
+        IntPtr tempRegion = IntPtr.Zero;
+
+        try
+        {
+            // Start empty
+            fullRegion = CreateRectRgn(0, 0, 0, 0);
+            
+            // Add outer bounding box
+            tempRegion = CreateRectRgn((int)outerBoundingBox.X, (int)outerBoundingBox.Y, (int)outerBoundingBox.Right, (int)outerBoundingBox.Bottom);
+            if (tempRegion != IntPtr.Zero)
+            {
+                CombineRgn(fullRegion, fullRegion, tempRegion, RGN_OR);
+                DeleteObject(tempRegion);
+                tempRegion = IntPtr.Zero;
+            }
+
+            // Punch hole in the middle
+            if (innerHole.Width > 0 && innerHole.Height > 0)
+            {
+                tempRegion = CreateRectRgn((int)innerHole.X, (int)innerHole.Y, (int)innerHole.Right, (int)innerHole.Bottom);
+                if (tempRegion != IntPtr.Zero)
+                {
+                    CombineRgn(fullRegion, fullRegion, tempRegion, RGN_DIFF);
+                    DeleteObject(tempRegion);
+                    tempRegion = IntPtr.Zero;
+                }
+            }
+
+            // Add toolbar 
+            if (toolbarRect.HasValue && toolbarRect.Value.Width > 0 && toolbarRect.Value.Height > 0)
+            {
+                var tbRect = toolbarRect.Value;
+                int padding = 5;
+                tempRegion = CreateRectRgn(
+                    Math.Max(0, (int)tbRect.X - padding),
+                    Math.Max(0, (int)tbRect.Y - padding),
+                    (int)tbRect.Right + padding,
+                    (int)tbRect.Bottom + padding
+                );
+                if (tempRegion != IntPtr.Zero)
+                {
+                    CombineRgn(fullRegion, fullRegion, tempRegion, RGN_OR);
+                    DeleteObject(tempRegion);
+                    tempRegion = IntPtr.Zero;
+                }
+            }
+
+            int setResult = SetWindowRgn(hwnd, fullRegion, true);
+            fullRegion = IntPtr.Zero;
+            return setResult != 0;
+        }
+        finally
+        {
+            if (tempRegion != IntPtr.Zero) DeleteObject(tempRegion);
+            if (fullRegion != IntPtr.Zero) DeleteObject(fullRegion);
+        }
+    }
+
+    /// <summary>
     /// Clears the window region, restoring the window to its default rectangular shape.
     /// Call this when closing the window or when no selection is active.
     /// </summary>

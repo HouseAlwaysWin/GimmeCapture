@@ -232,7 +232,7 @@
                   
                 <!-- Selection Border -->
                 <Border CornerRadius="0" Background="#01FFFFFF"
-                        BoxShadow="{Binding SelectionBorderColor, Converter={StaticResource ColorToBoxShadowConverter}}"
+                        BoxShadow="{Binding SelectionShadowColor, Converter={StaticResource ColorToBoxShadowConverter}}"
                         IsVisible="{Binding HideFrameBorder, Converter={StaticResource BoolInvertConverter}}"
                         IsHitTestVisible="{Binding IsDrawingMode, Converter={StaticResource BoolInvertConverter}}"
                         Classes="MoveHandle">

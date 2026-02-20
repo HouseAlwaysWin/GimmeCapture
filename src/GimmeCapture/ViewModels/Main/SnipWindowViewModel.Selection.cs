@@ -26,6 +26,7 @@ public partial class SnipWindowViewModel
         {
             System.Diagnostics.Debug.WriteLine($"[SnipState] {_currentState} -> {value}");
             this.RaiseAndSetIfChanged(ref _currentState, value);
+            this.RaisePropertyChanged(nameof(SelectionShadowColor));
             
             // If we leave Detecting state (e.g. start selecting), cancel any running scan
             if (value != SnipState.Detecting)
@@ -272,14 +273,22 @@ public partial class SnipWindowViewModel
         Geometry mainMask = new RectangleGeometry(new Rect(-100, -100, w + 200, h + 200));
 
         // 2. 處理截圖模式選取框 (全挖空)
-        if (SelectionRect.Width > 0 && SelectionRect.Height > 0)
+        if (SelectionRect.Width > 0 && SelectionRect.Height > 0 && !IsTranslationMode)
         {
-            mainMask = new CombinedGeometry
+            if (CurrentState == SnipState.Selected)
             {
-                GeometryCombineMode = GeometryCombineMode.Exclude,
-                Geometry1 = mainMask,
-                Geometry2 = new RectangleGeometry(SelectionRect)
-            };
+                // V8: When the box is set (Selected), remove the full screen mask
+                mainMask = new GeometryGroup();
+            }
+            else
+            {
+                mainMask = new CombinedGeometry
+                {
+                    GeometryCombineMode = GeometryCombineMode.Exclude,
+                    Geometry1 = mainMask,
+                    Geometry2 = new RectangleGeometry(SelectionRect)
+                };
+            }
         }
 
         // 3. 處理翻譯模式選取框 (V8: 已翻譯不挖洞，與 Win32 Region 同步)
@@ -330,8 +339,14 @@ public partial class SnipWindowViewModel
     public Color SelectionBorderColor
     {
         get => _selectionBorderColor;
-        set => this.RaiseAndSetIfChanged(ref _selectionBorderColor, value);
+        set 
+        {
+            this.RaiseAndSetIfChanged(ref _selectionBorderColor, value);
+            this.RaisePropertyChanged(nameof(SelectionShadowColor));
+        }
     }
+
+    public Color SelectionShadowColor => CurrentState == SnipState.Selected ? Colors.Transparent : SelectionBorderColor;
 
     private double _selectionBorderThickness = 2.0;
     public double SelectionBorderThickness

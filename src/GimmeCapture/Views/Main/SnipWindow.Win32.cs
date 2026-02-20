@@ -6,11 +6,86 @@ using GimmeCapture.Models;
 using GimmeCapture.Services.Interop;
 using GimmeCapture.ViewModels.Main;
 using System;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
 
 namespace GimmeCapture.Views.Main;
 
 public partial class SnipWindow : Window
 {
+    // Win32 Interop for click-through
+    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    private delegate IntPtr WndProcDelegate(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("user32.dll", EntryPoint = "SetWindowLongPtr")]
+    private static extern IntPtr SetWindowLongPtr64(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
+
+    [DllImport("user32.dll", EntryPoint = "SetWindowLong")]
+    private static extern IntPtr SetWindowLongPtr32(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr CallWindowProc(IntPtr lpPrevWndFunc, IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
+
+    private const int GWLP_WNDPROC = -4;
+    private const uint WM_NCHITTEST = 0x0084;
+    private const int HTTRANSPARENT = -1;
+
+    private WndProcDelegate? _wndProcDelegate;
+    private IntPtr _oldWndProc;
+
+    private List<Rect> _hitTestRegions = new();
+    private bool _useHitTestRegions = false;
+
+    public void InitializeWin32Hook()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        var hwnd = this.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
+        if (hwnd == IntPtr.Zero || _wndProcDelegate != null) return;
+
+        _wndProcDelegate = new WndProcDelegate(WndProcHook);
+        IntPtr ptr = Marshal.GetFunctionPointerForDelegate(_wndProcDelegate);
+
+        if (IntPtr.Size == 8)
+            _oldWndProc = SetWindowLongPtr64(hwnd, GWLP_WNDPROC, ptr);
+        else
+            _oldWndProc = SetWindowLongPtr32(hwnd, GWLP_WNDPROC, ptr);
+    }
+
+    private IntPtr WndProcHook(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam)
+    {
+        if (msg == WM_NCHITTEST && _useHitTestRegions && !(_viewModel?.IsDrawingMode ?? false))
+        {
+            int x = (short)(lParam.ToInt64() & 0xFFFF);
+            int y = (short)((lParam.ToInt64() >> 16) & 0xFFFF);
+            
+            var pPos = this.Position;
+            double winX = x - pPos.X;
+            double winY = y - pPos.Y;
+            var point = new Point(winX, winY);
+
+            bool hit = false;
+            foreach (var r in _hitTestRegions)
+            {
+                if (r.Contains(point))
+                {
+                    hit = true;
+                    break;
+                }
+            }
+
+            // Also check if inside the selection box (since users might want to copy/save without clicking through)
+            // Wait, the user wants the entire screen to be click-through EXCEPT the borders.
+            // But we actually DO want the click to pass through to desktop inside the selection box as well!
+            // Wait! If the user clicks "inside", the user is trying to record or click on YouTube! So it should pass through.
+            // But if the user wants to draw annotations, IsDrawingMode is true, so this whole block is skipped. Perfect!
+            if (!hit)
+            {
+                return new IntPtr(HTTRANSPARENT);
+            }
+        }
+        return CallWindowProc(_oldWndProc, hWnd, msg, wParam, lParam);
+    }
+
     /// <summary>
     /// Updates the window region to create a "hole" in the selection area for mouse pass-through.
     /// This allows clicking on underlying windows (like YouTube) while keeping the border UI interactive.
@@ -96,37 +171,68 @@ public partial class SnipWindow : Window
             }
             else if (state == SnipState.Selected)
             {
+                // V8 Fix: Use a single contiguous Bounding Box region with an inner hole!
+                // This allows full-screen pass-through outside the box AND avoids the DWM shadow 
+                // glitches caused by combining multiple disjoint `extraRegions` for wings/skulls.
                 var scaledRect = new Rect(selectionRect.X * scaling, selectionRect.Y * scaling, selectionRect.Width * scaling, selectionRect.Height * scaling);
-                holeRects.Add(scaledRect);
-
+                
+                // Calculate outer bounding box that firmly wraps the selection + all wings/borders
+                double maxMargin = 0;
                 if (_viewModel != null)
                 {
-                    double wingsY = selectionRect.Center.Y - (_viewModel.WingHeight / 2);
-                    extraRegions.Add(new Rect((selectionRect.X - _viewModel.WingWidth) * scaling, wingsY * scaling, _viewModel.WingWidth * scaling, _viewModel.WingHeight * scaling));
-                    extraRegions.Add(new Rect(selectionRect.Right * scaling, wingsY * scaling, _viewModel.WingWidth * scaling, _viewModel.WingHeight * scaling));
-
-                    double hSize = 30 * scaling;
-                    double hHalf = 15 * scaling;
-                    extraRegions.Add(new Rect(scaledRect.X - hHalf, scaledRect.Y - hHalf, hSize, hSize));
-                    extraRegions.Add(new Rect(scaledRect.Right - hHalf, scaledRect.Y - hHalf, hSize, hSize));
-                    extraRegions.Add(new Rect(scaledRect.X - hHalf, scaledRect.Bottom - hHalf, hSize, hSize));
-                    extraRegions.Add(new Rect(scaledRect.Right - hHalf, scaledRect.Bottom - hHalf, hSize, hSize));
-
-                    double iconSize = (_viewModel.SelectionIconSize + 8) * scaling;
-                    double iconMargin = 2 * scaling;
-                    extraRegions.Add(new Rect(scaledRect.X + iconMargin, scaledRect.Y + iconMargin, iconSize, iconSize));
-                    extraRegions.Add(new Rect(scaledRect.Right - iconMargin - iconSize, scaledRect.Y + iconMargin, iconSize, iconSize));
-                    extraRegions.Add(new Rect(scaledRect.X + iconMargin, scaledRect.Bottom - iconMargin - iconSize, iconSize, iconSize));
-                    extraRegions.Add(new Rect(scaledRect.Right - iconMargin - iconSize, scaledRect.Bottom - iconMargin - iconSize, iconSize, iconSize));
-
-                    double sThick = 15 * scaling;
-                    double sHalf = 7.5 * scaling;
-                    extraRegions.Add(new Rect(scaledRect.X + hSize, scaledRect.Y - sHalf, scaledRect.Width - hSize * 2, sThick));
-                    extraRegions.Add(new Rect(scaledRect.X + hSize, scaledRect.Bottom - sHalf, scaledRect.Width - hSize * 2, sThick));
-                    extraRegions.Add(new Rect(scaledRect.X - sHalf, scaledRect.Y + hSize, sThick, scaledRect.Height - hSize * 2));
-                    extraRegions.Add(new Rect(scaledRect.Right - sHalf, scaledRect.Y + hSize, sThick, scaledRect.Height - hSize * 2));
+                    double hSize = 30 * scaling;      // Handles
+                    double sThick = 15 * scaling;     // Frame edges
+                    double wW = _viewModel.WingWidth * scaling;
+                    double iSize = (_viewModel.SelectionIconSize + 8) * scaling; 
+                    
+                    maxMargin = Math.Max(hSize / 2, Math.Max(sThick / 2, Math.Max(wW, iSize)));
                 }
+                else
+                {
+                    maxMargin = 20 * scaling;
+                }
+                
+                // The single contiguous outer region containing our graphics (avoids slicing complex PNG anti-aliasing)
+                var outerBox = new Rect(
+                    scaledRect.X - maxMargin,
+                    scaledRect.Y - maxMargin,
+                    scaledRect.Width + maxMargin * 2,
+                    scaledRect.Height + maxMargin * 2
+                );
+
+                Rect? selectedToolbarRect = null;
+                if (_viewModel != null && _viewModel.ToolbarWidth > 0)
+                {
+                    double tw = _viewModel.ToolbarWidth + 20; 
+                    double th = _viewModel.ToolbarHeight + 20;
+                    selectedToolbarRect = new Rect((_viewModel.ToolbarLeft - 2) * scaling, (_viewModel.ToolbarTop - 2) * scaling, tw * scaling, th * scaling);
+                }
+
+                // Avalonia draws borders and corners INSIDE the selectionRect Canvas.
+                // Punching a hole exactly at scaledRect deletes them! 
+                // We must shrink (deflate) the inner hole by the max inner penetration of our UI objects (~30px)
+                double innerShrink = 0;
+                if (_viewModel != null)
+                {
+                    // Corners penetrate by IconSize + margin. Handles penetrate by Handle Size/2 (15px). Border by Thickness.
+                    double innerIconWidth = (_viewModel.SelectionIconSize + 4) * scaling; 
+                    double borderThick = _viewModel.SelectionBorderThickness * scaling;
+                    innerShrink = Math.Max(15 * scaling, Math.Max(innerIconWidth, borderThick));
+                }
+
+                var innerHole = new Rect(
+                    scaledRect.X + innerShrink,
+                    scaledRect.Y + innerShrink,
+                    Math.Max(0, scaledRect.Width - innerShrink * 2),
+                    Math.Max(0, scaledRect.Height - innerShrink * 2)
+                );
+
+                Win32Helpers.SetBoundingBoxHoleRegion(hwnd, outerBox, innerHole, selectedToolbarRect);
+                return;
             }
+
+            // Normal logic for Translation Mode
+            _useHitTestRegions = false;
 
             // V8 修正：翻譯模式下即便 holeRects 為空（全部已翻譯），
             // 也要正確設定 region（只有 extraRegions 的情況）
@@ -147,7 +253,7 @@ public partial class SnipWindow : Window
             int borderWidth = (int)((_viewModel?.SelectionBorderThickness ?? 6) * scaling);
             if (isTranslation && _viewModel != null && !_viewModel.IsTranslationSelectionActive)
             {
-                 // Edit mode removes the border around the hole! The hole is literally the entire screen.
+                 // Edit mode removes the border around the hole
                  borderWidth = 0;
             }
 

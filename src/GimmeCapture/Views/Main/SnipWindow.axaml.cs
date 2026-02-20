@@ -90,11 +90,13 @@ public partial class SnipWindow : Window
                 Console.WriteLine("[SnipWindow] ViewModel is not null, setting properties");
                 _viewModel.VisualScaling = this.RenderScaling;
                 _viewModel.ScreenOffset = this.Position;
-                // 翻譯模式不需要 Win32 視窗偵測
                 if (!_viewModel.IsTranslationMode)
                 {
                     _viewModel.RefreshWindowRects(this.TryGetPlatformHandle()?.Handle);
                 }
+
+                // Initialize Win32 Hook for click-through
+                InitializeWin32Hook();
 
                 // Populate AllScreenBounds for multi-monitor UI
                 double scaling = this.RenderScaling;
