@@ -124,7 +124,7 @@ public partial class SnipWindow : Window
                 toolbarRect = new Rect((_viewModel.ToolbarLeft - 2) * scaling, (_viewModel.ToolbarTop - 2) * scaling, tw * scaling, th * scaling);
             }
             
-            int borderWidth = (int)(6 * scaling);
+            int borderWidth = (int)((_viewModel?.SelectionBorderThickness ?? 6) * scaling);
             Win32Helpers.SetMultiWindowHoleRegion(hwnd, windowWidth, windowHeight, holeRects, borderWidth, toolbarRect, extraRegions);
         }
         else

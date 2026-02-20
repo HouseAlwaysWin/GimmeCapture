@@ -19,6 +19,8 @@
             <cv:ColorToBrushConverter x:Key="ColorToBrushConverter"/>
             <cv:ColorToBoxShadowConverter x:Key="ColorToBoxShadowConverter"/>
             <cv:ThicknessConverter x:Key="ThicknessConverter"/>
+            <cv:DynamicThicknessConverter x:Key="DynamicThicknessConverter"/>
+            <cv:BoolToThicknessConverter x:Key="BoolToThicknessConverter"/>
             <cv:EnumToBoolConverter x:Key="EnumToBoolConverter"/>
             <cv:ColorMatchConverter x:Key="ColorMatchConverter"/>
             <cv:EnumMatchConverter x:Key="EnumMatchConverter"/>
@@ -61,4 +63,3 @@
         </Style>
     </Application.Styles>
 </Application>
-
