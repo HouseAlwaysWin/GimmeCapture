@@ -183,9 +183,18 @@ public partial class SnipWindow : Window
                     double hSize = 30 * scaling;      // Handles
                     double sThick = 15 * scaling;     // Frame edges
                     double wW = _viewModel.WingWidth * scaling;
+                    double wH = _viewModel.WingHeight * scaling;
                     double iSize = (_viewModel.SelectionIconSize + 8) * scaling; 
                     
+                    // Base margin handles basic widths
                     maxMargin = Math.Max(hSize / 2, Math.Max(sThick / 2, Math.Max(wW, iSize)));
+                    
+                    // Account for vertical overflowing wings on short selections
+                    double verticalOverflow = (wH / 2) - (scaledRect.Height / 2);
+                    if (verticalOverflow > maxMargin)
+                    {
+                        maxMargin = verticalOverflow + (10 * scaling); // +10px safety buffer
+                    }
                 }
                 else
                 {
@@ -214,11 +223,19 @@ public partial class SnipWindow : Window
                 double innerShrink = 0;
                 if (_viewModel != null)
                 {
-                    // Corners penetrate by IconSize + margin. Handles penetrate by Handle Size/2 (15px). Border by Thickness.
+                    // Corners penetrate by IconSize AND they are pushed inwards by a Margin proportional to BorderThickness.
                     double innerIconWidth = (_viewModel.SelectionIconSize + 4) * scaling; 
                     double borderThick = _viewModel.SelectionBorderThickness * scaling;
-                    innerShrink = Math.Max(15 * scaling, Math.Max(innerIconWidth, borderThick));
+                    
+                    // The inner clipping point is Additive (BorderThickness + IconSize + Safety Buffer)
+                    innerShrink = borderThick + innerIconWidth + (12 * scaling);
+                    innerShrink = Math.Max(15 * scaling, innerShrink); // At least 15px for basic UI handles
                 }
+                
+                // Safe guard: Do not shrink the hole so much that it inverts the geometry natively
+                double maxAllowedShrink = Math.Min(scaledRect.Width, scaledRect.Height) / 2.0 - 1;
+                if (maxAllowedShrink < 0) maxAllowedShrink = 0;
+                innerShrink = Math.Min(innerShrink, maxAllowedShrink);
 
                 var innerHole = new Rect(
                     scaledRect.X + innerShrink,

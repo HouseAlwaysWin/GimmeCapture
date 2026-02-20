@@ -27,7 +27,6 @@ public partial class SnipWindowViewModel
             System.Diagnostics.Debug.WriteLine($"[SnipState] {_currentState} -> {value}");
             this.RaiseAndSetIfChanged(ref _currentState, value);
             this.RaisePropertyChanged(nameof(SelectionShadowColor));
-            this.RaisePropertyChanged(nameof(SelectionInnerBackground));
             
             // If we leave Detecting state (e.g. start selecting), cancel any running scan
             if (value != SnipState.Detecting)
@@ -349,8 +348,6 @@ public partial class SnipWindowViewModel
     }
 
     public Color SelectionShadowColor => CurrentState == SnipState.Selected ? Colors.Transparent : SelectionBorderColor;
-
-    public IBrush SelectionInnerBackground => CurrentState == SnipState.Selected ? Brushes.Transparent : new SolidColorBrush(Color.FromArgb(1, 255, 255, 255));
 
     private double _selectionBorderThickness = 2.0;
     public double SelectionBorderThickness

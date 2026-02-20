@@ -463,11 +463,7 @@ public partial class SnipWindow : Window
             {
                 var rect = sel.Bounds;
                 
-                // 1. 已翻譯文字區域：Arrow priority if hovering over the translated box itself
-                if (sel.IsTranslated && sel.Bounds.Contains(currentPoint))
-                { SetCursorShape(StandardCursorType.Arrow); specialCursorSet = true; break; }
-
-                // 2. Corners (Resize) - PRIORITY over edges
+                // 1. Corners (Resize) - PRIORITY over edges and body
                 double tolerance = 14;
                 if (Math.Abs(currentPoint.X - rect.X) < tolerance && Math.Abs(currentPoint.Y - rect.Y) < tolerance)
                 { SetCursorShape(StandardCursorType.TopLeftCorner); specialCursorSet = true; break; }
@@ -478,14 +474,21 @@ public partial class SnipWindow : Window
                 if (Math.Abs(currentPoint.X - rect.Right) < tolerance && Math.Abs(currentPoint.Y - rect.Bottom) < tolerance)
                 { SetCursorShape(StandardCursorType.BottomRightCorner); specialCursorSet = true; break; }
                 
-                // 3. Edges (Move)
+                // 2. Edges (Move or Resize)
                 double edgeTol = 8;
                 bool nearL = Math.Abs(currentPoint.X - rect.X) < edgeTol && currentPoint.Y > rect.Y && currentPoint.Y < rect.Bottom;
                 bool nearR = Math.Abs(currentPoint.X - rect.Right) < edgeTol && currentPoint.Y > rect.Y && currentPoint.Y < rect.Bottom;
                 bool nearT = Math.Abs(currentPoint.Y - rect.Y) < edgeTol && currentPoint.X > rect.X && currentPoint.X < rect.Right;
                 bool nearB = Math.Abs(currentPoint.Y - rect.Bottom) < edgeTol && currentPoint.X > rect.X && currentPoint.X < rect.Right;
-                if (nearL || nearR || nearT || nearB)
-                { SetCursorShape(StandardCursorType.SizeAll); specialCursorSet = true; break; }
+                
+                if (nearL || nearR)
+                { SetCursorShape(StandardCursorType.SizeWestEast); specialCursorSet = true; break; }
+                if (nearT || nearB)
+                { SetCursorShape(StandardCursorType.SizeNorthSouth); specialCursorSet = true; break; }
+                
+                // 3. 已翻譯文字區域：Arrow priority if hovering over the translated box body (not edges)
+                if (sel.IsTranslated && sel.Bounds.Contains(currentPoint))
+                { SetCursorShape(StandardCursorType.Arrow); specialCursorSet = true; break; }
             }
 
             // 翻譯模式其餘空白區域：十字游標（可以繼續圈選）
@@ -533,9 +536,25 @@ public partial class SnipWindow : Window
                 if (!actionCursorSet)
                 {
                     var hit = this.InputHitTest(currentPoint) as Control;
-                    bool isOverHandle = hit != null && (hit.Classes.Contains("Handle") || hit.Classes.Contains("MoveHandle"));
+                    bool isResizeHandle = hit != null && hit.Classes.Contains("Handle");
+                    bool isMoveHandle = hit != null && hit.Classes.Contains("MoveHandle");
 
-                    if (isOverHandle || (!_viewModel.IsDrawingMode && _viewModel.SelectionRect.Contains(currentPoint)))
+                    if (isResizeHandle)
+                    {
+                        var dir = GetDirectionFromName(hit?.Name);
+                        switch (dir)
+                        {
+                            case ResizeDirection.TopLeft: SetCursorShape(StandardCursorType.TopLeftCorner); break;
+                            case ResizeDirection.TopRight: SetCursorShape(StandardCursorType.TopRightCorner); break;
+                            case ResizeDirection.BottomLeft: SetCursorShape(StandardCursorType.BottomLeftCorner); break;
+                            case ResizeDirection.BottomRight: SetCursorShape(StandardCursorType.BottomRightCorner); break;
+                            case ResizeDirection.Top: case ResizeDirection.Bottom: SetCursorShape(StandardCursorType.SizeNorthSouth); break;
+                            case ResizeDirection.Left: case ResizeDirection.Right: SetCursorShape(StandardCursorType.SizeWestEast); break;
+                            default: SetCursorShape(StandardCursorType.SizeAll); break;
+                        }
+                        actionCursorSet = true;
+                    }
+                    else if (isMoveHandle || (!_viewModel.IsDrawingMode && _viewModel.SelectionRect.Contains(currentPoint)))
                     {
                         SetCursorShape(StandardCursorType.SizeAll);
                         actionCursorSet = true;
