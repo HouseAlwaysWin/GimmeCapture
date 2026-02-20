@@ -306,6 +306,10 @@ public partial class SnipWindow : Window
             }
         }
 
+        // 翻譯模式下非左鍵事件（右鍵等）不進入標準選取邏輯
+        // ContextMenu 由 XAML Border/SelectableTextBlock 處理
+        if (_viewModel.IsTranslationMode) return;
+
         // If clicking OUTSIDE or in Idle/Detecting, start NEW selection
         // Check if the click is within the toolbar bounds (coordinate-based check)
         var toolbarControl = this.FindControl<SnipToolbar>("Toolbar");
