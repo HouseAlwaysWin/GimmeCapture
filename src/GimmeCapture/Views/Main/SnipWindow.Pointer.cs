@@ -248,8 +248,9 @@ public partial class SnipWindow : Window
                     }
                 }
                 
-                // D. Fall-through: Let the click pass to the selection box (SelectableTextBlock)
-                return; 
+                // D. 翻譯模式下一律 return，不讓事件掉入標準選取邏輯
+                // 已翻譯的區域在 Bubble phase 已被 SelectableTextBlock 接收
+                return;
             }
         }
         
@@ -434,18 +435,12 @@ public partial class SnipWindow : Window
             }
             specialCursorSet = true;
         }
-        else if (_viewModel.CurrentState == SnipState.Selecting || _viewModel.CurrentState == SnipState.Detecting || _isTranslationSelecting)
-        {
-            SetCursorShape(StandardCursorType.Cross);
-            specialCursorSet = true;
-        }
         else if (_viewModel.IsTranslationMode)
         {
-            // V7+ Geometric Cursor Detection
-            // Math-based corner detection because transparency breaks hit-testing
+            // V8: 翻譯模式幾何游標偵測（必須在 Detecting 十字游標之前）
             foreach (var sel in _viewModel.UserSelections)
             {
-                double tolerance = 12;
+                double tolerance = 14;
                 var rect = sel.Bounds;
                 if (Math.Abs(currentPoint.X - rect.X) < tolerance && Math.Abs(currentPoint.Y - rect.Y) < tolerance)
                 { SetCursorShape(StandardCursorType.TopLeftCorner); specialCursorSet = true; break; }
@@ -456,10 +451,26 @@ public partial class SnipWindow : Window
                 if (Math.Abs(currentPoint.X - rect.Right) < tolerance && Math.Abs(currentPoint.Y - rect.Bottom) < tolerance)
                 { SetCursorShape(StandardCursorType.BottomRightCorner); specialCursorSet = true; break; }
                 
-                // Also check Drag Handle Area
+                // Drag Handle Area
                 if (currentPoint.X >= rect.X && currentPoint.X <= rect.Right && currentPoint.Y >= rect.Y - 20 && currentPoint.Y <= rect.Y)
                 { SetCursorShape(StandardCursorType.SizeAll); specialCursorSet = true; break; }
+
+                // 已翻譯文字區域：Arrow（方便選取文字）
+                if (sel.IsTranslated && sel.Bounds.Contains(currentPoint))
+                { SetCursorShape(StandardCursorType.Arrow); specialCursorSet = true; break; }
             }
+
+            // 翻譯模式其餘空白區域：十字游標（可以繼續圈選）
+            if (!specialCursorSet && _viewModel.IsTranslationSelectionActive)
+            {
+                SetCursorShape(StandardCursorType.Cross);
+                specialCursorSet = true;
+            }
+        }
+        else if (_viewModel.CurrentState == SnipState.Selecting || _viewModel.CurrentState == SnipState.Detecting || _isTranslationSelecting)
+        {
+            SetCursorShape(StandardCursorType.Cross);
+            specialCursorSet = true;
         }
 
         if (!specialCursorSet)

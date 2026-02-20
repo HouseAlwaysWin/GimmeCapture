@@ -180,7 +180,7 @@ public partial class SnipWindowViewModel
             };
         }
 
-        // 3. 處理翻譯模式選取框 (島嶼式挖空)
+        // 3. 處理翻譯模式選取框 (V8: 已翻譯不挖洞，與 Win32 Region 同步)
         if (IsTranslationMode)
         {
             foreach (var sel in UserSelections)
@@ -188,11 +188,8 @@ public partial class SnipWindowViewModel
                 if (sel.Bounds.Width > 10 && sel.Bounds.Height > 10)
                 {
                     var rect = sel.Bounds;
-                    
-                    // 建立要挖掉的幾何體
-                    Geometry hole = new RectangleGeometry(rect);
 
-                    // 島嶼 A：端掛牆拖拽把手 (External Handle V6) -> 在挖空區域外
+                    // 拖拽把手區域一律挖空
                     Geometry dragBar = new RectangleGeometry(new Rect(rect.X, rect.Y - 20, rect.Width, 20));
                     mainMask = new CombinedGeometry
                     {
@@ -201,45 +198,23 @@ public partial class SnipWindowViewModel
                         Geometry2 = dragBar
                     };
 
-                    // 島嶼 B：文字顯示區 (若已翻譯，則不挖空)
-                    if (sel.IsTranslated)
+                    if (!sel.IsTranslated)
                     {
-                        // 確保安全邊距，不因負數導致裁剪失敗
-                        double margin = 4;
-                        double safeW = Math.Max(0, rect.Width - margin * 2);
-                        double safeH = Math.Max(0, rect.Height - margin * 2);
-
-                        Geometry textIsland = new RectangleGeometry(new Rect(
-                            rect.X + margin,
-                            rect.Y + margin,
-                            safeW,
-                            safeH
-                        ));
-                        hole = new CombinedGeometry
+                        // 未翻譯：挖洞穿透
+                        mainMask = new CombinedGeometry
                         {
                             GeometryCombineMode = GeometryCombineMode.Exclude,
-                            Geometry1 = hole,
-                            Geometry2 = textIsland
+                            Geometry1 = mainMask,
+                            Geometry2 = new RectangleGeometry(rect)
                         };
                     }
-
-                    // 島嶼 C：四個角落的無痕 Resize 感應區 (也要扣除主遮罩，讓滑鼠穿透點擊能觸發)
-                    // 這邊視覺上其實只要 hole 正確就好，但為了點擊與游標變化，Win32 Region 已經處理了。
-                    // 這裡僅處理視覺上的「不挖空」
-                    
-                    // 從主遮罩中減去最終確定的「洞」
-                    mainMask = new CombinedGeometry
-                    {
-                        GeometryCombineMode = GeometryCombineMode.Exclude,
-                        Geometry1 = mainMask,
-                        Geometry2 = hole
-                    };
+                    // 已翻譯：不挖洞，保持遮罩 → 文字控件渲染在上方
                 }
             }
         }
 
         MaskGeometry = mainMask;
-        System.Diagnostics.Debug.WriteLine($"[Mask] UpdateMask (V4 Island-style) done. Viewport: {w}x{h}");
+        System.Diagnostics.Debug.WriteLine($"[Mask] UpdateMask (V8) done. Viewport: {w}x{h}");
     }
 
     private double _maskOpacity = 0.5;
@@ -1045,6 +1020,16 @@ public partial class SnipWindowViewModel
                 {
                     sel.TranslatedText = combinedText;
                     sel.IsTranslated = !string.IsNullOrWhiteSpace(combinedText);
+
+                    // V8: 自動撐開選取範圍以容納翻譯文字
+                    if (sel.IsTranslated)
+                    {
+                        AutoFitSelectionToText(sel);
+                    }
+
+                    // V8: 翻譯後重新整理遮罩和 Win32 Region
+                    // 因為 IsTranslated 不在 WhenAnyValue 訂閱中，必須手動觸發
+                    UpdateMask();
                 });
             }
         }
@@ -1145,6 +1130,74 @@ public partial class SnipWindowViewModel
         {
             ShowTopLoadingBar = false;
             IsIndeterminate = false;
+        }
+    }
+
+    /// <summary>
+    /// V8: 根據翻譯文字長度自動撐開選取範圍
+    /// </summary>
+    private void AutoFitSelectionToText(UserSelectionRect sel)
+    {
+        if (string.IsNullOrWhiteSpace(sel.TranslatedText)) return;
+
+        var text = sel.TranslatedText;
+        double fontSize = 12; // 與 XAML 中 SelectableTextBlock FontSize 一致
+        double lineHeight = fontSize * 1.8; // 行高
+        double padding = 28; // Border padding + margin + extra
+
+        // 估算文字寬度（考慮 CJK 全形字元）
+        double EstimateTextWidth(string s)
+        {
+            double w = 0;
+            foreach (char c in s)
+            {
+                if (c >= 0x2E80 && c <= 0x9FFF || c >= 0xF900 && c <= 0xFAFF || 
+                    c >= 0xFF00 && c <= 0xFFEF || c >= 0x3000 && c <= 0x303F)
+                    w += fontSize * 1.1; // CJK 全形
+                else
+                    w += fontSize * 0.6; // Latin 半形
+            }
+            return w;
+        }
+
+        double currentWidth = sel.Bounds.Width;
+        double usableWidth = Math.Max(currentWidth - padding, 40);
+
+        // 計算需要的行數
+        var lines = text.Split('\n');
+        int totalLines = 0;
+        foreach (var line in lines)
+        {
+            double lineWidth = EstimateTextWidth(line);
+            int wrappedLines = Math.Max(1, (int)Math.Ceiling(lineWidth / usableWidth));
+            totalLines += wrappedLines;
+        }
+
+        double requiredHeight = totalLines * lineHeight + padding;
+        double requiredWidth = currentWidth;
+
+        // 如果文字很短（單行），確保寬度足以容納
+        if (lines.Length == 1)
+        {
+            double singleLineWidth = EstimateTextWidth(text) + padding;
+            if (singleLineWidth > currentWidth)
+            {
+                requiredWidth = Math.Min(singleLineWidth, 500);
+            }
+        }
+
+        // 只擴展，不縮小
+        double newWidth = Math.Max(currentWidth, requiredWidth);
+        double newHeight = Math.Max(sel.Bounds.Height, requiredHeight);
+
+        // 最小尺寸
+        newWidth = Math.Max(newWidth, 80);
+        newHeight = Math.Max(newHeight, 50);
+
+        if (Math.Abs(newWidth - sel.Bounds.Width) > 1 || Math.Abs(newHeight - sel.Bounds.Height) > 1)
+        {
+            sel.Bounds = new Rect(sel.Bounds.X, sel.Bounds.Y, newWidth, newHeight);
+            System.Diagnostics.Debug.WriteLine($"[AutoFit] Expanded to {newWidth:F0}x{newHeight:F0} for {totalLines} lines, text='{text}'");
         }
     }
 }

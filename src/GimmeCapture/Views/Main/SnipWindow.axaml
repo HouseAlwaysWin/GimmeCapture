@@ -391,9 +391,7 @@
                                                            Foreground="White" 
                                                            FontSize="12" 
                                                            TextWrapping="Wrap"
-                                                           xml:space="preserve"
-                                                           ContextFlyout="{x:Null}"
-                                                           ContextMenu="{Binding $parent[Border].ContextMenu}"/>
+                                                           xml:space="preserve"/>
                                     </Border>
                                 </Panel>
                             </Border>

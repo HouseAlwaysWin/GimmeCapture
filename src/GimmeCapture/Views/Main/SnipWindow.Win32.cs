@@ -41,30 +41,32 @@ public partial class SnipWindow : Window
                     if (sel.Bounds.Width > 10 && sel.Bounds.Height > 10)
                     {
                         var rect = sel.Bounds;
-                        // 1. Hole (The selection box itself)
-                        holeRects.Add(new Rect(rect.X * scaling, rect.Y * scaling, rect.Width * scaling, rect.Height * scaling));
 
-                        // 2. Opaque Island: External Drag Handle (Top 20px outside V6)
-                        // Height matches XAML 18px + margin
-                        extraRegions.Add(new Rect(rect.X * scaling, (rect.Y - 20) * scaling, rect.Width * scaling, 20 * scaling));
-
-                        // 3. Opaque Island: Text Result (Safe Mapping)
                         if (sel.IsTranslated)
                         {
-                            // Ensure island doesn't exceed box bounds or become negative
-                            double txtMargin = 4 * scaling;
-                            double safeW = Math.Max(0, rect.Width * scaling - txtMargin * 2);
-                            double safeH = Math.Max(0, rect.Height * scaling - txtMargin * 2);
-                            extraRegions.Add(new Rect((rect.X * scaling) + txtMargin, (rect.Y * scaling) + txtMargin, safeW, safeH));
+                            // 已翻譯：不挖洞，整塊保持不透明（包含拖拽把手）
+                            extraRegions.Add(new Rect(
+                                rect.X * scaling,
+                                (rect.Y - 20) * scaling,
+                                rect.Width * scaling,
+                                (rect.Height + 20) * scaling));
                         }
+                        else
+                        {
+                            // 未翻譯：挖洞穿透 + 保留把手與邊角
+                            holeRects.Add(new Rect(rect.X * scaling, rect.Y * scaling, rect.Width * scaling, rect.Height * scaling));
 
-                        // 4. Corner Handles (Invisible but opaque for Hit-Testing/Mouse cursor)
-                        double hSize = 16 * scaling;
-                        double hHalf = 8 * scaling;
-                        extraRegions.Add(new Rect((rect.X - hHalf) * scaling, (rect.Y - hHalf) * scaling, hSize, hSize)); // TL
-                        extraRegions.Add(new Rect((rect.Right - hHalf) * scaling, (rect.Y - hHalf) * scaling, hSize, hSize)); // TR
-                        extraRegions.Add(new Rect((rect.X - hHalf) * scaling, (rect.Bottom - hHalf) * scaling, hSize, hSize)); // BL
-                        extraRegions.Add(new Rect((rect.Right - hHalf) * scaling, (rect.Bottom - hHalf) * scaling, hSize, hSize)); // BR
+                            // Opaque: External Drag Handle (Top 20px)
+                            extraRegions.Add(new Rect(rect.X * scaling, (rect.Y - 20) * scaling, rect.Width * scaling, 20 * scaling));
+
+                            // Corner Handles (先縮放再偏移，24px)
+                            double hSize = 24 * scaling;
+                            double hHalf = hSize / 2;
+                            extraRegions.Add(new Rect(rect.X * scaling - hHalf, rect.Y * scaling - hHalf, hSize, hSize)); // TL
+                            extraRegions.Add(new Rect(rect.Right * scaling - hHalf, rect.Y * scaling - hHalf, hSize, hSize)); // TR
+                            extraRegions.Add(new Rect(rect.X * scaling - hHalf, rect.Bottom * scaling - hHalf, hSize, hSize)); // BL
+                            extraRegions.Add(new Rect(rect.Right * scaling - hHalf, rect.Bottom * scaling - hHalf, hSize, hSize)); // BR
+                        }
                     }
                 }
             }
@@ -102,7 +104,9 @@ public partial class SnipWindow : Window
                 }
             }
 
-            if (holeRects.Count == 0)
+            // V8 修正：翻譯模式下即便 holeRects 為空（全部已翻譯），
+            // 也要正確設定 region（只有 extraRegions 的情況）
+            if (holeRects.Count == 0 && extraRegions.Count == 0)
             {
                 Win32Helpers.ClearWindowRegion(hwnd);
                 return;
