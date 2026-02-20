@@ -108,7 +108,7 @@
                        Name="PinnedImage"/>
 
                 <!-- 翻譯結果覆蓋層（多選區域）-->
-                <ItemsControl ItemsSource="{Binding TranslatedBlocks}" IsHitTestVisible="False">
+                <ItemsControl ItemsSource="{Binding TranslatedBlocks}" IsHitTestVisible="True">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
                             <Canvas Width="{Binding DisplayWidth}" Height="{Binding DisplayHeight}"/>
@@ -123,12 +123,24 @@
                                     Background="#E0000000"
                                     CornerRadius="2"
                                     Padding="4">
-                                <TextBlock Text="{Binding TranslatedText}"
+                                <SelectableTextBlock Text="{Binding TranslatedText}"
                                            Foreground="White"
                                            FontSize="{Binding InferredFontSize}"
                                            TextWrapping="Wrap"
                                            VerticalAlignment="Center"
-                                           HorizontalAlignment="Center"/>
+                                           HorizontalAlignment="Center">
+                                    <SelectableTextBlock.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="複製翻譯文字" 
+                                                      Command="{Binding $parent[Window].DataContext.CopyTranslationTextCommand}"
+                                                      CommandParameter="{Binding}"/>
+                                            <Separator/>
+                                            <MenuItem Header="刪除區域" 
+                                                      Command="{Binding $parent[Window].DataContext.RemoveTranslatedBlockCommand}"
+                                                      CommandParameter="{Binding}"/>
+                                        </ContextMenu>
+                                    </SelectableTextBlock.ContextMenu>
+                                </SelectableTextBlock>
                             </Border>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>

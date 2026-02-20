@@ -310,11 +310,19 @@
                                 <SelectableTextBlock Text="{Binding TranslatedText}" 
                                                    Foreground="White" 
                                                    FontSize="15" 
-                                                   FontWeight="Medium"
-                                                   TextWrapping="Wrap"
-                                                   xml:space="preserve"
-                                                   HorizontalAlignment="Left"
-                                                   VerticalAlignment="Center"/>
+                                                   FontWeight="Medium" 
+                                                   TextWrapping="Wrap" 
+                                                   xml:space="preserve" 
+                                                   HorizontalAlignment="Left" 
+                                                   VerticalAlignment="Center">
+                                    <SelectableTextBlock.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="複製翻譯文字" 
+                                                      Command="{Binding $parent[Window].DataContext.CopyTranslationTextCommand}"
+                                                      CommandParameter="{Binding}"/>
+                                        </ContextMenu>
+                                    </SelectableTextBlock.ContextMenu>
+                                </SelectableTextBlock>
                             </ScrollViewer>
                         </Border>
                     </DataTemplate>
@@ -355,6 +363,9 @@
                     <DataTemplate x:DataType="m:UserSelectionRect">
                         <Canvas ClipToBounds="False" Width="{Binding Bounds.Width}" Height="{Binding Bounds.Height}">
                             <Grid Width="{Binding Bounds.Width}" Height="{Binding Bounds.Height}">
+                                <!-- Move Handle for Translation Box (Hollow Border, Background layer) -->
+                                <Border Classes="MoveHandle" BorderBrush="#01FFFFFF" BorderThickness="20" Background="Transparent" Cursor="SizeAll"/>
+
                                 <Border BorderBrush="{Binding $parent[Window].DataContext.SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" 
                                         BorderThickness="1"
                                         Background="#01000000"
@@ -401,8 +412,6 @@
                                         </Border>
                                     </Panel>
                                 </Border>
-                                <!-- Move Handle for Translation Box (Hollow Border) -->
-                                <Border Classes="MoveHandle" BorderBrush="#01FFFFFF" BorderThickness="20" Background="Transparent" Cursor="SizeAll"/>
 
                                 <!-- Resize Handles for Translation Box (Outer Edges and Corners) -->
                                 <Grid Classes="Handle" Name="HandleTopLeft" Cursor="TopLeftCorner" Width="40" Height="40" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="-20,-20,0,0" Background="#01FFFFFF"/>

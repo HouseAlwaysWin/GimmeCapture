@@ -83,6 +83,8 @@ public partial class FloatingTranslationViewModel : FloatingWindowViewModelBase,
 
     // 命令
     public ReactiveCommand<Unit, Unit> CopyCommand { get; private set; } = null!;
+    public ReactiveCommand<TranslatedBlock, Unit> CopyTranslationTextCommand { get; private set; } = null!;
+    public ReactiveCommand<TranslatedBlock, Unit> RemoveTranslatedBlockCommand { get; private set; } = null!;
 
     public override Thickness WindowPadding
     {
@@ -135,18 +137,37 @@ public partial class FloatingTranslationViewModel : FloatingWindowViewModelBase,
             }
         });
         CopyCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Translation Copy Error: {ex}"));
+
+        CopyTranslationTextCommand = ReactiveCommand.CreateFromTask<TranslatedBlock>(async (TranslatedBlock block) =>
+        {
+            if (block != null && !string.IsNullOrEmpty(block.TranslatedText))
+            {
+                await _clipboardService.CopyTextAsync(block.TranslatedText);
+            }
+        });
+        CopyTranslationTextCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Copy Text Error: {ex}"));
+
+        RemoveTranslatedBlockCommand = ReactiveCommand.Create<TranslatedBlock>(block =>
+        {
+            if (block != null)
+            {
+                TranslatedBlocks.Remove(block);
+            }
+        });
+        RemoveTranslatedBlockCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Remove Block Error: {ex}"));
     }
 
     /// <summary>
     /// 新增翻譯結果區塊
     /// </summary>
-    public void AddTranslatedBlock(Rect bounds, string originalText, string translatedText)
+    public void AddTranslatedBlock(Rect bounds, string originalText, string translatedText, double inferredFontSize = 12.0)
     {
         TranslatedBlocks.Add(new TranslatedBlock
         {
             Bounds = bounds,
             OriginalText = originalText,
-            TranslatedText = translatedText
+            TranslatedText = translatedText,
+            InferredFontSize = inferredFontSize
         });
     }
 
