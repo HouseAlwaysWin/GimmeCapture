@@ -346,7 +346,8 @@ public partial class SnipWindow : Window
             }
         }
         
-        if (_viewModel.RecState == RecordingState.Idle && 
+        // 修正：只有左鍵才能開啟新的選取框
+        if (props.IsLeftButtonPressed && _viewModel.RecState == RecordingState.Idle && 
             (_viewModel.CurrentState == SnipState.Idle || _viewModel.CurrentState == SnipState.Detecting))
         {
             _startPoint = point;
@@ -357,7 +358,7 @@ public partial class SnipWindow : Window
             e.Handled = true;
             return;
         }
-        else if (_viewModel.RecState == RecordingState.Idle && _viewModel.CurrentState == SnipState.Selected)
+        else if (props.IsLeftButtonPressed && _viewModel.RecState == RecordingState.Idle && _viewModel.CurrentState == SnipState.Selected)
         {
             var expandedBounds = _viewModel.SelectionRect.Inflate(120);
             if (expandedBounds.Contains(point) && !_viewModel.SelectionRect.Contains(point))

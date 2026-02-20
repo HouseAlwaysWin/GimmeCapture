@@ -288,15 +288,22 @@ public partial class SnipWindow : Window
             };
             
             // Subscribe to Geometry and state changes to update window region
-            _selectionRectSubscription = _viewModel.WhenAnyValue(
+            // Subscribe to Geometry and state changes to update window region
+            // Split into two subscriptions if arguments exceed 7 to avoid compilation error
+            var trigger1 = _viewModel.WhenAnyValue(
                 x => x.MaskGeometry,
                 x => x.SelectionRect, 
                 x => x.CurrentState, 
                 x => x.IsDrawingMode,
                 x => x.IsTranslationMode,
+                x => x.IsTranslationSelectionActive);
+                
+            var trigger2 = _viewModel.WhenAnyValue(
                 x => x.ToolbarWidth,
-                x => x.ToolbarHeight)
-                .Throttle(TimeSpan.FromMilliseconds(16)) // ~60fps Limit
+                x => x.ToolbarHeight);
+
+            _selectionRectSubscription = System.Reactive.Linq.Observable.CombineLatest(trigger1, trigger2, (t1, t2) => t1)
+                .Throttle(TimeSpan.FromMilliseconds(16))
                 .ObserveOn(RxApp.MainThreadScheduler)
                 .Subscribe(tuple => UpdateWindowRegion(tuple.Item2, tuple.Item3, tuple.Item4));
             

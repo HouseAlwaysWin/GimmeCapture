@@ -189,16 +189,13 @@ public partial class SnipWindowViewModel
                 {
                     var rect = sel.Bounds;
 
-                    if (!sel.IsTranslated)
+                    // 翻譯模式無論是否已完成，一律排除遮罩以保持通亮
+                    mainMask = new CombinedGeometry
                     {
-                        // 未翻譯：挖洞穿透
-                        mainMask = new CombinedGeometry
-                        {
-                            GeometryCombineMode = GeometryCombineMode.Exclude,
-                            Geometry1 = mainMask,
-                            Geometry2 = new RectangleGeometry(rect)
-                        };
-                    }
+                        GeometryCombineMode = GeometryCombineMode.Exclude,
+                        Geometry1 = mainMask,
+                        Geometry2 = new RectangleGeometry(rect)
+                    };
                     // 已翻譯：不挖洞，保持遮罩 → 文字控件渲染在上方
                 }
             }
