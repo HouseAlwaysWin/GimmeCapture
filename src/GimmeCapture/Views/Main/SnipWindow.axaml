@@ -249,21 +249,21 @@
                 </Border>
                 
                 <!-- Resize Handles -->
-                <Grid Classes="Handle" Name="HandleTopLeft" Cursor="TopLeftCorner" Width="30" Height="30" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="-15" 
+                <Grid Classes="Handle" Name="HandleTopLeft" Cursor="TopLeftCorner" Width="30" Height="30" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="-15" Background="#01FFFFFF"
                       IsVisible="{Binding IsDrawingMode, Converter={StaticResource BoolInvertConverter}}"/>
-                <Grid Classes="Handle" Name="HandleTopRight" Cursor="TopRightCorner" Width="30" Height="30" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="-15"
+                <Grid Classes="Handle" Name="HandleTopRight" Cursor="TopRightCorner" Width="30" Height="30" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="-15" Background="#01FFFFFF"
                       IsVisible="{Binding IsDrawingMode, Converter={StaticResource BoolInvertConverter}}"/>
-                <Grid Classes="Handle" Name="HandleBottomLeft" Cursor="BottomLeftCorner" Width="30" Height="30" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="-15"
+                <Grid Classes="Handle" Name="HandleBottomLeft" Cursor="BottomLeftCorner" Width="30" Height="30" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="-15" Background="#01FFFFFF"
                       IsVisible="{Binding IsDrawingMode, Converter={StaticResource BoolInvertConverter}}"/>
-                <Grid Classes="Handle" Name="HandleBottomRight" Cursor="BottomRightCorner" Width="30" Height="30" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="-15"
+                <Grid Classes="Handle" Name="HandleBottomRight" Cursor="BottomRightCorner" Width="30" Height="30" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="-15" Background="#01FFFFFF"
                       IsVisible="{Binding IsDrawingMode, Converter={StaticResource BoolInvertConverter}}"/>
-                <Grid Classes="Handle" Name="HandleTop" Cursor="SizeNorthSouth" Height="15" HorizontalAlignment="Stretch" VerticalAlignment="Top" Margin="15,0"
+                <Grid Classes="Handle" Name="HandleTop" Cursor="SizeNorthSouth" Height="20" HorizontalAlignment="Stretch" VerticalAlignment="Top" Margin="-10" Background="#01FFFFFF"
                       IsVisible="{Binding IsDrawingMode, Converter={StaticResource BoolInvertConverter}}"/>
-                <Grid Classes="Handle" Name="HandleBottom" Cursor="SizeNorthSouth" Height="15" HorizontalAlignment="Stretch" VerticalAlignment="Bottom" Margin="15,0"
+                <Grid Classes="Handle" Name="HandleBottom" Cursor="SizeNorthSouth" Height="20" HorizontalAlignment="Stretch" VerticalAlignment="Bottom" Margin="-10" Background="#01FFFFFF"
                       IsVisible="{Binding IsDrawingMode, Converter={StaticResource BoolInvertConverter}}"/>
-                <Grid Classes="Handle" Name="HandleLeft" Cursor="SizeWestEast" Width="15" HorizontalAlignment="Left" VerticalAlignment="Stretch" Margin="0,15"
+                <Grid Classes="Handle" Name="HandleLeft" Cursor="SizeWestEast" Width="20" HorizontalAlignment="Left" VerticalAlignment="Stretch" Margin="-10" Background="#01FFFFFF"
                       IsVisible="{Binding IsDrawingMode, Converter={StaticResource BoolInvertConverter}}"/>
-                <Grid Classes="Handle" Name="HandleRight" Cursor="SizeWestEast" Width="15" HorizontalAlignment="Right" VerticalAlignment="Stretch" Margin="0,15"
+                <Grid Classes="Handle" Name="HandleRight" Cursor="SizeWestEast" Width="20" HorizontalAlignment="Right" VerticalAlignment="Stretch" Margin="-10" Background="#01FFFFFF"
                       IsVisible="{Binding IsDrawingMode, Converter={StaticResource BoolInvertConverter}}"/>
                 
                 <!-- Decoration Layer (Unified) -->
@@ -354,55 +354,70 @@
                 <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="m:UserSelectionRect">
                         <Canvas ClipToBounds="False" Width="{Binding Bounds.Width}" Height="{Binding Bounds.Height}">
+                            <Grid Width="{Binding Bounds.Width}" Height="{Binding Bounds.Height}">
+                                <Border BorderBrush="{Binding $parent[Window].DataContext.SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" 
+                                        BorderThickness="1"
+                                        Background="#01000000"
+                                        Width="{Binding Bounds.Width}"
+                                        Height="{Binding Bounds.Height}"
+                                        CornerRadius="0"
+                                        Classes="TranslationItem"
+                                        IsHitTestVisible="True">
+                                    <Border.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="複製翻譯文字" 
+                                                      Command="{Binding $parent[Window].DataContext.CopyTranslationTextCommand}"
+                                                      CommandParameter="{Binding}"/>
+                                            <Separator/>
+                                            <MenuItem Header="刪除區域" 
+                                                      Command="{Binding $parent[Window].DataContext.RemoveUserSelectionCommand}"
+                                                      CommandParameter="{Binding}"/>
+                                        </ContextMenu>
+                                    </Border.ContextMenu>
+                                    
+                                    <!-- 顯示翻譯結果 (文字島嶼) -->
+                                    <Panel IsVisible="{Binding IsTranslated}" IsHitTestVisible="True" VerticalAlignment="Center" HorizontalAlignment="Center">
+                                        <Border Background="#CC000000" CornerRadius="4" Padding="6"
+                                                BorderBrush="#44FFFFFF" BorderThickness="1"
+                                                Margin="4"
+                                                HorizontalAlignment="Center" VerticalAlignment="Center">
+                                            <SelectableTextBlock Text="{Binding TranslatedText}" 
+                                                               Foreground="White" 
+                                                               FontSize="12" 
+                                                               TextWrapping="Wrap"
+                                                               xml:space="preserve">
+                                                <SelectableTextBlock.ContextMenu>
+                                                    <ContextMenu>
+                                                        <MenuItem Header="複製翻譯文字" 
+                                                                  Command="{Binding $parent[Window].DataContext.CopyTranslationTextCommand}"
+                                                                  CommandParameter="{Binding}"/>
+                                                        <Separator/>
+                                                        <MenuItem Header="刪除區域" 
+                                                                  Command="{Binding $parent[Window].DataContext.RemoveUserSelectionCommand}"
+                                                                  CommandParameter="{Binding}"/>
+                                                    </ContextMenu>
+                                                </SelectableTextBlock.ContextMenu>
+                                            </SelectableTextBlock>
+                                        </Border>
+                                    </Panel>
+                                </Border>
 
-                            <Border BorderBrush="{Binding $parent[Window].DataContext.SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" 
-                                    BorderThickness="1"
-                                    Background="#01000000"
-                                    Width="{Binding Bounds.Width}"
-                                    Height="{Binding Bounds.Height}"
-                                    CornerRadius="0"
-                                    Classes="TranslationItem"
-                                    IsHitTestVisible="True">
-                                <Border.ContextMenu>
-                                    <ContextMenu>
-                                        <MenuItem Header="複製翻譯文字" 
-                                                  Command="{Binding $parent[Window].DataContext.CopyTranslationTextCommand}"
-                                                  CommandParameter="{Binding}"/>
-                                        <Separator/>
-                                        <MenuItem Header="刪除區域" 
-                                                  Command="{Binding $parent[Window].DataContext.RemoveUserSelectionCommand}"
-                                                  CommandParameter="{Binding}"/>
-                                    </ContextMenu>
-                                </Border.ContextMenu>
-                                
-                                <!-- 顯示翻譯結果 (文字島嶼) -->
-                                <Panel IsVisible="{Binding IsTranslated}" IsHitTestVisible="True" VerticalAlignment="Center" HorizontalAlignment="Center">
-                                    <Border Background="#CC000000" CornerRadius="4" Padding="6"
-                                            BorderBrush="#44FFFFFF" BorderThickness="1"
-                                            Margin="4"
-                                            HorizontalAlignment="Center" VerticalAlignment="Center">
-                                        <SelectableTextBlock Text="{Binding TranslatedText}" 
-                                                           Foreground="White" 
-                                                           FontSize="12" 
-                                                           TextWrapping="Wrap"
-                                                           xml:space="preserve">
-                                            <SelectableTextBlock.ContextMenu>
-                                                <ContextMenu>
-                                                    <MenuItem Header="複製翻譯文字" 
-                                                              Command="{Binding $parent[Window].DataContext.CopyTranslationTextCommand}"
-                                                              CommandParameter="{Binding}"/>
-                                                    <Separator/>
-                                                    <MenuItem Header="刪除區域" 
-                                                              Command="{Binding $parent[Window].DataContext.RemoveUserSelectionCommand}"
-                                                              CommandParameter="{Binding}"/>
-                                                </ContextMenu>
-                                            </SelectableTextBlock.ContextMenu>
-                                        </SelectableTextBlock>
-                                    </Border>
-                                </Panel>
-                            </Border>
+                                <!-- Move Handles for Translation Box (Inner Corners) -->
+                                <Grid Classes="MoveHandle" Width="30" Height="30" HorizontalAlignment="Left" VerticalAlignment="Top" Background="#01FFFFFF" Cursor="SizeAll"/>
+                                <Grid Classes="MoveHandle" Width="30" Height="30" HorizontalAlignment="Right" VerticalAlignment="Top" Background="#01FFFFFF" Cursor="SizeAll"/>
+                                <Grid Classes="MoveHandle" Width="30" Height="30" HorizontalAlignment="Left" VerticalAlignment="Bottom" Background="#01FFFFFF" Cursor="SizeAll"/>
+                                <Grid Classes="MoveHandle" Width="30" Height="30" HorizontalAlignment="Right" VerticalAlignment="Bottom" Background="#01FFFFFF" Cursor="SizeAll"/>
 
-                            <!-- Resize 由幾何偵測 (OnPointerMoved/Pressed) 處理，不再使用覆蓋 Canvas -->
+                                <!-- Resize Handles for Translation Box (Outer Edges and Corners) -->
+                                <Grid Classes="Handle" Name="HandleTopLeft" Cursor="TopLeftCorner" Width="30" Height="30" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="-15" Background="#01FFFFFF"/>
+                                <Grid Classes="Handle" Name="HandleTopRight" Cursor="TopRightCorner" Width="30" Height="30" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="-15" Background="#01FFFFFF"/>
+                                <Grid Classes="Handle" Name="HandleBottomLeft" Cursor="BottomLeftCorner" Width="30" Height="30" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="-15" Background="#01FFFFFF"/>
+                                <Grid Classes="Handle" Name="HandleBottomRight" Cursor="BottomRightCorner" Width="30" Height="30" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="-15" Background="#01FFFFFF"/>
+                                <Grid Classes="Handle" Name="HandleTop" Cursor="SizeNorthSouth" Height="20" HorizontalAlignment="Stretch" VerticalAlignment="Top" Margin="-10" Background="#01FFFFFF"/>
+                                <Grid Classes="Handle" Name="HandleBottom" Cursor="SizeNorthSouth" Height="20" HorizontalAlignment="Stretch" VerticalAlignment="Bottom" Margin="-10" Background="#01FFFFFF"/>
+                                <Grid Classes="Handle" Name="HandleLeft" Cursor="SizeWestEast" Width="20" HorizontalAlignment="Left" VerticalAlignment="Stretch" Margin="-10" Background="#01FFFFFF"/>
+                                <Grid Classes="Handle" Name="HandleRight" Cursor="SizeWestEast" Width="20" HorizontalAlignment="Right" VerticalAlignment="Stretch" Margin="-10" Background="#01FFFFFF"/>
+                            </Grid>
                         </Canvas>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>

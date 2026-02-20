@@ -148,18 +148,24 @@ public partial class SnipWindow : Window
                             else
                             {
                                 // 未翻譯且在選取模式：挖洞穿透，允許滑鼠繪圖或截取
-                                holeRects.Add(new Rect(rect.X * scaling, rect.Y * scaling, rect.Width * scaling, rect.Height * scaling));
+                                // 縮小洞口以保留內角的拖拉把手 (MoveHandle, 30px -> ~15px shrink)
+                                double shrink = 15 * scaling;
+                                holeRects.Add(new Rect(
+                                    rect.X * scaling + shrink, 
+                                    rect.Y * scaling + shrink, 
+                                    Math.Max(0, rect.Width * scaling - shrink * 2), 
+                                    Math.Max(0, rect.Height * scaling - shrink * 2)));
 
-                                // Corner Handles (24px)
-                                double hSize = 24 * scaling;
+                                // Corner Handles
+                                double hSize = 30 * scaling;
                                 double hHalf = hSize / 2;
                                 extraRegions.Add(new Rect(rect.X * scaling - hHalf, rect.Y * scaling - hHalf, hSize, hSize));
                                 extraRegions.Add(new Rect(rect.Right * scaling - hHalf, rect.Y * scaling - hHalf, hSize, hSize));
                                 extraRegions.Add(new Rect(rect.X * scaling - hHalf, rect.Bottom * scaling - hHalf, hSize, hSize));
                                 extraRegions.Add(new Rect(rect.Right * scaling - hHalf, rect.Bottom * scaling - hHalf, hSize, hSize));
 
-                                // Edge Strips (8px) for drag + right-click
-                                double e = 8 * scaling;
+                                // Edge Strips (20px) for drag + right-click
+                                double e = 20 * scaling;
                                 extraRegions.Add(new Rect(rect.X * scaling - e/2, rect.Y * scaling, e, rect.Height * scaling));         // Left
                                 extraRegions.Add(new Rect(rect.Right * scaling - e/2, rect.Y * scaling, e, rect.Height * scaling));     // Right
                                 extraRegions.Add(new Rect(rect.X * scaling, rect.Y * scaling - e/2, rect.Width * scaling, e));          // Top

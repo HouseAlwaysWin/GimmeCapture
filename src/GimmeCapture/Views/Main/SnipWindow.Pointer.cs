@@ -134,7 +134,34 @@ public partial class SnipWindow : Window
 
         if (props.IsLeftButtonPressed && isMoveHandle)
         {
-            if (_viewModel.RecState == RecordingState.Idle && _viewModel.CurrentState == SnipState.Selected)
+            var sel = sourceControl.DataContext as GimmeCapture.Models.UserSelectionRect;
+            if (sel == null)
+            {
+                var parent = sourceControl.GetVisualParent();
+                while (parent != null)
+                {
+                    if (parent is Control c && c.DataContext is GimmeCapture.Models.UserSelectionRect found)
+                    {
+                        sel = found;
+                        break;
+                    }
+                    parent = parent.GetVisualParent();
+                }
+            }
+
+            if (sel != null)
+            {
+                if (props.IsRightButtonPressed) return;
+
+                _isMovingTranslationSelection = true;
+                _movingTranslationSelection = sel;
+                _translationMoveStart = point;
+                _originalTranslationBounds = sel.Bounds;
+                e.Pointer.Capture(this);
+                e.Handled = true;
+                return;
+            }
+            else if (_viewModel.RecState == RecordingState.Idle && _viewModel.CurrentState == SnipState.Selected)
             {
                 _isMovingSelection = true;
                 _moveStartPoint = point;
@@ -146,6 +173,33 @@ public partial class SnipWindow : Window
 
         if (props.IsLeftButtonPressed && isResizeHandle)
         {
+            var sel = sourceControl.DataContext as GimmeCapture.Models.UserSelectionRect;
+            if (sel == null)
+            {
+                var parent = sourceControl.GetVisualParent();
+                while (parent != null)
+                {
+                    if (parent is Control c && c.DataContext is GimmeCapture.Models.UserSelectionRect found)
+                    {
+                        sel = found;
+                        break;
+                    }
+                    parent = parent.GetVisualParent();
+                }
+            }
+
+            if (sel != null)
+            {
+                _isResizingTranslation = true;
+                _translationResizeDirection = GetDirectionFromName(sourceControl.Name);
+                _resizingTranslationItem = sel;
+                _originalTranslationRect = sel.Bounds;
+                _translationResizeStartPoint = point;
+                e.Pointer.Capture(this);
+                e.Handled = true;
+                return;
+            }
+
             if (_viewModel.RecState != RecordingState.Idle)
             {
                 e.Handled = true;
@@ -190,58 +244,7 @@ public partial class SnipWindow : Window
             // Translation mode: selection and interaction (V7+ Restructured)
             if (_viewModel.IsTranslationMode)
             {
-                // A. Geometric Resize Detection (V7+ - Mathematical hit testing) - PRIORITIZED over edge drag
-                foreach (var sel in _viewModel.UserSelections)
-                {
-                    double tolerance = 12; 
-                    var rect = sel.Bounds;
-                    ResizeDirection dir = ResizeDirection.None;
-
-                    if (Math.Abs(point.X - rect.X) < tolerance && Math.Abs(point.Y - rect.Y) < tolerance) dir = ResizeDirection.TopLeft;
-                    else if (Math.Abs(point.X - rect.Right) < tolerance && Math.Abs(point.Y - rect.Y) < tolerance) dir = ResizeDirection.TopRight;
-                    else if (Math.Abs(point.X - rect.X) < tolerance && Math.Abs(point.Y - rect.Bottom) < tolerance) dir = ResizeDirection.BottomLeft;
-                    else if (Math.Abs(point.X - rect.Right) < tolerance && Math.Abs(point.Y - rect.Bottom) < tolerance) dir = ResizeDirection.BottomRight;
-
-                    if (dir != ResizeDirection.None)
-                    {
-                        _isResizingTranslation = true;
-                        _translationResizeDirection = dir;
-                        _resizingTranslationItem = sel;
-                        _originalTranslationRect = rect;
-                        _translationResizeStartPoint = point;
-                        e.Pointer.Capture(this);
-                        e.Handled = true;
-                        return;
-                    }
-                }
-
-                // B. Edge Detection for Drag (邊緣拖拽)
-                foreach (var sel in _viewModel.UserSelections)
-                {
-                    double edgeTolerance = 8;
-                    var rect = sel.Bounds;
-                    bool nearLeft   = Math.Abs(point.X - rect.X) < edgeTolerance && point.Y > rect.Y && point.Y < rect.Bottom;
-                    bool nearRight  = Math.Abs(point.X - rect.Right) < edgeTolerance && point.Y > rect.Y && point.Y < rect.Bottom;
-                    bool nearTop    = Math.Abs(point.Y - rect.Y) < edgeTolerance && point.X > rect.X && point.X < rect.Right;
-                    bool nearBottom = Math.Abs(point.Y - rect.Bottom) < edgeTolerance && point.X > rect.X && point.X < rect.Right;
-
-                    if (nearLeft || nearRight || nearTop || nearBottom)
-                    {
-                        // Right clicks shouldn't trigger move - allow context menu
-                        if (props.IsRightButtonPressed) 
-                        {
-                            return; 
-                        }
-
-                        _isMovingTranslationSelection = true;
-                        _movingTranslationSelection = sel;
-                        _translationMoveStart = point;
-                        _originalTranslationBounds = sel.Bounds;
-                        e.Pointer.Capture(this);
-                        e.Handled = true;
-                        return;
-                    }
-                }
+                // B. Selection Creation (Only if no handle/corner hit and selection-active)
 
                 // C. Selection Creation (Only if no handle/corner hit and selection-active)
                 if (_viewModel.IsTranslationSelectionActive)
@@ -456,61 +459,14 @@ public partial class SnipWindow : Window
             }
             specialCursorSet = true;
         }
-        else if (_viewModel.IsTranslationMode)
-        {
-            // V8: 翻譯模式幾何游標偵測（必須在 Detecting 十字游標之前）
-            foreach (var sel in _viewModel.UserSelections)
-            {
-                var rect = sel.Bounds;
-                
-                // 1. Corners (Resize) - PRIORITY over edges and body
-                double tolerance = 14;
-                if (Math.Abs(currentPoint.X - rect.X) < tolerance && Math.Abs(currentPoint.Y - rect.Y) < tolerance)
-                { SetCursorShape(StandardCursorType.TopLeftCorner); specialCursorSet = true; break; }
-                if (Math.Abs(currentPoint.X - rect.Right) < tolerance && Math.Abs(currentPoint.Y - rect.Y) < tolerance)
-                { SetCursorShape(StandardCursorType.TopRightCorner); specialCursorSet = true; break; }
-                if (Math.Abs(currentPoint.X - rect.X) < tolerance && Math.Abs(currentPoint.Y - rect.Bottom) < tolerance)
-                { SetCursorShape(StandardCursorType.BottomLeftCorner); specialCursorSet = true; break; }
-                if (Math.Abs(currentPoint.X - rect.Right) < tolerance && Math.Abs(currentPoint.Y - rect.Bottom) < tolerance)
-                { SetCursorShape(StandardCursorType.BottomRightCorner); specialCursorSet = true; break; }
-                
-                // 2. Edges (Move or Resize)
-                double edgeTol = 8;
-                bool nearL = Math.Abs(currentPoint.X - rect.X) < edgeTol && currentPoint.Y > rect.Y && currentPoint.Y < rect.Bottom;
-                bool nearR = Math.Abs(currentPoint.X - rect.Right) < edgeTol && currentPoint.Y > rect.Y && currentPoint.Y < rect.Bottom;
-                bool nearT = Math.Abs(currentPoint.Y - rect.Y) < edgeTol && currentPoint.X > rect.X && currentPoint.X < rect.Right;
-                bool nearB = Math.Abs(currentPoint.Y - rect.Bottom) < edgeTol && currentPoint.X > rect.X && currentPoint.X < rect.Right;
-                
-                if (nearL || nearR)
-                { SetCursorShape(StandardCursorType.SizeWestEast); specialCursorSet = true; break; }
-                if (nearT || nearB)
-                { SetCursorShape(StandardCursorType.SizeNorthSouth); specialCursorSet = true; break; }
-                
-                // 3. 已翻譯文字區域：Arrow priority if hovering over the translated box body (not edges)
-                if (sel.IsTranslated && sel.Bounds.Contains(currentPoint))
-                { SetCursorShape(StandardCursorType.Arrow); specialCursorSet = true; break; }
-            }
-
-            // 翻譯模式其餘空白區域：十字游標（可以繼續圈選）
-            if (!specialCursorSet && _viewModel.IsTranslationSelectionActive)
-            {
-                SetCursorShape(StandardCursorType.Cross);
-                specialCursorSet = true;
-            }
-        }
-        else if (_viewModel.CurrentState == SnipState.Selecting || _viewModel.CurrentState == SnipState.Detecting || _isTranslationSelecting)
-        {
-            SetCursorShape(StandardCursorType.Cross);
-            specialCursorSet = true;
-        }
 
         if (!specialCursorSet)
         {
             bool actionCursorSet = false;
-            if (_viewModel.CurrentState == SnipState.Selected)
+            if (_viewModel.CurrentState == SnipState.Selected || _viewModel.IsTranslationMode)
             {
                 // 1. Text Annotation Hover (Hand Cursor)
-                if (_viewModel.IsDrawingMode && _viewModel.CurrentAnnotationTool == AnnotationType.Text)
+                if (_viewModel.CurrentState == SnipState.Selected && _viewModel.IsDrawingMode && _viewModel.CurrentAnnotationTool == AnnotationType.Text)
                 {
                     var selectionSpacePoint = new Point(currentPoint.X - _viewModel.SelectionRect.X, currentPoint.Y - _viewModel.SelectionRect.Y);
                     for (int i = _viewModel.Annotations.Count - 1; i >= 0; i--)
@@ -554,12 +510,12 @@ public partial class SnipWindow : Window
                         }
                         actionCursorSet = true;
                     }
-                    else if (isMoveHandle || (!_viewModel.IsDrawingMode && _viewModel.SelectionRect.Contains(currentPoint)))
+                    else if (isMoveHandle || (!_viewModel.IsTranslationMode && !_viewModel.IsDrawingMode && _viewModel.SelectionRect.Contains(currentPoint)))
                     {
                         SetCursorShape(StandardCursorType.SizeAll);
                         actionCursorSet = true;
                     }
-                    else if (_viewModel.IsDrawingMode && _viewModel.SelectionRect.Contains(currentPoint))
+                    else if (!_viewModel.IsTranslationMode && _viewModel.IsDrawingMode && _viewModel.SelectionRect.Contains(currentPoint))
                     {
                         if (_viewModel.CurrentAnnotationTool == AnnotationType.Text)
                         {
@@ -574,23 +530,21 @@ public partial class SnipWindow : Window
                 }
             }
             
-            // 3. Translation mode Hover over existing selections
-            if (!actionCursorSet && _viewModel.IsTranslationMode)
-            {
-                foreach (var sel in _viewModel.UserSelections)
-                {
-                    if (sel.Bounds.Contains(currentPoint))
-                    {
-                        SetCursorShape(StandardCursorType.SizeAll);
-                        actionCursorSet = true;
-                        break;
-                    }
-                }
-            }
-
+            // 3. Fallback to standard Selection/Translation Cross cursors if no action handles were hit
             if (!actionCursorSet)
             {
-                SetCursorShape(StandardCursorType.Arrow);
+                if (_viewModel.IsTranslationMode && _viewModel.IsTranslationSelectionActive)
+                {
+                    SetCursorShape(StandardCursorType.Cross);
+                }
+                else if (_viewModel.CurrentState == SnipState.Selecting || _viewModel.CurrentState == SnipState.Detecting || _isTranslationSelecting)
+                {
+                    SetCursorShape(StandardCursorType.Cross);
+                }
+                else
+                {
+                    SetCursorShape(StandardCursorType.Arrow);
+                }
             }
         }
 
@@ -629,6 +583,18 @@ public partial class SnipWindow : Window
                     break;
                 case ResizeDirection.BottomRight:
                     newW += dx; newH += dy;
+                    break;
+                case ResizeDirection.Top:
+                    newY += dy; newH -= dy;
+                    break;
+                case ResizeDirection.Bottom:
+                    newH += dy;
+                    break;
+                case ResizeDirection.Left:
+                    newX += dx; newW -= dx;
+                    break;
+                case ResizeDirection.Right:
+                    newW += dx;
                     break;
             }
 
