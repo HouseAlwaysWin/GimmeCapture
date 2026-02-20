@@ -149,6 +149,108 @@ public partial class SnipWindowViewModel
         }
     }
 
+    // Auto-Detect OCR Monitor Loop
+    private CancellationTokenSource? _autoDetectCts;
+    private Task? _autoDetectTask;
+
+    public void StartAutoDetectLoop()
+    {
+        StopAutoDetectLoop();
+        _autoDetectCts = new CancellationTokenSource();
+        _autoDetectTask = Task.Run(() => AutoDetectLoopAsync(_autoDetectCts.Token));
+    }
+
+    public void StopAutoDetectLoop()
+    {
+        _autoDetectCts?.Cancel();
+        _autoDetectCts?.Dispose();
+        _autoDetectCts = null;
+    }
+
+    private async Task AutoDetectLoopAsync(CancellationToken token)
+    {
+        while (!token.IsCancellationRequested)
+        {
+            try
+            {
+                await Task.Delay(1500, token); // Check every 1.5 seconds
+
+                if (_mainVm == null || !IsTranslationMode) continue;
+                bool isOcrReady = await _mainVm.AIResourceService.EnsureOCRAsync();
+                if (!isOcrReady) continue;
+
+                var activeSections = UserSelections.Where(s => s.IsAutoDetectEnabled).ToList();
+                if (activeSections.Count == 0) continue;
+
+                var ocrEngine = new GimmeCapture.Services.OCR.PaddleOCREngine(_mainVm.AIResourceService, _mainVm.AppSettingsService);
+                var ocrLang = _mainVm.AppSettingsService.Settings.SourceLanguage;
+                await ocrEngine.EnsureLoadedAsync(ocrLang);
+
+                foreach (var sel in activeSections)
+                {
+                    if (token.IsCancellationRequested) break;
+                    try
+                    {
+                        var rect = sel.Bounds;
+                        if (rect.Width <= 10 || rect.Height <= 10) continue;
+
+                        using var bitmap = await _captureService.CaptureScreenAsync(rect, ScreenOffset, VisualScaling, false);
+                        if (bitmap == null) continue;
+
+                        // Because the region is already cropped to the box, we can just recognize the whole thing.
+                        // Or we can just use TranslationService's AnalyzeAndTranslateAsync which does OCR + Translation in one go,
+                        // but that might be heavy if the text hasn't changed.
+                        // Let's use DetectText + RecognizeText to get the text string to compare first.
+                        var boxes = ocrEngine.DetectText(bitmap);
+                        var sb = new System.Text.StringBuilder();
+                        foreach (var box in boxes)
+                        {
+                            var ocrResult = ocrEngine.RecognizeText(bitmap, box, token);
+                            if (!string.IsNullOrWhiteSpace(ocrResult.text))
+                            {
+                                sb.AppendLine(ocrResult.text);
+                            }
+                        }
+                        var newText = sb.ToString().Trim();
+
+                        if (!string.IsNullOrWhiteSpace(newText) && newText != sel.LastOcrText)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[AutoDetect] Text changed for a selection. Old length: {sel.LastOcrText?.Length}, New length: {newText.Length}");
+                            
+                            // Ask TranslationService to translate just this text
+                            if (_translationService != null)
+                            {
+                                // We don't want to freeze the UI or show loading bars for background updates
+                                var blocks = await _translationService.AnalyzeAndTranslateAsync(bitmap, token);
+                                var combinedText = string.Join("\n", blocks.Select(b => b.TranslatedText).Where(t => !string.IsNullOrWhiteSpace(t)));
+                                
+                                await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+                                {
+                                    sel.LastOcrText = newText; // Update tracking hash
+                                    sel.TranslatedText = combinedText;
+                                    sel.IsTranslated = !string.IsNullOrWhiteSpace(combinedText);
+                                    if (sel.IsTranslated) AutoFitSelectionToText(sel);
+                                    UpdateMask();
+                                });
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[AutoDetect] Region OCR error: {ex.Message}");
+                    }
+                }
+                
+                ocrEngine.Dispose();
+            }
+            catch (TaskCanceledException) { break; }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[AutoDetect] Loop Error: {ex.Message}");
+            }
+        }
+    }
+
     private Geometry _maskGeometry = new GeometryGroup();
     public Geometry MaskGeometry
     {

@@ -37,4 +37,18 @@ public class UserSelectionRect : ReactiveObject
         get => _translatedText;
         set => this.RaiseAndSetIfChanged(ref _translatedText, value);
     }
+
+    private bool _isAutoDetectEnabled;
+    public bool IsAutoDetectEnabled
+    {
+        get => _isAutoDetectEnabled;
+        set => this.RaiseAndSetIfChanged(ref _isAutoDetectEnabled, value);
+    }
+
+    private string _lastOcrText = string.Empty;
+    public string LastOcrText
+    {
+        get => _lastOcrText;
+        set => this.RaiseAndSetIfChanged(ref _lastOcrText, value);
+    }
 }

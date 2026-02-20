@@ -55,6 +55,8 @@ public partial class SnipWindowViewModel
                 IsMaskVisible = true;
                 this.RaisePropertyChanged(nameof(MaskOpacity));
                 UpdateMask();
+                
+                StartAutoDetectLoop();
             }
             else
             {
@@ -62,8 +64,13 @@ public partial class SnipWindowViewModel
                 IsMaskVisible = true;
                 // 清除多重選取
                 UserSelections.Clear();
+                // 關閉自動偵測
+                IsGlobalAutoDetectEnabled = false;
+                
                 this.RaisePropertyChanged(nameof(MaskOpacity));
                 UpdateMask();
+                
+                StopAutoDetectLoop();
             }
 
             // Update border color (Unified Theme Color)
@@ -74,6 +81,26 @@ public partial class SnipWindowViewModel
             this.RaisePropertyChanged(nameof(IsScreenshotMode));
             this.RaisePropertyChanged(nameof(IsToolbarVisible));
             this.RaisePropertyChanged(nameof(ModeDisplayName));
+        }
+    }
+    
+    private bool _isGlobalAutoDetectEnabled;
+    public bool IsGlobalAutoDetectEnabled
+    {
+        get => _isGlobalAutoDetectEnabled;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _isGlobalAutoDetectEnabled, value);
+            // 同步更新所有當前翻譯區塊的偵測狀態
+            foreach (var sel in UserSelections)
+            {
+                sel.IsAutoDetectEnabled = value;
+            }
+            // 如果開啟，喚醒背景迴圈，或者直接依靠現有的 Loop
+            if (value && IsTranslationMode)
+            {
+                StartAutoDetectLoop();
+            }
         }
     }
 
