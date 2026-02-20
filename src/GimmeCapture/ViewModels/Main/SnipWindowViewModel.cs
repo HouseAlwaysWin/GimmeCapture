@@ -127,6 +127,8 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
                 {
                     this.RaisePropertyChanged(nameof(RecState));
                     this.RaisePropertyChanged(nameof(IsRecordingActive));
+                    this.RaisePropertyChanged(nameof(HideFrameBorder));
+                    this.RaisePropertyChanged(nameof(HideSelectionDecoration));
                 }).DisposeWith(_disposables);
 
             _recordingService.WhenAnyValue(x => x.IsFinalizing)

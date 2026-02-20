@@ -124,8 +124,25 @@ public partial class SnipWindowViewModel
     }
 
     // Action Helpers
-    public bool HideSelectionDecoration => IsRecordingMode ? (_mainVm?.HideRecordSelectionDecoration ?? false) : (_mainVm?.HideSnipSelectionDecoration ?? false);
-    public bool HideFrameBorder => IsRecordingMode ? (_mainVm?.HideRecordSelectionBorder ?? false) : (_mainVm?.HideSnipSelectionBorder ?? false);
+    public bool HideSelectionDecoration 
+    {
+        get
+        {
+            // Always show decoration during selection phase
+            if (IsRecordingMode && !IsRecordingActive) return false;
+            return IsRecordingMode ? (_mainVm?.HideRecordSelectionDecoration ?? false) : (_mainVm?.HideSnipSelectionDecoration ?? false);
+        }
+    }
+
+    public bool HideFrameBorder 
+    {
+        get
+        {
+            // Always show border during selection phase so user can see what they are selecting
+            if (IsRecordingMode && !IsRecordingActive) return false;
+            return IsRecordingMode ? (_mainVm?.HideRecordSelectionBorder ?? false) : (_mainVm?.HideSnipSelectionBorder ?? false);
+        }
+    }
 
     private int _autoActionMode = 0; // 0=Normal, 1=Copy, 2=Pin
     public int AutoActionMode
