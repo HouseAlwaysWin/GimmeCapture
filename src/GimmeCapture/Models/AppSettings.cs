@@ -12,6 +12,7 @@ public class TranslatedBlock
     public string OriginalText { get; set; } = string.Empty;
     public string TranslatedText { get; set; } = string.Empty;
     public Avalonia.Rect Bounds { get; set; }
+    public double InferredFontSize { get; set; } = 12.0;
 }
 
 public class AppSettings

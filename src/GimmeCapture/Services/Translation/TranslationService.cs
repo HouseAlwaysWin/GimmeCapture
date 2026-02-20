@@ -96,6 +96,15 @@ public class TranslationService
 
         var translated = await TranslateAsync(mergedText, ocrLang, ct);
         
+        // Infer font size from average height of OCR blocks
+        double inferredFontSize = 12.0;
+        if (sortedBlocks.Any())
+        {
+            inferredFontSize = sortedBlocks.Average(b => (double)b.Box.Height);
+            // Limit range to reasonable font sizes
+            inferredFontSize = Math.Clamp(inferredFontSize, 8.0, 72.0);
+        }
+
         bool acceptable = IsTranslationAcceptable(mergedText, translated, _settings.TargetLanguage);
         if (!acceptable && _settings.TargetLanguage == TranslationLanguage.English)
         {
@@ -110,7 +119,8 @@ public class TranslationService
             {
                 OriginalText = mergedText,
                 TranslatedText = translated,
-                Bounds = new Rect(unionBox.Left, unionBox.Top, unionBox.Width, unionBox.Height)
+                Bounds = new Rect(unionBox.Left, unionBox.Top, unionBox.Width, unionBox.Height),
+                InferredFontSize = inferredFontSize
             });
         }
         else
@@ -122,7 +132,8 @@ public class TranslationService
                 {
                     OriginalText = mergedText,
                     TranslatedText = fallback,
-                    Bounds = new Rect(unionBox.Left, unionBox.Top, unionBox.Width, unionBox.Height)
+                    Bounds = new Rect(unionBox.Left, unionBox.Top, unionBox.Width, unionBox.Height),
+                    InferredFontSize = inferredFontSize
                 });
             }
         }

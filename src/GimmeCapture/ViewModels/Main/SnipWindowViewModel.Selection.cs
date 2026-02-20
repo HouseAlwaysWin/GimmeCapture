@@ -231,6 +231,13 @@ public partial class SnipWindowViewModel
                                     sel.LastOcrText = newText; // Update tracking hash
                                     sel.TranslatedText = combinedText;
                                     sel.IsTranslated = !string.IsNullOrWhiteSpace(combinedText);
+                                    
+                                    // Propagate inferred font size from blocks
+                                    if (blocks.Any())
+                                    {
+                                        sel.InferredFontSize = blocks[0].InferredFontSize;
+                                    }
+
                                     if (sel.IsTranslated) sel.EstimatedTextHeight = EstimateTranslatedTextHeight(sel);
                                     UpdateMask();
                                 });
@@ -1144,6 +1151,12 @@ public partial class SnipWindowViewModel
                     sel.TranslatedText = combinedText;
                     sel.IsTranslated = !string.IsNullOrWhiteSpace(combinedText);
 
+                    // Propagate inferred font size from blocks
+                    if (blocks.Any())
+                    {
+                        sel.InferredFontSize = blocks[0].InferredFontSize;
+                    }
+
                     if (sel.IsTranslated)
                     {
                         sel.EstimatedTextHeight = EstimateTranslatedTextHeight(sel);
@@ -1263,7 +1276,7 @@ public partial class SnipWindowViewModel
         if (string.IsNullOrWhiteSpace(sel.TranslatedText)) return 0;
 
         var text = sel.TranslatedText;
-        double fontSize = 12; // 對應 XAML FontSize
+        double fontSize = sel.InferredFontSize; // Use inferred font size from OCR
         double lineHeight = fontSize * 1.8;
         double padding = 28; // Border padding + extra
         double currentWidth = sel.Bounds.Width;
@@ -1303,7 +1316,7 @@ public partial class SnipWindowViewModel
         if (string.IsNullOrWhiteSpace(sel.TranslatedText)) return;
 
         var text = sel.TranslatedText;
-        double fontSize = 12; // 與 XAML 中 SelectableTextBlock FontSize 一致
+        double fontSize = sel.InferredFontSize; // Use inferred font size
         double lineHeight = fontSize * 1.8; // 行高
         double padding = 28; // Border padding + margin + extra
 

@@ -383,7 +383,7 @@
                                                 HorizontalAlignment="Center" VerticalAlignment="Center">
                                             <SelectableTextBlock Text="{Binding TranslatedText}" 
                                                                Foreground="White" 
-                                                               FontSize="12" 
+                                                               FontSize="{Binding InferredFontSize}" 
                                                                TextWrapping="Wrap"
                                                                xml:space="preserve">
                                                 <SelectableTextBlock.ContextMenu>
