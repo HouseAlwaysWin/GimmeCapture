@@ -249,21 +249,21 @@
                 </Border>
                 
                 <!-- Resize Handles -->
-                <Grid Classes="Handle" Name="HandleTopLeft" Cursor="TopLeftCorner" Width="30" Height="30" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="-15" Background="#01FFFFFF"
+                <Grid Classes="Handle" Name="HandleTopLeft" Cursor="TopLeftCorner" Width="40" Height="40" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="-20,-20,0,0" Background="#01FFFFFF"
                       IsVisible="{Binding IsDrawingMode, Converter={StaticResource BoolInvertConverter}}"/>
-                <Grid Classes="Handle" Name="HandleTopRight" Cursor="TopRightCorner" Width="30" Height="30" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="-15" Background="#01FFFFFF"
+                <Grid Classes="Handle" Name="HandleTopRight" Cursor="TopRightCorner" Width="40" Height="40" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-20,-20,0" Background="#01FFFFFF"
                       IsVisible="{Binding IsDrawingMode, Converter={StaticResource BoolInvertConverter}}"/>
-                <Grid Classes="Handle" Name="HandleBottomLeft" Cursor="BottomLeftCorner" Width="30" Height="30" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="-15" Background="#01FFFFFF"
+                <Grid Classes="Handle" Name="HandleBottomLeft" Cursor="BottomLeftCorner" Width="40" Height="40" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="-20,0,0,-20" Background="#01FFFFFF"
                       IsVisible="{Binding IsDrawingMode, Converter={StaticResource BoolInvertConverter}}"/>
-                <Grid Classes="Handle" Name="HandleBottomRight" Cursor="BottomRightCorner" Width="30" Height="30" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="-15" Background="#01FFFFFF"
+                <Grid Classes="Handle" Name="HandleBottomRight" Cursor="BottomRightCorner" Width="40" Height="40" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-20,-20" Background="#01FFFFFF"
                       IsVisible="{Binding IsDrawingMode, Converter={StaticResource BoolInvertConverter}}"/>
-                <Grid Classes="Handle" Name="HandleTop" Cursor="SizeNorthSouth" Height="20" HorizontalAlignment="Stretch" VerticalAlignment="Top" Margin="-10" Background="#01FFFFFF"
+                <Grid Classes="Handle" Name="HandleTop" Cursor="SizeNorthSouth" Height="20" HorizontalAlignment="Stretch" VerticalAlignment="Top" Margin="20,-10,20,0" Background="#01FFFFFF"
                       IsVisible="{Binding IsDrawingMode, Converter={StaticResource BoolInvertConverter}}"/>
-                <Grid Classes="Handle" Name="HandleBottom" Cursor="SizeNorthSouth" Height="20" HorizontalAlignment="Stretch" VerticalAlignment="Bottom" Margin="-10" Background="#01FFFFFF"
+                <Grid Classes="Handle" Name="HandleBottom" Cursor="SizeNorthSouth" Height="20" HorizontalAlignment="Stretch" VerticalAlignment="Bottom" Margin="20,0,20,-10" Background="#01FFFFFF"
                       IsVisible="{Binding IsDrawingMode, Converter={StaticResource BoolInvertConverter}}"/>
-                <Grid Classes="Handle" Name="HandleLeft" Cursor="SizeWestEast" Width="20" HorizontalAlignment="Left" VerticalAlignment="Stretch" Margin="-10" Background="#01FFFFFF"
+                <Grid Classes="Handle" Name="HandleLeft" Cursor="SizeWestEast" Width="20" HorizontalAlignment="Left" VerticalAlignment="Stretch" Margin="-10,20,0,20" Background="#01FFFFFF"
                       IsVisible="{Binding IsDrawingMode, Converter={StaticResource BoolInvertConverter}}"/>
-                <Grid Classes="Handle" Name="HandleRight" Cursor="SizeWestEast" Width="20" HorizontalAlignment="Right" VerticalAlignment="Stretch" Margin="-10" Background="#01FFFFFF"
+                <Grid Classes="Handle" Name="HandleRight" Cursor="SizeWestEast" Width="20" HorizontalAlignment="Right" VerticalAlignment="Stretch" Margin="0,20,-10,20" Background="#01FFFFFF"
                       IsVisible="{Binding IsDrawingMode, Converter={StaticResource BoolInvertConverter}}"/>
                 
                 <!-- Decoration Layer (Unified) -->
@@ -401,22 +401,18 @@
                                         </Border>
                                     </Panel>
                                 </Border>
-
-                                <!-- Move Handles for Translation Box (Inner Corners) -->
-                                <Grid Classes="MoveHandle" Width="30" Height="30" HorizontalAlignment="Left" VerticalAlignment="Top" Background="#01FFFFFF" Cursor="SizeAll"/>
-                                <Grid Classes="MoveHandle" Width="30" Height="30" HorizontalAlignment="Right" VerticalAlignment="Top" Background="#01FFFFFF" Cursor="SizeAll"/>
-                                <Grid Classes="MoveHandle" Width="30" Height="30" HorizontalAlignment="Left" VerticalAlignment="Bottom" Background="#01FFFFFF" Cursor="SizeAll"/>
-                                <Grid Classes="MoveHandle" Width="30" Height="30" HorizontalAlignment="Right" VerticalAlignment="Bottom" Background="#01FFFFFF" Cursor="SizeAll"/>
+                                <!-- Move Handle for Translation Box (Hollow Border) -->
+                                <Border Classes="MoveHandle" BorderBrush="#01FFFFFF" BorderThickness="20" Background="Transparent" Cursor="SizeAll"/>
 
                                 <!-- Resize Handles for Translation Box (Outer Edges and Corners) -->
-                                <Grid Classes="Handle" Name="HandleTopLeft" Cursor="TopLeftCorner" Width="30" Height="30" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="-15" Background="#01FFFFFF"/>
-                                <Grid Classes="Handle" Name="HandleTopRight" Cursor="TopRightCorner" Width="30" Height="30" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="-15" Background="#01FFFFFF"/>
-                                <Grid Classes="Handle" Name="HandleBottomLeft" Cursor="BottomLeftCorner" Width="30" Height="30" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="-15" Background="#01FFFFFF"/>
-                                <Grid Classes="Handle" Name="HandleBottomRight" Cursor="BottomRightCorner" Width="30" Height="30" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="-15" Background="#01FFFFFF"/>
-                                <Grid Classes="Handle" Name="HandleTop" Cursor="SizeNorthSouth" Height="20" HorizontalAlignment="Stretch" VerticalAlignment="Top" Margin="-10" Background="#01FFFFFF"/>
-                                <Grid Classes="Handle" Name="HandleBottom" Cursor="SizeNorthSouth" Height="20" HorizontalAlignment="Stretch" VerticalAlignment="Bottom" Margin="-10" Background="#01FFFFFF"/>
-                                <Grid Classes="Handle" Name="HandleLeft" Cursor="SizeWestEast" Width="20" HorizontalAlignment="Left" VerticalAlignment="Stretch" Margin="-10" Background="#01FFFFFF"/>
-                                <Grid Classes="Handle" Name="HandleRight" Cursor="SizeWestEast" Width="20" HorizontalAlignment="Right" VerticalAlignment="Stretch" Margin="-10" Background="#01FFFFFF"/>
+                                <Grid Classes="Handle" Name="HandleTopLeft" Cursor="TopLeftCorner" Width="40" Height="40" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="-20,-20,0,0" Background="#01FFFFFF"/>
+                                <Grid Classes="Handle" Name="HandleTopRight" Cursor="TopRightCorner" Width="40" Height="40" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-20,-20,0" Background="#01FFFFFF"/>
+                                <Grid Classes="Handle" Name="HandleBottomLeft" Cursor="BottomLeftCorner" Width="40" Height="40" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="-20,0,0,-20" Background="#01FFFFFF"/>
+                                <Grid Classes="Handle" Name="HandleBottomRight" Cursor="BottomRightCorner" Width="40" Height="40" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-20,-20" Background="#01FFFFFF"/>
+                                <Grid Classes="Handle" Name="HandleTop" Cursor="SizeNorthSouth" Height="20" HorizontalAlignment="Stretch" VerticalAlignment="Top" Margin="20,-10,20,0" Background="#01FFFFFF"/>
+                                <Grid Classes="Handle" Name="HandleBottom" Cursor="SizeNorthSouth" Height="20" HorizontalAlignment="Stretch" VerticalAlignment="Bottom" Margin="20,0,20,-10" Background="#01FFFFFF"/>
+                                <Grid Classes="Handle" Name="HandleLeft" Cursor="SizeWestEast" Width="20" HorizontalAlignment="Left" VerticalAlignment="Stretch" Margin="-10,20,0,20" Background="#01FFFFFF"/>
+                                <Grid Classes="Handle" Name="HandleRight" Cursor="SizeWestEast" Width="20" HorizontalAlignment="Right" VerticalAlignment="Stretch" Margin="0,20,-10,20" Background="#01FFFFFF"/>
                             </Grid>
                         </Canvas>
                     </DataTemplate>

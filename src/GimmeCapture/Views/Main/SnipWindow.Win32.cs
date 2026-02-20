@@ -148,8 +148,8 @@ public partial class SnipWindow : Window
                             else
                             {
                                 // 未翻譯且在選取模式：挖洞穿透，允許滑鼠繪圖或截取
-                                // 縮小洞口以保留內角的拖拉把手 (MoveHandle, 30px -> ~15px shrink)
-                                double shrink = 15 * scaling;
+                                // 縮小洞口以保留內圈的拖拉把手環 (MoveHandle Border, 20px)
+                                double shrink = 20 * scaling;
                                 holeRects.Add(new Rect(
                                     rect.X * scaling + shrink, 
                                     rect.Y * scaling + shrink, 
@@ -157,7 +157,7 @@ public partial class SnipWindow : Window
                                     Math.Max(0, rect.Height * scaling - shrink * 2)));
 
                                 // Corner Handles
-                                double hSize = 30 * scaling;
+                                double hSize = 40 * scaling;
                                 double hHalf = hSize / 2;
                                 extraRegions.Add(new Rect(rect.X * scaling - hHalf, rect.Y * scaling - hHalf, hSize, hSize));
                                 extraRegions.Add(new Rect(rect.Right * scaling - hHalf, rect.Y * scaling - hHalf, hSize, hSize));
@@ -186,7 +186,7 @@ public partial class SnipWindow : Window
                 double maxMargin = 0;
                 if (_viewModel != null)
                 {
-                    double hSize = 30 * scaling;      // Handles
+                    double hSize = 40 * scaling;      // Handles
                     double sThick = 15 * scaling;     // Frame edges
                     double wW = _viewModel.WingWidth * scaling;
                     double wH = _viewModel.WingHeight * scaling;
