@@ -116,6 +116,8 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         {
             // Always use ThemeColor for all UI boxes per request
             _selectionBorderColor = _mainVm.ThemeColor;
+            _selectionBorderThickness = _mainVm.BorderThickness;
+            _maskOpacity = _mainVm.MaskOpacity;
         }
 
         if (_recordingService != null)
@@ -198,6 +200,16 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
                       this.RaisePropertyChanged(nameof(ThemeColor));
                       this.RaisePropertyChanged(nameof(ThemeDeepColor));
                   })
+                  .DisposeWith(_disposables);
+
+            // Sync Border Thickness
+            mainVm.WhenAnyValue(x => x.BorderThickness)
+                  .Subscribe(val => SelectionBorderThickness = val)
+                  .DisposeWith(_disposables);
+
+            // Sync Mask Opacity
+            mainVm.WhenAnyValue(x => x.MaskOpacity)
+                  .Subscribe(val => MaskOpacity = val)
                   .DisposeWith(_disposables);
         }
 

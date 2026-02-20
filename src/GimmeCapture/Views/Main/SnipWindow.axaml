@@ -235,7 +235,6 @@
                         BoxShadow="{Binding SelectionBorderColor, Converter={StaticResource ColorToBoxShadowConverter}}"
                         IsVisible="{Binding HideFrameBorder, Converter={StaticResource BoolInvertConverter}}"
                         IsHitTestVisible="{Binding IsDrawingMode, Converter={StaticResource BoolInvertConverter}}"
-                        Opacity="{Binding IsRecordingActive, Converter={StaticResource BoolInvertConverter}}"
                         Classes="MoveHandle">
                     <Border.BorderBrush>
                         <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
@@ -272,7 +271,6 @@
                                       ShowWings="{Binding !IsRecordingActive}"
                                       ShowCorners="{Binding !HideSelectionDecoration}"
                                       ShowBorder="True"
-                                      IsVisible="{Binding !IsRecordingActive}"
                                       WingWidth="{Binding WingWidth}"
                                       WingHeight="{Binding WingHeight}"
                                       SelectionIconSize="{Binding SelectionIconSize}"
