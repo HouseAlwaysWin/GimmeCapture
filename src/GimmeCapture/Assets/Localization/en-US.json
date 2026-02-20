@@ -37,6 +37,7 @@
   "SnipHotkey": "Snip Hotkey:",
   "CopyHotkey": "Snip & Copy:",
   "PinHotkey": "Snip & Pin:",
+  "TranslateHotkey": "Translate Hotkey:",
   "HotkeysActive": "* Global Listener Active (Kitsune Mode Ready)",
   "StartCapture": "Start Capture (Snip)",
   "StatusReady": "Ready",

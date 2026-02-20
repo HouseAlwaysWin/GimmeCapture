@@ -62,6 +62,7 @@ public partial class MainWindowViewModel
         AutoSave = defaultSettings.AutoSave;
         SnipHotkey = defaultSettings.SnipHotkey;
         CopyHotkey = defaultSettings.CopyHotkey;
+        TranslateHotkey = defaultSettings.TranslateHotkey;
         PinHotkey = defaultSettings.PinHotkey;
         RecordHotkey = defaultSettings.RecordHotkey;
         RecordFormat = defaultSettings.RecordFormat;

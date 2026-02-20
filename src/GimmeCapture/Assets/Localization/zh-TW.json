@@ -37,6 +37,7 @@
   "SnipHotkey": "截圖熱鍵 (Snip):",
   "CopyHotkey": "截圖並複製 (Copy):",
   "PinHotkey": "截圖並釘選 (Pin):",
+  "TranslateHotkey": "全螢幕翻譯 (Translate):",
   "HotkeysActive": "* 已啟用全域監聽 (Kitsune Mode Ready)",
   "StartCapture": "開始擷取 (側寫)",
   "StatusReady": "就緒",

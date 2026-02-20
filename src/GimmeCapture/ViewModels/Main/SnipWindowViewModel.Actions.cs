@@ -200,6 +200,48 @@ public partial class SnipWindowViewModel
     public ReactiveCommand<Unit, Unit> ToggleTopmostCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> ToggleMaskCommand { get; set; } = null!;
 
+    public void HandleGlobalHotkey(int modeInt)
+    {
+        if (_mainVm == null) return;
+        
+        var mode = (MainWindowViewModel.CaptureMode)modeInt;
+
+        string pressedHotkey = mode switch {
+            MainWindowViewModel.CaptureMode.Normal => _mainVm.SnipHotkey,
+            MainWindowViewModel.CaptureMode.Record => _mainVm.RecordHotkey,
+            MainWindowViewModel.CaptureMode.Translate => _mainVm.TranslateHotkey,
+            MainWindowViewModel.CaptureMode.Copy => _mainVm.CopyHotkey,
+            _ => ""
+        };
+
+        if (!string.IsNullOrEmpty(pressedHotkey) && pressedHotkey == _mainVm.PinHotkey)
+        {
+             if (HandleF3Command != null)
+             {
+                 HandleF3Command.Execute().Subscribe();
+             }
+             return;
+        }
+
+        if (mode == MainWindowViewModel.CaptureMode.Normal)
+        {
+            if (HandleF1Command != null) HandleF1Command.Execute().Subscribe();
+        }
+        else if (mode == MainWindowViewModel.CaptureMode.Record)
+        {
+            if (HandleF2Command != null) HandleF2Command.Execute().Subscribe();
+        }
+        else if (mode == MainWindowViewModel.CaptureMode.Translate)
+        {
+            if (SetTranslationModeCommand != null) SetTranslationModeCommand.Execute().Subscribe();
+        }
+        else if (mode == MainWindowViewModel.CaptureMode.Copy)
+        {
+            AutoActionMode = 1;
+            if (CurrentState == SnipState.Selected) TriggerAutoAction(); 
+        }
+    }
+
     // Init Method
     private void InitializeActionCommands()
     {
@@ -297,20 +339,17 @@ public partial class SnipWindowViewModel
         // 錄影模式 -> F3 -> Pin  
         // 翻譯模式 -> F3 -> 無動作
         // 未進入模式 (Detecting) -> F3 -> 進入翻譯模式
-        HandleF3Command = ReactiveCommand.CreateFromTask(async () => 
+        HandleF3Command = ReactiveCommand.Create(() => 
         {
-            if (RecState != RecordingState.Idle) return;
-            
             if (IsTranslationMode)
             {
-                // 翻譯模式下 F3 無動作（翻譯模式已由全域快捷鍵進入）
+                // 翻譯沒有Pin: F3 -> 空
                 return;
             }
             
-            if (CurrentState == SnipState.Selected)
+            if (PinCommand != null)
             {
-                // 截圖/錄影模式且已選取 -> Pin
-                await Pin(false);
+                PinCommand.Execute().Subscribe();
             }
         }, canExecuteHotkeys);
         HandleF3Command.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"HandleF3 error: {ex}"));

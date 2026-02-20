@@ -96,6 +96,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private const int ID_COPY = 9001;
     private const int ID_PIN = 9002;
     private const int ID_RECORD = 9003;
+    private const int ID_TRANSLATE = 9004;
 
     public enum CaptureMode { Normal, Copy, Pin, Record, Translate }
 
@@ -194,7 +195,8 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             if (id == ID_SNIP) Avalonia.Threading.Dispatcher.UIThread.Post(() => StartCaptureCommand.Execute(CaptureMode.Normal));
             else if (id == ID_RECORD) Avalonia.Threading.Dispatcher.UIThread.Post(() => StartCaptureCommand.Execute(CaptureMode.Record));
-            else if (id == ID_PIN) Avalonia.Threading.Dispatcher.UIThread.Post(() => StartCaptureCommand.Execute(CaptureMode.Translate));
+            else if (id == ID_PIN) Avalonia.Threading.Dispatcher.UIThread.Post(() => StartCaptureCommand.Execute(CaptureMode.Pin));
+            else if (id == ID_TRANSLATE) Avalonia.Threading.Dispatcher.UIThread.Post(() => StartCaptureCommand.Execute(CaptureMode.Translate));
         };
 
 

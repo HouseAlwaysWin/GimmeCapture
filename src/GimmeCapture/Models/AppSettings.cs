@@ -59,6 +59,7 @@ public class AppSettings
     // Global Hotkeys
     public string SnipHotkey { get; set; } = "F1";
     public string RecordHotkey { get; set; } = "F2";
+    public string TranslateHotkey { get; set; } = "F3";
     public string PinHotkey { get; set; } = "F3";
     public string CopyHotkey { get; set; } = "Ctrl+C";
 

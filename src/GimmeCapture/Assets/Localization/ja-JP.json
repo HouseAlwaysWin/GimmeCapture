@@ -37,6 +37,7 @@
   "SnipHotkey": "キャプチャ (Snip):",
   "CopyHotkey": "コピーしてキャプチャ:",
   "PinHotkey": "ピン留めしてキャプチャ:",
+  "TranslateHotkey": "翻訳ホットキー (Translate):",
   "HotkeysActive": "* グローバルリスナー有効 (Kitsune Mode Ready)",
   "StartCapture": "キャプチャ開始",
   "StatusReady": "待機中",

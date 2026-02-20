@@ -27,6 +27,7 @@ public class FloatingImageViewModelTests
 
         public Task CopyTextAsync(string text) => Task.CompletedTask;
         public Task CopyFileAsync(string filePath) => Task.CompletedTask;
+        public Task CopyFileAndImageAsync(string filePath, Avalonia.Media.Imaging.Bitmap bitmap) => Task.CompletedTask;
     }
 
     [Fact]

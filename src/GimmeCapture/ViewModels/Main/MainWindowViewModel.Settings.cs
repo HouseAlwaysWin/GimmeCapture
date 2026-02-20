@@ -299,6 +299,18 @@ public partial class MainWindowViewModel
         }
     }
 
+    private string _translateHotkey = "F3";
+    public string TranslateHotkey
+    {
+        get => _translateHotkey;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _translateHotkey, value);
+            HotkeyService.Register(ID_TRANSLATE, value);
+            this.RaisePropertyChanged(nameof(TranslateTooltip));
+        }
+    }
+
     private string _recordHotkey = "F2";
     public string RecordHotkey
     {
@@ -315,6 +327,7 @@ public partial class MainWindowViewModel
     public string RecordTooltip => $"{LocalizationService.Instance["CaptureModeRecord"]} ({RecordHotkey})";
     public string CopyTooltip => $"{LocalizationService.Instance["TipCopy"]} ({CopyHotkey})";
     public string PinTooltip => $"{LocalizationService.Instance["TipPin"]} ({PinHotkey})";
+    public string TranslateTooltip => $"{LocalizationService.Instance["TranslateHotkey"]} ({TranslateHotkey})";
 
     // Drawing Tool Hotkeys
     private string _rectangleHotkey = "R";
@@ -824,6 +837,7 @@ public partial class MainWindowViewModel
             SaveDirectory = settings.SaveDirectory;
             SnipHotkey = settings.SnipHotkey;
             CopyHotkey = settings.CopyHotkey;
+            TranslateHotkey = settings.TranslateHotkey;
             PinHotkey = settings.PinHotkey;
             RecordHotkey = settings.RecordHotkey;
             RecordFormat = settings.RecordFormat;
@@ -918,6 +932,7 @@ public partial class MainWindowViewModel
             settings.SaveDirectory = SaveDirectory;
             settings.SnipHotkey = SnipHotkey;
             settings.CopyHotkey = CopyHotkey;
+            settings.TranslateHotkey = TranslateHotkey;
             settings.PinHotkey = PinHotkey;
             settings.RecordHotkey = RecordHotkey;
             settings.RecordFormat = RecordFormat;
