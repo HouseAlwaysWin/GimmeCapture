@@ -45,6 +45,13 @@ public class UserSelectionRect : ReactiveObject
         set => this.RaiseAndSetIfChanged(ref _isAutoDetectEnabled, value);
     }
 
+    private double _estimatedTextHeight;
+    public double EstimatedTextHeight
+    {
+        get => _estimatedTextHeight;
+        set => this.RaiseAndSetIfChanged(ref _estimatedTextHeight, value);
+    }
+
     private string _lastOcrText = string.Empty;
     public string LastOcrText
     {

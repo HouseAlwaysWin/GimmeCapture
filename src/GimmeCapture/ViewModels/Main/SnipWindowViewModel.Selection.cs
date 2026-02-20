@@ -229,7 +229,7 @@ public partial class SnipWindowViewModel
                                     sel.LastOcrText = newText; // Update tracking hash
                                     sel.TranslatedText = combinedText;
                                     sel.IsTranslated = !string.IsNullOrWhiteSpace(combinedText);
-                                    if (sel.IsTranslated) AutoFitSelectionToText(sel);
+                                    if (sel.IsTranslated) sel.EstimatedTextHeight = EstimateTranslatedTextHeight(sel);
                                     UpdateMask();
                                 });
                             }
@@ -285,20 +285,28 @@ public partial class SnipWindowViewModel
         // 3. 處理翻譯模式選取框 (V8: 已翻譯不挖洞，與 Win32 Region 同步)
         if (IsTranslationMode)
         {
-            foreach (var sel in UserSelections)
+            if (!IsTranslationSelectionActive)
             {
-                if (sel.Bounds.Width > 10 && sel.Bounds.Height > 10)
+                // V8: Edit Mode - The user wants to click through the OTHER parts of the screen!
+                // So the entire screen should be click-through, and NO FULL SCREEN MASK.
+                mainMask = new GeometryGroup(); 
+            }
+            else
+            {
+                foreach (var sel in UserSelections)
                 {
-                    var rect = sel.Bounds;
-
-                    // 翻譯模式無論是否已完成，一律排除遮罩以保持通亮
-                    mainMask = new CombinedGeometry
+                    if (sel.Bounds.Width > 10 && sel.Bounds.Height > 10)
                     {
-                        GeometryCombineMode = GeometryCombineMode.Exclude,
-                        Geometry1 = mainMask,
-                        Geometry2 = new RectangleGeometry(rect)
-                    };
-                    // 已翻譯：不挖洞，保持遮罩 → 文字控件渲染在上方
+                        var rect = sel.Bounds;
+
+                        // 翻譯模式無論是否已完成，一律排除遮罩以保持通亮
+                        mainMask = new CombinedGeometry
+                        {
+                            GeometryCombineMode = GeometryCombineMode.Exclude,
+                            Geometry1 = mainMask,
+                            Geometry2 = new RectangleGeometry(rect)
+                        };
+                    }
                 }
             }
         }
@@ -431,10 +439,15 @@ public partial class SnipWindowViewModel
         {
             this.RaiseAndSetIfChanged(ref _currentTranslationTool, value);
             this.RaisePropertyChanged(nameof(IsTranslationSelectionActive));
+            UpdateMask();
         }
     }
 
-    public bool IsTranslationSelectionActive => CurrentTranslationTool == TranslationTool.Select;
+    public bool IsTranslationSelectionActive
+    {
+        get => CurrentTranslationTool == TranslationTool.Select;
+        set => CurrentTranslationTool = value ? TranslationTool.Select : TranslationTool.Edit;
+    }
 
     // 翻譯工具列位置（可拖曳，預設螢幕中間上方）
     private double _translationToolbarTop = 20;
@@ -1115,10 +1128,9 @@ public partial class SnipWindowViewModel
                     sel.TranslatedText = combinedText;
                     sel.IsTranslated = !string.IsNullOrWhiteSpace(combinedText);
 
-                    // V8: 自動撐開選取範圍以容納翻譯文字
                     if (sel.IsTranslated)
                     {
-                        AutoFitSelectionToText(sel);
+                        sel.EstimatedTextHeight = EstimateTranslatedTextHeight(sel);
                     }
 
                     // V8: 翻譯後重新整理遮罩和 Win32 Region
@@ -1225,6 +1237,46 @@ public partial class SnipWindowViewModel
             ShowTopLoadingBar = false;
             IsIndeterminate = false;
         }
+    }
+
+    /// <summary>
+    /// 估算翻譯文字在特定寬度下的高度，作為 HitTest Win32 Region 大小參考
+    /// </summary>
+    private double EstimateTranslatedTextHeight(UserSelectionRect sel)
+    {
+        if (string.IsNullOrWhiteSpace(sel.TranslatedText)) return 0;
+
+        var text = sel.TranslatedText;
+        double fontSize = 12; // 對應 XAML FontSize
+        double lineHeight = fontSize * 1.8;
+        double padding = 28; // Border padding + extra
+        double currentWidth = sel.Bounds.Width;
+        double usableWidth = Math.Max(currentWidth - padding, 40);
+
+        double EstimateTextWidth(string s)
+        {
+            double w = 0;
+            foreach (char c in s)
+            {
+                if (c >= 0x2E80 && c <= 0x9FFF || c >= 0xF900 && c <= 0xFAFF || 
+                    c >= 0xFF00 && c <= 0xFFEF || c >= 0x3000 && c <= 0x303F)
+                    w += fontSize * 1.1; 
+                else
+                    w += fontSize * 0.6; 
+            }
+            return w;
+        }
+
+        var lines = text.Split('\n');
+        int totalLines = 0;
+        foreach (var line in lines)
+        {
+            double lineWidth = EstimateTextWidth(line);
+            int wrappedLines = Math.Max(1, (int)Math.Ceiling(lineWidth / usableWidth));
+            totalLines += wrappedLines;
+        }
+
+        return totalLines * lineHeight + padding;
     }
 
     /// <summary>

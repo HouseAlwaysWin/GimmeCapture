@@ -36,6 +36,14 @@ public partial class SnipWindow : Window
 
             if (isTranslation && _viewModel != null)
             {
+                bool isEditMode = !_viewModel.IsTranslationSelectionActive;
+
+                if (isEditMode)
+                {
+                    // V8: Edit mode, screen is transparent, leaving ONLY the translation blocks completely opaque!
+                    holeRects.Add(new Rect(0, 0, windowWidth, windowHeight));
+                }
+
                 foreach (var sel in _viewModel.UserSelections)
                 {
                     if (sel.Bounds.Width > 10 && sel.Bounds.Height > 10)
@@ -44,32 +52,44 @@ public partial class SnipWindow : Window
 
                         if (sel.IsTranslated)
                         {
-                            // 已翻譯：不挖洞，選取框保持不透明
+                            // 已翻譯：選取框及下方文字島嶼保持不透明
                             extraRegions.Add(new Rect(
                                 rect.X * scaling,
                                 rect.Y * scaling,
                                 rect.Width * scaling,
-                                rect.Height * scaling));
+                                (rect.Height + sel.EstimatedTextHeight + 20) * scaling));
                         }
                         else
                         {
-                            // 未翻譯：挖洞穿透
-                            holeRects.Add(new Rect(rect.X * scaling, rect.Y * scaling, rect.Width * scaling, rect.Height * scaling));
+                            if (isEditMode)
+                            {
+                                // 未翻譯且在編輯模式下，框選區域依然要能互動(例如刪除)
+                                extraRegions.Add(new Rect(
+                                    rect.X * scaling,
+                                    rect.Y * scaling,
+                                    rect.Width * scaling,
+                                    rect.Height * scaling));
+                            }
+                            else
+                            {
+                                // 未翻譯且在選取模式：挖洞穿透，允許滑鼠繪圖或截取
+                                holeRects.Add(new Rect(rect.X * scaling, rect.Y * scaling, rect.Width * scaling, rect.Height * scaling));
 
-                            // Corner Handles (24px)
-                            double hSize = 24 * scaling;
-                            double hHalf = hSize / 2;
-                            extraRegions.Add(new Rect(rect.X * scaling - hHalf, rect.Y * scaling - hHalf, hSize, hSize));
-                            extraRegions.Add(new Rect(rect.Right * scaling - hHalf, rect.Y * scaling - hHalf, hSize, hSize));
-                            extraRegions.Add(new Rect(rect.X * scaling - hHalf, rect.Bottom * scaling - hHalf, hSize, hSize));
-                            extraRegions.Add(new Rect(rect.Right * scaling - hHalf, rect.Bottom * scaling - hHalf, hSize, hSize));
+                                // Corner Handles (24px)
+                                double hSize = 24 * scaling;
+                                double hHalf = hSize / 2;
+                                extraRegions.Add(new Rect(rect.X * scaling - hHalf, rect.Y * scaling - hHalf, hSize, hSize));
+                                extraRegions.Add(new Rect(rect.Right * scaling - hHalf, rect.Y * scaling - hHalf, hSize, hSize));
+                                extraRegions.Add(new Rect(rect.X * scaling - hHalf, rect.Bottom * scaling - hHalf, hSize, hSize));
+                                extraRegions.Add(new Rect(rect.Right * scaling - hHalf, rect.Bottom * scaling - hHalf, hSize, hSize));
 
-                            // Edge Strips (8px) for drag + right-click
-                            double e = 8 * scaling;
-                            extraRegions.Add(new Rect(rect.X * scaling - e/2, rect.Y * scaling, e, rect.Height * scaling));         // Left
-                            extraRegions.Add(new Rect(rect.Right * scaling - e/2, rect.Y * scaling, e, rect.Height * scaling));     // Right
-                            extraRegions.Add(new Rect(rect.X * scaling, rect.Y * scaling - e/2, rect.Width * scaling, e));          // Top
-                            extraRegions.Add(new Rect(rect.X * scaling, rect.Bottom * scaling - e/2, rect.Width * scaling, e));     // Bottom
+                                // Edge Strips (8px) for drag + right-click
+                                double e = 8 * scaling;
+                                extraRegions.Add(new Rect(rect.X * scaling - e/2, rect.Y * scaling, e, rect.Height * scaling));         // Left
+                                extraRegions.Add(new Rect(rect.Right * scaling - e/2, rect.Y * scaling, e, rect.Height * scaling));     // Right
+                                extraRegions.Add(new Rect(rect.X * scaling, rect.Y * scaling - e/2, rect.Width * scaling, e));          // Top
+                                extraRegions.Add(new Rect(rect.X * scaling, rect.Bottom * scaling - e/2, rect.Width * scaling, e));     // Bottom
+                            }
                         }
                     }
                 }
@@ -125,6 +145,12 @@ public partial class SnipWindow : Window
             }
             
             int borderWidth = (int)((_viewModel?.SelectionBorderThickness ?? 6) * scaling);
+            if (isTranslation && _viewModel != null && !_viewModel.IsTranslationSelectionActive)
+            {
+                 // Edit mode removes the border around the hole! The hole is literally the entire screen.
+                 borderWidth = 0;
+            }
+
             Win32Helpers.SetMultiWindowHoleRegion(hwnd, windowWidth, windowHeight, holeRects, borderWidth, toolbarRect, extraRegions);
         }
         else
