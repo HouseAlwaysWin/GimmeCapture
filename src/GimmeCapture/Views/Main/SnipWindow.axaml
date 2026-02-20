@@ -231,7 +231,7 @@
                   ZIndex="2">
                   
                 <!-- Selection Border -->
-                <Border CornerRadius="0" Background="#01FFFFFF"
+                <Border CornerRadius="0" Background="{Binding SelectionInnerBackground}"
                         BoxShadow="{Binding SelectionShadowColor, Converter={StaticResource ColorToBoxShadowConverter}}"
                         IsVisible="{Binding HideFrameBorder, Converter={StaticResource BoolInvertConverter}}"
                         IsHitTestVisible="{Binding IsDrawingMode, Converter={StaticResource BoolInvertConverter}}"
