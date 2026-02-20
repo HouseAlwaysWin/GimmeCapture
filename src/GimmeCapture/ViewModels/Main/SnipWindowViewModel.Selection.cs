@@ -208,8 +208,12 @@ public partial class SnipWindowViewModel
     private double _maskOpacity = 0.5;
     public double MaskOpacity
     {
-        get => _maskOpacity;
-        set => this.RaiseAndSetIfChanged(ref _maskOpacity, value);
+        get => IsTranslationMode ? 0.0 : _maskOpacity;
+        set 
+        {
+            this.RaiseAndSetIfChanged(ref _maskOpacity, value);
+            this.RaisePropertyChanged(nameof(MaskOpacity));
+        }
     }
 
     private Color _selectionBorderColor = Colors.Transparent;

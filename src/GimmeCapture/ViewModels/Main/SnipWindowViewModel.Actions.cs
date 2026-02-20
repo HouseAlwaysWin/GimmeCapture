@@ -53,6 +53,7 @@ public partial class SnipWindowViewModel
                 this.RaisePropertyChanged(nameof(IsRecordingMode));
                 SelectionRect = new Rect(0, 0, 0, 0); // 確保清空標準選取框，避免干擾挖空
                 IsMaskVisible = true;
+                this.RaisePropertyChanged(nameof(MaskOpacity));
                 UpdateMask();
             }
             else
@@ -61,6 +62,7 @@ public partial class SnipWindowViewModel
                 IsMaskVisible = true;
                 // 清除多重選取
                 UserSelections.Clear();
+                this.RaisePropertyChanged(nameof(MaskOpacity));
                 UpdateMask();
             }
 
