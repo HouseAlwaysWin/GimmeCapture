@@ -521,15 +521,27 @@ public partial class SnipWindow : Window
                     }
                 }
 
-                // 2. Handle Hover (SizeAll)
+                // 2. Handle Hover (SizeAll) or Drawing Cursors
                 if (!actionCursorSet)
                 {
                     var hit = this.InputHitTest(currentPoint) as Control;
                     bool isOverHandle = hit != null && (hit.Classes.Contains("Handle") || hit.Classes.Contains("MoveHandle"));
 
-                    if (isOverHandle || _viewModel.SelectionRect.Contains(currentPoint))
+                    if (isOverHandle || (!_viewModel.IsDrawingMode && _viewModel.SelectionRect.Contains(currentPoint)))
                     {
                         SetCursorShape(StandardCursorType.SizeAll);
+                        actionCursorSet = true;
+                    }
+                    else if (_viewModel.IsDrawingMode && _viewModel.SelectionRect.Contains(currentPoint))
+                    {
+                        if (_viewModel.CurrentAnnotationTool == AnnotationType.Text)
+                        {
+                            SetCursorShape(StandardCursorType.Ibeam);
+                        }
+                        else
+                        {
+                            SetCursorShape(StandardCursorType.Cross);
+                        }
                         actionCursorSet = true;
                     }
                 }

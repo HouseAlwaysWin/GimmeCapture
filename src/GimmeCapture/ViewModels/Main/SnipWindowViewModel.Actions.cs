@@ -128,8 +128,12 @@ public partial class SnipWindowViewModel
     {
         get
         {
+            // Force hide decoration during active recording or paused so they aren't captured
+            if (IsRecordingMode && RecState != RecordingState.Idle) return true;
+
             // Always show decoration during selection phase
-            if (IsRecordingMode && !IsRecordingActive) return false;
+            if (IsRecordingMode && RecState == RecordingState.Idle) return false;
+            
             return IsRecordingMode ? (_mainVm?.HideRecordSelectionDecoration ?? false) : (_mainVm?.HideSnipSelectionDecoration ?? false);
         }
     }
@@ -138,8 +142,9 @@ public partial class SnipWindowViewModel
     {
         get
         {
+            // You can optionally force hide border here if needed, but we respect the setting
             // Always show border during selection phase so user can see what they are selecting
-            if (IsRecordingMode && !IsRecordingActive) return false;
+            if (IsRecordingMode && RecState == RecordingState.Idle) return false;
             return IsRecordingMode ? (_mainVm?.HideRecordSelectionBorder ?? false) : (_mainVm?.HideSnipSelectionBorder ?? false);
         }
     }
