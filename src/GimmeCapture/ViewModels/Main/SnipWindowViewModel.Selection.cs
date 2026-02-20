@@ -189,18 +189,6 @@ public partial class SnipWindowViewModel
                 {
                     var rect = sel.Bounds;
 
-                    // 拖拽把手區域：只在編輯模式（非選取模式）挖空
-                    if (!IsTranslationSelectionActive)
-                    {
-                        Geometry dragBar = new RectangleGeometry(new Rect(rect.X, rect.Y - 20, rect.Width, 20));
-                        mainMask = new CombinedGeometry
-                        {
-                            GeometryCombineMode = GeometryCombineMode.Exclude,
-                            Geometry1 = mainMask,
-                            Geometry2 = dragBar
-                        };
-                    }
-
                     if (!sel.IsTranslated)
                     {
                         // 未翻譯：挖洞穿透

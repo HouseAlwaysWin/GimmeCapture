@@ -190,17 +190,26 @@ public partial class SnipWindow : Window
             // Translation mode: selection and interaction (V7+ Restructured)
             if (_viewModel.IsTranslationMode)
             {
-                // A. Drag Handle Detection — 選取模式時跳過
-                if (!_viewModel.IsTranslationSelectionActive &&
-                    sourceControl is Border db && db.Classes.Contains("TranslationDragHandle") && db.DataContext is UserSelectionRect dragItem)
+                // A. Edge Detection for Drag (邊緣拖拽)
+                foreach (var sel in _viewModel.UserSelections)
                 {
-                    _isMovingTranslationSelection = true;
-                    _movingTranslationSelection = dragItem;
-                    _translationMoveStart = point;
-                    _originalTranslationBounds = dragItem.Bounds;
-                    e.Pointer.Capture(this);
-                    e.Handled = true;
-                    return;
+                    double edgeTolerance = 8;
+                    var rect = sel.Bounds;
+                    bool nearLeft   = Math.Abs(point.X - rect.X) < edgeTolerance && point.Y > rect.Y && point.Y < rect.Bottom;
+                    bool nearRight  = Math.Abs(point.X - rect.Right) < edgeTolerance && point.Y > rect.Y && point.Y < rect.Bottom;
+                    bool nearTop    = Math.Abs(point.Y - rect.Y) < edgeTolerance && point.X > rect.X && point.X < rect.Right;
+                    bool nearBottom = Math.Abs(point.Y - rect.Bottom) < edgeTolerance && point.X > rect.X && point.X < rect.Right;
+
+                    if (nearLeft || nearRight || nearTop || nearBottom)
+                    {
+                        _isMovingTranslationSelection = true;
+                        _movingTranslationSelection = sel;
+                        _translationMoveStart = point;
+                        _originalTranslationBounds = sel.Bounds;
+                        e.Pointer.Capture(this);
+                        e.Handled = true;
+                        return;
+                    }
                 }
 
                 // B. Geometric Resize Detection (V7+ - Mathematical hit testing)
@@ -452,12 +461,16 @@ public partial class SnipWindow : Window
                 if (Math.Abs(currentPoint.X - rect.Right) < tolerance && Math.Abs(currentPoint.Y - rect.Bottom) < tolerance)
                 { SetCursorShape(StandardCursorType.BottomRightCorner); specialCursorSet = true; break; }
                 
-                // Drag Handle Area — 選取模式時跳過
-                if (!_viewModel.IsTranslationSelectionActive &&
-                    currentPoint.X >= rect.X && currentPoint.X <= rect.Right && currentPoint.Y >= rect.Y - 20 && currentPoint.Y <= rect.Y)
+                // 邊緣拖拽區域 (Edge Drag)
+                double edgeTol = 8;
+                bool nearL = Math.Abs(currentPoint.X - rect.X) < edgeTol && currentPoint.Y > rect.Y && currentPoint.Y < rect.Bottom;
+                bool nearR = Math.Abs(currentPoint.X - rect.Right) < edgeTol && currentPoint.Y > rect.Y && currentPoint.Y < rect.Bottom;
+                bool nearT = Math.Abs(currentPoint.Y - rect.Y) < edgeTol && currentPoint.X > rect.X && currentPoint.X < rect.Right;
+                bool nearB = Math.Abs(currentPoint.Y - rect.Bottom) < edgeTol && currentPoint.X > rect.X && currentPoint.X < rect.Right;
+                if (nearL || nearR || nearT || nearB)
                 { SetCursorShape(StandardCursorType.SizeAll); specialCursorSet = true; break; }
 
-                // 已翻譯文字區域：Arrow（方便選取文字）
+                // 已翻譯文字區域：Arrow
                 if (sel.IsTranslated && sel.Bounds.Contains(currentPoint))
                 { SetCursorShape(StandardCursorType.Arrow); specialCursorSet = true; break; }
             }

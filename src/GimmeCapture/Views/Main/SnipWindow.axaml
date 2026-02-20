@@ -353,13 +353,6 @@
                 <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="m:UserSelectionRect">
                         <Canvas ClipToBounds="False" Width="{Binding Bounds.Width}" Height="{Binding Bounds.Height}">
-                            <!-- 外掛式拖拽把手：僅在編輯模式（非選取模式）時顯示 -->
-                            <Border Canvas.Top="-20" Canvas.Left="0" Height="18" Width="{Binding Bounds.Width}" 
-                                    Background="#66FFAA00" CornerRadius="4,4,0,0" 
-                                    IsHitTestVisible="True" Classes="TranslationDragHandle"
-                                    IsVisible="{Binding !$parent[Window].DataContext.IsTranslationSelectionActive}">
-                                <TextBlock Text="⋮⋮" Foreground="#AAFFFFFF" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="12" IsHitTestVisible="False"/>
-                            </Border>
 
                             <Border BorderBrush="#AAFFAA00" 
                                     BorderThickness="1"

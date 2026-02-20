@@ -44,34 +44,32 @@ public partial class SnipWindow : Window
 
                         if (sel.IsTranslated)
                         {
-                            // 已翻譯：不挖洞，整塊保持不透明
-                            // 選取模式時不含拖拽把手區域
-                            bool includeHandle = !(_viewModel.IsTranslationSelectionActive);
-                            double handleOffset = includeHandle ? 20 : 0;
+                            // 已翻譯：不挖洞，選取框保持不透明
                             extraRegions.Add(new Rect(
                                 rect.X * scaling,
-                                (rect.Y - handleOffset) * scaling,
+                                rect.Y * scaling,
                                 rect.Width * scaling,
-                                (rect.Height + handleOffset) * scaling));
+                                rect.Height * scaling));
                         }
                         else
                         {
                             // 未翻譯：挖洞穿透
                             holeRects.Add(new Rect(rect.X * scaling, rect.Y * scaling, rect.Width * scaling, rect.Height * scaling));
 
-                            // 選取模式時不加拖拽把手 extra region
-                            if (!_viewModel.IsTranslationSelectionActive)
-                            {
-                                extraRegions.Add(new Rect(rect.X * scaling, (rect.Y - 20) * scaling, rect.Width * scaling, 20 * scaling));
-                            }
-
-                            // Corner Handles
+                            // Corner Handles (24px)
                             double hSize = 24 * scaling;
                             double hHalf = hSize / 2;
                             extraRegions.Add(new Rect(rect.X * scaling - hHalf, rect.Y * scaling - hHalf, hSize, hSize));
                             extraRegions.Add(new Rect(rect.Right * scaling - hHalf, rect.Y * scaling - hHalf, hSize, hSize));
                             extraRegions.Add(new Rect(rect.X * scaling - hHalf, rect.Bottom * scaling - hHalf, hSize, hSize));
                             extraRegions.Add(new Rect(rect.Right * scaling - hHalf, rect.Bottom * scaling - hHalf, hSize, hSize));
+
+                            // Edge Strips (8px) for drag + right-click
+                            double e = 8 * scaling;
+                            extraRegions.Add(new Rect(rect.X * scaling - e/2, rect.Y * scaling, e, rect.Height * scaling));         // Left
+                            extraRegions.Add(new Rect(rect.Right * scaling - e/2, rect.Y * scaling, e, rect.Height * scaling));     // Right
+                            extraRegions.Add(new Rect(rect.X * scaling, rect.Y * scaling - e/2, rect.Width * scaling, e));          // Top
+                            extraRegions.Add(new Rect(rect.X * scaling, rect.Bottom * scaling - e/2, rect.Width * scaling, e));     // Bottom
                         }
                     }
                 }
