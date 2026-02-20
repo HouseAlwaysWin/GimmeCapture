@@ -134,16 +134,18 @@
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
                         <!-- Interactive Candidate Box -->
-                        <Border BorderBrush="#40FF0000" 
+                        <Border BorderBrush="{Binding $parent[Window].DataContext.SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" 
                                 BorderThickness="1"
                                 Background="Transparent"
+                                Opacity="0.4"
                                 Width="{Binding Width}"
                                 Height="{Binding Height}">
                             <Border.Styles>
                                 <Style Selector="Border:pointerover">
-                                    <Setter Property="BorderBrush" Value="#FFFF0000"/>
+                                    <Setter Property="BorderBrush" Value="{Binding $parent[Window].DataContext.SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}"/>
                                     <Setter Property="BorderThickness" Value="3"/>
-                                    <Setter Property="Background" Value="#10FF0000"/>
+                                    <Setter Property="Background" Value="{Binding $parent[Window].DataContext.SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}"/>
+                                    <Setter Property="Opacity" Value="0.2"/>
                                 </Style>
                             </Border.Styles>
                         </Border>
@@ -354,7 +356,7 @@
                     <DataTemplate x:DataType="m:UserSelectionRect">
                         <Canvas ClipToBounds="False" Width="{Binding Bounds.Width}" Height="{Binding Bounds.Height}">
 
-                            <Border BorderBrush="#AAFFAA00" 
+                            <Border BorderBrush="{Binding $parent[Window].DataContext.SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" 
                                     BorderThickness="1"
                                     Background="Transparent"
                                     Width="{Binding Bounds.Width}"

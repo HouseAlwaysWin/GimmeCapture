@@ -112,6 +112,12 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         _recordingService = recService;
         _mainVm = mainVm;
 
+        if (_mainVm != null)
+        {
+            // Always use ThemeColor for all UI boxes per request
+            _selectionBorderColor = _mainVm.ThemeColor;
+        }
+
         if (_recordingService != null)
         {
             _recordingService.WhenAnyValue(x => x.State)
@@ -184,10 +190,11 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
                   })
                   .DisposeWith(_disposables);
 
-            // Sync Theme Color
+            // Sync Theme Color (Unified for all boxes)
             mainVm.WhenAnyValue(x => x.ThemeColor)
-                  .Subscribe(_ => 
+                  .Subscribe(val => 
                   {
+                      SelectionBorderColor = val;
                       this.RaisePropertyChanged(nameof(ThemeColor));
                       this.RaisePropertyChanged(nameof(ThemeDeepColor));
                   })

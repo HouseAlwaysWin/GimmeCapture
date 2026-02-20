@@ -27,8 +27,8 @@ public partial class SnipWindowViewModel
             // Exiting recording mode should also exit translation mode
             if (value) IsTranslationMode = false;
             
-            // Update border color based on mode
-            SelectionBorderColor = _mainVm?.BorderColor ?? Colors.Red;
+            // Update border color (Unified Theme Color)
+            SelectionBorderColor = _mainVm?.ThemeColor ?? Colors.Yellow;
             
             this.RaisePropertyChanged(nameof(HideFrameBorder));
             this.RaisePropertyChanged(nameof(HideSelectionDecoration));
@@ -63,8 +63,12 @@ public partial class SnipWindowViewModel
                 UserSelections.Clear();
                 UpdateMask();
             }
+
+            // Update border color (Unified Theme Color)
+            SelectionBorderColor = _mainVm?.ThemeColor ?? Colors.Yellow;
             
             this.RaisePropertyChanged(nameof(IsTranslationMode));
+            this.RaisePropertyChanged(nameof(HideSelectionDecoration));
             this.RaisePropertyChanged(nameof(IsScreenshotMode));
             this.RaisePropertyChanged(nameof(IsToolbarVisible));
             this.RaisePropertyChanged(nameof(ModeDisplayName));

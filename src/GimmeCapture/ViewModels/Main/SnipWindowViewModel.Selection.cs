@@ -212,7 +212,7 @@ public partial class SnipWindowViewModel
         set => this.RaiseAndSetIfChanged(ref _maskOpacity, value);
     }
 
-    private Color _selectionBorderColor = Colors.Red;
+    private Color _selectionBorderColor = Colors.Transparent;
     public Color SelectionBorderColor
     {
         get => _selectionBorderColor;
