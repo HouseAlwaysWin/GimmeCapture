@@ -223,7 +223,7 @@ public partial class SnipWindowViewModel
                             if (_translationService != null)
                             {
                                 // We don't want to freeze the UI or show loading bars for background updates
-                                var blocks = await _translationService.AnalyzeAndTranslateAsync(bitmap, token);
+                                var blocks = await _translationService.AnalyzeAndTranslateAsync(bitmap, VisualScaling, token);
                                 var combinedText = string.Join("\n", blocks.Select(b => b.TranslatedText).Where(t => !string.IsNullOrWhiteSpace(t)));
                                 
                                 await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
@@ -1028,7 +1028,7 @@ public partial class SnipWindowViewModel
                     IsIndeterminate = true;
                     
                     // Task.Run to offload CPU-intensive OCR from UI thread
-                    var blocks = await Task.Run(() => _translationService.AnalyzeAndTranslateAsync(bitmap, token), token);
+                    var blocks = await Task.Run(() => _translationService.AnalyzeAndTranslateAsync(bitmap, VisualScaling, token), token);
                     
                     if (currentVersion != _translationVersion || token.IsCancellationRequested) return;
                     
@@ -1139,7 +1139,7 @@ public partial class SnipWindowViewModel
                 if (bitmap == null) continue;
 
                 token.ThrowIfCancellationRequested();
-                var blocks = await Task.Run(() => _translationService.AnalyzeAndTranslateAsync(bitmap, token), token);
+                var blocks = await Task.Run(() => _translationService.AnalyzeAndTranslateAsync(bitmap, VisualScaling, token), token);
                 
                 if (token.IsCancellationRequested) break;
 

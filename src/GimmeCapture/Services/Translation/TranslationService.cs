@@ -56,7 +56,7 @@ public class TranslationService
         _httpClient.Timeout = TimeSpan.FromSeconds(20);
     }
 
-    public async Task<List<TranslatedBlock>> AnalyzeAndTranslateAsync(SKBitmap bitmap, CancellationToken ct = default)
+    public async Task<List<TranslatedBlock>> AnalyzeAndTranslateAsync(SKBitmap bitmap, double scale = 1.0, CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
 
@@ -96,11 +96,14 @@ public class TranslationService
 
         var translated = await TranslateAsync(mergedText, ocrLang, ct);
         
-        // Infer font size from average height of OCR blocks
+        // Infer font size from average height of OCR blocks (Pixels -> DIPs)
         double inferredFontSize = 12.0;
         if (sortedBlocks.Any())
         {
-            inferredFontSize = sortedBlocks.Average(b => (double)b.Box.Height);
+            double averagePixelHeight = sortedBlocks.Average(b => (double)b.Box.Height);
+            // Convert to DIPs by dividing by scale, and apply a 0.85 correction factor
+            // as OCR bounding boxes are usually taller than the actual text font size.
+            inferredFontSize = (averagePixelHeight / scale) * 0.85;
             // Limit range to reasonable font sizes
             inferredFontSize = Math.Clamp(inferredFontSize, 8.0, 72.0);
         }
@@ -113,13 +116,21 @@ public class TranslationService
         }
 
         var result = new List<TranslatedBlock>();
+        
+        // Convert unionBox (Pixels) to logical bounds (DIPs)
+        var logicalBounds = new Rect(
+            unionBox.Left / scale, 
+            unionBox.Top / scale, 
+            unionBox.Width / scale, 
+            unionBox.Height / scale);
+
         if (acceptable)
         {
             result.Add(new TranslatedBlock
             {
                 OriginalText = mergedText,
                 TranslatedText = translated,
-                Bounds = new Rect(unionBox.Left, unionBox.Top, unionBox.Width, unionBox.Height),
+                Bounds = logicalBounds,
                 InferredFontSize = inferredFontSize
             });
         }
@@ -132,7 +143,7 @@ public class TranslationService
                 {
                     OriginalText = mergedText,
                     TranslatedText = fallback,
-                    Bounds = new Rect(unionBox.Left, unionBox.Top, unionBox.Width, unionBox.Height),
+                    Bounds = logicalBounds,
                     InferredFontSize = inferredFontSize
                 });
             }
