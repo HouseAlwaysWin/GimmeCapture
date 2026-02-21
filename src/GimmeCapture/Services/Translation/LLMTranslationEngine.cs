@@ -115,11 +115,6 @@ public class LLMTranslationEngine : ITranslationEngine
     private async Task<string> TranslateStrictRetryForCjkAsync(string model, string url, string text, TranslationLanguage target, CancellationToken ct)
     {
         string targetName = GetTargetLanguageName(target);
-        string strictHint = target switch {
-            TranslationLanguage.Japanese => "MUST include Hiragana/Katakana. DO NOT output Chinese-only text.",
-            _ => "ABSOLUTELY NO Japanese kana or Korean hangul if translating to Chinese."
-        };
-
         var req = new
         {
             model,
@@ -192,29 +187,38 @@ public class LLMTranslationEngine : ITranslationEngine
         // If target is Japanese, it MUST contain kana if it's more than a few words...
         if (target == TranslationLanguage.Japanese)
         {
+            // For Japanese, we expect some kana.
             bool hasKana = translated.Any(c => (c >= 0x3040 && c <= 0x309F) || (c >= 0x30A0 && c <= 0x30FF));
-            if (!hasKana && translated.Length > 1)
+            if (!hasKana && translated.Length > 2) // Allow 1-2 char Kanji-only words
             {
+                System.Diagnostics.Debug.WriteLine($"[LLM] Validation: rejected Japanese output (No Kana found).");
                 return false; 
             }
         }
 
-        // If target is NOT Japanese (e.g. Chinese), it MUST NOT contain Japanese kana
-        // unless the source was English or another language where the LLM might have hallucinated Japanese.
-        // Actually, if target is Chinese, ANY kana is usually a failure.
-        if (target != TranslationLanguage.Japanese && translated.Any(c => (c >= 0x3040 && c <= 0x309F) || (c >= 0x30A0 && c <= 0x30FF)))
+        // If target is Traditional/Simplified Chinese, it should NOT contain excessive Japanese kana
+        if ((target == TranslationLanguage.TraditionalChinese || target == TranslationLanguage.SimplifiedChinese))
         {
-            // If the source had kana, maybe some remain in technical terms, but usually they should be translated.
-            // Strict rule: if target is Chinese, reject if kana found.
-            if (target == TranslationLanguage.TraditionalChinese || target == TranslationLanguage.SimplifiedChinese)
-            {
-                return false;
-            }
-            
-            int sKana = source.Count(c => (c >= 0x3040 && c <= 0x309F) || (c >= 0x30A0 && c <= 0x30FF));
-            int tKana = translated.Count(c => (c >= 0x3040 && c <= 0x309F) || (c >= 0x30A0 && c <= 0x30FF));
-            if (tKana > 0 && sKana == 0) return false; // Hallucinated Japanese
-            if (tKana > translated.Length / 4) return false; // Too much kana left
+             // For Chinese variants, some technical terms or proper names might have kana in source, 
+             // but usually none in target. However, we should be lenient.
+             int tKana = translated.Count(c => (c >= 0x3040 && c <= 0x309F) || (c >= 0x30A0 && c <= 0x30FF));
+             if (tKana > 0)
+             {
+                 int sKana = source.Count(c => (c >= 0x3040 && c <= 0x309F) || (c >= 0x30A0 && c <= 0x30FF));
+                 // If source had NO kana, but target HAS kana -> Hallucination or failed translation
+                 if (sKana == 0 && tKana > 0)
+                 {
+                     System.Diagnostics.Debug.WriteLine($"[LLM] Validation: rejected Chinese output (Hallucinated Kana).");
+                     return false;
+                 }
+                 
+                 // If source HAD kana, allow some in target (maybe untranslated names), but not too much
+                 if (tKana > translated.Length / 3) 
+                 {
+                     System.Diagnostics.Debug.WriteLine($"[LLM] Validation: rejected Chinese output (Too much Kana remains).");
+                     return false;
+                 }
+             }
         }
         
         return true;

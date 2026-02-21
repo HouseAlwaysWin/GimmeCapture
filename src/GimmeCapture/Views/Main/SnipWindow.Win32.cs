@@ -271,9 +271,29 @@ public partial class SnipWindow : Window
             Rect? toolbarRect = null;
             if (_viewModel != null && _viewModel.ToolbarWidth > 0)
             {
-                double tw = _viewModel.ToolbarWidth + 20; 
-                double th = _viewModel.ToolbarHeight + 20;
-                toolbarRect = new Rect((_viewModel.ToolbarLeft - 2) * scaling, (_viewModel.ToolbarTop - 2) * scaling, tw * scaling, th * scaling);
+                // V13: Robust toolbar region calculation
+                double tw = _viewModel.ToolbarWidth + 40; // More padding
+                double th = _viewModel.ToolbarHeight + 40;
+                double tx = _viewModel.ToolbarLeft - 20;
+                double ty = _viewModel.ToolbarTop - 20;
+
+                toolbarRect = new Rect(tx * scaling, ty * scaling, tw * scaling, th * scaling);
+                
+                // Add to extraRegions to be absolutely sure it's opaque in SetMultiWindowHoleRegion
+                extraRegions.Add(toolbarRect.Value);
+            }
+
+            // V13: Ensure TopLoadingBar is visible in Translation Mode (including General Mode)
+            if (_viewModel != null && _viewModel.ShowTopLoadingBar)
+            {
+                foreach (var screen in _viewModel.AllScreenBounds)
+                {
+                    extraRegions.Add(new Rect(
+                        screen.X * scaling, 
+                        screen.Y * scaling, 
+                        screen.W * scaling, 
+                        8 * scaling)); // Increased height slightly for visibility safety
+                }
             }
             
             int borderWidth = (int)((_viewModel?.SelectionBorderThickness ?? 6) * scaling);
