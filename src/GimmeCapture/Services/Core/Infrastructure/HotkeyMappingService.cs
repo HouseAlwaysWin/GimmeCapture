@@ -48,6 +48,7 @@ public class HotkeyMappingService
             { "RecordRedoHotkey", (vm, val) => vm.RecordRedoHotkey = val },
             { "RecordClearHotkey", (vm, val) => vm.RecordClearHotkey = val },
             { "RecordSaveHotkey", (vm, val) => vm.RecordSaveHotkey = val },
+            { "RecordCopyHotkey", (vm, val) => vm.RecordCopyHotkey = val },
             { "RecordCloseHotkey", (vm, val) => vm.RecordCloseHotkey = val },
             { "RecordActionHotkey", (vm, val) => vm.RecordActionHotkey = val },
             { "RecordToolbarHotkey", (vm, val) => vm.RecordToolbarHotkey = val },

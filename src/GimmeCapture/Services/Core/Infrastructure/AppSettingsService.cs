@@ -156,6 +156,7 @@ public class AppSettingsService
         dest.RecordRedoHotkey = source.RecordRedoHotkey;
         dest.RecordClearHotkey = source.RecordClearHotkey;
         dest.RecordSaveHotkey = source.RecordSaveHotkey;
+        dest.RecordCopyHotkey = source.RecordCopyHotkey;
         dest.RecordCloseHotkey = source.RecordCloseHotkey;
         dest.RecordToolbarHotkey = source.RecordToolbarHotkey;
         dest.RecordActionHotkey = source.RecordActionHotkey;

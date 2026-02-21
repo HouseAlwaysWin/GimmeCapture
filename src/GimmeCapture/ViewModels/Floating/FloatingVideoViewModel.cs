@@ -197,12 +197,12 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
     public bool ShowIconSettings => false;
     
     // Hotkey Proxies
-    public override string CopyHotkey => _appSettingsService?.Settings.SnipCopyHotkey ?? base.CopyHotkey;
     public override string PinHotkey => _appSettingsService?.Settings.SnipPinHotkey ?? base.PinHotkey;
     public override string UndoHotkey => _appSettingsService?.Settings.RecordUndoHotkey ?? base.UndoHotkey;
     public override string RedoHotkey => _appSettingsService?.Settings.RecordRedoHotkey ?? base.RedoHotkey;
     public override string ClearHotkey => _appSettingsService?.Settings.RecordClearHotkey ?? base.ClearHotkey;
     public override string SaveHotkey => _appSettingsService?.Settings.RecordSaveHotkey ?? base.SaveHotkey;
+    public override string CopyHotkey => _appSettingsService?.Settings.RecordCopyHotkey ?? base.CopyHotkey;
     public override string CloseHotkey => _appSettingsService?.Settings.RecordCloseHotkey ?? base.CloseHotkey;
     public string PlaybackHotkey => _appSettingsService?.Settings.RecordPlaybackHotkey ?? "Space"; // Specific to Video
     

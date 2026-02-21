@@ -98,7 +98,7 @@
                             <TextBlock Grid.Row="5" Grid.Column="0" Text="{Binding [TipText], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" FontSize="12"/>
                             <TextBox Grid.Row="5" Grid.Column="2" Text="{Binding RecordTextHotkey, Mode=OneWay}" Tag="RecordTextHotkey" IsReadOnly="True" KeyDown="HotkeyTextBox_KeyDown" Margin="0,2"/>
                         </Grid>
-                        <Grid ColumnDefinitions="Auto, 5, *" RowDefinitions="Auto, Auto, Auto, Auto, Auto" Margin="5,0,0,0">
+                        <Grid ColumnDefinitions="Auto, 5, *" RowDefinitions="Auto, Auto, Auto, Auto, Auto, Auto, Auto" Margin="5,0,0,0">
                             <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding [ActionStartPin], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" FontSize="12"/>
                             <TextBox Grid.Row="0" Grid.Column="2" Text="{Binding RecordActionHotkey, Mode=OneWay}" Tag="RecordActionHotkey" IsReadOnly="True" KeyDown="HotkeyTextBox_KeyDown" Margin="0,2"/>
                             <TextBlock Grid.Row="1" Grid.Column="0" Text="{Binding [ActionToolbar], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" FontSize="12"/>
@@ -109,6 +109,10 @@
                             <TextBox Grid.Row="3" Grid.Column="2" Text="{Binding RecordCloseHotkey, Mode=OneWay}" Tag="RecordCloseHotkey" IsReadOnly="True" KeyDown="HotkeyTextBox_KeyDown" Margin="0,2"/>
                             <TextBlock Grid.Row="4" Grid.Column="0" Text="{Binding [Undo], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" FontSize="12"/>
                             <TextBox Grid.Row="4" Grid.Column="2" Text="{Binding RecordUndoHotkey, Mode=OneWay}" Tag="RecordUndoHotkey" IsReadOnly="True" KeyDown="HotkeyTextBox_KeyDown" Margin="0,2"/>
+                            <TextBlock Grid.Row="5" Grid.Column="0" Text="{Binding [Save], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" FontSize="12"/>
+                            <TextBox Grid.Row="5" Grid.Column="2" Text="{Binding RecordSaveHotkey, Mode=OneWay}" Tag="RecordSaveHotkey" IsReadOnly="True" KeyDown="HotkeyTextBox_KeyDown" Margin="0,2"/>
+                            <TextBlock Grid.Row="6" Grid.Column="0" Text="{Binding [TipCopy], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" FontSize="12"/>
+                            <TextBox Grid.Row="6" Grid.Column="2" Text="{Binding RecordCopyHotkey, Mode=OneWay}" Tag="RecordCopyHotkey" IsReadOnly="True" KeyDown="HotkeyTextBox_KeyDown" Margin="0,2"/>
                         </Grid>
                     </UniformGrid>
                 </StackPanel>

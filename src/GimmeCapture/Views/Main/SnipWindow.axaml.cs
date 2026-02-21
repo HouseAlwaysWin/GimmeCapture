@@ -507,21 +507,7 @@ public partial class SnipWindow : Window
                  Close();
             }
         }
-        else if (e.Key == Key.S && e.KeyModifiers.HasFlag(KeyModifiers.Control))
-        {
-            if (_viewModel != null)
-            {
-                if (_viewModel.IsRecordingMode)
-                {
-                    _viewModel.StopRecordingCommand.Execute().Subscribe();
-                }
-                else
-                {
-                    _viewModel.SaveCommand.Execute().Subscribe();
-                }
-            }
-        }
-        
+
         // Manual Hotkey Routing (Bypassing XAML KeyBinding quirks)
         if (_viewModel != null && !e.Handled)
         {
@@ -546,6 +532,28 @@ public partial class SnipWindow : Window
                 if (_viewModel.ToggleToolbarCommand != null)
                 {
                     _viewModel.ToggleToolbarCommand.Execute().Subscribe();
+                    e.Handled = true;
+                }
+            }
+            // Parse Save action
+            else if (!string.IsNullOrEmpty(_viewModel.SaveHotkey) &&
+                     KeyGesture.Parse(_viewModel.SaveHotkey).Matches(e))
+            {
+                System.Diagnostics.Debug.WriteLine($"[SnipWindow.axaml.cs] Matched SaveHotkey! Firing SaveCommand.");
+                if (_viewModel.SaveCommand != null)
+                {
+                    _viewModel.SaveCommand.Execute().Subscribe();
+                    e.Handled = true;
+                }
+            }
+            // Parse Copy action
+            else if (!string.IsNullOrEmpty(_viewModel.CopyHotkey) &&
+                     KeyGesture.Parse(_viewModel.CopyHotkey).Matches(e))
+            {
+                System.Diagnostics.Debug.WriteLine($"[SnipWindow.axaml.cs] Matched CopyHotkey! Firing CopyCommand.");
+                if (_viewModel.CopyCommand != null)
+                {
+                    _viewModel.CopyCommand.Execute().Subscribe();
                     e.Handled = true;
                 }
             }

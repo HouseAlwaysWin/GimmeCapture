@@ -369,6 +369,8 @@ public partial class MainWindowViewModel
     public string RecordClearHotkey { get => _recordClearHotkey; set => this.RaiseAndSetIfChanged(ref _recordClearHotkey, value); }
     private string _recordSaveHotkey = "Ctrl+S";
     public string RecordSaveHotkey { get => _recordSaveHotkey; set => this.RaiseAndSetIfChanged(ref _recordSaveHotkey, value); }
+    private string _recordCopyHotkey = "Ctrl+C";
+    public string RecordCopyHotkey { get => _recordCopyHotkey; set => this.RaiseAndSetIfChanged(ref _recordCopyHotkey, value); }
     private string _recordCloseHotkey = "Escape";
     public string RecordCloseHotkey { get => _recordCloseHotkey; set => this.RaiseAndSetIfChanged(ref _recordCloseHotkey, value); }
     private string _recordToolbarHotkey = "F4";
@@ -532,7 +534,7 @@ public partial class MainWindowViewModel
         var recordGroup = new[] { 
             "RecordRectangleHotkey", "RecordEllipseHotkey", "RecordArrowHotkey", "RecordLineHotkey", "RecordPenHotkey", 
             "RecordTextHotkey", "RecordMosaicHotkey", "RecordBlurHotkey", "RecordUndoHotkey", "RecordRedoHotkey", 
-            "RecordClearHotkey", "RecordSaveHotkey", "RecordCloseHotkey", "RecordToolbarHotkey", 
+            "RecordClearHotkey", "RecordSaveHotkey", "RecordCopyHotkey", "RecordCloseHotkey", "RecordToolbarHotkey", 
             "RecordActionHotkey", "RecordPlaybackHotkey" 
         };
 
@@ -580,6 +582,7 @@ public partial class MainWindowViewModel
             if (targetTag != "RecordRedoHotkey" && RecordRedoHotkey == hotkey) return "Redo";
             if (targetTag != "RecordClearHotkey" && RecordClearHotkey == hotkey) return "Clear";
             if (targetTag != "RecordSaveHotkey" && RecordSaveHotkey == hotkey) return "Save";
+            if (targetTag != "RecordCopyHotkey" && RecordCopyHotkey == hotkey) return "TipCopy";
             if (targetTag != "RecordCloseHotkey" && RecordCloseHotkey == hotkey) return "ActionClose";
             if (targetTag != "RecordToolbarHotkey" && RecordToolbarHotkey == hotkey) return "ActionToolbar";
             if (targetTag != "RecordActionHotkey" && RecordActionHotkey == hotkey) return "ActionStartPin";
@@ -921,6 +924,7 @@ public partial class MainWindowViewModel
             RecordRedoHotkey = settings.RecordRedoHotkey;
             RecordClearHotkey = settings.RecordClearHotkey;
             RecordSaveHotkey = settings.RecordSaveHotkey;
+            RecordCopyHotkey = settings.RecordCopyHotkey;
             RecordCloseHotkey = settings.RecordCloseHotkey;
             RecordToolbarHotkey = settings.RecordToolbarHotkey;
             RecordActionHotkey = settings.RecordActionHotkey;
@@ -1056,6 +1060,7 @@ public partial class MainWindowViewModel
             settings.RecordRedoHotkey = RecordRedoHotkey;
             settings.RecordClearHotkey = RecordClearHotkey;
             settings.RecordSaveHotkey = RecordSaveHotkey;
+            settings.RecordCopyHotkey = RecordCopyHotkey;
             settings.RecordCloseHotkey = RecordCloseHotkey;
             settings.RecordToolbarHotkey = RecordToolbarHotkey;
             settings.RecordActionHotkey = RecordActionHotkey;

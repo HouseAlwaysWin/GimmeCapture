@@ -97,6 +97,7 @@ public partial class MainWindowViewModel
         RecordRedoHotkey = defaultSettings.RecordRedoHotkey;
         RecordClearHotkey = defaultSettings.RecordClearHotkey;
         RecordSaveHotkey = defaultSettings.RecordSaveHotkey;
+        RecordCopyHotkey = defaultSettings.RecordCopyHotkey;
         RecordCloseHotkey = defaultSettings.RecordCloseHotkey;
         RecordToolbarHotkey = defaultSettings.RecordToolbarHotkey;
         RecordActionHotkey = defaultSettings.RecordActionHotkey;

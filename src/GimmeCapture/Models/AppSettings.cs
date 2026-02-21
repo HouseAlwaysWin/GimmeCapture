@@ -95,6 +95,7 @@ public class AppSettings
     public string RecordRedoHotkey { get; set; } = "Ctrl+Y";
     public string RecordClearHotkey { get; set; } = "Delete";
     public string RecordSaveHotkey { get; set; } = "Ctrl+S";
+    public string RecordCopyHotkey { get; set; } = "Ctrl+C";
     public string RecordCloseHotkey { get; set; } = "Escape";
     public string RecordToolbarHotkey { get; set; } = "F4";
     public string RecordActionHotkey { get; set; } = "F3";
