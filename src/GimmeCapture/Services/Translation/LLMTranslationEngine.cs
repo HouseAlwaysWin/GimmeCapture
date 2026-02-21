@@ -31,62 +31,62 @@ public class LLMTranslationEngine : ITranslationEngine
     {
         var settings = _settingsService.Settings;
         var model = settings.OllamaModel;
-        if (string.IsNullOrEmpty(model)) return text;
+        if (string.IsNullOrEmpty(model)) 
+        {
+            System.Diagnostics.Debug.WriteLine("[LLM] SKIPPED: No model selected in settings.");
+            return string.Empty;
+        }
 
         string sourceLangName = ResolveSourceLanguageForPrompt(text, sourceLang);
         string targetLangName = GetTargetLanguageName(targetLang);
         
-        string systemPrompt = $@"You are a professional and neutral translation engine. 
-Role: Translate ANY text provided from {sourceLangName} to {targetLangName} accurately.
-Rules:
-1. Output ONLY the translated text. 
-2. NO explanations, NO introductory text (e.g., 'Sure', 'Translated text:'), NO conversational filler.
-3. Preserve original paragraph structure and technical terms.";
-
-        string strictHint = "";
-        if (targetLangName.Contains("Japanese")) strictHint = "Use Japanese (Kanji and Kana). DO NOT use Chinese-only characters.";
-        else if (targetLangName.Contains("Chinese")) strictHint = "Use Chinese characters only. DO NOT use Japanese Kana or Korean Hangul.";
-
         var request = new
         {
             model = model,
-            system = systemPrompt,
-            prompt = $@"Translate the following text to {targetLangName}. 
-{strictHint}
-Preserve original line breaks and formatting. 
-Output ONLY the translated text.
-
-Input:
-{text}
-
-Output:",
-            stream = false,
-            options = new
-            {
-                temperature = 0.0,
-                top_p = 0.1,
-                repeat_penalty = 1.0,
-                num_predict = 512,
-                seed = 42
-            }
+            prompt = $"Translate \"{text}\" from {sourceLangName} to {targetLangName}. Output ONLY the translated text. No quotes. No explanations.",
+            stream = false
+            // Removed options to use server defaults as per user feedback
         };
 
         try
         {
-            string url = !string.IsNullOrEmpty(settings.OllamaApiUrl) ? 
-                (settings.OllamaApiUrl.EndsWith("/api/generate") ? settings.OllamaApiUrl : settings.OllamaApiUrl.TrimEnd('/') + "/api/generate") : 
-                "http://localhost:11434/api/generate";
+            string baseUrl = !string.IsNullOrEmpty(settings.OllamaApiUrl) ? settings.OllamaApiUrl.TrimEnd('/') : "http://localhost:11434";
+            string url;
+            if (baseUrl.EndsWith("/api/generate")) url = baseUrl;
+            else if (baseUrl.EndsWith("/api/chat")) url = baseUrl.Replace("/api/chat", "/api/generate");
+            else url = baseUrl + "/api/generate";
 
-            var content = new StringContent(JsonSerializer.Serialize(request), Encoding.UTF8, "application/json");
+            string requestJson = JsonSerializer.Serialize(request);
+            System.Diagnostics.Debug.WriteLine($"[LLM] Requesting translation for: {text}");
+            System.Diagnostics.Debug.WriteLine($"[LLM] Request JSON: {requestJson}");
+
+            var content = new StringContent(requestJson, Encoding.UTF8, "application/json");
             var response = await _httpClient.PostAsync(url, content, ct);
-            if (!response.IsSuccessStatusCode) return text;
+            
+            if (!response.IsSuccessStatusCode)
+            {
+                System.Diagnostics.Debug.WriteLine($"[LLM] API Error: {response.StatusCode}");
+                return string.Empty;
+            }
 
             var json = await response.Content.ReadAsStringAsync(ct);
+            System.Diagnostics.Debug.WriteLine($"[LLM] Raw Response: {json}");
             using var doc = JsonDocument.Parse(json);
-            var resultText = doc.RootElement.GetProperty("response").GetString()?.Trim() ?? text;
+            
+            string resultText = string.Empty;
+            if (doc.RootElement.TryGetProperty("response", out var responseProp))
+            {
+                resultText = responseProp.GetString()?.Trim() ?? string.Empty;
+            }
+            else if (doc.RootElement.TryGetProperty("message", out var messageObj) && 
+                messageObj.TryGetProperty("content", out var contentProp))
+            {
+                // Fallback for chat-style response
+                resultText = contentProp.GetString()?.Trim() ?? string.Empty;
+            }
             
             resultText = CleanupTranslationResult(resultText);
-            if (string.IsNullOrWhiteSpace(resultText)) return text;
+            if (string.IsNullOrWhiteSpace(resultText)) return string.Empty;
 
             // Optional: Restore retry logic if it still drifts
             if (!IsTranslationAcceptableInternal(text, resultText, targetLang))
@@ -96,14 +96,19 @@ Output:",
                 {
                     resultText = retried;
                 }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine("[LLM] Validation failed even after retry. Rejecting output.");
+                    return string.Empty;
+                }
             }
 
             return resultText;
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[LLM] Translation Error: {ex.Message}");
-            return text;
+            System.Diagnostics.Debug.WriteLine($"[LLM] Translation Error: {ex.Message}");
+            return string.Empty;
         }
     }
 
@@ -131,22 +136,15 @@ Translation:";
     {
         string targetName = GetTargetLanguageName(target);
         string strictHint = target switch {
-            TranslationLanguage.Japanese => "MUST include Hiragana/Katakana where appropriate. DO NOT output Chinese-only text.",
+            TranslationLanguage.Japanese => "MUST include Hiragana/Katakana. DO NOT output Chinese-only text.",
             _ => "ABSOLUTELY NO Japanese kana or Korean hangul if translating to Chinese."
         };
 
         var req = new
         {
             model,
-            prompt = $@"Translate to {targetName}. 
-Rules: 
-1) Output ONLY {targetName}. 
-2) {strictHint}
-3) NO explanations.
-Input: {text}
-Output:",
-            stream = false,
-            options = new { temperature = 0.0, top_p = 0.1, num_predict = 512, seed = 43 }
+            prompt = $"The previous translation for \"{text}\" was incorrect. Please output ONLY the raw {targetName} translation of \"{text}\". No explanations.",
+            stream = false
         };
 
         try
@@ -155,8 +153,14 @@ Output:",
             var resp = await _httpClient.PostAsync(url, content, ct);
             if (resp == null || !resp.IsSuccessStatusCode) return string.Empty;
             var payload = await resp.Content.ReadAsStringAsync();
+            System.Diagnostics.Debug.WriteLine($"[LLM-Retry] Raw Response: {payload}");
             using var doc = JsonDocument.Parse(payload);
-            return CleanupTranslationResult(doc.RootElement.GetProperty("response").GetString()?.Trim() ?? string.Empty);
+            
+            if (doc.RootElement.TryGetProperty("response", out var responseProp))
+            {
+                return CleanupTranslationResult(responseProp.GetString()?.Trim() ?? string.Empty);
+            }
+            return string.Empty;
         }
         catch { return string.Empty; }
     }
@@ -164,8 +168,23 @@ Output:",
     private string CleanupTranslationResult(string result)
     {
         if (string.IsNullOrWhiteSpace(result)) return "";
+        
         var cleaned = result.Trim();
-        // Remove common prefixes
+
+        // 1. Remove thinking blocks (for reasoning models)
+        if (cleaned.Contains("<think>") && cleaned.Contains("</think>"))
+        {
+            int endIndex = cleaned.IndexOf("</think>");
+            cleaned = cleaned.Substring(endIndex + 8).Trim();
+        }
+        else if (cleaned.Contains("</think>"))
+        {
+             // Handle case where start tag might be missing or cut off
+             int endIndex = cleaned.IndexOf("</think>");
+             cleaned = cleaned.Substring(endIndex + 8).Trim();
+        }
+
+        // 2. Remove common prefixes
         var prefixes = new[] { "Translation:", "Output:", "Result:", "Translated text:" };
         foreach (var p in prefixes)
         {
@@ -183,12 +202,18 @@ Output:",
     {
         if (string.IsNullOrWhiteSpace(translated)) return false;
 
-        // If target is Japanese, it MUST contain kana if it's more than a few words,
-        // unless the source was also purely Kanji and translation is short.
+        // Hallucination Check: If source is tiny, but translation is a long sentence, it's likely a hallucination
+        if (source.Trim().Length <= 6 && translated.Length > 25)
+        {
+            System.Diagnostics.Debug.WriteLine($"[LLM] Validation: rejected due to length jump (Hallucination suspected).");
+            return false;
+        }
+
+        // If target is Japanese, it MUST contain kana if it's more than a few words...
         if (target == TranslationLanguage.Japanese)
         {
             bool hasKana = translated.Any(c => (c >= 0x3040 && c <= 0x309F) || (c >= 0x30A0 && c <= 0x30FF));
-            if (!hasKana && translated.Length > 2)
+            if (!hasKana && translated.Length > 1)
             {
                 return false; 
             }
@@ -217,18 +242,18 @@ Output:",
 
     private string GetTargetLanguageName(TranslationLanguage lang) => lang switch
     {
-        TranslationLanguage.TraditionalChinese => "Traditional Chinese (Taiwan)",
-        TranslationLanguage.SimplifiedChinese => "Simplified Chinese",
+        TranslationLanguage.TraditionalChinese => "Chinese",
+        TranslationLanguage.SimplifiedChinese => "Chinese",
         TranslationLanguage.English => "English",
         TranslationLanguage.Japanese => "Japanese",
         TranslationLanguage.Korean => "Korean",
-        _ => "Traditional Chinese"
+        _ => "Chinese"
     };
 
     private string ResolveSourceLanguageForPrompt(string text, OCRLanguage lang) => lang switch
     {
-        OCRLanguage.TraditionalChinese => "Traditional Chinese",
-        OCRLanguage.SimplifiedChinese => "Simplified Chinese",
+        OCRLanguage.TraditionalChinese => "Chinese",
+        OCRLanguage.SimplifiedChinese => "Chinese",
         OCRLanguage.Japanese => "Japanese",
         OCRLanguage.Korean => "Korean",
         OCRLanguage.English => "English",

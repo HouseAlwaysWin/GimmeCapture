@@ -96,8 +96,15 @@ public class TranslationService
 
         var translated = await TranslateAsync(mergedText, ocrLang, ct);
         
-        Debug.WriteLine($"[TranslationService] Raw OCR: {mergedText}");
-        Debug.WriteLine($"[TranslationService] Result: {translated}");
+        if (string.IsNullOrEmpty(translated))
+        {
+            System.Diagnostics.Debug.WriteLine($"[TranslationService] FAILURE: Engine returned empty result for OCR: '{mergedText}'");
+        }
+        else
+        {
+            System.Diagnostics.Debug.WriteLine($"[TranslationService] Raw OCR: {mergedText}");
+            System.Diagnostics.Debug.WriteLine($"[TranslationService] Result: {translated}");
+        }
         
         // Infer font size from average height of OCR blocks (Pixels -> DIPs)
         double inferredFontSize = 12.0;
@@ -140,17 +147,7 @@ public class TranslationService
         }
         else
         {
-            var fallback = BuildTargetLanguageFallbackText(mergedText, _settings.TargetLanguage);
-            if (!string.IsNullOrWhiteSpace(fallback))
-            {
-                result.Add(new TranslatedBlock
-                {
-                    OriginalText = mergedText,
-                    TranslatedText = fallback,
-                    Bounds = logicalBounds,
-                    InferredFontSize = inferredFontSize
-                });
-            }
+            System.Diagnostics.Debug.WriteLine($"[TranslationService] Final translation effort failed or was unacceptable. Returning empty result.");
         }
 
         return result;
@@ -172,8 +169,19 @@ public class TranslationService
     private async Task<string> TranslateAsync(string text, OCRLanguage sourceLang, CancellationToken ct)
     {
         var engine = _translationEngines.FirstOrDefault(e => e.EngineType == _settings.SelectedTranslationEngine);
-        if (engine == null) return text;
-        return await engine.TranslateAsync(text, sourceLang, _settings.TargetLanguage, ct);
+        if (engine == null) 
+        {
+            System.Diagnostics.Debug.WriteLine($"[TranslationService] NO ENGINE FOUND for {_settings.SelectedTranslationEngine}");
+            return string.Empty; 
+        }
+        System.Diagnostics.Debug.WriteLine($"[TranslationService] Using engine: {engine.EngineType} for {sourceLang} -> {_settings.TargetLanguage}");
+        System.Diagnostics.Debug.WriteLine($"[TranslationService] Engine {engine.EngineType} starting translation for '{text.Substring(0, Math.Min(text.Length, 20))}...'");
+        var result = await engine.TranslateAsync(text, sourceLang, _settings.TargetLanguage, ct);
+        if (string.IsNullOrEmpty(result))
+        {
+             System.Diagnostics.Debug.WriteLine($"[TranslationService] Engine {engine.EngineType} failed to translate.");
+        }
+        return result ?? string.Empty;
     }
 
     private async Task<string> ForceTranslateAsync(string text, OCRLanguage sourceLang, TranslationLanguage targetLang, CancellationToken ct)
@@ -181,7 +189,7 @@ public class TranslationService
         // Force the use of LLM for retry with a stricter target language prompt
         var llm = _translationEngines.OfType<LLMTranslationEngine>().FirstOrDefault();
         if (llm != null) return await llm.TranslateAsync(text, sourceLang, targetLang, ct);
-        return text;
+        return string.Empty;
     }
 
     private bool IsUsefulOcrText(string text, float confidence)
