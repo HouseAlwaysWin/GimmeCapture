@@ -176,11 +176,13 @@
   "AIInitErrorTitle": "AI Initialization Error",
   "AIInitErrorMessage": "Failed to start AI: {0}",
   "StatusError": "Error",
-  "HotkeyStartupGroup": "Global Startup Hotkeys",
   "HotkeySnipGroup": "Snip Mode Actions",
   "HotkeyRecordGroup": "Record Mode Actions",
+  "HotkeyTranslateGroup": "Translate Mode Actions",
   "HotkeyRecordingGroup": "Active Recording Actions",
   "ActionPin": "Pin Image",
+  "ActionStartPin": "Start Recording / Pin Video",
+  "ActionHideTranslate": "Show/Hide Translation Results",
   "ActionCopy": "Copy Image",
   "ActionStart": "Start Recording",
   "ActionStopPin": "Stop & Pin Video",
@@ -219,5 +221,5 @@
   "MarianMTDownloadConfirm": "Offline translation requires downloading a special module (~400MB). Download now?",
   "DefaultHideSnipToolbar": "Hide Snip Toolbar by Default",
   "DefaultHideRecordToolbar": "Hide Record Toolbar by Default",
-  "HideTranslationResults": "Show/Hide Translation Results (F3)"
+  "HideTranslationResults": "Show/Hide Translation Results"
 }

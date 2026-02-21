@@ -168,6 +168,14 @@
   "AIInitErrorTitle": "AI 初期化エラー",
   "AIInitErrorMessage": "AIの起動に失敗しました：{0}",
   "StatusError": "エラー",
+  "HotkeySnipGroup": "キャプチャモードのアクション (Snip Mode)",
+  "HotkeyRecordGroup": "録画モードのアクション (Record Mode)",
+  "HotkeyTranslateGroup": "翻訳モードのアクション (Translate Mode)",
+  "HotkeyRecordingGroup": "録画中のアクション (Recording)",
+  "ActionPin": "ピン留め (Pin)",
+  "ActionStartPin": "録画開始 / 停止して固定 (Start / Pin)",
+  "ActionHideTranslate": "翻訳結果を表示/非表示 (Toggle Results)",
+  "ActionCopy": "コピー (Copy)",
   "HotkeyDrawingGroup": "描画ツールのショートカット",
   "HotkeyCommonGroup": "共通アクションのショートカット",
   "ActionClose": "ウィンドウを閉じる",
@@ -199,5 +207,6 @@
   "TranslationEngineMarianMT": "MarianMT (オフライン)",
   "MarianMTDownloadConfirm": "オフライン翻訳機能には専用モジュールのダウンロード (~400MB) が必要です。今すぐダウンロードしますか？",
   "DefaultHideSnipToolbar": "デフォルトでキャプチャツールバーを隠す",
-  "DefaultHideRecordToolbar": "デフォルトで録画ツールバーを隠す"
+  "DefaultHideRecordToolbar": "デフォルトで録画ツールバーを隠す",
+  "HideTranslationResults": "翻訳結果を表示/非表示"
 }

@@ -176,11 +176,13 @@
   "AIInitErrorTitle": "AI 初始化錯誤",
   "AIInitErrorMessage": "無法啟動 AI：{0}",
   "StatusError": "錯誤",
-  "HotkeyStartupGroup": "啟動快捷鍵 (Global Startup)",
   "HotkeySnipGroup": "截圖模式功能 (Snip Mode)",
   "HotkeyRecordGroup": "錄影模式功能 (Record Mode)",
+  "HotkeyTranslateGroup": "翻譯模式功能 (Translate Mode)",
   "HotkeyRecordingGroup": "錄影進行中 (Recording)",
   "ActionPin": "釘選 (Pin)",
+  "ActionStartPin": "開始錄影 / 停止並釘選 (Start / Pin)",
+  "ActionHideTranslate": "顯示/隱藏翻譯結果 (Toggle Results)",
   "ActionCopy": "複製 (Copy)",
   "ActionStart": "開始錄影 (Start)",
   "ActionStopPin": "停止並釘選 (Stop & Pin)",
@@ -219,7 +221,7 @@
   "MarianMTDownloadConfirm": "離線翻譯功能需要下載專用模組 (約 400MB)。現在要下載嗎？",
   "DefaultHideSnipToolbar": "預設隱藏截圖工具列",
   "DefaultHideRecordToolbar": "預設隱藏錄影工具列",
-  "HideTranslationResults": "顯示/隱藏翻譯結果 (F3)"
+  "HideTranslationResults": "顯示/隱藏翻譯結果"
 }
 
 

@@ -378,10 +378,29 @@ public partial class SnipWindowViewModel
         {
             if (IsTranslationMode)
             {
+                // 翻譯模式：切換結果顯示
                 ShowTranslationResults = !ShowTranslationResults;
                 return;
             }
+
+            if (IsRecordingMode)
+            {
+                if (RecState == RecordingState.Idle)
+                {
+                    // 錄影模式（空閒）：開始錄影
+                    if (StartRecordingCommand != null)
+                        StartRecordingCommand.Execute().Subscribe();
+                }
+                else
+                {
+                    // 錄影模式（正在錄製/暫停）：停止並釘選
+                    if (PinCommand != null)
+                        PinCommand.Execute().Subscribe();
+                }
+                return;
+            }
             
+            // 截圖模式：釘選
             if (PinCommand != null)
             {
                 PinCommand.Execute().Subscribe();
