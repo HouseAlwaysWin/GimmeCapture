@@ -112,26 +112,6 @@ public class LLMTranslationEngine : ITranslationEngine
         }
     }
 
-    private static string BuildStrictTranslationPrompt(string sourceLang, string targetLang, string text)
-    {
-        string strictHint = "";
-        if (targetLang.Contains("Japanese")) strictHint = "MUST use Japanese (Kanji/Kana). Ensure the output is natural Japanese, not Chinese.";
-        else if (targetLang.Contains("Chinese")) strictHint = "MUST use Chinese (Traditional/Taiwan). Ensure NO Japanese kana or Korean hangul remains.";
-
-        return $@"Task: Translate from {sourceLang} to {targetLang}.
-{strictHint}
-
-Rules:
-- Output ONLY the translated content.
-- NO quotes, NO 'Translation:', NO explanations.
-- If content is already in {targetLang}, return it unchanged.
-
-Input Text:
-{text}
-
-Translation:";
-    }
-
     private async Task<string> TranslateStrictRetryForCjkAsync(string model, string url, string text, TranslationLanguage target, CancellationToken ct)
     {
         string targetName = GetTargetLanguageName(target);
@@ -242,8 +222,8 @@ Translation:";
 
     private string GetTargetLanguageName(TranslationLanguage lang) => lang switch
     {
-        TranslationLanguage.TraditionalChinese => "Chinese",
-        TranslationLanguage.SimplifiedChinese => "Chinese",
+        TranslationLanguage.TraditionalChinese => "Traditional Chinese",
+        TranslationLanguage.SimplifiedChinese => "Simplified Chinese",
         TranslationLanguage.English => "English",
         TranslationLanguage.Japanese => "Japanese",
         TranslationLanguage.Korean => "Korean",
@@ -252,8 +232,8 @@ Translation:";
 
     private string ResolveSourceLanguageForPrompt(string text, OCRLanguage lang) => lang switch
     {
-        OCRLanguage.TraditionalChinese => "Chinese",
-        OCRLanguage.SimplifiedChinese => "Chinese",
+        OCRLanguage.TraditionalChinese => "Traditional Chinese",
+        OCRLanguage.SimplifiedChinese => "Simplified Chinese",
         OCRLanguage.Japanese => "Japanese",
         OCRLanguage.Korean => "Korean",
         OCRLanguage.English => "English",
