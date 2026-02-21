@@ -50,7 +50,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     public string MosaicHotkey => IsRecordingMode ? (_mainVm?.RecordMosaicHotkey ?? "M") : (_mainVm?.SnipMosaicHotkey ?? "M");
     public string BlurHotkey => IsRecordingMode ? (_mainVm?.RecordBlurHotkey ?? "B") : (_mainVm?.SnipBlurHotkey ?? "B");
 
-    public string ActiveActionHotkey => IsTranslationMode ? (_mainVm?.TranslateActionHotkey ?? "F3") : (IsRecordingMode ? (_mainVm?.RecordActionHotkey ?? "F3") : (_mainVm?.PinHotkey ?? "F3"));
+    public string ActiveActionHotkey => IsTranslationMode ? (_mainVm?.TranslateActionHotkey ?? "F3") : (IsRecordingMode ? (_mainVm?.RecordActionHotkey ?? "F3") : (_mainVm?.SnipPinHotkey ?? "F3"));
     public string ActiveToolbarHotkey => IsTranslationMode ? (_mainVm?.TranslateToolbarHotkey ?? "F4") : (IsRecordingMode ? (_mainVm?.RecordToolbarHotkey ?? "F4") : (_mainVm?.SnipToolbarHotkey ?? "F4"));
     public string ActivePlaybackHotkey => _mainVm?.RecordPlaybackHotkey ?? "Space";
 

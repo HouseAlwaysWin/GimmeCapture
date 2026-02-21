@@ -196,12 +196,17 @@ public partial class MainWindowViewModel : ViewModelBase
 
         HotkeyService.OnHotkeyPressed = (id) => 
         {
-            // 如果 SnipWindow 開啟中，無視任何全域快速鍵觸發
+            // 如果 SnipWindow 開啟中，將熱鍵傳遞給它處理，而不是無視
             var desktop = Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime;
-            if (desktop?.Windows.OfType<SnipWindow>().Any() == true)
+            var snipWindow = desktop?.Windows.OfType<SnipWindow>().FirstOrDefault();
+            if (snipWindow != null)
             {
-                // 將全體控制權留給子視窗
-                return;
+                var vm = snipWindow.DataContext as SnipWindowViewModel;
+                if (vm != null)
+                {
+                    vm.HandleGlobalHotkey(id);
+                    return;
+                }
             }
 
             if (id == ID_SNIP) Avalonia.Threading.Dispatcher.UIThread.Post(() => StartCaptureCommand.Execute(CaptureMode.Normal));

@@ -61,9 +61,7 @@ public partial class MainWindowViewModel
         MaskOpacity = defaultSettings.MaskOpacity;
         AutoSave = defaultSettings.AutoSave;
         SnipHotkey = defaultSettings.SnipHotkey;
-        CopyHotkey = defaultSettings.CopyHotkey;
         TranslateHotkey = defaultSettings.TranslateHotkey;
-        PinHotkey = defaultSettings.PinHotkey;
         RecordHotkey = defaultSettings.RecordHotkey;
         RecordFormat = defaultSettings.RecordFormat;
         VideoCodec = defaultSettings.VideoCodec;
@@ -81,6 +79,7 @@ public partial class MainWindowViewModel
         SnipClearHotkey = defaultSettings.SnipClearHotkey;
         SnipSaveHotkey = defaultSettings.SnipSaveHotkey;
         SnipCopyHotkey = defaultSettings.SnipCopyHotkey;
+        SnipPinHotkey = defaultSettings.SnipPinHotkey;
         SnipCloseHotkey = defaultSettings.SnipCloseHotkey;
         SnipToolbarHotkey = defaultSettings.SnipToolbarHotkey;
         SnipSelectionModeHotkey = defaultSettings.SnipSelectionModeHotkey;

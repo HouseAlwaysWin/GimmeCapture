@@ -12,6 +12,7 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
     private const int WM_HOTKEY = 0x0312;
     private IntPtr _handle;
     private readonly HashSet<int> _registeredIds = new();
+    private readonly Dictionary<int, string> _pendingRegistrations = new();
     
     // Action to fire when hotkey is pressed, passing the ID
     public Action<int>? OnHotkeyPressed { get; set; }
@@ -35,12 +36,25 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
         if (platformHandle != null)
         {
             _handle = platformHandle.Handle;
+            
+            // Register pending hotkeys
+            foreach (var kvp in _pendingRegistrations)
+            {
+                Register(kvp.Key, kvp.Value);
+            }
+            _pendingRegistrations.Clear();
         }
     }
 
     public void Register(int id, string hotkey)
     {
-        if (!OperatingSystem.IsWindows() || _handle == IntPtr.Zero) return;
+        if (!OperatingSystem.IsWindows()) return;
+        
+        if (_handle == IntPtr.Zero)
+        {
+            _pendingRegistrations[id] = hotkey;
+            return;
+        }
         
         Unregister(id);
 
@@ -68,6 +82,7 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
             UnregisterHotKey(_handle, id);
             _registeredIds.Remove(id);
         }
+        _pendingRegistrations.Remove(id);
     }
 
     private void UnregisterAll()
@@ -78,6 +93,7 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
             UnregisterHotKey(_handle, id);
         }
         _registeredIds.Clear();
+        _pendingRegistrations.Clear();
     }
 
     private (uint mods, uint vkey) ParseHotkey(string hk)

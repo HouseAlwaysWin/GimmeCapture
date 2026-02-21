@@ -276,28 +276,6 @@ public partial class MainWindowViewModel
         }
     }
 
-    private string _copyHotkey = "Ctrl+C";
-    public string CopyHotkey
-    {
-        get => _copyHotkey;
-        set
-        {
-            this.RaiseAndSetIfChanged(ref _copyHotkey, value);
-            this.RaisePropertyChanged(nameof(CopyTooltip));
-        }
-    }
-
-    private string _pinHotkey = "F3";
-    public string PinHotkey
-    {
-        get => _pinHotkey;
-        set
-        {
-            this.RaiseAndSetIfChanged(ref _pinHotkey, value);
-            HotkeyService.Register(ID_PIN, value);
-            this.RaisePropertyChanged(nameof(PinTooltip));
-        }
-    }
 
     private string _translateHotkey = "F3";
     public string TranslateHotkey
@@ -325,8 +303,6 @@ public partial class MainWindowViewModel
 
     public string SnipTooltip => $"{LocalizationService.Instance["StartCapture"]} ({SnipHotkey})";
     public string RecordTooltip => $"{LocalizationService.Instance["CaptureModeRecord"]} ({RecordHotkey})";
-    public string CopyTooltip => $"{LocalizationService.Instance["TipCopy"]} ({CopyHotkey})";
-    public string PinTooltip => $"{LocalizationService.Instance["TipPin"]} ({PinHotkey})";
     public string TranslateTooltip => $"{LocalizationService.Instance["TranslateHotkey"]} ({TranslateHotkey})";
 
     // Drawing Tool Hotkeys
@@ -357,6 +333,8 @@ public partial class MainWindowViewModel
     public string SnipSaveHotkey { get => _snipSaveHotkey; set => this.RaiseAndSetIfChanged(ref _snipSaveHotkey, value); }
     private string _snipCopyHotkey = "Ctrl+C";
     public string SnipCopyHotkey { get => _snipCopyHotkey; set => this.RaiseAndSetIfChanged(ref _snipCopyHotkey, value); }
+    private string _snipPinHotkey = "F3";
+    public string SnipPinHotkey { get => _snipPinHotkey; set => this.RaiseAndSetIfChanged(ref _snipPinHotkey, value); }
     private string _snipCloseHotkey = "Escape";
     public string SnipCloseHotkey { get => _snipCloseHotkey; set => this.RaiseAndSetIfChanged(ref _snipCloseHotkey, value); }
     private string _snipToolbarHotkey = "F4";
@@ -566,8 +544,6 @@ public partial class MainWindowViewModel
             if (targetTag != "SnipHotkey" && SnipHotkey == hotkey) return "SnipHotkey";
             if (targetTag != "RecordHotkey" && RecordHotkey == hotkey) return "RecordHotkey";
             if (targetTag != "TranslateHotkey" && TranslateHotkey == hotkey) return "TranslateHotkey";
-            if (targetTag != "PinHotkey" && PinHotkey == hotkey) return "PinHotkey";
-            if (targetTag != "CopyHotkey" && CopyHotkey == hotkey) return "CopyHotkey";
         }
         else if (snipGroup.Contains(targetTag))
         {
@@ -588,7 +564,7 @@ public partial class MainWindowViewModel
             if (targetTag != "SnipToolbarHotkey" && SnipToolbarHotkey == hotkey) return "ActionToolbar";
             if (targetTag != "SnipSelectionModeHotkey" && SnipSelectionModeHotkey == hotkey) return "ActionSelectionMode";
             if (targetTag != "SnipCropModeHotkey" && SnipCropModeHotkey == hotkey) return "ActionCropMode";
-            if (targetTag != "PinHotkey" && PinHotkey == hotkey) return "TipPin";
+            if (targetTag != "SnipPinHotkey" && SnipPinHotkey == hotkey) return "TipPin";
         }
         else if (recordGroup.Contains(targetTag))
         {
@@ -878,9 +854,7 @@ public partial class MainWindowViewModel
             AutoSave = settings.AutoSave;
             SaveDirectory = settings.SaveDirectory;
             SnipHotkey = settings.SnipHotkey;
-            CopyHotkey = settings.CopyHotkey;
             TranslateHotkey = settings.TranslateHotkey;
-            PinHotkey = settings.PinHotkey;
             RecordHotkey = settings.RecordHotkey;
             RecordFormat = settings.RecordFormat;
             VideoSaveDirectory = settings.VideoSaveDirectory;
@@ -929,6 +903,7 @@ public partial class MainWindowViewModel
             SnipClearHotkey = settings.SnipClearHotkey;
             SnipSaveHotkey = settings.SnipSaveHotkey;
             SnipCopyHotkey = settings.SnipCopyHotkey;
+            SnipPinHotkey = settings.SnipPinHotkey;
             SnipCloseHotkey = settings.SnipCloseHotkey;
             SnipToolbarHotkey = settings.SnipToolbarHotkey;
             SnipSelectionModeHotkey = settings.SnipSelectionModeHotkey;
@@ -1013,9 +988,7 @@ public partial class MainWindowViewModel
             settings.AutoSave = AutoSave;
             settings.SaveDirectory = SaveDirectory;
             settings.SnipHotkey = SnipHotkey;
-            settings.CopyHotkey = CopyHotkey;
             settings.TranslateHotkey = TranslateHotkey;
-            settings.PinHotkey = PinHotkey;
             settings.RecordHotkey = RecordHotkey;
             settings.RecordFormat = RecordFormat;
             settings.VideoSaveDirectory = VideoSaveDirectory;
@@ -1065,6 +1038,7 @@ public partial class MainWindowViewModel
             settings.SnipClearHotkey = SnipClearHotkey;
             settings.SnipSaveHotkey = SnipSaveHotkey;
             settings.SnipCopyHotkey = SnipCopyHotkey;
+            settings.SnipPinHotkey = SnipPinHotkey;
             settings.SnipCloseHotkey = SnipCloseHotkey;
             settings.SnipToolbarHotkey = SnipToolbarHotkey;
             settings.SnipSelectionModeHotkey = SnipSelectionModeHotkey;

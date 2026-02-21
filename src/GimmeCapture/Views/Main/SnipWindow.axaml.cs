@@ -521,6 +521,35 @@ public partial class SnipWindow : Window
                 }
             }
         }
+        
+        // Manual Hotkey Routing (Bypassing XAML KeyBinding quirks)
+        if (_viewModel != null && !e.Handled)
+        {
+            System.Diagnostics.Debug.WriteLine($"[SnipWindow.axaml.cs] OnKeyDown: Key={e.Key}, Mods={e.KeyModifiers}, ActiveAction={_viewModel.ActiveActionHotkey}, IsInputFocused={_viewModel.IsInputFocused}");
+            
+            // Parse F3 action
+            if (!string.IsNullOrEmpty(_viewModel.ActiveActionHotkey) &&
+                KeyGesture.Parse(_viewModel.ActiveActionHotkey).Matches(e))
+            {
+                System.Diagnostics.Debug.WriteLine($"[SnipWindow.axaml.cs] Matched ActiveActionHotkey! Firing HandleF3Command.");
+                if (_viewModel.HandleF3Command != null)
+                {
+                    _viewModel.HandleF3Command.Execute().Subscribe();
+                    e.Handled = true;
+                }
+            }
+            // Parse F4 action
+            else if (!string.IsNullOrEmpty(_viewModel.ActiveToolbarHotkey) &&
+                     KeyGesture.Parse(_viewModel.ActiveToolbarHotkey).Matches(e))
+            {
+                System.Diagnostics.Debug.WriteLine($"[SnipWindow.axaml.cs] Matched ActiveToolbarHotkey! Firing ToggleToolbarCommand.");
+                if (_viewModel.ToggleToolbarCommand != null)
+                {
+                    _viewModel.ToggleToolbarCommand.Execute().Subscribe();
+                    e.Handled = true;
+                }
+            }
+        }
     }
     
     private void UpdateActiveScreenBounds(Point point)

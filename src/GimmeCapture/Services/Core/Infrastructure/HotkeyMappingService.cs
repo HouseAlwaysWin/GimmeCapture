@@ -15,8 +15,6 @@ public class HotkeyMappingService
             { "SnipHotkey", (vm, val) => vm.SnipHotkey = val },
             { "RecordHotkey", (vm, val) => vm.RecordHotkey = val },
             { "TranslateHotkey", (vm, val) => vm.TranslateHotkey = val },
-            { "CopyHotkey", (vm, val) => vm.CopyHotkey = val },
-            { "PinHotkey", (vm, val) => vm.PinHotkey = val },
             
             // Snip Mode Actions
             { "SnipRectangleHotkey", (vm, val) => vm.SnipRectangleHotkey = val },

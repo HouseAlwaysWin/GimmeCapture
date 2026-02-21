@@ -61,8 +61,6 @@ public class AppSettings
     public string SnipHotkey { get; set; } = "F1";
     public string RecordHotkey { get; set; } = "F2";
     public string TranslateHotkey { get; set; } = "F3";
-    public string PinHotkey { get; set; } = "F3";
-    public string CopyHotkey { get; set; } = "Ctrl+C";
 
     // Snip Mode Hotkeys
     public string SnipRectangleHotkey { get; set; } = "R";
@@ -78,6 +76,7 @@ public class AppSettings
     public string SnipClearHotkey { get; set; } = "Delete";
     public string SnipSaveHotkey { get; set; } = "Ctrl+S";
     public string SnipCopyHotkey { get; set; } = "Ctrl+C";
+    public string SnipPinHotkey { get; set; } = "F3";
     public string SnipCloseHotkey { get; set; } = "Escape";
     public string SnipToolbarHotkey { get; set; } = "F4";
     public string SnipSelectionModeHotkey { get; set; } = "S";

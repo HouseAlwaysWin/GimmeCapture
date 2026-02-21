@@ -44,10 +44,10 @@ public partial class FloatingTranslationViewModel : FloatingWindowViewModelBase,
     private readonly AppSettingsService _appSettingsService = null!;
     private readonly IClipboardService _clipboardService;
 
-    public override string CopyHotkey => _appSettingsService?.Settings.CopyHotkey ?? base.CopyHotkey;
+    public override string CopyHotkey => _appSettingsService?.Settings.SnipCopyHotkey ?? base.CopyHotkey;
     public override string SaveHotkey => _appSettingsService?.Settings.SnipSaveHotkey ?? base.SaveHotkey;
     public override string CloseHotkey => _appSettingsService?.Settings.TranslateCloseHotkey ?? base.CloseHotkey;
-    public override string PinHotkey => _appSettingsService?.Settings.PinHotkey ?? base.PinHotkey;
+    public override string PinHotkey => _appSettingsService?.Settings.SnipPinHotkey ?? base.PinHotkey;
     public override string UndoHotkey => _appSettingsService?.Settings.SnipUndoHotkey ?? base.UndoHotkey;
     public override string RedoHotkey => _appSettingsService?.Settings.SnipRedoHotkey ?? base.RedoHotkey;
     public override string ClearHotkey => _appSettingsService?.Settings.SnipClearHotkey ?? base.ClearHotkey;

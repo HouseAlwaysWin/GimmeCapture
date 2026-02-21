@@ -63,8 +63,8 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
     public ReactiveCommand<Unit, Unit> CancelInteractiveCommand { get; private set; } = null!;
 
     // Tooltips 
-    public override string CopyHotkey => _appSettingsService?.Settings.CopyHotkey ?? base.CopyHotkey;
-    public override string PinHotkey => _appSettingsService?.Settings.PinHotkey ?? base.PinHotkey;
+    public override string CopyHotkey => _appSettingsService?.Settings.SnipCopyHotkey ?? base.CopyHotkey;
+    public override string PinHotkey => _appSettingsService?.Settings.SnipPinHotkey ?? base.PinHotkey;
     public override string UndoHotkey => _appSettingsService?.Settings.SnipUndoHotkey ?? base.UndoHotkey;
     public override string RedoHotkey => _appSettingsService?.Settings.SnipRedoHotkey ?? base.RedoHotkey;
     public override string ClearHotkey => _appSettingsService?.Settings.SnipClearHotkey ?? base.ClearHotkey;

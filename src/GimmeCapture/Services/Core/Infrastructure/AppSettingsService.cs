@@ -122,8 +122,8 @@ public class AppSettingsService
         dest.TempDirectory = source.TempDirectory;
         dest.SnipHotkey = source.SnipHotkey;
         dest.RecordHotkey = source.RecordHotkey;
-        dest.PinHotkey = source.PinHotkey;
-        dest.CopyHotkey = source.CopyHotkey;
+        dest.SnipPinHotkey = source.SnipPinHotkey;
+        dest.SnipCopyHotkey = source.SnipCopyHotkey;
         dest.TranslateHotkey = source.TranslateHotkey;
 
         dest.SnipRectangleHotkey = source.SnipRectangleHotkey;

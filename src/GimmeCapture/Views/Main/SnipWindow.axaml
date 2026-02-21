@@ -31,14 +31,7 @@
         <cv:StringToKeyGestureConverter x:Key="StringToKeyGestureConverter"/>
         <cv:BoolToHiddenOpacityConverter x:Key="BoolToHiddenOpacityConverter"/>
     </Window.Resources>
-    
     <Window.KeyBindings>
-        <!-- Mode & Core Logic (Suppressed when window open, but local handling here) -->
-        <KeyBinding Gesture="{Binding SnipHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding HandleF1Command}" />
-        <KeyBinding Gesture="{Binding RecordHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding HandleF2Command}" />
-        <KeyBinding Gesture="{Binding ActiveActionHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding HandleF3Command}" />
-        <KeyBinding Gesture="{Binding ActiveToolbarHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding ToggleToolbarCommand}" />
-        
         <!-- Actions (Dynamic by Mode) -->
         <KeyBinding Gesture="{Binding CopyHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding CopyCommand}" />
         <KeyBinding Gesture="{Binding SaveHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding SaveCommand}" />

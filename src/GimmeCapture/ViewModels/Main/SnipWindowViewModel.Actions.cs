@@ -235,47 +235,56 @@ public partial class SnipWindowViewModel
     public ReactiveCommand<Unit, Unit> ToggleTopmostCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> ToggleMaskCommand { get; set; } = null!;
 
-    public void HandleGlobalHotkey(int modeInt)
+    public void HandleGlobalHotkey(int id)
     {
         if (_mainVm == null) return;
         
-        var mode = (MainWindowViewModel.CaptureMode)modeInt;
+        // 找出觸發此全域 ID 的熱鍵字串
+        string pressedHotkey = string.Empty;
+        if (id == 9000) pressedHotkey = _mainVm.SnipHotkey;
+        else if (id == 9003) pressedHotkey = _mainVm.RecordHotkey;
+        else if (id == 9004) pressedHotkey = _mainVm.TranslateHotkey;
 
-        string pressedHotkey = mode switch {
-            MainWindowViewModel.CaptureMode.Normal => _mainVm.SnipHotkey,
-            MainWindowViewModel.CaptureMode.Record => _mainVm.RecordHotkey,
-            MainWindowViewModel.CaptureMode.Translate => _mainVm.TranslateHotkey,
-            MainWindowViewModel.CaptureMode.Copy => _mainVm.CopyHotkey,
-            _ => ""
-        };
+        System.Diagnostics.Debug.WriteLine($"[SnipWindowViewModel] HandleGlobalHotkey ID={id}, Pressed={pressedHotkey}, ActiveAction={ActiveActionHotkey}, ActiveToolbar={ActiveToolbarHotkey}");
 
-        if (!string.IsNullOrEmpty(pressedHotkey) && pressedHotkey == _mainVm.PinHotkey)
+        // 若該熱鍵恰好與當前模式的動作熱鍵相同（例如 F3），則優先執行本地動作
+        if (!string.IsNullOrEmpty(pressedHotkey))
         {
-             if (HandleF3Command != null)
-             {
-                 HandleF3Command.Execute().Subscribe();
-             }
-             return;
+            if (pressedHotkey == ActiveActionHotkey && HandleF3Command != null)
+            {
+                System.Diagnostics.Debug.WriteLine($"[SnipWindowViewModel] Intercepted ActionHotkey match. Firing HandleF3Command.");
+                HandleF3Command.Execute().Subscribe();
+                return;
+            }
+            if (pressedHotkey == ActiveToolbarHotkey && ToggleToolbarCommand != null)
+            {
+                ToggleToolbarCommand.Execute().Subscribe();
+                return;
+            }
         }
 
-        if (mode == MainWindowViewModel.CaptureMode.Normal)
+        // 使用 ID 進行明確路由 (對應 MainWindowViewModel.ID_*)
+        switch (id)
         {
-            if (HandleF1Command != null) HandleF1Command.Execute().Subscribe();
-        }
-        else if (mode == MainWindowViewModel.CaptureMode.Record)
-        {
-            if (HandleF2Command != null) HandleF2Command.Execute().Subscribe();
-        }
-        else if (mode == MainWindowViewModel.CaptureMode.Translate)
-        {
-            if (SetTranslationModeCommand != null) SetTranslationModeCommand.Execute().Subscribe();
-        }
-        else if (mode == MainWindowViewModel.CaptureMode.Copy)
-        {
-            AutoActionMode = 1;
-            if (CurrentState == SnipState.Selected) TriggerAutoAction(); 
+            case 100: // ID_SNIP
+                if (HandleF1Command != null) HandleF1Command.Execute().Subscribe();
+                break;
+            case 101: // ID_RECORD
+                if (HandleF2Command != null) HandleF2Command.Execute().Subscribe();
+                break;
+            case 102: // ID_PIN (不再設定全域，保留防呆)
+                if (HandleF3Command != null) HandleF3Command.Execute().Subscribe();
+                break;
+            case 103: // ID_TRANSLATE
+                if (SetTranslationModeCommand != null) SetTranslationModeCommand.Execute().Subscribe();
+                break;
+            case 104: // ID_COPY (不再設定全域，保留防呆)
+                AutoActionMode = 1;
+                if (CurrentState == SnipState.Selected) TriggerAutoAction();
+                break;
         }
     }
+
 
     // Init Method
     private void InitializeActionCommands()
@@ -376,33 +385,34 @@ public partial class SnipWindowViewModel
         // 未進入模式 (Detecting) -> F3 -> 進入翻譯模式
         HandleF3Command = ReactiveCommand.Create(() => 
         {
+            System.Diagnostics.Debug.WriteLine($"[SnipWindowViewModel] HandleF3Command invoked. Mode: Trans={IsTranslationMode}, Rec={IsRecordingMode}");
             if (IsTranslationMode)
             {
                 // 翻譯模式：切換結果顯示
                 ShowTranslationResults = !ShowTranslationResults;
                 return;
             }
-
-            if (IsRecordingMode)
+            
+            // 錄影模式（正在錄製/暫停）：停止並釘選
+            if (IsRecordingMode && RecState != RecordingState.Idle)
             {
-                if (RecState == RecordingState.Idle)
-                {
-                    // 錄影模式（空閒）：開始錄影
-                    if (StartRecordingCommand != null)
-                        StartRecordingCommand.Execute().Subscribe();
-                }
-                else
-                {
-                    // 錄影模式（正在錄製/暫停）：停止並釘選
-                    if (PinCommand != null)
-                        PinCommand.Execute().Subscribe();
-                }
+                if (PinCommand != null)
+                    PinCommand.Execute().Subscribe();
+                return;
+            }
+
+            // 錄影模式（空閒且已選取）：開始錄影
+            if (IsRecordingMode && RecState == RecordingState.Idle && CurrentState == SnipState.Selected)
+            {
+                if (StartRecordingCommand != null)
+                    StartRecordingCommand.Execute().Subscribe();
                 return;
             }
             
-            // 截圖模式：釘選
+            // 截圖模式或未進入錄影：釘選
             if (PinCommand != null)
             {
+                System.Diagnostics.Debug.WriteLine($"[SnipWindowViewModel] Invoking PinCommand.");
                 PinCommand.Execute().Subscribe();
             }
         }, canExecuteHotkeys);
@@ -859,6 +869,7 @@ public partial class SnipWindowViewModel
     
     private async Task Pin(bool runAI = false)
     {
+        System.Diagnostics.Debug.WriteLine($"[SnipWindowViewModel] Pin() called. runAI={runAI}, SelectionRect={SelectionRect}");
         // Guard: If AI is disabled globally, prevent running it
         if (runAI && (_mainVm == null || !_mainVm.EnableAI))
         {
