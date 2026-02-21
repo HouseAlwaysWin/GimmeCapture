@@ -12,6 +12,9 @@ using System.IO;
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core;
 using GimmeCapture.Services.Platforms.Windows;
+using Avalonia.Controls.ApplicationLifetimes;
+using GimmeCapture.Views.Main;
+using System.Collections.Generic;
 
 namespace GimmeCapture.ViewModels.Main;
 
@@ -193,6 +196,14 @@ public partial class MainWindowViewModel : ViewModelBase
 
         HotkeyService.OnHotkeyPressed = (id) => 
         {
+            // 如果 SnipWindow 開啟中，無視任何全域快速鍵觸發
+            var desktop = Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime;
+            if (desktop?.Windows.OfType<SnipWindow>().Any() == true)
+            {
+                // 將全體控制權留給子視窗
+                return;
+            }
+
             if (id == ID_SNIP) Avalonia.Threading.Dispatcher.UIThread.Post(() => StartCaptureCommand.Execute(CaptureMode.Normal));
             else if (id == ID_RECORD) Avalonia.Threading.Dispatcher.UIThread.Post(() => StartCaptureCommand.Execute(CaptureMode.Record));
             else if (id == ID_PIN) Avalonia.Threading.Dispatcher.UIThread.Post(() => StartCaptureCommand.Execute(CaptureMode.Pin));

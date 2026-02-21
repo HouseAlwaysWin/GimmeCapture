@@ -33,35 +33,41 @@
     </Window.Resources>
     
     <Window.KeyBindings>
-        <!-- Mode & Core Logic -->
+        <!-- Mode & Core Logic (Suppressed when window open, but local handling here) -->
         <KeyBinding Gesture="{Binding SnipHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding HandleF1Command}" />
         <KeyBinding Gesture="{Binding RecordHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding HandleF2Command}" />
-        <KeyBinding Gesture="{Binding PinHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding HandleF3Command}" />
+        <KeyBinding Gesture="{Binding ActiveActionHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding HandleF3Command}" />
+        <KeyBinding Gesture="{Binding ActiveToolbarHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding ToggleToolbarCommand}" />
+        
+        <!-- Actions (Dynamic by Mode) -->
         <KeyBinding Gesture="{Binding CopyHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding CopyCommand}" />
-        <KeyBinding Gesture="Ctrl+S" Command="{Binding SaveCommand}" />
-        <KeyBinding Gesture="Escape" Command="{Binding CloseCommand}" />
-        <KeyBinding Gesture="Delete" Command="{Binding ClearAnnotationsCommand}" />
+        <KeyBinding Gesture="{Binding SaveHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding SaveCommand}" />
+        <KeyBinding Gesture="{Binding CloseHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding CloseCommand}" />
+        <KeyBinding Gesture="{Binding ClearHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding ClearAnnotationsCommand}" />
 
-        <!-- Drawing Tools -->
-        <KeyBinding Gesture="R" Command="{Binding SelectToolCommand}" CommandParameter="{x:Static m:AnnotationType.Rectangle}" />
-        <KeyBinding Gesture="E" Command="{Binding SelectToolCommand}" CommandParameter="{x:Static m:AnnotationType.Ellipse}" />
-        <KeyBinding Gesture="A" Command="{Binding SelectToolCommand}" CommandParameter="{x:Static m:AnnotationType.Arrow}" />
-        <KeyBinding Gesture="L" Command="{Binding SelectToolCommand}" CommandParameter="{x:Static m:AnnotationType.Line}" />
-        <KeyBinding Gesture="P" Command="{Binding ToggleToolGroupCommand}" CommandParameter="Pen" />
-        <KeyBinding Gesture="T" Command="{Binding ToggleToolGroupCommand}" CommandParameter="Text" />
-        <KeyBinding Gesture="M" Command="{Binding SelectToolCommand}" CommandParameter="{x:Static m:AnnotationType.Mosaic}" />
-        <KeyBinding Gesture="B" Command="{Binding SelectToolCommand}" CommandParameter="{x:Static m:AnnotationType.Blur}" />
+        <!-- Drawing Tools (Dynamic by Mode) -->
+        <KeyBinding Gesture="{Binding RectangleHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding SelectToolCommand}" CommandParameter="{x:Static m:AnnotationType.Rectangle}" />
+        <KeyBinding Gesture="{Binding EllipseHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding SelectToolCommand}" CommandParameter="{x:Static m:AnnotationType.Ellipse}" />
+        <KeyBinding Gesture="{Binding ArrowHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding SelectToolCommand}" CommandParameter="{x:Static m:AnnotationType.Arrow}" />
+        <KeyBinding Gesture="{Binding LineHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding SelectToolCommand}" CommandParameter="{x:Static m:AnnotationType.Line}" />
+        <KeyBinding Gesture="{Binding PenHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding ToggleToolGroupCommand}" CommandParameter="Pen" />
+        <KeyBinding Gesture="{Binding TextHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding ToggleToolGroupCommand}" CommandParameter="Text" />
+        <KeyBinding Gesture="{Binding MosaicHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding SelectToolCommand}" CommandParameter="{x:Static m:AnnotationType.Mosaic}" />
+        <KeyBinding Gesture="{Binding BlurHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding SelectToolCommand}" CommandParameter="{x:Static m:AnnotationType.Blur}" />
 
-        <!-- History -->
-        <KeyBinding Gesture="Ctrl+Z" Command="{Binding UndoCommand}" />
-        <KeyBinding Gesture="Ctrl+Y" Command="{Binding RedoCommand}" />
+        <!-- History (Dynamic by Mode) -->
+        <KeyBinding Gesture="{Binding UndoHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding UndoCommand}" />
+        <KeyBinding Gesture="{Binding RedoHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding RedoCommand}" />
 
-        <!-- Recording Controls -->
-        <KeyBinding Gesture="Space" Command="{Binding PauseRecordingCommand}" />
+        <!-- Recording Specific -->
+        <KeyBinding Gesture="{Binding ActivePlaybackHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding PauseRecordingCommand}" />
+
+        <!-- Snip Specific -->
+        <KeyBinding Gesture="{Binding SnipSelectionModeHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding ToggleSelectionModeCommand}" />
+        <KeyBinding Gesture="{Binding SnipCropModeHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding StartCropCommand}" />
 
         <!-- Debug / Compatibility -->
         <KeyBinding Gesture="Ctrl+Alt+T" Command="{Binding ToggleTopmostCommand}" />
-        <KeyBinding Gesture="F4" Command="{Binding ToggleToolbarCommand}" />
     </Window.KeyBindings>
 
     <Window.Styles>

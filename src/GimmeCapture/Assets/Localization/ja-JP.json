@@ -34,6 +34,7 @@
   "SelectPath": "保存先を選択...",
   "CurrentPath": "現在のパス:",
   "GlobalHotkeys": "グローバルホットキー",
+  "HotkeyStartupGroup": "グローバル起動ショートカット",
   "SnipHotkey": "キャプチャ (Snip):",
   "CopyHotkey": "コピーしてキャプチャ:",
   "PinHotkey": "ピン留めしてキャプチャ:",

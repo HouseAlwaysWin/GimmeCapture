@@ -64,26 +64,47 @@ public class AppSettings
     public string PinHotkey { get; set; } = "F3";
     public string CopyHotkey { get; set; } = "Ctrl+C";
 
-    // Drawing Tool Hotkeys
-    public string RectangleHotkey { get; set; } = "R";
-    public string EllipseHotkey { get; set; } = "E";
-    public string ArrowHotkey { get; set; } = "A";
-    public string LineHotkey { get; set; } = "L";
-    public string PenHotkey { get; set; } = "P";
-    public string TextHotkey { get; set; } = "T";
-    public string MosaicHotkey { get; set; } = "M";
-    public string BlurHotkey { get; set; } = "B";
+    // Snip Mode Hotkeys
+    public string SnipRectangleHotkey { get; set; } = "R";
+    public string SnipEllipseHotkey { get; set; } = "E";
+    public string SnipArrowHotkey { get; set; } = "A";
+    public string SnipLineHotkey { get; set; } = "L";
+    public string SnipPenHotkey { get; set; } = "P";
+    public string SnipTextHotkey { get; set; } = "T";
+    public string SnipMosaicHotkey { get; set; } = "M";
+    public string SnipBlurHotkey { get; set; } = "B";
+    public string SnipUndoHotkey { get; set; } = "Ctrl+Z";
+    public string SnipRedoHotkey { get; set; } = "Ctrl+Y";
+    public string SnipClearHotkey { get; set; } = "Delete";
+    public string SnipSaveHotkey { get; set; } = "Ctrl+S";
+    public string SnipCopyHotkey { get; set; } = "Ctrl+C";
+    public string SnipCloseHotkey { get; set; } = "Escape";
+    public string SnipToolbarHotkey { get; set; } = "F4";
+    public string SnipSelectionModeHotkey { get; set; } = "S";
+    public string SnipCropModeHotkey { get; set; } = "C";
 
-    // Action Hotkeys
-    public string UndoHotkey { get; set; } = "Ctrl+Z";
-    public string RedoHotkey { get; set; } = "Ctrl+Y";
-    public string ClearHotkey { get; set; } = "Delete";
-    public string SaveHotkey { get; set; } = "Ctrl+S";
-    public string CloseHotkey { get; set; } = "Escape";
-    public string TogglePlaybackHotkey { get; set; } = "Space";
-    public string ToggleToolbarHotkey { get; set; } = "F4";
-    public string SelectionModeHotkey { get; set; } = "S";
-    public string CropModeHotkey { get; set; } = "C";
+    // Record Mode Hotkeys
+    public string RecordRectangleHotkey { get; set; } = "R";
+    public string RecordEllipseHotkey { get; set; } = "E";
+    public string RecordArrowHotkey { get; set; } = "A";
+    public string RecordLineHotkey { get; set; } = "L";
+    public string RecordPenHotkey { get; set; } = "P";
+    public string RecordTextHotkey { get; set; } = "T";
+    public string RecordMosaicHotkey { get; set; } = "M";
+    public string RecordBlurHotkey { get; set; } = "B";
+    public string RecordUndoHotkey { get; set; } = "Ctrl+Z";
+    public string RecordRedoHotkey { get; set; } = "Ctrl+Y";
+    public string RecordClearHotkey { get; set; } = "Delete";
+    public string RecordSaveHotkey { get; set; } = "Ctrl+S";
+    public string RecordCloseHotkey { get; set; } = "Escape";
+    public string RecordToolbarHotkey { get; set; } = "F4";
+    public string RecordActionHotkey { get; set; } = "F3";
+    public string RecordPlaybackHotkey { get; set; } = "Space";
+
+    // Translate Mode Hotkeys
+    public string TranslateActionHotkey { get; set; } = "F3";
+    public string TranslateToolbarHotkey { get; set; } = "F4";
+    public string TranslateCloseHotkey { get; set; } = "Escape";
     
     // AI
     public string AIResourcesDirectory { get; set; } = string.Empty;

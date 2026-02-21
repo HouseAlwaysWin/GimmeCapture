@@ -14,29 +14,51 @@ public class HotkeyMappingService
         {
             { "SnipHotkey", (vm, val) => vm.SnipHotkey = val },
             { "RecordHotkey", (vm, val) => vm.RecordHotkey = val },
+            { "TranslateHotkey", (vm, val) => vm.TranslateHotkey = val },
             { "CopyHotkey", (vm, val) => vm.CopyHotkey = val },
             { "PinHotkey", (vm, val) => vm.PinHotkey = val },
             
-            // Drawing Tools
-            { "RectangleHotkey", (vm, val) => vm.RectangleHotkey = val },
-            { "EllipseHotkey", (vm, val) => vm.EllipseHotkey = val },
-            { "ArrowHotkey", (vm, val) => vm.ArrowHotkey = val },
-            { "LineHotkey", (vm, val) => vm.LineHotkey = val },
-            { "PenHotkey", (vm, val) => vm.PenHotkey = val },
-            { "TextHotkey", (vm, val) => vm.TextHotkey = val },
-            { "MosaicHotkey", (vm, val) => vm.MosaicHotkey = val },
-            { "BlurHotkey", (vm, val) => vm.BlurHotkey = val },
-            
-            // Actions
-            { "UndoHotkey", (vm, val) => vm.UndoHotkey = val },
-            { "RedoHotkey", (vm, val) => vm.RedoHotkey = val },
-            { "ClearHotkey", (vm, val) => vm.ClearHotkey = val },
-            { "SaveHotkey", (vm, val) => vm.SaveHotkey = val },
-            { "CloseHotkey", (vm, val) => vm.CloseHotkey = val },
-            { "TogglePlaybackHotkey", (vm, val) => vm.TogglePlaybackHotkey = val },
-            { "ToggleToolbarHotkey", (vm, val) => vm.ToggleToolbarHotkey = val },
-            { "SelectionModeHotkey", (vm, val) => vm.SelectionModeHotkey = val },
-            { "CropModeHotkey", (vm, val) => vm.CropModeHotkey = val }
+            // Snip Mode Actions
+            { "SnipRectangleHotkey", (vm, val) => vm.SnipRectangleHotkey = val },
+            { "SnipEllipseHotkey", (vm, val) => vm.SnipEllipseHotkey = val },
+            { "SnipArrowHotkey", (vm, val) => vm.SnipArrowHotkey = val },
+            { "SnipLineHotkey", (vm, val) => vm.SnipLineHotkey = val },
+            { "SnipPenHotkey", (vm, val) => vm.SnipPenHotkey = val },
+            { "SnipTextHotkey", (vm, val) => vm.SnipTextHotkey = val },
+            { "SnipMosaicHotkey", (vm, val) => vm.SnipMosaicHotkey = val },
+            { "SnipBlurHotkey", (vm, val) => vm.SnipBlurHotkey = val },
+            { "SnipUndoHotkey", (vm, val) => vm.SnipUndoHotkey = val },
+            { "SnipRedoHotkey", (vm, val) => vm.SnipRedoHotkey = val },
+            { "SnipClearHotkey", (vm, val) => vm.SnipClearHotkey = val },
+            { "SnipSaveHotkey", (vm, val) => vm.SnipSaveHotkey = val },
+            { "SnipCopyHotkey", (vm, val) => vm.SnipCopyHotkey = val },
+            { "SnipCloseHotkey", (vm, val) => vm.SnipCloseHotkey = val },
+            { "SnipToolbarHotkey", (vm, val) => vm.SnipToolbarHotkey = val },
+            { "SnipSelectionModeHotkey", (vm, val) => vm.SnipSelectionModeHotkey = val },
+            { "SnipCropModeHotkey", (vm, val) => vm.SnipCropModeHotkey = val },
+
+            // Record Mode Actions
+            { "RecordRectangleHotkey", (vm, val) => vm.RecordRectangleHotkey = val },
+            { "RecordEllipseHotkey", (vm, val) => vm.RecordEllipseHotkey = val },
+            { "RecordArrowHotkey", (vm, val) => vm.RecordArrowHotkey = val },
+            { "RecordLineHotkey", (vm, val) => vm.RecordLineHotkey = val },
+            { "RecordPenHotkey", (vm, val) => vm.RecordPenHotkey = val },
+            { "RecordTextHotkey", (vm, val) => vm.RecordTextHotkey = val },
+            { "RecordMosaicHotkey", (vm, val) => vm.RecordMosaicHotkey = val },
+            { "RecordBlurHotkey", (vm, val) => vm.RecordBlurHotkey = val },
+            { "RecordUndoHotkey", (vm, val) => vm.RecordUndoHotkey = val },
+            { "RecordRedoHotkey", (vm, val) => vm.RecordRedoHotkey = val },
+            { "RecordClearHotkey", (vm, val) => vm.RecordClearHotkey = val },
+            { "RecordSaveHotkey", (vm, val) => vm.RecordSaveHotkey = val },
+            { "RecordCloseHotkey", (vm, val) => vm.RecordCloseHotkey = val },
+            { "RecordActionHotkey", (vm, val) => vm.RecordActionHotkey = val },
+            { "RecordToolbarHotkey", (vm, val) => vm.RecordToolbarHotkey = val },
+            { "RecordPlaybackHotkey", (vm, val) => vm.RecordPlaybackHotkey = val },
+
+            // Translate Mode Actions
+            { "TranslateActionHotkey", (vm, val) => vm.TranslateActionHotkey = val },
+            { "TranslateToolbarHotkey", (vm, val) => vm.TranslateToolbarHotkey = val },
+            { "TranslateCloseHotkey", (vm, val) => vm.TranslateCloseHotkey = val }
         };
     }
 

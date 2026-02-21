@@ -330,125 +330,85 @@ public partial class MainWindowViewModel
     public string TranslateTooltip => $"{LocalizationService.Instance["TranslateHotkey"]} ({TranslateHotkey})";
 
     // Drawing Tool Hotkeys
-    private string _rectangleHotkey = "R";
-    public string RectangleHotkey
-    {
-        get => _rectangleHotkey;
-        set => this.RaiseAndSetIfChanged(ref _rectangleHotkey, value);
-    }
+    // Snip Mode Hotkeys
+    private string _snipRectangleHotkey = "R";
+    public string SnipRectangleHotkey { get => _snipRectangleHotkey; set => this.RaiseAndSetIfChanged(ref _snipRectangleHotkey, value); }
+    private string _snipEllipseHotkey = "E";
+    public string SnipEllipseHotkey { get => _snipEllipseHotkey; set => this.RaiseAndSetIfChanged(ref _snipEllipseHotkey, value); }
+    private string _snipArrowHotkey = "A";
+    public string SnipArrowHotkey { get => _snipArrowHotkey; set => this.RaiseAndSetIfChanged(ref _snipArrowHotkey, value); }
+    private string _snipLineHotkey = "L";
+    public string SnipLineHotkey { get => _snipLineHotkey; set => this.RaiseAndSetIfChanged(ref _snipLineHotkey, value); }
+    private string _snipPenHotkey = "P";
+    public string SnipPenHotkey { get => _snipPenHotkey; set => this.RaiseAndSetIfChanged(ref _snipPenHotkey, value); }
+    private string _snipTextHotkey = "T";
+    public string SnipTextHotkey { get => _snipTextHotkey; set => this.RaiseAndSetIfChanged(ref _snipTextHotkey, value); }
+    private string _snipMosaicHotkey = "M";
+    public string SnipMosaicHotkey { get => _snipMosaicHotkey; set => this.RaiseAndSetIfChanged(ref _snipMosaicHotkey, value); }
+    private string _snipBlurHotkey = "B";
+    public string SnipBlurHotkey { get => _snipBlurHotkey; set => this.RaiseAndSetIfChanged(ref _snipBlurHotkey, value); }
+    private string _snipUndoHotkey = "Ctrl+Z";
+    public string SnipUndoHotkey { get => _snipUndoHotkey; set => this.RaiseAndSetIfChanged(ref _snipUndoHotkey, value); }
+    private string _snipRedoHotkey = "Ctrl+Y";
+    public string SnipRedoHotkey { get => _snipRedoHotkey; set => this.RaiseAndSetIfChanged(ref _snipRedoHotkey, value); }
+    private string _snipClearHotkey = "Delete";
+    public string SnipClearHotkey { get => _snipClearHotkey; set => this.RaiseAndSetIfChanged(ref _snipClearHotkey, value); }
+    private string _snipSaveHotkey = "Ctrl+S";
+    public string SnipSaveHotkey { get => _snipSaveHotkey; set => this.RaiseAndSetIfChanged(ref _snipSaveHotkey, value); }
+    private string _snipCopyHotkey = "Ctrl+C";
+    public string SnipCopyHotkey { get => _snipCopyHotkey; set => this.RaiseAndSetIfChanged(ref _snipCopyHotkey, value); }
+    private string _snipCloseHotkey = "Escape";
+    public string SnipCloseHotkey { get => _snipCloseHotkey; set => this.RaiseAndSetIfChanged(ref _snipCloseHotkey, value); }
+    private string _snipToolbarHotkey = "F4";
+    public string SnipToolbarHotkey { get => _snipToolbarHotkey; set => this.RaiseAndSetIfChanged(ref _snipToolbarHotkey, value); }
+    private string _snipSelectionModeHotkey = "S";
+    public string SnipSelectionModeHotkey { get => _snipSelectionModeHotkey; set => this.RaiseAndSetIfChanged(ref _snipSelectionModeHotkey, value); }
+    private string _snipCropModeHotkey = "C";
+    public string SnipCropModeHotkey { get => _snipCropModeHotkey; set => this.RaiseAndSetIfChanged(ref _snipCropModeHotkey, value); }
 
-    private string _ellipseHotkey = "E";
-    public string EllipseHotkey
-    {
-        get => _ellipseHotkey;
-        set => this.RaiseAndSetIfChanged(ref _ellipseHotkey, value);
-    }
+    // Record Mode Hotkeys
+    private string _recordRectangleHotkey = "R";
+    public string RecordRectangleHotkey { get => _recordRectangleHotkey; set => this.RaiseAndSetIfChanged(ref _recordRectangleHotkey, value); }
+    private string _recordEllipseHotkey = "E";
+    public string RecordEllipseHotkey { get => _recordEllipseHotkey; set => this.RaiseAndSetIfChanged(ref _recordEllipseHotkey, value); }
+    private string _recordArrowHotkey = "A";
+    public string RecordArrowHotkey { get => _recordArrowHotkey; set => this.RaiseAndSetIfChanged(ref _recordArrowHotkey, value); }
+    private string _recordLineHotkey = "L";
+    public string RecordLineHotkey { get => _recordLineHotkey; set => this.RaiseAndSetIfChanged(ref _recordLineHotkey, value); }
+    private string _recordPenHotkey = "P";
+    public string RecordPenHotkey { get => _recordPenHotkey; set => this.RaiseAndSetIfChanged(ref _recordPenHotkey, value); }
+    private string _recordTextHotkey = "T";
+    public string RecordTextHotkey { get => _recordTextHotkey; set => this.RaiseAndSetIfChanged(ref _recordTextHotkey, value); }
+    private string _recordMosaicHotkey = "M";
+    public string RecordMosaicHotkey { get => _recordMosaicHotkey; set => this.RaiseAndSetIfChanged(ref _recordMosaicHotkey, value); }
+    private string _recordBlurHotkey = "B";
+    public string RecordBlurHotkey { get => _recordBlurHotkey; set => this.RaiseAndSetIfChanged(ref _recordBlurHotkey, value); }
+    private string _recordUndoHotkey = "Ctrl+Z";
+    public string RecordUndoHotkey { get => _recordUndoHotkey; set => this.RaiseAndSetIfChanged(ref _recordUndoHotkey, value); }
+    private string _recordRedoHotkey = "Ctrl+Y";
+    public string RecordRedoHotkey { get => _recordRedoHotkey; set => this.RaiseAndSetIfChanged(ref _recordRedoHotkey, value); }
+    private string _recordClearHotkey = "Delete";
+    public string RecordClearHotkey { get => _recordClearHotkey; set => this.RaiseAndSetIfChanged(ref _recordClearHotkey, value); }
+    private string _recordSaveHotkey = "Ctrl+S";
+    public string RecordSaveHotkey { get => _recordSaveHotkey; set => this.RaiseAndSetIfChanged(ref _recordSaveHotkey, value); }
+    private string _recordCloseHotkey = "Escape";
+    public string RecordCloseHotkey { get => _recordCloseHotkey; set => this.RaiseAndSetIfChanged(ref _recordCloseHotkey, value); }
+    private string _recordToolbarHotkey = "F4";
+    public string RecordToolbarHotkey { get => _recordToolbarHotkey; set => this.RaiseAndSetIfChanged(ref _recordToolbarHotkey, value); }
+    private string _recordActionHotkey = "F3"; // F3 in Record mode (Stop/Pin)
+    public string RecordActionHotkey { get => _recordActionHotkey; set => this.RaiseAndSetIfChanged(ref _recordActionHotkey, value); }
+    private string _recordPlaybackHotkey = "Space";
+    public string RecordPlaybackHotkey { get => _recordPlaybackHotkey; set => this.RaiseAndSetIfChanged(ref _recordPlaybackHotkey, value); }
 
-    private string _arrowHotkey = "A";
-    public string ArrowHotkey
-    {
-        get => _arrowHotkey;
-        set => this.RaiseAndSetIfChanged(ref _arrowHotkey, value);
-    }
-
-    private string _lineHotkey = "L";
-    public string LineHotkey
-    {
-        get => _lineHotkey;
-        set => this.RaiseAndSetIfChanged(ref _lineHotkey, value);
-    }
-
-    private string _penHotkey = "P";
-    public string PenHotkey
-    {
-        get => _penHotkey;
-        set => this.RaiseAndSetIfChanged(ref _penHotkey, value);
-    }
-
-    private string _textHotkey = "T";
-    public string TextHotkey
-    {
-        get => _textHotkey;
-        set => this.RaiseAndSetIfChanged(ref _textHotkey, value);
-    }
-
-    private string _mosaicHotkey = "M";
-    public string MosaicHotkey
-    {
-        get => _mosaicHotkey;
-        set => this.RaiseAndSetIfChanged(ref _mosaicHotkey, value);
-    }
-
-    private string _blurHotkey = "B";
-    public string BlurHotkey
-    {
-        get => _blurHotkey;
-        set => this.RaiseAndSetIfChanged(ref _blurHotkey, value);
-    }
+    // Translate Mode Hotkeys
+    private string _translateActionHotkey = "F3"; // F3 in Translate mode (Hide results)
+    public string TranslateActionHotkey { get => _translateActionHotkey; set => this.RaiseAndSetIfChanged(ref _translateActionHotkey, value); }
+    private string _translateToolbarHotkey = "F4";
+    public string TranslateToolbarHotkey { get => _translateToolbarHotkey; set => this.RaiseAndSetIfChanged(ref _translateToolbarHotkey, value); }
+    private string _translateCloseHotkey = "Escape";
+    public string TranslateCloseHotkey { get => _translateCloseHotkey; set => this.RaiseAndSetIfChanged(ref _translateCloseHotkey, value); }
 
     // Action Hotkeys
-    private string _undoHotkey = "Ctrl+Z";
-    public string UndoHotkey
-    {
-        get => _undoHotkey;
-        set => this.RaiseAndSetIfChanged(ref _undoHotkey, value);
-    }
-
-    private string _redoHotkey = "Ctrl+Y";
-    public string RedoHotkey
-    {
-        get => _redoHotkey;
-        set => this.RaiseAndSetIfChanged(ref _redoHotkey, value);
-    }
-
-    private string _clearHotkey = "Delete";
-    public string ClearHotkey
-    {
-        get => _clearHotkey;
-        set => this.RaiseAndSetIfChanged(ref _clearHotkey, value);
-    }
-
-    private string _saveHotkey = "Ctrl+S";
-    public string SaveHotkey
-    {
-        get => _saveHotkey;
-        set => this.RaiseAndSetIfChanged(ref _saveHotkey, value);
-    }
-
-    private string _closeHotkey = "Escape";
-    public string CloseHotkey
-    {
-        get => _closeHotkey;
-        set => this.RaiseAndSetIfChanged(ref _closeHotkey, value);
-    }
-
-    private string _togglePlaybackHotkey = "Space";
-    public string TogglePlaybackHotkey
-    {
-        get => _togglePlaybackHotkey;
-        set => this.RaiseAndSetIfChanged(ref _togglePlaybackHotkey, value);
-    }
-
-    private string _toggleToolbarHotkey = "F4";
-    public string ToggleToolbarHotkey
-    {
-        get => _toggleToolbarHotkey;
-        set => this.RaiseAndSetIfChanged(ref _toggleToolbarHotkey, value);
-    }
-
-    private string _selectionModeHotkey = "S";
-    public string SelectionModeHotkey
-    {
-        get => _selectionModeHotkey;
-        set => this.RaiseAndSetIfChanged(ref _selectionModeHotkey, value);
-    }
-
-    private string _cropModeHotkey = "C";
-    public string CropModeHotkey
-    {
-        get => _cropModeHotkey;
-        set => this.RaiseAndSetIfChanged(ref _cropModeHotkey, value);
-    }
 
     private string _videoSaveDirectory = string.Empty;
     public string VideoSaveDirectory
@@ -575,6 +535,88 @@ public partial class MainWindowViewModel
     {
         get => _hideRecordSelectionBorder;
         set => this.RaiseAndSetIfChanged(ref _hideRecordSelectionBorder, value);
+    }
+
+    public string? CheckHotkeyConflict(string targetTag, string hotkey)
+    {
+        // 1. Global Group (Idle state triggers)
+        var globalGroup = new[] { "SnipHotkey", "RecordHotkey", "TranslateHotkey", "PinHotkey", "CopyHotkey" };
+        
+        // 2. Snip Group (Local to Screenshot mode)
+        var snipGroup = new[] { 
+            "SnipRectangleHotkey", "SnipEllipseHotkey", "SnipArrowHotkey", "SnipLineHotkey", "SnipPenHotkey", 
+            "SnipTextHotkey", "SnipMosaicHotkey", "SnipBlurHotkey", "SnipUndoHotkey", "SnipRedoHotkey", 
+            "SnipClearHotkey", "SnipSaveHotkey", "SnipCopyHotkey", "SnipCloseHotkey", 
+            "SnipToolbarHotkey", "SnipSelectionModeHotkey", "SnipCropModeHotkey", "PinHotkey" 
+        };
+
+        // 3. Record Group (Local to Video Recording mode)
+        var recordGroup = new[] { 
+            "RecordRectangleHotkey", "RecordEllipseHotkey", "RecordArrowHotkey", "RecordLineHotkey", "RecordPenHotkey", 
+            "RecordTextHotkey", "RecordMosaicHotkey", "RecordBlurHotkey", "RecordUndoHotkey", "RecordRedoHotkey", 
+            "RecordClearHotkey", "RecordSaveHotkey", "RecordCloseHotkey", "RecordToolbarHotkey", 
+            "RecordActionHotkey", "RecordPlaybackHotkey" 
+        };
+
+        // 4. Translate Group (Local to Translation mode)
+        var translateGroup = new[] { "TranslateActionHotkey", "TranslateToolbarHotkey", "TranslateCloseHotkey" };
+
+        if (globalGroup.Contains(targetTag))
+        {
+            if (targetTag != "SnipHotkey" && SnipHotkey == hotkey) return "SnipHotkey";
+            if (targetTag != "RecordHotkey" && RecordHotkey == hotkey) return "RecordHotkey";
+            if (targetTag != "TranslateHotkey" && TranslateHotkey == hotkey) return "TranslateHotkey";
+            if (targetTag != "PinHotkey" && PinHotkey == hotkey) return "PinHotkey";
+            if (targetTag != "CopyHotkey" && CopyHotkey == hotkey) return "CopyHotkey";
+        }
+        else if (snipGroup.Contains(targetTag))
+        {
+            if (targetTag != "SnipRectangleHotkey" && SnipRectangleHotkey == hotkey) return "TipRectangle";
+            if (targetTag != "SnipEllipseHotkey" && SnipEllipseHotkey == hotkey) return "TipEllipse";
+            if (targetTag != "SnipArrowHotkey" && SnipArrowHotkey == hotkey) return "TipArrow";
+            if (targetTag != "SnipLineHotkey" && SnipLineHotkey == hotkey) return "TipLine";
+            if (targetTag != "SnipPenHotkey" && SnipPenHotkey == hotkey) return "TipPen";
+            if (targetTag != "SnipTextHotkey" && SnipTextHotkey == hotkey) return "TipText";
+            if (targetTag != "SnipMosaicHotkey" && SnipMosaicHotkey == hotkey) return "TipMosaic";
+            if (targetTag != "SnipBlurHotkey" && SnipBlurHotkey == hotkey) return "TipBlur";
+            if (targetTag != "SnipUndoHotkey" && SnipUndoHotkey == hotkey) return "Undo";
+            if (targetTag != "SnipRedoHotkey" && SnipRedoHotkey == hotkey) return "Redo";
+            if (targetTag != "SnipClearHotkey" && SnipClearHotkey == hotkey) return "Clear";
+            if (targetTag != "SnipSaveHotkey" && SnipSaveHotkey == hotkey) return "Save";
+            if (targetTag != "SnipCopyHotkey" && SnipCopyHotkey == hotkey) return "TipCopy";
+            if (targetTag != "SnipCloseHotkey" && SnipCloseHotkey == hotkey) return "ActionClose";
+            if (targetTag != "SnipToolbarHotkey" && SnipToolbarHotkey == hotkey) return "ActionToolbar";
+            if (targetTag != "SnipSelectionModeHotkey" && SnipSelectionModeHotkey == hotkey) return "ActionSelectionMode";
+            if (targetTag != "SnipCropModeHotkey" && SnipCropModeHotkey == hotkey) return "ActionCropMode";
+            if (targetTag != "PinHotkey" && PinHotkey == hotkey) return "TipPin";
+        }
+        else if (recordGroup.Contains(targetTag))
+        {
+            if (targetTag != "RecordRectangleHotkey" && RecordRectangleHotkey == hotkey) return "TipRectangle";
+            if (targetTag != "RecordEllipseHotkey" && RecordEllipseHotkey == hotkey) return "TipEllipse";
+            if (targetTag != "RecordArrowHotkey" && RecordArrowHotkey == hotkey) return "TipArrow";
+            if (targetTag != "RecordLineHotkey" && RecordLineHotkey == hotkey) return "TipLine";
+            if (targetTag != "RecordPenHotkey" && RecordPenHotkey == hotkey) return "TipPen";
+            if (targetTag != "RecordTextHotkey" && RecordTextHotkey == hotkey) return "TipText";
+            if (targetTag != "RecordMosaicHotkey" && RecordMosaicHotkey == hotkey) return "TipMosaic";
+            if (targetTag != "RecordBlurHotkey" && RecordBlurHotkey == hotkey) return "TipBlur";
+            if (targetTag != "RecordUndoHotkey" && RecordUndoHotkey == hotkey) return "Undo";
+            if (targetTag != "RecordRedoHotkey" && RecordRedoHotkey == hotkey) return "Redo";
+            if (targetTag != "RecordClearHotkey" && RecordClearHotkey == hotkey) return "Clear";
+            if (targetTag != "RecordSaveHotkey" && RecordSaveHotkey == hotkey) return "Save";
+            if (targetTag != "RecordCloseHotkey" && RecordCloseHotkey == hotkey) return "ActionClose";
+            if (targetTag != "RecordToolbarHotkey" && RecordToolbarHotkey == hotkey) return "ActionToolbar";
+            if (targetTag != "RecordActionHotkey" && RecordActionHotkey == hotkey) return "ActionStartPin";
+            if (targetTag != "RecordPlaybackHotkey" && RecordPlaybackHotkey == hotkey) return "ActionPlayback";
+        }
+        else if (translateGroup.Contains(targetTag))
+        {
+            if (targetTag != "TranslateActionHotkey" && TranslateActionHotkey == hotkey) return "ActionHideTranslate";
+            if (targetTag != "TranslateToolbarHotkey" && TranslateToolbarHotkey == hotkey) return "ActionToolbar";
+            if (targetTag != "TranslateCloseHotkey" && TranslateCloseHotkey == hotkey) return "ActionClose";
+        }
+
+        return null;
     }
 
     private string _tempDirectory = string.Empty;
@@ -872,6 +914,46 @@ public partial class MainWindowViewModel
             OllamaModel = settings.OllamaModel;
             SourceLanguage = settings.SourceLanguage;
             TargetLanguage = settings.TargetLanguage;
+
+            // Load mode-specific hotkeys
+            SnipRectangleHotkey = settings.SnipRectangleHotkey;
+            SnipEllipseHotkey = settings.SnipEllipseHotkey;
+            SnipArrowHotkey = settings.SnipArrowHotkey;
+            SnipLineHotkey = settings.SnipLineHotkey;
+            SnipPenHotkey = settings.SnipPenHotkey;
+            SnipTextHotkey = settings.SnipTextHotkey;
+            SnipMosaicHotkey = settings.SnipMosaicHotkey;
+            SnipBlurHotkey = settings.SnipBlurHotkey;
+            SnipUndoHotkey = settings.SnipUndoHotkey;
+            SnipRedoHotkey = settings.SnipRedoHotkey;
+            SnipClearHotkey = settings.SnipClearHotkey;
+            SnipSaveHotkey = settings.SnipSaveHotkey;
+            SnipCopyHotkey = settings.SnipCopyHotkey;
+            SnipCloseHotkey = settings.SnipCloseHotkey;
+            SnipToolbarHotkey = settings.SnipToolbarHotkey;
+            SnipSelectionModeHotkey = settings.SnipSelectionModeHotkey;
+            SnipCropModeHotkey = settings.SnipCropModeHotkey;
+
+            RecordRectangleHotkey = settings.RecordRectangleHotkey;
+            RecordEllipseHotkey = settings.RecordEllipseHotkey;
+            RecordArrowHotkey = settings.RecordArrowHotkey;
+            RecordLineHotkey = settings.RecordLineHotkey;
+            RecordPenHotkey = settings.RecordPenHotkey;
+            RecordTextHotkey = settings.RecordTextHotkey;
+            RecordMosaicHotkey = settings.RecordMosaicHotkey;
+            RecordBlurHotkey = settings.RecordBlurHotkey;
+            RecordUndoHotkey = settings.RecordUndoHotkey;
+            RecordRedoHotkey = settings.RecordRedoHotkey;
+            RecordClearHotkey = settings.RecordClearHotkey;
+            RecordSaveHotkey = settings.RecordSaveHotkey;
+            RecordCloseHotkey = settings.RecordCloseHotkey;
+            RecordToolbarHotkey = settings.RecordToolbarHotkey;
+            RecordActionHotkey = settings.RecordActionHotkey;
+            RecordPlaybackHotkey = settings.RecordPlaybackHotkey;
+
+            TranslateActionHotkey = settings.TranslateActionHotkey;
+            TranslateToolbarHotkey = settings.TranslateToolbarHotkey;
+            TranslateCloseHotkey = settings.TranslateCloseHotkey;
             
             // Seed the list so ComboBox can show the value immediately.
             if (!string.IsNullOrEmpty(settings.OllamaModel))
@@ -968,6 +1050,46 @@ public partial class MainWindowViewModel
             settings.BorderColorHex = BorderColor.ToString();
             settings.ThemeColorHex = ThemeColor.ToString();
             settings.Language = SelectedLanguageOption.Value;
+
+            // Save mode-specific hotkeys
+            settings.SnipRectangleHotkey = SnipRectangleHotkey;
+            settings.SnipEllipseHotkey = SnipEllipseHotkey;
+            settings.SnipArrowHotkey = SnipArrowHotkey;
+            settings.SnipLineHotkey = SnipLineHotkey;
+            settings.SnipPenHotkey = SnipPenHotkey;
+            settings.SnipTextHotkey = SnipTextHotkey;
+            settings.SnipMosaicHotkey = SnipMosaicHotkey;
+            settings.SnipBlurHotkey = SnipBlurHotkey;
+            settings.SnipUndoHotkey = SnipUndoHotkey;
+            settings.SnipRedoHotkey = SnipRedoHotkey;
+            settings.SnipClearHotkey = SnipClearHotkey;
+            settings.SnipSaveHotkey = SnipSaveHotkey;
+            settings.SnipCopyHotkey = SnipCopyHotkey;
+            settings.SnipCloseHotkey = SnipCloseHotkey;
+            settings.SnipToolbarHotkey = SnipToolbarHotkey;
+            settings.SnipSelectionModeHotkey = SnipSelectionModeHotkey;
+            settings.SnipCropModeHotkey = SnipCropModeHotkey;
+
+            settings.RecordRectangleHotkey = RecordRectangleHotkey;
+            settings.RecordEllipseHotkey = RecordEllipseHotkey;
+            settings.RecordArrowHotkey = RecordArrowHotkey;
+            settings.RecordLineHotkey = RecordLineHotkey;
+            settings.RecordPenHotkey = RecordPenHotkey;
+            settings.RecordTextHotkey = RecordTextHotkey;
+            settings.RecordMosaicHotkey = RecordMosaicHotkey;
+            settings.RecordBlurHotkey = RecordBlurHotkey;
+            settings.RecordUndoHotkey = RecordUndoHotkey;
+            settings.RecordRedoHotkey = RecordRedoHotkey;
+            settings.RecordClearHotkey = RecordClearHotkey;
+            settings.RecordSaveHotkey = RecordSaveHotkey;
+            settings.RecordCloseHotkey = RecordCloseHotkey;
+            settings.RecordToolbarHotkey = RecordToolbarHotkey;
+            settings.RecordActionHotkey = RecordActionHotkey;
+            settings.RecordPlaybackHotkey = RecordPlaybackHotkey;
+
+            settings.TranslateActionHotkey = TranslateActionHotkey;
+            settings.TranslateToolbarHotkey = TranslateToolbarHotkey;
+            settings.TranslateCloseHotkey = TranslateCloseHotkey;
 
 
             await _settingsService.SaveAsync();
