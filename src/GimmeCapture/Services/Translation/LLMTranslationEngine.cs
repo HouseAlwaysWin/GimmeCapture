@@ -36,9 +36,12 @@ public class LLMTranslationEngine : ITranslationEngine
         string sourceLangName = ResolveSourceLanguageForPrompt(text, sourceLang);
         string targetLangName = GetTargetLanguageName(targetLang);
         
-        string systemPrompt = $@"You are a professional and strict translation engine. 
-Your ONLY task is to translate text accurately from {sourceLangName} to {targetLangName}.
-DO NOT provide explanations. DO NOT provide conversational responses like 'Sure' or 'Here is the translation'.";
+        string systemPrompt = $@"You are a professional and neutral translation engine. 
+Role: Translate ANY text provided from {sourceLangName} to {targetLangName} accurately.
+Rules:
+1. Output ONLY the translated text. 
+2. NO explanations, NO introductory text (e.g., 'Sure', 'Translated text:'), NO conversational filler.
+3. Preserve original paragraph structure and technical terms.";
 
         string strictHint = "";
         if (targetLangName.Contains("Japanese")) strictHint = "Use Japanese (Kanji and Kana). DO NOT use Chinese-only characters.";
@@ -107,24 +110,21 @@ Output:",
     private static string BuildStrictTranslationPrompt(string sourceLang, string targetLang, string text)
     {
         string strictHint = "";
-        if (targetLang.Contains("Japanese")) strictHint = "Use Japanese (Kanji and Kana). DO NOT use Chinese-only characters.";
-        else if (targetLang.Contains("Chinese")) strictHint = "Use Chinese characters only. DO NOT use Japanese Kana or Korean Hangul.";
+        if (targetLang.Contains("Japanese")) strictHint = "MUST use Japanese (Kanji/Kana). Ensure the output is natural Japanese, not Chinese.";
+        else if (targetLang.Contains("Chinese")) strictHint = "MUST use Chinese (Traditional/Taiwan). Ensure NO Japanese kana or Korean hangul remains.";
 
-        return $@"You are an expert translator. 
-Translate the following {sourceLang} text into {targetLang} accurately.
+        return $@"Task: Translate from {sourceLang} to {targetLang}.
 {strictHint}
 
 Rules:
-1) Output ONLY the translated text.
-2) NO explanations, NO quotes, NO original text.
-3) Do NOT say ""Translation:"", ""Sure"", or ""Here is the translation"".
-4) Preserve formatting, punctuation, and ORIGINAL LINE BREAKS.
-5) If the text is already in {targetLang}, return it as is.
+- Output ONLY the translated content.
+- NO quotes, NO 'Translation:', NO explanations.
+- If content is already in {targetLang}, return it unchanged.
 
-Input:
+Input Text:
 {text}
 
-Output:";
+Translation:";
     }
 
     private async Task<string> TranslateStrictRetryForCjkAsync(string model, string url, string text, TranslationLanguage target, CancellationToken ct)
@@ -183,31 +183,35 @@ Output:",
     {
         if (string.IsNullOrWhiteSpace(translated)) return false;
 
-        // If target is Japanese, it MUST contain kana if source was significant
-        // unless the translation is extremely short (e.g. "Yes").
+        // If target is Japanese, it MUST contain kana if it's more than a few words,
+        // unless the source was also purely Kanji and translation is short.
         if (target == TranslationLanguage.Japanese)
         {
             bool hasKana = translated.Any(c => (c >= 0x3040 && c <= 0x309F) || (c >= 0x30A0 && c <= 0x30FF));
             if (!hasKana && translated.Length > 2)
             {
-                // If source has kana but translation doesn't, it likely drifted to Chinese
-                if (source.Any(c => (c >= 0x3040 && c <= 0x309F) || (c >= 0x30A0 && c <= 0x30FF))) return false;
-                
-                // If source is English/Chinese and translation is only Kanji, it's suspicious but could be valid.
-                // However, user specifically complained about Chinese output when Japanese selected.
-                // Most Japanese sentences have at least some kana.
                 return false; 
             }
         }
 
+        // If target is NOT Japanese (e.g. Chinese), it MUST NOT contain Japanese kana
+        // unless the source was English or another language where the LLM might have hallucinated Japanese.
+        // Actually, if target is Chinese, ANY kana is usually a failure.
         if (target != TranslationLanguage.Japanese && translated.Any(c => (c >= 0x3040 && c <= 0x309F) || (c >= 0x30A0 && c <= 0x30FF)))
         {
-            if (!source.Any(c => (c >= 0x3040 && c <= 0x309F) || (c >= 0x30A0 && c <= 0x30FF))) return false;
-            // If source had kana, but result has too much kana left
+            // If the source had kana, maybe some remain in technical terms, but usually they should be translated.
+            // Strict rule: if target is Chinese, reject if kana found.
+            if (target == TranslationLanguage.TraditionalChinese || target == TranslationLanguage.SimplifiedChinese)
+            {
+                return false;
+            }
+            
             int sKana = source.Count(c => (c >= 0x3040 && c <= 0x309F) || (c >= 0x30A0 && c <= 0x30FF));
             int tKana = translated.Count(c => (c >= 0x3040 && c <= 0x309F) || (c >= 0x30A0 && c <= 0x30FF));
-            if (tKana > translated.Length / 3) return false;
+            if (tKana > 0 && sKana == 0) return false; // Hallucinated Japanese
+            if (tKana > translated.Length / 4) return false; // Too much kana left
         }
+        
         return true;
     }
 
@@ -221,12 +225,15 @@ Output:",
         _ => "Traditional Chinese"
     };
 
-    private string ResolveSourceLanguageForPrompt(string text, OCRLanguage lang)
+    private string ResolveSourceLanguageForPrompt(string text, OCRLanguage lang) => lang switch
     {
-        if (lang != OCRLanguage.Auto) return lang.ToString();
-        if (text.Any(c => (c >= 0x3040 && c <= 0x309F) || (c >= 0x30A0 && c <= 0x30FF))) return "Japanese";
-        if (text.Any(c => (c >= 0x1100 && c <= 0x11FF) || (c >= 0xAC00 && c <= 0xD7AF))) return "Korean";
-        if (text.Any(c => (c >= 0x4E00 && c <= 0x9FFF))) return "Chinese";
-        return "English";
-    }
+        OCRLanguage.TraditionalChinese => "Traditional Chinese",
+        OCRLanguage.SimplifiedChinese => "Simplified Chinese",
+        OCRLanguage.Japanese => "Japanese",
+        OCRLanguage.Korean => "Korean",
+        OCRLanguage.English => "English",
+        _ => text.Any(c => (c >= 0x3040 && c <= 0x309F) || (c >= 0x30A0 && c <= 0x30FF)) ? "Japanese" :
+             text.Any(c => (c >= 0x1100 && c <= 0x11FF) || (c >= 0xAC00 && c <= 0xD7AF)) ? "Korean" :
+             text.Any(c => (c >= 0x4E00 && c <= 0x9FFF)) ? "Chinese" : "English"
+    };
 }

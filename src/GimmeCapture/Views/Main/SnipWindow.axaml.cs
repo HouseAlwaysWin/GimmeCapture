@@ -267,10 +267,10 @@ public partial class SnipWindow : Window
                     .ObserveOn(RxApp.MainThreadScheduler)
                     .Subscribe(state => 
                     {
-                        // Removed Win32Helpers.SetWindowCaptureVisibility(hwnd, isVisibleToCapture) 
-                        // because WDA_EXCLUDEFROMCAPTURE can cause transparent windows to completely vanish from the user's screen on some Windows builds.
+                        // Note: We use WDA_EXCLUDEFROMCAPTURE for Translation Mode in OnOpened.
+                        // For Recording Mode, we rely on hiding specific UI elements.
                         
-                        // Also trigger UI update for decorations since we removed force-hide
+                        // Trigger UI update for decorations
                         _viewModel.RaisePropertyChanged(nameof(_viewModel.HideSelectionDecoration));
                         _viewModel.RaisePropertyChanged(nameof(_viewModel.HideFrameBorder));
                         _viewModel.RaisePropertyChanged(nameof(_viewModel.IsToolbarVisible));

@@ -48,6 +48,7 @@ public partial class MainWindowViewModel
                 
                 if (!_isDataLoading)
                 {
+                   _settingsService.Settings.SourceLanguage = value; // Immediate sync
                    IsModified = true;
                    _ = SaveSettingsAsync();
                 }
@@ -67,6 +68,7 @@ public partial class MainWindowViewModel
                 
                 if (!_isDataLoading)
                 {
+                   _settingsService.Settings.TargetLanguage = value; // Immediate sync
                    IsModified = true; // Mark as modified so Save can happen if auto-save or manual save
                    _ = SaveSettingsAsync(); // Auto-save for convenience
                 }
@@ -106,6 +108,7 @@ public partial class MainWindowViewModel
 
                 if (!_isDataLoading)
                 {
+                    _settingsService.Settings.SelectedTranslationEngine = value; // Immediate sync
                     IsModified = true;
                     _ = SaveSettingsAsync();
                 }
@@ -707,7 +710,7 @@ public partial class MainWindowViewModel
             this.RaiseAndSetIfChanged(ref _ollamaModel, value);
             if (!_isDataLoading)
             {
-                _settingsService.Settings.OllamaModel = value;
+                _settingsService.Settings.OllamaModel = value; // Immediate sync
                 IsModified = true;
                 _ = SaveSettingsAsync();
             }
@@ -723,7 +726,7 @@ public partial class MainWindowViewModel
             this.RaiseAndSetIfChanged(ref _ollamaApiUrl, value);
             if (!_isDataLoading)
             {
-                _settingsService.Settings.OllamaApiUrl = value;
+                _settingsService.Settings.OllamaApiUrl = value; // Immediate sync
                 IsModified = true;
                 _ = SaveSettingsAsync();
             }

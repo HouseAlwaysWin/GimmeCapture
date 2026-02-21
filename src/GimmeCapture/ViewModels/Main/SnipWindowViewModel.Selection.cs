@@ -223,17 +223,22 @@ public partial class SnipWindowViewModel
                         if (sel.LastPixels != null && sel.LastPixelWidth == width && sel.LastPixelHeight == height && currentPixels.Length == sel.LastPixels.Length)
                         {
                             int diffCount = 0;
-                            int totalPixels = currentPixels.Length / 4; // Assuming RGBA
-                            int step = 4; // Check every 4th pixel for speed
+                            int totalPixels = width * height;
+                            int step = 8; // Sample every 8th pixel for better performance in large regions
 
-                            for (int i = 0; i < currentPixels.Length; i += step * 4) // Jump by step pixels
+                            for (int i = 0; i < currentPixels.Length; i += step * 4) 
                             {
-                                // SAD (Sum of Absolute Differences) on RGB, ignore Alpha
-                                int diff = Math.Abs(currentPixels[i] - sel.LastPixels[i]) +
-                                           Math.Abs(currentPixels[i + 1] - sel.LastPixels[i + 1]) +
-                                           Math.Abs(currentPixels[i + 2] - sel.LastPixels[i + 2]);
+                                // SAD (Sum of Absolute Differences) on RGB
+                                int rDiff = currentPixels[i] - sel.LastPixels[i];
+                                int gDiff = currentPixels[i + 1] - sel.LastPixels[i + 1];
+                                int bDiff = currentPixels[i + 2] - sel.LastPixels[i + 2];
+                                
+                                // Square sum for better sensitivity to noise vs content change? 
+                                // No, SAD is fine but let's use a lower per-pixel noise threshold (30 instead of 50)
+                                // to catch subtle subtitle changes while ignoring compression artifacts.
+                                int sad = Math.Abs(rDiff) + Math.Abs(gDiff) + Math.Abs(bDiff);
 
-                                if (diff > 50) // Threshold for pixel noise
+                                if (sad > 45) // Total difference threshold (sums to ~15 per channel)
                                 {
                                     diffCount++;
                                 }
@@ -242,7 +247,7 @@ public partial class SnipWindowViewModel
                             // Calculate percentage based on checked pixels
                             double diffPercentage = (double)diffCount / (totalPixels / step);
                             
-                            // 5% change threshold
+                            // 5% change threshold as requested
                             if (diffPercentage < 0.05) 
                             {
                                 hasSignificantChange = false;

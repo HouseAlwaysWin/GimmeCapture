@@ -109,10 +109,11 @@ public class TranslationService
         }
 
         bool acceptable = IsTranslationAcceptable(mergedText, translated, _settings.TargetLanguage);
-        if (!acceptable && _settings.TargetLanguage == TranslationLanguage.English)
+        if (!acceptable)
         {
-            translated = await ForceTranslateAsync(mergedText, ocrLang, ct);
-            acceptable = IsTranslationAcceptable(mergedText, translated, TranslationLanguage.English);
+            // Retry for ANY language if the first attempt was unacceptable
+            translated = await ForceTranslateAsync(mergedText, ocrLang, _settings.TargetLanguage, ct);
+            acceptable = IsTranslationAcceptable(mergedText, translated, _settings.TargetLanguage);
         }
 
         var result = new List<TranslatedBlock>();
@@ -172,11 +173,11 @@ public class TranslationService
         return await engine.TranslateAsync(text, sourceLang, _settings.TargetLanguage, ct);
     }
 
-    private async Task<string> ForceTranslateAsync(string text, OCRLanguage sourceLang, CancellationToken ct)
+    private async Task<string> ForceTranslateAsync(string text, OCRLanguage sourceLang, TranslationLanguage targetLang, CancellationToken ct)
     {
-        // Try fallback to LLM if current is not LLM, or just retry with strict English prompt
+        // Force the use of LLM for retry with a stricter target language prompt
         var llm = _translationEngines.OfType<LLMTranslationEngine>().FirstOrDefault();
-        if (llm != null) return await llm.TranslateAsync(text, sourceLang, TranslationLanguage.English, ct);
+        if (llm != null) return await llm.TranslateAsync(text, sourceLang, targetLang, ct);
         return text;
     }
 
@@ -201,7 +202,24 @@ public class TranslationService
     private bool IsTranslationAcceptable(string original, string translated, TranslationLanguage target)
     {
         if (string.IsNullOrWhiteSpace(translated)) return false;
+        
+        // If the translation is the same as original and is sufficiently long, it probably failed
         if (original.Length > 3 && translated == original) return false;
+
+        // CJK Specific logic
+        if (target == TranslationLanguage.TraditionalChinese || target == TranslationLanguage.SimplifiedChinese)
+        {
+            // If translating to Chinese, output MUST NOT contain Japanese kana
+            bool hasKana = translated.Any(c => (c >= 0x3040 && c <= 0x309F) || (c >= 0x30A0 && c <= 0x30FF));
+            if (hasKana) return false;
+        }
+        else if (target == TranslationLanguage.Japanese)
+        {
+            // If translating to Japanese, output SHOULD contain some kana unless it's very short
+            bool hasKana = translated.Any(c => (c >= 0x3040 && c <= 0x309F) || (c >= 0x30A0 && c <= 0x30FF));
+            if (!hasKana && translated.Length > 2) return false;
+        }
+
         return true;
     }
 
