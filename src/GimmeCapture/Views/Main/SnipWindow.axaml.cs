@@ -251,6 +251,24 @@ public partial class SnipWindow : Window
                 _viewModel.ToolbarHeight = b.Height;
             });
 
+            // Toggle window capture visibility based on recording state
+            // When recording, exclude SnipWindow from capture so toolbar/decorations don't show in video
+            if (_viewModel.RecordingService != null)
+            {
+                _viewModel.RecordingService.WhenAnyValue(x => x.State)
+                    .ObserveOn(RxApp.MainThreadScheduler)
+                    .Subscribe(state => 
+                    {
+                        var hwnd = this.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
+                        bool isVisibleToCapture = (state == RecordingState.Idle);
+                        Win32Helpers.SetWindowCaptureVisibility(hwnd, isVisibleToCapture);
+                        
+                        // Also trigger UI update for decorations since we removed force-hide
+                        _viewModel.RaisePropertyChanged(nameof(_viewModel.HideSelectionDecoration));
+                        _viewModel.RaisePropertyChanged(nameof(_viewModel.HideFrameBorder));
+                    });
+            }
+
             _viewModel.IsMagnifierEnabled = true;
             _viewModel.CloseAction = () => 
             {
@@ -298,7 +316,8 @@ public partial class SnipWindow : Window
                 x => x.CurrentState, 
                 x => x.IsDrawingMode,
                 x => x.IsTranslationMode,
-                x => x.IsTranslationSelectionActive);
+                x => x.IsTranslationSelectionActive,
+                x => x.RecState);
                 
             var trigger2 = _viewModel.WhenAnyValue(
                 x => x.ToolbarWidth,

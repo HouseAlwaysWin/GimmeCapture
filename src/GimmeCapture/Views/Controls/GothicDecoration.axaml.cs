@@ -41,13 +41,13 @@ namespace GimmeCapture.Views.Controls
         public static readonly StyledProperty<bool> ShowBorderProperty =
             AvaloniaProperty.Register<GothicDecoration, bool>(nameof(ShowBorder), true);
 
-        public static new readonly StyledProperty<double> BorderThicknessProperty =
-            AvaloniaProperty.Register<GothicDecoration, double>(nameof(BorderThickness), 1.0);
+        public static readonly StyledProperty<double> SelectionThicknessProperty =
+            AvaloniaProperty.Register<GothicDecoration, double>(nameof(SelectionThickness), 1.0);
 
-        public new double BorderThickness
+        public double SelectionThickness
         {
-            get => GetValue(BorderThicknessProperty);
-            set => SetValue(BorderThicknessProperty, value);
+            get => GetValue(SelectionThicknessProperty);
+            set => SetValue(SelectionThicknessProperty, value);
         }
 
         public bool ShowWings

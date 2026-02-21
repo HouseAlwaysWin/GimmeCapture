@@ -281,10 +281,10 @@
                 
                 <!-- Decoration Layer (Unified) -->
                 <ctl:GothicDecoration DecorationBrush="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}"
-                                      ShowWings="{Binding !IsRecordingActive}"
-                                      ShowCorners="{Binding !HideSelectionDecoration}"
-                                      ShowBorder="{Binding !HideFrameBorder}"
-                                      BorderThickness="{Binding SelectionBorderThickness}"
+                                      ShowWings="{Binding HideSelectionDecoration, Converter={StaticResource BoolInvertConverter}}"
+                                      ShowCorners="{Binding HideSelectionDecoration, Converter={StaticResource BoolInvertConverter}}"
+                                      ShowBorder="{Binding HideFrameBorder, Converter={StaticResource BoolInvertConverter}}"
+                                      SelectionThickness="{Binding SelectionBorderThickness}"
                                       WingWidth="{Binding WingWidth}"
                                       WingHeight="{Binding WingHeight}"
                                       SelectionIconSize="{Binding SelectionIconSize}"

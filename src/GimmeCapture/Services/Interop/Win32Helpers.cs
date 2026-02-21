@@ -24,6 +24,13 @@ public static class Win32Helpers
     [DllImport("user32.dll")]
     private static extern int SetWindowRgn(IntPtr hWnd, IntPtr hRgn, bool bRedraw);
 
+    [DllImport("user32.dll")]
+    private static extern bool SetWindowDisplayAffinity(IntPtr hWnd, uint dwAffinity);
+
+    private const uint WDA_NONE = 0x00000000;
+    private const uint WDA_MONITOR = 0x00000001;
+    private const uint WDA_EXCLUDEFROMCAPTURE = 0x00000011;
+
     // Combine region modes
     private const int RGN_AND = 1;
     private const int RGN_OR = 2;
@@ -207,9 +214,27 @@ public static class Win32Helpers
     /// Call this when closing the window or when no selection is active.
     /// </summary>
     /// <param name="hwnd">Window handle</param>
+    /// <summary>
+    /// Clears the window region, restoring the window to its default rectangular shape.
+    /// Call this when closing the window or when no selection is active.
+    /// </summary>
+    /// <param name="hwnd">Window handle</param>
     public static void ClearWindowRegion(IntPtr hwnd)
     {
         if (hwnd == IntPtr.Zero) return;
         SetWindowRgn(hwnd, IntPtr.Zero, true);
+    }
+
+    /// <summary>
+    /// Sets whether the window should be visible to screen capture software (FFmpeg, OBS, etc).
+    /// </summary>
+    /// <param name="hwnd">Window handle</param>
+    /// <param name="visible">True to be visible, False to be excluded from capture</param>
+    public static void SetWindowCaptureVisibility(IntPtr hwnd, bool visible)
+    {
+        if (hwnd == IntPtr.Zero || !OperatingSystem.IsWindows()) return;
+        
+        uint affinity = visible ? WDA_NONE : WDA_EXCLUDEFROMCAPTURE;
+        SetWindowDisplayAffinity(hwnd, affinity);
     }
 }

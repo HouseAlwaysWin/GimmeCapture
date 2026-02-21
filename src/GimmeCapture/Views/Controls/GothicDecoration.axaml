@@ -14,13 +14,13 @@
                 <Setter Property="Width" Value="{Binding SelectionIconSize}"/>
                 <Setter Property="Height" Value="{Binding SelectionIconSize}"/>
                 <Setter Property="Fill" Value="{Binding DecorationBrush}"/>
-                <Setter Property="Margin" Value="{Binding BorderThickness, Converter={StaticResource DynamicThicknessConverter}, ConverterParameter=4}"/>
+                <Setter Property="Margin" Value="{Binding SelectionThickness, Converter={StaticResource DynamicThicknessConverter}, ConverterParameter=4}"/>
             </Style>
         </Panel.Styles>
 
         <!-- Inner Border Line -->
         <Border BorderBrush="{Binding DecorationBrush}" 
-                BorderThickness="{Binding BorderThickness, Converter={StaticResource ThicknessConverter}}" 
+                BorderThickness="{Binding SelectionThickness, Converter={StaticResource ThicknessConverter}}" 
                 Margin="-1" 
                 IsHitTestVisible="False"
                 ClipToBounds="False"

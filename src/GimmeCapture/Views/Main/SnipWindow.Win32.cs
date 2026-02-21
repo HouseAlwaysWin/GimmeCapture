@@ -207,6 +207,9 @@ public partial class SnipWindow : Window
                     maxMargin = 20 * scaling;
                 }
                 
+                // Add an extra safety buffer for high-DPI or slight rounding variations
+                maxMargin += 20 * scaling;
+                
                 // The single contiguous outer region containing our graphics (avoids slicing complex PNG anti-aliasing)
                 var outerBox = new Rect(
                     scaledRect.X - maxMargin,
