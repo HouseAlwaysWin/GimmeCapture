@@ -65,4 +65,25 @@ public class UserSelectionRect : ReactiveObject
         get => _inferredFontSize;
         set => this.RaiseAndSetIfChanged(ref _inferredFontSize, value);
     }
+    
+    private byte[]? _lastPixels;
+    public byte[]? LastPixels
+    {
+        get => _lastPixels;
+        set => this.RaiseAndSetIfChanged(ref _lastPixels, value);
+    }
+
+    private int _lastPixelWidth;
+    public int LastPixelWidth
+    {
+        get => _lastPixelWidth;
+        set => this.RaiseAndSetIfChanged(ref _lastPixelWidth, value);
+    }
+
+    private int _lastPixelHeight;
+    public int LastPixelHeight
+    {
+        get => _lastPixelHeight;
+        set => this.RaiseAndSetIfChanged(ref _lastPixelHeight, value);
+    }
 }

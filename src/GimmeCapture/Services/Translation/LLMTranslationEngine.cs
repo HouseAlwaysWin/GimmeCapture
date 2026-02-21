@@ -36,10 +36,27 @@ public class LLMTranslationEngine : ITranslationEngine
         string sourceLangName = ResolveSourceLanguageForPrompt(text, sourceLang);
         string targetLangName = GetTargetLanguageName(targetLang);
         
+        string systemPrompt = $@"You are a professional and strict translation engine. 
+Your ONLY task is to translate text accurately from {sourceLangName} to {targetLangName}.
+DO NOT provide explanations. DO NOT provide conversational responses like 'Sure' or 'Here is the translation'.";
+
+        string strictHint = "";
+        if (targetLangName.Contains("Japanese")) strictHint = "Use Japanese (Kanji and Kana). DO NOT use Chinese-only characters.";
+        else if (targetLangName.Contains("Chinese")) strictHint = "Use Chinese characters only. DO NOT use Japanese Kana or Korean Hangul.";
+
         var request = new
         {
             model = model,
-            prompt = BuildStrictTranslationPrompt(sourceLangName, targetLangName, text),
+            system = systemPrompt,
+            prompt = $@"Translate the following text to {targetLangName}. 
+{strictHint}
+Preserve original line breaks and formatting. 
+Output ONLY the translated text.
+
+Input:
+{text}
+
+Output:",
             stream = false,
             options = new
             {

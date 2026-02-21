@@ -145,6 +145,14 @@ public partial class SnipWindow : Window
                 {
                     _viewModel.InitializeTranslationToolbarPosition();
                     Console.WriteLine($"[SnipWindow] Translation toolbar at ({_viewModel.ToolbarLeft}, {_viewModel.ToolbarTop})");
+                    
+                    // NEW: Exclude from capture specifically for Translation Mode to prevent flickering during background OCR updates.
+                    var hwnd = this.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
+                    if (hwnd != IntPtr.Zero && OperatingSystem.IsWindows())
+                    {
+                        Win32Helpers.SetWindowCaptureVisibility(hwnd, false);
+                        Console.WriteLine("[SnipWindow] Applied WDA_EXCLUDEFROMCAPTURE for Translation Mode.");
+                    }
                 }
             }
             else

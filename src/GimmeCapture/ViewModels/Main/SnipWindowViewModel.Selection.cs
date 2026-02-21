@@ -210,58 +210,85 @@ public partial class SnipWindowViewModel
                         var rect = sel.Bounds;
                         if (rect.Width <= 10 || rect.Height <= 10) continue;
 
-                        await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => IsCapturing = true);
-                        await Task.Delay(50); // 等待 UI 隱藏
-
+                        // Capture screen without flickering (UI will be hidden via WDA_EXCLUDEFROMCAPTURE in Translate mode)
                         using var bitmap = await _captureService.CaptureScreenAsync(rect, ScreenOffset, VisualScaling, false);
-                        
-                        await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => IsCapturing = false);
-
                         if (bitmap == null) continue;
 
-                        // Because the region is already cropped to the box, we can just recognize the whole thing.
-                        // Or we can just use TranslationService's AnalyzeAndTranslateAsync which does OCR + Translation in one go,
-                        // but that might be heavy if the text hasn't changed.
-                        // Let's use DetectText + RecognizeText to get the text string to compare first.
-                        var boxes = _sharedOcrEngine.DetectText(bitmap);
-                        var sb = new System.Text.StringBuilder();
-                        foreach (var box in boxes)
+                        // Calculate Pixel Diff
+                        var currentPixels = bitmap.Bytes;
+                        int width = bitmap.Width;
+                        int height = bitmap.Height;
+                        bool hasSignificantChange = true; // Default to true for first run
+
+                        if (sel.LastPixels != null && sel.LastPixelWidth == width && sel.LastPixelHeight == height && currentPixels.Length == sel.LastPixels.Length)
                         {
-                            var ocrResult = _sharedOcrEngine.RecognizeText(bitmap, box, token);
-                            if (!string.IsNullOrWhiteSpace(ocrResult.text))
+                            int diffCount = 0;
+                            int totalPixels = currentPixels.Length / 4; // Assuming RGBA
+                            int step = 4; // Check every 4th pixel for speed
+
+                            for (int i = 0; i < currentPixels.Length; i += step * 4) // Jump by step pixels
                             {
-                                sb.AppendLine(ocrResult.text);
+                                // SAD (Sum of Absolute Differences) on RGB, ignore Alpha
+                                int diff = Math.Abs(currentPixels[i] - sel.LastPixels[i]) +
+                                           Math.Abs(currentPixels[i + 1] - sel.LastPixels[i + 1]) +
+                                           Math.Abs(currentPixels[i + 2] - sel.LastPixels[i + 2]);
+
+                                if (diff > 50) // Threshold for pixel noise
+                                {
+                                    diffCount++;
+                                }
+                            }
+
+                            // Calculate percentage based on checked pixels
+                            double diffPercentage = (double)diffCount / (totalPixels / step);
+                            
+                            // 5% change threshold
+                            if (diffPercentage < 0.05) 
+                            {
+                                hasSignificantChange = false;
                             }
                         }
-                        var newText = sb.ToString().Trim();
 
-                        if (!string.IsNullOrWhiteSpace(newText) && newText != sel.LastOcrText)
+                        // Update cached pixels
+                        sel.LastPixels = currentPixels;
+                        sel.LastPixelWidth = width;
+                        sel.LastPixelHeight = height;
+
+                        if (!hasSignificantChange)
                         {
-                            System.Diagnostics.Debug.WriteLine($"[AutoDetect] Text changed for a selection. Old length: {sel.LastOcrText?.Length}, New length: {newText.Length}");
-                            
-                            // Ask TranslationService to translate just this text
-                            if (_translationService != null)
-                            {
-                                // We don't want to freeze the UI or show loading bars for background updates
-                                var blocks = await _translationService.AnalyzeAndTranslateAsync(bitmap, VisualScaling, token);
-                                var combinedText = string.Join("\n", blocks.Select(b => b.TranslatedText).Where(t => !string.IsNullOrWhiteSpace(t)));
-                                
-                                await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
-                                {
-                                    sel.LastOcrText = newText; // Update tracking hash
-                                    sel.TranslatedText = combinedText;
-                                    sel.IsTranslated = !string.IsNullOrWhiteSpace(combinedText);
-                                    
-                                    // Propagate inferred font size from blocks
-                                    if (blocks.Any())
-                                    {
-                                        sel.InferredFontSize = blocks[0].InferredFontSize;
-                                    }
+                            continue; // Skip OCR completely if the visual didn't change enough
+                        }
 
-                                    if (sel.IsTranslated) sel.EstimatedTextHeight = EstimateTranslatedTextHeight(sel);
-                                    UpdateMask();
-                                });
-                            }
+                        System.Diagnostics.Debug.WriteLine($"[AutoDetect] Significant visual change detected for a selection. Running OCR & Translation...");
+
+                        // Ask TranslationService to translate just this text
+                        if (_translationService != null)
+                        {
+                            // We don't want to freeze the UI or show loading bars for background updates
+                            // AnalyzeAndTranslateAsync will handle OCR + LLM
+                            var blocks = await _translationService.AnalyzeAndTranslateAsync(bitmap, VisualScaling, token);
+                            if (blocks == null || blocks.Count == 0) continue;
+
+                            var combinedText = string.Join("\n", blocks.Select(b => b.TranslatedText).Where(t => !string.IsNullOrWhiteSpace(t)));
+                            
+                            // Prevent re-updating if text hasn't logically changed despite visual noise
+                            if (combinedText == sel.TranslatedText) continue;
+                            
+                            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+                            {
+                                sel.LastOcrText = string.Join("\n", blocks.Select(b => b.OriginalText).Where(t => !string.IsNullOrWhiteSpace(t))); // Update tracking hash
+                                sel.TranslatedText = combinedText;
+                                sel.IsTranslated = !string.IsNullOrWhiteSpace(combinedText);
+                                
+                                // Propagate inferred font size from blocks
+                                if (blocks.Any())
+                                {
+                                    sel.InferredFontSize = blocks[0].InferredFontSize;
+                                }
+
+                                if (sel.IsTranslated) sel.EstimatedTextHeight = EstimateTranslatedTextHeight(sel);
+                                UpdateMask();
+                            });
                         }
                     }
                     catch (Exception ex)
