@@ -12,9 +12,16 @@ public partial class SnipToolbar : UserControl
         InitializeComponent();
         
         // Prevent pointer events from bubbling up to the canvas
-        // Use Bubble strategy so child controls (buttons) receive clicks first
-        // Then we mark the event as handled to stop it from reaching the canvas
         AddHandler(PointerPressedEvent, OnToolbarPointerPressed, Avalonia.Interactivity.RoutingStrategies.Bubble);
+
+        var translateBtn = this.FindControl<Button>("TranslateAllButton");
+        if (translateBtn != null)
+        {
+            translateBtn.Click += (s, e) => 
+            {
+                System.Diagnostics.Debug.WriteLine("[SnipToolbar] TranslateAllButton physically CLICKED");
+            };
+        }
     }
     
     private void OnToolbarPointerPressed(object? sender, PointerPressedEventArgs e)

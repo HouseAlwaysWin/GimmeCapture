@@ -130,7 +130,7 @@
                 </Panel>
             </ToggleButton>
 
-            <Button Theme="{StaticResource SnipButton}" FontSize="12" BorderThickness="1"
+            <Button Name="TranslateAllButton" Theme="{StaticResource SnipButton}" FontSize="12" BorderThickness="1"
                     Command="{Binding TranslateAllSelectionsCommand}"
                     IsVisible="{Binding IsTranslationMode}"
                     ToolTip.Tip="翻譯所有選取區域">

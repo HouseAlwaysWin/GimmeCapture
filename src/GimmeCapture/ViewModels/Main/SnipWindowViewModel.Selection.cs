@@ -264,7 +264,13 @@ public partial class SnipWindowViewModel
                             continue; // Skip OCR completely if the visual didn't change enough
                         }
 
-                        System.Diagnostics.Debug.WriteLine($"[AutoDetect] Significant visual change detected for a selection. Running OCR & Translation...");
+                        System.Diagnostics.Debug.WriteLine($"[AutoDetect] Significant visual change detected. Running OCR & Translation...");
+
+                        // Ensure TranslationService is initialized
+                        if (_translationService == null && _mainVm != null)
+                        {
+                            _translationService = new TranslationService(_mainVm.AIResourceService, _mainVm.AppSettingsService, _mainVm.MarianMTService);
+                        }
 
                         // Ask TranslationService to translate just this text
                         if (_translationService != null)
@@ -925,9 +931,9 @@ public partial class SnipWindowViewModel
         {
             try
             {
-                Console.WriteLine("[SAM2 Preload] Starting background initialization and warmup...");
+                System.Diagnostics.Debug.WriteLine("[SAM2 Preload] Starting background initialization and warmup...");
                 await _sam2Service.InitializeAsync();
-                Console.WriteLine("[SAM2 Preload] Background warmup complete. Ready for scan.");
+                System.Diagnostics.Debug.WriteLine("[SAM2 Preload] Background warmup complete. Ready for scan.");
             }
             catch (Exception ex)
             {
@@ -943,12 +949,30 @@ public partial class SnipWindowViewModel
     /// </summary>
     private async Task TranslateAllSelectionsAsync()
     {
-        if (UserSelections.Count == 0) return;
+        System.Diagnostics.Debug.WriteLine("[TranslationMode] TranslateAllSelectionsAsync triggered");
+        if (UserSelections.Count == 0)
+        {
+            System.Diagnostics.Debug.WriteLine("[TranslationMode] No selections found. Triggering Auto-Scan fallback...");
+            
+            ProcessingText = "Scanning..."; 
+            await ScanAllTextAsync();
+            
+            System.Diagnostics.Debug.WriteLine($"[TranslationMode] Auto-Scan finished. Selections found: {UserSelections.Count}");
+            
+            if (UserSelections.Count == 0)
+            {
+                System.Diagnostics.Debug.WriteLine("[TranslationMode] Auto-Scan found no text. Aborting.");
+                ProcessingText = "No text found";
+                await Task.Delay(2000);
+                ProcessingText = string.Empty;
+                return;
+            }
+        }
 
-        System.Diagnostics.Debug.WriteLine($"[TranslationMode] TranslateAllSelections: {UserSelections.Count} regions");
-
+        System.Diagnostics.Debug.WriteLine($"[TranslationMode] Proceeding to translate {UserSelections.Count} regions");
         ShowTopLoadingBar = true;
         IsIndeterminate = true;
+        ProcessingText = "Translating...";
 
         if (_translationService == null)
         {
@@ -1031,11 +1055,11 @@ public partial class SnipWindowViewModel
         }
         catch (OperationCanceledException)
         {
-            System.Diagnostics.Debug.WriteLine("[TranslationMode] TranslateAll cancelled");
+            Console.WriteLine("[TranslationMode] TranslateAll cancelled");
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[TranslationMode] TranslateAll error: {ex}");
+            Console.WriteLine($"[TranslationMode] TranslateAll error: {ex}");
         }
         finally
         {
@@ -1054,7 +1078,11 @@ public partial class SnipWindowViewModel
         ShowTopLoadingBar = true;
         IsIndeterminate = true;
 
-        if (_mainVm?.AIResourceService == null) return;
+        if (_mainVm?.AIResourceService == null) 
+        {
+            System.Diagnostics.Debug.WriteLine("[TranslationMode] ScanAllText: mainVm or AIResourceService is NULL");
+            return;
+        }
 
         // Ensure OCR resources
         bool ready = await _mainVm.AIResourceService.EnsureOCRAsync();
@@ -1068,10 +1096,16 @@ public partial class SnipWindowViewModel
 
         try
         {
+            System.Diagnostics.Debug.WriteLine("[TranslationMode] ScanAllText: Capturing full screen...");
             // 擷取全螢幕
             var fullScreenRect = new Rect(0, 0, ViewportSize.Width, ViewportSize.Height);
             using var bitmap = await _captureService.CaptureScreenAsync(fullScreenRect, ScreenOffset, VisualScaling, false);
-            if (bitmap == null) return;
+            if (bitmap == null) 
+            {
+                System.Diagnostics.Debug.WriteLine("[TranslationMode] ScanAllText: FAILED to capture screen");
+                return;
+            }
+            System.Diagnostics.Debug.WriteLine($"[TranslationMode] ScanAllText: Captured bitmap {bitmap.Width}x{bitmap.Height}");
 
             // 使用 PaddleOCR 偵測文字區域
             var ocrEngine = new PaddleOCREngine(_mainVm.AIResourceService, _mainVm.AppSettingsService);
