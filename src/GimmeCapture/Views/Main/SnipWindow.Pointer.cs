@@ -132,7 +132,7 @@ public partial class SnipWindow : Window
         bool isResizeHandle = sourceControl != null && sourceControl.Classes.Contains("Handle");
         bool isMoveHandle = sourceControl != null && (sourceControl.Classes.Contains("MoveHandle") || sourceControl.Name?.Contains("InnerCorner") == true);
 
-        if (props.IsLeftButtonPressed && isMoveHandle)
+        if (sourceControl != null && props.IsLeftButtonPressed && isMoveHandle)
         {
             var sel = sourceControl.DataContext as GimmeCapture.Models.UserSelectionRect;
             if (sel == null)
@@ -171,7 +171,7 @@ public partial class SnipWindow : Window
             }
         }
 
-        if (props.IsLeftButtonPressed && isResizeHandle)
+        if (sourceControl != null && props.IsLeftButtonPressed && isResizeHandle)
         {
             var sel = sourceControl.DataContext as GimmeCapture.Models.UserSelectionRect;
             if (sel == null)

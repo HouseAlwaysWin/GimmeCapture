@@ -760,7 +760,7 @@ public partial class SnipWindowViewModel
                 ShowProcessingOverlay = true;
                 IsIndeterminate = true;
                 ProcessingText = LocalizationService.Instance["StatusProcessing"] ?? "Processing...";
-                var bitmap = await _captureService.CaptureScreenWithAnnotationsAsync(SelectionRect, ScreenOffset, VisualScaling, Annotations, _mainVm?.ShowSnipCursor ?? false);
+                var bitmap = await _captureService.CaptureScreenWithAnnotationsAsync(SelectionRect, ScreenOffset, VisualScaling, Annotations, UserSelections, TranslatedBlocks, _mainVm?.ShowSnipCursor ?? false);
                 await _captureService.CopyToClipboardAsync(bitmap);
                 _mainVm?.SetStatus("StatusCopied");
             }
@@ -793,7 +793,7 @@ public partial class SnipWindowViewModel
                  ShowProcessingOverlay = true;
                  IsIndeterminate = true;
                  ProcessingText = LocalizationService.Instance["StatusSaving"] ?? "Saving...";
-                 var bitmap = await _captureService.CaptureScreenWithAnnotationsAsync(SelectionRect, ScreenOffset, VisualScaling, Annotations, _mainVm?.ShowSnipCursor ?? false);
+                 var bitmap = await _captureService.CaptureScreenWithAnnotationsAsync(SelectionRect, ScreenOffset, VisualScaling, Annotations, UserSelections, TranslatedBlocks, _mainVm?.ShowSnipCursor ?? false);
                  
                  if (_mainVm != null && _mainVm.AutoSave)
                  {
@@ -865,7 +865,7 @@ public partial class SnipWindowViewModel
             
             try
             {
-                var skBitmap = await _captureService.CaptureScreenWithAnnotationsAsync(SelectionRect, ScreenOffset, VisualScaling, Annotations, _mainVm?.ShowSnipCursor ?? false);
+                var skBitmap = await _captureService.CaptureScreenWithAnnotationsAsync(SelectionRect, ScreenOffset, VisualScaling, Annotations, UserSelections, TranslatedBlocks, _mainVm?.ShowSnipCursor ?? false);
                 
                 // Convert SKBitmap to Avalonia Bitmap
                 using var image = SkiaSharp.SKImage.FromBitmap(skBitmap);

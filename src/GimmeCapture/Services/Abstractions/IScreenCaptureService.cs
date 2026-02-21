@@ -9,7 +9,11 @@ namespace GimmeCapture.Services.Abstractions;
 public interface IScreenCaptureService
 {
     Task<SKBitmap> CaptureScreenAsync(Avalonia.Rect region, Avalonia.PixelPoint screenOffset, double visualScaling, bool includeCursor = false);
-    Task<SKBitmap> CaptureScreenWithAnnotationsAsync(Avalonia.Rect region, Avalonia.PixelPoint screenOffset, double visualScaling, IEnumerable<Annotation> annotations, bool includeCursor = false);
+    Task<SKBitmap> CaptureScreenWithAnnotationsAsync(Avalonia.Rect region, Avalonia.PixelPoint screenOffset, double visualScaling, 
+        IEnumerable<Annotation> annotations, 
+        IEnumerable<UserSelectionRect>? translationSelections = null,
+        IEnumerable<TranslatedBlock>? translationBlocks = null,
+        bool includeCursor = false);
     Task CopyToClipboardAsync(SKBitmap bitmap);
     Task CopyToClipboardAsync(string text);
     Task CopyFileToClipboardAsync(string filePath);

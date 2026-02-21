@@ -135,9 +135,7 @@ public partial class SnipWindowViewModel
     public ObservableCollection<UserSelectionRect> UserSelections { get; } = new();
     private TranslationService? _translationService;
     private CancellationTokenSource? _translationCts;
-    private int _translationVersion = 0;
-    private DateTime _lastTranslationRequestAt = DateTime.MinValue;
-    private Rect _lastTranslationRect = new Rect(0, 0, 0, 0);
+
 
     private Rect _selectionRect;
     public Rect SelectionRect
@@ -823,7 +821,6 @@ public partial class SnipWindowViewModel
     public ReactiveCommand<Unit, Unit> AIScanCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> TriggerAutoScanCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> ToggleAIScanBoxCommand { get; set; } = null!;
-    public ReactiveCommand<Unit, Unit> TranslateCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> TranslateAllSelectionsCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> ScanAllTextCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> ClearAllSelectionsCommand { get; set; } = null!;
@@ -842,8 +839,6 @@ public partial class SnipWindowViewModel
         ToggleAIScanBoxCommand = ReactiveCommand.Create(() => { ShowAIScanBox = !ShowAIScanBox; return Unit.Default; });
         ToggleAIScanBoxCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Toggle AI Box error: {ex}"));
 
-        TranslateCommand = ReactiveCommand.CreateFromTask(PerformTranslationAsync);
-        TranslateCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Translate Command error: {ex}"));
 
         // 翻譯模式專用命令
         TranslateAllSelectionsCommand = ReactiveCommand.CreateFromTask(TranslateAllSelectionsAsync);
@@ -909,200 +904,7 @@ public partial class SnipWindowViewModel
         });
     }
 
-    private async Task PerformTranslationAsync()
-    {
-        Console.WriteLine("[Translation] PerformTranslationAsync triggered");
-        
-        if (CurrentState != SnipState.Selected || SelectionRect.Width <= 10 || SelectionRect.Height <= 10)
-        {
-            return;
-        }
 
-        // 0. Update UI state immediately for responsiveness
-        TranslatedBlocks.Clear(); // Clear old results at start of new translation
-        IsTranslationActive = true;
-        ShowSnipToolBar = true;
-        _isLocalProcessing = true;
-        ShowProcessingOverlay = false; // Hidden to allow user to see current selection
-        ProcessingText = LocalizationService.Instance["StatusTranslating"] ?? "Translating...";
-        IsIndeterminate = true;
-        ProgressValue = 0;
-
-        if (_translationService == null)
-        {
-            if (_mainVm?.AIResourceService == null) return;
-            _translationService = new TranslationService(_mainVm.AIResourceService, _mainVm.AppSettingsService, _mainVm.MarianMTService);
-        }
-
-        // Ensure translation uses the latest values from Settings UI.
-        if (_mainVm != null)
-        {
-            _mainVm.AppSettingsService.Settings.TargetLanguage = _mainVm.TargetLanguage;
-            _mainVm.AppSettingsService.Settings.SourceLanguage = _mainVm.SourceLanguage;
-            Console.WriteLine($"[Translation] Effective languages => OCR:{_mainVm.SourceLanguage}, Target:{_mainVm.TargetLanguage}");
-        }
-
-        // Debounce repeated trigger storms from UI/events.
-        var now = DateTime.UtcNow;
-        if (now - _lastTranslationRequestAt < TimeSpan.FromMilliseconds(500) &&
-            AreRectsSimilar(_lastTranslationRect, SelectionRect))
-        {
-            Console.WriteLine("[Translation] Ignored duplicated trigger (debounced)");
-            return;
-        }
-        _lastTranslationRequestAt = now;
-        _lastTranslationRect = SelectionRect;
-
-        var currentVersion = Interlocked.Increment(ref _translationVersion);
-        _translationCts?.Cancel();
-        _translationCts?.Dispose();
-        _translationCts = new CancellationTokenSource();
-        var token = _translationCts.Token;
-
-        // 1. Engine specific readiness check
-        var settings = _mainVm?.AppSettingsService.Settings ?? new AppSettings();
-        if (settings.SelectedTranslationEngine == TranslationEngine.Ollama)
-        {
-            var models = await _translationService.GetAvailableModelsAsync();
-            if (!models.Any())
-            {
-                Avalonia.Threading.Dispatcher.UIThread.Post(() => {
-                    ShowSnipToolBar = true;
-                    ProcessingText = LocalizationService.Instance["StatusOllamaRequired"] ?? "Please install Ollama and download a model first.";
-                    IsIndeterminate = false;
-                    ProgressValue = 100;
-                });
-                await Task.Delay(3000);
-                Avalonia.Threading.Dispatcher.UIThread.Post(() => {
-                    ShowSnipToolBar = false;
-                    IsTranslationActive = false;
-                });
-                return;
-            }
-        }
-        else if (settings.SelectedTranslationEngine == TranslationEngine.MarianMT)
-        {
-            if (_mainVm != null && !_mainVm.AIResourceService.IsNmtReady())
-            {
-                if (_mainVm.ConfirmAction != null)
-                {
-                    var confirmed = await _mainVm.ConfirmAction(
-                        LocalizationService.Instance["AIDownloadTitle"],
-                        LocalizationService.Instance["MarianMTDownloadConfirm"]);
-                    
-                    if (confirmed)
-                    {
-                        // 1. Close SnipWindow immediately
-                        Close();
-
-                        // 2. Trigger background download in MainWindow (don't await so we can finish this task)
-                        _ = _mainVm.InstallModuleAsync("MarianMT");
-                        return;
-                    }
-                    else
-                    {
-                        IsTranslationActive = false;
-                        ShowSnipToolBar = false;
-                        return;
-                    }
-                }
-            }
-            
-            // Final check
-            if (_mainVm != null && !_mainVm.AIResourceService.IsNmtReady())
-            {
-                 ProcessingText = LocalizationService.Instance["StatusMarianMTNotReady"] ?? "Offline translation resources not ready.";
-                 await Task.Delay(2000);
-                 IsTranslationActive = false;
-                 ShowSnipToolBar = false;
-                 return;
-            }
-        }
-
-        try
-        {
-            token.ThrowIfCancellationRequested();
-            using (var bitmap = await _captureService.CaptureScreenAsync(SelectionRect, ScreenOffset, VisualScaling, false))
-            {
-                if (bitmap != null)
-                {
-                    token.ThrowIfCancellationRequested();
-                    // Check and Ensure OCR resources are ready
-                    if (_mainVm != null)
-                    {
-                        bool ready = await _mainVm.AIResourceService.EnsureOCRAsync();
-                        if (!ready)
-                        {
-                            Avalonia.Threading.Dispatcher.UIThread.Post(() => {
-                                ShowSnipToolBar = true;
-                                ProcessingText = LocalizationService.Instance["StatusOCRNotReady"] ?? "OCR resources not ready.";
-                                IsIndeterminate = false;
-                                ProgressValue = 100;
-                            });
-                            await Task.Delay(3000);
-                            return;
-                        }
-                    }
-
-                    // Proceed with actual analysis and translation
-                    ProcessingText = LocalizationService.Instance["StatusTranslating"] ?? "Translating...";
-                    IsIndeterminate = true;
-                    
-                    // Task.Run to offload CPU-intensive OCR from UI thread
-                    var blocks = await Task.Run(() => _translationService.AnalyzeAndTranslateAsync(bitmap, VisualScaling, token), token);
-                    
-                    if (currentVersion != _translationVersion || token.IsCancellationRequested) return;
-                    
-                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                    {
-                        if (currentVersion != _translationVersion || token.IsCancellationRequested) return;
-                        TranslatedBlocks.Clear();
-                        foreach (var block in blocks)
-                        {
-                            TranslatedBlocks.Add(block);
-                        }
-                    });
-                }
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            Console.WriteLine("[Translation] Request cancelled");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[Translation] Error: {ex}");
-            var errorFmt = LocalizationService.Instance["StatusTranslationError"] ?? "Translation Error: {0}";
-            ProcessingText = string.Format(errorFmt, ex.Message);
-            IsIndeterminate = false;
-            ProgressValue = 100;
-            await Task.Delay(3000);
-        }
-        finally
-        {
-            if (currentVersion == _translationVersion)
-            {
-                // Add a small delay so the user can see the "Translating..." status 
-                // and result before the toolbar disappears.
-                await Task.Delay(500);
-                ShowSnipToolBar = false;
-                _isLocalProcessing = false;
-                ShowProcessingOverlay = false;
-                IsTranslationActive = false;
-                IsIndeterminate = false;
-                ProgressValue = 0;
-            }
-        }
-    }
-
-    private static bool AreRectsSimilar(Rect a, Rect b)
-    {
-        const double tol = 2.0;
-        return Math.Abs(a.X - b.X) <= tol &&
-               Math.Abs(a.Y - b.Y) <= tol &&
-               Math.Abs(a.Width - b.Width) <= tol &&
-               Math.Abs(a.Height - b.Height) <= tol;
-    }
 
     /// <summary>
     /// 翻譯模式：翻譯所有 UserSelections 中的圈選區域

@@ -8,6 +8,7 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Threading.Tasks;
 using GimmeCapture.Services.Abstractions;
 using Avalonia.Controls;
@@ -205,18 +206,55 @@ public class WindowsScreenCaptureService : IScreenCaptureService
         });
     }
 
-    public async Task<SKBitmap> CaptureScreenWithAnnotationsAsync(Rect region, PixelPoint screenOffset, double visualScaling, IEnumerable<Annotation> annotations, bool includeCursor = false)
+    public async Task<SKBitmap> CaptureScreenWithAnnotationsAsync(Rect region, PixelPoint screenOffset, double visualScaling, 
+        IEnumerable<Annotation> annotations, 
+        IEnumerable<UserSelectionRect>? translationSelections = null,
+        IEnumerable<TranslatedBlock>? translationBlocks = null,
+        bool includeCursor = false)
     {
         var bitmap = await CaptureScreenAsync(region, screenOffset, visualScaling, includeCursor);
-        if (annotations == null || !annotations.Any()) return bitmap;
-
+        // annotations can be null, but we check count later.
+        
         // Use the visualScaling to adjust all logical coordinates to physical coordinates
         float scale = (float)visualScaling;
 
         using (var canvas = new SKCanvas(bitmap))
         {
-            foreach (var ann in annotations)
+            // 1. Render manual translation selections (UserSelectionRect)
+            if (translationSelections != null)
             {
+                foreach (var sel in translationSelections)
+                {
+                    if (!sel.IsTranslated || string.IsNullOrWhiteSpace(sel.TranslatedText)) continue;
+
+                    // sel.Bounds is logical coordinate relative to the screen.
+                    // We need to map it relative to the captured region.
+                    var relBounds = new Rect(sel.Bounds.Position - region.Position, sel.Bounds.Size);
+                    if (relBounds.Width <= 0 || relBounds.Height <= 0) continue;
+
+                    DrawTranslationBox(canvas, relBounds, sel.TranslatedText, sel.InferredFontSize, scale);
+                }
+            }
+
+            // 2. Render automatic translation blocks (TranslatedBlock)
+            if (translationBlocks != null)
+            {
+                foreach (var block in translationBlocks)
+                {
+                    if (string.IsNullOrWhiteSpace(block.TranslatedText)) continue;
+
+                    var relBounds = new Rect(block.Bounds.Position - region.Position, block.Bounds.Size);
+                    if (relBounds.Width <= 0 || relBounds.Height <= 0) continue;
+
+                    DrawTranslationBox(canvas, relBounds, block.TranslatedText, block.InferredFontSize, scale);
+                }
+            }
+
+            // 3. Render annotations
+            if (annotations != null && annotations.Any())
+            {
+                foreach (var ann in annotations)
+                {
                 using var paint = new SKPaint
                 {
                     Color = new SKColor(ann.Color.R, ann.Color.G, ann.Color.B, ann.Color.A),
@@ -378,8 +416,123 @@ public class WindowsScreenCaptureService : IScreenCaptureService
                 }
             }
         }
+    }
 
         return bitmap;
+    }
+
+    private void DrawTranslationBox(SKCanvas canvas, Rect relBounds, string text, double fontSize, float scale)
+    {
+        // UI matches: Background #CC000000 (80% opacity), CornerRadius 4, Padding 6, Margin 4
+        // The relBounds already represents the text region.
+        
+        float margin = 4.0f * scale;
+        float padding = 6.0f * scale;
+        float cornerRadius = 4.0f * scale;
+
+        // Calculate box size. 
+        // Note: The UI Panel uses VerticalAlignment=Center, HorizontalAlignment=Center.
+        // We assume the relBounds is the target area where the text box should be centered.
+        
+        using var paint = new SKPaint
+        {
+            Color = new SKColor(0, 0, 0, 204), // #CC000000
+            IsAntialias = true,
+            Style = SKPaintStyle.Fill
+        };
+
+        // Text rendering setup
+        using var textPaint = new SKPaint
+        {
+            Color = SKColors.White,
+            IsAntialias = true,
+            Style = SKPaintStyle.Fill
+        };
+
+        // Font setup
+        var weight = SKFontStyleWeight.Normal;
+        var style = new SKFontStyle(weight, SKFontStyleWidth.Normal, SKFontStyleSlant.Upright);
+        using var typeface = SKTypeface.FromFamilyName("Microsoft JhengHei", style); // Match UI preference
+        using var font = new SKFont(typeface, (float)(fontSize * scale));
+
+        // Basic line wrapping and measuring
+        var lines = WrapText(text, (float)(relBounds.Width * scale - padding * 2), font);
+        float lineHeight = font.Size * 1.5f;
+        float totalTextHeight = lines.Count * lineHeight;
+        float totalTextWidth = lines.Any() ? lines.Max(l => font.MeasureText(l)) : 0;
+
+        float boxWidth = totalTextWidth + padding * 2;
+        float boxHeight = totalTextHeight + padding * 2;
+
+        // Center the box within relBounds
+        float centerX = (float)(relBounds.X * scale + relBounds.Width * scale / 2);
+        float centerY = (float)(relBounds.Y * scale + relBounds.Height * scale / 2);
+
+        var boxRect = new SKRect(
+            centerX - boxWidth / 2,
+            centerY - boxHeight / 2,
+            centerX + boxWidth / 2,
+            centerY + boxHeight / 2
+        );
+
+        // Clip to avoid overflow if necessary, but UI usually lets it overflow if ClipToBounds=False
+        // However, for capture, we should probably keep it reasonable.
+        
+        canvas.DrawRoundRect(boxRect, cornerRadius, cornerRadius, paint);
+
+        float textX = centerX - totalTextWidth / 2;
+        float textY = centerY - totalTextHeight / 2 + font.Size; // Skia draws from baseline
+
+        foreach (var line in lines)
+        {
+            float lineWidth = font.MeasureText(line);
+            float lineX = centerX - lineWidth / 2; // Center each line
+            canvas.DrawText(line, lineX, textY, font, textPaint);
+            textY += lineHeight;
+        }
+    }
+
+    private List<string> WrapText(string text, float maxWidth, SKFont font)
+    {
+        var result = new List<string>();
+        var paragraphs = text.Split('\n');
+        foreach (var p in paragraphs)
+        {
+            if (string.IsNullOrWhiteSpace(p))
+            {
+                result.Add("");
+                continue;
+            }
+
+            var words = p.Split(' '); // Simple space-based wrapping for Latin
+            // For CJK, we might need character-based wrapping if there are no spaces
+            
+            var currentLine = new StringBuilder();
+            foreach (var word in words)
+            {
+                var testLine = currentLine.Length == 0 ? word : currentLine + " " + word;
+                if (font.MeasureText(testLine) <= maxWidth)
+                {
+                    currentLine.Append(currentLine.Length == 0 ? word : " " + word);
+                }
+                else
+                {
+                    if (currentLine.Length > 0)
+                    {
+                        result.Add(currentLine.ToString());
+                        currentLine.Clear();
+                        currentLine.Append(word);
+                    }
+                    else
+                    {
+                        // Single word is too wide, force break characters for CJK or just add it
+                        result.Add(word);
+                    }
+                }
+            }
+            if (currentLine.Length > 0) result.Add(currentLine.ToString());
+        }
+        return result;
     }
 
     private void DrawArrow(SKCanvas canvas, SKPoint p1, SKPoint p2, SKPaint paint, float scale)
