@@ -431,6 +431,9 @@ public partial class SnipWindowViewModel
 
         ToggleToolbarCommand = ReactiveCommand.Create(() => { ShowToolbar = !ShowToolbar; });
         ToggleToolbarCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
+
+        ToggleTranslationResultsCommand = ReactiveCommand.Create(() => { ShowTranslationResults = !ShowTranslationResults; });
+        ToggleTranslationResultsCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
     }
 
     public double WingScale

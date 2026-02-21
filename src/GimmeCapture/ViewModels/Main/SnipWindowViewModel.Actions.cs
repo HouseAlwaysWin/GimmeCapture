@@ -160,9 +160,6 @@ public partial class SnipWindowViewModel
             // Always show during selection phase
             if (IsRecordingMode && RecState == RecordingState.Idle) return false;
             
-            // FORCE SHOW during recording for debugging if wings are appearing but border isn't
-            if (RecState == RecordingState.Recording || RecState == RecordingState.Paused) return false;
-
             bool hide = IsRecordingMode ? (_mainVm?.HideRecordSelectionDecoration ?? false) : (_mainVm?.HideSnipSelectionDecoration ?? false);
             System.Diagnostics.Debug.WriteLine($"[SnipWindow] HideSelectionDecoration queried: {hide} (IsRecordingMode: {IsRecordingMode}, RecState: {RecState})");
             return hide;
@@ -175,9 +172,6 @@ public partial class SnipWindowViewModel
         {
             // Always show border during selection phase so user can see what they are selecting
             if (IsRecordingMode && RecState == RecordingState.Idle) return false;
-
-            // FORCE SHOW during recording for debugging
-            if (RecState == RecordingState.Recording || RecState == RecordingState.Paused) return false;
             
             bool hide = IsRecordingMode ? (_mainVm?.HideRecordSelectionBorder ?? false) : (_mainVm?.HideSnipSelectionBorder ?? false);
             System.Diagnostics.Debug.WriteLine($"[SnipWindow] HideFrameBorder queried: {hide} (IsRecordingMode: {IsRecordingMode}, RecState: {RecState})");
@@ -384,7 +378,7 @@ public partial class SnipWindowViewModel
         {
             if (IsTranslationMode)
             {
-                // 翻譯沒有Pin: F3 -> 空
+                ShowTranslationResults = !ShowTranslationResults;
                 return;
             }
             

@@ -89,8 +89,13 @@ public class LLMTranslationEngine : ITranslationEngine
 
     private static string BuildStrictTranslationPrompt(string sourceLang, string targetLang, string text)
     {
+        string strictHint = "";
+        if (targetLang.Contains("Japanese")) strictHint = "Use Japanese (Kanji and Kana). DO NOT use Chinese-only characters.";
+        else if (targetLang.Contains("Chinese")) strictHint = "Use Chinese characters only. DO NOT use Japanese Kana or Korean Hangul.";
+
         return $@"You are an expert translator. 
 Translate the following {sourceLang} text into {targetLang} accurately.
+{strictHint}
 
 Rules:
 1) Output ONLY the translated text.
@@ -108,13 +113,18 @@ Output:";
     private async Task<string> TranslateStrictRetryForCjkAsync(string model, string url, string text, TranslationLanguage target, CancellationToken ct)
     {
         string targetName = GetTargetLanguageName(target);
+        string strictHint = target switch {
+            TranslationLanguage.Japanese => "MUST include Hiragana/Katakana where appropriate. DO NOT output Chinese-only text.",
+            _ => "ABSOLUTELY NO Japanese kana or Korean hangul if translating to Chinese."
+        };
+
         var req = new
         {
             model,
             prompt = $@"Translate to {targetName}. 
 Rules: 
 1) Output ONLY {targetName}. 
-2) ABSOLUTELY NO Japanese kana or Korean hangul if translating to Chinese.
+2) {strictHint}
 3) NO explanations.
 Input: {text}
 Output:",
@@ -155,6 +165,24 @@ Output:",
     private bool IsTranslationAcceptableInternal(string source, string translated, TranslationLanguage target)
     {
         if (string.IsNullOrWhiteSpace(translated)) return false;
+
+        // If target is Japanese, it MUST contain kana if source was significant
+        // unless the translation is extremely short (e.g. "Yes").
+        if (target == TranslationLanguage.Japanese)
+        {
+            bool hasKana = translated.Any(c => (c >= 0x3040 && c <= 0x309F) || (c >= 0x30A0 && c <= 0x30FF));
+            if (!hasKana && translated.Length > 2)
+            {
+                // If source has kana but translation doesn't, it likely drifted to Chinese
+                if (source.Any(c => (c >= 0x3040 && c <= 0x309F) || (c >= 0x30A0 && c <= 0x30FF))) return false;
+                
+                // If source is English/Chinese and translation is only Kanji, it's suspicious but could be valid.
+                // However, user specifically complained about Chinese output when Japanese selected.
+                // Most Japanese sentences have at least some kana.
+                return false; 
+            }
+        }
+
         if (target != TranslationLanguage.Japanese && translated.Any(c => (c >= 0x3040 && c <= 0x309F) || (c >= 0x30A0 && c <= 0x30FF)))
         {
             if (!source.Any(c => (c >= 0x3040 && c <= 0x309F) || (c >= 0x30A0 && c <= 0x30FF))) return false;

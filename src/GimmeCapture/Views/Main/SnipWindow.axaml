@@ -299,7 +299,13 @@
             <ItemsControl ItemsSource="{Binding TranslatedBlocks}" 
                           Canvas.Left="{Binding TranslationOverlayLeft}"
                           Canvas.Top="{Binding TranslationOverlayTop}"
-                          ZIndex="999">
+                           ZIndex="999">
+                <ItemsControl.IsVisible>
+                    <MultiBinding Converter="{x:Static BoolConverters.And}">
+                        <Binding Path="IsTranslationMode"/>
+                        <Binding Path="!IsCapturing"/>
+                    </MultiBinding>
+                </ItemsControl.IsVisible>
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
                         <StackPanel Spacing="4"/>
@@ -389,18 +395,19 @@
                                         Height="{Binding Bounds.Height}"
                                         CornerRadius="0"
                                         Classes="TranslationItem"
-                                        IsHitTestVisible="False">
+                                        IsHitTestVisible="False"
+                                        IsVisible="{Binding $parent[Window].DataContext.ShowTranslationResults}">
                                 </Border>
 
                                 <!-- 2. 拖動層 (MoveHandle 與 InnerCorner) -->
                                 <!-- 邊緣拖動 (20px 寬度的透明邊框) -->
-                                <Border Classes="MoveHandle" BorderBrush="#01FFFFFF" BorderThickness="20" Background="Transparent" Cursor="SizeAll"/>
+                                <Border Classes="MoveHandle" BorderBrush="#01FFFFFF" BorderThickness="20" Background="Transparent" Cursor="SizeAll" IsVisible="{Binding $parent[Window].DataContext.ShowTranslationResults}"/>
                                 
                                 <!-- 內角拖動 (四角落內部的 40x40 區域) -->
-                                <Grid Name="InnerCornerTopLeft" Width="40" Height="40" HorizontalAlignment="Left" VerticalAlignment="Top" Background="#01FFFFFF" Cursor="SizeAll" Margin="1,1,0,0" Classes="MoveHandle"/>
-                                <Grid Name="InnerCornerTopRight" Width="40" Height="40" HorizontalAlignment="Right" VerticalAlignment="Top" Background="#01FFFFFF" Cursor="SizeAll" Margin="0,1,1,0" Classes="MoveHandle"/>
-                                <Grid Name="InnerCornerBottomLeft" Width="40" Height="40" HorizontalAlignment="Left" VerticalAlignment="Bottom" Background="#01FFFFFF" Cursor="SizeAll" Margin="1,0,0,1" Classes="MoveHandle"/>
-                                <Grid Name="InnerCornerBottomRight" Width="40" Height="40" HorizontalAlignment="Right" VerticalAlignment="Bottom" Background="#01FFFFFF" Cursor="SizeAll" Margin="0,0,1,1" Classes="MoveHandle"/>
+                                <Grid Name="InnerCornerTopLeft" Width="40" Height="40" HorizontalAlignment="Left" VerticalAlignment="Top" Background="#01FFFFFF" Cursor="SizeAll" Margin="1,1,0,0" Classes="MoveHandle" IsVisible="{Binding $parent[Window].DataContext.ShowTranslationResults}"/>
+                                <Grid Name="InnerCornerTopRight" Width="40" Height="40" HorizontalAlignment="Right" VerticalAlignment="Top" Background="#01FFFFFF" Cursor="SizeAll" Margin="0,1,1,0" Classes="MoveHandle" IsVisible="{Binding $parent[Window].DataContext.ShowTranslationResults}"/>
+                                <Grid Name="InnerCornerBottomLeft" Width="40" Height="40" HorizontalAlignment="Left" VerticalAlignment="Bottom" Background="#01FFFFFF" Cursor="SizeAll" Margin="1,0,0,1" Classes="MoveHandle" IsVisible="{Binding $parent[Window].DataContext.ShowTranslationResults}"/>
+                                <Grid Name="InnerCornerBottomRight" Width="40" Height="40" HorizontalAlignment="Right" VerticalAlignment="Bottom" Background="#01FFFFFF" Cursor="SizeAll" Margin="0,0,1,1" Classes="MoveHandle" IsVisible="{Binding $parent[Window].DataContext.ShowTranslationResults}"/>
 
                                 <!-- 3. 文字內容層 (最上方，支援選取與右鍵選單) -->
                                 <Panel IsHitTestVisible="True" VerticalAlignment="Center" HorizontalAlignment="Center">
@@ -446,14 +453,14 @@
                                 </Panel>
 
                                 <!-- 4. 縮放手把層 (最外層邊界) -->
-                                <Grid Classes="Handle" Name="HandleTopLeft" Cursor="TopLeftCorner" Width="40" Height="40" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="-20,-20,0,0" Background="#01FFFFFF"/>
-                                <Grid Classes="Handle" Name="HandleTopRight" Cursor="TopRightCorner" Width="40" Height="40" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-20,-20,0" Background="#01FFFFFF"/>
-                                <Grid Classes="Handle" Name="HandleBottomLeft" Cursor="BottomLeftCorner" Width="40" Height="40" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="-20,0,0,-20" Background="#01FFFFFF"/>
-                                <Grid Classes="Handle" Name="HandleBottomRight" Cursor="BottomRightCorner" Width="40" Height="40" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-20,-20" Background="#01FFFFFF"/>
-                                <Grid Classes="Handle" Name="HandleTop" Cursor="SizeNorthSouth" Height="20" HorizontalAlignment="Stretch" VerticalAlignment="Top" Margin="20,-10,20,0" Background="#01FFFFFF"/>
-                                <Grid Classes="Handle" Name="HandleBottom" Cursor="SizeNorthSouth" Height="20" HorizontalAlignment="Stretch" VerticalAlignment="Bottom" Margin="20,0,20,-10" Background="#01FFFFFF"/>
-                                <Grid Classes="Handle" Name="HandleLeft" Cursor="SizeWestEast" Width="20" HorizontalAlignment="Left" VerticalAlignment="Stretch" Margin="-10,20,0,20" Background="#01FFFFFF"/>
-                                <Grid Classes="Handle" Name="HandleRight" Cursor="SizeWestEast" Width="20" HorizontalAlignment="Right" VerticalAlignment="Stretch" Margin="0,20,-10,20" Background="#01FFFFFF"/>
+                                <Grid Classes="Handle" Name="HandleTopLeft" Cursor="TopLeftCorner" Width="40" Height="40" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="-20,-20,0,0" Background="#01FFFFFF" IsVisible="{Binding $parent[Window].DataContext.ShowTranslationResults}"/>
+                                <Grid Classes="Handle" Name="HandleTopRight" Cursor="TopRightCorner" Width="40" Height="40" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-20,-20,0" Background="#01FFFFFF" IsVisible="{Binding $parent[Window].DataContext.ShowTranslationResults}"/>
+                                <Grid Classes="Handle" Name="HandleBottomLeft" Cursor="BottomLeftCorner" Width="40" Height="40" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="-20,0,0,-20" Background="#01FFFFFF" IsVisible="{Binding $parent[Window].DataContext.ShowTranslationResults}"/>
+                                <Grid Classes="Handle" Name="HandleBottomRight" Cursor="BottomRightCorner" Width="40" Height="40" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-20,-20" Background="#01FFFFFF" IsVisible="{Binding $parent[Window].DataContext.ShowTranslationResults}"/>
+                                <Grid Classes="Handle" Name="HandleTop" Cursor="SizeNorthSouth" Height="20" HorizontalAlignment="Stretch" VerticalAlignment="Top" Margin="20,-10,20,0" Background="#01FFFFFF" IsVisible="{Binding $parent[Window].DataContext.ShowTranslationResults}"/>
+                                <Grid Classes="Handle" Name="HandleBottom" Cursor="SizeNorthSouth" Height="20" HorizontalAlignment="Stretch" VerticalAlignment="Bottom" Margin="20,0,20,-10" Background="#01FFFFFF" IsVisible="{Binding $parent[Window].DataContext.ShowTranslationResults}"/>
+                                <Grid Classes="Handle" Name="HandleLeft" Cursor="SizeWestEast" Width="20" HorizontalAlignment="Left" VerticalAlignment="Stretch" Margin="-10,20,0,20" Background="#01FFFFFF" IsVisible="{Binding $parent[Window].DataContext.ShowTranslationResults}"/>
+                                <Grid Classes="Handle" Name="HandleRight" Cursor="SizeWestEast" Width="20" HorizontalAlignment="Right" VerticalAlignment="Stretch" Margin="0,20,-10,20" Background="#01FFFFFF" IsVisible="{Binding $parent[Window].DataContext.ShowTranslationResults}"/>
                             </Grid>
                         </Canvas>
                     </DataTemplate>

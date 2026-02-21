@@ -158,6 +158,15 @@
                 <PathIcon Data="M21,10.12h-6.78l2.74-2.82c-2.73-2.7-7.15-2.8-9.88-0.1c-2.73,2.71-2.73,7.08,0,9.79s7.15,2.71,9.88,0C18.32,15.65,19,14.08,19,12.1h2c0,2.46-1.07,4.81-2.95,6.67c-3.86,3.82-10.07,3.82-13.93,0s-3.86-10.02,0-13.84s10.07-3.81,13.93,0L21,2.02V10.12z" Width="14" Height="14"/>
             </ToggleButton>
 
+            <!-- Toggle Translation Results visibility -->
+            <ToggleButton Theme="{StaticResource SnipToolButton}" FontSize="12" BorderThickness="1"
+                          IsChecked="{Binding ShowTranslationResults, Mode=TwoWay}"
+                          Classes.active="{Binding ShowTranslationResults}"
+                          IsVisible="{Binding IsTranslationMode}"
+                          ToolTip.Tip="{Binding HideTranslationResultsTooltip}">
+                <PathIcon Data="M12,9A3,3 0 0,0 9,12A3,3 0 0,0 12,15A3,3 0 0,0 15,12A3,3 0 0,0 12,9M12,17A5,5 0 0,1 7,12A5,5 0 0,1 12,7A5,5 0 0,1 17,12A5,5 0 0,1 12,17M12,4.5C7,4.5 2.73,7.61 1,12C2.73,16.39 7,19.5 12,19.5C17,19.5 21.27,16.39 23,12C21.27,7.61 17,4.5 12,4.5Z" Width="14" Height="14"/>
+            </ToggleButton>
+
             <!-- 5d. Hide Toolbar Button -->
             <Button Theme="{StaticResource SnipButton}" FontSize="12" BorderThickness="1"
                     Command="{Binding ToggleToolbarCommand}"

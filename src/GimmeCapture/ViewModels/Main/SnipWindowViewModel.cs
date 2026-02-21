@@ -64,6 +64,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     public string BlurTooltip => $"{LocalizationService.Instance["TipBlur"]} ({BlurHotkey})";
     public string SnipTooltip => $"{LocalizationService.Instance["CaptureModeNormal"]} ({SnipHotkey})";
     public string RecordTooltip => $"{LocalizationService.Instance["CaptureModeRecord"]} ({RecordHotkey})";
+    public string HideTranslationResultsTooltip => $"{LocalizationService.Instance["HideTranslationResults"]} (F3)";
 
     public Color ThemeColor => _mainVm?.ThemeColor ?? Colors.Red;
     public Color ThemeDeepColor 
@@ -269,6 +270,15 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
             this.RaisePropertyChanged(nameof(IsToolbarVisible));
         }
     }
+
+    private bool _showTranslationResults = true;
+    public bool ShowTranslationResults
+    {
+        get => _showTranslationResults;
+        set => this.RaiseAndSetIfChanged(ref _showTranslationResults, value);
+    }
+
+    public ReactiveCommand<System.Reactive.Unit, System.Reactive.Unit> ToggleTranslationResultsCommand { get; protected set; } = null!;
 
     private bool _isCapturing;
     public bool IsCapturing
