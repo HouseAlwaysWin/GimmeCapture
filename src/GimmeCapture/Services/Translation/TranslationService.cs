@@ -53,7 +53,7 @@ public class TranslationService
             new MarianMTTranslationEngine(marianMTService)
         };
         
-        _httpClient.Timeout = TimeSpan.FromSeconds(20);
+        _httpClient.Timeout = TimeSpan.FromSeconds(60); // Increased timeout for local LLMs
     }
 
     public async Task<List<TranslatedBlock>> AnalyzeAndTranslateAsync(SKBitmap bitmap, double scale = 1.0, CancellationToken ct = default)
@@ -95,6 +95,9 @@ public class TranslationService
             sortedBlocks.Max(b => b.Box.Bottom));
 
         var translated = await TranslateAsync(mergedText, ocrLang, ct);
+        
+        Debug.WriteLine($"[TranslationService] Raw OCR: {mergedText}");
+        Debug.WriteLine($"[TranslationService] Result: {translated}");
         
         // Infer font size from average height of OCR blocks (Pixels -> DIPs)
         double inferredFontSize = 12.0;
@@ -203,10 +206,10 @@ public class TranslationService
     {
         if (string.IsNullOrWhiteSpace(translated)) return false;
         
-        // If the translation is the same as original and is sufficiently long, it probably failed
-        if (original.Length > 3 && translated == original) return false;
+        // If the translation is the same as original and is more than 1 char, it probably failed
+        if (original.Length > 1 && translated.Trim() == original.Trim()) return false;
 
-        // CJK Specific logic
+        // CJK Specific logic - Tightened limits
         if (target == TranslationLanguage.TraditionalChinese || target == TranslationLanguage.SimplifiedChinese)
         {
             // If translating to Chinese, output MUST NOT contain Japanese kana
@@ -215,9 +218,9 @@ public class TranslationService
         }
         else if (target == TranslationLanguage.Japanese)
         {
-            // If translating to Japanese, output SHOULD contain some kana unless it's very short
+            // If translating to Japanese, output SHOULD contain some kana unless it's a single character
             bool hasKana = translated.Any(c => (c >= 0x3040 && c <= 0x309F) || (c >= 0x30A0 && c <= 0x30FF));
-            if (!hasKana && translated.Length > 2) return false;
+            if (!hasKana && translated.Length > 1) return false;
         }
 
         return true;
