@@ -112,7 +112,7 @@ public partial class SnipWindowViewModel
     /// <summary>
     /// 工具列是否可見：翻譯模式始終可見，其他模式需要在 Selected 狀態且未 Finalizing
     /// </summary>
-    public bool IsToolbarVisible => IsTranslationMode || (CurrentState == SnipState.Selected && !IsRecordingFinalizing);
+    public bool IsToolbarVisible => ShowToolbar && (IsTranslationMode || (CurrentState == SnipState.Selected && !IsRecordingFinalizing));
 
     public string ModeDisplayName => IsTranslationMode 
         ? LocalizationService.Instance["CaptureModeTranslation"] ?? "Translation"

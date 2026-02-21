@@ -312,6 +312,7 @@ public partial class SnipWindowViewModel
     public ReactiveCommand<Unit, Unit> DecreaseWingScaleCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> IncreaseCornerIconScaleCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> DecreaseCornerIconScaleCommand { get; set; } = null!;
+    public ReactiveCommand<Unit, Unit> ToggleToolbarCommand { get; set; } = null!;
 
     private void InitializeToolbarCommands()
     {
@@ -427,6 +428,9 @@ public partial class SnipWindowViewModel
         IncreaseCornerIconScaleCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
         DecreaseCornerIconScaleCommand = ReactiveCommand.Create(() => { if (CornerIconScale > 0.4) CornerIconScale = Math.Round(CornerIconScale - 0.1, 1); });
         DecreaseCornerIconScaleCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
+
+        ToggleToolbarCommand = ReactiveCommand.Create(() => { ShowToolbar = !ShowToolbar; });
+        ToggleToolbarCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
     }
 
     public double WingScale

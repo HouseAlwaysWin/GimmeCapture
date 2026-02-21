@@ -259,6 +259,17 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         UpdateMask();
     }
 
+    private bool _showToolbar = true;
+    public bool ShowToolbar
+    {
+        get => _showToolbar;
+        set 
+        {
+            this.RaiseAndSetIfChanged(ref _showToolbar, value);
+            this.RaisePropertyChanged(nameof(IsToolbarVisible));
+        }
+    }
+
     private bool _isTopmost = true;
     public bool IsTopmost
     {

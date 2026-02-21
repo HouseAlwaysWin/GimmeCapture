@@ -61,7 +61,7 @@
 
         <!-- Debug / Compatibility -->
         <KeyBinding Gesture="Ctrl+Alt+T" Command="{Binding ToggleTopmostCommand}" />
-        <KeyBinding Gesture="Ctrl+Alt+M" Command="{Binding ToggleMaskCommand}" />
+        <KeyBinding Gesture="F4" Command="{Binding ToggleToolbarCommand}" />
     </Window.KeyBindings>
 
     <Window.Styles>
@@ -94,6 +94,19 @@
     </Window.Styles>
     
     <Grid>
+        <Grid.ContextMenu>
+            <ContextMenu>
+                <MenuItem Header="{Binding [MenuShowToolbar], Source={x:Static services:LocalizationService.Instance}}" 
+                          Command="{Binding ToggleToolbarCommand}">
+                    <MenuItem.Icon>
+                        <CheckBox IsChecked="{Binding ShowToolbar}" IsHitTestVisible="False"/>
+                    </MenuItem.Icon>
+                </MenuItem>
+                <Separator/>
+                <MenuItem Header="{Binding [MenuClose], Source={x:Static services:LocalizationService.Instance}}" Command="{Binding CloseCommand}"/>
+            </ContextMenu>
+        </Grid.ContextMenu>
+        
         <!-- 背景遮罩層 -->
         <Path Fill="Black" Data="{Binding MaskGeometry}" Opacity="{Binding MaskOpacity}" IsHitTestVisible="False" Stretch="None">
             <Path.IsVisible>
