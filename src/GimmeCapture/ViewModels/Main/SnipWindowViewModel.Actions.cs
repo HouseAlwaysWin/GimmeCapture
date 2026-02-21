@@ -170,10 +170,11 @@ public partial class SnipWindowViewModel
     {
         get
         {
-            // Always show border during selection phase so user can see what they are selecting
-            if (IsRecordingMode && RecState == RecordingState.Idle) return false;
+            // For Recording Mode: ALWAYS show the border on screen, so the user knows what region is being captured.
+            // The actual removal of the border from the output video is handled by FFmpeg cropping during StartRecording if _mainVm.HideRecordSelectionBorder is true.
+            if (IsRecordingMode) return false;
             
-            bool hide = IsRecordingMode ? (_mainVm?.HideRecordSelectionBorder ?? false) : (_mainVm?.HideSnipSelectionBorder ?? false);
+            bool hide = _mainVm?.HideSnipSelectionBorder ?? false;
             System.Diagnostics.Debug.WriteLine($"[SnipWindow] HideFrameBorder queried: {hide} (IsRecordingMode: {IsRecordingMode}, RecState: {RecState})");
             return hide;
         }
@@ -514,11 +515,27 @@ public partial class SnipWindowViewModel
         
         var region = SelectionRect;
         
+        // Shrink region by the thickness of the border so the coloured border is excluded from the recorded video
+        // (Only if the user checked "Hide Border during Recording" in settings)
+        if (_mainVm != null && _mainVm.HideRecordSelectionBorder)
+        {
+            double borderThick = SelectionBorderThickness;
+            if (region.Width > borderThick * 2 && region.Height > borderThick * 2)
+            {
+                region = new Avalonia.Rect(
+                    region.X + borderThick,
+                    region.Y + borderThick,
+                    region.Width - borderThick * 2,
+                    region.Height - borderThick * 2
+                );
+            }
+        }
+        
         // Ensure size is even for ffmpeg
         if (region.Width % 2 != 0) region = region.WithWidth(region.Width - 1);
         if (region.Height % 2 != 0) region = region.WithHeight(region.Height - 1);
 
-        if (await _recordingService.StartAsync(SelectionRect, _currentRecordingPath, _mainVm.RecordFormat ?? "mp4", _mainVm.ShowRecordCursor, ScreenOffset, VisualScaling, _mainVm.RecordFPS))
+        if (await _recordingService.StartAsync(region, _currentRecordingPath, _mainVm.RecordFormat ?? "mp4", _mainVm.ShowRecordCursor, ScreenOffset, VisualScaling, _mainVm.RecordFPS))
         {
             RecordingDuration = TimeSpan.Zero;
             

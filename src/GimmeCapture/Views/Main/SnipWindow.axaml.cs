@@ -259,13 +259,13 @@ public partial class SnipWindow : Window
                     .ObserveOn(RxApp.MainThreadScheduler)
                     .Subscribe(state => 
                     {
-                        var hwnd = this.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
-                        bool isVisibleToCapture = (state == RecordingState.Idle);
-                        Win32Helpers.SetWindowCaptureVisibility(hwnd, isVisibleToCapture);
+                        // Removed Win32Helpers.SetWindowCaptureVisibility(hwnd, isVisibleToCapture) 
+                        // because WDA_EXCLUDEFROMCAPTURE can cause transparent windows to completely vanish from the user's screen on some Windows builds.
                         
                         // Also trigger UI update for decorations since we removed force-hide
                         _viewModel.RaisePropertyChanged(nameof(_viewModel.HideSelectionDecoration));
                         _viewModel.RaisePropertyChanged(nameof(_viewModel.HideFrameBorder));
+                        _viewModel.RaisePropertyChanged(nameof(_viewModel.IsToolbarVisible));
                     });
             }
 
