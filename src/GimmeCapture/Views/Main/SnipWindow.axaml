@@ -355,12 +355,17 @@
                                  IsVisible="{Binding IsToolbarVisible}"/>
             </Canvas>
 
-            <!-- Translation Mode: Multi-Selection Layer -->
-            <ItemsControl ItemsSource="{Binding UserSelections}"
-                          IsVisible="{Binding IsTranslationMode}"
-                          ZIndex="998"
+            <!-- Translation Selected Regions (UserSelections) -->
+            <ItemsControl ItemsSource="{Binding UserSelections}" 
+                          ZIndex="500"
                           Width="{Binding ViewportSize.Width}" Height="{Binding ViewportSize.Height}"
                           x:CompileBindings="False">
+                <ItemsControl.IsVisible>
+                    <MultiBinding Converter="{x:Static BoolConverters.And}">
+                        <Binding Path="IsTranslationMode"/>
+                        <Binding Path="!IsCapturing"/>
+                    </MultiBinding>
+                </ItemsControl.IsVisible>
                 <ItemsControl.Styles>
                     <Style Selector="ItemsControl > ContentPresenter" x:DataType="m:UserSelectionRect">
                         <Setter Property="Canvas.Left" Value="{Binding Bounds.X}"/>
@@ -398,7 +403,13 @@
                                 <Grid Name="InnerCornerBottomRight" Width="40" Height="40" HorizontalAlignment="Right" VerticalAlignment="Bottom" Background="#01FFFFFF" Cursor="SizeAll" Margin="0,0,1,1" Classes="MoveHandle"/>
 
                                 <!-- 3. 文字內容層 (最上方，支援選取與右鍵選單) -->
-                                <Panel IsVisible="{Binding IsTranslated}" IsHitTestVisible="True" VerticalAlignment="Center" HorizontalAlignment="Center">
+                                <Panel IsHitTestVisible="True" VerticalAlignment="Center" HorizontalAlignment="Center">
+                                    <Panel.IsVisible>
+                                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                                            <Binding Path="IsTranslated"/>
+                                            <Binding Path="!$parent[Window].DataContext.IsCapturing"/>
+                                        </MultiBinding>
+                                    </Panel.IsVisible>
                                     <Border Background="#CC000000" CornerRadius="4" Padding="6"
                                             BorderBrush="#44FFFFFF" BorderThickness="1"
                                             Margin="4"

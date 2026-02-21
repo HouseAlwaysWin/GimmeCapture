@@ -154,6 +154,7 @@ public partial class SnipWindowViewModel
     // Auto-Detect OCR Monitor Loop
     private CancellationTokenSource? _autoDetectCts;
     private Task? _autoDetectTask;
+    private GimmeCapture.Services.OCR.PaddleOCREngine? _sharedOcrEngine;
 
     public void StartAutoDetectLoop()
     {
@@ -167,6 +168,9 @@ public partial class SnipWindowViewModel
         _autoDetectCts?.Cancel();
         _autoDetectCts?.Dispose();
         _autoDetectCts = null;
+        
+        _sharedOcrEngine?.Dispose();
+        _sharedOcrEngine = null;
     }
 
     private async Task AutoDetectLoopAsync(CancellationToken token)
@@ -181,12 +185,24 @@ public partial class SnipWindowViewModel
                 bool isOcrReady = await _mainVm.AIResourceService.EnsureOCRAsync();
                 if (!isOcrReady) continue;
 
+                if (_sharedOcrEngine == null)
+                {
+                    _sharedOcrEngine = new GimmeCapture.Services.OCR.PaddleOCREngine(_mainVm.AIResourceService, _mainVm.AppSettingsService);
+                }
+
                 var activeSections = UserSelections.Where(s => s.IsAutoDetectEnabled).ToList();
                 if (activeSections.Count == 0) continue;
 
-                var ocrEngine = new GimmeCapture.Services.OCR.PaddleOCREngine(_mainVm.AIResourceService, _mainVm.AppSettingsService);
                 var ocrLang = _mainVm.AppSettingsService.Settings.SourceLanguage;
-                await ocrEngine.EnsureLoadedAsync(ocrLang);
+                // Auto detect script if source is auto
+                if (ocrLang == OCRLanguage.Auto)
+                {
+                    // Fallback to Trad Chinese or Japanese based on some heuristic or just default to Trad Chinese for now
+                    // For better auto-detect, we might need a fast script detector
+                    ocrLang = OCRLanguage.TraditionalChinese;
+                }
+
+                await _sharedOcrEngine.EnsureLoadedAsync(ocrLang, token);
 
                 foreach (var sel in activeSections)
                 {
@@ -196,18 +212,24 @@ public partial class SnipWindowViewModel
                         var rect = sel.Bounds;
                         if (rect.Width <= 10 || rect.Height <= 10) continue;
 
+                        await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => IsCapturing = true);
+                        await Task.Delay(50); // 等待 UI 隱藏
+
                         using var bitmap = await _captureService.CaptureScreenAsync(rect, ScreenOffset, VisualScaling, false);
+                        
+                        await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => IsCapturing = false);
+
                         if (bitmap == null) continue;
 
                         // Because the region is already cropped to the box, we can just recognize the whole thing.
                         // Or we can just use TranslationService's AnalyzeAndTranslateAsync which does OCR + Translation in one go,
                         // but that might be heavy if the text hasn't changed.
                         // Let's use DetectText + RecognizeText to get the text string to compare first.
-                        var boxes = ocrEngine.DetectText(bitmap);
+                        var boxes = _sharedOcrEngine.DetectText(bitmap);
                         var sb = new System.Text.StringBuilder();
                         foreach (var box in boxes)
                         {
-                            var ocrResult = ocrEngine.RecognizeText(bitmap, box, token);
+                            var ocrResult = _sharedOcrEngine.RecognizeText(bitmap, box, token);
                             if (!string.IsNullOrWhiteSpace(ocrResult.text))
                             {
                                 sb.AppendLine(ocrResult.text);
@@ -250,7 +272,6 @@ public partial class SnipWindowViewModel
                     }
                 }
                 
-                ocrEngine.Dispose();
             }
             catch (TaskCanceledException) { break; }
             catch (Exception ex)
@@ -1133,9 +1154,15 @@ public partial class SnipWindowViewModel
             foreach (var sel in selectionsCopy)
             {
                 if (token.IsCancellationRequested) break;
-                if (sel.IsTranslated) continue; // 已翻譯的跳過
+                // 用戶點擊按鈕時，無論是否翻譯過都強制重新翻譯
+
+                IsCapturing = true;
+                await Task.Delay(50); // 等待 UI 隱藏
 
                 using var bitmap = await _captureService.CaptureScreenAsync(sel.Bounds, ScreenOffset, VisualScaling, false);
+                
+                IsCapturing = false;
+
                 if (bitmap == null) continue;
 
                 token.ThrowIfCancellationRequested();

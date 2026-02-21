@@ -270,6 +270,13 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         }
     }
 
+    private bool _isCapturing;
+    public bool IsCapturing
+    {
+        get => _isCapturing;
+        set => this.RaiseAndSetIfChanged(ref _isCapturing, value);
+    }
+
     private bool _isTopmost = true;
     public bool IsTopmost
     {
