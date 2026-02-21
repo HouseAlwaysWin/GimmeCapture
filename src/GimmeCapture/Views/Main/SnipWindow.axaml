@@ -363,9 +363,7 @@
                     <DataTemplate x:DataType="m:UserSelectionRect">
                         <Canvas ClipToBounds="False" Width="{Binding Bounds.Width}" Height="{Binding Bounds.Height}">
                             <Grid Width="{Binding Bounds.Width}" Height="{Binding Bounds.Height}">
-                                <!-- Move Handle for Translation Box (Hollow Border, Background layer) -->
-                                <Border Classes="MoveHandle" BorderBrush="#01FFFFFF" BorderThickness="20" Background="Transparent" Cursor="SizeAll"/>
-
+                                <!-- 1. 底層背景與邊框 (僅顯示，不阻擋拖動) -->
                                 <Border BorderBrush="{Binding $parent[Window].DataContext.SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" 
                                         BorderThickness="1"
                                         Background="#01000000"
@@ -373,47 +371,57 @@
                                         Height="{Binding Bounds.Height}"
                                         CornerRadius="0"
                                         Classes="TranslationItem"
-                                        IsHitTestVisible="True">
-                                    <Border.ContextMenu>
-                                        <ContextMenu>
-                                            <MenuItem Header="複製翻譯文字" 
-                                                      Command="{Binding $parent[Window].DataContext.CopyTranslationTextCommand}"
-                                                      CommandParameter="{Binding}"/>
-                                            <Separator/>
-                                            <MenuItem Header="刪除區域" 
-                                                      Command="{Binding $parent[Window].DataContext.RemoveUserSelectionCommand}"
-                                                      CommandParameter="{Binding}"/>
-                                        </ContextMenu>
-                                    </Border.ContextMenu>
-                                    
-                                    <!-- 顯示翻譯結果 (文字島嶼) -->
-                                    <Panel IsVisible="{Binding IsTranslated}" IsHitTestVisible="True" VerticalAlignment="Center" HorizontalAlignment="Center">
-                                        <Border Background="#CC000000" CornerRadius="4" Padding="6"
-                                                BorderBrush="#44FFFFFF" BorderThickness="1"
-                                                Margin="4"
-                                                HorizontalAlignment="Center" VerticalAlignment="Center">
-                                            <SelectableTextBlock Text="{Binding TranslatedText}" 
-                                                               Foreground="White" 
-                                                               FontSize="{Binding InferredFontSize}" 
-                                                               TextWrapping="Wrap"
-                                                               xml:space="preserve">
-                                                <SelectableTextBlock.ContextMenu>
-                                                    <ContextMenu>
-                                                        <MenuItem Header="複製翻譯文字" 
-                                                                  Command="{Binding $parent[Window].DataContext.CopyTranslationTextCommand}"
-                                                                  CommandParameter="{Binding}"/>
-                                                        <Separator/>
-                                                        <MenuItem Header="刪除區域" 
-                                                                  Command="{Binding $parent[Window].DataContext.RemoveUserSelectionCommand}"
-                                                                  CommandParameter="{Binding}"/>
-                                                    </ContextMenu>
-                                                </SelectableTextBlock.ContextMenu>
-                                            </SelectableTextBlock>
-                                        </Border>
-                                    </Panel>
+                                        IsHitTestVisible="False">
                                 </Border>
 
-                                <!-- Resize Handles for Translation Box (Outer Edges and Corners) -->
+                                <!-- 2. 拖動層 (MoveHandle 與 InnerCorner) -->
+                                <!-- 邊緣拖動 (20px 寬度的透明邊框) -->
+                                <Border Classes="MoveHandle" BorderBrush="#01FFFFFF" BorderThickness="20" Background="Transparent" Cursor="SizeAll"/>
+                                
+                                <!-- 內角拖動 (四角落內部的 40x40 區域) -->
+                                <Grid Name="InnerCornerTopLeft" Width="40" Height="40" HorizontalAlignment="Left" VerticalAlignment="Top" Background="#01FFFFFF" Cursor="SizeAll" Margin="1,1,0,0" Classes="MoveHandle"/>
+                                <Grid Name="InnerCornerTopRight" Width="40" Height="40" HorizontalAlignment="Right" VerticalAlignment="Top" Background="#01FFFFFF" Cursor="SizeAll" Margin="0,1,1,0" Classes="MoveHandle"/>
+                                <Grid Name="InnerCornerBottomLeft" Width="40" Height="40" HorizontalAlignment="Left" VerticalAlignment="Bottom" Background="#01FFFFFF" Cursor="SizeAll" Margin="1,0,0,1" Classes="MoveHandle"/>
+                                <Grid Name="InnerCornerBottomRight" Width="40" Height="40" HorizontalAlignment="Right" VerticalAlignment="Bottom" Background="#01FFFFFF" Cursor="SizeAll" Margin="0,0,1,1" Classes="MoveHandle"/>
+
+                                <!-- 3. 文字內容層 (最上方，支援選取與右鍵選單) -->
+                                <Panel IsVisible="{Binding IsTranslated}" IsHitTestVisible="True" VerticalAlignment="Center" HorizontalAlignment="Center">
+                                    <Border Background="#CC000000" CornerRadius="4" Padding="6"
+                                            BorderBrush="#44FFFFFF" BorderThickness="1"
+                                            Margin="4"
+                                            HorizontalAlignment="Center" VerticalAlignment="Center">
+                                        <Border.ContextMenu>
+                                            <ContextMenu>
+                                                <MenuItem Header="複製翻譯文字" 
+                                                          Command="{Binding $parent[Window].DataContext.CopyTranslationTextCommand}"
+                                                          CommandParameter="{Binding}"/>
+                                                <Separator/>
+                                                <MenuItem Header="刪除區域" 
+                                                          Command="{Binding $parent[Window].DataContext.RemoveUserSelectionCommand}"
+                                                          CommandParameter="{Binding}"/>
+                                            </ContextMenu>
+                                        </Border.ContextMenu>
+                                        <SelectableTextBlock Text="{Binding TranslatedText}" 
+                                                           Foreground="White" 
+                                                           FontSize="{Binding InferredFontSize}" 
+                                                           TextWrapping="Wrap"
+                                                           xml:space="preserve">
+                                            <SelectableTextBlock.ContextMenu>
+                                                <ContextMenu>
+                                                    <MenuItem Header="複製翻譯文字" 
+                                                              Command="{Binding $parent[Window].DataContext.CopyTranslationTextCommand}"
+                                                              CommandParameter="{Binding}"/>
+                                                    <Separator/>
+                                                    <MenuItem Header="刪除區域" 
+                                                              Command="{Binding $parent[Window].DataContext.RemoveUserSelectionCommand}"
+                                                              CommandParameter="{Binding}"/>
+                                                </ContextMenu>
+                                            </SelectableTextBlock.ContextMenu>
+                                        </SelectableTextBlock>
+                                    </Border>
+                                </Panel>
+
+                                <!-- 4. 縮放手把層 (最外層邊界) -->
                                 <Grid Classes="Handle" Name="HandleTopLeft" Cursor="TopLeftCorner" Width="40" Height="40" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="-20,-20,0,0" Background="#01FFFFFF"/>
                                 <Grid Classes="Handle" Name="HandleTopRight" Cursor="TopRightCorner" Width="40" Height="40" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-20,-20,0" Background="#01FFFFFF"/>
                                 <Grid Classes="Handle" Name="HandleBottomLeft" Cursor="BottomLeftCorner" Width="40" Height="40" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="-20,0,0,-20" Background="#01FFFFFF"/>
