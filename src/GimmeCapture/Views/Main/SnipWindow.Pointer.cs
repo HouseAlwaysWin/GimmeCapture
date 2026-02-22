@@ -131,9 +131,12 @@ public partial class SnipWindow : Window
         var sourceControl = e.Source as Control;
         bool isResizeHandle = sourceControl != null && sourceControl.Classes.Contains("Handle");
         bool isMoveHandle = sourceControl != null && (sourceControl.Classes.Contains("MoveHandle") || sourceControl.Name?.Contains("InnerCorner") == true);
+        
+        System.Diagnostics.Debug.WriteLine($"[PointerPressed] isResize: {isResizeHandle}, isMove: {isMoveHandle}");
 
-        if (sourceControl != null && props.IsLeftButtonPressed && isMoveHandle && !_viewModel.IsTranslationSelectionActive)
+        if (sourceControl != null && props.IsLeftButtonPressed && isMoveHandle)
         {
+            System.Diagnostics.Debug.WriteLine($"[PointerPressed] Entered MoveHandle block");
             var sel = sourceControl.DataContext as GimmeCapture.Models.UserSelectionRect;
             if (sel == null)
             {
@@ -171,8 +174,9 @@ public partial class SnipWindow : Window
             }
         }
 
-        if (sourceControl != null && props.IsLeftButtonPressed && isResizeHandle && !_viewModel.IsTranslationSelectionActive)
+        if (sourceControl != null && props.IsLeftButtonPressed && isResizeHandle)
         {
+            System.Diagnostics.Debug.WriteLine($"[PointerPressed] Entered ResizeHandle block");
             var sel = sourceControl.DataContext as GimmeCapture.Models.UserSelectionRect;
             if (sel == null)
             {
