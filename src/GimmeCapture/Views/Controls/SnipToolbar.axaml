@@ -125,7 +125,8 @@
                     <!-- Current active tool icon -->
                     <PathIcon Data="M19,13h-6v6h-2v-6H5v-2h6V5h2v6h6V13z" Width="14" Height="14" 
                               IsVisible="{Binding IsTranslationSelectionActive}"/>
-                    <PathIcon Data="M13,10h-2V7H9l3,-3 3,3h-2v3zm0,4h-2v3H9l3,3 3,-3h-2v-3zm3,-1h3V11l3,3-3,3v-2h-3v-2zM8,13H5v2l-3,-3 3,-3v2h3v2z" Width="14" Height="14" 
+                    <!-- Mouse Cursor Icon -->
+                    <PathIcon Data="M13.64,21.97C13.14,22.21 12.54,22 12.31,21.5L10.13,16.76L7.62,18.78C7.45,18.92 7.24,19 7,19A1,1 0 0,1 6,18V3A1,1 0 0,1 7,2C7.24,2 7.47,2.09 7.64,2.23L22.65,12.22C23.11,12.5 23.25,13.11 22.95,13.57C22.82,13.78 22.63,13.92 22.4,14L17.58,15.65L19.85,20.41C20.08,20.91 19.86,21.5 19.36,21.73L13.64,21.97Z" Width="14" Height="14" 
                               IsVisible="{Binding !IsTranslationSelectionActive}"/>
                 </Panel>
             </ToggleButton>
@@ -173,21 +174,6 @@
                     ToolTip.Tip="隱藏工具列 (F4)">
                 <PathIcon Data="M11.83,9L15,12.17V12.11L11.83,9M15,10.11L17.39,12.5L15,14.89V10.11M6,3V6H3V3H6M19,3H22V6H19V3M3,8H5.97L9,11H3V8M13.13,10.31L15.82,13H13V15.82L10.31,13.13L13.13,10.31M15,18.89L17.39,16.5L15,14.11V18.89M22,8V11H16L19.03,8H22M3,19H6V22H3V19M19,19H22V22H19V19M6,22H18V21H6V22M18,3H6V4H18V3Z" Width="14" Height="14"/>
             </Button>
-
-            <!-- 6. Integrated Loading Indicator -->
-            <StackPanel Orientation="Horizontal" IsVisible="{Binding ShowSnipToolBar}" VerticalAlignment="Center" Margin="4,0">
-                <Rectangle Fill="#444444" Width="1" Height="16" Margin="0,0,4,0"/>
-                <StackPanel Spacing="2" VerticalAlignment="Center" Margin="0,0,4,0">
-                    <TextBlock Text="{Binding ProcessingText}" Foreground="White" FontSize="10" HorizontalAlignment="Center"/>
-                    <ProgressBar IsIndeterminate="{Binding IsIndeterminate}"
-                                 Value="{Binding ProgressValue}"
-                                 Minimum="0" Maximum="100"
-                                 Height="4" MinWidth="70"
-                                 Foreground="{DynamicResource ThemeAccentBrush}"
-                                 Background="#333333"
-                                 VerticalAlignment="Center"/>
-                </StackPanel>
-            </StackPanel>
 
         </WrapPanel>
     </Border>

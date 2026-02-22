@@ -71,7 +71,14 @@ public partial class SnipWindowViewModel
     public bool ShowTopLoadingBar
     {
         get => _showTopLoadingBar;
-        set => this.RaiseAndSetIfChanged(ref _showTopLoadingBar, value);
+        set 
+        {
+            if (value != _showTopLoadingBar)
+            {
+                this.RaiseAndSetIfChanged(ref _showTopLoadingBar, value);
+                UpdateMask();
+            }
+        }
     }
 
 
