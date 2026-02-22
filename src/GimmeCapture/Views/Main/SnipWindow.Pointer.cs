@@ -132,7 +132,7 @@ public partial class SnipWindow : Window
         bool isResizeHandle = sourceControl != null && sourceControl.Classes.Contains("Handle");
         bool isMoveHandle = sourceControl != null && (sourceControl.Classes.Contains("MoveHandle") || sourceControl.Name?.Contains("InnerCorner") == true);
 
-        if (sourceControl != null && props.IsLeftButtonPressed && isMoveHandle)
+        if (sourceControl != null && props.IsLeftButtonPressed && isMoveHandle && !_viewModel.IsTranslationSelectionActive)
         {
             var sel = sourceControl.DataContext as GimmeCapture.Models.UserSelectionRect;
             if (sel == null)
@@ -171,7 +171,7 @@ public partial class SnipWindow : Window
             }
         }
 
-        if (sourceControl != null && props.IsLeftButtonPressed && isResizeHandle)
+        if (sourceControl != null && props.IsLeftButtonPressed && isResizeHandle && !_viewModel.IsTranslationSelectionActive)
         {
             var sel = sourceControl.DataContext as GimmeCapture.Models.UserSelectionRect;
             if (sel == null)
@@ -249,22 +249,18 @@ public partial class SnipWindow : Window
                 // C. Selection Creation (Only if no handle/corner hit and selection-active)
                 if (_viewModel.IsTranslationSelectionActive)
                 {
-                    bool hitExisting = false;
-                    foreach (var sel in _viewModel.UserSelections)
-                    {
-                        if (sel.Bounds.Contains(point)) { hitExisting = true; break; }
-                    }
-
-                    if (!hitExisting)
-                    {
-                        _isTranslationSelecting = true;
-                        _translationSelectionStart = point;
-                        _currentTranslationSelection = new UserSelectionRect { Bounds = new Rect(point, new Size(0, 0)) };
-                        _viewModel.UserSelections.Add(_currentTranslationSelection);
-                        e.Pointer.Capture(this);
-                        e.Handled = true;
-                        return;
-                    }
+                    // V8 Selection Mode: Always allow starting a new selection, ignoring existing hits
+                    _isTranslationSelecting = true;
+                    _translationSelectionStart = point;
+                    _currentTranslationSelection = new UserSelectionRect { Bounds = new Rect(point, new Size(0, 0)) };
+                    _viewModel.UserSelections.Add(_currentTranslationSelection);
+                    
+                    // Force mask update immediately for feedback
+                    _viewModel.UpdateMask();
+                    
+                    e.Pointer.Capture(this);
+                    e.Handled = true;
+                    return;
                 }
                 
                 // D. 翻譯模式下一律 return，不讓事件掉入標準選取邏輯
@@ -791,6 +787,9 @@ public partial class SnipWindow : Window
                 {
                     _viewModel.UserSelections.Remove(_currentTranslationSelection);
                 }
+                
+                // Finalize mask and region
+                _viewModel.UpdateMask();
                 _currentTranslationSelection = null;
             }
             return;
