@@ -293,7 +293,7 @@ public partial class SnipWindow : Window
 
                 if (selRect != null)
                 {
-                    _viewModel.UserSelections.Remove(selRect);
+                    _viewModel!.UserSelections.Remove(selRect);
                     e.Handled = true;
                     return;
                 }
@@ -308,7 +308,7 @@ public partial class SnipWindow : Window
                     _isTranslationSelecting = true;
                     _translationSelectionStart = point;
                     _currentTranslationSelection = new UserSelectionRect { Bounds = new Rect(point, new Size(0, 0)) };
-                    _viewModel.UserSelections.Add(_currentTranslationSelection);
+                    _viewModel!.UserSelections.Add(_currentTranslationSelection);
                     
                     // Force mask update immediately for feedback
                     _viewModel.UpdateMask();

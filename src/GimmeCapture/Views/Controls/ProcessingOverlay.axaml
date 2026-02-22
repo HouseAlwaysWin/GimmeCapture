@@ -82,8 +82,7 @@
                                        TextWrapping="NoWrap"/>
                             
                             <!-- Progress Bar (Red) - Adaptive width -->
-                            <ProgressBar IsIndeterminate="{Binding IsIndeterminate}"
-                                         Value="{Binding ProgressValue}"
+                            <ProgressBar IsIndeterminate="True"
                                          Minimum="0" Maximum="100"
                                          Height="3"
                                          HorizontalAlignment="Stretch"
