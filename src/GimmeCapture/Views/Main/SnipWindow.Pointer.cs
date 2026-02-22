@@ -239,14 +239,65 @@ public partial class SnipWindow : Window
             }
         }
 
-        if (props.IsLeftButtonPressed)
+        // Translation mode: selection and interaction (V7+ Restructured)
+        if (_viewModel.IsTranslationMode)
         {
-            // Translation mode: selection and interaction (V7+ Restructured)
-            if (_viewModel.IsTranslationMode)
+            if (props.IsRightButtonPressed)
+            {
+                System.Diagnostics.Debug.WriteLine($"[TranslationRightClick] PointerPressed at {point}. Source: {sourceControl?.GetType().Name}, Name: {sourceControl?.Name}, DataContext: {sourceControl?.DataContext?.GetType().Name}");
+
+                // If right-clicking the translated text, do not delete it, let the ContextMenu handle it
+                if (sourceControl is SelectableTextBlock || sourceControl?.FindAncestorOfType<SelectableTextBlock>() != null)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[TranslationRightClick] Hit SelectableTextBlock. Ignoring delete to allow ContextMenu.");
+                    return; 
+                }
+
+                // Otherwise, if right-clicking a translation box, delete it
+                var selRect = sourceControl?.DataContext as GimmeCapture.Models.UserSelectionRect;
+                if (selRect == null)
+                {
+                    var parent = sourceControl?.GetVisualParent();
+                    while (parent != null)
+                    {
+                        if (parent is Control c && c.DataContext is GimmeCapture.Models.UserSelectionRect found)
+                        {
+                            selRect = found;
+                            break;
+                        }
+                        parent = parent.GetVisualParent();
+                    }
+                }
+
+                // Fallback: Coordinate-based hit testing
+                if (selRect == null && _viewModel.UserSelections != null)
+                {
+                    // Reverse iterate to pick top-most box
+                    for (int i = _viewModel.UserSelections.Count - 1; i >= 0; i--)
+                    {
+                        var box = _viewModel.UserSelections[i];
+                        if (box.Bounds.Contains(point))
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[TranslationRightClick] Coordinate hit test succeeded for box {i}.");
+                            selRect = box;
+                            break;
+                        }
+                    }
+                }
+
+                System.Diagnostics.Debug.WriteLine($"[TranslationRightClick] Final selRect resolved: {selRect != null}");
+
+                if (selRect != null)
+                {
+                    _viewModel.UserSelections.Remove(selRect);
+                    e.Handled = true;
+                    return;
+                }
+            }
+
+            if (props.IsLeftButtonPressed)
             {
                 // B. Selection Creation (Only if no handle/corner hit and selection-active)
-
-                // C. Selection Creation (Only if no handle/corner hit and selection-active)
                 if (_viewModel.IsTranslationSelectionActive)
                 {
                     // V8 Selection Mode: Always allow starting a new selection, ignoring existing hits
@@ -262,11 +313,11 @@ public partial class SnipWindow : Window
                     e.Handled = true;
                     return;
                 }
-                
-                // D. 翻譯模式下一律 return，不讓事件掉入標準選取邏輯
-                // 已翻譯的區域在 Bubble phase 已被 SelectableTextBlock 接收
-                return;
             }
+            
+            // D. 翻譯模式下一律 return，不讓事件掉入標準選取邏輯
+            // 已翻譯的區域在 Bubble phase 已被 SelectableTextBlock 接收
+            return;
         }
         
         if (_viewModel.IsDrawingMode && _viewModel.CurrentState == SnipState.Selected)
@@ -311,9 +362,6 @@ public partial class SnipWindow : Window
             }
         }
 
-        // 翻譯模式下非左鍵事件（右鍵等）不進入標準選取邏輯
-        // ContextMenu 由 XAML Border/SelectableTextBlock 處理
-        if (_viewModel.IsTranslationMode) return;
 
         // If clicking OUTSIDE or in Idle/Detecting, start NEW selection
         // Check if the click is within the toolbar bounds (coordinate-based check)

@@ -476,6 +476,33 @@ public partial class SnipWindow : Window
     // Flag to Debounce Text Entry Finish
     private DateTime _lastTextFinishTime = DateTime.MinValue;
 
+    private void RootGrid_ContextRequested(object? sender, ContextRequestedEventArgs e)
+    {
+        if (_viewModel == null) return;
+
+        var src = e.Source as Control;
+        
+        // Let SelectableTextBlock show its own ContextMenu
+        if (src is SelectableTextBlock || src?.FindAncestorOfType<SelectableTextBlock>() != null)
+        {
+            return;
+        }
+
+        // Translation mode: Right-click deletes box, NO context menu on the background
+        if (_viewModel.IsTranslationMode)
+        {
+            e.Handled = true;
+            return;
+        }
+
+        // Selection mode: Right-click cancels box, NO context menu when interacting with box
+        if (_viewModel.CurrentState == SnipState.Selecting || _viewModel.CurrentState == SnipState.Selected)
+        {
+            e.Handled = true;
+            return;
+        }
+    }
+
     private void OnKeyDown(object? sender, KeyEventArgs e)
     {
         if (e.Key == Key.Escape)

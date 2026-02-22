@@ -92,7 +92,7 @@
         </Style>
     </Window.Styles>
     
-    <Grid>
+    <Grid ContextRequested="RootGrid_ContextRequested">
         <Grid.ContextMenu>
             <ContextMenu>
                 <MenuItem Header="{Binding [MenuShowToolbar], Source={x:Static services:LocalizationService.Instance}}" 
@@ -394,7 +394,7 @@
                                         Height="{Binding Bounds.Height}"
                                         CornerRadius="0"
                                         Classes="TranslationItem"
-                                        IsHitTestVisible="False"
+                                        IsHitTestVisible="True"
                                         IsVisible="{Binding $parent[Window].DataContext.ShowTranslationResults}">
                                 </Border>
 
@@ -420,17 +420,6 @@
                                             BorderBrush="#44FFFFFF" BorderThickness="1"
                                             Margin="4"
                                             HorizontalAlignment="Center" VerticalAlignment="Center">
-                                        <Border.ContextMenu>
-                                            <ContextMenu>
-                                                <MenuItem Header="複製翻譯文字" 
-                                                          Command="{Binding $parent[Window].DataContext.CopyTranslationTextCommand}"
-                                                          CommandParameter="{Binding}"/>
-                                                <Separator/>
-                                                <MenuItem Header="刪除區域" 
-                                                          Command="{Binding $parent[Window].DataContext.RemoveUserSelectionCommand}"
-                                                          CommandParameter="{Binding}"/>
-                                            </ContextMenu>
-                                        </Border.ContextMenu>
                                         <SelectableTextBlock Text="{Binding TranslatedText}" 
                                                            Foreground="White" 
                                                            FontSize="{Binding InferredFontSize}" 
@@ -440,11 +429,11 @@
                                                 <ContextMenu>
                                                     <MenuItem Header="複製翻譯文字" 
                                                               Command="{Binding $parent[Window].DataContext.CopyTranslationTextCommand}"
-                                                              CommandParameter="{Binding}"/>
+                                                              CommandParameter="{Binding $parent[SelectableTextBlock].DataContext}"/>
                                                     <Separator/>
                                                     <MenuItem Header="刪除區域" 
                                                               Command="{Binding $parent[Window].DataContext.RemoveUserSelectionCommand}"
-                                                              CommandParameter="{Binding}"/>
+                                                              CommandParameter="{Binding $parent[SelectableTextBlock].DataContext}"/>
                                                 </ContextMenu>
                                             </SelectableTextBlock.ContextMenu>
                                         </SelectableTextBlock>
