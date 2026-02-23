@@ -517,19 +517,9 @@ public partial class SnipWindow : Window
             return;
         }
 
-        // Translation mode: Right-click deletes box, NO context menu on the background
-        if (_viewModel.IsTranslationMode)
-        {
-            e.Handled = true;
-            return;
-        }
-
-        // Selection mode: Right-click cancels box, NO context menu when interacting with box
-        if (_viewModel.CurrentState == SnipState.Selecting || _viewModel.CurrentState == SnipState.Selected)
-        {
-            e.Handled = true;
-            return;
-        }
+        // Suppress system context menu in all capture modes.
+        // HandleRightClick already handles right-click logic (cancel selection / close).
+        e.Handled = true;
     }
 
     private void OnKeyDown(object? sender, KeyEventArgs e)
