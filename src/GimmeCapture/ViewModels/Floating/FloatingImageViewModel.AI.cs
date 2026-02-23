@@ -9,6 +9,7 @@ using System.Reactive.Linq;
 using System;
 using System.Threading.Tasks;
 using GimmeCapture.ViewModels.Shared;
+using GimmeCapture.Views.Floating;
 
 namespace GimmeCapture.ViewModels.Floating;
 
@@ -42,20 +43,7 @@ public partial class FloatingImageViewModel
                  };
                  var dialog = new GimmeCapture.Views.Shared.GothicDialog { DataContext = dialogVm };
                  
-                 var desktop = Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime;
-                 var owner = desktop?.Windows.FirstOrDefault(w => w.DataContext == this) as Avalonia.Controls.Window;
-                 
-                  // Fallback: If owner specific to this VM not found, try any active FloatingImageWindow
-                 if (owner == null)
-                 {
-                     owner = desktop?.Windows.OfType<GimmeCapture.Views.Floating.FloatingImageWindow>().FirstOrDefault(w => w.IsActive);
-                 }
-                 
-                 // Final Fallback: Try Main Window or any active window
-                 if (owner == null)
-                 {
-                     owner = desktop?.Windows.FirstOrDefault(w => w.IsActive) ?? desktop?.MainWindow;
-                 }
+                var owner = ResolveOwnerWindow();
                  
                  if (owner != null) 
                  {
@@ -106,8 +94,7 @@ public partial class FloatingImageViewModel
                      Message = string.Format(LocalizationService.Instance["AIInitErrorMessage"], ex.Message)
                  };
                  var dialog = new GimmeCapture.Views.Shared.GothicDialog { DataContext = dialogVm };
-                 var desktop = Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime;
-                 var owner = desktop?.Windows.FirstOrDefault(w => w.DataContext == this) as Avalonia.Controls.Window;
+                var owner = ResolveOwnerWindow();
                  if (owner != null) dialog.ShowDialog<bool>(owner);
             });
         }
@@ -295,9 +282,7 @@ public partial class FloatingImageViewModel
 
         await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
         {
-            // Find owner window (FloatingImageWindow)
-            var desktop = Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime;
-            var owner = desktop?.Windows.FirstOrDefault(w => w.DataContext == this);
+            var owner = ResolveOwnerWindow();
             if (owner != null)
             {
                 confirmed = await GimmeCapture.Views.Dialogs.UpdateDialog.ShowDialog(owner, msg, isUpdateAvailable: true);
@@ -323,8 +308,7 @@ public partial class FloatingImageViewModel
                      Message = LocalizationService.Instance["ComponentDownloadingProgress"] ?? "Downloading component..." 
                  };
                  var dialog = new GimmeCapture.Views.Shared.GothicDialog { DataContext = dialogVm };
-                 var desktop = Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime;
-                 var owner = desktop?.Windows.FirstOrDefault(w => w.DataContext == this) as Avalonia.Controls.Window;
+                var owner = ResolveOwnerWindow();
                  if (owner != null) dialog.ShowDialog<bool>(owner);
             });
             return false;
@@ -372,8 +356,7 @@ public partial class FloatingImageViewModel
                      Message = "AI Core components are currently downloading..." 
                  };
                  var dialog = new GimmeCapture.Views.Shared.GothicDialog { DataContext = dialogVm };
-                 var desktop = Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime;
-                 var owner = desktop?.Windows.FirstOrDefault(w => w.DataContext == this) as Avalonia.Controls.Window;
+                var owner = ResolveOwnerWindow();
                  if (owner != null) dialog.ShowDialog<bool>(owner);
             });
             return false;
@@ -385,8 +368,7 @@ public partial class FloatingImageViewModel
 
         await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
         {
-            var desktop = Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime;
-            var owner = desktop?.Windows.FirstOrDefault(w => w.DataContext == this);
+            var owner = ResolveOwnerWindow();
              if (owner != null)
             {
                 confirmed = await GimmeCapture.Views.Dialogs.UpdateDialog.ShowDialog(owner, msg, isUpdateAvailable: true);
@@ -415,20 +397,7 @@ public partial class FloatingImageViewModel
                  var dialogVm = new GothicDialogViewModel { Title = "AI Disabled", Message = "AI features are currently disabled in Settings." };
                  var dialog = new GimmeCapture.Views.Shared.GothicDialog { DataContext = dialogVm };
                  
-                 var desktop = Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime;
-                 var owner = desktop?.Windows.FirstOrDefault(w => w.DataContext == this) as Avalonia.Controls.Window;
-                 
-                 // Fallback: If owner specific to this VM not found, try any active FloatingImageWindow
-                 if (owner == null)
-                 {
-                     owner = desktop?.Windows.OfType<GimmeCapture.Views.Floating.FloatingImageWindow>().FirstOrDefault(w => w.IsActive);
-                 }
-                 
-                 // Final Fallback: Try Main Window or any active window
-                 if (owner == null)
-                 {
-                     owner = desktop?.Windows.FirstOrDefault(w => w.IsActive) ?? desktop?.MainWindow;
-                 }
+                var owner = ResolveOwnerWindow();
                  
                  if (owner != null) 
                  {
@@ -505,8 +474,7 @@ public partial class FloatingImageViewModel
              Avalonia.Threading.Dispatcher.UIThread.Post(() => {
                  var dialogVm = new GothicDialogViewModel { Title = "Error", Message = ex.Message };
                  var dialog = new GimmeCapture.Views.Shared.GothicDialog { DataContext = dialogVm };
-                 var desktop = Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime;
-                 var owner = desktop?.Windows.FirstOrDefault(w => w.DataContext == this) as Avalonia.Controls.Window;
+                var owner = ResolveOwnerWindow();
                  if (owner != null) dialog.ShowDialog<bool>(owner);
             });
         }
@@ -595,8 +563,7 @@ public partial class FloatingImageViewModel
              Avalonia.Threading.Dispatcher.UIThread.Post(() => {
                  var dialogVm = new GothicDialogViewModel { Title = "Error", Message = $"Failed to apply background removal: {ex.Message}" };
                  var dialog = new GimmeCapture.Views.Shared.GothicDialog { DataContext = dialogVm };
-                 var desktop = Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime;
-                 var owner = desktop?.Windows.FirstOrDefault(w => w.DataContext == this) as Avalonia.Controls.Window;
+                var owner = ResolveOwnerWindow();
                  if (owner != null) dialog.ShowDialog<bool>(owner);
             });
         }
@@ -647,5 +614,13 @@ public partial class FloatingImageViewModel
         {
             return null;
         }
+    }
+
+    private Avalonia.Controls.Window? ResolveOwnerWindow()
+    {
+        return _windowManager.FindWindowByDataContext(this)
+            ?? _windowManager.GetActiveWindowOfType<FloatingImageWindow>()
+            ?? _windowManager.GetActiveWindow()
+            ?? _windowManager.GetMainWindow();
     }
 }

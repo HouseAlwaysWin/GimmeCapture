@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core;
+using GimmeCapture.Services.Platforms.Desktop;
 using System.Linq;
 using System.Reactive.Linq;
 using GimmeCapture.ViewModels.Main;
@@ -110,6 +111,7 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
     public AppSettingsService AppSettingsService => _appSettingsService;
 
     private readonly IClipboardService _clipboardService;
+    private readonly IWindowManager _windowManager;
     private readonly AIResourceService _aiResourceService;
     private readonly AIPathService _pathService;
     private readonly AppSettingsService _appSettingsService = null!;
@@ -228,6 +230,7 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
         HidePinDecoration = hideDecoration;
         HidePinBorder = hideBorder;
         _clipboardService = clipboardService;
+        _windowManager = new AvaloniaWindowManager();
         _aiResourceService = aiResourceService;
         _pathService = pathService;
         _appSettingsService = appSettingsService;
