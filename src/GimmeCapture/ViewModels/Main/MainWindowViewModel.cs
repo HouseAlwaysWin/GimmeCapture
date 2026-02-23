@@ -12,8 +12,8 @@ using System.IO;
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core;
 using GimmeCapture.Services.Core.Infrastructure;
+using GimmeCapture.Services.Platforms.Desktop;
 using GimmeCapture.Services.Platforms.Windows;
-using Avalonia.Controls.ApplicationLifetimes;
 using GimmeCapture.Views.Main;
 using System.Collections.Generic;
 
@@ -93,6 +93,7 @@ public partial class MainWindowViewModel : ViewModelBase
     
     public AppSettingsService AppSettingsService => _settingsService;
     private readonly AppSettingsService _settingsService;
+    private readonly IWindowManager _windowManager;
     public WindowsGlobalHotkeyService HotkeyService { get; } = new();
     public HotkeyMappingService HotkeyMappingService { get; } = new();
     public HotkeyRouterService HotkeyRouterService { get; } = new();
@@ -140,6 +141,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public MainWindowViewModel()
     {
+        _windowManager = new AvaloniaWindowManager();
         _settingsService = new AppSettingsService();
         FfmpegDownloader = new FFmpegDownloaderService(_settingsService);
         RecordingService = new RecordingService(FfmpegDownloader, _settingsService);
@@ -193,16 +195,11 @@ public partial class MainWindowViewModel : ViewModelBase
         HotkeyService.OnHotkeyPressed = (id) => 
         {
             // 如果 SnipWindow 開啟中，將熱鍵傳遞給它處理，而不是無視
-            var desktop = Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime;
-            var snipWindow = desktop?.Windows.OfType<SnipWindow>().FirstOrDefault();
-            if (snipWindow != null)
+            var snipVm = _windowManager.GetWindowDataContext<SnipWindow, SnipWindowViewModel>();
+            if (snipVm != null)
             {
-                var vm = snipWindow.DataContext as SnipWindowViewModel;
-                if (vm != null)
-                {
-                    vm.HandleGlobalHotkey(id);
-                    return;
-                }
+                snipVm.HandleGlobalHotkey(id);
+                return;
             }
 
             if (HotkeyRouterService.TryMapGlobalHotkeyToCaptureMode(id, out var mode))

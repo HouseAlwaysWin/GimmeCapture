@@ -9,7 +9,6 @@ using System.Linq;
 using GimmeCapture.Models;
 using GimmeCapture.Views.Dialogs;
 using GimmeCapture.Services.Core;
-using Avalonia.Controls.ApplicationLifetimes;
 
 namespace GimmeCapture.ViewModels.Main;
 
@@ -26,7 +25,7 @@ public partial class MainWindowViewModel
                 
                 await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
                 {
-                    var mainWindow = (Avalonia.Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
+                    var mainWindow = _windowManager.GetMainWindow();
                     if (mainWindow != null)
                     {
                         confirmed = await UpdateDialog.ShowDialog(mainWindow, msg, isUpdateAvailable: true);
@@ -122,7 +121,7 @@ public partial class MainWindowViewModel
             
             bool? result = await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
             {
-                var mainWindow = (Avalonia.Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
+                var mainWindow = _windowManager.GetMainWindow();
                 if (mainWindow == null) return false;
                 return await UpdateDialog.ShowDialog(mainWindow, msg, isUpdateAvailable: true);
             });
@@ -135,7 +134,7 @@ public partial class MainWindowViewModel
                     var readyMsg = LocalizationService.Instance["UpdateReady"];
                     bool? readyResult = await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
                     {
-                        var mainWindow = (Avalonia.Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
+                        var mainWindow = _windowManager.GetMainWindow();
                         if (mainWindow == null) return false;
                         return await UpdateDialog.ShowDialog(mainWindow, readyMsg, isUpdateAvailable: true);
                     });
@@ -153,7 +152,7 @@ public partial class MainWindowViewModel
             {
                 SetStatus("StatusReady");
                 await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () => {
-                    var mainWindow = (Avalonia.Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
+                    var mainWindow = _windowManager.GetMainWindow();
                     if (mainWindow != null) await UpdateDialog.ShowDialog(mainWindow, LocalizationService.Instance["NoUpdateFound"], isUpdateAvailable: false);
                 });
             }

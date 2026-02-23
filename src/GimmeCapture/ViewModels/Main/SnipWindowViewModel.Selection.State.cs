@@ -637,6 +637,4 @@ public partial class SnipWindowViewModel
             TranslationOverlayLeft = left;
         }
     }
-
-
 }
