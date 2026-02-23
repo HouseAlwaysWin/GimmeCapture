@@ -35,6 +35,8 @@ public class SnipHotkeys
     public string Toolbar { get; set; } = "F4";
     public string SelectionMode { get; set; } = "S";
     public string CropMode { get; set; } = "C";
+    public string RemoveBackground { get; set; } = "Shift+R";
+    public string MagicWand { get; set; } = "W";
 }
 
 public class RecordHotkeys

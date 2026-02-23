@@ -61,6 +61,8 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     public string ActiveActionHotkey => CurrentMode == SnipMode.Translation ? (_mainVm?.Translate_Action ?? "F3") : (CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Action ?? "F3") : (_mainVm?.Snip_Pin ?? "F3"));
     public string ActiveToolbarHotkey => CurrentMode == SnipMode.Translation ? (_mainVm?.Translate_Toolbar ?? "F4") : (CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Toolbar ?? "F4") : (_mainVm?.Snip_Toolbar ?? "F4"));
     public string ActivePlaybackHotkey => _mainVm?.Record_Playback ?? "Space";
+    public string RemoveBackgroundHotkey => _mainVm?.Snip_RemoveBackground ?? "Shift+R";
+    public string MagicWandHotkey => _mainVm?.Snip_MagicWand ?? "W";
 
     public string UndoTooltip => $"{LocalizationService.Instance["Undo"]} ({UndoHotkey})";
     public string RedoTooltip => $"{LocalizationService.Instance["Redo"]} ({RedoHotkey})";
@@ -81,6 +83,8 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     public string HideTranslationResultsTooltip => $"{LocalizationService.Instance["HideTranslationResults"]} ({ActiveActionHotkey})";
     public string ToggleToolbarTooltip => $"{LocalizationService.Instance["ActionToolbar"]} ({ActiveToolbarHotkey})";
     public string TogglePlaybackTooltip => $"{LocalizationService.Instance["ActionPlayback"]} ({ActivePlaybackHotkey})";
+    public string RemoveBackgroundTooltip => $"{LocalizationService.Instance["RemoveBackground"]} ({RemoveBackgroundHotkey})";
+    public string MagicWandTooltip => $"{LocalizationService.Instance["TipMagicWand"]} ({MagicWandHotkey})";
 
     public Color ThemeColor => _mainVm?.ThemeColor ?? Colors.Red;
     public Color ThemeDeepColor 
@@ -104,7 +108,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     public Action? CloseRecordingProgressWindowAction { get; set; }
     public Action? SaveAction { get; set; }
     public Action? FocusWindowAction { get; set; }
-    public Action<Avalonia.Media.Imaging.Bitmap, Rect, Color, double, bool>? OpenPinWindowAction { get; set; }
+    public Action<Avalonia.Media.Imaging.Bitmap, Rect, Color, double, bool, bool>? OpenPinWindowAction { get; set; }
     public Func<Task<string?>>? PickSaveFileAction { get; set; }
 
     public static class StaticData

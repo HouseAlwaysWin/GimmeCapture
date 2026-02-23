@@ -366,7 +366,7 @@ public partial class SnipWindow : Window
                  return file?.Path.LocalPath;
             };
 
-            _viewModel.OpenPinWindowAction = (bitmap, rect, color, thickness, runAI) =>
+            _viewModel.OpenPinWindowAction = (bitmap, rect, color, thickness, runAI, initialInteractive) =>
             {
                 // Use settings directly from MainVm to ensure consistency
                 bool hideDecoration = _viewModel.MainVm?.HideSnipPinDecoration ?? false;
@@ -411,6 +411,23 @@ public partial class SnipWindow : Window
                         Width = rect.Width + padding.Left + padding.Right,
                         Height = rect.Height + padding.Top + padding.Bottom
                     };
+                    
+                    // Auto-Run AI if requested
+                    if (runAI)
+                    {
+                        // Use dispatcher to ensure window is shown/initialized before starting
+                         Avalonia.Threading.Dispatcher.UIThread.Post(() => {
+                            vm.RemoveBackgroundCommand.Execute().Subscribe();
+                         });
+                    }
+
+                    // Initial Interactive mode if requested
+                    if (initialInteractive)
+                    {
+                        Avalonia.Threading.Dispatcher.UIThread.Post(() => {
+                            vm.IsPointRemovalMode = true;
+                        });
+                    }
 
                     // Save Action
                     vm.SaveAction = async () =>
@@ -446,15 +463,6 @@ public partial class SnipWindow : Window
                     };
                     
                     win.Show();
-                    
-                    // Auto-Run AI if requested
-                    if (runAI)
-                    {
-                        // Use dispatcher to ensure window is shown/initialized before starting
-                         Avalonia.Threading.Dispatcher.UIThread.Post(() => {
-                            vm.RemoveBackgroundCommand.Execute().Subscribe();
-                         });
-                    }
                 }
                 catch (Exception ex)
                 {

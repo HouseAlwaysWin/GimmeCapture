@@ -37,7 +37,7 @@
                 <StackPanel Spacing="10">
                     <TextBlock Text="{Binding [HotkeySnipGroup], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold" Foreground="{Binding ThemeColor, Converter={StaticResource ColorToBrushConverter}}"/>
                     <UniformGrid Columns="2">
-                        <Grid ColumnDefinitions="Auto, 5, *" RowDefinitions="Auto, Auto, Auto, Auto, Auto, Auto, Auto, Auto" Margin="0,0,10,0">
+                        <Grid ColumnDefinitions="Auto, 5, *" RowDefinitions="Auto, Auto, Auto, Auto, Auto, Auto, Auto, Auto, Auto" Margin="0,0,10,0">
                             <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding [TipRectangle], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" FontSize="12"/>
                             <TextBox Grid.Row="0" Grid.Column="2" Text="{Binding Snip_Rectangle, Mode=OneWay}" Tag="Snip_Rectangle" IsReadOnly="True" KeyDown="HotkeyTextBox_KeyDown" Margin="0,2"/>
                             <TextBlock Grid.Row="1" Grid.Column="0" Text="{Binding [TipEllipse], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" FontSize="12"/>
@@ -54,6 +54,10 @@
                             <TextBox Grid.Row="6" Grid.Column="2" Text="{Binding Snip_Mosaic, Mode=OneWay}" Tag="Snip_Mosaic" IsReadOnly="True" KeyDown="HotkeyTextBox_KeyDown" Margin="0,2"/>
                             <TextBlock Grid.Row="7" Grid.Column="0" Text="{Binding [TipBlur], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" FontSize="12"/>
                             <TextBox Grid.Row="7" Grid.Column="2" Text="{Binding Snip_Blur, Mode=OneWay}" Tag="Snip_Blur" IsReadOnly="True" KeyDown="HotkeyTextBox_KeyDown" Margin="0,2"/>
+                            <TextBlock Grid.Row="8" Grid.Column="0" Text="{Binding [RemoveBackground], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" FontSize="12"/>
+                            <TextBox Grid.Row="8" Grid.Column="2" Text="{Binding Snip_RemoveBackground, Mode=OneWay}" Tag="Snip_RemoveBackground" IsReadOnly="True" KeyDown="HotkeyTextBox_KeyDown" Margin="0,2"/>
+                            <TextBlock Grid.Row="9" Grid.Column="0" Text="{Binding [TipMagicWand], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" FontSize="12"/>
+                            <TextBox Grid.Row="9" Grid.Column="2" Text="{Binding Snip_MagicWand, Mode=OneWay}" Tag="Snip_MagicWand" IsReadOnly="True" KeyDown="HotkeyTextBox_KeyDown" Margin="0,2"/>
                         </Grid>
                         <Grid ColumnDefinitions="Auto, 5, *" RowDefinitions="Auto, Auto, Auto, Auto, Auto, Auto, Auto, Auto, Auto" Margin="5,0,0,0">
                             <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding [Undo], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" FontSize="12"/>

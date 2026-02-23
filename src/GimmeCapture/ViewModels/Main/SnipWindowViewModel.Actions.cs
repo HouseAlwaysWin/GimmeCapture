@@ -245,6 +245,7 @@ public partial class SnipWindowViewModel
     public ReactiveCommand<Unit, Unit> HandleF2Command { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> HandleF3Command { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> RemoveBackgroundCommand { get; set; } = null!;
+    public ReactiveCommand<Unit, Unit> InteractiveRemovalCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> ToggleTopmostCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> ToggleMaskCommand { get; set; } = null!;
 
@@ -460,9 +461,15 @@ public partial class SnipWindowViewModel
 
         RemoveBackgroundCommand = ReactiveCommand.CreateFromTask(async () => {
              // Pin first, then Run AI
-             await Pin(true);
+             await Pin(true, false);
         }, canRemoveBackground);
         RemoveBackgroundCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
+
+        InteractiveRemovalCommand = ReactiveCommand.CreateFromTask(async () => {
+             // Pin first, then Run Interactive AI
+             await Pin(false, true);
+        }, canRemoveBackground);
+        InteractiveRemovalCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
 
         ToggleTopmostCommand = ReactiveCommand.Create(() => 
         {
@@ -895,7 +902,7 @@ public partial class SnipWindowViewModel
          }
     }
     
-    private async Task Pin(bool runAI = false)
+    private async Task Pin(bool runAI = false, bool initialInteractive = false)
     {
         System.Diagnostics.Debug.WriteLine($"[SnipWindowViewModel] Pin() called. runAI={runAI}, SelectionRect={SelectionRect}");
         // Guard: If AI is disabled globally, prevent running it
@@ -936,7 +943,7 @@ public partial class SnipWindowViewModel
                 var avaloniaBitmap = new Avalonia.Media.Imaging.Bitmap(stream);
                 
                 // Open Floating Window
-                OpenPinWindowAction?.Invoke(avaloniaBitmap, SelectionRect, SelectionBorderColor, SelectionBorderThickness, runAI);
+                OpenPinWindowAction?.Invoke(avaloniaBitmap, SelectionRect, SelectionBorderColor, SelectionBorderThickness, runAI, initialInteractive);
             }
             finally
             {

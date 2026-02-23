@@ -102,10 +102,19 @@ public partial class FloatingImageWindow : FloatingWindowBase
         if (e.Handled) return;
         if (DataContext is not FloatingImageViewModel vm) return;
 
-        // 2. AI Interaction
+        // 2. AI Interaction — skip if the click target is a Button/ToggleButton (e.g. Confirm/Cancel)
         var pProperties = e.GetCurrentPoint(this).Properties;
         if (pProperties.IsLeftButtonPressed && vm.IsPointRemovalMode && !vm.IsProcessing)
         {
+            // Walk visual tree to check if click landed on a toolbar button
+            var visualSource = e.Source as Avalonia.Visual;
+            while (visualSource != null)
+            {
+                if (visualSource is Button || visualSource is ToggleButton)
+                    return; // Let the button handle the click naturally
+                visualSource = visualSource.GetVisualParent();
+            }
+
             _isAIPointing = true;
             e.Pointer.Capture(this);
             e.Handled = true;
