@@ -19,6 +19,7 @@ namespace GimmeCapture.Views.Main;
 
 public partial class MainWindow : Window
 {
+    private readonly IDownloadWindowService _downloadWindowService = new AvaloniaDownloadWindowService();
     private readonly IScreenLayoutService _screenLayoutService = new AvaloniaScreenLayoutService();
     private readonly IWindowLayerService _windowLayerService = new AvaloniaWindowLayerService();
     private readonly IWindowManager _windowManager = new AvaloniaWindowManager();
@@ -65,6 +66,7 @@ public partial class MainWindow : Window
     public void Shutdown()
     {
         _isExiting = true;
+        _downloadWindowService.Close();
         Close();
     }
 
@@ -186,61 +188,6 @@ public partial class MainWindow : Window
     private void UpdateDownloadWindow()
     {
         if (DataContext is not MainWindowViewModel vm) return;
-        
-        // 僅在主視窗縮小或隱藏時且正在處理中，才顯示全域懸浮下載視窗
-        // 現在縮小時視窗仍可見（在工作列），所以判斷 Minimized 
-        bool isBackground = this.WindowState == WindowState.Minimized || !this.IsVisible;
-
-        if (vm.IsProcessing && isBackground)
-        {
-            if (_downloadWindow == null)
-            {
-                try 
-                {
-                    _downloadWindow = new ResourceDownloadWindow
-                    {
-                        DataContext = vm
-                    };
-
-                    if (this.IsVisible)
-                    {
-                        _downloadWindow.Show(this);
-                    }
-                    else
-                    {
-                        // 如果主視窗隱藏中（如在系統匣），不能設定為 Owner 否則會拋出 InvalidOperationException
-                        _downloadWindow.Show();
-                    }
-                }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"Failed to show download window: {ex}");
-                }
-            }
-            else
-            {
-                _downloadWindow.Show();
-                _downloadWindow.WindowState = WindowState.Normal;
-                _downloadWindow.Activate();
-            }
-        }
-        else
-        {
-            // 如果主視窗已打開或是處理已完成，則隱藏/關閉懸浮視窗
-            if (!vm.IsProcessing)
-            {
-                if (_downloadWindow != null)
-                {
-                     _downloadWindow.Close();
-                     _downloadWindow = null;
-                }
-            }
-            else
-            {
-                _downloadWindow?.Hide();
-            }
-        }
+        _downloadWindowService.Update(this, vm, vm.IsProcessing);
     }
-
-    private ResourceDownloadWindow? _downloadWindow;
 }
