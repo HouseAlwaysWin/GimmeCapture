@@ -5,6 +5,17 @@ namespace GimmeCapture.Services.Core.Infrastructure;
 
 public class HotkeyRouterService
 {
+    public enum SnipGlobalHotkeyAction
+    {
+        None,
+        ActiveAction,
+        ToggleToolbar,
+        ScreenshotMode,
+        RecordingMode,
+        TranslateMode,
+        CopyAutoAction
+    }
+
     public enum WindowHotkeyAction
     {
         None,
@@ -44,6 +55,29 @@ public class HotkeyRouterService
             HotkeyIds.Record => vm.RecordHotkey,
             HotkeyIds.Translate => vm.TranslateHotkey,
             _ => string.Empty
+        };
+    }
+
+    public SnipGlobalHotkeyAction ResolveSnipGlobalHotkeyAction(
+        int hotkeyId,
+        string pressedHotkey,
+        string activeActionHotkey,
+        string activeToolbarHotkey)
+    {
+        if (!string.IsNullOrWhiteSpace(pressedHotkey))
+        {
+            if (pressedHotkey == activeActionHotkey) return SnipGlobalHotkeyAction.ActiveAction;
+            if (pressedHotkey == activeToolbarHotkey) return SnipGlobalHotkeyAction.ToggleToolbar;
+        }
+
+        return hotkeyId switch
+        {
+            HotkeyIds.Snip => SnipGlobalHotkeyAction.ScreenshotMode,
+            HotkeyIds.Record => SnipGlobalHotkeyAction.RecordingMode,
+            HotkeyIds.Pin => SnipGlobalHotkeyAction.ActiveAction,
+            HotkeyIds.Translate => SnipGlobalHotkeyAction.TranslateMode,
+            HotkeyIds.Copy => SnipGlobalHotkeyAction.CopyAutoAction,
+            _ => SnipGlobalHotkeyAction.None
         };
     }
 

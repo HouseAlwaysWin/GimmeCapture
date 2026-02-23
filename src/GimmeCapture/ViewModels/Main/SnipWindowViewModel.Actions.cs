@@ -254,46 +254,36 @@ public partial class SnipWindowViewModel
     {
         if (_mainVm == null) return;
         
-        // 找出觸發此全域 ID 的熱鍵字串
-        string pressedHotkey = string.Empty;
-        if (id == HotkeyIds.Snip) pressedHotkey = _mainVm.SnipHotkey;
-        else if (id == HotkeyIds.Record) pressedHotkey = _mainVm.RecordHotkey;
-        else if (id == HotkeyIds.Translate) pressedHotkey = _mainVm.TranslateHotkey;
+        string pressedHotkey = _mainVm.HotkeyRouterService.GetPressedHotkeyText(id, _mainVm);
 
         System.Diagnostics.Debug.WriteLine($"[SnipWindowViewModel] HandleGlobalHotkey ID={id}, Pressed={pressedHotkey}, ActiveAction={ActiveActionHotkey}, ActiveToolbar={ActiveToolbarHotkey}");
 
-        // 若該熱鍵恰好與當前模式的動作熱鍵相同（例如 F3），則優先執行本地動作
-        if (!string.IsNullOrEmpty(pressedHotkey))
-        {
-            if (pressedHotkey == ActiveActionHotkey && HandleActiveActionHotkeyCommand != null)
-            {
-                System.Diagnostics.Debug.WriteLine($"[SnipWindowViewModel] Intercepted ActionHotkey match. Firing HandleActiveActionHotkeyCommand.");
-                HandleActiveActionHotkeyCommand.Execute().Subscribe();
-                return;
-            }
-            if (pressedHotkey == ActiveToolbarHotkey && ToggleToolbarCommand != null)
-            {
-                ToggleToolbarCommand.Execute().Subscribe();
-                return;
-            }
-        }
+        var routeAction = _mainVm.HotkeyRouterService.ResolveSnipGlobalHotkeyAction(
+            id,
+            pressedHotkey,
+            ActiveActionHotkey,
+            ActiveToolbarHotkey);
 
-        // 使用 ID 進行明確路由 (對應 MainWindowViewModel.ID_*)
-        switch (id)
+        switch (routeAction)
         {
-            case HotkeyIds.Snip:
-                if (HandleScreenshotModeHotkeyCommand != null) HandleScreenshotModeHotkeyCommand.Execute().Subscribe();
+            case HotkeyRouterService.SnipGlobalHotkeyAction.ActiveAction:
+                System.Diagnostics.Debug.WriteLine("[SnipWindowViewModel] Routed to ActiveAction hotkey.");
+                HandleActiveActionHotkeyCommand?.Execute().Subscribe();
                 break;
-            case HotkeyIds.Record:
-                if (HandleRecordingModeHotkeyCommand != null) HandleRecordingModeHotkeyCommand.Execute().Subscribe();
+            case HotkeyRouterService.SnipGlobalHotkeyAction.ToggleToolbar:
+                System.Diagnostics.Debug.WriteLine("[SnipWindowViewModel] Routed to ToggleToolbar hotkey.");
+                ToggleToolbarCommand?.Execute().Subscribe();
                 break;
-            case HotkeyIds.Pin: // 不再設定全域，保留防呆
-                if (HandleActiveActionHotkeyCommand != null) HandleActiveActionHotkeyCommand.Execute().Subscribe();
+            case HotkeyRouterService.SnipGlobalHotkeyAction.ScreenshotMode:
+                HandleScreenshotModeHotkeyCommand?.Execute().Subscribe();
                 break;
-            case HotkeyIds.Translate:
-                if (SetTranslationModeCommand != null) SetTranslationModeCommand.Execute().Subscribe();
+            case HotkeyRouterService.SnipGlobalHotkeyAction.RecordingMode:
+                HandleRecordingModeHotkeyCommand?.Execute().Subscribe();
                 break;
-            case HotkeyIds.Copy: // 不再設定全域，保留防呆
+            case HotkeyRouterService.SnipGlobalHotkeyAction.TranslateMode:
+                SetTranslationModeCommand?.Execute().Subscribe();
+                break;
+            case HotkeyRouterService.SnipGlobalHotkeyAction.CopyAutoAction:
                 AutoActionMode = 1;
                 if (CurrentState == SnipState.Selected) TriggerAutoAction();
                 break;
