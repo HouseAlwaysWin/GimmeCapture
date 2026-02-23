@@ -560,10 +560,10 @@ public partial class SnipWindow : Window
             if (!string.IsNullOrEmpty(_viewModel.ActiveActionHotkey) &&
                 KeyGesture.Parse(_viewModel.ActiveActionHotkey).Matches(e))
             {
-                System.Diagnostics.Debug.WriteLine($"[SnipWindow.axaml.cs] Matched ActiveActionHotkey! Firing HandleF3Command.");
-                if (_viewModel.HandleF3Command != null)
+                System.Diagnostics.Debug.WriteLine($"[SnipWindow.axaml.cs] Matched ActiveActionHotkey! Firing HandleActiveActionHotkeyCommand.");
+                if (_viewModel.HandleActiveActionHotkeyCommand != null)
                 {
-                    _viewModel.HandleF3Command.Execute().Subscribe();
+                    _viewModel.HandleActiveActionHotkeyCommand.Execute().Subscribe();
                     e.Handled = true;
                 }
             }

@@ -241,9 +241,9 @@ public partial class SnipWindowViewModel
     public ReactiveCommand<Unit, Unit> PauseRecordingCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> StopRecordingCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> CopyRecordingCommand { get; set; } = null!;
-    public ReactiveCommand<Unit, Unit> HandleF1Command { get; set; } = null!;
-    public ReactiveCommand<Unit, Unit> HandleF2Command { get; set; } = null!;
-    public ReactiveCommand<Unit, Unit> HandleF3Command { get; set; } = null!;
+    public ReactiveCommand<Unit, Unit> HandleScreenshotModeHotkeyCommand { get; set; } = null!;
+    public ReactiveCommand<Unit, Unit> HandleRecordingModeHotkeyCommand { get; set; } = null!;
+    public ReactiveCommand<Unit, Unit> HandleActiveActionHotkeyCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> RemoveBackgroundCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> InteractiveRemovalCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> ToggleTopmostCommand { get; set; } = null!;
@@ -264,10 +264,10 @@ public partial class SnipWindowViewModel
         // 若該熱鍵恰好與當前模式的動作熱鍵相同（例如 F3），則優先執行本地動作
         if (!string.IsNullOrEmpty(pressedHotkey))
         {
-            if (pressedHotkey == ActiveActionHotkey && HandleF3Command != null)
+            if (pressedHotkey == ActiveActionHotkey && HandleActiveActionHotkeyCommand != null)
             {
-                System.Diagnostics.Debug.WriteLine($"[SnipWindowViewModel] Intercepted ActionHotkey match. Firing HandleF3Command.");
-                HandleF3Command.Execute().Subscribe();
+                System.Diagnostics.Debug.WriteLine($"[SnipWindowViewModel] Intercepted ActionHotkey match. Firing HandleActiveActionHotkeyCommand.");
+                HandleActiveActionHotkeyCommand.Execute().Subscribe();
                 return;
             }
             if (pressedHotkey == ActiveToolbarHotkey && ToggleToolbarCommand != null)
@@ -281,13 +281,13 @@ public partial class SnipWindowViewModel
         switch (id)
         {
             case 100: // ID_SNIP
-                if (HandleF1Command != null) HandleF1Command.Execute().Subscribe();
+                if (HandleScreenshotModeHotkeyCommand != null) HandleScreenshotModeHotkeyCommand.Execute().Subscribe();
                 break;
             case 101: // ID_RECORD
-                if (HandleF2Command != null) HandleF2Command.Execute().Subscribe();
+                if (HandleRecordingModeHotkeyCommand != null) HandleRecordingModeHotkeyCommand.Execute().Subscribe();
                 break;
             case 102: // ID_PIN (不再設定全域，保留防呆)
-                if (HandleF3Command != null) HandleF3Command.Execute().Subscribe();
+                if (HandleActiveActionHotkeyCommand != null) HandleActiveActionHotkeyCommand.Execute().Subscribe();
                 break;
             case 103: // ID_TRANSLATE
                 if (SetTranslationModeCommand != null) SetTranslationModeCommand.Execute().Subscribe();
@@ -374,13 +374,13 @@ public partial class SnipWindowViewModel
         CopyRecordingCommand = ReactiveCommand.CreateFromTask(CopyRecording);
         CopyRecordingCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
 
-        HandleF1Command = ReactiveCommand.Create(() => { 
+        HandleScreenshotModeHotkeyCommand = ReactiveCommand.Create(() => { 
             if (RecState == RecordingState.Idle) 
             {
                 CurrentMode = SnipMode.Screenshot;
             }
         }, canExecuteHotkeys);
-        HandleF2Command = ReactiveCommand.Create(() => 
+        HandleRecordingModeHotkeyCommand = ReactiveCommand.Create(() => 
         { 
             if (RecState == RecordingState.Idle) 
             {
@@ -397,9 +397,9 @@ public partial class SnipWindowViewModel
         // 錄影模式 -> F3 -> Pin  
         // 翻譯模式 -> F3 -> 無動作
         // 未進入模式 (Detecting) -> F3 -> 進入翻譯模式
-        HandleF3Command = ReactiveCommand.Create(() => 
+        HandleActiveActionHotkeyCommand = ReactiveCommand.Create(() => 
         {
-            System.Diagnostics.Debug.WriteLine($"[SnipWindowViewModel] HandleF3Command invoked. Mode: {CurrentMode}, RecState: {RecState}");
+            System.Diagnostics.Debug.WriteLine($"[SnipWindowViewModel] HandleActiveActionHotkeyCommand invoked. Mode: {CurrentMode}, RecState: {RecState}");
             if (CurrentMode == SnipMode.Translation)
             {
                 // 翻譯模式：切換結果顯示
@@ -430,7 +430,7 @@ public partial class SnipWindowViewModel
                 PinCommand.Execute().Subscribe();
             }
         }, canExecuteHotkeys);
-        HandleF3Command.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"HandleF3 error: {ex}"));
+        HandleActiveActionHotkeyCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"HandleActiveActionHotkey error: {ex}"));
 
         SetTranslationModeCommand = ReactiveCommand.Create(() =>
         {
