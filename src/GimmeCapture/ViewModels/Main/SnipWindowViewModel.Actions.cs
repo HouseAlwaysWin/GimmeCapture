@@ -16,72 +16,53 @@ namespace GimmeCapture.ViewModels.Main;
 
 public partial class SnipWindowViewModel
 {
-    private bool _isRecordingMode;
-    public bool IsRecordingMode
-    {
-        get => _isRecordingMode;
-        set 
-        {
-            this.RaiseAndSetIfChanged(ref _isRecordingMode, value);
-            
-            // Exiting recording mode should also exit translation mode
-            if (value) IsTranslationMode = false;
-            
-            // Update border color (Unified Theme Color)
-            SelectionBorderColor = _mainVm?.ThemeColor ?? Colors.Yellow;
-            
-            this.RaisePropertyChanged(nameof(HideFrameBorder));
-            this.RaisePropertyChanged(nameof(HideSelectionDecoration));
-            this.RaisePropertyChanged(nameof(ModeDisplayName));
-            this.RaisePropertyChanged(nameof(IsScreenshotMode));
-        }
-    }
+    public bool IsRecordingMode => CurrentMode == SnipMode.Recording;
+    public bool IsTranslationMode => CurrentMode == SnipMode.Translation;
+    public bool IsScreenshotMode => CurrentMode == SnipMode.Screenshot;
 
-    private bool _isTranslationMode;
-    public bool IsTranslationMode
-    {
-        get => _isTranslationMode;
-        set
-        {
-            this.RaiseAndSetIfChanged(ref _isTranslationMode, value);
-            System.Diagnostics.Debug.WriteLine($"[Mode] IsTranslationMode -> {value}");
-            
-            if (value)
-            {
-                // 進入翻譯模式：啟用遮罩並更新挖空區域、退出錄影模式
-                _isRecordingMode = false;
-                this.RaisePropertyChanged(nameof(IsRecordingMode));
-                SelectionRect = new Rect(0, 0, 0, 0); // 確保清空標準選取框，避免干擾挖空
-                IsMaskVisible = true;
-                this.RaisePropertyChanged(nameof(MaskOpacity));
-                UpdateMask();
-                
-                StartAutoDetectLoop();
-            }
-            else
-            {
-                // 退出翻譯模式：恢復遮罩
-                IsMaskVisible = true;
-                // 清除多重選取
-                UserSelections.Clear();
-                // 關閉自動偵測
-                IsGlobalAutoDetectEnabled = false;
-                
-                this.RaisePropertyChanged(nameof(MaskOpacity));
-                UpdateMask();
-                
-                StopAutoDetectLoop();
-            }
 
-            // Update border color (Unified Theme Color)
-            SelectionBorderColor = _mainVm?.ThemeColor ?? Colors.Yellow;
-            
-            this.RaisePropertyChanged(nameof(IsTranslationMode));
-            this.RaisePropertyChanged(nameof(HideSelectionDecoration));
-            this.RaisePropertyChanged(nameof(IsScreenshotMode));
-            this.RaisePropertyChanged(nameof(IsToolbarVisible));
-            this.RaisePropertyChanged(nameof(ModeDisplayName));
+    private void SetCurrentMode(SnipMode value)
+    {
+        var oldMode = _currentMode;
+        if (oldMode == value) return;
+
+        this.RaiseAndSetIfChanged(ref _currentMode, value, nameof(CurrentMode));
+
+        // Logic from old IsRecordingMode / IsTranslationMode setters
+        if (value == SnipMode.Translation)
+        {
+            // 進入翻譯模式：啟用遮罩並更新挖空區域
+            SelectionRect = new Rect(0, 0, 0, 0); // 確保清空標準選取框，避免干擾挖空
+            IsMaskVisible = true;
+            this.RaisePropertyChanged(nameof(MaskOpacity));
+            UpdateMask();
+            StartAutoDetectLoop();
         }
+        else if (oldMode == SnipMode.Translation)
+        {
+            // 退出翻譯模式：恢復遮罩
+            IsMaskVisible = true;
+            // 清除多重選取
+            UserSelections.Clear();
+            // 關閉自動偵測
+            IsGlobalAutoDetectEnabled = false;
+            
+            this.RaisePropertyChanged(nameof(MaskOpacity));
+            UpdateMask();
+            StopAutoDetectLoop();
+        }
+
+        // Common updates
+        SelectionBorderColor = _mainVm?.ThemeColor ?? Colors.Yellow;
+
+        // Notify all related properties
+        this.RaisePropertyChanged(nameof(IsRecordingMode));
+        this.RaisePropertyChanged(nameof(IsTranslationMode));
+        this.RaisePropertyChanged(nameof(IsScreenshotMode));
+        this.RaisePropertyChanged(nameof(HideFrameBorder));
+        this.RaisePropertyChanged(nameof(HideSelectionDecoration));
+        this.RaisePropertyChanged(nameof(ModeDisplayName));
+        this.RaisePropertyChanged(nameof(IsToolbarVisible));
     }
     
     private bool _isGlobalAutoDetectEnabled;
@@ -105,20 +86,16 @@ public partial class SnipWindowViewModel
     }
 
     /// <summary>
-    /// 截圖模式（非錄影且非翻譯）
-    /// </summary>
-    public bool IsScreenshotMode => !IsRecordingMode && !IsTranslationMode;
-
-    /// <summary>
     /// 工具列是否可見：翻譯模式始終可見，其他模式需要在 Selected 狀態且未 Finalizing
     /// </summary>
     public bool IsToolbarVisible => ShowToolbar && (IsTranslationMode || (CurrentState == SnipState.Selected && !IsRecordingFinalizing));
 
-    public string ModeDisplayName => IsTranslationMode 
-        ? LocalizationService.Instance["CaptureModeTranslation"] ?? "Translation"
-        : IsRecordingMode 
-            ? LocalizationService.Instance["CaptureModeRecord"] 
-            : LocalizationService.Instance["CaptureModeNormal"];
+    public string ModeDisplayName => CurrentMode switch
+    {
+        SnipMode.Translation => LocalizationService.Instance["CaptureModeTranslation"] ?? "Translation",
+        SnipMode.Recording => LocalizationService.Instance["CaptureModeRecord"],
+        _ => LocalizationService.Instance["CaptureModeNormal"]
+    };
 
     // True when actively recording (not idle, not paused) - used to hide selection border
     public bool IsRecordingActive => _recordingService?.State == RecordingState.Recording;
@@ -206,7 +183,7 @@ public partial class SnipWindowViewModel
         }
         else if (AutoActionMode == 3) // Record mode entry, do NOT auto-start
         {
-             if (!IsRecordingMode) IsRecordingMode = true;
+             if (CurrentMode != SnipMode.Recording) CurrentMode = SnipMode.Recording;
              // USER REQUEST: Selection only, record manually or via F3
         }
     }
@@ -336,7 +313,10 @@ public partial class SnipWindowViewModel
 
         ToggleModeCommand = ReactiveCommand.Create(() => 
         {
-            if (RecState == RecordingState.Idle) IsRecordingMode = !IsRecordingMode;
+            if (RecState == RecordingState.Idle) 
+            {
+                CurrentMode = IsRecordingMode ? SnipMode.Screenshot : SnipMode.Recording;
+            }
         }, canExecuteHotkeys);
         ToggleModeCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
 
@@ -344,8 +324,7 @@ public partial class SnipWindowViewModel
         {
             if (RecState == RecordingState.Idle)
             {
-                IsTranslationMode = false;
-                IsRecordingMode = isRecord;
+                CurrentMode = isRecord ? SnipMode.Recording : SnipMode.Screenshot;
             }
         }, canExecuteHotkeys);
         SetCaptureModeCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
@@ -362,8 +341,7 @@ public partial class SnipWindowViewModel
         HandleF1Command = ReactiveCommand.Create(() => { 
             if (RecState == RecordingState.Idle) 
             {
-                IsRecordingMode = false;
-                IsTranslationMode = false;
+                CurrentMode = SnipMode.Screenshot;
             }
         }, canExecuteHotkeys);
         HandleF2Command = ReactiveCommand.Create(() => 
@@ -371,10 +349,9 @@ public partial class SnipWindowViewModel
             if (RecState == RecordingState.Idle) 
             {
                 // USER REQUEST: F2 always switches/sets Record Mode, never auto-starts recording
-                if (!IsRecordingMode)
+                if (CurrentMode != SnipMode.Recording)
                 {
-                    IsTranslationMode = false;
-                    IsRecordingMode = true;
+                    CurrentMode = SnipMode.Recording;
                 }
             }
         }, canExecuteHotkeys);
@@ -426,13 +403,12 @@ public partial class SnipWindowViewModel
                 if (IsTranslationMode)
                 {
                     // 已在翻譯模式，點擊則切換回截圖模式
-                    IsTranslationMode = false;
+                    CurrentMode = SnipMode.Screenshot;
                 }
                 else
                 {
                     // 進入翻譯模式
-                    IsTranslationMode = true;
-                    IsRecordingMode = false;
+                    CurrentMode = SnipMode.Translation;
                     // 重置選取狀態
                     CurrentState = SnipState.Detecting;
                     SelectionRect = default;

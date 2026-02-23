@@ -19,6 +19,7 @@ using System.Reactive.Disposables;
 namespace GimmeCapture.ViewModels.Main;
 
 public enum SnipState { Idle, Detecting, Selecting, Selected }
+public enum SnipMode { Screenshot, Recording, Translation }
 
 public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingToolViewModel
 {
@@ -28,6 +29,13 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     public MainWindowViewModel? MainVm => _mainVm;
     private readonly IScreenCaptureService _captureService;
     private readonly CompositeDisposable _disposables = new();
+
+    private SnipMode _currentMode = SnipMode.Screenshot;
+    public SnipMode CurrentMode
+    {
+        get => _currentMode;
+        set => SetCurrentMode(value);
+    }
 
     // Hotkeys / Tooltips (Dynamic by Mode)
     public string SnipHotkey => _mainVm?.SnipHotkey ?? "F1";

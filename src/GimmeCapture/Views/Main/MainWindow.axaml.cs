@@ -170,11 +170,11 @@ public partial class MainWindow : Window
         snipVm.AutoActionMode = (int)mode;
         if (mode == MainWindowViewModel.CaptureMode.Record)
         {
-            snipVm.IsRecordingMode = true;
+            snipVm.CurrentMode = SnipMode.Recording;
         }
         else if (mode == MainWindowViewModel.CaptureMode.Translate)
         {
-            snipVm.IsTranslationMode = true;
+            snipVm.CurrentMode = SnipMode.Translation;
             snipVm.InitializeTranslationToolbarPosition();
         }
         snip.DataContext = snipVm;
