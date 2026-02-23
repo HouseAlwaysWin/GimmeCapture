@@ -17,22 +17,18 @@ namespace GimmeCapture.Views.Main;
 public partial class SnipWindow : Window
 {
     // Translation mode multi-selection fields
-    private bool _isTranslationSelecting;
     private Point _translationSelectionStart;
     private UserSelectionRect? _currentTranslationSelection;
 
     // Toolbar dragging fields
-    private bool _isDraggingToolbar;
     private Point _toolbarDragOffset;
 
     // Translation selection move fields
-    private bool _isMovingTranslationSelection;
     private Point _translationMoveStart;
     private UserSelectionRect? _movingTranslationSelection;
     private Rect _originalTranslationBounds;
 
     // Translation selection resize fields
-    private bool _isResizingTranslation;
     private ResizeDirection _translationResizeDirection;
     private UserSelectionRect? _resizingTranslationItem;
     private Rect _originalTranslationRect;
@@ -115,7 +111,7 @@ public partial class SnipWindow : Window
                          else
                          {
                              // Single Click -> Start Dragging
-                             _isDraggingAnnotation = true;
+                             _pointerState = PointerInteractionState.DraggingAnnotation;
                              _draggingAnnotation = ann;
                              _dragOffset = new Point(selectionSpacePoint.X - ann.StartPoint.X, selectionSpacePoint.Y - ann.StartPoint.Y);
                              e.Handled = true;
@@ -156,7 +152,7 @@ public partial class SnipWindow : Window
             {
                 if (props.IsRightButtonPressed) return;
 
-                _isMovingTranslationSelection = true;
+                _pointerState = PointerInteractionState.MovingTranslationBox;
                 _movingTranslationSelection = sel;
                 _translationMoveStart = point;
                 _originalTranslationBounds = sel.Bounds;
@@ -166,7 +162,7 @@ public partial class SnipWindow : Window
             }
             else if (_viewModel.RecState == RecordingState.Idle && _viewModel.CurrentState == SnipState.Selected)
             {
-                _isMovingSelection = true;
+                _pointerState = PointerInteractionState.MovingSelection;
                 _moveStartPoint = point;
                 _originalRect = _viewModel.SelectionRect;
                 e.Handled = true;
@@ -194,7 +190,7 @@ public partial class SnipWindow : Window
 
             if (sel != null)
             {
-                _isResizingTranslation = true;
+                _pointerState = PointerInteractionState.ResizingTranslationBox;
                 _translationResizeDirection = GetDirectionFromName(sourceControl.Name);
                 _resizingTranslationItem = sel;
                 _originalTranslationRect = sel.Bounds;
@@ -209,7 +205,7 @@ public partial class SnipWindow : Window
                 e.Handled = true;
                 return; // Block resize during recording
             }
-            _isResizing = true;
+            _pointerState = PointerInteractionState.ResizingSelection;
             _resizeDirection = GetDirectionFromName(sourceControl!.Name);
             _resizeStartPoint = point;
             _originalRect = _viewModel.SelectionRect;
@@ -235,7 +231,7 @@ public partial class SnipWindow : Window
                 }
 
                 // Otherwise, start dragging the toolbar
-                _isDraggingToolbar = true;
+                _pointerState = PointerInteractionState.DraggingToolbar;
                 _toolbarDragOffset = e.GetPosition(toolbar); // Position relative to toolbar
                 e.Pointer.Capture(this);
                 e.Handled = true;
@@ -305,7 +301,7 @@ public partial class SnipWindow : Window
                 if (_viewModel.IsTranslationSelectionActive)
                 {
                     // V8 Selection Mode: Always allow starting a new selection, ignoring existing hits
-                    _isTranslationSelecting = true;
+                    _pointerState = PointerInteractionState.TranslationSelecting;
                     _translationSelectionStart = point;
                     _currentTranslationSelection = new UserSelectionRect { Bounds = new Rect(point, new Size(0, 0)) };
                     _viewModel!.UserSelections.Add(_currentTranslationSelection);
@@ -486,14 +482,14 @@ public partial class SnipWindow : Window
             SetCursorShape(StandardCursorType.Arrow);
             specialCursorSet = true;
         }
-        else if (_isDraggingToolbar || _isMovingTranslationSelection || _isMovingSelection || _isDraggingAnnotation)
+        else if (_pointerState == PointerInteractionState.DraggingToolbar || _pointerState == PointerInteractionState.MovingTranslationBox || _pointerState == PointerInteractionState.MovingSelection || _pointerState == PointerInteractionState.DraggingAnnotation)
         {
             SetCursorShape(StandardCursorType.SizeAll);
             specialCursorSet = true;
         }
-        else if (_isResizing || _isResizingTranslation)
+        else if (_pointerState == PointerInteractionState.ResizingSelection || _pointerState == PointerInteractionState.ResizingTranslationBox)
         {
-            var dir = _isResizing ? _resizeDirection : _translationResizeDirection;
+            var dir = _pointerState == PointerInteractionState.ResizingSelection ? _resizeDirection : _translationResizeDirection;
             switch (dir)
             {
                 // 注意：這裡假設 ResizeDirection 已經定義了對應的方向
@@ -585,7 +581,7 @@ public partial class SnipWindow : Window
                 {
                     SetCursorShape(StandardCursorType.Cross);
                 }
-                else if (_viewModel.CurrentState == SnipState.Selecting || _viewModel.CurrentState == SnipState.Detecting || _isTranslationSelecting)
+                else if (_viewModel.CurrentState == SnipState.Selecting || _viewModel.CurrentState == SnipState.Detecting || _pointerState == PointerInteractionState.TranslationSelecting)
                 {
                     SetCursorShape(StandardCursorType.Cross);
                 }
@@ -599,7 +595,7 @@ public partial class SnipWindow : Window
         // --- Execution Logic ---
 
         // 1. Toolbar Dragging
-        if (_isDraggingToolbar)
+        if (_pointerState == PointerInteractionState.DraggingToolbar)
         {
             _viewModel.ToolbarLeft = currentPoint.X - _toolbarDragOffset.X;
             _viewModel.ToolbarTop = currentPoint.Y - _toolbarDragOffset.Y;
@@ -608,7 +604,7 @@ public partial class SnipWindow : Window
         }
 
         // Translation Selection Moving
-        if (_isResizingTranslation && _resizingTranslationItem != null)
+        if (_pointerState == PointerInteractionState.ResizingTranslationBox && _resizingTranslationItem != null)
         {
             var dx = currentPoint.X - _translationResizeStartPoint.X;
             var dy = currentPoint.Y - _translationResizeStartPoint.Y;
@@ -656,7 +652,7 @@ public partial class SnipWindow : Window
             return;
         }
 
-        if (_isMovingTranslationSelection && _movingTranslationSelection != null)
+        if (_pointerState == PointerInteractionState.MovingTranslationBox && _movingTranslationSelection != null)
         {
             var deltaX = currentPoint.X - _translationMoveStart.X;
             var deltaY = currentPoint.Y - _translationMoveStart.Y;
@@ -669,7 +665,7 @@ public partial class SnipWindow : Window
         }
 
         // 2. Selection Resizing
-        if (_isResizing)
+        if (_pointerState == PointerInteractionState.ResizingSelection)
         {
              var deltaX = currentPoint.X - _resizeStartPoint.X;
              var deltaY = currentPoint.Y - _resizeStartPoint.Y;
@@ -707,7 +703,7 @@ public partial class SnipWindow : Window
         }
         
         // 3. Selection Moving
-        if (_isMovingSelection)
+        if (_pointerState == PointerInteractionState.MovingSelection)
         {
              var deltaX = currentPoint.X - _moveStartPoint.X;
              var deltaY = currentPoint.Y - _moveStartPoint.Y;
@@ -721,7 +717,7 @@ public partial class SnipWindow : Window
         }
         
         // 4. Annotation Dragging
-        if (_isDraggingAnnotation && _draggingAnnotation != null)
+        if (_pointerState == PointerInteractionState.DraggingAnnotation && _draggingAnnotation != null)
         {
              var selectionSpacePoint = new Point(currentPoint.X - _viewModel.SelectionRect.X, currentPoint.Y - _viewModel.SelectionRect.Y);
              _draggingAnnotation.StartPoint = new Point(selectionSpacePoint.X - _dragOffset.X, selectionSpacePoint.Y - _dragOffset.Y);
@@ -738,7 +734,7 @@ public partial class SnipWindow : Window
             var height = Math.Abs(currentPoint.Y - _startPoint.Y);
             _viewModel.SelectionRect = new Rect(x, y, width, height);
         }
-        else if (_isTranslationSelecting && _currentTranslationSelection != null)
+        else if (_pointerState == PointerInteractionState.TranslationSelecting && _currentTranslationSelection != null)
         {
             var x = Math.Min(_translationSelectionStart.X, currentPoint.X);
             var y = Math.Min(_translationSelectionStart.Y, currentPoint.Y);
@@ -764,35 +760,35 @@ public partial class SnipWindow : Window
     {
         if (_viewModel == null) return;
         
-        if (_isDraggingToolbar)
+        if (_pointerState == PointerInteractionState.DraggingToolbar)
         {
-            _isDraggingToolbar = false;
+            _pointerState = PointerInteractionState.None;
             e.Pointer.Capture(null);
             e.Handled = true;
             return;
         }
 
-        if (_isMovingTranslationSelection)
+        if (_pointerState == PointerInteractionState.MovingTranslationBox)
         {
-            _isMovingTranslationSelection = false;
+            _pointerState = PointerInteractionState.None;
             _movingTranslationSelection = null;
             e.Pointer.Capture(null);
             e.Handled = true;
             return;
         }
 
-        if (_isResizing)
+        if (_pointerState == PointerInteractionState.ResizingSelection)
         {
-             _isResizing = false;
+             _pointerState = PointerInteractionState.None;
              _resizeDirection = ResizeDirection.None;
              _viewModel.CurrentState = SnipState.Selected;
              e.Pointer.Capture(null);
              return;
         }
 
-        if (_isResizingTranslation)
+        if (_pointerState == PointerInteractionState.ResizingTranslationBox)
         {
-            _isResizingTranslation = false;
+            _pointerState = PointerInteractionState.None;
             _resizingTranslationItem = null;
             _translationResizeDirection = ResizeDirection.None;
             e.Pointer.Capture(null);
@@ -800,16 +796,16 @@ public partial class SnipWindow : Window
             return;
         }
 
-        if (_isMovingSelection)
+        if (_pointerState == PointerInteractionState.MovingSelection)
         {
-            _isMovingSelection = false;
+            _pointerState = PointerInteractionState.None;
             e.Pointer.Capture(null);
             return;
         }
         
-        if (_isDraggingAnnotation)
+        if (_pointerState == PointerInteractionState.DraggingAnnotation)
         {
-            _isDraggingAnnotation = false;
+            _pointerState = PointerInteractionState.None;
             _draggingAnnotation = null;
             e.Pointer.Capture(null);
             return;
@@ -829,9 +825,9 @@ public partial class SnipWindow : Window
         }
 
         // Translation mode: finish selection
-        if (_isTranslationSelecting)
+        if (_pointerState == PointerInteractionState.TranslationSelecting)
         {
-            _isTranslationSelecting = false;
+            _pointerState = PointerInteractionState.None;
             if (_currentTranslationSelection != null)
             {
                 // Remove if too small (accidental clicks)

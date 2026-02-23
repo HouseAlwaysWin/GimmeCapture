@@ -31,8 +31,10 @@ public partial class SnipWindow : Window
     private Annotation? _currentAnnotation;
     private RecordingProgressWindow? _progressWindow;
     
+    // Pointer Interaction State (replaces multiple _is* booleans)
+    private PointerInteractionState _pointerState = PointerInteractionState.None;
+    
     // Resize State
-    private bool _isResizing;
     private ResizeDirection _resizeDirection;
     private Point _resizeStartPoint;
     
@@ -42,6 +44,19 @@ public partial class SnipWindow : Window
     
     // Services
     private readonly ClipboardService _clipboardService = new ClipboardService();
+
+    private enum PointerInteractionState
+    {
+        None,
+        ResizingSelection,
+        MovingSelection,
+        DraggingAnnotation,
+        DraggingTranslationResult,
+        TranslationSelecting,
+        DraggingToolbar,
+        MovingTranslationBox,
+        ResizingTranslationBox
+    }
 
     private enum ResizeDirection
     {
@@ -473,12 +488,10 @@ public partial class SnipWindow : Window
     }
 
     // Text Dragging State
-    private bool _isDraggingAnnotation;
     private Annotation? _draggingAnnotation;
     private Point _dragOffset;
     
     // Selection Moving State
-    private bool _isMovingSelection;
     private Point _moveStartPoint;
 
     // Flag to Debounce Text Entry Finish
@@ -642,7 +655,6 @@ public partial class SnipWindow : Window
     }
 
     // Translation Dragging State
-    private bool _isDraggingTranslation;
     private Point _translationDragOffset;
 
     private void Translation_PointerPressed(object? sender, PointerPressedEventArgs e)
@@ -652,7 +664,7 @@ public partial class SnipWindow : Window
         var props = e.GetCurrentPoint(this).Properties;
         if (props.IsLeftButtonPressed)
         {
-            _isDraggingTranslation = true;
+            _pointerState = PointerInteractionState.DraggingTranslationResult;
             _translationDragOffset = e.GetPosition(this);
             _translationDragOffset = new Point(
                 _translationDragOffset.X - _viewModel.TranslationOverlayLeft,
@@ -665,7 +677,7 @@ public partial class SnipWindow : Window
 
     private void Translation_PointerMoved(object? sender, PointerEventArgs e)
     {
-        if (!_isDraggingTranslation || _viewModel == null) return;
+        if (_pointerState != PointerInteractionState.DraggingTranslationResult || _viewModel == null) return;
 
         var currentPos = e.GetPosition(this);
         _viewModel.TranslationOverlayLeft = currentPos.X - _translationDragOffset.X;
@@ -677,9 +689,9 @@ public partial class SnipWindow : Window
 
     private void Translation_PointerReleased(object? sender, PointerReleasedEventArgs e)
     {
-        if (_isDraggingTranslation && sender is Border border)
+        if (_pointerState == PointerInteractionState.DraggingTranslationResult && sender is Border border)
         {
-            _isDraggingTranslation = false;
+            _pointerState = PointerInteractionState.None;
             e.Pointer.Capture(null);
             e.Handled = true;
         }
