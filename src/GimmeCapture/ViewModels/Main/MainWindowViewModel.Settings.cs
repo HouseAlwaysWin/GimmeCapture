@@ -309,48 +309,48 @@ public partial class MainWindowViewModel
     public string TranslateTooltip => $"{LocalizationService.Instance["TranslateHotkey"]} ({TranslateHotkey})";
 
     // Snip Mode Hotkeys
-    public string SnipRectangleHotkey { get => _settingsService.Settings.Snip.Rectangle; set { if (_settingsService.Settings.Snip.Rectangle != value) { this.RaisePropertyChanging(); _settingsService.Settings.Snip.Rectangle = value; this.RaisePropertyChanged(); } } }
-    public string SnipEllipseHotkey { get => _settingsService.Settings.Snip.Ellipse; set { if (_settingsService.Settings.Snip.Ellipse != value) { this.RaisePropertyChanging(); _settingsService.Settings.Snip.Ellipse = value; this.RaisePropertyChanged(); } } }
-    public string SnipArrowHotkey { get => _settingsService.Settings.Snip.Arrow; set { if (_settingsService.Settings.Snip.Arrow != value) { this.RaisePropertyChanging(); _settingsService.Settings.Snip.Arrow = value; this.RaisePropertyChanged(); } } }
-    public string SnipLineHotkey { get => _settingsService.Settings.Snip.Line; set { if (_settingsService.Settings.Snip.Line != value) { this.RaisePropertyChanging(); _settingsService.Settings.Snip.Line = value; this.RaisePropertyChanged(); } } }
-    public string SnipPenHotkey { get => _settingsService.Settings.Snip.Pen; set { if (_settingsService.Settings.Snip.Pen != value) { this.RaisePropertyChanging(); _settingsService.Settings.Snip.Pen = value; this.RaisePropertyChanged(); } } }
-    public string SnipTextHotkey { get => _settingsService.Settings.Snip.Text; set { if (_settingsService.Settings.Snip.Text != value) { this.RaisePropertyChanging(); _settingsService.Settings.Snip.Text = value; this.RaisePropertyChanged(); } } }
-    public string SnipMosaicHotkey { get => _settingsService.Settings.Snip.Mosaic; set { if (_settingsService.Settings.Snip.Mosaic != value) { this.RaisePropertyChanging(); _settingsService.Settings.Snip.Mosaic = value; this.RaisePropertyChanged(); } } }
-    public string SnipBlurHotkey { get => _settingsService.Settings.Snip.Blur; set { if (_settingsService.Settings.Snip.Blur != value) { this.RaisePropertyChanging(); _settingsService.Settings.Snip.Blur = value; this.RaisePropertyChanged(); } } }
-    public string SnipUndoHotkey { get => _settingsService.Settings.Snip.Undo; set { if (_settingsService.Settings.Snip.Undo != value) { this.RaisePropertyChanging(); _settingsService.Settings.Snip.Undo = value; this.RaisePropertyChanged(); } } }
-    public string SnipRedoHotkey { get => _settingsService.Settings.Snip.Redo; set { if (_settingsService.Settings.Snip.Redo != value) { this.RaisePropertyChanging(); _settingsService.Settings.Snip.Redo = value; this.RaisePropertyChanged(); } } }
-    public string SnipClearHotkey { get => _settingsService.Settings.Snip.Clear; set { if (_settingsService.Settings.Snip.Clear != value) { this.RaisePropertyChanging(); _settingsService.Settings.Snip.Clear = value; this.RaisePropertyChanged(); } } }
-    public string SnipSaveHotkey { get => _settingsService.Settings.Snip.Save; set { if (_settingsService.Settings.Snip.Save != value) { this.RaisePropertyChanging(); _settingsService.Settings.Snip.Save = value; this.RaisePropertyChanged(); } } }
-    public string SnipCopyHotkey { get => _settingsService.Settings.Snip.Copy; set { if (_settingsService.Settings.Snip.Copy != value) { this.RaisePropertyChanging(); _settingsService.Settings.Snip.Copy = value; this.RaisePropertyChanged(); } } }
-    public string SnipPinHotkey { get => _settingsService.Settings.Snip.Pin; set { if (_settingsService.Settings.Snip.Pin != value) { this.RaisePropertyChanging(); _settingsService.Settings.Snip.Pin = value; this.RaisePropertyChanged(); } } }
-    public string SnipCloseHotkey { get => _settingsService.Settings.Snip.Close; set { if (_settingsService.Settings.Snip.Close != value) { this.RaisePropertyChanging(); _settingsService.Settings.Snip.Close = value; this.RaisePropertyChanged(); } } }
-    public string SnipToolbarHotkey { get => _settingsService.Settings.Snip.Toolbar; set { if (_settingsService.Settings.Snip.Toolbar != value) { this.RaisePropertyChanging(); _settingsService.Settings.Snip.Toolbar = value; this.RaisePropertyChanged(); } } }
-    public string SnipSelectionModeHotkey { get => _settingsService.Settings.Snip.SelectionMode; set { if (_settingsService.Settings.Snip.SelectionMode != value) { this.RaisePropertyChanging(); _settingsService.Settings.Snip.SelectionMode = value; this.RaisePropertyChanged(); } } }
-    public string SnipCropModeHotkey { get => _settingsService.Settings.Snip.CropMode; set { if (_settingsService.Settings.Snip.CropMode != value) { this.RaisePropertyChanging(); _settingsService.Settings.Snip.CropMode = value; this.RaisePropertyChanged(); } } }
+    public string Snip_Rectangle { get => _settingsService.Settings.Snip.Rectangle; set { if (_settingsService.Settings.Snip.Rectangle != value) { this.RaisePropertyChanging(); _settingsService.Settings.Snip.Rectangle = value; this.RaisePropertyChanged(); } } }
+    public string Snip_Ellipse { get => _settingsService.Settings.Snip.Ellipse; set { if (_settingsService.Settings.Snip.Ellipse != value) { this.RaisePropertyChanging(); _settingsService.Settings.Snip.Ellipse = value; this.RaisePropertyChanged(); } } }
+    public string Snip_Arrow { get => _settingsService.Settings.Snip.Arrow; set { if (_settingsService.Settings.Snip.Arrow != value) { this.RaisePropertyChanging(); _settingsService.Settings.Snip.Arrow = value; this.RaisePropertyChanged(); } } }
+    public string Snip_Line { get => _settingsService.Settings.Snip.Line; set { if (_settingsService.Settings.Snip.Line != value) { this.RaisePropertyChanging(); _settingsService.Settings.Snip.Line = value; this.RaisePropertyChanged(); } } }
+    public string Snip_Pen { get => _settingsService.Settings.Snip.Pen; set { if (_settingsService.Settings.Snip.Pen != value) { this.RaisePropertyChanging(); _settingsService.Settings.Snip.Pen = value; this.RaisePropertyChanged(); } } }
+    public string Snip_Text { get => _settingsService.Settings.Snip.Text; set { if (_settingsService.Settings.Snip.Text != value) { this.RaisePropertyChanging(); _settingsService.Settings.Snip.Text = value; this.RaisePropertyChanged(); } } }
+    public string Snip_Mosaic { get => _settingsService.Settings.Snip.Mosaic; set { if (_settingsService.Settings.Snip.Mosaic != value) { this.RaisePropertyChanging(); _settingsService.Settings.Snip.Mosaic = value; this.RaisePropertyChanged(); } } }
+    public string Snip_Blur { get => _settingsService.Settings.Snip.Blur; set { if (_settingsService.Settings.Snip.Blur != value) { this.RaisePropertyChanging(); _settingsService.Settings.Snip.Blur = value; this.RaisePropertyChanged(); } } }
+    public string Snip_Undo { get => _settingsService.Settings.Snip.Undo; set { if (_settingsService.Settings.Snip.Undo != value) { this.RaisePropertyChanging(); _settingsService.Settings.Snip.Undo = value; this.RaisePropertyChanged(); } } }
+    public string Snip_Redo { get => _settingsService.Settings.Snip.Redo; set { if (_settingsService.Settings.Snip.Redo != value) { this.RaisePropertyChanging(); _settingsService.Settings.Snip.Redo = value; this.RaisePropertyChanged(); } } }
+    public string Snip_Clear { get => _settingsService.Settings.Snip.Clear; set { if (_settingsService.Settings.Snip.Clear != value) { this.RaisePropertyChanging(); _settingsService.Settings.Snip.Clear = value; this.RaisePropertyChanged(); } } }
+    public string Snip_Save { get => _settingsService.Settings.Snip.Save; set { if (_settingsService.Settings.Snip.Save != value) { this.RaisePropertyChanging(); _settingsService.Settings.Snip.Save = value; this.RaisePropertyChanged(); } } }
+    public string Snip_Copy { get => _settingsService.Settings.Snip.Copy; set { if (_settingsService.Settings.Snip.Copy != value) { this.RaisePropertyChanging(); _settingsService.Settings.Snip.Copy = value; this.RaisePropertyChanged(); } } }
+    public string Snip_Pin { get => _settingsService.Settings.Snip.Pin; set { if (_settingsService.Settings.Snip.Pin != value) { this.RaisePropertyChanging(); _settingsService.Settings.Snip.Pin = value; this.RaisePropertyChanged(); } } }
+    public string Snip_Close { get => _settingsService.Settings.Snip.Close; set { if (_settingsService.Settings.Snip.Close != value) { this.RaisePropertyChanging(); _settingsService.Settings.Snip.Close = value; this.RaisePropertyChanged(); } } }
+    public string Snip_Toolbar { get => _settingsService.Settings.Snip.Toolbar; set { if (_settingsService.Settings.Snip.Toolbar != value) { this.RaisePropertyChanging(); _settingsService.Settings.Snip.Toolbar = value; this.RaisePropertyChanged(); } } }
+    public string Snip_SelectionMode { get => _settingsService.Settings.Snip.SelectionMode; set { if (_settingsService.Settings.Snip.SelectionMode != value) { this.RaisePropertyChanging(); _settingsService.Settings.Snip.SelectionMode = value; this.RaisePropertyChanged(); } } }
+    public string Snip_CropMode { get => _settingsService.Settings.Snip.CropMode; set { if (_settingsService.Settings.Snip.CropMode != value) { this.RaisePropertyChanging(); _settingsService.Settings.Snip.CropMode = value; this.RaisePropertyChanged(); } } }
 
     // Record Mode Hotkeys
-    public string RecordRectangleHotkey { get => _settingsService.Settings.Record.Rectangle; set { if (_settingsService.Settings.Record.Rectangle != value) { this.RaisePropertyChanging(); _settingsService.Settings.Record.Rectangle = value; this.RaisePropertyChanged(); } } }
-    public string RecordEllipseHotkey { get => _settingsService.Settings.Record.Ellipse; set { if (_settingsService.Settings.Record.Ellipse != value) { this.RaisePropertyChanging(); _settingsService.Settings.Record.Ellipse = value; this.RaisePropertyChanged(); } } }
-    public string RecordArrowHotkey { get => _settingsService.Settings.Record.Arrow; set { if (_settingsService.Settings.Record.Arrow != value) { this.RaisePropertyChanging(); _settingsService.Settings.Record.Arrow = value; this.RaisePropertyChanged(); } } }
-    public string RecordLineHotkey { get => _settingsService.Settings.Record.Line; set { if (_settingsService.Settings.Record.Line != value) { this.RaisePropertyChanging(); _settingsService.Settings.Record.Line = value; this.RaisePropertyChanged(); } } }
-    public string RecordPenHotkey { get => _settingsService.Settings.Record.Pen; set { if (_settingsService.Settings.Record.Pen != value) { this.RaisePropertyChanging(); _settingsService.Settings.Record.Pen = value; this.RaisePropertyChanged(); } } }
-    public string RecordTextHotkey { get => _settingsService.Settings.Record.Text; set { if (_settingsService.Settings.Record.Text != value) { this.RaisePropertyChanging(); _settingsService.Settings.Record.Text = value; this.RaisePropertyChanged(); } } }
-    public string RecordMosaicHotkey { get => _settingsService.Settings.Record.Mosaic; set { if (_settingsService.Settings.Record.Mosaic != value) { this.RaisePropertyChanging(); _settingsService.Settings.Record.Mosaic = value; this.RaisePropertyChanged(); } } }
-    public string RecordBlurHotkey { get => _settingsService.Settings.Record.Blur; set { if (_settingsService.Settings.Record.Blur != value) { this.RaisePropertyChanging(); _settingsService.Settings.Record.Blur = value; this.RaisePropertyChanged(); } } }
-    public string RecordUndoHotkey { get => _settingsService.Settings.Record.Undo; set { if (_settingsService.Settings.Record.Undo != value) { this.RaisePropertyChanging(); _settingsService.Settings.Record.Undo = value; this.RaisePropertyChanged(); } } }
-    public string RecordRedoHotkey { get => _settingsService.Settings.Record.Redo; set { if (_settingsService.Settings.Record.Redo != value) { this.RaisePropertyChanging(); _settingsService.Settings.Record.Redo = value; this.RaisePropertyChanged(); } } }
-    public string RecordClearHotkey { get => _settingsService.Settings.Record.Clear; set { if (_settingsService.Settings.Record.Clear != value) { this.RaisePropertyChanging(); _settingsService.Settings.Record.Clear = value; this.RaisePropertyChanged(); } } }
-    public string RecordSaveHotkey { get => _settingsService.Settings.Record.Save; set { if (_settingsService.Settings.Record.Save != value) { this.RaisePropertyChanging(); _settingsService.Settings.Record.Save = value; this.RaisePropertyChanged(); } } }
-    public string RecordCopyHotkey { get => _settingsService.Settings.Record.Copy; set { if (_settingsService.Settings.Record.Copy != value) { this.RaisePropertyChanging(); _settingsService.Settings.Record.Copy = value; this.RaisePropertyChanged(); } } }
-    public string RecordCloseHotkey { get => _settingsService.Settings.Record.Close; set { if (_settingsService.Settings.Record.Close != value) { this.RaisePropertyChanging(); _settingsService.Settings.Record.Close = value; this.RaisePropertyChanged(); } } }
-    public string RecordToolbarHotkey { get => _settingsService.Settings.Record.Toolbar; set { if (_settingsService.Settings.Record.Toolbar != value) { this.RaisePropertyChanging(); _settingsService.Settings.Record.Toolbar = value; this.RaisePropertyChanged(); } } }
-    public string RecordActionHotkey { get => _settingsService.Settings.Record.Action; set { if (_settingsService.Settings.Record.Action != value) { this.RaisePropertyChanging(); _settingsService.Settings.Record.Action = value; this.RaisePropertyChanged(); } } }
-    public string RecordPlaybackHotkey { get => _settingsService.Settings.Record.Playback; set { if (_settingsService.Settings.Record.Playback != value) { this.RaisePropertyChanging(); _settingsService.Settings.Record.Playback = value; this.RaisePropertyChanged(); } } }
+    public string Record_Rectangle { get => _settingsService.Settings.Record.Rectangle; set { if (_settingsService.Settings.Record.Rectangle != value) { this.RaisePropertyChanging(); _settingsService.Settings.Record.Rectangle = value; this.RaisePropertyChanged(); } } }
+    public string Record_Ellipse { get => _settingsService.Settings.Record.Ellipse; set { if (_settingsService.Settings.Record.Ellipse != value) { this.RaisePropertyChanging(); _settingsService.Settings.Record.Ellipse = value; this.RaisePropertyChanged(); } } }
+    public string Record_Arrow { get => _settingsService.Settings.Record.Arrow; set { if (_settingsService.Settings.Record.Arrow != value) { this.RaisePropertyChanging(); _settingsService.Settings.Record.Arrow = value; this.RaisePropertyChanged(); } } }
+    public string Record_Line { get => _settingsService.Settings.Record.Line; set { if (_settingsService.Settings.Record.Line != value) { this.RaisePropertyChanging(); _settingsService.Settings.Record.Line = value; this.RaisePropertyChanged(); } } }
+    public string Record_Pen { get => _settingsService.Settings.Record.Pen; set { if (_settingsService.Settings.Record.Pen != value) { this.RaisePropertyChanging(); _settingsService.Settings.Record.Pen = value; this.RaisePropertyChanged(); } } }
+    public string Record_Text { get => _settingsService.Settings.Record.Text; set { if (_settingsService.Settings.Record.Text != value) { this.RaisePropertyChanging(); _settingsService.Settings.Record.Text = value; this.RaisePropertyChanged(); } } }
+    public string Record_Mosaic { get => _settingsService.Settings.Record.Mosaic; set { if (_settingsService.Settings.Record.Mosaic != value) { this.RaisePropertyChanging(); _settingsService.Settings.Record.Mosaic = value; this.RaisePropertyChanged(); } } }
+    public string Record_Blur { get => _settingsService.Settings.Record.Blur; set { if (_settingsService.Settings.Record.Blur != value) { this.RaisePropertyChanging(); _settingsService.Settings.Record.Blur = value; this.RaisePropertyChanged(); } } }
+    public string Record_Undo { get => _settingsService.Settings.Record.Undo; set { if (_settingsService.Settings.Record.Undo != value) { this.RaisePropertyChanging(); _settingsService.Settings.Record.Undo = value; this.RaisePropertyChanged(); } } }
+    public string Record_Redo { get => _settingsService.Settings.Record.Redo; set { if (_settingsService.Settings.Record.Redo != value) { this.RaisePropertyChanging(); _settingsService.Settings.Record.Redo = value; this.RaisePropertyChanged(); } } }
+    public string Record_Clear { get => _settingsService.Settings.Record.Clear; set { if (_settingsService.Settings.Record.Clear != value) { this.RaisePropertyChanging(); _settingsService.Settings.Record.Clear = value; this.RaisePropertyChanged(); } } }
+    public string Record_Save { get => _settingsService.Settings.Record.Save; set { if (_settingsService.Settings.Record.Save != value) { this.RaisePropertyChanging(); _settingsService.Settings.Record.Save = value; this.RaisePropertyChanged(); } } }
+    public string Record_Copy { get => _settingsService.Settings.Record.Copy; set { if (_settingsService.Settings.Record.Copy != value) { this.RaisePropertyChanging(); _settingsService.Settings.Record.Copy = value; this.RaisePropertyChanged(); } } }
+    public string Record_Close { get => _settingsService.Settings.Record.Close; set { if (_settingsService.Settings.Record.Close != value) { this.RaisePropertyChanging(); _settingsService.Settings.Record.Close = value; this.RaisePropertyChanged(); } } }
+    public string Record_Toolbar { get => _settingsService.Settings.Record.Toolbar; set { if (_settingsService.Settings.Record.Toolbar != value) { this.RaisePropertyChanging(); _settingsService.Settings.Record.Toolbar = value; this.RaisePropertyChanged(); } } }
+    public string Record_Action { get => _settingsService.Settings.Record.Action; set { if (_settingsService.Settings.Record.Action != value) { this.RaisePropertyChanging(); _settingsService.Settings.Record.Action = value; this.RaisePropertyChanged(); } } }
+    public string Record_Playback { get => _settingsService.Settings.Record.Playback; set { if (_settingsService.Settings.Record.Playback != value) { this.RaisePropertyChanging(); _settingsService.Settings.Record.Playback = value; this.RaisePropertyChanged(); } } }
 
     // Translate Mode Hotkeys
-    public string TranslateActionHotkey { get => _settingsService.Settings.Translate.Action; set { if (_settingsService.Settings.Translate.Action != value) { this.RaisePropertyChanging(); _settingsService.Settings.Translate.Action = value; this.RaisePropertyChanged(); } } }
-    public string TranslateToolbarHotkey { get => _settingsService.Settings.Translate.Toolbar; set { if (_settingsService.Settings.Translate.Toolbar != value) { this.RaisePropertyChanging(); _settingsService.Settings.Translate.Toolbar = value; this.RaisePropertyChanged(); } } }
-    public string TranslateCloseHotkey { get => _settingsService.Settings.Translate.Close; set { if (_settingsService.Settings.Translate.Close != value) { this.RaisePropertyChanging(); _settingsService.Settings.Translate.Close = value; this.RaisePropertyChanged(); } } }
+    public string Translate_Action { get => _settingsService.Settings.Translate.Action; set { if (_settingsService.Settings.Translate.Action != value) { this.RaisePropertyChanging(); _settingsService.Settings.Translate.Action = value; this.RaisePropertyChanged(); } } }
+    public string Translate_Toolbar { get => _settingsService.Settings.Translate.Toolbar; set { if (_settingsService.Settings.Translate.Toolbar != value) { this.RaisePropertyChanging(); _settingsService.Settings.Translate.Toolbar = value; this.RaisePropertyChanged(); } } }
+    public string Translate_Close { get => _settingsService.Settings.Translate.Close; set { if (_settingsService.Settings.Translate.Close != value) { this.RaisePropertyChanging(); _settingsService.Settings.Translate.Close = value; this.RaisePropertyChanged(); } } }
 
 
 
@@ -490,22 +490,22 @@ public partial class MainWindowViewModel
         
         // 2. Snip Group (Local to Screenshot mode)
         var snipGroup = new[] { 
-            "SnipRectangleHotkey", "SnipEllipseHotkey", "SnipArrowHotkey", "SnipLineHotkey", "SnipPenHotkey", 
-            "SnipTextHotkey", "SnipMosaicHotkey", "SnipBlurHotkey", "SnipUndoHotkey", "SnipRedoHotkey", 
-            "SnipClearHotkey", "SnipSaveHotkey", "SnipCopyHotkey", "SnipCloseHotkey", 
-            "SnipToolbarHotkey", "SnipSelectionModeHotkey", "SnipCropModeHotkey", "SnipPinHotkey" 
+            "Snip_Rectangle", "Snip_Ellipse", "Snip_Arrow", "Snip_Line", "Snip_Pen", 
+            "Snip_Text", "Snip_Mosaic", "Snip_Blur", "Snip_Undo", "Snip_Redo", 
+            "Snip_Clear", "Snip_Save", "Snip_Copy", "Snip_Close", 
+            "Snip_Toolbar", "Snip_SelectionMode", "Snip_CropMode", "Snip_Pin" 
         };
 
         // 3. Record Group (Local to Video Recording mode)
         var recordGroup = new[] { 
-            "RecordRectangleHotkey", "RecordEllipseHotkey", "RecordArrowHotkey", "RecordLineHotkey", "RecordPenHotkey", 
-            "RecordTextHotkey", "RecordMosaicHotkey", "RecordBlurHotkey", "RecordUndoHotkey", "RecordRedoHotkey", 
-            "RecordClearHotkey", "RecordSaveHotkey", "RecordCopyHotkey", "RecordCloseHotkey", "RecordToolbarHotkey", 
-            "RecordActionHotkey", "RecordPlaybackHotkey" 
+            "Record_Rectangle", "Record_Ellipse", "Record_Arrow", "Record_Line", "Record_Pen", 
+            "Record_Text", "Record_Mosaic", "Record_Blur", "Record_Undo", "Record_Redo", 
+            "Record_Clear", "Record_Save", "Record_Copy", "Record_Close", "Record_Toolbar", 
+            "Record_Action", "Record_Playback" 
         };
 
         // 4. Translate Group (Local to Translation mode)
-        var translateGroup = new[] { "TranslateActionHotkey", "TranslateToolbarHotkey", "TranslateCloseHotkey" };
+        var translateGroup = new[] { "Translate_Action", "Translate_Toolbar", "Translate_Close" };
 
         if (globalGroup.Contains(targetTag))
         {
@@ -515,50 +515,50 @@ public partial class MainWindowViewModel
         }
         else if (snipGroup.Contains(targetTag))
         {
-            if (targetTag != "SnipRectangleHotkey" && SnipRectangleHotkey == hotkey) return "TipRectangle";
-            if (targetTag != "SnipEllipseHotkey" && SnipEllipseHotkey == hotkey) return "TipEllipse";
-            if (targetTag != "SnipArrowHotkey" && SnipArrowHotkey == hotkey) return "TipArrow";
-            if (targetTag != "SnipLineHotkey" && SnipLineHotkey == hotkey) return "TipLine";
-            if (targetTag != "SnipPenHotkey" && SnipPenHotkey == hotkey) return "TipPen";
-            if (targetTag != "SnipTextHotkey" && SnipTextHotkey == hotkey) return "TipText";
-            if (targetTag != "SnipMosaicHotkey" && SnipMosaicHotkey == hotkey) return "TipMosaic";
-            if (targetTag != "SnipBlurHotkey" && SnipBlurHotkey == hotkey) return "TipBlur";
-            if (targetTag != "SnipUndoHotkey" && SnipUndoHotkey == hotkey) return "Undo";
-            if (targetTag != "SnipRedoHotkey" && SnipRedoHotkey == hotkey) return "Redo";
-            if (targetTag != "SnipClearHotkey" && SnipClearHotkey == hotkey) return "Clear";
-            if (targetTag != "SnipSaveHotkey" && SnipSaveHotkey == hotkey) return "Save";
-            if (targetTag != "SnipCopyHotkey" && SnipCopyHotkey == hotkey) return "TipCopy";
-            if (targetTag != "SnipCloseHotkey" && SnipCloseHotkey == hotkey) return "ActionClose";
-            if (targetTag != "SnipToolbarHotkey" && SnipToolbarHotkey == hotkey) return "ActionToolbar";
-            if (targetTag != "SnipSelectionModeHotkey" && SnipSelectionModeHotkey == hotkey) return "ActionSelectionMode";
-            if (targetTag != "SnipCropModeHotkey" && SnipCropModeHotkey == hotkey) return "ActionCropMode";
-            if (targetTag != "SnipPinHotkey" && SnipPinHotkey == hotkey) return "TipPin";
+            if (targetTag != "Snip_Rectangle" && Snip_Rectangle == hotkey) return "TipRectangle";
+            if (targetTag != "Snip_Ellipse" && Snip_Ellipse == hotkey) return "TipEllipse";
+            if (targetTag != "Snip_Arrow" && Snip_Arrow == hotkey) return "TipArrow";
+            if (targetTag != "Snip_Line" && Snip_Line == hotkey) return "TipLine";
+            if (targetTag != "Snip_Pen" && Snip_Pen == hotkey) return "TipPen";
+            if (targetTag != "Snip_Text" && Snip_Text == hotkey) return "TipText";
+            if (targetTag != "Snip_Mosaic" && Snip_Mosaic == hotkey) return "TipMosaic";
+            if (targetTag != "Snip_Blur" && Snip_Blur == hotkey) return "TipBlur";
+            if (targetTag != "Snip_Undo" && Snip_Undo == hotkey) return "Undo";
+            if (targetTag != "Snip_Redo" && Snip_Redo == hotkey) return "Redo";
+            if (targetTag != "Snip_Clear" && Snip_Clear == hotkey) return "Clear";
+            if (targetTag != "Snip_Save" && Snip_Save == hotkey) return "Save";
+            if (targetTag != "Snip_Copy" && Snip_Copy == hotkey) return "TipCopy";
+            if (targetTag != "Snip_Close" && Snip_Close == hotkey) return "ActionClose";
+            if (targetTag != "Snip_Toolbar" && Snip_Toolbar == hotkey) return "ActionToolbar";
+            if (targetTag != "Snip_SelectionMode" && Snip_SelectionMode == hotkey) return "ActionSelectionMode";
+            if (targetTag != "Snip_CropMode" && Snip_CropMode == hotkey) return "ActionCropMode";
+            if (targetTag != "Snip_Pin" && Snip_Pin == hotkey) return "TipPin";
         }
         else if (recordGroup.Contains(targetTag))
         {
-            if (targetTag != "RecordRectangleHotkey" && RecordRectangleHotkey == hotkey) return "TipRectangle";
-            if (targetTag != "RecordEllipseHotkey" && RecordEllipseHotkey == hotkey) return "TipEllipse";
-            if (targetTag != "RecordArrowHotkey" && RecordArrowHotkey == hotkey) return "TipArrow";
-            if (targetTag != "RecordLineHotkey" && RecordLineHotkey == hotkey) return "TipLine";
-            if (targetTag != "RecordPenHotkey" && RecordPenHotkey == hotkey) return "TipPen";
-            if (targetTag != "RecordTextHotkey" && RecordTextHotkey == hotkey) return "TipText";
-            if (targetTag != "RecordMosaicHotkey" && RecordMosaicHotkey == hotkey) return "TipMosaic";
-            if (targetTag != "RecordBlurHotkey" && RecordBlurHotkey == hotkey) return "TipBlur";
-            if (targetTag != "RecordUndoHotkey" && RecordUndoHotkey == hotkey) return "Undo";
-            if (targetTag != "RecordRedoHotkey" && RecordRedoHotkey == hotkey) return "Redo";
-            if (targetTag != "RecordClearHotkey" && RecordClearHotkey == hotkey) return "Clear";
-            if (targetTag != "RecordSaveHotkey" && RecordSaveHotkey == hotkey) return "Save";
-            if (targetTag != "RecordCopyHotkey" && RecordCopyHotkey == hotkey) return "TipCopy";
-            if (targetTag != "RecordCloseHotkey" && RecordCloseHotkey == hotkey) return "ActionClose";
-            if (targetTag != "RecordToolbarHotkey" && RecordToolbarHotkey == hotkey) return "ActionToolbar";
-            if (targetTag != "RecordActionHotkey" && RecordActionHotkey == hotkey) return "ActionStartPin";
-            if (targetTag != "RecordPlaybackHotkey" && RecordPlaybackHotkey == hotkey) return "ActionPlayback";
+            if (targetTag != "Record_Rectangle" && Record_Rectangle == hotkey) return "TipRectangle";
+            if (targetTag != "Record_Ellipse" && Record_Ellipse == hotkey) return "TipEllipse";
+            if (targetTag != "Record_Arrow" && Record_Arrow == hotkey) return "TipArrow";
+            if (targetTag != "Record_Line" && Record_Line == hotkey) return "TipLine";
+            if (targetTag != "Record_Pen" && Record_Pen == hotkey) return "TipPen";
+            if (targetTag != "Record_Text" && Record_Text == hotkey) return "TipText";
+            if (targetTag != "Record_Mosaic" && Record_Mosaic == hotkey) return "TipMosaic";
+            if (targetTag != "Record_Blur" && Record_Blur == hotkey) return "TipBlur";
+            if (targetTag != "Record_Undo" && Record_Undo == hotkey) return "Undo";
+            if (targetTag != "Record_Redo" && Record_Redo == hotkey) return "Redo";
+            if (targetTag != "Record_Clear" && Record_Clear == hotkey) return "Clear";
+            if (targetTag != "Record_Save" && Record_Save == hotkey) return "Save";
+            if (targetTag != "Record_Copy" && Record_Copy == hotkey) return "TipCopy";
+            if (targetTag != "Record_Close" && Record_Close == hotkey) return "ActionClose";
+            if (targetTag != "Record_Toolbar" && Record_Toolbar == hotkey) return "ActionToolbar";
+            if (targetTag != "Record_Action" && Record_Action == hotkey) return "ActionStartPin";
+            if (targetTag != "Record_Playback" && Record_Playback == hotkey) return "ActionPlayback";
         }
         else if (translateGroup.Contains(targetTag))
         {
-            if (targetTag != "TranslateActionHotkey" && TranslateActionHotkey == hotkey) return "ActionHideTranslate";
-            if (targetTag != "TranslateToolbarHotkey" && TranslateToolbarHotkey == hotkey) return "ActionToolbar";
-            if (targetTag != "TranslateCloseHotkey" && TranslateCloseHotkey == hotkey) return "ActionClose";
+            if (targetTag != "Translate_Action" && Translate_Action == hotkey) return "ActionHideTranslate";
+            if (targetTag != "Translate_Toolbar" && Translate_Toolbar == hotkey) return "ActionToolbar";
+            if (targetTag != "Translate_Close" && Translate_Close == hotkey) return "ActionClose";
         }
 
         return null;
@@ -860,15 +860,15 @@ public partial class MainWindowViewModel
 
             // Trigger notifications for all hotkeys (they access Settings directly now)
             var hotkeyProps = new[] {
-                nameof(SnipRectangleHotkey), nameof(SnipEllipseHotkey), nameof(SnipArrowHotkey), nameof(SnipLineHotkey), nameof(SnipPenHotkey),
-                nameof(SnipTextHotkey), nameof(SnipMosaicHotkey), nameof(SnipBlurHotkey), nameof(SnipUndoHotkey), nameof(SnipRedoHotkey),
-                nameof(SnipClearHotkey), nameof(SnipSaveHotkey), nameof(SnipCopyHotkey), nameof(SnipPinHotkey), nameof(SnipCloseHotkey),
-                nameof(SnipToolbarHotkey), nameof(SnipSelectionModeHotkey), nameof(SnipCropModeHotkey),
-                nameof(RecordRectangleHotkey), nameof(RecordEllipseHotkey), nameof(RecordArrowHotkey), nameof(RecordLineHotkey), nameof(RecordPenHotkey),
-                nameof(RecordTextHotkey), nameof(RecordMosaicHotkey), nameof(RecordBlurHotkey), nameof(RecordUndoHotkey), nameof(RecordRedoHotkey),
-                nameof(RecordClearHotkey), nameof(RecordSaveHotkey), nameof(RecordCopyHotkey), nameof(RecordCloseHotkey), nameof(RecordToolbarHotkey),
-                nameof(RecordActionHotkey), nameof(RecordPlaybackHotkey),
-                nameof(TranslateActionHotkey), nameof(TranslateToolbarHotkey), nameof(TranslateCloseHotkey)
+                nameof(Snip_Rectangle), nameof(Snip_Ellipse), nameof(Snip_Arrow), nameof(Snip_Line), nameof(Snip_Pen),
+                nameof(Snip_Text), nameof(Snip_Mosaic), nameof(Snip_Blur), nameof(Snip_Undo), nameof(Snip_Redo),
+                nameof(Snip_Clear), nameof(Snip_Save), nameof(Snip_Copy), nameof(Snip_Pin), nameof(Snip_Close),
+                nameof(Snip_Toolbar), nameof(Snip_SelectionMode), nameof(Snip_CropMode),
+                nameof(Record_Rectangle), nameof(Record_Ellipse), nameof(Record_Arrow), nameof(Record_Line), nameof(Record_Pen),
+                nameof(Record_Text), nameof(Record_Mosaic), nameof(Record_Blur), nameof(Record_Undo), nameof(Record_Redo),
+                nameof(Record_Clear), nameof(Record_Save), nameof(Record_Copy), nameof(Record_Close), nameof(Record_Toolbar),
+                nameof(Record_Action), nameof(Record_Playback),
+                nameof(Translate_Action), nameof(Translate_Toolbar), nameof(Translate_Close)
             };
             foreach (var prop in hotkeyProps) this.RaisePropertyChanged(prop);
 

@@ -72,15 +72,15 @@ public partial class MainWindowViewModel
         
         // Refresh all hotkey properties (they access Settings directly now)
         var hotkeyProps = new[] {
-            nameof(SnipRectangleHotkey), nameof(SnipEllipseHotkey), nameof(SnipArrowHotkey), nameof(SnipLineHotkey), nameof(SnipPenHotkey),
-            nameof(SnipTextHotkey), nameof(SnipMosaicHotkey), nameof(SnipBlurHotkey), nameof(SnipUndoHotkey), nameof(SnipRedoHotkey),
-            nameof(SnipClearHotkey), nameof(SnipSaveHotkey), nameof(SnipCopyHotkey), nameof(SnipPinHotkey), nameof(SnipCloseHotkey),
-            nameof(SnipToolbarHotkey), nameof(SnipSelectionModeHotkey), nameof(SnipCropModeHotkey),
-            nameof(RecordRectangleHotkey), nameof(RecordEllipseHotkey), nameof(RecordArrowHotkey), nameof(RecordLineHotkey), nameof(RecordPenHotkey),
-            nameof(RecordTextHotkey), nameof(RecordMosaicHotkey), nameof(RecordBlurHotkey), nameof(RecordUndoHotkey), nameof(RecordRedoHotkey),
-            nameof(RecordClearHotkey), nameof(RecordSaveHotkey), nameof(RecordCopyHotkey), nameof(RecordCloseHotkey), nameof(RecordToolbarHotkey),
-            nameof(RecordActionHotkey), nameof(RecordPlaybackHotkey),
-            nameof(TranslateActionHotkey), nameof(TranslateToolbarHotkey), nameof(TranslateCloseHotkey)
+            nameof(Snip_Rectangle), nameof(Snip_Ellipse), nameof(Snip_Arrow), nameof(Snip_Line), nameof(Snip_Pen),
+            nameof(Snip_Text), nameof(Snip_Mosaic), nameof(Snip_Blur), nameof(Snip_Undo), nameof(Snip_Redo),
+            nameof(Snip_Clear), nameof(Snip_Save), nameof(Snip_Copy), nameof(Snip_Pin), nameof(Snip_Close),
+            nameof(Snip_Toolbar), nameof(Snip_SelectionMode), nameof(Snip_CropMode),
+            nameof(Record_Rectangle), nameof(Record_Ellipse), nameof(Record_Arrow), nameof(Record_Line), nameof(Record_Pen),
+            nameof(Record_Text), nameof(Record_Mosaic), nameof(Record_Blur), nameof(Record_Undo), nameof(Record_Redo),
+            nameof(Record_Clear), nameof(Record_Save), nameof(Record_Copy), nameof(Record_Close), nameof(Record_Toolbar),
+            nameof(Record_Action), nameof(Record_Playback),
+            nameof(Translate_Action), nameof(Translate_Toolbar), nameof(Translate_Close)
         };
         foreach (var prop in hotkeyProps) this.RaisePropertyChanged(prop);
 

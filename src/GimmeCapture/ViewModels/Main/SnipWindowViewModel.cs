@@ -42,25 +42,25 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     public string RecordHotkey => _mainVm?.RecordHotkey ?? "F2";
     public string TranslateHotkey => _mainVm?.TranslateHotkey ?? "F3";
     
-    public string CopyHotkey => CurrentMode == SnipMode.Recording ? (_mainVm?.RecordCopyHotkey ?? "Ctrl+C") : (_mainVm?.SnipCopyHotkey ?? "Ctrl+C");
-    public string UndoHotkey => CurrentMode == SnipMode.Recording ? (_mainVm?.RecordUndoHotkey ?? "Ctrl+Z") : (_mainVm?.SnipUndoHotkey ?? "Ctrl+Z");
-    public string RedoHotkey => CurrentMode == SnipMode.Recording ? (_mainVm?.RecordRedoHotkey ?? "Ctrl+Y") : (_mainVm?.SnipRedoHotkey ?? "Ctrl+Y");
-    public string ClearHotkey => CurrentMode == SnipMode.Recording ? (_mainVm?.RecordClearHotkey ?? "Delete") : (_mainVm?.SnipClearHotkey ?? "Delete");
-    public string SaveHotkey => CurrentMode == SnipMode.Recording ? (_mainVm?.RecordSaveHotkey ?? "Ctrl+S") : (_mainVm?.SnipSaveHotkey ?? "Ctrl+S");
-    public string CloseHotkey => CurrentMode == SnipMode.Translation ? (_mainVm?.TranslateCloseHotkey ?? "Escape") : (CurrentMode == SnipMode.Recording ? (_mainVm?.RecordCloseHotkey ?? "Escape") : (_mainVm?.SnipCloseHotkey ?? "Escape"));
+    public string CopyHotkey => CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Copy ?? "Ctrl+C") : (_mainVm?.Snip_Copy ?? "Ctrl+C");
+    public string UndoHotkey => CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Undo ?? "Ctrl+Z") : (_mainVm?.Snip_Undo ?? "Ctrl+Z");
+    public string RedoHotkey => CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Redo ?? "Ctrl+Y") : (_mainVm?.Snip_Redo ?? "Ctrl+Y");
+    public string ClearHotkey => CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Clear ?? "Delete") : (_mainVm?.Snip_Clear ?? "Delete");
+    public string SaveHotkey => CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Save ?? "Ctrl+S") : (_mainVm?.Snip_Save ?? "Ctrl+S");
+    public string CloseHotkey => CurrentMode == SnipMode.Translation ? (_mainVm?.Translate_Close ?? "Escape") : (CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Close ?? "Escape") : (_mainVm?.Snip_Close ?? "Escape"));
     
-    public string RectangleHotkey => CurrentMode == SnipMode.Recording ? (_mainVm?.RecordRectangleHotkey ?? "R") : (_mainVm?.SnipRectangleHotkey ?? "R");
-    public string EllipseHotkey => CurrentMode == SnipMode.Recording ? (_mainVm?.RecordEllipseHotkey ?? "E") : (_mainVm?.SnipEllipseHotkey ?? "E");
-    public string ArrowHotkey => CurrentMode == SnipMode.Recording ? (_mainVm?.RecordArrowHotkey ?? "A") : (_mainVm?.SnipArrowHotkey ?? "A");
-    public string LineHotkey => CurrentMode == SnipMode.Recording ? (_mainVm?.RecordLineHotkey ?? "L") : (_mainVm?.SnipLineHotkey ?? "L");
-    public string PenHotkey => CurrentMode == SnipMode.Recording ? (_mainVm?.RecordPenHotkey ?? "P") : (_mainVm?.SnipPenHotkey ?? "P");
-    public string TextHotkey => CurrentMode == SnipMode.Recording ? (_mainVm?.RecordTextHotkey ?? "T") : (_mainVm?.SnipTextHotkey ?? "T");
-    public string MosaicHotkey => CurrentMode == SnipMode.Recording ? (_mainVm?.RecordMosaicHotkey ?? "M") : (_mainVm?.SnipMosaicHotkey ?? "M");
-    public string BlurHotkey => CurrentMode == SnipMode.Recording ? (_mainVm?.RecordBlurHotkey ?? "B") : (_mainVm?.SnipBlurHotkey ?? "B");
+    public string RectangleHotkey => CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Rectangle ?? "R") : (_mainVm?.Snip_Rectangle ?? "R");
+    public string EllipseHotkey => CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Ellipse ?? "E") : (_mainVm?.Snip_Ellipse ?? "E");
+    public string ArrowHotkey => CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Arrow ?? "A") : (_mainVm?.Snip_Arrow ?? "A");
+    public string LineHotkey => CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Line ?? "L") : (_mainVm?.Snip_Line ?? "L");
+    public string PenHotkey => CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Pen ?? "P") : (_mainVm?.Snip_Pen ?? "P");
+    public string TextHotkey => CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Text ?? "T") : (_mainVm?.Snip_Text ?? "T");
+    public string MosaicHotkey => CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Mosaic ?? "M") : (_mainVm?.Snip_Mosaic ?? "M");
+    public string BlurHotkey => CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Blur ?? "B") : (_mainVm?.Snip_Blur ?? "B");
 
-    public string ActiveActionHotkey => CurrentMode == SnipMode.Translation ? (_mainVm?.TranslateActionHotkey ?? "F3") : (CurrentMode == SnipMode.Recording ? (_mainVm?.RecordActionHotkey ?? "F3") : (_mainVm?.SnipPinHotkey ?? "F3"));
-    public string ActiveToolbarHotkey => CurrentMode == SnipMode.Translation ? (_mainVm?.TranslateToolbarHotkey ?? "F4") : (CurrentMode == SnipMode.Recording ? (_mainVm?.RecordToolbarHotkey ?? "F4") : (_mainVm?.SnipToolbarHotkey ?? "F4"));
-    public string ActivePlaybackHotkey => _mainVm?.RecordPlaybackHotkey ?? "Space";
+    public string ActiveActionHotkey => CurrentMode == SnipMode.Translation ? (_mainVm?.Translate_Action ?? "F3") : (CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Action ?? "F3") : (_mainVm?.Snip_Pin ?? "F3"));
+    public string ActiveToolbarHotkey => CurrentMode == SnipMode.Translation ? (_mainVm?.Translate_Toolbar ?? "F4") : (CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Toolbar ?? "F4") : (_mainVm?.Snip_Toolbar ?? "F4"));
+    public string ActivePlaybackHotkey => _mainVm?.Record_Playback ?? "Space";
 
     public string UndoTooltip => $"{LocalizationService.Instance["Undo"]} ({UndoHotkey})";
     public string RedoTooltip => $"{LocalizationService.Instance["Redo"]} ({RedoHotkey})";
