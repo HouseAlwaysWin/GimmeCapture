@@ -64,6 +64,13 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     public string RemoveBackgroundHotkey => _mainVm?.Snip_RemoveBackground ?? "Shift+R";
     public string MagicWandHotkey => _mainVm?.Snip_MagicWand ?? "W";
 
+    // Translation mode specific hotkeys
+    public string TranslateAllHotkey => _mainVm?.Translate_TranslateAll ?? "Enter";
+    public string ScanAllHotkey => _mainVm?.Translate_ScanAll ?? "S";
+    public string ClearAllHotkey => _mainVm?.Translate_ClearAll ?? "Delete";
+    public string ToggleSelectHotkey => _mainVm?.Translate_ToggleSelect ?? "Tab";
+    public string AutoDetectHotkey => _mainVm?.Translate_AutoDetect ?? "D";
+
     public string UndoTooltip => $"{LocalizationService.Instance["Undo"]} ({UndoHotkey})";
     public string RedoTooltip => $"{LocalizationService.Instance["Redo"]} ({RedoHotkey})";
     public string ClearTooltip => $"{LocalizationService.Instance["Clear"]} ({ClearHotkey})";
@@ -81,6 +88,11 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     public string SnipTooltip => $"{LocalizationService.Instance["CaptureModeNormal"]} ({SnipHotkey})";
     public string RecordTooltip => $"{LocalizationService.Instance["CaptureModeRecord"]} ({RecordHotkey})";
     public string HideTranslationResultsTooltip => $"{LocalizationService.Instance["HideTranslationResults"]} ({ActiveActionHotkey})";
+    public string TranslateAllTooltip => $"{LocalizationService.Instance["ActionTranslateAll"]} ({TranslateAllHotkey})";
+    public string ScanAllTooltip => $"{LocalizationService.Instance["ActionScanAll"]} ({ScanAllHotkey})";
+    public string ClearAllTooltip => $"{LocalizationService.Instance["ActionClearAll"]} ({ClearAllHotkey})";
+    public string ToggleSelectTooltip => $"{LocalizationService.Instance["ActionToggleSelect"]} ({ToggleSelectHotkey})";
+    public string AutoDetectTooltip => $"{LocalizationService.Instance["ActionAutoDetect"]} ({AutoDetectHotkey})";
     public string ToggleToolbarTooltip => $"{LocalizationService.Instance["ActionToolbar"]} ({ActiveToolbarHotkey})";
     public string TogglePlaybackTooltip => $"{LocalizationService.Instance["ActionPlayback"]} ({ActivePlaybackHotkey})";
     public string RemoveBackgroundTooltip => $"{LocalizationService.Instance["RemoveBackground"]} ({RemoveBackgroundHotkey})";

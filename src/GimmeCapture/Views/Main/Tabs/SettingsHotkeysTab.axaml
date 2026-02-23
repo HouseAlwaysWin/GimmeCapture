@@ -126,16 +126,28 @@
             <Border Background="#1A1A1A" Padding="15" CornerRadius="4" BorderBrush="#333333" BorderThickness="1" Margin="0,0,0,10">
                 <StackPanel Spacing="10">
                     <TextBlock Text="{Binding [HotkeyTranslateGroup], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold" Foreground="{Binding ThemeColor, Converter={StaticResource ColorToBrushConverter}}"/>
-                    <Grid ColumnDefinitions="Auto, 10, *" RowDefinitions="Auto, Auto, Auto">
-                        <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding [ActionHideTranslate], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center"/>
-                        <TextBox Grid.Row="0" Grid.Column="2" Text="{Binding Translate_Action, Mode=OneWay}" Tag="{x:Static services:HotkeyTagNames.Translate_Action}" IsReadOnly="True" KeyDown="HotkeyTextBox_KeyDown"/>
-
-                        <TextBlock Grid.Row="1" Grid.Column="0" Text="{Binding [ActionToolbar], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,10,0,0"/>
-                        <TextBox Grid.Row="1" Grid.Column="2" Text="{Binding Translate_Toolbar, Mode=OneWay}" Tag="{x:Static services:HotkeyTagNames.Translate_Toolbar}" IsReadOnly="True" Margin="0,10,0,0" KeyDown="HotkeyTextBox_KeyDown"/>
-
-                        <TextBlock Grid.Row="2" Grid.Column="0" Text="{Binding [ActionClose], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,10,0,0"/>
-                        <TextBox Grid.Row="2" Grid.Column="2" Text="{Binding Translate_Close, Mode=OneWay}" Tag="{x:Static services:HotkeyTagNames.Translate_Close}" IsReadOnly="True" Margin="0,10,0,0" KeyDown="HotkeyTextBox_KeyDown"/>
-                    </Grid>
+                    <UniformGrid Columns="2">
+                        <Grid ColumnDefinitions="Auto, 5, *" RowDefinitions="Auto, Auto, Auto, Auto" Margin="0,0,10,0">
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding [ActionTranslateAll], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" FontSize="12"/>
+                            <TextBox Grid.Row="0" Grid.Column="2" Text="{Binding Translate_TranslateAll, Mode=OneWay}" Tag="{x:Static services:HotkeyTagNames.Translate_TranslateAll}" IsReadOnly="True" KeyDown="HotkeyTextBox_KeyDown" Margin="0,2"/>
+                            <TextBlock Grid.Row="1" Grid.Column="0" Text="{Binding [ActionScanAll], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" FontSize="12"/>
+                            <TextBox Grid.Row="1" Grid.Column="2" Text="{Binding Translate_ScanAll, Mode=OneWay}" Tag="{x:Static services:HotkeyTagNames.Translate_ScanAll}" IsReadOnly="True" KeyDown="HotkeyTextBox_KeyDown" Margin="0,2"/>
+                            <TextBlock Grid.Row="2" Grid.Column="0" Text="{Binding [ActionClearAll], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" FontSize="12"/>
+                            <TextBox Grid.Row="2" Grid.Column="2" Text="{Binding Translate_ClearAll, Mode=OneWay}" Tag="{x:Static services:HotkeyTagNames.Translate_ClearAll}" IsReadOnly="True" KeyDown="HotkeyTextBox_KeyDown" Margin="0,2"/>
+                            <TextBlock Grid.Row="3" Grid.Column="0" Text="{Binding [ActionToggleSelect], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" FontSize="12"/>
+                            <TextBox Grid.Row="3" Grid.Column="2" Text="{Binding Translate_ToggleSelect, Mode=OneWay}" Tag="{x:Static services:HotkeyTagNames.Translate_ToggleSelect}" IsReadOnly="True" KeyDown="HotkeyTextBox_KeyDown" Margin="0,2"/>
+                        </Grid>
+                        <Grid ColumnDefinitions="Auto, 5, *" RowDefinitions="Auto, Auto, Auto, Auto" Margin="5,0,0,0">
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding [ActionAutoDetect], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" FontSize="12"/>
+                            <TextBox Grid.Row="0" Grid.Column="2" Text="{Binding Translate_AutoDetect, Mode=OneWay}" Tag="{x:Static services:HotkeyTagNames.Translate_AutoDetect}" IsReadOnly="True" KeyDown="HotkeyTextBox_KeyDown" Margin="0,2"/>
+                            <TextBlock Grid.Row="1" Grid.Column="0" Text="{Binding [ActionHideTranslate], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" FontSize="12"/>
+                            <TextBox Grid.Row="1" Grid.Column="2" Text="{Binding Translate_Action, Mode=OneWay}" Tag="{x:Static services:HotkeyTagNames.Translate_Action}" IsReadOnly="True" KeyDown="HotkeyTextBox_KeyDown" Margin="0,2"/>
+                            <TextBlock Grid.Row="2" Grid.Column="0" Text="{Binding [ActionToolbar], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" FontSize="12"/>
+                            <TextBox Grid.Row="2" Grid.Column="2" Text="{Binding Translate_Toolbar, Mode=OneWay}" Tag="{x:Static services:HotkeyTagNames.Translate_Toolbar}" IsReadOnly="True" KeyDown="HotkeyTextBox_KeyDown" Margin="0,2"/>
+                            <TextBlock Grid.Row="3" Grid.Column="0" Text="{Binding [ActionClose], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" FontSize="12"/>
+                            <TextBox Grid.Row="3" Grid.Column="2" Text="{Binding Translate_Close, Mode=OneWay}" Tag="{x:Static services:HotkeyTagNames.Translate_Close}" IsReadOnly="True" KeyDown="HotkeyTextBox_KeyDown" Margin="0,2"/>
+                        </Grid>
+                    </UniformGrid>
                 </StackPanel>
             </Border>
             

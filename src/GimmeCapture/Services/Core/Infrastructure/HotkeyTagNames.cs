@@ -43,4 +43,9 @@ public static class HotkeyTagNames
     public const string Translate_Action = nameof(Translate_Action);
     public const string Translate_Toolbar = nameof(Translate_Toolbar);
     public const string Translate_Close = nameof(Translate_Close);
+    public const string Translate_TranslateAll = nameof(Translate_TranslateAll);
+    public const string Translate_ScanAll = nameof(Translate_ScanAll);
+    public const string Translate_ClearAll = nameof(Translate_ClearAll);
+    public const string Translate_ToggleSelect = nameof(Translate_ToggleSelect);
+    public const string Translate_AutoDetect = nameof(Translate_AutoDetect);
 }

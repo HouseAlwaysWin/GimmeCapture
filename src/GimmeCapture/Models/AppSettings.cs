@@ -65,6 +65,11 @@ public class TranslateHotkeys
     public string Action { get; set; } = "F3";
     public string Toolbar { get; set; } = "F4";
     public string Close { get; set; } = "Escape";
+    public string TranslateAll { get; set; } = "Enter";
+    public string ScanAll { get; set; } = "S";
+    public string ClearAll { get; set; } = "Delete";
+    public string ToggleSelect { get; set; } = "Tab";
+    public string AutoDetect { get; set; } = "D";
 }
 
 public class AppSettings

@@ -243,6 +243,8 @@ public partial class SnipWindowViewModel
     public ReactiveCommand<Unit, Unit> TranslateAllSelectionsCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> ScanAllTextCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> ClearAllSelectionsCommand { get; set; } = null!;
+    public ReactiveCommand<Unit, Unit> ToggleTranslationSelectCommand { get; set; } = null!;
+    public ReactiveCommand<Unit, Unit> ToggleAutoDetectCommand { get; set; } = null!;
     public ReactiveCommand<UserSelectionRect, Unit> RemoveUserSelectionCommand { get; set; } = null!;
     public ReactiveCommand<TranslationTool, Unit> SelectTranslationToolCommand { get; set; } = null!;
     public ReactiveCommand<UserSelectionRect, Unit> CopyTranslationTextCommand { get; set; } = null!;
@@ -268,6 +270,12 @@ public partial class SnipWindowViewModel
 
         ClearAllSelectionsCommand = ReactiveCommand.Create(() => UserSelections.Clear());
         ClearAllSelectionsCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"ClearAll error: {ex}"));
+
+        ToggleTranslationSelectCommand = ReactiveCommand.Create(() => { IsTranslationSelectionActive = !IsTranslationSelectionActive; });
+        ToggleTranslationSelectCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"ToggleSelect error: {ex}"));
+
+        ToggleAutoDetectCommand = ReactiveCommand.Create(() => { IsGlobalAutoDetectEnabled = !IsGlobalAutoDetectEnabled; });
+        ToggleAutoDetectCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"ToggleAutoDetect error: {ex}"));
         
         SelectTranslationToolCommand = ReactiveCommand.Create<TranslationTool>(tool => 
         {

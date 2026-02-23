@@ -354,6 +354,11 @@ public partial class MainWindowViewModel
     public string Translate_Action { get => _settingsService.Settings.Translate.Action; set { if (_settingsService.Settings.Translate.Action != value) { this.RaisePropertyChanging(); _settingsService.Settings.Translate.Action = value; this.RaisePropertyChanged(); } } }
     public string Translate_Toolbar { get => _settingsService.Settings.Translate.Toolbar; set { if (_settingsService.Settings.Translate.Toolbar != value) { this.RaisePropertyChanging(); _settingsService.Settings.Translate.Toolbar = value; this.RaisePropertyChanged(); } } }
     public string Translate_Close { get => _settingsService.Settings.Translate.Close; set { if (_settingsService.Settings.Translate.Close != value) { this.RaisePropertyChanging(); _settingsService.Settings.Translate.Close = value; this.RaisePropertyChanged(); } } }
+    public string Translate_TranslateAll { get => _settingsService.Settings.Translate.TranslateAll; set { if (_settingsService.Settings.Translate.TranslateAll != value) { this.RaisePropertyChanging(); _settingsService.Settings.Translate.TranslateAll = value; this.RaisePropertyChanged(); } } }
+    public string Translate_ScanAll { get => _settingsService.Settings.Translate.ScanAll; set { if (_settingsService.Settings.Translate.ScanAll != value) { this.RaisePropertyChanging(); _settingsService.Settings.Translate.ScanAll = value; this.RaisePropertyChanged(); } } }
+    public string Translate_ClearAll { get => _settingsService.Settings.Translate.ClearAll; set { if (_settingsService.Settings.Translate.ClearAll != value) { this.RaisePropertyChanging(); _settingsService.Settings.Translate.ClearAll = value; this.RaisePropertyChanged(); } } }
+    public string Translate_ToggleSelect { get => _settingsService.Settings.Translate.ToggleSelect; set { if (_settingsService.Settings.Translate.ToggleSelect != value) { this.RaisePropertyChanging(); _settingsService.Settings.Translate.ToggleSelect = value; this.RaisePropertyChanged(); } } }
+    public string Translate_AutoDetect { get => _settingsService.Settings.Translate.AutoDetect; set { if (_settingsService.Settings.Translate.AutoDetect != value) { this.RaisePropertyChanging(); _settingsService.Settings.Translate.AutoDetect = value; this.RaisePropertyChanged(); } } }
 
 
 
@@ -508,7 +513,11 @@ public partial class MainWindowViewModel
         };
 
         // 4. Translate Group (Local to Translation mode)
-        var translateGroup = new[] { "Translate_Action", "Translate_Toolbar", "Translate_Close" };
+        var translateGroup = new[] { 
+            "Translate_Action", "Translate_Toolbar", "Translate_Close",
+            "Translate_TranslateAll", "Translate_ScanAll", "Translate_ClearAll",
+            "Translate_ToggleSelect", "Translate_AutoDetect"
+        };
 
         if (globalGroup.Contains(targetTag))
         {
@@ -564,6 +573,11 @@ public partial class MainWindowViewModel
             if (targetTag != "Translate_Action" && Translate_Action == hotkey) return "ActionHideTranslate";
             if (targetTag != "Translate_Toolbar" && Translate_Toolbar == hotkey) return "ActionToolbar";
             if (targetTag != "Translate_Close" && Translate_Close == hotkey) return "ActionClose";
+            if (targetTag != "Translate_TranslateAll" && Translate_TranslateAll == hotkey) return "ActionTranslateAll";
+            if (targetTag != "Translate_ScanAll" && Translate_ScanAll == hotkey) return "ActionScanAll";
+            if (targetTag != "Translate_ClearAll" && Translate_ClearAll == hotkey) return "ActionClearAll";
+            if (targetTag != "Translate_ToggleSelect" && Translate_ToggleSelect == hotkey) return "ActionToggleSelect";
+            if (targetTag != "Translate_AutoDetect" && Translate_AutoDetect == hotkey) return "ActionAutoDetect";
         }
 
         return null;
@@ -873,7 +887,9 @@ public partial class MainWindowViewModel
                 nameof(Record_Text), nameof(Record_Mosaic), nameof(Record_Blur), nameof(Record_Undo), nameof(Record_Redo),
                 nameof(Record_Clear), nameof(Record_Save), nameof(Record_Copy), nameof(Record_Close), nameof(Record_Toolbar),
                 nameof(Record_Action), nameof(Record_Playback),
-                nameof(Translate_Action), nameof(Translate_Toolbar), nameof(Translate_Close)
+                nameof(Translate_Action), nameof(Translate_Toolbar), nameof(Translate_Close),
+                nameof(Translate_TranslateAll), nameof(Translate_ScanAll), nameof(Translate_ClearAll),
+                nameof(Translate_ToggleSelect), nameof(Translate_AutoDetect)
             };
             foreach (var prop in hotkeyProps) this.RaisePropertyChanged(prop);
 
