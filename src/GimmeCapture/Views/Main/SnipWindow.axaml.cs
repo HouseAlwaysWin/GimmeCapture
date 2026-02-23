@@ -23,6 +23,7 @@ using ReactiveUI;
 using Avalonia.Interactivity;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
+using System.Collections.Generic;
 
 namespace GimmeCapture.Views.Main;
 
@@ -48,6 +49,7 @@ public partial class SnipWindow : Window
     private readonly ClipboardService _clipboardService = new ClipboardService();
     private readonly HotkeyRouterService _hotkeyRouter = new();
     private readonly IScreenLayoutService _screenLayoutService = new AvaloniaScreenLayoutService();
+    private readonly IWindowLayerService _windowLayerService = new AvaloniaWindowLayerService();
 
     private enum PointerInteractionState
     {
@@ -91,7 +93,7 @@ public partial class SnipWindow : Window
         KeyDown += OnKeyDown;
     }
     
-    private System.Collections.Generic.List<Window> _hiddenTopmostWindows = new();
+    private IReadOnlyList<Window> _hiddenTopmostWindows = [];
 
     protected override void OnOpened(EventArgs e)
     {
@@ -199,17 +201,7 @@ public partial class SnipWindow : Window
             });
 
             // Temporarily lower existing Pin windows
-            if (Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
-            {
-                foreach (var win in desktop.Windows)
-                {
-                    if (win is FloatingImageWindow floating && floating.Topmost && floating.IsVisible)
-                    {
-                        floating.Topmost = false;
-                        _hiddenTopmostWindows.Add(floating);
-                    }
-                }
-            }
+            _hiddenTopmostWindows = _windowLayerService.LowerTopmostWindowsOfType<FloatingImageWindow>();
 
             // Track Focus to fix Ctrl+C conflict with SelectableTextBlock
             this.AddHandler(InputElement.GotFocusEvent, (s, ev) => 
@@ -252,16 +244,8 @@ public partial class SnipWindow : Window
         }
 
         // Restore Pin windows to Topmost
-        foreach (var win in _hiddenTopmostWindows)
-        {
-            try 
-            {
-                if (win.IsVisible) // Ensure not closed
-                    win.Topmost = true;
-            }
-            catch { /* Ignore if window closed */ }
-        }
-        _hiddenTopmostWindows.Clear();
+        _windowLayerService.RestoreTopmostWindows(_hiddenTopmostWindows);
+        _hiddenTopmostWindows = [];
     }
 
     protected override void OnDataContextChanged(EventArgs e)
