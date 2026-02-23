@@ -14,6 +14,7 @@ using Avalonia.Platform;
 using Avalonia.Input.Raw;
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core;
+using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Platforms.Windows;
 using GimmeCapture.Services.Interop;
 
@@ -44,6 +45,7 @@ public partial class SnipWindow : Window
     
     // Services
     private readonly ClipboardService _clipboardService = new ClipboardService();
+    private readonly HotkeyRouterService _hotkeyRouter = new();
 
     private enum PointerInteractionState
     {
@@ -568,50 +570,42 @@ public partial class SnipWindow : Window
         if (_viewModel != null && !e.Handled)
         {
             System.Diagnostics.Debug.WriteLine($"[SnipWindow.axaml.cs] OnKeyDown: Key={e.Key}, Mods={e.KeyModifiers}, ActiveAction={_viewModel.ActiveActionHotkey}, IsInputFocused={_viewModel.IsInputFocused}");
-            
-            // Parse F3 action
-            if (!string.IsNullOrEmpty(_viewModel.ActiveActionHotkey) &&
-                KeyGesture.Parse(_viewModel.ActiveActionHotkey).Matches(e))
+
+            bool IsMatch(string hotkey)
             {
-                System.Diagnostics.Debug.WriteLine($"[SnipWindow.axaml.cs] Matched ActiveActionHotkey! Firing HandleActiveActionHotkeyCommand.");
-                if (_viewModel.HandleActiveActionHotkeyCommand != null)
-                {
-                    _viewModel.HandleActiveActionHotkeyCommand.Execute().Subscribe();
-                    e.Handled = true;
-                }
+                try { return KeyGesture.Parse(hotkey).Matches(e); }
+                catch { return false; }
             }
-            // Parse F4 action
-            else if (!string.IsNullOrEmpty(_viewModel.ActiveToolbarHotkey) &&
-                     KeyGesture.Parse(_viewModel.ActiveToolbarHotkey).Matches(e))
+
+            var action = _hotkeyRouter.ResolveWindowHotkeyAction(
+                _viewModel.ActiveActionHotkey,
+                _viewModel.ActiveToolbarHotkey,
+                _viewModel.SaveHotkey,
+                _viewModel.CopyHotkey,
+                IsMatch);
+
+            switch (action)
             {
-                System.Diagnostics.Debug.WriteLine($"[SnipWindow.axaml.cs] Matched ActiveToolbarHotkey! Firing ToggleToolbarCommand.");
-                if (_viewModel.ToggleToolbarCommand != null)
-                {
-                    _viewModel.ToggleToolbarCommand.Execute().Subscribe();
+                case HotkeyRouterService.WindowHotkeyAction.ActiveAction:
+                    System.Diagnostics.Debug.WriteLine("[SnipWindow.axaml.cs] Matched ActiveActionHotkey! Firing HandleActiveActionHotkeyCommand.");
+                    _viewModel.HandleActiveActionHotkeyCommand?.Execute().Subscribe();
                     e.Handled = true;
-                }
-            }
-            // Parse Save action
-            else if (!string.IsNullOrEmpty(_viewModel.SaveHotkey) &&
-                     KeyGesture.Parse(_viewModel.SaveHotkey).Matches(e))
-            {
-                System.Diagnostics.Debug.WriteLine($"[SnipWindow.axaml.cs] Matched SaveHotkey! Firing SaveCommand.");
-                if (_viewModel.SaveCommand != null)
-                {
-                    _viewModel.SaveCommand.Execute().Subscribe();
+                    break;
+                case HotkeyRouterService.WindowHotkeyAction.ToggleToolbar:
+                    System.Diagnostics.Debug.WriteLine("[SnipWindow.axaml.cs] Matched ActiveToolbarHotkey! Firing ToggleToolbarCommand.");
+                    _viewModel.ToggleToolbarCommand?.Execute().Subscribe();
                     e.Handled = true;
-                }
-            }
-            // Parse Copy action
-            else if (!string.IsNullOrEmpty(_viewModel.CopyHotkey) &&
-                     KeyGesture.Parse(_viewModel.CopyHotkey).Matches(e))
-            {
-                System.Diagnostics.Debug.WriteLine($"[SnipWindow.axaml.cs] Matched CopyHotkey! Firing CopyCommand.");
-                if (_viewModel.CopyCommand != null)
-                {
-                    _viewModel.CopyCommand.Execute().Subscribe();
+                    break;
+                case HotkeyRouterService.WindowHotkeyAction.Save:
+                    System.Diagnostics.Debug.WriteLine("[SnipWindow.axaml.cs] Matched SaveHotkey! Firing SaveCommand.");
+                    _viewModel.SaveCommand?.Execute().Subscribe();
                     e.Handled = true;
-                }
+                    break;
+                case HotkeyRouterService.WindowHotkeyAction.Copy:
+                    System.Diagnostics.Debug.WriteLine("[SnipWindow.axaml.cs] Matched CopyHotkey! Firing CopyCommand.");
+                    _viewModel.CopyCommand?.Execute().Subscribe();
+                    e.Handled = true;
+                    break;
             }
         }
     }
