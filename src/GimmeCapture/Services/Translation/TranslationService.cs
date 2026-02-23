@@ -45,10 +45,12 @@ public class TranslationService
         
         // Manual DI for now as the app doesn't use a container in constructor injection here
         var translationCache = new InMemoryTranslationCache();
+        var executionPolicy = new TranslationExecutionPolicy();
         _ollamaApiClient = new OllamaApiClient(new HttpClient
         {
-            Timeout = TimeSpan.FromSeconds(60)
-        }, settingsService);
+            // Timeout is controlled by TranslationExecutionHelper + policy.
+            Timeout = Timeout.InfiniteTimeSpan
+        }, settingsService, executionPolicy);
 
         _ocrEngine = new PaddleOCREngine(aiResourceService, settingsService);
         _translationEngines = new List<ITranslationEngine>

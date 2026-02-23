@@ -15,14 +15,16 @@ public class OllamaApiClient : IOllamaApiClient
 
     private readonly HttpClient _httpClient;
     private readonly AppSettingsService _settingsService;
+    private readonly ITranslationExecutionPolicy _policy;
     private readonly object _modelsLock = new();
     private IReadOnlyList<string>? _cachedModels;
     private DateTime _modelsCachedAtUtc;
 
-    public OllamaApiClient(HttpClient httpClient, AppSettingsService settingsService)
+    public OllamaApiClient(HttpClient httpClient, AppSettingsService settingsService, ITranslationExecutionPolicy policy)
     {
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
+        _policy = policy ?? throw new ArgumentNullException(nameof(policy));
     }
 
     public async Task<string> GenerateAsync(string model, string prompt, CancellationToken ct = default)
@@ -32,24 +34,31 @@ public class OllamaApiClient : IOllamaApiClient
             return string.Empty;
         }
 
-        var payload = new
-        {
-            model,
-            prompt,
-            stream = false
-        };
+        return await TranslationExecutionHelper.ExecuteAsync(
+            async token =>
+            {
+                var payload = new
+                {
+                    model,
+                    prompt,
+                    stream = false
+                };
 
-        var url = BuildGenerateUrl();
-        var content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+                var url = BuildGenerateUrl();
+                var content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+                var response = await _httpClient.PostAsync(url, content, token);
+                if (!response.IsSuccessStatusCode)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[OllamaApiClient] API error: {response.StatusCode}");
+                    return string.Empty;
+                }
 
-        var response = await _httpClient.PostAsync(url, content, ct);
-        if (!response.IsSuccessStatusCode)
-        {
-            System.Diagnostics.Debug.WriteLine($"[OllamaApiClient] API error: {response.StatusCode}");
-            return string.Empty;
-        }
-
-        return await response.Content.ReadAsStringAsync(ct);
+                return await response.Content.ReadAsStringAsync(token);
+            },
+            ct,
+            _policy.OllamaGenerateTimeout,
+            () => string.Empty,
+            "OllamaApiClient.Generate");
     }
 
     public async Task<IReadOnlyList<string>> GetModelsAsync(CancellationToken ct = default)
@@ -62,34 +71,38 @@ public class OllamaApiClient : IOllamaApiClient
             }
         }
 
-        try
-        {
-            var response = await _httpClient.GetAsync(BuildTagsUrl(), ct);
-            if (!response.IsSuccessStatusCode) return Array.Empty<string>();
-
-            var json = await response.Content.ReadAsStringAsync(ct);
-            using var doc = JsonDocument.Parse(json);
-            var models = doc.RootElement.GetProperty("models").EnumerateArray();
-
-            var names = new List<string>();
-            foreach (var model in models)
+        var names = await TranslationExecutionHelper.ExecuteAsync(
+            async token =>
             {
-                names.Add(model.GetProperty("name").GetString() ?? string.Empty);
-            }
+                var response = await _httpClient.GetAsync(BuildTagsUrl(), token);
+                if (!response.IsSuccessStatusCode) return Array.Empty<string>();
 
-            lock (_modelsLock)
-            {
-                _cachedModels = names;
-                _modelsCachedAtUtc = DateTime.UtcNow;
-            }
+                var json = await response.Content.ReadAsStringAsync(token);
+                using var doc = JsonDocument.Parse(json);
+                var models = doc.RootElement.GetProperty("models").EnumerateArray();
 
-            return names;
-        }
-        catch (Exception ex)
+                var result = new List<string>();
+                foreach (var model in models)
+                {
+                    result.Add(model.GetProperty("name").GetString() ?? string.Empty);
+                }
+
+                return (IReadOnlyList<string>)result;
+            },
+            ct,
+            _policy.OllamaTagsTimeout,
+            () => Array.Empty<string>(),
+            "OllamaApiClient.GetModels");
+
+        if (names.Count == 0) return names;
+
+        lock (_modelsLock)
         {
-            System.Diagnostics.Debug.WriteLine($"[OllamaApiClient] GetModels failed: {ex.Message}");
-            return Array.Empty<string>();
+            _cachedModels = names;
+            _modelsCachedAtUtc = DateTime.UtcNow;
         }
+
+        return names;
     }
 
     private string BuildGenerateUrl()

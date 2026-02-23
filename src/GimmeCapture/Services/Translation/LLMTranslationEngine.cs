@@ -29,70 +29,70 @@ public class LLMTranslationEngine : ITranslationEngine
 
     public async Task<string> TranslateAsync(string text, OCRLanguage sourceLang, TranslationLanguage targetLang, CancellationToken ct = default)
     {
-        var settings = _settingsService.Settings;
-        var model = settings.OllamaModel;
-        if (string.IsNullOrEmpty(model)) 
-        {
-            System.Diagnostics.Debug.WriteLine("[LLM] SKIPPED: No model selected in settings.");
-            return string.Empty;
-        }
-
-        var cacheKey = _cache.BuildKey(EngineType, sourceLang, targetLang, text);
-        if (_cache.TryGet(cacheKey, out var cachedResult))
-        {
-            return cachedResult;
-        }
-
-        string sourceLangName = ResolveSourceLanguageForPrompt(text, sourceLang);
-        string targetLangName = GetTargetLanguageName(targetLang);
-        var prompt = $"Translate \"{text}\" from {sourceLangName} to {targetLangName}. Output ONLY the translated text. No quotes. No explanations.";
-
-        try
-        {
-            System.Diagnostics.Debug.WriteLine($"[LLM] Requesting translation for: {text}");
-            var json = await _ollamaApiClient.GenerateAsync(model, prompt, ct);
-            if (string.IsNullOrWhiteSpace(json)) return string.Empty;
-            System.Diagnostics.Debug.WriteLine($"[LLM] Raw Response: {json}");
-            using var doc = JsonDocument.Parse(json);
-            
-            string resultText = string.Empty;
-            if (doc.RootElement.TryGetProperty("response", out var responseProp))
+        return await TranslationExecutionHelper.ExecuteAsync(
+            async token =>
             {
-                resultText = responseProp.GetString()?.Trim() ?? string.Empty;
-            }
-            else if (doc.RootElement.TryGetProperty("message", out var messageObj) && 
-                messageObj.TryGetProperty("content", out var contentProp))
-            {
-                // Fallback for chat-style response
-                resultText = contentProp.GetString()?.Trim() ?? string.Empty;
-            }
-            
-            resultText = CleanupTranslationResult(resultText);
-            if (string.IsNullOrWhiteSpace(resultText)) return string.Empty;
-
-            // Optional: Restore retry logic if it still drifts
-            if (!IsTranslationAcceptableInternal(text, resultText, targetLang))
-            {
-                var retried = await TranslateStrictRetryForCjkAsync(model, text, targetLang, ct);
-                if (!string.IsNullOrWhiteSpace(retried) && IsTranslationAcceptableInternal(text, retried, targetLang))
+                var settings = _settingsService.Settings;
+                var model = settings.OllamaModel;
+                if (string.IsNullOrEmpty(model)) 
                 {
-                    resultText = retried;
-                }
-                else
-                {
-                    System.Diagnostics.Debug.WriteLine("[LLM] Validation failed even after retry. Rejecting output.");
+                    System.Diagnostics.Debug.WriteLine("[LLM] SKIPPED: No model selected in settings.");
                     return string.Empty;
                 }
-            }
 
-            _cache.Set(cacheKey, resultText);
-            return resultText;
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"[LLM] Translation Error: {ex.Message}");
-            return string.Empty;
-        }
+                var cacheKey = _cache.BuildKey(EngineType, sourceLang, targetLang, text);
+                if (_cache.TryGet(cacheKey, out var cachedResult))
+                {
+                    return cachedResult;
+                }
+
+                string sourceLangName = ResolveSourceLanguageForPrompt(text, sourceLang);
+                string targetLangName = GetTargetLanguageName(targetLang);
+                var prompt = $"Translate \"{text}\" from {sourceLangName} to {targetLangName}. Output ONLY the translated text. No quotes. No explanations.";
+
+                System.Diagnostics.Debug.WriteLine($"[LLM] Requesting translation for: {text}");
+                var json = await _ollamaApiClient.GenerateAsync(model, prompt, token);
+                if (string.IsNullOrWhiteSpace(json)) return string.Empty;
+                System.Diagnostics.Debug.WriteLine($"[LLM] Raw Response: {json}");
+                using var doc = JsonDocument.Parse(json);
+                
+                string resultText = string.Empty;
+                if (doc.RootElement.TryGetProperty("response", out var responseProp))
+                {
+                    resultText = responseProp.GetString()?.Trim() ?? string.Empty;
+                }
+                else if (doc.RootElement.TryGetProperty("message", out var messageObj) && 
+                    messageObj.TryGetProperty("content", out var contentProp))
+                {
+                    // Fallback for chat-style response
+                    resultText = contentProp.GetString()?.Trim() ?? string.Empty;
+                }
+                
+                resultText = CleanupTranslationResult(resultText);
+                if (string.IsNullOrWhiteSpace(resultText)) return string.Empty;
+
+                // Optional: Restore retry logic if it still drifts
+                if (!IsTranslationAcceptableInternal(text, resultText, targetLang))
+                {
+                    var retried = await TranslateStrictRetryForCjkAsync(model, text, targetLang, token);
+                    if (!string.IsNullOrWhiteSpace(retried) && IsTranslationAcceptableInternal(text, retried, targetLang))
+                    {
+                        resultText = retried;
+                    }
+                    else
+                    {
+                        System.Diagnostics.Debug.WriteLine("[LLM] Validation failed even after retry. Rejecting output.");
+                        return string.Empty;
+                    }
+                }
+
+                _cache.Set(cacheKey, resultText);
+                return resultText;
+            },
+            ct,
+            TimeSpan.FromSeconds(90),
+            () => string.Empty,
+            "LLMTranslationEngine.Translate");
     }
 
     private async Task<string> TranslateStrictRetryForCjkAsync(string model, string text, TranslationLanguage target, CancellationToken ct)
@@ -100,20 +100,24 @@ public class LLMTranslationEngine : ITranslationEngine
         string targetName = GetTargetLanguageName(target);
         var prompt = $"The previous translation for \"{text}\" was incorrect. Please output ONLY the raw {targetName} translation of \"{text}\". No explanations.";
 
-        try
-        {
-            var payload = await _ollamaApiClient.GenerateAsync(model, prompt, ct);
-            if (string.IsNullOrWhiteSpace(payload)) return string.Empty;
-            System.Diagnostics.Debug.WriteLine($"[LLM-Retry] Raw Response: {payload}");
-            using var doc = JsonDocument.Parse(payload);
-            
-            if (doc.RootElement.TryGetProperty("response", out var responseProp))
+        return await TranslationExecutionHelper.ExecuteAsync(
+            async token =>
             {
-                return CleanupTranslationResult(responseProp.GetString()?.Trim() ?? string.Empty);
-            }
-            return string.Empty;
-        }
-        catch { return string.Empty; }
+                var payload = await _ollamaApiClient.GenerateAsync(model, prompt, token);
+                if (string.IsNullOrWhiteSpace(payload)) return string.Empty;
+                System.Diagnostics.Debug.WriteLine($"[LLM-Retry] Raw Response: {payload}");
+                using var doc = JsonDocument.Parse(payload);
+                
+                if (doc.RootElement.TryGetProperty("response", out var responseProp))
+                {
+                    return CleanupTranslationResult(responseProp.GetString()?.Trim() ?? string.Empty);
+                }
+                return string.Empty;
+            },
+            ct,
+            TimeSpan.FromSeconds(90),
+            () => string.Empty,
+            "LLMTranslationEngine.Retry");
     }
 
     private string CleanupTranslationResult(string result)

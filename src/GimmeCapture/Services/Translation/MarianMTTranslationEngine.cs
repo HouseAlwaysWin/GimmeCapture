@@ -20,15 +20,16 @@ public class MarianMTTranslationEngine : ITranslationEngine
 
     public async Task<string> TranslateAsync(string text, OCRLanguage sourceLang, TranslationLanguage targetLang, CancellationToken ct = default)
     {
-        try
-        {
-            await _marianMTService.EnsureLoadedAsync(ct);
-            var result = await _marianMTService.TranslateAsync(text, targetLang, sourceLang, ct);
-            return string.IsNullOrEmpty(result) ? text : result;
-        }
-        catch (Exception)
-        {
-            return text;
-        }
+        return await TranslationExecutionHelper.ExecuteAsync(
+            async token =>
+            {
+                await _marianMTService.EnsureLoadedAsync(token);
+                var result = await _marianMTService.TranslateAsync(text, targetLang, sourceLang, token);
+                return string.IsNullOrEmpty(result) ? text : result;
+            },
+            ct,
+            TimeSpan.FromSeconds(30),
+            () => text,
+            "MarianMTTranslationEngine.Translate");
     }
 }
