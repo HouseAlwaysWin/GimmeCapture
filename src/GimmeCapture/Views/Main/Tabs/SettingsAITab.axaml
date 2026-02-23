@@ -14,7 +14,7 @@
                         <!-- Detection & Scanning Group (First in AI Tab now) -->
                         <Border Background="#1A1A1A" Padding="15" CornerRadius="4" BorderBrush="#333333" BorderThickness="1" Margin="24,10,0,10">
                             <StackPanel Spacing="10">
-                                <TextBlock Text="{Binding [DetectionSettings], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold" Foreground="{DynamicResource AccentRedBrush}"/>
+                                <TextBlock Text="{Binding [DetectionSettings], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold" Foreground="{DynamicResource ThemeAccentBrush}"/>
                                 
                                 <StackPanel Spacing="5">
                                     <CheckBox IsChecked="{Binding ShowAIScanBox}" Content="{Binding [ShowAIScanBox], Source={x:Static services:LocalizationService.Instance}}"/>

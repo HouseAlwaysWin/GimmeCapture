@@ -1,4 +1,4 @@
-﻿<Window xmlns="https://github.com/avaloniaui"
+<Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -48,7 +48,7 @@
                 <!-- Text -->
                 <TextBlock Text="GIMME UPDATE!!" 
                            FontFamily="avares://GimmeCapture/Assets/Fonts/Cinzel/Cinzel-VariableFont_wght.ttf#Cinzel, avares://GimmeCapture/Assets/Fonts/Noto_Serif_JP/NotoSerifJP-VariableFont_wght.ttf#Noto Serif JP, avares://GimmeCapture/Assets/Fonts/Noto_Serif_TC/NotoSerifTC-VariableFont_wght.ttf#Noto Serif TC" 
-                           Foreground="{DynamicResource AccentRedBrush}"
+                           Foreground="{DynamicResource ThemeAccentBrush}"
                            FontWeight="Bold"
                            FontSize="22"
                            HorizontalAlignment="Center" VerticalAlignment="Center"

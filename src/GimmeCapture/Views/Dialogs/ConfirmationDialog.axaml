@@ -1,4 +1,4 @@
-﻿<Window xmlns="https://github.com/avaloniaui"
+<Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:services="using:GimmeCapture.Services.Core.Infrastructure"
         xmlns:views="using:GimmeCapture.Views.Dialogs"
@@ -28,7 +28,7 @@
                    </Border.BorderBrush>
                 </Border>
                 <TextBlock Text="{Binding DialogTitle}" 
-                           Foreground="{DynamicResource AccentRedBrush}"
+                           Foreground="{DynamicResource ThemeAccentBrush}"
                            FontWeight="Bold"
                            FontSize="18"
                            HorizontalAlignment="Center" VerticalAlignment="Center"
