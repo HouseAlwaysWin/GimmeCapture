@@ -15,6 +15,7 @@ using Avalonia.Input.Raw;
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core;
 using GimmeCapture.Services.Core.Infrastructure;
+using GimmeCapture.Services.Platforms.Desktop;
 using GimmeCapture.Services.Platforms.Windows;
 using GimmeCapture.Services.Interop;
 
@@ -46,6 +47,7 @@ public partial class SnipWindow : Window
     // Services
     private readonly ClipboardService _clipboardService = new ClipboardService();
     private readonly HotkeyRouterService _hotkeyRouter = new();
+    private readonly IScreenLayoutService _screenLayoutService = new AvaloniaScreenLayoutService();
 
     private enum PointerInteractionState
     {
@@ -119,16 +121,17 @@ public partial class SnipWindow : Window
                 double scaling = this.RenderScaling;
                 var allScreens = this.Screens.All;
                 Console.WriteLine($"[SnipWindow] Detected {allScreens.Count} screens for multi-monitor UI.");
-                var screenBoundsList = new System.Collections.Generic.List<ScreenBoundsViewModel>();
-                foreach (var s in allScreens)
+                var physicalScreenBounds = allScreens.Select(s => s.Bounds).ToList();
+                var relativeScreenBounds = _screenLayoutService.BuildRelativeScreenBounds(physicalScreenBounds, this.Position, scaling);
+                var screenBoundsList = new System.Collections.Generic.List<ScreenBoundsViewModel>(relativeScreenBounds.Count);
+                foreach (var bounds in relativeScreenBounds)
                 {
-                    Console.WriteLine($"[SnipWindow] Screen: {s.Bounds}, Scaling: {s.Scaling}");
                     screenBoundsList.Add(new ScreenBoundsViewModel
                     {
-                        X = (s.Bounds.X - this.Position.X) / scaling,
-                        Y = (s.Bounds.Y - this.Position.Y) / scaling,
-                        W = s.Bounds.Width / scaling,
-                        H = s.Bounds.Height / scaling
+                        X = bounds.X,
+                        Y = bounds.Y,
+                        W = bounds.Width,
+                        H = bounds.Height
                     });
                 }
                 _viewModel.AllScreenBounds = new System.Collections.ObjectModel.ObservableCollection<ScreenBoundsViewModel>(screenBoundsList);
@@ -625,38 +628,11 @@ public partial class SnipWindow : Window
     private void UpdateActiveScreenBounds(Point point)
     {
         if (_viewModel == null) return;
-        
-        // Point is in Window Logical Coordinates (if from PointerMoved args) or Screen Physical (if from desktop).
-        // Let's assume input 'point' is Screen Physical for consistency with ScreenFromPoint, 
-        // OR we use the Window-relative point and `PointToScreen`.
-        
-        // Easier: Use `Screens.ScreenFromPointer(this)`? No, window spans multiple.
-        // Use `Screens.ScreenFromPoint(this.PointToScreen(point))`?
-        
-        // Let's get the absolute physical point from the event or cursor.
-        var pixelPoint = new PixelPoint((int)point.X, (int)point.Y); // Rough conversion if point is logical? No.
-        
-        // Actually, let's just use the mouse position from the event which is relative to window.
-        // Convert to Screen Physical
-        var screenPoint = this.PointToScreen(point);
-        
-        var screen = Screens.ScreenFromPoint(screenPoint);
-        if (screen != null)
+
+        var bounds = _screenLayoutService.TryGetActiveScreenBounds(this.Screens, this, point, _viewModel.VisualScaling);
+        if (bounds.HasValue)
         {
-             // Calculate Bounds relative to the Window's TopLeft (which is MinX, MinY of virtual desktop)
-             // Window Position: this.Position
-             // Screen Bounds: screen.Bounds
-             
-             double scaling = _viewModel.VisualScaling; // Should be 1.0 if we set it right, or whatever the window scaling is.
-             // Wait, `VisualScaling` in VM is set from `this.RenderScaling`.
-             
-             // Relative Position = (ScreenX - WindowX) / Scaling
-             double relX = (screen.Bounds.X - this.Position.X) / scaling;
-             double relY = (screen.Bounds.Y - this.Position.Y) / scaling;
-             double relW = screen.Bounds.Width / scaling;
-             double relH = screen.Bounds.Height / scaling;
-             
-             _viewModel.ActiveScreenBounds = new Rect(relX, relY, relW, relH);
+             _viewModel.ActiveScreenBounds = bounds.Value;
         }
     }
 

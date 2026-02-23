@@ -18,11 +18,19 @@ using System.Collections.Generic;
 using GimmeCapture.Models;
 using Avalonia.Media;
 using System.Linq;
+using GimmeCapture.Services.Platforms.Desktop;
 
 namespace GimmeCapture.Services.Platforms.Windows;
 
 public class WindowsScreenCaptureService : IScreenCaptureService
 {
+    private readonly IWindowManager _windowManager;
+
+    public WindowsScreenCaptureService(IWindowManager? windowManager = null)
+    {
+        _windowManager = windowManager ?? new AvaloniaWindowManager();
+    }
+
     [DllImport("user32.dll")]
     static extern bool GetCursorInfo(out CURSORINFO pci);
 
@@ -596,7 +604,7 @@ public class WindowsScreenCaptureService : IScreenCaptureService
              }
 
               // Fallback / Non-Windows implementation
-              var topLevel = TopLevel.GetTopLevel(Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop ? desktop.MainWindow : null);
+              var topLevel = ResolveClipboardTopLevel();
               if (topLevel?.Clipboard is { } clipboard)
               {
                   using var image = SKImage.FromBitmap(bitmap);
@@ -634,7 +642,7 @@ public class WindowsScreenCaptureService : IScreenCaptureService
                 }
             }
 
-            var topLevel = TopLevel.GetTopLevel(Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop ? desktop.MainWindow : null);
+            var topLevel = ResolveClipboardTopLevel();
             if (topLevel?.Clipboard is { } clipboard)
             {
                 await clipboard.SetTextAsync(text);
@@ -655,7 +663,7 @@ public class WindowsScreenCaptureService : IScreenCaptureService
     {
         await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
         {
-            var topLevel = TopLevel.GetTopLevel(Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop ? desktop.MainWindow : null);
+            var topLevel = ResolveClipboardTopLevel();
             var clipboard = topLevel?.Clipboard;
             var storageProvider = topLevel?.StorageProvider;
 
@@ -673,5 +681,11 @@ public class WindowsScreenCaptureService : IScreenCaptureService
                  System.Diagnostics.Debug.WriteLine("Avalonia Clipboard: Clipboard not available");
             }
         });
+    }
+
+    private TopLevel? ResolveClipboardTopLevel()
+    {
+        var owner = _windowManager.GetActiveWindow() ?? _windowManager.GetMainWindow();
+        return owner == null ? null : TopLevel.GetTopLevel(owner);
     }
 }
