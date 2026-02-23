@@ -11,6 +11,7 @@ using System.Reactive.Linq;
 using System.IO;
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core;
+using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Platforms.Windows;
 using Avalonia.Controls.ApplicationLifetimes;
 using GimmeCapture.Views.Main;
@@ -94,12 +95,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly AppSettingsService _settingsService;
     public WindowsGlobalHotkeyService HotkeyService { get; } = new();
     public HotkeyMappingService HotkeyMappingService { get; } = new();
-
-    private const int ID_SNIP = 9000;
-    private const int ID_COPY = 9001;
-    private const int ID_PIN = 9002;
-    private const int ID_RECORD = 9003;
-    private const int ID_TRANSLATE = 9004;
+    public HotkeyRouterService HotkeyRouterService { get; } = new();
 
     public enum CaptureMode { Normal, Copy, Pin, Record, Translate }
 
@@ -209,10 +205,10 @@ public partial class MainWindowViewModel : ViewModelBase
                 }
             }
 
-            if (id == ID_SNIP) Avalonia.Threading.Dispatcher.UIThread.Post(() => StartCaptureCommand.Execute(CaptureMode.Normal));
-            else if (id == ID_RECORD) Avalonia.Threading.Dispatcher.UIThread.Post(() => StartCaptureCommand.Execute(CaptureMode.Record));
-            else if (id == ID_PIN) Avalonia.Threading.Dispatcher.UIThread.Post(() => StartCaptureCommand.Execute(CaptureMode.Pin));
-            else if (id == ID_TRANSLATE) Avalonia.Threading.Dispatcher.UIThread.Post(() => StartCaptureCommand.Execute(CaptureMode.Translate));
+            if (HotkeyRouterService.TryMapGlobalHotkeyToCaptureMode(id, out var mode))
+            {
+                Avalonia.Threading.Dispatcher.UIThread.Post(() => StartCaptureCommand.Execute(mode));
+            }
         };
 
 

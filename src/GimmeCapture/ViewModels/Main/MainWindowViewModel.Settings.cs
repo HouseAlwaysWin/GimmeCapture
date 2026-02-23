@@ -8,6 +8,7 @@ using Avalonia.Controls;
 using Avalonia.Media;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Core;
+using GimmeCapture.Services.Core.Infrastructure;
 using ReactiveUI;
 using System.Net.Http;
 using System.Text.Json;
@@ -274,7 +275,7 @@ public partial class MainWindowViewModel
         set
         {
             this.RaiseAndSetIfChanged(ref _snipHotkey, value);
-            HotkeyService.Register(ID_SNIP, value);
+            HotkeyService.Register(HotkeyIds.Snip, value);
             this.RaisePropertyChanged(nameof(SnipTooltip));
         }
     }
@@ -287,7 +288,7 @@ public partial class MainWindowViewModel
         set
         {
             this.RaiseAndSetIfChanged(ref _translateHotkey, value);
-            HotkeyService.Register(ID_TRANSLATE, value);
+            HotkeyService.Register(HotkeyIds.Translate, value);
             this.RaisePropertyChanged(nameof(TranslateTooltip));
         }
     }
@@ -299,7 +300,7 @@ public partial class MainWindowViewModel
         set
         {
             this.RaiseAndSetIfChanged(ref _recordHotkey, value);
-            HotkeyService.Register(ID_RECORD, value);
+            HotkeyService.Register(HotkeyIds.Record, value);
             this.RaisePropertyChanged(nameof(RecordTooltip));
         }
     }

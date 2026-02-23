@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using System.Reactive;
 using System.Reactive.Linq;
 using GimmeCapture.Services.Core;
+using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.ViewModels.Floating;
 using GimmeCapture.Views.Floating;
@@ -255,9 +256,9 @@ public partial class SnipWindowViewModel
         
         // 找出觸發此全域 ID 的熱鍵字串
         string pressedHotkey = string.Empty;
-        if (id == 9000) pressedHotkey = _mainVm.SnipHotkey;
-        else if (id == 9003) pressedHotkey = _mainVm.RecordHotkey;
-        else if (id == 9004) pressedHotkey = _mainVm.TranslateHotkey;
+        if (id == HotkeyIds.Snip) pressedHotkey = _mainVm.SnipHotkey;
+        else if (id == HotkeyIds.Record) pressedHotkey = _mainVm.RecordHotkey;
+        else if (id == HotkeyIds.Translate) pressedHotkey = _mainVm.TranslateHotkey;
 
         System.Diagnostics.Debug.WriteLine($"[SnipWindowViewModel] HandleGlobalHotkey ID={id}, Pressed={pressedHotkey}, ActiveAction={ActiveActionHotkey}, ActiveToolbar={ActiveToolbarHotkey}");
 
@@ -280,19 +281,42 @@ public partial class SnipWindowViewModel
         // 使用 ID 進行明確路由 (對應 MainWindowViewModel.ID_*)
         switch (id)
         {
-            case 100: // ID_SNIP
+            case HotkeyIds.Snip:
                 if (HandleScreenshotModeHotkeyCommand != null) HandleScreenshotModeHotkeyCommand.Execute().Subscribe();
                 break;
-            case 101: // ID_RECORD
+            case HotkeyIds.Record:
                 if (HandleRecordingModeHotkeyCommand != null) HandleRecordingModeHotkeyCommand.Execute().Subscribe();
                 break;
-            case 102: // ID_PIN (不再設定全域，保留防呆)
+            case HotkeyIds.Pin: // 不再設定全域，保留防呆
                 if (HandleActiveActionHotkeyCommand != null) HandleActiveActionHotkeyCommand.Execute().Subscribe();
                 break;
-            case 103: // ID_TRANSLATE
+            case HotkeyIds.Translate:
                 if (SetTranslationModeCommand != null) SetTranslationModeCommand.Execute().Subscribe();
                 break;
-            case 104: // ID_COPY (不再設定全域，保留防呆)
+            case HotkeyIds.Copy: // 不再設定全域，保留防呆
+                AutoActionMode = 1;
+                if (CurrentState == SnipState.Selected) TriggerAutoAction();
+                break;
+        }
+    }
+
+    public void HandleCaptureModeRequest(MainWindowViewModel.CaptureMode mode)
+    {
+        switch (mode)
+        {
+            case MainWindowViewModel.CaptureMode.Normal:
+                HandleScreenshotModeHotkeyCommand?.Execute().Subscribe();
+                break;
+            case MainWindowViewModel.CaptureMode.Record:
+                HandleRecordingModeHotkeyCommand?.Execute().Subscribe();
+                break;
+            case MainWindowViewModel.CaptureMode.Pin:
+                HandleActiveActionHotkeyCommand?.Execute().Subscribe();
+                break;
+            case MainWindowViewModel.CaptureMode.Translate:
+                SetTranslationModeCommand?.Execute().Subscribe();
+                break;
+            case MainWindowViewModel.CaptureMode.Copy:
                 AutoActionMode = 1;
                 if (CurrentState == SnipState.Selected) TriggerAutoAction();
                 break;

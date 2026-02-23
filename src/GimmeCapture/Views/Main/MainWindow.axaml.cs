@@ -133,7 +133,7 @@ public partial class MainWindow : Window
         {
             if (existing.DataContext is SnipWindowViewModel existingVm)
             {
-                existingVm.HandleGlobalHotkey((int)mode);
+                existingVm.HandleCaptureModeRequest(mode);
             }
             existing.Activate();
             return;
