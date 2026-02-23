@@ -2,14 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-using System.Net.Http;
-using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using GimmeCapture.Models;
-using GimmeCapture.Services.Core;
+using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Core.Interfaces;
 
 namespace GimmeCapture.Services.Translation;
@@ -18,13 +16,15 @@ public class LLMTranslationEngine : ITranslationEngine
 {
     public TranslationEngine EngineType => TranslationEngine.Ollama;
     
-    private readonly HttpClient _httpClient;
+    private readonly IOllamaApiClient _ollamaApiClient;
     private readonly AppSettingsService _settingsService;
+    private readonly ITranslationCache _cache;
 
-    public LLMTranslationEngine(HttpClient httpClient, AppSettingsService settingsService)
+    public LLMTranslationEngine(IOllamaApiClient ollamaApiClient, AppSettingsService settingsService, ITranslationCache cache)
     {
-        _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+        _ollamaApiClient = ollamaApiClient ?? throw new ArgumentNullException(nameof(ollamaApiClient));
         _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
+        _cache = cache ?? throw new ArgumentNullException(nameof(cache));
     }
 
     public async Task<string> TranslateAsync(string text, OCRLanguage sourceLang, TranslationLanguage targetLang, CancellationToken ct = default)
@@ -37,39 +37,21 @@ public class LLMTranslationEngine : ITranslationEngine
             return string.Empty;
         }
 
+        var cacheKey = _cache.BuildKey(EngineType, sourceLang, targetLang, text);
+        if (_cache.TryGet(cacheKey, out var cachedResult))
+        {
+            return cachedResult;
+        }
+
         string sourceLangName = ResolveSourceLanguageForPrompt(text, sourceLang);
         string targetLangName = GetTargetLanguageName(targetLang);
-        
-        var request = new
-        {
-            model = model,
-            prompt = $"Translate \"{text}\" from {sourceLangName} to {targetLangName}. Output ONLY the translated text. No quotes. No explanations.",
-            stream = false
-            // Removed options to use server defaults as per user feedback
-        };
+        var prompt = $"Translate \"{text}\" from {sourceLangName} to {targetLangName}. Output ONLY the translated text. No quotes. No explanations.";
 
         try
         {
-            string baseUrl = !string.IsNullOrEmpty(settings.OllamaApiUrl) ? settings.OllamaApiUrl.TrimEnd('/') : "http://localhost:11434";
-            string url;
-            if (baseUrl.EndsWith("/api/generate")) url = baseUrl;
-            else if (baseUrl.EndsWith("/api/chat")) url = baseUrl.Replace("/api/chat", "/api/generate");
-            else url = baseUrl + "/api/generate";
-
-            string requestJson = JsonSerializer.Serialize(request);
             System.Diagnostics.Debug.WriteLine($"[LLM] Requesting translation for: {text}");
-            System.Diagnostics.Debug.WriteLine($"[LLM] Request JSON: {requestJson}");
-
-            var content = new StringContent(requestJson, Encoding.UTF8, "application/json");
-            var response = await _httpClient.PostAsync(url, content, ct);
-            
-            if (!response.IsSuccessStatusCode)
-            {
-                System.Diagnostics.Debug.WriteLine($"[LLM] API Error: {response.StatusCode}");
-                return string.Empty;
-            }
-
-            var json = await response.Content.ReadAsStringAsync(ct);
+            var json = await _ollamaApiClient.GenerateAsync(model, prompt, ct);
+            if (string.IsNullOrWhiteSpace(json)) return string.Empty;
             System.Diagnostics.Debug.WriteLine($"[LLM] Raw Response: {json}");
             using var doc = JsonDocument.Parse(json);
             
@@ -91,7 +73,7 @@ public class LLMTranslationEngine : ITranslationEngine
             // Optional: Restore retry logic if it still drifts
             if (!IsTranslationAcceptableInternal(text, resultText, targetLang))
             {
-                var retried = await TranslateStrictRetryForCjkAsync(model, url, text, targetLang, ct);
+                var retried = await TranslateStrictRetryForCjkAsync(model, text, targetLang, ct);
                 if (!string.IsNullOrWhiteSpace(retried) && IsTranslationAcceptableInternal(text, retried, targetLang))
                 {
                     resultText = retried;
@@ -103,6 +85,7 @@ public class LLMTranslationEngine : ITranslationEngine
                 }
             }
 
+            _cache.Set(cacheKey, resultText);
             return resultText;
         }
         catch (Exception ex)
@@ -112,22 +95,15 @@ public class LLMTranslationEngine : ITranslationEngine
         }
     }
 
-    private async Task<string> TranslateStrictRetryForCjkAsync(string model, string url, string text, TranslationLanguage target, CancellationToken ct)
+    private async Task<string> TranslateStrictRetryForCjkAsync(string model, string text, TranslationLanguage target, CancellationToken ct)
     {
         string targetName = GetTargetLanguageName(target);
-        var req = new
-        {
-            model,
-            prompt = $"The previous translation for \"{text}\" was incorrect. Please output ONLY the raw {targetName} translation of \"{text}\". No explanations.",
-            stream = false
-        };
+        var prompt = $"The previous translation for \"{text}\" was incorrect. Please output ONLY the raw {targetName} translation of \"{text}\". No explanations.";
 
         try
         {
-            var content = new StringContent(JsonSerializer.Serialize(req), Encoding.UTF8, "application/json");
-            var resp = await _httpClient.PostAsync(url, content, ct);
-            if (resp == null || !resp.IsSuccessStatusCode) return string.Empty;
-            var payload = await resp.Content.ReadAsStringAsync();
+            var payload = await _ollamaApiClient.GenerateAsync(model, prompt, ct);
+            if (string.IsNullOrWhiteSpace(payload)) return string.Empty;
             System.Diagnostics.Debug.WriteLine($"[LLM-Retry] Raw Response: {payload}");
             using var doc = JsonDocument.Parse(payload);
             

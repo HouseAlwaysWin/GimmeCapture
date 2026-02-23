@@ -958,21 +958,10 @@ public partial class SnipWindowViewModel
         System.Diagnostics.Debug.WriteLine("[TranslationMode] TranslateAllSelectionsAsync triggered");
         if (UserSelections.Count == 0)
         {
-            System.Diagnostics.Debug.WriteLine("[TranslationMode] No selections found. Triggering Auto-Scan fallback...");
-            
-            ProcessingText = "Scanning..."; 
-            await ScanAllTextAsync();
-            
-            System.Diagnostics.Debug.WriteLine($"[TranslationMode] Auto-Scan finished. Selections found: {UserSelections.Count}");
-            
-            if (UserSelections.Count == 0)
-            {
-                System.Diagnostics.Debug.WriteLine("[TranslationMode] Auto-Scan found no text. Aborting.");
-                ProcessingText = "No text found";
-                await Task.Delay(2000);
-                ProcessingText = string.Empty;
-                return;
-            }
+            // UX rule: translate button should only process explicit user selections.
+            // If no selection exists, do nothing instead of scanning full screen.
+            System.Diagnostics.Debug.WriteLine("[TranslationMode] No selections found. Skip translation.");
+            return;
         }
 
         System.Diagnostics.Debug.WriteLine($"[TranslationMode] Proceeding to translate {UserSelections.Count} regions");

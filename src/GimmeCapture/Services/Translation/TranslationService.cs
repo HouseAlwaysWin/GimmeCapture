@@ -1,17 +1,15 @@
-﻿using System;
+using System;
 using System.Diagnostics;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
-using System.Text;
-using System.Text.Json;
 using System.Threading.Tasks;
 using System.Threading;
-using System.Text.RegularExpressions;
 using Avalonia;
 using GimmeCapture.Models; // This using statement is already present, indicating the target namespace
 using GimmeCapture.Services.Core.Interfaces;
+using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.OCR;
 using GimmeCapture.Services.Translation;
 using SkiaSharp;
@@ -34,7 +32,7 @@ public class TranslationService
     private readonly AppSettingsService _settingsService;
     private readonly IOCREngine _ocrEngine;
     private readonly IEnumerable<ITranslationEngine> _translationEngines;
-    private readonly HttpClient _httpClient = new();
+    private readonly IOllamaApiClient _ollamaApiClient;
 
     private AppSettings _settings => _settingsService.Settings;
 
@@ -46,14 +44,18 @@ public class TranslationService
         _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
         
         // Manual DI for now as the app doesn't use a container in constructor injection here
+        var translationCache = new InMemoryTranslationCache();
+        _ollamaApiClient = new OllamaApiClient(new HttpClient
+        {
+            Timeout = TimeSpan.FromSeconds(60)
+        }, settingsService);
+
         _ocrEngine = new PaddleOCREngine(aiResourceService, settingsService);
         _translationEngines = new List<ITranslationEngine>
         {
-            new LLMTranslationEngine(_httpClient, settingsService),
+            new LLMTranslationEngine(_ollamaApiClient, settingsService, translationCache),
             new MarianMTTranslationEngine(marianMTService)
         };
-        
-        _httpClient.Timeout = TimeSpan.FromSeconds(60); // Increased timeout for local LLMs
     }
 
     public async Task<List<TranslatedBlock>> AnalyzeAndTranslateAsync(SKBitmap bitmap, double scale = 1.0, CancellationToken ct = default)
@@ -242,16 +244,7 @@ public class TranslationService
 
     public async Task<List<string>> GetAvailableModelsAsync()
     {
-        try
-        {
-            var baseUrl = _settings.OllamaApiUrl.Replace("/api/generate", "");
-            var response = await _httpClient.GetAsync($"{baseUrl}/api/tags");
-            if (!response.IsSuccessStatusCode) return new List<string>();
-            var json = await response.Content.ReadAsStringAsync();
-            using var doc = JsonDocument.Parse(json);
-            return doc.RootElement.GetProperty("models").EnumerateArray()
-                .Select(m => m.GetProperty("name").GetString() ?? "").ToList();
-        }
-        catch { return new List<string>(); }
+        var models = await _ollamaApiClient.GetModelsAsync();
+        return models.ToList();
     }
 }
