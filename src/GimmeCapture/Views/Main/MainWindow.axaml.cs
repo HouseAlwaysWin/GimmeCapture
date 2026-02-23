@@ -2,7 +2,6 @@ using System;
 using Avalonia.Controls;
 using System.Linq;
 using Avalonia;
-using Avalonia.Controls.ApplicationLifetimes;
 using GimmeCapture.ViewModels.Main;
 using GimmeCapture.Views.Dialogs;
 using GimmeCapture.Views.Main;
@@ -22,6 +21,7 @@ public partial class MainWindow : Window
 {
     private readonly IScreenLayoutService _screenLayoutService = new AvaloniaScreenLayoutService();
     private readonly IWindowLayerService _windowLayerService = new AvaloniaWindowLayerService();
+    private readonly IWindowManager _windowManager = new AvaloniaWindowManager();
 
     [StructLayout(LayoutKind.Sequential)]
     public struct POINT
@@ -130,8 +130,7 @@ public partial class MainWindow : Window
     {
         if (DataContext is not MainWindowViewModel vm) return;
 
-        var desktop = Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime;
-        var existing = desktop?.Windows.OfType<SnipWindow>().FirstOrDefault();
+        var existing = _windowManager.FindWindowOfType<SnipWindow>();
 
         if (existing != null)
         {

@@ -35,6 +35,12 @@ public class AvaloniaWindowManager : IWindowManager
         return desktop?.Windows.FirstOrDefault(w => ReferenceEquals(w.DataContext, dataContext));
     }
 
+    public TWindow? FindWindowOfType<TWindow>() where TWindow : Window
+    {
+        var desktop = Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime;
+        return desktop?.Windows.OfType<TWindow>().FirstOrDefault();
+    }
+
     public TWindow? GetActiveWindowOfType<TWindow>() where TWindow : Window
     {
         var desktop = Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime;
