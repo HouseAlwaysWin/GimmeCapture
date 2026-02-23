@@ -986,10 +986,6 @@ public partial class MainWindowViewModel
 
     private void UpdateThemeResources(Color themeColor)
     {
-        if (Application.Current?.Resources is { } resources)
-        {
-            resources["ThemeAccentColor"] = themeColor;
-            resources["ThemeDeepColor"] = ThemeDeepColor;
-        }
+        _themeResourceService.UpdateThemeColors(themeColor, ThemeDeepColor);
     }
 }

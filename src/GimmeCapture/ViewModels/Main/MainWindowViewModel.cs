@@ -94,6 +94,7 @@ public partial class MainWindowViewModel : ViewModelBase
     public AppSettingsService AppSettingsService => _settingsService;
     private readonly AppSettingsService _settingsService;
     private readonly IWindowManager _windowManager;
+    private readonly IThemeResourceService _themeResourceService;
     public WindowsGlobalHotkeyService HotkeyService { get; } = new();
     public HotkeyMappingService HotkeyMappingService { get; } = new();
     public HotkeyRouterService HotkeyRouterService { get; } = new();
@@ -142,6 +143,7 @@ public partial class MainWindowViewModel : ViewModelBase
     public MainWindowViewModel()
     {
         _windowManager = new AvaloniaWindowManager();
+        _themeResourceService = new AvaloniaThemeResourceService();
         _settingsService = new AppSettingsService();
         FfmpegDownloader = new FFmpegDownloaderService(_settingsService);
         RecordingService = new RecordingService(FfmpegDownloader, _settingsService);
