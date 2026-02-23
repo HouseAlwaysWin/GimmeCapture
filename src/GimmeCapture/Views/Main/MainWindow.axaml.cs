@@ -11,6 +11,7 @@ using Avalonia.Platform;
 using Avalonia.Media;
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core;
+using GimmeCapture.Services.Platforms.Desktop;
 using GimmeCapture.Services.Platforms.Windows;
 using ReactiveUI;
 using System.Reactive.Linq;
@@ -19,6 +20,9 @@ namespace GimmeCapture.Views.Main;
 
 public partial class MainWindow : Window
 {
+    private readonly IScreenLayoutService _screenLayoutService = new AvaloniaScreenLayoutService();
+    private readonly IWindowLayerService _windowLayerService = new AvaloniaWindowLayerService();
+
     [StructLayout(LayoutKind.Sequential)]
     public struct POINT
     {
@@ -139,25 +143,23 @@ public partial class MainWindow : Window
             return;
         }
 
-        var snip = new SnipWindow();
+        var snip = new SnipWindow(_screenLayoutService, _windowLayerService);
         
         // Multi-monitor support: Span ALL screens
         var allScreens = snip.Screens.All;
         if (allScreens.Count > 0)
         {
-            int physMinX = allScreens.Min(s => s.Bounds.X);
-            int physMinY = allScreens.Min(s => s.Bounds.Y);
-            int physMaxR = allScreens.Max(s => s.Bounds.Right);
-            int physMaxB = allScreens.Max(s => s.Bounds.Bottom);
-
-            snip.WindowStartupLocation = WindowStartupLocation.Manual;
-            snip.Position = new PixelPoint(physMinX, physMinY);
-            
+            var screenBounds = allScreens.Select(s => s.Bounds).ToList();
             var primaryScreen = snip.Screens.Primary ?? allScreens.First();
             double unifiedScaling = primaryScreen.Scaling;
-            
-            snip.Width = (physMaxR - physMinX) / unifiedScaling;
-            snip.Height = (physMaxB - physMinY) / unifiedScaling;
+
+            if (_screenLayoutService.TryGetUnifiedDesktopPlacement(screenBounds, unifiedScaling, out var position, out var size))
+            {
+                snip.WindowStartupLocation = WindowStartupLocation.Manual;
+                snip.Position = position;
+                snip.Width = size.Width;
+                snip.Height = size.Height;
+            }
         }
         
         var snipVm = new SnipWindowViewModel(

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.IO.Compression;
 using System.Net.Http;
@@ -412,14 +412,19 @@ public class AIResourceService : ReactiveObject
         }
     }
 
-    public virtual async Task<bool> EnsureOCRAsync(CancellationToken ct = default)
+    public virtual Task<bool> EnsureOCRAsync(CancellationToken ct = default)
     {
-        if (IsOCRReady()) return true;
+        return EnsureOCRAsync(_settingsService.Settings.SourceLanguage, ct);
+    }
+
+    public virtual async Task<bool> EnsureOCRAsync(OCRLanguage language, CancellationToken ct = default)
+    {
+        if (IsOCRReady(language)) return true;
 
         await _downloadLock.WaitAsync(ct);
         try
         {
-            if (IsOCRReady()) return true;
+            if (IsOCRReady(language)) return true;
 
             _downloader.IsDownloading = true;
             _downloader.CurrentDownloadName = "OCR Models (PaddleOCR v5)";
@@ -429,7 +434,6 @@ public class AIResourceService : ReactiveObject
             var ocrDir = Path.Combine(baseDir, "ocr");
             Directory.CreateDirectory(ocrDir);
 
-            var language = _settingsService.Settings.SourceLanguage;
             var paths = _pathService.GetOCRPaths(language);
             
             string recUrl, dictUrl;

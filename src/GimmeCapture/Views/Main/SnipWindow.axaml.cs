@@ -48,8 +48,8 @@ public partial class SnipWindow : Window
     // Services
     private readonly ClipboardService _clipboardService = new ClipboardService();
     private readonly HotkeyRouterService _hotkeyRouter = new();
-    private readonly IScreenLayoutService _screenLayoutService = new AvaloniaScreenLayoutService();
-    private readonly IWindowLayerService _windowLayerService = new AvaloniaWindowLayerService();
+    private readonly IScreenLayoutService _screenLayoutService;
+    private readonly IWindowLayerService _windowLayerService;
 
     private enum PointerInteractionState
     {
@@ -80,8 +80,15 @@ public partial class SnipWindow : Window
         public int Y;
     }
 
-    public SnipWindow()
+    public SnipWindow() : this(new AvaloniaScreenLayoutService(), new AvaloniaWindowLayerService())
     {
+    }
+
+    public SnipWindow(IScreenLayoutService screenLayoutService, IWindowLayerService windowLayerService)
+    {
+        _screenLayoutService = screenLayoutService ?? throw new ArgumentNullException(nameof(screenLayoutService));
+        _windowLayerService = windowLayerService ?? throw new ArgumentNullException(nameof(windowLayerService));
+
         InitializeComponent();
         
         // Listen to pointer events on the window or canvas

@@ -46,7 +46,7 @@ public class PaddleOCREngine : IOCREngine
             Debug.WriteLine($"[OCR] Switching language to {lang}");
         }
 
-        await _aiResourceService.EnsureOCRAsync();
+        await _aiResourceService.EnsureOCRAsync(lang, ct);
         var paths = _aiResourceService.GetOCRPaths(lang);
 
         var options = new SessionOptions();

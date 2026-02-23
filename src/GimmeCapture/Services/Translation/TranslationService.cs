@@ -227,6 +227,10 @@ public class TranslationService
             // If translating to Chinese, output MUST NOT contain Japanese kana
             bool hasKana = translated.Any(c => (c >= 0x3040 && c <= 0x309F) || (c >= 0x30A0 && c <= 0x30FF));
             if (hasKana) return false;
+
+            // Must not drift to Korean output when target is Chinese.
+            bool hasHangul = translated.Any(c => (c >= 0x1100 && c <= 0x11FF) || (c >= 0xAC00 && c <= 0xD7AF));
+            if (hasHangul) return false;
         }
         else if (target == TranslationLanguage.Japanese)
         {

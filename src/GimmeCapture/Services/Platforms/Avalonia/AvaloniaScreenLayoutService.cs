@@ -37,4 +37,33 @@ public class AvaloniaScreenLayoutService : IScreenLayoutService
             width: activeScreen.Bounds.Width / renderScaling,
             height: activeScreen.Bounds.Height / renderScaling);
     }
+
+    public bool TryGetUnifiedDesktopPlacement(IReadOnlyList<PixelRect> screenBounds, double unifiedScaling, out PixelPoint windowPosition, out Size logicalSize)
+    {
+        if (screenBounds.Count == 0 || unifiedScaling <= 0)
+        {
+            windowPosition = default;
+            logicalSize = default;
+            return false;
+        }
+
+        int minX = int.MaxValue;
+        int minY = int.MaxValue;
+        int maxRight = int.MinValue;
+        int maxBottom = int.MinValue;
+
+        foreach (var bounds in screenBounds)
+        {
+            if (bounds.X < minX) minX = bounds.X;
+            if (bounds.Y < minY) minY = bounds.Y;
+            if (bounds.Right > maxRight) maxRight = bounds.Right;
+            if (bounds.Bottom > maxBottom) maxBottom = bounds.Bottom;
+        }
+
+        windowPosition = new PixelPoint(minX, minY);
+        logicalSize = new Size(
+            width: (maxRight - minX) / unifiedScaling,
+            height: (maxBottom - minY) / unifiedScaling);
+        return true;
+    }
 }

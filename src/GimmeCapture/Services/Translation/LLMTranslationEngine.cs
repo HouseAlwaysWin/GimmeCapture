@@ -199,6 +199,14 @@ public class LLMTranslationEngine : ITranslationEngine
                      return false;
                  }
              }
+
+             // Reject Korean-script drift for Chinese targets.
+             int tHangul = translated.Count(c => (c >= 0x1100 && c <= 0x11FF) || (c >= 0xAC00 && c <= 0xD7AF));
+             if (tHangul > 0)
+             {
+                 System.Diagnostics.Debug.WriteLine("[LLM] Validation: rejected Chinese output (Hangul detected).");
+                 return false;
+             }
         }
         
         return true;
