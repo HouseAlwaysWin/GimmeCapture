@@ -126,8 +126,10 @@ public class RecordingService : ReactiveObject
         _segments.Add(segmentFile);
 
         // Calculate physical pixels for high-DPI
-        int x = (int)((_region.X + _screenOffset.X) * _visualScaling);
-        int y = (int)((_region.Y + _screenOffset.Y) * _visualScaling);
+        // Keep coordinate conversion consistent with screen capture services:
+        // scale logical region first, then apply physical screen offset.
+        int x = (int)(_region.X * _visualScaling) + _screenOffset.X;
+        int y = (int)(_region.Y * _visualScaling) + _screenOffset.Y;
         // Ensure even dimensions for video codecs
         int w = ((int)(_region.Width * _visualScaling) / 2) * 2;
         int h = ((int)(_region.Height * _visualScaling) / 2) * 2;
@@ -316,6 +318,7 @@ public class RecordingService : ReactiveObject
             }
 
             FinalizationProgress = 30;
+            string? cropFilter = null;
 
             // Step 2: Convert/Move to target format
             if (_targetFormat == "mkv")
@@ -327,40 +330,53 @@ public class RecordingService : ReactiveObject
                     _outputFile = Path.ChangeExtension(_outputFile, "mkv");
                 }
                 
-                // Robust Move Strategy: Retry loops with Copy+Delete fallback
-                bool moveSuccess = false;
-                Exception? lastEx = null;
-
-                for (int i = 0; i < 5; i++)
+                if (string.IsNullOrWhiteSpace(cropFilter))
                 {
-                    try
-                    {
-                        if (File.Exists(_outputFile)) File.Delete(_outputFile);
-                        
-                        // Try Move first
-                        try 
-                        {
-                            File.Move(mergedMkv, _outputFile);
-                            moveSuccess = true;
-                        }
-                        catch (IOException)
-                        {
-                            // If Move fails (e.g. cross-volume or locked), try Copy+Delete
-                            File.Copy(mergedMkv, _outputFile, true);
-                            try { File.Delete(mergedMkv); } catch { /* best effort delete */ }
-                            moveSuccess = true;
-                        }
+                    // Robust Move Strategy: Retry loops with Copy+Delete fallback
+                    bool moveSuccess = false;
+                    Exception? lastEx = null;
 
-                        if (moveSuccess) break;
-                    }
-                    catch (Exception ex)
+                    for (int i = 0; i < 5; i++)
                     {
-                        lastEx = ex;
-                        await Task.Delay(500); // Wait before retry
+                        try
+                        {
+                            if (File.Exists(_outputFile)) File.Delete(_outputFile);
+
+                            // Try Move first
+                            try
+                            {
+                                File.Move(mergedMkv, _outputFile);
+                                moveSuccess = true;
+                            }
+                            catch (IOException)
+                            {
+                                // If Move fails (e.g. cross-volume or locked), try Copy+Delete
+                                File.Copy(mergedMkv, _outputFile, true);
+                                try { File.Delete(mergedMkv); } catch { /* best effort delete */ }
+                                moveSuccess = true;
+                            }
+
+                            if (moveSuccess) break;
+                        }
+                        catch (Exception ex)
+                        {
+                            lastEx = ex;
+                            await Task.Delay(500); // Wait before retry
+                        }
                     }
+
+                    if (!moveSuccess && lastEx != null) throw lastEx;
+                }
+                else
+                {
+                    string codec = _settingsService?.Settings.VideoCodec == VideoCodec.H265 ? "libx265" : "libx264";
+                    string crf = _settingsService?.Settings.VideoCodec == VideoCodec.H265 ? "24" : "20";
+                    string mkvConvertArgs = $"-y -i \"{mergedMkv}\" -vf \"{cropFilter}\" -c:v {codec} -preset fast -crf {crf} -pix_fmt yuv420p \"{_outputFile}\"";
+                    var mkvInfo = new ProcessStartInfo { FileName = _downloader.FfmpegExecutablePath, Arguments = mkvConvertArgs, UseShellExecute = false, CreateNoWindow = true };
+                    using var p = Process.Start(mkvInfo);
+                    if (p != null) await p.WaitForExitAsync();
                 }
 
-                if (!moveSuccess && lastEx != null) throw lastEx;
                 FinalizationProgress = 100;
             }
             else if (_targetFormat == "gif")
@@ -368,13 +384,17 @@ public class RecordingService : ReactiveObject
                 // ... (GIF logic omitted for brevity, assumes standard ffmpeg conversion)
                 // Existing GIF logic
                 string paletteFile = Path.Combine(_tempDir, "palette.png");
-                string paletteArgs = $"-y -i \"{mergedMkv}\" -vf \"fps={_fps},palettegen\" \"{paletteFile}\"";
+                string paletteArgs = string.IsNullOrWhiteSpace(cropFilter)
+                    ? $"-y -i \"{mergedMkv}\" -vf \"fps={_fps},palettegen\" \"{paletteFile}\""
+                    : $"-y -i \"{mergedMkv}\" -vf \"{cropFilter},fps={_fps},palettegen\" \"{paletteFile}\"";
                 var paletteInfo = new ProcessStartInfo { FileName = _downloader.FfmpegExecutablePath, Arguments = paletteArgs, UseShellExecute = false, CreateNoWindow = true };
                 using (var p = Process.Start(paletteInfo)) if (p != null) await p.WaitForExitAsync();
 
                 FinalizationProgress = 60;
 
-                string gifArgs = $"-y -i \"{mergedMkv}\" -i \"{paletteFile}\" -lavfi \"fps={_fps} [x]; [x][1:v] paletteuse\" \"{_outputFile}\"";
+                string gifArgs = string.IsNullOrWhiteSpace(cropFilter)
+                    ? $"-y -i \"{mergedMkv}\" -i \"{paletteFile}\" -lavfi \"fps={_fps} [x]; [x][1:v] paletteuse\" \"{_outputFile}\""
+                    : $"-y -i \"{mergedMkv}\" -i \"{paletteFile}\" -lavfi \"{cropFilter},fps={_fps} [x]; [x][1:v] paletteuse\" \"{_outputFile}\"";
                 var gifInfo = new ProcessStartInfo { FileName = _downloader.FfmpegExecutablePath, Arguments = gifArgs, UseShellExecute = false, CreateNoWindow = true };
                 using (var p = Process.Start(gifInfo)) if (p != null) await p.WaitForExitAsync();
             }
@@ -394,9 +414,15 @@ public class RecordingService : ReactiveObject
 
                 string convertArgs = _targetFormat switch
                 {
-                    "webm" => $"-y -i \"{mergedMkv}\" -c:v libvpx-vp9 -crf 25 -b:v 0 -c:a libopus \"{_outputFile}\"",
-                    "mov" => $"-y -i \"{mergedMkv}\" -c:v {codec} -preset fast -crf {crf} -pix_fmt yuv420p -f mov \"{_outputFile}\"",
-                    _ => $"-y -i \"{mergedMkv}\" -c:v {codec} -preset fast -crf {crf} -movflags +faststart \"{_outputFile}\""
+                    "webm" => string.IsNullOrWhiteSpace(cropFilter)
+                        ? $"-y -i \"{mergedMkv}\" -c:v libvpx-vp9 -crf 25 -b:v 0 -c:a libopus \"{_outputFile}\""
+                        : $"-y -i \"{mergedMkv}\" -vf \"{cropFilter}\" -c:v libvpx-vp9 -crf 25 -b:v 0 -c:a libopus \"{_outputFile}\"",
+                    "mov" => string.IsNullOrWhiteSpace(cropFilter)
+                        ? $"-y -i \"{mergedMkv}\" -c:v {codec} -preset fast -crf {crf} -pix_fmt yuv420p -f mov \"{_outputFile}\""
+                        : $"-y -i \"{mergedMkv}\" -vf \"{cropFilter}\" -c:v {codec} -preset fast -crf {crf} -pix_fmt yuv420p -f mov \"{_outputFile}\"",
+                    _ => string.IsNullOrWhiteSpace(cropFilter)
+                        ? $"-y -i \"{mergedMkv}\" -c:v {codec} -preset fast -crf {crf} -movflags +faststart \"{_outputFile}\""
+                        : $"-y -i \"{mergedMkv}\" -vf \"{cropFilter}\" -c:v {codec} -preset fast -crf {crf} -movflags +faststart \"{_outputFile}\""
                 };
 
                 var convertInfo = new ProcessStartInfo { FileName = _downloader.FfmpegExecutablePath, Arguments = convertArgs, UseShellExecute = false, CreateNoWindow = true };
@@ -431,4 +457,5 @@ public class RecordingService : ReactiveObject
         }
         catch { /* ignore */ }
     }
+
 }

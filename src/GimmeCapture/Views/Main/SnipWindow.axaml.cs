@@ -284,8 +284,20 @@ public partial class SnipWindow : Window
                     .ObserveOn(RxApp.MainThreadScheduler)
                     .Subscribe(state => 
                     {
-                        // Note: We use WDA_EXCLUDEFROMCAPTURE for Translation Mode in OnOpened.
-                        // For Recording Mode, we rely on hiding specific UI elements.
+                        var hwnd = this.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
+                        if (hwnd != IntPtr.Zero && OperatingSystem.IsWindows())
+                        {
+                            // Recording mode: keep overlay visible to user, but exclude window from capture source.
+                            if (state != RecordingState.Idle && _viewModel.MainVm?.HideRecordSelectionBorder == true)
+                            {
+                                Win32Helpers.SetWindowCaptureVisibility(hwnd, false);
+                            }
+                            else if (!_viewModel.IsTranslationMode)
+                            {
+                                // Translation mode manages capture visibility separately in OnOpened.
+                                Win32Helpers.SetWindowCaptureVisibility(hwnd, true);
+                            }
+                        }
                         
                         // Trigger UI update for decorations
                         _viewModel.RaisePropertyChanged(nameof(_viewModel.HideSelectionDecoration));

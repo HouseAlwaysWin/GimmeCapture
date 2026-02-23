@@ -59,22 +59,6 @@ public partial class SnipWindowViewModel
 
         var region = SelectionRect;
 
-        // Shrink region by the thickness of the border so the coloured border is excluded from the recorded video
-        // (Only if the user checked "Hide Border during Recording" in settings)
-        if (_mainVm != null && _mainVm.HideRecordSelectionBorder)
-        {
-            double borderThick = SelectionBorderThickness;
-            if (region.Width > borderThick * 2 && region.Height > borderThick * 2)
-            {
-                region = new Avalonia.Rect(
-                    region.X + borderThick,
-                    region.Y + borderThick,
-                    region.Width - borderThick * 2,
-                    region.Height - borderThick * 2
-                );
-            }
-        }
-
         // Ensure size is even for ffmpeg
         if (region.Width % 2 != 0) region = region.WithWidth(region.Width - 1);
         if (region.Height % 2 != 0) region = region.WithHeight(region.Height - 1);

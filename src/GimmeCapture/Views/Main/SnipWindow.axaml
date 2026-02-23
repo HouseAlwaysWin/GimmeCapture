@@ -1,4 +1,4 @@
-﻿<Window xmlns="https://github.com/avaloniaui"
+<Window xmlns="https://github.com/avaloniaui"
         x:Name="root"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -244,6 +244,7 @@
                   
                 <!-- Selection Border -->
                 <Border CornerRadius="0" Background="#01FFFFFF"
+                        Margin="{Binding SelectionBorderOuterMargin}"
                         BoxShadow="{Binding SelectionShadowColor, Converter={StaticResource ColorToBoxShadowConverter}}"
                         IsVisible="{Binding HideFrameBorder, Converter={StaticResource BoolInvertConverter}}"
                         IsHitTestVisible="{Binding IsDrawingMode, Converter={StaticResource BoolInvertConverter}}"
@@ -280,6 +281,7 @@
                 
                 <!-- Decoration Layer (Unified) -->
                 <ctl:GothicDecoration DecorationBrush="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}"
+                                      Margin="{Binding SelectionBorderOuterMargin}"
                                       ShowWings="{Binding HideSelectionDecoration, Converter={StaticResource BoolInvertConverter}}"
                                       ShowCorners="{Binding HideSelectionDecoration, Converter={StaticResource BoolInvertConverter}}"
                                       ShowBorder="{Binding HideFrameBorder, Converter={StaticResource BoolInvertConverter}}"

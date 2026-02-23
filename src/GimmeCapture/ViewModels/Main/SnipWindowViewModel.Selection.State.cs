@@ -423,8 +423,16 @@ public partial class SnipWindowViewModel
     public double SelectionBorderThickness
     {
         get => _selectionBorderThickness;
-        set => this.RaiseAndSetIfChanged(ref _selectionBorderThickness, value);
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _selectionBorderThickness, value);
+            this.RaisePropertyChanged(nameof(SelectionBorderOuterMargin));
+        }
     }
+
+    // Draw border/decorations outside the selected content bounds,
+    // so recording of SelectionRect does not include the border line.
+    public Thickness SelectionBorderOuterMargin => new(-SelectionBorderThickness, -SelectionBorderThickness, -SelectionBorderThickness, -SelectionBorderThickness);
 
     private bool _isMagnifierEnabled = true;
     public bool IsMagnifierEnabled

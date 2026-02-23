@@ -183,8 +183,8 @@ public partial class SnipWindowViewModel
     {
         get
         {
-            // For Recording Mode: ALWAYS show the border on screen, so the user knows what region is being captured.
-            // The actual removal of the border from the output video is handled by FFmpeg cropping during StartRecording if _mainVm.HideRecordSelectionBorder is true.
+            // For Recording Mode: keep border visible on screen for targeting.
+            // Border visuals are rendered outside SelectionRect, so recorded region remains clean.
             if (CurrentMode == SnipMode.Recording) return false;
             
             bool hide = _mainVm?.HideSnipSelectionBorder ?? false;
