@@ -1,14 +1,42 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.VisualTree;
 using GimmeCapture.ViewModels.Main;
+using System;
+using System.Linq;
 
 namespace GimmeCapture.Views.Main.Tabs;
 
 public partial class SettingsHotkeysTab : UserControl
 {
+    private bool _tagsValidated;
+
     public SettingsHotkeysTab()
     {
         InitializeComponent();
+        AttachedToVisualTree += OnAttachedToVisualTree;
+    }
+
+    private void OnAttachedToVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
+    {
+        if (_tagsValidated) return;
+        _tagsValidated = true;
+
+        if (DataContext is not MainWindowViewModel vm) return;
+
+        var tags = this.GetVisualDescendants()
+            .OfType<TextBox>()
+            .Select(tb => tb.Tag as string)
+            .Where(tag => !string.IsNullOrWhiteSpace(tag))
+            .Cast<string>()
+            .ToList();
+
+        var unknown = vm.HotkeyMappingService.ValidateTags(tags);
+        if (unknown.Count > 0)
+        {
+            System.Diagnostics.Debug.WriteLine($"[SettingsHotkeysTab] Unknown hotkey tags: {string.Join(", ", unknown)}");
+        }
     }
 
     private void HotkeyTextBox_KeyDown(object? sender, KeyEventArgs e)
