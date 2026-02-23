@@ -209,5 +209,6 @@
   "MarianMTDownloadConfirm": "オフライン翻訳機能には専用モジュールのダウンロード (~400MB) が必要です。今すぐダウンロードしますか？",
   "DefaultHideSnipToolbar": "デフォルトでキャプチャツールバーを隠す",
   "DefaultHideRecordToolbar": "デフォルトで録画ツールバーを隠す",
-  "HideTranslationResults": "翻訳結果を表示/非表示"
+  "HideTranslationResults": "翻訳結果を表示/非表示",
+  "StatusTranslateNoSelection": "翻訳する範囲を先に選択してください。"
 }

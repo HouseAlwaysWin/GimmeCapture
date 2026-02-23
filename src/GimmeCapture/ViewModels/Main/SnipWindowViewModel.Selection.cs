@@ -961,6 +961,7 @@ public partial class SnipWindowViewModel
             // UX rule: translate button should only process explicit user selections.
             // If no selection exists, do nothing instead of scanning full screen.
             System.Diagnostics.Debug.WriteLine("[TranslationMode] No selections found. Skip translation.");
+            _mainVm?.SetStatus("StatusTranslateNoSelection");
             return;
         }
 
