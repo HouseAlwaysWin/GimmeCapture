@@ -64,6 +64,17 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     public string RemoveBackgroundHotkey => _mainVm?.Snip_RemoveBackground ?? "Shift+R";
     public string MagicWandHotkey => _mainVm?.Snip_MagicWand ?? "W";
 
+    // Mode-switch hotkeys (resolved per current mode)
+    public string SwitchToSnipHotkey => CurrentMode == SnipMode.Recording
+        ? (_mainVm?.Record_SwitchToSnip ?? "F1")
+        : (_mainVm?.Translate_SwitchToSnip ?? "F1");
+    public string SwitchToRecordHotkey => CurrentMode == SnipMode.Screenshot
+        ? (_mainVm?.Snip_SwitchToRecord ?? "F2")
+        : (_mainVm?.Translate_SwitchToRecord ?? "F2");
+    public string SwitchToTranslateHotkey => CurrentMode == SnipMode.Screenshot
+        ? (_mainVm?.Snip_SwitchToTranslate ?? "F1")
+        : (_mainVm?.Record_SwitchToTranslate ?? "F2");
+
     // Translation mode specific hotkeys
     public string TranslateAllHotkey => _mainVm?.Translate_TranslateAll ?? "Enter";
     public string ScanAllHotkey => _mainVm?.Translate_ScanAll ?? "S";

@@ -25,6 +25,8 @@ public static class HotkeyTagNames
     public const string Snip_CropMode = nameof(Snip_CropMode);
     public const string Snip_Pin = nameof(Snip_Pin);
     public const string Snip_Copy = nameof(Snip_Copy);
+    public const string Snip_SwitchToTranslate = nameof(Snip_SwitchToTranslate);
+    public const string Snip_SwitchToRecord = nameof(Snip_SwitchToRecord);
 
     public const string Record_Rectangle = nameof(Record_Rectangle);
     public const string Record_Ellipse = nameof(Record_Ellipse);
@@ -39,6 +41,8 @@ public static class HotkeyTagNames
     public const string Record_Undo = nameof(Record_Undo);
     public const string Record_Save = nameof(Record_Save);
     public const string Record_Copy = nameof(Record_Copy);
+    public const string Record_SwitchToSnip = nameof(Record_SwitchToSnip);
+    public const string Record_SwitchToTranslate = nameof(Record_SwitchToTranslate);
 
     public const string Translate_Action = nameof(Translate_Action);
     public const string Translate_Toolbar = nameof(Translate_Toolbar);
@@ -48,4 +52,6 @@ public static class HotkeyTagNames
     public const string Translate_ClearAll = nameof(Translate_ClearAll);
     public const string Translate_ToggleSelect = nameof(Translate_ToggleSelect);
     public const string Translate_AutoDetect = nameof(Translate_AutoDetect);
+    public const string Translate_SwitchToSnip = nameof(Translate_SwitchToSnip);
+    public const string Translate_SwitchToRecord = nameof(Translate_SwitchToRecord);
 }

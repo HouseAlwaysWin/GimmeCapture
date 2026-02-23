@@ -330,6 +330,8 @@ public partial class MainWindowViewModel
     public string Snip_CropMode { get => _settingsService.Settings.Snip.CropMode; set { if (_settingsService.Settings.Snip.CropMode != value) { this.RaisePropertyChanging(); _settingsService.Settings.Snip.CropMode = value; this.RaisePropertyChanged(); } } }
     public string Snip_RemoveBackground { get => _settingsService.Settings.Snip.RemoveBackground; set { if (_settingsService.Settings.Snip.RemoveBackground != value) { this.RaisePropertyChanging(); _settingsService.Settings.Snip.RemoveBackground = value; this.RaisePropertyChanged(); } } }
     public string Snip_MagicWand { get => _settingsService.Settings.Snip.MagicWand; set { if (_settingsService.Settings.Snip.MagicWand != value) { this.RaisePropertyChanging(); _settingsService.Settings.Snip.MagicWand = value; this.RaisePropertyChanged(); } } }
+    public string Snip_SwitchToTranslate { get => _settingsService.Settings.Snip.SwitchToTranslate; set { if (_settingsService.Settings.Snip.SwitchToTranslate != value) { this.RaisePropertyChanging(); _settingsService.Settings.Snip.SwitchToTranslate = value; this.RaisePropertyChanged(); } } }
+    public string Snip_SwitchToRecord { get => _settingsService.Settings.Snip.SwitchToRecord; set { if (_settingsService.Settings.Snip.SwitchToRecord != value) { this.RaisePropertyChanging(); _settingsService.Settings.Snip.SwitchToRecord = value; this.RaisePropertyChanged(); } } }
 
     // Record Mode Hotkeys
     public string Record_Rectangle { get => _settingsService.Settings.Record.Rectangle; set { if (_settingsService.Settings.Record.Rectangle != value) { this.RaisePropertyChanging(); _settingsService.Settings.Record.Rectangle = value; this.RaisePropertyChanged(); } } }
@@ -349,6 +351,8 @@ public partial class MainWindowViewModel
     public string Record_Toolbar { get => _settingsService.Settings.Record.Toolbar; set { if (_settingsService.Settings.Record.Toolbar != value) { this.RaisePropertyChanging(); _settingsService.Settings.Record.Toolbar = value; this.RaisePropertyChanged(); } } }
     public string Record_Action { get => _settingsService.Settings.Record.Action; set { if (_settingsService.Settings.Record.Action != value) { this.RaisePropertyChanging(); _settingsService.Settings.Record.Action = value; this.RaisePropertyChanged(); } } }
     public string Record_Playback { get => _settingsService.Settings.Record.Playback; set { if (_settingsService.Settings.Record.Playback != value) { this.RaisePropertyChanging(); _settingsService.Settings.Record.Playback = value; this.RaisePropertyChanged(); } } }
+    public string Record_SwitchToSnip { get => _settingsService.Settings.Record.SwitchToSnip; set { if (_settingsService.Settings.Record.SwitchToSnip != value) { this.RaisePropertyChanging(); _settingsService.Settings.Record.SwitchToSnip = value; this.RaisePropertyChanged(); } } }
+    public string Record_SwitchToTranslate { get => _settingsService.Settings.Record.SwitchToTranslate; set { if (_settingsService.Settings.Record.SwitchToTranslate != value) { this.RaisePropertyChanging(); _settingsService.Settings.Record.SwitchToTranslate = value; this.RaisePropertyChanged(); } } }
 
     // Translate Mode Hotkeys
     public string Translate_Action { get => _settingsService.Settings.Translate.Action; set { if (_settingsService.Settings.Translate.Action != value) { this.RaisePropertyChanging(); _settingsService.Settings.Translate.Action = value; this.RaisePropertyChanged(); } } }
@@ -359,6 +363,8 @@ public partial class MainWindowViewModel
     public string Translate_ClearAll { get => _settingsService.Settings.Translate.ClearAll; set { if (_settingsService.Settings.Translate.ClearAll != value) { this.RaisePropertyChanging(); _settingsService.Settings.Translate.ClearAll = value; this.RaisePropertyChanged(); } } }
     public string Translate_ToggleSelect { get => _settingsService.Settings.Translate.ToggleSelect; set { if (_settingsService.Settings.Translate.ToggleSelect != value) { this.RaisePropertyChanging(); _settingsService.Settings.Translate.ToggleSelect = value; this.RaisePropertyChanged(); } } }
     public string Translate_AutoDetect { get => _settingsService.Settings.Translate.AutoDetect; set { if (_settingsService.Settings.Translate.AutoDetect != value) { this.RaisePropertyChanging(); _settingsService.Settings.Translate.AutoDetect = value; this.RaisePropertyChanged(); } } }
+    public string Translate_SwitchToSnip { get => _settingsService.Settings.Translate.SwitchToSnip; set { if (_settingsService.Settings.Translate.SwitchToSnip != value) { this.RaisePropertyChanging(); _settingsService.Settings.Translate.SwitchToSnip = value; this.RaisePropertyChanged(); } } }
+    public string Translate_SwitchToRecord { get => _settingsService.Settings.Translate.SwitchToRecord; set { if (_settingsService.Settings.Translate.SwitchToRecord != value) { this.RaisePropertyChanging(); _settingsService.Settings.Translate.SwitchToRecord = value; this.RaisePropertyChanged(); } } }
 
 
 
@@ -501,7 +507,8 @@ public partial class MainWindowViewModel
             "Snip_Rectangle", "Snip_Ellipse", "Snip_Arrow", "Snip_Line", "Snip_Pen", 
             "Snip_Text", "Snip_Mosaic", "Snip_Blur", "Snip_Undo", "Snip_Redo", 
             "Snip_Clear", "Snip_Save", "Snip_Copy", "Snip_Close", 
-            "Snip_Toolbar", "Snip_SelectionMode", "Snip_CropMode", "Snip_Pin" 
+            "Snip_Toolbar", "Snip_SelectionMode", "Snip_CropMode", "Snip_Pin",
+            "Snip_SwitchToTranslate", "Snip_SwitchToRecord"
         };
 
         // 3. Record Group (Local to Video Recording mode)
@@ -509,14 +516,16 @@ public partial class MainWindowViewModel
             "Record_Rectangle", "Record_Ellipse", "Record_Arrow", "Record_Line", "Record_Pen", 
             "Record_Text", "Record_Mosaic", "Record_Blur", "Record_Undo", "Record_Redo", 
             "Record_Clear", "Record_Save", "Record_Copy", "Record_Close", "Record_Toolbar", 
-            "Record_Action", "Record_Playback" 
+            "Record_Action", "Record_Playback",
+            "Record_SwitchToSnip", "Record_SwitchToTranslate"
         };
 
         // 4. Translate Group (Local to Translation mode)
         var translateGroup = new[] { 
             "Translate_Action", "Translate_Toolbar", "Translate_Close",
             "Translate_TranslateAll", "Translate_ScanAll", "Translate_ClearAll",
-            "Translate_ToggleSelect", "Translate_AutoDetect"
+            "Translate_ToggleSelect", "Translate_AutoDetect",
+            "Translate_SwitchToSnip", "Translate_SwitchToRecord"
         };
 
         if (globalGroup.Contains(targetTag))
@@ -547,6 +556,8 @@ public partial class MainWindowViewModel
             if (targetTag != "Snip_RemoveBackground" && Snip_RemoveBackground == hotkey) return "RemoveBackground";
             if (targetTag != "Snip_MagicWand" && Snip_MagicWand == hotkey) return "MagicWand";
             if (targetTag != "Snip_Pin" && Snip_Pin == hotkey) return "TipPin";
+            if (targetTag != "Snip_SwitchToTranslate" && Snip_SwitchToTranslate == hotkey) return "SwitchToTranslate";
+            if (targetTag != "Snip_SwitchToRecord" && Snip_SwitchToRecord == hotkey) return "SwitchToRecord";
         }
         else if (recordGroup.Contains(targetTag))
         {
@@ -567,6 +578,8 @@ public partial class MainWindowViewModel
             if (targetTag != "Record_Toolbar" && Record_Toolbar == hotkey) return "ActionToolbar";
             if (targetTag != "Record_Action" && Record_Action == hotkey) return "ActionStartPin";
             if (targetTag != "Record_Playback" && Record_Playback == hotkey) return "ActionPlayback";
+            if (targetTag != "Record_SwitchToSnip" && Record_SwitchToSnip == hotkey) return "SwitchToSnip";
+            if (targetTag != "Record_SwitchToTranslate" && Record_SwitchToTranslate == hotkey) return "SwitchToTranslate";
         }
         else if (translateGroup.Contains(targetTag))
         {
@@ -578,6 +591,8 @@ public partial class MainWindowViewModel
             if (targetTag != "Translate_ClearAll" && Translate_ClearAll == hotkey) return "ActionClearAll";
             if (targetTag != "Translate_ToggleSelect" && Translate_ToggleSelect == hotkey) return "ActionToggleSelect";
             if (targetTag != "Translate_AutoDetect" && Translate_AutoDetect == hotkey) return "ActionAutoDetect";
+            if (targetTag != "Translate_SwitchToSnip" && Translate_SwitchToSnip == hotkey) return "SwitchToSnip";
+            if (targetTag != "Translate_SwitchToRecord" && Translate_SwitchToRecord == hotkey) return "SwitchToRecord";
         }
 
         return null;
@@ -887,9 +902,12 @@ public partial class MainWindowViewModel
                 nameof(Record_Text), nameof(Record_Mosaic), nameof(Record_Blur), nameof(Record_Undo), nameof(Record_Redo),
                 nameof(Record_Clear), nameof(Record_Save), nameof(Record_Copy), nameof(Record_Close), nameof(Record_Toolbar),
                 nameof(Record_Action), nameof(Record_Playback),
+                nameof(Record_SwitchToSnip), nameof(Record_SwitchToTranslate),
                 nameof(Translate_Action), nameof(Translate_Toolbar), nameof(Translate_Close),
                 nameof(Translate_TranslateAll), nameof(Translate_ScanAll), nameof(Translate_ClearAll),
-                nameof(Translate_ToggleSelect), nameof(Translate_AutoDetect)
+                nameof(Translate_ToggleSelect), nameof(Translate_AutoDetect),
+                nameof(Translate_SwitchToSnip), nameof(Translate_SwitchToRecord),
+                nameof(Snip_SwitchToTranslate), nameof(Snip_SwitchToRecord)
             };
             foreach (var prop in hotkeyProps) this.RaisePropertyChanged(prop);
 

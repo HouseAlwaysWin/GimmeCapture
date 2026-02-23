@@ -79,9 +79,12 @@ public partial class MainWindowViewModel
             nameof(Record_Text), nameof(Record_Mosaic), nameof(Record_Blur), nameof(Record_Undo), nameof(Record_Redo),
             nameof(Record_Clear), nameof(Record_Save), nameof(Record_Copy), nameof(Record_Close), nameof(Record_Toolbar),
             nameof(Record_Action), nameof(Record_Playback),
+            nameof(Record_SwitchToSnip), nameof(Record_SwitchToTranslate),
             nameof(Translate_Action), nameof(Translate_Toolbar), nameof(Translate_Close),
             nameof(Translate_TranslateAll), nameof(Translate_ScanAll), nameof(Translate_ClearAll),
-            nameof(Translate_ToggleSelect), nameof(Translate_AutoDetect)
+            nameof(Translate_ToggleSelect), nameof(Translate_AutoDetect),
+            nameof(Translate_SwitchToSnip), nameof(Translate_SwitchToRecord),
+            nameof(Snip_SwitchToTranslate), nameof(Snip_SwitchToRecord)
         };
         foreach (var prop in hotkeyProps) this.RaisePropertyChanged(prop);
 

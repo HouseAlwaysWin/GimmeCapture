@@ -66,6 +66,11 @@
         <KeyBinding Gesture="{Binding ToggleSelectHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding ToggleTranslationSelectCommand}" />
         <KeyBinding Gesture="{Binding AutoDetectHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding ToggleAutoDetectCommand}" />
 
+        <!-- Mode Switching -->
+        <KeyBinding Gesture="{Binding SwitchToSnipHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding SwitchToSnipCommand}" />
+        <KeyBinding Gesture="{Binding SwitchToRecordHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding SwitchToRecordCommand}" />
+        <KeyBinding Gesture="{Binding SwitchToTranslateHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding SwitchToTranslateCommand}" />
+
         <!-- Debug / Compatibility -->
         <KeyBinding Gesture="Ctrl+Alt+T" Command="{Binding ToggleTopmostCommand}" />
     </Window.KeyBindings>

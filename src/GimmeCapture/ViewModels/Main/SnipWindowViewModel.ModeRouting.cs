@@ -110,6 +110,10 @@ public partial class SnipWindowViewModel
         this.RaisePropertyChanged(nameof(ToggleSelectTooltip));
         this.RaisePropertyChanged(nameof(AutoDetectTooltip));
         this.RaisePropertyChanged(nameof(ToggleToolbarTooltip));
+
+        this.RaisePropertyChanged(nameof(SwitchToSnipHotkey));
+        this.RaisePropertyChanged(nameof(SwitchToRecordHotkey));
+        this.RaisePropertyChanged(nameof(SwitchToTranslateHotkey));
     }
     
     private bool _isGlobalAutoDetectEnabled;
@@ -256,6 +260,9 @@ public partial class SnipWindowViewModel
     public ReactiveCommand<Unit, Unit> HandleScreenshotModeHotkeyCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> HandleRecordingModeHotkeyCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> HandleActiveActionHotkeyCommand { get; set; } = null!;
+    public ReactiveCommand<Unit, Unit> SwitchToSnipCommand { get; set; } = null!;
+    public ReactiveCommand<Unit, Unit> SwitchToRecordCommand { get; set; } = null!;
+    public ReactiveCommand<Unit, Unit> SwitchToTranslateCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> RemoveBackgroundCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> InteractiveRemovalCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> ToggleTopmostCommand { get; set; } = null!;
@@ -267,7 +274,9 @@ public partial class SnipWindowViewModel
         
         string pressedHotkey = _mainVm.HotkeyRouterService.GetPressedHotkeyText(id, _mainVm);
 
-        System.Diagnostics.Debug.WriteLine($"[SnipWindowViewModel] HandleGlobalHotkey ID={id}, Pressed={pressedHotkey}, ActiveAction={ActiveActionHotkey}, ActiveToolbar={ActiveToolbarHotkey}");
+        System.Diagnostics.Debug.WriteLine($"[SnipWindowViewModel] HandleGlobalHotkey ID={id}, Pressed={pressedHotkey}, ActiveAction={ActiveActionHotkey}, ActiveToolbar={ActiveToolbarHotkey}, Mode={CurrentMode}");
+
+        if (TryHandleModeSwitchHotkey(pressedHotkey)) return;
 
         var routeAction = _mainVm.HotkeyRouterService.ResolveSnipGlobalHotkeyAction(
             id,
@@ -299,6 +308,35 @@ public partial class SnipWindowViewModel
                 if (CurrentState == SnipState.Selected) TriggerAutoAction();
                 break;
         }
+    }
+
+    private bool TryHandleModeSwitchHotkey(string pressedHotkey)
+    {
+        if (string.IsNullOrWhiteSpace(pressedHotkey) || _mainVm == null || RecState != RecordingState.Idle)
+            return false;
+
+        switch (CurrentMode)
+        {
+            case SnipMode.Screenshot:
+                if (StringComparer.OrdinalIgnoreCase.Equals(pressedHotkey, _mainVm.Snip_SwitchToTranslate))
+                    { SwitchToTranslateCommand?.Execute().Subscribe(); return true; }
+                if (StringComparer.OrdinalIgnoreCase.Equals(pressedHotkey, _mainVm.Snip_SwitchToRecord))
+                    { SwitchToRecordCommand?.Execute().Subscribe(); return true; }
+                break;
+            case SnipMode.Recording:
+                if (StringComparer.OrdinalIgnoreCase.Equals(pressedHotkey, _mainVm.Record_SwitchToSnip))
+                    { SwitchToSnipCommand?.Execute().Subscribe(); return true; }
+                if (StringComparer.OrdinalIgnoreCase.Equals(pressedHotkey, _mainVm.Record_SwitchToTranslate))
+                    { SwitchToTranslateCommand?.Execute().Subscribe(); return true; }
+                break;
+            case SnipMode.Translation:
+                if (StringComparer.OrdinalIgnoreCase.Equals(pressedHotkey, _mainVm.Translate_SwitchToSnip))
+                    { SwitchToSnipCommand?.Execute().Subscribe(); return true; }
+                if (StringComparer.OrdinalIgnoreCase.Equals(pressedHotkey, _mainVm.Translate_SwitchToRecord))
+                    { SwitchToRecordCommand?.Execute().Subscribe(); return true; }
+                break;
+        }
+        return false;
     }
 
     public void HandleCaptureModeRequest(MainWindowViewModel.CaptureMode mode)
@@ -478,6 +516,30 @@ public partial class SnipWindowViewModel
             }
         }, canExecuteHotkeys);
         SetTranslationModeCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
+
+        var canSwitchToSnip = this.WhenAnyValue(
+            x => x.CurrentMode, x => x.RecState, x => x.IsInputFocused,
+            (mode, rec, focus) => mode != SnipMode.Screenshot && rec == RecordingState.Idle && !focus);
+        SwitchToSnipCommand = ReactiveCommand.Create(() => { CurrentMode = SnipMode.Screenshot; }, canSwitchToSnip);
+        SwitchToSnipCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"SwitchToSnip error: {ex}"));
+
+        var canSwitchToRecord = this.WhenAnyValue(
+            x => x.CurrentMode, x => x.RecState, x => x.IsInputFocused,
+            (mode, rec, focus) => mode != SnipMode.Recording && rec == RecordingState.Idle && !focus);
+        SwitchToRecordCommand = ReactiveCommand.Create(() => { CurrentMode = SnipMode.Recording; }, canSwitchToRecord);
+        SwitchToRecordCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"SwitchToRecord error: {ex}"));
+
+        var canSwitchToTranslate = this.WhenAnyValue(
+            x => x.CurrentMode, x => x.RecState, x => x.IsInputFocused,
+            (mode, rec, focus) => mode != SnipMode.Translation && rec == RecordingState.Idle && !focus);
+        SwitchToTranslateCommand = ReactiveCommand.Create(() =>
+        {
+            CurrentMode = SnipMode.Translation;
+            CurrentState = SnipState.Detecting;
+            SelectionRect = default;
+            InitializeTranslationToolbarPosition();
+        }, canSwitchToTranslate);
+        SwitchToTranslateCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"SwitchToTranslate error: {ex}"));
 
         var canRemoveBackground = this.WhenAnyValue(
             x => x.CurrentMode, 

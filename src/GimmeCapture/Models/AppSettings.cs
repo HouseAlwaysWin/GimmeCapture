@@ -37,6 +37,8 @@ public class SnipHotkeys
     public string CropMode { get; set; } = "C";
     public string RemoveBackground { get; set; } = "Shift+R";
     public string MagicWand { get; set; } = "W";
+    public string SwitchToTranslate { get; set; } = "F1";
+    public string SwitchToRecord { get; set; } = "F2";
 }
 
 public class RecordHotkeys
@@ -58,6 +60,8 @@ public class RecordHotkeys
     public string Toolbar { get; set; } = "F4";
     public string Action { get; set; } = "F3";
     public string Playback { get; set; } = "Space";
+    public string SwitchToSnip { get; set; } = "F1";
+    public string SwitchToTranslate { get; set; } = "F2";
 }
 
 public class TranslateHotkeys
@@ -70,6 +74,8 @@ public class TranslateHotkeys
     public string ClearAll { get; set; } = "Delete";
     public string ToggleSelect { get; set; } = "Tab";
     public string AutoDetect { get; set; } = "D";
+    public string SwitchToSnip { get; set; } = "F1";
+    public string SwitchToRecord { get; set; } = "F2";
 }
 
 public class AppSettings
