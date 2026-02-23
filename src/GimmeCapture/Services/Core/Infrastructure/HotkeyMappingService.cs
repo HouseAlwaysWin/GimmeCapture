@@ -30,6 +30,7 @@ public class HotkeyMappingService
             { "SnipClearHotkey", (vm, val) => vm.SnipClearHotkey = val },
             { "SnipSaveHotkey", (vm, val) => vm.SnipSaveHotkey = val },
             { "SnipCopyHotkey", (vm, val) => vm.SnipCopyHotkey = val },
+            { "SnipPinHotkey", (vm, val) => vm.SnipPinHotkey = val },
             { "SnipCloseHotkey", (vm, val) => vm.SnipCloseHotkey = val },
             { "SnipToolbarHotkey", (vm, val) => vm.SnipToolbarHotkey = val },
             { "SnipSelectionModeHotkey", (vm, val) => vm.SnipSelectionModeHotkey = val },

@@ -197,23 +197,23 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
     public bool ShowIconSettings => false;
     
     // Hotkey Proxies
-    public override string PinHotkey => _appSettingsService?.Settings.SnipPinHotkey ?? base.PinHotkey;
-    public override string UndoHotkey => _appSettingsService?.Settings.RecordUndoHotkey ?? base.UndoHotkey;
-    public override string RedoHotkey => _appSettingsService?.Settings.RecordRedoHotkey ?? base.RedoHotkey;
-    public override string ClearHotkey => _appSettingsService?.Settings.RecordClearHotkey ?? base.ClearHotkey;
-    public override string SaveHotkey => _appSettingsService?.Settings.RecordSaveHotkey ?? base.SaveHotkey;
-    public override string CopyHotkey => _appSettingsService?.Settings.RecordCopyHotkey ?? base.CopyHotkey;
-    public override string CloseHotkey => _appSettingsService?.Settings.RecordCloseHotkey ?? base.CloseHotkey;
-    public string PlaybackHotkey => _appSettingsService?.Settings.RecordPlaybackHotkey ?? "Space"; // Specific to Video
+    public override string PinHotkey => _appSettingsService?.Settings.Snip.Pin ?? base.PinHotkey;
+    public override string UndoHotkey => _appSettingsService?.Settings.Record.Undo ?? base.UndoHotkey;
+    public override string RedoHotkey => _appSettingsService?.Settings.Record.Redo ?? base.RedoHotkey;
+    public override string ClearHotkey => _appSettingsService?.Settings.Record.Clear ?? base.ClearHotkey;
+    public override string SaveHotkey => _appSettingsService?.Settings.Record.Save ?? base.SaveHotkey;
+    public override string CopyHotkey => _appSettingsService?.Settings.Record.Copy ?? base.CopyHotkey;
+    public override string CloseHotkey => _appSettingsService?.Settings.Record.Close ?? base.CloseHotkey;
+    public string PlaybackHotkey => _appSettingsService?.Settings.Record.Playback ?? "Space"; // Specific to Video
     
-    public override string RectangleHotkey => _appSettingsService?.Settings.RecordRectangleHotkey ?? base.RectangleHotkey;
-    public override string EllipseHotkey => _appSettingsService?.Settings.RecordEllipseHotkey ?? base.EllipseHotkey;
-    public override string ArrowHotkey => _appSettingsService?.Settings.RecordArrowHotkey ?? base.ArrowHotkey;
-    public override string LineHotkey => _appSettingsService?.Settings.RecordLineHotkey ?? base.LineHotkey;
-    public override string PenHotkey => _appSettingsService?.Settings.RecordPenHotkey ?? base.PenHotkey;
-    public override string TextHotkey => _appSettingsService?.Settings.RecordTextHotkey ?? base.TextHotkey;
-    public override string MosaicHotkey => _appSettingsService?.Settings.RecordMosaicHotkey ?? base.MosaicHotkey;
-    public override string BlurHotkey => _appSettingsService?.Settings.RecordBlurHotkey ?? base.BlurHotkey;
+    public override string RectangleHotkey => _appSettingsService?.Settings.Record.Rectangle ?? base.RectangleHotkey;
+    public override string EllipseHotkey => _appSettingsService?.Settings.Record.Ellipse ?? base.EllipseHotkey;
+    public override string ArrowHotkey => _appSettingsService?.Settings.Record.Arrow ?? base.ArrowHotkey;
+    public override string LineHotkey => _appSettingsService?.Settings.Record.Line ?? base.LineHotkey;
+    public override string PenHotkey => _appSettingsService?.Settings.Record.Pen ?? base.PenHotkey;
+    public override string TextHotkey => _appSettingsService?.Settings.Record.Text ?? base.TextHotkey;
+    public override string MosaicHotkey => _appSettingsService?.Settings.Record.Mosaic ?? base.MosaicHotkey;
+    public override string BlurHotkey => _appSettingsService?.Settings.Record.Blur ?? base.BlurHotkey;
 
     // Tooltip Hints
     public string UndoTooltip => $"{LocalizationService.Instance["Undo"]} ({UndoHotkey})";
@@ -231,7 +231,7 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
     public string MosaicTooltip => $"{LocalizationService.Instance["TipMosaic"]} ({MosaicHotkey})";
     public string BlurTooltip => $"{LocalizationService.Instance["TipBlur"]} ({BlurHotkey})";
     public string PlaybackTooltip => $"{LocalizationService.Instance["ActionPlayback"]} ({PlaybackHotkey})";
-    public string ToggleToolbarTooltip => $"{LocalizationService.Instance["ActionToolbar"]} ({_appSettingsService?.Settings.RecordToolbarHotkey ?? "H"})";
+    public string ToggleToolbarTooltip => $"{LocalizationService.Instance["ActionToolbar"]} ({_appSettingsService?.Settings.Record.Toolbar ?? "H"})";
     public string CloseTooltip => $"{LocalizationService.Instance["ActionClose"]} ({CloseHotkey})";
     public string RepeatTooltip => $"{LocalizationService.Instance["ActionRepeat"]}";
     public string SelectionTooltip => $"{LocalizationService.Instance["TipSelectionArea"]} (S)";

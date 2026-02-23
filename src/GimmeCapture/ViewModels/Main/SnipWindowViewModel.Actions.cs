@@ -63,6 +63,41 @@ public partial class SnipWindowViewModel
         this.RaisePropertyChanged(nameof(HideSelectionDecoration));
         this.RaisePropertyChanged(nameof(ModeDisplayName));
         this.RaisePropertyChanged(nameof(IsToolbarVisible));
+        
+        // Notify hotkeys and tooltips
+        this.RaisePropertyChanged(nameof(CopyHotkey));
+        this.RaisePropertyChanged(nameof(UndoHotkey));
+        this.RaisePropertyChanged(nameof(RedoHotkey));
+        this.RaisePropertyChanged(nameof(ClearHotkey));
+        this.RaisePropertyChanged(nameof(SaveHotkey));
+        this.RaisePropertyChanged(nameof(CloseHotkey));
+        this.RaisePropertyChanged(nameof(RectangleHotkey));
+        this.RaisePropertyChanged(nameof(EllipseHotkey));
+        this.RaisePropertyChanged(nameof(ArrowHotkey));
+        this.RaisePropertyChanged(nameof(LineHotkey));
+        this.RaisePropertyChanged(nameof(PenHotkey));
+        this.RaisePropertyChanged(nameof(TextHotkey));
+        this.RaisePropertyChanged(nameof(MosaicHotkey));
+        this.RaisePropertyChanged(nameof(BlurHotkey));
+        this.RaisePropertyChanged(nameof(ActiveActionHotkey));
+        this.RaisePropertyChanged(nameof(ActiveToolbarHotkey));
+
+        this.RaisePropertyChanged(nameof(UndoTooltip));
+        this.RaisePropertyChanged(nameof(RedoTooltip));
+        this.RaisePropertyChanged(nameof(ClearTooltip));
+        this.RaisePropertyChanged(nameof(SaveTooltip));
+        this.RaisePropertyChanged(nameof(CopyTooltip));
+        this.RaisePropertyChanged(nameof(PinTooltip));
+        this.RaisePropertyChanged(nameof(RectangleTooltip));
+        this.RaisePropertyChanged(nameof(EllipseTooltip));
+        this.RaisePropertyChanged(nameof(ArrowTooltip));
+        this.RaisePropertyChanged(nameof(LineTooltip));
+        this.RaisePropertyChanged(nameof(PenTooltip));
+        this.RaisePropertyChanged(nameof(TextTooltip));
+        this.RaisePropertyChanged(nameof(MosaicTooltip));
+        this.RaisePropertyChanged(nameof(BlurTooltip));
+        this.RaisePropertyChanged(nameof(HideTranslationResultsTooltip));
+        this.RaisePropertyChanged(nameof(ToggleToolbarTooltip));
     }
     
     private bool _isGlobalAutoDetectEnabled;
@@ -78,7 +113,7 @@ public partial class SnipWindowViewModel
                 sel.IsAutoDetectEnabled = value;
             }
             // 如果開啟，喚醒背景迴圈，或者直接依靠現有的 Loop
-            if (value && IsTranslationMode)
+            if (value && CurrentMode == SnipMode.Translation)
             {
                 StartAutoDetectLoop();
             }
@@ -88,7 +123,7 @@ public partial class SnipWindowViewModel
     /// <summary>
     /// 工具列是否可見：翻譯模式始終可見，其他模式需要在 Selected 狀態且未 Finalizing
     /// </summary>
-    public bool IsToolbarVisible => ShowToolbar && (IsTranslationMode || (CurrentState == SnipState.Selected && !IsRecordingFinalizing));
+    public bool IsToolbarVisible => ShowToolbar && (CurrentMode == SnipMode.Translation || (CurrentState == SnipState.Selected && !IsRecordingFinalizing));
 
     public string ModeDisplayName => CurrentMode switch
     {
@@ -135,10 +170,10 @@ public partial class SnipWindowViewModel
         get
         {
             // Always show during selection phase
-            if (IsRecordingMode && RecState == RecordingState.Idle) return false;
+            if (CurrentMode == SnipMode.Recording && RecState == RecordingState.Idle) return false;
             
-            bool hide = IsRecordingMode ? (_mainVm?.HideRecordSelectionDecoration ?? false) : (_mainVm?.HideSnipSelectionDecoration ?? false);
-            System.Diagnostics.Debug.WriteLine($"[SnipWindow] HideSelectionDecoration queried: {hide} (IsRecordingMode: {IsRecordingMode}, RecState: {RecState})");
+            bool hide = CurrentMode == SnipMode.Recording ? (_mainVm?.HideRecordSelectionDecoration ?? false) : (_mainVm?.HideSnipSelectionDecoration ?? false);
+            System.Diagnostics.Debug.WriteLine($"[SnipWindow] HideSelectionDecoration queried: {hide} (CurrentMode: {CurrentMode}, RecState: {RecState})");
             return hide;
         }
     }
@@ -149,10 +184,10 @@ public partial class SnipWindowViewModel
         {
             // For Recording Mode: ALWAYS show the border on screen, so the user knows what region is being captured.
             // The actual removal of the border from the output video is handled by FFmpeg cropping during StartRecording if _mainVm.HideRecordSelectionBorder is true.
-            if (IsRecordingMode) return false;
+            if (CurrentMode == SnipMode.Recording) return false;
             
             bool hide = _mainVm?.HideSnipSelectionBorder ?? false;
-            System.Diagnostics.Debug.WriteLine($"[SnipWindow] HideFrameBorder queried: {hide} (IsRecordingMode: {IsRecordingMode}, RecState: {RecState})");
+            System.Diagnostics.Debug.WriteLine($"[SnipWindow] HideFrameBorder queried: {hide} (CurrentMode: {CurrentMode}, RecState: {RecState})");
             return hide;
         }
     }
@@ -271,7 +306,7 @@ public partial class SnipWindowViewModel
 
         PinCommand = ReactiveCommand.CreateFromTask(async () => 
         {
-            if (!IsRecordingMode)
+            if (CurrentMode != SnipMode.Recording)
             {
                 await Pin(false);
             }
@@ -300,7 +335,7 @@ public partial class SnipWindowViewModel
 
         CopyCommand = ReactiveCommand.CreateFromTask(async () => 
         {
-            if (!IsRecordingMode) await Copy();
+            if (CurrentMode != SnipMode.Recording) await Copy();
             else await CopyRecording();
         }, this.WhenAnyValue(x => x.IsInputFocused, x => !x));
         CopyCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"CopyCommand error: {ex}"));
@@ -315,7 +350,7 @@ public partial class SnipWindowViewModel
         {
             if (RecState == RecordingState.Idle) 
             {
-                CurrentMode = IsRecordingMode ? SnipMode.Screenshot : SnipMode.Recording;
+                CurrentMode = CurrentMode == SnipMode.Recording ? SnipMode.Screenshot : SnipMode.Recording;
             }
         }, canExecuteHotkeys);
         ToggleModeCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
@@ -363,8 +398,8 @@ public partial class SnipWindowViewModel
         // 未進入模式 (Detecting) -> F3 -> 進入翻譯模式
         HandleF3Command = ReactiveCommand.Create(() => 
         {
-            System.Diagnostics.Debug.WriteLine($"[SnipWindowViewModel] HandleF3Command invoked. Mode: Trans={IsTranslationMode}, Rec={IsRecordingMode}");
-            if (IsTranslationMode)
+            System.Diagnostics.Debug.WriteLine($"[SnipWindowViewModel] HandleF3Command invoked. Mode: {CurrentMode}, RecState: {RecState}");
+            if (CurrentMode == SnipMode.Translation)
             {
                 // 翻譯模式：切換結果顯示
                 ShowTranslationResults = !ShowTranslationResults;
@@ -372,7 +407,7 @@ public partial class SnipWindowViewModel
             }
             
             // 錄影模式（正在錄製/暫停）：停止並釘選
-            if (IsRecordingMode && RecState != RecordingState.Idle)
+            if (CurrentMode == SnipMode.Recording && RecState != RecordingState.Idle)
             {
                 if (PinCommand != null)
                     PinCommand.Execute().Subscribe();
@@ -380,7 +415,7 @@ public partial class SnipWindowViewModel
             }
 
             // 錄影模式（空閒且已選取）：開始錄影
-            if (IsRecordingMode && RecState == RecordingState.Idle && CurrentState == SnipState.Selected)
+            if (CurrentMode == SnipMode.Recording && RecState == RecordingState.Idle && CurrentState == SnipState.Selected)
             {
                 if (StartRecordingCommand != null)
                     StartRecordingCommand.Execute().Subscribe();
@@ -400,7 +435,7 @@ public partial class SnipWindowViewModel
         {
             if (RecState == RecordingState.Idle)
             {
-                if (IsTranslationMode)
+                if (CurrentMode == SnipMode.Translation)
                 {
                     // 已在翻譯模式，點擊則切換回截圖模式
                     CurrentMode = SnipMode.Screenshot;
@@ -419,9 +454,9 @@ public partial class SnipWindowViewModel
         SetTranslationModeCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
 
         var canRemoveBackground = this.WhenAnyValue(
-            x => x.IsRecordingMode, 
+            x => x.CurrentMode, 
             x => x.ShowProcessingOverlay, 
-            (isRec, isProc) => !isRec && !isProc);
+            (mode, isProc) => mode != SnipMode.Recording && !isProc);
 
         RemoveBackgroundCommand = ReactiveCommand.CreateFromTask(async () => {
              // Pin first, then Run AI
@@ -760,7 +795,7 @@ public partial class SnipWindowViewModel
         if (_isProcessingRecording) return;
 
         // If recording is active or we are in recording mode with a valid path, use CopyRecording
-        if (IsRecordingMode)
+        if (CurrentMode == SnipMode.Recording)
         {
              var lastPath = _recordingService?.LastRecordingPath;
              bool hasVideo = !string.IsNullOrEmpty(lastPath) && System.IO.File.Exists(lastPath);
@@ -870,7 +905,7 @@ public partial class SnipWindowViewModel
         }
 
         // If recording is active or we are in recording mode with a valid path, use PinRecording
-        if (IsRecordingMode)
+        if (CurrentMode == SnipMode.Recording)
         {
             var lastPath = _recordingService?.LastRecordingPath;
             bool hasVideo = !string.IsNullOrEmpty(lastPath) && System.IO.File.Exists(lastPath);
@@ -921,7 +956,7 @@ public partial class SnipWindowViewModel
         if (RecState != RecordingState.Idle) return;
 
         // 翻譯模式下右鍵點擊空白處不關閉視窗 (避免與右鍵刪除選取框衝突)
-        if (IsTranslationMode) return;
+        if (CurrentMode == SnipMode.Translation) return;
 
         if (CurrentState == SnipState.Selecting || CurrentState == SnipState.Selected)
         {

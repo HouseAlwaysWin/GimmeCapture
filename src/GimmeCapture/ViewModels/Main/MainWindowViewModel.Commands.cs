@@ -53,8 +53,12 @@ public partial class MainWindowViewModel
     private async Task ResetToDefault()
     {
         _isDataLoading = true;
-        var defaultSettings = new AppSettings();
         
+        // Reset AppSettings directly
+        var defaultSettings = new AppSettings();
+        _settingsService.UpdateSettings(defaultSettings);
+        
+        // Populate ViewModel properties from the newly reset settings
         RunOnStartup = defaultSettings.RunOnStartup;
         AutoCheckUpdates = defaultSettings.AutoCheckUpdates;
         BorderThickness = defaultSettings.BorderThickness;
@@ -66,46 +70,20 @@ public partial class MainWindowViewModel
         RecordFormat = defaultSettings.RecordFormat;
         VideoCodec = defaultSettings.VideoCodec;
         
-        SnipRectangleHotkey = defaultSettings.SnipRectangleHotkey;
-        SnipEllipseHotkey = defaultSettings.SnipEllipseHotkey;
-        SnipArrowHotkey = defaultSettings.SnipArrowHotkey;
-        SnipLineHotkey = defaultSettings.SnipLineHotkey;
-        SnipPenHotkey = defaultSettings.SnipPenHotkey;
-        SnipTextHotkey = defaultSettings.SnipTextHotkey;
-        SnipMosaicHotkey = defaultSettings.SnipMosaicHotkey;
-        SnipBlurHotkey = defaultSettings.SnipBlurHotkey;
-        SnipUndoHotkey = defaultSettings.SnipUndoHotkey;
-        SnipRedoHotkey = defaultSettings.SnipRedoHotkey;
-        SnipClearHotkey = defaultSettings.SnipClearHotkey;
-        SnipSaveHotkey = defaultSettings.SnipSaveHotkey;
-        SnipCopyHotkey = defaultSettings.SnipCopyHotkey;
-        SnipPinHotkey = defaultSettings.SnipPinHotkey;
-        SnipCloseHotkey = defaultSettings.SnipCloseHotkey;
-        SnipToolbarHotkey = defaultSettings.SnipToolbarHotkey;
-        SnipSelectionModeHotkey = defaultSettings.SnipSelectionModeHotkey;
-        SnipCropModeHotkey = defaultSettings.SnipCropModeHotkey;
+        // Refresh all hotkey properties (they access Settings directly now)
+        var hotkeyProps = new[] {
+            nameof(SnipRectangleHotkey), nameof(SnipEllipseHotkey), nameof(SnipArrowHotkey), nameof(SnipLineHotkey), nameof(SnipPenHotkey),
+            nameof(SnipTextHotkey), nameof(SnipMosaicHotkey), nameof(SnipBlurHotkey), nameof(SnipUndoHotkey), nameof(SnipRedoHotkey),
+            nameof(SnipClearHotkey), nameof(SnipSaveHotkey), nameof(SnipCopyHotkey), nameof(SnipPinHotkey), nameof(SnipCloseHotkey),
+            nameof(SnipToolbarHotkey), nameof(SnipSelectionModeHotkey), nameof(SnipCropModeHotkey),
+            nameof(RecordRectangleHotkey), nameof(RecordEllipseHotkey), nameof(RecordArrowHotkey), nameof(RecordLineHotkey), nameof(RecordPenHotkey),
+            nameof(RecordTextHotkey), nameof(RecordMosaicHotkey), nameof(RecordBlurHotkey), nameof(RecordUndoHotkey), nameof(RecordRedoHotkey),
+            nameof(RecordClearHotkey), nameof(RecordSaveHotkey), nameof(RecordCopyHotkey), nameof(RecordCloseHotkey), nameof(RecordToolbarHotkey),
+            nameof(RecordActionHotkey), nameof(RecordPlaybackHotkey),
+            nameof(TranslateActionHotkey), nameof(TranslateToolbarHotkey), nameof(TranslateCloseHotkey)
+        };
+        foreach (var prop in hotkeyProps) this.RaisePropertyChanged(prop);
 
-        RecordRectangleHotkey = defaultSettings.RecordRectangleHotkey;
-        RecordEllipseHotkey = defaultSettings.RecordEllipseHotkey;
-        RecordArrowHotkey = defaultSettings.RecordArrowHotkey;
-        RecordLineHotkey = defaultSettings.RecordLineHotkey;
-        RecordPenHotkey = defaultSettings.RecordPenHotkey;
-        RecordTextHotkey = defaultSettings.RecordTextHotkey;
-        RecordMosaicHotkey = defaultSettings.RecordMosaicHotkey;
-        RecordBlurHotkey = defaultSettings.RecordBlurHotkey;
-        RecordUndoHotkey = defaultSettings.RecordUndoHotkey;
-        RecordRedoHotkey = defaultSettings.RecordRedoHotkey;
-        RecordClearHotkey = defaultSettings.RecordClearHotkey;
-        RecordSaveHotkey = defaultSettings.RecordSaveHotkey;
-        RecordCopyHotkey = defaultSettings.RecordCopyHotkey;
-        RecordCloseHotkey = defaultSettings.RecordCloseHotkey;
-        RecordToolbarHotkey = defaultSettings.RecordToolbarHotkey;
-        RecordActionHotkey = defaultSettings.RecordActionHotkey;
-        RecordPlaybackHotkey = defaultSettings.RecordPlaybackHotkey;
-
-        TranslateActionHotkey = defaultSettings.TranslateActionHotkey;
-        TranslateToolbarHotkey = defaultSettings.TranslateToolbarHotkey;
-        TranslateCloseHotkey = defaultSettings.TranslateCloseHotkey;
         HideSnipPinDecoration = false;
         HideSnipPinBorder = false;
         HideRecordPinDecoration = false;

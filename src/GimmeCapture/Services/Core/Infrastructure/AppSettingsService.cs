@@ -90,7 +90,7 @@ public class AppSettingsService
         }
     }
 
-    private void UpdateSettings(AppSettings source)
+    public void UpdateSettings(AppSettings source)
     {
         var dest = Settings;
         dest.Language = source.Language;
@@ -122,49 +122,50 @@ public class AppSettingsService
         dest.TempDirectory = source.TempDirectory;
         dest.SnipHotkey = source.SnipHotkey;
         dest.RecordHotkey = source.RecordHotkey;
-        dest.SnipPinHotkey = source.SnipPinHotkey;
-        dest.SnipCopyHotkey = source.SnipCopyHotkey;
         dest.TranslateHotkey = source.TranslateHotkey;
 
-        dest.SnipRectangleHotkey = source.SnipRectangleHotkey;
-        dest.SnipEllipseHotkey = source.SnipEllipseHotkey;
-        dest.SnipArrowHotkey = source.SnipArrowHotkey;
-        dest.SnipLineHotkey = source.SnipLineHotkey;
-        dest.SnipPenHotkey = source.SnipPenHotkey;
-        dest.SnipTextHotkey = source.SnipTextHotkey;
-        dest.SnipMosaicHotkey = source.SnipMosaicHotkey;
-        dest.SnipBlurHotkey = source.SnipBlurHotkey;
-        dest.SnipUndoHotkey = source.SnipUndoHotkey;
-        dest.SnipRedoHotkey = source.SnipRedoHotkey;
-        dest.SnipClearHotkey = source.SnipClearHotkey;
-        dest.SnipSaveHotkey = source.SnipSaveHotkey;
-        dest.SnipCopyHotkey = source.SnipCopyHotkey;
-        dest.SnipCloseHotkey = source.SnipCloseHotkey;
-        dest.SnipToolbarHotkey = source.SnipToolbarHotkey;
-        dest.SnipSelectionModeHotkey = source.SnipSelectionModeHotkey;
-        dest.SnipCropModeHotkey = source.SnipCropModeHotkey;
+        // Structured Hotkeys
+        dest.Snip.Rectangle = source.Snip.Rectangle;
+        dest.Snip.Ellipse = source.Snip.Ellipse;
+        dest.Snip.Arrow = source.Snip.Arrow;
+        dest.Snip.Line = source.Snip.Line;
+        dest.Snip.Pen = source.Snip.Pen;
+        dest.Snip.Text = source.Snip.Text;
+        dest.Snip.Mosaic = source.Snip.Mosaic;
+        dest.Snip.Blur = source.Snip.Blur;
+        dest.Snip.Undo = source.Snip.Undo;
+        dest.Snip.Redo = source.Snip.Redo;
+        dest.Snip.Clear = source.Snip.Clear;
+        dest.Snip.Save = source.Snip.Save;
+        dest.Snip.Copy = source.Snip.Copy;
+        dest.Snip.Pin = source.Snip.Pin;
+        dest.Snip.Close = source.Snip.Close;
+        dest.Snip.Toolbar = source.Snip.Toolbar;
+        dest.Snip.SelectionMode = source.Snip.SelectionMode;
+        dest.Snip.CropMode = source.Snip.CropMode;
 
-        dest.RecordRectangleHotkey = source.RecordRectangleHotkey;
-        dest.RecordEllipseHotkey = source.RecordEllipseHotkey;
-        dest.RecordArrowHotkey = source.RecordArrowHotkey;
-        dest.RecordLineHotkey = source.RecordLineHotkey;
-        dest.RecordPenHotkey = source.RecordPenHotkey;
-        dest.RecordTextHotkey = source.RecordTextHotkey;
-        dest.RecordMosaicHotkey = source.RecordMosaicHotkey;
-        dest.RecordBlurHotkey = source.RecordBlurHotkey;
-        dest.RecordUndoHotkey = source.RecordUndoHotkey;
-        dest.RecordRedoHotkey = source.RecordRedoHotkey;
-        dest.RecordClearHotkey = source.RecordClearHotkey;
-        dest.RecordSaveHotkey = source.RecordSaveHotkey;
-        dest.RecordCopyHotkey = source.RecordCopyHotkey;
-        dest.RecordCloseHotkey = source.RecordCloseHotkey;
-        dest.RecordToolbarHotkey = source.RecordToolbarHotkey;
-        dest.RecordActionHotkey = source.RecordActionHotkey;
-        dest.RecordPlaybackHotkey = source.RecordPlaybackHotkey;
+        dest.Record.Rectangle = source.Record.Rectangle;
+        dest.Record.Ellipse = source.Record.Ellipse;
+        dest.Record.Arrow = source.Record.Arrow;
+        dest.Record.Line = source.Record.Line;
+        dest.Record.Pen = source.Record.Pen;
+        dest.Record.Text = source.Record.Text;
+        dest.Record.Mosaic = source.Record.Mosaic;
+        dest.Record.Blur = source.Record.Blur;
+        dest.Record.Undo = source.Record.Undo;
+        dest.Record.Redo = source.Record.Redo;
+        dest.Record.Clear = source.Record.Clear;
+        dest.Record.Save = source.Record.Save;
+        dest.Record.Copy = source.Record.Copy;
+        dest.Record.Close = source.Record.Close;
+        dest.Record.Toolbar = source.Record.Toolbar;
+        dest.Record.Action = source.Record.Action;
+        dest.Record.Playback = source.Record.Playback;
 
-        dest.TranslateActionHotkey = source.TranslateActionHotkey;
-        dest.TranslateToolbarHotkey = source.TranslateToolbarHotkey;
-        dest.TranslateCloseHotkey = source.TranslateCloseHotkey;
+        dest.Translate.Action = source.Translate.Action;
+        dest.Translate.Toolbar = source.Translate.Toolbar;
+        dest.Translate.Close = source.Translate.Close;
+        
         dest.AIResourcesDirectory = source.AIResourcesDirectory;
         dest.EnableAI = source.EnableAI;
         dest.SelectedSAM2Variant = source.SelectedSAM2Variant;

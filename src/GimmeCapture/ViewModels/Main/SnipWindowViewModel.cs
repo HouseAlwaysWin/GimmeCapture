@@ -42,24 +42,24 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     public string RecordHotkey => _mainVm?.RecordHotkey ?? "F2";
     public string TranslateHotkey => _mainVm?.TranslateHotkey ?? "F3";
     
-    public string CopyHotkey => IsRecordingMode ? (_mainVm?.SnipCopyHotkey ?? "Ctrl+C") : (_mainVm?.SnipCopyHotkey ?? "Ctrl+C"); // Record doesn't usually copy but we keep for safety
-    public string UndoHotkey => IsRecordingMode ? (_mainVm?.RecordUndoHotkey ?? "Ctrl+Z") : (_mainVm?.SnipUndoHotkey ?? "Ctrl+Z");
-    public string RedoHotkey => IsRecordingMode ? (_mainVm?.RecordRedoHotkey ?? "Ctrl+Y") : (_mainVm?.SnipRedoHotkey ?? "Ctrl+Y");
-    public string ClearHotkey => IsRecordingMode ? (_mainVm?.RecordClearHotkey ?? "Delete") : (_mainVm?.SnipClearHotkey ?? "Delete");
-    public string SaveHotkey => IsRecordingMode ? (_mainVm?.RecordSaveHotkey ?? "Ctrl+S") : (_mainVm?.SnipSaveHotkey ?? "Ctrl+S");
-    public string CloseHotkey => IsTranslationMode ? (_mainVm?.TranslateCloseHotkey ?? "Escape") : (IsRecordingMode ? (_mainVm?.RecordCloseHotkey ?? "Escape") : (_mainVm?.SnipCloseHotkey ?? "Escape"));
+    public string CopyHotkey => CurrentMode == SnipMode.Recording ? (_mainVm?.RecordCopyHotkey ?? "Ctrl+C") : (_mainVm?.SnipCopyHotkey ?? "Ctrl+C");
+    public string UndoHotkey => CurrentMode == SnipMode.Recording ? (_mainVm?.RecordUndoHotkey ?? "Ctrl+Z") : (_mainVm?.SnipUndoHotkey ?? "Ctrl+Z");
+    public string RedoHotkey => CurrentMode == SnipMode.Recording ? (_mainVm?.RecordRedoHotkey ?? "Ctrl+Y") : (_mainVm?.SnipRedoHotkey ?? "Ctrl+Y");
+    public string ClearHotkey => CurrentMode == SnipMode.Recording ? (_mainVm?.RecordClearHotkey ?? "Delete") : (_mainVm?.SnipClearHotkey ?? "Delete");
+    public string SaveHotkey => CurrentMode == SnipMode.Recording ? (_mainVm?.RecordSaveHotkey ?? "Ctrl+S") : (_mainVm?.SnipSaveHotkey ?? "Ctrl+S");
+    public string CloseHotkey => CurrentMode == SnipMode.Translation ? (_mainVm?.TranslateCloseHotkey ?? "Escape") : (CurrentMode == SnipMode.Recording ? (_mainVm?.RecordCloseHotkey ?? "Escape") : (_mainVm?.SnipCloseHotkey ?? "Escape"));
     
-    public string RectangleHotkey => IsRecordingMode ? (_mainVm?.RecordRectangleHotkey ?? "R") : (_mainVm?.SnipRectangleHotkey ?? "R");
-    public string EllipseHotkey => IsRecordingMode ? (_mainVm?.RecordEllipseHotkey ?? "E") : (_mainVm?.SnipEllipseHotkey ?? "E");
-    public string ArrowHotkey => IsRecordingMode ? (_mainVm?.RecordArrowHotkey ?? "A") : (_mainVm?.SnipArrowHotkey ?? "A");
-    public string LineHotkey => IsRecordingMode ? (_mainVm?.RecordLineHotkey ?? "L") : (_mainVm?.SnipLineHotkey ?? "L");
-    public string PenHotkey => IsRecordingMode ? (_mainVm?.RecordPenHotkey ?? "P") : (_mainVm?.SnipPenHotkey ?? "P");
-    public string TextHotkey => IsRecordingMode ? (_mainVm?.RecordTextHotkey ?? "T") : (_mainVm?.SnipTextHotkey ?? "T");
-    public string MosaicHotkey => IsRecordingMode ? (_mainVm?.RecordMosaicHotkey ?? "M") : (_mainVm?.SnipMosaicHotkey ?? "M");
-    public string BlurHotkey => IsRecordingMode ? (_mainVm?.RecordBlurHotkey ?? "B") : (_mainVm?.SnipBlurHotkey ?? "B");
+    public string RectangleHotkey => CurrentMode == SnipMode.Recording ? (_mainVm?.RecordRectangleHotkey ?? "R") : (_mainVm?.SnipRectangleHotkey ?? "R");
+    public string EllipseHotkey => CurrentMode == SnipMode.Recording ? (_mainVm?.RecordEllipseHotkey ?? "E") : (_mainVm?.SnipEllipseHotkey ?? "E");
+    public string ArrowHotkey => CurrentMode == SnipMode.Recording ? (_mainVm?.RecordArrowHotkey ?? "A") : (_mainVm?.SnipArrowHotkey ?? "A");
+    public string LineHotkey => CurrentMode == SnipMode.Recording ? (_mainVm?.RecordLineHotkey ?? "L") : (_mainVm?.SnipLineHotkey ?? "L");
+    public string PenHotkey => CurrentMode == SnipMode.Recording ? (_mainVm?.RecordPenHotkey ?? "P") : (_mainVm?.SnipPenHotkey ?? "P");
+    public string TextHotkey => CurrentMode == SnipMode.Recording ? (_mainVm?.RecordTextHotkey ?? "T") : (_mainVm?.SnipTextHotkey ?? "T");
+    public string MosaicHotkey => CurrentMode == SnipMode.Recording ? (_mainVm?.RecordMosaicHotkey ?? "M") : (_mainVm?.SnipMosaicHotkey ?? "M");
+    public string BlurHotkey => CurrentMode == SnipMode.Recording ? (_mainVm?.RecordBlurHotkey ?? "B") : (_mainVm?.SnipBlurHotkey ?? "B");
 
-    public string ActiveActionHotkey => IsTranslationMode ? (_mainVm?.TranslateActionHotkey ?? "F3") : (IsRecordingMode ? (_mainVm?.RecordActionHotkey ?? "F3") : (_mainVm?.SnipPinHotkey ?? "F3"));
-    public string ActiveToolbarHotkey => IsTranslationMode ? (_mainVm?.TranslateToolbarHotkey ?? "F4") : (IsRecordingMode ? (_mainVm?.RecordToolbarHotkey ?? "F4") : (_mainVm?.SnipToolbarHotkey ?? "F4"));
+    public string ActiveActionHotkey => CurrentMode == SnipMode.Translation ? (_mainVm?.TranslateActionHotkey ?? "F3") : (CurrentMode == SnipMode.Recording ? (_mainVm?.RecordActionHotkey ?? "F3") : (_mainVm?.SnipPinHotkey ?? "F3"));
+    public string ActiveToolbarHotkey => CurrentMode == SnipMode.Translation ? (_mainVm?.TranslateToolbarHotkey ?? "F4") : (CurrentMode == SnipMode.Recording ? (_mainVm?.RecordToolbarHotkey ?? "F4") : (_mainVm?.SnipToolbarHotkey ?? "F4"));
     public string ActivePlaybackHotkey => _mainVm?.RecordPlaybackHotkey ?? "Space";
 
     public string UndoTooltip => $"{LocalizationService.Instance["Undo"]} ({UndoHotkey})";
@@ -67,7 +67,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     public string ClearTooltip => $"{LocalizationService.Instance["Clear"]} ({ClearHotkey})";
     public string SaveTooltip => $"{LocalizationService.Instance["TipSave"]} ({SaveHotkey})";
     public string CopyTooltip => $"{LocalizationService.Instance["TipCopy"]} ({CopyHotkey})";
-    public string PinTooltip => IsTranslationMode ? string.Empty : (IsRecordingMode ? $"{LocalizationService.Instance["ActionStartPin"]} ({ActiveActionHotkey})" : $"{LocalizationService.Instance["TipPin"]} ({ActiveActionHotkey})");
+    public string PinTooltip => CurrentMode == SnipMode.Translation ? string.Empty : (CurrentMode == SnipMode.Recording ? $"{LocalizationService.Instance["ActionStartPin"]} ({ActiveActionHotkey})" : $"{LocalizationService.Instance["TipPin"]} ({ActiveActionHotkey})");
     public string RectangleTooltip => $"{LocalizationService.Instance["TipRectangle"]} ({RectangleHotkey})";
     public string EllipseTooltip => $"{LocalizationService.Instance["TipEllipse"]} ({EllipseHotkey})";
     public string ArrowTooltip => $"{LocalizationService.Instance["TipArrow"]} ({ArrowHotkey})";
@@ -263,10 +263,10 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         }
 
         // Reactive toolbar positioning for translation mode
-        this.WhenAnyValue(x => x.ViewportSize, x => x.ToolbarWidth, x => x.IsTranslationMode, x => x.ActiveScreenBounds)
+        this.WhenAnyValue(x => x.ViewportSize, x => x.ToolbarWidth, x => x.CurrentMode, x => x.ActiveScreenBounds)
             .Subscribe(_ => 
             {
-                if (IsTranslationMode)
+                if (CurrentMode == SnipMode.Translation)
                 {
                     InitializeTranslationToolbarPosition();
                 }

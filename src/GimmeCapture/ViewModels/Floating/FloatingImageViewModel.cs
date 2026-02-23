@@ -63,22 +63,22 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
     public ReactiveCommand<Unit, Unit> CancelInteractiveCommand { get; private set; } = null!;
 
     // Tooltips 
-    public override string CopyHotkey => _appSettingsService?.Settings.SnipCopyHotkey ?? base.CopyHotkey;
-    public override string PinHotkey => _appSettingsService?.Settings.SnipPinHotkey ?? base.PinHotkey;
-    public override string UndoHotkey => _appSettingsService?.Settings.SnipUndoHotkey ?? base.UndoHotkey;
-    public override string RedoHotkey => _appSettingsService?.Settings.SnipRedoHotkey ?? base.RedoHotkey;
-    public override string ClearHotkey => _appSettingsService?.Settings.SnipClearHotkey ?? base.ClearHotkey;
-    public override string SaveHotkey => _appSettingsService?.Settings.SnipSaveHotkey ?? base.SaveHotkey;
-    public override string CloseHotkey => _appSettingsService?.Settings.SnipCloseHotkey ?? base.CloseHotkey;
+    public override string CopyHotkey => _appSettingsService?.Settings.Snip.Copy ?? base.CopyHotkey;
+    public override string PinHotkey => _appSettingsService?.Settings.Snip.Pin ?? base.PinHotkey;
+    public override string UndoHotkey => _appSettingsService?.Settings.Snip.Undo ?? base.UndoHotkey;
+    public override string RedoHotkey => _appSettingsService?.Settings.Snip.Redo ?? base.RedoHotkey;
+    public override string ClearHotkey => _appSettingsService?.Settings.Snip.Clear ?? base.ClearHotkey;
+    public override string SaveHotkey => _appSettingsService?.Settings.Snip.Save ?? base.SaveHotkey;
+    public override string CloseHotkey => _appSettingsService?.Settings.Snip.Close ?? base.CloseHotkey;
     
-    public override string RectangleHotkey => _appSettingsService?.Settings.SnipRectangleHotkey ?? base.RectangleHotkey;
-    public override string EllipseHotkey => _appSettingsService?.Settings.SnipEllipseHotkey ?? base.EllipseHotkey;
-    public override string ArrowHotkey => _appSettingsService?.Settings.SnipArrowHotkey ?? base.ArrowHotkey;
-    public override string LineHotkey => _appSettingsService?.Settings.SnipLineHotkey ?? base.LineHotkey;
-    public override string PenHotkey => _appSettingsService?.Settings.SnipPenHotkey ?? base.PenHotkey;
-    public override string TextHotkey => _appSettingsService?.Settings.SnipTextHotkey ?? base.TextHotkey;
-    public override string MosaicHotkey => _appSettingsService?.Settings.SnipMosaicHotkey ?? base.MosaicHotkey;
-    public override string BlurHotkey => _appSettingsService?.Settings.SnipBlurHotkey ?? base.BlurHotkey;
+    public override string RectangleHotkey => _appSettingsService?.Settings.Snip.Rectangle ?? base.RectangleHotkey;
+    public override string EllipseHotkey => _appSettingsService?.Settings.Snip.Ellipse ?? base.EllipseHotkey;
+    public override string ArrowHotkey => _appSettingsService?.Settings.Snip.Arrow ?? base.ArrowHotkey;
+    public override string LineHotkey => _appSettingsService?.Settings.Snip.Line ?? base.LineHotkey;
+    public override string PenHotkey => _appSettingsService?.Settings.Snip.Pen ?? base.PenHotkey;
+    public override string TextHotkey => _appSettingsService?.Settings.Snip.Text ?? base.TextHotkey;
+    public override string MosaicHotkey => _appSettingsService?.Settings.Snip.Mosaic ?? base.MosaicHotkey;
+    public override string BlurHotkey => _appSettingsService?.Settings.Snip.Blur ?? base.BlurHotkey;
 
     public string UndoTooltip => $"{LocalizationService.Instance["Undo"]} ({UndoHotkey})";
     public string RedoTooltip => $"{LocalizationService.Instance["Redo"]} ({RedoHotkey})";
@@ -94,7 +94,7 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
     public string TextTooltip => $"{LocalizationService.Instance["TipText"]} ({TextHotkey})";
     public string MosaicTooltip => $"{LocalizationService.Instance["TipMosaic"]} ({MosaicHotkey})";
     public string BlurTooltip => $"{LocalizationService.Instance["TipBlur"]} ({BlurHotkey})";
-    public string ToggleToolbarTooltip => $"{LocalizationService.Instance["ActionToolbar"]} ({_appSettingsService?.Settings.SnipToolbarHotkey ?? "H"})";
+    public string ToggleToolbarTooltip => $"{LocalizationService.Instance["ActionToolbar"]} ({_appSettingsService?.Settings.Snip.Toolbar ?? "H"})";
     public string CloseTooltip => $"{LocalizationService.Instance["ActionClose"]} ({CloseHotkey})";
     public string SelectionTooltip => $"{LocalizationService.Instance["TipSelectionArea"]} (S)";
     public string CropTooltip => $"{LocalizationService.Instance["TipCrop"]} (C)";

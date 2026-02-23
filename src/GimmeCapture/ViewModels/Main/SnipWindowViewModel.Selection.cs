@@ -37,10 +37,9 @@ public partial class SnipWindowViewModel
             }
             else
             {
-                // Re-entering Detecting state (e.g. from Cancel/Reset)
                 // Restart scan if enabled (only after AllScreenBounds is populated)
                 // 翻譯模式不使用 SAM2 掃描
-                if (ShowAIScanBox && !IsTranslationMode && AllScreenBounds?.Count > 0)
+                if (ShowAIScanBox && CurrentMode != SnipMode.Translation && AllScreenBounds?.Count > 0)
                 {
                     TriggerAutoScanCommand?.Execute(Unit.Default).Subscribe();
                 }
@@ -105,7 +104,7 @@ public partial class SnipWindowViewModel
                 {
                     // Trigger scan if enabled (only after AllScreenBounds is populated)
                     // 翻譯模式不使用 SAM2
-                    if (CurrentState == SnipState.Detecting && !IsTranslationMode && AllScreenBounds?.Count > 0)
+                    if (CurrentState == SnipState.Detecting && CurrentMode != SnipMode.Translation && AllScreenBounds?.Count > 0)
                     {
                         TriggerAutoScanCommand?.Execute(Unit.Default).Subscribe();
                     }
@@ -186,7 +185,7 @@ public partial class SnipWindowViewModel
             {
                 await Task.Delay(1500, token); // Check every 1.5 seconds
 
-                if (_mainVm == null || !IsTranslationMode) continue;
+                if (_mainVm == null || CurrentMode != SnipMode.Translation) continue;
                 bool isOcrReady = await _mainVm.AIResourceService.EnsureOCRAsync();
                 if (!isOcrReady) continue;
 
@@ -345,7 +344,7 @@ public partial class SnipWindowViewModel
         Geometry mainMask = new RectangleGeometry(new Rect(-100, -100, w + 200, h + 200));
 
         // 2. 處理截圖模式選取框 (全挖空)
-        if (SelectionRect.Width > 0 && SelectionRect.Height > 0 && !IsTranslationMode)
+        if (SelectionRect.Width > 0 && SelectionRect.Height > 0 && CurrentMode != SnipMode.Translation)
         {
             if (CurrentState == SnipState.Selected)
             {
@@ -364,7 +363,7 @@ public partial class SnipWindowViewModel
         }
 
         // 3. 處理翻譯模式選取框 (V8: 已翻譯不挖洞，與 Win32 Region 同步)
-        if (IsTranslationMode)
+        if (CurrentMode == SnipMode.Translation)
         {
             if (!IsTranslationSelectionActive)
             {
@@ -399,7 +398,7 @@ public partial class SnipWindowViewModel
     private double _maskOpacity = 0.5;
     public double MaskOpacity
     {
-        get => IsTranslationMode ? 0.0 : _maskOpacity;
+        get => CurrentMode == SnipMode.Translation ? 0.0 : _maskOpacity;
         set 
         {
             this.RaiseAndSetIfChanged(ref _maskOpacity, value);
@@ -555,7 +554,7 @@ public partial class SnipWindowViewModel
     {
         // 如果使用者已經手動移動過，且還在同一個螢幕範圍內，可能不需要強行置中
         // 但目前的邏輯是：只有在尚未手動移動時才自動置中
-        if (IsToolbarManuallyPositioned && IsTranslationMode)
+        if (IsToolbarManuallyPositioned && CurrentMode == SnipMode.Translation)
         {
             return;
         }
@@ -575,7 +574,7 @@ public partial class SnipWindowViewModel
     private void UpdateToolbarPosition()
     {
         // 翻譯模式下工具列位置由 InitializeTranslationToolbarPosition 管理
-        if (IsTranslationMode) return;
+        if (CurrentMode == SnipMode.Translation) return;
 
         // Default viewport fallback
         double vh = ViewportSize.Height > 0 ? ViewportSize.Height : 1080;
