@@ -67,60 +67,8 @@ public partial class SnipWindow : Window
         var props = e.GetCurrentPoint(this).Properties;
         var source = e.Source as Control;
 
-        // 1. Text Interaction (Edit / Move) - High Priority
-        if (props.IsLeftButtonPressed && _viewModel.IsDrawingMode && _viewModel.CurrentAnnotationTool == AnnotationType.Text)
-        {
-             // Convert Window Point to Selection Space for Hit Testing
-             var selectionSpacePoint = new Point(point.X - _viewModel.SelectionRect.X, point.Y - _viewModel.SelectionRect.Y);
-             
-             // Check for hit on existing text annotations (Top-most first)
-             for (int i = _viewModel.Annotations.Count - 1; i >= 0; i--)
-             {
-                 var ann = _viewModel.Annotations[i];
-                 if (ann.Type == AnnotationType.Text)
-                 {
-                     double estimatedWidth = ann.Text.Length * ann.FontSize * 0.6; 
-                     double estimatedHeight = ann.FontSize * 1.5;
-                     
-                     var rect = new Rect(ann.StartPoint.X, ann.StartPoint.Y, estimatedWidth, estimatedHeight);
-                     if (rect.Contains(selectionSpacePoint))
-                     {
-                         if (e.ClickCount == 2)
-                         {
-                             // Double Click -> Edit Mode
-                             _viewModel.RemoveAnnotation(ann);
-                             
-                             _viewModel.IsEnteringText = true;
-                             _viewModel.TextInputPosition = new Point(ann.StartPoint.X + _viewModel.SelectionRect.X, ann.StartPoint.Y + _viewModel.SelectionRect.Y);
-                             _viewModel.PendingText = ann.Text;
-                             _viewModel.CurrentFontSize = ann.FontSize;
-                             _viewModel.CurrentFontFamily = ann.FontFamily;
-                             _viewModel.IsBold = ann.IsBold;
-                             _viewModel.IsItalic = ann.IsItalic;
-                             _viewModel.SelectedColor = ann.Color;
-
-                            // Do NOT call FinishTextEntry() here. We want to START entry.
-                            
-                             // Focus Textbox
-                             var textBox = this.FindControl<TextBox>("TextInputOverlay");
-                             Avalonia.Threading.Dispatcher.UIThread.Post(() => textBox?.Focus());
-                             
-                             e.Handled = true;
-                             return;
-                         }
-                         else
-                         {
-                             // Single Click -> Start Dragging
-                             _pointerState = PointerInteractionState.DraggingAnnotation;
-                             _draggingAnnotation = ann;
-                             _dragOffset = new Point(selectionSpacePoint.X - ann.StartPoint.X, selectionSpacePoint.Y - ann.StartPoint.Y);
-                             e.Handled = true;
-                             return;
-                         }
-                     }
-                 }
-             }
-        }
+        if (TryHandleTextAnnotationPressed(point, e))
+            return;
 
         // Check for handle interaction (Move or Resize)
         // prioritized before drawing logic to allow adjustment while tool is active
@@ -133,20 +81,7 @@ public partial class SnipWindow : Window
         if (sourceControl != null && props.IsLeftButtonPressed && isMoveHandle)
         {
             System.Diagnostics.Debug.WriteLine($"[PointerPressed] Entered MoveHandle block");
-            var sel = sourceControl.DataContext as GimmeCapture.Models.UserSelectionRect;
-            if (sel == null)
-            {
-                var parent = sourceControl.GetVisualParent();
-                while (parent != null)
-                {
-                    if (parent is Control c && c.DataContext is GimmeCapture.Models.UserSelectionRect found)
-                    {
-                        sel = found;
-                        break;
-                    }
-                    parent = parent.GetVisualParent();
-                }
-            }
+            var sel = ResolveTranslationSelectionFromVisualTree(sourceControl);
 
             if (sel != null)
             {
@@ -173,20 +108,7 @@ public partial class SnipWindow : Window
         if (sourceControl != null && props.IsLeftButtonPressed && isResizeHandle)
         {
             System.Diagnostics.Debug.WriteLine($"[PointerPressed] Entered ResizeHandle block");
-            var sel = sourceControl.DataContext as GimmeCapture.Models.UserSelectionRect;
-            if (sel == null)
-            {
-                var parent = sourceControl.GetVisualParent();
-                while (parent != null)
-                {
-                    if (parent is Control c && c.DataContext is GimmeCapture.Models.UserSelectionRect found)
-                    {
-                        sel = found;
-                        break;
-                    }
-                    parent = parent.GetVisualParent();
-                }
-            }
+            var sel = ResolveTranslationSelectionFromVisualTree(sourceControl);
 
             if (sel != null)
             {
@@ -239,128 +161,14 @@ public partial class SnipWindow : Window
             }
         }
 
-        // Translation mode: selection and interaction (V7+ Restructured)
         if (_viewModel.IsTranslationMode)
         {
-            if (props.IsRightButtonPressed)
-            {
-                System.Diagnostics.Debug.WriteLine($"[TranslationRightClick] PointerPressed at {point}. Source: {sourceControl?.GetType().Name}, Name: {sourceControl?.Name}, DataContext: {sourceControl?.DataContext?.GetType().Name}");
-
-                // If right-clicking the translated text, do not delete it, let the ContextMenu handle it
-                if (sourceControl is SelectableTextBlock || sourceControl?.FindAncestorOfType<SelectableTextBlock>() != null)
-                {
-                    System.Diagnostics.Debug.WriteLine($"[TranslationRightClick] Hit SelectableTextBlock. Ignoring delete to allow ContextMenu.");
-                    return; 
-                }
-
-                // Otherwise, if right-clicking a translation box, delete it
-                var selRect = sourceControl?.DataContext as GimmeCapture.Models.UserSelectionRect;
-                if (selRect == null)
-                {
-                    var parent = sourceControl?.GetVisualParent();
-                    while (parent != null)
-                    {
-                        if (parent is Control c && c.DataContext is GimmeCapture.Models.UserSelectionRect found)
-                        {
-                            selRect = found;
-                            break;
-                        }
-                        parent = parent.GetVisualParent();
-                    }
-                }
-
-                // Fallback: Coordinate-based hit testing
-                if (selRect == null && _viewModel.UserSelections != null)
-                {
-                    // Reverse iterate to pick top-most box
-                    for (int i = _viewModel.UserSelections.Count - 1; i >= 0; i--)
-                    {
-                        var box = _viewModel.UserSelections[i];
-                        if (box.Bounds.Contains(point))
-                        {
-                            System.Diagnostics.Debug.WriteLine($"[TranslationRightClick] Coordinate hit test succeeded for box {i}.");
-                            selRect = box;
-                            break;
-                        }
-                    }
-                }
-
-                System.Diagnostics.Debug.WriteLine($"[TranslationRightClick] Final selRect resolved: {selRect != null}");
-
-                if (selRect != null)
-                {
-                    _viewModel!.UserSelections.Remove(selRect);
-                    e.Handled = true;
-                    return;
-                }
-            }
-
-            if (props.IsLeftButtonPressed)
-            {
-                // B. Selection Creation (Only if no handle/corner hit and selection-active)
-                if (_viewModel.IsTranslationSelectionActive)
-                {
-                    // V8 Selection Mode: Always allow starting a new selection, ignoring existing hits
-                    _pointerState = PointerInteractionState.TranslationSelecting;
-                    _translationSelectionStart = point;
-                    _currentTranslationSelection = new UserSelectionRect { Bounds = new Rect(point, new Size(0, 0)) };
-                    _viewModel!.UserSelections.Add(_currentTranslationSelection);
-                    
-                    // Force mask update immediately for feedback
-                    _viewModel.UpdateMask();
-                    
-                    e.Pointer.Capture(this);
-                    e.Handled = true;
-                    return;
-                }
-            }
-            
-            // D. 翻譯模式下一律 return，不讓事件掉入標準選取邏輯
-            // 已翻譯的區域在 Bubble phase 已被 SelectableTextBlock 接收
+            TryHandleTranslationPointerPressed(point, e);
             return;
         }
-        
-        if (_viewModel.IsDrawingMode && _viewModel.CurrentState == SnipState.Selected)
-        {
-            // Logic: If in drawing mode and clicked INSIDE the selection area, draw.
-            if (_viewModel.SelectionRect.Contains(point))
-            {
-                if (_viewModel.CurrentAnnotationTool == AnnotationType.Text)
-                {
-                    // Start Text Entry
-                    _viewModel.IsEnteringText = true;
-                    _viewModel.TextInputPosition = point;
-                    _viewModel.PendingText = string.Empty;
-                    
-                    e.Handled = true;
-                    return;
-                }
 
-                // Start Drawing
-                _startPoint = point;
-                var relPoint = new Point(point.X - _viewModel.SelectionRect.X, point.Y - _viewModel.SelectionRect.Y);
-                
-                _currentAnnotation = new Annotation
-                {
-                    Type = _viewModel.CurrentAnnotationTool,
-                    StartPoint = relPoint,
-                    EndPoint = relPoint,
-                    Color = _viewModel.SelectedColor,
-                    Thickness = _viewModel.CurrentThickness,
-                    FontSize = _viewModel.CurrentFontSize,
-                    DrawingModeSnapshot = _viewModel.DrawingModeSnapshot
-                };
-
-                if (_viewModel.CurrentAnnotationTool == AnnotationType.Pen)
-                {
-                    _currentAnnotation.AddPoint(relPoint);
-                }
-                
-                _viewModel.AddAnnotation(_currentAnnotation);
-                e.Handled = true;
-                return;
-            }
-        }
+        if (TryHandleDrawingStartPressed(point, e))
+            return;
 
 
         // If clicking OUTSIDE or in Idle/Detecting, start NEW selection
@@ -603,66 +411,8 @@ public partial class SnipWindow : Window
             return;
         }
 
-        // Translation Selection Moving
-        if (_pointerState == PointerInteractionState.ResizingTranslationBox && _resizingTranslationItem != null)
-        {
-            var dx = currentPoint.X - _translationResizeStartPoint.X;
-            var dy = currentPoint.Y - _translationResizeStartPoint.Y;
-
-            double newX = _originalTranslationRect.X;
-            double newY = _originalTranslationRect.Y;
-            double newW = _originalTranslationRect.Width;
-            double newH = _originalTranslationRect.Height;
-
-            switch (_translationResizeDirection)
-            {
-                case ResizeDirection.TopLeft:
-                    newX += dx; newY += dy; newW -= dx; newH -= dy;
-                    break;
-                case ResizeDirection.TopRight:
-                    newY += dy; newW += dx; newH -= dy;
-                    break;
-                case ResizeDirection.BottomLeft:
-                    newX += dx; newW -= dx; newH += dy;
-                    break;
-                case ResizeDirection.BottomRight:
-                    newW += dx; newH += dy;
-                    break;
-                case ResizeDirection.Top:
-                    newY += dy; newH -= dy;
-                    break;
-                case ResizeDirection.Bottom:
-                    newH += dy;
-                    break;
-                case ResizeDirection.Left:
-                    newX += dx; newW -= dx;
-                    break;
-                case ResizeDirection.Right:
-                    newW += dx;
-                    break;
-            }
-
-            // Apply limits (Min size 40x40 for stability V7+)
-            if (newW < 40) newW = 40;
-            if (newH < 40) newH = 40;
-            
-            _resizingTranslationItem.Bounds = new Rect(newX, newY, Math.Max(0, newW), Math.Max(0, newH));
-            _viewModel.UpdateMask();
-            e.Handled = true;
+        if (TryHandleTranslationPointerMoved(currentPoint, e))
             return;
-        }
-
-        if (_pointerState == PointerInteractionState.MovingTranslationBox && _movingTranslationSelection != null)
-        {
-            var deltaX = currentPoint.X - _translationMoveStart.X;
-            var deltaY = currentPoint.Y - _translationMoveStart.Y;
-            _movingTranslationSelection.Bounds = new Rect(
-                _originalTranslationBounds.X + deltaX,
-                _originalTranslationBounds.Y + deltaY,
-                _originalTranslationBounds.Width,
-                _originalTranslationBounds.Height);
-            return;
-        }
 
         // 2. Selection Resizing
         if (_pointerState == PointerInteractionState.ResizingSelection)
@@ -716,16 +466,9 @@ public partial class SnipWindow : Window
              return;
         }
         
-        // 4. Annotation Dragging
-        if (_pointerState == PointerInteractionState.DraggingAnnotation && _draggingAnnotation != null)
-        {
-             var selectionSpacePoint = new Point(currentPoint.X - _viewModel.SelectionRect.X, currentPoint.Y - _viewModel.SelectionRect.Y);
-             _draggingAnnotation.StartPoint = new Point(selectionSpacePoint.X - _dragOffset.X, selectionSpacePoint.Y - _dragOffset.Y);
-             _draggingAnnotation.EndPoint = _draggingAnnotation.StartPoint; 
-             return;
-        }
+        if (TryHandleAnnotationPointerMoved(currentPoint))
+            return;
 
-        // 5. Normal Selection / Translation Selection / Detecting
         if (_viewModel.CurrentState == SnipState.Selecting)
         {
             var x = Math.Min(_startPoint.X, currentPoint.X);
@@ -734,25 +477,9 @@ public partial class SnipWindow : Window
             var height = Math.Abs(currentPoint.Y - _startPoint.Y);
             _viewModel.SelectionRect = new Rect(x, y, width, height);
         }
-        else if (_pointerState == PointerInteractionState.TranslationSelecting && _currentTranslationSelection != null)
-        {
-            var x = Math.Min(_translationSelectionStart.X, currentPoint.X);
-            var y = Math.Min(_translationSelectionStart.Y, currentPoint.Y);
-            var width = Math.Abs(currentPoint.X - _translationSelectionStart.X);
-            var height = Math.Abs(currentPoint.Y - _translationSelectionStart.Y);
-            _currentTranslationSelection.Bounds = new Rect(x, y, width, height);
-        }
         else if (_viewModel.CurrentState == SnipState.Detecting && !_viewModel.IsTranslationMode)
         {
             _viewModel.UpdateDetectedRect(currentPoint);
-        }
-        else if (_viewModel.CurrentState == SnipState.Selected && _currentAnnotation != null)
-        {
-            var relPoint = new Point(currentPoint.X - _viewModel.SelectionRect.X, currentPoint.Y - _viewModel.SelectionRect.Y);
-            if (_currentAnnotation.Type == AnnotationType.Pen)
-                _currentAnnotation.AddPoint(relPoint);
-            else
-                _currentAnnotation.EndPoint = relPoint;
         }
     }
 
@@ -768,14 +495,8 @@ public partial class SnipWindow : Window
             return;
         }
 
-        if (_pointerState == PointerInteractionState.MovingTranslationBox)
-        {
-            _pointerState = PointerInteractionState.None;
-            _movingTranslationSelection = null;
-            e.Pointer.Capture(null);
-            e.Handled = true;
+        if (TryHandleTranslationPointerReleased(e))
             return;
-        }
 
         if (_pointerState == PointerInteractionState.ResizingSelection)
         {
@@ -786,27 +507,9 @@ public partial class SnipWindow : Window
              return;
         }
 
-        if (_pointerState == PointerInteractionState.ResizingTranslationBox)
-        {
-            _pointerState = PointerInteractionState.None;
-            _resizingTranslationItem = null;
-            _translationResizeDirection = ResizeDirection.None;
-            e.Pointer.Capture(null);
-            e.Handled = true;
-            return;
-        }
-
         if (_pointerState == PointerInteractionState.MovingSelection)
         {
             _pointerState = PointerInteractionState.None;
-            e.Pointer.Capture(null);
-            return;
-        }
-        
-        if (_pointerState == PointerInteractionState.DraggingAnnotation)
-        {
-            _pointerState = PointerInteractionState.None;
-            _draggingAnnotation = null;
             e.Pointer.Capture(null);
             return;
         }
@@ -824,28 +527,6 @@ public partial class SnipWindow : Window
              _viewModel.CurrentState = SnipState.Selected;
         }
 
-        // Translation mode: finish selection
-        if (_pointerState == PointerInteractionState.TranslationSelecting)
-        {
-            _pointerState = PointerInteractionState.None;
-            if (_currentTranslationSelection != null)
-            {
-                // Remove if too small (accidental clicks)
-                if (_currentTranslationSelection.Bounds.Width < 10 || _currentTranslationSelection.Bounds.Height < 5)
-                {
-                    _viewModel.UserSelections.Remove(_currentTranslationSelection);
-                }
-                
-                // Finalize mask and region
-                _viewModel.UpdateMask();
-                _currentTranslationSelection = null;
-            }
-            return;
-        }
-
-        if (_currentAnnotation != null)
-        {
-            _currentAnnotation = null;
-        }
+        TryHandleAnnotationPointerReleased(e);
     }
 }
