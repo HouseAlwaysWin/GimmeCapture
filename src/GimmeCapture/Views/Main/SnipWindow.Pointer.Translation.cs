@@ -66,9 +66,10 @@ public partial class SnipWindow
 
         System.Diagnostics.Debug.WriteLine($"[TranslationRightClick] Final selRect resolved: {selRect != null}");
 
-        if (selRect != null && _viewModel != null)
+        var vm = _viewModel;
+        if (selRect != null && vm != null)
         {
-            _viewModel.UserSelections.Remove(selRect);
+            vm.UserSelections?.Remove(selRect);
             e.Handled = true;
             return true;
         }
@@ -160,14 +161,15 @@ public partial class SnipWindow
         if (_pointerState == PointerInteractionState.TranslationSelecting)
         {
             _pointerState = PointerInteractionState.None;
+            var vm = _viewModel;
             if (_currentTranslationSelection != null)
             {
                 if (_currentTranslationSelection.Bounds.Width < 10 || _currentTranslationSelection.Bounds.Height < 5)
                 {
-                    _viewModel?.UserSelections?.Remove(_currentTranslationSelection);
+                    vm?.UserSelections?.Remove(_currentTranslationSelection);
                 }
 
-                _viewModel?.UpdateMask();
+                vm?.UpdateMask();
                 _currentTranslationSelection = null;
             }
             return true;
