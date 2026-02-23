@@ -50,6 +50,8 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
     {
         if (!OperatingSystem.IsWindows()) return;
         
+        _hotkeyStrings[id] = hotkey;
+
         if (_handle == IntPtr.Zero)
         {
             _pendingRegistrations[id] = hotkey;
@@ -83,6 +85,34 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
             _registeredIds.Remove(id);
         }
         _pendingRegistrations.Remove(id);
+    }
+
+    private readonly Dictionary<int, string> _hotkeyStrings = new();
+    private readonly Dictionary<int, string> _suspendedHotkeys = new();
+
+    public void SuspendAll()
+    {
+        if (_handle == IntPtr.Zero) return;
+        _suspendedHotkeys.Clear();
+        foreach (var id in new List<int>(_registeredIds))
+        {
+            if (_hotkeyStrings.TryGetValue(id, out var hk))
+                _suspendedHotkeys[id] = hk;
+            UnregisterHotKey(_handle, id);
+        }
+        _registeredIds.Clear();
+        System.Diagnostics.Debug.WriteLine($"[GlobalHotkey] Suspended {_suspendedHotkeys.Count} hotkeys");
+    }
+
+    public void ResumeAll()
+    {
+        if (_handle == IntPtr.Zero || _suspendedHotkeys.Count == 0) return;
+        foreach (var kvp in _suspendedHotkeys)
+        {
+            Register(kvp.Key, kvp.Value);
+        }
+        System.Diagnostics.Debug.WriteLine($"[GlobalHotkey] Resumed {_suspendedHotkeys.Count} hotkeys");
+        _suspendedHotkeys.Clear();
     }
 
     private void UnregisterAll()

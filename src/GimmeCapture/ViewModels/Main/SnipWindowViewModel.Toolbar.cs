@@ -317,6 +317,9 @@ public partial class SnipWindowViewModel
     private void InitializeToolbarCommands()
     {
         var canExecuteHotkeys = this.WhenAnyValue(x => x.IsInputFocused, x => !x);
+        var canExecuteNonTranslation = this.WhenAnyValue(
+            x => x.IsInputFocused, x => x.CurrentMode,
+            (focused, mode) => !focused && mode != SnipMode.Translation);
 
         ConfirmTextEntryCommand = ReactiveCommand.Create(() => 
         {
@@ -349,9 +352,9 @@ public partial class SnipWindowViewModel
             FocusWindowAction?.Invoke();
         });
 
-        ClearAnnotationsCommand = ReactiveCommand.Create(ClearAnnotations, canExecuteHotkeys);
+        ClearAnnotationsCommand = ReactiveCommand.Create(ClearAnnotations, canExecuteNonTranslation);
         
-        ToggleToolGroupCommand = ReactiveCommand.Create<string>(ToggleToolGroup, canExecuteHotkeys);
+        ToggleToolGroupCommand = ReactiveCommand.Create<string>(ToggleToolGroup, canExecuteNonTranslation);
         
         SelectToolCommand = ReactiveCommand.Create<AnnotationType>(t => {
             if (CurrentAnnotationTool == t)
@@ -364,7 +367,7 @@ public partial class SnipWindowViewModel
                 CurrentAnnotationTool = t;
                 IsDrawingMode = true; 
             }
-        }, canExecuteHotkeys);
+        }, canExecuteNonTranslation);
         SelectToolCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
         
         ChangeColorCommand = ReactiveCommand.Create<Color>(c => SelectedColor = c);

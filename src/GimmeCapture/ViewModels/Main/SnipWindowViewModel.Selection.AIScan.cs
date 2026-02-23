@@ -261,20 +261,21 @@ public partial class SnipWindowViewModel
         ToggleAIScanBoxCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Toggle AI Box error: {ex}"));
 
 
-        // 翻譯模式專用命令
-        TranslateAllSelectionsCommand = ReactiveCommand.CreateFromTask(TranslateAllSelectionsAsync);
+        var canExecuteInTranslation = this.WhenAnyValue(x => x.CurrentMode, mode => mode == SnipMode.Translation);
+
+        TranslateAllSelectionsCommand = ReactiveCommand.CreateFromTask(TranslateAllSelectionsAsync, canExecuteInTranslation);
         TranslateAllSelectionsCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"TranslateAll error: {ex}"));
 
-        ScanAllTextCommand = ReactiveCommand.CreateFromTask(ScanAllTextAsync);
+        ScanAllTextCommand = ReactiveCommand.CreateFromTask(ScanAllTextAsync, canExecuteInTranslation);
         ScanAllTextCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"ScanAll error: {ex}"));
 
-        ClearAllSelectionsCommand = ReactiveCommand.Create(() => UserSelections.Clear());
+        ClearAllSelectionsCommand = ReactiveCommand.Create(() => UserSelections.Clear(), canExecuteInTranslation);
         ClearAllSelectionsCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"ClearAll error: {ex}"));
 
-        ToggleTranslationSelectCommand = ReactiveCommand.Create(() => { IsTranslationSelectionActive = !IsTranslationSelectionActive; });
+        ToggleTranslationSelectCommand = ReactiveCommand.Create(() => { IsTranslationSelectionActive = !IsTranslationSelectionActive; }, canExecuteInTranslation);
         ToggleTranslationSelectCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"ToggleSelect error: {ex}"));
 
-        ToggleAutoDetectCommand = ReactiveCommand.Create(() => { IsGlobalAutoDetectEnabled = !IsGlobalAutoDetectEnabled; });
+        ToggleAutoDetectCommand = ReactiveCommand.Create(() => { IsGlobalAutoDetectEnabled = !IsGlobalAutoDetectEnabled; }, canExecuteInTranslation);
         ToggleAutoDetectCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"ToggleAutoDetect error: {ex}"));
         
         SelectTranslationToolCommand = ReactiveCommand.Create<TranslationTool>(tool => 

@@ -11,6 +11,7 @@ namespace GimmeCapture.Views.Main.Tabs;
 public partial class SettingsHotkeysTab : UserControl
 {
     private bool _tagsValidated;
+    private bool _isSuspended;
 
     public SettingsHotkeysTab()
     {
@@ -21,9 +22,9 @@ public partial class SettingsHotkeysTab : UserControl
     private void OnAttachedToVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
     {
         if (_tagsValidated) return;
-        _tagsValidated = true;
 
         if (DataContext is not MainWindowViewModel vm) return;
+        _tagsValidated = true;
 
         var tags = this.GetVisualDescendants()
             .OfType<TextBox>()
@@ -39,15 +40,56 @@ public partial class SettingsHotkeysTab : UserControl
         }
     }
 
+    private void EnsureSuspended()
+    {
+        if (_isSuspended) return;
+        if (DataContext is MainWindowViewModel vm)
+        {
+            vm.HotkeyService.SuspendAll();
+            _isSuspended = true;
+        }
+    }
+
+    private void EnsureResumed()
+    {
+        if (!_isSuspended) return;
+        if (DataContext is MainWindowViewModel vm)
+        {
+            vm.HotkeyService.ResumeAll();
+            _isSuspended = false;
+        }
+    }
+
+    private void HotkeyTextBox_GotFocus(object? sender, GotFocusEventArgs e)
+    {
+        EnsureSuspended();
+    }
+
+    private void HotkeyTextBox_LostFocus(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        EnsureResumed();
+    }
+
     private void HotkeyTextBox_KeyDown(object? sender, KeyEventArgs e)
     {
-        // Don't Record purely modifier keys
+        EnsureSuspended();
+
         var key = e.Key;
         if (key == Key.LeftCtrl || key == Key.RightCtrl ||
             key == Key.LeftAlt || key == Key.RightAlt ||
             key == Key.LeftShift || key == Key.RightShift ||
             key == Key.LWin || key == Key.RWin)
         {
+            e.Handled = true;
+            return;
+        }
+
+        if (key == Key.Escape)
+        {
+            EnsureResumed();
+            if (sender is TextBox tb)
+                (tb.GetVisualParent() as Control)?.Focus();
+            e.Handled = true;
             return;
         }
 
@@ -60,10 +102,19 @@ public partial class SettingsHotkeysTab : UserControl
 
         hotkeyStr += key.ToString();
 
-        if (DataContext is MainWindowViewModel vm && sender is TextBox tb && tb.Tag is string tag)
+        if (DataContext is MainWindowViewModel vm && sender is TextBox textBox && textBox.Tag is string tag)
         {
-            // Use service to update ViewModel hotkey
-            vm.HotkeyMappingService.UpdateViewModelHotkey(vm, tag, hotkeyStr);
+            var conflict = vm.CheckHotkeyConflict(tag, hotkeyStr);
+            if (conflict != null)
+            {
+                var conflictName = GimmeCapture.Services.Core.Infrastructure.LocalizationService.Instance[conflict] ?? conflict;
+                vm.StatusText = $"⚠ {hotkeyStr} → {conflictName}";
+                System.Diagnostics.Debug.WriteLine($"[HotkeyConflict] {hotkeyStr} conflicts with {conflict} for tag {tag}");
+            }
+            else
+            {
+                vm.HotkeyMappingService.UpdateViewModelHotkey(vm, tag, hotkeyStr);
+            }
         }
 
         e.Handled = true;
