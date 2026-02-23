@@ -113,9 +113,10 @@ public partial class MainWindow : Window
                 return folders.Count > 0 ? folders[0].Path.LocalPath : null;
             };
 
-            vm.ConfirmAction = async (title, message) =>
+            vm.ConfirmAction = async (title, message, isOkOnly) =>
             {
-                var result = await ConfirmationDialog.ShowConfirmation(this, title, message);
+                var mode = isOkOnly ? ConfirmationMode.OkOnly : ConfirmationMode.YesNoCancel;
+                var result = await ConfirmationDialog.ShowConfirmation(this, title, message, mode);
                 return result == ConfirmationResult.Yes;
             };
 

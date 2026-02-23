@@ -12,6 +12,12 @@ namespace GimmeCapture.Views.Dialogs
         Cancel
     }
 
+    public enum ConfirmationMode
+    {
+        YesNoCancel,
+        OkOnly
+    }
+
     public partial class ConfirmationDialog : Window
     {
         public ConfirmationResult Result { get; private set; } = ConfirmationResult.Cancel;
@@ -34,10 +40,55 @@ namespace GimmeCapture.Views.Dialogs
             set => SetValue(DialogMessageProperty, value);
         }
 
+        public static readonly StyledProperty<ConfirmationMode> ModeProperty =
+            AvaloniaProperty.Register<ConfirmationDialog, ConfirmationMode>(nameof(Mode), defaultValue: ConfirmationMode.YesNoCancel);
+
+        public ConfirmationMode Mode
+        {
+            get => GetValue(ModeProperty);
+            set => SetValue(ModeProperty, value);
+        }
+
+        public static readonly StyledProperty<string> PrimaryButtonTextProperty =
+            AvaloniaProperty.Register<ConfirmationDialog, string>(nameof(PrimaryButtonText), defaultValue: "Yes");
+
+        public string PrimaryButtonText
+        {
+            get => GetValue(PrimaryButtonTextProperty);
+            set => SetValue(PrimaryButtonTextProperty, value);
+        }
+
+        public static readonly StyledProperty<bool> IsExtendedModeProperty =
+            AvaloniaProperty.Register<ConfirmationDialog, bool>(nameof(IsExtendedMode), defaultValue: true);
+
+        public bool IsExtendedMode
+        {
+            get => GetValue(IsExtendedModeProperty);
+            set => SetValue(IsExtendedModeProperty, value);
+        }
+
         public ConfirmationDialog()
         {
             InitializeComponent();
             DataContext = this;
+            UpdateModeUI();
+        }
+
+        protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+        {
+            base.OnPropertyChanged(change);
+            if (change.Property == ModeProperty)
+            {
+                UpdateModeUI();
+            }
+        }
+
+        private void UpdateModeUI()
+        {
+            PrimaryButtonText = Mode == ConfirmationMode.OkOnly 
+                ? LocalizationService.Instance["UpdateBtnOk"] 
+                : LocalizationService.Instance["Yes"];
+            IsExtendedMode = Mode == ConfirmationMode.YesNoCancel;
         }
 
         public static async Task<ConfirmationResult> ShowConfirmation(Window owner)
@@ -46,12 +97,13 @@ namespace GimmeCapture.Views.Dialogs
             return await ShowConfirmation(owner, loc["UnsavedTitle"], loc["UnsavedMessage"]);
         }
 
-        public static async Task<ConfirmationResult> ShowConfirmation(Window owner, string title, string message)
+        public static async Task<ConfirmationResult> ShowConfirmation(Window owner, string title, string message, ConfirmationMode mode = ConfirmationMode.YesNoCancel)
         {
             var dialog = new ConfirmationDialog
             {
                 DialogTitle = title,
-                DialogMessage = message
+                DialogMessage = message,
+                Mode = mode
             };
             await dialog.ShowDialog(owner);
             return dialog.Result;

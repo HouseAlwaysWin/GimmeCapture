@@ -15,16 +15,6 @@ using GimmeCapture.Services.Translation;
 using SkiaSharp;
 using SKRectI = SkiaSharp.SKRectI;
 
-// Assuming TranslatedBlock was previously defined here within GimmeCapture.Services.Core
-// and needs to be moved to GimmeCapture.Models.
-// Since the definition of TranslatedBlock is not in the provided document,
-// I cannot physically move it. However, the instruction implies it exists
-// and should conceptually be in GimmeCapture.Models.
-// The existing `using GimmeCapture.Models;` statement already makes it accessible.
-// If the class definition was present, I would move it to a new namespace block.
-// As it's not present, I will assume the instruction is about its logical location
-// and that the `using` statement correctly reflects its new location.
-
 namespace GimmeCapture.Services.Translation;
 
 public class TranslationService
@@ -33,6 +23,7 @@ public class TranslationService
     private readonly IOCREngine _ocrEngine;
     private readonly IEnumerable<ITranslationEngine> _translationEngines;
     private readonly IOllamaApiClient _ollamaApiClient;
+    private readonly AIResourceService _aiResourceService;
 
     private AppSettings _settings => _settingsService.Settings;
 
@@ -41,6 +32,7 @@ public class TranslationService
         AppSettingsService settingsService, 
         MarianMTService marianMTService)
     {
+        _aiResourceService = aiResourceService ?? throw new ArgumentNullException(nameof(aiResourceService));
         _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
         
         // Manual DI for now as the app doesn't use a container in constructor injection here
@@ -58,6 +50,29 @@ public class TranslationService
             new LLMTranslationEngine(_ollamaApiClient, settingsService, translationCache),
             new MarianMTTranslationEngine(marianMTService)
         };
+    }
+
+    public async Task<ResourceReadyResult> CheckEngineReadyAsync()
+    {
+        var engineType = _settings.SelectedTranslationEngine;
+        if (engineType == TranslationEngine.MarianMT)
+        {
+            if (!_aiResourceService.IsNmtReady())
+            {
+                return ResourceReadyResult.NotReady("StatusMarianMTNotReady", true);
+            }
+        }
+        else if (engineType == TranslationEngine.Ollama)
+        {
+            var model = _settings.OllamaModel;
+            bool ready = await _ollamaApiClient.IsReadyAsync(model);
+            if (!ready)
+            {
+                return ResourceReadyResult.NotReady("StatusOllamaRequired", false);
+            }
+        }
+
+        return ResourceReadyResult.Ready();
     }
 
     public async Task<List<TranslatedBlock>> AnalyzeAndTranslateAsync(SKBitmap bitmap, double scale = 1.0, CancellationToken ct = default)

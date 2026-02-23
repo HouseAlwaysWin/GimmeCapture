@@ -45,7 +45,7 @@
             </StackPanel>
 
             <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="15" Margin="20,10,20,30">
-                <Button Content="{Binding [Yes], Source={x:Static services:LocalizationService.Instance}}" 
+                <Button Content="{Binding PrimaryButtonText}" 
                         Theme="{StaticResource GothicMetalButton}"
                         MinWidth="100" Height="40"
                         Classes="accent"
@@ -53,11 +53,13 @@
                 <Button Content="{Binding [No], Source={x:Static services:LocalizationService.Instance}}" 
                         Theme="{StaticResource GothicMetalButton}"
                         MinWidth="100" Height="40"
+                        IsVisible="{Binding IsExtendedMode}"
                         Click="OnNoClick"/>
                 <Button Content="{Binding [Cancel], Source={x:Static services:LocalizationService.Instance}}" 
                         Theme="{StaticResource GothicMetalButton}"
                         MinWidth="100" Height="40"
                         Foreground="Gray"
+                        IsVisible="{Binding IsExtendedMode}"
                         Click="OnCancelClick"/>
             </StackPanel>
         </Grid>

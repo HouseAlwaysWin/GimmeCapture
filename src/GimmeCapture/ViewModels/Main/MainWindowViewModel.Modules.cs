@@ -199,7 +199,8 @@ public partial class MainWindowViewModel
         {
             var result = await ConfirmAction(
                 LocalizationService.Instance["UpdateCheckTitle"], 
-                LocalizationService.Instance["ConfirmCancelDownload"]);
+                LocalizationService.Instance["ConfirmCancelDownload"],
+                false);
 
             if (result)
             {
@@ -214,7 +215,8 @@ public partial class MainWindowViewModel
         {
             var result = await (ConfirmAction?.Invoke(
                 LocalizationService.Instance["TabModules"], 
-                LocalizationService.Instance["ConfirmRemoveModule"]) ?? Task.FromResult(false));
+                LocalizationService.Instance["ConfirmRemoveModule"],
+                false) ?? Task.FromResult(false));
 
             if (!result) return;
 

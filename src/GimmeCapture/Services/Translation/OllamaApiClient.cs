@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
@@ -82,9 +84,9 @@ public class OllamaApiClient : IOllamaApiClient
                 var models = doc.RootElement.GetProperty("models").EnumerateArray();
 
                 var result = new List<string>();
-                foreach (var model in models)
+                foreach (var modelItem in models)
                 {
-                    result.Add(model.GetProperty("name").GetString() ?? string.Empty);
+                    result.Add(modelItem.GetProperty("name").GetString() ?? string.Empty);
                 }
 
                 return (IReadOnlyList<string>)result;
@@ -103,6 +105,18 @@ public class OllamaApiClient : IOllamaApiClient
         }
 
         return names;
+    }
+
+    public async Task<bool> IsReadyAsync(string model, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(model)) return false;
+
+        var models = await GetModelsAsync(ct);
+        if (models.Count == 0) return false;
+
+        // Check for exact match or name:latest match
+        return models.Any(m => m.Equals(model, StringComparison.OrdinalIgnoreCase) || 
+                               m.Equals($"{model}:latest", StringComparison.OrdinalIgnoreCase));
     }
 
     private string BuildGenerateUrl()

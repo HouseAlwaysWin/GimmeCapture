@@ -26,6 +26,8 @@ public partial class SnipWindowViewModel
             return;
         }
 
+        if (!await EnsureTranslationEngineReadyAsync()) return;
+
         System.Diagnostics.Debug.WriteLine($"[TranslationMode] Proceeding to translate {UserSelections.Count} regions");
         ShowTopLoadingBar = true;
         IsIndeterminate = true;
@@ -131,6 +133,8 @@ public partial class SnipWindowViewModel
     private async Task ScanAllTextAsync()
     {
         System.Diagnostics.Debug.WriteLine("[TranslationMode] ScanAllText triggered");
+
+        if (!await EnsureTranslationEngineReadyAsync()) return;
 
         ShowTopLoadingBar = true;
         IsIndeterminate = true;
@@ -326,5 +330,46 @@ public partial class SnipWindowViewModel
             sel.Bounds = new Rect(sel.Bounds.X, sel.Bounds.Y, newWidth, newHeight);
             System.Diagnostics.Debug.WriteLine($"[AutoFit] Expanded to {newWidth:F0}x{newHeight:F0} for {totalLines} lines, text='{text}'");
         }
+    }
+
+    private async Task<bool> EnsureTranslationEngineReadyAsync()
+    {
+        if (_translationService == null)
+        {
+            if (_mainVm?.AIResourceService == null) return false;
+            _translationService = new TranslationService(_mainVm.AIResourceService, _mainVm.AppSettingsService, _mainVm.MarianMTService);
+        }
+
+        var result = await _translationService.CheckEngineReadyAsync();
+        if (result.IsReady) return true;
+
+        if (_mainVm != null && result.ErrorKey != null)
+        {
+            var title = LocalizationService.Instance["StatusError"];
+            var message = LocalizationService.Instance[result.ErrorKey];
+
+            if (result.ShowDownloadPrompt)
+            {
+                // Confirmation format: Title, Message
+                var userConfirmed = await _mainVm.ConfirmAction!(title, message, false);
+                if (userConfirmed)
+                {
+                    // For MarianMT, triggering download
+                    ShowTopLoadingBar = true;
+                    IsIndeterminate = true;
+                    var success = await _mainVm.AIResourceService.EnsureNmtAsync();
+                    ShowTopLoadingBar = false;
+                    IsIndeterminate = false;
+                    return success;
+                }
+            }
+            else
+            {
+                // General reminder (Ollama)
+                await _mainVm.ConfirmAction!(title, message, true);
+            }
+        }
+
+        return false;
     }
 }

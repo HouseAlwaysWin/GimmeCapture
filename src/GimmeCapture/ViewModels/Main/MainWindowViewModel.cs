@@ -89,7 +89,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public Action<CaptureMode>? RequestCaptureAction { get; set; }
     public Func<Task<string?>>? PickFolderAction { get; set; }
-    public Func<string, string, Task<bool>>? ConfirmAction { get; set; }
+    public Func<string, string, bool, Task<bool>>? ConfirmAction { get; set; }
     
     public AppSettingsService AppSettingsService => _settingsService;
     private readonly AppSettingsService _settingsService;
