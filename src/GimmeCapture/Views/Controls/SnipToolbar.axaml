@@ -242,7 +242,7 @@
             <Button Theme="{StaticResource SnipButton}" FontSize="12" BorderThickness="1"
                     Command="{Binding ToggleToolbarCommand}"
                     ToolTip.Tip="隱藏工具列 (F4)">
-                <PathIcon Data="M11.83,9L15,12.17V12.11L11.83,9M15,10.11L17.39,12.5L15,14.89V10.11M6,3V6H3V3H6M19,3H22V6H19V3M3,8H5.97L9,11H3V8M13.13,10.31L15.82,13H13V15.82L10.31,13.13L13.13,10.31M15,18.89L17.39,16.5L15,14.11V18.89M22,8V11H16L19.03,8H22M3,19H6V22H3V19M19,19H22V22H19V19M6,22H18V21H6V22M18,3H6V4H18V3Z" Width="14" Height="14"/>
+                <PathIcon Data="M10.71,9.29a1,1,0,0,0-1.42,0L4.29,14.29a1,1,0,0,0,1.42,1.42L10,11.41l4.29,4.3a1,1,0,0,0,1.42-1.42Z" Width="14" Height="14"/>
             </Button>
 
         </WrapPanel>
