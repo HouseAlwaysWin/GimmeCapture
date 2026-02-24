@@ -220,5 +220,8 @@
   "HideTranslationResults": "翻訳結果を表示/非表示",
   "StatusTranslateNoSelection": "翻訳する範囲を先に選択してください。",
   "Input": "入力",
-  "Output": "出力"
+  "Output": "出力",
+  "TranslateModeCursor": "通常モード",
+  "TranslateModeSingle": "単一選択",
+  "TranslateModeMulti": "複数選択"
 }

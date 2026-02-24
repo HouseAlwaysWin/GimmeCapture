@@ -233,7 +233,10 @@
   "HideTranslationResults": "顯示/隱藏翻譯結果",
   "StatusTranslateNoSelection": "請先框選要翻譯的區域。",
   "Input": "輸入",
-  "Output": "輸出"
+  "Output": "輸出",
+  "TranslateModeCursor": "一般模式",
+  "TranslateModeSingle": "單選模式",
+  "TranslateModeMulti": "多選模式"
 }
 
 

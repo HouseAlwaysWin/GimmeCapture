@@ -139,19 +139,32 @@
             <!-- 5c. Translation Mode Actions (only visible in translation mode) -->
             <Rectangle Fill="#444444" Width="1" Height="16" Margin="4,0" VerticalAlignment="Center" IsVisible="{Binding IsTranslationMode}"/>
             
-            <ToggleButton Theme="{StaticResource SnipToggleButton}" FontSize="12" BorderThickness="1"
-                          IsVisible="{Binding IsTranslationMode}"
-                          IsChecked="{Binding IsTranslationSelectionActive, Mode=TwoWay}"
-                          ToolTip.Tip="{Binding ToggleSelectTooltip}">
-                <Panel>
-                    <!-- Current active tool icon -->
-                    <PathIcon Data="M19,13h-6v6h-2v-6H5v-2h6V5h2v6h6V13z" Width="14" Height="14" 
-                              IsVisible="{Binding IsTranslationSelectionActive}"/>
-                    <!-- Mouse Cursor Icon -->
-                    <PathIcon Data="M13.64,21.97C13.14,22.21 12.54,22 12.31,21.5L10.13,16.76L7.62,18.78C7.45,18.92 7.24,19 7,19A1,1 0 0,1 6,18V3A1,1 0 0,1 7,2C7.24,2 7.47,2.09 7.64,2.23L22.65,12.22C23.11,12.5 23.25,13.11 22.95,13.57C22.82,13.78 22.63,13.92 22.4,14L17.58,15.65L19.85,20.41C20.08,20.91 19.86,21.5 19.36,21.73L13.64,21.97Z" Width="14" Height="14" 
-                              IsVisible="{Binding !IsTranslationSelectionActive}"/>
-                </Panel>
-            </ToggleButton>
+            <!-- Translation Sub-Modes -->
+            <StackPanel Orientation="Horizontal" IsVisible="{Binding IsTranslationMode}" VerticalAlignment="Center" Spacing="2">
+                <!-- Cursor Mode (Edit/Functional) -->
+                <ToggleButton Theme="{StaticResource SnipToolButton}" 
+                              IsChecked="{Binding IsTranslationCursorMode, Mode=TwoWay}"
+                              Classes.active="{Binding IsTranslationCursorMode}"
+                              ToolTip.Tip="{Binding [TranslateModeCursor], Source={x:Static infra:LocalizationService.Instance}}">
+                    <PathIcon Data="M13.63,21.94L10.12,16.71L7.6,18.73C7.43,18.87 7.22,18.95 7,18.95A1,1 0 0,1 6,17.95V2.95A1,1 0 0,1 7,1.95C7.24,1.95 7.47,2.04 7.64,2.18L22.65,12.17C23.11,12.45 23.25,13.06 22.95,13.52C22.82,13.73 22.63,13.87 22.4,13.95L17.58,15.6L19.85,20.36C20.08,20.86 19.86,21.45 19.36,21.68L13.63,21.94Z" Width="14" Height="14"/>
+                </ToggleButton>
+                
+                <!-- Single Mode (Default) -->
+                <ToggleButton Theme="{StaticResource SnipToolButton}" 
+                              IsChecked="{Binding IsTranslationSingleMode, Mode=TwoWay}"
+                              Classes.active="{Binding IsTranslationSingleMode}"
+                              ToolTip.Tip="{Binding [TranslateModeSingle], Source={x:Static infra:LocalizationService.Instance}}">
+                    <PathIcon Data="M4,4H20V20H4V4M6,6V18H18V6H6Z" Width="14" Height="14"/>
+                </ToggleButton>
+
+                <!-- Multi Mode -->
+                <ToggleButton Theme="{StaticResource SnipToolButton}" 
+                              IsChecked="{Binding IsTranslationMultiMode, Mode=TwoWay}"
+                              Classes.active="{Binding IsTranslationMultiMode}"
+                              ToolTip.Tip="{Binding [TranslateModeMulti], Source={x:Static infra:LocalizationService.Instance}}">
+                    <PathIcon Data="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z" Width="14" Height="14"/>
+                </ToggleButton>
+            </StackPanel>
             
             <!-- Language Selection (Translation Mode Only) -->
             <StackPanel Orientation="Horizontal" IsVisible="{Binding IsTranslationMode}" VerticalAlignment="Center" Margin="4,0">

@@ -233,5 +233,8 @@
   "HideTranslationResults": "Show/Hide Translation Results",
   "StatusTranslateNoSelection": "Please select a region before translating.",
   "Input": "Input",
-  "Output": "Output"
+  "Output": "Output",
+  "TranslateModeCursor": "Cursor Mode",
+  "TranslateModeSingle": "Single Selection",
+  "TranslateModeMulti": "Multi Selection"
 }

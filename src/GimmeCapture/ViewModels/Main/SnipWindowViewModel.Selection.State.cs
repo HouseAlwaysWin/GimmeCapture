@@ -525,7 +525,7 @@ public partial class SnipWindowViewModel
         set => this.RaiseAndSetIfChanged(ref _isToolbarManuallyPositioned, value);
     }
 
-    private TranslationTool _currentTranslationTool = TranslationTool.Select;
+    private TranslationTool _currentTranslationTool = TranslationTool.Single;
     public TranslationTool CurrentTranslationTool
     {
         get => _currentTranslationTool;
@@ -533,14 +533,41 @@ public partial class SnipWindowViewModel
         {
             this.RaiseAndSetIfChanged(ref _currentTranslationTool, value);
             this.RaisePropertyChanged(nameof(IsTranslationSelectionActive));
+            this.RaisePropertyChanged(nameof(IsTranslationCursorMode));
+            this.RaisePropertyChanged(nameof(IsTranslationSingleMode));
+            this.RaisePropertyChanged(nameof(IsTranslationMultiMode));
             UpdateMask();
         }
     }
 
     public bool IsTranslationSelectionActive
     {
-        get => CurrentTranslationTool == TranslationTool.Select;
-        set => CurrentTranslationTool = value ? TranslationTool.Select : TranslationTool.Edit;
+        get => CurrentTranslationTool == TranslationTool.Single || CurrentTranslationTool == TranslationTool.Multi;
+        set 
+        {
+            if (value && CurrentTranslationTool == TranslationTool.Cursor)
+                CurrentTranslationTool = TranslationTool.Single;
+            else if (!value)
+                CurrentTranslationTool = TranslationTool.Cursor;
+        }
+    }
+
+    public bool IsTranslationCursorMode
+    {
+        get => CurrentTranslationTool == TranslationTool.Cursor;
+        set { if (value) CurrentTranslationTool = TranslationTool.Cursor; }
+    }
+
+    public bool IsTranslationSingleMode
+    {
+        get => CurrentTranslationTool == TranslationTool.Single;
+        set { if (value) CurrentTranslationTool = TranslationTool.Single; }
+    }
+
+    public bool IsTranslationMultiMode
+    {
+        get => CurrentTranslationTool == TranslationTool.Multi;
+        set { if (value) CurrentTranslationTool = TranslationTool.Multi; }
     }
 
     // 翻譯工具列位置（可拖曳，預設螢幕中間上方）

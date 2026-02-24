@@ -23,6 +23,12 @@ public partial class SnipWindow
 
         if (props.IsLeftButtonPressed && _viewModel.IsTranslationSelectionActive)
         {
+            // 如果是單選模式，先清除之前的選取
+            if (_viewModel.CurrentTranslationTool == TranslationTool.Single)
+            {
+                _viewModel.UserSelections.Clear();
+            }
+
             _pointerState = PointerInteractionState.TranslationSelecting;
             _translationSelectionStart = point;
             _currentTranslationSelection = new UserSelectionRect { Bounds = new Rect(point, new Size(0, 0)) };

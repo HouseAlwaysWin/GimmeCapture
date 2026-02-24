@@ -8,8 +8,9 @@ namespace GimmeCapture.Models;
 /// </summary>
 public enum TranslationTool
 {
-    Select, // 手動選取模式
-    Edit    // 編輯與功能選單模式
+    Cursor, // 一般模式 (編輯與功能選單模式)
+    Single, // 單選模式 (截圖模式一致)
+    Multi   // 多選模式
 }
 
 /// <summary>
