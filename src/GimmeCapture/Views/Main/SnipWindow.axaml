@@ -349,8 +349,12 @@
                                                    VerticalAlignment="Center">
                                     <SelectableTextBlock.ContextMenu>
                                         <ContextMenu>
-                                            <MenuItem Header="複製翻譯文字" 
+                                            <MenuItem Header="{Binding $parent[Window].DataContext.MenuCopyTranslation}" 
                                                       Command="{Binding $parent[Window].DataContext.CopyTranslationTextCommand}"
+                                                      CommandParameter="{Binding}"/>
+                                            <Separator/>
+                                            <MenuItem Header="{Binding $parent[Window].DataContext.MenuPinTranslation}" 
+                                                      Command="{Binding $parent[Window].DataContext.PinTranslationCommand}"
                                                       CommandParameter="{Binding}"/>
                                         </ContextMenu>
                                     </SelectableTextBlock.ContextMenu>
@@ -441,8 +445,12 @@
                                                            xml:space="preserve">
                                             <SelectableTextBlock.ContextMenu>
                                                 <ContextMenu>
-                                                    <MenuItem Header="複製翻譯文字" 
+                                                    <MenuItem Header="{Binding $parent[Window].DataContext.MenuCopyTranslation}" 
                                                               Command="{Binding $parent[Window].DataContext.CopyTranslationTextCommand}"
+                                                              CommandParameter="{Binding $parent[SelectableTextBlock].DataContext}"/>
+                                                    <Separator/>
+                                                    <MenuItem Header="{Binding $parent[Window].DataContext.MenuPinTranslation}" 
+                                                              Command="{Binding $parent[Window].DataContext.PinTranslationCommand}"
                                                               CommandParameter="{Binding $parent[SelectableTextBlock].DataContext}"/>
                                                     <Separator/>
                                                     <MenuItem Header="刪除區域" 

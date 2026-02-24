@@ -372,4 +372,65 @@ public partial class SnipWindowViewModel
 
         return false;
     }
+
+    /// <summary>
+    /// 釘選翻譯結果（支援可選取文字）
+    /// </summary>
+    private async Task PinTranslationAsync(object? item)
+    {
+        if (item == null) return;
+
+        Rect bounds = new Rect();
+        string? text = null;
+        double fontSize = 12.0;
+
+        if (item is UserSelectionRect sel)
+        {
+            bounds = sel.Bounds;
+            text = sel.TranslatedText;
+            fontSize = sel.InferredFontSize;
+        }
+        else if (item is TranslatedBlock block)
+        {
+            bounds = block.Bounds;
+            text = block.TranslatedText;
+            fontSize = block.InferredFontSize;
+        }
+
+        if (bounds.Width <= 0 || bounds.Height <= 0) return;
+
+        // 隱藏視窗以便擷取乾淨的螢幕畫面
+        HideAction?.Invoke();
+        await Task.Delay(200); // 等待視窗完全隱藏
+
+        try
+        {
+            // 擷取翻譯區域的背景圖
+            using var skBitmap = await _captureService.CaptureScreenAsync(bounds, ScreenOffset, VisualScaling, false);
+
+            if (skBitmap != null)
+            {
+                // 將 SKBitmap 轉換為 Avalonia Bitmap
+                using var image = SkiaSharp.SKImage.FromBitmap(skBitmap);
+                using var data = image.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
+                using var stream = new System.IO.MemoryStream();
+                data.SaveTo(stream);
+                stream.Position = 0;
+
+                var avaloniaBitmap = new Avalonia.Media.Imaging.Bitmap(stream);
+
+                // 開啟釘選視窗，並傳入翻譯文字與字體大小 metadata
+                OpenPinWindowAction?.Invoke(avaloniaBitmap, bounds, SelectionBorderColor, SelectionBorderThickness, false, false, text, fontSize);
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[TranslationMode] PinTranslation error: {ex}");
+        }
+        finally
+        {
+            // 釘選後關閉擷取工作
+            CloseAction?.Invoke();
+        }
+    }
 }

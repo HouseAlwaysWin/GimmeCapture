@@ -223,5 +223,7 @@
   "Output": "出力",
   "TranslateModeCursor": "通常モード",
   "TranslateModeSingle": "単一選択",
-  "TranslateModeMulti": "複数選択"
+  "TranslateModeMulti": "複数選択",
+  "MenuPinTranslation": "翻訳結果をピン留め",
+  "CopyTranslation": "翻訳テキストをコピー"
 }

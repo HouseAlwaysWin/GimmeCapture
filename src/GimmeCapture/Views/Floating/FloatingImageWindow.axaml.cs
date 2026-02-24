@@ -58,10 +58,10 @@ public partial class FloatingImageWindow : FloatingWindowBase
         {
             // Specific Image VM Setup
             
-            vm.OpenPinWindowAction ??= (bitmap, rect, color, thickness, runAI) =>
+            vm.OpenPinWindowAction ??= (bitmap, rect, color, thickness, runAI, initialInteractive, pinnedText, inferredFontSize) =>
             {
                 var newVm = new FloatingImageViewModel(bitmap, rect.Width, rect.Height, color, thickness, vm.HidePinDecoration, vm.HidePinBorder, 
-                    vm.ClipboardService, vm.AIResourceService, vm.AppSettingsService, vm.AIPathService);
+                    vm.ClipboardService, vm.AIResourceService, vm.AppSettingsService, vm.AIPathService, pinnedText, inferredFontSize);
                 
                 newVm.WingScale = vm.WingScale;
                 newVm.CornerIconScale = vm.CornerIconScale;

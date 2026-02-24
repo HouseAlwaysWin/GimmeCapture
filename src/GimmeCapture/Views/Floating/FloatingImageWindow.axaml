@@ -176,6 +176,21 @@
                                     <DropShadowEffect BlurRadius="10" Color="Yellow" Opacity="0.8"/>
                                 </Image.Effect>
                             </Image>
+
+                            <!-- Selectable Text Overlay for Pinned Translation -->
+                            <Border IsVisible="{Binding PinnedText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                                    Padding="10" Background="#CC000000" CornerRadius="4"
+                                    IsHitTestVisible="True" ZIndex="10"
+                                    MaxWidth="{Binding DisplayWidth}"
+                                    MaxHeight="{Binding DisplayHeight}">
+                                <SelectableTextBlock Text="{Binding PinnedText}"
+                                                   Foreground="White"
+                                                   FontSize="{Binding ScaledFontSize}"
+                                                   TextWrapping="Wrap"
+                                                   TextAlignment="Center"
+                                                   xml:space="preserve"/>
+                            </Border>
                         </Grid>
                             
                         <!-- Decoration Layer (Unified) -->

@@ -59,6 +59,23 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
     private readonly ObservableAsPropertyHelper<bool> _canRemoveBackground;
     public bool CanRemoveBackground => _canRemoveBackground.Value;
 
+    // Pinned Translation Support
+    private string? _pinnedText;
+    public string? PinnedText
+    {
+        get => _pinnedText;
+        set => this.RaiseAndSetIfChanged(ref _pinnedText, value);
+    }
+
+    private double _inferredFontSize = 12.0;
+    public double InferredFontSize
+    {
+        get => _inferredFontSize;
+        set => this.RaiseAndSetIfChanged(ref _inferredFontSize, value);
+    }
+
+    public double ScaledFontSize => InferredFontSize * (DisplayWidth / Math.Max(1, OriginalWidth));
+
     public ReactiveCommand<Unit, Unit> RemoveBackgroundCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> ConfirmInteractiveCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> CancelInteractiveCommand { get; private set; } = null!;
@@ -195,7 +212,7 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
 
 
     // Actions
-    public System.Action<Bitmap, Avalonia.Rect, Avalonia.Media.Color, double, bool>? OpenPinWindowAction { get; set; }
+    public System.Action<Bitmap, Avalonia.Rect, Avalonia.Media.Color, double, bool, bool, string?, double>? OpenPinWindowAction { get; set; }
 
     // Commands
     public ReactiveCommand<Unit, Unit> CopyCommand { get; private set; } = null!;
@@ -218,7 +235,7 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
 
     public override bool IsAnyToolActive => base.IsAnyToolActive || IsPointRemovalMode;
 
-    public FloatingImageViewModel(Bitmap image, double originalWidth, double originalHeight, Avalonia.Media.Color borderColor, double borderThickness, bool hideDecoration, bool hideBorder, IClipboardService clipboardService, AIResourceService aiResourceService, AppSettingsService appSettingsService, AIPathService pathService)
+    public FloatingImageViewModel(Bitmap image, double originalWidth, double originalHeight, Avalonia.Media.Color borderColor, double borderThickness, bool hideDecoration, bool hideBorder, IClipboardService clipboardService, AIResourceService aiResourceService, AppSettingsService appSettingsService, AIPathService pathService, string? pinnedText = null, double inferredFontSize = 12.0)
     {
         Image = image;
         OriginalWidth = originalWidth;
@@ -229,6 +246,8 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
         BorderThickness = borderThickness;
         HidePinDecoration = hideDecoration;
         HidePinBorder = hideBorder;
+        PinnedText = pinnedText;
+        InferredFontSize = inferredFontSize;
         _clipboardService = clipboardService;
         _windowManager = new AvaloniaWindowManager();
         _aiResourceService = aiResourceService;

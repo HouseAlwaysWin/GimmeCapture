@@ -389,7 +389,7 @@ public partial class SnipWindow : Window
                  return file?.Path.LocalPath;
             };
 
-            _viewModel.OpenPinWindowAction = (bitmap, rect, color, thickness, runAI, initialInteractive) =>
+            _viewModel.OpenPinWindowAction = (bitmap, rect, color, thickness, runAI, initialInteractive, pinnedText, inferredFontSize) =>
             {
                 // Use settings directly from MainVm to ensure consistency
                 bool hideDecoration = _viewModel.MainVm?.HideSnipPinDecoration ?? false;
@@ -404,7 +404,7 @@ public partial class SnipWindow : Window
                 }
                 
                 if (_viewModel.MainVm == null) return;
-                var vm = new FloatingImageViewModel(bitmap, rect.Width, rect.Height, color, thickness, hideDecoration, hideBorder, _clipboardService, aiService, _viewModel.MainVm.AppSettingsService, _viewModel.MainVm.AIPathService);
+                var vm = new FloatingImageViewModel(bitmap, rect.Width, rect.Height, color, thickness, hideDecoration, hideBorder, _clipboardService, aiService, _viewModel.MainVm.AppSettingsService, _viewModel.MainVm.AIPathService, pinnedText, inferredFontSize);
                 vm.WingScale = _viewModel.WingScale;
                 vm.CornerIconScale = _viewModel.CornerIconScale;
                 

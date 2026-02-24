@@ -197,7 +197,7 @@ public abstract class FloatingWindowBase : Window
         var vFallback = visualSource;
         while (vFallback != null)
         {
-            if (vFallback is Button || vFallback is ToggleButton || vFallback is ICommandSource || vFallback is ContextMenu || vFallback is TextBox || vFallback is Slider || vFallback is Thumb)
+            if (vFallback is Button || vFallback is ToggleButton || vFallback is ICommandSource || vFallback is ContextMenu || vFallback is TextBox || vFallback is Slider || vFallback is Thumb || vFallback is SelectableTextBlock)
                 return;
             vFallback = vFallback.GetVisualParent();
         }

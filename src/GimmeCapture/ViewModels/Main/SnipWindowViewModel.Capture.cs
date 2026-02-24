@@ -155,7 +155,7 @@ public partial class SnipWindowViewModel
                 var avaloniaBitmap = new Avalonia.Media.Imaging.Bitmap(stream);
 
                 // Open Floating Window
-                OpenPinWindowAction?.Invoke(avaloniaBitmap, SelectionRect, SelectionBorderColor, SelectionBorderThickness, runAI, initialInteractive);
+                OpenPinWindowAction?.Invoke(avaloniaBitmap, SelectionRect, SelectionBorderColor, SelectionBorderThickness, runAI, initialInteractive, null, 12.0);
             }
             finally
             {

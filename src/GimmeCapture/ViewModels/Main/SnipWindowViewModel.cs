@@ -114,6 +114,9 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     public string TogglePlaybackTooltip => $"{LocalizationService.Instance["ActionPlayback"]} ({ActivePlaybackHotkey})";
     public string RemoveBackgroundTooltip => $"{LocalizationService.Instance["RemoveBackground"]} ({RemoveBackgroundHotkey})";
     public string MagicWandTooltip => $"{LocalizationService.Instance["TipMagicWand"]} ({MagicWandHotkey})";
+    
+    public string MenuPinTranslation => LocalizationService.Instance["MenuPinTranslation"];
+    public string MenuCopyTranslation => LocalizationService.Instance["CopyTranslation"] ?? "Copy Translation";
 
     public Color ThemeColor => _mainVm?.ThemeColor ?? Colors.Red;
     public Color ThemeDeepColor 
@@ -137,7 +140,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     public Action? CloseRecordingProgressWindowAction { get; set; }
     public Action? SaveAction { get; set; }
     public Action? FocusWindowAction { get; set; }
-    public Action<Avalonia.Media.Imaging.Bitmap, Rect, Color, double, bool, bool>? OpenPinWindowAction { get; set; }
+    public Action<Avalonia.Media.Imaging.Bitmap, Rect, Color, double, bool, bool, string?, double>? OpenPinWindowAction { get; set; }
     public Func<Task<string?>>? PickSaveFileAction { get; set; }
 
     public static class StaticData

@@ -248,6 +248,7 @@ public partial class SnipWindowViewModel
     public ReactiveCommand<UserSelectionRect, Unit> RemoveUserSelectionCommand { get; set; } = null!;
     public ReactiveCommand<TranslationTool, Unit> SelectTranslationToolCommand { get; set; } = null!;
     public ReactiveCommand<UserSelectionRect, Unit> CopyTranslationTextCommand { get; set; } = null!;
+    public ReactiveCommand<object?, Unit> PinTranslationCommand { get; set; } = null!;
 
     private void InitializeSelectionCommands()
     {
@@ -296,6 +297,9 @@ public partial class SnipWindowViewModel
             }
         });
         CopyTranslationTextCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Copy Translation error: {ex}"));
+
+        PinTranslationCommand = ReactiveCommand.CreateFromTask<object?>(PinTranslationAsync);
+        PinTranslationCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Pin Translation error: {ex}"));
 
         // 監聽集合變更以即時更新遮罩挖空，並訂閱項目的屬性變更
         UserSelections.CollectionChanged += (s, e) => 
