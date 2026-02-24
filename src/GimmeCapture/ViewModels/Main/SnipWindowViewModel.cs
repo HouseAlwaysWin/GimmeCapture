@@ -145,6 +145,21 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     }
     public IEnumerable<Color> PresetColors => StaticData.ColorsList;
 
+    public OCRLanguage SourceLanguage
+    {
+        get => _mainVm?.SourceLanguage ?? OCRLanguage.Auto;
+        set { if (_mainVm != null) _mainVm.SourceLanguage = value; this.RaisePropertyChanged(); }
+    }
+
+    public TranslationLanguage TargetLanguage
+    {
+        get => _mainVm?.TargetLanguage ?? TranslationLanguage.TraditionalChinese;
+        set { if (_mainVm != null) _mainVm.TargetLanguage = value; this.RaisePropertyChanged(); }
+    }
+
+    public List<OCRLanguage> AvailableOCRLanguages => _mainVm?.AvailableOCRLanguages ?? Enum.GetValues<OCRLanguage>().ToList();
+    public List<TranslationLanguage> AvailableTranslationLanguages => _mainVm?.AvailableTranslationLanguages ?? Enum.GetValues<TranslationLanguage>().ToList();
+
     public SnipWindowViewModel() : this(Colors.Red, 2.0, 0.5, null, null) { }
 
     public SnipWindowViewModel(Color borderColor, double borderThickness, double maskOpacity, RecordingService? recService = null, MainWindowViewModel? mainVm = null)

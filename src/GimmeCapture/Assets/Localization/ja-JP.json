@@ -218,5 +218,7 @@
   "DefaultHideSnipToolbar": "デフォルトでキャプチャツールバーを隠す",
   "DefaultHideRecordToolbar": "デフォルトで録画ツールバーを隠す",
   "HideTranslationResults": "翻訳結果を表示/非表示",
-  "StatusTranslateNoSelection": "翻訳する範囲を先に選択してください。"
+  "StatusTranslateNoSelection": "翻訳する範囲を先に選択してください。",
+  "Input": "入力",
+  "Output": "出力"
 }

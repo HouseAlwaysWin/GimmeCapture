@@ -231,7 +231,9 @@
   "DefaultHideSnipToolbar": "預設隱藏截圖工具列",
   "DefaultHideRecordToolbar": "預設隱藏錄影工具列",
   "HideTranslationResults": "顯示/隱藏翻譯結果",
-  "StatusTranslateNoSelection": "請先框選要翻譯的區域。"
+  "StatusTranslateNoSelection": "請先框選要翻譯的區域。",
+  "Input": "輸入",
+  "Output": "輸出"
 }
 
 

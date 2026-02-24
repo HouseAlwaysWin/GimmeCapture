@@ -10,6 +10,7 @@
              xmlns:c="using:GimmeCapture.Views.Controls"
              mc:Ignorable="d" d:DesignWidth="300" d:DesignHeight="36"
              x:Class="GimmeCapture.Views.Controls.SnipToolbar"
+             xmlns:converters="using:GimmeCapture.Converters"
              x:DataType="vm:SnipWindowViewModel"
              TextElement.FontSize="12">
 
@@ -151,6 +152,41 @@
                               IsVisible="{Binding !IsTranslationSelectionActive}"/>
                 </Panel>
             </ToggleButton>
+            
+            <!-- Language Selection (Translation Mode Only) -->
+            <StackPanel Orientation="Horizontal" IsVisible="{Binding IsTranslationMode}" VerticalAlignment="Center" Margin="4,0">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding [Input], Source={x:Static infra:LocalizationService.Instance}}" 
+                               Foreground="#AAAAAA" FontSize="10" VerticalAlignment="Center" Margin="2,0,4,0"/>
+                    <ComboBox ItemsSource="{Binding AvailableOCRLanguages}"
+                              SelectedItem="{Binding SourceLanguage}"
+                              Width="100" Height="26" Padding="5,0"
+                              Theme="{StaticResource {x:Type ComboBox}}">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Converter={x:Static converters:EnumToLocalizedConverter.Instance}, ConverterParameter='OCRLang'}"/>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                </StackPanel>
+                
+                <Path Data="M4,11L8,15L12,11M12,9L8,5L4,9" Stroke="#444444" StrokeThickness="1" Width="12" Height="12" Margin="4,0" RenderTransform="rotate(-90deg)"/>
+
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding [Output], Source={x:Static infra:LocalizationService.Instance}}" 
+                               Foreground="#AAAAAA" FontSize="10" VerticalAlignment="Center" Margin="2,0,4,0"/>
+                    <ComboBox ItemsSource="{Binding AvailableTranslationLanguages}"
+                              SelectedItem="{Binding TargetLanguage}"
+                              Width="100" Height="26" Padding="5,0"
+                              Theme="{StaticResource {x:Type ComboBox}}">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Converter={x:Static converters:EnumToLocalizedConverter.Instance}, ConverterParameter='Lang'}"/>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                </StackPanel>
+            </StackPanel>
 
             <Button Name="TranslateAllButton" Theme="{StaticResource SnipButton}" FontSize="12" BorderThickness="1"
                     Command="{Binding TranslateAllSelectionsCommand}"

@@ -231,5 +231,7 @@
   "DefaultHideSnipToolbar": "Hide Snip Toolbar by Default",
   "DefaultHideRecordToolbar": "Hide Record Toolbar by Default",
   "HideTranslationResults": "Show/Hide Translation Results",
-  "StatusTranslateNoSelection": "Please select a region before translating."
+  "StatusTranslateNoSelection": "Please select a region before translating.",
+  "Input": "Input",
+  "Output": "Output"
 }
