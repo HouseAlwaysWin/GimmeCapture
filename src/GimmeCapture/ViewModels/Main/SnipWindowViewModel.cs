@@ -81,6 +81,9 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     public string ClearAllHotkey => _mainVm?.Translate_ClearAll ?? "Delete";
     public string ToggleSelectHotkey => _mainVm?.Translate_ToggleSelect ?? "Tab";
     public string AutoDetectHotkey => _mainVm?.Translate_AutoDetect ?? "D";
+    public string ModeCursorHotkey => _mainVm?.Translate_ModeCursor ?? "D1";
+    public string ModeSingleHotkey => _mainVm?.Translate_ModeSingle ?? "D2";
+    public string ModeMultiHotkey => _mainVm?.Translate_ModeMulti ?? "D3";
 
     public string UndoTooltip => $"{LocalizationService.Instance["Undo"]} ({UndoHotkey})";
     public string RedoTooltip => $"{LocalizationService.Instance["Redo"]} ({RedoHotkey})";
@@ -104,6 +107,9 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     public string ClearAllTooltip => $"{LocalizationService.Instance["ActionClearAll"]} ({ClearAllHotkey})";
     public string ToggleSelectTooltip => $"{LocalizationService.Instance["ActionToggleSelect"]} ({ToggleSelectHotkey})";
     public string AutoDetectTooltip => $"{LocalizationService.Instance["ActionAutoDetect"]} ({AutoDetectHotkey})";
+    public string ModeCursorTooltip => $"{LocalizationService.Instance["TranslateModeCursor"]} ({ModeCursorHotkey})";
+    public string ModeSingleTooltip => $"{LocalizationService.Instance["TranslateModeSingle"]} ({ModeSingleHotkey})";
+    public string ModeMultiTooltip => $"{LocalizationService.Instance["TranslateModeMulti"]} ({ModeMultiHotkey})";
     public string ToggleToolbarTooltip => $"{LocalizationService.Instance["ActionToolbar"]} ({ActiveToolbarHotkey})";
     public string TogglePlaybackTooltip => $"{LocalizationService.Instance["ActionPlayback"]} ({ActivePlaybackHotkey})";
     public string RemoveBackgroundTooltip => $"{LocalizationService.Instance["RemoveBackground"]} ({RemoveBackgroundHotkey})";

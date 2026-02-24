@@ -22,7 +22,11 @@ public class HotkeyRouterService
         ActiveAction,
         ToggleToolbar,
         Save,
-        Copy
+        Copy,
+        ModeCursor,
+        ModeSingle,
+        ModeMulti,
+        TranslateAll
     }
 
     public bool TryMapGlobalHotkeyToCaptureMode(int hotkeyId, out MainWindowViewModel.CaptureMode mode)
@@ -99,6 +103,34 @@ public class HotkeyRouterService
 
         if (!string.IsNullOrWhiteSpace(copyHotkey) && isMatch(copyHotkey))
             return WindowHotkeyAction.Copy;
+
+        return WindowHotkeyAction.None;
+    }
+
+    public WindowHotkeyAction ResolveTranslationModeHotkeyAction(
+        string modeCursorHotkey,
+        string modeSingleHotkey,
+        string modeMultiHotkey,
+        Func<string, bool> isMatch)
+    {
+        if (!string.IsNullOrWhiteSpace(modeCursorHotkey) && isMatch(modeCursorHotkey))
+            return WindowHotkeyAction.ModeCursor;
+
+        if (!string.IsNullOrWhiteSpace(modeSingleHotkey) && isMatch(modeSingleHotkey))
+            return WindowHotkeyAction.ModeSingle;
+
+        if (!string.IsNullOrWhiteSpace(modeMultiHotkey) && isMatch(modeMultiHotkey))
+            return WindowHotkeyAction.ModeMulti;
+
+        return WindowHotkeyAction.None;
+    }
+
+    public WindowHotkeyAction ResolveSpecificTranslationAction(
+        string translateAllHotkey,
+        Func<string, bool> isMatch)
+    {
+        if (!string.IsNullOrWhiteSpace(translateAllHotkey) && isMatch(translateAllHotkey))
+            return WindowHotkeyAction.TranslateAll;
 
         return WindowHotkeyAction.None;
     }

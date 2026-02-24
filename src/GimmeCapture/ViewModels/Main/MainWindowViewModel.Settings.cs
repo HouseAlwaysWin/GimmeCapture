@@ -365,6 +365,9 @@ public partial class MainWindowViewModel
     public string Translate_AutoDetect { get => _settingsService.Settings.Translate.AutoDetect; set { if (_settingsService.Settings.Translate.AutoDetect != value) { this.RaisePropertyChanging(); _settingsService.Settings.Translate.AutoDetect = value; this.RaisePropertyChanged(); } } }
     public string Translate_SwitchToSnip { get => _settingsService.Settings.Translate.SwitchToSnip; set { if (_settingsService.Settings.Translate.SwitchToSnip != value) { this.RaisePropertyChanging(); _settingsService.Settings.Translate.SwitchToSnip = value; this.RaisePropertyChanged(); } } }
     public string Translate_SwitchToRecord { get => _settingsService.Settings.Translate.SwitchToRecord; set { if (_settingsService.Settings.Translate.SwitchToRecord != value) { this.RaisePropertyChanging(); _settingsService.Settings.Translate.SwitchToRecord = value; this.RaisePropertyChanged(); } } }
+    public string Translate_ModeCursor { get => _settingsService.Settings.Translate.ModeCursor; set { if (_settingsService.Settings.Translate.ModeCursor != value) { this.RaisePropertyChanging(); _settingsService.Settings.Translate.ModeCursor = value; this.RaisePropertyChanged(); } } }
+    public string Translate_ModeSingle { get => _settingsService.Settings.Translate.ModeSingle; set { if (_settingsService.Settings.Translate.ModeSingle != value) { this.RaisePropertyChanging(); _settingsService.Settings.Translate.ModeSingle = value; this.RaisePropertyChanged(); } } }
+    public string Translate_ModeMulti { get => _settingsService.Settings.Translate.ModeMulti; set { if (_settingsService.Settings.Translate.ModeMulti != value) { this.RaisePropertyChanging(); _settingsService.Settings.Translate.ModeMulti = value; this.RaisePropertyChanged(); } } }
 
 
 
@@ -525,6 +528,7 @@ public partial class MainWindowViewModel
             "Translate_Action", "Translate_Toolbar", "Translate_Close",
             "Translate_TranslateAll", "Translate_ScanAll", "Translate_ClearAll",
             "Translate_ToggleSelect", "Translate_AutoDetect",
+            "Translate_ModeCursor", "Translate_ModeSingle", "Translate_ModeMulti",
             "Translate_SwitchToSnip", "Translate_SwitchToRecord"
         };
 
@@ -591,6 +595,9 @@ public partial class MainWindowViewModel
             if (targetTag != "Translate_ClearAll" && Translate_ClearAll == hotkey) return "ActionClearAll";
             if (targetTag != "Translate_ToggleSelect" && Translate_ToggleSelect == hotkey) return "ActionToggleSelect";
             if (targetTag != "Translate_AutoDetect" && Translate_AutoDetect == hotkey) return "ActionAutoDetect";
+            if (targetTag != "Translate_ModeCursor" && Translate_ModeCursor == hotkey) return "TranslateModeCursor";
+            if (targetTag != "Translate_ModeSingle" && Translate_ModeSingle == hotkey) return "TranslateModeSingle";
+            if (targetTag != "Translate_ModeMulti" && Translate_ModeMulti == hotkey) return "TranslateModeMulti";
             if (targetTag != "Translate_SwitchToSnip" && Translate_SwitchToSnip == hotkey) return "SwitchToSnip";
             if (targetTag != "Translate_SwitchToRecord" && Translate_SwitchToRecord == hotkey) return "SwitchToRecord";
         }

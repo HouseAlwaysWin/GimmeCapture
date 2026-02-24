@@ -603,6 +603,45 @@ public partial class SnipWindow : Window
                     e.Handled = true;
                     break;
             }
+
+            // Translation Mode Specific Hotkeys
+            if (!e.Handled && _viewModel.IsTranslationMode)
+            {
+                var transAction = _hotkeyRouter.ResolveTranslationModeHotkeyAction(
+                    _viewModel.ModeCursorHotkey,
+                    _viewModel.ModeSingleHotkey,
+                    _viewModel.ModeMultiHotkey,
+                    IsMatch);
+
+                switch (transAction)
+                {
+                    case HotkeyRouterService.WindowHotkeyAction.ModeCursor:
+                        _viewModel.CurrentTranslationTool = Models.TranslationTool.Cursor;
+                        e.Handled = true;
+                        break;
+                    case HotkeyRouterService.WindowHotkeyAction.ModeSingle:
+                        _viewModel.CurrentTranslationTool = Models.TranslationTool.Single;
+                        e.Handled = true;
+                        break;
+                    case HotkeyRouterService.WindowHotkeyAction.ModeMulti:
+                        _viewModel.CurrentTranslationTool = Models.TranslationTool.Multi;
+                        e.Handled = true;
+                        break;
+                }
+
+                if (!e.Handled)
+                {
+                    var specificAction = _hotkeyRouter.ResolveSpecificTranslationAction(
+                        _viewModel.TranslateAllHotkey,
+                        IsMatch);
+
+                    if (specificAction == HotkeyRouterService.WindowHotkeyAction.TranslateAll)
+                    {
+                        _viewModel.TranslateAllSelectionsCommand?.Execute().Subscribe();
+                        e.Handled = true;
+                    }
+                }
+            }
         }
     }
     
