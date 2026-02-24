@@ -53,6 +53,9 @@ public class UpdateService : ReactiveObject
         private set => this.RaiseAndSetIfChanged(ref _isDownloading, value);
     }
 
+    public string? DownloadedZipPath { get; private set; }
+    public string? DownloadedVersion { get; private set; }
+
     public UpdateService(string currentVersion)
     {
         _currentVersion = currentVersion.TrimStart('v');
@@ -94,9 +97,21 @@ public class UpdateService : ReactiveObject
         }
     }
 
+    public bool IsUpdateDownloaded(ReleaseInfo release)
+    {
+        var targetVersion = release.TagName.TrimStart('v');
+        return DownloadedVersion == targetVersion && !string.IsNullOrEmpty(DownloadedZipPath) && File.Exists(DownloadedZipPath);
+    }
+
     public async Task<string?> DownloadUpdateAsync(ReleaseInfo release)
     {
         if (IsDownloading) return null;
+
+        var targetVersion = release.TagName.TrimStart('v');
+        if (DownloadedVersion == targetVersion && !string.IsNullOrEmpty(DownloadedZipPath) && File.Exists(DownloadedZipPath))
+        {
+            return DownloadedZipPath;
+        }
 
         try
         {
@@ -138,6 +153,8 @@ public class UpdateService : ReactiveObject
                 }
             }
             
+            DownloadedZipPath = zipPath;
+            DownloadedVersion = targetVersion;
             return zipPath;
         }
         catch (Exception ex)

@@ -122,32 +122,48 @@ public partial class MainWindowViewModel
         if (release != null)
         {
             SetStatus("StatusReady");
-            var msg = string.Format(LocalizationService.Instance["UpdateFound"], release.TagName);
             
-            bool? result = await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
-            {
-                var mainWindow = _windowManager.GetMainWindow();
-                if (mainWindow == null) return false;
-                return await UpdateDialog.ShowDialog(mainWindow, msg, isUpdateAvailable: true);
-            });
+            // Check if already downloaded
+            string? zipPath = UpdateService.IsUpdateDownloaded(release) ? UpdateService.DownloadedZipPath : null;
 
-            if (result == true)
+            if (string.IsNullOrEmpty(zipPath))
             {
-                var zipPath = await UpdateService.DownloadUpdateAsync(release);
-                if (!string.IsNullOrEmpty(zipPath))
+                var msg = string.Format(LocalizationService.Instance["UpdateFound"], release.TagName);
+                bool? result = await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
                 {
-                    var readyMsg = LocalizationService.Instance["UpdateReady"];
-                    bool? readyResult = await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
-                    {
-                        var mainWindow = _windowManager.GetMainWindow();
-                        if (mainWindow == null) return false;
-                        return await UpdateDialog.ShowDialog(mainWindow, readyMsg, isUpdateAvailable: true);
-                    });
+                    var mainWindow = _windowManager.GetMainWindow();
+                    if (mainWindow == null) return false;
+                    return await UpdateDialog.ShowDialog(mainWindow, msg, isUpdateAvailable: true);
+                });
 
-                    if (readyResult == true)
+                if (result == true)
+                {
+                    zipPath = await UpdateService.DownloadUpdateAsync(release);
+                }
+            }
+
+            if (!string.IsNullOrEmpty(zipPath))
+            {
+                var readyMsg = LocalizationService.Instance["UpdateReady"];
+                bool? readyResult = await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
+                {
+                    var mainWindow = _windowManager.GetMainWindow();
+                    if (mainWindow == null) return false;
+
+                    // Ensure window is visible and focused
+                    if (mainWindow.WindowState == Avalonia.Controls.WindowState.Minimized)
                     {
-                        UpdateService.ApplyUpdate(zipPath);
+                        mainWindow.WindowState = Avalonia.Controls.WindowState.Normal;
                     }
+                    mainWindow.Activate();
+                    mainWindow.Show();
+
+                    return await UpdateDialog.ShowDialog(mainWindow, readyMsg, isUpdateAvailable: true);
+                });
+
+                if (readyResult == true)
+                {
+                    UpdateService.ApplyUpdate(zipPath);
                 }
             }
         }
