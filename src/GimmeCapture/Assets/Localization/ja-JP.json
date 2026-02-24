@@ -225,5 +225,6 @@
   "TranslateModeSingle": "単一選択",
   "TranslateModeMulti": "複数選択",
   "MenuPinTranslation": "翻訳結果をピン留め",
-  "CopyTranslation": "翻訳テキストをコピー"
+  "CopyTranslation": "翻訳テキストをコピー",
+  "CaptureModeTranslation": "キャプチャモード：翻訳"
 }

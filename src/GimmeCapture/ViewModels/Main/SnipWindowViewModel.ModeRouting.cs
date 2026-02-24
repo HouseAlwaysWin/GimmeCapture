@@ -103,6 +103,9 @@ public partial class SnipWindowViewModel
         this.RaisePropertyChanged(nameof(ToggleSelectHotkey));
         this.RaisePropertyChanged(nameof(AutoDetectHotkey));
 
+        this.RaisePropertyChanged(nameof(SnipTooltip));
+        this.RaisePropertyChanged(nameof(RecordTooltip));
+        this.RaisePropertyChanged(nameof(TranslateTooltip));
         this.RaisePropertyChanged(nameof(HideTranslationResultsTooltip));
         this.RaisePropertyChanged(nameof(TranslateAllTooltip));
         this.RaisePropertyChanged(nameof(ScanAllTooltip));

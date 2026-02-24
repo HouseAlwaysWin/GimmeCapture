@@ -238,5 +238,6 @@
   "TranslateModeSingle": "Single Selection",
   "TranslateModeMulti": "Multi Selection",
   "MenuPinTranslation": "Pin Translation",
-  "CopyTranslation": "Copy Translation"
+  "CopyTranslation": "Copy Translation",
+  "CaptureModeTranslation": "Capture Mode: Translation"
 }

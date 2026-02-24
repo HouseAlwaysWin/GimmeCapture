@@ -99,8 +99,9 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     public string TextTooltip => $"{LocalizationService.Instance["TipText"]} ({TextHotkey})";
     public string MosaicTooltip => $"{LocalizationService.Instance["TipMosaic"]} ({MosaicHotkey})";
     public string BlurTooltip => $"{LocalizationService.Instance["TipBlur"]} ({BlurHotkey})";
-    public string SnipTooltip => $"{LocalizationService.Instance["CaptureModeNormal"]} ({SnipHotkey})";
-    public string RecordTooltip => $"{LocalizationService.Instance["CaptureModeRecord"]} ({RecordHotkey})";
+    public string SnipTooltip => CurrentMode == SnipMode.Screenshot ? LocalizationService.Instance["CaptureModeNormal"] : $"{LocalizationService.Instance["CaptureModeNormal"]} ({SwitchToSnipHotkey})";
+    public string RecordTooltip => CurrentMode == SnipMode.Recording ? LocalizationService.Instance["CaptureModeRecord"] : $"{LocalizationService.Instance["CaptureModeRecord"]} ({SwitchToRecordHotkey})";
+    public string TranslateTooltip => CurrentMode == SnipMode.Translation ? (LocalizationService.Instance["CaptureModeTranslation"] ?? "Translation") : $"{(LocalizationService.Instance["CaptureModeTranslation"] ?? "Translation")} ({SwitchToTranslateHotkey})";
     public string HideTranslationResultsTooltip => $"{LocalizationService.Instance["HideTranslationResults"]} ({ActiveActionHotkey})";
     public string TranslateAllTooltip => $"{LocalizationService.Instance["ActionTranslateAll"]} ({TranslateAllHotkey})";
     public string ScanAllTooltip => $"{LocalizationService.Instance["ActionScanAll"]} ({ScanAllHotkey})";
@@ -323,6 +324,38 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
                 }
             })
             .DisposeWith(_disposables);
+
+        // Refresh tooltips when language changes
+        LocalizationService.Instance.PropertyChanged += (s, e) =>
+        {
+            if (e.PropertyName == "Item" || e.PropertyName == "Item[]")
+            {
+                this.RaisePropertyChanged(nameof(SnipTooltip));
+                this.RaisePropertyChanged(nameof(RecordTooltip));
+                this.RaisePropertyChanged(nameof(TranslateTooltip));
+                this.RaisePropertyChanged(nameof(UndoTooltip));
+                this.RaisePropertyChanged(nameof(RedoTooltip));
+                this.RaisePropertyChanged(nameof(ClearTooltip));
+                this.RaisePropertyChanged(nameof(SaveTooltip));
+                this.RaisePropertyChanged(nameof(CopyTooltip));
+                this.RaisePropertyChanged(nameof(PinTooltip));
+                this.RaisePropertyChanged(nameof(RectangleTooltip));
+                this.RaisePropertyChanged(nameof(EllipseTooltip));
+                this.RaisePropertyChanged(nameof(ArrowTooltip));
+                this.RaisePropertyChanged(nameof(LineTooltip));
+                this.RaisePropertyChanged(nameof(PenTooltip));
+                this.RaisePropertyChanged(nameof(TextTooltip));
+                this.RaisePropertyChanged(nameof(MosaicTooltip));
+                this.RaisePropertyChanged(nameof(BlurTooltip));
+                this.RaisePropertyChanged(nameof(HideTranslationResultsTooltip));
+                this.RaisePropertyChanged(nameof(TranslateAllTooltip));
+                this.RaisePropertyChanged(nameof(ScanAllTooltip));
+                this.RaisePropertyChanged(nameof(ClearAllTooltip));
+                this.RaisePropertyChanged(nameof(ToggleSelectTooltip));
+                this.RaisePropertyChanged(nameof(AutoDetectTooltip));
+                this.RaisePropertyChanged(nameof(ToggleToolbarTooltip));
+            }
+        };
 
         UpdateMask();
     }

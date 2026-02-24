@@ -238,7 +238,8 @@
   "TranslateModeSingle": "單選模式",
   "TranslateModeMulti": "多選模式",
   "MenuPinTranslation": "釘選翻譯結果",
-  "CopyTranslation": "複製翻譯文字"
+  "CopyTranslation": "複製翻譯文字",
+  "CaptureModeTranslation": "擷取模式：翻譯"
 }
 
 
