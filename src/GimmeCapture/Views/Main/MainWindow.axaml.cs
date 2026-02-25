@@ -60,6 +60,14 @@ public partial class MainWindow : Window
         }
     }
 
+    private void TopBar_PointerPressed(object? sender, Avalonia.Input.PointerPressedEventArgs e)
+    {
+        if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+        {
+            BeginMoveDrag(e);
+        }
+    }
+
     private bool _isClosingFromDialog = false;
     private bool _isExiting = false;
 

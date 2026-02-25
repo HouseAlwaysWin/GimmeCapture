@@ -124,6 +124,9 @@ public partial class MainWindowViewModel : ViewModelBase
     public ReactiveCommand<Color, Unit> ChangeThemeColorCommand { get; } = null!;
     public ReactiveCommand<Unit, Unit> CheckUpdateCommand { get; } = null!;
     public ReactiveCommand<Unit, Unit> OpenProjectCommand { get; } = null!;
+    public ReactiveCommand<Unit, Unit> MinimizeCommand { get; } = null!;
+    public ReactiveCommand<Unit, Unit> MaximizeCommand { get; } = null!;
+    public ReactiveCommand<Unit, Unit> CloseCommand { get; } = null!;
     public ReactiveCommand<Unit, Unit> IncreaseWingScaleCommand { get; } = null!;
     public ReactiveCommand<Unit, Unit> DecreaseWingScaleCommand { get; } = null!;
     public ReactiveCommand<Unit, Unit> IncreaseRecordFPSCommand { get; set; } = null!;
@@ -177,6 +180,19 @@ public partial class MainWindowViewModel : ViewModelBase
         ChangeThemeColorCommand = ReactiveCommand.Create<Color>(c => ThemeColor = c);
         CheckUpdateCommand = ReactiveCommand.CreateFromTask(CheckForUpdates);
         OpenProjectCommand = ReactiveCommand.Create(() => OpenProjectUrl());
+        
+        MinimizeCommand = ReactiveCommand.Create(() => {
+            var win = _windowManager.GetMainWindow();
+            if (win != null) win.WindowState = Avalonia.Controls.WindowState.Minimized;
+        });
+        MaximizeCommand = ReactiveCommand.Create(() => {
+            var win = _windowManager.GetMainWindow();
+            if (win != null) win.WindowState = win.WindowState == Avalonia.Controls.WindowState.Maximized ? Avalonia.Controls.WindowState.Normal : Avalonia.Controls.WindowState.Maximized;
+        });
+        CloseCommand = ReactiveCommand.Create(() => {
+            _windowManager.GetMainWindow()?.Close();
+        });
+
         IncreaseWingScaleCommand = ReactiveCommand.Create(() => { if (WingScale < 3.0) WingScale = Math.Round(WingScale + 0.1, 1); });
         DecreaseWingScaleCommand = ReactiveCommand.Create(() => { if (WingScale > 0.5) WingScale = Math.Round(WingScale - 0.1, 1); });
         IncreaseCornerIconScaleCommand = ReactiveCommand.Create(() => { if (CornerIconScale < 1.0) CornerIconScale = Math.Round(CornerIconScale + 0.1, 1); });
