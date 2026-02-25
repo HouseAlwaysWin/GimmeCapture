@@ -60,6 +60,13 @@ public class UserSelectionRect : ReactiveObject
         set => this.RaiseAndSetIfChanged(ref _lastOcrText, value);
     }
     
+    private string _originalText = string.Empty;
+    public string OriginalText
+    {
+        get => _originalText;
+        set => this.RaiseAndSetIfChanged(ref _originalText, value);
+    }
+    
     private double _inferredFontSize = 12.0;
     public double InferredFontSize
     {

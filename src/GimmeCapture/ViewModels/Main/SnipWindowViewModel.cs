@@ -377,6 +377,15 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         get => _showTranslationResults;
         set => this.RaiseAndSetIfChanged(ref _showTranslationResults, value);
     }
+    
+    private bool _showOcrResult;
+    public bool ShowOcrResult
+    {
+        get => _showOcrResult;
+        set => this.RaiseAndSetIfChanged(ref _showOcrResult, value);
+    }
+
+    public string ShowOcrResultTooltip => $"{LocalizationService.Instance["ToggleOcrResult"]} (Debug)";
 
     public ReactiveCommand<System.Reactive.Unit, System.Reactive.Unit> ToggleTranslationResultsCommand { get; protected set; } = null!;
 

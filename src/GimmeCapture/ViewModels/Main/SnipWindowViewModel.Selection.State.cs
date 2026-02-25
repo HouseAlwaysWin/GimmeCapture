@@ -287,6 +287,7 @@ public partial class SnipWindowViewModel
                             if (blocks == null || blocks.Count == 0) continue;
 
                             var combinedText = string.Join("\n", blocks.Select(b => b.TranslatedText).Where(t => !string.IsNullOrWhiteSpace(t)));
+                            var combinedOriginalText = string.Join("\n", blocks.Select(b => b.OriginalText).Where(t => !string.IsNullOrWhiteSpace(t)));
                             
                             // Prevent re-updating if text hasn't logically changed despite visual noise
                             if (combinedText == sel.TranslatedText) continue;
@@ -294,6 +295,7 @@ public partial class SnipWindowViewModel
                             await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
                             {
                                 sel.LastOcrText = string.Join("\n", blocks.Select(b => b.OriginalText).Where(t => !string.IsNullOrWhiteSpace(t))); // Update tracking hash
+                                sel.OriginalText = combinedOriginalText;
                                 sel.TranslatedText = combinedText;
                                 sel.IsTranslated = !string.IsNullOrWhiteSpace(combinedText);
                                 

@@ -89,6 +89,7 @@ public partial class SnipWindowViewModel
 
                 // 合併所有翻譯結果作為這個區域的翻譯文字
                 var combinedText = string.Join("\n", blocks.Select(b => b.TranslatedText).Where(t => !string.IsNullOrWhiteSpace(t)));
+                var combinedOriginalText = string.Join("\n", blocks.Select(b => b.OriginalText).Where(t => !string.IsNullOrWhiteSpace(t)));
                 
                 await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
                 {
@@ -104,6 +105,7 @@ public partial class SnipWindowViewModel
                         sel.TranslatedText = combinedText;
                     }
 
+                    sel.OriginalText = combinedOriginalText;
                     sel.IsTranslated = true;
 
                     // Propagate inferred font size from blocks

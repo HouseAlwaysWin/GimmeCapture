@@ -339,26 +339,51 @@
                                 PointerMoved="Translation_PointerMoved"
                                 PointerReleased="Translation_PointerReleased">
                             <ScrollViewer VerticalScrollBarVisibility="Auto">
-                                <SelectableTextBlock Text="{Binding TranslatedText}" 
-                                                   Foreground="White" 
-                                                   FontSize="15" 
-                                                   FontWeight="Medium" 
-                                                   TextWrapping="Wrap" 
-                                                   xml:space="preserve" 
-                                                   HorizontalAlignment="Left" 
-                                                   VerticalAlignment="Center">
-                                    <SelectableTextBlock.ContextMenu>
-                                        <ContextMenu>
-                                            <MenuItem Header="{Binding $parent[Window].DataContext.MenuCopyTranslation}" 
-                                                      Command="{Binding $parent[Window].DataContext.CopyTranslationTextCommand}"
-                                                      CommandParameter="{Binding}"/>
-                                            <Separator/>
-                                            <MenuItem Header="{Binding $parent[Window].DataContext.MenuPinTranslation}" 
-                                                      Command="{Binding $parent[Window].DataContext.PinTranslationCommand}"
-                                                      CommandParameter="{Binding}"/>
-                                        </ContextMenu>
-                                    </SelectableTextBlock.ContextMenu>
-                                </SelectableTextBlock>
+                                <StackPanel>
+                                    <SelectableTextBlock Text="{Binding TranslatedText}" 
+                                                       Foreground="White" 
+                                                       FontSize="15" 
+                                                       FontWeight="Medium" 
+                                                       TextWrapping="Wrap" 
+                                                       xml:space="preserve" 
+                                                       HorizontalAlignment="Left" 
+                                                       VerticalAlignment="Center"
+                                                       IsVisible="{Binding !$parent[Window].DataContext.ShowOcrResult}">
+                                        <SelectableTextBlock.ContextMenu>
+                                            <ContextMenu>
+                                                <MenuItem Header="{Binding $parent[Window].DataContext.MenuCopyTranslation}" 
+                                                          Command="{Binding $parent[Window].DataContext.CopyTranslationTextCommand}"
+                                                          CommandParameter="{Binding}"/>
+                                                <Separator/>
+                                                <MenuItem Header="{Binding $parent[Window].DataContext.MenuPinTranslation}" 
+                                                          Command="{Binding $parent[Window].DataContext.PinTranslationCommand}"
+                                                          CommandParameter="{Binding}"/>
+                                            </ContextMenu>
+                                        </SelectableTextBlock.ContextMenu>
+                                    </SelectableTextBlock>
+                                    <SelectableTextBlock Text="{Binding OriginalText}" 
+                                                       Foreground="Yellow" 
+                                                       FontSize="15" 
+                                                       FontWeight="Medium" 
+                                                       TextWrapping="Wrap" 
+                                                       xml:space="preserve" 
+                                                       HorizontalAlignment="Left" 
+                                                       VerticalAlignment="Center"
+                                                       IsVisible="{Binding $parent[Window].DataContext.ShowOcrResult}">
+                                        <SelectableTextBlock.ContextMenu>
+                                            <ContextMenu>
+                                                <MenuItem Header="{Binding $parent[Window].DataContext.MenuCopyTranslation}" 
+                                                          Command="{Binding $parent[Window].DataContext.CopyTranslationTextCommand}"
+                                                          CommandParameter="{Binding}"/>
+                                                <Separator/>
+                                                <MenuItem Header="{Binding $parent[Window].DataContext.MenuPinTranslation}" 
+                                                          Command="{Binding $parent[Window].DataContext.PinTranslationCommand}"
+                                                          CommandParameter="{Binding}"/>
+                                            </ContextMenu>
+                                        </SelectableTextBlock.ContextMenu>
+                                    </SelectableTextBlock>
+                                </StackPanel>
+
                             </ScrollViewer>
                         </Border>
                     </DataTemplate>
@@ -438,27 +463,52 @@
                                             BorderBrush="#44FFFFFF" BorderThickness="1"
                                             Margin="4"
                                             HorizontalAlignment="Center" VerticalAlignment="Center">
-                                        <SelectableTextBlock Text="{Binding TranslatedText}" 
-                                                           Foreground="White" 
-                                                           FontSize="{Binding InferredFontSize}" 
-                                                           TextWrapping="Wrap"
-                                                           xml:space="preserve">
-                                            <SelectableTextBlock.ContextMenu>
-                                                <ContextMenu>
-                                                    <MenuItem Header="{Binding $parent[Window].DataContext.MenuCopyTranslation}" 
-                                                              Command="{Binding $parent[Window].DataContext.CopyTranslationTextCommand}"
-                                                              CommandParameter="{Binding $parent[SelectableTextBlock].DataContext}"/>
-                                                    <Separator/>
-                                                    <MenuItem Header="{Binding $parent[Window].DataContext.MenuPinTranslation}" 
-                                                              Command="{Binding $parent[Window].DataContext.PinTranslationCommand}"
-                                                              CommandParameter="{Binding $parent[SelectableTextBlock].DataContext}"/>
-                                                    <Separator/>
-                                                    <MenuItem Header="刪除區域" 
-                                                              Command="{Binding $parent[Window].DataContext.RemoveUserSelectionCommand}"
-                                                              CommandParameter="{Binding $parent[SelectableTextBlock].DataContext}"/>
-                                                </ContextMenu>
-                                            </SelectableTextBlock.ContextMenu>
-                                        </SelectableTextBlock>
+                                        <StackPanel>
+                                            <SelectableTextBlock Text="{Binding TranslatedText}" 
+                                                               Foreground="White" 
+                                                               FontSize="{Binding InferredFontSize}" 
+                                                               TextWrapping="Wrap"
+                                                               xml:space="preserve"
+                                                               IsVisible="{Binding !$parent[Window].DataContext.ShowOcrResult}">
+                                                <SelectableTextBlock.ContextMenu>
+                                                    <ContextMenu>
+                                                        <MenuItem Header="{Binding $parent[Window].DataContext.MenuCopyTranslation}" 
+                                                                  Command="{Binding $parent[Window].DataContext.CopyTranslationTextCommand}"
+                                                                  CommandParameter="{Binding $parent[SelectableTextBlock].DataContext}"/>
+                                                        <Separator/>
+                                                        <MenuItem Header="{Binding $parent[Window].DataContext.MenuPinTranslation}" 
+                                                                  Command="{Binding $parent[Window].DataContext.PinTranslationCommand}"
+                                                                  CommandParameter="{Binding $parent[SelectableTextBlock].DataContext}"/>
+                                                        <Separator/>
+                                                        <MenuItem Header="刪除區域" 
+                                                                  Command="{Binding $parent[Window].DataContext.RemoveUserSelectionCommand}"
+                                                                  CommandParameter="{Binding $parent[SelectableTextBlock].DataContext}"/>
+                                                    </ContextMenu>
+                                                </SelectableTextBlock.ContextMenu>
+                                            </SelectableTextBlock>
+                                            <SelectableTextBlock Text="{Binding OriginalText}" 
+                                                               Foreground="Yellow" 
+                                                               FontSize="{Binding InferredFontSize}" 
+                                                               TextWrapping="Wrap"
+                                                               xml:space="preserve"
+                                                               IsVisible="{Binding $parent[Window].DataContext.ShowOcrResult}">
+                                                <SelectableTextBlock.ContextMenu>
+                                                    <ContextMenu>
+                                                        <MenuItem Header="{Binding $parent[Window].DataContext.MenuCopyTranslation}" 
+                                                                  Command="{Binding $parent[Window].DataContext.CopyTranslationTextCommand}"
+                                                                  CommandParameter="{Binding $parent[SelectableTextBlock].DataContext}"/>
+                                                        <Separator/>
+                                                        <MenuItem Header="{Binding $parent[Window].DataContext.MenuPinTranslation}" 
+                                                                  Command="{Binding $parent[Window].DataContext.PinTranslationCommand}"
+                                                                  CommandParameter="{Binding $parent[SelectableTextBlock].DataContext}"/>
+                                                        <Separator/>
+                                                        <MenuItem Header="刪除區域" 
+                                                                  Command="{Binding $parent[Window].DataContext.RemoveUserSelectionCommand}"
+                                                                  CommandParameter="{Binding $parent[SelectableTextBlock].DataContext}"/>
+                                                    </ContextMenu>
+                                                </SelectableTextBlock.ContextMenu>
+                                            </SelectableTextBlock>
+                                        </StackPanel>
                                     </Border>
                                 </Panel>
 

@@ -243,5 +243,6 @@
   "StatusTranslateFailed": "Translation Failed",
   "StatusTranslateNoText": "No recognizable text found",
   "StatusTranslateFailedEngine": "Translation engine returned no response",
-  "StatusTranslateFailedAcceptable": "Translation quality below standard"
+  "StatusTranslateFailedAcceptable": "Translation quality below standard",
+  "ToggleOcrResult": "Debug Mode: Show OCR Result"
 }

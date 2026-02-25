@@ -230,5 +230,6 @@
   "StatusTranslateFailed": "翻訳失敗",
   "StatusTranslateNoText": "認識可能なテキストが見つかりません",
   "StatusTranslateFailedEngine": "翻訳エンジンからの応答がありません",
-  "StatusTranslateFailedAcceptable": "翻訳品質が基準を満たしていません"
+  "StatusTranslateFailedAcceptable": "翻訳品質が基準を満たしていません",
+  "ToggleOcrResult": "デバッグモード: OCR結果を表示"
 }
