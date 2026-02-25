@@ -80,9 +80,11 @@ public class TranslationService
         ct.ThrowIfCancellationRequested();
 
         var ocrLang = _settings.SourceLanguage;
+        Console.WriteLine($"[TranslationService] SourceLanguage={ocrLang}, TargetLanguage={_settings.TargetLanguage}");
         if (ocrLang == OCRLanguage.Auto)
         {
             ocrLang = await DetectScriptLanguageAsync(bitmap, ct);
+            Console.WriteLine($"[TranslationService] Auto-detected source: {ocrLang}");
         }
 
         await _ocrEngine.EnsureLoadedAsync(ocrLang, ct);
@@ -194,8 +196,7 @@ public class TranslationService
             System.Diagnostics.Debug.WriteLine($"[TranslationService] NO ENGINE FOUND for {_settings.SelectedTranslationEngine}");
             return string.Empty; 
         }
-        System.Diagnostics.Debug.WriteLine($"[TranslationService] Using engine: {engine.EngineType} for {sourceLang} -> {_settings.TargetLanguage}");
-        System.Diagnostics.Debug.WriteLine($"[TranslationService] Engine {engine.EngineType} starting translation for '{text.Substring(0, Math.Min(text.Length, 20))}...'");
+        Console.WriteLine($"[TranslationService] Using engine: {engine.EngineType} for {sourceLang} -> {_settings.TargetLanguage}");
         var result = await engine.TranslateAsync(text, sourceLang, _settings.TargetLanguage, ct);
         if (string.IsNullOrEmpty(result))
         {
@@ -233,28 +234,6 @@ public class TranslationService
     private bool IsTranslationAcceptable(string original, string translated, TranslationLanguage target)
     {
         if (string.IsNullOrWhiteSpace(translated)) return false;
-        
-        // Removed specific CJK/Japanese character checks as they cause valid translation combinations to fail.
-        /*
-        // CJK Specific logic - Tightened limits
-        if (target == TranslationLanguage.TraditionalChinese || target == TranslationLanguage.SimplifiedChinese)
-        {
-            // If translating to Chinese, output MUST NOT contain Japanese kana
-            bool hasKana = translated.Any(c => (c >= 0x3040 && c <= 0x309F) || (c >= 0x30A0 && c <= 0x30FF));
-            if (hasKana) return false;
-
-            // Must not drift to Korean output when target is Chinese.
-            bool hasHangul = translated.Any(c => (c >= 0x1100 && c <= 0x11FF) || (c >= 0xAC00 && c <= 0xD7AF));
-            if (hasHangul) return false;
-        }
-        else if (target == TranslationLanguage.Japanese)
-        {
-            // If translating to Japanese, output SHOULD contain some kana unless it's a single character
-            bool hasKana = translated.Any(c => (c >= 0x3040 && c <= 0x309F) || (c >= 0x30A0 && c <= 0x30FF));
-            if (!hasKana && translated.Length > 1) return false;
-        }
-        */
-
         return true;
     }
 

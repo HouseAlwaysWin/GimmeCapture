@@ -278,6 +278,14 @@ public partial class SnipWindowViewModel
                             _translationService = new TranslationService(_mainVm.AIResourceService, _mainVm.AppSettingsService, _mainVm.MarianMTService);
                         }
 
+                        // Sync language settings before translation (must match manual translate path)
+                        if (_mainVm != null)
+                        {
+                            _mainVm.AppSettingsService.Settings.TargetLanguage = _mainVm.TargetLanguage;
+                            _mainVm.AppSettingsService.Settings.SourceLanguage = _mainVm.SourceLanguage;
+                            System.Diagnostics.Debug.WriteLine($"[AutoDetect] Language sync: Source={_mainVm.SourceLanguage}, Target={_mainVm.TargetLanguage}");
+                        }
+
                         // Ask TranslationService to translate just this text
                         if (_translationService != null)
                         {

@@ -50,7 +50,8 @@ public class LLMTranslationEngine : ITranslationEngine
                 string targetLangName = GetTargetLanguageName(targetLang);
                 var prompt = $"Translate \"{text}\" from {sourceLangName} to {targetLangName}. Output ONLY the translated text. No quotes. No explanations.";
 
-                System.Diagnostics.Debug.WriteLine($"[LLM] Requesting translation for: {text}");
+                Console.WriteLine($"[LLM] Prompt: {prompt}");
+                Console.WriteLine($"[LLM] Source={sourceLangName}, Target={targetLangName}, TargetLangEnum={targetLang}");
                 var json = await _ollamaApiClient.GenerateAsync(model, prompt, token);
                 if (string.IsNullOrWhiteSpace(json)) return string.Empty;
                 System.Diagnostics.Debug.WriteLine($"[LLM] Raw Response: {json}");
@@ -156,63 +157,6 @@ public class LLMTranslationEngine : ITranslationEngine
     private bool IsTranslationAcceptableInternal(string source, string translated, TranslationLanguage target)
     {
         if (string.IsNullOrWhiteSpace(translated)) return false;
-
-        /*
-        // Hallucination Check Disabled based on user feedback:
-        // Even if LLM hallucinates a long text, let it wrap safely.
-        int lengthMultiplier = (target == TranslationLanguage.English) ? 8 : 4;
-        if (source.Trim().Length <= 8 && translated.Length > Math.Max(40, source.Trim().Length * lengthMultiplier))
-        {
-            System.Diagnostics.Debug.WriteLine($"[LLM] Validation: rejected due to length jump (Hallucination suspected).");
-            return false;
-        }
-
-        // If target is Japanese, it MUST contain kana if it's more than a few words...
-        if (target == TranslationLanguage.Japanese)
-        {
-            // For Japanese, we expect some kana.
-            bool hasKana = translated.Any(c => (c >= 0x3040 && c <= 0x309F) || (c >= 0x30A0 && c <= 0x30FF));
-            if (!hasKana && translated.Length > 2) // Allow 1-2 char Kanji-only words
-            {
-                System.Diagnostics.Debug.WriteLine($"[LLM] Validation: rejected Japanese output (No Kana found).");
-                return false; 
-            }
-        }
-
-        // If target is Traditional/Simplified Chinese, it should NOT contain excessive Japanese kana
-        if ((target == TranslationLanguage.TraditionalChinese || target == TranslationLanguage.SimplifiedChinese))
-        {
-             // For Chinese variants, some technical terms or proper names might have kana in source, 
-             // but usually none in target. However, we should be lenient.
-             int tKana = translated.Count(c => (c >= 0x3040 && c <= 0x309F) || (c >= 0x30A0 && c <= 0x30FF));
-             if (tKana > 0)
-             {
-                 int sKana = source.Count(c => (c >= 0x3040 && c <= 0x309F) || (c >= 0x30A0 && c <= 0x30FF));
-                 // If source had NO kana, but target HAS kana -> Hallucination or failed translation
-                 if (sKana == 0 && tKana > 0)
-                 {
-                     System.Diagnostics.Debug.WriteLine($"[LLM] Validation: rejected Chinese output (Hallucinated Kana).");
-                     return false;
-                 }
-                 
-                 // If source HAD kana, allow some in target (maybe untranslated names), but not too much
-                 if (tKana > translated.Length / 3) 
-                 {
-                     System.Diagnostics.Debug.WriteLine($"[LLM] Validation: rejected Chinese output (Too much Kana remains).");
-                     return false;
-                 }
-             }
-
-             // Reject Korean-script drift for Chinese targets.
-             int tHangul = translated.Count(c => (c >= 0x1100 && c <= 0x11FF) || (c >= 0xAC00 && c <= 0xD7AF));
-             if (tHangul > 0)
-             {
-                 System.Diagnostics.Debug.WriteLine("[LLM] Validation: rejected Chinese output (Hangul detected).");
-                 return false;
-             }
-        }
-        */
-        
         return true;
     }
 

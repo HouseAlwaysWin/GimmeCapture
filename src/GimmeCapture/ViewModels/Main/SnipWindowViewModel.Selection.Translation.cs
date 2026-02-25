@@ -44,6 +44,12 @@ public partial class SnipWindowViewModel
         {
             _mainVm.AppSettingsService.Settings.TargetLanguage = _mainVm.TargetLanguage;
             _mainVm.AppSettingsService.Settings.SourceLanguage = _mainVm.SourceLanguage;
+            System.Diagnostics.Debug.WriteLine($"[TranslationMode] ===== LANGUAGE SETTINGS =====");
+            System.Diagnostics.Debug.WriteLine($"[TranslationMode]   MainVM.SourceLanguage = {_mainVm.SourceLanguage}");
+            System.Diagnostics.Debug.WriteLine($"[TranslationMode]   MainVM.TargetLanguage = {_mainVm.TargetLanguage}");
+            System.Diagnostics.Debug.WriteLine($"[TranslationMode]   AppSettings.SourceLanguage = {_mainVm.AppSettingsService.Settings.SourceLanguage}");
+            System.Diagnostics.Debug.WriteLine($"[TranslationMode]   AppSettings.TargetLanguage = {_mainVm.AppSettingsService.Settings.TargetLanguage}");
+            System.Diagnostics.Debug.WriteLine($"[TranslationMode] ==============================");
         }
 
         _translationCts?.Cancel();
