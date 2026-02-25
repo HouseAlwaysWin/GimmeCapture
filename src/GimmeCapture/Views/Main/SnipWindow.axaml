@@ -452,23 +452,23 @@
                                 <Grid Name="InnerCornerBottomRight" Width="40" Height="40" HorizontalAlignment="Right" VerticalAlignment="Bottom" Background="#01FFFFFF" Cursor="SizeAll" Margin="0,0,1,1" Classes="MoveHandle" IsVisible="{Binding $parent[Window].DataContext.ShowTranslationResults}"/>
 
                                 <!-- 3. 文字內容層 (最上方，支援選取與右鍵選單) -->
-                                <Panel IsHitTestVisible="True" VerticalAlignment="Center" HorizontalAlignment="Center">
+                                <Panel IsHitTestVisible="True" VerticalAlignment="Center" HorizontalAlignment="Stretch" ClipToBounds="True">
                                     <Panel.IsVisible>
                                         <MultiBinding Converter="{x:Static BoolConverters.And}">
                                             <Binding Path="IsTranslated"/>
                                             <Binding Path="!$parent[Window].DataContext.IsCapturing"/>
                                         </MultiBinding>
                                     </Panel.IsVisible>
-                                    <Border Background="#CC000000" CornerRadius="4" Padding="6"
+                                    <Border Background="#CC000000" CornerRadius="4" Padding="4"
                                             BorderBrush="#44FFFFFF" BorderThickness="1"
-                                            Margin="4"
-                                            HorizontalAlignment="Center" VerticalAlignment="Center">
+                                            Margin="0"
+                                            HorizontalAlignment="Stretch" VerticalAlignment="Center"
+                                            ClipToBounds="True">
                                         <StackPanel>
                                             <SelectableTextBlock Text="{Binding TranslatedText}" 
                                                                Foreground="White" 
                                                                FontSize="{Binding InferredFontSize}" 
                                                                TextWrapping="Wrap"
-                                                               xml:space="preserve"
                                                                IsVisible="{Binding !$parent[Window].DataContext.ShowOcrResult}">
                                                 <SelectableTextBlock.ContextMenu>
                                                     <ContextMenu>
@@ -490,7 +490,6 @@
                                                                Foreground="Yellow" 
                                                                FontSize="{Binding InferredFontSize}" 
                                                                TextWrapping="Wrap"
-                                                               xml:space="preserve"
                                                                IsVisible="{Binding $parent[Window].DataContext.ShowOcrResult}">
                                                 <SelectableTextBlock.ContextMenu>
                                                     <ContextMenu>

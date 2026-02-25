@@ -157,8 +157,11 @@ public class LLMTranslationEngine : ITranslationEngine
     {
         if (string.IsNullOrWhiteSpace(translated)) return false;
 
-        // Hallucination Check: If source is tiny, but translation is a long sentence, it's likely a hallucination
-        if (source.Trim().Length <= 6 && translated.Length > 25)
+        /*
+        // Hallucination Check Disabled based on user feedback:
+        // Even if LLM hallucinates a long text, let it wrap safely.
+        int lengthMultiplier = (target == TranslationLanguage.English) ? 8 : 4;
+        if (source.Trim().Length <= 8 && translated.Length > Math.Max(40, source.Trim().Length * lengthMultiplier))
         {
             System.Diagnostics.Debug.WriteLine($"[LLM] Validation: rejected due to length jump (Hallucination suspected).");
             return false;
@@ -208,6 +211,7 @@ public class LLMTranslationEngine : ITranslationEngine
                  return false;
              }
         }
+        */
         
         return true;
     }

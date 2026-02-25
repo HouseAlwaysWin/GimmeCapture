@@ -234,9 +234,8 @@ public class TranslationService
     {
         if (string.IsNullOrWhiteSpace(translated)) return false;
         
-        // If the translation is the same as original and is more than 1 char, it probably failed
-        if (original.Length > 1 && translated.Trim() == original.Trim()) return false;
-
+        // Removed specific CJK/Japanese character checks as they cause valid translation combinations to fail.
+        /*
         // CJK Specific logic - Tightened limits
         if (target == TranslationLanguage.TraditionalChinese || target == TranslationLanguage.SimplifiedChinese)
         {
@@ -254,6 +253,7 @@ public class TranslationService
             bool hasKana = translated.Any(c => (c >= 0x3040 && c <= 0x309F) || (c >= 0x30A0 && c <= 0x30FF));
             if (!hasKana && translated.Length > 1) return false;
         }
+        */
 
         return true;
     }
