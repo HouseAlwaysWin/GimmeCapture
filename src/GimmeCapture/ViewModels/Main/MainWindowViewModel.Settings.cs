@@ -277,6 +277,12 @@ public partial class MainWindowViewModel
             this.RaiseAndSetIfChanged(ref _snipHotkey, value);
             HotkeyService.Register(HotkeyIds.Snip, value);
             this.RaisePropertyChanged(nameof(SnipTooltip));
+            if (!_isDataLoading)
+            {
+                _settingsService.Settings.SnipHotkey = value;
+                IsModified = true;
+                _ = SaveSettingsAsync();
+            }
         }
     }
 
@@ -290,6 +296,12 @@ public partial class MainWindowViewModel
             this.RaiseAndSetIfChanged(ref _translateHotkey, value);
             HotkeyService.Register(HotkeyIds.Translate, value);
             this.RaisePropertyChanged(nameof(TranslateTooltip));
+            if (!_isDataLoading)
+            {
+                _settingsService.Settings.TranslateHotkey = value;
+                IsModified = true;
+                _ = SaveSettingsAsync();
+            }
         }
     }
 
@@ -302,6 +314,12 @@ public partial class MainWindowViewModel
             this.RaiseAndSetIfChanged(ref _recordHotkey, value);
             HotkeyService.Register(HotkeyIds.Record, value);
             this.RaisePropertyChanged(nameof(RecordTooltip));
+            if (!_isDataLoading)
+            {
+                _settingsService.Settings.RecordHotkey = value;
+                IsModified = true;
+                _ = SaveSettingsAsync();
+            }
         }
     }
 
