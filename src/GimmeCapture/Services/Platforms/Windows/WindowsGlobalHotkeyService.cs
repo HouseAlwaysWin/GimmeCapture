@@ -13,6 +13,7 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
     private IntPtr _handle;
     private readonly HashSet<int> _registeredIds = new();
     private readonly Dictionary<int, string> _pendingRegistrations = new();
+    private bool _isSuspended;
     
     // Action to fire when hotkey is pressed, passing the ID
     public Action<int>? OnHotkeyPressed { get; set; }
@@ -25,6 +26,16 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
 
     [DllImport("user32.dll")]
     private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
+
+    protected virtual bool NativeRegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vkey)
+    {
+        return RegisterHotKey(hWnd, id, fsModifiers, vkey);
+    }
+
+    protected virtual bool NativeUnregisterHotKey(IntPtr hWnd, int id)
+    {
+        return UnregisterHotKey(hWnd, id);
+    }
 
     private delegate IntPtr WndProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
     
@@ -52,6 +63,13 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
         
         _hotkeyStrings[id] = hotkey;
 
+        if (_isSuspended)
+        {
+            _suspendedHotkeys[id] = hotkey;
+            System.Diagnostics.Debug.WriteLine($"[GlobalHotkey] Queueing registration for ID {id} while suspended: {hotkey}");
+            return;
+        }
+
         if (_handle == IntPtr.Zero)
         {
             _pendingRegistrations[id] = hotkey;
@@ -64,7 +82,7 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
 
         if (vkey != 0)
         {
-             bool success = RegisterHotKey(_handle, id, modifiers, vkey);
+             bool success = NativeRegisterHotKey(_handle, id, modifiers, vkey);
              if (success)
              {
                  _registeredIds.Add(id);
@@ -81,10 +99,14 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
     {
         if (_handle != IntPtr.Zero && _registeredIds.Contains(id))
         {
-            UnregisterHotKey(_handle, id);
+            NativeUnregisterHotKey(_handle, id);
             _registeredIds.Remove(id);
         }
         _pendingRegistrations.Remove(id);
+        if (_isSuspended)
+        {
+            _suspendedHotkeys.Remove(id);
+        }
     }
 
     private readonly Dictionary<int, string> _hotkeyStrings = new();
@@ -93,12 +115,14 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
     public void SuspendAll()
     {
         if (_handle == IntPtr.Zero) return;
+        _isSuspended = true;
         _suspendedHotkeys.Clear();
         foreach (var id in new List<int>(_registeredIds))
         {
             if (_hotkeyStrings.TryGetValue(id, out var hk))
                 _suspendedHotkeys[id] = hk;
-            UnregisterHotKey(_handle, id);
+            
+            NativeUnregisterHotKey(_handle, id);
         }
         _registeredIds.Clear();
         System.Diagnostics.Debug.WriteLine($"[GlobalHotkey] Suspended {_suspendedHotkeys.Count} hotkeys");
@@ -106,13 +130,20 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
 
     public void ResumeAll()
     {
-        if (_handle == IntPtr.Zero || _suspendedHotkeys.Count == 0) return;
-        foreach (var kvp in _suspendedHotkeys)
-        {
-            Register(kvp.Key, kvp.Value);
-        }
-        System.Diagnostics.Debug.WriteLine($"[GlobalHotkey] Resumed {_suspendedHotkeys.Count} hotkeys");
+        if (_handle == IntPtr.Zero) return;
+        
+        _isSuspended = false;
+        var toResume = new Dictionary<int, string>(_suspendedHotkeys);
         _suspendedHotkeys.Clear();
+
+        foreach (var kvp in toResume)
+        {
+            // Always use the latest value from _hotkeyStrings if it exists
+            string valueToRegister = _hotkeyStrings.TryGetValue(kvp.Key, out var current) ? current : kvp.Value;
+            Register(kvp.Key, valueToRegister);
+        }
+        
+        System.Diagnostics.Debug.WriteLine($"[GlobalHotkey] Resumed {toResume.Count} hotkeys");
     }
 
     private void UnregisterAll()

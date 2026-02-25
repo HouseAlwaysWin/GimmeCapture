@@ -17,6 +17,7 @@ public class LLMTranslationEngineTests
 {
     private readonly Mock<HttpMessageHandler> _handlerMock;
     private readonly Mock<AppSettingsService> _settingsServiceMock;
+    private readonly Mock<ITranslationCache> _cacheMock;
     private readonly LLMTranslationEngine _sut;
     private readonly AppSettings _settings;
 
@@ -27,6 +28,8 @@ public class LLMTranslationEngineTests
         // Now works because we added protected parameterless constructor
         _settingsServiceMock = new Mock<AppSettingsService>();
         
+        _cacheMock = new Mock<ITranslationCache>();
+        
         _settings = new AppSettings
         {
             OllamaModel = "gemma",
@@ -36,7 +39,11 @@ public class LLMTranslationEngineTests
         _settingsServiceMock.Setup(s => s.Settings).Returns(_settings);
 
         var httpClient = new HttpClient(_handlerMock.Object);
-        _sut = new LLMTranslationEngine(httpClient, _settingsServiceMock.Object);
+        // Wrapper for OllamaApiClient if needed, but the original code was passing httpClient directly? 
+        // Wait, the constructor takes IOllamaApiClient. The test was passing httpClient.
+        // Let me re-check the constructor.
+        var ollamaMock = new Mock<IOllamaApiClient>();
+        _sut = new LLMTranslationEngine(ollamaMock.Object, _settingsServiceMock.Object, _cacheMock.Object);
     }
 
     [Fact]
