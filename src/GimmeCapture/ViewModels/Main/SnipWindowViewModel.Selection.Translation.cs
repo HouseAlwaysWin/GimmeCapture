@@ -83,7 +83,7 @@ public partial class SnipWindowViewModel
                 if (bitmap == null) continue;
 
                 token.ThrowIfCancellationRequested();
-                var blocks = await Task.Run(() => _translationService.AnalyzeAndTranslateAsync(bitmap, VisualScaling, token), token);
+                var (blocks, errorKey) = await Task.Run(() => _translationService.AnalyzeAndTranslateAsync(bitmap, VisualScaling, token), token);
                 
                 if (token.IsCancellationRequested) break;
 
@@ -92,13 +92,28 @@ public partial class SnipWindowViewModel
                 
                 await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
                 {
-                    sel.TranslatedText = combinedText;
-                    sel.IsTranslated = !string.IsNullOrWhiteSpace(combinedText);
+                    bool isFailed = string.IsNullOrWhiteSpace(combinedText);
+                    if (isFailed)
+                    {
+                        var failMsgKey = string.IsNullOrEmpty(errorKey) ? "StatusTranslateFailed" : errorKey;
+                        _mainVm?.SetStatus(failMsgKey);
+                        sel.TranslatedText = LocalizationService.Instance[failMsgKey];
+                    }
+                    else
+                    {
+                        sel.TranslatedText = combinedText;
+                    }
+
+                    sel.IsTranslated = true;
 
                     // Propagate inferred font size from blocks
                     if (blocks.Any())
                     {
                         sel.InferredFontSize = blocks[0].InferredFontSize;
+                    }
+                    else if (isFailed)
+                    {
+                        sel.InferredFontSize = 14.0;
                     }
 
                     if (sel.IsTranslated)

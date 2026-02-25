@@ -75,7 +75,7 @@ public class TranslationService
         return ResourceReadyResult.Ready();
     }
 
-    public async Task<List<TranslatedBlock>> AnalyzeAndTranslateAsync(SKBitmap bitmap, double scale = 1.0, CancellationToken ct = default)
+    public async Task<(List<TranslatedBlock> Blocks, string ErrorKey)> AnalyzeAndTranslateAsync(SKBitmap bitmap, double scale = 1.0, CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
 
@@ -99,7 +99,7 @@ public class TranslationService
             }
         }
 
-        if (recognizedBlocks.Count == 0) return new List<TranslatedBlock>();
+        if (recognizedBlocks.Count == 0) return (new List<TranslatedBlock>(), "StatusTranslateNoText");
 
         var sortedBlocks = recognizedBlocks
             .OrderBy(b => b.Box.Top / 16)
@@ -118,6 +118,7 @@ public class TranslationService
         if (string.IsNullOrEmpty(translated))
         {
             System.Diagnostics.Debug.WriteLine($"[TranslationService] FAILURE: Engine returned empty result for OCR: '{mergedText}'");
+            return (new List<TranslatedBlock>(), "StatusTranslateFailedEngine");
         }
         else
         {
@@ -163,13 +164,13 @@ public class TranslationService
                 Bounds = logicalBounds,
                 InferredFontSize = inferredFontSize
             });
+            return (result, string.Empty);
         }
         else
         {
             System.Diagnostics.Debug.WriteLine($"[TranslationService] Final translation effort failed or was unacceptable. Returning empty result.");
+            return (result, "StatusTranslateFailedAcceptable");
         }
-
-        return result;
     }
 
     private async Task<OCRLanguage> DetectScriptLanguageAsync(SKBitmap bitmap, CancellationToken ct)

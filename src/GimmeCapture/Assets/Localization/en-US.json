@@ -239,5 +239,9 @@
   "TranslateModeMulti": "Multi Selection",
   "MenuPinTranslation": "Pin Translation",
   "CopyTranslation": "Copy Translation",
-  "CaptureModeTranslation": "Capture Mode: Translation"
+  "CaptureModeTranslation": "Capture Mode: Translation",
+  "StatusTranslateFailed": "Translation Failed",
+  "StatusTranslateNoText": "No recognizable text found",
+  "StatusTranslateFailedEngine": "Translation engine returned no response",
+  "StatusTranslateFailedAcceptable": "Translation quality below standard"
 }

@@ -283,7 +283,7 @@ public partial class SnipWindowViewModel
                         {
                             // We don't want to freeze the UI or show loading bars for background updates
                             // AnalyzeAndTranslateAsync will handle OCR + LLM
-                            var blocks = await _translationService.AnalyzeAndTranslateAsync(bitmap, VisualScaling, token);
+                            var (blocks, errorKey) = await _translationService.AnalyzeAndTranslateAsync(bitmap, VisualScaling, token);
                             if (blocks == null || blocks.Count == 0) continue;
 
                             var combinedText = string.Join("\n", blocks.Select(b => b.TranslatedText).Where(t => !string.IsNullOrWhiteSpace(t)));

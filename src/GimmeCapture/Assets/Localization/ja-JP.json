@@ -226,5 +226,9 @@
   "TranslateModeMulti": "複数選択",
   "MenuPinTranslation": "翻訳結果をピン留め",
   "CopyTranslation": "翻訳テキストをコピー",
-  "CaptureModeTranslation": "キャプチャモード：翻訳"
+  "CaptureModeTranslation": "キャプチャモード：翻訳",
+  "StatusTranslateFailed": "翻訳失敗",
+  "StatusTranslateNoText": "認識可能なテキストが見つかりません",
+  "StatusTranslateFailedEngine": "翻訳エンジンからの応答がありません",
+  "StatusTranslateFailedAcceptable": "翻訳品質が基準を満たしていません"
 }

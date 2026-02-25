@@ -239,7 +239,11 @@
   "TranslateModeMulti": "多選模式",
   "MenuPinTranslation": "釘選翻譯結果",
   "CopyTranslation": "複製翻譯文字",
-  "CaptureModeTranslation": "擷取模式：翻譯"
+  "CaptureModeTranslation": "擷取模式：翻譯",
+  "StatusTranslateFailed": "翻譯失敗",
+  "StatusTranslateNoText": "找不到可辨認的文字",
+  "StatusTranslateFailedEngine": "翻譯引擎無回應",
+  "StatusTranslateFailedAcceptable": "翻譯品質未達標準"
 }
 
 
