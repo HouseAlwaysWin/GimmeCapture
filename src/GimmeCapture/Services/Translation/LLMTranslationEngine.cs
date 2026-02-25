@@ -91,7 +91,7 @@ public class LLMTranslationEngine : ITranslationEngine
                 return resultText;
             },
             ct,
-            TimeSpan.FromSeconds(90),
+            Timeout.InfiniteTimeSpan,
             () => string.Empty,
             "LLMTranslationEngine.Translate");
     }
@@ -116,7 +116,7 @@ public class LLMTranslationEngine : ITranslationEngine
                 return string.Empty;
             },
             ct,
-            TimeSpan.FromSeconds(90),
+            Timeout.InfiniteTimeSpan,
             () => string.Empty,
             "LLMTranslationEngine.Retry");
     }
