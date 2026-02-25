@@ -462,7 +462,8 @@
                                     <Border Background="#CC000000" CornerRadius="4" Padding="4"
                                             BorderBrush="#44FFFFFF" BorderThickness="1"
                                             Margin="0"
-                                            HorizontalAlignment="Stretch" VerticalAlignment="Center"
+                                            MaxWidth="{Binding Bounds.Width}"
+                                            HorizontalAlignment="Center" VerticalAlignment="Center"
                                             ClipToBounds="True">
                                         <StackPanel>
                                             <SelectableTextBlock Text="{Binding TranslatedText}" 
