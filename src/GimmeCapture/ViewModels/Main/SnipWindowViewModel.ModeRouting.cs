@@ -183,13 +183,19 @@ public partial class SnipWindowViewModel
         }
     }
 
+    // Pre-record flag: set to true BEFORE FFmpeg starts to hide decorations from gdigrab
+    private bool _preRecordHideDecorations;
+
     // Action Helpers
     public bool HideSelectionDecoration 
     {
         get
         {
             // Always show during selection phase
-            if (CurrentMode == SnipMode.Recording && RecState == RecordingState.Idle) return false;
+            if (CurrentMode == SnipMode.Recording && RecState == RecordingState.Idle && !_preRecordHideDecorations) return false;
+            
+            // Force-hide decorations during active recording or pre-record phase
+            if (_preRecordHideDecorations || (CurrentMode == SnipMode.Recording && RecState == RecordingState.Recording)) return true;
             
             bool hide = CurrentMode == SnipMode.Recording ? (_mainVm?.HideRecordSelectionDecoration ?? false) : (_mainVm?.HideSnipSelectionDecoration ?? false);
             System.Diagnostics.Debug.WriteLine($"[SnipWindow] HideSelectionDecoration queried: {hide} (CurrentMode: {CurrentMode}, RecState: {RecState})");
@@ -201,8 +207,10 @@ public partial class SnipWindowViewModel
     {
         get
         {
-            // For Recording Mode: keep border visible on screen for targeting.
-            // Border visuals are rendered outside SelectionRect, so recorded region remains clean.
+            // Force-hide border during active recording or pre-record phase
+            if (_preRecordHideDecorations || (CurrentMode == SnipMode.Recording && RecState == RecordingState.Recording)) return true;
+            
+            // For Recording Mode (idle): keep border visible on screen for targeting.
             if (CurrentMode == SnipMode.Recording) return false;
             
             bool hide = _mainVm?.HideSnipSelectionBorder ?? false;
