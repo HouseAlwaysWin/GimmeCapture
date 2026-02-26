@@ -98,6 +98,7 @@ public partial class SnipWindow : Window
         
         // Close on Escape
         KeyDown += OnKeyDown;
+        KeyUp += OnKeyUp;
     }
     
     private IReadOnlyList<Window> _hiddenTopmostWindows = [];
@@ -607,26 +608,40 @@ public partial class SnipWindow : Window
             // Translation Mode Specific Hotkeys
             if (!e.Handled && _viewModel.IsTranslationMode)
             {
-                var transAction = _hotkeyRouter.ResolveTranslationModeHotkeyAction(
-                    _viewModel.ModeCursorHotkey,
-                    _viewModel.ModeSingleHotkey,
-                    _viewModel.ModeMultiHotkey,
-                    IsMatch);
-
-                switch (transAction)
+                if (IsModifierMatch(_viewModel.HoldSingleHotkey, e.Key))
                 {
-                    case HotkeyRouterService.WindowHotkeyAction.ModeCursor:
-                        _viewModel.CurrentTranslationTool = Models.TranslationTool.Cursor;
-                        e.Handled = true;
-                        break;
-                    case HotkeyRouterService.WindowHotkeyAction.ModeSingle:
-                        _viewModel.CurrentTranslationTool = Models.TranslationTool.Single;
-                        e.Handled = true;
-                        break;
-                    case HotkeyRouterService.WindowHotkeyAction.ModeMulti:
-                        _viewModel.CurrentTranslationTool = Models.TranslationTool.Multi;
-                        e.Handled = true;
-                        break;
+                    _viewModel.CurrentTranslationTool = Models.TranslationTool.Single;
+                    e.Handled = true;
+                }
+                else if (IsModifierMatch(_viewModel.HoldMultiHotkey, e.Key))
+                {
+                    _viewModel.CurrentTranslationTool = Models.TranslationTool.Multi;
+                    e.Handled = true;
+                }
+
+                if (!e.Handled)
+                {
+                    var transAction = _hotkeyRouter.ResolveTranslationModeHotkeyAction(
+                        _viewModel.ModeCursorHotkey,
+                        _viewModel.ModeSingleHotkey,
+                        _viewModel.ModeMultiHotkey,
+                        IsMatch);
+
+                    switch (transAction)
+                    {
+                        case HotkeyRouterService.WindowHotkeyAction.ModeCursor:
+                            _viewModel.CurrentTranslationTool = Models.TranslationTool.Cursor;
+                            e.Handled = true;
+                            break;
+                        case HotkeyRouterService.WindowHotkeyAction.ModeSingle:
+                            _viewModel.CurrentTranslationTool = Models.TranslationTool.Single;
+                            e.Handled = true;
+                            break;
+                        case HotkeyRouterService.WindowHotkeyAction.ModeMulti:
+                            _viewModel.CurrentTranslationTool = Models.TranslationTool.Multi;
+                            e.Handled = true;
+                            break;
+                    }
                 }
 
                 if (!e.Handled)
@@ -643,6 +658,27 @@ public partial class SnipWindow : Window
                 }
             }
         }
+    }
+
+    private void OnKeyUp(object? sender, KeyEventArgs e)
+    {
+        if (_viewModel != null && _viewModel.IsTranslationMode)
+        {
+            if (IsModifierMatch(_viewModel.HoldSingleHotkey, e.Key) || IsModifierMatch(_viewModel.HoldMultiHotkey, e.Key))
+            {
+                // Revert to Cursor mode when the modifier is released
+                _viewModel.CurrentTranslationTool = Models.TranslationTool.Cursor;
+                e.Handled = true;
+            }
+        }
+    }
+
+    private bool IsModifierMatch(string hotkeyLabel, Key key)
+    {
+        if (hotkeyLabel == "Shift" && (key == Key.LeftShift || key == Key.RightShift)) return true;
+        if (hotkeyLabel == "Ctrl" && (key == Key.LeftCtrl || key == Key.RightCtrl)) return true;
+        if (hotkeyLabel == "Alt" && (key == Key.LeftAlt || key == Key.RightAlt)) return true;
+        return false;
     }
     
     private void UpdateActiveScreenBounds(Point point)

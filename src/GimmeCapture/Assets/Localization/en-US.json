@@ -188,6 +188,8 @@
   "ActionScanAll": "Scan Full Screen Text",
   "ActionClearAll": "Clear All Selections",
   "ActionToggleSelect": "Toggle Select/Edit Mode",
+  "ActionHoldSingle": "Hold to Single Selection",
+  "ActionHoldMulti": "Hold to Multi Selection",
   "ActionAutoDetect": "Toggle Auto-Detect",
   "SwitchToSnip": "Switch to Screenshot",
   "SwitchToRecord": "Switch to Recording",

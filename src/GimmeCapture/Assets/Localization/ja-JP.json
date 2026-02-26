@@ -180,6 +180,8 @@
   "ActionScanAll": "全画面テキストスキャン",
   "ActionClearAll": "すべての選択をクリア",
   "ActionToggleSelect": "選択/編集モード切替",
+  "ActionHoldSingle": "長押しで単一選択",
+  "ActionHoldMulti": "長押しで複数選択",
   "ActionAutoDetect": "自動検出の切替",
   "SwitchToSnip": "スクリーンショットに切替",
   "SwitchToRecord": "録画に切替",

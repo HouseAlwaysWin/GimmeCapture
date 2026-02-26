@@ -546,7 +546,7 @@ public partial class SnipWindowViewModel
         set => this.RaiseAndSetIfChanged(ref _isToolbarManuallyPositioned, value);
     }
 
-    private TranslationTool _currentTranslationTool = TranslationTool.Single;
+    private TranslationTool _currentTranslationTool = TranslationTool.Cursor;
     public TranslationTool CurrentTranslationTool
     {
         get => _currentTranslationTool;

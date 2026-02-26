@@ -84,6 +84,8 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     public string ModeCursorHotkey => _mainVm?.Translate_ModeCursor ?? "D1";
     public string ModeSingleHotkey => _mainVm?.Translate_ModeSingle ?? "D2";
     public string ModeMultiHotkey => _mainVm?.Translate_ModeMulti ?? "D3";
+    public string HoldSingleHotkey => _mainVm?.Translate_HoldSingle ?? "Shift";
+    public string HoldMultiHotkey => _mainVm?.Translate_HoldMulti ?? "Ctrl";
 
     public string UndoTooltip => $"{LocalizationService.Instance["Undo"]} ({UndoHotkey})";
     public string RedoTooltip => $"{LocalizationService.Instance["Redo"]} ({RedoHotkey})";
