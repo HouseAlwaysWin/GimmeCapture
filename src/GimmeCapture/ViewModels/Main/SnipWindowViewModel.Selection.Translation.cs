@@ -47,7 +47,6 @@ public partial class SnipWindowViewModel
         ShowTopLoadingBar = true;
         IsIndeterminate = true;
         ProcessingText = "Translating...";
-        ShowProcessingOverlay = true;
 
         if (!await EnsureTranslationEngineReadyAsync()) return;
 
@@ -163,7 +162,6 @@ public partial class SnipWindowViewModel
             IsTranslating = false;
             ShowTopLoadingBar = false;
             IsIndeterminate = false;
-            ShowProcessingOverlay = false;
         }
     }
     catch (Exception ex)
