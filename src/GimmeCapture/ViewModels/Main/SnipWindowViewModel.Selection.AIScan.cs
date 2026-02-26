@@ -301,8 +301,18 @@ public partial class SnipWindowViewModel
                 {
                     if (token.IsCancellationRequested) return;
                     if (CurrentState != SnipState.Detecting || _mainVm?.EnableAI != true) return;
-
-                    WindowRects.Clear();
+                    
+                    // Keep existing Win32-detected candidate boxes and append OCR boxes.
+                    // This preserves original selectable regions while still adding text targets.
+                    bool IsNearDuplicate(Rect a, Rect b)
+                    {
+                        const double posTolerance = 6.0;
+                        const double sizeTolerance = 8.0;
+                        return Math.Abs(a.X - b.X) <= posTolerance &&
+                               Math.Abs(a.Y - b.Y) <= posTolerance &&
+                               Math.Abs(a.Width - b.Width) <= sizeTolerance &&
+                               Math.Abs(a.Height - b.Height) <= sizeTolerance;
+                    }
 
                     double scaleX = ViewportSize.Width / bitmap.Width;
                     double scaleY = ViewportSize.Height / bitmap.Height;
@@ -316,7 +326,12 @@ public partial class SnipWindowViewModel
 
                         if (logicalRect.Width >= 12 && logicalRect.Height >= 8)
                         {
-                            WindowRects.Add(new VisualRect(logicalRect));
+                            bool duplicated = WindowRects.Any(existing =>
+                                IsNearDuplicate(new Rect(existing.X, existing.Y, existing.Width, existing.Height), logicalRect));
+                            if (!duplicated)
+                            {
+                                WindowRects.Add(new VisualRect(logicalRect));
+                            }
                         }
                     }
                 });
