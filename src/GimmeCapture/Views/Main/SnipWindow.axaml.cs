@@ -586,6 +586,10 @@ public partial class SnipWindow : Window
                         {
                             if (physicalKeyStr == "Digit" + expectedKeyStr[1]) return true;
                         }
+                        else if ((expectedKeyStr == "Return" || expectedKeyStr == "Enter") && (physicalKeyStr == "Return" || physicalKeyStr == "Enter"))
+                        {
+                            return true;
+                        }
                         else if (string.Equals(expectedKeyStr, physicalKeyStr, StringComparison.OrdinalIgnoreCase))
                         {
                             return true;
