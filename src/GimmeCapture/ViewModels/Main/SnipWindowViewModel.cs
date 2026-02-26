@@ -67,15 +67,30 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     public string MagicWandHotkey => _mainVm?.Snip_MagicWand ?? "W";
 
     // Mode-switch hotkeys (resolved per current mode)
-    public string SwitchToSnipHotkey => CurrentMode == SnipMode.Recording
-        ? (_mainVm?.Record_SwitchToSnip ?? "F1")
-        : (_mainVm?.Translate_SwitchToSnip ?? "F1");
-    public string SwitchToRecordHotkey => CurrentMode == SnipMode.Screenshot
-        ? (_mainVm?.Snip_SwitchToRecord ?? "F2")
-        : (_mainVm?.Translate_SwitchToRecord ?? "F2");
-    public string SwitchToTranslateHotkey => CurrentMode == SnipMode.Screenshot
-        ? (_mainVm?.Snip_SwitchToTranslate ?? "F1")
-        : (_mainVm?.Record_SwitchToTranslate ?? "F2");
+    // Return empty string when already in the target mode to avoid conflicts
+    // (e.g., in Screenshot mode, SwitchToSnipHotkey and SwitchToTranslateHotkey
+    //  both resolved to "F1", causing SwitchToSnip to swallow the event first)
+    public string SwitchToSnipHotkey => CurrentMode switch
+    {
+        SnipMode.Screenshot => string.Empty, // Already in Snip mode
+        SnipMode.Recording => _mainVm?.Record_SwitchToSnip ?? "F1",
+        SnipMode.Translation => _mainVm?.Translate_SwitchToSnip ?? "F1",
+        _ => string.Empty
+    };
+    public string SwitchToRecordHotkey => CurrentMode switch
+    {
+        SnipMode.Recording => string.Empty, // Already in Record mode
+        SnipMode.Screenshot => _mainVm?.Snip_SwitchToRecord ?? "F2",
+        SnipMode.Translation => _mainVm?.Translate_SwitchToRecord ?? "F2",
+        _ => string.Empty
+    };
+    public string SwitchToTranslateHotkey => CurrentMode switch
+    {
+        SnipMode.Translation => string.Empty, // Already in Translation mode
+        SnipMode.Screenshot => _mainVm?.Snip_SwitchToTranslate ?? "F1",
+        SnipMode.Recording => _mainVm?.Record_SwitchToTranslate ?? "F2",
+        _ => string.Empty
+    };
 
     // Translation mode specific hotkeys
     public string TranslateAllHotkey => _mainVm?.Translate_TranslateAll ?? "Enter";
