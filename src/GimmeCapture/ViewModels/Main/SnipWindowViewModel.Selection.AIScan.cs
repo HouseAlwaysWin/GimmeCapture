@@ -8,6 +8,7 @@ using System.Reactive;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
 using GimmeCapture.Services.Core;
+using GimmeCapture.Services.OCR;
 using GimmeCapture.Services.Platforms.Windows;
 
 namespace GimmeCapture.ViewModels.Main;
@@ -60,6 +61,18 @@ public partial class SnipWindowViewModel
     private System.Threading.CancellationTokenSource? _scanCts;
 
     private async Task RunAIScanAsync()
+    {
+        var engine = _mainVm?.AIScanEngine ?? AIScanEngine.OCR;
+        if (engine == AIScanEngine.SAM2)
+        {
+            await RunSAM2ScanAsync();
+            return;
+        }
+
+        await RunOCRScanAsync();
+    }
+
+    private async Task RunSAM2ScanAsync()
     {
         System.Diagnostics.Debug.WriteLine("[AI Scan] RunAIScanAsync started");
 
@@ -222,6 +235,109 @@ public partial class SnipWindowViewModel
         }
     }
 
+    private async Task RunOCRScanAsync()
+    {
+        System.Diagnostics.Debug.WriteLine("[AI Scan][OCR] RunOCRScanAsync started");
+
+        if (RecState != RecordingState.Idle)
+        {
+            System.Diagnostics.Debug.WriteLine($"[AI Scan][OCR] Abort: RecState is {RecState}");
+            return;
+        }
+
+        if (_mainVm == null || !_mainVm.EnableAI)
+        {
+            System.Diagnostics.Debug.WriteLine("[AI Scan][OCR] Abort: EnableAI is false or MainVm is null");
+            return;
+        }
+
+        if (!_mainVm.EnableAIScan)
+        {
+            System.Diagnostics.Debug.WriteLine("[AI Scan][OCR] Abort: EnableAIScan is false");
+            return;
+        }
+
+        _scanCts?.Cancel();
+        _scanCts = new System.Threading.CancellationTokenSource();
+        var token = _scanCts.Token;
+
+        ShowTopLoadingBar = true;
+
+        try
+        {
+            if (CurrentState == SnipState.Detecting)
+                ProcessingText = LocalizationService.Instance["StatusAIScanning"] ?? "AI Scanning...";
+
+            var ocrReady = await _mainVm.AIResourceService.EnsureOCRAsync();
+            if (!ocrReady)
+            {
+                System.Diagnostics.Debug.WriteLine("[AI Scan][OCR] OCR resources are not ready");
+                return;
+            }
+
+            token.ThrowIfCancellationRequested();
+
+            var regionToCapture = new Rect(0, 0, ViewportSize.Width, ViewportSize.Height);
+            using var bitmap = await _captureService.CaptureScreenAsync(regionToCapture, ScreenOffset, VisualScaling, false);
+            if (bitmap == null)
+            {
+                System.Diagnostics.Debug.WriteLine("[AI Scan][OCR] Capture returned null");
+                return;
+            }
+
+            token.ThrowIfCancellationRequested();
+
+            var ocrEngine = new PaddleOCREngine(_mainVm.AIResourceService, _mainVm.AppSettingsService);
+            var ocrLang = _mainVm.AppSettingsService.Settings.SourceLanguage;
+            await ocrEngine.EnsureLoadedAsync(ocrLang);
+            var textBoxes = await Task.Run(() => ocrEngine.DetectText(bitmap), token);
+            ocrEngine.Dispose();
+
+            token.ThrowIfCancellationRequested();
+
+            if (_mainVm.ShowAIScanBox)
+            {
+                await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    if (token.IsCancellationRequested) return;
+                    if (CurrentState != SnipState.Detecting || _mainVm?.EnableAI != true) return;
+
+                    WindowRects.Clear();
+
+                    double scaleX = ViewportSize.Width / bitmap.Width;
+                    double scaleY = ViewportSize.Height / bitmap.Height;
+                    foreach (var box in textBoxes)
+                    {
+                        var logicalRect = new Rect(
+                            box.Left * scaleX,
+                            box.Top * scaleY,
+                            box.Width * scaleX,
+                            box.Height * scaleY);
+
+                        if (logicalRect.Width >= 12 && logicalRect.Height >= 8)
+                        {
+                            WindowRects.Add(new VisualRect(logicalRect));
+                        }
+                    }
+                });
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            System.Diagnostics.Debug.WriteLine("[AI Scan][OCR] CANCELLED");
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[AI Scan][OCR] ERROR: {ex.Message}");
+        }
+        finally
+        {
+            ShowTopLoadingBar = false;
+            _scanCts?.Dispose();
+            _scanCts = null;
+        }
+    }
+
     private Rect _activeScreenBounds = new Rect(0,0,1920,1080); // Default
     public Rect ActiveScreenBounds
     {
@@ -255,8 +371,9 @@ public partial class SnipWindowViewModel
         AIScanCommand = ReactiveCommand.CreateFromTask(RunAIScanAsync);
         AIScanCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"AI Scan Command error: {ex}"));
 
-        TriggerAutoScanCommand = ReactiveCommand.CreateFromTask(RunAIScanAsync);
-        TriggerAutoScanCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Auto Scan Command error: {ex}"));
+        // Keep SAM2 path for manual/advanced trigger.
+        TriggerAutoScanCommand = ReactiveCommand.CreateFromTask(RunSAM2ScanAsync);
+        TriggerAutoScanCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Manual SAM2 Scan Command error: {ex}"));
 
         ToggleAIScanBoxCommand = ReactiveCommand.Create(() => { ShowAIScanBox = !ShowAIScanBox; return Unit.Default; });
         ToggleAIScanBoxCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Toggle AI Box error: {ex}"));

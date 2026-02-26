@@ -6,6 +6,7 @@ public enum VideoCodec { H264, H265 }
 public enum TranslationLanguage { TraditionalChinese, SimplifiedChinese, English, Japanese, Korean }
 public enum OCRLanguage { Auto, English, TraditionalChinese, SimplifiedChinese, Japanese, Korean }
 public enum TranslationEngine { Ollama, MarianMT }
+public enum AIScanEngine { OCR, SAM2 }
 
 public class TranslatedBlock
 {
@@ -141,6 +142,8 @@ public class AppSettings
     public SAM2Variant SelectedSAM2Variant { get; set; } = SAM2Variant.Tiny;
     public bool ShowAIScanBox { get; set; } = true;
     public bool EnableAIScan { get; set; } = true;
+    [System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter))]
+    public AIScanEngine AIScanEngine { get; set; } = AIScanEngine.OCR;
     public int SAM2GridDensity { get; set; } = 8;
     public int SAM2MaxObjects { get; set; } = 20;
     public int SAM2MinObjectSize { get; set; } = 20;

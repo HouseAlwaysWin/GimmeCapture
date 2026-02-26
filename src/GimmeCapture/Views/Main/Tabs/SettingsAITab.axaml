@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:GimmeCapture.ViewModels.Main"
              xmlns:services="using:GimmeCapture.Services.Core.Infrastructure"
+             xmlns:converters="using:GimmeCapture.Converters"
              x:Class="GimmeCapture.Views.Main.Tabs.SettingsAITab"
              x:DataType="vm:MainWindowViewModel">
     <ScrollViewer>
@@ -20,6 +21,16 @@
                                     <CheckBox IsChecked="{Binding ShowAIScanBox}" Content="{Binding [ShowAIScanBox], Source={x:Static services:LocalizationService.Instance}}"/>
                                     <CheckBox IsChecked="{Binding EnableAIScan}" Content="{Binding [EnableAIScan], Source={x:Static services:LocalizationService.Instance}}"/>
                                 </StackPanel>
+                                <DockPanel>
+                                    <TextBlock Text="{Binding [AIScanEngine], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                    <ComboBox ItemsSource="{Binding AvailableAIScanEngines}" SelectedItem="{Binding AIScanEngine}" HorizontalAlignment="Stretch">
+                                        <ComboBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding Converter={x:Static converters:EnumToLocalizedConverter.Instance}, ConverterParameter='AIScanEngine'}"/>
+                                            </DataTemplate>
+                                        </ComboBox.ItemTemplate>
+                                    </ComboBox>
+                                </DockPanel>
                                 <Separator Background="#333333" Height="1" Margin="0,5"/>
                                 <StackPanel Spacing="5">
                                     <TextBlock Text="{Binding [AIScanDensity], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>

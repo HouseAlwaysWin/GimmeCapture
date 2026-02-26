@@ -78,6 +78,7 @@ public partial class MainWindowViewModel
     }
 
     public List<TranslationEngine> AvailableTranslationEngines { get; } = Enum.GetValues<TranslationEngine>().ToList();
+    public List<AIScanEngine> AvailableAIScanEngines { get; } = Enum.GetValues<AIScanEngine>().ToList();
     
     private TranslationEngine _selectedTranslationEngine;
     public TranslationEngine SelectedTranslationEngine
@@ -670,6 +671,23 @@ public partial class MainWindowViewModel
             }
         }
     }
+
+    public AIScanEngine AIScanEngine
+    {
+        get => _settingsService.Settings.AIScanEngine;
+        set
+        {
+            if (_settingsService.Settings.AIScanEngine != value)
+            {
+                _settingsService.Settings.AIScanEngine = value;
+                this.RaisePropertyChanged();
+                if (!_isDataLoading)
+                {
+                    _ = SaveSettingsAsync();
+                }
+            }
+        }
+    }
     
     private bool _enableAI = true;
     public bool EnableAI
@@ -914,6 +932,7 @@ public partial class MainWindowViewModel
             CornerIconScale = settings.CornerIconScale;
             RecordFPS = settings.RecordFPS;
             EnableAIScan = settings.EnableAIScan;
+            AIScanEngine = settings.AIScanEngine;
             AIResourcesDirectory = settings.AIResourcesDirectory;
             OllamaApiUrl = settings.OllamaApiUrl;
             SelectedTranslationEngine = settings.SelectedTranslationEngine;
@@ -959,6 +978,7 @@ public partial class MainWindowViewModel
             
             this.RaisePropertyChanged(nameof(SourceLanguage));
             this.RaisePropertyChanged(nameof(TargetLanguage));
+            this.RaisePropertyChanged(nameof(AIScanEngine));
 
             IsModified = false;
 
@@ -1026,6 +1046,7 @@ public partial class MainWindowViewModel
             settings.WingScale = WingScale;
             settings.CornerIconScale = CornerIconScale;
             settings.RecordFPS = RecordFPS;
+            settings.AIScanEngine = AIScanEngine;
             settings.TargetLanguage = TargetLanguage;
             settings.SourceLanguage = SourceLanguage;
             settings.OllamaModel = OllamaModel;
