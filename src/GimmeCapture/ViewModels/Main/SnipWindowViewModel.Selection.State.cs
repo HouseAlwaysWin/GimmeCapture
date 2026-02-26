@@ -137,6 +137,17 @@ public partial class SnipWindowViewModel
         }
     }
 
+    private bool _isTranslating;
+    public bool IsTranslating
+    {
+        get => _isTranslating;
+        set
+        {
+            System.Diagnostics.Debug.WriteLine($"[Translation] IsTranslating -> {value}");
+            this.RaiseAndSetIfChanged(ref _isTranslating, value);
+        }
+    }
+
     public ObservableCollection<TranslatedBlock> TranslatedBlocks { get; } = new();
     public ObservableCollection<UserSelectionRect> UserSelections { get; } = new();
     private TranslationService? _translationService;

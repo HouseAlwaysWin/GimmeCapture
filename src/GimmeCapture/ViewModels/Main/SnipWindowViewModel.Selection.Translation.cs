@@ -16,19 +16,36 @@ public partial class SnipWindowViewModel
     /// </summary>
     private async Task TranslateAllSelectionsAsync()
     {
-        System.Diagnostics.Debug.WriteLine("[TranslationMode] TranslateAllSelectionsAsync triggered");
-        if (UserSelections.Count == 0)
+        try
         {
-            // UX rule: translate button should only process explicit user selections.
-            // If no selection exists, do nothing instead of scanning full screen.
-            System.Diagnostics.Debug.WriteLine("[TranslationMode] No selections found. Skip translation.");
-            _mainVm?.SetStatus("StatusTranslateNoSelection");
-            return;
-        }
+            System.Diagnostics.Debug.WriteLine("[TranslationMode] TranslateAllSelectionsAsync triggered");
+            
+            if (IsTranslating)
+            {
+                System.Diagnostics.Debug.WriteLine("[TranslationMode] Cancelling active translation...");
+                _translationCts?.Cancel();
+                // Do not set IsTranslating = false here, let the finally block handle it
+                return;
+            }
+
+            _translationCts?.Cancel();
+            _translationCts?.Dispose();
+            _translationCts = new CancellationTokenSource();
+            var token = _translationCts.Token;
+
+            if (UserSelections.Count == 0)
+            {
+                // UX rule: translate button should only process explicit user selections.
+                // If no selection exists, do nothing instead of scanning full screen.
+                System.Diagnostics.Debug.WriteLine("[TranslationMode] No selections found. Skip translation.");
+                _mainVm?.SetStatus("StatusTranslateNoSelection");
+                return;
+            }
 
         if (!await EnsureTranslationEngineReadyAsync()) return;
 
         System.Diagnostics.Debug.WriteLine($"[TranslationMode] Proceeding to translate {UserSelections.Count} regions");
+        IsTranslating = true;
         ShowTopLoadingBar = true;
         IsIndeterminate = true;
         ProcessingText = "Translating...";
@@ -52,10 +69,7 @@ public partial class SnipWindowViewModel
             System.Diagnostics.Debug.WriteLine($"[TranslationMode] ==============================");
         }
 
-        _translationCts?.Cancel();
-        _translationCts?.Dispose();
-        _translationCts = new CancellationTokenSource();
-        var token = _translationCts.Token;
+        // Setup new cancellation token source moved to the beginning of the function
 
         // Ensure OCR resources
         if (_mainVm != null)
@@ -145,10 +159,16 @@ public partial class SnipWindowViewModel
         }
         finally
         {
+            IsTranslating = false;
             ShowTopLoadingBar = false;
             IsIndeterminate = false;
         }
     }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[TranslationMode] Unexpected outer error: {ex}");
+    }
+}
 
     /// <summary>
     /// 翻譯模式：PaddleOCR 掃描全螢幕偵測可翻譯文字區域
@@ -357,40 +377,47 @@ public partial class SnipWindowViewModel
 
     private async Task<bool> EnsureTranslationEngineReadyAsync()
     {
-        if (_translationService == null)
+        try
         {
-            if (_mainVm?.AIResourceService == null) return false;
-            _translationService = new TranslationService(_mainVm.AIResourceService, _mainVm.AppSettingsService, _mainVm.MarianMTService);
-        }
-
-        var result = await _translationService.CheckEngineReadyAsync();
-        if (result.IsReady) return true;
-
-        if (_mainVm != null && result.ErrorKey != null)
-        {
-            var title = LocalizationService.Instance["StatusError"];
-            var message = LocalizationService.Instance[result.ErrorKey];
-
-            if (result.ShowDownloadPrompt)
+            if (_translationService == null)
             {
-                // Confirmation format: Title, Message
-                var userConfirmed = await _mainVm.ConfirmAction!(title, message, false);
-                if (userConfirmed)
+                if (_mainVm?.AIResourceService == null) return false;
+                _translationService = new TranslationService(_mainVm.AIResourceService, _mainVm.AppSettingsService, _mainVm.MarianMTService);
+            }
+
+            var result = await _translationService.CheckEngineReadyAsync();
+            if (result.IsReady) return true;
+
+            if (_mainVm != null && result.ErrorKey != null)
+            {
+                var title = LocalizationService.Instance["StatusError"];
+                var message = LocalizationService.Instance[result.ErrorKey];
+
+                if (result.ShowDownloadPrompt)
                 {
-                    // For MarianMT, triggering download
-                    ShowTopLoadingBar = true;
-                    IsIndeterminate = true;
-                    var success = await _mainVm.AIResourceService.EnsureNmtAsync();
-                    ShowTopLoadingBar = false;
-                    IsIndeterminate = false;
-                    return success;
+                    // Confirmation format: Title, Message
+                    var userConfirmed = await _mainVm.ConfirmAction!(title, message, false);
+                    if (userConfirmed)
+                    {
+                        // For MarianMT, triggering download
+                        ShowTopLoadingBar = true;
+                        IsIndeterminate = true;
+                        var success = await _mainVm.AIResourceService.EnsureNmtAsync();
+                        ShowTopLoadingBar = false;
+                        IsIndeterminate = false;
+                        return success;
+                    }
+                }
+                else
+                {
+                    // General reminder (Ollama)
+                    await _mainVm.ConfirmAction!(title, message, true);
                 }
             }
-            else
-            {
-                // General reminder (Ollama)
-                await _mainVm.ConfirmAction!(title, message, true);
-            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[TranslationMode] EnsureEngineReady error: {ex}");
         }
 
         return false;

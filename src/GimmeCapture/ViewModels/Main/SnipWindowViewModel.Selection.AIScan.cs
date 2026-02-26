@@ -264,7 +264,7 @@ public partial class SnipWindowViewModel
 
         var canExecuteInTranslation = this.WhenAnyValue(x => x.CurrentMode, mode => mode == SnipMode.Translation);
 
-        TranslateAllSelectionsCommand = ReactiveCommand.CreateFromTask(TranslateAllSelectionsAsync, canExecuteInTranslation);
+        TranslateAllSelectionsCommand = ReactiveCommand.Create(() => { _ = TranslateAllSelectionsAsync(); }, canExecuteInTranslation);
         TranslateAllSelectionsCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"TranslateAll error: {ex}"));
 
         ScanAllTextCommand = ReactiveCommand.CreateFromTask(ScanAllTextAsync, canExecuteInTranslation);
