@@ -42,13 +42,14 @@ public partial class SnipWindowViewModel
                 return;
             }
 
-        if (!await EnsureTranslationEngineReadyAsync()) return;
-
         System.Diagnostics.Debug.WriteLine($"[TranslationMode] Proceeding to translate {UserSelections.Count} regions");
         IsTranslating = true;
         ShowTopLoadingBar = true;
         IsIndeterminate = true;
         ProcessingText = "Translating...";
+        ShowProcessingOverlay = true;
+
+        if (!await EnsureTranslationEngineReadyAsync()) return;
 
         if (_translationService == null)
         {
@@ -162,6 +163,7 @@ public partial class SnipWindowViewModel
             IsTranslating = false;
             ShowTopLoadingBar = false;
             IsIndeterminate = false;
+            ShowProcessingOverlay = false;
         }
     }
     catch (Exception ex)
