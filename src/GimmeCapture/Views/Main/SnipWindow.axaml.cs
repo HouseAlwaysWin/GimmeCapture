@@ -570,7 +570,30 @@ public partial class SnipWindow : Window
 
             bool IsMatch(string hotkey)
             {
-                try { return KeyGesture.Parse(hotkey).Matches(e); }
+                try 
+                { 
+                    var gesture = KeyGesture.Parse(hotkey);
+                    if (gesture.Matches(e)) return true;
+
+                    // Fallback for IME processing (e.Key might be ImeProcessed / None)
+                    if ((e.Key == Key.ImeProcessed || e.Key == Key.None) && gesture.KeyModifiers == e.KeyModifiers)
+                    {
+                        string expectedKeyStr = gesture.Key.ToString();
+                        string physicalKeyStr = e.PhysicalKey.ToString();
+                        
+                        // Map specific keys if necessary, e.g. Key.D1 -> PhysicalKey.Digit1
+                        if (expectedKeyStr.StartsWith("D") && expectedKeyStr.Length == 2 && char.IsDigit(expectedKeyStr[1]))
+                        {
+                            if (physicalKeyStr == "Digit" + expectedKeyStr[1]) return true;
+                        }
+                        else if (string.Equals(expectedKeyStr, physicalKeyStr, StringComparison.OrdinalIgnoreCase))
+                        {
+                            return true;
+                        }
+                    }
+
+                    return false; 
+                }
                 catch { return false; }
             }
 
@@ -608,12 +631,12 @@ public partial class SnipWindow : Window
             // Translation Mode Specific Hotkeys
             if (!e.Handled && _viewModel.IsTranslationMode)
             {
-                if (IsModifierMatch(_viewModel.HoldSingleHotkey, e.Key))
+                if (IsModifierMatch(_viewModel.HoldSingleHotkey, e))
                 {
                     _viewModel.CurrentTranslationTool = Models.TranslationTool.Single;
                     e.Handled = true;
                 }
-                else if (IsModifierMatch(_viewModel.HoldMultiHotkey, e.Key))
+                else if (IsModifierMatch(_viewModel.HoldMultiHotkey, e))
                 {
                     _viewModel.CurrentTranslationTool = Models.TranslationTool.Multi;
                     e.Handled = true;
@@ -664,7 +687,7 @@ public partial class SnipWindow : Window
     {
         if (_viewModel != null && _viewModel.IsTranslationMode)
         {
-            if (IsModifierMatch(_viewModel.HoldSingleHotkey, e.Key) || IsModifierMatch(_viewModel.HoldMultiHotkey, e.Key))
+            if (IsModifierMatch(_viewModel.HoldSingleHotkey, e) || IsModifierMatch(_viewModel.HoldMultiHotkey, e))
             {
                 // Revert to Cursor mode when the modifier is released
                 _viewModel.CurrentTranslationTool = Models.TranslationTool.Cursor;
@@ -673,11 +696,11 @@ public partial class SnipWindow : Window
         }
     }
 
-    private bool IsModifierMatch(string hotkeyLabel, Key key)
+    private bool IsModifierMatch(string hotkeyLabel, KeyEventArgs e)
     {
-        if (hotkeyLabel == "Shift" && (key == Key.LeftShift || key == Key.RightShift)) return true;
-        if (hotkeyLabel == "Ctrl" && (key == Key.LeftCtrl || key == Key.RightCtrl)) return true;
-        if (hotkeyLabel == "Alt" && (key == Key.LeftAlt || key == Key.RightAlt)) return true;
+        if (hotkeyLabel == "Shift" && (e.Key == Key.LeftShift || e.Key == Key.RightShift || e.PhysicalKey.ToString() == "ShiftLeft" || e.PhysicalKey.ToString() == "ShiftRight")) return true;
+        if (hotkeyLabel == "Ctrl" && (e.Key == Key.LeftCtrl || e.Key == Key.RightCtrl || e.PhysicalKey.ToString() == "ControlLeft" || e.PhysicalKey.ToString() == "ControlRight")) return true;
+        if (hotkeyLabel == "Alt" && (e.Key == Key.LeftAlt || e.Key == Key.RightAlt || e.PhysicalKey.ToString() == "AltLeft" || e.PhysicalKey.ToString() == "AltRight")) return true;
         return false;
     }
     
