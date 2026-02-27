@@ -80,7 +80,7 @@ public partial class FloatingVideoWindow : FloatingWindowBase
                     ShowOverwritePrompt = true,
                     FileTypeChoices = new[]
                     {
-                        new Avalonia.Platform.Storage.FilePickerFileType("Video Files") { Patterns = new[] { "*.mp4", "*.mkv", "*.gif", "*.webm" } },
+                        new Avalonia.Platform.Storage.FilePickerFileType("Video Files") { Patterns = new[] { "*.mp4", "*.mkv", "*.gif", "*.webm", "*.mov" } },
                         new Avalonia.Platform.Storage.FilePickerFileType("All Files") { Patterns = new[] { "*.*" } }
                     }
                 });

@@ -90,8 +90,11 @@ public partial class MainWindow : Window
         // 如果有修改，仍可以在後台提示
         if (DataContext is MainWindowViewModel vm && vm.IsModified)
         {
-             // 可以在這裡非同步保存，或者單純 Hide
-             // 為了避免警告且符合行為需求，這裡移除語意不明的註解
+            // Use Post to ensure we don't block the visual tree teardown (prevents PopupRoot/PlatformImpl null errors)
+            Avalonia.Threading.Dispatcher.UIThread.Post(async () => 
+            {
+                await vm.SaveSettingsAsync();
+            });
         }
     }
 

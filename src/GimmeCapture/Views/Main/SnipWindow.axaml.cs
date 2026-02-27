@@ -375,16 +375,24 @@ public partial class SnipWindow : Window
                  string fileTypeName = isRecording ? $"{defaultExt.ToUpper()} Video" : "PNG Image";
                  string pattern = $"*.{defaultExt}";
                  
+                 var fileChoices = new System.Collections.Generic.List<Avalonia.Platform.Storage.FilePickerFileType>();
+                 if (isRecording)
+                 {
+                     fileChoices.Add(new Avalonia.Platform.Storage.FilePickerFileType("Video Files") { Patterns = new[] { "*.mp4", "*.mkv", "*.gif", "*.webm", "*.mov" } });
+                     fileChoices.Add(new Avalonia.Platform.Storage.FilePickerFileType("All Files") { Patterns = new[] { "*.*" } });
+                 }
+                 else
+                 {
+                     fileChoices.Add(new Avalonia.Platform.Storage.FilePickerFileType(fileTypeName) { Patterns = new[] { pattern } });
+                 }
+
                  var file = await topLevel.StorageProvider.SaveFilePickerAsync(new Avalonia.Platform.Storage.FilePickerSaveOptions
                  {
                      Title = isRecording ? "Save Recording" : "Save Screenshot",
                      DefaultExtension = defaultExt,
                      ShowOverwritePrompt = true,
                      SuggestedFileName = $"Capture_{DateTime.Now:yyyyMMdd_HHmmss}",
-                     FileTypeChoices = new[]
-                     {
-                         new Avalonia.Platform.Storage.FilePickerFileType(fileTypeName) { Patterns = new[] { pattern } }
-                     }
+                     FileTypeChoices = fileChoices
                  });
                  
                  return file?.Path.LocalPath;

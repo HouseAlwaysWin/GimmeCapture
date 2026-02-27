@@ -119,7 +119,7 @@ public class AppSettings
     public bool ShowSnipCursor { get; set; } = false;
     public bool ShowRecordCursor { get; set; } = true;
     public string VideoSaveDirectory { get; set; } = string.Empty;
-    public string RecordFormat { get; set; } = "gif";
+    public string RecordFormat { get; set; } = "mp4";
     public VideoCodec VideoCodec { get; set; } = VideoCodec.H264;
     public int RecordFPS { get; set; } = 30;
     public bool UseFixedRecordPath { get; set; }
