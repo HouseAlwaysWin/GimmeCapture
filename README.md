@@ -18,23 +18,39 @@ The name **GimmeCapture!!** is a tribute to the song **["Gimme chocolate!!" (Off
 
 ### Features
 - **Smart Snip**: High-performance screen capture with instant editing tools.
-- **Screen Recording**: Capture your screen as MP4, MKV, GIF, and more (Powered by FFmpeg).
+- **Screen Recording + System Audio**: Record screen video with desktop/system audio into MP4, MKV, GIF, and more.
+- **Live Translation Mode**: OCR + translation workflow with single/multi selection, language selection, and translation result overlays.
 - **Pin to Top**: Pin your snips as floating windows for easy reference.
+- **Pinned Video Player**: Play/pause, loop, seek, speed control (0.5x/1.0x/1.5x/2.0x), and audio mute toggle.
 - **Editing Tools**: Draw boxes, arrows, lines, and text directly on your capture.
 - **Customizable Hotkeys**: All shortcuts are fully customizable in the "Control" tab.
 - **Visual Personalization**: Adjustable border thickness, mask opacity, and theme colors (Gold, Silver, Red).
 - **Decoration Scaling**: Customize the size of **Side Wings (0.5x - 3.0x)** and **Corner Icons (0.4x - 1.0x)** to fit your style.
 - **Auto-start**: Option to launch automatically when Windows starts.
+- **Live Audio Metering**: Recording toolbar shows real-time input/output audio levels and dB state.
 
 ### How to Use
-1. **F1 (Default)**: Start Snipping.
-2. **F2 (Default)**: Start/Stop Recording.
-3. **F3 (Default)**: Snip and Pin to top.
-4. **Ctrl + C**: Copy capture to clipboard.
-5. **Right Click**: Open context menu on pinned windows or captures.
+1. Launch the app and switch between the three modes on the toolbar: **Snip / Record / Translate**.
+2. In Snip mode, capture an area, annotate it, then copy, save, or pin it as a floating window.
+3. In Record mode, start/pause/stop recording and monitor live input/output audio levels from the toolbar.
+4. In Translate mode, choose source/target languages, select regions (single or multi), then run translate or OCR scan.
+5. Use right-click on pinned windows to access context actions; pinned videos support playback, speed, and audio controls.
+
+### Translation Mode Notes
+- Switch to **Translation Mode** from the toolbar language/translate icon.
+- Select source and target languages, then use **single** or **multi** selection capture.
+- Use **Translate All** to process all selections, or **Scan All** for OCR-only detection.
+- Translation overlays can be toggled on/off from the translation toolbar.
+
+### Recording / Pinned Video Notes
+- Enable or disable system audio capture in **Settings > Record**.
+- In pinned video mode, audio is **muted by default**.
+- In pinned video mode, press **Shift + M** to toggle mute/unmute audio.
+- Video speed changes also affect audio playback speed in pinned video mode.
 
 ### 📦 Third-party Components
 - **FFmpeg**: Used for screen recording and multimedia processing. FFmpeg is licensed under the [GPL/LGPL](https://ffmpeg.org/legal.html). This project downloads FFmpeg binaries automatically from [BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds).
+- **NAudio**: Used for system audio loopback capture during recording and real-time audio level monitoring.
 
 ---
 
