@@ -546,24 +546,38 @@ public class WindowsScreenCaptureService : IScreenCaptureService
     private void DrawArrow(SKCanvas canvas, SKPoint p1, SKPoint p2, SKPaint paint, float scale)
     {
         canvas.DrawLine(p1, p2, paint);
-        
-        var angle = (float)Math.Atan2(p2.Y - p1.Y, p2.X - p1.X);
-        var arrowSize = (15.0f * scale) + paint.StrokeWidth; // Scale arrow head size
-        var arrowAngle = (float)Math.PI / 6;
 
-        var ap1 = new SKPoint(
-            p2.X - arrowSize * (float)Math.Cos(angle - arrowAngle),
-            p2.Y - arrowSize * (float)Math.Sin(angle - arrowAngle));
-        
-        var ap2 = new SKPoint(
-            p2.X - arrowSize * (float)Math.Cos(angle + arrowAngle),
-            p2.Y - arrowSize * (float)Math.Sin(angle + arrowAngle));
+        var dx = p2.X - p1.X;
+        var dy = p2.Y - p1.Y;
+        var len = (float)Math.Sqrt((dx * dx) + (dy * dy));
+        if (len <= 0.001f) return;
+
+        var ux = dx / len;
+        var uy = dy / len;
+        var px = -uy;
+        var py = ux;
+
+        var headLength = Math.Clamp((8.0f * scale) + (paint.StrokeWidth * 1.4f), 8.0f * scale, 18.0f * scale);
+        // Softer inner notch angle (less steep).
+        var halfWidth = headLength * 0.36f;
+        var notchDepth = headLength * 0.38f;
+
+        var left = new SKPoint(
+            p2.X - (ux * headLength) + (px * halfWidth),
+            p2.Y - (uy * headLength) + (py * halfWidth));
+        var right = new SKPoint(
+            p2.X - (ux * headLength) - (px * halfWidth),
+            p2.Y - (uy * headLength) - (py * halfWidth));
+        var notch = new SKPoint(
+            p2.X - (ux * notchDepth),
+            p2.Y - (uy * notchDepth));
 
         paint.Style = SKPaintStyle.Fill;
         using var path = new SKPath();
         path.MoveTo(p2);
-        path.LineTo(ap1);
-        path.LineTo(ap2);
+        path.LineTo(left);
+        path.LineTo(notch);
+        path.LineTo(right);
         path.Close();
         canvas.DrawPath(path, paint);
     }

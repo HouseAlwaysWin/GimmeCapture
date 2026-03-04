@@ -326,14 +326,37 @@ public partial class FloatingVideoViewModel
                         float x1 = (float)(ann.StartPoint.X * scaleX), y1 = (float)(ann.StartPoint.Y * scaleY);
                         float x2 = (float)(ann.EndPoint.X * scaleX), y2 = (float)(ann.EndPoint.Y * scaleY);
                         canvas.DrawLine(x1, y1, x2, y2, paint);
-                        double angle = Math.Atan2(y2 - y1, x2 - x1), arrowLen = 15 * scaleX, arrowAngle = Math.PI / 6;
-                        var path = new SkiaSharp.SKPath();
-                        path.MoveTo(x2, y2);
-                        path.LineTo((float)(x2 - arrowLen * Math.Cos(angle - arrowAngle)), (float)(y2 - arrowLen * Math.Sin(angle - arrowAngle)));
-                        path.LineTo((float)(x2 - arrowLen * Math.Cos(angle + arrowAngle)), (float)(y2 - arrowLen * Math.Sin(angle + arrowAngle)));
-                        path.Close();
-                        paint.Style = SkiaSharp.SKPaintStyle.Fill;
-                        canvas.DrawPath(path, paint);
+                        var dx = x2 - x1;
+                        var dy = y2 - y1;
+                        var len = Math.Sqrt((dx * dx) + (dy * dy));
+                        if (len > 0.001)
+                        {
+                            var ux = dx / len;
+                            var uy = dy / len;
+                            var px = -uy;
+                            var py = ux;
+
+                            var headLength = Math.Clamp((8.0 * scaleX) + (ann.Thickness * scaleX * 1.4), 8.0 * scaleX, 18.0 * scaleX);
+                            // Softer inner notch angle (less steep).
+                            var halfWidth = headLength * 0.36;
+                            var notchDepth = headLength * 0.38;
+
+                            var leftX = x2 - (ux * headLength) + (px * halfWidth);
+                            var leftY = y2 - (uy * headLength) + (py * halfWidth);
+                            var rightX = x2 - (ux * headLength) - (px * halfWidth);
+                            var rightY = y2 - (uy * headLength) - (py * halfWidth);
+                            var notchX = x2 - (ux * notchDepth);
+                            var notchY = y2 - (uy * notchDepth);
+
+                            var path = new SkiaSharp.SKPath();
+                            path.MoveTo(x2, y2);
+                            path.LineTo((float)leftX, (float)leftY);
+                            path.LineTo((float)notchX, (float)notchY);
+                            path.LineTo((float)rightX, (float)rightY);
+                            path.Close();
+                            paint.Style = SkiaSharp.SKPaintStyle.Fill;
+                            canvas.DrawPath(path, paint);
+                        }
                         System.Diagnostics.Debug.WriteLine($"[DrawAnnotations] Drew {ann.Type} from {ann.StartPoint} to {ann.EndPoint}");
                         break;
                     case AnnotationType.Pen:
