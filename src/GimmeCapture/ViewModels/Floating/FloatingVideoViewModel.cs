@@ -11,7 +11,7 @@ using System.Reactive.Linq;
 using GimmeCapture.ViewModels.Main;
 using GimmeCapture.ViewModels.Shared;
 using System.Threading;
-using NAudio.Wave;
+using System.Diagnostics;
 
 namespace GimmeCapture.ViewModels.Floating;
 
@@ -37,8 +37,7 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
     private Task? _playbackTask;
     private readonly int _width;
     private readonly int _height;
-    private WaveOutEvent? _audioOutput;
-    private MediaFoundationReader? _audioReader;
+    private Process? _audioPlayProcess;
     private bool _isMuted = true;
 
     private bool _isExporting;

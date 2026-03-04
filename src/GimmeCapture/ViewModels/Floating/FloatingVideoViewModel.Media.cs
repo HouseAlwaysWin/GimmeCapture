@@ -6,11 +6,12 @@ using System;
 using System.Reactive;
 using System.Threading.Tasks;
 using System.IO;
+using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Threading;
+using System.Diagnostics;
 using CliWrap;
 using CliWrap.Buffered;
-using NAudio.Wave;
 
 namespace GimmeCapture.ViewModels.Floating;
 
@@ -250,15 +251,28 @@ public partial class FloatingVideoViewModel
         {
             StopAudioPlayback();
 
-            _audioReader = new MediaFoundationReader(VideoPath)
+            var ffplayPath = _ffmpegPath.Contains("ffmpeg.exe", StringComparison.OrdinalIgnoreCase)
+                ? _ffmpegPath.Replace("ffmpeg.exe", "ffplay.exe", StringComparison.OrdinalIgnoreCase)
+                : _ffmpegPath;
+
+            if (!File.Exists(ffplayPath))
             {
-                CurrentTime = _currentTime
+                System.Diagnostics.Debug.WriteLine($"Audio playback skipped: ffplay not found ({ffplayPath})");
+                return;
+            }
+
+            var seekSeconds = Math.Max(0, _currentTime.TotalSeconds).ToString("F3", CultureInfo.InvariantCulture);
+            var tempo = Math.Clamp(PlaybackSpeed, 0.5, 2.0).ToString("F2", CultureInfo.InvariantCulture);
+
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = ffplayPath,
+                Arguments = $"-nodisp -autoexit -loglevel quiet -ss {seekSeconds} -af \"atempo={tempo}\" -i \"{VideoPath}\"",
+                UseShellExecute = false,
+                CreateNoWindow = true
             };
 
-            _audioOutput = new WaveOutEvent();
-            _audioOutput.Init(_audioReader);
-            _audioOutput.Volume = 1f;
-            _audioOutput.Play();
+            _audioPlayProcess = Process.Start(startInfo);
         }
         catch (Exception ex)
         {
@@ -271,29 +285,18 @@ public partial class FloatingVideoViewModel
     {
         try
         {
-            _audioOutput?.Stop();
-        }
-        catch { }
+            if (_audioPlayProcess != null)
+            {
+                if (!_audioPlayProcess.HasExited)
+                {
+                    _audioPlayProcess.Kill();
+                }
 
-        try
-        {
-            _audioOutput?.Dispose();
+                _audioPlayProcess.Dispose();
+                _audioPlayProcess = null;
+            }
         }
         catch { }
-        finally
-        {
-            _audioOutput = null;
-        }
-
-        try
-        {
-            _audioReader?.Dispose();
-        }
-        catch { }
-        finally
-        {
-            _audioReader = null;
-        }
     }
 
     internal void UpdateBitmap(byte[] frameData, int generation)
