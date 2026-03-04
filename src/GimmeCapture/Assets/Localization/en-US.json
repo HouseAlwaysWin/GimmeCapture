@@ -119,6 +119,8 @@
   "RecordAudioOutput": "Out",
   "RecordAudioActive": "Live",
   "RecordAudioIdle": "Idle",
+  "RecordMute": "Mute",
+  "RecordUnmute": "Unmute",
   "ShowAIScanBox": "Show AI Scan Box",
   "EnableAIScan": "Enable AI Object Detection",
   "AIScanEngine": "Scan Engine:",

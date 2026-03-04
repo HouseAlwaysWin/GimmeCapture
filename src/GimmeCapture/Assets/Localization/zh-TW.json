@@ -119,6 +119,8 @@
   "RecordAudioOutput": "輸出",
   "RecordAudioActive": "作用中",
   "RecordAudioIdle": "無訊號",
+  "RecordMute": "靜音",
+  "RecordUnmute": "開啟聲音",
   "ShowAIScanBox": "顯示 AI 偵測框",
   "EnableAIScan": "啟用 AI 物件偵測",
   "AIScanEngine": "掃描引擎:",

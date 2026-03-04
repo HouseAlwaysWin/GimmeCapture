@@ -1,4 +1,4 @@
-﻿using Avalonia;
+using Avalonia;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using ReactiveUI;
@@ -11,6 +11,7 @@ using System.Reactive.Linq;
 using GimmeCapture.ViewModels.Main;
 using GimmeCapture.ViewModels.Shared;
 using System.Threading;
+using NAudio.Wave;
 
 namespace GimmeCapture.ViewModels.Floating;
 
@@ -36,6 +37,9 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
     private Task? _playbackTask;
     private readonly int _width;
     private readonly int _height;
+    private WaveOutEvent? _audioOutput;
+    private MediaFoundationReader? _audioReader;
+    private bool _isMuted = true;
 
     private bool _isExporting;
     public bool IsExporting
@@ -109,6 +113,17 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
     }
 
     public string PlaybackSpeedText => $"{_playbackSpeed:F1}x";
+    public bool IsMuted
+    {
+        get => _isMuted;
+        set
+        {
+            if (_isMuted == value) return;
+            this.RaiseAndSetIfChanged(ref _isMuted, value);
+            this.RaisePropertyChanged(nameof(MuteTooltip));
+            UpdateAudioStateFromPlayback();
+        }
+    }
 
     private bool _isDraggingSlider;
     private CancellationTokenSource? _seekDebounceCts;
@@ -153,6 +168,7 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
     public ReactiveCommand<Unit, Unit> RewindCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> ToggleLoopCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> CycleSpeedCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> ToggleMuteCommand { get; private set; } = null!;
 
     public System.Action? RequestRedraw { get; set; }
 
@@ -205,6 +221,7 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
     public override string CopyHotkey => _appSettingsService?.Settings.Record.Copy ?? base.CopyHotkey;
     public override string CloseHotkey => _appSettingsService?.Settings.Record.Close ?? base.CloseHotkey;
     public string PlaybackHotkey => _appSettingsService?.Settings.Record.Playback ?? "Space"; // Specific to Video
+    public string MuteHotkey => "Shift+M";
     
     public override string RectangleHotkey => _appSettingsService?.Settings.Record.Rectangle ?? base.RectangleHotkey;
     public override string EllipseHotkey => _appSettingsService?.Settings.Record.Ellipse ?? base.EllipseHotkey;
@@ -231,6 +248,9 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
     public string MosaicTooltip => $"{LocalizationService.Instance["TipMosaic"]} ({MosaicHotkey})";
     public string BlurTooltip => $"{LocalizationService.Instance["TipBlur"]} ({BlurHotkey})";
     public string PlaybackTooltip => $"{LocalizationService.Instance["ActionPlayback"]} ({PlaybackHotkey})";
+    public string MuteTooltip => IsMuted
+        ? $"{(LocalizationService.Instance["RecordUnmute"] ?? "Unmute")} ({MuteHotkey})"
+        : $"{(LocalizationService.Instance["RecordMute"] ?? "Mute")} ({MuteHotkey})";
     public string ToggleToolbarTooltip => $"{LocalizationService.Instance["ActionToolbar"]} ({_appSettingsService?.Settings.Record.Toolbar ?? "H"})";
     public string CloseTooltip => $"{LocalizationService.Instance["ActionClose"]} ({CloseHotkey})";
     public string RepeatTooltip => $"{LocalizationService.Instance["ActionRepeat"]}";
@@ -322,6 +342,7 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
 
         _playSemaphore.Dispose();
         _seekDebounceCts?.Dispose();
+        StopAudioPlayback();
         
         VideoBitmap = null;
     }

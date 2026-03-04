@@ -1,4 +1,4 @@
-﻿<Window xmlns="https://github.com/avaloniaui"
+<Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -38,6 +38,7 @@
 
         <!-- Mode Actions -->
         <KeyBinding Gesture="Space" Command="{Binding TogglePlaybackCommand}" />
+        <KeyBinding Gesture="Shift+M" Command="{Binding ToggleMuteCommand}" />
         <KeyBinding Gesture="S" Command="{Binding SelectionCommand}" />
         <KeyBinding Gesture="C" Command="{Binding CropCommand}" />
         <KeyBinding Gesture="F3" Command="{Binding PinSelectionCommand}" />
@@ -242,6 +243,12 @@
                         <Button Theme="{StaticResource SnipButton}" Width="30" Height="30" Command="{Binding ToggleLoopCommand}" ToolTip.Tip="{Binding RepeatTooltip}">
                             <PathIcon Data="M17,17H7V14L3,18L7,22V19H19V13H17V17M7,7H17V10L21,6L17,2V5H5V11H7V7Z" Width="12" Height="12" 
                                       Opacity="{Binding IsLooping, Converter={StaticResource BoolToOpacityConverter}}"/>
+                        </Button>
+                        <Button Theme="{StaticResource SnipButton}" Width="30" Height="30" Command="{Binding ToggleMuteCommand}" ToolTip.Tip="{Binding MuteTooltip}">
+                            <Panel>
+                                <PathIcon Data="M14,3.23V20.77C14,21.37 13.33,21.74 12.83,21.42L7.6,18H3C1.9,18 1,17.1 1,16V8C1,6.9 1.9,6 3,6H7.6L12.83,2.58C13.33,2.26 14,2.63 14,3.23M19,9L16.41,11.59L19,14.17L17.59,15.59L15,13L12.41,15.59L11,14.17L13.59,11.59L11,9L12.41,7.59L15,10.17L17.59,7.59L19,9Z" Width="12" Height="12" IsVisible="{Binding IsMuted}"/>
+                                <PathIcon Data="M14,3.23V20.77C14,21.37 13.33,21.74 12.83,21.42L7.6,18H3C1.9,18 1,17.1 1,16V8C1,6.9 1.9,6 3,6H7.6L12.83,2.58C13.33,2.26 14,2.63 14,3.23M16,7.82V10.73C17.16,11.14 18,12.25 18,13.55C18,14.84 17.16,15.95 16,16.36V19.27C18.89,18.78 21,16.35 21,13.55C21,10.74 18.89,8.31 16,7.82Z" Width="12" Height="12" IsVisible="{Binding !IsMuted}"/>
+                            </Panel>
                         </Button>
                     </StackPanel>
                     <!-- Right: Time + Speed -->

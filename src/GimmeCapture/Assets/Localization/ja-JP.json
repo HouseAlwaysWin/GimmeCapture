@@ -109,6 +109,8 @@
   "RecordAudioOutput": "出力",
   "RecordAudioActive": "有効",
   "RecordAudioIdle": "無信号",
+  "RecordMute": "ミュート",
+  "RecordUnmute": "ミュート解除",
   "ShowAIScanBox": "AI 検出枠を表示",
   "EnableAIScan": "AI オブジェクト検出を有効化",
   "AIScanEngine": "スキャンエンジン:",

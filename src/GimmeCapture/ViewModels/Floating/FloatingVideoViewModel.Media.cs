@@ -10,6 +10,7 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using CliWrap;
 using CliWrap.Buffered;
+using NAudio.Wave;
 
 namespace GimmeCapture.ViewModels.Floating;
 
@@ -78,6 +79,11 @@ public partial class FloatingVideoViewModel
         {
             IsLooping = !IsLooping;
         });
+
+        ToggleMuteCommand = ReactiveCommand.Create(() =>
+        {
+            IsMuted = !IsMuted;
+        });
         
         // Initialize bitmap
         VideoBitmap = new WriteableBitmap(
@@ -123,6 +129,8 @@ public partial class FloatingVideoViewModel
         {
             Task.Run(() => { try { oldCts.Cancel(); oldCts.Dispose(); } catch { } });
         }
+
+        StopAudioPlayback();
     }
 
     private void StartPlayback()
@@ -146,6 +154,7 @@ public partial class FloatingVideoViewModel
         
         _playCts = new CancellationTokenSource();
         _playbackTask = PlaybackLoopFixed(_playCts.Token);
+        UpdateAudioStateFromPlayback();
     }
 
     private async Task PlaybackLoopFixed(CancellationToken ct)
@@ -201,6 +210,7 @@ public partial class FloatingVideoViewModel
                 if (!IsLooping) 
                 {
                     _isPlaybackActive = false;
+                    StopAudioPlayback();
                     Avalonia.Threading.Dispatcher.UIThread.Post(() => this.RaisePropertyChanged(nameof(IsPlaying)));
                     break;
                 }
@@ -208,6 +218,7 @@ public partial class FloatingVideoViewModel
                 // 循環播放：重新讀取最新的裁切起點
                 var loopStart = IsTrimmingMode ? TrimStartSeconds : 0;
                 _currentTime = TimeSpan.FromSeconds(loopStart);
+                UpdateAudioStateFromPlayback();
                 Avalonia.Threading.Dispatcher.UIThread.Post(() => this.RaisePropertyChanged(nameof(CurrentTimeSeconds)));
             }
         }
@@ -219,6 +230,69 @@ public partial class FloatingVideoViewModel
         finally
         {
             _playSemaphore.Release();
+        }
+    }
+
+    private void UpdateAudioStateFromPlayback()
+    {
+        if (_isDisposed || !_isPlaybackActive || IsMuted)
+        {
+            StopAudioPlayback();
+            return;
+        }
+
+        StartAudioPlayback();
+    }
+
+    private void StartAudioPlayback()
+    {
+        try
+        {
+            StopAudioPlayback();
+
+            _audioReader = new MediaFoundationReader(VideoPath)
+            {
+                CurrentTime = _currentTime
+            };
+
+            _audioOutput = new WaveOutEvent();
+            _audioOutput.Init(_audioReader);
+            _audioOutput.Volume = 1f;
+            _audioOutput.Play();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Audio Playback Error: {ex.Message}");
+            StopAudioPlayback();
+        }
+    }
+
+    private void StopAudioPlayback()
+    {
+        try
+        {
+            _audioOutput?.Stop();
+        }
+        catch { }
+
+        try
+        {
+            _audioOutput?.Dispose();
+        }
+        catch { }
+        finally
+        {
+            _audioOutput = null;
+        }
+
+        try
+        {
+            _audioReader?.Dispose();
+        }
+        catch { }
+        finally
+        {
+            _audioReader = null;
         }
     }
 
