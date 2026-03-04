@@ -19,12 +19,13 @@
             BorderThickness="1" 
             CornerRadius="4" 
             Padding="2">
-        <WrapPanel Orientation="Horizontal">
-            <WrapPanel.Styles>
+        <StackPanel Orientation="Vertical" Spacing="2">
+            <WrapPanel Orientation="Horizontal">
+                <WrapPanel.Styles>
                 <Style Selector="Button, Rectangle, c|DrawingToolbar">
                     <Setter Property="Margin" Value="1,2"/>
                 </Style>
-            </WrapPanel.Styles>
+                </WrapPanel.Styles>
             <!-- 1. Mode Selection Buttons (三個模式同時顯示) -->
             <Button Theme="{StaticResource SnipToolButton}" Classes.active="{Binding IsScreenshotMode}"
                     Command="{Binding SetCaptureModeCommand}" CommandParameter="{x:False}"
@@ -88,28 +89,6 @@
                 <Rectangle Fill="White" Width="10" Height="10"/>
             </Button>
 
-            <TextBlock Text="{Binding RecordingDurationText}" VerticalAlignment="Center" Margin="4,0" Foreground="White" FontSize="11" FontFamily="Consolas"
-                       IsVisible="{Binding IsRecordingMode}"/>
-
-            <StackPanel Orientation="Vertical" Margin="4,0" VerticalAlignment="Center" IsVisible="{Binding IsRecordingMode}">
-                <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                    <TextBlock Text="{Binding [RecordAudioInput], Source={x:Static infra:LocalizationService.Instance}}" Foreground="#CFCFCF" FontSize="10" Width="28"/>
-                    <ProgressBar Width="100" Height="8" Minimum="0" Maximum="1" Value="{Binding InputAudioLevel}" VerticalAlignment="Center"/>
-                    <TextBlock Text="{Binding InputAudioDbText}" Foreground="#A0A0A0" FontSize="10" Width="46" TextAlignment="Right"/>
-                    <TextBlock Text="●" Foreground="#2ECC71" FontSize="10" IsVisible="{Binding IsInputAudioActive}"/>
-                    <TextBlock Text="●" Foreground="#C0392B" FontSize="10" IsVisible="{Binding !IsInputAudioActive}"/>
-                    <TextBlock Text="{Binding InputAudioStateText}" Foreground="#A0A0A0" FontSize="10" Width="32"/>
-                </StackPanel>
-                <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                    <TextBlock Text="{Binding [RecordAudioOutput], Source={x:Static infra:LocalizationService.Instance}}" Foreground="#CFCFCF" FontSize="10" Width="28"/>
-                    <ProgressBar Width="100" Height="8" Minimum="0" Maximum="1" Value="{Binding OutputAudioLevel}" VerticalAlignment="Center"/>
-                    <TextBlock Text="{Binding OutputAudioDbText}" Foreground="#A0A0A0" FontSize="10" Width="46" TextAlignment="Right"/>
-                    <TextBlock Text="●" Foreground="#2ECC71" FontSize="10" IsVisible="{Binding IsOutputAudioActive}"/>
-                    <TextBlock Text="●" Foreground="#C0392B" FontSize="10" IsVisible="{Binding !IsOutputAudioActive}"/>
-                    <TextBlock Text="{Binding OutputAudioStateText}" Foreground="#A0A0A0" FontSize="10" Width="32"/>
-                </StackPanel>
-            </StackPanel>
-            
             <Rectangle Fill="#444444" Width="1" Height="16" Margin="4,0" VerticalAlignment="Center" IsVisible="{Binding !IsTranslationMode}"/>
 
             <!-- 4. Clear -->
@@ -275,6 +254,32 @@
                 <PathIcon Data="M10.71,9.29a1,1,0,0,0-1.42,0L4.29,14.29a1,1,0,0,0,1.42,1.42L10,11.41l4.29,4.3a1,1,0,0,0,1.42-1.42Z" Width="14" Height="14"/>
             </Button>
 
-        </WrapPanel>
+            </WrapPanel>
+
+            <StackPanel IsVisible="{Binding IsRecordingMode}" Orientation="Vertical" Spacing="2" Margin="4,0,4,2">
+                <Rectangle Fill="#333333" Height="1" HorizontalAlignment="Stretch"/>
+                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding RecordingDurationText}" VerticalAlignment="Center" Foreground="White" FontSize="11" FontFamily="Consolas"/>
+                    <StackPanel Orientation="Vertical" VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding [RecordAudioInput], Source={x:Static infra:LocalizationService.Instance}}" Foreground="#CFCFCF" FontSize="10" Width="28"/>
+                            <ProgressBar Width="120" Height="8" Minimum="0" Maximum="1" Value="{Binding InputAudioLevel}" VerticalAlignment="Center"/>
+                            <TextBlock Text="{Binding InputAudioDbText}" Foreground="#A0A0A0" FontSize="10" Width="46" TextAlignment="Right"/>
+                            <TextBlock Text="●" Foreground="#2ECC71" FontSize="10" IsVisible="{Binding IsInputAudioActive}"/>
+                            <TextBlock Text="●" Foreground="#C0392B" FontSize="10" IsVisible="{Binding !IsInputAudioActive}"/>
+                            <TextBlock Text="{Binding InputAudioStateText}" Foreground="#A0A0A0" FontSize="10" Width="32"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding [RecordAudioOutput], Source={x:Static infra:LocalizationService.Instance}}" Foreground="#CFCFCF" FontSize="10" Width="28"/>
+                            <ProgressBar Width="120" Height="8" Minimum="0" Maximum="1" Value="{Binding OutputAudioLevel}" VerticalAlignment="Center"/>
+                            <TextBlock Text="{Binding OutputAudioDbText}" Foreground="#A0A0A0" FontSize="10" Width="46" TextAlignment="Right"/>
+                            <TextBlock Text="●" Foreground="#2ECC71" FontSize="10" IsVisible="{Binding IsOutputAudioActive}"/>
+                            <TextBlock Text="●" Foreground="#C0392B" FontSize="10" IsVisible="{Binding !IsOutputAudioActive}"/>
+                            <TextBlock Text="{Binding OutputAudioStateText}" Foreground="#A0A0A0" FontSize="10" Width="32"/>
+                        </StackPanel>
+                    </StackPanel>
+                </StackPanel>
+            </StackPanel>
+        </StackPanel>
     </Border>
 </UserControl>
