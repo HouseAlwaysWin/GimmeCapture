@@ -12,9 +12,11 @@ using System.Linq;
 using System.Threading.Tasks;
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core;
+using GimmeCapture.Services.Core.Media;
 using GimmeCapture.Services.Platforms.Windows;
 using GimmeCapture.ViewModels.Shared;
 using System.Reactive.Disposables;
+using Avalonia.Threading;
 
 namespace GimmeCapture.ViewModels.Main;
 
@@ -29,6 +31,8 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     public MainWindowViewModel? MainVm => _mainVm;
     private readonly IScreenCaptureService _captureService;
     private readonly CompositeDisposable _disposables = new();
+    private readonly AudioLevelMonitorService _audioLevelMonitor = new();
+    private readonly DispatcherTimer _audioMeterTimer;
 
     private SnipMode _currentMode = SnipMode.Screenshot;
     public SnipMode CurrentMode
@@ -199,6 +203,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         _maskOpacity = maskOpacity;
         _recordingService = recService;
         _mainVm = mainVm;
+        _audioMeterTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(120) };
 
         if (_mainVm != null)
         {
@@ -235,6 +240,9 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
                     }
                 }).DisposeWith(_disposables);
         }
+
+        _audioMeterTimer.Tick += (_, _) => RefreshAudioLevels();
+        _audioMeterTimer.Start();
 
         InitializeActionCommands();
         InitializeToolbarCommands();
@@ -373,10 +381,76 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
                 this.RaisePropertyChanged(nameof(ToggleSelectTooltip));
                 this.RaisePropertyChanged(nameof(AutoDetectTooltip));
                 this.RaisePropertyChanged(nameof(ToggleToolbarTooltip));
+                this.RaisePropertyChanged(nameof(InputAudioStateText));
+                this.RaisePropertyChanged(nameof(OutputAudioStateText));
             }
         };
 
         UpdateMask();
+    }
+
+    private double _inputAudioLevel;
+    public double InputAudioLevel
+    {
+        get => _inputAudioLevel;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _inputAudioLevel, value);
+            this.RaisePropertyChanged(nameof(InputAudioDbText));
+            this.RaisePropertyChanged(nameof(IsInputAudioActive));
+            this.RaisePropertyChanged(nameof(InputAudioStateText));
+        }
+    }
+
+    private double _outputAudioLevel;
+    public double OutputAudioLevel
+    {
+        get => _outputAudioLevel;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _outputAudioLevel, value);
+            this.RaisePropertyChanged(nameof(OutputAudioDbText));
+            this.RaisePropertyChanged(nameof(IsOutputAudioActive));
+            this.RaisePropertyChanged(nameof(OutputAudioStateText));
+        }
+    }
+
+    public string InputAudioDbText => $"{ToDecibel(InputAudioLevel):F1} dB";
+    public string OutputAudioDbText => $"{ToDecibel(OutputAudioLevel):F1} dB";
+    public bool IsInputAudioActive => InputAudioLevel >= 0.01;
+    public bool IsOutputAudioActive => OutputAudioLevel >= 0.01;
+    public string InputAudioStateText => IsInputAudioActive
+        ? (LocalizationService.Instance["RecordAudioActive"] ?? "Active")
+        : (LocalizationService.Instance["RecordAudioIdle"] ?? "Idle");
+    public string OutputAudioStateText => IsOutputAudioActive
+        ? (LocalizationService.Instance["RecordAudioActive"] ?? "Active")
+        : (LocalizationService.Instance["RecordAudioIdle"] ?? "Idle");
+
+    private void RefreshAudioLevels()
+    {
+        // Only show active metering in recording mode to reduce visual noise.
+        if (CurrentMode != SnipMode.Recording)
+        {
+            InputAudioLevel = 0;
+            OutputAudioLevel = 0;
+            return;
+        }
+
+        if (_audioLevelMonitor.TryRefresh())
+        {
+            InputAudioLevel = Math.Clamp(_audioLevelMonitor.InputPeak, 0, 1);
+            OutputAudioLevel = Math.Clamp(_audioLevelMonitor.OutputPeak, 0, 1);
+            return;
+        }
+
+        InputAudioLevel = 0;
+        OutputAudioLevel = 0;
+    }
+
+    private static double ToDecibel(double linearPeak)
+    {
+        if (linearPeak <= 0.00001) return -60;
+        return Math.Clamp(20 * Math.Log10(linearPeak), -60, 0);
     }
 
     private bool _showToolbar = true;
@@ -468,6 +542,8 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
 
     public void Dispose()
     {
+        _audioMeterTimer.Stop();
+        _audioLevelMonitor.Dispose();
         _disposables.Dispose();
         _sam2Service?.Dispose();
         _recordTimer?.Stop();
