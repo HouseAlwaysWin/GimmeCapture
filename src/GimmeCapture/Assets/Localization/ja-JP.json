@@ -104,6 +104,7 @@
   "HideRecordSelectionDecoration": "選択ウィンドウの装飾を隠す (録画)",
   "HideRecordSelectionBorder": "選択ウィンドウの枠線を隠す (録画)",
   "ShowRecordCursor": "録画時にカーソルを表示",
+  "RecordSystemAudio": "録画時にシステム音声を含める",
   "ShowAIScanBox": "AI 検出枠を表示",
   "EnableAIScan": "AI オブジェクト検出を有効化",
   "AIScanEngine": "スキャンエンジン:",

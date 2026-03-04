@@ -114,6 +114,7 @@
   "HideRecordSelectionDecoration": "Hide Selection Window Decorations (Record)",
   "HideRecordSelectionBorder": "Hide Selection Window Border (Record)",
   "ShowRecordCursor": "Show Cursor in Record",
+  "RecordSystemAudio": "Capture system audio while recording",
   "ShowAIScanBox": "Show AI Scan Box",
   "EnableAIScan": "Enable AI Object Detection",
   "AIScanEngine": "Scan Engine:",

@@ -70,7 +70,7 @@ public partial class SnipWindowViewModel
         // Give UI thread time to re-render without decorations
         await Task.Delay(150);
 
-        if (await _recordingService.StartAsync(region, _currentRecordingPath, _mainVm!.RecordFormat ?? "mp4", _mainVm.ShowRecordCursor, ScreenOffset, VisualScaling, _mainVm.RecordFPS))
+        if (await _recordingService.StartAsync(region, _currentRecordingPath, _mainVm!.RecordFormat ?? "mp4", _mainVm.ShowRecordCursor, ScreenOffset, VisualScaling, _mainVm.RecordFPS, _mainVm.RecordSystemAudio))
         {
             RecordingDuration = TimeSpan.Zero;
 
@@ -102,20 +102,22 @@ public partial class SnipWindowViewModel
         await _recordingService.StopAsync();
 
         // Use the actual output path from RecordingService (may have been modified during finalization)
-        string? actualOutputPath = _recordingService.OutputFilePath ?? _currentRecordingPath;
+        string? actualOutputPath = await ResolveRecordingFilePathAsync(_recordingService.OutputFilePath ?? _currentRecordingPath);
+        string? revealPath = null;
 
         // Check if we need to prompt
-        if (!_mainVm.UseFixedRecordPath && PickSaveFileAction != null && !string.IsNullOrEmpty(actualOutputPath))
+        if (!_mainVm.UseFixedRecordPath && PickSaveFileAction != null)
         {
-            if (System.IO.File.Exists(actualOutputPath))
+            var targetPath = await PickSaveFileAction();
+            if (!string.IsNullOrEmpty(targetPath))
             {
-                var targetPath = await PickSaveFileAction();
-                if (!string.IsNullOrEmpty(targetPath))
+                if (!string.IsNullOrEmpty(actualOutputPath) && System.IO.File.Exists(actualOutputPath))
                 {
                     try
                     {
                         if (System.IO.File.Exists(targetPath)) System.IO.File.Delete(targetPath);
-                        System.IO.File.Move(actualOutputPath!, targetPath);
+                        System.IO.File.Move(actualOutputPath, targetPath);
+                        revealPath = targetPath;
                     }
                     catch (Exception ex)
                     {
@@ -124,21 +126,34 @@ public partial class SnipWindowViewModel
                 }
                 else
                 {
-                    // User cancelled, delete temp file
-                    try
-                    {
-                        if (System.IO.File.Exists(actualOutputPath))
-                        {
-                            System.IO.File.Delete(actualOutputPath);
-                            System.Diagnostics.Debug.WriteLine($"Deleted cancelled recording: {actualOutputPath}");
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        System.Diagnostics.Debug.WriteLine($"Failed to delete cancelled recording: {ex.Message}");
-                    }
+                    System.Diagnostics.Debug.WriteLine($"Recording output not found, save dialog had target but source missing: {actualOutputPath}");
                 }
             }
+            else
+            {
+                // User cancelled, delete temp file
+                try
+                {
+                    if (!string.IsNullOrEmpty(actualOutputPath) && System.IO.File.Exists(actualOutputPath))
+                    {
+                        System.IO.File.Delete(actualOutputPath);
+                        System.Diagnostics.Debug.WriteLine($"Deleted cancelled recording: {actualOutputPath}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Failed to delete cancelled recording: {ex.Message}");
+                }
+            }
+        }
+        else if (!string.IsNullOrEmpty(actualOutputPath) && System.IO.File.Exists(actualOutputPath))
+        {
+            revealPath = actualOutputPath;
+        }
+
+        if (!string.IsNullOrEmpty(revealPath))
+        {
+            OpenFileLocation(revealPath);
         }
 
         CloseAction?.Invoke();
@@ -154,26 +169,7 @@ public partial class SnipWindowViewModel
             _recordTimer?.Stop();
             await _recordingService.StopAsync();
 
-            string? actualOutputPath = _recordingService.OutputFilePath ?? _currentRecordingPath;
-
-            if (!string.IsNullOrEmpty(actualOutputPath) && !System.IO.File.Exists(actualOutputPath))
-            {
-                if (!actualOutputPath.EndsWith(".mkv", StringComparison.OrdinalIgnoreCase))
-                {
-                    string withExt = actualOutputPath + ".mkv";
-                    if (System.IO.File.Exists(withExt)) actualOutputPath = withExt;
-                }
-            }
-
-            // Wait loop for existence (up to 2 seconds)
-            if (!string.IsNullOrEmpty(actualOutputPath))
-            {
-                for (int i = 0; i < 20; i++)
-                {
-                    if (System.IO.File.Exists(actualOutputPath)) break;
-                    await Task.Delay(100);
-                }
-            }
+            string? actualOutputPath = await ResolveRecordingFilePathAsync(_recordingService.OutputFilePath ?? _currentRecordingPath);
 
             if (!string.IsNullOrEmpty(actualOutputPath) && System.IO.File.Exists(actualOutputPath))
             {
@@ -211,7 +207,9 @@ public partial class SnipWindowViewModel
     {
         if (ShowProcessingOverlay || _recordingService == null) return;
 
-        bool wasRecording = _recordingService.State == RecordingState.Recording;
+        bool hasRecordingContext = _recordingService.State != RecordingState.Idle
+                                   || !string.IsNullOrEmpty(_recordingService.LastRecordingPath)
+                                   || !string.IsNullOrEmpty(_currentRecordingPath);
 
         _isLocalProcessing = true;
         ShowProcessingOverlay = true;
@@ -222,14 +220,13 @@ public partial class SnipWindowViewModel
             _recordTimer?.Stop();
             await _recordingService.StopAsync();
 
-            if (wasRecording)
+            if (hasRecordingContext)
             {
-                var recordingPath = _recordingService.LastRecordingPath;
+                string? recordingPath = await ResolveRecordingFilePathAsync(_recordingService.OutputFilePath ?? _recordingService.LastRecordingPath ?? _currentRecordingPath);
+
                 if (string.IsNullOrEmpty(recordingPath) || !System.IO.File.Exists(recordingPath))
                 {
                     System.Diagnostics.Debug.WriteLine($"找不到錄影檔案: {recordingPath}");
-                    _isLocalProcessing = false;
-                    ShowProcessingOverlay = false;
                     return;
                 }
 
@@ -238,8 +235,6 @@ public partial class SnipWindowViewModel
                 if (string.IsNullOrEmpty(ffplayPath) || !System.IO.File.Exists(ffplayPath))
                 {
                     System.Diagnostics.Debug.WriteLine($"找不到播放器組件 (ffplay.exe)");
-                    _isLocalProcessing = false;
-                    ShowProcessingOverlay = false;
                     return;
                 }
 
@@ -313,6 +308,52 @@ public partial class SnipWindowViewModel
         {
             _isLocalProcessing = false;
             ShowProcessingOverlay = false;
+        }
+    }
+
+    private async Task<string?> ResolveRecordingFilePathAsync(string? preferredPath)
+    {
+        if (string.IsNullOrWhiteSpace(preferredPath)) return preferredPath;
+
+        string path = preferredPath;
+
+        for (int i = 0; i < 20; i++)
+        {
+            if (System.IO.File.Exists(path)) return path;
+            await Task.Delay(100);
+        }
+
+        // Try common extension fallbacks if final output extension changed.
+        string basePath = System.IO.Path.Combine(
+            System.IO.Path.GetDirectoryName(path) ?? string.Empty,
+            System.IO.Path.GetFileNameWithoutExtension(path));
+
+        string[] candidates = [".mp4", ".mkv", ".webm", ".mov", ".gif"];
+        foreach (var ext in candidates)
+        {
+            var alt = basePath + ext;
+            if (System.IO.File.Exists(alt)) return alt;
+        }
+
+        // Keep original path for diagnostics if still not found.
+        return path;
+    }
+
+    private static void OpenFileLocation(string filePath)
+    {
+        try
+        {
+            var psi = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "explorer.exe",
+                Arguments = $"/select,\"{filePath}\"",
+                UseShellExecute = true
+            };
+            System.Diagnostics.Process.Start(psi);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Failed to open file location: {ex.Message}");
         }
     }
 }

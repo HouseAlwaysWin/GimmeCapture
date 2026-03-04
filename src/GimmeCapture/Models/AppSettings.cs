@@ -118,6 +118,7 @@ public class AppSettings
     
     public bool ShowSnipCursor { get; set; } = false;
     public bool ShowRecordCursor { get; set; } = true;
+    public bool RecordSystemAudio { get; set; } = true;
     public string VideoSaveDirectory { get; set; } = string.Empty;
     public string RecordFormat { get; set; } = "mp4";
     public VideoCodec VideoCodec { get; set; } = VideoCodec.H264;

@@ -64,6 +64,8 @@
 
                         <CheckBox Content="{Binding [ShowRecordCursor], Source={x:Static services:LocalizationService.Instance}}" 
      IsChecked="{Binding ShowRecordCursor}" Margin="0,5,0,0"/>
+                        <CheckBox Content="{Binding [RecordSystemAudio], Source={x:Static services:LocalizationService.Instance}}"
+     IsChecked="{Binding RecordSystemAudio}" Margin="0,5,0,0"/>
                         <CheckBox Content="{Binding [DefaultHideRecordToolbar], Source={x:Static services:LocalizationService.Instance}}" 
      IsChecked="{Binding DefaultHideRecordToolbar}" Margin="0,5,0,0"/>
                 </StackPanel>

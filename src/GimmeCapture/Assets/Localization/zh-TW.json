@@ -114,6 +114,7 @@
   "HideRecordSelectionDecoration": "隱藏選取視窗裝飾 (錄影)",
   "HideRecordSelectionBorder": "隱藏選取視窗邊框 (錄影)",
   "ShowRecordCursor": "錄影時顯示游標",
+  "RecordSystemAudio": "錄影時擷取系統音訊",
   "ShowAIScanBox": "顯示 AI 偵測框",
   "EnableAIScan": "啟用 AI 物件偵測",
   "AIScanEngine": "掃描引擎:",

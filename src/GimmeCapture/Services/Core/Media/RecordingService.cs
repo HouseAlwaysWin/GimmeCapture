@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Avalonia;
 using ReactiveUI;
@@ -28,15 +29,10 @@ public class RecordingService : ReactiveObject
     private PixelPoint _screenOffset;
     private double _visualScaling = 1.0;
     private int _fps = 30;
+    private bool _recordSystemAudio;
     private bool _isFinalizing;
     private double _finalizationProgress;
     private string _tempDir = string.Empty;
-
-    // Windows API for sending Ctrl+C
-    // ... (omitting DllImports as they are in the file already)
-    // Wait, I should include the DllImports if they were part of the replaced block.
-    // Looking at the previous tool call, I replaced lines 17-79.
-    // The DllImports were in that range.
 
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool GenerateConsoleCtrlEvent(uint dwCtrlEvent, uint dwProcessGroupId);
@@ -90,7 +86,7 @@ public class RecordingService : ReactiveObject
     /// Start recording with specified target format for final output.
     /// Recording is done in MKV format internally for fast pause/resume.
     /// </summary>
-    public async Task<bool> StartAsync(Rect region, string outputFile, string targetFormat = "mp4", bool includeCursor = true, PixelPoint screenOffset = default, double visualScaling = 1.0, int fps = 30)
+    public async Task<bool> StartAsync(Rect region, string outputFile, string targetFormat = "mp4", bool includeCursor = true, PixelPoint screenOffset = default, double visualScaling = 1.0, int fps = 30, bool recordSystemAudio = false)
     {
         if (State != RecordingState.Idle) return false;
         if (!_downloader.IsFFmpegAvailable()) return false;
@@ -102,6 +98,7 @@ public class RecordingService : ReactiveObject
         _screenOffset = screenOffset;
         _visualScaling = visualScaling;
         _fps = fps;
+        _recordSystemAudio = recordSystemAudio;
         _segments.Clear();
 
         // Use a unique temp directory for THIS session to avoid conflicts with zombie processes
@@ -134,13 +131,108 @@ public class RecordingService : ReactiveObject
         int w = ((int)(_region.Width * _visualScaling) / 2) * 2;
         int h = ((int)(_region.Height * _visualScaling) / 2) * 2;
 
-        // Use MKV with zerolatency for instant pause response
-        string drawMouse = _includeCursor ? "1" : "0";
-        // Use selected codec for segment recording
-        string codec = _settingsService?.Settings.VideoCodec == VideoCodec.H265 ? "libx265" : "libx264";
-        string args = $"-y -f gdigrab -draw_mouse {drawMouse} -framerate {_fps} -offset_x {x} -offset_y {y} -video_size {w}x{h} -i desktop " +
-                      $"-c:v {codec} -preset ultrafast -tune zerolatency -pix_fmt yuv420p \"{segmentFile}\"";
+        var started = false;
+        if (_recordSystemAudio)
+        {
+            var audioCandidates = await BuildAudioInputCandidatesAsync();
+            foreach (var audioInput in audioCandidates)
+            {
+                var argsWithAudio = BuildSegmentArguments(x, y, w, h, segmentFile, audioInput);
+                started = await StartFfmpegSegmentAsync(argsWithAudio);
+                if (started)
+                {
+                    Debug.WriteLine($"Audio capture enabled with input: {audioInput.Trim()}");
+                    break;
+                }
+            }
+        }
 
+        if (!started)
+        {
+            if (_recordSystemAudio)
+            {
+                Debug.WriteLine("Audio capture unavailable, fallback to video-only for this segment.");
+                _recordSystemAudio = false;
+            }
+
+            var argsNoAudio = BuildSegmentArguments(x, y, w, h, segmentFile, null);
+            started = await StartFfmpegSegmentAsync(argsNoAudio);
+        }
+
+        return started;
+    }
+
+    private async Task<List<string>> BuildAudioInputCandidatesAsync()
+    {
+        var candidates = new List<string>
+        {
+            "-thread_queue_size 1024 -f wasapi -i default "
+        };
+
+        var stereoMixName = await TryFindStereoMixDeviceNameAsync();
+        if (!string.IsNullOrWhiteSpace(stereoMixName))
+        {
+            var escaped = stereoMixName.Replace("\"", "\\\"");
+            candidates.Add($"-thread_queue_size 1024 -f dshow -i audio=\"{escaped}\" ");
+        }
+
+        candidates.Add("-thread_queue_size 1024 -f dshow -i audio=\"virtual-audio-capturer\" ");
+        return candidates;
+    }
+
+    private async Task<string?> TryFindStereoMixDeviceNameAsync()
+    {
+        try
+        {
+            var listInfo = new ProcessStartInfo
+            {
+                FileName = _downloader.FfmpegExecutablePath,
+                Arguments = "-hide_banner -list_devices true -f dshow -i dummy",
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardError = true,
+                RedirectStandardOutput = false
+            };
+
+            using var process = new Process { StartInfo = listInfo };
+            process.Start();
+            var stderr = await process.StandardError.ReadToEndAsync();
+            await process.WaitForExitAsync();
+
+            if (string.IsNullOrWhiteSpace(stderr)) return null;
+
+            foreach (var line in stderr.Split('\n'))
+            {
+                if (line.IndexOf("stereo mix", StringComparison.OrdinalIgnoreCase) < 0) continue;
+
+                var match = Regex.Match(line, "\"(?<name>[^\"]+)\"");
+                if (match.Success)
+                {
+                    return match.Groups["name"].Value;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Failed to discover audio devices: {ex.Message}");
+        }
+
+        return null;
+    }
+
+    private string BuildSegmentArguments(int x, int y, int w, int h, string segmentFile, string? audioInputArgs)
+    {
+        string drawMouse = _includeCursor ? "1" : "0";
+        string codec = _settingsService?.Settings.VideoCodec == VideoCodec.H265 ? "libx265" : "libx264";
+        string audioInput = audioInputArgs ?? string.Empty;
+        bool includeAudio = !string.IsNullOrWhiteSpace(audioInputArgs);
+        string audioCodec = includeAudio ? "-c:a aac -b:a 160k -ac 2 " : string.Empty;
+        return $"-y -f gdigrab -draw_mouse {drawMouse} -framerate {_fps} -offset_x {x} -offset_y {y} -video_size {w}x{h} -i desktop " +
+               $"{audioInput}-c:v {codec} -preset ultrafast -tune zerolatency -pix_fmt yuv420p {audioCodec}\"{segmentFile}\"";
+    }
+
+    private async Task<bool> StartFfmpegSegmentAsync(string args)
+    {
         var startInfo = new ProcessStartInfo
         {
             FileName = _downloader.FfmpegExecutablePath,
@@ -151,36 +243,45 @@ public class RecordingService : ReactiveObject
             RedirectStandardError = true
         };
 
-        _ffmpegProcess = new Process { StartInfo = startInfo };
-        
-        return await Task.Run(() =>
+        var process = new Process { StartInfo = startInfo };
+        try
         {
-            try
+            process.Start();
+
+            // Read stderr in background to prevent buffer blocking.
+            _ = Task.Run(async () =>
             {
-                _ffmpegProcess.Start();
-                // Read stderr in background to prevent buffer blocking
-                _ = Task.Run(async () =>
+                try
                 {
-                    try
+                    while (!process.HasExited)
                     {
-                        while (!_ffmpegProcess.HasExited)
-                        {
-                            var line = await _ffmpegProcess.StandardError.ReadLineAsync();
-                            if (line != null) Debug.WriteLine($"[FFmpeg] {line}");
-                        }
+                        var line = await process.StandardError.ReadLineAsync();
+                        if (line != null) Debug.WriteLine($"[FFmpeg] {line}");
                     }
-                    catch { /* ignore */ }
-                });
-                State = RecordingState.Recording;
-                return true;
-            }
-            catch (Exception ex)
+                }
+                catch { /* ignore */ }
+            });
+
+            // Guard against immediate start failures (invalid device/args).
+            await Task.Delay(400);
+            if (process.HasExited)
             {
-                Debug.WriteLine($"Failed to start FFmpeg: {ex.Message}");
-                State = RecordingState.Idle;
+                Debug.WriteLine($"FFmpeg exited early ({process.ExitCode}).");
+                process.Dispose();
                 return false;
             }
-        });
+
+            _ffmpegProcess = process;
+            State = RecordingState.Recording;
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Failed to start FFmpeg: {ex.Message}");
+            try { process.Dispose(); } catch { }
+            State = RecordingState.Idle;
+            return false;
+        }
     }
 
     public async Task PauseAsync()
@@ -371,7 +472,7 @@ public class RecordingService : ReactiveObject
                 {
                     string codec = _settingsService?.Settings.VideoCodec == VideoCodec.H265 ? "libx265" : "libx264";
                     string crf = _settingsService?.Settings.VideoCodec == VideoCodec.H265 ? "24" : "20";
-                    string mkvConvertArgs = $"-y -i \"{mergedMkv}\" -vf \"{cropFilter}\" -c:v {codec} -preset fast -crf {crf} -pix_fmt yuv420p \"{_outputFile}\"";
+                    string mkvConvertArgs = $"-y -i \"{mergedMkv}\" -vf \"{cropFilter}\" -c:v {codec} -preset fast -crf {crf} -pix_fmt yuv420p -c:a aac -b:a 160k \"{_outputFile}\"";
                     var mkvInfo = new ProcessStartInfo { FileName = _downloader.FfmpegExecutablePath, Arguments = mkvConvertArgs, UseShellExecute = false, CreateNoWindow = true };
                     using var p = Process.Start(mkvInfo);
                     if (p != null) await p.WaitForExitAsync();
@@ -418,11 +519,11 @@ public class RecordingService : ReactiveObject
                         ? $"-y -i \"{mergedMkv}\" -c:v libvpx-vp9 -crf 25 -b:v 0 -c:a libopus \"{_outputFile}\""
                         : $"-y -i \"{mergedMkv}\" -vf \"{cropFilter}\" -c:v libvpx-vp9 -crf 25 -b:v 0 -c:a libopus \"{_outputFile}\"",
                     "mov" => string.IsNullOrWhiteSpace(cropFilter)
-                        ? $"-y -i \"{mergedMkv}\" -c:v {codec} -preset fast -crf {crf} -pix_fmt yuv420p -f mov \"{_outputFile}\""
-                        : $"-y -i \"{mergedMkv}\" -vf \"{cropFilter}\" -c:v {codec} -preset fast -crf {crf} -pix_fmt yuv420p -f mov \"{_outputFile}\"",
+                        ? $"-y -i \"{mergedMkv}\" -c:v {codec} -preset fast -crf {crf} -pix_fmt yuv420p -c:a aac -b:a 160k -f mov \"{_outputFile}\""
+                        : $"-y -i \"{mergedMkv}\" -vf \"{cropFilter}\" -c:v {codec} -preset fast -crf {crf} -pix_fmt yuv420p -c:a aac -b:a 160k -f mov \"{_outputFile}\"",
                     _ => string.IsNullOrWhiteSpace(cropFilter)
-                        ? $"-y -i \"{mergedMkv}\" -c:v {codec} -preset fast -crf {crf} -movflags +faststart \"{_outputFile}\""
-                        : $"-y -i \"{mergedMkv}\" -vf \"{cropFilter}\" -c:v {codec} -preset fast -crf {crf} -movflags +faststart \"{_outputFile}\""
+                        ? $"-y -i \"{mergedMkv}\" -c:v {codec} -preset fast -crf {crf} -c:a aac -b:a 160k -movflags +faststart \"{_outputFile}\""
+                        : $"-y -i \"{mergedMkv}\" -vf \"{cropFilter}\" -c:v {codec} -preset fast -crf {crf} -c:a aac -b:a 160k -movflags +faststart \"{_outputFile}\""
                 };
 
                 var convertInfo = new ProcessStartInfo { FileName = _downloader.FfmpegExecutablePath, Arguments = convertArgs, UseShellExecute = false, CreateNoWindow = true };

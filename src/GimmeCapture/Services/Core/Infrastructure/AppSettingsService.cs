@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -114,6 +114,7 @@ public class AppSettingsService
         dest.SaveDirectory = source.SaveDirectory;
         dest.ShowSnipCursor = source.ShowSnipCursor;
         dest.ShowRecordCursor = source.ShowRecordCursor;
+        dest.RecordSystemAudio = source.RecordSystemAudio;
         dest.VideoSaveDirectory = source.VideoSaveDirectory;
         dest.RecordFormat = source.RecordFormat;
         dest.VideoCodec = source.VideoCodec;

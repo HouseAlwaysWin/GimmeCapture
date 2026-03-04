@@ -887,6 +887,13 @@ public partial class MainWindowViewModel
         set => this.RaiseAndSetIfChanged(ref _showRecordCursor, value);
     }
 
+    private bool _recordSystemAudio = true;
+    public bool RecordSystemAudio
+    {
+        get => _recordSystemAudio;
+        set => this.RaiseAndSetIfChanged(ref _recordSystemAudio, value);
+    }
+
     public string[] AvailableRecordFormats { get; } = { "mp4", "mkv", "gif", "webm", "mov" };
 
     public async Task LoadSettingsAsync()
@@ -922,6 +929,7 @@ public partial class MainWindowViewModel
             HideRecordSelectionBorder = settings.HideRecordSelectionBorder;
             ShowSnipCursor = settings.ShowSnipCursor;
             ShowRecordCursor = settings.ShowRecordCursor;
+            RecordSystemAudio = settings.RecordSystemAudio;
             TempDirectory = settings.TempDirectory;
             ShowAIScanBox = settings.ShowAIScanBox;
             EnableAI = settings.EnableAI;
@@ -1037,6 +1045,7 @@ public partial class MainWindowViewModel
             settings.HideRecordSelectionBorder = HideRecordSelectionBorder;
             settings.ShowSnipCursor = ShowSnipCursor;
             settings.ShowRecordCursor = ShowRecordCursor;
+            settings.RecordSystemAudio = RecordSystemAudio;
             settings.TempDirectory = TempDirectory;
             settings.ShowAIScanBox = ShowAIScanBox;
             settings.EnableAI = EnableAI;
