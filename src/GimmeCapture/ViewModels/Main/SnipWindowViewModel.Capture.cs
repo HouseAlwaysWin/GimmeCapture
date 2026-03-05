@@ -72,6 +72,8 @@ public partial class SnipWindowViewModel
                 ProcessingText = LocalizationService.Instance["StatusSaving"] ?? "Saving...";
                 var bitmap = await _captureService.CaptureScreenWithAnnotationsAsync(SelectionRect, ScreenOffset, VisualScaling, Annotations, UserSelections, TranslatedBlocks, _mainVm?.ShowSnipCursor ?? false);
 
+                string? savedPath = null;
+
                 if (_mainVm != null && _mainVm.AutoSave)
                 {
                     var dir = _mainVm.SaveDirectory;
@@ -84,6 +86,7 @@ public partial class SnipWindowViewModel
                     var fileName = $"Capture_{DateTime.Now:yyyyMMdd_HHmmss}.png";
                     var path = System.IO.Path.Combine(dir, fileName);
                     await _captureService.SaveToFileAsync(bitmap, path);
+                    savedPath = path;
                     _mainVm?.SetStatus("StatusSaved");
                     System.Diagnostics.Debug.WriteLine($"Auto-saved to {path}");
                 }
@@ -93,6 +96,7 @@ public partial class SnipWindowViewModel
                     if (!string.IsNullOrEmpty(path))
                     {
                         await _captureService.SaveToFileAsync(bitmap, path);
+                        savedPath = path;
                         _mainVm?.SetStatus("StatusSaved");
                     }
                     System.Diagnostics.Debug.WriteLine($"Saved to {path}");
@@ -103,6 +107,12 @@ public partial class SnipWindowViewModel
                     var fileName = $"Capture_{DateTime.Now:yyyyMMdd_HHmmss}.png";
                     var path = System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.MyPictures), fileName);
                     await _captureService.SaveToFileAsync(bitmap, path);
+                    savedPath = path;
+                }
+
+                if (!string.IsNullOrWhiteSpace(savedPath))
+                {
+                    FileLocationService.RevealInFileExplorer(savedPath);
                 }
             }
             finally

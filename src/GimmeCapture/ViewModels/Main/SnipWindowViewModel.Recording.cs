@@ -146,7 +146,7 @@ public partial class SnipWindowViewModel
 
         if (!string.IsNullOrEmpty(revealPath))
         {
-            OpenFileLocation(revealPath);
+            FileLocationService.RevealInFileExplorer(revealPath);
         }
 
         CloseAction?.Invoke();
@@ -332,21 +332,4 @@ public partial class SnipWindowViewModel
         return path;
     }
 
-    private static void OpenFileLocation(string filePath)
-    {
-        try
-        {
-            var psi = new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = "explorer.exe",
-                Arguments = $"/select,\"{filePath}\"",
-                UseShellExecute = true
-            };
-            System.Diagnostics.Process.Start(psi);
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"Failed to open file location: {ex.Message}");
-        }
-    }
 }

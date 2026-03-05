@@ -115,6 +115,7 @@ public partial class FloatingVideoViewModel
                     if (!string.IsNullOrEmpty(processedPath) && System.IO.File.Exists(processedPath))
                     {
                         System.IO.File.Copy(processedPath, targetPath, true);
+                        FileLocationService.RevealInFileExplorer(targetPath);
                         return;
                     }
                 }
@@ -122,6 +123,7 @@ public partial class FloatingVideoViewModel
                 if (System.IO.File.Exists(VideoPath))
                 {
                     System.IO.File.Copy(VideoPath, targetPath, true);
+                    FileLocationService.RevealInFileExplorer(targetPath);
                 }
                 else
                 {
@@ -130,6 +132,7 @@ public partial class FloatingVideoViewModel
                     {
                         using var stream = new System.IO.FileStream(targetPath, System.IO.FileMode.Create);
                         bitmap.Save(stream);
+                        FileLocationService.RevealInFileExplorer(targetPath);
                     }
                 }
             }

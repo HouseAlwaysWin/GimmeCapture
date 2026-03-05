@@ -485,6 +485,7 @@ public partial class SnipWindow : Window
                                 {
                                     using var stream = await file.OpenWriteAsync();
                                     vm.Image?.Save(stream); // Save current image (might be transparent)
+                                    FileLocationService.RevealInFileExplorer(file.Path.LocalPath);
                                 }
                             }
                         }
