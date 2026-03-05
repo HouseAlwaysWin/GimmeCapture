@@ -283,7 +283,7 @@ public partial class SnipWindow : Window
                         if (hwnd != IntPtr.Zero && OperatingSystem.IsWindows())
                         {
                             // Recording mode: keep overlay visible to user, but exclude window from capture source.
-                            if (state != RecordingState.Idle && _viewModel.MainVm?.HideRecordSelectionBorder == true)
+                            if (state != RecordingState.Idle)
                             {
                                 Win32Helpers.SetWindowCaptureVisibility(hwnd, false);
                             }
