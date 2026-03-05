@@ -83,7 +83,7 @@ public partial class SnipWindowViewModel
                     }
                     try { System.IO.Directory.CreateDirectory(dir); } catch { }
 
-                    var fileName = $"Capture_{DateTime.Now:yyyyMMdd_HHmmss}.png";
+                    var fileName = CaptureFileNameService.BuildFileName("png");
                     var path = System.IO.Path.Combine(dir, fileName);
                     await _captureService.SaveToFileAsync(bitmap, path);
                     savedPath = path;
@@ -104,7 +104,7 @@ public partial class SnipWindowViewModel
                 else
                 {
                     // Fallback
-                    var fileName = $"Capture_{DateTime.Now:yyyyMMdd_HHmmss}.png";
+                    var fileName = CaptureFileNameService.BuildFileName("png");
                     var path = System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.MyPictures), fileName);
                     await _captureService.SaveToFileAsync(bitmap, path);
                     savedPath = path;

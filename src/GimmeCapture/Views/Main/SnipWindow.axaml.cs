@@ -391,7 +391,7 @@ public partial class SnipWindow : Window
                      Title = isRecording ? "Save Recording" : "Save Screenshot",
                      DefaultExtension = defaultExt,
                      ShowOverwritePrompt = true,
-                     SuggestedFileName = $"Capture_{DateTime.Now:yyyyMMdd_HHmmss}",
+                    SuggestedFileName = CaptureFileNameService.SuggestedBaseName(),
                      FileTypeChoices = fileChoices
                  });
                  
@@ -474,7 +474,7 @@ public partial class SnipWindow : Window
                                     Title = "Save Pinned Image",
                                     DefaultExtension = "png",
                                     ShowOverwritePrompt = true,
-                                    SuggestedFileName = $"Capture_{DateTime.Now:yyyyMMdd_HHmmss}",
+                                    SuggestedFileName = CaptureFileNameService.SuggestedBaseName(),
                                     FileTypeChoices = new[]
                                     {
                                         new Avalonia.Platform.Storage.FilePickerFileType("PNG Image") { Patterns = new[] { "*.png" } }

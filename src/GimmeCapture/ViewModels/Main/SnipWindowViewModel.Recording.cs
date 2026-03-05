@@ -49,7 +49,7 @@ public partial class SnipWindowViewModel
         {
             // Ensure directory exists
             try { System.IO.Directory.CreateDirectory(_mainVm.VideoSaveDirectory); } catch { }
-            string fileName = $"Capture_{DateTime.Now:yyyyMMdd_HHmmss}.{format}";
+            string fileName = CaptureFileNameService.BuildFileName(format);
             _currentRecordingPath = System.IO.Path.Combine(_mainVm.VideoSaveDirectory, fileName);
         }
         else

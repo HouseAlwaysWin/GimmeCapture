@@ -6,6 +6,7 @@ using Avalonia.Controls.Primitives;
 using GimmeCapture.ViewModels.Floating;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Core;
+using GimmeCapture.Services.Core.Infrastructure;
 using System;
 using System.Threading.Tasks;
 using System.IO;
@@ -78,6 +79,7 @@ public partial class FloatingVideoWindow : FloatingWindowBase
                     Title = GimmeCapture.Services.Core.Infrastructure.LocalizationService.Instance["SaveVideo"],
                     DefaultExtension = System.IO.Path.GetExtension(vm.VideoPath).TrimStart('.'),
                     ShowOverwritePrompt = true,
+                    SuggestedFileName = CaptureFileNameService.SuggestedBaseName(),
                     FileTypeChoices = new[]
                     {
                         new Avalonia.Platform.Storage.FilePickerFileType("Video Files") { Patterns = new[] { "*.mp4", "*.mkv", "*.gif", "*.webm", "*.mov" } },
