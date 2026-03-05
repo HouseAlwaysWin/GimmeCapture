@@ -80,6 +80,7 @@ public partial class SnipWindowViewModel
         this.RaisePropertyChanged(nameof(TextHotkey));
         this.RaisePropertyChanged(nameof(MosaicHotkey));
         this.RaisePropertyChanged(nameof(BlurHotkey));
+        this.RaisePropertyChanged(nameof(FullscreenSelectHotkey));
         this.RaisePropertyChanged(nameof(ActiveActionHotkey));
         this.RaisePropertyChanged(nameof(ActiveToolbarHotkey));
 
@@ -97,6 +98,7 @@ public partial class SnipWindowViewModel
         this.RaisePropertyChanged(nameof(TextTooltip));
         this.RaisePropertyChanged(nameof(MosaicTooltip));
         this.RaisePropertyChanged(nameof(BlurTooltip));
+        this.RaisePropertyChanged(nameof(FullscreenSelectTooltip));
         this.RaisePropertyChanged(nameof(TranslateAllHotkey));
         this.RaisePropertyChanged(nameof(ScanAllHotkey));
         this.RaisePropertyChanged(nameof(ClearAllHotkey));

@@ -212,6 +212,7 @@
   "HotkeyCommonGroup": "Common Action Hotkeys",
   "ActionClose": "Close Window",
   "ActionPlayback": "Play/Pause Video",
+  "ActionSelectFullscreen": "Select Full Screen",
   "ActionRepeat": "Repeat Playback",
   "ActionToolbar": "Toggle Toolbar",
   "ActionSelectionMode": "Selection Mode",

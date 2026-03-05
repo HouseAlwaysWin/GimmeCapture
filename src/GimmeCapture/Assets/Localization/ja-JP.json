@@ -201,6 +201,7 @@
   "HotkeyCommonGroup": "共通アクションのショートカット",
   "ActionClose": "ウィンドウを閉じる",
   "ActionPlayback": "再生/一時停止",
+  "ActionSelectFullscreen": "全画面選択",
   "ActionRepeat": "繰り返し再生",
   "ActionToolbar": "ツールバーを表示/非表示",
   "ActionSelectionMode": "選択モード",

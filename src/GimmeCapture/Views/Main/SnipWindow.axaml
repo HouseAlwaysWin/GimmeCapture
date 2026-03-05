@@ -47,6 +47,7 @@
         <KeyBinding Gesture="{Binding TextHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding ToggleToolGroupCommand}" CommandParameter="Text" />
         <KeyBinding Gesture="{Binding MosaicHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding SelectToolCommand}" CommandParameter="{x:Static m:AnnotationType.Mosaic}" />
         <KeyBinding Gesture="{Binding BlurHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding SelectToolCommand}" CommandParameter="{x:Static m:AnnotationType.Blur}" />
+        <KeyBinding Gesture="{Binding FullscreenSelectHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding SelectFullscreenCommand}" />
 
         <!-- History (Dynamic by Mode) -->
         <KeyBinding Gesture="{Binding UndoHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding UndoCommand}" />

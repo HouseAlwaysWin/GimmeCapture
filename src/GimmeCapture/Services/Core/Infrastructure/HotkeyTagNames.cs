@@ -16,6 +16,7 @@ public static class HotkeyTagNames
     public const string Snip_Blur = nameof(Snip_Blur);
     public const string Snip_RemoveBackground = nameof(Snip_RemoveBackground);
     public const string Snip_MagicWand = nameof(Snip_MagicWand);
+    public const string Snip_FullscreenSelect = nameof(Snip_FullscreenSelect);
     public const string Snip_Undo = nameof(Snip_Undo);
     public const string Snip_Redo = nameof(Snip_Redo);
     public const string Snip_Save = nameof(Snip_Save);
@@ -37,6 +38,7 @@ public static class HotkeyTagNames
     public const string Record_Action = nameof(Record_Action);
     public const string Record_Toolbar = nameof(Record_Toolbar);
     public const string Record_Playback = nameof(Record_Playback);
+    public const string Record_FullscreenSelect = nameof(Record_FullscreenSelect);
     public const string Record_Close = nameof(Record_Close);
     public const string Record_Undo = nameof(Record_Undo);
     public const string Record_Save = nameof(Record_Save);

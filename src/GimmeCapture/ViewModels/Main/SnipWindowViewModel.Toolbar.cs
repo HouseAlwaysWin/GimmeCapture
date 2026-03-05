@@ -9,6 +9,7 @@ using System.Collections.Generic;
 using System.Reactive;
 using System.Reactive.Linq;
 using GimmeCapture.Services.Core;
+using GimmeCapture.Services.Core.Media;
 using System.Linq;
 
 namespace GimmeCapture.ViewModels.Main;
@@ -313,6 +314,7 @@ public partial class SnipWindowViewModel
     public ReactiveCommand<Unit, Unit> IncreaseCornerIconScaleCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> DecreaseCornerIconScaleCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> ToggleToolbarCommand { get; set; } = null!;
+    public ReactiveCommand<Unit, Unit> SelectFullscreenCommand { get; set; } = null!;
 
     private void InitializeToolbarCommands()
     {
@@ -437,6 +439,40 @@ public partial class SnipWindowViewModel
 
         ToggleTranslationResultsCommand = ReactiveCommand.Create(() => { ShowTranslationResults = !ShowTranslationResults; });
         ToggleTranslationResultsCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
+
+        SelectFullscreenCommand = ReactiveCommand.Create(() =>
+        {
+            if (CurrentMode == SnipMode.Translation || RecState != RecordingState.Idle)
+            {
+                return;
+            }
+
+            IsDrawingMode = false;
+            CurrentState = SnipState.Selected;
+            SelectionRect = ResolveFullscreenSelectionRect();
+        }, canExecuteNonTranslation);
+        SelectFullscreenCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
+    }
+
+    private Rect ResolveFullscreenSelectionRect()
+    {
+        if (ActiveScreenBounds.Width > 0 && ActiveScreenBounds.Height > 0)
+        {
+            return ActiveScreenBounds;
+        }
+
+        if (AllScreenBounds is { Count: > 0 })
+        {
+            var first = AllScreenBounds[0];
+            if (first.W > 0 && first.H > 0)
+            {
+                return new Rect(first.X, first.Y, first.W, first.H);
+            }
+        }
+
+        double width = ViewportSize.Width > 0 ? ViewportSize.Width : 1920;
+        double height = ViewportSize.Height > 0 ? ViewportSize.Height : 1080;
+        return new Rect(0, 0, width, height);
     }
 
     public double WingScale

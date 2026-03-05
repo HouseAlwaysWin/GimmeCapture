@@ -349,6 +349,7 @@ public partial class MainWindowViewModel
     public string Snip_CropMode { get => _settingsService.Settings.Snip.CropMode; set { if (_settingsService.Settings.Snip.CropMode != value) { this.RaisePropertyChanging(); _settingsService.Settings.Snip.CropMode = value; this.RaisePropertyChanged(); } } }
     public string Snip_RemoveBackground { get => _settingsService.Settings.Snip.RemoveBackground; set { if (_settingsService.Settings.Snip.RemoveBackground != value) { this.RaisePropertyChanging(); _settingsService.Settings.Snip.RemoveBackground = value; this.RaisePropertyChanged(); } } }
     public string Snip_MagicWand { get => _settingsService.Settings.Snip.MagicWand; set { if (_settingsService.Settings.Snip.MagicWand != value) { this.RaisePropertyChanging(); _settingsService.Settings.Snip.MagicWand = value; this.RaisePropertyChanged(); } } }
+    public string Snip_FullscreenSelect { get => _settingsService.Settings.Snip.FullscreenSelect; set { if (_settingsService.Settings.Snip.FullscreenSelect != value) { this.RaisePropertyChanging(); _settingsService.Settings.Snip.FullscreenSelect = value; this.RaisePropertyChanged(); } } }
     public string Snip_SwitchToTranslate { get => _settingsService.Settings.Snip.SwitchToTranslate; set { if (_settingsService.Settings.Snip.SwitchToTranslate != value) { this.RaisePropertyChanging(); _settingsService.Settings.Snip.SwitchToTranslate = value; this.RaisePropertyChanged(); } } }
     public string Snip_SwitchToRecord { get => _settingsService.Settings.Snip.SwitchToRecord; set { if (_settingsService.Settings.Snip.SwitchToRecord != value) { this.RaisePropertyChanging(); _settingsService.Settings.Snip.SwitchToRecord = value; this.RaisePropertyChanged(); } } }
 
@@ -370,6 +371,7 @@ public partial class MainWindowViewModel
     public string Record_Toolbar { get => _settingsService.Settings.Record.Toolbar; set { if (_settingsService.Settings.Record.Toolbar != value) { this.RaisePropertyChanging(); _settingsService.Settings.Record.Toolbar = value; this.RaisePropertyChanged(); } } }
     public string Record_Action { get => _settingsService.Settings.Record.Action; set { if (_settingsService.Settings.Record.Action != value) { this.RaisePropertyChanging(); _settingsService.Settings.Record.Action = value; this.RaisePropertyChanged(); } } }
     public string Record_Playback { get => _settingsService.Settings.Record.Playback; set { if (_settingsService.Settings.Record.Playback != value) { this.RaisePropertyChanging(); _settingsService.Settings.Record.Playback = value; this.RaisePropertyChanged(); } } }
+    public string Record_FullscreenSelect { get => _settingsService.Settings.Record.FullscreenSelect; set { if (_settingsService.Settings.Record.FullscreenSelect != value) { this.RaisePropertyChanging(); _settingsService.Settings.Record.FullscreenSelect = value; this.RaisePropertyChanged(); } } }
     public string Record_SwitchToSnip { get => _settingsService.Settings.Record.SwitchToSnip; set { if (_settingsService.Settings.Record.SwitchToSnip != value) { this.RaisePropertyChanging(); _settingsService.Settings.Record.SwitchToSnip = value; this.RaisePropertyChanged(); } } }
     public string Record_SwitchToTranslate { get => _settingsService.Settings.Record.SwitchToTranslate; set { if (_settingsService.Settings.Record.SwitchToTranslate != value) { this.RaisePropertyChanging(); _settingsService.Settings.Record.SwitchToTranslate = value; this.RaisePropertyChanged(); } } }
 
@@ -531,7 +533,7 @@ public partial class MainWindowViewModel
             "Snip_Rectangle", "Snip_Ellipse", "Snip_Arrow", "Snip_Line", "Snip_Pen", 
             "Snip_Text", "Snip_Mosaic", "Snip_Blur", "Snip_Undo", "Snip_Redo", 
             "Snip_Clear", "Snip_Save", "Snip_Copy", "Snip_Close", 
-            "Snip_Toolbar", "Snip_SelectionMode", "Snip_CropMode", "Snip_Pin",
+            "Snip_Toolbar", "Snip_SelectionMode", "Snip_CropMode", "Snip_Pin", "Snip_FullscreenSelect",
             "Snip_SwitchToTranslate", "Snip_SwitchToRecord"
         };
 
@@ -540,7 +542,7 @@ public partial class MainWindowViewModel
             "Record_Rectangle", "Record_Ellipse", "Record_Arrow", "Record_Line", "Record_Pen", 
             "Record_Text", "Record_Mosaic", "Record_Blur", "Record_Undo", "Record_Redo", 
             "Record_Clear", "Record_Save", "Record_Copy", "Record_Close", "Record_Toolbar", 
-            "Record_Action", "Record_Playback",
+            "Record_Action", "Record_Playback", "Record_FullscreenSelect",
             "Record_SwitchToSnip", "Record_SwitchToTranslate"
         };
 
@@ -581,6 +583,7 @@ public partial class MainWindowViewModel
             if (targetTag != "Snip_RemoveBackground" && Snip_RemoveBackground == hotkey) return "RemoveBackground";
             if (targetTag != "Snip_MagicWand" && Snip_MagicWand == hotkey) return "MagicWand";
             if (targetTag != "Snip_Pin" && Snip_Pin == hotkey) return "TipPin";
+            if (targetTag != "Snip_FullscreenSelect" && Snip_FullscreenSelect == hotkey) return "ActionSelectFullscreen";
             if (targetTag != "Snip_SwitchToTranslate" && Snip_SwitchToTranslate == hotkey) return "SwitchToTranslate";
             if (targetTag != "Snip_SwitchToRecord" && Snip_SwitchToRecord == hotkey) return "SwitchToRecord";
         }
@@ -603,6 +606,7 @@ public partial class MainWindowViewModel
             if (targetTag != "Record_Toolbar" && Record_Toolbar == hotkey) return "ActionToolbar";
             if (targetTag != "Record_Action" && Record_Action == hotkey) return "ActionStartPin";
             if (targetTag != "Record_Playback" && Record_Playback == hotkey) return "ActionPlayback";
+            if (targetTag != "Record_FullscreenSelect" && Record_FullscreenSelect == hotkey) return "ActionSelectFullscreen";
             if (targetTag != "Record_SwitchToSnip" && Record_SwitchToSnip == hotkey) return "SwitchToSnip";
             if (targetTag != "Record_SwitchToTranslate" && Record_SwitchToTranslate == hotkey) return "SwitchToTranslate";
         }
@@ -954,10 +958,11 @@ public partial class MainWindowViewModel
                 nameof(Snip_Text), nameof(Snip_Mosaic), nameof(Snip_Blur), nameof(Snip_Undo), nameof(Snip_Redo),
                 nameof(Snip_Clear), nameof(Snip_Save), nameof(Snip_Copy), nameof(Snip_Pin), nameof(Snip_Close),
                 nameof(Snip_Toolbar), nameof(Snip_SelectionMode), nameof(Snip_CropMode), nameof(Snip_RemoveBackground),
+                nameof(Snip_FullscreenSelect),
                 nameof(Record_Rectangle), nameof(Record_Ellipse), nameof(Record_Arrow), nameof(Record_Line), nameof(Record_Pen),
                 nameof(Record_Text), nameof(Record_Mosaic), nameof(Record_Blur), nameof(Record_Undo), nameof(Record_Redo),
                 nameof(Record_Clear), nameof(Record_Save), nameof(Record_Copy), nameof(Record_Close), nameof(Record_Toolbar),
-                nameof(Record_Action), nameof(Record_Playback),
+                nameof(Record_Action), nameof(Record_Playback), nameof(Record_FullscreenSelect),
                 nameof(Record_SwitchToSnip), nameof(Record_SwitchToTranslate),
                 nameof(Translate_Action), nameof(Translate_Toolbar), nameof(Translate_Close),
                 nameof(Translate_TranslateAll), nameof(Translate_ScanAll), nameof(Translate_ClearAll),

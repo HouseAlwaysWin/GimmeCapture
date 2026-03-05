@@ -355,6 +355,13 @@ public partial class SnipWindow : Window
             return true;
         }
 
+        if ((_viewModel.CurrentMode == SnipMode.Screenshot || _viewModel.CurrentMode == SnipMode.Recording) &&
+            IsMatch(_viewModel.FullscreenSelectHotkey))
+        {
+            _viewModel.SelectFullscreenCommand?.Execute().Subscribe();
+            return true;
+        }
+
         if (_viewModel.CurrentMode == SnipMode.Screenshot)
         {
             // Note: SnipSelectionModeHotkey and SnipCropModeHotkey do not actually exist in the ViewModel.

@@ -63,6 +63,12 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     public string TextHotkey => CurrentMode == SnipMode.Translation ? string.Empty : (CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Text ?? "T") : (_mainVm?.Snip_Text ?? "T"));
     public string MosaicHotkey => CurrentMode == SnipMode.Translation ? string.Empty : (CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Mosaic ?? "M") : (_mainVm?.Snip_Mosaic ?? "M"));
     public string BlurHotkey => CurrentMode == SnipMode.Translation ? string.Empty : (CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Blur ?? "B") : (_mainVm?.Snip_Blur ?? "B"));
+    public string FullscreenSelectHotkey => CurrentMode switch
+    {
+        SnipMode.Recording => _mainVm?.Record_FullscreenSelect ?? "F",
+        SnipMode.Screenshot => _mainVm?.Snip_FullscreenSelect ?? "F",
+        _ => string.Empty
+    };
 
     public string ActiveActionHotkey => CurrentMode == SnipMode.Translation ? (_mainVm?.Translate_Action ?? "F3") : (CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Action ?? "F3") : (_mainVm?.Snip_Pin ?? "F3"));
     public string ActiveToolbarHotkey => CurrentMode == SnipMode.Translation ? (_mainVm?.Translate_Toolbar ?? "F4") : (CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Toolbar ?? "F4") : (_mainVm?.Snip_Toolbar ?? "F4"));
@@ -122,6 +128,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     public string TextTooltip => $"{LocalizationService.Instance["TipText"]} ({TextHotkey})";
     public string MosaicTooltip => $"{LocalizationService.Instance["TipMosaic"]} ({MosaicHotkey})";
     public string BlurTooltip => $"{LocalizationService.Instance["TipBlur"]} ({BlurHotkey})";
+    public string FullscreenSelectTooltip => $"{LocalizationService.Instance["ActionSelectFullscreen"]} ({FullscreenSelectHotkey})";
     public string SnipTooltip => CurrentMode == SnipMode.Screenshot ? LocalizationService.Instance["CaptureModeNormal"] : $"{LocalizationService.Instance["CaptureModeNormal"]} ({SwitchToSnipHotkey})";
     public string RecordTooltip => CurrentMode == SnipMode.Recording ? LocalizationService.Instance["CaptureModeRecord"] : $"{LocalizationService.Instance["CaptureModeRecord"]} ({SwitchToRecordHotkey})";
     public string TranslateTooltip => CurrentMode == SnipMode.Translation ? (LocalizationService.Instance["CaptureModeTranslation"] ?? "Translation") : $"{(LocalizationService.Instance["CaptureModeTranslation"] ?? "Translation")} ({SwitchToTranslateHotkey})";
@@ -374,6 +381,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
                 this.RaisePropertyChanged(nameof(TextTooltip));
                 this.RaisePropertyChanged(nameof(MosaicTooltip));
                 this.RaisePropertyChanged(nameof(BlurTooltip));
+                this.RaisePropertyChanged(nameof(FullscreenSelectTooltip));
                 this.RaisePropertyChanged(nameof(HideTranslationResultsTooltip));
                 this.RaisePropertyChanged(nameof(TranslateAllTooltip));
                 this.RaisePropertyChanged(nameof(ScanAllTooltip));
