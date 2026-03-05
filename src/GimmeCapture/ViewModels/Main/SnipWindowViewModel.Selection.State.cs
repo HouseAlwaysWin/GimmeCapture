@@ -303,7 +303,23 @@ public partial class SnipWindowViewModel
                             // We don't want to freeze the UI or show loading bars for background updates
                             // AnalyzeAndTranslateAsync will handle OCR + LLM
                             var (blocks, errorKey) = await _translationService.AnalyzeAndTranslateAsync(bitmap, VisualScaling, token);
-                            if (blocks == null || blocks.Count == 0) continue;
+                            if (blocks == null || blocks.Count == 0)
+                            {
+                                // Continuous detect mode: if no text is detected this round, clear stale text from previous round.
+                                await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+                                {
+                                    if (sel.IsTranslated || !string.IsNullOrWhiteSpace(sel.TranslatedText) || !string.IsNullOrWhiteSpace(sel.OriginalText))
+                                    {
+                                        sel.LastOcrText = string.Empty;
+                                        sel.OriginalText = string.Empty;
+                                        sel.TranslatedText = string.Empty;
+                                        sel.IsTranslated = false;
+                                        sel.EstimatedTextHeight = 0;
+                                        UpdateMask();
+                                    }
+                                });
+                                continue;
+                            }
 
                             var combinedText = string.Join("\n", blocks.Select(b => b.TranslatedText).Where(t => !string.IsNullOrWhiteSpace(t)));
                             var combinedOriginalText = string.Join("\n", blocks.Select(b => b.OriginalText).Where(t => !string.IsNullOrWhiteSpace(t)));
