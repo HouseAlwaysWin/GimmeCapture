@@ -178,8 +178,34 @@ public class TranslationService
     public async Task<string> TranslatePlainTextAsync(string text, OCRLanguage sourceLang, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(text)) return string.Empty;
-        var translated = await TranslateAsync(text, sourceLang, ct);
-        return translated?.Trim() ?? string.Empty;
+        string translated = (await TranslateAsync(text, sourceLang, ct)).Trim();
+        if (IsTranslationAcceptable(text, translated, _settings.TargetLanguage))
+        {
+            return translated;
+        }
+
+        // Retry once with a likely source guess when Auto/ambiguous source may hurt engine routing.
+        var guessedSource = GuessSourceLanguageFromText(text);
+        if (guessedSource != sourceLang)
+        {
+            string retried = (await TranslateAsync(text, guessedSource, ct)).Trim();
+            if (IsTranslationAcceptable(text, retried, _settings.TargetLanguage))
+            {
+                return retried;
+            }
+        }
+
+        // Fallback: try another engine if selected one returns unacceptable output.
+        foreach (var engine in _translationEngines.Where(e => e.EngineType != _settings.SelectedTranslationEngine))
+        {
+            string fallback = (await engine.TranslateAsync(text, guessedSource, _settings.TargetLanguage, ct)).Trim();
+            if (IsTranslationAcceptable(text, fallback, _settings.TargetLanguage))
+            {
+                return fallback;
+            }
+        }
+
+        return string.Empty;
     }
 
     private async Task<OCRLanguage> DetectScriptLanguageAsync(SKBitmap bitmap, CancellationToken ct)
@@ -241,6 +267,13 @@ public class TranslationService
     private bool IsTranslationAcceptable(string original, string translated, TranslationLanguage target)
     {
         if (string.IsNullOrWhiteSpace(translated)) return false;
+        if (target == TranslationLanguage.English) return true;
+
+        // For CJK targets, reject pure Latin outputs that look like untranslated text.
+        if (!ContainsTargetScript(translated, target))
+        {
+            return false;
+        }
         return true;
     }
 
@@ -248,6 +281,32 @@ public class TranslationService
     {
         if (target == TranslationLanguage.TraditionalChinese) return text; // Already source-like
         return text; // Simple fallback
+    }
+
+    private static OCRLanguage GuessSourceLanguageFromText(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return OCRLanguage.Auto;
+        if (text.Any(c => c >= '\u3040' && c <= '\u30FF')) return OCRLanguage.Japanese;
+        if (text.Any(c => c >= '\uAC00' && c <= '\uD7AF')) return OCRLanguage.Korean;
+        if (text.Any(c => c >= '\u4E00' && c <= '\u9FFF')) return OCRLanguage.TraditionalChinese;
+        if (text.Any(c => (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z'))) return OCRLanguage.English;
+        return OCRLanguage.Auto;
+    }
+
+    private static bool ContainsTargetScript(string text, TranslationLanguage target)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return false;
+
+        return target switch
+        {
+            TranslationLanguage.TraditionalChinese or TranslationLanguage.SimplifiedChinese =>
+                text.Any(c => c >= '\u4E00' && c <= '\u9FFF'),
+            TranslationLanguage.Japanese =>
+                text.Any(c => (c >= '\u3040' && c <= '\u30FF') || (c >= '\u4E00' && c <= '\u9FFF')),
+            TranslationLanguage.Korean =>
+                text.Any(c => c >= '\uAC00' && c <= '\uD7AF'),
+            _ => true
+        };
     }
 
     public async Task<List<string>> GetAvailableModelsAsync()

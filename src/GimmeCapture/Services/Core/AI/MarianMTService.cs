@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -457,7 +457,7 @@ public class MarianMTService : IDisposable
         catch (Exception ex)
         {
             Debug.WriteLine($"[MarianMT] Translation failed: {ex.Message}");
-            return text;
+            return string.Empty;
         }
     }
 

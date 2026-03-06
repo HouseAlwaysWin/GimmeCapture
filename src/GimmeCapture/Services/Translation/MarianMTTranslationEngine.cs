@@ -25,11 +25,11 @@ public class MarianMTTranslationEngine : ITranslationEngine
             {
                 await _marianMTService.EnsureLoadedAsync(token);
                 var result = await _marianMTService.TranslateAsync(text, targetLang, sourceLang, token);
-                return string.IsNullOrEmpty(result) ? text : result;
+                return string.IsNullOrWhiteSpace(result) ? string.Empty : result;
             },
             ct,
             TimeSpan.FromSeconds(30),
-            () => text,
+            () => string.Empty,
             "MarianMTTranslationEngine.Translate");
     }
 }

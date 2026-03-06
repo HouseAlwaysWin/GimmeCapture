@@ -84,6 +84,7 @@
   "ModuleSAM2Description": "Segment Anything Model v2 for smart object selection and background removal.",
   "ModuleOCRDescription": "PaddleOCR v5 models for real-time text detection and recognition.",
   "ModuleMarianMTDescription": "MarianMT translation model, optimized for offline Japanese-to-Chinese translation.",
+  "ModuleVoskDescription": "Vosk offline speech-to-text models for system audio transcription.",
   "Installed": "Installed",
   "NotInstalled": "Not Installed",
   "Install": "Install",

@@ -386,8 +386,9 @@ public partial class SnipWindowViewModel
         _audioTranscriptionService ??= new SystemAudioTranscriptionService(_mainVm.AppSettingsService.BaseDataDirectory);
 
         var sourceLanguage = ResolveSpeechSourceLanguage();
+        var autoPreferredLanguage = ResolveSpeechAutoPreferredLanguage();
         string originalText = await _audioTranscriptionService.CaptureAndTranscribeAsync(
-            TimeSpan.FromSeconds(3), sourceLanguage, token);
+            TimeSpan.FromSeconds(4), sourceLanguage, autoPreferredLanguage, token);
 
         if (string.IsNullOrWhiteSpace(originalText))
         {
@@ -413,18 +414,21 @@ public partial class SnipWindowViewModel
             _translationService = new TranslationService(_mainVm.AIResourceService, _mainVm.AppSettingsService, _mainVm.MarianMTService);
         }
 
-        string translatedText = await _translationService.TranslatePlainTextAsync(originalText, sourceLanguage, token);
-        if (string.IsNullOrWhiteSpace(translatedText))
-        {
-            translatedText = originalText;
-        }
+        // Keep audio translation path consistent with visual translation path.
+        // Without this sync, audio mode may reuse stale language settings.
+        _mainVm.AppSettingsService.Settings.TargetLanguage = _mainVm.TargetLanguage;
+        _mainVm.AppSettingsService.Settings.SourceLanguage = _mainVm.SourceLanguage;
+
+        OCRLanguage translationSourceLanguage = ResolveSpeechTranslationSourceLanguage(sourceLanguage, originalText);
+        string translatedText = await _translationService.TranslatePlainTextAsync(originalText, translationSourceLanguage, token);
+        bool hasValidTranslation = !string.IsNullOrWhiteSpace(translatedText);
 
         await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
         {
             sel.LastOcrText = originalText;
             sel.OriginalText = originalText;
-            sel.TranslatedText = translatedText;
-            sel.IsTranslated = true;
+            sel.TranslatedText = hasValidTranslation ? translatedText : string.Empty;
+            sel.IsTranslated = hasValidTranslation;
             if (sel.InferredFontSize < 18) sel.InferredFontSize = 18;
             sel.EstimatedTextHeight = 0;
             UpdateMask();
@@ -435,6 +439,71 @@ public partial class SnipWindowViewModel
     {
         if (_mainVm == null) return OCRLanguage.Auto;
         return _mainVm.SourceLanguage;
+    }
+
+    private OCRLanguage ResolveSpeechAutoPreferredLanguage()
+    {
+        if (_mainVm == null) return OCRLanguage.Auto;
+        if (_mainVm.SourceLanguage != OCRLanguage.Auto) return _mainVm.SourceLanguage;
+
+        return _mainVm.TargetLanguage switch
+        {
+            TranslationLanguage.TraditionalChinese => OCRLanguage.TraditionalChinese,
+            TranslationLanguage.SimplifiedChinese => OCRLanguage.SimplifiedChinese,
+            TranslationLanguage.Japanese => OCRLanguage.Japanese,
+            TranslationLanguage.Korean => OCRLanguage.Korean,
+            _ => OCRLanguage.Auto
+        };
+    }
+
+    private OCRLanguage ResolveSpeechTranslationSourceLanguage(OCRLanguage configuredSourceLanguage, string text)
+    {
+        if (_audioTranscriptionService == null)
+        {
+            return configuredSourceLanguage;
+        }
+
+        OCRLanguage detected = _audioTranscriptionService.LastDetectedLanguage;
+        if (configuredSourceLanguage == OCRLanguage.Auto && detected != OCRLanguage.Auto)
+        {
+            return detected;
+        }
+
+        // If user forced a CJK source but transcript is mainly Latin, prefer detected language.
+        if ((configuredSourceLanguage == OCRLanguage.TraditionalChinese
+             || configuredSourceLanguage == OCRLanguage.SimplifiedChinese
+             || configuredSourceLanguage == OCRLanguage.Japanese
+             || configuredSourceLanguage == OCRLanguage.Korean)
+            && IsLikelyLatinText(text)
+            && detected != OCRLanguage.Auto)
+        {
+            return detected;
+        }
+
+        return configuredSourceLanguage;
+    }
+
+    private static bool IsLikelyLatinText(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return false;
+
+        int latin = 0;
+        int cjk = 0;
+        foreach (char ch in text)
+        {
+            if ((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z'))
+            {
+                latin++;
+            }
+            else if ((ch >= '\u4E00' && ch <= '\u9FFF')
+                     || (ch >= '\u3040' && ch <= '\u30FF')
+                     || (ch >= '\uAC00' && ch <= '\uD7AF'))
+            {
+                cjk++;
+            }
+        }
+
+        return latin > 0 && latin >= (cjk * 2 + 2);
     }
 
     private Geometry _maskGeometry = new GeometryGroup();
@@ -659,6 +728,12 @@ public partial class SnipWindowViewModel
             this.RaisePropertyChanged(nameof(IsTranslationSingleMode));
             this.RaisePropertyChanged(nameof(IsTranslationMultiMode));
             this.RaisePropertyChanged(nameof(IsTranslationAudioMode));
+            this.RaisePropertyChanged(nameof(TranslateAllHotkey));
+            this.RaisePropertyChanged(nameof(ScanAllHotkey));
+            this.RaisePropertyChanged(nameof(ToggleSelectHotkey));
+            this.RaisePropertyChanged(nameof(TranslateAllTooltip));
+            this.RaisePropertyChanged(nameof(ScanAllTooltip));
+            this.RaisePropertyChanged(nameof(ToggleSelectTooltip));
             UpdateMask();
         }
     }
@@ -696,7 +771,18 @@ public partial class SnipWindowViewModel
     public bool IsTranslationAudioMode
     {
         get => CurrentTranslationTool == TranslationTool.Audio;
-        set { if (value) CurrentTranslationTool = TranslationTool.Audio; }
+        set
+        {
+            if (value)
+            {
+                CurrentTranslationTool = TranslationTool.Audio;
+            }
+            else if (CurrentTranslationTool == TranslationTool.Audio)
+            {
+                // Allow toggling off audio mode without exposing text selection tools.
+                CurrentTranslationTool = TranslationTool.Single;
+            }
+        }
     }
 
     private void EnsureAudioTranslationBox()

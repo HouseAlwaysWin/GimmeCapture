@@ -66,6 +66,12 @@ public class AIResourceService : ReactiveObject
     private const string NmtSpmUrl = "https://huggingface.co/facebook/m2m100_418M/resolve/main/sentencepiece.bpe.model?download=true";
     private const string NmtConfigUrl = "https://huggingface.co/Xenova/m2m100_418M/resolve/main/config.json?download=true";
     private const string NmtGenerationConfigUrl = "https://huggingface.co/Xenova/m2m100_418M/resolve/main/generation_config.json?download=true";
+    
+    // Vosk speech-to-text models
+    private const string VoskEnModelUrl = "https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip";
+    private const string VoskCnModelUrl = "https://alphacephei.com/vosk/models/vosk-model-small-cn-0.22.zip";
+    private const string VoskJaModelUrl = "https://alphacephei.com/vosk/models/vosk-model-small-ja-0.22.zip";
+    private const string VoskKoModelUrl = "https://alphacephei.com/vosk/models/vosk-model-small-ko-0.22.zip";
 
     // Using a reliable direct link to ONNX Runtime GPU (Win x64)
     private const string OnnxRuntimeZipUrl = "https://github.com/microsoft/onnxruntime/releases/download/v1.20.1/onnxruntime-win-x64-gpu-1.20.1.zip";
@@ -157,6 +163,12 @@ public class AIResourceService : ReactiveObject
     {
         var paths = GetOCRPaths(language);
         return File.Exists(paths.Det) && File.Exists(paths.Rec) && File.Exists(paths.Dict);
+    }
+
+    public bool IsVoskReady(OCRLanguage language)
+    {
+        var modelPath = GetVoskModelPath(language);
+        return IsVoskModelDirectory(modelPath);
     }
 
     // Deprecated monolithic check, keeping for compatibility if needed, but logic should move to specific checks
@@ -258,6 +270,25 @@ public class AIResourceService : ReactiveObject
         catch (Exception ex)
         {
             LastErrorMessage = $"NMT Removal Failed: {ex.Message}";
+            System.Diagnostics.Debug.WriteLine(LastErrorMessage);
+            return false;
+        }
+    }
+
+    public bool RemoveVoskResources(OCRLanguage language)
+    {
+        try
+        {
+            var modelPath = GetVoskModelPath(language);
+            if (Directory.Exists(modelPath))
+            {
+                Directory.Delete(modelPath, true);
+            }
+            return true;
+        }
+        catch (Exception ex)
+        {
+            LastErrorMessage = $"Vosk Removal Failed: {ex.Message}";
             System.Diagnostics.Debug.WriteLine(LastErrorMessage);
             return false;
         }
@@ -547,6 +578,129 @@ public class AIResourceService : ReactiveObject
         {
             _downloader.IsDownloading = false;
             _downloadLock.Release();
+        }
+    }
+
+    public virtual async Task<bool> EnsureVoskAsync(OCRLanguage language, CancellationToken ct = default)
+    {
+        if (IsVoskReady(language)) return true;
+
+        await _downloadLock.WaitAsync(ct);
+        try
+        {
+            if (IsVoskReady(language)) return true;
+
+            _downloader.IsDownloading = true;
+            _downloader.CurrentDownloadName = $"Vosk STT Model ({language})";
+            _downloader.DownloadProgress = 0;
+
+            var (tag, url) = ResolveVoskModelSpec(language);
+            string modelRoot = GetVoskModelRoot();
+            string targetDir = Path.Combine(modelRoot, tag);
+
+            Directory.CreateDirectory(modelRoot);
+
+            string tempDir = Path.Combine(modelRoot, "_tmp");
+            Directory.CreateDirectory(tempDir);
+            string zipPath = Path.Combine(tempDir, $"{tag}.zip");
+            string extractDir = Path.Combine(tempDir, $"{tag}_extract");
+
+            if (!File.Exists(zipPath))
+            {
+                await _downloader.DownloadFileAsync(url, zipPath, 0, 85, ct);
+            }
+            else
+            {
+                _downloader.DownloadProgress = 85;
+            }
+
+            if (Directory.Exists(extractDir))
+            {
+                Directory.Delete(extractDir, true);
+            }
+
+            _downloader.DownloadProgress = 90;
+            ZipFile.ExtractToDirectory(zipPath, extractDir);
+
+            string? extractedModelRoot = Directory.EnumerateDirectories(extractDir, "*", SearchOption.TopDirectoryOnly)
+                .FirstOrDefault(IsVoskModelDirectory);
+            if (string.IsNullOrWhiteSpace(extractedModelRoot))
+            {
+                extractedModelRoot = Directory.EnumerateDirectories(extractDir, "*", SearchOption.AllDirectories)
+                    .FirstOrDefault(IsVoskModelDirectory);
+            }
+            if (string.IsNullOrWhiteSpace(extractedModelRoot))
+            {
+                LastErrorMessage = "Vosk archive format not recognized.";
+                return false;
+            }
+
+            if (Directory.Exists(targetDir))
+            {
+                Directory.Delete(targetDir, true);
+            }
+
+            _downloader.DownloadProgress = 95;
+            CopyDirectory(extractedModelRoot, targetDir);
+            _downloader.DownloadProgress = 100;
+            return IsVoskReady(language);
+        }
+        catch (OperationCanceledException)
+        {
+            return false;
+        }
+        catch (Exception ex)
+        {
+            LastErrorMessage = ex.Message;
+            return false;
+        }
+        finally
+        {
+            _downloader.IsDownloading = false;
+            _downloadLock.Release();
+        }
+    }
+
+    private static (string Tag, string Url) ResolveVoskModelSpec(OCRLanguage language)
+    {
+        return language switch
+        {
+            OCRLanguage.SimplifiedChinese => ("small-cn-0.22", VoskCnModelUrl),
+            OCRLanguage.TraditionalChinese => ("small-cn-0.22", VoskCnModelUrl),
+            OCRLanguage.Japanese => ("small-ja-0.22", VoskJaModelUrl),
+            OCRLanguage.Korean => ("small-ko-0.22", VoskKoModelUrl),
+            OCRLanguage.Auto => ("small-ja-0.22", VoskJaModelUrl),
+            _ => ("small-en-us-0.15", VoskEnModelUrl)
+        };
+    }
+
+    private string GetVoskModelRoot()
+    {
+        return Path.Combine(_settingsService.BaseDataDirectory, "AIResources", "asr", "vosk");
+    }
+
+    private string GetVoskModelPath(OCRLanguage language)
+    {
+        var (tag, _) = ResolveVoskModelSpec(language);
+        return Path.Combine(GetVoskModelRoot(), tag);
+    }
+
+    private static bool IsVoskModelDirectory(string path)
+    {
+        return Directory.Exists(Path.Combine(path, "am"))
+               && Directory.Exists(Path.Combine(path, "conf"));
+    }
+
+    private static void CopyDirectory(string source, string destination)
+    {
+        Directory.CreateDirectory(destination);
+        foreach (var file in Directory.GetFiles(source))
+        {
+            File.Copy(file, Path.Combine(destination, Path.GetFileName(file)), true);
+        }
+        foreach (var dir in Directory.GetDirectories(source))
+        {
+            CopyDirectory(dir, Path.Combine(destination, Path.GetFileName(dir)));
         }
     }
 

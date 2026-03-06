@@ -77,6 +77,7 @@
   "ModuleFFmpegDescription": "動画の録画と再生に必要なマルチメディアフレームワーク (FFmpeg)。",
   "ModuleAIDescription": "背景削除とオブジェクト選択用の AI 模型 (U2Net/SAM2)。",
   "ModuleMarianMTDescription": "MarianMT 翻訳モデル。完全オフライン環境での日中翻訳に特化しています。",
+  "ModuleVoskDescription": "システム音声の文字起こし向け Vosk オフライン音声認識モデル。",
   "Installed": "インストール済み",
   "NotInstalled": "未インストール",
   "Install": "インストール",

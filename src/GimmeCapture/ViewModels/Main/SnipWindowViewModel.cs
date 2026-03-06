@@ -103,10 +103,10 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     };
 
     // Translation mode specific hotkeys
-    public string TranslateAllHotkey => _mainVm?.Translate_TranslateAll ?? "Enter";
-    public string ScanAllHotkey => _mainVm?.Translate_ScanAll ?? "S";
+    public string TranslateAllHotkey => IsTranslationAudioMode ? string.Empty : (_mainVm?.Translate_TranslateAll ?? "Enter");
+    public string ScanAllHotkey => IsTranslationAudioMode ? string.Empty : (_mainVm?.Translate_ScanAll ?? "S");
     public string ClearAllHotkey => _mainVm?.Translate_ClearAll ?? "Delete";
-    public string ToggleSelectHotkey => _mainVm?.Translate_ToggleSelect ?? "Tab";
+    public string ToggleSelectHotkey => IsTranslationAudioMode ? string.Empty : (_mainVm?.Translate_ToggleSelect ?? "Tab");
     public string AutoDetectHotkey => _mainVm?.Translate_AutoDetect ?? "D";
     public string ModeCursorHotkey => _mainVm?.Translate_ModeCursor ?? "D1";
     public string ModeSingleHotkey => _mainVm?.Translate_ModeSingle ?? "D2";
