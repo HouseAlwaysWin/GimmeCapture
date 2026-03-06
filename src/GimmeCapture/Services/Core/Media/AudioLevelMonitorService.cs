@@ -39,9 +39,9 @@ public sealed class AudioLevelMonitorService : IDisposable
 
     private void ResetDevices()
     {
-        try { _renderDevice?.Dispose(); } catch { }
-        try { _captureDevice?.Dispose(); } catch { }
-        try { _enumerator?.Dispose(); } catch { }
+        _renderDevice?.Dispose();
+        _captureDevice?.Dispose();
+        _enumerator?.Dispose();
 
         _renderDevice = null;
         _captureDevice = null;

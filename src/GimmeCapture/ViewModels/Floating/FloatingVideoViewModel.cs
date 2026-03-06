@@ -295,12 +295,19 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
     public bool CanUndo => HasUndo;
     public bool CanRedo => HasRedo;
 
+    private static int NormalizeVideoDimension(int value)
+    {
+        var positive = Math.Max(1, value);
+        var even = (positive / 2) * 2;
+        return Math.Max(2, even);
+    }
+
     public FloatingVideoViewModel(string videoPath, string ffmpegPath, int width, int height, double originalWidth, double originalHeight, Avalonia.Media.Color borderColor, double borderThickness, bool hideDecoration, bool hideBorder, GimmeCapture.Services.Abstractions.IClipboardService clipboardService, AppSettingsService? appSettingsService)
     {
         VideoPath = videoPath;
         _ffmpegPath = ffmpegPath;
-        _width = (width / 2) * 2; // Ensure even for FFmpeg
-        _height = (height / 2) * 2;
+        _width = NormalizeVideoDimension(width); // Ensure even and valid for bitmap/FFmpeg
+        _height = NormalizeVideoDimension(height);
         OriginalWidth = originalWidth;
         OriginalHeight = originalHeight;
         DisplayWidth = originalWidth;
