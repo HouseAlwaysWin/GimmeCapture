@@ -522,12 +522,24 @@ public partial class SnipWindow : Window
 
                         if (sel.IsTranslated)
                         {
-                            // 已翻譯：選取框及下方文字島嶼保持不透明
-                            extraRegions.Add(new Rect(
-                                rect.X * scaling,
-                                rect.Y * scaling,
-                                rect.Width * scaling,
-                                (rect.Height + sel.EstimatedTextHeight + 20) * scaling));
+                            if (sel.IsAudioPanel)
+                            {
+                                // Audio panel keeps text inside fixed box (no extra text island below).
+                                extraRegions.Add(new Rect(
+                                    rect.X * scaling,
+                                    rect.Y * scaling,
+                                    rect.Width * scaling,
+                                    rect.Height * scaling));
+                            }
+                            else
+                            {
+                                // 已翻譯：選取框及下方文字島嶼保持不透明
+                                extraRegions.Add(new Rect(
+                                    rect.X * scaling,
+                                    rect.Y * scaling,
+                                    rect.Width * scaling,
+                                    (rect.Height + sel.EstimatedTextHeight + 20) * scaling));
+                            }
                         }
                         else
                         {

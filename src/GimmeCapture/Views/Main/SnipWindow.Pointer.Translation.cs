@@ -75,6 +75,13 @@ public partial class SnipWindow
         var vm = _viewModel;
         if (selRect != null && vm != null)
         {
+            // Audio mode panel is persistent and should not be removed by right-click.
+            if (vm.CurrentTranslationTool == TranslationTool.Audio && selRect.IsAudioPanel)
+            {
+                e.Handled = true;
+                return true;
+            }
+
             vm.UserSelections?.Remove(selRect);
             e.Handled = true;
             return true;

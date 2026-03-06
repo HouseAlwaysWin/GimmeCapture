@@ -237,6 +237,7 @@
   "TranslateModeCursor": "通常モード",
   "TranslateModeSingle": "単一選択",
   "TranslateModeMulti": "複数選択",
+  "TranslateModeAudio": "音声モード",
   "MenuPinTranslation": "翻訳結果をピン留め",
   "CopyTranslation": "翻訳テキストをコピー",
   "CaptureModeTranslation": "キャプチャモード：翻訳",

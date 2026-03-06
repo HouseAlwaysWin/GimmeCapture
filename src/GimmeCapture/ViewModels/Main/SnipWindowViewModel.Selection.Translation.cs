@@ -140,7 +140,7 @@ public partial class SnipWindowViewModel
 
                     if (sel.IsTranslated)
                     {
-                        sel.EstimatedTextHeight = EstimateTranslatedTextHeight(sel);
+                        sel.EstimatedTextHeight = sel.IsAudioPanel ? 0 : EstimateTranslatedTextHeight(sel);
                     }
 
                     // V8: 翻譯後重新整理遮罩和 Win32 Region

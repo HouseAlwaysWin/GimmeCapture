@@ -169,6 +169,14 @@
                               ToolTip.Tip="{Binding ModeMultiTooltip}">
                     <PathIcon Data="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z" Width="14" Height="14"/>
                 </ToggleButton>
+
+                <!-- Audio Mode -->
+                <ToggleButton Theme="{StaticResource SnipToolButton}" 
+                              IsChecked="{Binding IsTranslationAudioMode, Mode=TwoWay}"
+                              Classes.active="{Binding IsTranslationAudioMode}"
+                              ToolTip.Tip="{Binding ModeAudioTooltip}">
+                    <PathIcon Data="M12,3A1,1 0 0,1 13,4V11A1,1 0 0,1 11,11V4A1,1 0 0,1 12,3M8,10A1,1 0 0,1 9,11V12A3,3 0 0,0 15,12V11A1,1 0 0,1 17,11V12A5,5 0 0,1 13,16.9V20H16A1,1 0 0,1 16,22H8A1,1 0 0,1 8,20H11V16.9A5,5 0 0,1 7,12V11A1,1 0 0,1 8,10Z" Width="14" Height="14"/>
+                </ToggleButton>
             </StackPanel>
             
             <!-- Language Selection (Translation Mode Only) -->

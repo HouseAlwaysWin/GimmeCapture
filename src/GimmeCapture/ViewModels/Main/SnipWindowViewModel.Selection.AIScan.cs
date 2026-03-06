@@ -402,7 +402,14 @@ public partial class SnipWindowViewModel
         ScanAllTextCommand = ReactiveCommand.CreateFromTask(ScanAllTextAsync, canExecuteInTranslation);
         ScanAllTextCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"ScanAll error: {ex}"));
 
-        ClearAllSelectionsCommand = ReactiveCommand.Create(() => UserSelections.Clear(), canExecuteInTranslation);
+        ClearAllSelectionsCommand = ReactiveCommand.Create(() =>
+        {
+            UserSelections.Clear();
+            if (CurrentTranslationTool == TranslationTool.Audio)
+            {
+                EnsureAudioTranslationBox();
+            }
+        }, canExecuteInTranslation);
         ClearAllSelectionsCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"ClearAll error: {ex}"));
 
         ToggleTranslationSelectCommand = ReactiveCommand.Create(() => { IsTranslationSelectionActive = !IsTranslationSelectionActive; }, canExecuteInTranslation);
@@ -417,7 +424,12 @@ public partial class SnipWindowViewModel
         });
         SelectTranslationToolCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Select Tool error: {ex}"));
 
-        RemoveUserSelectionCommand = ReactiveCommand.Create<UserSelectionRect>(item => { UserSelections.Remove(item); });
+        RemoveUserSelectionCommand = ReactiveCommand.Create<UserSelectionRect>(item =>
+        {
+            if (item == null) return;
+            if (CurrentTranslationTool == TranslationTool.Audio && item.IsAudioPanel) return;
+            UserSelections.Remove(item);
+        });
         RemoveUserSelectionCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"RemoveSelection error: {ex}"));
 
         CopyTranslationTextCommand = ReactiveCommand.CreateFromTask<UserSelectionRect>(async (UserSelectionRect item) => 
@@ -444,6 +456,13 @@ public partial class SnipWindowViewModel
                         .Subscribe(_ => UpdateMask());
                 }
             }
+
+            // Keep one persistent audio panel while in Audio mode.
+            if (CurrentTranslationTool == TranslationTool.Audio && !UserSelections.Any(x => x.IsAudioPanel))
+            {
+                EnsureAudioTranslationBox();
+            }
+
             UpdateMask();
         };
     }

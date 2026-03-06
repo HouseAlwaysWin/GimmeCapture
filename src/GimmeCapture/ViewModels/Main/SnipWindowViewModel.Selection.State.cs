@@ -340,7 +340,10 @@ public partial class SnipWindowViewModel
                                     sel.InferredFontSize = blocks[0].InferredFontSize;
                                 }
 
-                                if (sel.IsTranslated) sel.EstimatedTextHeight = EstimateTranslatedTextHeight(sel);
+                                if (sel.IsTranslated)
+                                {
+                                    sel.EstimatedTextHeight = sel.IsAudioPanel ? 0 : EstimateTranslatedTextHeight(sel);
+                                }
                                 UpdateMask();
                             });
                         }
@@ -569,10 +572,19 @@ public partial class SnipWindowViewModel
         set 
         {
             this.RaiseAndSetIfChanged(ref _currentTranslationTool, value);
+            if (value == TranslationTool.Audio)
+            {
+                EnsureAudioTranslationBox();
+            }
+            else if (value == TranslationTool.Single || value == TranslationTool.Multi)
+            {
+                CloseAudioTranslationBoxes();
+            }
             this.RaisePropertyChanged(nameof(IsTranslationSelectionActive));
             this.RaisePropertyChanged(nameof(IsTranslationCursorMode));
             this.RaisePropertyChanged(nameof(IsTranslationSingleMode));
             this.RaisePropertyChanged(nameof(IsTranslationMultiMode));
+            this.RaisePropertyChanged(nameof(IsTranslationAudioMode));
             UpdateMask();
         }
     }
@@ -582,7 +594,7 @@ public partial class SnipWindowViewModel
         get => CurrentTranslationTool == TranslationTool.Single || CurrentTranslationTool == TranslationTool.Multi;
         set 
         {
-            if (value && CurrentTranslationTool == TranslationTool.Cursor)
+            if (value && (CurrentTranslationTool == TranslationTool.Cursor || CurrentTranslationTool == TranslationTool.Audio))
                 CurrentTranslationTool = TranslationTool.Single;
             else if (!value)
                 CurrentTranslationTool = TranslationTool.Cursor;
@@ -605,6 +617,46 @@ public partial class SnipWindowViewModel
     {
         get => CurrentTranslationTool == TranslationTool.Multi;
         set { if (value) CurrentTranslationTool = TranslationTool.Multi; }
+    }
+
+    public bool IsTranslationAudioMode
+    {
+        get => CurrentTranslationTool == TranslationTool.Audio;
+        set { if (value) CurrentTranslationTool = TranslationTool.Audio; }
+    }
+
+    private void EnsureAudioTranslationBox()
+    {
+        if (UserSelections.Count > 0)
+        {
+            return;
+        }
+
+        // Place an initial subtitle-like box near the lower third of the active screen.
+        var bounds = ActiveScreenBounds.Width > 0
+            ? ActiveScreenBounds
+            : new Rect(0, 0, ViewportSize.Width > 0 ? ViewportSize.Width : 1920, ViewportSize.Height > 0 ? ViewportSize.Height : 1080);
+
+        double width = Math.Clamp(bounds.Width * 0.62, 360, 960);
+        double height = Math.Clamp(bounds.Height * 0.18, 90, 260);
+        double x = bounds.X + (bounds.Width - width) / 2.0;
+        double y = bounds.Y + bounds.Height * 0.72 - (height / 2.0);
+
+        UserSelections.Add(new UserSelectionRect
+        {
+            Bounds = new Rect(x, y, width, height),
+            IsTranslated = false,
+            IsAudioPanel = true
+        });
+    }
+
+    private void CloseAudioTranslationBoxes()
+    {
+        var audioPanels = UserSelections.Where(x => x.IsAudioPanel).ToList();
+        foreach (var item in audioPanels)
+        {
+            UserSelections.Remove(item);
+        }
     }
 
     // 翻譯工具列位置（可拖曳，預設螢幕中間上方）

@@ -10,7 +10,8 @@ public enum TranslationTool
 {
     Cursor, // 一般模式 (編輯與功能選單模式)
     Single, // 單選模式 (截圖模式一致)
-    Multi   // 多選模式
+    Multi,  // 多選模式
+    Audio   // 音訊模式（固定翻譯框）
 }
 
 /// <summary>
@@ -30,6 +31,13 @@ public class UserSelectionRect : ReactiveObject
     {
         get => _isTranslated;
         set => this.RaiseAndSetIfChanged(ref _isTranslated, value);
+    }
+
+    private bool _isAudioPanel;
+    public bool IsAudioPanel
+    {
+        get => _isAudioPanel;
+        set => this.RaiseAndSetIfChanged(ref _isAudioPanel, value);
     }
 
     private string _translatedText = string.Empty;

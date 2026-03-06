@@ -141,6 +141,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     public string ModeCursorTooltip => $"{LocalizationService.Instance["TranslateModeCursor"]} ({ModeCursorHotkey})";
     public string ModeSingleTooltip => $"{LocalizationService.Instance["TranslateModeSingle"]} ({ModeSingleHotkey})";
     public string ModeMultiTooltip => $"{LocalizationService.Instance["TranslateModeMulti"]} ({ModeMultiHotkey})";
+    public string ModeAudioTooltip => LocalizationService.Instance["TranslateModeAudio"] ?? "Audio Mode";
     public string ToggleToolbarTooltip => $"{LocalizationService.Instance["ActionToolbar"]} ({ActiveToolbarHotkey})";
     public string TogglePlaybackTooltip => $"{LocalizationService.Instance["ActionPlayback"]} ({ActivePlaybackHotkey})";
     public string RemoveBackgroundTooltip => $"{LocalizationService.Instance["RemoveBackground"]} ({RemoveBackgroundHotkey})";
@@ -388,6 +389,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
                 this.RaisePropertyChanged(nameof(ClearAllTooltip));
                 this.RaisePropertyChanged(nameof(ToggleSelectTooltip));
                 this.RaisePropertyChanged(nameof(AutoDetectTooltip));
+                this.RaisePropertyChanged(nameof(ModeAudioTooltip));
                 this.RaisePropertyChanged(nameof(ToggleToolbarTooltip));
                 this.RaisePropertyChanged(nameof(InputAudioStateText));
                 this.RaisePropertyChanged(nameof(OutputAudioStateText));
