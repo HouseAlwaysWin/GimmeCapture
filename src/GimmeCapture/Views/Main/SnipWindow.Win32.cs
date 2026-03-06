@@ -626,7 +626,7 @@ public partial class SnipWindow : Window
                 );
 
                 Rect? selectedToolbarRect = null;
-                if (_viewModel != null && _viewModel.ToolbarWidth > 0)
+                if (_viewModel != null && _viewModel.IsToolbarVisible && _viewModel.ToolbarWidth > 0 && _viewModel.ToolbarHeight > 0)
                 {
                     double tw = _viewModel.ToolbarWidth + 20; 
                     double th = _viewModel.ToolbarHeight + 20;
@@ -676,7 +676,7 @@ public partial class SnipWindow : Window
             }
 
             Rect? toolbarRect = null;
-            if (_viewModel != null && _viewModel.ToolbarWidth > 0)
+            if (_viewModel != null && _viewModel.IsToolbarVisible && _viewModel.ToolbarWidth > 0 && _viewModel.ToolbarHeight > 0)
             {
                 // V13: Robust toolbar region calculation
                 double tw = _viewModel.ToolbarWidth + 40; // More padding

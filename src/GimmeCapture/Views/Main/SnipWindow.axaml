@@ -396,8 +396,8 @@
                                   Canvas.Left="{Binding TextInputPosition.X}"
                                   Canvas.Top="{Binding TextInputPosition.Y}"/>
 
-            <!-- Toolbar Layer -->
-            <Canvas IsHitTestVisible="True" ZIndex="1000">
+            <!-- Toolbar Layer: when toolbar is hidden, do not capture hit-test so clicks pass through -->
+            <Canvas IsHitTestVisible="{Binding IsToolbarVisible}" ZIndex="1000">
                 <ctl:SnipToolbar Name="Toolbar" 
                                  Canvas.Left="{Binding ToolbarLeft}" Canvas.Top="{Binding ToolbarTop}" 
                                  MaxWidth="{Binding ToolbarMaxWidth}"

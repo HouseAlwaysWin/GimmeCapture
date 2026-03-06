@@ -353,7 +353,9 @@ public partial class SnipWindow : Window
                 
             var trigger2 = _viewModel.WhenAnyValue(
                 x => x.ToolbarWidth,
-                x => x.ToolbarHeight);
+                x => x.ToolbarHeight,
+                x => x.ShowToolbar,
+                x => x.IsToolbarVisible);
 
             _selectionRectSubscription = System.Reactive.Linq.Observable.CombineLatest(trigger1, trigger2, (t1, t2) => t1)
                 .Throttle(TimeSpan.FromMilliseconds(16))

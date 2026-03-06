@@ -295,10 +295,9 @@
                 <PathIcon Data="M19,3H5A2,2,0,0,0,3,5V19A2,2,0,0,0,5,21H19A2,2,0,0,0,21,19V5A2,2,0,0,0,19,3M19,19H5V5H19ZM9,14H7V8H9A3,3,0,0,1,12,11A3,3,0,0,1,9,14ZM9,10H8V12H9A1,1,0,0,0,10,11A1,1,0,0,0,9,10ZM17,14H15V13H14V14H12V8H15A2,2,0,0,1,17,10A2,2,0,0,1,15,12A2,2,0,0,1,17,14ZM15,11H14.5V9.5H15A0.5,0.5,0,0,1,15.5,10A0.5,0.5,0,0,1,15,11Z" Width="14" Height="14"/>
             </ToggleButton>
 
-            <!-- 5d. Hide Toolbar Button -->
+            <!-- 5d. Hide Toolbar Button (visible in all modes including audio) -->
             <Button Theme="{StaticResource SnipButton}" FontSize="12" BorderThickness="1"
                     Command="{Binding ToggleToolbarCommand}"
-                    IsVisible="{Binding !IsTranslationAudioMode}"
                     ToolTip.Tip="{Binding ToggleToolbarTooltip}">
                 <PathIcon Data="M10.71,9.29a1,1,0,0,0-1.42,0L4.29,14.29a1,1,0,0,0,1.42,1.42L10,11.41l4.29,4.3a1,1,0,0,0,1.42-1.42Z" Width="14" Height="14"/>
             </Button>
