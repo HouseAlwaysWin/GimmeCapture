@@ -131,7 +131,10 @@ public partial class SnipWindowViewModel
             // 同步更新所有當前翻譯區塊的偵測狀態
             foreach (var sel in UserSelections)
             {
-                sel.IsAutoDetectEnabled = value;
+                if (!sel.IsAudioPanel)
+                {
+                    sel.IsAutoDetectEnabled = value;
+                }
             }
             // 如果開啟，喚醒背景迴圈，或者直接依靠現有的 Loop
             if (value && CurrentMode == SnipMode.Translation)

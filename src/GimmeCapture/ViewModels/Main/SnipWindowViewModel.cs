@@ -554,6 +554,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     {
         _audioMeterTimer.Stop();
         _audioLevelMonitor.Dispose();
+        _audioTranscriptionService?.Dispose();
         _disposables.Dispose();
         _sam2Service?.Dispose();
         _recordTimer?.Stop();

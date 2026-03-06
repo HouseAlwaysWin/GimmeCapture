@@ -11,6 +11,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Threading;
 using GimmeCapture.Services.Core;
+using GimmeCapture.Services.Core.Media;
 using GimmeCapture.Services.Platforms.Windows;
 using GimmeCapture.Services.OCR;
 
@@ -170,6 +171,7 @@ public partial class SnipWindowViewModel
     private CancellationTokenSource? _autoDetectCts;
     private Task? _autoDetectTask;
     private GimmeCapture.Services.OCR.PaddleOCREngine? _sharedOcrEngine;
+    private SystemAudioTranscriptionService? _audioTranscriptionService;
 
     public void StartAutoDetectLoop()
     {
@@ -194,19 +196,24 @@ public partial class SnipWindowViewModel
         {
             try
             {
-                await Task.Delay(1500, token); // Check every 1.5 seconds
+                bool hasAudioPanel = UserSelections.Any(s => s.IsAudioPanel);
+                await Task.Delay(hasAudioPanel ? 450 : 1500, token);
 
-                if (_mainVm == null || CurrentMode != SnipMode.Translation) continue;
-                bool isOcrReady = await _mainVm.AIResourceService.EnsureOCRAsync();
-                if (!isOcrReady) continue;
-
-                if (_sharedOcrEngine == null)
-                {
-                    _sharedOcrEngine = new GimmeCapture.Services.OCR.PaddleOCREngine(_mainVm.AIResourceService, _mainVm.AppSettingsService);
-                }
-
-                var activeSections = UserSelections.Where(s => s.IsAutoDetectEnabled).ToList();
+                var activeSections = UserSelections.Where(s => s.IsAutoDetectEnabled || s.IsAudioPanel).ToList();
                 if (activeSections.Count == 0) continue;
+                if (_mainVm == null || CurrentMode != SnipMode.Translation) continue;
+
+                bool hasVisualSections = activeSections.Any(s => !s.IsAudioPanel);
+                if (hasVisualSections)
+                {
+                    bool isOcrReady = await _mainVm.AIResourceService.EnsureOCRAsync();
+                    if (!isOcrReady) continue;
+
+                    if (_sharedOcrEngine == null)
+                    {
+                        _sharedOcrEngine = new GimmeCapture.Services.OCR.PaddleOCREngine(_mainVm.AIResourceService, _mainVm.AppSettingsService);
+                    }
+                }
 
                 var ocrLang = _mainVm.AppSettingsService.Settings.SourceLanguage;
                 // Auto detect script if source is auto
@@ -217,13 +224,22 @@ public partial class SnipWindowViewModel
                     ocrLang = OCRLanguage.TraditionalChinese;
                 }
 
-                await _sharedOcrEngine.EnsureLoadedAsync(ocrLang, token);
+                if (hasVisualSections && _sharedOcrEngine != null)
+                {
+                    await _sharedOcrEngine.EnsureLoadedAsync(ocrLang, token);
+                }
 
                 foreach (var sel in activeSections)
                 {
                     if (token.IsCancellationRequested) break;
                     try
                     {
+                        if (sel.IsAudioPanel)
+                        {
+                            await HandleAudioPanelTranscriptionAsync(sel, token);
+                            continue;
+                        }
+
                         var rect = sel.Bounds;
                         if (rect.Width <= 10 || rect.Height <= 10) continue;
 
@@ -361,6 +377,64 @@ public partial class SnipWindowViewModel
                 System.Diagnostics.Debug.WriteLine($"[AutoDetect] Loop Error: {ex.Message}");
             }
         }
+    }
+
+    private async Task HandleAudioPanelTranscriptionAsync(UserSelectionRect sel, CancellationToken token)
+    {
+        if (_mainVm == null) return;
+
+        _audioTranscriptionService ??= new SystemAudioTranscriptionService(_mainVm.AppSettingsService.BaseDataDirectory);
+
+        var sourceLanguage = ResolveSpeechSourceLanguage();
+        string originalText = await _audioTranscriptionService.CaptureAndTranscribeAsync(
+            TimeSpan.FromSeconds(3), sourceLanguage, token);
+
+        if (string.IsNullOrWhiteSpace(originalText))
+        {
+            string status = _audioTranscriptionService.LastStatus;
+            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                sel.OriginalText = string.IsNullOrWhiteSpace(status) ? "Listening..." : status;
+                sel.TranslatedText = string.Empty;
+                sel.IsTranslated = false;
+                if (sel.InferredFontSize < 18) sel.InferredFontSize = 18;
+                sel.EstimatedTextHeight = 0;
+            });
+            return;
+        }
+
+        if (string.Equals(originalText, sel.OriginalText, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        if (_translationService == null)
+        {
+            _translationService = new TranslationService(_mainVm.AIResourceService, _mainVm.AppSettingsService, _mainVm.MarianMTService);
+        }
+
+        string translatedText = await _translationService.TranslatePlainTextAsync(originalText, sourceLanguage, token);
+        if (string.IsNullOrWhiteSpace(translatedText))
+        {
+            translatedText = originalText;
+        }
+
+        await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            sel.LastOcrText = originalText;
+            sel.OriginalText = originalText;
+            sel.TranslatedText = translatedText;
+            sel.IsTranslated = true;
+            if (sel.InferredFontSize < 18) sel.InferredFontSize = 18;
+            sel.EstimatedTextHeight = 0;
+            UpdateMask();
+        });
+    }
+
+    private OCRLanguage ResolveSpeechSourceLanguage()
+    {
+        if (_mainVm == null) return OCRLanguage.Auto;
+        return _mainVm.SourceLanguage;
     }
 
     private Geometry _maskGeometry = new GeometryGroup();
@@ -627,7 +701,7 @@ public partial class SnipWindowViewModel
 
     private void EnsureAudioTranslationBox()
     {
-        if (UserSelections.Count > 0)
+        if (UserSelections.Any(x => x.IsAudioPanel))
         {
             return;
         }
@@ -646,7 +720,9 @@ public partial class SnipWindowViewModel
         {
             Bounds = new Rect(x, y, width, height),
             IsTranslated = false,
-            IsAudioPanel = true
+            IsAudioPanel = true,
+            IsAutoDetectEnabled = true,
+            InferredFontSize = 18
         });
     }
 

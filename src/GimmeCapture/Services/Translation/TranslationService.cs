@@ -175,6 +175,13 @@ public class TranslationService
         }
     }
 
+    public async Task<string> TranslatePlainTextAsync(string text, OCRLanguage sourceLang, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return string.Empty;
+        var translated = await TranslateAsync(text, sourceLang, ct);
+        return translated?.Trim() ?? string.Empty;
+    }
+
     private async Task<OCRLanguage> DetectScriptLanguageAsync(SKBitmap bitmap, CancellationToken ct)
     {
         await _ocrEngine.EnsureLoadedAsync(OCRLanguage.TraditionalChinese, ct);

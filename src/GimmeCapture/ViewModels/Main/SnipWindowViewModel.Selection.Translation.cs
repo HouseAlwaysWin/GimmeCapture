@@ -93,6 +93,12 @@ public partial class SnipWindowViewModel
                 if (token.IsCancellationRequested) break;
                 // 用戶點擊按鈕時，無論是否翻譯過都強制重新翻譯
 
+                if (sel.IsAudioPanel)
+                {
+                    await HandleAudioPanelTranscriptionAsync(sel, token);
+                    continue;
+                }
+
                 IsCapturing = true;
                 await Task.Delay(50); // 等待 UI 隱藏
 
