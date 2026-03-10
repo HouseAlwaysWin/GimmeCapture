@@ -259,7 +259,7 @@ public class RecordingService : ReactiveObject
             if (process.HasExited)
             {
                 Debug.WriteLine($"FFmpeg exited early ({process.ExitCode}).");
-                process.Dispose();
+                TryDisposeProcess(process);
                 return false;
             }
 
@@ -337,7 +337,7 @@ public class RecordingService : ReactiveObject
 
         if (process.HasExited)
         {
-            process.Dispose();
+            TryDisposeProcess(process);
             _ffmpegProcess = null;
             return;
         }
