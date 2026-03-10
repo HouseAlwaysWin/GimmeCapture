@@ -459,12 +459,25 @@ public class RecordingService : ReactiveObject
                 }
                 else
                 {
-                    // Mux audio into MKV - use -c:v copy (no re-encode needed, recording is already x264)
+                    // Mux audio into MKV - use -c:v copy when no crop (no re-encode needed)
+                    string codec = _settingsService?.Settings.VideoCodec == VideoCodec.H265 ? "libx265" : "libx264";
+                    var quality = _settingsService?.Settings.VideoQuality ?? VideoQuality.Medium;
+                    string crf = quality switch {
+                        VideoQuality.High => "18",
+                        VideoQuality.Low => (_settingsService?.Settings.VideoCodec == VideoCodec.H265 ? "32" : "28"),
+                        _ => (_settingsService?.Settings.VideoCodec == VideoCodec.H265 ? "28" : "23")
+                    };
+                    string preset = quality switch {
+                        VideoQuality.High => "slower",
+                        VideoQuality.Low => "fast",
+                        _ => "medium"
+                    };
+
                     string mkvConvertArgs = string.IsNullOrWhiteSpace(mergedAudio)
-                        ? $"-y -i \"{mergedMkv}\" -vf \"{cropFilter}\" -c:v libx264 -preset medium -crf 23 -pix_fmt yuv420p -c:a aac -b:a 128k \"{_outputFile}\""
+                        ? $"-y -i \"{mergedMkv}\" -vf \"{cropFilter}\" -c:v {codec} -preset {preset} -crf {crf} -pix_fmt yuv420p -c:a aac -b:a 128k \"{_outputFile}\""
                         : (string.IsNullOrWhiteSpace(cropFilter)
                             ? $"-y -i \"{mergedMkv}\" -i \"{mergedAudio}\" -map 0:v:0 -map 1:a:0 -c:v copy -c:a aac -b:a 128k -shortest \"{_outputFile}\""
-                            : $"-y -i \"{mergedMkv}\" -i \"{mergedAudio}\" -map 0:v:0 -map 1:a:0 -vf \"{cropFilter}\" -c:v libx264 -preset medium -crf 23 -pix_fmt yuv420p -c:a aac -b:a 128k -shortest \"{_outputFile}\"");
+                            : $"-y -i \"{mergedMkv}\" -i \"{mergedAudio}\" -map 0:v:0 -map 1:a:0 -vf \"{cropFilter}\" -c:v {codec} -preset {preset} -crf {crf} -pix_fmt yuv420p -c:a aac -b:a 128k -shortest \"{_outputFile}\"");
                     LogToFile($"MKV convert cmd: {mkvConvertArgs}");
                     await RunFfmpegProcessAsync(mkvConvertArgs, "MKV Convert");
                 }
@@ -526,7 +539,31 @@ public class RecordingService : ReactiveObject
                 }
 
                 string codec = _settingsService?.Settings.VideoCodec == VideoCodec.H265 ? "libx265" : "libx264";
-                string crf = _settingsService?.Settings.VideoCodec == VideoCodec.H265 ? "28" : "23";
+                var quality = _settingsService?.Settings.VideoQuality ?? VideoQuality.Medium;
+
+                string crf = quality switch {
+                    VideoQuality.High => "18",
+                    VideoQuality.Low => (_settingsService?.Settings.VideoCodec == VideoCodec.H265 ? "32" : "28"),
+                    _ => (_settingsService?.Settings.VideoCodec == VideoCodec.H265 ? "28" : "23")
+                };
+
+                string preset = quality switch {
+                    VideoQuality.High => "slower",
+                    VideoQuality.Low => "fast",
+                    _ => "medium"
+                };
+
+                // WebM uses -cpu-used instead of -preset (libvpx-vp9 doesn't support -preset)
+                string webmCpuUsed = quality switch {
+                    VideoQuality.High => "1",
+                    VideoQuality.Low => "4",
+                    _ => "2"
+                };
+                string webmCrf = quality switch {
+                    VideoQuality.High => "18",
+                    VideoQuality.Low => "35",
+                    _ => "25"
+                };
 
                 string convertArgs;
                 if (!string.IsNullOrWhiteSpace(mergedAudio))
@@ -534,14 +571,14 @@ public class RecordingService : ReactiveObject
                     convertArgs = _targetFormat switch
                     {
                         "webm" => string.IsNullOrWhiteSpace(cropFilter)
-                            ? $"-y -i \"{mergedMkv}\" -i \"{mergedAudio}\" -map 0:v:0 -map 1:a:0 -c:v libvpx-vp9 -crf 25 -b:v 0 -c:a libopus -shortest \"{_outputFile}\""
-                            : $"-y -i \"{mergedMkv}\" -i \"{mergedAudio}\" -map 0:v:0 -map 1:a:0 -vf \"{cropFilter}\" -c:v libvpx-vp9 -crf 25 -b:v 0 -c:a libopus -shortest \"{_outputFile}\"",
+                            ? $"-y -i \"{mergedMkv}\" -i \"{mergedAudio}\" -map 0:v:0 -map 1:a:0 -c:v libvpx-vp9 -crf {webmCrf} -b:v 0 -cpu-used {webmCpuUsed} -c:a libopus -shortest \"{_outputFile}\""
+                            : $"-y -i \"{mergedMkv}\" -i \"{mergedAudio}\" -map 0:v:0 -map 1:a:0 -vf \"{cropFilter}\" -c:v libvpx-vp9 -crf {webmCrf} -b:v 0 -cpu-used {webmCpuUsed} -c:a libopus -shortest \"{_outputFile}\"",
                         "mov" => string.IsNullOrWhiteSpace(cropFilter)
-                            ? $"-y -i \"{mergedMkv}\" -i \"{mergedAudio}\" -map 0:v:0 -map 1:a:0 -c:v {codec} -preset medium -crf {crf} -pix_fmt yuv420p -c:a aac -b:a 128k -shortest -f mov \"{_outputFile}\""
-                            : $"-y -i \"{mergedMkv}\" -i \"{mergedAudio}\" -map 0:v:0 -map 1:a:0 -vf \"{cropFilter}\" -c:v {codec} -preset medium -crf {crf} -pix_fmt yuv420p -c:a aac -b:a 128k -shortest -f mov \"{_outputFile}\"",
+                            ? $"-y -i \"{mergedMkv}\" -i \"{mergedAudio}\" -map 0:v:0 -map 1:a:0 -c:v {codec} -preset {preset} -crf {crf} -pix_fmt yuv420p -c:a aac -b:a 128k -shortest -f mov \"{_outputFile}\""
+                            : $"-y -i \"{mergedMkv}\" -i \"{mergedAudio}\" -map 0:v:0 -map 1:a:0 -vf \"{cropFilter}\" -c:v {codec} -preset {preset} -crf {crf} -pix_fmt yuv420p -c:a aac -b:a 128k -shortest -f mov \"{_outputFile}\"",
                         _ => string.IsNullOrWhiteSpace(cropFilter)
-                            ? $"-y -i \"{mergedMkv}\" -i \"{mergedAudio}\" -map 0:v:0 -map 1:a:0 -c:v {codec} -preset medium -crf {crf} -c:a aac -b:a 128k -shortest -movflags +faststart \"{_outputFile}\""
-                            : $"-y -i \"{mergedMkv}\" -i \"{mergedAudio}\" -map 0:v:0 -map 1:a:0 -vf \"{cropFilter}\" -c:v {codec} -preset medium -crf {crf} -c:a aac -b:a 128k -shortest -movflags +faststart \"{_outputFile}\""
+                            ? $"-y -i \"{mergedMkv}\" -i \"{mergedAudio}\" -map 0:v:0 -map 1:a:0 -c:v {codec} -preset {preset} -crf {crf} -c:a aac -b:a 128k -shortest -movflags +faststart \"{_outputFile}\""
+                            : $"-y -i \"{mergedMkv}\" -i \"{mergedAudio}\" -map 0:v:0 -map 1:a:0 -vf \"{cropFilter}\" -c:v {codec} -preset {preset} -crf {crf} -c:a aac -b:a 128k -shortest -movflags +faststart \"{_outputFile}\""
                     };
                 }
                 else
@@ -549,14 +586,14 @@ public class RecordingService : ReactiveObject
                     convertArgs = _targetFormat switch
                     {
                         "webm" => string.IsNullOrWhiteSpace(cropFilter)
-                            ? $"-y -i \"{mergedMkv}\" -c:v libvpx-vp9 -crf 25 -b:v 0 \"{_outputFile}\""
-                            : $"-y -i \"{mergedMkv}\" -vf \"{cropFilter}\" -c:v libvpx-vp9 -crf 25 -b:v 0 \"{_outputFile}\"",
+                            ? $"-y -i \"{mergedMkv}\" -c:v libvpx-vp9 -crf {webmCrf} -b:v 0 -cpu-used {webmCpuUsed} \"{_outputFile}\""
+                            : $"-y -i \"{mergedMkv}\" -vf \"{cropFilter}\" -c:v libvpx-vp9 -crf {webmCrf} -b:v 0 -cpu-used {webmCpuUsed} \"{_outputFile}\"",
                         "mov" => string.IsNullOrWhiteSpace(cropFilter)
-                            ? $"-y -i \"{mergedMkv}\" -c:v {codec} -preset medium -crf {crf} -pix_fmt yuv420p -f mov \"{_outputFile}\""
-                            : $"-y -i \"{mergedMkv}\" -vf \"{cropFilter}\" -c:v {codec} -preset medium -crf {crf} -pix_fmt yuv420p -f mov \"{_outputFile}\"",
+                            ? $"-y -i \"{mergedMkv}\" -c:v {codec} -preset {preset} -crf {crf} -pix_fmt yuv420p -f mov \"{_outputFile}\""
+                            : $"-y -i \"{mergedMkv}\" -vf \"{cropFilter}\" -c:v {codec} -preset {preset} -crf {crf} -pix_fmt yuv420p -f mov \"{_outputFile}\"",
                         _ => string.IsNullOrWhiteSpace(cropFilter)
-                            ? $"-y -i \"{mergedMkv}\" -c:v {codec} -preset medium -crf {crf} -movflags +faststart \"{_outputFile}\""
-                            : $"-y -i \"{mergedMkv}\" -vf \"{cropFilter}\" -c:v {codec} -preset medium -crf {crf} -movflags +faststart \"{_outputFile}\""
+                            ? $"-y -i \"{mergedMkv}\" -c:v {codec} -preset {preset} -crf {crf} -movflags +faststart \"{_outputFile}\""
+                            : $"-y -i \"{mergedMkv}\" -vf \"{cropFilter}\" -c:v {codec} -preset {preset} -crf {crf} -movflags +faststart \"{_outputFile}\""
                     };
                 }
 
