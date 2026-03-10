@@ -171,7 +171,6 @@ public partial class SnipWindowViewModel
     private CancellationTokenSource? _autoDetectCts;
     private Task? _autoDetectTask;
     private GimmeCapture.Services.OCR.PaddleOCREngine? _sharedOcrEngine;
-    private SystemAudioTranscriptionService? _audioTranscriptionService;
 
     public void StartAutoDetectLoop()
     {
@@ -196,14 +195,13 @@ public partial class SnipWindowViewModel
         {
             try
             {
-                bool hasAudioPanel = UserSelections.Any(s => s.IsAudioPanel);
-                await Task.Delay(hasAudioPanel ? 450 : 1500, token);
+                await Task.Delay(1500, token);
 
-                var activeSections = UserSelections.Where(s => s.IsAutoDetectEnabled || s.IsAudioPanel).ToList();
+                var activeSections = UserSelections.Where(s => s.IsAutoDetectEnabled).ToList();
                 if (activeSections.Count == 0) continue;
                 if (_mainVm == null || CurrentMode != SnipMode.Translation) continue;
 
-                bool hasVisualSections = activeSections.Any(s => !s.IsAudioPanel);
+                bool hasVisualSections = activeSections.Any();
                 if (hasVisualSections)
                 {
                     bool isOcrReady = await _mainVm.AIResourceService.EnsureOCRAsync();
@@ -234,11 +232,7 @@ public partial class SnipWindowViewModel
                     if (token.IsCancellationRequested) break;
                     try
                     {
-                        if (sel.IsAudioPanel)
-                        {
-                            await HandleAudioPanelTranscriptionAsync(sel, token);
-                            continue;
-                        }
+                        /* Audio panel logic removed */
 
                         var rect = sel.Bounds;
                         if (rect.Width <= 10 || rect.Height <= 10) continue;
@@ -358,7 +352,7 @@ public partial class SnipWindowViewModel
 
                                 if (sel.IsTranslated)
                                 {
-                                    sel.EstimatedTextHeight = sel.IsAudioPanel ? 0 : EstimateTranslatedTextHeight(sel);
+                                    sel.EstimatedTextHeight = EstimateTranslatedTextHeight(sel);
                                 }
                                 UpdateMask();
                             });
@@ -379,132 +373,7 @@ public partial class SnipWindowViewModel
         }
     }
 
-    private async Task HandleAudioPanelTranscriptionAsync(UserSelectionRect sel, CancellationToken token)
-    {
-        if (_mainVm == null) return;
-
-        _audioTranscriptionService ??= new SystemAudioTranscriptionService(_mainVm.AppSettingsService.BaseDataDirectory);
-
-        var sourceLanguage = ResolveSpeechSourceLanguage();
-        var autoPreferredLanguage = ResolveSpeechAutoPreferredLanguage();
-        string originalText = await _audioTranscriptionService.CaptureAndTranscribeAsync(
-            TimeSpan.FromSeconds(4), sourceLanguage, autoPreferredLanguage, token);
-
-        if (string.IsNullOrWhiteSpace(originalText))
-        {
-            string status = _audioTranscriptionService.LastStatus;
-            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
-            {
-                sel.OriginalText = string.IsNullOrWhiteSpace(status) ? "Listening..." : status;
-                sel.TranslatedText = string.Empty;
-                sel.IsTranslated = false;
-                if (sel.InferredFontSize < 18) sel.InferredFontSize = 18;
-                sel.EstimatedTextHeight = 0;
-            });
-            return;
-        }
-
-        if (string.Equals(originalText, sel.OriginalText, StringComparison.Ordinal))
-        {
-            return;
-        }
-
-        if (_translationService == null)
-        {
-            _translationService = new TranslationService(_mainVm.AIResourceService, _mainVm.AppSettingsService, _mainVm.MarianMTService);
-        }
-
-        // Keep audio translation path consistent with visual translation path.
-        // Without this sync, audio mode may reuse stale language settings.
-        _mainVm.AppSettingsService.Settings.TargetLanguage = _mainVm.TargetLanguage;
-        _mainVm.AppSettingsService.Settings.SourceLanguage = _mainVm.SourceLanguage;
-
-        OCRLanguage translationSourceLanguage = ResolveSpeechTranslationSourceLanguage(sourceLanguage, originalText);
-        string translatedText = await _translationService.TranslatePlainTextAsync(originalText, translationSourceLanguage, token);
-        bool hasValidTranslation = !string.IsNullOrWhiteSpace(translatedText);
-
-        await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
-        {
-            sel.LastOcrText = originalText;
-            sel.OriginalText = originalText;
-            sel.TranslatedText = hasValidTranslation ? translatedText : string.Empty;
-            sel.IsTranslated = hasValidTranslation;
-            if (sel.InferredFontSize < 18) sel.InferredFontSize = 18;
-            sel.EstimatedTextHeight = 0;
-            UpdateMask();
-        });
-    }
-
-    private OCRLanguage ResolveSpeechSourceLanguage()
-    {
-        if (_mainVm == null) return OCRLanguage.Auto;
-        return _mainVm.SourceLanguage;
-    }
-
-    private OCRLanguage ResolveSpeechAutoPreferredLanguage()
-    {
-        if (_mainVm == null) return OCRLanguage.Auto;
-        if (_mainVm.SourceLanguage != OCRLanguage.Auto) return _mainVm.SourceLanguage;
-
-        return _mainVm.TargetLanguage switch
-        {
-            TranslationLanguage.TraditionalChinese => OCRLanguage.TraditionalChinese,
-            TranslationLanguage.SimplifiedChinese => OCRLanguage.SimplifiedChinese,
-            TranslationLanguage.Japanese => OCRLanguage.Japanese,
-            TranslationLanguage.Korean => OCRLanguage.Korean,
-            _ => OCRLanguage.Auto
-        };
-    }
-
-    private OCRLanguage ResolveSpeechTranslationSourceLanguage(OCRLanguage configuredSourceLanguage, string text)
-    {
-        if (_audioTranscriptionService == null)
-        {
-            return configuredSourceLanguage;
-        }
-
-        OCRLanguage detected = _audioTranscriptionService.LastDetectedLanguage;
-        if (configuredSourceLanguage == OCRLanguage.Auto && detected != OCRLanguage.Auto)
-        {
-            return detected;
-        }
-
-        // If user forced a CJK source but transcript is mainly Latin, prefer detected language.
-        if ((configuredSourceLanguage == OCRLanguage.TraditionalChinese
-             || configuredSourceLanguage == OCRLanguage.SimplifiedChinese
-             || configuredSourceLanguage == OCRLanguage.Japanese
-             || configuredSourceLanguage == OCRLanguage.Korean)
-            && IsLikelyLatinText(text)
-            && detected != OCRLanguage.Auto)
-        {
-            return detected;
-        }
-
-        return configuredSourceLanguage;
-    }
-
-    private static bool IsLikelyLatinText(string text)
-    {
-        if (string.IsNullOrWhiteSpace(text)) return false;
-
-        int latin = 0;
-        int cjk = 0;
-        foreach (char ch in text)
-        {
-            if ((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z'))
-            {
-                latin++;
-            }
-            else if ((ch >= '\u4E00' && ch <= '\u9FFF')
-                     || (ch >= '\u3040' && ch <= '\u30FF')
-                     || (ch >= '\uAC00' && ch <= '\uD7AF'))
-            {
-                cjk++;
-            }
-        }
-
-        return latin > 0 && latin >= (cjk * 2 + 2);
-    }
+    /* Speech helper methods removed */
 
     private Geometry _maskGeometry = new GeometryGroup();
     public Geometry MaskGeometry
@@ -715,19 +584,10 @@ public partial class SnipWindowViewModel
         set 
         {
             this.RaiseAndSetIfChanged(ref _currentTranslationTool, value);
-            if (value == TranslationTool.Audio)
-            {
-                EnsureAudioTranslationBox();
-            }
-            else if (value == TranslationTool.Single || value == TranslationTool.Multi)
-            {
-                CloseAudioTranslationBoxes();
-            }
             this.RaisePropertyChanged(nameof(IsTranslationSelectionActive));
             this.RaisePropertyChanged(nameof(IsTranslationCursorMode));
             this.RaisePropertyChanged(nameof(IsTranslationSingleMode));
             this.RaisePropertyChanged(nameof(IsTranslationMultiMode));
-            this.RaisePropertyChanged(nameof(IsTranslationAudioMode));
             this.RaisePropertyChanged(nameof(TranslateAllHotkey));
             this.RaisePropertyChanged(nameof(ScanAllHotkey));
             this.RaisePropertyChanged(nameof(ToggleSelectHotkey));
@@ -743,7 +603,7 @@ public partial class SnipWindowViewModel
         get => CurrentTranslationTool == TranslationTool.Single || CurrentTranslationTool == TranslationTool.Multi;
         set 
         {
-            if (value && (CurrentTranslationTool == TranslationTool.Cursor || CurrentTranslationTool == TranslationTool.Audio))
+            if (value && CurrentTranslationTool == TranslationTool.Cursor)
                 CurrentTranslationTool = TranslationTool.Single;
             else if (!value)
                 CurrentTranslationTool = TranslationTool.Cursor;
@@ -768,22 +628,7 @@ public partial class SnipWindowViewModel
         set { if (value) CurrentTranslationTool = TranslationTool.Multi; }
     }
 
-    public bool IsTranslationAudioMode
-    {
-        get => CurrentTranslationTool == TranslationTool.Audio;
-        set
-        {
-            if (value)
-            {
-                CurrentTranslationTool = TranslationTool.Audio;
-            }
-            else if (CurrentTranslationTool == TranslationTool.Audio)
-            {
-                // Allow toggling off audio mode without exposing text selection tools.
-                CurrentTranslationTool = TranslationTool.Single;
-            }
-        }
-    }
+    /* Audio mode property removed */
 
     private void EnsureAudioTranslationBox()
     {

@@ -84,7 +84,6 @@
   "ModuleSAM2Description": "Segment Anything Model v2，用於智慧物體選取與去背。",
   "ModuleOCRDescription": "PaddleOCR v5 模型，用於即時文字偵測與識別。",
   "ModuleMarianMTDescription": "MarianMT 翻譯模型，專為完全離線環境下的日翻中優化。",
-  "ModuleVoskDescription": "Vosk 離線語音辨識模型，用於系統音訊即時轉文字。",
   "Installed": "已安裝",
   "NotInstalled": "未安裝",
   "Install": "安裝",
@@ -251,7 +250,6 @@
   "TranslateModeCursor": "一般模式",
   "TranslateModeSingle": "單選模式",
   "TranslateModeMulti": "多選模式",
-  "TranslateModeAudio": "音訊模式",
   "MenuPinTranslation": "釘選翻譯結果",
   "CopyTranslation": "複製翻譯文字",
   "CaptureModeTranslation": "擷取模式：翻譯",
@@ -261,7 +259,3 @@
   "StatusTranslateFailedAcceptable": "翻譯品質未達標準",
   "ToggleOcrResult": "除錯模式: 顯示OCR結果"
 }
-
-
-
-

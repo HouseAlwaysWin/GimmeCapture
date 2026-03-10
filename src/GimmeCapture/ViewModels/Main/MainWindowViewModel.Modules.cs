@@ -123,65 +123,12 @@ public partial class MainWindowViewModel
             RemoveCommand = ReactiveCommand.CreateFromTask(() => RemoveModuleAsync("MarianMT"))
         };
 
-        // Vosk STT Module
-        var vosk = new ModuleItem("Vosk STT", "ModuleVoskDescription")
-        {
-            HasVariants = true,
-            Variants = new ObservableCollection<string>(new[]
-            {
-                nameof(OCRLanguage.Japanese),
-                nameof(OCRLanguage.TraditionalChinese),
-                nameof(OCRLanguage.English),
-                nameof(OCRLanguage.Korean)
-            }),
-            SelectedVariant = nameof(OCRLanguage.Japanese),
-            IsInstalled = AIResourceService.IsVoskReady(OCRLanguage.Japanese),
-            InstallCommand = ReactiveCommand.CreateFromTask(() => InstallModuleAsync("Vosk")),
-            CancelCommand = ReactiveCommand.CreateFromTask(() => CancelModuleAsync("Vosk")),
-            RemoveCommand = ReactiveCommand.CreateFromTask(() => RemoveModuleAsync("Vosk"))
-        };
-
-        vosk.WhenAnyValue(x => x.SelectedVariant)
-            .Subscribe(v =>
-            {
-                if (TryParseVoskLanguage(v, out var lang))
-                {
-                    vosk.IsInstalled = AIResourceService.IsVoskReady(lang);
-                }
-            });
-        
-        ResourceQueue.ObserveStatus("MarianMT")
-            .ObserveOn(RxApp.MainThreadScheduler)
-            .Subscribe(status => 
-            {
-                marian.IsPending = status == QueueItemStatus.Pending;
-                marian.IsProcessing = status == QueueItemStatus.Downloading;
-                marian.HasError = status == QueueItemStatus.Failed;
-                if (status == QueueItemStatus.Failed) marian.ErrorMessage = AIResourceService.LastErrorMessage;
-                if (status == QueueItemStatus.Completed) marian.IsInstalled = AIResourceService.IsNmtReady();
-            });
-
-        ResourceQueue.ObserveStatus("Vosk")
-            .ObserveOn(RxApp.MainThreadScheduler)
-            .Subscribe(status =>
-            {
-                vosk.IsPending = status == QueueItemStatus.Pending;
-                vosk.IsProcessing = status == QueueItemStatus.Downloading;
-                vosk.HasError = status == QueueItemStatus.Failed;
-                if (status == QueueItemStatus.Failed) vosk.ErrorMessage = AIResourceService.LastErrorMessage;
-                if (status == QueueItemStatus.Completed && TryParseVoskLanguage(vosk.SelectedVariant, out var lang))
-                {
-                    vosk.IsInstalled = AIResourceService.IsVoskReady(lang);
-                }
-            });
-
         AIResourceService.WhenAnyValue(x => x.DownloadProgress)
             .Subscribe(p => {
                 if (aiCore.IsProcessing) aiCore.Progress = p;
                 if (sam2.IsProcessing) sam2.Progress = p;
                 if (ocr.IsProcessing) ocr.Progress = p;
                 if (marian.IsProcessing) marian.Progress = p;
-                if (vosk.IsProcessing) vosk.Progress = p;
             });
 
         ffmpeg.UpdateDescription();
@@ -189,14 +136,12 @@ public partial class MainWindowViewModel
         sam2.UpdateDescription();
         ocr.UpdateDescription();
         marian.UpdateDescription();
-        vosk.UpdateDescription();
 
         Modules.Add(ffmpeg);
         Modules.Add(aiCore);
         Modules.Add(sam2);
         Modules.Add(ocr);
         Modules.Add(marian);
-        Modules.Add(vosk);
     }
 
     public async Task InstallModuleAsync(string type)
@@ -207,8 +152,7 @@ public partial class MainWindowViewModel
                 (m.Name == "ONNX Runtime & U2Net" && type == "AICore") ||
                 (m.Name == "SAM2 Model" && type == "SAM2") ||
                 (m.Name == "PaddleOCR v5" && type == "OCR") ||
-                (m.Name == "MarianMT" && type == "MarianMT") ||
-                (m.Name == "Vosk STT" && type == "Vosk"))
+                (m.Name == "MarianMT" && type == "MarianMT"))
             {
                 m.HasError = false;
                 m.ErrorMessage = "";
@@ -235,16 +179,6 @@ public partial class MainWindowViewModel
         else if (type == "MarianMT")
         {
             await ResourceQueue.EnqueueAsync("MarianMT", (ct) => AIResourceService.EnsureNmtAsync(ct));
-        }
-        else if (type == "Vosk")
-        {
-            var voskModule = Modules.FirstOrDefault(m => m.Name == "Vosk STT");
-            OCRLanguage language = OCRLanguage.Japanese;
-            if (voskModule != null && TryParseVoskLanguage(voskModule.SelectedVariant, out var parsed))
-            {
-                language = parsed;
-            }
-            await ResourceQueue.EnqueueAsync("Vosk", (ct) => AIResourceService.EnsureVoskAsync(language, ct));
         }
     }
 
@@ -295,16 +229,6 @@ public partial class MainWindowViewModel
             {
                 AIResourceService.RemoveNmtResources();
             }
-            else if (type == "Vosk")
-            {
-                var voskModule = Modules.FirstOrDefault(m => m.Name == "Vosk STT");
-                OCRLanguage language = OCRLanguage.Japanese;
-                if (voskModule != null && TryParseVoskLanguage(voskModule.SelectedVariant, out var parsed))
-                {
-                    language = parsed;
-                }
-                AIResourceService.RemoveVoskResources(language);
-            }
             
             foreach (var m in Modules)
             {
@@ -313,20 +237,12 @@ public partial class MainWindowViewModel
                 if (m.Name == "SAM2 Model") m.IsInstalled = AIResourceService.IsSAM2Ready(_settingsService.Settings.SelectedSAM2Variant);
                 if (m.Name == "PaddleOCR v5") m.IsInstalled = AIResourceService.IsOCRReady();
                 if (m.Name == "MarianMT") m.IsInstalled = AIResourceService.IsNmtReady();
-                if (m.Name == "Vosk STT" && TryParseVoskLanguage(m.SelectedVariant, out var lang)) m.IsInstalled = AIResourceService.IsVoskReady(lang);
             }
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"Failed to remove module {type}: {ex}");
         }
-    }
-
-    private static bool TryParseVoskLanguage(string? variant, out OCRLanguage language)
-    {
-        language = OCRLanguage.Japanese;
-        if (string.IsNullOrWhiteSpace(variant)) return false;
-        return Enum.TryParse(variant, out language);
     }
 
     public class ModuleItem : ReactiveObject

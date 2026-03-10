@@ -103,10 +103,10 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     };
 
     // Translation mode specific hotkeys
-    public string TranslateAllHotkey => IsTranslationAudioMode ? string.Empty : (_mainVm?.Translate_TranslateAll ?? "Enter");
-    public string ScanAllHotkey => IsTranslationAudioMode ? string.Empty : (_mainVm?.Translate_ScanAll ?? "S");
+    public string TranslateAllHotkey => _mainVm?.Translate_TranslateAll ?? "Enter";
+    public string ScanAllHotkey => _mainVm?.Translate_ScanAll ?? "S";
     public string ClearAllHotkey => _mainVm?.Translate_ClearAll ?? "Delete";
-    public string ToggleSelectHotkey => IsTranslationAudioMode ? string.Empty : (_mainVm?.Translate_ToggleSelect ?? "Tab");
+    public string ToggleSelectHotkey => _mainVm?.Translate_ToggleSelect ?? "Tab";
     public string AutoDetectHotkey => _mainVm?.Translate_AutoDetect ?? "D";
     public string ModeCursorHotkey => _mainVm?.Translate_ModeCursor ?? "D1";
     public string ModeSingleHotkey => _mainVm?.Translate_ModeSingle ?? "D2";
@@ -389,7 +389,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
                 this.RaisePropertyChanged(nameof(ClearAllTooltip));
                 this.RaisePropertyChanged(nameof(ToggleSelectTooltip));
                 this.RaisePropertyChanged(nameof(AutoDetectTooltip));
-                this.RaisePropertyChanged(nameof(ModeAudioTooltip));
+                this.RaisePropertyChanged(nameof(ModeMultiTooltip));
                 this.RaisePropertyChanged(nameof(ToggleToolbarTooltip));
                 this.RaisePropertyChanged(nameof(InputAudioStateText));
                 this.RaisePropertyChanged(nameof(OutputAudioStateText));
@@ -554,7 +554,6 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     {
         _audioMeterTimer.Stop();
         _audioLevelMonitor.Dispose();
-        _audioTranscriptionService?.Dispose();
         _disposables.Dispose();
         _sam2Service?.Dispose();
         _recordTimer?.Stop();

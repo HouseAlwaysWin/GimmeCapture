@@ -93,11 +93,7 @@ public partial class SnipWindowViewModel
                 if (token.IsCancellationRequested) break;
                 // 用戶點擊按鈕時，無論是否翻譯過都強制重新翻譯
 
-                if (sel.IsAudioPanel)
-                {
-                    await HandleAudioPanelTranscriptionAsync(sel, token);
-                    continue;
-                }
+
 
                 IsCapturing = true;
                 await Task.Delay(50); // 等待 UI 隱藏
@@ -146,7 +142,7 @@ public partial class SnipWindowViewModel
 
                     if (sel.IsTranslated)
                     {
-                        sel.EstimatedTextHeight = sel.IsAudioPanel ? 0 : EstimateTranslatedTextHeight(sel);
+                        sel.EstimatedTextHeight = EstimateTranslatedTextHeight(sel);
                     }
 
                     // V8: 翻譯後重新整理遮罩和 Win32 Region
