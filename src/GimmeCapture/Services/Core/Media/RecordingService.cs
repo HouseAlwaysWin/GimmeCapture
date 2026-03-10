@@ -99,7 +99,10 @@ public class RecordingService : ReactiveObject
         {
             if (Directory.Exists(_tempDir)) Directory.Delete(_tempDir, true);
         }
-        catch { /* ignore */ }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Failed to clear temp dir '{_tempDir}': {ex.Message}");
+        }
         Directory.CreateDirectory(_tempDir);
 
         return await StartSegmentAsync();
@@ -153,7 +156,7 @@ public class RecordingService : ReactiveObject
             _audioWriter = new WaveFileWriter(audioSegmentPath, _audioCapture.WaveFormat);
             _audioCapture.DataAvailable += (_, e) =>
             {
-                try { _audioWriter?.Write(e.Buffer, 0, e.BytesRecorded); } catch { }
+                TryWriteAudioBuffer(e.Buffer, e.BytesRecorded);
             };
             _audioCapture.StartRecording();
             return true;
@@ -168,11 +171,59 @@ public class RecordingService : ReactiveObject
 
     private void StopAudioCapture()
     {
-        try { _audioCapture?.StopRecording(); } catch { }
-        try { _audioCapture?.Dispose(); } catch { }
-        try { _audioWriter?.Dispose(); } catch { }
+        try
+        {
+            _audioCapture?.StopRecording();
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Stop loopback capture failed: {ex.Message}");
+        }
+        finally
+        {
+            DisposeAudioResources();
+        }
+    }
+
+    private void DisposeAudioResources()
+    {
+        Exception? firstException = null;
+
+        TryExecute("Dispose loopback capture", () => _audioCapture?.Dispose());
+        TryExecute("Dispose wave writer", () => _audioWriter?.Dispose());
+
         _audioCapture = null;
         _audioWriter = null;
+
+        if (firstException != null)
+        {
+            Debug.WriteLine($"Audio cleanup completed with errors: {firstException.Message}");
+        }
+
+        void TryExecute(string action, Action operation)
+        {
+            try
+            {
+                operation();
+            }
+            catch (Exception ex)
+            {
+                firstException ??= ex;
+                Debug.WriteLine($"{action} failed: {ex.Message}");
+            }
+        }
+    }
+
+    private void TryWriteAudioBuffer(byte[] buffer, int bytesRecorded)
+    {
+        try
+        {
+            _audioWriter?.Write(buffer, 0, bytesRecorded);
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Write loopback audio buffer failed: {ex.Message}");
+        }
     }
 
     private string BuildSegmentArguments(int x, int y, int w, int h, string segmentFile)
@@ -201,18 +252,7 @@ public class RecordingService : ReactiveObject
             process.Start();
 
             // Read stderr in background to prevent buffer blocking.
-            _ = Task.Run(async () =>
-            {
-                try
-                {
-                    while (!process.HasExited)
-                    {
-                        var line = await process.StandardError.ReadLineAsync();
-                        if (line != null) Debug.WriteLine($"[FFmpeg] {line}");
-                    }
-                }
-                catch { /* ignore */ }
-            });
+            _ = PumpFfmpegStderrAsync(process);
 
             // Guard against immediate start failures (invalid device/args).
             await Task.Delay(400);
@@ -230,7 +270,7 @@ public class RecordingService : ReactiveObject
         catch (Exception ex)
         {
             Debug.WriteLine($"Failed to start FFmpeg: {ex.Message}");
-            try { process.Dispose(); } catch { }
+            TryDisposeProcess(process);
             State = RecordingState.Idle;
             return false;
         }
@@ -242,6 +282,22 @@ public class RecordingService : ReactiveObject
 
         await StopCurrentSegmentAsync();
         State = RecordingState.Paused;
+    }
+
+    private static async Task PumpFfmpegStderrAsync(Process process)
+    {
+        try
+        {
+            while (!process.HasExited)
+            {
+                var line = await process.StandardError.ReadLineAsync();
+                if (line != null) Debug.WriteLine($"[FFmpeg] {line}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"FFmpeg stderr pump stopped: {ex.Message}");
+        }
     }
 
     public async Task ResumeAsync()
@@ -320,9 +376,9 @@ public class RecordingService : ReactiveObject
             process.StandardInput.WriteLine("q");
             process.StandardInput.Flush();
         }
-        catch
+        catch (Exception ex)
         {
-            // stdin might be unavailable/closed; fallback is timeout+kill.
+            Debug.WriteLine($"Failed to send quit command to FFmpeg: {ex.Message}");
         }
     }
 
@@ -342,12 +398,26 @@ public class RecordingService : ReactiveObject
 
     private static void TryKillProcess(Process process)
     {
-        try { process.Kill(); } catch { }
+        try
+        {
+            process.Kill();
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Failed to kill FFmpeg process: {ex.Message}");
+        }
     }
 
     private static void TryDisposeProcess(Process process)
     {
-        try { process.Dispose(); } catch { }
+        try
+        {
+            process.Dispose();
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Failed to dispose FFmpeg process: {ex.Message}");
+        }
     }
 
     private async Task FinalizeRecordingAsync()
@@ -617,48 +687,83 @@ public class RecordingService : ReactiveObject
         Exception? lastEx = null;
         for (int i = 0; i < 5; i++)
         {
-            try
+            if (TryMoveWithFallback(sourcePath, destinationPath, out lastEx))
             {
-                if (File.Exists(destinationPath))
-                {
-                    File.Delete(destinationPath);
-                }
-
-                if (TryMoveFile(sourcePath, destinationPath))
-                {
-                    return;
-                }
-
-                File.Copy(sourcePath, destinationPath, true);
-                TryDeleteFile(sourcePath);
                 return;
             }
-            catch (Exception ex)
-            {
-                lastEx = ex;
-                await Task.Delay(500);
-            }
+
+            await Task.Delay(500);
         }
 
         if (lastEx != null) throw lastEx;
     }
 
-    private static bool TryMoveFile(string sourcePath, string destinationPath)
+    private bool TryMoveWithFallback(string sourcePath, string destinationPath, out Exception? error)
+    {
+        try
+        {
+            if (File.Exists(destinationPath))
+            {
+                File.Delete(destinationPath);
+            }
+        }
+        catch (Exception ex)
+        {
+            error = ex;
+            return false;
+        }
+
+        if (TryMoveFile(sourcePath, destinationPath, out var moveError))
+        {
+            error = null;
+            return true;
+        }
+
+        if (moveError is not IOException)
+        {
+            error = moveError;
+            return false;
+        }
+
+        try
+        {
+            File.Copy(sourcePath, destinationPath, true);
+            TryDeleteFile(sourcePath);
+            error = null;
+            return true;
+        }
+        catch (Exception ex)
+        {
+            error = ex;
+            return false;
+        }
+    }
+
+    private static bool TryMoveFile(string sourcePath, string destinationPath, out Exception? error)
     {
         try
         {
             File.Move(sourcePath, destinationPath);
+            error = null;
             return true;
         }
-        catch (IOException)
+        catch (Exception ex)
         {
+            error = ex;
             return false;
         }
     }
 
     private static void TryDeleteFile(string path)
     {
-        try { File.Delete(path); } catch { }
+        try
+        {
+            File.Delete(path);
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Failed to delete file '{path}': {ex.Message}");
+        }
     }
 
     private void CleanupTempDirectory()
@@ -674,7 +779,10 @@ public class RecordingService : ReactiveObject
 
             Directory.Delete(_tempDir, true);
         }
-        catch { }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Failed to cleanup temp directory '{_tempDir}': {ex.Message}");
+        }
     }
 
     private async Task RunFfmpegProcessAsync(string arguments, string label)
@@ -707,6 +815,9 @@ public class RecordingService : ReactiveObject
             File.AppendAllText(logPath, $"[{DateTime.Now:HH:mm:ss.fff}] {message}{Environment.NewLine}");
             Debug.WriteLine($"[RecordingService] {message}");
         }
-        catch { }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[RecordingService] Failed to write log file: {ex.Message}");
+        }
     }
 }
