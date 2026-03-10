@@ -3,6 +3,7 @@ using GimmeCapture.Services.Core;
 namespace GimmeCapture.Models;
 
 public enum VideoCodec { H264, H265 }
+public enum VideoQuality { Low, Medium, High }
 public enum TranslationLanguage { TraditionalChinese, SimplifiedChinese, English, Japanese, Korean }
 public enum OCRLanguage { Auto, English, TraditionalChinese, SimplifiedChinese, Japanese, Korean }
 public enum TranslationEngine { Ollama, MarianMT }
@@ -124,6 +125,7 @@ public class AppSettings
     public string VideoSaveDirectory { get; set; } = string.Empty;
     public string RecordFormat { get; set; } = "mp4";
     public VideoCodec VideoCodec { get; set; } = VideoCodec.H264;
+    public VideoQuality VideoQuality { get; set; } = VideoQuality.Medium;
     public int RecordFPS { get; set; } = 30;
     public bool UseFixedRecordPath { get; set; }
     public string TempDirectory { get; set; } = string.Empty;

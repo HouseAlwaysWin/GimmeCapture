@@ -257,5 +257,9 @@
   "StatusTranslateNoText": "No recognizable text found",
   "StatusTranslateFailedEngine": "Translation engine returned no response",
   "StatusTranslateFailedAcceptable": "Translation quality below standard",
-  "ToggleOcrResult": "Debug Mode: Show OCR Result"
+  "ToggleOcrResult": "Debug Mode: Show OCR Result",
+  "VideoQuality": "Video Quality:",
+  "VideoQualityLow": "Low (Smallest)",
+  "VideoQualityMedium": "Medium (Balanced)",
+  "VideoQualityHigh": "High (Visually Lossless)"
 }

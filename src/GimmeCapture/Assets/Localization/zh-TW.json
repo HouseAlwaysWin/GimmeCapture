@@ -257,5 +257,9 @@
   "StatusTranslateNoText": "找不到可辨認的文字",
   "StatusTranslateFailedEngine": "翻譯引擎無回應",
   "StatusTranslateFailedAcceptable": "翻譯品質未達標準",
-  "ToggleOcrResult": "除錯模式: 顯示OCR結果"
+  "ToggleOcrResult": "除錯模式: 顯示OCR結果",
+  "VideoQuality": "輸出的畫質:",
+  "VideoQualityLow": "低 (最小檔案)",
+  "VideoQualityMedium": "中 (效能平衡)",
+  "VideoQualityHigh": "高 (高品質壓縮)"
 }

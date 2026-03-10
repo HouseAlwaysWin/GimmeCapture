@@ -424,15 +424,34 @@ public partial class MainWindowViewModel
         set => this.RaiseAndSetIfChanged(ref _videoCodec, value);
     }
 
+    private VideoQuality _videoQuality = VideoQuality.Medium;
+    public VideoQuality VideoQuality
+    {
+        get => _videoQuality;
+        set => this.RaiseAndSetIfChanged(ref _videoQuality, value);
+    }
+
     public class VideoCodecOption
     {
         public VideoCodec Value { get; set; }
         public string Name => LocalizationService.Instance[$"VideoCodec{Value}"];
     }
 
+    public class VideoQualityOption
+    {
+        public VideoQuality Value { get; set; }
+        public string Name => LocalizationService.Instance[$"VideoQuality{Value}"];
+    }
+
     public VideoCodecOption[] VideoCodecOptions { get; } = {
         new VideoCodecOption { Value = VideoCodec.H264 },
         new VideoCodecOption { Value = VideoCodec.H265 }
+    };
+
+    public VideoQualityOption[] VideoQualityOptions { get; } = {
+        new VideoQualityOption { Value = VideoQuality.Low },
+        new VideoQualityOption { Value = VideoQuality.Medium },
+        new VideoQualityOption { Value = VideoQuality.High }
     };
 
     private VideoCodecOption? _selectedVideoCodecOption;
@@ -443,6 +462,17 @@ public partial class MainWindowViewModel
         {
             this.RaiseAndSetIfChanged(ref _selectedVideoCodecOption, value);
             if (value != null) VideoCodec = value.Value;
+        }
+    }
+
+    private VideoQualityOption? _selectedVideoQualityOption;
+    public VideoQualityOption? SelectedVideoQualityOption
+    {
+        get => _selectedVideoQualityOption;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _selectedVideoQualityOption, value);
+            if (value != null) VideoQuality = value.Value;
         }
     }
 
@@ -920,6 +950,7 @@ public partial class MainWindowViewModel
             RecordFormat = settings.RecordFormat;
             VideoSaveDirectory = settings.VideoSaveDirectory;
             VideoCodec = settings.VideoCodec;
+            VideoQuality = settings.VideoQuality;
             UseFixedRecordPath = settings.UseFixedRecordPath;
             HideSnipPinDecoration = settings.HideSnipPinDecoration;
             HideSnipPinBorder = settings.HideSnipPinBorder;
@@ -988,6 +1019,7 @@ public partial class MainWindowViewModel
 
             SelectedLanguageOption = AvailableLanguages.FirstOrDefault(x => x.Value == settings.Language) ?? AvailableLanguages[0];
             SelectedVideoCodecOption = VideoCodecOptions.FirstOrDefault(x => x.Value == settings.VideoCodec);
+            SelectedVideoQualityOption = VideoQualityOptions.FirstOrDefault(x => x.Value == settings.VideoQuality);
             
             this.RaisePropertyChanged(nameof(SourceLanguage));
             this.RaisePropertyChanged(nameof(TargetLanguage));
@@ -1037,6 +1069,7 @@ public partial class MainWindowViewModel
             settings.RecordFormat = RecordFormat;
             settings.VideoSaveDirectory = VideoSaveDirectory;
             settings.VideoCodec = VideoCodec;
+            settings.VideoQuality = VideoQuality;
             settings.UseFixedRecordPath = UseFixedRecordPath;
             settings.HideSnipPinDecoration = HideSnipPinDecoration;
             settings.HideSnipPinBorder = HideSnipPinBorder;
