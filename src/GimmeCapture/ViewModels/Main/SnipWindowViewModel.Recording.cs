@@ -217,6 +217,14 @@ public partial class SnipWindowViewModel
             {
                 string? recordingPath = await ResolveRecordingFilePathAsync(_recordingService.OutputFilePath ?? _recordingService.LastRecordingPath ?? _currentRecordingPath);
 
+                System.Diagnostics.Debug.WriteLine($"[Pin] OutputFilePath={_recordingService.OutputFilePath}");
+                System.Diagnostics.Debug.WriteLine($"[Pin] LastRecordingPath={_recordingService.LastRecordingPath}");
+                System.Diagnostics.Debug.WriteLine($"[Pin] _currentRecordingPath={_currentRecordingPath}");
+                System.Diagnostics.Debug.WriteLine($"[Pin] Resolved recordingPath={recordingPath}");
+                System.Diagnostics.Debug.WriteLine($"[Pin] File.Exists={(!string.IsNullOrEmpty(recordingPath) && System.IO.File.Exists(recordingPath))}");
+                if (!string.IsNullOrEmpty(recordingPath) && System.IO.File.Exists(recordingPath))
+                    System.Diagnostics.Debug.WriteLine($"[Pin] FileSize={new System.IO.FileInfo(recordingPath).Length}");
+
                 if (string.IsNullOrEmpty(recordingPath) || !System.IO.File.Exists(recordingPath))
                 {
                     System.Diagnostics.Debug.WriteLine($"找不到錄影檔案: {recordingPath}");

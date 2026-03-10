@@ -192,8 +192,13 @@ public partial class FloatingVideoViewModel
                 
                 var filter = $"[0:v]setpts={1.0/_playbackSpeed}*PTS,fps=30,realtime[v]";
 
+                var ffArgs = $"{seekArg}-i \"{VideoPath}\" -filter_complex \"{filter}\" -map \"[v]\" -f image2pipe -vcodec rawvideo -pix_fmt bgra -s {_width}x{_height} -sws_flags fast_bilinear -loglevel error -";
+                if (generation == 1) System.Diagnostics.Debug.WriteLine($"[Playback] cmd: {ffArgs}");
+                if (generation == 1) System.Diagnostics.Debug.WriteLine($"[Playback] _ffmpegPath: {_ffmpegPath}");
+                if (generation == 1) System.Diagnostics.Debug.WriteLine($"[Playback] VideoPath exists: {File.Exists(VideoPath)}, size: {(File.Exists(VideoPath) ? new FileInfo(VideoPath).Length : 0)}");
+
                 var cmd = Cli.Wrap(_ffmpegPath)
-                    .WithArguments($"{seekArg}-i \"{VideoPath}\" -filter_complex \"{filter}\" -map \"[v]\" -f image2pipe -vcodec rawvideo -pix_fmt bgra -s {_width}x{_height} -sws_flags fast_bilinear -loglevel quiet -")
+                    .WithArguments(ffArgs)
                     .WithStandardOutputPipe(PipeTarget.ToStream(new FrameStreamWriter(this, frameSize, generation, trimEnd)));
 
                 try

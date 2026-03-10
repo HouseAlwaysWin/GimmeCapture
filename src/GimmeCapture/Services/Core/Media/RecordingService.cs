@@ -375,17 +375,8 @@ public class RecordingService : ReactiveObject
                 await File.WriteAllTextAsync(listFile, sb.ToString());
 
                 string concatArgs = $"-y -f concat -safe 0 -i \"{listFile}\" -c copy \"{mergedMkv}\"";
-
-                var concatInfo = new ProcessStartInfo
-                {
-                    FileName = _downloader.FfmpegExecutablePath,
-                    Arguments = concatArgs,
-                    UseShellExecute = false,
-                    CreateNoWindow = true
-                };
-
-                using var concatProcess = Process.Start(concatInfo);
-                if (concatProcess != null) await concatProcess.WaitForExitAsync();
+                Debug.WriteLine($"[Finalize] Concat cmd: {concatArgs}");
+                await RunFfmpegProcessAsync(concatArgs, "Concat");
             }
 
             FinalizationProgress = 30;
@@ -409,15 +400,8 @@ public class RecordingService : ReactiveObject
 
                     mergedAudio = Path.Combine(_tempDir, "merged_audio.wav");
                     string concatAudioArgs = $"-y -f concat -safe 0 -i \"{audioListFile}\" -c:a pcm_s16le \"{mergedAudio}\"";
-                    var concatAudioInfo = new ProcessStartInfo
-                    {
-                        FileName = _downloader.FfmpegExecutablePath,
-                        Arguments = concatAudioArgs,
-                        UseShellExecute = false,
-                        CreateNoWindow = true
-                    };
-                    using var concatAudioProcess = Process.Start(concatAudioInfo);
-                    if (concatAudioProcess != null) await concatAudioProcess.WaitForExitAsync();
+                    Debug.WriteLine($"[Finalize] Concat audio cmd: {concatAudioArgs}");
+                    await RunFfmpegProcessAsync(concatAudioArgs, "Concat Audio");
 
                     if (!File.Exists(mergedAudio) || new FileInfo(mergedAudio).Length <= 44)
                     {
@@ -475,31 +459,14 @@ public class RecordingService : ReactiveObject
                 }
                 else
                 {
-                    string codec = _settingsService?.Settings.VideoCodec == VideoCodec.H265 ? "libx265" : "libx264";
-                    var quality = _settingsService?.Settings.VideoQuality ?? VideoQuality.Medium;
-                    
-                    string crf = quality switch {
-                        VideoQuality.High => "18",
-                        VideoQuality.Low => (_settingsService?.Settings.VideoCodec == VideoCodec.H265 ? "32" : "28"),
-                        _ => (_settingsService?.Settings.VideoCodec == VideoCodec.H265 ? "28" : "23")
-                    };
-                    
-                    string preset = quality switch {
-                        VideoQuality.High => "slower",
-                        VideoQuality.Low => "fast",
-                        _ => "slow"
-                    };
-
-                    string tune = " -tune stillimage";
-
+                    // Mux audio into MKV - use -c:v copy (no re-encode needed, recording is already x264)
                     string mkvConvertArgs = string.IsNullOrWhiteSpace(mergedAudio)
-                        ? $"-y -i \"{mergedMkv}\" -vf \"{cropFilter}\" -c:v {codec} -preset {preset} -crf {crf}{tune} -pix_fmt yuv420p -c:a aac -b:a 128k \"{_outputFile}\""
+                        ? $"-y -i \"{mergedMkv}\" -vf \"{cropFilter}\" -c:v libx264 -preset medium -crf 23 -pix_fmt yuv420p -c:a aac -b:a 128k \"{_outputFile}\""
                         : (string.IsNullOrWhiteSpace(cropFilter)
-                            ? $"-y -i \"{mergedMkv}\" -i \"{mergedAudio}\" -map 0:v:0 -map 1:a:0 -c:v {codec} -preset {preset} -crf {crf}{tune} -c:a aac -b:a 128k -shortest \"{_outputFile}\""
-                            : $"-y -i \"{mergedMkv}\" -i \"{mergedAudio}\" -map 0:v:0 -map 1:a:0 -vf \"{cropFilter}\" -c:v {codec} -preset {preset} -crf {crf}{tune} -pix_fmt yuv420p -c:a aac -b:a 128k -shortest \"{_outputFile}\"");
-                    var mkvInfo = new ProcessStartInfo { FileName = _downloader.FfmpegExecutablePath, Arguments = mkvConvertArgs, UseShellExecute = false, CreateNoWindow = true };
-                    using var p = Process.Start(mkvInfo);
-                    if (p != null) await p.WaitForExitAsync();
+                            ? $"-y -i \"{mergedMkv}\" -i \"{mergedAudio}\" -map 0:v:0 -map 1:a:0 -c:v copy -c:a aac -b:a 128k -shortest \"{_outputFile}\""
+                            : $"-y -i \"{mergedMkv}\" -i \"{mergedAudio}\" -map 0:v:0 -map 1:a:0 -vf \"{cropFilter}\" -c:v libx264 -preset medium -crf 23 -pix_fmt yuv420p -c:a aac -b:a 128k -shortest \"{_outputFile}\"");
+                    LogToFile($"MKV convert cmd: {mkvConvertArgs}");
+                    await RunFfmpegProcessAsync(mkvConvertArgs, "MKV Convert");
                 }
 
                 FinalizationProgress = 100;
@@ -559,21 +526,7 @@ public class RecordingService : ReactiveObject
                 }
 
                 string codec = _settingsService?.Settings.VideoCodec == VideoCodec.H265 ? "libx265" : "libx264";
-                var quality = _settingsService?.Settings.VideoQuality ?? VideoQuality.Medium;
-
-                string crf = quality switch {
-                    VideoQuality.High => "18",
-                    VideoQuality.Low => (_settingsService?.Settings.VideoCodec == VideoCodec.H265 ? "32" : "28"),
-                    _ => (_settingsService?.Settings.VideoCodec == VideoCodec.H265 ? "28" : "23")
-                };
-
-                string preset = quality switch {
-                    VideoQuality.High => "slower",
-                    VideoQuality.Low => "fast",
-                    _ => "slow"
-                };
-
-                string tune = " -tune stillimage";
+                string crf = _settingsService?.Settings.VideoCodec == VideoCodec.H265 ? "28" : "23";
 
                 string convertArgs;
                 if (!string.IsNullOrWhiteSpace(mergedAudio))
@@ -581,14 +534,14 @@ public class RecordingService : ReactiveObject
                     convertArgs = _targetFormat switch
                     {
                         "webm" => string.IsNullOrWhiteSpace(cropFilter)
-                            ? $"-y -i \"{mergedMkv}\" -i \"{mergedAudio}\" -map 0:v:0 -map 1:a:0 -c:v libvpx-vp9 -crf {crf} -b:v 0 -c:a libopus -preset {preset} -shortest \"{_outputFile}\""
-                            : $"-y -i \"{mergedMkv}\" -i \"{mergedAudio}\" -map 0:v:0 -map 1:a:0 -vf \"{cropFilter}\" -c:v libvpx-vp9 -crf {crf} -b:v 0 -c:a libopus -preset {preset} -shortest \"{_outputFile}\"",
+                            ? $"-y -i \"{mergedMkv}\" -i \"{mergedAudio}\" -map 0:v:0 -map 1:a:0 -c:v libvpx-vp9 -crf 25 -b:v 0 -c:a libopus -shortest \"{_outputFile}\""
+                            : $"-y -i \"{mergedMkv}\" -i \"{mergedAudio}\" -map 0:v:0 -map 1:a:0 -vf \"{cropFilter}\" -c:v libvpx-vp9 -crf 25 -b:v 0 -c:a libopus -shortest \"{_outputFile}\"",
                         "mov" => string.IsNullOrWhiteSpace(cropFilter)
-                            ? $"-y -i \"{mergedMkv}\" -i \"{mergedAudio}\" -map 0:v:0 -map 1:a:0 -c:v {codec} -preset {preset} -crf {crf}{tune} -pix_fmt yuv420p -c:a aac -b:a 128k -shortest -f mov \"{_outputFile}\""
-                            : $"-y -i \"{mergedMkv}\" -i \"{mergedAudio}\" -map 0:v:0 -map 1:a:0 -vf \"{cropFilter}\" -c:v {codec} -preset {preset} -crf {crf}{tune} -pix_fmt yuv420p -c:a aac -b:a 128k -shortest -f mov \"{_outputFile}\"",
+                            ? $"-y -i \"{mergedMkv}\" -i \"{mergedAudio}\" -map 0:v:0 -map 1:a:0 -c:v {codec} -preset medium -crf {crf} -pix_fmt yuv420p -c:a aac -b:a 128k -shortest -f mov \"{_outputFile}\""
+                            : $"-y -i \"{mergedMkv}\" -i \"{mergedAudio}\" -map 0:v:0 -map 1:a:0 -vf \"{cropFilter}\" -c:v {codec} -preset medium -crf {crf} -pix_fmt yuv420p -c:a aac -b:a 128k -shortest -f mov \"{_outputFile}\"",
                         _ => string.IsNullOrWhiteSpace(cropFilter)
-                            ? $"-y -i \"{mergedMkv}\" -i \"{mergedAudio}\" -map 0:v:0 -map 1:a:0 -c:v {codec} -preset {preset} -crf {crf}{tune} -c:a aac -b:a 128k -shortest -movflags +faststart \"{_outputFile}\""
-                            : $"-y -i \"{mergedMkv}\" -i \"{mergedAudio}\" -map 0:v:0 -map 1:a:0 -vf \"{cropFilter}\" -c:v {codec} -preset {preset} -crf {crf}{tune} -c:a aac -b:a 128k -shortest -movflags +faststart \"{_outputFile}\""
+                            ? $"-y -i \"{mergedMkv}\" -i \"{mergedAudio}\" -map 0:v:0 -map 1:a:0 -c:v {codec} -preset medium -crf {crf} -c:a aac -b:a 128k -shortest -movflags +faststart \"{_outputFile}\""
+                            : $"-y -i \"{mergedMkv}\" -i \"{mergedAudio}\" -map 0:v:0 -map 1:a:0 -vf \"{cropFilter}\" -c:v {codec} -preset medium -crf {crf} -c:a aac -b:a 128k -shortest -movflags +faststart \"{_outputFile}\""
                     };
                 }
                 else
@@ -596,20 +549,20 @@ public class RecordingService : ReactiveObject
                     convertArgs = _targetFormat switch
                     {
                         "webm" => string.IsNullOrWhiteSpace(cropFilter)
-                            ? $"-y -i \"{mergedMkv}\" -c:v libvpx-vp9 -crf {crf} -b:v 0 -preset {preset} \"{_outputFile}\""
-                            : $"-y -i \"{mergedMkv}\" -vf \"{cropFilter}\" -c:v libvpx-vp9 -crf {crf} -b:v 0 -preset {preset} \"{_outputFile}\"",
+                            ? $"-y -i \"{mergedMkv}\" -c:v libvpx-vp9 -crf 25 -b:v 0 \"{_outputFile}\""
+                            : $"-y -i \"{mergedMkv}\" -vf \"{cropFilter}\" -c:v libvpx-vp9 -crf 25 -b:v 0 \"{_outputFile}\"",
                         "mov" => string.IsNullOrWhiteSpace(cropFilter)
-                            ? $"-y -i \"{mergedMkv}\" -c:v {codec} -preset {preset} -crf {crf}{tune} -pix_fmt yuv420p -f mov \"{_outputFile}\""
-                            : $"-y -i \"{mergedMkv}\" -vf \"{cropFilter}\" -c:v {codec} -preset {preset} -crf {crf}{tune} -pix_fmt yuv420p -f mov \"{_outputFile}\"",
+                            ? $"-y -i \"{mergedMkv}\" -c:v {codec} -preset medium -crf {crf} -pix_fmt yuv420p -f mov \"{_outputFile}\""
+                            : $"-y -i \"{mergedMkv}\" -vf \"{cropFilter}\" -c:v {codec} -preset medium -crf {crf} -pix_fmt yuv420p -f mov \"{_outputFile}\"",
                         _ => string.IsNullOrWhiteSpace(cropFilter)
-                            ? $"-y -i \"{mergedMkv}\" -c:v {codec} -preset {preset} -crf {crf}{tune} -movflags +faststart \"{_outputFile}\""
-                            : $"-y -i \"{mergedMkv}\" -vf \"{cropFilter}\" -c:v {codec} -preset {preset} -crf {crf}{tune} -movflags +faststart \"{_outputFile}\""
+                            ? $"-y -i \"{mergedMkv}\" -c:v {codec} -preset medium -crf {crf} -movflags +faststart \"{_outputFile}\""
+                            : $"-y -i \"{mergedMkv}\" -vf \"{cropFilter}\" -c:v {codec} -preset medium -crf {crf} -movflags +faststart \"{_outputFile}\""
                     };
                 }
 
-                var convertInfo = new ProcessStartInfo { FileName = _downloader.FfmpegExecutablePath, Arguments = convertArgs, UseShellExecute = false, CreateNoWindow = true };
-                using (var p = Process.Start(convertInfo)) if (p != null) await p.WaitForExitAsync();
-                
+                Debug.WriteLine($"[Finalize] Convert cmd: {convertArgs}");
+                await RunFfmpegProcessAsync(convertArgs, "Convert");
+                Debug.WriteLine($"[Finalize] Output exists={File.Exists(_outputFile)}, size={( File.Exists(_outputFile) ? new FileInfo(_outputFile).Length : 0 )}");
                 FinalizationProgress = 100;
             }
         }
@@ -640,4 +593,32 @@ public class RecordingService : ReactiveObject
         catch { /* ignore */ }
     }
 
+    private async Task RunFfmpegProcessAsync(string arguments, string label)
+    {
+        var psi = new ProcessStartInfo
+        {
+            FileName = _downloader.FfmpegExecutablePath,
+            Arguments = arguments,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardError = true
+        };
+        using var proc = Process.Start(psi);
+        if (proc == null) { LogToFile($"{label}: Failed to start FFmpeg process"); return; }
+        string stderr = await proc.StandardError.ReadToEndAsync();
+        await proc.WaitForExitAsync();
+        LogToFile($"{label}: ExitCode={proc.ExitCode}");
+        if (proc.ExitCode != 0) LogToFile($"{label} STDERR: {stderr}");
+    }
+
+    private void LogToFile(string message)
+    {
+        try
+        {
+            var logPath = Path.Combine(_settingsService?.BaseDataDirectory ?? AppDomain.CurrentDomain.BaseDirectory, "recording_debug.log");
+            File.AppendAllText(logPath, $"[{DateTime.Now:HH:mm:ss.fff}] {message}{Environment.NewLine}");
+            Debug.WriteLine($"[RecordingService] {message}");
+        }
+        catch { }
+    }
 }
