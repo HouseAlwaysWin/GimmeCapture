@@ -276,48 +276,78 @@ public class RecordingService : ReactiveObject
 
     private async Task StopCurrentSegmentAsync()
     {
-        if (_ffmpegProcess == null) return;
-        
-        if (_ffmpegProcess.HasExited)
+        var process = _ffmpegProcess;
+        if (process == null) return;
+
+        if (process.HasExited)
         {
-            _ffmpegProcess.Dispose();
+            process.Dispose();
             _ffmpegProcess = null;
             return;
         }
 
         try
         {
-            // Try sending 'q' via stdin first
-            try
-            {
-                _ffmpegProcess.StandardInput.WriteLine("q");
-                _ffmpegProcess.StandardInput.Flush();
-            }
-            catch { /* stdin might be closed */ }
+            TrySendQuitCommand(process);
 
-            // With zerolatency + MKV, exit should be very fast (< 0.5s)
-            var cts = new System.Threading.CancellationTokenSource(1000);
-            try
-            {
-                await _ffmpegProcess.WaitForExitAsync(cts.Token);
-            }
-            catch (OperationCanceledException)
+            bool exitedInTime = await WaitForExitWithinAsync(process, timeoutMs: 1000);
+            if (!exitedInTime)
             {
                 Debug.WriteLine("FFmpeg did not exit gracefully, killing...");
-                try { _ffmpegProcess.Kill(); } catch { }
+                TryKillProcess(process);
             }
         }
         catch (Exception ex)
         {
             Debug.WriteLine($"Error stopping FFmpeg: {ex.Message}");
-            try { _ffmpegProcess.Kill(); } catch { }
+            TryKillProcess(process);
         }
         finally
         {
-            try { _ffmpegProcess?.Dispose(); } catch { }
-            _ffmpegProcess = null;
+            TryDisposeProcess(process);
+            if (ReferenceEquals(_ffmpegProcess, process))
+            {
+                _ffmpegProcess = null;
+            }
             StopAudioCapture();
         }
+    }
+
+    private static void TrySendQuitCommand(Process process)
+    {
+        try
+        {
+            process.StandardInput.WriteLine("q");
+            process.StandardInput.Flush();
+        }
+        catch
+        {
+            // stdin might be unavailable/closed; fallback is timeout+kill.
+        }
+    }
+
+    private static async Task<bool> WaitForExitWithinAsync(Process process, int timeoutMs)
+    {
+        using var cts = new System.Threading.CancellationTokenSource(timeoutMs);
+        try
+        {
+            await process.WaitForExitAsync(cts.Token);
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            return false;
+        }
+    }
+
+    private static void TryKillProcess(Process process)
+    {
+        try { process.Kill(); } catch { }
+    }
+
+    private static void TryDisposeProcess(Process process)
+    {
+        try { process.Dispose(); } catch { }
     }
 
     private async Task FinalizeRecordingAsync()
@@ -589,18 +619,18 @@ public class RecordingService : ReactiveObject
         {
             try
             {
-                if (File.Exists(destinationPath)) File.Delete(destinationPath);
-
-                try
+                if (File.Exists(destinationPath))
                 {
-                    File.Move(sourcePath, destinationPath);
-                }
-                catch (IOException)
-                {
-                    File.Copy(sourcePath, destinationPath, true);
-                    try { File.Delete(sourcePath); } catch { }
+                    File.Delete(destinationPath);
                 }
 
+                if (TryMoveFile(sourcePath, destinationPath))
+                {
+                    return;
+                }
+
+                File.Copy(sourcePath, destinationPath, true);
+                TryDeleteFile(sourcePath);
                 return;
             }
             catch (Exception ex)
@@ -611,6 +641,24 @@ public class RecordingService : ReactiveObject
         }
 
         if (lastEx != null) throw lastEx;
+    }
+
+    private static bool TryMoveFile(string sourcePath, string destinationPath)
+    {
+        try
+        {
+            File.Move(sourcePath, destinationPath);
+            return true;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+    }
+
+    private static void TryDeleteFile(string path)
+    {
+        try { File.Delete(path); } catch { }
     }
 
     private void CleanupTempDirectory()
