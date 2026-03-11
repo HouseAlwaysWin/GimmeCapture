@@ -132,7 +132,7 @@ public partial class RecordingService
                     ? $"-y -i \"{mergedMkv}\" -i \"{mergedAudio}\" -map 0:v:0 -map 1:a:0 -c:v copy -c:a aac -b:a 128k -shortest \"{_outputFile}\""
                     : $"-y -i \"{mergedMkv}\" -i \"{mergedAudio}\" -map 0:v:0 -map 1:a:0 -vf \"{cropFilter}\" -c:v {options.Codec} -preset {options.Preset} -crf {options.Crf} -pix_fmt yuv420p -c:a aac -b:a 128k -shortest \"{_outputFile}\"");
 
-            LogToFile($"MKV convert cmd: {mkvConvertArgs}");
+            Debug.WriteLine($"[Finalize] MKV convert cmd: {mkvConvertArgs}");
             await RunFfmpegProcessAsync(mkvConvertArgs, "MKV Convert");
         }
 
@@ -387,15 +387,15 @@ public partial class RecordingService
                 .WithValidation(CommandResultValidation.None)
                 .ExecuteBufferedAsync();
 
-            LogToFile($"{label}: ExitCode={result.ExitCode}");
-            if (result.ExitCode != 0 && !string.IsNullOrWhiteSpace(result.StandardError))
+            Debug.WriteLine($"[Finalize] {label}: ExitCode={result.ExitCode}");
+            if (result.ExitCode != 0)
             {
-                LogToFile($"{label} STDERR: {result.StandardError}");
+                throw new Exception($"{label} FFmpeg failed with exit code {result.ExitCode}. STDERR: {result.StandardError}");
             }
         }
         catch (Exception ex)
         {
-            LogToFile($"{label}: Failed to run FFmpeg via CliWrap. {ex.Message}");
+            LogToFile($"{label}: FFmpeg error: {ex.Message}");
             throw;
         }
     }
