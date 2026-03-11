@@ -14,7 +14,7 @@
                 <Setter Property="Width" Value="{Binding SelectionIconSize}"/>
                 <Setter Property="Height" Value="{Binding SelectionIconSize}"/>
                 <Setter Property="Fill" Value="{Binding DecorationBrush}"/>
-                <Setter Property="Margin" Value="{Binding SelectionThickness, Converter={StaticResource DynamicThicknessConverter}, ConverterParameter=4}"/>
+                <Setter Property="Margin" Value="{Binding SelectionThickness, Converter={StaticResource DynamicThicknessConverter}, ConverterParameter=1.5}"/>
             </Style>
         </Panel.Styles>
 

@@ -262,14 +262,14 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
         get
         {
             // If decorations are hidden, we just need the standard margin (e.g. 10 for shadow/resize handles).
-            // If they are visible, we need enough space for the wings (WingWidth).
-            double hPad = HidePinDecoration ? 10 : System.Math.Max(10, WingWidth);
-            double vPad = 25;
+            // If they are visible, we need enough space for the wings (WingWidth) + border + buffer
+            double hPad = HidePinDecoration ? 10 : (WingWidth + SelectionThickness + 10);
+            double vPad = 28; // Increased from 25
             
             // RESERVE space for floating toolbar if visible
             // Two rows: Toolbar Height(32*2) + Spacing(4) + Bottom Margin(10) = 78px
             double bottomPad = vPad;
-            if (ShowToolbar) bottomPad += 78;
+            if (ShowToolbar) bottomPad += 15;
             
             // 裁切面板額外空間：拉桿(28) + 時間輸入(28) + spacing + padding ≈ 75px
             if (IsTrimmingMode) bottomPad += 75;

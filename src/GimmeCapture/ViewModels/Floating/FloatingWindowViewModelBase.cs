@@ -50,8 +50,17 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
     public double BorderThickness
     {
         get => _borderThickness;
-        set => this.RaiseAndSetIfChanged(ref _borderThickness, value);
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _borderThickness, value);
+            this.RaisePropertyChanged(nameof(SelectionThickness));
+            this.RaisePropertyChanged(nameof(SelectionBorderOuterMargin));
+        }
     }
+
+    public double SelectionThickness => BorderThickness;
+
+    public Thickness SelectionBorderOuterMargin => new(-SelectionThickness, -SelectionThickness, -SelectionThickness, -SelectionThickness);
 
     private bool _hidePinDecoration = false;
     public bool HidePinDecoration

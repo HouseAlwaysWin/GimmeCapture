@@ -200,8 +200,8 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
     {
         get
         {
-            double hPad = HidePinDecoration ? 10 : System.Math.Max(10, WingWidth);
-            double topPad = 45;
+            double hPad = HidePinDecoration ? 10 : (WingWidth + SelectionThickness + 10);
+            double topPad = 48; // Increased from 45
             double baseBottomPad = 15;
             double bottomPad = baseBottomPad;
             if (ShowToolbar) bottomPad += 45;

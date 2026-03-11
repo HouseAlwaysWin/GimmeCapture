@@ -262,6 +262,9 @@ public partial class SnipWindowViewModel
                         new ClipboardService(),
                         _mainVm?.AppSettingsService);
 
+                    videoVm.WingScale = WingScale;
+                    videoVm.CornerIconScale = CornerIconScale;
+
                     // Set Save Actions
                     videoVm.PickSaveFileAction = PickSaveFileAction;
                     videoVm.SaveAction = () =>

@@ -16,7 +16,8 @@
         Background="Transparent"
         FontFamily="{Binding CurrentFontFamily, Source={x:Static services:LocalizationService.Instance}}"
         ShowInTaskbar="False"
-        SizeToContent="WidthAndHeight">
+        SizeToContent="WidthAndHeight"
+        ClipToBounds="False">
         
     <Window.KeyBindings>
         <!-- Drawing Tools -->
@@ -68,11 +69,13 @@
     </Window.Styles>
     
     <Grid Name="RootGrid" Background="Transparent" ClipToBounds="False">
-
-
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
 
         <!-- BABYMETAL Style Border (Wraps IMAGE ONLY) -->
-        <Border x:Name="MainBorder"
+        <Border x:Name="MainBorder" Grid.Row="0"
                 HorizontalAlignment="Center"
                 VerticalAlignment="Top"
                 Width="{Binding DisplayWidth}"
@@ -90,9 +93,9 @@
                     <GradientStop Offset="1" Color="{Binding BorderColor}"/>
                 </LinearGradientBrush>
             </Border.BorderBrush>
-            <Border Classes="InnerBorder">
-                <Grid> <!-- Single row for image and overlays -->
-                    <Grid>
+            <Border Classes="InnerBorder" ClipToBounds="False">
+                <Grid ClipToBounds="False"> <!-- Single row for image and overlays -->
+                    <Grid ClipToBounds="False">
                         <Border BorderBrush="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" 
                                 BorderThickness="1" Margin="-1" 
                                 IsVisible="{Binding HidePinBorder, Converter={StaticResource BoolInvertConverter}}"/>
@@ -194,15 +197,19 @@
                         </Grid>
                             
                         <!-- Decoration Layer (Unified) -->
-                        <ctl:GothicDecoration DecorationBrush="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" 
-                                              ShowWings="{Binding !HidePinDecoration}"
-                                              ShowCorners="{Binding !HidePinDecoration}"
-                                              ShowBorder="{Binding !HidePinBorder}"
-                                              WingWidth="{Binding WingWidth}"
-                                              WingHeight="{Binding WingHeight}"
-                                              SelectionIconSize="{Binding SelectionIconSize}"
-                                              LeftWingMargin="{Binding LeftWingMargin}"
-                                              RightWingMargin="{Binding RightWingMargin}" />
+                        <Grid ClipToBounds="False">
+                            <ctl:GothicDecoration DecorationBrush="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" 
+                                                  Margin="{Binding SelectionBorderOuterMargin}"
+                                                  ShowWings="{Binding !HidePinDecoration}"
+                                                  ShowCorners="{Binding !HidePinDecoration}"
+                                                  ShowBorder="{Binding !HidePinBorder}"
+                                                  SelectionThickness="{Binding SelectionThickness}"
+                                                  WingWidth="{Binding WingWidth}"
+                                                  WingHeight="{Binding WingHeight}"
+                                                  SelectionIconSize="{Binding SelectionIconSize}"
+                                                  LeftWingMargin="{Binding LeftWingMargin}"
+                                                  RightWingMargin="{Binding RightWingMargin}" />
+                        </Grid>
                         
                         <!-- Resize Handles - 使用負 margin 定位在視覺邊界上 (參考 SnipWindow) -->
                         <Grid Classes="Handle" Name="HandleTopLeft" Cursor="TopLeftCorner" Width="30" Height="30" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="-15"/>
@@ -218,13 +225,13 @@
             </Border>
         </Border>
 
-        <!-- Bottom Toolbar (Grown OUTSIDE the main border container, inside window padding) -->
-        <Border x:Name="ToolbarBorder" IsVisible="{Binding ShowToolbar}" 
-                Margin="{Binding ToolbarMargin}"
+        <!-- Bottom Toolbar -->
+        <Border x:Name="ToolbarBorder" Grid.Row="1" IsVisible="{Binding ShowToolbar}" 
+                Margin="0,0,0,10"
                 Background="#1A1A1A" BorderBrush="#333333" BorderThickness="1" 
                 CornerRadius="4" Padding="6,2"
                 HorizontalAlignment="Center" 
-                VerticalAlignment="Bottom"
+                VerticalAlignment="Top"
                 MinWidth="420"
                 BoxShadow="0 4 15 0 #D0000000"
                 ZIndex="20">
@@ -395,18 +402,6 @@
                        Foreground="#00FF00" FontSize="12" FontWeight="Bold"/>
         </Border>
 
-        <!-- Debug Overlay (Centered Actual Size) -->
-        <StackPanel Orientation="Horizontal" VerticalAlignment="Top" HorizontalAlignment="Center" Margin="0,25,0,0" IsHitTestVisible="False" ZIndex="15">
-             <TextBlock Text="{Binding #MainBorder.Bounds.Width, StringFormat='{}{0:F0}'}" Foreground="Lime" FontWeight="Bold" FontSize="14">
-                 <TextBlock.Effect><DropShadowEffect BlurRadius="2" Color="Black"/></TextBlock.Effect>
-             </TextBlock>
-             <TextBlock Text=" x " Foreground="Lime" FontWeight="Bold" FontSize="14">
-                 <TextBlock.Effect><DropShadowEffect BlurRadius="2" Color="Black"/></TextBlock.Effect>
-             </TextBlock>
-             <TextBlock Text="{Binding #MainBorder.Bounds.Height, StringFormat='{}{0:F0}'}" Foreground="Lime" FontWeight="Bold" FontSize="14">
-                 <TextBlock.Effect><DropShadowEffect BlurRadius="2" Color="Black"/></TextBlock.Effect>
-             </TextBlock>
-        </StackPanel>
 
         
 
