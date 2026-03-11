@@ -23,14 +23,20 @@ public partial class RecordingService
         {
             process.Start();
 
-            // Read stderr in background to prevent buffer blocking.
-            _ = PumpFfmpegStderrAsync(process);
+            var startupTcs = new TaskCompletionSource<bool>();
+            // Read stderr in background to prevent buffer blocking and detect startup.
+            _ = PumpFfmpegStderrAsync(process, startupTcs);
 
-            // Guard against immediate start failures (invalid device/args).
-            await Task.Delay(400);
-            if (process.HasExited)
+            // Wait for FFmpeg to signal "started" or timeout (5 seconds)
+            var startTask = startupTcs.Task;
+            var timeoutTask = Task.Delay(5000);
+
+            var completedTask = await Task.WhenAny(startTask, timeoutTask);
+            bool started = completedTask == startTask && await startTask;
+
+            if (!started || process.HasExited)
             {
-                Debug.WriteLine($"FFmpeg exited early ({process.ExitCode}).");
+                Debug.WriteLine($"FFmpeg failed to start properly (Exit={process.HasExited}, Code={ (process.HasExited ? process.ExitCode : "N/A") }).");
                 TryDisposeProcess(process);
                 return false;
             }
@@ -48,19 +54,38 @@ public partial class RecordingService
         }
     }
 
-    private static async Task PumpFfmpegStderrAsync(Process process)
+    private static async Task PumpFfmpegStderrAsync(Process process, TaskCompletionSource<bool>? startupTcs = null)
     {
         try
         {
+            bool signaled = false;
             while (!process.HasExited)
             {
                 var line = await process.StandardError.ReadLineAsync();
-                if (line != null) Debug.WriteLine($"[FFmpeg] {line}");
+                if (line == null) break;
+
+                Debug.WriteLine($"[FFmpeg] {line}");
+
+                if (startupTcs != null && !signaled)
+                {
+                    // Look for common startup success markers or indicator that recording has begun
+                    if (line.Contains("Press [q] to stop") || line.Contains("frame=") || line.Contains("Output #0"))
+                    {
+                        startupTcs.TrySetResult(true);
+                        signaled = true;
+                    }
+                }
+            }
+
+            if (startupTcs != null && !signaled)
+            {
+                startupTcs.TrySetResult(false);
             }
         }
         catch (Exception ex)
         {
             Debug.WriteLine($"FFmpeg stderr pump stopped: {ex.Message}");
+            startupTcs?.TrySetResult(false);
         }
     }
 
