@@ -70,13 +70,9 @@
     </Window.Styles>
     
     <Grid Name="RootGrid" Background="Transparent" ClipToBounds="False">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-        </Grid.RowDefinitions>
 
         <!-- BABYMETAL Style Border (Wraps VIDEO ONLY) -->
-        <Border x:Name="MainBorder" Grid.Row="0"
+        <Border x:Name="MainBorder"
                 HorizontalAlignment="Center"
                 VerticalAlignment="Top"
                 Width="{Binding DisplayWidth}"
@@ -179,12 +175,12 @@
             </Border>
         </Border>
 
-        <!-- Bottom Toolbar -->
-        <Border x:Name="ToolbarBorder" Grid.Row="1" IsVisible="{Binding ShowToolbar}" 
-                Margin="0,0,0,10"
+        <!-- Bottom Toolbar (Overlay positioned inside window padding) -->
+        <Border x:Name="ToolbarBorder" IsVisible="{Binding ShowToolbar}" 
+                Margin="{Binding ToolbarMargin}"
                 Background="#1A1A1A" BorderBrush="#333333" BorderThickness="1" 
                 CornerRadius="4" Padding="6,2"
-                HorizontalAlignment="Center" VerticalAlignment="Top"
+                HorizontalAlignment="Center" VerticalAlignment="Bottom"
                 MinWidth="420"
                 BoxShadow="0 4 15 0 #D0000000"
                 ZIndex="20">

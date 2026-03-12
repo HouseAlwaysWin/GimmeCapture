@@ -269,7 +269,7 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
             // RESERVE space for floating toolbar if visible
             // Two rows: Toolbar Height(32*2) + Spacing(4) + Bottom Margin(10) = 78px
             double bottomPad = vPad;
-            if (ShowToolbar) bottomPad += 15;
+            if (ShowToolbar) bottomPad += 78;
             
             // 裁切面板額外空間：拉桿(28) + 時間輸入(28) + spacing + padding ≈ 75px
             if (IsTrimmingMode) bottomPad += 75;
