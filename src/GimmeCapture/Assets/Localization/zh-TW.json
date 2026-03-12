@@ -261,5 +261,8 @@
   "VideoQuality": "輸出的畫質:",
   "VideoQualityLow": "低 (最小檔案)",
   "VideoQualityMedium": "中 (效能平衡)",
-  "VideoQualityHigh": "高 (高品質壓縮)"
+  "VideoQualityHigh": "高 (高品質壓縮)",
+  "TrayShow": "顯示主視窗",
+  "TrayExit": "結束程式",
+  "TrayCheckForUpdates": "檢查更新"
 }

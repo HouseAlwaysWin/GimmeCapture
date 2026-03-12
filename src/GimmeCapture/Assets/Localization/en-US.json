@@ -261,5 +261,8 @@
   "VideoQuality": "Video Quality:",
   "VideoQualityLow": "Low (Smallest)",
   "VideoQualityMedium": "Medium (Balanced)",
-  "VideoQualityHigh": "High (Visually Lossless)"
+  "VideoQualityHigh": "High (Visually Lossless)",
+  "TrayShow": "Show",
+  "TrayExit": "Exit",
+  "TrayCheckForUpdates": "Check for Updates"
 }

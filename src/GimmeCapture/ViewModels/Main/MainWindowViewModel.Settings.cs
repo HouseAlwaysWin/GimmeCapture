@@ -164,14 +164,39 @@ public partial class MainWindowViewModel
     public bool RunOnStartup
     {
         get => _runOnStartup;
-        set => this.RaiseAndSetIfChanged(ref _runOnStartup, value);
+        set
+        {
+            if (_runOnStartup != value)
+            {
+                this.RaiseAndSetIfChanged(ref _runOnStartup, value);
+                StartupService.SetStartup(value); // Apply to Windows Registry
+                if (!_isDataLoading)
+                {
+                    _settingsService.Settings.RunOnStartup = value;
+                    IsModified = true;
+                    _ = SaveSettingsAsync();
+                }
+            }
+        }
     }
 
     private bool _autoCheckUpdates;
     public bool AutoCheckUpdates
     {
         get => _autoCheckUpdates;
-        set => this.RaiseAndSetIfChanged(ref _autoCheckUpdates, value);
+        set
+        {
+            if (_autoCheckUpdates != value)
+            {
+                this.RaiseAndSetIfChanged(ref _autoCheckUpdates, value);
+                if (!_isDataLoading)
+                {
+                    _settingsService.Settings.AutoCheckUpdates = value;
+                    IsModified = true;
+                    _ = SaveSettingsAsync();
+                }
+            }
+        }
     }
 
     // Snip Settings

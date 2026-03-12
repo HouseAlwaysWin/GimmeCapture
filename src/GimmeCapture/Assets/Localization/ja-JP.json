@@ -250,5 +250,8 @@
   "VideoQuality": "出力画質:",
   "VideoQualityLow": "低 (ファイルサイズ最小)",
   "VideoQualityMedium": "中 (バランス)",
-  "VideoQualityHigh": "高 (視覚的に無損失)"
+  "VideoQualityHigh": "高 (視覚的に無損失)",
+  "TrayShow": "メインウィンドウを表示",
+  "TrayExit": "終了",
+  "TrayCheckForUpdates": "アップデートを確認"
 }

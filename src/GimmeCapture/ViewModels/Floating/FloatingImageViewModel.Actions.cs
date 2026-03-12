@@ -88,14 +88,6 @@ public partial class FloatingImageViewModel
 
         // 1. Copy selection
         await CopyAsync();
-
-        // 2. Clear selection area (make transparent or fill with background?)
-        // For now, we don't have an "Erase Area" function easily accessible on the bitmap directly here without drawing.
-        // But we have "Delete" or "PointRemoval".
-        // Let's implement Cut as "Copy + Add Mask/Mosaic" or simply "Copy". 
-        // Real Cut on a Raster image implies erasing pixels.
-        
-        // TODO: Implement Erase pixels in selection
     }
 
     private async Task CropAsync()
