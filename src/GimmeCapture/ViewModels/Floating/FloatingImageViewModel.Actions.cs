@@ -207,17 +207,15 @@ public partial class FloatingImageViewModel
         
         try 
         {
-            // Crop
-            // Avalonia Bitmap doesn't have easy Crop?
-            // Use SkiaSharp or WriteableBitmap lookup
-            
             return await Task.Run(() => 
             {
-                using var stream = new System.IO.MemoryStream();
-                source.Save(stream);
-                stream.Position = 0;
+                var info = new SkiaSharp.SKImageInfo((int)source.Size.Width, (int)source.Size.Height, SkiaSharp.SKColorType.Bgra8888);
+                using var skBitmap = new SkiaSharp.SKBitmap(info);
                 
-                using var skBitmap = SkiaSharp.SKBitmap.Decode(stream);
+                // Use Avalonia's CopyPixels which avoids PNG roundtrip
+                var pixelSize = new Avalonia.PixelSize((int)source.Size.Width, (int)source.Size.Height);
+                source.CopyPixels(new Avalonia.PixelRect(0, 0, (int)source.Size.Width, (int)source.Size.Height), skBitmap.GetPixels(), info.BytesSize, info.RowBytes);
+                
                 var subset = new SkiaSharp.SKBitmap();
                 
                 SkiaSharp.SKRectI skRect = new SkiaSharp.SKRectI(
@@ -257,15 +255,11 @@ public partial class FloatingImageViewModel
                 // We need to draw the base image and then draw all annotations on top.
                 // Using SkiaSharp is the most robust way.
                 
-                using var locked = Image.Lock();
-                var info = new SkiaSharp.SKImageInfo(locked.Size.Width, locked.Size.Height, SkiaSharp.SKColorType.Bgra8888);
+                var info = new SkiaSharp.SKImageInfo((int)Image.Size.Width, (int)Image.Size.Height, SkiaSharp.SKColorType.Bgra8888);
                 using var baseSkBitmap = new SkiaSharp.SKBitmap(info);
                 
-                unsafe 
-                {
-                    long len = (long)info.BytesSize;
-                    Buffer.MemoryCopy((void*)locked.Address, (void*)baseSkBitmap.GetPixels(), len, len);
-                }
+                var pixelSize = new Avalonia.PixelSize((int)Image.Size.Width, (int)Image.Size.Height);
+                Image.CopyPixels(new Avalonia.PixelRect(0, 0, (int)Image.Size.Width, (int)Image.Size.Height), baseSkBitmap.GetPixels(), info.BytesSize, info.RowBytes);
                 
                 using var surface = SkiaSharp.SKSurface.Create(info);
                 using var canvas = surface.Canvas;
