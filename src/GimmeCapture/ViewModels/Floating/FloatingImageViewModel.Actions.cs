@@ -225,13 +225,23 @@ public partial class FloatingImageViewModel
                     
                 if (skBitmap.ExtractSubset(subset, skRect))
                 {
-                    // Convert back to Avalonia Bitmap
-                    using var valImg = SkiaSharp.SKImage.FromBitmap(subset);
-                    using var data = valImg.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
-                    using var outStream = new System.IO.MemoryStream();
-                    data.SaveTo(outStream);
-                    outStream.Position = 0;
-                    return new Bitmap(outStream);
+                    // Convert back to Avalonia Bitmap via direct memory copy to avoid PNG encoding
+                    var outBitmap = new Avalonia.Media.Imaging.WriteableBitmap(
+                        new Avalonia.PixelSize(subset.Width, subset.Height),
+                        new Avalonia.Vector(96, 96),
+                        Avalonia.Platform.PixelFormat.Bgra8888,
+                        Avalonia.Platform.AlphaFormat.Premul);
+
+                    using var lockedOut = outBitmap.Lock();
+                    unsafe
+                    {
+                        Buffer.MemoryCopy(
+                            (void*)subset.GetPixels(),
+                            (void*)lockedOut.Address,
+                            lockedOut.RowBytes * lockedOut.Size.Height,
+                            subset.RowBytes * subset.Height);
+                    }
+                    return outBitmap;
                 }
                 return null;
             });
@@ -271,11 +281,24 @@ public partial class FloatingImageViewModel
                 GimmeCapture.Services.Core.Rendering.AnnotationRenderHelper.DrawAnnotationsOnCanvas(canvas, Annotations, DisplayWidth, DisplayHeight, baseSkBitmap.Width, baseSkBitmap.Height);
                 
                 using var image = surface.Snapshot();
-                using var data = image.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
-                using var outStream = new System.IO.MemoryStream();
-                data.SaveTo(outStream);
-                outStream.Position = 0;
-                return new Bitmap(outStream);
+                using var outSkBitmap = SkiaSharp.SKBitmap.FromImage(image);
+                
+                var outBitmap = new Avalonia.Media.Imaging.WriteableBitmap(
+                    new Avalonia.PixelSize(outSkBitmap.Width, outSkBitmap.Height),
+                    new Avalonia.Vector(96, 96),
+                    Avalonia.Platform.PixelFormat.Bgra8888,
+                    Avalonia.Platform.AlphaFormat.Premul);
+
+                using var lockedOut = outBitmap.Lock();
+                unsafe
+                {
+                    Buffer.MemoryCopy(
+                        (void*)outSkBitmap.GetPixels(),
+                        (void*)lockedOut.Address,
+                        lockedOut.RowBytes * lockedOut.Size.Height,
+                        outSkBitmap.RowBytes * outSkBitmap.Height);
+                }
+                return outBitmap;
             }
             catch (Exception ex)
             {
