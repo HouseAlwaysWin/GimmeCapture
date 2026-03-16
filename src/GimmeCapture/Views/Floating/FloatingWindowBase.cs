@@ -289,8 +289,10 @@ public abstract class FloatingWindowBase : Window
             _isDrawing = true;
             _startPoint = pointerPosOnContent;
             
-            // Snapshot for Mosaic/Blur
-            Bitmap? frameSnapshot = GetContentSnapshot();
+            // Snapshot is only needed for effects that sample underlying pixels.
+            Bitmap? frameSnapshot = (vm.CurrentAnnotationTool == AnnotationType.Mosaic || vm.CurrentAnnotationTool == AnnotationType.Blur)
+                ? GetContentSnapshot()
+                : null;
 
             _currentAnnotation = new Annotation
             {

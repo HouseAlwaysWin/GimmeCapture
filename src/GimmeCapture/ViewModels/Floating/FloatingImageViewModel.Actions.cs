@@ -235,11 +235,17 @@ public partial class FloatingImageViewModel
                     using var lockedOut = outBitmap.Lock();
                     unsafe
                     {
-                        Buffer.MemoryCopy(
-                            (void*)subset.GetPixels(),
-                            (void*)lockedOut.Address,
-                            lockedOut.RowBytes * lockedOut.Size.Height,
-                            subset.RowBytes * subset.Height);
+                        byte* srcBase = (byte*)subset.GetPixels();
+                        byte* dstBase = (byte*)lockedOut.Address;
+                        int rows = Math.Min(subset.Height, lockedOut.Size.Height);
+                        int bytesPerRow = Math.Min(subset.RowBytes, lockedOut.RowBytes);
+
+                        for (int row = 0; row < rows; row++)
+                        {
+                            var srcRow = srcBase + (row * subset.RowBytes);
+                            var dstRow = dstBase + (row * lockedOut.RowBytes);
+                            Buffer.MemoryCopy(srcRow, dstRow, lockedOut.RowBytes, bytesPerRow);
+                        }
                     }
                     return outBitmap;
                 }
@@ -292,11 +298,17 @@ public partial class FloatingImageViewModel
                 using var lockedOut = outBitmap.Lock();
                 unsafe
                 {
-                    Buffer.MemoryCopy(
-                        (void*)outSkBitmap.GetPixels(),
-                        (void*)lockedOut.Address,
-                        lockedOut.RowBytes * lockedOut.Size.Height,
-                        outSkBitmap.RowBytes * outSkBitmap.Height);
+                    byte* srcBase = (byte*)outSkBitmap.GetPixels();
+                    byte* dstBase = (byte*)lockedOut.Address;
+                    int rows = Math.Min(outSkBitmap.Height, lockedOut.Size.Height);
+                    int bytesPerRow = Math.Min(outSkBitmap.RowBytes, lockedOut.RowBytes);
+
+                    for (int row = 0; row < rows; row++)
+                    {
+                        var srcRow = srcBase + (row * outSkBitmap.RowBytes);
+                        var dstRow = dstBase + (row * lockedOut.RowBytes);
+                        Buffer.MemoryCopy(srcRow, dstRow, lockedOut.RowBytes, bytesPerRow);
+                    }
                 }
                 return outBitmap;
             }

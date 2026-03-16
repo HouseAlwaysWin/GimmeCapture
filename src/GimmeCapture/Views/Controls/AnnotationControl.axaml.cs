@@ -4,6 +4,7 @@ using Avalonia.Media.Imaging;
 using GimmeCapture.Models;
 using ReactiveUI;
 using System;
+using System.Buffers;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
 
@@ -53,7 +54,7 @@ public partial class AnnotationControl : UserControl
                 ann.WhenAnyValue(a => a.EndPoint),
                 ann.WhenAnyValue(a => a.DrawingModeSnapshot),
                 (start, end, snapshot) => (start, end, snapshot))
-                .Throttle(TimeSpan.FromMilliseconds(16)) // ~60fps
+                .Throttle(TimeSpan.FromMilliseconds(33)) // ~30fps to reduce allocation churn
                 .ObserveOn(RxApp.MainThreadScheduler)
                 .Subscribe(tuple => GenerateMosaicPreview(tuple.snapshot, tuple.start, tuple.end));
         }
@@ -105,29 +106,33 @@ public partial class AnnotationControl : UserControl
             Avalonia.Platform.PixelFormat.Bgra8888,
             Avalonia.Platform.AlphaFormat.Premul);
 
-        // Get source pixel data — handle both WriteableBitmap and regular Bitmap
+        // Get source pixel data — handle both WriteableBitmap and regular Bitmap.
+        // Use pooled buffers to avoid repeated large allocations while dragging.
         byte[]? srcPixels = null;
         int srcStride = 0;
+        int rentedLength = 0;
 
         if (snapshot is WriteableBitmap wb)
         {
             using var srcLock = wb.Lock();
             srcStride = srcLock.RowBytes;
-            srcPixels = new byte[srcStride * snapPixelH];
-            System.Runtime.InteropServices.Marshal.Copy(srcLock.Address, srcPixels, 0, srcPixels.Length);
+            rentedLength = srcStride * snapPixelH;
+            srcPixels = ArrayPool<byte>.Shared.Rent(rentedLength);
+            System.Runtime.InteropServices.Marshal.Copy(srcLock.Address, srcPixels, 0, rentedLength);
         }
         else
         {
             // Regular Bitmap — use CopyPixels to read pixel data
             srcStride = snapPixelW * 4;
-            srcPixels = new byte[srcStride * snapPixelH];
+            rentedLength = srcStride * snapPixelH;
+            srcPixels = ArrayPool<byte>.Shared.Rent(rentedLength);
             var handle = System.Runtime.InteropServices.GCHandle.Alloc(srcPixels, System.Runtime.InteropServices.GCHandleType.Pinned);
             try
             {
                 snapshot.CopyPixels(
                     new PixelRect(0, 0, snapPixelW, snapPixelH),
                     handle.AddrOfPinnedObject(),
-                    srcPixels.Length,
+                    rentedLength,
                     srcStride);
             }
             finally
@@ -138,50 +143,60 @@ public partial class AnnotationControl : UserControl
 
         if (srcPixels == null) return;
 
-        // Fill the mosaic bitmap
-        using var dstLock = result.Lock();
-        unsafe
+        try
         {
-            byte* dstPtr = (byte*)dstLock.Address;
-            int dstStride = dstLock.RowBytes;
-
-            for (int cy = 0; cy < annH; cy += cellSize)
+            // Fill the mosaic bitmap
+            using var dstLock = result.Lock();
+            unsafe
             {
-                for (int cx = 0; cx < annW; cx += cellSize)
+                byte* dstPtr = (byte*)dstLock.Address;
+                int dstStride = dstLock.RowBytes;
+
+                for (int cy = 0; cy < annH; cy += cellSize)
                 {
-                    int cw = Math.Min(cellSize, annW - cx);
-                    int ch = Math.Min(cellSize, annH - cy);
-
-                    // Sample center pixel (matching SkiaSharp output algorithm)
-                    double logicalSampleX = x1 + cx + cw / 2.0;
-                    double logicalSampleY = y1 + cy + ch / 2.0;
-
-                    // Map to snapshot pixel coordinates
-                    int pixelSampleX = Math.Clamp((int)(logicalSampleX * scaleX), 0, snapPixelW - 1);
-                    int pixelSampleY = Math.Clamp((int)(logicalSampleY * scaleY), 0, snapPixelH - 1);
-
-                    // Read pixel (BGRA)
-                    int srcOffset = pixelSampleY * srcStride + pixelSampleX * 4;
-                    byte b = srcPixels[srcOffset + 0];
-                    byte g = srcPixels[srcOffset + 1];
-                    byte r = srcPixels[srcOffset + 2];
-                    byte a = srcPixels[srcOffset + 3];
-
-                    // Fill cell in destination
-                    for (int dy = 0; dy < ch; dy++)
+                    for (int cx = 0; cx < annW; cx += cellSize)
                     {
-                        for (int dx = 0; dx < cw; dx++)
+                        int cw = Math.Min(cellSize, annW - cx);
+                        int ch = Math.Min(cellSize, annH - cy);
+
+                        // Sample center pixel (matching SkiaSharp output algorithm)
+                        double logicalSampleX = x1 + cx + cw / 2.0;
+                        double logicalSampleY = y1 + cy + ch / 2.0;
+
+                        // Map to snapshot pixel coordinates
+                        int pixelSampleX = Math.Clamp((int)(logicalSampleX * scaleX), 0, snapPixelW - 1);
+                        int pixelSampleY = Math.Clamp((int)(logicalSampleY * scaleY), 0, snapPixelH - 1);
+
+                        // Read pixel (BGRA)
+                        int srcOffset = pixelSampleY * srcStride + pixelSampleX * 4;
+                        byte b = srcPixels[srcOffset + 0];
+                        byte g = srcPixels[srcOffset + 1];
+                        byte r = srcPixels[srcOffset + 2];
+                        byte a = srcPixels[srcOffset + 3];
+
+                        // Fill cell in destination
+                        for (int dy = 0; dy < ch; dy++)
                         {
-                            int destX = cx + dx;
-                            int destY = cy + dy;
-                            int dstOffset = destY * dstStride + destX * 4;
-                            dstPtr[dstOffset + 0] = b;
-                            dstPtr[dstOffset + 1] = g;
-                            dstPtr[dstOffset + 2] = r;
-                            dstPtr[dstOffset + 3] = a;
+                            for (int dx = 0; dx < cw; dx++)
+                            {
+                                int destX = cx + dx;
+                                int destY = cy + dy;
+                                int dstOffset = destY * dstStride + destX * 4;
+                                dstPtr[dstOffset + 0] = b;
+                                dstPtr[dstOffset + 1] = g;
+                                dstPtr[dstOffset + 2] = r;
+                                dstPtr[dstOffset + 3] = a;
+                            }
                         }
                     }
                 }
+            }
+        }
+        finally
+        {
+            if (srcPixels != null && rentedLength > 0)
+            {
+                ArrayPool<byte>.Shared.Return(srcPixels);
             }
         }
 

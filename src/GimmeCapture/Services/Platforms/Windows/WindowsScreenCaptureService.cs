@@ -129,12 +129,40 @@ public class WindowsScreenCaptureService : IScreenCaptureService
                     }
                 }
                 
-                // Convert System.Drawing.Bitmap to SKBitmap
-                using var stream = new MemoryStream();
-                bitmap.Save(stream, ImageFormat.Png);
-                stream.Seek(0, SeekOrigin.Begin);
-                
-                return SKBitmap.Decode(stream);
+                // Convert System.Drawing.Bitmap to SKBitmap via direct pixel copy
+                // to avoid PNG encode/decode roundtrip allocations.
+                var skBitmap = new SKBitmap(new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Premul));
+                var bmpData = bitmap.LockBits(
+                    new System.Drawing.Rectangle(0, 0, width, height),
+                    System.Drawing.Imaging.ImageLockMode.ReadOnly,
+                    System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+
+                try
+                {
+                    IntPtr dstPixels = skBitmap.GetPixels();
+                    int dstStride = skBitmap.RowBytes;
+                    int srcStride = bmpData.Stride;
+
+                    unsafe
+                    {
+                        byte* srcBase = (byte*)bmpData.Scan0;
+                        byte* dstBase = (byte*)dstPixels;
+                        int copyBytesPerRow = width * 4;
+
+                        for (int row = 0; row < height; row++)
+                        {
+                            var srcRow = srcBase + (row * srcStride);
+                            var dstRow = dstBase + (row * dstStride);
+                            Buffer.MemoryCopy(srcRow, dstRow, dstStride, copyBytesPerRow);
+                        }
+                    }
+                }
+                finally
+                {
+                    bitmap.UnlockBits(bmpData);
+                }
+
+                return skBitmap;
             }
             
             return new SKBitmap(100, 100);
