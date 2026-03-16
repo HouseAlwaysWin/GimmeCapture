@@ -6,7 +6,6 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using CliWrap;
-using CliWrap.Buffered;
 using GimmeCapture.Models;
 
 namespace GimmeCapture.Services.Core.Media;
@@ -382,21 +381,152 @@ public partial class RecordingService
     {
         try
         {
+            var recentLogs = new Queue<string>();
+            var recentLogsLock = new object();
+            const int maxRecentLogs = 80;
+
+            void HandleLogLine(string streamTag, string? data)
+            {
+                if (string.IsNullOrWhiteSpace(data)) return;
+                var line = $"[{streamTag}] {data}";
+                Debug.WriteLine($"[Finalize] {label} {line}");
+                LogToFile($"{label} {line}");
+
+                lock (recentLogsLock)
+                {
+                    recentLogs.Enqueue(line);
+                    while (recentLogs.Count > maxRecentLogs)
+                    {
+                        recentLogs.Dequeue();
+                    }
+                }
+            }
+
+            using var stdOutStream = new LineDispatchStream(line => HandleLogLine("OUT", line));
+            using var stdErrStream = new LineDispatchStream(line => HandleLogLine("ERR", line));
+
             var result = await Cli.Wrap(_downloader.FfmpegExecutablePath)
                 .WithArguments(arguments)
                 .WithValidation(CommandResultValidation.None)
-                .ExecuteBufferedAsync();
+                .WithStandardOutputPipe(PipeTarget.ToStream(stdOutStream))
+                .WithStandardErrorPipe(PipeTarget.ToStream(stdErrStream))
+                .ExecuteAsync();
 
             Debug.WriteLine($"[Finalize] {label}: ExitCode={result.ExitCode}");
             if (result.ExitCode != 0)
             {
-                throw new Exception($"{label} FFmpeg failed with exit code {result.ExitCode}. STDERR: {result.StandardError}");
+                string recent;
+                lock (recentLogsLock)
+                {
+                    recent = recentLogs.Count > 0
+                        ? string.Join(Environment.NewLine, recentLogs)
+                        : "No FFmpeg log output.";
+                }
+                throw new Exception($"{label} FFmpeg failed with exit code {result.ExitCode}.{Environment.NewLine}Recent logs:{Environment.NewLine}{recent}");
             }
         }
         catch (Exception ex)
         {
             LogToFile($"{label}: FFmpeg error: {ex.Message}");
             throw;
+        }
+    }
+
+    private sealed class LineDispatchStream : Stream
+    {
+        private readonly Action<string> _onLine;
+        private readonly Decoder _decoder = Encoding.UTF8.GetDecoder();
+        private readonly StringBuilder _lineBuffer = new();
+        private readonly char[] _charBuffer = new char[4096];
+
+        public LineDispatchStream(Action<string> onLine)
+        {
+            _onLine = onLine;
+        }
+
+        public override bool CanRead => false;
+        public override bool CanSeek => false;
+        public override bool CanWrite => true;
+        public override long Length => throw new NotSupportedException();
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override void Flush()
+        {
+            FlushLineBuffer();
+        }
+
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            if (count <= 0) return;
+
+            int bytesUsed = 0;
+            while (bytesUsed < count)
+            {
+                _decoder.Convert(
+                    buffer,
+                    offset + bytesUsed,
+                    count - bytesUsed,
+                    _charBuffer,
+                    0,
+                    _charBuffer.Length,
+                    flush: false,
+                    out int consumed,
+                    out int charsUsed,
+                    out _);
+
+                bytesUsed += consumed;
+                if (charsUsed > 0)
+                {
+                    ProcessChars(_charBuffer, charsUsed);
+                }
+            }
+        }
+
+        private void ProcessChars(char[] chars, int length)
+        {
+            for (int i = 0; i < length; i++)
+            {
+                char ch = chars[i];
+                if (ch == '\n')
+                {
+                    EmitCurrentLine();
+                }
+                else if (ch != '\r')
+                {
+                    _lineBuffer.Append(ch);
+                }
+            }
+        }
+
+        private void EmitCurrentLine()
+        {
+            if (_lineBuffer.Length == 0) return;
+            _onLine(_lineBuffer.ToString());
+            _lineBuffer.Clear();
+        }
+
+        private void FlushLineBuffer()
+        {
+            if (_lineBuffer.Length == 0) return;
+            _onLine(_lineBuffer.ToString());
+            _lineBuffer.Clear();
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                FlushLineBuffer();
+            }
+            base.Dispose(disposing);
         }
     }
 
