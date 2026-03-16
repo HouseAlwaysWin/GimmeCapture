@@ -257,13 +257,16 @@ public partial class FloatingImageViewModel
                 // We need to draw the base image and then draw all annotations on top.
                 // Using SkiaSharp is the most robust way.
                 
-                using var stream = new System.IO.MemoryStream();
-                Image.Save(stream);
-                stream.Position = 0;
+                using var locked = Image.Lock();
+                var info = new SkiaSharp.SKImageInfo(locked.Size.Width, locked.Size.Height, SkiaSharp.SKColorType.Bgra8888);
+                using var baseSkBitmap = new SkiaSharp.SKBitmap(info);
                 
-                using var baseSkBitmap = SkiaSharp.SKBitmap.Decode(stream);
+                unsafe 
+                {
+                    long len = (long)info.BytesSize;
+                    Buffer.MemoryCopy((void*)locked.Address, (void*)baseSkBitmap.GetPixels(), len, len);
+                }
                 
-                var info = new SkiaSharp.SKImageInfo(baseSkBitmap.Width, baseSkBitmap.Height);
                 using var surface = SkiaSharp.SKSurface.Create(info);
                 using var canvas = surface.Canvas;
                 
@@ -271,81 +274,7 @@ public partial class FloatingImageViewModel
                 
                 // Draw Annotations
                 // We need to scale annotations from Display Coordinates to Image Coordinates
-                 double scaleX = baseSkBitmap.Width / (DisplayWidth > 0 ? DisplayWidth : 1);
-                 double scaleY = baseSkBitmap.Height / (DisplayHeight > 0 ? DisplayHeight : 1);
-                
-                foreach (var ann in Annotations)
-                {
-                    using var paint = new SkiaSharp.SKPaint();
-                    paint.Color = new SkiaSharp.SKColor(ann.Color.R, ann.Color.G, ann.Color.B, ann.Color.A);
-                    paint.IsAntialias = true;
-                    paint.StrokeWidth = (float)(ann.Thickness * scaleX); // Scale thickness?
-                    paint.Style = SkiaSharp.SKPaintStyle.Stroke;
-                    
-                    if (ann.Type == AnnotationType.Pen) // Highlighter removed if not in enum
-                    {
-                        if (ann.Points != null && ann.Points.Count > 1)
-                        {
-                            // If we tracked highlighter properly we'd check it here. 
-                            // For now assume Pen.
-                            
-                            var path = new SkiaSharp.SKPath();
-                            path.MoveTo((float)(ann.Points[0].X * scaleX), (float)(ann.Points[0].Y * scaleY));
-                            
-                            for (int i = 1; i < ann.Points.Count; i++)
-                            {
-                                path.LineTo((float)(ann.Points[i].X * scaleX), (float)(ann.Points[i].Y * scaleY));
-                            }
-                            canvas.DrawPath(path, paint);
-                        }
-                    }
-                    else if (ann.Type == AnnotationType.Rectangle)
-                    {
-                         var rect = new SkiaSharp.SKRect(
-                             (float)(Math.Min(ann.StartPoint.X, ann.EndPoint.X) * scaleX),
-                             (float)(Math.Min(ann.StartPoint.Y, ann.EndPoint.Y) * scaleY),
-                             (float)(Math.Max(ann.StartPoint.X, ann.EndPoint.X) * scaleX),
-                             (float)(Math.Max(ann.StartPoint.Y, ann.EndPoint.Y) * scaleY));
-                         canvas.DrawRect(rect, paint);
-                    }
-                    else if (ann.Type == AnnotationType.Ellipse)
-                    {
-                         var rect = new SkiaSharp.SKRect(
-                             (float)(Math.Min(ann.StartPoint.X, ann.EndPoint.X) * scaleX),
-                             (float)(Math.Min(ann.StartPoint.Y, ann.EndPoint.Y) * scaleY),
-                             (float)(Math.Max(ann.StartPoint.X, ann.EndPoint.X) * scaleX),
-                             (float)(Math.Max(ann.StartPoint.Y, ann.EndPoint.Y) * scaleY));
-                         canvas.DrawOval(rect, paint);
-                    }
-                    else if (ann.Type == AnnotationType.Arrow)
-                    {
-                        // Simple Arrow drawing
-                        float x1 = (float)(ann.StartPoint.X * scaleX);
-                        float y1 = (float)(ann.StartPoint.Y * scaleY);
-                        float x2 = (float)(ann.EndPoint.X * scaleX);
-                        float y2 = (float)(ann.EndPoint.Y * scaleY);
-                        
-                        canvas.DrawLine(x1, y1, x2, y2, paint);
-                        
-                        // Draw Arrowhead (simple)
-                        // ...
-                    }
-                    else if (ann.Type == AnnotationType.Text)
-                    {
-                         using var textPaint = new SkiaSharp.SKPaint();
-                         textPaint.Color = paint.Color;
-                         textPaint.IsAntialias = true;
-#pragma warning disable CS0618 // SKPaint.TextSize is obsolete
-                         textPaint.TextSize = (float)(ann.FontSize * scaleX);
-#pragma warning restore CS0618
-                         // textPaint.Typeface = ...
-                         
-                         // canvas.DrawText(ann.Text, (float)(ann.StartPoint.X * scaleX), (float)(ann.StartPoint.Y * scaleY), textPaint);
-                         // Text positioning is usually top-left or baseline. SkiaDrawText is baseline.
-                         // Need detailed text layout for perfect match. 
-                    }
-                    // ... other types
-                }
+                GimmeCapture.Services.Core.Rendering.AnnotationRenderHelper.DrawAnnotationsOnCanvas(canvas, Annotations, DisplayWidth, DisplayHeight, baseSkBitmap.Width, baseSkBitmap.Height);
                 
                 using var image = surface.Snapshot();
                 using var data = image.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
