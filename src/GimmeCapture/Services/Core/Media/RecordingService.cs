@@ -147,7 +147,7 @@ public partial class RecordingService : ReactiveObject
     {
         string drawMouse = _includeCursor ? "1" : "0";
         string codec = _settingsService?.Settings.VideoCodec == VideoCodec.H265 ? "libx265" : "libx264";
-        return $"-y -f gdigrab -draw_mouse {drawMouse} -framerate {_fps} -offset_x {x} -offset_y {y} -video_size {w}x{h} -i desktop " +
+        return $"-y -hide_banner -nostats -loglevel warning -thread_queue_size 512 -f gdigrab -draw_mouse {drawMouse} -framerate {_fps} -offset_x {x} -offset_y {y} -video_size {w}x{h} -i desktop " +
                $"-c:v {codec} -preset ultrafast -tune zerolatency -pix_fmt yuv420p \"{segmentFile}\"";
     }
 

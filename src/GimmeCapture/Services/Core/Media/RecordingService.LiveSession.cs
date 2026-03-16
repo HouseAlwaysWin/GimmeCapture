@@ -23,16 +23,20 @@ public partial class RecordingService
         {
             process.Start();
 
-            var startupTcs = new TaskCompletionSource<bool>();
+            var startupTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             // Read stderr in background to prevent buffer blocking and detect startup.
             _ = PumpFfmpegStderrAsync(process, startupTcs);
 
-            // Wait for FFmpeg to signal "started" or timeout (5 seconds)
+            // Wait for FFmpeg to signal "started" or timeout.
+            // With reduced FFmpeg log level there may be no startup line,
+            // so fallback to process liveness after timeout.
             var startTask = startupTcs.Task;
-            var timeoutTask = Task.Delay(5000);
+            var timeoutTask = Task.Delay(1200);
 
             var completedTask = await Task.WhenAny(startTask, timeoutTask);
-            bool started = completedTask == startTask && await startTask;
+            bool started = completedTask == startTask
+                ? await startTask
+                : !process.HasExited;
 
             if (!started || process.HasExited)
             {
@@ -64,16 +68,19 @@ public partial class RecordingService
                 var line = await process.StandardError.ReadLineAsync();
                 if (line == null) break;
 
-                Debug.WriteLine($"[FFmpeg] {line}");
-
-                if (startupTcs != null && !signaled)
+                if (!signaled && startupTcs != null)
                 {
-                    // Look for common startup success markers or indicator that recording has begun
-                    if (line.Contains("Press [q] to stop") || line.Contains("frame=") || line.Contains("Output #0"))
-                    {
-                        startupTcs.TrySetResult(true);
-                        signaled = true;
-                    }
+                    startupTcs.TrySetResult(true);
+                    signaled = true;
+                }
+
+                // Keep runtime noise low during recording; only log warnings/errors.
+                bool isImportant = line.Contains("error", StringComparison.OrdinalIgnoreCase)
+                    || line.Contains("failed", StringComparison.OrdinalIgnoreCase)
+                    || line.Contains("warning", StringComparison.OrdinalIgnoreCase);
+                if (isImportant)
+                {
+                    Debug.WriteLine($"[FFmpeg] {line}");
                 }
             }
 
