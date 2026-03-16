@@ -155,14 +155,25 @@ public partial class SnipWindowViewModel
             {
                 var skBitmap = await _captureService.CaptureScreenWithAnnotationsAsync(SelectionRect, ScreenOffset, VisualScaling, Annotations, UserSelections, TranslatedBlocks, _mainVm?.ShowSnipCursor ?? false);
 
-                // Convert SKBitmap to Avalonia Bitmap
-                using var image = SkiaSharp.SKImage.FromBitmap(skBitmap);
-                using var data = image.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
-                using var stream = new System.IO.MemoryStream();
-                data.SaveTo(stream);
-                stream.Position = 0;
+                // Convert SKBitmap to Avalonia Bitmap without PNG stream roundtrip
+                var avaloniaBitmap = new Avalonia.Media.Imaging.WriteableBitmap(
+                    new Avalonia.PixelSize(skBitmap.Width, skBitmap.Height),
+                    new Avalonia.Vector(96, 96),
+                    Avalonia.Platform.PixelFormat.Bgra8888,
+                    Avalonia.Platform.AlphaFormat.Premul);
 
-                var avaloniaBitmap = new Avalonia.Media.Imaging.Bitmap(stream);
+                using var lockedOut = avaloniaBitmap.Lock();
+                unsafe
+                {
+                    Buffer.MemoryCopy(
+                        (void*)skBitmap.GetPixels(),
+                        (void*)lockedOut.Address,
+                        lockedOut.RowBytes * lockedOut.Size.Height,
+                        skBitmap.RowBytes * skBitmap.Height);
+                }
+
+                // Make sure to dispose the SKBitmap after we are done copying
+                skBitmap.Dispose();
 
                 // Open Floating Window
                 OpenPinWindowAction?.Invoke(avaloniaBitmap, SelectionRect, SelectionBorderColor, SelectionBorderThickness, runAI, initialInteractive, null, 12.0);
