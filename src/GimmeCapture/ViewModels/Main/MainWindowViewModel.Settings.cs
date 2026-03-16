@@ -868,6 +868,20 @@ public partial class MainWindowViewModel
         set => this.RaiseAndSetIfChanged(ref _recordSystemAudio, value);
     }
 
+    private int _playbackUiFps = 30;
+    public int PlaybackUiFps
+    {
+        get => _playbackUiFps;
+        set => this.RaiseAndSetIfChanged(ref _playbackUiFps, Math.Clamp(value, 1, 120));
+    }
+
+    private int _playbackTimelineFps = 15;
+    public int PlaybackTimelineFps
+    {
+        get => _playbackTimelineFps;
+        set => this.RaiseAndSetIfChanged(ref _playbackTimelineFps, Math.Clamp(value, 1, 120));
+    }
+
     public string[] AvailableRecordFormats { get; } = { "mp4", "mkv", "gif", "webm", "mov" };
 
     public async Task LoadSettingsAsync()
@@ -905,6 +919,8 @@ public partial class MainWindowViewModel
             ShowSnipCursor = settings.ShowSnipCursor;
             ShowRecordCursor = settings.ShowRecordCursor;
             RecordSystemAudio = settings.RecordSystemAudio;
+            PlaybackUiFps = settings.PlaybackUiFps;
+            PlaybackTimelineFps = settings.PlaybackTimelineFps;
             TempDirectory = settings.TempDirectory;
             ShowAIScanBox = settings.ShowAIScanBox;
             EnableAI = settings.EnableAI;
@@ -1024,6 +1040,8 @@ public partial class MainWindowViewModel
             settings.ShowSnipCursor = ShowSnipCursor;
             settings.ShowRecordCursor = ShowRecordCursor;
             settings.RecordSystemAudio = RecordSystemAudio;
+            settings.PlaybackUiFps = PlaybackUiFps;
+            settings.PlaybackTimelineFps = PlaybackTimelineFps;
             settings.TempDirectory = TempDirectory;
             settings.ShowAIScanBox = ShowAIScanBox;
             settings.EnableAI = EnableAI;

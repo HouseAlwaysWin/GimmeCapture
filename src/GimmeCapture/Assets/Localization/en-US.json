@@ -105,6 +105,8 @@
   "TempPath": "Temporary File Path:",
   "RecordFormat": "Recording Format:",
   "RecordFPS": "Recording FPS (GIF/Video):",
+  "PlaybackUiFps": "Pinned Video UI FPS:",
+  "PlaybackTimelineFps": "Pinned Video Timeline FPS:",
   "VideoFormat": "Video Format:",
   "VideoCodec": "Video Codec:",
   "VideoCodecH264": "H264 (AVC)",

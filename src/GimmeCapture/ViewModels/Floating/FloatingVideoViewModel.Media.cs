@@ -225,7 +225,7 @@ public partial class FloatingVideoViewModel
                 var loopStart = IsTrimmingMode ? TrimStartSeconds : 0;
                 _currentTime = TimeSpan.FromSeconds(loopStart);
                 UpdateAudioStateFromPlayback();
-                Avalonia.Threading.Dispatcher.UIThread.Post(() => this.RaisePropertyChanged(nameof(CurrentTimeSeconds)));
+                RequestCurrentTimeUiRefresh(force: true);
             }
         }
         catch (OperationCanceledException) { }
@@ -304,26 +304,93 @@ public partial class FloatingVideoViewModel
         catch { }
     }
 
-    internal void UpdateBitmap(byte[] frameData, int generation)
+    private void RequestCurrentTimeUiRefresh(bool force = false)
     {
-        if (VideoBitmap == null || _isDisposed) return;
-        if (generation != Volatile.Read(ref _playbackGeneration)) return;
+        if (_isDisposed) return;
 
-        Avalonia.Threading.Dispatcher.UIThread.Post(() => 
+        var now = Environment.TickCount64;
+        var last = Interlocked.Read(ref _lastTimeUiPostTimestampMs);
+        if (!force && now - last < _uiTimeUpdateIntervalMs) return;
+        if (Interlocked.CompareExchange(ref _isTimeUiPostPending, 1, 0) != 0) return;
+
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
         {
-            if (generation != Volatile.Read(ref _playbackGeneration) || _isDisposed) return;
-            
-            try 
+            try
             {
+                if (_isDisposed) return;
+                this.RaisePropertyChanged(nameof(CurrentTimeSeconds));
+                Interlocked.Exchange(ref _lastTimeUiPostTimestampMs, Environment.TickCount64);
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _isTimeUiPostPending, 0);
+            }
+        });
+    }
+
+    private void QueueLatestFrame(byte[] frameData, int generation)
+    {
+        lock (_latestFrameLock)
+        {
+            if (_latestFrameData == null || _latestFrameData.Length != frameData.Length)
+            {
+                _latestFrameData = new byte[frameData.Length];
+            }
+
+            Buffer.BlockCopy(frameData, 0, _latestFrameData, 0, frameData.Length);
+            _latestFrameGeneration = generation;
+        }
+    }
+
+    private void TryScheduleFrameUiRefresh()
+    {
+        if (_isDisposed) return;
+
+        var now = Environment.TickCount64;
+        var last = Interlocked.Read(ref _lastFrameUiPostTimestampMs);
+        if (now - last < _uiFrameUpdateIntervalMs) return;
+        if (Interlocked.CompareExchange(ref _isFrameUiPostPending, 1, 0) != 0) return;
+
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            try
+            {
+                if (_isDisposed || VideoBitmap == null) return;
+
+                byte[]? frameData;
+                int generation;
+                lock (_latestFrameLock)
+                {
+                    frameData = _latestFrameData;
+                    generation = _latestFrameGeneration;
+                }
+
+                if (frameData == null) return;
+                if (generation != Volatile.Read(ref _playbackGeneration)) return;
+
                 using (var lockedBitmap = VideoBitmap.Lock())
                 {
                     Marshal.Copy(frameData, 0, lockedBitmap.Address, frameData.Length);
                 }
+
                 this.RaisePropertyChanged(nameof(VideoBitmap));
                 RequestRedraw?.Invoke();
+                Interlocked.Exchange(ref _lastFrameUiPostTimestampMs, Environment.TickCount64);
             }
             catch { }
+            finally
+            {
+                Interlocked.Exchange(ref _isFrameUiPostPending, 0);
+            }
         });
+    }
+
+    internal void UpdateBitmap(byte[] frameData, int generation)
+    {
+        if (VideoBitmap == null || _isDisposed) return;
+        if (generation != Volatile.Read(ref _playbackGeneration)) return;
+        QueueLatestFrame(frameData, generation);
+        TryScheduleFrameUiRefresh();
     }
 
     private class FrameStreamWriter : Stream
@@ -379,14 +446,12 @@ public partial class FloatingVideoViewModel
                         {
                             _vm.CurrentTime = TimeSpan.FromSeconds(_trimEndSeconds);
                             _vm._trimEndReached = true;
-                            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                                _vm.RaisePropertyChanged(nameof(_vm.CurrentTimeSeconds)));
+                            _vm.RequestCurrentTimeUiRefresh(force: true);
                             throw new OperationCanceledException();
                         }
                         
                         _vm.CurrentTime = newTime;
-                        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                            _vm.RaisePropertyChanged(nameof(_vm.CurrentTimeSeconds)));
+                        _vm.RequestCurrentTimeUiRefresh();
                     }
                 }
             }

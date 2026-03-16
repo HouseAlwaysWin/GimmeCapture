@@ -138,6 +138,8 @@
   "TranslationSettings": "翻訳と言語エンジン設定",
   "RecordFormat": "録画フォーマット:",
   "RecordFPS": "録画フレームレート (FPS):",
+  "PlaybackUiFps": "ピン留め動画 UI 更新 FPS:",
+  "PlaybackTimelineFps": "ピン留め動画 タイムライン更新 FPS:",
   "EnableAI": "AI 機能を有効にする (高メモリ使用)",
   "IconScale": "アイコンのサイズ:",
   "WingScale": "翼のサイズ:",

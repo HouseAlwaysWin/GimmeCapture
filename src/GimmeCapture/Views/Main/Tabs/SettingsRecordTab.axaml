@@ -73,6 +73,28 @@
                             </StackPanel>
                         </StackPanel>
 
+                        <StackPanel Spacing="5" Margin="0,5,0,0">
+                            <TextBlock Text="{Binding [PlaybackUiFps], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <Slider Minimum="1" Maximum="120" Value="{Binding PlaybackUiFps}"
+                                        TickFrequency="5" IsSnapToTickEnabled="True" HorizontalAlignment="Stretch" Width="250"/>
+                                <c:CompactNumericStep Value="{Binding PlaybackUiFps}"
+                                                       IncreaseCommand="{Binding IncreasePlaybackUiFpsCommand}"
+                                                       DecreaseCommand="{Binding DecreasePlaybackUiFpsCommand}"/>
+                            </StackPanel>
+                        </StackPanel>
+
+                        <StackPanel Spacing="5" Margin="0,5,0,0">
+                            <TextBlock Text="{Binding [PlaybackTimelineFps], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <Slider Minimum="1" Maximum="120" Value="{Binding PlaybackTimelineFps}"
+                                        TickFrequency="5" IsSnapToTickEnabled="True" HorizontalAlignment="Stretch" Width="250"/>
+                                <c:CompactNumericStep Value="{Binding PlaybackTimelineFps}"
+                                                       IncreaseCommand="{Binding IncreasePlaybackTimelineFpsCommand}"
+                                                       DecreaseCommand="{Binding DecreasePlaybackTimelineFpsCommand}"/>
+                            </StackPanel>
+                        </StackPanel>
+
                         <CheckBox Content="{Binding [ShowRecordCursor], Source={x:Static services:LocalizationService.Instance}}" 
      IsChecked="{Binding ShowRecordCursor}" Margin="0,5,0,0"/>
                         <CheckBox Content="{Binding [RecordSystemAudio], Source={x:Static services:LocalizationService.Instance}}"

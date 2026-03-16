@@ -105,6 +105,8 @@
   "TempPath": "暫存檔案路徑:",
   "RecordFormat": "錄影格式:",
   "RecordFPS": "錄影幀率 (FPS):",
+  "PlaybackUiFps": "釘選影片 UI 更新幀率 (FPS):",
+  "PlaybackTimelineFps": "釘選影片時間軸更新幀率 (FPS):",
   "VideoFormat": "影片格式:",
   "VideoCodec": "影片編碼:",
   "VideoCodecH264": "H264 (AVC)",

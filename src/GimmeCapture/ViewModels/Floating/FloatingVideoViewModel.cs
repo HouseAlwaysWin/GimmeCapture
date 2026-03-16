@@ -17,10 +17,19 @@ namespace GimmeCapture.ViewModels.Floating;
 
 public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDrawingToolViewModel, IDisposable
 {
+    private readonly int _uiFrameUpdateIntervalMs;
+    private readonly int _uiTimeUpdateIntervalMs;
     private readonly SemaphoreSlim _playSemaphore = new(1, 1);
     private int _playbackGeneration = 0;
     internal volatile bool _trimEndReached;
     private bool _isDisposed;
+    private readonly object _latestFrameLock = new();
+    private byte[]? _latestFrameData;
+    private int _latestFrameGeneration;
+    private long _lastFrameUiPostTimestampMs;
+    private long _lastTimeUiPostTimestampMs;
+    private int _isFrameUiPostPending;
+    private int _isTimeUiPostPending;
     // Media / Video Properties & State
     private WriteableBitmap? _videoBitmap;
     public WriteableBitmap? VideoBitmap
@@ -302,6 +311,12 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
         return Math.Max(2, even);
     }
 
+    private static int FpsToIntervalMs(int fps, int defaultFps)
+    {
+        int safeFps = Math.Clamp(fps > 0 ? fps : defaultFps, 1, 120);
+        return Math.Max(1, 1000 / safeFps);
+    }
+
     public FloatingVideoViewModel(string videoPath, string ffmpegPath, int width, int height, double originalWidth, double originalHeight, Avalonia.Media.Color borderColor, double borderThickness, bool hideDecoration, bool hideBorder, GimmeCapture.Services.Abstractions.IClipboardService clipboardService, AppSettingsService? appSettingsService)
     {
         VideoPath = videoPath;
@@ -318,6 +333,8 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
         HidePinBorder = hideBorder;
         _clipboardService = clipboardService;
         _appSettingsService = appSettingsService;
+        _uiFrameUpdateIntervalMs = FpsToIntervalMs(_appSettingsService?.Settings.PlaybackUiFps ?? 30, 30);
+        _uiTimeUpdateIntervalMs = FpsToIntervalMs(_appSettingsService?.Settings.PlaybackTimelineFps ?? 15, 15);
 
         // Apply Default Toolbar Visibility
         ShowToolbar = !(_appSettingsService?.Settings.DefaultHideRecordToolbar ?? false);
@@ -355,5 +372,9 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
         var oldBitmap = VideoBitmap;
         VideoBitmap = null;
         oldBitmap?.Dispose();
+        lock (_latestFrameLock)
+        {
+            _latestFrameData = null;
+        }
     }
 }
