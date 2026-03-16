@@ -160,7 +160,7 @@ public partial class SnipWindowViewModel
     public bool IsRecordingActive => _recordingService?.State == RecordingState.Recording;
 
     // Current recording format (gif, mp4, webm, etc.)
-    public string RecordFormat => _mainVm?.RecordFormat ?? "mp4";
+    public string RecordFormat => _mainVm?.RecordingSettings.RecordFormat ?? "mp4";
 
     private TimeSpan _recordingDuration = TimeSpan.Zero;
     public TimeSpan RecordingDuration

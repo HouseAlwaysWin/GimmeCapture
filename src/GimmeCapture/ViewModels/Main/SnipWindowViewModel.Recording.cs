@@ -34,7 +34,7 @@ public partial class SnipWindowViewModel
             return;
         }
 
-        string format = _mainVm.RecordFormat?.ToLowerInvariant() ?? "mp4";
+        string format = _mainVm.RecordingSettings.RecordFormat?.ToLowerInvariant() ?? "mp4";
 
         // Use TempFolder setting if available, otherwise local Temp folder in app directory
         string tempDir = _mainVm.TempDirectory;
@@ -45,12 +45,12 @@ public partial class SnipWindowViewModel
 
         try { System.IO.Directory.CreateDirectory(tempDir); } catch { }
 
-        if (_mainVm.UseFixedRecordPath && !string.IsNullOrEmpty(_mainVm.VideoSaveDirectory))
+        if (_mainVm.RecordingSettings.UseFixedRecordPath && !string.IsNullOrEmpty(_mainVm.RecordingSettings.VideoSaveDirectory))
         {
             // Ensure directory exists
-            try { System.IO.Directory.CreateDirectory(_mainVm.VideoSaveDirectory); } catch { }
+            try { System.IO.Directory.CreateDirectory(_mainVm.RecordingSettings.VideoSaveDirectory); } catch { }
             string fileName = CaptureFileNameService.BuildFileName(format);
-            _currentRecordingPath = System.IO.Path.Combine(_mainVm.VideoSaveDirectory, fileName);
+            _currentRecordingPath = System.IO.Path.Combine(_mainVm.RecordingSettings.VideoSaveDirectory, fileName);
         }
         else
         {
@@ -63,7 +63,7 @@ public partial class SnipWindowViewModel
         if (region.Width % 2 != 0) region = region.WithWidth(region.Width - 1);
         if (region.Height % 2 != 0) region = region.WithHeight(region.Height - 1);
 
-        if (await _recordingService.StartAsync(region, _currentRecordingPath, _mainVm!.RecordFormat ?? "mp4", _mainVm.ShowRecordCursor, ScreenOffset, VisualScaling, _mainVm.RecordFPS, _mainVm.RecordSystemAudio))
+        if (await _recordingService.StartAsync(region, _currentRecordingPath, _mainVm!.RecordingSettings.RecordFormat ?? "mp4", _mainVm.ShowRecordCursor, ScreenOffset, VisualScaling, _mainVm.RecordingSettings.RecordFPS, _mainVm.RecordSystemAudio))
         {
             RecordingDuration = TimeSpan.Zero;
 
@@ -99,7 +99,7 @@ public partial class SnipWindowViewModel
         string? revealPath = null;
 
         // Check if we need to prompt
-        if (!_mainVm.UseFixedRecordPath && PickSaveFileAction != null)
+        if (!_mainVm.RecordingSettings.UseFixedRecordPath && PickSaveFileAction != null)
         {
             var targetPath = await PickSaveFileAction();
             if (!string.IsNullOrEmpty(targetPath))

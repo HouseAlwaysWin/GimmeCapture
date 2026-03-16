@@ -197,8 +197,8 @@ public partial class MainWindowViewModel : ViewModelBase
         DecreaseWingScaleCommand = ReactiveCommand.Create(() => { if (WingScale > 0.5) WingScale = Math.Round(WingScale - 0.1, 1); });
         IncreaseCornerIconScaleCommand = ReactiveCommand.Create(() => { if (CornerIconScale < 1.0) CornerIconScale = Math.Round(CornerIconScale + 0.1, 1); });
         DecreaseCornerIconScaleCommand = ReactiveCommand.Create(() => { if (CornerIconScale > 0.4) CornerIconScale = Math.Round(CornerIconScale - 0.1, 1); });
-        IncreaseRecordFPSCommand = ReactiveCommand.Create(() => { if (RecordFPS < 60) RecordFPS = Math.Min(60, RecordFPS + 5); });
-        DecreaseRecordFPSCommand = ReactiveCommand.Create(() => { if (RecordFPS > 5) RecordFPS = Math.Max(5, RecordFPS - 5); });
+        IncreaseRecordFPSCommand = ReactiveCommand.Create(() => { if (RecordingSettings.RecordFPS < 60) RecordingSettings.RecordFPS = Math.Min(60, RecordingSettings.RecordFPS + 5); });
+        DecreaseRecordFPSCommand = ReactiveCommand.Create(() => { if (RecordingSettings.RecordFPS > 5) RecordingSettings.RecordFPS = Math.Max(5, RecordingSettings.RecordFPS - 5); });
         
         PickAIFolderCommand = ReactiveCommand.CreateFromTask(async () => {
             if (PickFolderAction != null)
@@ -304,6 +304,18 @@ public partial class MainWindowViewModel : ViewModelBase
         this.PropertyChanged += (s, e) =>
         {
             if (!_isDataLoading && e.PropertyName != nameof(StatusText) && e.PropertyName != nameof(IsModified))
+            {
+                if (!IsModified)
+                {
+                    IsModified = true;
+                    SetStatus("StatusModified");
+                }
+            }
+        };
+
+        RecordingSettings.PropertyChanged += (s, e) =>
+        {
+            if (!_isDataLoading)
             {
                 if (!IsModified)
                 {

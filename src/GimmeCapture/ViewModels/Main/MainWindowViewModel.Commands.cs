@@ -66,8 +66,8 @@ public partial class MainWindowViewModel
         SnipHotkey = defaultSettings.SnipHotkey;
         TranslateHotkey = defaultSettings.TranslateHotkey;
         RecordHotkey = defaultSettings.RecordHotkey;
-        RecordFormat = defaultSettings.RecordFormat;
-        VideoCodec = defaultSettings.VideoCodec;
+        RecordingSettings.RecordFormat = defaultSettings.RecordFormat;
+        RecordingSettings.VideoCodec = defaultSettings.VideoCodec;
         
         // Refresh all hotkey properties (they access Settings directly now)
         var hotkeyProps = new[] {
@@ -186,7 +186,7 @@ public partial class MainWindowViewModel
         if (PickFolderAction != null)
         {
             var path = await PickFolderAction();
-            if (!string.IsNullOrEmpty(path)) VideoSaveDirectory = path;
+            if (!string.IsNullOrEmpty(path)) RecordingSettings.VideoSaveDirectory = path;
         }
     }
 
