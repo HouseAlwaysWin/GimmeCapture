@@ -48,44 +48,42 @@ public partial class SnipWindowViewModel
         IsIndeterminate = true;
         ProcessingText = "Translating...";
 
-        if (!await EnsureTranslationEngineReadyAsync()) return;
-
-        if (_translationService == null)
-        {
-            if (_mainVm?.AIResourceService == null) return;
-            _translationService = new TranslationService(_mainVm.AIResourceService, _mainVm.AppSettingsService, _mainVm.MarianMTService);
-        }
-
-        // Sync language settings
-        if (_mainVm != null)
-        {
-            _mainVm.AppSettingsService.Settings.TargetLanguage = _mainVm.TargetLanguage;
-            _mainVm.AppSettingsService.Settings.SourceLanguage = _mainVm.SourceLanguage;
-            System.Diagnostics.Debug.WriteLine($"[TranslationMode] ===== LANGUAGE SETTINGS =====");
-            System.Diagnostics.Debug.WriteLine($"[TranslationMode]   MainVM.SourceLanguage = {_mainVm.SourceLanguage}");
-            System.Diagnostics.Debug.WriteLine($"[TranslationMode]   MainVM.TargetLanguage = {_mainVm.TargetLanguage}");
-            System.Diagnostics.Debug.WriteLine($"[TranslationMode]   AppSettings.SourceLanguage = {_mainVm.AppSettingsService.Settings.SourceLanguage}");
-            System.Diagnostics.Debug.WriteLine($"[TranslationMode]   AppSettings.TargetLanguage = {_mainVm.AppSettingsService.Settings.TargetLanguage}");
-            System.Diagnostics.Debug.WriteLine($"[TranslationMode] ==============================");
-        }
-
-        // Setup new cancellation token source moved to the beginning of the function
-
-        // Ensure OCR resources
-        if (_mainVm != null)
-        {
-            bool ready = await _mainVm.AIResourceService.EnsureOCRAsync();
-            if (!ready)
-            {
-                System.Diagnostics.Debug.WriteLine("[TranslationMode] OCR not ready");
-                ShowTopLoadingBar = false;
-                IsIndeterminate = false;
-                return;
-            }
-        }
-
         try
         {
+            if (!await EnsureTranslationEngineReadyAsync()) return;
+
+            if (_translationService == null)
+            {
+                if (_mainVm?.AIResourceService == null) return;
+                _translationService = new TranslationService(_mainVm.AIResourceService, _mainVm.AppSettingsService, _mainVm.MarianMTService);
+            }
+
+            // Sync language settings
+            if (_mainVm != null)
+            {
+                _mainVm.AppSettingsService.Settings.TargetLanguage = _mainVm.TargetLanguage;
+                _mainVm.AppSettingsService.Settings.SourceLanguage = _mainVm.SourceLanguage;
+                System.Diagnostics.Debug.WriteLine($"[TranslationMode] ===== LANGUAGE SETTINGS =====");
+                System.Diagnostics.Debug.WriteLine($"[TranslationMode]   MainVM.SourceLanguage = {_mainVm.SourceLanguage}");
+                System.Diagnostics.Debug.WriteLine($"[TranslationMode]   MainVM.TargetLanguage = {_mainVm.TargetLanguage}");
+                System.Diagnostics.Debug.WriteLine($"[TranslationMode]   AppSettings.SourceLanguage = {_mainVm.AppSettingsService.Settings.SourceLanguage}");
+                System.Diagnostics.Debug.WriteLine($"[TranslationMode]   AppSettings.TargetLanguage = {_mainVm.AppSettingsService.Settings.TargetLanguage}");
+                System.Diagnostics.Debug.WriteLine($"[TranslationMode] ==============================");
+            }
+
+            // Setup new cancellation token source moved to the beginning of the function
+
+            // Ensure OCR resources
+            if (_mainVm != null)
+            {
+                bool ready = await _mainVm.AIResourceService.EnsureOCRAsync();
+                if (!ready)
+                {
+                    System.Diagnostics.Debug.WriteLine("[TranslationMode] OCR not ready");
+                    return;
+                }
+            }
+
             // 逐一翻譯每個選取區域
             var selectionsCopy = UserSelections.ToList();
             foreach (var sel in selectionsCopy)
@@ -179,29 +177,27 @@ public partial class SnipWindowViewModel
     {
         System.Diagnostics.Debug.WriteLine("[TranslationMode] ScanAllText triggered");
 
-        if (!await EnsureTranslationEngineReadyAsync()) return;
-
         ShowTopLoadingBar = true;
         IsIndeterminate = true;
 
-        if (_mainVm?.AIResourceService == null) 
-        {
-            System.Diagnostics.Debug.WriteLine("[TranslationMode] ScanAllText: mainVm or AIResourceService is NULL");
-            return;
-        }
-
-        // Ensure OCR resources
-        bool ready = await _mainVm.AIResourceService.EnsureOCRAsync();
-        if (!ready)
-        {
-            System.Diagnostics.Debug.WriteLine("[TranslationMode] OCR not ready for scan");
-            ShowTopLoadingBar = false;
-            IsIndeterminate = false;
-            return;
-        }
-
         try
         {
+            if (!await EnsureTranslationEngineReadyAsync()) return;
+
+            if (_mainVm?.AIResourceService == null) 
+            {
+                System.Diagnostics.Debug.WriteLine("[TranslationMode] ScanAllText: mainVm or AIResourceService is NULL");
+                return;
+            }
+
+            // Ensure OCR resources
+            bool ready = await _mainVm.AIResourceService.EnsureOCRAsync();
+            if (!ready)
+            {
+                System.Diagnostics.Debug.WriteLine("[TranslationMode] OCR not ready for scan");
+                return;
+            }
+
             System.Diagnostics.Debug.WriteLine("[TranslationMode] ScanAllText: Capturing full screen...");
             // 擷取全螢幕
             var fullScreenRect = new Rect(0, 0, ViewportSize.Width, ViewportSize.Height);
