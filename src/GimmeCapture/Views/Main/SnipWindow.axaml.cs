@@ -271,8 +271,9 @@ public partial class SnipWindow : Window
                 _viewModel.ToolbarHeight = b.Height;
             });
 
-            // Toggle window capture visibility based on recording state
-            // When recording, exclude SnipWindow from capture so toolbar/decorations don't show in video
+            // Toggle window capture visibility based on mode/state.
+            // Recording should include on-screen drawing timeline, so keep SnipWindow capturable.
+            // Translation mode still excludes the window to prevent OCR/flicker recursion.
             if (_viewModel.RecordingService != null)
             {
                 _viewModel.RecordingService.WhenAnyValue(x => x.State)
@@ -282,14 +283,9 @@ public partial class SnipWindow : Window
                         var hwnd = this.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
                         if (hwnd != IntPtr.Zero && OperatingSystem.IsWindows())
                         {
-                            // Recording mode: keep overlay visible to user, but exclude window from capture source.
-                            if (state != RecordingState.Idle)
+                            if (!_viewModel.IsTranslationMode)
                             {
-                                Win32Helpers.SetWindowCaptureVisibility(hwnd, false);
-                            }
-                            else if (!_viewModel.IsTranslationMode)
-                            {
-                                // Translation mode manages capture visibility separately in OnOpened.
+                                // Keep SnipWindow capturable so brush/text drawing is actually recorded.
                                 Win32Helpers.SetWindowCaptureVisibility(hwnd, true);
                             }
                         }

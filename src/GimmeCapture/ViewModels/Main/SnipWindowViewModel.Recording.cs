@@ -239,6 +239,13 @@ public partial class SnipWindowViewModel
                     return;
                 }
 
+                var ffmpegPath = ResolveFfmpegPath(ffplayPath, _recordingService.Downloader.FfmpegExecutablePath);
+                if (string.IsNullOrEmpty(ffmpegPath) || !System.IO.File.Exists(ffmpegPath))
+                {
+                    System.Diagnostics.Debug.WriteLine($"找不到編碼器組件 (ffmpeg.exe): {ffmpegPath}");
+                    return;
+                }
+
                 double scaling = VisualScaling;
                 int x = (int)(SelectionRect.X * scaling) + ScreenOffset.X;
                 int y = (int)(SelectionRect.Y * scaling) + ScreenOffset.Y;
@@ -252,7 +259,7 @@ public partial class SnipWindowViewModel
                 {
                     var videoVm = new FloatingVideoViewModel(
                         recordingPath,
-                        ffplayPath.Replace("ffplay.exe", "ffmpeg.exe"),
+                        ffmpegPath,
                         w, h,
                         logW, logH,
                         SelectionBorderColor,
@@ -273,22 +280,10 @@ public partial class SnipWindowViewModel
                         return Task.CompletedTask;
                     };
 
-                    // Copy annotations from Snip window to the pinned video window
-                    var offsetX = SelectionRect.X;
-                    var offsetY = SelectionRect.Y;
-                    foreach (var ann in Annotations)
-                    {
-                        var cloned = ann.Clone();
-                        cloned.StartPoint = new Point(cloned.StartPoint.X - offsetX, cloned.StartPoint.Y - offsetY);
-                        cloned.EndPoint = new Point(cloned.EndPoint.X - offsetX, cloned.EndPoint.Y - offsetY);
-                        if (cloned.Points != null && cloned.Points.Count > 0)
-                        {
-                            var ptsCopy = new System.Collections.Generic.List<Avalonia.Point>(cloned.Points);
-                            cloned.Points.Clear();
-                            foreach (var pt in ptsCopy) cloned.Points.Add(new Avalonia.Point(pt.X - offsetX, pt.Y - offsetY));
-                        }
-                        videoVm.Annotations.Add(cloned);
-                    }
+                    // IMPORTANT:
+                    // Do not copy Snip annotations into pinned video.
+                    // Recording already contains the real drawing timeline;
+                    // copying final annotations here would make them appear from time 0.
 
                     var pad = videoVm.WindowPadding;
 
@@ -341,6 +336,25 @@ public partial class SnipWindowViewModel
 
         // Keep original path for diagnostics if still not found.
         return path;
+    }
+
+    private static string ResolveFfmpegPath(string ffplayPath, string fallbackFfmpegPath)
+    {
+        if (!string.IsNullOrWhiteSpace(ffplayPath))
+        {
+            var candidate = ffplayPath;
+            if (candidate.EndsWith("ffplay.exe", StringComparison.OrdinalIgnoreCase))
+            {
+                candidate = candidate[..^"ffplay.exe".Length] + "ffmpeg.exe";
+            }
+
+            if (System.IO.File.Exists(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        return fallbackFfmpegPath;
     }
 
 }
