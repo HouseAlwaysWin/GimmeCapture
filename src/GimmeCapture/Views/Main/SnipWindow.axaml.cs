@@ -43,6 +43,9 @@ public partial class SnipWindow : Window
     
     // Window region for transparent hole (mouse pass-through)
     private IDisposable? _selectionRectSubscription;
+    private IDisposable? _viewportBoundsSubscription;
+    private IDisposable? _toolbarBoundsSubscription;
+    private IDisposable? _recordingStateSubscription;
     private Rect _originalRect;
     
     // Services
@@ -233,6 +236,13 @@ public partial class SnipWindow : Window
         
         // Cleanup subscriptions
         _selectionRectSubscription?.Dispose();
+        _selectionRectSubscription = null;
+        _viewportBoundsSubscription?.Dispose();
+        _viewportBoundsSubscription = null;
+        _toolbarBoundsSubscription?.Dispose();
+        _toolbarBoundsSubscription = null;
+        _recordingStateSubscription?.Dispose();
+        _recordingStateSubscription = null;
         
         // Release ViewModel resources
         _viewModel?.Dispose();
@@ -259,31 +269,42 @@ public partial class SnipWindow : Window
     protected override void OnDataContextChanged(EventArgs e)
     {
         base.OnDataContextChanged(e);
+        _selectionRectSubscription?.Dispose();
+        _selectionRectSubscription = null;
+        _viewportBoundsSubscription?.Dispose();
+        _viewportBoundsSubscription = null;
+        _toolbarBoundsSubscription?.Dispose();
+        _toolbarBoundsSubscription = null;
+        _recordingStateSubscription?.Dispose();
+        _recordingStateSubscription = null;
+
         _viewModel = DataContext as SnipWindowViewModel;
         if (_viewModel != null)
         {
-            this.GetObservable(Visual.BoundsProperty).Subscribe(b => _viewModel.ViewportSize = b.Size);
+            var vm = _viewModel;
+            _viewportBoundsSubscription = this.GetObservable(Visual.BoundsProperty)
+                .Subscribe(b => vm.ViewportSize = b.Size);
             
             // Sync Toolbar size to VM for adaptive positioning
-            this.Toolbar.GetObservable(Visual.BoundsProperty).Subscribe(b =>
+            _toolbarBoundsSubscription = this.Toolbar.GetObservable(Visual.BoundsProperty).Subscribe(b =>
             {
-                _viewModel.ToolbarWidth = b.Width;
-                _viewModel.ToolbarHeight = b.Height;
+                vm.ToolbarWidth = b.Width;
+                vm.ToolbarHeight = b.Height;
             });
 
             // Toggle window capture visibility based on mode/state.
             // Recording should include on-screen drawing timeline, so keep SnipWindow capturable.
             // Translation mode still excludes the window to prevent OCR/flicker recursion.
-            if (_viewModel.RecordingService != null)
+            if (vm.RecordingService != null)
             {
-                _viewModel.RecordingService.WhenAnyValue(x => x.State)
+                _recordingStateSubscription = vm.RecordingService.WhenAnyValue(x => x.State)
                     .ObserveOn(RxApp.MainThreadScheduler)
                     .Subscribe(state => 
                     {
                         var hwnd = this.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
                         if (hwnd != IntPtr.Zero && OperatingSystem.IsWindows())
                         {
-                            if (!_viewModel.IsTranslationMode)
+                            if (!vm.IsTranslationMode)
                             {
                                 // Keep SnipWindow capturable so brush/text drawing is actually recorded.
                                 Win32Helpers.SetWindowCaptureVisibility(hwnd, true);
@@ -291,9 +312,9 @@ public partial class SnipWindow : Window
                         }
                         
                         // Trigger UI update for decorations
-                        _viewModel.RaisePropertyChanged(nameof(_viewModel.HideSelectionDecoration));
-                        _viewModel.RaisePropertyChanged(nameof(_viewModel.HideFrameBorder));
-                        _viewModel.RaisePropertyChanged(nameof(_viewModel.IsToolbarVisible));
+                        vm.RaisePropertyChanged(nameof(vm.HideSelectionDecoration));
+                        vm.RaisePropertyChanged(nameof(vm.HideFrameBorder));
+                        vm.RaisePropertyChanged(nameof(vm.IsToolbarVisible));
                     });
             }
 
@@ -338,7 +359,7 @@ public partial class SnipWindow : Window
             // Subscribe to Geometry and state changes to update window region
             // Subscribe to Geometry and state changes to update window region
             // Split into two subscriptions if arguments exceed 7 to avoid compilation error
-            var trigger1 = _viewModel.WhenAnyValue(
+            var trigger1 = vm.WhenAnyValue(
                 x => x.MaskGeometry,
                 x => x.SelectionRect, 
                 x => x.CurrentState, 
@@ -347,7 +368,7 @@ public partial class SnipWindow : Window
                 x => x.IsTranslationSelectionActive,
                 x => x.RecState);
                 
-            var trigger2 = _viewModel.WhenAnyValue(
+            var trigger2 = vm.WhenAnyValue(
                 x => x.ToolbarWidth,
                 x => x.ToolbarHeight,
                 x => x.ShowToolbar,

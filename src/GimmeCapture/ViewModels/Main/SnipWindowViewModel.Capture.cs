@@ -37,7 +37,7 @@ public partial class SnipWindowViewModel
                 ShowProcessingOverlay = true;
                 IsIndeterminate = true;
                 ProcessingText = LocalizationService.Instance["StatusProcessing"] ?? "Processing...";
-                var bitmap = await _captureService.CaptureScreenWithAnnotationsAsync(SelectionRect, ScreenOffset, VisualScaling, Annotations, UserSelections, TranslatedBlocks, _mainVm?.ShowSnipCursor ?? false);
+                using var bitmap = await _captureService.CaptureScreenWithAnnotationsAsync(SelectionRect, ScreenOffset, VisualScaling, Annotations, UserSelections, TranslatedBlocks, _mainVm?.ShowSnipCursor ?? false);
                 await _captureService.CopyToClipboardAsync(bitmap);
                 _mainVm?.SetStatus("StatusCopied");
             }
@@ -70,7 +70,7 @@ public partial class SnipWindowViewModel
                 ShowProcessingOverlay = true;
                 IsIndeterminate = true;
                 ProcessingText = LocalizationService.Instance["StatusSaving"] ?? "Saving...";
-                var bitmap = await _captureService.CaptureScreenWithAnnotationsAsync(SelectionRect, ScreenOffset, VisualScaling, Annotations, UserSelections, TranslatedBlocks, _mainVm?.ShowSnipCursor ?? false);
+                using var bitmap = await _captureService.CaptureScreenWithAnnotationsAsync(SelectionRect, ScreenOffset, VisualScaling, Annotations, UserSelections, TranslatedBlocks, _mainVm?.ShowSnipCursor ?? false);
 
                 string? savedPath = null;
 
@@ -153,7 +153,7 @@ public partial class SnipWindowViewModel
 
             try
             {
-                var skBitmap = await _captureService.CaptureScreenWithAnnotationsAsync(SelectionRect, ScreenOffset, VisualScaling, Annotations, UserSelections, TranslatedBlocks, _mainVm?.ShowSnipCursor ?? false);
+                using var skBitmap = await _captureService.CaptureScreenWithAnnotationsAsync(SelectionRect, ScreenOffset, VisualScaling, Annotations, UserSelections, TranslatedBlocks, _mainVm?.ShowSnipCursor ?? false);
 
                 // Convert SKBitmap to Avalonia Bitmap without PNG stream roundtrip
                 var avaloniaBitmap = new Avalonia.Media.Imaging.WriteableBitmap(
@@ -171,9 +171,6 @@ public partial class SnipWindowViewModel
                         lockedOut.RowBytes * lockedOut.Size.Height,
                         skBitmap.RowBytes * skBitmap.Height);
                 }
-
-                // Make sure to dispose the SKBitmap after we are done copying
-                skBitmap.Dispose();
 
                 // Open Floating Window
                 OpenPinWindowAction?.Invoke(avaloniaBitmap, SelectionRect, SelectionBorderColor, SelectionBorderThickness, runAI, initialInteractive, null, 12.0);

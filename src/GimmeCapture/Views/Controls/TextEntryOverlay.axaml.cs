@@ -3,6 +3,7 @@ using System.Reactive;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.VisualTree;
 using GimmeCapture.ViewModels.Shared;
 using ReactiveUI;
 
@@ -10,6 +11,8 @@ namespace GimmeCapture.Views.Controls;
 
 public partial class TextEntryOverlay : UserControl
 {
+    private IDisposable? _panelVisibleSubscription;
+
     public TextEntryOverlay()
     {
         InitializeComponent();
@@ -17,7 +20,7 @@ public partial class TextEntryOverlay : UserControl
         var panel = this.FindControl<StackPanel>("TextEntryPanel");
         if (panel != null)
         {
-            panel.GetObservable(IsVisibleProperty).Subscribe(visible =>
+            _panelVisibleSubscription = panel.GetObservable(IsVisibleProperty).Subscribe(visible =>
             {
                 if (visible)
                 {
@@ -26,6 +29,13 @@ public partial class TextEntryOverlay : UserControl
                 }
             });
         }
+    }
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        _panelVisibleSubscription?.Dispose();
+        _panelVisibleSubscription = null;
+        base.OnDetachedFromVisualTree(e);
     }
 
     private void OnTextBoxKeyDown(object? sender, KeyEventArgs e)

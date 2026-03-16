@@ -351,7 +351,9 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
         StopAudioPlayback();
         
         base.Dispose();
-        
+
+        var oldBitmap = VideoBitmap;
         VideoBitmap = null;
+        oldBitmap?.Dispose();
     }
 }

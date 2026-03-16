@@ -10,6 +10,7 @@ using Avalonia.Interactivity;
 using Avalonia.Threading;
 using System.Linq;
 using Avalonia.Media.Imaging;
+using System.ComponentModel;
 
 namespace GimmeCapture.Views.Floating;
 
@@ -24,6 +25,9 @@ namespace GimmeCapture.Views.Floating;
 /// </summary>
 public abstract class FloatingWindowBase : Window
 {
+    private FloatingWindowViewModelBase? _boundViewModel;
+    private PropertyChangedEventHandler? _boundViewModelPropertyChangedHandler;
+
     // Resize State
     protected bool _isResizing;
     protected ResizeDirection _resizeDirection;
@@ -85,6 +89,13 @@ public abstract class FloatingWindowBase : Window
     protected override void OnDataContextChanged(EventArgs e)
     {
         base.OnDataContextChanged(e);
+        if (_boundViewModel != null && _boundViewModelPropertyChangedHandler != null)
+        {
+            _boundViewModel.PropertyChanged -= _boundViewModelPropertyChangedHandler;
+            _boundViewModel = null;
+            _boundViewModelPropertyChangedHandler = null;
+        }
+
         if (DataContext is FloatingWindowViewModelBase vm)
         {
             // Shared VM Setup
@@ -100,7 +111,7 @@ public abstract class FloatingWindowBase : Window
             };
             
             // Re-bind property changed
-            vm.PropertyChanged += (s, ev) =>
+            _boundViewModelPropertyChangedHandler = (s, ev) =>
             {
                 if (ev.PropertyName == nameof(FloatingWindowViewModelBase.ShowToolbar) || 
                     ev.PropertyName == nameof(FloatingWindowViewModelBase.WindowPadding) ||
@@ -110,10 +121,24 @@ public abstract class FloatingWindowBase : Window
                     SyncWindowSizeToContent();
                 }
             };
+            vm.PropertyChanged += _boundViewModelPropertyChangedHandler;
+            _boundViewModel = vm;
             
             // Force initial sync
             SyncWindowSizeToContent();
         }
+    }
+
+    protected override void OnClosed(EventArgs e)
+    {
+        if (_boundViewModel != null && _boundViewModelPropertyChangedHandler != null)
+        {
+            _boundViewModel.PropertyChanged -= _boundViewModelPropertyChangedHandler;
+            _boundViewModel = null;
+            _boundViewModelPropertyChangedHandler = null;
+        }
+
+        base.OnClosed(e);
     }
 
     protected virtual void SyncWindowSizeToContent()

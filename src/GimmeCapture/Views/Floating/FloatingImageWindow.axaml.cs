@@ -12,12 +12,16 @@ using Avalonia.Media.Imaging;
 using Avalonia.Media;
 using System.Reactive.Linq;
 using Avalonia.Interactivity;
+using System.ComponentModel;
 
 namespace GimmeCapture.Views.Floating;
 
 public partial class FloatingImageWindow : FloatingWindowBase
 {
     private bool _isAIPointing;
+    private IDisposable? _toolbarBoundsSubscription;
+    private FloatingImageViewModel? _boundViewModel;
+    private PropertyChangedEventHandler? _boundViewModelPropertyChangedHandler;
 
     public FloatingImageWindow()
     {
@@ -37,7 +41,7 @@ public partial class FloatingImageWindow : FloatingWindowBase
         var toolbar = this.FindControl<Border>("ToolbarBorder");
         if (toolbar != null)
         {
-            toolbar.GetObservable(Visual.BoundsProperty).Subscribe(bounds => {
+            _toolbarBoundsSubscription = toolbar.GetObservable(Visual.BoundsProperty).Subscribe(bounds => {
                 if (DataContext is FloatingImageViewModel vm)
                 {
                     vm.ToolbarWidth = bounds.Width;
@@ -54,6 +58,13 @@ public partial class FloatingImageWindow : FloatingWindowBase
     protected override void OnDataContextChanged(EventArgs e)
     {
         base.OnDataContextChanged(e);
+        if (_boundViewModel != null && _boundViewModelPropertyChangedHandler != null)
+        {
+            _boundViewModel.PropertyChanged -= _boundViewModelPropertyChangedHandler;
+            _boundViewModel = null;
+            _boundViewModelPropertyChangedHandler = null;
+        }
+
         if (DataContext is FloatingImageViewModel vm)
         {
             // Specific Image VM Setup
@@ -83,14 +94,30 @@ public partial class FloatingImageWindow : FloatingWindowBase
             };
             
             // Re-Bind VM Properties specific to ImageWindow if needed
-            vm.PropertyChanged += (s, ev) =>
+            _boundViewModelPropertyChangedHandler = (s, ev) =>
             {
                 if (ev.PropertyName == nameof(FloatingImageViewModel.Image))
                 {
                     SyncWindowSizeToContent();
                 }
             };
+            vm.PropertyChanged += _boundViewModelPropertyChangedHandler;
+            _boundViewModel = vm;
         }
+    }
+
+    protected override void OnClosed(EventArgs e)
+    {
+        _toolbarBoundsSubscription?.Dispose();
+        _toolbarBoundsSubscription = null;
+        if (_boundViewModel != null && _boundViewModelPropertyChangedHandler != null)
+        {
+            _boundViewModel.PropertyChanged -= _boundViewModelPropertyChangedHandler;
+            _boundViewModel = null;
+            _boundViewModelPropertyChangedHandler = null;
+        }
+
+        base.OnClosed(e);
     }
 
     // Override OnPointerPressed to handle AI Interactions
