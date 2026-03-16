@@ -11,6 +11,82 @@ namespace GimmeCapture.ViewModels.Main;
 
 public partial class SnipWindowViewModel
 {
+    private void ResetRecordingDurationTracking()
+    {
+        _recordingAccumulatedDuration = TimeSpan.Zero;
+        _recordingActiveStartUtc = DateTime.UtcNow;
+        _lastRecordingState = RecordingState.Idle;
+        RecordingDuration = TimeSpan.Zero;
+    }
+
+    private void EnsureRecordingTimerStarted()
+    {
+        if (_recordTimer == null)
+        {
+            _recordTimer = new Avalonia.Threading.DispatcherTimer
+            {
+                Interval = TimeSpan.FromMilliseconds(200)
+            };
+            _recordTimer.Tick += (_, _) => UpdateRecordingDurationFromClock();
+        }
+
+        if (!_recordTimer.IsEnabled)
+        {
+            _recordTimer.Start();
+        }
+    }
+
+    private void HandleRecordingStateChanged(RecordingState newState)
+    {
+        var nowUtc = DateTime.UtcNow;
+
+        // Close the active recording segment when leaving Recording state.
+        if (_lastRecordingState == RecordingState.Recording && newState != RecordingState.Recording)
+        {
+            var delta = nowUtc - _recordingActiveStartUtc;
+            if (delta > TimeSpan.Zero)
+            {
+                _recordingAccumulatedDuration += delta;
+            }
+        }
+
+        // Open a new active segment when entering Recording state.
+        if (_lastRecordingState != RecordingState.Recording && newState == RecordingState.Recording)
+        {
+            _recordingActiveStartUtc = nowUtc;
+            EnsureRecordingTimerStarted();
+        }
+
+        if (newState == RecordingState.Idle && _recordTimer?.IsEnabled == true)
+        {
+            _recordTimer.Stop();
+        }
+
+        _lastRecordingState = newState;
+        UpdateRecordingDurationFromClock();
+    }
+
+    private void UpdateRecordingDurationFromClock()
+    {
+        TimeSpan duration = _recordingAccumulatedDuration;
+
+        if (RecState == RecordingState.Recording)
+        {
+            var live = DateTime.UtcNow - _recordingActiveStartUtc;
+            if (live > TimeSpan.Zero)
+            {
+                duration += live;
+            }
+        }
+
+        if (duration < TimeSpan.Zero)
+        {
+            duration = TimeSpan.Zero;
+        }
+
+        RecordingDuration = duration;
+    }
+
     private async Task ExecuteStartRecordingAsync()
     {
         // Cancel any pending AI scans immediately
@@ -63,20 +139,10 @@ public partial class SnipWindowViewModel
         if (region.Width % 2 != 0) region = region.WithWidth(region.Width - 1);
         if (region.Height % 2 != 0) region = region.WithHeight(region.Height - 1);
 
+        ResetRecordingDurationTracking();
         if (await _recordingService.StartAsync(region, _currentRecordingPath, _mainVm!.RecordingSettings.RecordFormat ?? "mp4", _mainVm.ShowRecordCursor, ScreenOffset, VisualScaling, _mainVm.RecordingSettings.RecordFPS, _mainVm.RecordSystemAudio))
         {
-            RecordingDuration = TimeSpan.Zero;
-
-            _recordTimer = new Avalonia.Threading.DispatcherTimer
-            {
-                Interval = TimeSpan.FromSeconds(1)
-            };
-            _recordTimer.Tick += (s, e) =>
-            {
-                if (RecState == RecordingState.Recording)
-                    RecordingDuration = RecordingDuration.Add(TimeSpan.FromSeconds(1));
-            };
-            _recordTimer.Start();
+            EnsureRecordingTimerStarted();
         }
     }
 

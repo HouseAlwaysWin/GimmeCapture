@@ -224,8 +224,10 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         if (_recordingService != null)
         {
             _recordingService.WhenAnyValue(x => x.State)
+                .ObserveOn(RxApp.MainThreadScheduler)
                 .Subscribe(_ => 
                 {
+                    HandleRecordingStateChanged(_recordingService.State);
                     this.RaisePropertyChanged(nameof(RecState));
                     this.RaisePropertyChanged(nameof(IsRecordingActive));
                     this.RaisePropertyChanged(nameof(HideFrameBorder));

@@ -176,6 +176,9 @@ public partial class SnipWindowViewModel
     public string RecordingDurationText => RecordingDuration.ToString(@"mm\:ss");
 
     private Avalonia.Threading.DispatcherTimer? _recordTimer;
+    private DateTime _recordingActiveStartUtc;
+    private TimeSpan _recordingAccumulatedDuration = TimeSpan.Zero;
+    private RecordingState _lastRecordingState = RecordingState.Idle;
 
     private bool _isRecordingFinalizing;
     public bool IsRecordingFinalizing
