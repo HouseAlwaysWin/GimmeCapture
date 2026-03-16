@@ -7,7 +7,7 @@ using System.Linq;
 
 namespace GimmeCapture.Models;
 
-public interface IHistoryAction
+public interface IHistoryAction : IDisposable
 {
     void Undo();
     void Redo();
@@ -28,6 +28,12 @@ public class BitmapHistoryAction : IHistoryAction
 
     public void Undo() => SetBitmapAction(OldBitmap);
     public void Redo() => SetBitmapAction(NewBitmap);
+
+    public void Dispose()
+    {
+        OldBitmap?.Dispose();
+        NewBitmap?.Dispose();
+    }
 }
 
 public class AnnotationHistoryAction : IHistoryAction
@@ -54,6 +60,8 @@ public class AnnotationHistoryAction : IHistoryAction
         if (_isAdd) _annotations.Add(_annotation);
         else _annotations.Remove(_annotation);
     }
+
+    public void Dispose() { }
 }
 
 public class ClearAnnotationsHistoryAction : IHistoryAction
@@ -76,6 +84,8 @@ public class ClearAnnotationsHistoryAction : IHistoryAction
     {
         _annotations.Clear();
     }
+
+    public void Dispose() { }
 }
 
 public class WindowTransformHistoryAction : IHistoryAction
@@ -112,6 +122,8 @@ public class WindowTransformHistoryAction : IHistoryAction
 
     public void Undo() => _setter(_oldPos, _oldWidth, _oldHeight, _oldContentWidth, _oldContentHeight);
     public void Redo() => _setter(_newPos, _newWidth, _newHeight, _newContentWidth, _newContentHeight);
+
+    public void Dispose() { }
 }
 
 
@@ -140,5 +152,14 @@ public class CompositeHistoryAction : IHistoryAction
         {
             _actions[i].Redo();
         }
+    }
+
+    public void Dispose()
+    {
+        foreach (var action in _actions)
+        {
+            action.Dispose();
+        }
+        _actions.Clear();
     }
 }

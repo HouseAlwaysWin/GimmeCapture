@@ -289,6 +289,7 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
 
     public override void Dispose()
     {
+        base.Dispose();
         _sam2Service?.Dispose();
         _sam2Service = null;
     }

@@ -570,7 +570,14 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
     public void PushUndoAction(IHistoryAction action)
     {
         _historyStack.Push(action);
+        
+        // When a new action is performed, redo history is invalidated. Dispose those actions to free memory.
+        foreach (var redoAction in _redoHistoryStack)
+        {
+            redoAction.Dispose();
+        }
         _redoHistoryStack.Clear();
+        
         UpdateHistoryStatus();
     }
 
@@ -613,5 +620,12 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
         HasRedo = _redoHistoryStack.Count > 0;
     }
 
-    public virtual void Dispose() {} 
+    public virtual void Dispose() 
+    {
+        foreach (var action in _historyStack) action.Dispose();
+        _historyStack.Clear();
+
+        foreach (var action in _redoHistoryStack) action.Dispose();
+        _redoHistoryStack.Clear();
+    } 
 }
