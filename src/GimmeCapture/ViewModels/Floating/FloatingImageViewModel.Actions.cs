@@ -205,51 +205,36 @@ public partial class FloatingImageViewModel
 
         if (intersect.Width <= 0 || intersect.Height <= 0) return null;
         
-        try 
+        try
         {
-            return await Task.Run(() => 
+            return await Task.Run(() =>
             {
-                var info = new SkiaSharp.SKImageInfo((int)source.Size.Width, (int)source.Size.Height, SkiaSharp.SKColorType.Bgra8888);
-                using var skBitmap = new SkiaSharp.SKBitmap(info);
-                
-                // Use Avalonia's CopyPixels which avoids PNG roundtrip
-                var pixelSize = new Avalonia.PixelSize((int)source.Size.Width, (int)source.Size.Height);
-                source.CopyPixels(new Avalonia.PixelRect(0, 0, (int)source.Size.Width, (int)source.Size.Height), skBitmap.GetPixels(), info.BytesSize, info.RowBytes);
-                
-                var subset = new SkiaSharp.SKBitmap();
-                
-                SkiaSharp.SKRectI skRect = new SkiaSharp.SKRectI(
-                    (int)intersect.X, (int)intersect.Y, 
-                    (int)(intersect.X + intersect.Width), 
-                    (int)(intersect.Y + intersect.Height));
-                    
-                if (skBitmap.ExtractSubset(subset, skRect))
-                {
-                    // Convert back to Avalonia Bitmap via direct memory copy to avoid PNG encoding
-                    var outBitmap = new Avalonia.Media.Imaging.WriteableBitmap(
-                        new Avalonia.PixelSize(subset.Width, subset.Height),
-                        new Avalonia.Vector(96, 96),
-                        Avalonia.Platform.PixelFormat.Bgra8888,
-                        Avalonia.Platform.AlphaFormat.Premul);
+                int sourceWidth = (int)source.Size.Width;
+                int sourceHeight = (int)source.Size.Height;
 
-                    using var lockedOut = outBitmap.Lock();
-                    unsafe
-                    {
-                        byte* srcBase = (byte*)subset.GetPixels();
-                        byte* dstBase = (byte*)lockedOut.Address;
-                        int rows = Math.Min(subset.Height, lockedOut.Size.Height);
-                        int bytesPerRow = Math.Min(subset.RowBytes, lockedOut.RowBytes);
+                int left = Math.Clamp((int)Math.Floor(intersect.X), 0, Math.Max(0, sourceWidth - 1));
+                int top = Math.Clamp((int)Math.Floor(intersect.Y), 0, Math.Max(0, sourceHeight - 1));
+                int right = Math.Clamp((int)Math.Ceiling(intersect.X + intersect.Width), left + 1, sourceWidth);
+                int bottom = Math.Clamp((int)Math.Ceiling(intersect.Y + intersect.Height), top + 1, sourceHeight);
 
-                        for (int row = 0; row < rows; row++)
-                        {
-                            var srcRow = srcBase + (row * subset.RowBytes);
-                            var dstRow = dstBase + (row * lockedOut.RowBytes);
-                            Buffer.MemoryCopy(srcRow, dstRow, lockedOut.RowBytes, bytesPerRow);
-                        }
-                    }
-                    return outBitmap;
-                }
-                return null;
+                int cropWidth = right - left;
+                int cropHeight = bottom - top;
+                if (cropWidth <= 0 || cropHeight <= 0) return null;
+
+                var outBitmap = new Avalonia.Media.Imaging.WriteableBitmap(
+                    new Avalonia.PixelSize(cropWidth, cropHeight),
+                    new Avalonia.Vector(96, 96),
+                    Avalonia.Platform.PixelFormat.Bgra8888,
+                    Avalonia.Platform.AlphaFormat.Premul);
+
+                using var lockedOut = outBitmap.Lock();
+                source.CopyPixels(
+                    new Avalonia.PixelRect(left, top, cropWidth, cropHeight),
+                    lockedOut.Address,
+                    lockedOut.RowBytes * lockedOut.Size.Height,
+                    lockedOut.RowBytes);
+
+                return outBitmap;
             });
         }
         catch (Exception ex)

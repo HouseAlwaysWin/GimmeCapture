@@ -106,31 +106,30 @@ public partial class AnnotationControl : UserControl
             Avalonia.Platform.PixelFormat.Bgra8888,
             Avalonia.Platform.AlphaFormat.Premul);
 
-        // Get source pixel data — handle both WriteableBitmap and regular Bitmap.
+        // Read only the ROI needed by the annotation (instead of the full snapshot).
+        int roiX = Math.Clamp((int)Math.Floor(x1 * scaleX), 0, Math.Max(0, snapPixelW - 1));
+        int roiY = Math.Clamp((int)Math.Floor(y1 * scaleY), 0, Math.Max(0, snapPixelH - 1));
+        int roiRight = Math.Clamp((int)Math.Ceiling(x2 * scaleX), roiX + 1, snapPixelW);
+        int roiBottom = Math.Clamp((int)Math.Ceiling(y2 * scaleY), roiY + 1, snapPixelH);
+        int roiW = roiRight - roiX;
+        int roiH = roiBottom - roiY;
+        if (roiW <= 0 || roiH <= 0) return;
+
         // Use pooled buffers to avoid repeated large allocations while dragging.
         byte[]? srcPixels = null;
         int srcStride = 0;
         int rentedLength = 0;
 
-        if (snapshot is WriteableBitmap wb)
+        try
         {
-            using var srcLock = wb.Lock();
-            srcStride = srcLock.RowBytes;
-            rentedLength = srcStride * snapPixelH;
-            srcPixels = ArrayPool<byte>.Shared.Rent(rentedLength);
-            System.Runtime.InteropServices.Marshal.Copy(srcLock.Address, srcPixels, 0, rentedLength);
-        }
-        else
-        {
-            // Regular Bitmap — use CopyPixels to read pixel data
-            srcStride = snapPixelW * 4;
-            rentedLength = srcStride * snapPixelH;
+            srcStride = roiW * 4;
+            rentedLength = srcStride * roiH;
             srcPixels = ArrayPool<byte>.Shared.Rent(rentedLength);
             var handle = System.Runtime.InteropServices.GCHandle.Alloc(srcPixels, System.Runtime.InteropServices.GCHandleType.Pinned);
             try
             {
                 snapshot.CopyPixels(
-                    new PixelRect(0, 0, snapPixelW, snapPixelH),
+                    new PixelRect(roiX, roiY, roiW, roiH),
                     handle.AddrOfPinnedObject(),
                     rentedLength,
                     srcStride);
@@ -139,6 +138,14 @@ public partial class AnnotationControl : UserControl
             {
                 handle.Free();
             }
+        }
+        catch
+        {
+            if (srcPixels != null && rentedLength > 0)
+            {
+                ArrayPool<byte>.Shared.Return(srcPixels);
+            }
+            throw;
         }
 
         if (srcPixels == null) return;
@@ -166,9 +173,11 @@ public partial class AnnotationControl : UserControl
                         // Map to snapshot pixel coordinates
                         int pixelSampleX = Math.Clamp((int)(logicalSampleX * scaleX), 0, snapPixelW - 1);
                         int pixelSampleY = Math.Clamp((int)(logicalSampleY * scaleY), 0, snapPixelH - 1);
+                        int roiSampleX = Math.Clamp(pixelSampleX - roiX, 0, roiW - 1);
+                        int roiSampleY = Math.Clamp(pixelSampleY - roiY, 0, roiH - 1);
 
                         // Read pixel (BGRA)
-                        int srcOffset = pixelSampleY * srcStride + pixelSampleX * 4;
+                        int srcOffset = roiSampleY * srcStride + roiSampleX * 4;
                         byte b = srcPixels[srcOffset + 0];
                         byte g = srcPixels[srcOffset + 1];
                         byte r = srcPixels[srcOffset + 2];
