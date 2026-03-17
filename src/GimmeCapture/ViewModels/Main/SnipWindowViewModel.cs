@@ -10,6 +10,7 @@ using System.Collections.ObjectModel;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using System.ComponentModel;
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core;
 using GimmeCapture.Services.Core.Media;
@@ -25,6 +26,38 @@ public enum SnipMode { Screenshot, Recording, Translation }
 
 public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingToolViewModel
 {
+    private static readonly string[] _localizedPropertyNames =
+    {
+        nameof(SnipTooltip),
+        nameof(RecordTooltip),
+        nameof(TranslateTooltip),
+        nameof(UndoTooltip),
+        nameof(RedoTooltip),
+        nameof(ClearTooltip),
+        nameof(SaveTooltip),
+        nameof(CopyTooltip),
+        nameof(PinTooltip),
+        nameof(RectangleTooltip),
+        nameof(EllipseTooltip),
+        nameof(ArrowTooltip),
+        nameof(LineTooltip),
+        nameof(PenTooltip),
+        nameof(TextTooltip),
+        nameof(MosaicTooltip),
+        nameof(BlurTooltip),
+        nameof(FullscreenSelectTooltip),
+        nameof(HideTranslationResultsTooltip),
+        nameof(TranslateAllTooltip),
+        nameof(ScanAllTooltip),
+        nameof(ClearAllTooltip),
+        nameof(ToggleSelectTooltip),
+        nameof(AutoDetectTooltip),
+        nameof(ModeMultiTooltip),
+        nameof(ToggleToolbarTooltip),
+        nameof(InputAudioStateText),
+        nameof(OutputAudioStateText)
+    };
+
     private readonly RecordingService? _recordingService;
     public RecordingService? RecordingService => _recordingService;
     private readonly MainWindowViewModel? _mainVm;
@@ -213,43 +246,8 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         _mainVm = mainVm;
         _audioMeterTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(120) };
 
-        if (_mainVm != null)
-        {
-            // Always use ThemeColor for all UI boxes per request
-            _selectionBorderColor = _mainVm.ThemeColor;
-            _selectionBorderThickness = _mainVm.BorderThickness;
-            _maskOpacity = _mainVm.MaskOpacity;
-        }
-
-        if (_recordingService != null)
-        {
-            _recordingService.WhenAnyValue(x => x.State)
-                .ObserveOn(RxApp.MainThreadScheduler)
-                .Subscribe(_ => 
-                {
-                    HandleRecordingStateChanged(_recordingService.State);
-                    this.RaisePropertyChanged(nameof(RecState));
-                    this.RaisePropertyChanged(nameof(IsRecordingActive));
-                    this.RaisePropertyChanged(nameof(HideFrameBorder));
-                    this.RaisePropertyChanged(nameof(HideSelectionDecoration));
-                }).DisposeWith(_disposables);
-
-            _recordingService.WhenAnyValue(x => x.IsFinalizing)
-                .ObserveOn(RxApp.MainThreadScheduler)
-                .Subscribe(isFinalizing => 
-                {
-                    IsRecordingFinalizing = isFinalizing;
-                    if (isFinalizing)
-                    {
-                         ProcessingText = LocalizationService.Instance["StatusProcessing"];
-                         OpenRecordingProgressWindowAction?.Invoke();
-                    }
-                    else
-                    {
-                         CloseRecordingProgressWindowAction?.Invoke();
-                    }
-                }).DisposeWith(_disposables);
-        }
+        ApplyInitialMainVmVisualSettings();
+        InitializeRecordingBindingsIfNeeded();
 
         _audioMeterTimer.Tick += (_, _) => RefreshAudioLevels();
         _audioMeterTimer.Start();
@@ -257,69 +255,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         InitializeActionCommands();
         InitializeToolbarCommands();
         InitializeSelectionCommands();
-        if (mainVm != null)
-        {
-            // 只在 AI 功能啟用時才預載 SAM2 模型，避免不必要的記憶體消耗
-            if (mainVm.EnableAI)
-            {
-                InitializeSAM2(mainVm);
-            }
-            
-            // Sync translation activation with global settings in real-time
-
-
-            // Sync AI Scan Box visibility
-            mainVm.WhenAnyValue(x => x.ShowAIScanBox)
-                  .Subscribe(val => ShowAIScanBox = val)
-                  .DisposeWith(_disposables);
-
-            // Sync Enable AI Scan
-            mainVm.WhenAnyValue(x => x.EnableAIScan)
-                  .Subscribe(val => EnableAIScan = val)
-                  .DisposeWith(_disposables);
-
-            // Sync AI Download Progress
-            mainVm.WhenAnyValue(x => x.ProgressValue)
-                  .Subscribe(val => ProgressValue = val)
-                  .DisposeWith(_disposables);
-
-            // Sync IsIndeterminate
-            mainVm.WhenAnyValue(x => x.IsIndeterminate)
-                  .Subscribe(val => IsIndeterminate = val)
-                  .DisposeWith(_disposables);
-
-            // Sync ShowProcessingOverlay — only propagate 'true' from MainVM.
-            // When MainVM goes false, only clear overlay if no local operation is active.
-            mainVm.WhenAnyValue(x => x.ShowProcessingOverlay)
-                  .Subscribe(val =>
-                  {
-                      if (val)
-                          ShowProcessingOverlay = true;
-                      else if (!_isLocalProcessing)
-                          ShowProcessingOverlay = false;
-                  })
-                  .DisposeWith(_disposables);
-
-            // Sync Theme Color (Unified for all boxes)
-            mainVm.WhenAnyValue(x => x.ThemeColor)
-                  .Subscribe(val => 
-                  {
-                      SelectionBorderColor = val;
-                      this.RaisePropertyChanged(nameof(ThemeColor));
-                      this.RaisePropertyChanged(nameof(ThemeDeepColor));
-                  })
-                  .DisposeWith(_disposables);
-
-            // Sync Border Thickness
-            mainVm.WhenAnyValue(x => x.BorderThickness)
-                  .Subscribe(val => SelectionBorderThickness = val)
-                  .DisposeWith(_disposables);
-
-            // Sync Mask Opacity
-            mainVm.WhenAnyValue(x => x.MaskOpacity)
-                  .Subscribe(val => MaskOpacity = val)
-                  .DisposeWith(_disposables);
-        }
+        InitializeMainViewModelBindingsIfNeeded();
 
         // Initialize Debug Compatibility
         _isTopmost = !System.Diagnostics.Debugger.IsAttached;
@@ -330,30 +266,46 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
             Console.WriteLine("[SnipWindow] Debugger detected. IsTopmost = false. Press Ctrl+Alt+T to toggle.");
         }
 
-        // Real-time sync for decoration scales from MainVM
-        if (mainVm != null)
+        InitializeToolbarReactivity();
+        InitializeLocalizationBindings();
+
+        UpdateMask();
+    }
+
+    private void ApplyInitialMainVmVisualSettings()
+    {
+        if (_mainVm == null)
         {
-            mainVm.WhenAnyValue(x => x.WingScale)
-                  .Subscribe(val => {
-                      this.RaisePropertyChanged(nameof(WingScale));
-                      this.RaisePropertyChanged(nameof(WingWidth));
-                      this.RaisePropertyChanged(nameof(WingHeight));
-                      this.RaisePropertyChanged(nameof(LeftWingMargin));
-                      this.RaisePropertyChanged(nameof(RightWingMargin));
-                  })
-                  .DisposeWith(_disposables);
-                  
-            mainVm.WhenAnyValue(x => x.CornerIconScale)
-                  .Subscribe(val => {
-                      this.RaisePropertyChanged(nameof(CornerIconScale));
-                      this.RaisePropertyChanged(nameof(SelectionIconSize));
-                  })
-                  .DisposeWith(_disposables);
+            return;
         }
 
+        // Always use ThemeColor for all UI boxes per request
+        _selectionBorderColor = _mainVm.ThemeColor;
+        _selectionBorderThickness = _mainVm.BorderThickness;
+        _maskOpacity = _mainVm.MaskOpacity;
+    }
+
+    private void InitializeRecordingBindingsIfNeeded()
+    {
+        if (_recordingService != null)
+        {
+            InitializeRecordingBindings(_recordingService);
+        }
+    }
+
+    private void InitializeMainViewModelBindingsIfNeeded()
+    {
+        if (_mainVm != null)
+        {
+            InitializeMainViewModelBindings(_mainVm);
+        }
+    }
+
+    private void InitializeToolbarReactivity()
+    {
         // Reactive toolbar positioning for translation mode
         this.WhenAnyValue(x => x.ViewportSize, x => x.ToolbarWidth, x => x.CurrentMode, x => x.ActiveScreenBounds)
-            .Subscribe(_ => 
+            .Subscribe(_ =>
             {
                 if (CurrentMode == SnipMode.Translation)
                 {
@@ -361,44 +313,135 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
                 }
             })
             .DisposeWith(_disposables);
+    }
 
+    private void InitializeLocalizationBindings()
+    {
         // Refresh tooltips when language changes
-        LocalizationService.Instance.PropertyChanged += (s, e) =>
-        {
-            if (e.PropertyName == "Item" || e.PropertyName == "Item[]")
-            {
-                this.RaisePropertyChanged(nameof(SnipTooltip));
-                this.RaisePropertyChanged(nameof(RecordTooltip));
-                this.RaisePropertyChanged(nameof(TranslateTooltip));
-                this.RaisePropertyChanged(nameof(UndoTooltip));
-                this.RaisePropertyChanged(nameof(RedoTooltip));
-                this.RaisePropertyChanged(nameof(ClearTooltip));
-                this.RaisePropertyChanged(nameof(SaveTooltip));
-                this.RaisePropertyChanged(nameof(CopyTooltip));
-                this.RaisePropertyChanged(nameof(PinTooltip));
-                this.RaisePropertyChanged(nameof(RectangleTooltip));
-                this.RaisePropertyChanged(nameof(EllipseTooltip));
-                this.RaisePropertyChanged(nameof(ArrowTooltip));
-                this.RaisePropertyChanged(nameof(LineTooltip));
-                this.RaisePropertyChanged(nameof(PenTooltip));
-                this.RaisePropertyChanged(nameof(TextTooltip));
-                this.RaisePropertyChanged(nameof(MosaicTooltip));
-                this.RaisePropertyChanged(nameof(BlurTooltip));
-                this.RaisePropertyChanged(nameof(FullscreenSelectTooltip));
-                this.RaisePropertyChanged(nameof(HideTranslationResultsTooltip));
-                this.RaisePropertyChanged(nameof(TranslateAllTooltip));
-                this.RaisePropertyChanged(nameof(ScanAllTooltip));
-                this.RaisePropertyChanged(nameof(ClearAllTooltip));
-                this.RaisePropertyChanged(nameof(ToggleSelectTooltip));
-                this.RaisePropertyChanged(nameof(AutoDetectTooltip));
-                this.RaisePropertyChanged(nameof(ModeMultiTooltip));
-                this.RaisePropertyChanged(nameof(ToggleToolbarTooltip));
-                this.RaisePropertyChanged(nameof(InputAudioStateText));
-                this.RaisePropertyChanged(nameof(OutputAudioStateText));
-            }
-        };
+        LocalizationService.Instance.PropertyChanged += OnLocalizationPropertyChanged;
+    }
 
-        UpdateMask();
+    private void InitializeRecordingBindings(RecordingService recordingService)
+    {
+        BindDistinct(
+            recordingService.WhenAnyValue(x => x.State),
+            _ =>
+            {
+                HandleRecordingStateChanged(recordingService.State);
+                RaiseProperties(
+                    nameof(RecState),
+                    nameof(IsRecordingActive),
+                    nameof(HideFrameBorder),
+                    nameof(HideSelectionDecoration));
+            },
+            observeOnMainThread: true)
+            .DisposeWith(_disposables);
+
+        BindDistinct(
+            recordingService.WhenAnyValue(x => x.IsFinalizing),
+            isFinalizing =>
+            {
+                IsRecordingFinalizing = isFinalizing;
+                if (isFinalizing)
+                {
+                    ProcessingText = LocalizationService.Instance["StatusProcessing"];
+                    OpenRecordingProgressWindowAction?.Invoke();
+                }
+                else
+                {
+                    CloseRecordingProgressWindowAction?.Invoke();
+                }
+            },
+            observeOnMainThread: true)
+            .DisposeWith(_disposables);
+    }
+
+    private void InitializeMainViewModelBindings(MainWindowViewModel mainVm)
+    {
+        // 只在 AI 功能啟用時才預載 SAM2 模型，避免不必要的記憶體消耗
+        if (mainVm.EnableAI)
+        {
+            InitializeSAM2(mainVm);
+        }
+
+        BindDistinct(mainVm.WhenAnyValue(x => x.ShowAIScanBox), val => ShowAIScanBox = val)
+            .DisposeWith(_disposables);
+
+        BindDistinct(mainVm.WhenAnyValue(x => x.EnableAIScan), val => EnableAIScan = val)
+            .DisposeWith(_disposables);
+
+        BindDistinct(mainVm.WhenAnyValue(x => x.ProgressValue), val => ProgressValue = val)
+            .DisposeWith(_disposables);
+
+        BindDistinct(mainVm.WhenAnyValue(x => x.IsIndeterminate), val => IsIndeterminate = val)
+            .DisposeWith(_disposables);
+
+        // Sync ShowProcessingOverlay — only propagate 'true' from MainVM.
+        // When MainVM goes false, only clear overlay if no local operation is active.
+        BindDistinct(mainVm.WhenAnyValue(x => x.ShowProcessingOverlay), val =>
+            {
+                if (val)
+                    ShowProcessingOverlay = true;
+                else if (!_isLocalProcessing)
+                    ShowProcessingOverlay = false;
+            })
+            .DisposeWith(_disposables);
+
+        // Sync Theme Color (Unified for all boxes)
+        BindDistinct(mainVm.WhenAnyValue(x => x.ThemeColor), val =>
+            {
+                SelectionBorderColor = val;
+                RaiseProperties(nameof(ThemeColor), nameof(ThemeDeepColor));
+            })
+            .DisposeWith(_disposables);
+
+        BindDistinct(mainVm.WhenAnyValue(x => x.BorderThickness), val => SelectionBorderThickness = val)
+            .DisposeWith(_disposables);
+
+        BindDistinct(mainVm.WhenAnyValue(x => x.MaskOpacity), val => MaskOpacity = val)
+            .DisposeWith(_disposables);
+
+        // Real-time sync for decoration scales from MainVM
+        BindDistinct(mainVm.WhenAnyValue(x => x.WingScale), _ =>
+            {
+                RaiseProperties(
+                    nameof(WingScale),
+                    nameof(WingWidth),
+                    nameof(WingHeight),
+                    nameof(LeftWingMargin),
+                    nameof(RightWingMargin));
+            })
+            .DisposeWith(_disposables);
+
+        BindDistinct(mainVm.WhenAnyValue(x => x.CornerIconScale), _ => RaiseProperties(nameof(CornerIconScale), nameof(SelectionIconSize)))
+            .DisposeWith(_disposables);
+    }
+
+    private IDisposable BindDistinct<T>(IObservable<T> source, Action<T> onNext, bool observeOnMainThread = false)
+    {
+        var stream = source.DistinctUntilChanged();
+        if (observeOnMainThread)
+        {
+            stream = stream.ObserveOn(RxApp.MainThreadScheduler);
+        }
+
+        return stream.Subscribe(onNext);
+    }
+
+    private void OnLocalizationPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == "Item" || e.PropertyName == "Item[]")
+        {
+            RaiseProperties(_localizedPropertyNames);
+        }
+    }
+
+    private void RaiseProperties(params string[] propertyNames)
+    {
+        foreach (var propertyName in propertyNames)
+        {
+            this.RaisePropertyChanged(propertyName);
+        }
     }
 
     private double _inputAudioLevel;
@@ -554,6 +597,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
 
     public void Dispose()
     {
+        LocalizationService.Instance.PropertyChanged -= OnLocalizationPropertyChanged;
         _audioMeterTimer.Stop();
         _audioLevelMonitor.Dispose();
         _disposables.Dispose();
