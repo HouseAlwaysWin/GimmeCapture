@@ -201,7 +201,16 @@ public partial class SnipWindowViewModel
         {
             this.RaiseAndSetIfChanged(ref _isRecordingFinalizing, value);
             this.RaisePropertyChanged(nameof(IsToolbarVisible));
+            SetRecordingSelectionChromeHidden(value || RecState != RecordingState.Idle);
         }
+    }
+    private bool _forceHideRecordingSelectionChrome;
+
+    private void SetRecordingSelectionChromeHidden(bool hidden)
+    {
+        if (_forceHideRecordingSelectionChrome == hidden) return;
+        _forceHideRecordingSelectionChrome = hidden;
+        RaiseProperties(nameof(HideFrameBorder), nameof(HideSelectionDecoration));
     }
 
     // Action Helpers
@@ -209,6 +218,10 @@ public partial class SnipWindowViewModel
     {
         get
         {
+            if (_forceHideRecordingSelectionChrome || IsRecordingFinalizing)
+            {
+                return true;
+            }
             bool hide = CurrentMode == SnipMode.Recording ? (_mainVm?.HideRecordSelectionDecoration ?? false) : (_mainVm?.HideSnipSelectionDecoration ?? false);
             System.Diagnostics.Debug.WriteLine($"[SnipWindow] HideSelectionDecoration queried: {hide} (CurrentMode: {CurrentMode}, RecState: {RecState})");
             return hide;
@@ -219,6 +232,10 @@ public partial class SnipWindowViewModel
     {
         get
         {
+            if (_forceHideRecordingSelectionChrome || IsRecordingFinalizing)
+            {
+                return true;
+            }
             bool hide = CurrentMode == SnipMode.Recording ? (_mainVm?.HideRecordSelectionBorder ?? false) : (_mainVm?.HideSnipSelectionBorder ?? false);
             System.Diagnostics.Debug.WriteLine($"[SnipWindow] HideFrameBorder queried: {hide} (CurrentMode: {CurrentMode}, RecState: {RecState})");
             return hide;

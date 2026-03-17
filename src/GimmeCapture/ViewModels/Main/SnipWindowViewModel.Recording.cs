@@ -38,6 +38,8 @@ public partial class SnipWindowViewModel
 
     private void HandleRecordingStateChanged(RecordingState newState)
     {
+        SetRecordingSelectionChromeHidden(newState != RecordingState.Idle || IsRecordingFinalizing);
+
         var nowUtc = DateTime.UtcNow;
 
         // Close the active recording segment when leaving Recording state.
@@ -140,9 +142,14 @@ public partial class SnipWindowViewModel
         if (region.Height % 2 != 0) region = region.WithHeight(region.Height - 1);
 
         ResetRecordingDurationTracking();
+        SetRecordingSelectionChromeHidden(true);
         if (await _recordingService.StartAsync(region, _currentRecordingPath, _mainVm!.RecordingSettings.RecordFormat ?? "mp4", _mainVm.ShowRecordCursor, ScreenOffset, VisualScaling, _mainVm.RecordingSettings.RecordFPS, _mainVm.RecordSystemAudio))
         {
             EnsureRecordingTimerStarted();
+        }
+        else
+        {
+            SetRecordingSelectionChromeHidden(false);
         }
     }
 
