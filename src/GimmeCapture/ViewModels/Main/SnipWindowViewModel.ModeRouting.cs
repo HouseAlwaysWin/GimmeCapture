@@ -17,6 +17,75 @@ namespace GimmeCapture.ViewModels.Main;
 
 public partial class SnipWindowViewModel
 {
+    private static readonly string[] _modeStatePropertyNames =
+    {
+        nameof(IsRecordingMode),
+        nameof(IsTranslationMode),
+        nameof(IsScreenshotMode),
+        nameof(HideFrameBorder),
+        nameof(HideSelectionDecoration),
+        nameof(ModeDisplayName),
+        nameof(IsToolbarVisible)
+    };
+
+    private static readonly string[] _modeHotkeyPropertyNames =
+    {
+        nameof(CopyHotkey),
+        nameof(UndoHotkey),
+        nameof(RedoHotkey),
+        nameof(ClearHotkey),
+        nameof(SaveHotkey),
+        nameof(CloseHotkey),
+        nameof(RectangleHotkey),
+        nameof(EllipseHotkey),
+        nameof(ArrowHotkey),
+        nameof(LineHotkey),
+        nameof(PenHotkey),
+        nameof(TextHotkey),
+        nameof(MosaicHotkey),
+        nameof(BlurHotkey),
+        nameof(FullscreenSelectHotkey),
+        nameof(ActiveActionHotkey),
+        nameof(ActiveToolbarHotkey),
+        nameof(TranslateAllHotkey),
+        nameof(ScanAllHotkey),
+        nameof(ClearAllHotkey),
+        nameof(ToggleSelectHotkey),
+        nameof(AutoDetectHotkey),
+        nameof(SwitchToSnipHotkey),
+        nameof(SwitchToRecordHotkey),
+        nameof(SwitchToTranslateHotkey)
+    };
+
+    private static readonly string[] _modeTooltipPropertyNames =
+    {
+        nameof(UndoTooltip),
+        nameof(RedoTooltip),
+        nameof(ClearTooltip),
+        nameof(SaveTooltip),
+        nameof(CopyTooltip),
+        nameof(PinTooltip),
+        nameof(RectangleTooltip),
+        nameof(EllipseTooltip),
+        nameof(ArrowTooltip),
+        nameof(LineTooltip),
+        nameof(PenTooltip),
+        nameof(TextTooltip),
+        nameof(MosaicTooltip),
+        nameof(BlurTooltip),
+        nameof(FullscreenSelectTooltip),
+        nameof(SnipTooltip),
+        nameof(RecordTooltip),
+        nameof(TranslateTooltip),
+        nameof(HideTranslationResultsTooltip),
+        nameof(TranslateAllTooltip),
+        nameof(ScanAllTooltip),
+        nameof(ClearAllTooltip),
+        nameof(ToggleSelectTooltip),
+        nameof(AutoDetectTooltip),
+        nameof(ToggleToolbarTooltip)
+    };
+
     public bool IsRecordingMode => CurrentMode == SnipMode.Recording;
     public bool IsTranslationMode => CurrentMode == SnipMode.Translation;
     public bool IsScreenshotMode => CurrentMode == SnipMode.Screenshot;
@@ -35,7 +104,7 @@ public partial class SnipWindowViewModel
             // 進入翻譯模式：啟用遮罩並更新挖空區域
             SelectionRect = new Rect(0, 0, 0, 0); // 確保清空標準選取框，避免干擾挖空
             IsMaskVisible = true;
-            this.RaisePropertyChanged(nameof(MaskOpacity));
+            RaiseProperties(nameof(MaskOpacity));
             UpdateMask();
             StartAutoDetectLoop();
         }
@@ -48,7 +117,7 @@ public partial class SnipWindowViewModel
             // 關閉自動偵測
             IsGlobalAutoDetectEnabled = false;
             
-            this.RaisePropertyChanged(nameof(MaskOpacity));
+            RaiseProperties(nameof(MaskOpacity));
             UpdateMask();
             StopAutoDetectLoop();
         }
@@ -57,68 +126,11 @@ public partial class SnipWindowViewModel
         SelectionBorderColor = _mainVm?.ThemeColor ?? Colors.Yellow;
 
         // Notify all related properties
-        this.RaisePropertyChanged(nameof(IsRecordingMode));
-        this.RaisePropertyChanged(nameof(IsTranslationMode));
-        this.RaisePropertyChanged(nameof(IsScreenshotMode));
-        this.RaisePropertyChanged(nameof(HideFrameBorder));
-        this.RaisePropertyChanged(nameof(HideSelectionDecoration));
-        this.RaisePropertyChanged(nameof(ModeDisplayName));
-        this.RaisePropertyChanged(nameof(IsToolbarVisible));
-        
+        RaiseProperties(_modeStatePropertyNames);
+
         // Notify hotkeys and tooltips
-        this.RaisePropertyChanged(nameof(CopyHotkey));
-        this.RaisePropertyChanged(nameof(UndoHotkey));
-        this.RaisePropertyChanged(nameof(RedoHotkey));
-        this.RaisePropertyChanged(nameof(ClearHotkey));
-        this.RaisePropertyChanged(nameof(SaveHotkey));
-        this.RaisePropertyChanged(nameof(CloseHotkey));
-        this.RaisePropertyChanged(nameof(RectangleHotkey));
-        this.RaisePropertyChanged(nameof(EllipseHotkey));
-        this.RaisePropertyChanged(nameof(ArrowHotkey));
-        this.RaisePropertyChanged(nameof(LineHotkey));
-        this.RaisePropertyChanged(nameof(PenHotkey));
-        this.RaisePropertyChanged(nameof(TextHotkey));
-        this.RaisePropertyChanged(nameof(MosaicHotkey));
-        this.RaisePropertyChanged(nameof(BlurHotkey));
-        this.RaisePropertyChanged(nameof(FullscreenSelectHotkey));
-        this.RaisePropertyChanged(nameof(ActiveActionHotkey));
-        this.RaisePropertyChanged(nameof(ActiveToolbarHotkey));
-
-        this.RaisePropertyChanged(nameof(UndoTooltip));
-        this.RaisePropertyChanged(nameof(RedoTooltip));
-        this.RaisePropertyChanged(nameof(ClearTooltip));
-        this.RaisePropertyChanged(nameof(SaveTooltip));
-        this.RaisePropertyChanged(nameof(CopyTooltip));
-        this.RaisePropertyChanged(nameof(PinTooltip));
-        this.RaisePropertyChanged(nameof(RectangleTooltip));
-        this.RaisePropertyChanged(nameof(EllipseTooltip));
-        this.RaisePropertyChanged(nameof(ArrowTooltip));
-        this.RaisePropertyChanged(nameof(LineTooltip));
-        this.RaisePropertyChanged(nameof(PenTooltip));
-        this.RaisePropertyChanged(nameof(TextTooltip));
-        this.RaisePropertyChanged(nameof(MosaicTooltip));
-        this.RaisePropertyChanged(nameof(BlurTooltip));
-        this.RaisePropertyChanged(nameof(FullscreenSelectTooltip));
-        this.RaisePropertyChanged(nameof(TranslateAllHotkey));
-        this.RaisePropertyChanged(nameof(ScanAllHotkey));
-        this.RaisePropertyChanged(nameof(ClearAllHotkey));
-        this.RaisePropertyChanged(nameof(ToggleSelectHotkey));
-        this.RaisePropertyChanged(nameof(AutoDetectHotkey));
-
-        this.RaisePropertyChanged(nameof(SnipTooltip));
-        this.RaisePropertyChanged(nameof(RecordTooltip));
-        this.RaisePropertyChanged(nameof(TranslateTooltip));
-        this.RaisePropertyChanged(nameof(HideTranslationResultsTooltip));
-        this.RaisePropertyChanged(nameof(TranslateAllTooltip));
-        this.RaisePropertyChanged(nameof(ScanAllTooltip));
-        this.RaisePropertyChanged(nameof(ClearAllTooltip));
-        this.RaisePropertyChanged(nameof(ToggleSelectTooltip));
-        this.RaisePropertyChanged(nameof(AutoDetectTooltip));
-        this.RaisePropertyChanged(nameof(ToggleToolbarTooltip));
-
-        this.RaisePropertyChanged(nameof(SwitchToSnipHotkey));
-        this.RaisePropertyChanged(nameof(SwitchToRecordHotkey));
-        this.RaisePropertyChanged(nameof(SwitchToTranslateHotkey));
+        RaiseProperties(_modeHotkeyPropertyNames);
+        RaiseProperties(_modeTooltipPropertyNames);
     }
     
     private bool _isGlobalAutoDetectEnabled;
@@ -370,49 +382,25 @@ public partial class SnipWindowViewModel
     // Init Method
     private void InitializeActionCommands()
     {
-        var canExecuteHotkeys = this.WhenAnyValue(x => x.IsInputFocused, x => !x);
+        var canExecuteHotkeys = CreateCanExecuteHotkeys();
 
-        PinCommand = ReactiveCommand.CreateFromTask(async () => 
-        {
-            if (CurrentMode != SnipMode.Recording)
-            {
-                await Pin(false);
-            }
-            else 
-            {
-                if (RecState == RecordingState.Recording || RecState == RecordingState.Paused)
-                {
-                    await PinRecording();
-                }
-                else if (RecState == RecordingState.Idle)
-                {
-                     var lastPath = _recordingService?.LastRecordingPath;
-                     if (!string.IsNullOrEmpty(lastPath) && System.IO.File.Exists(lastPath))
-                     {
-                          await PinRecording();
-                          _recordingService?.ClearLastRecording();
-                     }
-                     else if (CurrentState == SnipState.Selected)
-                     {
-                         await StartRecording();
-                     }
-                }
-            }
-        }, canExecuteHotkeys);
-        PinCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"PinCommand error: {ex}"));
+        PinCommand = ReactiveCommand.CreateFromTask(ExecutePinActionAsync, canExecuteHotkeys);
+        AttachCommandErrorLogging(PinCommand, nameof(PinCommand));
 
-        CopyCommand = ReactiveCommand.CreateFromTask(async () => 
-        {
-            if (CurrentMode != SnipMode.Recording) await Copy();
-            else await CopyRecording();
-        }, this.WhenAnyValue(x => x.IsInputFocused, x => !x));
-        CopyCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"CopyCommand error: {ex}"));
+        CopyCommand = ReactiveCommand.CreateFromTask(
+            async () =>
+            {
+                if (CurrentMode != SnipMode.Recording) await Copy();
+                else await CopyRecording();
+            },
+            canExecuteHotkeys);
+        AttachCommandErrorLogging(CopyCommand, nameof(CopyCommand));
 
         SaveCommand = ReactiveCommand.CreateFromTask(Save, canExecuteHotkeys);
-        SaveCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"SaveCommand error: {ex}"));
+        AttachCommandErrorLogging(SaveCommand, nameof(SaveCommand));
         
         CloseCommand = ReactiveCommand.Create(Close, canExecuteHotkeys);
-        CloseCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"CloseCommand error: {ex}"));
+        AttachCommandErrorLogging(CloseCommand, nameof(CloseCommand));
 
         ToggleModeCommand = ReactiveCommand.Create(() => 
         {
@@ -421,7 +409,7 @@ public partial class SnipWindowViewModel
                 CurrentMode = CurrentMode == SnipMode.Recording ? SnipMode.Screenshot : SnipMode.Recording;
             }
         }, canExecuteHotkeys);
-        ToggleModeCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
+        AttachCommandErrorLogging(ToggleModeCommand, nameof(ToggleModeCommand));
 
         SetCaptureModeCommand = ReactiveCommand.Create<bool>(isRecord => 
         {
@@ -430,16 +418,16 @@ public partial class SnipWindowViewModel
                 CurrentMode = isRecord ? SnipMode.Recording : SnipMode.Screenshot;
             }
         }, canExecuteHotkeys);
-        SetCaptureModeCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
+        AttachCommandErrorLogging(SetCaptureModeCommand, nameof(SetCaptureModeCommand));
 
         StartRecordingCommand = ReactiveCommand.CreateFromTask(StartRecording);
-        StartRecordingCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
+        AttachCommandErrorLogging(StartRecordingCommand, nameof(StartRecordingCommand));
         PauseRecordingCommand = ReactiveCommand.CreateFromTask(PauseRecording);
-        PauseRecordingCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
+        AttachCommandErrorLogging(PauseRecordingCommand, nameof(PauseRecordingCommand));
         StopRecordingCommand = ReactiveCommand.CreateFromTask(StopRecording);
-        StopRecordingCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
+        AttachCommandErrorLogging(StopRecordingCommand, nameof(StopRecordingCommand));
         CopyRecordingCommand = ReactiveCommand.CreateFromTask(CopyRecording);
-        CopyRecordingCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
+        AttachCommandErrorLogging(CopyRecordingCommand, nameof(CopyRecordingCommand));
 
         HandleScreenshotModeHotkeyCommand = ReactiveCommand.Create(() => { 
             if (RecState == RecordingState.Idle) 
@@ -447,6 +435,8 @@ public partial class SnipWindowViewModel
                 CurrentMode = SnipMode.Screenshot;
             }
         }, canExecuteHotkeys);
+        AttachCommandErrorLogging(HandleScreenshotModeHotkeyCommand, nameof(HandleScreenshotModeHotkeyCommand));
+
         HandleRecordingModeHotkeyCommand = ReactiveCommand.Create(() => 
         { 
             if (RecState == RecordingState.Idle) 
@@ -458,109 +448,49 @@ public partial class SnipWindowViewModel
                 }
             }
         }, canExecuteHotkeys);
+        AttachCommandErrorLogging(HandleRecordingModeHotkeyCommand, nameof(HandleRecordingModeHotkeyCommand));
 
         // F3: 模式選擇器
         // 截圖模式 -> F3 -> Pin
         // 錄影模式 -> F3 -> Pin  
         // 翻譯模式 -> F3 -> 無動作
         // 未進入模式 (Detecting) -> F3 -> 進入翻譯模式
-        HandleActiveActionHotkeyCommand = ReactiveCommand.Create(() => 
-        {
-            System.Diagnostics.Debug.WriteLine($"[SnipWindowViewModel] HandleActiveActionHotkeyCommand invoked. Mode: {CurrentMode}, RecState: {RecState}");
-            if (CurrentMode == SnipMode.Translation)
-            {
-                // 翻譯模式：切換結果顯示
-                ShowTranslationResults = !ShowTranslationResults;
-                return;
-            }
-            
-            // 錄影模式（正在錄製/暫停）：停止並釘選
-            if (CurrentMode == SnipMode.Recording && RecState != RecordingState.Idle)
-            {
-                if (PinCommand != null)
-                    PinCommand.Execute().Subscribe();
-                return;
-            }
+        HandleActiveActionHotkeyCommand = ReactiveCommand.Create(HandleActiveActionHotkey, canExecuteHotkeys);
+        AttachCommandErrorLogging(HandleActiveActionHotkeyCommand, nameof(HandleActiveActionHotkeyCommand));
 
-            // 錄影模式（空閒且已選取）：開始錄影
-            if (CurrentMode == SnipMode.Recording && RecState == RecordingState.Idle && CurrentState == SnipState.Selected)
-            {
-                if (StartRecordingCommand != null)
-                    StartRecordingCommand.Execute().Subscribe();
-                return;
-            }
-            
-            // 截圖模式或未進入錄影：釘選
-            if (PinCommand != null)
-            {
-                System.Diagnostics.Debug.WriteLine($"[SnipWindowViewModel] Invoking PinCommand.");
-                PinCommand.Execute().Subscribe();
-            }
-        }, canExecuteHotkeys);
-        HandleActiveActionHotkeyCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"HandleActiveActionHotkey error: {ex}"));
+        SetTranslationModeCommand = ReactiveCommand.Create(ToggleTranslationMode, canExecuteHotkeys);
+        AttachCommandErrorLogging(SetTranslationModeCommand, nameof(SetTranslationModeCommand));
 
-        SetTranslationModeCommand = ReactiveCommand.Create(() =>
-        {
-            if (RecState == RecordingState.Idle)
-            {
-                if (CurrentMode == SnipMode.Translation)
-                {
-                    // 已在翻譯模式，點擊則切換回截圖模式
-                    CurrentMode = SnipMode.Screenshot;
-                }
-                else
-                {
-                    // 進入翻譯模式
-                    CurrentMode = SnipMode.Translation;
-                    // 重置選取狀態
-                    CurrentState = SnipState.Detecting;
-                    SelectionRect = default;
-                    InitializeTranslationToolbarPosition();
-                }
-            }
-        }, canExecuteHotkeys);
-        SetTranslationModeCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
-
-        var canSwitchToSnip = this.WhenAnyValue(
-            x => x.CurrentMode, x => x.RecState, x => x.IsInputFocused,
-            (mode, rec, focus) => mode != SnipMode.Screenshot && rec == RecordingState.Idle && !focus);
+        var canSwitchToSnip = CreateCanSwitchToMode(SnipMode.Screenshot);
         SwitchToSnipCommand = ReactiveCommand.Create(() => { CurrentMode = SnipMode.Screenshot; }, canSwitchToSnip);
-        SwitchToSnipCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"SwitchToSnip error: {ex}"));
+        AttachCommandErrorLogging(SwitchToSnipCommand, nameof(SwitchToSnipCommand));
 
-        var canSwitchToRecord = this.WhenAnyValue(
-            x => x.CurrentMode, x => x.RecState, x => x.IsInputFocused,
-            (mode, rec, focus) => mode != SnipMode.Recording && rec == RecordingState.Idle && !focus);
+        var canSwitchToRecord = CreateCanSwitchToMode(SnipMode.Recording);
         SwitchToRecordCommand = ReactiveCommand.Create(() => { CurrentMode = SnipMode.Recording; }, canSwitchToRecord);
-        SwitchToRecordCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"SwitchToRecord error: {ex}"));
+        AttachCommandErrorLogging(SwitchToRecordCommand, nameof(SwitchToRecordCommand));
 
-        var canSwitchToTranslate = this.WhenAnyValue(
-            x => x.CurrentMode, x => x.RecState, x => x.IsInputFocused,
-            (mode, rec, focus) => mode != SnipMode.Translation && rec == RecordingState.Idle && !focus);
-        SwitchToTranslateCommand = ReactiveCommand.Create(() =>
-        {
-            CurrentMode = SnipMode.Translation;
-            CurrentState = SnipState.Detecting;
-            SelectionRect = default;
-            InitializeTranslationToolbarPosition();
-        }, canSwitchToTranslate);
-        SwitchToTranslateCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"SwitchToTranslate error: {ex}"));
+        var canSwitchToTranslate = CreateCanSwitchToMode(SnipMode.Translation);
+        SwitchToTranslateCommand = ReactiveCommand.Create(EnterTranslationMode, canSwitchToTranslate);
+        AttachCommandErrorLogging(SwitchToTranslateCommand, nameof(SwitchToTranslateCommand));
 
         var canRemoveBackground = this.WhenAnyValue(
             x => x.CurrentMode, 
             x => x.ShowProcessingOverlay, 
             (mode, isProc) => mode != SnipMode.Recording && !isProc);
 
-        RemoveBackgroundCommand = ReactiveCommand.CreateFromTask(async () => {
-             // Pin first, then Run AI
-             await Pin(true, false);
+        RemoveBackgroundCommand = ReactiveCommand.CreateFromTask(async () =>
+        {
+            // Pin first, then run AI
+            await Pin(true, false);
         }, canRemoveBackground);
-        RemoveBackgroundCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
+        AttachCommandErrorLogging(RemoveBackgroundCommand, nameof(RemoveBackgroundCommand));
 
-        InteractiveRemovalCommand = ReactiveCommand.CreateFromTask(async () => {
-             // Pin first, then Run Interactive AI
-             await Pin(false, true);
+        InteractiveRemovalCommand = ReactiveCommand.CreateFromTask(async () =>
+        {
+            // Pin first, then run interactive AI
+            await Pin(false, true);
         }, canRemoveBackground);
-        InteractiveRemovalCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
+        AttachCommandErrorLogging(InteractiveRemovalCommand, nameof(InteractiveRemovalCommand));
 
         ToggleTopmostCommand = ReactiveCommand.Create(() => 
         {
@@ -568,12 +498,121 @@ public partial class SnipWindowViewModel
             System.Diagnostics.Debug.WriteLine($"[SnipWindow] Topmost toggled to: {IsTopmost}");
             _mainVm?.SetStatus(IsTopmost ? "Topmost ON" : "Topmost OFF");
         });
+        AttachCommandErrorLogging(ToggleTopmostCommand, nameof(ToggleTopmostCommand));
         
         ToggleMaskCommand = ReactiveCommand.Create(() => 
         {
             IsMaskVisible = !IsMaskVisible;
             System.Diagnostics.Debug.WriteLine($"[SnipWindow] Mask toggled to: {IsMaskVisible}");
         });
+        AttachCommandErrorLogging(ToggleMaskCommand, nameof(ToggleMaskCommand));
+    }
+
+    private IObservable<bool> CreateCanExecuteHotkeys()
+    {
+        return this.WhenAnyValue(x => x.IsInputFocused, x => !x);
+    }
+
+    private IObservable<bool> CreateCanSwitchToMode(SnipMode targetMode)
+    {
+        return this.WhenAnyValue(
+            x => x.CurrentMode,
+            x => x.RecState,
+            x => x.IsInputFocused,
+            (mode, rec, focus) => mode != targetMode && rec == RecordingState.Idle && !focus);
+    }
+
+    private async Task ExecutePinActionAsync()
+    {
+        if (CurrentMode != SnipMode.Recording)
+        {
+            await Pin(false);
+            return;
+        }
+
+        if (RecState == RecordingState.Recording || RecState == RecordingState.Paused)
+        {
+            await PinRecording();
+            return;
+        }
+
+        if (RecState != RecordingState.Idle)
+        {
+            return;
+        }
+
+        var lastPath = _recordingService?.LastRecordingPath;
+        if (!string.IsNullOrEmpty(lastPath) && System.IO.File.Exists(lastPath))
+        {
+            await PinRecording();
+            _recordingService?.ClearLastRecording();
+            return;
+        }
+
+        if (CurrentState == SnipState.Selected)
+        {
+            await StartRecording();
+        }
+    }
+
+    private void HandleActiveActionHotkey()
+    {
+        System.Diagnostics.Debug.WriteLine($"[SnipWindowViewModel] HandleActiveActionHotkeyCommand invoked. Mode: {CurrentMode}, RecState: {RecState}");
+        if (CurrentMode == SnipMode.Translation)
+        {
+            // 翻譯模式：切換結果顯示
+            ShowTranslationResults = !ShowTranslationResults;
+            return;
+        }
+
+        // 錄影模式（正在錄製/暫停）：停止並釘選
+        if (CurrentMode == SnipMode.Recording && RecState != RecordingState.Idle)
+        {
+            PinCommand?.Execute().Subscribe();
+            return;
+        }
+
+        // 錄影模式（空閒且已選取）：開始錄影
+        if (CurrentMode == SnipMode.Recording && CurrentState == SnipState.Selected)
+        {
+            StartRecordingCommand?.Execute().Subscribe();
+            return;
+        }
+
+        // 截圖模式或未進入錄影：釘選
+        System.Diagnostics.Debug.WriteLine("[SnipWindowViewModel] Invoking PinCommand.");
+        PinCommand?.Execute().Subscribe();
+    }
+
+    private void ToggleTranslationMode()
+    {
+        if (RecState != RecordingState.Idle)
+        {
+            return;
+        }
+
+        if (CurrentMode == SnipMode.Translation)
+        {
+            // 已在翻譯模式，點擊則切換回截圖模式
+            CurrentMode = SnipMode.Screenshot;
+            return;
+        }
+
+        EnterTranslationMode();
+    }
+
+    private void EnterTranslationMode()
+    {
+        // 進入翻譯模式並重置選取狀態
+        CurrentMode = SnipMode.Translation;
+        CurrentState = SnipState.Detecting;
+        SelectionRect = default;
+        InitializeTranslationToolbarPosition();
+    }
+
+    private static void AttachCommandErrorLogging<TInput, TOutput>(ReactiveCommand<TInput, TOutput> command, string commandName)
+    {
+        command.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"{commandName} error: {ex}"));
     }
 
     private async Task StartRecording()
