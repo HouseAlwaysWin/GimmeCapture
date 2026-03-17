@@ -227,9 +227,7 @@ public partial class FloatingImageViewModel
             DiagnosticText = LocalizationService.Instance["AIDisabled"];
             CurrentTool = FloatingTool.None;
 
-            ShowDialogOnUiThread(
-                LocalizationService.Instance["AIDisabledTitle"],
-                LocalizationService.Instance["AIDisabledMessage"]);
+            ShowGothicDialog("AIDisabledTitle", "AIDisabledMessage");
             return;
         }
 
@@ -266,8 +264,7 @@ public partial class FloatingImageViewModel
             DiagnosticText = LocalizationService.Instance["StatusError"]; // Or specify a new one
             CurrentTool = FloatingTool.None;
 
-            var initMessage = string.Format(LocalizationService.Instance["AIInitErrorMessage"], ex.Message);
-            ShowDialogOnUiThread(LocalizationService.Instance["AIInitErrorTitle"], initMessage);
+            ShowGothicDialog("AIInitErrorTitle", "AIInitErrorMessage", ex.Message);
         }
         finally
         {
@@ -468,9 +465,7 @@ public partial class FloatingImageViewModel
         var currentStatus = ResourceQueueService.Instance.GetStatus("AI");
         if (currentStatus == QueueItemStatus.Pending || currentStatus == QueueItemStatus.Downloading)
         {
-            ShowDialogOnUiThread(
-                "Download in Progress",
-                LocalizationService.Instance["ComponentDownloadingProgress"] ?? "Downloading component...");
+            ShowGothicDialog("StatusProcessing", "ComponentDownloadingProgress");
             return false;
         }
 
@@ -510,9 +505,7 @@ public partial class FloatingImageViewModel
         var currentStatus = ResourceQueueService.Instance.GetStatus("AI Core");
         if (currentStatus == QueueItemStatus.Pending || currentStatus == QueueItemStatus.Downloading)
         {
-            ShowDialogOnUiThread(
-                "Download in Progress",
-                "AI Core components are currently downloading...");
+            ShowGothicDialog("StatusProcessing", "ComponentDownloadingProgress");
             return false;
         }
 
@@ -547,7 +540,7 @@ public partial class FloatingImageViewModel
         // Check if AI is enabled
         if (!_appSettingsService.Settings.EnableAI)
         {
-            ShowDialogOnUiThread("AI Disabled", "AI features are currently disabled in Settings.");
+            ShowGothicDialog("AIDisabledTitle", "AIDisabledMessage");
             return;
         }
         
@@ -740,10 +733,30 @@ public partial class FloatingImageViewModel
 
     private void ShowErrorDialog(string message)
     {
-        ShowDialogOnUiThread("Error", message);
+        ShowGothicDialog("StatusError", message);
     }
 
-    private void ShowDialogOnUiThread(string title, string message)
+    private void ShowGothicDialog(string titleKey, string messageKeyOrText, params object[] formatArgs)
+    {
+        var title = LocalizeKeyOrText(titleKey);
+        var messageTemplate = LocalizeKeyOrText(messageKeyOrText);
+        var message = formatArgs.Length > 0
+            ? string.Format(messageTemplate, formatArgs)
+            : messageTemplate;
+
+        ShowGothicDialogOnUiThread(title, message);
+    }
+
+    private string LocalizeKeyOrText(string keyOrText)
+    {
+        if (string.IsNullOrWhiteSpace(keyOrText))
+            return string.Empty;
+
+        var localized = LocalizationService.Instance[keyOrText];
+        return string.IsNullOrWhiteSpace(localized) ? keyOrText : localized;
+    }
+
+    private void ShowGothicDialogOnUiThread(string title, string message)
     {
         Avalonia.Threading.Dispatcher.UIThread.Post(() =>
         {
