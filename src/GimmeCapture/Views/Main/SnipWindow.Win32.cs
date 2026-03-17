@@ -745,8 +745,16 @@ public partial class SnipWindow : Window
             int borderWidth = (int)((_viewModel?.SelectionBorderThickness ?? 6) * scaling);
             if (isTranslation && _viewModel != null && !_viewModel.IsTranslationSelectionActive)
             {
-                 // Edit mode removes the border around the hole
-                 borderWidth = 0;
+                // Cursor mode should remain pass-through by default.
+                // If no explicit holes were generated (e.g. all regions are already translated),
+                // punch a full-window hole and then add translated/toolbar islands back.
+                if (holeRects.Count == 0)
+                {
+                    holeRects.Add(new Rect(0, 0, windowWidth, windowHeight));
+                }
+
+                // Edit mode removes the border around the hole
+                borderWidth = 0;
             }
 
             Win32Helpers.SetMultiWindowHoleRegion(hwnd, windowWidth, windowHeight, holeRects, borderWidth, toolbarRect, extraRegions);
