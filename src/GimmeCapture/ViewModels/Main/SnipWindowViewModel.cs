@@ -305,6 +305,8 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     {
         // Reactive toolbar positioning for translation mode
         this.WhenAnyValue(x => x.ViewportSize, x => x.ToolbarWidth, x => x.CurrentMode, x => x.ActiveScreenBounds)
+            .DistinctUntilChanged()
+            .Throttle(TimeSpan.FromMilliseconds(50), RxApp.MainThreadScheduler)
             .Subscribe(_ =>
             {
                 if (CurrentMode == SnipMode.Translation)
@@ -486,20 +488,26 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         // Only show active metering in recording mode to reduce visual noise.
         if (CurrentMode != SnipMode.Recording)
         {
-            InputAudioLevel = 0;
-            OutputAudioLevel = 0;
+            InputAudioLevel = 0.0;
+            OutputAudioLevel = 0.0;
             return;
         }
 
         if (_audioLevelMonitor.TryRefresh())
         {
-            InputAudioLevel = Math.Clamp(_audioLevelMonitor.InputPeak, 0, 1);
-            OutputAudioLevel = Math.Clamp(_audioLevelMonitor.OutputPeak, 0, 1);
+            InputAudioLevel = QuantizeAudioLevel(_audioLevelMonitor.InputPeak);
+            OutputAudioLevel = QuantizeAudioLevel(_audioLevelMonitor.OutputPeak);
             return;
         }
 
-        InputAudioLevel = 0;
-        OutputAudioLevel = 0;
+        InputAudioLevel = 0.0;
+        OutputAudioLevel = 0.0;
+    }
+
+    private static double QuantizeAudioLevel(double value)
+    {
+        // Quantize tiny jitter so we avoid high-frequency UI invalidations.
+        return Math.Round(Math.Clamp(value, 0, 1), 2);
     }
 
     private static double ToDecibel(double linearPeak)

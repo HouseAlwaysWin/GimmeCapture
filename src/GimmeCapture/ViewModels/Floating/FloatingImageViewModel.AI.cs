@@ -188,6 +188,10 @@ public partial class FloatingImageViewModel
     public bool CanInteractiveClick => _interactiveSession.CanClick;
     public bool CanUndoInteractivePoint => _interactiveSession.CanUndo;
     public bool CanConfirmInteractive => _interactiveSession.CanConfirm;
+    private bool? _lastIsInteractiveSelectionMode;
+    private bool? _lastCanInteractiveClick;
+    private bool? _lastCanUndoInteractivePoint;
+    private bool? _lastCanConfirmInteractive;
 
     private void StartInteractiveSession()
     {
@@ -205,10 +209,19 @@ public partial class FloatingImageViewModel
 
     private void RaiseInteractiveStateChanged()
     {
-        this.RaisePropertyChanged(nameof(IsInteractiveSelectionMode));
-        this.RaisePropertyChanged(nameof(CanInteractiveClick));
-        this.RaisePropertyChanged(nameof(CanUndoInteractivePoint));
-        this.RaisePropertyChanged(nameof(CanConfirmInteractive));
+        RaiseInteractiveBooleanIfChanged(nameof(IsInteractiveSelectionMode), IsInteractiveSelectionMode, ref _lastIsInteractiveSelectionMode);
+        RaiseInteractiveBooleanIfChanged(nameof(CanInteractiveClick), CanInteractiveClick, ref _lastCanInteractiveClick);
+        RaiseInteractiveBooleanIfChanged(nameof(CanUndoInteractivePoint), CanUndoInteractivePoint, ref _lastCanUndoInteractivePoint);
+        RaiseInteractiveBooleanIfChanged(nameof(CanConfirmInteractive), CanConfirmInteractive, ref _lastCanConfirmInteractive);
+    }
+
+    private void RaiseInteractiveBooleanIfChanged(string propertyName, bool currentValue, ref bool? lastValue)
+    {
+        if (lastValue.HasValue && lastValue.Value == currentValue)
+            return;
+
+        lastValue = currentValue;
+        this.RaisePropertyChanged(propertyName);
     }
 
     private async Task StartInteractiveRemovalAsync()
