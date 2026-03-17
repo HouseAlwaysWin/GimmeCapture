@@ -354,7 +354,7 @@
                                             <ContextMenu>
                                                 <MenuItem Header="{Binding $parent[Window].DataContext.MenuCopyTranslation}" 
                                                           Command="{Binding $parent[Window].DataContext.CopyTranslationTextCommand}"
-                                                          CommandParameter="{Binding}"/>
+                                                          CommandParameter="{Binding $parent[SelectableTextBlock].SelectedText}"/>
                                                 <Separator/>
                                                 <MenuItem Header="{Binding $parent[Window].DataContext.MenuPinTranslation}" 
                                                           Command="{Binding $parent[Window].DataContext.PinTranslationCommand}"
@@ -375,7 +375,7 @@
                                             <ContextMenu>
                                                 <MenuItem Header="{Binding $parent[Window].DataContext.MenuCopyTranslation}" 
                                                           Command="{Binding $parent[Window].DataContext.CopyTranslationTextCommand}"
-                                                          CommandParameter="{Binding}"/>
+                                                          CommandParameter="{Binding $parent[SelectableTextBlock].SelectedText}"/>
                                                 <Separator/>
                                                 <MenuItem Header="{Binding $parent[Window].DataContext.MenuPinTranslation}" 
                                                           Command="{Binding $parent[Window].DataContext.PinTranslationCommand}"
@@ -484,7 +484,7 @@
                                                         <ContextMenu>
                                                             <MenuItem Header="{Binding $parent[Window].DataContext.MenuCopyTranslation}" 
                                                                       Command="{Binding $parent[Window].DataContext.CopyTranslationTextCommand}"
-                                                                      CommandParameter="{Binding $parent[SelectableTextBlock].DataContext}"/>
+                                                                      CommandParameter="{Binding $parent[SelectableTextBlock].SelectedText}"/>
                                                             <Separator/>
                                                             <MenuItem Header="{Binding $parent[Window].DataContext.MenuPinTranslation}" 
                                                                       Command="{Binding $parent[Window].DataContext.PinTranslationCommand}"
@@ -507,7 +507,7 @@
                                                         <ContextMenu>
                                                             <MenuItem Header="{Binding $parent[Window].DataContext.MenuCopyTranslation}" 
                                                                       Command="{Binding $parent[Window].DataContext.CopyTranslationTextCommand}"
-                                                                      CommandParameter="{Binding $parent[SelectableTextBlock].DataContext}"/>
+                                                                      CommandParameter="{Binding $parent[SelectableTextBlock].SelectedText}"/>
                                                             <Separator/>
                                                             <MenuItem Header="{Binding $parent[Window].DataContext.MenuPinTranslation}" 
                                                                       Command="{Binding $parent[Window].DataContext.PinTranslationCommand}"
@@ -555,7 +555,7 @@
                                                     <ContextMenu>
                                                         <MenuItem Header="{Binding $parent[Window].DataContext.MenuCopyTranslation}" 
                                                                   Command="{Binding $parent[Window].DataContext.CopyTranslationTextCommand}"
-                                                                  CommandParameter="{Binding $parent[SelectableTextBlock].DataContext}"/>
+                                                                  CommandParameter="{Binding $parent[SelectableTextBlock].SelectedText}"/>
                                                         <Separator/>
                                                         <MenuItem Header="{Binding $parent[Window].DataContext.MenuPinTranslation}" 
                                                                   Command="{Binding $parent[Window].DataContext.PinTranslationCommand}"
@@ -576,7 +576,7 @@
                                                     <ContextMenu>
                                                         <MenuItem Header="{Binding $parent[Window].DataContext.MenuCopyTranslation}" 
                                                                   Command="{Binding $parent[Window].DataContext.CopyTranslationTextCommand}"
-                                                                  CommandParameter="{Binding $parent[SelectableTextBlock].DataContext}"/>
+                                                                  CommandParameter="{Binding $parent[SelectableTextBlock].SelectedText}"/>
                                                         <Separator/>
                                                         <MenuItem Header="{Binding $parent[Window].DataContext.MenuPinTranslation}" 
                                                                   Command="{Binding $parent[Window].DataContext.PinTranslationCommand}"

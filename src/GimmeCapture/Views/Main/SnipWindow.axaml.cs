@@ -594,6 +594,12 @@ public partial class SnipWindow : Window
         // Manual Hotkey Routing (Bypassing XAML KeyBinding quirks)
         if (_viewModel != null && !e.Handled)
         {
+            // Let SelectableTextBlock/TextBox keep native copy behavior.
+            if (_viewModel.IsInputFocused && e.KeyModifiers.HasFlag(KeyModifiers.Control) && e.Key == Key.C)
+            {
+                return;
+            }
+
             System.Diagnostics.Debug.WriteLine($"[SnipWindow.axaml.cs] OnKeyDown: Key={e.Key}, Mods={e.KeyModifiers}, ActiveAction={_viewModel.ActiveActionHotkey}, IsInputFocused={_viewModel.IsInputFocused}");
 
             bool IsMatch(string hotkey)

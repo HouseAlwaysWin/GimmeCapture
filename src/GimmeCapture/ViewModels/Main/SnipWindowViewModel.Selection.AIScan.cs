@@ -378,7 +378,7 @@ public partial class SnipWindowViewModel
     public ReactiveCommand<Unit, Unit> ToggleAutoDetectCommand { get; set; } = null!;
     public ReactiveCommand<UserSelectionRect, Unit> RemoveUserSelectionCommand { get; set; } = null!;
     public ReactiveCommand<TranslationTool, Unit> SelectTranslationToolCommand { get; set; } = null!;
-    public ReactiveCommand<UserSelectionRect, Unit> CopyTranslationTextCommand { get; set; } = null!;
+    public ReactiveCommand<object?, Unit> CopyTranslationTextCommand { get; set; } = null!;
     public ReactiveCommand<object?, Unit> PinTranslationCommand { get; set; } = null!;
 
     private void InitializeSelectionCommands()
@@ -432,11 +432,23 @@ public partial class SnipWindowViewModel
         });
         RemoveUserSelectionCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"RemoveSelection error: {ex}"));
 
-        CopyTranslationTextCommand = ReactiveCommand.CreateFromTask<UserSelectionRect>(async (UserSelectionRect item) => 
+        CopyTranslationTextCommand = ReactiveCommand.CreateFromTask<object?>(async item =>
         {
-            if (item != null && !string.IsNullOrEmpty(item.TranslatedText))
+            var textToCopy = item switch
             {
-                await _captureService.CopyToClipboardAsync(item.TranslatedText);
+                UserSelectionRect selection => !string.IsNullOrWhiteSpace(selection.TranslatedText)
+                    ? selection.TranslatedText
+                    : selection.OriginalText,
+                TranslatedBlock block => !string.IsNullOrWhiteSpace(block.TranslatedText)
+                    ? block.TranslatedText
+                    : block.OriginalText,
+                string rawText => rawText,
+                _ => null
+            };
+
+            if (!string.IsNullOrWhiteSpace(textToCopy))
+            {
+                await _captureService.CopyToClipboardAsync(textToCopy);
                 _mainVm?.SetStatus("StatusCopied");
             }
         });

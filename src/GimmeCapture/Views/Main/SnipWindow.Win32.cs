@@ -255,6 +255,12 @@ public partial class SnipWindow : Window
             return false;
         }
 
+        // Let native text selection copy handle Ctrl+C in translation text blocks.
+        if (_viewModel.IsInputFocused && ctrlDown && string.Equals(keyStr, "C", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
         string activeKeysStr = "";
         if (ctrlDown) activeKeysStr += "Ctrl+";
         if (altDown) activeKeysStr += "Alt+";
