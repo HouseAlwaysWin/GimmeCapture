@@ -22,7 +22,8 @@ public partial class FloatingImageViewModel
         // CloseCommand, ToggleToolbarCommand etc are in Base.
         
         // Re-define SaveCommand with specific logic (Flattening)
-        SaveCommand = ReactiveCommand.CreateFromTask(async () => 
+        SaveCommand?.Dispose();
+        SaveCommand = CreateAsyncCommand(async () =>
         {
              if (SaveAction != null)
              {
@@ -48,12 +49,13 @@ public partial class FloatingImageViewModel
                      }
                  }
              }
-        });
+        }, null, nameof(SaveCommand));
 
-        CopyCommand = ReactiveCommand.CreateFromTask(CopyAsync);
-        CutCommand = ReactiveCommand.CreateFromTask(CutAsync, this.WhenAnyValue(x => x.IsSelectionActive));
-        CropCommand = ReactiveCommand.CreateFromTask(CropAsync, this.WhenAnyValue(x => x.IsSelectionActive));
-        PinSelectionCommand = ReactiveCommand.CreateFromTask(PinSelectionAsync, this.WhenAnyValue(x => x.IsSelectionActive));
+        var canUseSelection = this.WhenAnyValue(x => x.IsSelectionActive);
+        CopyCommand = CreateAsyncCommand(CopyAsync, null, nameof(CopyCommand));
+        CutCommand = CreateAsyncCommand(CutAsync, canUseSelection, nameof(CutCommand));
+        CropCommand = CreateAsyncCommand(CropAsync, canUseSelection, nameof(CropCommand));
+        PinSelectionCommand = CreateAsyncCommand(PinSelectionAsync, canUseSelection, nameof(PinSelectionCommand));
     }
 
     private async Task CopyAsync()

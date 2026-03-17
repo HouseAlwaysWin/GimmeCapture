@@ -255,18 +255,22 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
         _canRemoveBackground = this.WhenAnyValue(x => x.IsProcessing)
             .Select(x => !x)
             .ToProperty(this, x => x.CanRemoveBackground);
+        RegisterDisposable(_canRemoveBackground);
 
-        RemoveBackgroundCommand = ReactiveCommand.CreateFromTask(RemoveBackgroundAsync, this.WhenAnyValue(x => x.IsProcessing).Select(p => !p));
-        RemoveBackgroundCommand.ThrownExceptions.Subscribe((System.Exception ex) => System.Diagnostics.Debug.WriteLine($"Pinned AI Error: {ex}"));
+        RemoveBackgroundCommand = CreateAsyncCommand(
+            RemoveBackgroundAsync,
+            this.WhenAnyValue(x => x.IsProcessing).Select(p => !p),
+            nameof(RemoveBackgroundCommand));
 
-        CancelInteractiveCommand = ReactiveCommand.Create(() => 
+        CancelInteractiveCommand = CreateCommand(() =>
         {
             IsPointRemovalMode = false;
-        });
+        }, null, nameof(CancelInteractiveCommand));
 
-        UndoInteractivePointCommand = ReactiveCommand.CreateFromTask(
+        UndoInteractivePointCommand = CreateAsyncCommand(
             UndoLastPointAsync,
-            this.WhenAnyValue(x => x.CanUndoInteractivePoint));
+            this.WhenAnyValue(x => x.CanUndoInteractivePoint),
+            nameof(UndoInteractivePointCommand));
 
         var canUndoShortcut = this.WhenAnyValue(
             x => x.IsPointRemovalMode,
@@ -275,7 +279,7 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
             x => x.IsEnteringText,
             (isPointRemoval, canUndoPoint, hasUndo, isEnteringText) =>
                 !isEnteringText && ((isPointRemoval && canUndoPoint) || hasUndo));
-        UndoShortcutCommand = ReactiveCommand.CreateFromTask(async () =>
+        UndoShortcutCommand = CreateAsyncCommand(async () =>
         {
             if (IsPointRemovalMode && CanUndoInteractivePoint)
             {
@@ -284,24 +288,27 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
             }
 
             Undo();
-        }, canUndoShortcut);
+        }, canUndoShortcut, nameof(UndoShortcutCommand));
         
-        ConfirmInteractiveCommand = ReactiveCommand.CreateFromTask(
+        ConfirmInteractiveCommand = CreateAsyncCommand(
             ConfirmInteractiveAsync,
-            this.WhenAnyValue(x => x.CanConfirmInteractive));
+            this.WhenAnyValue(x => x.CanConfirmInteractive),
+            nameof(ConfirmInteractiveCommand));
 
         // CRITICAL: Invalidate SAM2 service when Image changes (e.g. Crop, Undo)
-        this.WhenAnyValue(x => x.Image)
+        RegisterSubscription(this.WhenAnyValue(x => x.Image)
             .Subscribe(_ =>
             {
                 _sam2Service?.Dispose();
                 _sam2Service = null;
                 ResetInteractivePoints();
-            });
+            }));
     }
 
     public override void Dispose()
     {
+        _lifecycleDisposables.Dispose();
+
         base.Dispose();
         _sam2Service?.Dispose();
         _sam2Service = null;

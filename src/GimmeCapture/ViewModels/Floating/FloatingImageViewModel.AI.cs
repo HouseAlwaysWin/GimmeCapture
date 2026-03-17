@@ -6,6 +6,7 @@ using GimmeCapture.Models;
 using GimmeCapture.Services.Core;
 using System.Linq;
 using System.Reactive.Linq;
+using System.Reactive.Disposables;
 using System;
 using System.Threading.Tasks;
 using GimmeCapture.ViewModels.Shared;
@@ -15,6 +16,8 @@ namespace GimmeCapture.ViewModels.Floating;
 
 public partial class FloatingImageViewModel
 {
+    private readonly CompositeDisposable _lifecycleDisposables = new();
+
     private enum InteractiveRemovalState
     {
         Idle,
@@ -129,6 +132,66 @@ public partial class FloatingImageViewModel
     private void InitializeAICommands()
     {
         // _canRemoveBackground is initialized in main constructor
+    }
+
+    private void RegisterDisposable(IDisposable disposable)
+    {
+        _lifecycleDisposables.Add(disposable);
+    }
+
+    private void RegisterSubscription(IDisposable subscription)
+    {
+        _lifecycleDisposables.Add(subscription);
+    }
+
+    private ReactiveCommand<Unit, Unit> CreateCommand(Action execute, IObservable<bool>? canExecute, string commandName)
+    {
+        return CreateCommand<Unit>(
+            _ => execute(),
+            canExecute,
+            commandName);
+    }
+
+    private ReactiveCommand<Unit, Unit> CreateAsyncCommand(Func<Task> execute, IObservable<bool>? canExecute, string commandName)
+    {
+        return CreateAsyncCommand<Unit>(
+            _ => execute(),
+            canExecute,
+            commandName);
+    }
+
+    private ReactiveCommand<TParam, Unit> CreateCommand<TParam>(
+        Action<TParam> execute,
+        IObservable<bool>? canExecute,
+        string commandName)
+    {
+        var command = canExecute == null
+            ? ReactiveCommand.Create<TParam>(execute)
+            : ReactiveCommand.Create<TParam>(execute, canExecute);
+        AttachCommandErrorLogging(command, commandName);
+        RegisterDisposable(command);
+        return command;
+    }
+
+    private ReactiveCommand<TParam, Unit> CreateAsyncCommand<TParam>(
+        Func<TParam, Task> execute,
+        IObservable<bool>? canExecute,
+        string commandName)
+    {
+        var command = canExecute == null
+            ? ReactiveCommand.CreateFromTask<TParam>(execute)
+            : ReactiveCommand.CreateFromTask<TParam>(execute, canExecute);
+        AttachCommandErrorLogging(command, commandName);
+        RegisterDisposable(command);
+        return command;
+    }
+
+    private void AttachCommandErrorLogging<TParam, TResult>(ReactiveCommand<TParam, TResult> command, string commandName)
+    {
+        RegisterSubscription(command.ThrownExceptions.Subscribe(ex =>
+        {
+            System.Diagnostics.Debug.WriteLine($"[FloatingVM:{commandName}] {ex}");
+        }));
     }
 
     public bool CanInteractiveClick => _interactiveSession.CanClick;
