@@ -15,6 +15,14 @@ namespace GimmeCapture.ViewModels.Floating;
 
 public partial class FloatingImageViewModel
 {
+    private enum InteractiveRemovalState
+    {
+        Idle,
+        Collecting,
+        ReadyToConfirm,
+        Applying
+    }
+
     private enum InteractiveRemovalMode
     {
         RemoveSelected,
@@ -25,23 +33,29 @@ public partial class FloatingImageViewModel
     {
         private readonly List<(double X, double Y, bool IsPositive)> _points = new();
 
-        public bool IsActive { get; private set; }
+        public InteractiveRemovalState State { get; private set; } = InteractiveRemovalState.Idle;
         public InteractiveRemovalMode Mode { get; private set; } = InteractiveRemovalMode.RemoveSelected;
         public byte[]? CleanMaskBytes { get; private set; }
         public IReadOnlyList<(double X, double Y, bool IsPositive)> Points => _points;
         public int PointCount => _points.Count;
+        public bool IsActive => State != InteractiveRemovalState.Idle;
+        public bool CanClick => State == InteractiveRemovalState.Collecting || State == InteractiveRemovalState.ReadyToConfirm;
+        public bool CanUndo => PointCount > 0 && CanClick;
+        public bool CanConfirm => State == InteractiveRemovalState.ReadyToConfirm && CleanMaskBytes is { Length: > 0 };
         public bool IsKeepSelectedMode => Mode == InteractiveRemovalMode.KeepSelected;
 
         public void Start()
         {
-            IsActive = true;
+            State = InteractiveRemovalState.Collecting;
             ResetPoints();
         }
 
         public void Cancel()
         {
-            IsActive = false;
-            ResetPoints();
+            _points.Clear();
+            Mode = InteractiveRemovalMode.RemoveSelected;
+            CleanMaskBytes = null;
+            State = InteractiveRemovalState.Idle;
         }
 
         public void ResetPoints()
@@ -49,21 +63,26 @@ public partial class FloatingImageViewModel
             _points.Clear();
             Mode = InteractiveRemovalMode.RemoveSelected;
             CleanMaskBytes = null;
+            if (State != InteractiveRemovalState.Idle)
+                State = InteractiveRemovalState.Collecting;
         }
 
         public bool UndoLastPoint()
         {
-            if (_points.Count == 0)
+            if (!CanUndo)
                 return false;
 
             _points.RemoveAt(_points.Count - 1);
-            if (_points.Count == 0)
-                ResetPoints();
+            CleanMaskBytes = null;
+            State = InteractiveRemovalState.Collecting;
             return true;
         }
 
         public void AddPoint(double x, double y, bool isPositiveInput)
         {
+            if (!CanClick)
+                return;
+
             var sam2Positive = isPositiveInput;
             if (_points.Count == 0)
             {
@@ -72,11 +91,38 @@ public partial class FloatingImageViewModel
             }
 
             _points.Add((x, y, sam2Positive));
+            CleanMaskBytes = null;
+            State = InteractiveRemovalState.Collecting;
         }
 
         public void SetCleanMaskBytes(byte[] bytes)
         {
             CleanMaskBytes = bytes;
+            if (PointCount > 0 && CleanMaskBytes.Length > 0 && State != InteractiveRemovalState.Idle)
+                State = InteractiveRemovalState.ReadyToConfirm;
+        }
+
+        public bool BeginApplying()
+        {
+            if (!CanConfirm)
+                return false;
+
+            State = InteractiveRemovalState.Applying;
+            return true;
+        }
+
+        public void EndApplying(bool succeeded)
+        {
+            if (State != InteractiveRemovalState.Applying)
+                return;
+
+            if (succeeded)
+            {
+                Cancel();
+                return;
+            }
+
+            State = CanConfirm ? InteractiveRemovalState.ReadyToConfirm : InteractiveRemovalState.Collecting;
         }
     }
 
@@ -85,22 +131,30 @@ public partial class FloatingImageViewModel
         // _canRemoveBackground is initialized in main constructor
     }
 
+    public bool CanInteractiveClick => _interactiveSession.CanClick;
+    public bool CanUndoInteractivePoint => _interactiveSession.CanUndo;
+    public bool CanConfirmInteractive => _interactiveSession.CanConfirm;
+
     private void StartInteractiveSession()
     {
-        var shouldNotify = !_interactiveSession.IsActive;
         _interactiveSession.Start();
         InteractiveMask = null;
-        if (shouldNotify)
-            this.RaisePropertyChanged(nameof(IsInteractiveSelectionMode));
+        RaiseInteractiveStateChanged();
     }
 
     private void CancelInteractiveSession()
     {
-        var shouldNotify = _interactiveSession.IsActive;
         _interactiveSession.Cancel();
         InteractiveMask = null;
-        if (shouldNotify)
-            this.RaisePropertyChanged(nameof(IsInteractiveSelectionMode));
+        RaiseInteractiveStateChanged();
+    }
+
+    private void RaiseInteractiveStateChanged()
+    {
+        this.RaisePropertyChanged(nameof(IsInteractiveSelectionMode));
+        this.RaisePropertyChanged(nameof(CanInteractiveClick));
+        this.RaisePropertyChanged(nameof(CanUndoInteractivePoint));
+        this.RaisePropertyChanged(nameof(CanConfirmInteractive));
     }
 
     private async Task StartInteractiveRemovalAsync()
@@ -173,6 +227,7 @@ public partial class FloatingImageViewModel
         InteractiveMask = null;
         DiagnosticText = "AI: Points Reset";
         System.Diagnostics.Debug.WriteLine("FloatingVM: Resetting interactive points");
+        RaiseInteractiveStateChanged();
     }
 
     public async Task UndoLastPointAsync()
@@ -189,6 +244,8 @@ public partial class FloatingImageViewModel
             {
                 await RefineMaskAsync();
             }
+
+            RaiseInteractiveStateChanged();
         }
     }
 
@@ -284,6 +341,7 @@ public partial class FloatingImageViewModel
                 using var finalMs = new System.IO.MemoryStream();
                 coloredMask.Encode(finalMs, SkiaSharp.SKEncodedImageFormat.Png, 100);
                 InteractiveMask = FloatingBitmapConversionHelper.CreateDetachedBitmapFromEncodedBytes(finalMs.ToArray());
+                RaiseInteractiveStateChanged();
             }
         }
         catch (Exception ex)
@@ -299,7 +357,7 @@ public partial class FloatingImageViewModel
 
     public async Task HandlePointClickAsync(double x, double y, bool isPositive = true)
     {
-        if (IsProcessing) return;
+        if (IsProcessing || !CanInteractiveClick) return;
         
         // LOG PHYSICAL PIXEL COORDINATES FOR USER VERIFICATION
         System.Diagnostics.Debug.WriteLine($"[AI DEBUG] Click Pixel: ({x:F0}, {y:F0}) Type: {(isPositive ? "Positive" : "Negative")}");
@@ -311,11 +369,14 @@ public partial class FloatingImageViewModel
 
         try
         {
+            var wasFirstPoint = _interactiveSession.PointCount == 0;
             _interactiveSession.AddPoint(physicalX, physicalY, isPositive);
             if (_interactiveSession.PointCount == 1)
             {
                 System.Diagnostics.Debug.WriteLine($"[AI MODE] First point. Keep selected mode = {_interactiveSession.IsKeepSelectedMode}");
             }
+            if (wasFirstPoint)
+                RaiseInteractiveStateChanged();
 
             await RefineMaskAsync();
         }
@@ -494,10 +555,12 @@ public partial class FloatingImageViewModel
 
     private async Task ConfirmInteractiveAsync()
     {
-        if (Image == null || InteractiveMask == null) return;
+        if (Image == null || InteractiveMask == null || !_interactiveSession.BeginApplying()) return;
 
+        var applySucceeded = false;
         try
         {
+            RaiseInteractiveStateChanged();
             IsProcessing = true;
             ProcessingText = LocalizationService.Instance["ProcessingAI"] ?? "Applying Removal...";
             
@@ -570,6 +633,7 @@ public partial class FloatingImageViewModel
             if (!FloatingBitmapConversionHelper.TryCreateDetachedBitmapFromEncodedBytes(imageBytes, out var confirmedBitmap, out var confirmDecodeError))
                 throw new Exception(confirmDecodeError ?? "Failed to decode interactive output.");
             Image = confirmedBitmap;
+            applySucceeded = true;
 
             IsPointRemovalMode = false;
         }
@@ -580,6 +644,8 @@ public partial class FloatingImageViewModel
         }
         finally
         {
+            _interactiveSession.EndApplying(applySucceeded);
+            RaiseInteractiveStateChanged();
             IsProcessing = false;
         }
     }

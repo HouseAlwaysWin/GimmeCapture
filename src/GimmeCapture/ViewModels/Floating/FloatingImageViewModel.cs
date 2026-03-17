@@ -69,6 +69,8 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
     public ReactiveCommand<Unit, Unit> RemoveBackgroundCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> ConfirmInteractiveCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> CancelInteractiveCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> UndoInteractivePointCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> UndoShortcutCommand { get; private set; } = null!;
 
     // Tooltips 
     public override string CopyHotkey => _appSettingsService?.Settings.Snip.Copy ?? base.CopyHotkey;
@@ -261,8 +263,32 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
         {
             IsPointRemovalMode = false;
         });
+
+        UndoInteractivePointCommand = ReactiveCommand.CreateFromTask(
+            UndoLastPointAsync,
+            this.WhenAnyValue(x => x.CanUndoInteractivePoint));
+
+        var canUndoShortcut = this.WhenAnyValue(
+            x => x.IsPointRemovalMode,
+            x => x.CanUndoInteractivePoint,
+            x => x.HasUndo,
+            x => x.IsEnteringText,
+            (isPointRemoval, canUndoPoint, hasUndo, isEnteringText) =>
+                !isEnteringText && ((isPointRemoval && canUndoPoint) || hasUndo));
+        UndoShortcutCommand = ReactiveCommand.CreateFromTask(async () =>
+        {
+            if (IsPointRemovalMode && CanUndoInteractivePoint)
+            {
+                await UndoLastPointAsync();
+                return;
+            }
+
+            Undo();
+        }, canUndoShortcut);
         
-        ConfirmInteractiveCommand = ReactiveCommand.CreateFromTask(ConfirmInteractiveAsync, this.WhenAnyValue(x => x.InteractiveMask).Select(m => m != null));
+        ConfirmInteractiveCommand = ReactiveCommand.CreateFromTask(
+            ConfirmInteractiveAsync,
+            this.WhenAnyValue(x => x.CanConfirmInteractive));
 
         // CRITICAL: Invalidate SAM2 service when Image changes (e.g. Crop, Undo)
         this.WhenAnyValue(x => x.Image)

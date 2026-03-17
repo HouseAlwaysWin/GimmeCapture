@@ -31,7 +31,7 @@
         <KeyBinding Gesture="B" Command="{Binding SelectToolCommand}" CommandParameter="{x:Static m:AnnotationType.Blur}" />
 
         <!-- History -->
-        <KeyBinding Gesture="Ctrl+Z" Command="{Binding UndoCommand}" />
+        <KeyBinding Gesture="Ctrl+Z" Command="{Binding UndoShortcutCommand}" />
         <KeyBinding Gesture="Ctrl+Y" Command="{Binding RedoCommand}" />
         <KeyBinding Gesture="Delete" Command="{Binding ClearAnnotationsCommand}" />
 
@@ -289,6 +289,12 @@
                             <!-- Interactive Selection Confirm/Cancel -->
                             <StackPanel Orientation="Horizontal" Spacing="2" IsVisible="{Binding IsPointRemovalMode}">
                                 <Rectangle Fill="#444444" Width="1" Height="16" Margin="2,0" VerticalAlignment="Center"/>
+                                <Button Theme="{StaticResource SnipButton}"
+                                        Command="{Binding UndoInteractivePointCommand}"
+                                        ToolTip.Tip="{Binding UndoTooltip}"
+                                        IsEnabled="{Binding CanUndoInteractivePoint}">
+                                    <PathIcon Data="M12.5,8C8.36,8 5,11.36 5,15.5C5,19.64 8.36,23 12.5,23C16.64,23 20,19.64 20,15.5H18C18,18.54 15.54,21 12.5,21C9.46,21 7,18.54 7,15.5C7,12.46 9.46,10 12.5,10C14.01,10 15.37,10.61 16.37,11.59L13,15H21V7L17.79,10.21C16.43,8.84 14.56,8 12.5,8Z" Width="14" Height="14"/>
+                                </Button>
                                 <Button Theme="{StaticResource SnipButton}" 
                                         Command="{Binding ConfirmInteractiveCommand}" 
                                         ToolTip.Tip="{Binding ConfirmRemovalTooltip}" Foreground="#4CAF50"
