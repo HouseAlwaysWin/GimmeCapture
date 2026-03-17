@@ -309,9 +309,9 @@ public partial class FloatingVideoViewModel
                 using var data = image.Encode(SKEncodedImageFormat.Png, 100);
                 using var resultMs = new MemoryStream();
                 data.SaveTo(resultMs);
-                resultMs.Position = 0;
-                
-                return new Bitmap(resultMs);
+                if (!FloatingBitmapConversionHelper.TryCreateDetachedBitmapFromEncodedBytes(resultMs.ToArray(), out var detachedBitmap, out _))
+                    return null;
+                return detachedBitmap;
             }
             catch (Exception ex)
             {

@@ -10,7 +10,6 @@ using System;
 using System.Threading.Tasks;
 using GimmeCapture.ViewModels.Shared;
 using GimmeCapture.Views.Floating;
-using Avalonia.Platform;
 
 namespace GimmeCapture.ViewModels.Floating;
 
@@ -36,21 +35,10 @@ public partial class FloatingImageViewModel
             System.Console.WriteLine("[FloatingVM] AI Disabled settings check failed.");
             DiagnosticText = LocalizationService.Instance["AIDisabled"];
             CurrentTool = FloatingTool.None;
-            
-             Avalonia.Threading.Dispatcher.UIThread.Post(() => {
-                 var dialogVm = new GothicDialogViewModel { 
-                     Title = LocalizationService.Instance["AIDisabledTitle"], 
-                     Message = LocalizationService.Instance["AIDisabledMessage"] 
-                 };
-                 var dialog = new GimmeCapture.Views.Shared.GothicDialog { DataContext = dialogVm };
-                 
-                var owner = ResolveOwnerWindow();
-                 
-                 if (owner != null) 
-                 {
-                     dialog.ShowDialog<bool>(owner);
-                 }
-            });
+
+            ShowDialogOnUiThread(
+                LocalizationService.Instance["AIDisabledTitle"],
+                LocalizationService.Instance["AIDisabledMessage"]);
             return;
         }
 
@@ -88,16 +76,9 @@ public partial class FloatingImageViewModel
             System.Diagnostics.Debug.WriteLine($"FloatingVM: Failed to start interactive removal: {ex}");
             DiagnosticText = LocalizationService.Instance["StatusError"]; // Or specify a new one
             CurrentTool = FloatingTool.None;
-            
-            Avalonia.Threading.Dispatcher.UIThread.Post(() => {
-                 var dialogVm = new GothicDialogViewModel { 
-                     Title = LocalizationService.Instance["AIInitErrorTitle"], 
-                     Message = string.Format(LocalizationService.Instance["AIInitErrorMessage"], ex.Message)
-                 };
-                 var dialog = new GimmeCapture.Views.Shared.GothicDialog { DataContext = dialogVm };
-                var owner = ResolveOwnerWindow();
-                 if (owner != null) dialog.ShowDialog<bool>(owner);
-            });
+
+            var initMessage = string.Format(LocalizationService.Instance["AIInitErrorMessage"], ex.Message);
+            ShowDialogOnUiThread(LocalizationService.Instance["AIInitErrorTitle"], initMessage);
         }
         finally
         {
@@ -226,7 +207,7 @@ public partial class FloatingImageViewModel
 
                 using var finalMs = new System.IO.MemoryStream();
                 coloredMask.Encode(finalMs, SkiaSharp.SKEncodedImageFormat.Png, 100);
-                InteractiveMask = CreateDetachedBitmapFromEncodedBytes(finalMs.ToArray());
+                InteractiveMask = FloatingBitmapConversionHelper.CreateDetachedBitmapFromEncodedBytes(finalMs.ToArray());
             }
         }
         catch (Exception ex)
@@ -307,15 +288,9 @@ public partial class FloatingImageViewModel
         var currentStatus = ResourceQueueService.Instance.GetStatus("AI");
         if (currentStatus == QueueItemStatus.Pending || currentStatus == QueueItemStatus.Downloading)
         {
-             Avalonia.Threading.Dispatcher.UIThread.Post(() => {
-                 var dialogVm = new GothicDialogViewModel { 
-                     Title = "Download in Progress", 
-                     Message = LocalizationService.Instance["ComponentDownloadingProgress"] ?? "Downloading component..." 
-                 };
-                 var dialog = new GimmeCapture.Views.Shared.GothicDialog { DataContext = dialogVm };
-                var owner = ResolveOwnerWindow();
-                 if (owner != null) dialog.ShowDialog<bool>(owner);
-            });
+            ShowDialogOnUiThread(
+                "Download in Progress",
+                LocalizationService.Instance["ComponentDownloadingProgress"] ?? "Downloading component...");
             return false;
         }
 
@@ -355,15 +330,9 @@ public partial class FloatingImageViewModel
         var currentStatus = ResourceQueueService.Instance.GetStatus("AI Core");
         if (currentStatus == QueueItemStatus.Pending || currentStatus == QueueItemStatus.Downloading)
         {
-             Avalonia.Threading.Dispatcher.UIThread.Post(() => {
-                 var dialogVm = new GothicDialogViewModel { 
-                     Title = "Download in Progress", 
-                     Message = "AI Core components are currently downloading..." 
-                 };
-                 var dialog = new GimmeCapture.Views.Shared.GothicDialog { DataContext = dialogVm };
-                var owner = ResolveOwnerWindow();
-                 if (owner != null) dialog.ShowDialog<bool>(owner);
-            });
+            ShowDialogOnUiThread(
+                "Download in Progress",
+                "AI Core components are currently downloading...");
             return false;
         }
 
@@ -398,22 +367,7 @@ public partial class FloatingImageViewModel
         // Check if AI is enabled
         if (!_appSettingsService.Settings.EnableAI)
         {
-             Avalonia.Threading.Dispatcher.UIThread.Post(() => {
-                 var dialogVm = new GothicDialogViewModel { Title = "AI Disabled", Message = "AI features are currently disabled in Settings." };
-                 var dialog = new GimmeCapture.Views.Shared.GothicDialog { DataContext = dialogVm };
-                 
-                var owner = ResolveOwnerWindow();
-                 
-                 if (owner != null) 
-                 {
-                     dialog.ShowDialog<bool>(owner);
-                 }
-                 else
-                 {
-                     // Absolute fallback if no window found (should differ happen)
-                     System.Diagnostics.Debug.WriteLine("[Error] No window found to show AI Disabled dialog");
-                 }
-            });
+            ShowDialogOnUiThread("AI Disabled", "AI features are currently disabled in Settings.");
             return;
         }
         
@@ -429,13 +383,8 @@ public partial class FloatingImageViewModel
             PushUndoState();
 
             // 1. Convert Avalonia Bitmap to Bytes
-            byte[] imageBytes;
-            using (var ms = new System.IO.MemoryStream())
-            {
-                // We need to save the current bitmap to stream
-                Image.Save(ms);
-                imageBytes = ms.ToArray();
-            }
+            if (!FloatingBitmapConversionHelper.TryEncodeBitmapToPngBytes(Image, out var imageBytes, out var encodeError))
+                throw new Exception(encodeError ?? "Failed to serialize image.");
 
             // 2. Process
             using var aiService = new BackgroundRemovalService(_aiResourceService, _pathService);
@@ -460,7 +409,9 @@ public partial class FloatingImageViewModel
             var transparentBytes = await aiService.RemoveBackgroundAsync(imageBytes, scaledRect);
 
             // 3. Update Image
-            Image = CreateDetachedBitmapFromEncodedBytes(transparentBytes);
+            if (!FloatingBitmapConversionHelper.TryCreateDetachedBitmapFromEncodedBytes(transparentBytes, out var detachedBitmap, out var decodeError))
+                throw new Exception(decodeError ?? "Failed to decode processed image.");
+            Image = detachedBitmap;
             
             // Clear selection after processing
             IsSelectionMode = false;
@@ -468,13 +419,7 @@ public partial class FloatingImageViewModel
         catch (System.Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"AI Processing Failed: {ex}");
-            // Show error dialog
-             Avalonia.Threading.Dispatcher.UIThread.Post(() => {
-                 var dialogVm = new GothicDialogViewModel { Title = "Error", Message = ex.Message };
-                 var dialog = new GimmeCapture.Views.Shared.GothicDialog { DataContext = dialogVm };
-                var owner = ResolveOwnerWindow();
-                 if (owner != null) dialog.ShowDialog<bool>(owner);
-            });
+            ShowErrorDialog(ex.Message);
         }
         finally
         {
@@ -498,12 +443,8 @@ public partial class FloatingImageViewModel
             if (sourceImage == null) throw new Exception("Source image is unavailable.");
             if (cleanMaskBytes == null || cleanMaskBytes.Length == 0) throw new Exception("No valid mask generated.");
 
-            byte[] sourceImageBytes;
-            using (var sourceMs = new System.IO.MemoryStream())
-            {
-                sourceImage.Save(sourceMs);
-                sourceImageBytes = sourceMs.ToArray();
-            }
+            if (!FloatingBitmapConversionHelper.TryEncodeBitmapToPngBytes(sourceImage, out var sourceImageBytes, out var sourceEncodeError))
+                throw new Exception(sourceEncodeError ?? "Failed to serialize source image.");
 
             // 1. Process with SkiaSharp in a background thread to prevent UI freeze
             var imageBytes = await Task.Run(() =>
@@ -561,19 +502,16 @@ public partial class FloatingImageViewModel
                 return data.ToArray();
             });
 
-            Image = CreateDetachedBitmapFromEncodedBytes(imageBytes);
+            if (!FloatingBitmapConversionHelper.TryCreateDetachedBitmapFromEncodedBytes(imageBytes, out var confirmedBitmap, out var confirmDecodeError))
+                throw new Exception(confirmDecodeError ?? "Failed to decode interactive output.");
+            Image = confirmedBitmap;
 
             IsPointRemovalMode = false;
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"Failed to confirm interactive: {ex}");
-             Avalonia.Threading.Dispatcher.UIThread.Post(() => {
-                 var dialogVm = new GothicDialogViewModel { Title = "Error", Message = $"Failed to apply background removal: {ex.Message}" };
-                 var dialog = new GimmeCapture.Views.Shared.GothicDialog { DataContext = dialogVm };
-                var owner = ResolveOwnerWindow();
-                 if (owner != null) dialog.ShowDialog<bool>(owner);
-            });
+            ShowErrorDialog($"Failed to apply background removal: {ex.Message}");
         }
         finally
         {
@@ -592,7 +530,7 @@ public partial class FloatingImageViewModel
             await _sam2Service.InitializeAsync();
             
              // Optimization: Pass current image to AI immediately after initialization
-            var skImage = ImageToSkia(Image);
+            var skImage = FloatingBitmapConversionHelper.ToSkBitmap(Image);
             if (skImage != null)
             {
                 await _sam2Service.SetImageAsync(skImage);
@@ -607,51 +545,37 @@ public partial class FloatingImageViewModel
         return _sam2Service;
     }
 
-    private SkiaSharp.SKBitmap? ImageToSkia(Bitmap? avaloniaBitmap)
-    {
-        if (avaloniaBitmap == null) return null;
-        try 
-        {
-            using var ms = new System.IO.MemoryStream();
-            avaloniaBitmap.Save(ms);
-            ms.Seek(0, System.IO.SeekOrigin.Begin);
-            return SkiaSharp.SKBitmap.Decode(ms);
-        }
-        catch 
-        {
-            return null;
-        }
-    }
-
-    private static Bitmap CreateDetachedBitmapFromEncodedBytes(byte[] encodedBytes)
-    {
-        if (encodedBytes == null || encodedBytes.Length == 0)
-            throw new Exception("Encoded bitmap bytes are empty.");
-
-        using var ms = new System.IO.MemoryStream(encodedBytes);
-        using var tempBitmap = new Bitmap(ms);
-
-        var result = new WriteableBitmap(
-            tempBitmap.PixelSize,
-            tempBitmap.Dpi,
-            PixelFormat.Bgra8888,
-            AlphaFormat.Premul);
-
-        using var locked = result.Lock();
-        tempBitmap.CopyPixels(
-            new Avalonia.PixelRect(0, 0, tempBitmap.PixelSize.Width, tempBitmap.PixelSize.Height),
-            locked.Address,
-            locked.RowBytes * locked.Size.Height,
-            locked.RowBytes);
-
-        return result;
-    }
-
     private Avalonia.Controls.Window? ResolveOwnerWindow()
     {
         return _windowManager.FindWindowByDataContext(this)
             ?? _windowManager.GetActiveWindowOfType<FloatingImageWindow>()
             ?? _windowManager.GetActiveWindow()
             ?? _windowManager.GetMainWindow();
+    }
+
+    private void ShowErrorDialog(string message)
+    {
+        ShowDialogOnUiThread("Error", message);
+    }
+
+    private void ShowDialogOnUiThread(string title, string message)
+    {
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            var owner = ResolveOwnerWindow();
+            if (owner == null)
+            {
+                System.Diagnostics.Debug.WriteLine($"[Dialog] Owner not found. Title={title}, Message={message}");
+                return;
+            }
+
+            var dialogVm = new GothicDialogViewModel
+            {
+                Title = title,
+                Message = message
+            };
+            var dialog = new GimmeCapture.Views.Shared.GothicDialog { DataContext = dialogVm };
+            dialog.ShowDialog<bool>(owner);
+        });
     }
 }
