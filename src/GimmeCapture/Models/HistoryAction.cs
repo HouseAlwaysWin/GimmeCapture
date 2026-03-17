@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using Avalonia.Media.Imaging;
 using GimmeCapture.Models;
 using System.Linq;
+using System.Runtime.CompilerServices;
 
 namespace GimmeCapture.Models;
 
@@ -15,15 +16,40 @@ public interface IHistoryAction : IDisposable
 
 public class BitmapHistoryAction : IHistoryAction
 {
+    private sealed class ReferenceEqualityComparer<T> : IEqualityComparer<T> where T : class
+    {
+        public bool Equals(T? x, T? y) => ReferenceEquals(x, y);
+        public int GetHashCode(T obj) => RuntimeHelpers.GetHashCode(obj);
+    }
+
+    private static readonly object _bitmapRefLock = new();
+    private static readonly Dictionary<Bitmap, int> _bitmapRefCounts = new(new ReferenceEqualityComparer<Bitmap>());
+
     public Action<Bitmap?> SetBitmapAction { get; }
     public Bitmap? OldBitmap { get; }
     public Bitmap? NewBitmap { get; }
+    private readonly bool _trackOldBitmap;
+    private readonly bool _trackNewBitmap;
+    private readonly Func<Bitmap?>? _getCurrentBitmap;
+    private bool _disposed;
 
-    public BitmapHistoryAction(Action<Bitmap?> setBitmap, Bitmap? oldBitmap, Bitmap? newBitmap)
+    public BitmapHistoryAction(
+        Action<Bitmap?> setBitmap,
+        Bitmap? oldBitmap,
+        Bitmap? newBitmap,
+        bool trackOldBitmap = true,
+        bool trackNewBitmap = true,
+        Func<Bitmap?>? getCurrentBitmap = null)
     {
         SetBitmapAction = setBitmap;
         OldBitmap = oldBitmap;
         NewBitmap = newBitmap;
+        _trackOldBitmap = trackOldBitmap;
+        _trackNewBitmap = trackNewBitmap;
+        _getCurrentBitmap = getCurrentBitmap;
+
+        AddBitmapRef(OldBitmap, _trackOldBitmap);
+        AddBitmapRef(NewBitmap, _trackNewBitmap);
     }
 
     public void Undo() => SetBitmapAction(OldBitmap);
@@ -31,12 +57,59 @@ public class BitmapHistoryAction : IHistoryAction
 
     public void Dispose()
     {
-        // Do not dispose bitmap instances here.
-        // BitmapHistoryAction often stores shared references to currently displayed images
-        // (especially around Undo/Redo mutation flows). Disposing them here can invalidate
-        // the active Image and cause NullReference/ObjectDisposed failures on next operation.
-        //
-        // Lifecycle is managed by owning view models/windows.
+        if (_disposed) return;
+        _disposed = true;
+
+        ReleaseBitmapRef(OldBitmap, _trackOldBitmap);
+        ReleaseBitmapRef(NewBitmap, _trackNewBitmap);
+    }
+
+    private static void AddBitmapRef(Bitmap? bitmap, bool shouldTrack)
+    {
+        if (!shouldTrack || bitmap == null) return;
+        lock (_bitmapRefLock)
+        {
+            _bitmapRefCounts.TryGetValue(bitmap, out var count);
+            _bitmapRefCounts[bitmap] = count + 1;
+        }
+    }
+
+    private void ReleaseBitmapRef(Bitmap? bitmap, bool shouldTrack)
+    {
+        if (!shouldTrack || bitmap == null) return;
+
+        bool shouldDispose = false;
+        lock (_bitmapRefLock)
+        {
+            if (!_bitmapRefCounts.TryGetValue(bitmap, out var count))
+            {
+                return;
+            }
+
+            if (count <= 1)
+            {
+                _bitmapRefCounts.Remove(bitmap);
+                shouldDispose = true;
+            }
+            else
+            {
+                _bitmapRefCounts[bitmap] = count - 1;
+            }
+        }
+
+        if (!shouldDispose) return;
+
+        // Never dispose the currently displayed bitmap.
+        if (ReferenceEquals(bitmap, _getCurrentBitmap?.Invoke())) return;
+
+        try
+        {
+            bitmap.Dispose();
+        }
+        catch
+        {
+            // Ignore cleanup failures in history disposal path.
+        }
     }
 }
 

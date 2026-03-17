@@ -32,7 +32,7 @@ public partial class FloatingImageViewModel
     {
         if (Image == null) return;
         // Correctly capture current state for undo
-        PushUndoAction(new BitmapHistoryAction(b => Image = b, Image, null));
+        PushUndoAction(new BitmapHistoryAction(b => Image = b, Image, null, getCurrentBitmap: () => Image));
     }
 
     protected override void Undo()
@@ -42,7 +42,7 @@ public partial class FloatingImageViewModel
         
         if (action is BitmapHistoryAction bh && bh.NewBitmap == null)
         {
-             var actionWithNew = new BitmapHistoryAction(bh.SetBitmapAction, bh.OldBitmap, Image);
+             var actionWithNew = new BitmapHistoryAction(bh.SetBitmapAction, bh.OldBitmap, Image, getCurrentBitmap: () => Image);
              actionWithNew.Undo();
              _redoHistoryStack.Push(actionWithNew);
         }

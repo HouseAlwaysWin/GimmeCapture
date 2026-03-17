@@ -126,7 +126,7 @@ public partial class FloatingImageViewModel
 
             // Create History Actions
             // Use captured oldImage
-            var bitmapAction = new BitmapHistoryAction(b => Image = b, oldImage, selected);
+            var bitmapAction = new BitmapHistoryAction(b => Image = b, oldImage, selected, getCurrentBitmap: () => Image);
             
             // Window Transform Action
             var transformAction = new WindowTransformHistoryAction(
