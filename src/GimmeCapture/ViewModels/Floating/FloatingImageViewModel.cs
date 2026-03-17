@@ -35,18 +35,8 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
     
     // AI / SAM2 Properties & State
     private SAM2Service? _sam2Service;
-    private readonly List<(double X, double Y, bool IsPositive)> _interactivePoints = new();
-    private bool _invertSelectionMode = false; // Shift+Click sets this to true
-    
-    // Clean mask without crosshairs for actual removal
-    private byte[]? _cleanMaskBytes;
-
-    private bool _isInteractiveSelectionMode;
-    public bool IsInteractiveSelectionMode
-    {
-        get => _isInteractiveSelectionMode;
-        set => this.RaiseAndSetIfChanged(ref _isInteractiveSelectionMode, value);
-    }
+    private readonly InteractiveRemovalSession _interactiveSession = new();
+    public bool IsInteractiveSelectionMode => _interactiveSession.IsActive;
 
     private Bitmap? _interactiveMask;
     public Bitmap? InteractiveMask
@@ -145,10 +135,7 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
             // Cleanup previous tool state
             if (base.CurrentTool == FloatingTool.PointRemoval)
             {
-                IsInteractiveSelectionMode = false;
-                InteractiveMask = null;
-                _cleanMaskBytes = null;
-                _interactivePoints.Clear();
+                CancelInteractiveSession();
             }
             else if (base.CurrentTool == FloatingTool.Selection)
             {

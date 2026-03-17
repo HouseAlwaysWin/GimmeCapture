@@ -15,9 +15,92 @@ namespace GimmeCapture.ViewModels.Floating;
 
 public partial class FloatingImageViewModel
 {
+    private enum InteractiveRemovalMode
+    {
+        RemoveSelected,
+        KeepSelected
+    }
+
+    private sealed class InteractiveRemovalSession
+    {
+        private readonly List<(double X, double Y, bool IsPositive)> _points = new();
+
+        public bool IsActive { get; private set; }
+        public InteractiveRemovalMode Mode { get; private set; } = InteractiveRemovalMode.RemoveSelected;
+        public byte[]? CleanMaskBytes { get; private set; }
+        public IReadOnlyList<(double X, double Y, bool IsPositive)> Points => _points;
+        public int PointCount => _points.Count;
+        public bool IsKeepSelectedMode => Mode == InteractiveRemovalMode.KeepSelected;
+
+        public void Start()
+        {
+            IsActive = true;
+            ResetPoints();
+        }
+
+        public void Cancel()
+        {
+            IsActive = false;
+            ResetPoints();
+        }
+
+        public void ResetPoints()
+        {
+            _points.Clear();
+            Mode = InteractiveRemovalMode.RemoveSelected;
+            CleanMaskBytes = null;
+        }
+
+        public bool UndoLastPoint()
+        {
+            if (_points.Count == 0)
+                return false;
+
+            _points.RemoveAt(_points.Count - 1);
+            if (_points.Count == 0)
+                ResetPoints();
+            return true;
+        }
+
+        public void AddPoint(double x, double y, bool isPositiveInput)
+        {
+            var sam2Positive = isPositiveInput;
+            if (_points.Count == 0)
+            {
+                Mode = isPositiveInput ? InteractiveRemovalMode.RemoveSelected : InteractiveRemovalMode.KeepSelected;
+                sam2Positive = true; // First point always defines subject for SAM2.
+            }
+
+            _points.Add((x, y, sam2Positive));
+        }
+
+        public void SetCleanMaskBytes(byte[] bytes)
+        {
+            CleanMaskBytes = bytes;
+        }
+    }
+
     private void InitializeAICommands()
     {
         // _canRemoveBackground is initialized in main constructor
+    }
+
+    private void StartInteractiveSession()
+    {
+        var shouldNotify = !_interactiveSession.IsActive;
+        _interactiveSession.Start();
+        InteractiveMask = null;
+        if (shouldNotify)
+            this.RaisePropertyChanged(nameof(IsInteractiveSelectionMode));
+    }
+
+    private void CancelInteractiveSession()
+    {
+        var shouldNotify = _interactiveSession.IsActive;
+        _interactiveSession.Cancel();
+        InteractiveMask = null;
+        if (shouldNotify)
+            this.RaisePropertyChanged(nameof(IsInteractiveSelectionMode));
     }
 
     private async Task StartInteractiveRemovalAsync()
@@ -64,9 +147,7 @@ public partial class FloatingImageViewModel
             
             // Image is already set by GetSAM2ServiceAsync using direct SKBitmap conversion
             
-            // Reset points list
-            _interactivePoints.Clear();
-            IsInteractiveSelectionMode = true; 
+            StartInteractiveSession();
             
             DiagnosticText = $"{LocalizationService.Instance["StatusReady"]} [{sam2.ModelVariantName}]";
             System.Console.WriteLine("[FloatingVM] Interactive Selection Ready");
@@ -88,24 +169,19 @@ public partial class FloatingImageViewModel
 
     public void ResetInteractivePoints()
     {
-        _interactivePoints.Clear();
-        _invertSelectionMode = false;
+        _interactiveSession.ResetPoints();
         InteractiveMask = null;
-        _cleanMaskBytes = null;
         DiagnosticText = "AI: Points Reset";
         System.Diagnostics.Debug.WriteLine("FloatingVM: Resetting interactive points");
     }
 
     public async Task UndoLastPointAsync()
     {
-        if (_interactivePoints.Count > 0)
+        if (_interactiveSession.UndoLastPoint())
         {
-            _interactivePoints.RemoveAt(_interactivePoints.Count - 1);
-            
             // CRITICAL: Reset the AI's mask feedback memory when undoing.
             // If the last result was a "bad" full-image mask, we don't want the AI to reuse it.
-
-            if (_interactivePoints.Count == 0)
+            if (_interactiveSession.PointCount == 0)
             {
                 ResetInteractivePoints();
             }
@@ -136,20 +212,20 @@ public partial class FloatingImageViewModel
             IsProcessing = true;
             ProcessingText = LocalizationService.Instance["StatusProcessing"];
             
-            var maskBytes = await sam2.GetMaskAsync(_interactivePoints);
+            var maskBytes = await sam2.GetMaskAsync(_interactiveSession.Points);
             var iouInfo = sam2.LastIouInfo;
-            DiagnosticText = $"AI: ({_interactivePoints.Count} pts) {iouInfo}";
+            DiagnosticText = $"AI: ({_interactiveSession.PointCount} pts) {iouInfo}";
 
             if (maskBytes != null && maskBytes.Length > 0)
             {
                 // Store clean mask for actual removal (without crosshairs)
-                _cleanMaskBytes = maskBytes;
+                _interactiveSession.SetCleanMaskBytes(maskBytes);
                 
                 using var grayMask = SkiaSharp.SKBitmap.Decode(maskBytes);
                 
                 // CRITICAL FIX: Convert grayscale mask to RGBA with transparency
                 // Color based on mode: Red (remove) vs Green (keep)
-                SkiaSharp.SKColor overlayColor = _invertSelectionMode 
+                SkiaSharp.SKColor overlayColor = _interactiveSession.IsKeepSelectedMode
                     ? new SkiaSharp.SKColor(0, 255, 100, 150)   // Green for "Keep mode" (Shift+Click)
                     : new SkiaSharp.SKColor(255, 80, 80, 150);  // Red for "Remove mode" (Normal)
                     
@@ -181,7 +257,7 @@ public partial class FloatingImageViewModel
                     float scaleX = (float)coloredMask.Width / (Image?.PixelSize.Width ?? 1);
                     float scaleY = (float)coloredMask.Height / (Image?.PixelSize.Height ?? 1);
 
-                    foreach (var pt in _interactivePoints)
+                    foreach (var pt in _interactiveSession.Points)
                     {
                         var px = (float)pt.X * scaleX;
                         var py = (float)pt.Y * scaleY;
@@ -231,26 +307,15 @@ public partial class FloatingImageViewModel
         var physicalX = x;
         var physicalY = y;
 
-        if (_sam2Service == null || !IsInteractiveSelectionMode) return;
+        if (_sam2Service == null || !_interactiveSession.IsActive) return;
 
         try
         {
-            // First point determines the mode:
-            // - Positive (normal click) = Remove selected area -> Red
-            // - Negative (Shift+click) = Keep selected area -> Green
-            bool sam2Positive = isPositive;
-            if (_interactivePoints.Count == 0)
+            _interactiveSession.AddPoint(physicalX, physicalY, isPositive);
+            if (_interactiveSession.PointCount == 1)
             {
-                // _invertSelectionMode=true means "keep selected" mode in confirm stage.
-                // So we invert the default click semantics here:
-                // normal click -> remove selected (invert=false)
-                // Shift+click -> keep selected (invert=true)
-                _invertSelectionMode = !isPositive;
-                sam2Positive = true; // First point always defines the subject for SAM2
-                System.Diagnostics.Debug.WriteLine($"[AI MODE] First point. Keep selected mode = {_invertSelectionMode}");
+                System.Diagnostics.Debug.WriteLine($"[AI MODE] First point. Keep selected mode = {_interactiveSession.IsKeepSelectedMode}");
             }
-            
-            _interactivePoints.Add((physicalX, physicalY, sam2Positive));
 
             await RefineMaskAsync();
         }
@@ -439,7 +504,7 @@ public partial class FloatingImageViewModel
             PushUndoState();
 
             var sourceImage = Image;
-            var cleanMaskBytes = _cleanMaskBytes;
+            var cleanMaskBytes = _interactiveSession.CleanMaskBytes;
             if (sourceImage == null) throw new Exception("Source image is unavailable.");
             if (cleanMaskBytes == null || cleanMaskBytes.Length == 0) throw new Exception("No valid mask generated.");
 
@@ -476,7 +541,7 @@ public partial class FloatingImageViewModel
                         bool isSelected = maskVal > 127;
                         
                         // Invert the selection if in invert mode
-                        if (_invertSelectionMode)
+                        if (_interactiveSession.IsKeepSelectedMode)
                         {
                             isSelected = !isSelected;
                         }
