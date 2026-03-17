@@ -296,7 +296,7 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
             nameof(ConfirmInteractiveCommand));
 
         // CRITICAL: Invalidate SAM2 service when Image changes (e.g. Crop, Undo)
-        RegisterSubscription(this.WhenAnyValue(x => x.Image)
+        RegisterDisposable(this.WhenAnyValue(x => x.Image)
             .Subscribe(_ =>
             {
                 _sam2Service?.Dispose();

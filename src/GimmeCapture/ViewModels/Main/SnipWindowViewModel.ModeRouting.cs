@@ -11,6 +11,7 @@ using GimmeCapture.Services.Core;
 using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.ViewModels.Floating;
+using GimmeCapture.ViewModels.Shared;
 using GimmeCapture.Views.Floating;
 
 namespace GimmeCapture.ViewModels.Main;
@@ -591,44 +592,54 @@ public partial class SnipWindowViewModel
         InitializeTranslationToolbarPosition();
     }
 
-    private static void AttachCommandErrorLogging<TInput, TOutput>(ReactiveCommand<TInput, TOutput> command, string commandName)
-    {
-        command.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"{commandName} error: {ex}"));
-    }
-
     private ReactiveCommand<Unit, Unit> CreateCommand(Action execute, string commandName)
     {
-        var command = ReactiveCommand.Create(execute);
-        AttachCommandErrorLogging(command, commandName);
-        return command;
+        return ReactiveCommandLifecycleHelper.CreateCommand(
+            execute,
+            canExecute: null,
+            commandName,
+            _disposables,
+            nameof(SnipWindowViewModel));
     }
 
     private ReactiveCommand<Unit, Unit> CreateCommand(Action execute, string commandName, IObservable<bool> canExecute)
     {
-        var command = ReactiveCommand.Create(execute, canExecute);
-        AttachCommandErrorLogging(command, commandName);
-        return command;
+        return ReactiveCommandLifecycleHelper.CreateCommand(
+            execute,
+            canExecute,
+            commandName,
+            _disposables,
+            nameof(SnipWindowViewModel));
     }
 
     private ReactiveCommand<TParam, Unit> CreateCommand<TParam>(Action<TParam> execute, string commandName, IObservable<bool> canExecute)
     {
-        var command = ReactiveCommand.Create(execute, canExecute);
-        AttachCommandErrorLogging(command, commandName);
-        return command;
+        return ReactiveCommandLifecycleHelper.CreateCommand(
+            execute,
+            canExecute,
+            commandName,
+            _disposables,
+            nameof(SnipWindowViewModel));
     }
 
     private ReactiveCommand<Unit, Unit> CreateAsyncCommand(Func<Task> execute, string commandName)
     {
-        var command = ReactiveCommand.CreateFromTask(execute);
-        AttachCommandErrorLogging(command, commandName);
-        return command;
+        return ReactiveCommandLifecycleHelper.CreateAsyncCommand(
+            execute,
+            canExecute: null,
+            commandName,
+            _disposables,
+            nameof(SnipWindowViewModel));
     }
 
     private ReactiveCommand<Unit, Unit> CreateAsyncCommand(Func<Task> execute, string commandName, IObservable<bool> canExecute)
     {
-        var command = ReactiveCommand.CreateFromTask(execute, canExecute);
-        AttachCommandErrorLogging(command, commandName);
-        return command;
+        return ReactiveCommandLifecycleHelper.CreateAsyncCommand(
+            execute,
+            canExecute,
+            commandName,
+            _disposables,
+            nameof(SnipWindowViewModel));
     }
 
     private async Task StartRecording()

@@ -139,25 +139,24 @@ public partial class FloatingImageViewModel
         _lifecycleDisposables.Add(disposable);
     }
 
-    private void RegisterSubscription(IDisposable subscription)
-    {
-        _lifecycleDisposables.Add(subscription);
-    }
-
     private ReactiveCommand<Unit, Unit> CreateCommand(Action execute, IObservable<bool>? canExecute, string commandName)
     {
-        return CreateCommand<Unit>(
-            _ => execute(),
+        return ReactiveCommandLifecycleHelper.CreateCommand(
+            execute,
             canExecute,
-            commandName);
+            commandName,
+            _lifecycleDisposables,
+            nameof(FloatingImageViewModel));
     }
 
     private ReactiveCommand<Unit, Unit> CreateAsyncCommand(Func<Task> execute, IObservable<bool>? canExecute, string commandName)
     {
-        return CreateAsyncCommand<Unit>(
-            _ => execute(),
+        return ReactiveCommandLifecycleHelper.CreateAsyncCommand(
+            execute,
             canExecute,
-            commandName);
+            commandName,
+            _lifecycleDisposables,
+            nameof(FloatingImageViewModel));
     }
 
     private ReactiveCommand<TParam, Unit> CreateCommand<TParam>(
@@ -165,12 +164,12 @@ public partial class FloatingImageViewModel
         IObservable<bool>? canExecute,
         string commandName)
     {
-        var command = canExecute == null
-            ? ReactiveCommand.Create<TParam>(execute)
-            : ReactiveCommand.Create<TParam>(execute, canExecute);
-        AttachCommandErrorLogging(command, commandName);
-        RegisterDisposable(command);
-        return command;
+        return ReactiveCommandLifecycleHelper.CreateCommand(
+            execute,
+            canExecute,
+            commandName,
+            _lifecycleDisposables,
+            nameof(FloatingImageViewModel));
     }
 
     private ReactiveCommand<TParam, Unit> CreateAsyncCommand<TParam>(
@@ -178,20 +177,12 @@ public partial class FloatingImageViewModel
         IObservable<bool>? canExecute,
         string commandName)
     {
-        var command = canExecute == null
-            ? ReactiveCommand.CreateFromTask<TParam>(execute)
-            : ReactiveCommand.CreateFromTask<TParam>(execute, canExecute);
-        AttachCommandErrorLogging(command, commandName);
-        RegisterDisposable(command);
-        return command;
-    }
-
-    private void AttachCommandErrorLogging<TParam, TResult>(ReactiveCommand<TParam, TResult> command, string commandName)
-    {
-        RegisterSubscription(command.ThrownExceptions.Subscribe(ex =>
-        {
-            System.Diagnostics.Debug.WriteLine($"[FloatingVM:{commandName}] {ex}");
-        }));
+        return ReactiveCommandLifecycleHelper.CreateAsyncCommand(
+            execute,
+            canExecute,
+            commandName,
+            _lifecycleDisposables,
+            nameof(FloatingImageViewModel));
     }
 
     public bool CanInteractiveClick => _interactiveSession.CanClick;
