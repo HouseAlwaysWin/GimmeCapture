@@ -71,6 +71,10 @@ public partial class SnipWindowViewModel
                 System.Diagnostics.Debug.WriteLine($"[TranslationMode] ==============================");
             }
 
+            // Ensure warm-up has completed before the first actual translation pass.
+            StartTranslationWarmup();
+            await AwaitTranslationWarmupAsync(token);
+
             // Setup new cancellation token source moved to the beginning of the function
 
             // Ensure OCR resources

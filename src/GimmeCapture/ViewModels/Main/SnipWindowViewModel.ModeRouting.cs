@@ -108,6 +108,7 @@ public partial class SnipWindowViewModel
             RaiseProperties(nameof(MaskOpacity));
             UpdateMask();
             StartAutoDetectLoop();
+            StartTranslationWarmup();
         }
         else if (oldMode == SnipMode.Translation)
         {
@@ -121,6 +122,7 @@ public partial class SnipWindowViewModel
             RaiseProperties(nameof(MaskOpacity));
             UpdateMask();
             StopAutoDetectLoop();
+            CancelTranslationWarmup();
         }
 
         // Common updates

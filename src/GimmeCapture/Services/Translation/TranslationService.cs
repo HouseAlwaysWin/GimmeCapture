@@ -24,6 +24,7 @@ public class TranslationService
     private readonly IEnumerable<ITranslationEngine> _translationEngines;
     private readonly IOllamaApiClient _ollamaApiClient;
     private readonly AIResourceService _aiResourceService;
+    private readonly MarianMTService _marianMTService;
 
     private AppSettings _settings => _settingsService.Settings;
 
@@ -34,6 +35,7 @@ public class TranslationService
     {
         _aiResourceService = aiResourceService ?? throw new ArgumentNullException(nameof(aiResourceService));
         _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
+        _marianMTService = marianMTService ?? throw new ArgumentNullException(nameof(marianMTService));
         
         // Manual DI for now as the app doesn't use a container in constructor injection here
         var translationCache = new InMemoryTranslationCache();
@@ -48,8 +50,83 @@ public class TranslationService
         _translationEngines = new List<ITranslationEngine>
         {
             new LLMTranslationEngine(_ollamaApiClient, settingsService, translationCache),
-            new MarianMTTranslationEngine(marianMTService)
+            new MarianMTTranslationEngine(_marianMTService)
         };
+    }
+
+    public async Task WarmUpAsync(CancellationToken ct = default)
+    {
+        var warmupSourceLanguage = _settings.SourceLanguage == OCRLanguage.Auto
+            ? OCRLanguage.TraditionalChinese
+            : _settings.SourceLanguage;
+
+        try
+        {
+            bool ocrReady = await _aiResourceService.EnsureOCRAsync(warmupSourceLanguage, ct);
+            if (ocrReady)
+            {
+                await _ocrEngine.EnsureLoadedAsync(warmupSourceLanguage, ct);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[TranslationService] Warm-up OCR failed: {ex.Message}");
+        }
+
+        if (_settings.SelectedTranslationEngine == TranslationEngine.MarianMT)
+        {
+            try
+            {
+                bool nmtReady = await _aiResourceService.EnsureNmtAsync(ct);
+                if (nmtReady)
+                {
+                    await _marianMTService.EnsureLoadedAsync(ct);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[TranslationService] Warm-up MarianMT failed: {ex.Message}");
+            }
+
+            return;
+        }
+
+        if (_settings.SelectedTranslationEngine == TranslationEngine.Ollama)
+        {
+            var model = _settings.OllamaModel;
+            if (string.IsNullOrWhiteSpace(model))
+            {
+                return;
+            }
+
+            try
+            {
+                bool ready = await _ollamaApiClient.IsReadyAsync(model, ct);
+                if (!ready)
+                {
+                    return;
+                }
+
+                // Trigger model cold-start in the background so first real translation is faster.
+                await _ollamaApiClient.GenerateAsync(model, "Reply with OK only.", ct);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[TranslationService] Warm-up Ollama failed: {ex.Message}");
+            }
+        }
     }
 
     public async Task<ResourceReadyResult> CheckEngineReadyAsync()

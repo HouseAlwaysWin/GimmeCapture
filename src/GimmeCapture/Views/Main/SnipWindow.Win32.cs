@@ -677,7 +677,40 @@ public partial class SnipWindow : Window
             // 也要正確設定 region（只有 extraRegions 的情況）
             if (holeRects.Count == 0 && extraRegions.Count == 0)
             {
-                Win32Helpers.ClearWindowRegion(hwnd);
+                if (isTranslation)
+                {
+                    if (_viewModel?.IsTranslationSelectionActive == true)
+                    {
+                        // In selection mode with no existing boxes, the window must stay interactive
+                        // so mouse drag can create the first translation selection.
+                        Win32Helpers.ClearWindowRegion(hwnd);
+                        return;
+                    }
+
+                    Rect? emptyStateToolbarRect = null;
+                    if (_viewModel != null && _viewModel.IsToolbarVisible && _viewModel.ToolbarWidth > 0 && _viewModel.ToolbarHeight > 0)
+                    {
+                        double tw = _viewModel.ToolbarWidth + 40;
+                        double th = _viewModel.ToolbarHeight + 40;
+                        double tx = _viewModel.ToolbarLeft - 20;
+                        double ty = _viewModel.ToolbarTop - 20;
+                        emptyStateToolbarRect = new Rect(tx * scaling, ty * scaling, tw * scaling, th * scaling);
+                    }
+
+                    // Keep full click-through when translation UI is hidden/empty.
+                    Win32Helpers.SetMultiWindowHoleRegion(
+                        hwnd,
+                        windowWidth,
+                        windowHeight,
+                        new[] { new Rect(0, 0, windowWidth, windowHeight) },
+                        0,
+                        emptyStateToolbarRect,
+                        null);
+                }
+                else
+                {
+                    Win32Helpers.ClearWindowRegion(hwnd);
+                }
                 return;
             }
 

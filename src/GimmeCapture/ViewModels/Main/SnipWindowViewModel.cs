@@ -605,6 +605,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
 
     public void Dispose()
     {
+        CancelTranslationWarmup();
         LocalizationService.Instance.PropertyChanged -= OnLocalizationPropertyChanged;
         _audioMeterTimer.Stop();
         _audioLevelMonitor.Dispose();

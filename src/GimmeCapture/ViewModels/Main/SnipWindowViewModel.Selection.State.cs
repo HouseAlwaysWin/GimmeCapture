@@ -153,6 +153,8 @@ public partial class SnipWindowViewModel
     public ObservableCollection<UserSelectionRect> UserSelections { get; } = new();
     private TranslationService? _translationService;
     private CancellationTokenSource? _translationCts;
+    private CancellationTokenSource? _translationWarmupCts;
+    private Task? _translationWarmupTask;
 
 
     private Rect _selectionRect;
@@ -187,6 +189,75 @@ public partial class SnipWindowViewModel
         
         _sharedOcrEngine?.Dispose();
         _sharedOcrEngine = null;
+    }
+
+    private void StartTranslationWarmup()
+    {
+        if (_mainVm == null || CurrentMode != SnipMode.Translation)
+        {
+            return;
+        }
+
+        if (_translationWarmupTask is { IsCompleted: false })
+        {
+            return;
+        }
+
+        _translationWarmupCts?.Cancel();
+        _translationWarmupCts?.Dispose();
+        _translationWarmupCts = new CancellationTokenSource();
+        var token = _translationWarmupCts.Token;
+
+        _translationWarmupTask = Task.Run(async () =>
+        {
+            try
+            {
+                _translationService ??= new TranslationService(_mainVm.AIResourceService, _mainVm.AppSettingsService, _mainVm.MarianMTService);
+
+                // Keep language settings in sync before warm-up.
+                _mainVm.AppSettingsService.Settings.TargetLanguage = _mainVm.TargetLanguage;
+                _mainVm.AppSettingsService.Settings.SourceLanguage = _mainVm.SourceLanguage;
+
+                await _translationService.WarmUpAsync(token);
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected when leaving translation mode.
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[TranslationWarmup] Failed: {ex.Message}");
+            }
+        }, token);
+    }
+
+    private void CancelTranslationWarmup()
+    {
+        _translationWarmupCts?.Cancel();
+        _translationWarmupCts?.Dispose();
+        _translationWarmupCts = null;
+    }
+
+    private async Task AwaitTranslationWarmupAsync(CancellationToken ct = default)
+    {
+        var warmupTask = _translationWarmupTask;
+        if (warmupTask == null)
+        {
+            return;
+        }
+
+        try
+        {
+            await warmupTask.WaitAsync(ct);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[TranslationWarmup] Await failed: {ex.Message}");
+        }
     }
 
     private async Task AutoDetectLoopAsync(CancellationToken token)
