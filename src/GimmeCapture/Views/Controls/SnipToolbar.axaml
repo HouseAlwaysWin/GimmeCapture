@@ -271,14 +271,6 @@
                     <TextBlock Text="{Binding RecordingDurationText}" VerticalAlignment="Center" Foreground="White" FontSize="11" FontFamily="Consolas"/>
                     <StackPanel Orientation="Vertical" VerticalAlignment="Center">
                         <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                            <TextBlock Text="{Binding [RecordAudioInput], Source={x:Static infra:LocalizationService.Instance}}" Foreground="#CFCFCF" FontSize="10" Width="28"/>
-                            <ProgressBar Width="120" Height="8" Minimum="0" Maximum="1" Value="{Binding InputAudioLevel}" VerticalAlignment="Center"/>
-                            <TextBlock Text="{Binding InputAudioDbText}" Foreground="#A0A0A0" FontSize="10" Width="46" TextAlignment="Right"/>
-                            <TextBlock Text="●" Foreground="#2ECC71" FontSize="10" IsVisible="{Binding IsInputAudioActive}"/>
-                            <TextBlock Text="●" Foreground="#C0392B" FontSize="10" IsVisible="{Binding !IsInputAudioActive}"/>
-                            <TextBlock Text="{Binding InputAudioStateText}" Foreground="#A0A0A0" FontSize="10" Width="32"/>
-                        </StackPanel>
-                        <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
                             <TextBlock Text="{Binding [RecordAudioOutput], Source={x:Static infra:LocalizationService.Instance}}" Foreground="#CFCFCF" FontSize="10" Width="28"/>
                             <ProgressBar Width="120" Height="8" Minimum="0" Maximum="1" Value="{Binding OutputAudioLevel}" VerticalAlignment="Center"/>
                             <TextBlock Text="{Binding OutputAudioDbText}" Foreground="#A0A0A0" FontSize="10" Width="46" TextAlignment="Right"/>
