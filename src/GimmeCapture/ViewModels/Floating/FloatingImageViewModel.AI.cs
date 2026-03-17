@@ -255,14 +255,18 @@ public partial class FloatingImageViewModel
         try
         {
             // First point determines the mode:
-            // - Positive (normal click) = Keep selected area (True) -> Green
-            // - Negative (Shift+click) = Remove selected area (False) -> Red
+            // - Positive (normal click) = Remove selected area -> Red
+            // - Negative (Shift+click) = Keep selected area -> Green
             bool sam2Positive = isPositive;
             if (_interactivePoints.Count == 0)
             {
-                _invertSelectionMode = isPositive;
+                // _invertSelectionMode=true means "keep selected" mode in confirm stage.
+                // So we invert the default click semantics here:
+                // normal click -> remove selected (invert=false)
+                // Shift+click -> keep selected (invert=true)
+                _invertSelectionMode = !isPositive;
                 sam2Positive = true; // First point always defines the subject for SAM2
-                System.Diagnostics.Debug.WriteLine($"[AI MODE] First point. Keep mode = {_invertSelectionMode}");
+                System.Diagnostics.Debug.WriteLine($"[AI MODE] First point. Keep selected mode = {_invertSelectionMode}");
             }
             
             _interactivePoints.Add((physicalX, physicalY, sam2Positive));
