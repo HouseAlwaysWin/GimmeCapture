@@ -384,60 +384,51 @@ public partial class SnipWindowViewModel
     {
         var canExecuteHotkeys = CreateCanExecuteHotkeys();
 
-        PinCommand = ReactiveCommand.CreateFromTask(ExecutePinActionAsync, canExecuteHotkeys);
-        AttachCommandErrorLogging(PinCommand, nameof(PinCommand));
+        PinCommand = CreateAsyncCommand(ExecutePinActionAsync, nameof(PinCommand), canExecuteHotkeys);
 
-        CopyCommand = ReactiveCommand.CreateFromTask(
+        CopyCommand = CreateAsyncCommand(
             async () =>
             {
                 if (CurrentMode != SnipMode.Recording) await Copy();
                 else await CopyRecording();
             },
+            nameof(CopyCommand),
             canExecuteHotkeys);
-        AttachCommandErrorLogging(CopyCommand, nameof(CopyCommand));
 
-        SaveCommand = ReactiveCommand.CreateFromTask(Save, canExecuteHotkeys);
-        AttachCommandErrorLogging(SaveCommand, nameof(SaveCommand));
+        SaveCommand = CreateAsyncCommand(Save, nameof(SaveCommand), canExecuteHotkeys);
         
-        CloseCommand = ReactiveCommand.Create(Close, canExecuteHotkeys);
-        AttachCommandErrorLogging(CloseCommand, nameof(CloseCommand));
+        CloseCommand = CreateCommand(Close, nameof(CloseCommand), canExecuteHotkeys);
 
-        ToggleModeCommand = ReactiveCommand.Create(() => 
+        ToggleModeCommand = CreateCommand(() =>
         {
             if (RecState == RecordingState.Idle) 
             {
                 CurrentMode = CurrentMode == SnipMode.Recording ? SnipMode.Screenshot : SnipMode.Recording;
             }
-        }, canExecuteHotkeys);
-        AttachCommandErrorLogging(ToggleModeCommand, nameof(ToggleModeCommand));
+        }, nameof(ToggleModeCommand), canExecuteHotkeys);
 
-        SetCaptureModeCommand = ReactiveCommand.Create<bool>(isRecord => 
+        SetCaptureModeCommand = CreateCommand<bool>(isRecord =>
         {
             if (RecState == RecordingState.Idle)
             {
                 CurrentMode = isRecord ? SnipMode.Recording : SnipMode.Screenshot;
             }
-        }, canExecuteHotkeys);
-        AttachCommandErrorLogging(SetCaptureModeCommand, nameof(SetCaptureModeCommand));
+        }, nameof(SetCaptureModeCommand), canExecuteHotkeys);
 
-        StartRecordingCommand = ReactiveCommand.CreateFromTask(StartRecording);
-        AttachCommandErrorLogging(StartRecordingCommand, nameof(StartRecordingCommand));
-        PauseRecordingCommand = ReactiveCommand.CreateFromTask(PauseRecording);
-        AttachCommandErrorLogging(PauseRecordingCommand, nameof(PauseRecordingCommand));
-        StopRecordingCommand = ReactiveCommand.CreateFromTask(StopRecording);
-        AttachCommandErrorLogging(StopRecordingCommand, nameof(StopRecordingCommand));
-        CopyRecordingCommand = ReactiveCommand.CreateFromTask(CopyRecording);
-        AttachCommandErrorLogging(CopyRecordingCommand, nameof(CopyRecordingCommand));
+        StartRecordingCommand = CreateAsyncCommand(StartRecording, nameof(StartRecordingCommand));
+        PauseRecordingCommand = CreateAsyncCommand(PauseRecording, nameof(PauseRecordingCommand));
+        StopRecordingCommand = CreateAsyncCommand(StopRecording, nameof(StopRecordingCommand));
+        CopyRecordingCommand = CreateAsyncCommand(CopyRecording, nameof(CopyRecordingCommand));
 
-        HandleScreenshotModeHotkeyCommand = ReactiveCommand.Create(() => { 
+        HandleScreenshotModeHotkeyCommand = CreateCommand(() =>
+        {
             if (RecState == RecordingState.Idle) 
             {
                 CurrentMode = SnipMode.Screenshot;
             }
-        }, canExecuteHotkeys);
-        AttachCommandErrorLogging(HandleScreenshotModeHotkeyCommand, nameof(HandleScreenshotModeHotkeyCommand));
+        }, nameof(HandleScreenshotModeHotkeyCommand), canExecuteHotkeys);
 
-        HandleRecordingModeHotkeyCommand = ReactiveCommand.Create(() => 
+        HandleRecordingModeHotkeyCommand = CreateCommand(() =>
         { 
             if (RecState == RecordingState.Idle) 
             {
@@ -447,65 +438,55 @@ public partial class SnipWindowViewModel
                     CurrentMode = SnipMode.Recording;
                 }
             }
-        }, canExecuteHotkeys);
-        AttachCommandErrorLogging(HandleRecordingModeHotkeyCommand, nameof(HandleRecordingModeHotkeyCommand));
+        }, nameof(HandleRecordingModeHotkeyCommand), canExecuteHotkeys);
 
         // F3: 模式選擇器
         // 截圖模式 -> F3 -> Pin
         // 錄影模式 -> F3 -> Pin  
         // 翻譯模式 -> F3 -> 無動作
         // 未進入模式 (Detecting) -> F3 -> 進入翻譯模式
-        HandleActiveActionHotkeyCommand = ReactiveCommand.Create(HandleActiveActionHotkey, canExecuteHotkeys);
-        AttachCommandErrorLogging(HandleActiveActionHotkeyCommand, nameof(HandleActiveActionHotkeyCommand));
+        HandleActiveActionHotkeyCommand = CreateCommand(HandleActiveActionHotkey, nameof(HandleActiveActionHotkeyCommand), canExecuteHotkeys);
 
-        SetTranslationModeCommand = ReactiveCommand.Create(ToggleTranslationMode, canExecuteHotkeys);
-        AttachCommandErrorLogging(SetTranslationModeCommand, nameof(SetTranslationModeCommand));
+        SetTranslationModeCommand = CreateCommand(ToggleTranslationMode, nameof(SetTranslationModeCommand), canExecuteHotkeys);
 
         var canSwitchToSnip = CreateCanSwitchToMode(SnipMode.Screenshot);
-        SwitchToSnipCommand = ReactiveCommand.Create(() => { CurrentMode = SnipMode.Screenshot; }, canSwitchToSnip);
-        AttachCommandErrorLogging(SwitchToSnipCommand, nameof(SwitchToSnipCommand));
+        SwitchToSnipCommand = CreateCommand(() => { CurrentMode = SnipMode.Screenshot; }, nameof(SwitchToSnipCommand), canSwitchToSnip);
 
         var canSwitchToRecord = CreateCanSwitchToMode(SnipMode.Recording);
-        SwitchToRecordCommand = ReactiveCommand.Create(() => { CurrentMode = SnipMode.Recording; }, canSwitchToRecord);
-        AttachCommandErrorLogging(SwitchToRecordCommand, nameof(SwitchToRecordCommand));
+        SwitchToRecordCommand = CreateCommand(() => { CurrentMode = SnipMode.Recording; }, nameof(SwitchToRecordCommand), canSwitchToRecord);
 
         var canSwitchToTranslate = CreateCanSwitchToMode(SnipMode.Translation);
-        SwitchToTranslateCommand = ReactiveCommand.Create(EnterTranslationMode, canSwitchToTranslate);
-        AttachCommandErrorLogging(SwitchToTranslateCommand, nameof(SwitchToTranslateCommand));
+        SwitchToTranslateCommand = CreateCommand(EnterTranslationMode, nameof(SwitchToTranslateCommand), canSwitchToTranslate);
 
         var canRemoveBackground = this.WhenAnyValue(
             x => x.CurrentMode, 
             x => x.ShowProcessingOverlay, 
             (mode, isProc) => mode != SnipMode.Recording && !isProc);
 
-        RemoveBackgroundCommand = ReactiveCommand.CreateFromTask(async () =>
+        RemoveBackgroundCommand = CreateAsyncCommand(async () =>
         {
             // Pin first, then run AI
             await Pin(true, false);
-        }, canRemoveBackground);
-        AttachCommandErrorLogging(RemoveBackgroundCommand, nameof(RemoveBackgroundCommand));
+        }, nameof(RemoveBackgroundCommand), canRemoveBackground);
 
-        InteractiveRemovalCommand = ReactiveCommand.CreateFromTask(async () =>
+        InteractiveRemovalCommand = CreateAsyncCommand(async () =>
         {
             // Pin first, then run interactive AI
             await Pin(false, true);
-        }, canRemoveBackground);
-        AttachCommandErrorLogging(InteractiveRemovalCommand, nameof(InteractiveRemovalCommand));
+        }, nameof(InteractiveRemovalCommand), canRemoveBackground);
 
-        ToggleTopmostCommand = ReactiveCommand.Create(() => 
+        ToggleTopmostCommand = CreateCommand(() =>
         {
             IsTopmost = !IsTopmost;
             System.Diagnostics.Debug.WriteLine($"[SnipWindow] Topmost toggled to: {IsTopmost}");
             _mainVm?.SetStatus(IsTopmost ? "Topmost ON" : "Topmost OFF");
-        });
-        AttachCommandErrorLogging(ToggleTopmostCommand, nameof(ToggleTopmostCommand));
+        }, nameof(ToggleTopmostCommand));
         
-        ToggleMaskCommand = ReactiveCommand.Create(() => 
+        ToggleMaskCommand = CreateCommand(() =>
         {
             IsMaskVisible = !IsMaskVisible;
             System.Diagnostics.Debug.WriteLine($"[SnipWindow] Mask toggled to: {IsMaskVisible}");
-        });
-        AttachCommandErrorLogging(ToggleMaskCommand, nameof(ToggleMaskCommand));
+        }, nameof(ToggleMaskCommand));
     }
 
     private IObservable<bool> CreateCanExecuteHotkeys()
@@ -613,6 +594,41 @@ public partial class SnipWindowViewModel
     private static void AttachCommandErrorLogging<TInput, TOutput>(ReactiveCommand<TInput, TOutput> command, string commandName)
     {
         command.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"{commandName} error: {ex}"));
+    }
+
+    private ReactiveCommand<Unit, Unit> CreateCommand(Action execute, string commandName)
+    {
+        var command = ReactiveCommand.Create(execute);
+        AttachCommandErrorLogging(command, commandName);
+        return command;
+    }
+
+    private ReactiveCommand<Unit, Unit> CreateCommand(Action execute, string commandName, IObservable<bool> canExecute)
+    {
+        var command = ReactiveCommand.Create(execute, canExecute);
+        AttachCommandErrorLogging(command, commandName);
+        return command;
+    }
+
+    private ReactiveCommand<TParam, Unit> CreateCommand<TParam>(Action<TParam> execute, string commandName, IObservable<bool> canExecute)
+    {
+        var command = ReactiveCommand.Create(execute, canExecute);
+        AttachCommandErrorLogging(command, commandName);
+        return command;
+    }
+
+    private ReactiveCommand<Unit, Unit> CreateAsyncCommand(Func<Task> execute, string commandName)
+    {
+        var command = ReactiveCommand.CreateFromTask(execute);
+        AttachCommandErrorLogging(command, commandName);
+        return command;
+    }
+
+    private ReactiveCommand<Unit, Unit> CreateAsyncCommand(Func<Task> execute, string commandName, IObservable<bool> canExecute)
+    {
+        var command = ReactiveCommand.CreateFromTask(execute, canExecute);
+        AttachCommandErrorLogging(command, commandName);
+        return command;
     }
 
     private async Task StartRecording()

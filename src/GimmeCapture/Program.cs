@@ -1,4 +1,4 @@
-﻿using Avalonia;
+using Avalonia;
 using System;
 using Avalonia.ReactiveUI;
 
@@ -24,17 +24,11 @@ class Program
         }
         catch (Exception ex)
         {
-            // Show error if startup fails (e.g. missing dlls or config issues)
-            // Using Windows Forms MessageBox as it is available in net-windows target
-            try 
-            {
-               System.Windows.Forms.MessageBox.Show($"Application Startup Failed:\n{ex.Message}\n\nStack:\n{ex.StackTrace}", "GimmeCapture Fatal Error");
-            }
-            catch 
-            {
-                // Fallback if MessageBox fails (unlikely)
-                System.Diagnostics.Debug.WriteLine($"FATAL: {ex}");
-            }
+            // Startup failure can happen before Avalonia UI is fully available,
+            // so keep the fatal prompt on a platform-native dialog.
+            var message = $"Application Startup Failed:\n{ex.Message}\n\nStack:\n{ex.StackTrace}";
+            System.Windows.Forms.MessageBox.Show(message, "GimmeCapture Fatal Error");
+            System.Diagnostics.Debug.WriteLine($"FATAL: {ex}");
         }
     }
 
