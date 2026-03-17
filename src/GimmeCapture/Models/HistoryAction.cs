@@ -31,8 +31,12 @@ public class BitmapHistoryAction : IHistoryAction
 
     public void Dispose()
     {
-        OldBitmap?.Dispose();
-        NewBitmap?.Dispose();
+        // Do not dispose bitmap instances here.
+        // BitmapHistoryAction often stores shared references to currently displayed images
+        // (especially around Undo/Redo mutation flows). Disposing them here can invalidate
+        // the active Image and cause NullReference/ObjectDisposed failures on next operation.
+        //
+        // Lifecycle is managed by owning view models/windows.
     }
 }
 

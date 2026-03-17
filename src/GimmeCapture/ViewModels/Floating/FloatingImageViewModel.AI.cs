@@ -10,6 +10,7 @@ using System;
 using System.Threading.Tasks;
 using GimmeCapture.ViewModels.Shared;
 using GimmeCapture.Views.Floating;
+using Avalonia.Platform;
 
 namespace GimmeCapture.ViewModels.Floating;
 
@@ -107,6 +108,7 @@ public partial class FloatingImageViewModel
     public void ResetInteractivePoints()
     {
         _interactivePoints.Clear();
+        _invertSelectionMode = false;
         InteractiveMask = null;
         _cleanMaskBytes = null;
         DiagnosticText = "AI: Points Reset";
@@ -224,8 +226,7 @@ public partial class FloatingImageViewModel
 
                 using var finalMs = new System.IO.MemoryStream();
                 coloredMask.Encode(finalMs, SkiaSharp.SKEncodedImageFormat.Png, 100);
-                finalMs.Seek(0, System.IO.SeekOrigin.Begin);
-                InteractiveMask = new Bitmap(finalMs);
+                InteractiveMask = CreateDetachedBitmapFromEncodedBytes(finalMs.ToArray());
             }
         }
         catch (Exception ex)
@@ -455,14 +456,7 @@ public partial class FloatingImageViewModel
             var transparentBytes = await aiService.RemoveBackgroundAsync(imageBytes, scaledRect);
 
             // 3. Update Image
-            using var tms = new System.IO.MemoryStream(transparentBytes);
-            // Replace the current image with the new transparent one
-            var newBitmap = new Bitmap(tms);
-            
-            // Dispose old image if possible/safe? 
-            // Avalonia bitmaps are ref counted roughly, but explicit dispose is good practice if we own it.
-            // But we bound it to UI. UI will release ref when binding updates.
-            Image = newBitmap; 
+            Image = CreateDetachedBitmapFromEncodedBytes(transparentBytes);
             
             // Clear selection after processing
             IsSelectionMode = false;
@@ -495,29 +489,40 @@ public partial class FloatingImageViewModel
             
             PushUndoState();
 
+            var sourceImage = Image;
+            var cleanMaskBytes = _cleanMaskBytes;
+            if (sourceImage == null) throw new Exception("Source image is unavailable.");
+            if (cleanMaskBytes == null || cleanMaskBytes.Length == 0) throw new Exception("No valid mask generated.");
+
+            byte[] sourceImageBytes;
+            using (var sourceMs = new System.IO.MemoryStream())
+            {
+                sourceImage.Save(sourceMs);
+                sourceImageBytes = sourceMs.ToArray();
+            }
+
             // 1. Process with SkiaSharp in a background thread to prevent UI freeze
             var imageBytes = await Task.Run(() =>
             {
-                using var originalMs = new System.IO.MemoryStream();
-                Image.Save(originalMs);
-                using var originalBmp = SkiaSharp.SKBitmap.Decode(originalMs.ToArray());
+                using var originalBmp = SkiaSharp.SKBitmap.Decode(sourceImageBytes);
+                if (originalBmp == null) throw new Exception("Failed to decode source image.");
 
                 // Use CLEAN mask without crosshairs!
-                if (_cleanMaskBytes == null) throw new Exception("No valid mask generated.");
-                using var maskBmp = SkiaSharp.SKBitmap.Decode(_cleanMaskBytes);
-                
-                // RESIZE MASK TO MATCH ORIGINAL BITMAP EXACTLY with Nearest sampling to avoid blurring edges
-                // This ensures pixel-perfect alignment with the physical image
-                using var resizedMask = maskBmp.Resize(new SkiaSharp.SKImageInfo(originalBmp.Width, originalBmp.Height), new SkiaSharp.SKSamplingOptions(SkiaSharp.SKFilterMode.Nearest));
+                using var maskBmp = SkiaSharp.SKBitmap.Decode(cleanMaskBytes);
+                if (maskBmp == null) throw new Exception("Failed to decode interactive mask.");
 
                 using var resultBmp = new SkiaSharp.SKBitmap(originalBmp.Width, originalBmp.Height, SkiaSharp.SKColorType.Bgra8888, SkiaSharp.SKAlphaType.Unpremul);
+                var maskScaleX = (double)maskBmp.Width / originalBmp.Width;
+                var maskScaleY = (double)maskBmp.Height / originalBmp.Height;
                 
                 for (int y = 0; y < originalBmp.Height; y++)
                 {
                     for (int x = 0; x < originalBmp.Width; x++)
                     {
                         var color = originalBmp.GetPixel(x, y);
-                        var maskColor = resizedMask.GetPixel(x, y);
+                        var maskX = Math.Clamp((int)(x * maskScaleX), 0, maskBmp.Width - 1);
+                        var maskY = Math.Clamp((int)(y * maskScaleY), 0, maskBmp.Height - 1);
+                        var maskColor = maskBmp.GetPixel(maskX, maskY);
                         
                         // Apply mask based on mode:
                         // Normal mode: Selected = REMOVE, Unselected = KEEP
@@ -552,8 +557,7 @@ public partial class FloatingImageViewModel
                 return data.ToArray();
             });
 
-            using var resultMs = new System.IO.MemoryStream(imageBytes);
-            Image = new Bitmap(resultMs);
+            Image = CreateDetachedBitmapFromEncodedBytes(imageBytes);
 
             IsPointRemovalMode = false;
         }
@@ -577,7 +581,6 @@ public partial class FloatingImageViewModel
     {
         if (_sam2Service != null && _sam2Service.ModelVariantName != "Unknown") return _sam2Service;
 
-        _sam2Service = new SAM2Service(_aiResourceService, _appSettingsService);
         _sam2Service = new SAM2Service(_aiResourceService, _appSettingsService);
         // ProcessingText is handled by caller
         try
@@ -614,6 +617,30 @@ public partial class FloatingImageViewModel
         {
             return null;
         }
+    }
+
+    private static Bitmap CreateDetachedBitmapFromEncodedBytes(byte[] encodedBytes)
+    {
+        if (encodedBytes == null || encodedBytes.Length == 0)
+            throw new Exception("Encoded bitmap bytes are empty.");
+
+        using var ms = new System.IO.MemoryStream(encodedBytes);
+        using var tempBitmap = new Bitmap(ms);
+
+        var result = new WriteableBitmap(
+            tempBitmap.PixelSize,
+            tempBitmap.Dpi,
+            PixelFormat.Bgra8888,
+            AlphaFormat.Premul);
+
+        using var locked = result.Lock();
+        tempBitmap.CopyPixels(
+            new Avalonia.PixelRect(0, 0, tempBitmap.PixelSize.Width, tempBitmap.PixelSize.Height),
+            locked.Address,
+            locked.RowBytes * locked.Size.Height,
+            locked.RowBytes);
+
+        return result;
     }
 
     private Avalonia.Controls.Window? ResolveOwnerWindow()
