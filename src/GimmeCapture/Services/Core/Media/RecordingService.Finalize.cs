@@ -7,6 +7,7 @@ using System.Text;
 using System.Threading.Tasks;
 using CliWrap;
 using GimmeCapture.Models;
+using NAudio.Wave;
 
 namespace GimmeCapture.Services.Core.Media;
 
@@ -53,7 +54,7 @@ public partial class RecordingService
         _segments.Where(s => File.Exists(s) && new FileInfo(s).Length > 0).ToList();
 
     private List<string> GetValidAudioSegments() =>
-        _audioSegments.Where(s => File.Exists(s) && new FileInfo(s).Length > 44).ToList();
+        _audioSegments.Where(HasValidAudioData).ToList();
 
     private async Task<string> MergeVideoSegmentsAsync(IReadOnlyList<string> validSegments, string mergedMkvPath)
     {
@@ -84,7 +85,26 @@ public partial class RecordingService
         Debug.WriteLine($"[Finalize] Concat audio cmd: {concatAudioArgs}");
         await RunFfmpegProcessAsync(concatAudioArgs, "Concat Audio");
 
-        return File.Exists(mergedAudio) && new FileInfo(mergedAudio).Length > 44 ? mergedAudio : null;
+        return HasValidAudioData(mergedAudio) ? mergedAudio : null;
+    }
+
+    private static bool HasValidAudioData(string path)
+    {
+        if (!File.Exists(path))
+        {
+            return false;
+        }
+
+        try
+        {
+            using var reader = new WaveFileReader(path);
+            return reader.Length > 0 && reader.TotalTime > TimeSpan.FromMilliseconds(100);
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Invalid audio segment '{path}': {ex.Message}");
+            return false;
+        }
     }
 
     private static async Task WriteConcatListFileAsync(string listPath, IEnumerable<string> items)
@@ -208,17 +228,24 @@ public partial class RecordingService
         }
         else
         {
+            string h264Crf = (_settingsService?.Settings.VideoQuality ?? VideoQuality.Medium) switch
+            {
+                VideoQuality.High => "18",
+                VideoQuality.Low => "28",
+                _ => "23"
+            };
+
             convertArgs = _targetFormat switch
             {
                 "webm" => string.IsNullOrWhiteSpace(cropFilter)
                     ? $"-y -i \"{mergedMkv}\" -c:v libvpx-vp9 -crf {options.WebmCrf} -b:v 0 -cpu-used {options.WebmCpuUsed} \"{_outputFile}\""
                     : $"-y -i \"{mergedMkv}\" -vf \"{cropFilter}\" -c:v libvpx-vp9 -crf {options.WebmCrf} -b:v 0 -cpu-used {options.WebmCpuUsed} \"{_outputFile}\"",
                 "mov" => string.IsNullOrWhiteSpace(cropFilter)
-                    ? $"-y -i \"{mergedMkv}\" -c:v {options.Codec} -preset {options.Preset} -crf {options.Crf} -pix_fmt yuv420p -f mov \"{_outputFile}\""
-                    : $"-y -i \"{mergedMkv}\" -vf \"{cropFilter}\" -c:v {options.Codec} -preset {options.Preset} -crf {options.Crf} -pix_fmt yuv420p -f mov \"{_outputFile}\"",
+                    ? $"-y -fflags +genpts -i \"{mergedMkv}\" -f lavfi -i anullsrc=channel_layout=stereo:sample_rate=48000 -map 0:v:0 -map 1:a:0 -vsync cfr -r {_fps} -c:v libx264 -preset {options.Preset} -crf {h264Crf} -pix_fmt yuv420p -c:a aac -b:a 128k -shortest -f mov \"{_outputFile}\""
+                    : $"-y -fflags +genpts -i \"{mergedMkv}\" -f lavfi -i anullsrc=channel_layout=stereo:sample_rate=48000 -map 0:v:0 -map 1:a:0 -vf \"{cropFilter}\" -vsync cfr -r {_fps} -c:v libx264 -preset {options.Preset} -crf {h264Crf} -pix_fmt yuv420p -c:a aac -b:a 128k -shortest -f mov \"{_outputFile}\"",
                 _ => string.IsNullOrWhiteSpace(cropFilter)
-                    ? $"-y -i \"{mergedMkv}\" -c:v {options.Codec} -preset {options.Preset} -crf {options.Crf} -movflags +faststart \"{_outputFile}\""
-                    : $"-y -i \"{mergedMkv}\" -vf \"{cropFilter}\" -c:v {options.Codec} -preset {options.Preset} -crf {options.Crf} -movflags +faststart \"{_outputFile}\""
+                    ? $"-y -fflags +genpts -i \"{mergedMkv}\" -f lavfi -i anullsrc=channel_layout=stereo:sample_rate=48000 -map 0:v:0 -map 1:a:0 -vsync cfr -r {_fps} -c:v libx264 -preset {options.Preset} -crf {h264Crf} -pix_fmt yuv420p -c:a aac -b:a 128k -shortest -movflags +faststart \"{_outputFile}\""
+                    : $"-y -fflags +genpts -i \"{mergedMkv}\" -f lavfi -i anullsrc=channel_layout=stereo:sample_rate=48000 -map 0:v:0 -map 1:a:0 -vf \"{cropFilter}\" -vsync cfr -r {_fps} -c:v libx264 -preset {options.Preset} -crf {h264Crf} -pix_fmt yuv420p -c:a aac -b:a 128k -shortest -movflags +faststart \"{_outputFile}\""
             };
         }
 
