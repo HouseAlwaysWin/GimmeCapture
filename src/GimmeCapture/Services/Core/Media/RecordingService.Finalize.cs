@@ -188,8 +188,8 @@ public partial class RecordingService
 
         string paletteFile = Path.Combine(_tempDir, "palette.png");
         string paletteArgs = string.IsNullOrWhiteSpace(cropFilter)
-            ? $"-y -i \"{mergedMkv}\" -vf \"{baseGifFilter},{palettegen}\" \"{paletteFile}\""
-            : $"-y -i \"{mergedMkv}\" -vf \"{cropFilter},{baseGifFilter},{palettegen}\" \"{paletteFile}\"";
+            ? $"-y -i \"{mergedMkv}\" -vf \"{baseGifFilter},{palettegen}\" -frames:v 1 -update 1 \"{paletteFile}\""
+            : $"-y -i \"{mergedMkv}\" -vf \"{cropFilter},{baseGifFilter},{palettegen}\" -frames:v 1 -update 1 \"{paletteFile}\"";
 
         await RunFfmpegProcessAsync(paletteArgs, "GIF Palette");
 
