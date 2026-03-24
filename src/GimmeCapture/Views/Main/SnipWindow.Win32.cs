@@ -761,7 +761,22 @@ public partial class SnipWindow : Window
         }
         else
         {
-            Win32Helpers.ClearWindowRegion(hwnd);
+            if (!isTranslation)
+            {
+                // To prevent Chromium-based browsers (Edge/Chrome) from aggressively 
+                // occluding YouTube/hardware-accelerated videos behind the SnipWindow initially,
+                // we punch a microscopic 1x1 pixel hole at the top left.
+                // This breaks the "full screen occluder" heuristic in the Desktop Window Manager (DWM).
+                double scaling = this.RenderScaling;
+                int windowWidth = (int)(this.Bounds.Width * scaling);
+                int windowHeight = (int)(this.Bounds.Height * scaling);
+                
+                Win32Helpers.SetMultiWindowHoleRegion(hwnd, windowWidth, windowHeight, new[] { new Rect(0, 0, 1, 1) }, 0);
+            }
+            else
+            {
+                Win32Helpers.ClearWindowRegion(hwnd);
+            }
         }
     }
 
