@@ -2,7 +2,7 @@
 <html lang='en'>
 <head>
 <meta charset='utf-8' />
-<title>GimmeCapture.Benchmarks.FileSizeBenchmarks-20260324-165657</title>
+<title>GimmeCapture.Benchmarks.InMemoryTranslationCacheBenchmarks-20260324-165731</title>
 
 <style type="text/css">
 	table { border-collapse: collapse; display: block; width: 100%; overflow: auto; }
@@ -22,10 +22,11 @@ AMD Ryzen 5 7535HS with Radeon Graphics 3.30GHz, 1 CPU, 12 logical and 6 physica
 <pre><code></code></pre>
 
 <table>
-<thead><tr><th>Method       </th><th>Mean</th><th>Error</th><th>StdDev</th><th>Ratio</th><th>RatioSD</th><th>Allocated</th><th>Alloc Ratio</th>
+<thead><tr><th>Method</th><th>Mean</th><th>Error</th><th>StdDev</th><th>Allocated</th>
 </tr>
-</thead><tbody><tr><td>TryCatchInsideLoop</td><td>2.327 ms</td><td>0.0363 ms</td><td>0.0340 ms</td><td>1.00</td><td>0.02</td><td>9.38 KB</td><td>1.00</td>
-</tr><tr><td>TryCatchOutsideLoop</td><td>2.326 ms</td><td>0.0331 ms</td><td>0.0293 ms</td><td>1.00</td><td>0.02</td><td>9.38 KB</td><td>1.00</td>
+</thead><tbody><tr><td>CacheHit</td><td>38.86 ns</td><td>0.208 ns</td><td>0.184 ns</td><td>-</td>
+</tr><tr><td>CacheMiss</td><td>14.22 ns</td><td>0.161 ns</td><td>0.151 ns</td><td>-</td>
+</tr><tr><td>CacheSet</td><td>45.54 ns</td><td>0.483 ns</td><td>0.403 ns</td><td>-</td>
 </tr></tbody></table>
 </body>
 </html>
