@@ -93,7 +93,7 @@ public partial class CompactNumericStep : UserControl
         var input = this.FindControl<TextBox>("ValueInput");
         if (input != null)
         {
-            input.Text = Value.ToString("0.##");
+            input.Text = Value.ToString("0.###");
         }
     }
 

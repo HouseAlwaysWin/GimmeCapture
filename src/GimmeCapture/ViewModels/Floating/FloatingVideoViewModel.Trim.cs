@@ -59,7 +59,7 @@ public partial class FloatingVideoViewModel
 
     public double TrimStartSecs
     {
-        get => Math.Floor(_trimStartSeconds % 60.0);
+        get => Math.Round(_trimStartSeconds % 60.0, 3);
         set => TrimStartSeconds = (TrimStartMinutes * 60.0) + value;
     }
 
@@ -71,7 +71,7 @@ public partial class FloatingVideoViewModel
 
     public double TrimEndSecs
     {
-        get => Math.Floor(_trimEndSeconds % 60.0);
+        get => Math.Round(_trimEndSeconds % 60.0, 3);
         set => TrimEndSeconds = (TrimEndMinutes * 60.0) + value;
     }
 
@@ -107,13 +107,13 @@ public partial class FloatingVideoViewModel
         // 起始時間微調
         IncTrimStartMinCmd = ReactiveCommand.Create(() => { TrimStartMinutes += 1; });
         DecTrimStartMinCmd = ReactiveCommand.Create(() => { TrimStartMinutes = Math.Max(0, TrimStartMinutes - 1); });
-        IncTrimStartSecCmd = ReactiveCommand.Create(() => { TrimStartSecs += 1; });
-        DecTrimStartSecCmd = ReactiveCommand.Create(() => { TrimStartSecs = Math.Max(0, TrimStartSecs - 1); });
+        IncTrimStartSecCmd = ReactiveCommand.Create(() => { TrimStartSecs = Math.Round(TrimStartSecs + 0.1, 3); });
+        DecTrimStartSecCmd = ReactiveCommand.Create(() => { TrimStartSecs = Math.Max(0, Math.Round(TrimStartSecs - 0.1, 3)); });
 
         // 終點時間微調
         IncTrimEndMinCmd = ReactiveCommand.Create(() => { TrimEndMinutes += 1; });
         DecTrimEndMinCmd = ReactiveCommand.Create(() => { TrimEndMinutes = Math.Max(0, TrimEndMinutes - 1); });
-        IncTrimEndSecCmd = ReactiveCommand.Create(() => { TrimEndSecs += 1; });
-        DecTrimEndSecCmd = ReactiveCommand.Create(() => { TrimEndSecs = Math.Max(0, TrimEndSecs - 1); });
+        IncTrimEndSecCmd = ReactiveCommand.Create(() => { TrimEndSecs = Math.Round(TrimEndSecs + 0.1, 3); });
+        DecTrimEndSecCmd = ReactiveCommand.Create(() => { TrimEndSecs = Math.Max(0, Math.Round(TrimEndSecs - 0.1, 3)); });
     }
 }
