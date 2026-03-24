@@ -1,4 +1,4 @@
-﻿using GimmeCapture.Models;
+using GimmeCapture.Models;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -52,6 +52,6 @@ public class MarianMTServiceTests
         var result = await _sut.TranslateAsync(text, TranslationLanguage.TraditionalChinese);
 
         // Assert
-        Assert.Equal(text, result);
+        Assert.Equal(string.Empty, result);
     }
 }

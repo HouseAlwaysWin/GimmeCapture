@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -32,7 +32,7 @@ public class PaddleOCREngineTests
     public async Task EnsureLoadedAsync_ShouldCallEnsureOCRAsync()
     {
         // Arrange
-        _mockAiResource.Setup(x => x.EnsureOCRAsync(It.IsAny<CancellationToken>()))
+        _mockAiResource.Setup(x => x.EnsureOCRAsync(It.IsAny<OCRLanguage>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
         _mockAiResource.Setup(x => x.GetOCRPaths(It.IsAny<OCRLanguage>()))
             .Returns(("det", "rec", "dict"));
@@ -43,7 +43,7 @@ public class PaddleOCREngineTests
         try { await _sut.EnsureLoadedAsync(OCRLanguage.TraditionalChinese); } catch { }
 
         // Assert
-        _mockAiResource.Verify(x => x.EnsureOCRAsync(It.IsAny<CancellationToken>()), Times.AtLeastOnce);
+        _mockAiResource.Verify(x => x.EnsureOCRAsync(It.IsAny<OCRLanguage>(), It.IsAny<CancellationToken>()), Times.AtLeastOnce);
     }
 
     [Fact]

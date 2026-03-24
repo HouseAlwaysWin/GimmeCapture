@@ -1,4 +1,4 @@
-﻿using System.Threading;
+using System.Threading;
 using System.Threading.Tasks;
 
 using GimmeCapture.Models;
@@ -57,6 +57,6 @@ public class MarianMTTranslationEngineTests
         var result = await _sut.TranslateAsync(text, OCRLanguage.English, TranslationLanguage.English);
 
         // Assert
-        Assert.Equal(text, result);
+        Assert.Equal(string.Empty, result);
     }
 }

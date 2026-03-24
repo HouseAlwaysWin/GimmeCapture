@@ -2,4 +2,8 @@
   <Folder Name="/src/">
     <Project Path="src/GimmeCapture/GimmeCapture.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/GimmeCapture.Tests/GimmeCapture.Tests.csproj" />
+    <Project Path="tests/GimmeCapture.Benchmarks/GimmeCapture.Benchmarks.csproj" />
+  </Folder>
 </Solution>

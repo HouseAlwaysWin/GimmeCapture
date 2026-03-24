@@ -1,3 +1,4 @@
+using GimmeCapture.Models;
 using GimmeCapture.ViewModels;
 using GimmeCapture.ViewModels.Floating;
 using GimmeCapture.Services;
@@ -36,6 +37,8 @@ public class FloatingImageViewModelTests
         // Arrange
         var mockService = new MockClipboardService();
         var mockSettings = new Mock<AppSettingsService>();
+        mockSettings.Setup(s => s.Settings).Returns(new AppSettings());
+        
         var mockAiPath = new Mock<AIPathService>(mockSettings.Object);
         var mockAiResolver = new Mock<NativeResolverService>(mockAiPath.Object);
         var mockAiDownloader = new Mock<AIModelDownloader>();
