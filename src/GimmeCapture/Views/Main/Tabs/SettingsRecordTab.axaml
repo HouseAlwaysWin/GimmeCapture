@@ -74,6 +74,17 @@
                         </StackPanel>
 
                         <StackPanel Spacing="5" Margin="0,5,0,0">
+                            <TextBlock Text="{Binding [MaxRecordingSizeMB], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <Slider Minimum="0" Maximum="500" Value="{Binding RecordingSettings.MaxRecordingSizeMB}" 
+                                        TickFrequency="0.1" SmallChange="0.1" LargeChange="1.0" IsSnapToTickEnabled="True" HorizontalAlignment="Stretch" Width="250"/>
+                                <c:CompactNumericStep Value="{Binding RecordingSettings.MaxRecordingSizeMB}"
+                                                       IncreaseCommand="{Binding IncreaseMaxRecordingSizeMBCommand}"
+                                                       DecreaseCommand="{Binding DecreaseMaxRecordingSizeMBCommand}"/>
+                            </StackPanel>
+                        </StackPanel>
+
+                        <StackPanel Spacing="5" Margin="0,5,0,0">
                             <TextBlock Text="{Binding [PlaybackUiFps], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>
                             <StackPanel Orientation="Horizontal" Spacing="10">
                                 <Slider Minimum="1" Maximum="120" Value="{Binding PlaybackUiFps}"

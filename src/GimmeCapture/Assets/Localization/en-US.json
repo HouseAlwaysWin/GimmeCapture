@@ -105,6 +105,7 @@
   "TempPath": "Temporary File Path:",
   "RecordFormat": "Recording Format:",
   "RecordFPS": "Recording FPS (GIF/Video):",
+  "MaxRecordingSizeMB": "Max Recording Size (MB, 0=None, GIF may vary):",
   "PlaybackUiFps": "Pinned Video UI FPS:",
   "PlaybackTimelineFps": "Pinned Video Timeline FPS:",
   "VideoFormat": "Video Format:",

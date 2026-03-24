@@ -127,6 +127,7 @@ public class AppSettings
     public VideoCodec VideoCodec { get; set; } = VideoCodec.H264;
     public VideoQuality VideoQuality { get; set; } = VideoQuality.Medium;
     public int RecordFPS { get; set; } = 30;
+    public double MaxRecordingSizeMB { get; set; } = 0;
     // Pinned video playback UI throttling (higher FPS = smoother, more UI load)
     public int PlaybackUiFps { get; set; } = 30;
     public int PlaybackTimelineFps { get; set; } = 15;

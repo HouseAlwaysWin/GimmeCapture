@@ -105,6 +105,7 @@
   "TempPath": "暫存檔案路徑:",
   "RecordFormat": "錄影格式:",
   "RecordFPS": "錄影幀率 (FPS):",
+  "MaxRecordingSizeMB": "檔案大小限制 (MB, 0=無限制, GIF輸出會有保守誤差):",
   "PlaybackUiFps": "釘選影片 UI 更新幀率 (FPS):",
   "PlaybackTimelineFps": "釘選影片時間軸更新幀率 (FPS):",
   "VideoFormat": "影片格式:",

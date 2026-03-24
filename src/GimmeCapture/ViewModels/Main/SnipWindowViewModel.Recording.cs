@@ -79,6 +79,21 @@ public partial class SnipWindowViewModel
             {
                 duration += live;
             }
+
+            // Size limit check
+            if (_mainVm != null && _recordingService != null)
+            {
+                double maxMb = _mainVm.RecordingSettings.MaxRecordingSizeMB;
+                if (maxMb > 0)
+                {
+                    long currentBytes = _recordingService.GetCurrentRecordingSizeBytes();  
+                    if (currentBytes > maxMb * 1024 * 1024)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Recording size limit reached: {currentBytes / 1024.0 / 1024.0:F2} MB > {maxMb} MB. Pinning...");
+                        Avalonia.Threading.Dispatcher.UIThread.Post(() => { _ = ExecutePinRecordingAsync(); });
+                    }
+                }
+            }
         }
 
         if (duration < TimeSpan.Zero)

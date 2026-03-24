@@ -138,6 +138,7 @@
   "TranslationSettings": "翻訳と言語エンジン設定",
   "RecordFormat": "録画フォーマット:",
   "RecordFPS": "録画フレームレート (FPS):",
+  "MaxRecordingSizeMB": "最大録画サイズ制限 (MB, 0=制限なし, GIF出力時誤差あり):",
   "PlaybackUiFps": "ピン留め動画 UI 更新 FPS:",
   "PlaybackTimelineFps": "ピン留め動画 タイムライン更新 FPS:",
   "EnableAI": "AI 機能を有効にする (高メモリ使用)",

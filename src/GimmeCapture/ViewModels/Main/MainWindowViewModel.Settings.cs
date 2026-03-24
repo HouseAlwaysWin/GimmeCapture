@@ -930,6 +930,7 @@ public partial class MainWindowViewModel
             WingScale = settings.WingScale;
             CornerIconScale = settings.CornerIconScale;
             RecordingSettings.RecordFPS = settings.RecordFPS;
+            RecordingSettings.MaxRecordingSizeMB = settings.MaxRecordingSizeMB;
             EnableAIScan = settings.EnableAIScan;
             AIScanEngine = settings.AIScanEngine;
             AIResourcesDirectory = settings.AIResourcesDirectory;
@@ -1051,6 +1052,7 @@ public partial class MainWindowViewModel
             settings.WingScale = WingScale;
             settings.CornerIconScale = CornerIconScale;
             settings.RecordFPS = RecordingSettings.RecordFPS;
+            settings.MaxRecordingSizeMB = RecordingSettings.MaxRecordingSizeMB;
             settings.AIScanEngine = AIScanEngine;
             settings.TargetLanguage = TargetLanguage;
             settings.SourceLanguage = SourceLanguage;

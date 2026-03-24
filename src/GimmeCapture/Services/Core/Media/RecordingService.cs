@@ -43,6 +43,44 @@ public partial class RecordingService : ReactiveObject
     public string? OutputFilePath => _outputFile;
     public string? LastRecordingPath => string.IsNullOrEmpty(_outputFile) ? null : _outputFile;
     public void ClearLastRecording() { _outputFile = string.Empty; }
+    
+    public long GetCurrentRecordingSizeBytes()
+    {
+        if (State == RecordingState.Idle) return 0;
+        long totalSize = 0;
+        try
+        {
+            foreach (var file in _segments)
+            {
+                if (File.Exists(file)) totalSize += new FileInfo(file).Length;
+            }
+            foreach (var file in _audioSegments)
+            {
+                if (File.Exists(file)) totalSize += new FileInfo(file).Length;
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Failed to retrieve recording segment size: {ex.Message}");
+        }
+
+        // Apply estimation multiplier because intermediate MKV H.264 segments
+        // are much more compressed than the finalized GIF format.
+        if (_targetFormat == "gif")
+        {
+            var quality = _settingsService?.Settings.VideoQuality ?? VideoQuality.Medium;
+            double multiplier = quality switch
+            {
+                VideoQuality.High => 4.5,
+                VideoQuality.Medium => 3.0,
+                VideoQuality.Low => 1.8,
+                _ => 3.0
+            };
+            totalSize = (long)(totalSize * multiplier);
+        }
+
+        return totalSize;
+    }
 
     public FFmpegDownloaderService Downloader => _downloader;
 
