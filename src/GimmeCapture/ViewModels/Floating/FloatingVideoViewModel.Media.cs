@@ -40,12 +40,7 @@ public partial class FloatingVideoViewModel
             if (target >= _totalDuration.TotalSeconds) target = _totalDuration.TotalSeconds - 0.1;
             _seekTargetSeconds = target;
             
-            // Restart if paused to reflect seek immediately
-            if (!_isPlaybackActive)
-            {
-                _isPlaybackActive = true;
-                this.RaisePropertyChanged(nameof(IsPlaying));
-            }
+            // Just seek and update 
             StartPlayback();
         });
 
@@ -55,11 +50,7 @@ public partial class FloatingVideoViewModel
             if (target < 0) target = 0;
             _seekTargetSeconds = target;
             
-            if (!_isPlaybackActive)
-            {
-                _isPlaybackActive = true;
-                this.RaisePropertyChanged(nameof(IsPlaying));
-            }
+            // Just seek and update
             StartPlayback();
         });
 
@@ -192,7 +183,8 @@ public partial class FloatingVideoViewModel
                 
                 var filter = $"[0:v]setpts={1.0/_playbackSpeed}*PTS,fps=30,realtime[v]";
 
-                var ffArgs = $"{seekArg}-i \"{VideoPath}\" -filter_complex \"{filter}\" -map \"[v]\" -f image2pipe -vcodec rawvideo -pix_fmt bgra -s {_width}x{_height} -sws_flags fast_bilinear -loglevel error -";
+                var framesArg = !_isPlaybackActive ? "-frames:v 1 " : "";
+                var ffArgs = $"{seekArg}-i \"{VideoPath}\" -filter_complex \"{filter}\" -map \"[v]\" -f image2pipe -vcodec rawvideo -pix_fmt bgra -s {_width}x{_height} -sws_flags fast_bilinear -loglevel error {framesArg}-";
                 if (generation == 1) System.Diagnostics.Debug.WriteLine($"[Playback] cmd: {ffArgs}");
                 if (generation == 1) System.Diagnostics.Debug.WriteLine($"[Playback] _ffmpegPath: {_ffmpegPath}");
                 if (generation == 1) System.Diagnostics.Debug.WriteLine($"[Playback] VideoPath exists: {File.Exists(VideoPath)}, size: {(File.Exists(VideoPath) ? new FileInfo(VideoPath).Length : 0)}");
@@ -212,6 +204,12 @@ public partial class FloatingVideoViewModel
 
                 if (ct.IsCancellationRequested)
                     break;
+                    
+                if (!_isPlaybackActive)
+                {
+                    // Was just seeking a single frame while paused. Exit loop.
+                    break;
+                }
 
                 if (!IsLooping) 
                 {
@@ -436,7 +434,7 @@ public partial class FloatingVideoViewModel
                     _vm.UpdateBitmap(_buffer, _generation);
                     _totalRead = 0;
                     
-                    if (!_vm._isDraggingSlider)
+                    if (!_vm._isDraggingSlider && _vm._isPlaybackActive)
                     {
                         var newTime = _vm.CurrentTime + TimeSpan.FromSeconds((1.0 / 30.0) * _vm.PlaybackSpeed);
                         if (newTime > _vm.TotalDuration) newTime = _vm.TotalDuration;

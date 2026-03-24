@@ -148,6 +148,14 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
                 _currentTime = TimeSpan.FromSeconds(value);
                 this.RaisePropertyChanged(nameof(FormattedTime));
                 
+                // Auto-pause immediately upon scrubbing
+                if (_isPlaybackActive)
+                {
+                    _isPlaybackActive = false;
+                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                        this.RaisePropertyChanged(nameof(IsPlaying)));
+                }
+
                 // Debounce the actual seek — only fire after user stops dragging for 300ms
                 _seekDebounceCts?.Cancel();
                 _seekDebounceCts = new CancellationTokenSource();
@@ -158,12 +166,6 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
                     {
                         _isDraggingSlider = false;
                         _seekTargetSeconds = value;
-                        if (!_isPlaybackActive)
-                        {
-                            _isPlaybackActive = true;
-                            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                                this.RaisePropertyChanged(nameof(IsPlaying)));
-                        }
                         StartPlayback();
                     }
                 }, TaskScheduler.Default);
