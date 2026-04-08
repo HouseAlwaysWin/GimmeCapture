@@ -2,7 +2,7 @@
 <html lang='en'>
 <head>
 <meta charset='utf-8' />
-<title>GimmeCapture.Benchmarks.InMemoryTranslationCacheBenchmarks-20260324-165731</title>
+<title>GimmeCapture.Benchmarks.AIPathServiceBenchmarks-20260408-120115</title>
 
 <style type="text/css">
 	table { border-collapse: collapse; display: block; width: 100%; overflow: auto; }
@@ -22,11 +22,11 @@ AMD Ryzen 5 7535HS with Radeon Graphics 3.30GHz, 1 CPU, 12 logical and 6 physica
 <pre><code></code></pre>
 
 <table>
-<thead><tr><th>Method</th><th>Mean</th><th>Error</th><th>StdDev</th><th>Allocated</th>
+<thead><tr><th>Method</th><th>Mean</th><th>Error</th><th>StdDev</th><th>Median</th><th>Gen0</th><th>Gen1</th><th>Allocated</th>
 </tr>
-</thead><tbody><tr><td>CacheHit</td><td>38.86 ns</td><td>0.208 ns</td><td>0.184 ns</td><td>-</td>
-</tr><tr><td>CacheMiss</td><td>14.22 ns</td><td>0.161 ns</td><td>0.151 ns</td><td>-</td>
-</tr><tr><td>CacheSet</td><td>45.54 ns</td><td>0.483 ns</td><td>0.403 ns</td><td>-</td>
+</thead><tbody><tr><td>SAM2Paths</td><td>125.3 ns</td><td>2.47 ns</td><td>6.56 ns</td><td>122.8 ns</td><td>0.1855</td><td>0.0095</td><td>1.52 KB</td>
+</tr><tr><td>OCRPaths</td><td>183.2 ns</td><td>9.37 ns</td><td>26.89 ns</td><td>182.4 ns</td><td>0.2332</td><td>0.0165</td><td>1.91 KB</td>
+</tr><tr><td>NmtPaths</td><td>394.9 ns</td><td>16.14 ns</td><td>46.83 ns</td><td>398.1 ns</td><td>0.3633</td><td>0.0515</td><td>2.97 KB</td>
 </tr></tbody></table>
 </body>
 </html>
