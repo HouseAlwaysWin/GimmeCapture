@@ -23,6 +23,7 @@ using Avalonia.Interactivity;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
 using System.Collections.Generic;
+using System.Collections.Specialized;
 
 namespace GimmeCapture.Views.Main;
 
@@ -371,9 +372,18 @@ public partial class SnipWindow : Window
                 x => x.ToolbarWidth,
                 x => x.ToolbarHeight,
                 x => x.ShowToolbar,
-                x => x.IsToolbarVisible);
+                x => x.IsToolbarVisible,
+                x => x.CurrentTranslationTool);
 
-            _selectionRectSubscription = System.Reactive.Linq.Observable.CombineLatest(trigger1, trigger2, (t1, t2) => t1)
+            // Recompute Win32 region when translation boxes are added/removed (not covered by SelectionRect alone).
+            var userSelectionsChanged = Observable
+                .FromEventPattern<NotifyCollectionChangedEventHandler, NotifyCollectionChangedEventArgs>(
+                    h => vm.UserSelections.CollectionChanged += h,
+                    h => vm.UserSelections.CollectionChanged -= h)
+                .Select(_ => 0)
+                .StartWith(0);
+
+            _selectionRectSubscription = Observable.CombineLatest(trigger1, trigger2, userSelectionsChanged, (t1, t2, _) => t1)
                 .Throttle(TimeSpan.FromMilliseconds(16))
                 .ObserveOn(RxApp.MainThreadScheduler)
                 .Subscribe(tuple => UpdateWindowRegion(tuple.Item2, tuple.Item3, tuple.Item4));

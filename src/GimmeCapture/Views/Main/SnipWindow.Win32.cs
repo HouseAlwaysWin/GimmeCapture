@@ -28,6 +28,10 @@ public partial class SnipWindow : Window
     [DllImport("user32.dll")]
     private static extern IntPtr CallWindowProc(IntPtr lpPrevWndFunc, IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
 
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool ScreenToClient(IntPtr hWnd, ref POINT lpPoint);
+
     private const int GWLP_WNDPROC = -4;
     private const uint WM_NCHITTEST = 0x0084;
     private const int HTTRANSPARENT = -1;
@@ -35,8 +39,8 @@ public partial class SnipWindow : Window
     private WndProcDelegate? _wndProcDelegate;
     private IntPtr _oldWndProc;
 
-    private List<Rect> _hitTestRegions = new();
-    private bool _useHitTestRegions = false;
+    private readonly List<Rect> _hitTestRegions = new();
+    private bool _useHitTestRegions;
 
     // --- Low-Level Keyboard Hook ---
     private const int WH_KEYBOARD_LL = 13;
@@ -456,13 +460,11 @@ public partial class SnipWindow : Window
     {
         if (msg == WM_NCHITTEST && _useHitTestRegions && !(_viewModel?.IsDrawingMode ?? false))
         {
-            int x = (short)(lParam.ToInt64() & 0xFFFF);
-            int y = (short)((lParam.ToInt64() >> 16) & 0xFFFF);
-            
-            var pPos = this.Position;
-            double winX = x - pPos.X;
-            double winY = y - pPos.Y;
-            var point = new Point(winX, winY);
+            // Signed screen coords (multi-monitor). Must match SetWindowRgn rects (physical client pixels).
+            int lp = lParam.ToInt32();
+            var pt = new POINT { X = (short)(lp & 0xFFFF), Y = (short)((lp >> 16) & 0xFFFF) };
+            ScreenToClient(hWnd, ref pt);
+            var point = new Point(pt.X, pt.Y);
 
             bool hit = false;
             foreach (var r in _hitTestRegions)
@@ -474,17 +476,159 @@ public partial class SnipWindow : Window
                 }
             }
 
-            // Also check if inside the selection box (since users might want to copy/save without clicking through)
-            // Wait, the user wants the entire screen to be click-through EXCEPT the borders.
-            // But we actually DO want the click to pass through to desktop inside the selection box as well!
-            // Wait! If the user clicks "inside", the user is trying to record or click on YouTube! So it should pass through.
-            // But if the user wants to draw annotations, IsDrawingMode is true, so this whole block is skipped. Perfect!
             if (!hit)
             {
                 return new IntPtr(HTTRANSPARENT);
             }
         }
+
         return CallWindowProc(_oldWndProc, hWnd, msg, wParam, lParam);
+    }
+
+    /// <summary>
+    /// Same as screenshot/recording when not using a full selection region: punch a 1×1 px hole so
+    /// Chromium/DWM does not treat SnipWindow as a full-screen occluder (YouTube/hardware video).
+    /// Optionally merges the toolbar so it stays hit-testable.
+    /// </summary>
+    private void ApplyTranslationDwmMinimalOccluderFix(IntPtr hwnd, double scaling, int windowWidth, int windowHeight)
+    {
+        Rect? toolbarRect = null;
+        if (_viewModel != null && _viewModel.IsToolbarVisible && _viewModel.ToolbarWidth > 0 && _viewModel.ToolbarHeight > 0)
+        {
+            double tw = _viewModel.ToolbarWidth + 40;
+            double th = _viewModel.ToolbarHeight + 40;
+            double tx = _viewModel.ToolbarLeft - 20;
+            double ty = _viewModel.ToolbarTop - 20;
+            toolbarRect = new Rect(tx * scaling, ty * scaling, tw * scaling, th * scaling);
+        }
+
+        Win32Helpers.SetMultiWindowHoleRegion(hwnd, windowWidth, windowHeight, new[] { new Rect(0, 0, 1, 1) }, 0, toolbarRect, null);
+    }
+
+    /// <summary>
+    /// Opaque UI islands for translation general (cursor) mode — same geometry as former WM_NCHITTEST list, for SetWindowRgn.
+    /// </summary>
+    private void CollectTranslationGeneralModeOpaqueRects(double scaling, System.Collections.Generic.List<Rect> dest)
+    {
+        if (_viewModel == null) return;
+
+        if (_viewModel.IsToolbarVisible && _viewModel.ToolbarWidth > 0 && _viewModel.ToolbarHeight > 0)
+        {
+            double tw = _viewModel.ToolbarWidth + 40;
+            double th = _viewModel.ToolbarHeight + 40;
+            double tx = _viewModel.ToolbarLeft - 20;
+            double ty = _viewModel.ToolbarTop - 20;
+            dest.Add(new Rect(tx * scaling, ty * scaling, tw * scaling, th * scaling));
+        }
+
+        foreach (var sel in _viewModel.UserSelections)
+        {
+            if (sel.Bounds.Width <= 10 || sel.Bounds.Height <= 10) continue;
+            var rect = sel.Bounds;
+
+            if (sel.IsTranslated)
+            {
+                if (sel.IsAudioPanel)
+                {
+                    dest.Add(new Rect(
+                        rect.X * scaling,
+                        rect.Y * scaling,
+                        rect.Width * scaling,
+                        rect.Height * scaling));
+                }
+                else
+                {
+                    dest.Add(new Rect(
+                        rect.X * scaling,
+                        rect.Y * scaling,
+                        rect.Width * scaling,
+                        (rect.Height + sel.EstimatedTextHeight + 20) * scaling));
+                }
+            }
+            else
+            {
+                dest.Add(new Rect(
+                    rect.X * scaling,
+                    rect.Y * scaling,
+                    rect.Width * scaling,
+                    rect.Height * scaling));
+            }
+        }
+
+        if (_viewModel.ShowTopLoadingBar)
+        {
+            foreach (var screen in _viewModel.AllScreenBounds)
+            {
+                dest.Add(new Rect(
+                    screen.X * scaling,
+                    screen.Y * scaling,
+                    screen.W * scaling,
+                    8 * scaling));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Same outer ring + inner pass-through hole as <see cref="SnipState.Selected"/> / screenshot (physical client pixels).
+    /// </summary>
+    private (Rect Outer, Rect InnerHole) ComputeScreenshotStyleRingPhysicalRects(Rect selectionBoundsLogical, double scaling)
+    {
+        var scaledRect = new Rect(
+            selectionBoundsLogical.X * scaling,
+            selectionBoundsLogical.Y * scaling,
+            selectionBoundsLogical.Width * scaling,
+            selectionBoundsLogical.Height * scaling);
+
+        double maxMargin = 0;
+        if (_viewModel != null)
+        {
+            double hSize = 40 * scaling;
+            double sThick = 15 * scaling;
+            double wW = _viewModel.WingWidth * scaling;
+            double wH = _viewModel.WingHeight * scaling;
+            double iSize = (_viewModel.SelectionIconSize + 8) * scaling;
+
+            maxMargin = Math.Max(hSize / 2, Math.Max(sThick / 2, Math.Max(wW, iSize)));
+
+            double verticalOverflow = (wH / 2) - (scaledRect.Height / 2);
+            if (verticalOverflow > maxMargin)
+            {
+                maxMargin = verticalOverflow + (10 * scaling);
+            }
+        }
+        else
+        {
+            maxMargin = 20 * scaling;
+        }
+
+        maxMargin += 20 * scaling;
+
+        var outerBox = new Rect(
+            scaledRect.X - maxMargin,
+            scaledRect.Y - maxMargin,
+            scaledRect.Width + maxMargin * 2,
+            scaledRect.Height + maxMargin * 2);
+
+        double innerShrink = 0;
+        if (_viewModel != null)
+        {
+            double innerIconWidth = (_viewModel.SelectionIconSize + 4) * scaling;
+            double borderThick = _viewModel.SelectionBorderThickness * scaling;
+            innerShrink = borderThick + innerIconWidth + (12 * scaling);
+            innerShrink = Math.Max(15 * scaling, innerShrink);
+        }
+
+        double maxAllowedShrink = Math.Min(scaledRect.Width, scaledRect.Height) / 2.0 - 1;
+        if (maxAllowedShrink < 0) maxAllowedShrink = 0;
+        innerShrink = Math.Min(innerShrink, maxAllowedShrink);
+
+        var innerHole = new Rect(
+            scaledRect.X + innerShrink,
+            scaledRect.Y + innerShrink,
+            Math.Max(0, scaledRect.Width - innerShrink * 2),
+            Math.Max(0, scaledRect.Height - innerShrink * 2));
+
+        return (outerBox, innerHole);
     }
 
     /// <summary>
@@ -509,16 +653,11 @@ public partial class SnipWindow : Window
             
             var holeRects = new System.Collections.Generic.List<Rect>();
             var extraRegions = new System.Collections.Generic.List<Rect>();
+            var translationRings = new System.Collections.Generic.List<(Rect Outer, Rect InnerHole)>();
 
             if (isTranslation && _viewModel != null)
             {
                 bool isEditMode = !_viewModel.IsTranslationSelectionActive;
-
-                if (isEditMode)
-                {
-                    // V8: Edit mode, screen is transparent, leaving ONLY the translation blocks completely opaque!
-                    holeRects.Add(new Rect(0, 0, windowWidth, windowHeight));
-                }
 
                 foreach (var sel in _viewModel.UserSelections)
                 {
@@ -560,33 +699,42 @@ public partial class SnipWindow : Window
                             }
                             else
                             {
-                                // 未翻譯且在選取模式：挖洞穿透，允許滑鼠繪圖或截取
-                                // 縮小洞口以保留內圈的拖拉把手環 (MoveHandle Border, 20px)
-                                double shrink = 20 * scaling;
-                                holeRects.Add(new Rect(
-                                    rect.X * scaling + shrink, 
-                                    rect.Y * scaling + shrink, 
-                                    Math.Max(0, rect.Width * scaling - shrink * 2), 
-                                    Math.Max(0, rect.Height * scaling - shrink * 2)));
-
-                                // Corner Handles
-                                double hSize = 40 * scaling;
-                                double hHalf = hSize / 2;
-                                extraRegions.Add(new Rect(rect.X * scaling - hHalf, rect.Y * scaling - hHalf, hSize, hSize));
-                                extraRegions.Add(new Rect(rect.Right * scaling - hHalf, rect.Y * scaling - hHalf, hSize, hSize));
-                                extraRegions.Add(new Rect(rect.X * scaling - hHalf, rect.Bottom * scaling - hHalf, hSize, hSize));
-                                extraRegions.Add(new Rect(rect.Right * scaling - hHalf, rect.Bottom * scaling - hHalf, hSize, hSize));
-
-                                // Edge Strips (20px) for drag + right-click
-                                double e = 20 * scaling;
-                                extraRegions.Add(new Rect(rect.X * scaling - e/2, rect.Y * scaling, e, rect.Height * scaling));         // Left
-                                extraRegions.Add(new Rect(rect.Right * scaling - e/2, rect.Y * scaling, e, rect.Height * scaling));     // Right
-                                extraRegions.Add(new Rect(rect.X * scaling, rect.Y * scaling - e/2, rect.Width * scaling, e));          // Top
-                                extraRegions.Add(new Rect(rect.X * scaling, rect.Bottom * scaling - e/2, rect.Width * scaling, e));     // Bottom
+                                // 未翻譯且在選取模式：與截圖/錄影相同 — 僅外框環 + 內洞穿透（非整窗再挖洞）
+                                translationRings.Add(ComputeScreenshotStyleRingPhysicalRects(rect, scaling));
                             }
                         }
                     }
                 }
+            }
+
+            // Translation single/multi (untranslated selection): same ring + inner hole as screenshot — not full-window-minus-holes.
+            if (isTranslation && translationRings.Count > 0)
+            {
+                Rect? toolbarRectRing = null;
+                if (_viewModel != null && _viewModel.IsToolbarVisible && _viewModel.ToolbarWidth > 0 && _viewModel.ToolbarHeight > 0)
+                {
+                    double tw = _viewModel.ToolbarWidth + 40;
+                    double th = _viewModel.ToolbarHeight + 40;
+                    double tx = _viewModel.ToolbarLeft - 20;
+                    double ty = _viewModel.ToolbarTop - 20;
+                    toolbarRectRing = new Rect(tx * scaling, ty * scaling, tw * scaling, th * scaling);
+                }
+
+                var ringsExtras = new System.Collections.Generic.List<Rect>(extraRegions);
+                if (_viewModel != null && _viewModel.ShowTopLoadingBar)
+                {
+                    foreach (var screen in _viewModel.AllScreenBounds)
+                    {
+                        ringsExtras.Add(new Rect(
+                            screen.X * scaling,
+                            screen.Y * scaling,
+                            screen.W * scaling,
+                            8 * scaling));
+                    }
+                }
+
+                Win32Helpers.SetMultipleBoundingBoxHoleRegions(hwnd, translationRings, toolbarRectRing, ringsExtras);
+                return;
             }
             else if (state == SnipState.Selected)
             {
@@ -671,8 +819,6 @@ public partial class SnipWindow : Window
             }
 
             // Normal logic for Translation Mode
-            _useHitTestRegions = false;
-
             // V8 修正：翻譯模式下即便 holeRects 為空（全部已翻譯），
             // 也要正確設定 region（只有 extraRegions 的情況）
             if (holeRects.Count == 0 && extraRegions.Count == 0)
@@ -681,31 +827,20 @@ public partial class SnipWindow : Window
                 {
                     if (_viewModel?.IsTranslationSelectionActive == true)
                     {
-                        // In selection mode with no existing boxes, the window must stay interactive
-                        // so mouse drag can create the first translation selection.
-                        Win32Helpers.ClearWindowRegion(hwnd);
+                        // Single/Multi with no boxes yet: same as screenshot/recording selecting — window receives pointer everywhere.
+                        _useHitTestRegions = false;
+                        _hitTestRegions.Clear();
+                        ApplyTranslationDwmMinimalOccluderFix(hwnd, scaling, windowWidth, windowHeight);
                         return;
                     }
 
-                    Rect? emptyStateToolbarRect = null;
-                    if (_viewModel != null && _viewModel.IsToolbarVisible && _viewModel.ToolbarWidth > 0 && _viewModel.ToolbarHeight > 0)
-                    {
-                        double tw = _viewModel.ToolbarWidth + 40;
-                        double th = _viewModel.ToolbarHeight + 40;
-                        double tx = _viewModel.ToolbarLeft - 20;
-                        double ty = _viewModel.ToolbarTop - 20;
-                        emptyStateToolbarRect = new Rect(tx * scaling, ty * scaling, tw * scaling, th * scaling);
-                    }
-
-                    // Keep full click-through when translation UI is hidden/empty.
-                    Win32Helpers.SetMultiWindowHoleRegion(
-                        hwnd,
-                        windowWidth,
-                        windowHeight,
-                        new[] { new Rect(0, 0, windowWidth, windowHeight) },
-                        0,
-                        emptyStateToolbarRect,
-                        null);
+                    // General (cursor), no selections yet: screenshot-style DWM fix + HTTRANSPARENT outside UI islands.
+                    var generalIslands = new System.Collections.Generic.List<Rect>();
+                    CollectTranslationGeneralModeOpaqueRects(scaling, generalIslands);
+                    ApplyTranslationDwmMinimalOccluderFix(hwnd, scaling, windowWidth, windowHeight);
+                    _hitTestRegions.Clear();
+                    _hitTestRegions.AddRange(generalIslands);
+                    _useHitTestRegions = generalIslands.Count > 0;
                 }
                 else
                 {
@@ -741,41 +876,50 @@ public partial class SnipWindow : Window
                         8 * scaling)); // Increased height slightly for visibility safety
                 }
             }
-            
-            int borderWidth = (int)((_viewModel?.SelectionBorderThickness ?? 6) * scaling);
+
+            // Translation general / cursor: screenshot-style DWM fix + HTTRANSPARENT outside UI islands.
             if (isTranslation && _viewModel != null && !_viewModel.IsTranslationSelectionActive)
             {
-                // Cursor mode should remain pass-through by default.
-                // If no explicit holes were generated (e.g. all regions are already translated),
-                // punch a full-window hole and then add translated/toolbar islands back.
-                if (holeRects.Count == 0)
-                {
-                    holeRects.Add(new Rect(0, 0, windowWidth, windowHeight));
-                }
+                ApplyTranslationDwmMinimalOccluderFix(hwnd, scaling, windowWidth, windowHeight);
+                _hitTestRegions.Clear();
+                _hitTestRegions.AddRange(extraRegions);
+                _useHitTestRegions = extraRegions.Count > 0;
+                return;
+            }
 
-                // Edit mode removes the border around the hole
-                borderWidth = 0;
+            int borderWidth = (int)((_viewModel?.SelectionBorderThickness ?? 6) * scaling);
+
+            // Translation remainder (e.g. selection mode + translated-only islands): disjoint opaque — not full-window-minus-holes.
+            if (isTranslation && holeRects.Count == 0)
+            {
+                ApplyTranslationDwmMinimalOccluderFix(hwnd, scaling, windowWidth, windowHeight);
+                _hitTestRegions.Clear();
+                _hitTestRegions.AddRange(extraRegions);
+                if (toolbarRect.HasValue) _hitTestRegions.Add(toolbarRect.Value);
+                _useHitTestRegions = _hitTestRegions.Count > 0;
+                return;
             }
 
             Win32Helpers.SetMultiWindowHoleRegion(hwnd, windowWidth, windowHeight, holeRects, borderWidth, toolbarRect, extraRegions);
         }
         else
         {
+            double scaling = this.RenderScaling;
+            int windowWidth = (int)(this.Bounds.Width * scaling);
+            int windowHeight = (int)(this.Bounds.Height * scaling);
+
             if (!isTranslation)
             {
                 // To prevent Chromium-based browsers (Edge/Chrome) from aggressively 
                 // occluding YouTube/hardware-accelerated videos behind the SnipWindow initially,
                 // we punch a microscopic 1x1 pixel hole at the top left.
                 // This breaks the "full screen occluder" heuristic in the Desktop Window Manager (DWM).
-                double scaling = this.RenderScaling;
-                int windowWidth = (int)(this.Bounds.Width * scaling);
-                int windowHeight = (int)(this.Bounds.Height * scaling);
-                
                 Win32Helpers.SetMultiWindowHoleRegion(hwnd, windowWidth, windowHeight, new[] { new Rect(0, 0, 1, 1) }, 0);
             }
             else
             {
-                Win32Helpers.ClearWindowRegion(hwnd);
+                // Translation + drawing mode: avoid ClearWindowRegion — same DWM / YouTube occlusion issue.
+                ApplyTranslationDwmMinimalOccluderFix(hwnd, scaling, windowWidth, windowHeight);
             }
         }
     }

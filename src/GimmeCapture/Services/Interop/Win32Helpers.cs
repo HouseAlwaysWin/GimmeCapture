@@ -210,6 +210,159 @@ public static class Win32Helpers
     }
 
     /// <summary>
+    /// Same mouse model as <see cref="SetBoundingBoxHoleRegion"/> but ORs multiple disjoint rings
+    /// (each outer rect minus an inner hole), then optional toolbar and opaque islands.
+    /// Outside every outer rect and inside each inner hole: pass-through — matches screenshot/recording selection.
+    /// </summary>
+    public static bool SetMultipleBoundingBoxHoleRegions(
+        IntPtr hwnd,
+        System.Collections.Generic.IReadOnlyList<(Rect Outer, Rect InnerHole)> rings,
+        Rect? toolbarRect = null,
+        System.Collections.Generic.IEnumerable<Rect>? extraOpaqueRects = null)
+    {
+        if (hwnd == IntPtr.Zero) return false;
+
+        IntPtr fullRegion = IntPtr.Zero;
+        IntPtr tempRegion = IntPtr.Zero;
+
+        try
+        {
+            fullRegion = CreateRectRgn(0, 0, 0, 0);
+            if (fullRegion == IntPtr.Zero) return false;
+
+            if (rings != null)
+            {
+                foreach (var (outer, inner) in rings)
+                {
+                    if (outer.Width <= 0 || outer.Height <= 0) continue;
+
+                    tempRegion = CreateRectRgn((int)outer.X, (int)outer.Y, (int)outer.Right, (int)outer.Bottom);
+                    if (tempRegion != IntPtr.Zero)
+                    {
+                        CombineRgn(fullRegion, fullRegion, tempRegion, RGN_OR);
+                        DeleteObject(tempRegion);
+                        tempRegion = IntPtr.Zero;
+                    }
+
+                    if (inner.Width > 0 && inner.Height > 0)
+                    {
+                        tempRegion = CreateRectRgn((int)inner.X, (int)inner.Y, (int)inner.Right, (int)inner.Bottom);
+                        if (tempRegion != IntPtr.Zero)
+                        {
+                            CombineRgn(fullRegion, fullRegion, tempRegion, RGN_DIFF);
+                            DeleteObject(tempRegion);
+                            tempRegion = IntPtr.Zero;
+                        }
+                    }
+                }
+            }
+
+            if (extraOpaqueRects != null)
+            {
+                foreach (var rect in extraOpaqueRects)
+                {
+                    if (rect.Width <= 0 || rect.Height <= 0) continue;
+                    tempRegion = CreateRectRgn((int)rect.X, (int)rect.Y, (int)rect.Right, (int)rect.Bottom);
+                    if (tempRegion != IntPtr.Zero)
+                    {
+                        CombineRgn(fullRegion, fullRegion, tempRegion, RGN_OR);
+                        DeleteObject(tempRegion);
+                        tempRegion = IntPtr.Zero;
+                    }
+                }
+            }
+
+            if (toolbarRect.HasValue && toolbarRect.Value.Width > 0 && toolbarRect.Value.Height > 0)
+            {
+                var tbRect = toolbarRect.Value;
+                int padding = 5;
+                tempRegion = CreateRectRgn(
+                    Math.Max(0, (int)tbRect.X - padding),
+                    Math.Max(0, (int)tbRect.Y - padding),
+                    (int)tbRect.Right + padding,
+                    (int)tbRect.Bottom + padding);
+                if (tempRegion != IntPtr.Zero)
+                {
+                    CombineRgn(fullRegion, fullRegion, tempRegion, RGN_OR);
+                    DeleteObject(tempRegion);
+                    tempRegion = IntPtr.Zero;
+                }
+            }
+
+            int setResult = SetWindowRgn(hwnd, fullRegion, true);
+            fullRegion = IntPtr.Zero;
+            return setResult != 0;
+        }
+        finally
+        {
+            if (tempRegion != IntPtr.Zero) DeleteObject(tempRegion);
+            if (fullRegion != IntPtr.Zero) DeleteObject(fullRegion);
+        }
+    }
+
+    /// <summary>
+    /// Hit-test region = OR of opaque rects only (no full-window base). Matches screenshot-style pass-through:
+    /// clicks outside all rects reach windows below without WM_NCHITTEST tricks.
+    /// </summary>
+    public static bool SetDisjointOpaqueRegions(
+        IntPtr hwnd,
+        System.Collections.Generic.IEnumerable<Rect> opaqueRects,
+        Rect? toolbarRect = null)
+    {
+        if (hwnd == IntPtr.Zero) return false;
+
+        IntPtr fullRegion = IntPtr.Zero;
+        IntPtr tempRegion = IntPtr.Zero;
+
+        try
+        {
+            fullRegion = CreateRectRgn(0, 0, 0, 0);
+            if (fullRegion == IntPtr.Zero) return false;
+
+            if (opaqueRects != null)
+            {
+                foreach (var rect in opaqueRects)
+                {
+                    if (rect.Width <= 0 || rect.Height <= 0) continue;
+                    tempRegion = CreateRectRgn((int)rect.X, (int)rect.Y, (int)rect.Right, (int)rect.Bottom);
+                    if (tempRegion != IntPtr.Zero)
+                    {
+                        CombineRgn(fullRegion, fullRegion, tempRegion, RGN_OR);
+                        DeleteObject(tempRegion);
+                        tempRegion = IntPtr.Zero;
+                    }
+                }
+            }
+
+            if (toolbarRect.HasValue && toolbarRect.Value.Width > 0 && toolbarRect.Value.Height > 0)
+            {
+                var tbRect = toolbarRect.Value;
+                int padding = 5;
+                tempRegion = CreateRectRgn(
+                    Math.Max(0, (int)tbRect.X - padding),
+                    Math.Max(0, (int)tbRect.Y - padding),
+                    (int)tbRect.Right + padding,
+                    (int)tbRect.Bottom + padding);
+                if (tempRegion != IntPtr.Zero)
+                {
+                    CombineRgn(fullRegion, fullRegion, tempRegion, RGN_OR);
+                    DeleteObject(tempRegion);
+                    tempRegion = IntPtr.Zero;
+                }
+            }
+
+            int setResult = SetWindowRgn(hwnd, fullRegion, true);
+            fullRegion = IntPtr.Zero;
+            return setResult != 0;
+        }
+        finally
+        {
+            if (tempRegion != IntPtr.Zero) DeleteObject(tempRegion);
+            if (fullRegion != IntPtr.Zero) DeleteObject(fullRegion);
+        }
+    }
+
+    /// <summary>
     /// Clears the window region, restoring the window to its default rectangular shape.
     /// Call this when closing the window or when no selection is active.
     /// </summary>
