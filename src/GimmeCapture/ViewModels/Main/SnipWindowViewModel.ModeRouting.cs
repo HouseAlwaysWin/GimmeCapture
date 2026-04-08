@@ -26,7 +26,9 @@ public partial class SnipWindowViewModel
         nameof(HideFrameBorder),
         nameof(HideSelectionDecoration),
         nameof(ModeDisplayName),
-        nameof(IsToolbarVisible)
+        nameof(IsToolbarVisible),
+        nameof(IsAiScanCandidateLayerVisible),
+        nameof(IsAiDetectedRectPreviewVisible)
     };
 
     private static readonly string[] _modeHotkeyPropertyNames =
@@ -102,6 +104,9 @@ public partial class SnipWindowViewModel
         // Logic from old IsRecordingMode / IsTranslationMode setters
         if (value == SnipMode.Translation)
         {
+            // 截圖/錄影的 AI 自動選取與視窗候選框不適用於翻譯模式
+            ClearAiScanOverlayState();
+
             // 進入翻譯模式：啟用遮罩並更新挖空區域
             SelectionRect = new Rect(0, 0, 0, 0); // 確保清空標準選取框，避免干擾挖空
             IsMaskVisible = true;

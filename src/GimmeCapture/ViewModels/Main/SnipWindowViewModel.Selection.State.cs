@@ -27,6 +27,8 @@ public partial class SnipWindowViewModel
             System.Diagnostics.Debug.WriteLine($"[SnipState] {_currentState} -> {value}");
             this.RaiseAndSetIfChanged(ref _currentState, value);
             this.RaisePropertyChanged(nameof(SelectionShadowColor));
+            this.RaisePropertyChanged(nameof(IsAiScanCandidateLayerVisible));
+            this.RaisePropertyChanged(nameof(IsAiDetectedRectPreviewVisible));
             
             // If we leave Detecting state (e.g. start selecting), cancel any running scan
             if (value != SnipState.Detecting)

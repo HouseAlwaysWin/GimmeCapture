@@ -129,22 +129,10 @@
             </Path.IsVisible>
         </Path>
         
-            <!-- AI Scan Results Layer (Background Candidates) -->
+            <!-- AI Scan Results Layer (Background Candidates) — 翻譯模式（含單選/多選）不顯示 -->
             <ItemsControl ItemsSource="{Binding WindowRects}" IsHitTestVisible="True"
-                          Width="{Binding ViewportSize.Width}" Height="{Binding ViewportSize.Height}">
-                <ItemsControl.IsVisible>
-                    <MultiBinding Converter="{x:Static BoolConverters.And}">
-                        <Binding Path="CurrentState">
-                            <Binding.Converter>
-                                <cv:EnumMatchConverter/>
-                            </Binding.Converter>
-                            <Binding.ConverterParameter>
-                                <x:Static Member="vm:SnipState.Detecting"/>
-                            </Binding.ConverterParameter>
-                        </Binding>
-                        <Binding Path="!IsTranslationMode"/>
-                    </MultiBinding>
-                </ItemsControl.IsVisible>
+                          Width="{Binding ViewportSize.Width}" Height="{Binding ViewportSize.Height}"
+                          IsVisible="{Binding IsAiScanCandidateLayerVisible}">
                 <ItemsControl.Styles>
                     <Style Selector="ItemsControl > ContentPresenter" x:DataType="m:VisualRect">
                         <Setter Property="Canvas.Left" Value="{Binding X}"/>
@@ -178,27 +166,17 @@
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
 
-            <!-- Detection Preview Layer (Active Selection - Dashed) -->
+            <!-- Detection Preview Layer (Active Selection - Dashed) — 翻譯模式不顯示 -->
             <Canvas IsHitTestVisible="False">
                 <Rectangle Stroke="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}"
                            StrokeThickness="2"
                            StrokeDashArray="4,2"
-                           IsVisible="{Binding !!DetectedRect.Width}"
+                           IsVisible="{Binding IsAiDetectedRectPreviewVisible}"
                            Width="{Binding DetectedRect.Width}"
                            Height="{Binding DetectedRect.Height}"
                            Canvas.Left="{Binding DetectedRect.X}"
-                           Canvas.Top="{Binding DetectedRect.Y}">
-                    <Rectangle.Opacity>
-                        <Binding Path="CurrentState">
-                            <Binding.Converter>
-                                <cv:EnumMatchConverter/>
-                            </Binding.Converter>
-                            <Binding.ConverterParameter>
-                                <x:Static Member="vm:SnipState.Detecting"/>
-                            </Binding.ConverterParameter>
-                        </Binding>
-                    </Rectangle.Opacity>
-                </Rectangle>
+                           Canvas.Top="{Binding DetectedRect.Y}"
+                           Opacity="1"/>
             </Canvas>
 
         

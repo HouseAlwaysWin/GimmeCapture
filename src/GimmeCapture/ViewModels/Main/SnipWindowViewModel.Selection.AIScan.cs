@@ -18,14 +18,45 @@ public partial class SnipWindowViewModel
     public Rect DetectedRect
     {
         get => _detectedRect;
-        set => this.RaiseAndSetIfChanged(ref _detectedRect, value);
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _detectedRect, value);
+            this.RaisePropertyChanged(nameof(IsAiDetectedRectPreviewVisible));
+        }
     }
+
+    /// <summary>
+    /// Screenshot/recording: AI + Win32 window snap candidate boxes. Always false in translation (cursor / single / multi).
+    /// </summary>
+    public bool IsAiScanCandidateLayerVisible =>
+        CurrentState == SnipState.Detecting && CurrentMode != SnipMode.Translation;
+
+    /// <summary>
+    /// Dashed hover preview when choosing a candidate. Always false in translation mode.
+    /// </summary>
+    public bool IsAiDetectedRectPreviewVisible =>
+        CurrentMode != SnipMode.Translation && CurrentState == SnipState.Detecting && DetectedRect.Width > 0;
 
     public ObservableCollection<VisualRect> WindowRects { get; } = new();
     private readonly WindowDetectionService _detectionService = new();
 
+    /// <summary>
+    /// Clears screenshot/recording AI candidate boxes and hover preview. Not used in translation mode.
+    /// </summary>
+    private void ClearAiScanOverlayState()
+    {
+        DetectedRect = default;
+        WindowRects.Clear();
+        _scanCts?.Cancel();
+    }
+
     public void RefreshWindowRects(IntPtr? excludeHWnd = null)
     {
+        if (CurrentMode == SnipMode.Translation)
+        {
+            return;
+        }
+
         // Get global rects (Physical pixels)
         var globalRects = _detectionService.GetVisibleWindowRects(excludeHWnd);
         
@@ -48,7 +79,7 @@ public partial class SnipWindowViewModel
 
     public void UpdateDetectedRect(Point mousePos)
     {
-        if (CurrentState != SnipState.Detecting) return;
+        if (CurrentState != SnipState.Detecting || CurrentMode == SnipMode.Translation) return;
         
         // Convert VisualRects back to Rects for detection service (or update detection service)
         // Since VisualRect is simple, we can just project it.
@@ -62,6 +93,8 @@ public partial class SnipWindowViewModel
 
     private async Task RunAIScanAsync()
     {
+        if (CurrentMode == SnipMode.Translation) return;
+
         var engine = _mainVm?.AIScanEngine ?? AIScanEngine.OCR;
         if (engine == AIScanEngine.SAM2)
         {
@@ -81,6 +114,12 @@ public partial class SnipWindowViewModel
         if (RecState != RecordingState.Idle) 
         {
             System.Diagnostics.Debug.WriteLine($"[AI Scan] Abort: RecState is {RecState}");
+            return;
+        }
+
+        if (CurrentMode == SnipMode.Translation)
+        {
+            System.Diagnostics.Debug.WriteLine("[AI Scan] Abort: Translation mode");
             return;
         }
 
@@ -180,7 +219,7 @@ public partial class SnipWindowViewModel
                         if (token.IsCancellationRequested) return;
                         
                         // Guard: If user has already started selecting or finished, or AI disabled, don't show rects
-                        if (CurrentState != SnipState.Detecting || _mainVm?.EnableAI != true) return;
+                        if (CurrentState != SnipState.Detecting || _mainVm?.EnableAI != true || CurrentMode == SnipMode.Translation) return;
 
                         int addedCount = 0;
                         double scale = VisualScaling > 0 ? VisualScaling : 1.0;
@@ -257,6 +296,12 @@ public partial class SnipWindowViewModel
             return;
         }
 
+        if (CurrentMode == SnipMode.Translation)
+        {
+            System.Diagnostics.Debug.WriteLine("[AI Scan][OCR] Abort: Translation mode");
+            return;
+        }
+
         _scanCts?.Cancel();
         _scanCts = new System.Threading.CancellationTokenSource();
         var token = _scanCts.Token;
@@ -300,7 +345,7 @@ public partial class SnipWindowViewModel
                 await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
                 {
                     if (token.IsCancellationRequested) return;
-                    if (CurrentState != SnipState.Detecting || _mainVm?.EnableAI != true) return;
+                    if (CurrentState != SnipState.Detecting || _mainVm?.EnableAI != true || CurrentMode == SnipMode.Translation) return;
                     
                     // Keep existing Win32-detected candidate boxes and append OCR boxes.
                     // This preserves original selectable regions while still adding text targets.
