@@ -762,9 +762,35 @@ public partial class SnipWindowViewModel
 
         // 根據滑鼠所在的螢幕 (ActiveScreenBounds) 置中工具列
         Rect bounds = ActiveScreenBounds.Width > 0 ? ActiveScreenBounds : new Rect(0, 0, ViewportSize.Width > 0 ? ViewportSize.Width : 1920, ViewportSize.Height > 0 ? ViewportSize.Height : 1080);
-        
+
+        // 翻譯列（模式鈕 + 游標/單選/多選 + 語言 Combo 等）實際寬度遠大於截圖/錄影列。
+        // 若仍用偏小的 ToolbarWidth（剛切換模式尚未量測、或預設 200）去做水平置中，
+        // Canvas.Left 會依「過窄的寬度」置中，實際控制項較寬，左側會被裁到視窗外，
+        // 看起來像「語言列右邊還在、左邊整段不見」。
+        const double translationMinCenteringWidth = 960;
         double tw = ToolbarWidth > 0 ? ToolbarWidth : 200;
-        TranslationToolbarLeft = bounds.X + (bounds.Width - tw) / 2;
+        if (CurrentMode == SnipMode.Translation)
+        {
+            tw = Math.Max(tw, translationMinCenteringWidth);
+        }
+
+        double margin = 20;
+        double maxTw = Math.Max(0, bounds.Width - margin * 2);
+        tw = Math.Min(tw, maxTw);
+
+        double left = bounds.X + (bounds.Width - tw) / 2;
+        double minLeft = bounds.X;
+        double maxLeft = bounds.X + bounds.Width - tw;
+        if (maxLeft < minLeft)
+        {
+            left = minLeft;
+        }
+        else
+        {
+            left = Math.Clamp(left, minLeft, maxLeft);
+        }
+
+        TranslationToolbarLeft = left;
         TranslationToolbarTop = bounds.Y + 20;
 
         // 同步更新 XAML 綁定的工具列位置

@@ -18,7 +18,8 @@
             BorderBrush="#333333" 
             BorderThickness="1" 
             CornerRadius="4" 
-            Padding="2">
+            Padding="2"
+            ClipToBounds="False">
         <StackPanel Orientation="Vertical" Spacing="2">
             <WrapPanel Orientation="Horizontal">
                 <WrapPanel.Styles>
