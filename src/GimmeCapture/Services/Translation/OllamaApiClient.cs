@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
@@ -115,7 +114,7 @@ public class OllamaApiClient : IOllamaApiClient
         if (models.Count == 0) return false;
 
         // Check for exact match or name:latest match
-        return models.Any(m => m.Equals(model, StringComparison.OrdinalIgnoreCase) || 
+        return models.AsValueEnumerable().Any(m => m.Equals(model, StringComparison.OrdinalIgnoreCase) || 
                                m.Equals($"{model}:latest", StringComparison.OrdinalIgnoreCase));
     }
 

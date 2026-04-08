@@ -4,8 +4,6 @@ using Avalonia.Input;
 using Avalonia.VisualTree;
 using GimmeCapture.ViewModels.Main;
 using System;
-using System.Linq;
-
 namespace GimmeCapture.Views.Main.Tabs;
 
 public partial class SettingsHotkeysTab : UserControl
@@ -27,6 +25,7 @@ public partial class SettingsHotkeysTab : UserControl
         _tagsValidated = true;
 
         var tags = this.GetVisualDescendants()
+            .AsValueEnumerable()
             .OfType<TextBox>()
             .Select(tb => tb.Tag as string)
             .Where(tag => !string.IsNullOrWhiteSpace(tag))

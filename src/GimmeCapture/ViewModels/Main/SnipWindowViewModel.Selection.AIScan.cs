@@ -3,7 +3,6 @@ using GimmeCapture.Models;
 using ReactiveUI;
 using System;
 using System.Collections.ObjectModel;
-using System.Linq;
 using System.Reactive;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
@@ -33,6 +32,7 @@ public partial class SnipWindowViewModel
         // Translate to local coordinates based on ScreenOffset (Physical)
         // AND convert to logical coordinates by dividing by VisualScaling
         var localRects = globalRects
+            .AsValueEnumerable()
             .Select(r => new VisualRect(
                 (r.X - ScreenOffset.X) / VisualScaling, 
                 (r.Y - ScreenOffset.Y) / VisualScaling, 
@@ -52,7 +52,7 @@ public partial class SnipWindowViewModel
         
         // Convert VisualRects back to Rects for detection service (or update detection service)
         // Since VisualRect is simple, we can just project it.
-        var rectList = WindowRects.Select(vr => new Rect(vr.X, vr.Y, vr.Width, vr.Height)).ToList();
+        var rectList = WindowRects.AsValueEnumerable().Select(vr => new Rect(vr.X, vr.Y, vr.Width, vr.Height)).ToList();
         var rect = _detectionService.GetRectAtPoint(mousePos, rectList);
         
         DetectedRect = rect ?? new Rect(0,0,0,0);
@@ -170,7 +170,7 @@ public partial class SnipWindowViewModel
             token.ThrowIfCancellationRequested();
 
             // 4. Add detected rects to WindowRects
-            if (rects.Any())
+            if (rects.AsValueEnumerable().Any())
             {
                 // Only add to WindowRects (visual red boxes) if the setting is enabled
                 if (_mainVm.ShowAIScanBox)
@@ -326,7 +326,7 @@ public partial class SnipWindowViewModel
 
                         if (logicalRect.Width >= 12 && logicalRect.Height >= 8)
                         {
-                            bool duplicated = WindowRects.Any(existing =>
+                            bool duplicated = WindowRects.AsValueEnumerable().Any(existing =>
                                 IsNearDuplicate(new Rect(existing.X, existing.Y, existing.Width, existing.Height), logicalRect));
                             if (!duplicated)
                             {
@@ -470,7 +470,7 @@ public partial class SnipWindowViewModel
             }
 
             // Keep one persistent audio panel while in Audio mode.
-            if (CurrentTranslationTool == TranslationTool.Audio && !UserSelections.Any(x => x.IsAudioPanel))
+            if (CurrentTranslationTool == TranslationTool.Audio && !UserSelections.AsValueEnumerable().Any(x => x.IsAudioPanel))
             {
                 EnsureAudioTranslationBox();
             }

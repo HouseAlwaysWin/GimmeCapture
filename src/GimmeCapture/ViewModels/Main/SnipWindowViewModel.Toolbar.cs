@@ -10,7 +10,6 @@ using System.Reactive;
 using System.Reactive.Linq;
 using GimmeCapture.Services.Core;
 using GimmeCapture.Services.Core.Media;
-using System.Linq;
 
 namespace GimmeCapture.ViewModels.Main;
 

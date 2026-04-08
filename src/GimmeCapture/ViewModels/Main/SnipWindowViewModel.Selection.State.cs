@@ -3,7 +3,6 @@ using Avalonia.Media;
 using GimmeCapture.Models;
 using ReactiveUI;
 using System;
-using System.Linq;
 using System.Reactive;
 using System.Reactive.Linq;
 using System.Collections.ObjectModel;
@@ -268,11 +267,11 @@ public partial class SnipWindowViewModel
             {
                 await Task.Delay(1500, token);
 
-                var activeSections = UserSelections.Where(s => s.IsAutoDetectEnabled).ToList();
+                var activeSections = UserSelections.AsValueEnumerable().Where(s => s.IsAutoDetectEnabled).ToList();
                 if (activeSections.Count == 0) continue;
                 if (_mainVm == null || CurrentMode != SnipMode.Translation) continue;
 
-                bool hasVisualSections = activeSections.Any();
+                bool hasVisualSections = activeSections.AsValueEnumerable().Any();
                 if (hasVisualSections)
                 {
                     bool isOcrReady = await _mainVm.AIResourceService.EnsureOCRAsync();
@@ -402,21 +401,21 @@ public partial class SnipWindowViewModel
                                 continue;
                             }
 
-                            var combinedText = string.Join("\n", blocks.Select(b => b.TranslatedText).Where(t => !string.IsNullOrWhiteSpace(t)));
-                            var combinedOriginalText = string.Join("\n", blocks.Select(b => b.OriginalText).Where(t => !string.IsNullOrWhiteSpace(t)));
+                            var combinedText = string.Join("\n", blocks.AsValueEnumerable().Select(b => b.TranslatedText).Where(t => !string.IsNullOrWhiteSpace(t)).ToArray());
+                            var combinedOriginalText = string.Join("\n", blocks.AsValueEnumerable().Select(b => b.OriginalText).Where(t => !string.IsNullOrWhiteSpace(t)).ToArray());
                             
                             // Prevent re-updating if text hasn't logically changed despite visual noise
                             if (combinedText == sel.TranslatedText) continue;
                             
                             await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
                             {
-                                sel.LastOcrText = string.Join("\n", blocks.Select(b => b.OriginalText).Where(t => !string.IsNullOrWhiteSpace(t))); // Update tracking hash
+                                sel.LastOcrText = string.Join("\n", blocks.AsValueEnumerable().Select(b => b.OriginalText).Where(t => !string.IsNullOrWhiteSpace(t)).ToArray()); // Update tracking hash
                                 sel.OriginalText = combinedOriginalText;
                                 sel.TranslatedText = combinedText;
                                 sel.IsTranslated = !string.IsNullOrWhiteSpace(combinedText);
                                 
                                 // Propagate inferred font size from blocks
-                                if (blocks.Any())
+                                if (blocks.AsValueEnumerable().Any())
                                 {
                                     sel.InferredFontSize = blocks[0].InferredFontSize;
                                 }
@@ -703,7 +702,7 @@ public partial class SnipWindowViewModel
 
     private void EnsureAudioTranslationBox()
     {
-        if (UserSelections.Any(x => x.IsAudioPanel))
+        if (UserSelections.AsValueEnumerable().Any(x => x.IsAudioPanel))
         {
             return;
         }
@@ -730,7 +729,7 @@ public partial class SnipWindowViewModel
 
     private void CloseAudioTranslationBoxes()
     {
-        var audioPanels = UserSelections.Where(x => x.IsAudioPanel).ToList();
+        var audioPanels = UserSelections.AsValueEnumerable().Where(x => x.IsAudioPanel).ToList();
         foreach (var item in audioPanels)
         {
             UserSelections.Remove(item);
@@ -791,7 +790,7 @@ public partial class SnipWindowViewModel
         double left = SelectionRect.Left;
 
         // Multi-monitor clamping: Find which monitor the selection is mostly on
-        var targetMonitor = AllScreenBounds?.FirstOrDefault(s => 
+        var targetMonitor = AllScreenBounds?.AsValueEnumerable().FirstOrDefault(s => 
             new Rect(s.X, s.Y, s.W, s.H).Intersects(SelectionRect)) 
             ?? new ScreenBoundsViewModel { X = 0, Y = 0, W = vw, H = vh };
 

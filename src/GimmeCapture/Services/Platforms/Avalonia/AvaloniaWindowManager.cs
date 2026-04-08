@@ -1,4 +1,3 @@
-using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -19,31 +18,31 @@ public class AvaloniaWindowManager : IWindowManager
         where TViewModel : class
     {
         var desktop = Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime;
-        var window = desktop?.Windows.OfType<TWindow>().FirstOrDefault();
+        var window = desktop?.Windows.AsValueEnumerable().OfType<TWindow>().FirstOrDefault();
         return window?.DataContext as TViewModel;
     }
 
     public Window? GetActiveWindow()
     {
         var desktop = Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime;
-        return desktop?.Windows.FirstOrDefault(w => w.IsActive);
+        return desktop?.Windows.AsValueEnumerable().FirstOrDefault(w => w.IsActive);
     }
 
     public Window? FindWindowByDataContext(object dataContext)
     {
         var desktop = Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime;
-        return desktop?.Windows.FirstOrDefault(w => ReferenceEquals(w.DataContext, dataContext));
+        return desktop?.Windows.AsValueEnumerable().FirstOrDefault(w => ReferenceEquals(w.DataContext, dataContext));
     }
 
     public TWindow? FindWindowOfType<TWindow>() where TWindow : Window
     {
         var desktop = Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime;
-        return desktop?.Windows.OfType<TWindow>().FirstOrDefault();
+        return desktop?.Windows.AsValueEnumerable().OfType<TWindow>().FirstOrDefault();
     }
 
     public TWindow? GetActiveWindowOfType<TWindow>() where TWindow : Window
     {
         var desktop = Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime;
-        return desktop?.Windows.OfType<TWindow>().FirstOrDefault(w => w.IsActive);
+        return desktop?.Windows.AsValueEnumerable().OfType<TWindow>().FirstOrDefault(w => w.IsActive);
     }
 }

@@ -12,8 +12,6 @@ using GimmeCapture.Models;
 using GimmeCapture.Services.Core;
 using System.Threading.Tasks;
 using Avalonia.Media.Imaging;
-using System.Linq;
-
 using System.Reactive.Linq;
 
 namespace GimmeCapture.ViewModels.Floating;

@@ -17,7 +17,6 @@ using Avalonia.Controls;
 using System.Collections.Generic;
 using GimmeCapture.Models;
 using Avalonia.Media;
-using System.Linq;
 using GimmeCapture.Services.Platforms.Desktop;
 
 namespace GimmeCapture.Services.Platforms.Windows;
@@ -287,7 +286,7 @@ public class WindowsScreenCaptureService : IScreenCaptureService
             }
 
             // 3. Render annotations
-            if (annotations != null && annotations.Any())
+            if (annotations != null && annotations.AsValueEnumerable().Any())
             {
                 foreach (var ann in annotations)
                 {
@@ -345,12 +344,12 @@ public class WindowsScreenCaptureService : IScreenCaptureService
                             using(var fontCheck = new SKFont(typeface))
                             {
                                 fontCheck.GetGlyphs(ann.Text, ids);
-                                if (ids.Any(id => id == 0)) missingGlyph = true;
+                                if (ids.AsValueEnumerable().Any(id => id == 0)) missingGlyph = true;
                             }
                             
                             if (missingGlyph)
                             {
-                                var fallback = SKFontManager.Default.MatchCharacter(ann.Text.FirstOrDefault(c => c > 127));
+                                var fallback = SKFontManager.Default.MatchCharacter(ann.Text.AsValueEnumerable().FirstOrDefault(c => c > 127));
                                 if (fallback != null)
                                 {
                                     typeface.Dispose();
@@ -369,12 +368,12 @@ public class WindowsScreenCaptureService : IScreenCaptureService
                         }
                         break;
                     case AnnotationType.Pen:
-                        if (ann.Points.Any())
+                        if (ann.Points.AsValueEnumerable().Any())
                         {
                             using var path = new SKPath();
-                            var first = ann.Points.First();
+                            var first = ann.Points.AsValueEnumerable().First();
                             path.MoveTo((float)(first.X * visualScaling), (float)(first.Y * visualScaling));
-                            foreach (var p in ann.Points.Skip(1))
+                            foreach (var p in ann.Points.AsValueEnumerable().Skip(1))
                             {
                                 path.LineTo((float)(p.X * visualScaling), (float)(p.Y * visualScaling));
                             }
@@ -495,7 +494,7 @@ public class WindowsScreenCaptureService : IScreenCaptureService
         var lines = WrapText(text, (float)(relBounds.Width * scale - padding * 2), font);
         float lineHeight = font.Size * 1.5f;
         float totalTextHeight = lines.Count * lineHeight;
-        float totalTextWidth = lines.Any() ? lines.Max(l => font.MeasureText(l)) : 0;
+        float totalTextWidth = lines.AsValueEnumerable().Any() ? lines.AsValueEnumerable().Max(l => font.MeasureText(l)) : 0;
 
         float boxWidth = totalTextWidth + padding * 2;
         float boxHeight = totalTextHeight + padding * 2;

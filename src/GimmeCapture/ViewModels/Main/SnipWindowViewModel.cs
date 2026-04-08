@@ -8,7 +8,6 @@ using System.Reactive;
 using System.Reactive.Linq;
 using System.Collections.ObjectModel;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
 using System.ComponentModel;
 using GimmeCapture.Services.Abstractions;
@@ -231,8 +230,8 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         set { if (_mainVm != null) _mainVm.TargetLanguage = value; this.RaisePropertyChanged(); }
     }
 
-    public List<OCRLanguage> AvailableOCRLanguages => _mainVm?.AvailableOCRLanguages ?? Enum.GetValues<OCRLanguage>().ToList();
-    public List<TranslationLanguage> AvailableTranslationLanguages => _mainVm?.AvailableTranslationLanguages ?? Enum.GetValues<TranslationLanguage>().ToList();
+    public List<OCRLanguage> AvailableOCRLanguages => _mainVm?.AvailableOCRLanguages ?? Enum.GetValues<OCRLanguage>().AsValueEnumerable().ToList();
+    public List<TranslationLanguage> AvailableTranslationLanguages => _mainVm?.AvailableTranslationLanguages ?? Enum.GetValues<TranslationLanguage>().AsValueEnumerable().ToList();
 
     public SnipWindowViewModel() : this(Colors.Red, 2.0, 0.5, null, null) { }
 

@@ -3,7 +3,6 @@ using GimmeCapture.Models;
 using GimmeCapture.Services.Core;
 using GimmeCapture.Services.OCR;
 using System;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -89,7 +88,7 @@ public partial class SnipWindowViewModel
             }
 
             // 逐一翻譯每個選取區域
-            var selectionsCopy = UserSelections.ToList();
+            var selectionsCopy = UserSelections.AsValueEnumerable().ToList();
             foreach (var sel in selectionsCopy)
             {
                 if (token.IsCancellationRequested) break;
@@ -112,8 +111,8 @@ public partial class SnipWindowViewModel
                 if (token.IsCancellationRequested) break;
 
                 // 合併所有翻譯結果作為這個區域的翻譯文字
-                var combinedText = string.Join("\n", blocks.Select(b => b.TranslatedText).Where(t => !string.IsNullOrWhiteSpace(t)));
-                var combinedOriginalText = string.Join("\n", blocks.Select(b => b.OriginalText).Where(t => !string.IsNullOrWhiteSpace(t)));
+                var combinedText = string.Join("\n", blocks.AsValueEnumerable().Select(b => b.TranslatedText).Where(t => !string.IsNullOrWhiteSpace(t)).ToArray());
+                var combinedOriginalText = string.Join("\n", blocks.AsValueEnumerable().Select(b => b.OriginalText).Where(t => !string.IsNullOrWhiteSpace(t)).ToArray());
                 
                 await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
                 {
@@ -133,7 +132,7 @@ public partial class SnipWindowViewModel
                     sel.IsTranslated = true;
 
                     // Propagate inferred font size from blocks
-                    if (blocks.Any())
+                    if (blocks.AsValueEnumerable().Any())
                     {
                         sel.InferredFontSize = blocks[0].InferredFontSize;
                     }

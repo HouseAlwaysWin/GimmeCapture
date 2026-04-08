@@ -1,7 +1,6 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Threading.Tasks;
 using System.Threading;
 using Microsoft.ML.OnnxRuntime;
@@ -91,10 +90,10 @@ public class SAM2Service : IDisposable
             _originalHeight = original.Height;
 
             var inputMetaData = _encoderSession.InputMetadata;
-            var inputNames = inputMetaData.Keys.ToList();
-            string inputName = inputNames.FirstOrDefault(n => n == "image" || n == "pixel_values") ?? inputNames.FirstOrDefault() ?? "image";
+            var inputNames = inputMetaData.Keys.AsValueEnumerable().ToList();
+            string inputName = inputNames.AsValueEnumerable().FirstOrDefault(n => n == "image" || n == "pixel_values") ?? inputNames.AsValueEnumerable().FirstOrDefault() ?? "image";
             
-            var expectedDims = inputMetaData[inputName].Dimensions.ToArray();
+            var expectedDims = inputMetaData[inputName].Dimensions.AsValueEnumerable().ToArray();
             bool is5D = expectedDims.Length == 5;
             int bufferSize = 3 * 1024 * 1024;
             float[] buffer = new float[bufferSize];
@@ -171,10 +170,10 @@ public class SAM2Service : IDisposable
             var inputs = new List<NamedOnnxValue> { NamedOnnxValue.CreateFromTensor(inputName, inputTensor) };
             using var results = _encoderSession.Run(inputs);
             
-            var outputNames = results.Select(r => r.Name).ToList();
+            var outputNames = results.AsValueEnumerable().Select(r => r.Name).ToList();
             
             T? FindResult<T>(string[] aliases) where T : class {
-                var found = results.FirstOrDefault(r => aliases.Any(a => r.Name == a || r.Name.Contains(a)));
+                var found = results.AsValueEnumerable().FirstOrDefault(r => aliases.AsValueEnumerable().Any(a => r.Name == a || r.Name.Contains(a)));
                 return found?.Value as T;
             }
 
@@ -213,7 +212,7 @@ public class SAM2Service : IDisposable
             Console.WriteLine($"[AI Scan] Processing {points.Count} grid points...");
 
             var decInputMetaData = _decoderSession.InputMetadata;
-            var decInputNames = decInputMetaData.Keys.ToList();
+            var decInputNames = decInputMetaData.Keys.AsValueEnumerable().ToList();
 
             // Process each point individually (batch=1) in PARALLEL
             int processedCount = 0;
@@ -247,11 +246,11 @@ public class SAM2Service : IDisposable
                     var hasMaskInput = new DenseTensor<float>(new[] { 1 });
 
                     var decInputMetaData = _decoderSession.InputMetadata;
-                    var decInputNames = decInputMetaData.Keys.ToList();
+                    var decInputNames = decInputMetaData.Keys.AsValueEnumerable().ToList();
                     var inputs = new List<NamedOnnxValue>();
 
                     void AddInput(string[] aliases, float[] data, int[] dimensions) {
-                        var name = decInputNames.FirstOrDefault(n => aliases.Any(a => n == a || n == a.Replace("_", "") || n.Contains(a)));
+                        var name = decInputNames.AsValueEnumerable().FirstOrDefault(n => aliases.AsValueEnumerable().Any(a => n == a || n == a.Replace("_", "") || n.Contains(a)));
                         if (name == null) return;
                         
                         var meta = decInputMetaData[name];
@@ -267,18 +266,18 @@ public class SAM2Service : IDisposable
                             for (int i = 1; i < dimensions.Length; i++) finalDims[i + 1] = dimensions[i];
                         }
 
-                        if (meta.ElementType == typeof(int)) inputs.Add(NamedOnnxValue.CreateFromTensor(name, new DenseTensor<int>(data.Select(x => (int)x).ToArray(), finalDims)));
-                        else if (meta.ElementType == typeof(long)) inputs.Add(NamedOnnxValue.CreateFromTensor(name, new DenseTensor<long>(data.Select(x => (long)x).ToArray(), finalDims)));
+                        if (meta.ElementType == typeof(int)) inputs.Add(NamedOnnxValue.CreateFromTensor(name, new DenseTensor<int>(data.AsValueEnumerable().Select(x => (int)x).ToArray(), finalDims)));
+                        else if (meta.ElementType == typeof(long)) inputs.Add(NamedOnnxValue.CreateFromTensor(name, new DenseTensor<long>(data.AsValueEnumerable().Select(x => (long)x).ToArray(), finalDims)));
                         else inputs.Add(NamedOnnxValue.CreateFromTensor(name, new DenseTensor<float>(data, finalDims)));
                     }
 
                     void AddTensorInput(string[] aliases, DenseTensor<float> tensor) {
-                        var name = decInputNames.FirstOrDefault(n => aliases.Any(a => n == a || n == a.Replace("_", "") || n.Contains(a)));
+                        var name = decInputNames.AsValueEnumerable().FirstOrDefault(n => aliases.AsValueEnumerable().Any(a => n == a || n == a.Replace("_", "") || n.Contains(a)));
                         if (name == null) return;
                         
                         var expectedDims = decInputMetaData[name].Dimensions;
                         if (expectedDims.Length == 5 && tensor.Dimensions.Length == 4) {
-                            var reshaped = new DenseTensor<float>(tensor.ToArray(), new int[5] { 1, 1, tensor.Dimensions[1], tensor.Dimensions[2], tensor.Dimensions[3] });
+                            var reshaped = new DenseTensor<float>(System.Linq.Enumerable.ToArray(tensor), new int[5] { 1, 1, tensor.Dimensions[1], tensor.Dimensions[2], tensor.Dimensions[3] });
                             inputs.Add(NamedOnnxValue.CreateFromTensor(name, reshaped));
                         } else inputs.Add(NamedOnnxValue.CreateFromTensor(name, tensor));
                     }
@@ -286,15 +285,15 @@ public class SAM2Service : IDisposable
                     AddTensorInput(new[] { "image_embeddings", "image_embed", "embeddings", "image_embedding" }, _imageEmbeddings);
                     AddTensorInput(new[] { "high_res_feats_0", "feat_0", "high_res_feat_0" }, _highResFeat0!);
                     AddTensorInput(new[] { "high_res_feats_1", "feat_1", "high_res_feat_1" }, _highResFeat1!);
-                    AddInput(new[] { "point_coords", "coords" }, decCoords.ToArray(), decCoords.Dimensions.ToArray());
-                    AddInput(new[] { "point_labels", "labels" }, decLabels.ToArray(), decLabels.Dimensions.ToArray());
-                    AddInput(new[] { "mask_input", "mask" }, maskInput.ToArray(), maskInput.Dimensions.ToArray());
-                    AddInput(new[] { "has_mask_input", "has_mask" }, hasMaskInput.ToArray(), hasMaskInput.Dimensions.ToArray());
+                    AddInput(new[] { "point_coords", "coords" }, System.Linq.Enumerable.ToArray(decCoords), decCoords.Dimensions.AsValueEnumerable().ToArray());
+                    AddInput(new[] { "point_labels", "labels" }, System.Linq.Enumerable.ToArray(decLabels), decLabels.Dimensions.AsValueEnumerable().ToArray());
+                    AddInput(new[] { "mask_input", "mask" }, System.Linq.Enumerable.ToArray(maskInput), maskInput.Dimensions.AsValueEnumerable().ToArray());
+                    AddInput(new[] { "has_mask_input", "has_mask" }, System.Linq.Enumerable.ToArray(hasMaskInput), hasMaskInput.Dimensions.AsValueEnumerable().ToArray());
                     AddInput(new[] { "orig_im_size", "im_size" }, new float[] { 1024f, 1024f }, new[] { 2 });
 
                     using var result = _decoderSession.Run(inputs);
-                    var masksOutput = result.FirstOrDefault(r => r.Name.Contains("mask") && !r.Name.Contains("low_res"))?.AsTensor<float>();
-                    var iouOutput = result.FirstOrDefault(r => r.Name.Contains("iou"))?.AsTensor<float>();
+                    var masksOutput = result.AsValueEnumerable().FirstOrDefault(r => r.Name.Contains("mask") && !r.Name.Contains("low_res"))?.AsTensor<float>();
+                    var iouOutput = result.AsValueEnumerable().FirstOrDefault(r => r.Name.Contains("iou"))?.AsTensor<float>();
 
                     if (masksOutput != null && iouOutput != null)
                     {
@@ -340,7 +339,7 @@ public class SAM2Service : IDisposable
                                 {
                                     lock (lockObj)
                                     {
-                                        if (!results.Any(existing => IoU(existing, rect) > 0.5f))
+                                        if (!results.AsValueEnumerable().Any(existing => IoU(existing, rect) > 0.5f))
                                         {
                                             if (results.Count < maxObjects)
                                             {
@@ -382,7 +381,7 @@ public class SAM2Service : IDisposable
 
         return await Task.Run(() =>
         {
-            var pointList = points.ToList();
+            var pointList = points.AsValueEnumerable().ToList();
             int n = pointList.Count;
             if (n == 0) return Array.Empty<byte>();
 
@@ -409,11 +408,11 @@ public class SAM2Service : IDisposable
             hasMaskInput[0] = 0f;
 
             var decInputMetaData = _decoderSession.InputMetadata;
-            var decInputNames = decInputMetaData.Keys.ToList();
+            var decInputNames = decInputMetaData.Keys.AsValueEnumerable().ToList();
             var inputs = new List<NamedOnnxValue>();
             
             void AddInput(string[] aliases, float[] data, int[] dimensions) {
-                var name = decInputNames.FirstOrDefault(n => aliases.Any(a => n == a || n == a.Replace("_", "") || n.Contains(a)));
+                var name = decInputNames.AsValueEnumerable().FirstOrDefault(n => aliases.AsValueEnumerable().Any(a => n == a || n == a.Replace("_", "") || n.Contains(a)));
                 if (name == null) return;
                 
                 var meta = decInputMetaData[name];
@@ -426,18 +425,18 @@ public class SAM2Service : IDisposable
                     finalDims[1] = 1;
                     for (int i = 1; i < dimensions.Length; i++) finalDims[i + 1] = dimensions[i];
                 }
-                if (meta.ElementType == typeof(int)) inputs.Add(NamedOnnxValue.CreateFromTensor(name, new DenseTensor<int>(data.Select(x => (int)x).ToArray(), finalDims)));
-                else if (meta.ElementType == typeof(long)) inputs.Add(NamedOnnxValue.CreateFromTensor(name, new DenseTensor<long>(data.Select(x => (long)x).ToArray(), finalDims)));
+                if (meta.ElementType == typeof(int)) inputs.Add(NamedOnnxValue.CreateFromTensor(name, new DenseTensor<int>(data.AsValueEnumerable().Select(x => (int)x).ToArray(), finalDims)));
+                else if (meta.ElementType == typeof(long)) inputs.Add(NamedOnnxValue.CreateFromTensor(name, new DenseTensor<long>(data.AsValueEnumerable().Select(x => (long)x).ToArray(), finalDims)));
                 else inputs.Add(NamedOnnxValue.CreateFromTensor(name, new DenseTensor<float>(data, finalDims)));
             }
 
             void AddTensorInput(string[] aliases, DenseTensor<float> tensor) {
-               var name = decInputNames.FirstOrDefault(n => aliases.Any(a => n == a || n == a.Replace("_", "") || n.Contains(a)));
+               var name = decInputNames.AsValueEnumerable().FirstOrDefault(n => aliases.AsValueEnumerable().Any(a => n == a || n == a.Replace("_", "") || n.Contains(a)));
                if (name == null) return;
                
                var expectedDims = decInputMetaData[name].Dimensions;
                if (expectedDims.Length == 5 && tensor.Dimensions.Length == 4) {
-                   var reshaped = new DenseTensor<float>(tensor.ToArray(), new int[5] { 1, 1, tensor.Dimensions[1], tensor.Dimensions[2], tensor.Dimensions[3] });
+                   var reshaped = new DenseTensor<float>(System.Linq.Enumerable.ToArray(tensor), new int[5] { 1, 1, tensor.Dimensions[1], tensor.Dimensions[2], tensor.Dimensions[3] });
                    inputs.Add(NamedOnnxValue.CreateFromTensor(name, reshaped));
                } else inputs.Add(NamedOnnxValue.CreateFromTensor(name, tensor));
             }
@@ -445,16 +444,16 @@ public class SAM2Service : IDisposable
             AddTensorInput(new[] { "image_embeddings", "image_embed", "embeddings", "image_embedding" }, _imageEmbeddings);
             AddTensorInput(new[] { "high_res_feats_0", "feat_0", "high_res_feat_0" }, _highResFeat0!);
             AddTensorInput(new[] { "high_res_feats_1", "feat_1", "high_res_feat_1" }, _highResFeat1!);
-            AddInput(new[] { "point_coords", "coords" }, decCoords.ToArray(), decCoords.Dimensions.ToArray());
-            AddInput(new[] { "point_labels", "labels" }, decLabels.ToArray(), decLabels.Dimensions.ToArray());
-            AddInput(new[] { "mask_input", "mask" }, maskInput.ToArray(), maskInput.Dimensions.ToArray());
-            AddInput(new[] { "has_mask_input", "has_mask" }, hasMaskInput.ToArray(), hasMaskInput.Dimensions.ToArray());
+            AddInput(new[] { "point_coords", "coords" }, System.Linq.Enumerable.ToArray(decCoords), decCoords.Dimensions.AsValueEnumerable().ToArray());
+            AddInput(new[] { "point_labels", "labels" }, System.Linq.Enumerable.ToArray(decLabels), decLabels.Dimensions.AsValueEnumerable().ToArray());
+            AddInput(new[] { "mask_input", "mask" }, System.Linq.Enumerable.ToArray(maskInput), maskInput.Dimensions.AsValueEnumerable().ToArray());
+            AddInput(new[] { "has_mask_input", "has_mask" }, System.Linq.Enumerable.ToArray(hasMaskInput), hasMaskInput.Dimensions.AsValueEnumerable().ToArray());
             // SAM2 CRITICAL: orig_im_size must be [1024, 1024] when using stretching
             AddInput(new[] { "orig_im_size", "im_size" }, new float[] { 1024f, 1024f }, new[] { 2 });
 
             using var results = _decoderSession.Run(inputs);
-            var masksResult = results.FirstOrDefault(r => r.Name == "upsampled_masks") ?? results.FirstOrDefault(r => r.Name == "masks") ?? results.FirstOrDefault(r => r.Name == "mask_values") ?? results.FirstOrDefault(r => r.Name.Contains("mask") && !r.Name.Contains("low_res"));
-            var iouResult = results.FirstOrDefault(r => r.Name == "iou_predictions" || r.Name == "iou_prediction" || r.Name.Contains("iou"));
+            var masksResult = results.AsValueEnumerable().FirstOrDefault(r => r.Name == "upsampled_masks") ?? results.AsValueEnumerable().FirstOrDefault(r => r.Name == "masks") ?? results.AsValueEnumerable().FirstOrDefault(r => r.Name == "mask_values") ?? results.AsValueEnumerable().FirstOrDefault(r => r.Name.Contains("mask") && !r.Name.Contains("low_res"));
+            var iouResult = results.AsValueEnumerable().FirstOrDefault(r => r.Name == "iou_predictions" || r.Name == "iou_prediction" || r.Name.Contains("iou"));
 
             if (masksResult == null || iouResult == null) throw new Exception("Decoder Error: Missing masks/IOU.");
 
@@ -592,16 +591,16 @@ public class SAM2Service : IDisposable
         var info = $"[BUILD: {DateTime.Now:HH:mm:ss}]\n";
         info += "Encoder Inputs:\n";
         foreach (var input in _encoderSession!.InputMetadata)
-            info += $"  - {input.Key}: {string.Join("x", input.Value.Dimensions.ToArray())}\n";
+            info += $"  - {input.Key}: {string.Join("x", input.Value.Dimensions.AsValueEnumerable().ToArray())}\n";
         info += "Encoder Outputs:\n";
         foreach (var output in _encoderSession!.OutputMetadata)
-            info += $"  - {output.Key}: {string.Join("x", output.Value.Dimensions.ToArray())}\n";
+            info += $"  - {output.Key}: {string.Join("x", output.Value.Dimensions.AsValueEnumerable().ToArray())}\n";
         info += "Decoder Inputs:\n";
         foreach (var input in _decoderSession!.InputMetadata)
-            info += $"  - {input.Key}: {string.Join("x", input.Value.Dimensions.ToArray())}\n";
+            info += $"  - {input.Key}: {string.Join("x", input.Value.Dimensions.AsValueEnumerable().ToArray())}\n";
         info += "Decoder Outputs:\n";
         foreach (var output in _decoderSession!.OutputMetadata)
-            info += $"  - {output.Key}: {string.Join("x", output.Value.Dimensions.ToArray())}\n";
+            info += $"  - {output.Key}: {string.Join("x", output.Value.Dimensions.AsValueEnumerable().ToArray())}\n";
         return info;
     }
 

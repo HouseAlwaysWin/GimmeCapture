@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -177,8 +176,8 @@ public class LLMTranslationEngine : ITranslationEngine
         OCRLanguage.Japanese => "Japanese",
         OCRLanguage.Korean => "Korean",
         OCRLanguage.English => "English",
-        _ => text.Any(c => (c >= 0x3040 && c <= 0x309F) || (c >= 0x30A0 && c <= 0x30FF)) ? "Japanese" :
-             text.Any(c => (c >= 0x1100 && c <= 0x11FF) || (c >= 0xAC00 && c <= 0xD7AF)) ? "Korean" :
-             text.Any(c => (c >= 0x4E00 && c <= 0x9FFF)) ? "Chinese" : "English"
+        _ => text.AsValueEnumerable().Any(c => (c >= 0x3040 && c <= 0x309F) || (c >= 0x30A0 && c <= 0x30FF)) ? "Japanese" :
+             text.AsValueEnumerable().Any(c => (c >= 0x1100 && c <= 0x11FF) || (c >= 0xAC00 && c <= 0xD7AF)) ? "Korean" :
+             text.AsValueEnumerable().Any(c => (c >= 0x4E00 && c <= 0x9FFF)) ? "Chinese" : "English"
     };
 }

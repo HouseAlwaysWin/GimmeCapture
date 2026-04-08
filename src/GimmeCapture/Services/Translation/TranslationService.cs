@@ -2,7 +2,6 @@ using System;
 using System.Diagnostics;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
 using System.Threading;
@@ -181,16 +180,17 @@ public class TranslationService
         if (recognizedBlocks.Count == 0) return (new List<TranslatedBlock>(), "StatusTranslateNoText");
 
         var sortedBlocks = recognizedBlocks
+            .AsValueEnumerable()
             .OrderBy(b => b.Box.Top / 16)
             .ThenBy(b => b.Box.Left)
             .ToList();
 
-        var mergedText = string.Join("\n", sortedBlocks.Select(b => b.Text));
+        var mergedText = string.Join("\n", sortedBlocks.AsValueEnumerable().Select(b => b.Text).ToArray());
         var unionBox = new SKRectI(
-            sortedBlocks.Min(b => b.Box.Left),
-            sortedBlocks.Min(b => b.Box.Top),
-            sortedBlocks.Max(b => b.Box.Right),
-            sortedBlocks.Max(b => b.Box.Bottom));
+            sortedBlocks.AsValueEnumerable().Min(b => b.Box.Left),
+            sortedBlocks.AsValueEnumerable().Min(b => b.Box.Top),
+            sortedBlocks.AsValueEnumerable().Max(b => b.Box.Right),
+            sortedBlocks.AsValueEnumerable().Max(b => b.Box.Bottom));
 
         var translated = await TranslateAsync(mergedText, ocrLang, ct);
         
@@ -207,9 +207,9 @@ public class TranslationService
         
         // Infer font size from average height of OCR blocks (Pixels -> DIPs)
         double inferredFontSize = 12.0;
-        if (sortedBlocks.Any())
+        if (sortedBlocks.AsValueEnumerable().Any())
         {
-            double averagePixelHeight = sortedBlocks.Average(b => (double)b.Box.Height);
+            double averagePixelHeight = sortedBlocks.AsValueEnumerable().Average(b => (double)b.Box.Height);
             // Convert to DIPs by dividing by scale, and apply a 0.85 correction factor
             // as OCR bounding boxes are usually taller than the actual text font size.
             inferredFontSize = (averagePixelHeight / scale) * 0.85;
@@ -273,7 +273,7 @@ public class TranslationService
         }
 
         // Fallback: try another engine if selected one returns unacceptable output.
-        foreach (var engine in _translationEngines.Where(e => e.EngineType != _settings.SelectedTranslationEngine))
+        foreach (var engine in _translationEngines.AsValueEnumerable().Where(e => e.EngineType != _settings.SelectedTranslationEngine).ToList())
         {
             string fallback = (await engine.TranslateAsync(text, guessedSource, _settings.TargetLanguage, ct)).Trim();
             if (IsTranslationAcceptable(text, fallback, _settings.TargetLanguage))
@@ -289,10 +289,10 @@ public class TranslationService
     {
         await _ocrEngine.EnsureLoadedAsync(OCRLanguage.TraditionalChinese, ct);
         var boxes = _ocrEngine.DetectText(bitmap);
-        foreach (var box in boxes.Take(5))
+        foreach (var box in boxes.AsValueEnumerable().Take(5))
         {
             var (text, _) = _ocrEngine.RecognizeText(bitmap, box, ct);
-            if (text.Any(c => (c >= 0x3040 && c <= 0x309F) || (c >= 0x30A0 && c <= 0x30FF)))
+            if (text.AsValueEnumerable().Any(c => (c >= 0x3040 && c <= 0x309F) || (c >= 0x30A0 && c <= 0x30FF)))
                 return OCRLanguage.Japanese;
         }
         return OCRLanguage.TraditionalChinese;
@@ -300,7 +300,7 @@ public class TranslationService
 
     private async Task<string> TranslateAsync(string text, OCRLanguage sourceLang, CancellationToken ct)
     {
-        var engine = _translationEngines.FirstOrDefault(e => e.EngineType == _settings.SelectedTranslationEngine);
+        var engine = _translationEngines.AsValueEnumerable().FirstOrDefault(e => e.EngineType == _settings.SelectedTranslationEngine);
         if (engine == null) 
         {
             System.Diagnostics.Debug.WriteLine($"[TranslationService] NO ENGINE FOUND for {_settings.SelectedTranslationEngine}");
@@ -318,7 +318,7 @@ public class TranslationService
     private async Task<string> ForceTranslateAsync(string text, OCRLanguage sourceLang, TranslationLanguage targetLang, CancellationToken ct)
     {
         // Force the use of LLM for retry with a stricter target language prompt
-        var llm = _translationEngines.OfType<LLMTranslationEngine>().FirstOrDefault();
+        var llm = _translationEngines.AsValueEnumerable().OfType<LLMTranslationEngine>().FirstOrDefault();
         if (llm != null) return await llm.TranslateAsync(text, sourceLang, targetLang, ct);
         return string.Empty;
     }
@@ -331,11 +331,11 @@ public class TranslationService
         string trimmed = text.Trim();
         if (trimmed.Length == 0) return false;
 
-        int replacementCount = trimmed.Count(ch => ch == '\uFFFD');
+        int replacementCount = trimmed.AsValueEnumerable().Count(ch => ch == '\uFFFD');
         if (replacementCount > 0) return false;
-        if (trimmed.All(ch => ch == '?' || ch == '.' || ch == '-' || ch == '_' || ch == '*')) return false;
+        if (trimmed.AsValueEnumerable().All(ch => ch == '?' || ch == '.' || ch == '-' || ch == '_' || ch == '*')) return false;
 
-        int useful = trimmed.Count(ch => char.IsLetterOrDigit(ch) || (ch >= 0x4E00 && ch <= 0x9FFF) || (ch >= 0x3040 && ch <= 0x309F) || (ch >= 0x30A0 && ch <= 0x30FF));
+        int useful = trimmed.AsValueEnumerable().Count(ch => char.IsLetterOrDigit(ch) || (ch >= 0x4E00 && ch <= 0x9FFF) || (ch >= 0x3040 && ch <= 0x309F) || (ch >= 0x30A0 && ch <= 0x30FF));
         if (useful == 0) return false;
         
         return true;
@@ -363,10 +363,10 @@ public class TranslationService
     private static OCRLanguage GuessSourceLanguageFromText(string text)
     {
         if (string.IsNullOrWhiteSpace(text)) return OCRLanguage.Auto;
-        if (text.Any(c => c >= '\u3040' && c <= '\u30FF')) return OCRLanguage.Japanese;
-        if (text.Any(c => c >= '\uAC00' && c <= '\uD7AF')) return OCRLanguage.Korean;
-        if (text.Any(c => c >= '\u4E00' && c <= '\u9FFF')) return OCRLanguage.TraditionalChinese;
-        if (text.Any(c => (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z'))) return OCRLanguage.English;
+        if (text.AsValueEnumerable().Any(c => c >= '\u3040' && c <= '\u30FF')) return OCRLanguage.Japanese;
+        if (text.AsValueEnumerable().Any(c => c >= '\uAC00' && c <= '\uD7AF')) return OCRLanguage.Korean;
+        if (text.AsValueEnumerable().Any(c => c >= '\u4E00' && c <= '\u9FFF')) return OCRLanguage.TraditionalChinese;
+        if (text.AsValueEnumerable().Any(c => (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z'))) return OCRLanguage.English;
         return OCRLanguage.Auto;
     }
 
@@ -377,11 +377,11 @@ public class TranslationService
         return target switch
         {
             TranslationLanguage.TraditionalChinese or TranslationLanguage.SimplifiedChinese =>
-                text.Any(c => c >= '\u4E00' && c <= '\u9FFF'),
+                text.AsValueEnumerable().Any(c => c >= '\u4E00' && c <= '\u9FFF'),
             TranslationLanguage.Japanese =>
-                text.Any(c => (c >= '\u3040' && c <= '\u30FF') || (c >= '\u4E00' && c <= '\u9FFF')),
+                text.AsValueEnumerable().Any(c => (c >= '\u3040' && c <= '\u30FF') || (c >= '\u4E00' && c <= '\u9FFF')),
             TranslationLanguage.Korean =>
-                text.Any(c => c >= '\uAC00' && c <= '\uD7AF'),
+                text.AsValueEnumerable().Any(c => c >= '\uAC00' && c <= '\uD7AF'),
             _ => true
         };
     }
@@ -389,6 +389,6 @@ public class TranslationService
     public async Task<List<string>> GetAvailableModelsAsync()
     {
         var models = await _ollamaApiClient.GetModelsAsync();
-        return models.ToList();
+        return models.AsValueEnumerable().ToList();
     }
 }

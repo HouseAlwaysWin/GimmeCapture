@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -18,7 +17,7 @@ public sealed class AvaloniaWindowLayerService : IWindowLayerService
         }
 
         var lowered = new List<Window>();
-        foreach (var window in desktop.Windows.OfType<TWindow>())
+        foreach (var window in desktop.Windows.AsValueEnumerable().OfType<TWindow>())
         {
             if (!window.Topmost || !window.IsVisible)
             {

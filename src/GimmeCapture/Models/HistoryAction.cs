@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using Avalonia.Media.Imaging;
 using GimmeCapture.Models;
-using System.Linq;
 using System.Runtime.CompilerServices;
 
 namespace GimmeCapture.Models;
@@ -210,7 +209,7 @@ public class CompositeHistoryAction : IHistoryAction
 
     public CompositeHistoryAction(IEnumerable<IHistoryAction> actions)
     {
-        _actions = actions.ToList();
+        _actions = actions.AsValueEnumerable().ToList();
     }
 
     public void Undo()

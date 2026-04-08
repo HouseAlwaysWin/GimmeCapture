@@ -7,7 +7,6 @@ using System.Collections.ObjectModel;
 using Avalonia.Media;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Core;
-using System.Linq;
 using System.Reactive.Linq;
 using System;
 

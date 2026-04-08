@@ -1,6 +1,5 @@
 using System;
 using Avalonia.Controls;
-using System.Linq;
 using Avalonia;
 using GimmeCapture.ViewModels.Main;
 using GimmeCapture.Views.Dialogs;
@@ -162,8 +161,8 @@ public partial class MainWindow : Window
         var allScreens = snip.Screens.All;
         if (allScreens.Count > 0)
         {
-            var screenBounds = allScreens.Select(s => s.Bounds).ToList();
-            var primaryScreen = snip.Screens.Primary ?? allScreens.First();
+            var screenBounds = allScreens.AsValueEnumerable().Select(s => s.Bounds).ToList();
+            var primaryScreen = snip.Screens.Primary ?? allScreens.AsValueEnumerable().First();
             double unifiedScaling = primaryScreen.Scaling;
 
             if (_screenLayoutService.TryGetUnifiedDesktopPlacement(screenBounds, unifiedScaling, out var position, out var size))

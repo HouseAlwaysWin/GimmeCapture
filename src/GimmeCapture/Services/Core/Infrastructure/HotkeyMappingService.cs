@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Linq.Expressions;
 using GimmeCapture.ViewModels.Main;
 
@@ -30,7 +29,7 @@ public class HotkeyMappingService
         if (tags == null) return Array.Empty<string>();
 
         var unknown = new List<string>();
-        foreach (var tag in tags.Where(t => !string.IsNullOrWhiteSpace(t)).Distinct(StringComparer.Ordinal))
+        foreach (var tag in tags.AsValueEnumerable().Where(t => !string.IsNullOrWhiteSpace(t)).Distinct(StringComparer.Ordinal))
         {
             if (!HotkeySetters.Value.ContainsKey(tag))
             {
@@ -46,6 +45,7 @@ public class HotkeyMappingService
         var result = new Dictionary<string, Action<MainWindowViewModel, string>>(StringComparer.Ordinal);
         var props = typeof(MainWindowViewModel)
             .GetProperties()
+            .AsValueEnumerable()
             .Where(p => p.PropertyType == typeof(string) && p.CanWrite && p.GetSetMethod() != null);
 
         foreach (var prop in props)

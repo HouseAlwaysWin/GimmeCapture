@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using GimmeCapture.Models;
 using SkiaSharp;
 
@@ -25,7 +24,7 @@ public static class AnnotationRenderHelper
         float scaleX = targetW / (float)refW;
         float scaleY = targetH / (float)refH;
 
-        var annotationsArray = annotations.ToArray();
+        var annotationsArray = annotations.AsValueEnumerable().ToArray();
         System.Diagnostics.Debug.WriteLine($"[DrawAnnotations] Drawing {annotationsArray.Length} annotations. Target size: {targetW}x{targetH}, Ref size: {refW}x{refH}");
 
         try
@@ -96,9 +95,9 @@ public static class AnnotationRenderHelper
                         System.Diagnostics.Debug.WriteLine($"[DrawAnnotations] Drew {ann.Type} from {ann.StartPoint} to {ann.EndPoint}");
                         break;
                     case AnnotationType.Pen:
-                        if (ann.Points.Any())
+                        if (ann.Points.AsValueEnumerable().Any())
                         {
-                            var pts = ann.Points.Select(p => new SKPoint((float)(p.X * scaleX), (float)(p.Y * scaleY))).ToArray();
+                            var pts = ann.Points.AsValueEnumerable().Select(p => new SKPoint((float)(p.X * scaleX), (float)(p.Y * scaleY))).ToArray();
                             canvas.DrawPoints(SKPointMode.Polygon, pts, paint);
                             System.Diagnostics.Debug.WriteLine($"[DrawAnnotations] Drew {ann.Type} with {pts.Length} points.");
                         }

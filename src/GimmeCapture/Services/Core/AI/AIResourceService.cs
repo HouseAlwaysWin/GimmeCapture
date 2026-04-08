@@ -9,8 +9,6 @@ using GimmeCapture.Models;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
 using System.Collections.Generic;
-using System.Linq;
-
 namespace GimmeCapture.Services.Core.AI;
 
 public class AIResourceService : ReactiveObject
@@ -630,36 +628,36 @@ public class AIResourceService : ReactiveObject
             // Encoder Warmup
             var encoderInput = new DenseTensor<float>(new[] { 1, 3, 1024, 1024 });
             var encInputMetaData = _cachedEncoder.InputMetadata;
-            var encInputName = encInputMetaData.Keys.FirstOrDefault(k => k == "image" || k == "pixel_values") ?? "image";
+            var encInputName = encInputMetaData.Keys.AsValueEnumerable().FirstOrDefault(k => k == "image" || k == "pixel_values") ?? "image";
             var encInputs = new List<NamedOnnxValue> { NamedOnnxValue.CreateFromTensor(encInputName, encoderInput) };
             using var encResults = _cachedEncoder.Run(encInputs);
 
             // Decoder Warmup (Requires mock embeddings and points)
             var decInputMetaData = _cachedDecoder.InputMetadata;
-            var decInputNames = decInputMetaData.Keys.ToList();
+            var decInputNames = decInputMetaData.Keys.AsValueEnumerable().ToList();
             var decInputs = new List<NamedOnnxValue>();
 
             void AddMock(string[] aliases, int[] dims, float val = 0f)
             {
-                var name = decInputNames.FirstOrDefault(n => aliases.Any(a => n == a || n == a.Replace("_", "") || n.Contains(a)));
+                var name = decInputNames.AsValueEnumerable().FirstOrDefault(n => aliases.AsValueEnumerable().Any(a => n == a || n == a.Replace("_", "") || n.Contains(a)));
                 if (name == null) return;
                 
                 var meta = decInputMetaData[name];
                 if (meta.ElementType == typeof(int))
                 {
-                    var data = new int[dims.Aggregate(1, (a, b) => a * b)];
+                    var data = new int[dims.AsValueEnumerable().Aggregate(1, (a, b) => a * b)];
                     if (val != 0) Array.Fill(data, (int)val);
                     decInputs.Add(NamedOnnxValue.CreateFromTensor(name, new DenseTensor<int>(data, dims)));
                 }
                 else if (meta.ElementType == typeof(long))
                 {
-                    var data = new long[dims.Aggregate(1, (a, b) => a * b)];
+                    var data = new long[dims.AsValueEnumerable().Aggregate(1, (a, b) => a * b)];
                     if (val != 0) Array.Fill(data, (long)val);
                     decInputs.Add(NamedOnnxValue.CreateFromTensor(name, new DenseTensor<long>(data, dims)));
                 }
                 else
                 {
-                    var data = new float[dims.Aggregate(1, (a, b) => a * b)];
+                    var data = new float[dims.AsValueEnumerable().Aggregate(1, (a, b) => a * b)];
                     if (val != 0) Array.Fill(data, val);
                     decInputs.Add(NamedOnnxValue.CreateFromTensor(name, new DenseTensor<float>(data, dims)));
                 }

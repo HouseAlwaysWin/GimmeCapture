@@ -2,7 +2,6 @@ using ReactiveUI;
 using System;
 using System.Threading.Tasks;
 using System.Reactive.Linq;
-using System.Linq;
 using System.Collections.ObjectModel;
 using System.Windows.Input;
 using GimmeCapture.Models;

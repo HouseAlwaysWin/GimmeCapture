@@ -14,7 +14,6 @@ using Avalonia.Interactivity;
 using Avalonia.Threading;
 using System.Reactive.Linq;
 using Avalonia.Media.Imaging;
-using System.Linq;
 using System.Collections.Generic;
 using ReactiveUI;
 

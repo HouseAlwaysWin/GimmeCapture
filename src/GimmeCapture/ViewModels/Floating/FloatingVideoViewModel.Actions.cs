@@ -8,7 +8,6 @@ using Avalonia.Media;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core;
-using System.Linq;
 using System.Reactive.Linq;
 using System;
 using System.IO;
@@ -49,7 +48,7 @@ public partial class FloatingVideoViewModel
             try
             {
                 ProcessingText = LocalizationService.Instance["StatusExportingVideo"] ?? "Exporting Video...";
-                bool hasAnnotations = Annotations.Any();
+                bool hasAnnotations = Annotations.AsValueEnumerable().Any();
                 bool needsTrim = IsTrimmingMode && (TrimStartSeconds > 0 || TrimEndSeconds < _totalDuration.TotalSeconds);
 
                 if (hasAnnotations || needsTrim)
@@ -103,7 +102,7 @@ public partial class FloatingVideoViewModel
 
             try
             {
-                bool hasAnnotations = Annotations.Any();
+                bool hasAnnotations = Annotations.AsValueEnumerable().Any();
                 string sourceExt = Path.GetExtension(VideoPath).ToLowerInvariant();
                 string targetExt = Path.GetExtension(targetPath).ToLowerInvariant();
                 bool needsConversion = sourceExt != targetExt;

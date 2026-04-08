@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using Avalonia;
-using System.Linq;
 
 namespace GimmeCapture.Services.Platforms.Windows;
 
@@ -162,6 +161,7 @@ public class WindowDetectionService
     {
         // Try to find the smallest window that contains the point (often the most nested/specific)
         return windowRects
+            .AsValueEnumerable()
             .Where(r => r.Contains(point))
             .OrderBy(r => r.Width * r.Height)
             .Cast<Rect?>()

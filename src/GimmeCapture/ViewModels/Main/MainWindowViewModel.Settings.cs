@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
 using System.Collections.Generic;
@@ -29,13 +28,13 @@ public partial class MainWindowViewModel
 
     public List<TranslationLanguage> AvailableTranslationLanguages => 
         _selectedTranslationEngine == TranslationEngine.MarianMT
-            ? Enum.GetValues<TranslationLanguage>().Where(l => l != TranslationLanguage.Korean).ToList()
-            : Enum.GetValues<TranslationLanguage>().ToList();
+            ? Enum.GetValues<TranslationLanguage>().AsValueEnumerable().Where(l => l != TranslationLanguage.Korean).ToList()
+            : Enum.GetValues<TranslationLanguage>().AsValueEnumerable().ToList();
 
     public List<OCRLanguage> AvailableOCRLanguages => 
         _selectedTranslationEngine == TranslationEngine.MarianMT
-            ? Enum.GetValues<OCRLanguage>().Where(l => l != OCRLanguage.Korean).ToList()
-            : Enum.GetValues<OCRLanguage>().ToList();
+            ? Enum.GetValues<OCRLanguage>().AsValueEnumerable().Where(l => l != OCRLanguage.Korean).ToList()
+            : Enum.GetValues<OCRLanguage>().AsValueEnumerable().ToList();
 
     private OCRLanguage _sourceLanguage;
     public OCRLanguage SourceLanguage
@@ -77,8 +76,8 @@ public partial class MainWindowViewModel
         }
     }
 
-    public List<TranslationEngine> AvailableTranslationEngines { get; } = Enum.GetValues<TranslationEngine>().ToList();
-    public List<AIScanEngine> AvailableAIScanEngines { get; } = Enum.GetValues<AIScanEngine>().ToList();
+    public List<TranslationEngine> AvailableTranslationEngines { get; } = Enum.GetValues<TranslationEngine>().AsValueEnumerable().ToList();
+    public List<AIScanEngine> AvailableAIScanEngines { get; } = Enum.GetValues<AIScanEngine>().AsValueEnumerable().ToList();
     
     private TranslationEngine _selectedTranslationEngine;
     public TranslationEngine SelectedTranslationEngine
@@ -142,7 +141,7 @@ public partial class MainWindowViewModel
 
     public LanguageOption SelectedLanguageOption
     {
-        get => AvailableLanguages.FirstOrDefault(x => x.Value == LocalizationService.Instance.CurrentLanguage) ?? AvailableLanguages[0];
+        get => AvailableLanguages.AsValueEnumerable().FirstOrDefault(x => x.Value == LocalizationService.Instance.CurrentLanguage) ?? AvailableLanguages[0];
         set
         {
             if (value != null && LocalizationService.Instance.CurrentLanguage != value.Value)
@@ -788,7 +787,7 @@ public partial class MainWindowViewModel
                 await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => 
                 {
                     // Surgical update to avoid triggering ComboBox reset
-                    var currentItems = AvailableOllamaModels.ToList();
+                    var currentItems = AvailableOllamaModels.AsValueEnumerable().ToList();
                     
                     // Remove items not in the new list, but KEEP the currently selected one
                     foreach (var item in currentItems)
@@ -846,7 +845,7 @@ public partial class MainWindowViewModel
                         AvailableOllamaModels.Add(_ollamaModel);
                     }
                     // Ensure _ollamaModel points to the collection instance
-                    var match = AvailableOllamaModels.FirstOrDefault(m => m == _ollamaModel);
+                    var match = AvailableOllamaModels.AsValueEnumerable().FirstOrDefault(m => m == _ollamaModel);
                     if (match != null) _ollamaModel = match;
                     this.RaisePropertyChanged(nameof(OllamaModel));
                 }
@@ -974,9 +973,9 @@ public partial class MainWindowViewModel
             if (Color.TryParse(settings.ThemeColorHex, out var themeColor))
                 ThemeColor = themeColor;
 
-            SelectedLanguageOption = AvailableLanguages.FirstOrDefault(x => x.Value == settings.Language) ?? AvailableLanguages[0];
-            RecordingSettings.SelectedVideoCodecOption = RecordingSettings.VideoCodecOptions.FirstOrDefault(x => x.Value == settings.VideoCodec);
-            RecordingSettings.SelectedVideoQualityOption = RecordingSettings.VideoQualityOptions.FirstOrDefault(x => x.Value == settings.VideoQuality);
+            SelectedLanguageOption = AvailableLanguages.AsValueEnumerable().FirstOrDefault(x => x.Value == settings.Language) ?? AvailableLanguages[0];
+            RecordingSettings.SelectedVideoCodecOption = RecordingSettings.VideoCodecOptions.AsValueEnumerable().FirstOrDefault(x => x.Value == settings.VideoCodec);
+            RecordingSettings.SelectedVideoQualityOption = RecordingSettings.VideoQualityOptions.AsValueEnumerable().FirstOrDefault(x => x.Value == settings.VideoQuality);
             
             this.RaisePropertyChanged(nameof(SourceLanguage));
             this.RaisePropertyChanged(nameof(TargetLanguage));

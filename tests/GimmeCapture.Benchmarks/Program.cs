@@ -1,7 +1,7 @@
 using System;
 using System.IO;
 using System.Text;
-using System.Linq;
+using ZLinq;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -242,7 +242,7 @@ public class LineDispatchStreamBenchmarks
         var bytes = new List<byte[]>();
         
         // chunk sizes 10 to 100 bytes
-        string fullLog = string.Join("\n", Enumerable.Repeat(logLines, 100).SelectMany(x => x));
+        string fullLog = string.Join("\n", System.Linq.Enumerable.Repeat(logLines, 100).AsValueEnumerable().SelectMany(x => x).ToArray());
         byte[] fullBytes = Encoding.UTF8.GetBytes(fullLog);
         
         int offset = 0;

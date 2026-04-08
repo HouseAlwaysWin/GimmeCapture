@@ -3,7 +3,6 @@ using Avalonia.Data.Converters;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
 using Avalonia.Media;
 using GimmeCapture.Models;
 
@@ -117,7 +116,7 @@ public class PenGeometryConverter : IValueConverter
     {
         if (value is IEnumerable<Point> pointsEnumerable)
         {
-            var points = pointsEnumerable.ToList();
+            var points = pointsEnumerable.AsValueEnumerable().ToList();
             if (points.Count > 0)
             {
                 var geometry = new StreamGeometry();
@@ -125,7 +124,7 @@ public class PenGeometryConverter : IValueConverter
                 {
                     var first = points[0];
                     context.BeginFigure(first, false);
-                    foreach (var point in points.Skip(1))
+                    foreach (var point in points.AsValueEnumerable().Skip(1))
                     {
                         context.LineTo(point);
                     }

@@ -4,7 +4,6 @@ using System.Reactive;
 using System.Collections.Generic;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Core;
-using System.Linq;
 using System.Reactive.Linq;
 using System.Reactive.Disposables;
 using System;

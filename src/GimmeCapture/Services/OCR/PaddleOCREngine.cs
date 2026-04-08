@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -96,10 +95,10 @@ public class PaddleOCREngine : IOCREngine
             }
         }
 
-        string inputName = _detSession.InputMetadata.Keys.FirstOrDefault() ?? "x";
+        string inputName = _detSession.InputMetadata.Keys.AsValueEnumerable().FirstOrDefault() ?? "x";
         var inputs = new List<NamedOnnxValue> { NamedOnnxValue.CreateFromTensor(inputName, input) };
         using var outputs = _detSession.Run(inputs);
-        var outputTensor = outputs.First().AsTensor<float>();
+        var outputTensor = outputs.AsValueEnumerable().First().AsTensor<float>();
 
         return FindBoxesFromMask(outputTensor, targetWidth, targetHeight, bitmap.Width, bitmap.Height);
     }
@@ -194,10 +193,10 @@ public class PaddleOCREngine : IOCREngine
             }
         }
 
-        string inputName = _recSession.InputMetadata.Keys.FirstOrDefault() ?? "x";
+        string inputName = _recSession.InputMetadata.Keys.AsValueEnumerable().FirstOrDefault() ?? "x";
         var inputs = new List<NamedOnnxValue> { NamedOnnxValue.CreateFromTensor(inputName, input) };
         using var outputs = _recSession.Run(inputs);
-        var outputTensor = outputs.First().AsTensor<float>();
+        var outputTensor = outputs.AsValueEnumerable().First().AsTensor<float>();
 
         return DecodeCTCAuto(outputTensor);
     }
@@ -265,7 +264,7 @@ public class PaddleOCREngine : IOCREngine
             if (boxes.Count >= DetMaxBoxes) break;
         }
 
-        return boxes.Any() ? boxes : new List<SKRectI> { new SKRectI(0, 0, origW, origH) };
+        return boxes.AsValueEnumerable().Any() ? boxes : new List<SKRectI> { new SKRectI(0, 0, origW, origH) };
     }
 
     private bool TryBuildDetProbabilityMap(Tensor<float> mask, out float[,] probMap, out int h, out int w)
@@ -288,7 +287,7 @@ public class PaddleOCREngine : IOCREngine
 
         if (h == 0 || w == 0) return false;
         probMap = new float[h, w];
-        float[] buffer = mask.ToArray();
+        float[] buffer = System.Linq.Enumerable.ToArray(mask);
         for (int i = 0; i < h; i++)
             for (int j = 0; j < w; j++)
                 probMap[i, j] = ToProbability(buffer[i * w + j]);
@@ -341,8 +340,8 @@ public class PaddleOCREngine : IOCREngine
 
     private List<string> LoadDictionaryWithEncodingFallback(string path)
     {
-        try { return File.ReadAllLines(path, Encoding.UTF8).ToList(); }
-        catch { return File.ReadAllLines(path, Encoding.GetEncoding("GBK")).ToList(); }
+        try { return File.ReadAllLines(path, Encoding.UTF8).AsValueEnumerable().ToList(); }
+        catch { return File.ReadAllLines(path, Encoding.GetEncoding("GBK")).AsValueEnumerable().ToList(); }
     }
 
     private void SaveDebugImage(SKBitmap bitmap)

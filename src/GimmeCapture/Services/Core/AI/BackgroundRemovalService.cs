@@ -1,7 +1,6 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Threading.Tasks;
 using System.Reflection;
 using System.Runtime.InteropServices;
@@ -198,7 +197,7 @@ public class BackgroundRemovalService : IDisposable
         if (samples.Count == 0) return false;
 
         // Filter out transparent pixels - if edges are transparent, it's not a solid COLOR background we can remove easily
-        var opaqueSamples = samples.Where(c => c.Alpha > 250).ToList();
+        var opaqueSamples = samples.AsValueEnumerable().Where(c => c.Alpha > 250).ToList();
         
         // If too many edge pixels are transparent, we probably shouldn't use the solid color algorithm
         if ((double)opaqueSamples.Count / samples.Count < 0.8) 
@@ -294,7 +293,7 @@ public class BackgroundRemovalService : IDisposable
         if (cornerSamples.Count == 0) return false;
 
         // Filter opaque samples
-        var opaqueSamples = cornerSamples.Where(c => c.Alpha > 250).ToList();
+        var opaqueSamples = cornerSamples.AsValueEnumerable().Where(c => c.Alpha > 250).ToList();
         if (opaqueSamples.Count < cornerSamples.Count * 0.7) return false;
 
         // Group by similar colors to find dominant color
@@ -321,7 +320,7 @@ public class BackgroundRemovalService : IDisposable
         if (groups.Count == 0) return false;
 
         // Find most common color group
-        var dominant = groups.OrderByDescending(g => g.count).First();
+        var dominant = groups.AsValueEnumerable().OrderByDescending(g => g.count).First();
         
         // Require at least 60% of samples to be this color to be considered uniform
         double ratio = (double)dominant.count / opaqueSamples.Count;
@@ -386,7 +385,7 @@ public class BackgroundRemovalService : IDisposable
         };
 
         using var results = session.Run(inputs);
-        var outputTensor = results.First().AsTensor<float>();
+        var outputTensor = results.AsValueEnumerable().First().AsTensor<float>();
 
         // 3. Postprocess
         float minVal, maxVal;

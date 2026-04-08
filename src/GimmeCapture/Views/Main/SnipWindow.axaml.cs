@@ -9,7 +9,6 @@ using GimmeCapture.Views.Main;
 using GimmeCapture.Views.Shared;
 using GimmeCapture.Models;
 using System;
-using System.Linq;
 using Avalonia.Platform;
 using Avalonia.Input.Raw;
 using GimmeCapture.Services.Abstractions;
@@ -134,7 +133,7 @@ public partial class SnipWindow : Window
                 double scaling = this.RenderScaling;
                 var allScreens = this.Screens.All;
                 Console.WriteLine($"[SnipWindow] Detected {allScreens.Count} screens for multi-monitor UI.");
-                var physicalScreenBounds = allScreens.Select(s => s.Bounds).ToList();
+                var physicalScreenBounds = allScreens.AsValueEnumerable().Select(s => s.Bounds).ToList();
                 var relativeScreenBounds = _screenLayoutService.BuildRelativeScreenBounds(physicalScreenBounds, this.Position, scaling);
                 var screenBoundsList = new System.Collections.Generic.List<ScreenBoundsViewModel>(relativeScreenBounds.Count);
                 foreach (var bounds in relativeScreenBounds)

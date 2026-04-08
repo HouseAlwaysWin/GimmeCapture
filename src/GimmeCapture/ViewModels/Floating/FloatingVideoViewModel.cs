@@ -6,7 +6,6 @@ using System;
 using System.Reactive;
 using System.Threading.Tasks;
 using GimmeCapture.Models;
-using System.Linq;
 using System.Reactive.Linq;
 using GimmeCapture.ViewModels.Main;
 using GimmeCapture.ViewModels.Shared;

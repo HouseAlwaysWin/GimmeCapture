@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
@@ -180,8 +179,8 @@ public class MarianMTService : IDisposable
     private string DecodeIds(IEnumerable<int> ids)
     {
         if (_reverseVocab == null) return string.Empty;
-        var tokens = ids.Select(id => _reverseVocab.TryGetValue(id, out var t) ? t : "<unk>");
-        var text = string.Join("", tokens);
+        var tokens = ids.AsValueEnumerable().Select(id => _reverseVocab.TryGetValue(id, out var t) ? t : "<unk>");
+        var text = string.Join("", tokens.ToArray());
         return text.Replace("\u2581", " ").Trim();
     }
 
@@ -341,15 +340,16 @@ public class MarianMTService : IDisposable
                 Debug.WriteLine($"[MarianMT] Line src={sourceLangToken}: '{line}'");
 
                 var tokenIds = EncodeText(line);
-                Debug.WriteLine($"[MarianMT] Encoded -> {tokenIds.Count} model IDs: [{string.Join(",", tokenIds.Take(20))}]");
+                Debug.WriteLine($"[MarianMT] Encoded -> {tokenIds.Count} model IDs: [{string.Join(",", tokenIds.AsValueEnumerable().Take(20).ToArray())}]");
 
                 // Build encoder input: [source_lang_token, ...token_ids, eos]
                 var inputIds = new List<long> { sourceLangToken };
-                inputIds.AddRange(tokenIds.Select(id => (long)id));
+                inputIds.AddRange(tokenIds.AsValueEnumerable().Select(id => (long)id).ToList());
                 inputIds.Add(_eosTokenId);
-                Debug.WriteLine($"[MarianMT] Encoder input ({inputIds.Count}): [{string.Join(",", inputIds.Take(30))}]");
+                Debug.WriteLine($"[MarianMT] Encoder input ({inputIds.Count}): [{string.Join(",", inputIds.AsValueEnumerable().Take(30).ToArray())}]");
 
-                var attentionMask = Enumerable.Repeat(1L, inputIds.Count).ToArray();
+                var attentionMask = new long[inputIds.Count];
+                Array.Fill(attentionMask, 1L);
                 var attentionMaskTensor = new DenseTensor<long>(attentionMask, new[] { 1, inputIds.Count });
 
                 var encoderInputs = new List<NamedOnnxValue>
@@ -359,7 +359,7 @@ public class MarianMTService : IDisposable
                 };
 
                 using var encoderResults = _encoderSession.Run(encoderInputs);
-                var lastHiddenState = encoderResults.First().AsTensor<float>();
+                var lastHiddenState = encoderResults.AsValueEnumerable().First().AsTensor<float>();
 
                 // Decoder seed: [eos, target_lang_token] per M2M100 spec (decoder_start_token_id=2)
                 int targetLangToken = GetTargetLangToken(target);
@@ -379,7 +379,7 @@ public class MarianMTService : IDisposable
                     };
 
                     using var decoderResults = _decoderSession.Run(decoderInputs);
-                    var logitsTensor = decoderResults.First().AsTensor<float>();
+                    var logitsTensor = decoderResults.AsValueEnumerable().First().AsTensor<float>();
                     
                     int seqLen = (int)logitsTensor.Dimensions[1];
                     int vocabSize = (int)logitsTensor.Dimensions[2];
@@ -424,8 +424,8 @@ public class MarianMTService : IDisposable
                 }
 
                 // Skip the 2 seed tokens (eos, target_lang)
-                var resultIds = outputIds.Skip(2).Select(id => (int)id).ToArray();
-                Debug.WriteLine($"[MarianMT] Output IDs ({resultIds.Length}): [{string.Join(",", resultIds.Take(30))}]");
+                var resultIds = outputIds.AsValueEnumerable().Skip(2).Select(id => (int)id).ToArray();
+                Debug.WriteLine($"[MarianMT] Output IDs ({resultIds.Length}): [{string.Join(",", resultIds.AsValueEnumerable().Take(30).ToArray())}]");
                 
                 if (resultIds.Length > 0)
                 {

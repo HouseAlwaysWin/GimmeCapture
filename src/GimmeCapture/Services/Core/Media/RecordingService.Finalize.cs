@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using CliWrap;
@@ -51,10 +50,10 @@ public partial class RecordingService
     }
 
     private List<string> GetValidVideoSegments() =>
-        _segments.Where(s => File.Exists(s) && new FileInfo(s).Length > 0).ToList();
+        _segments.AsValueEnumerable().Where(s => File.Exists(s) && new FileInfo(s).Length > 0).ToList();
 
     private List<string> GetValidAudioSegments() =>
-        _audioSegments.Where(HasValidAudioData).ToList();
+        _audioSegments.AsValueEnumerable().Where(HasValidAudioData).ToList();
 
     private async Task<string> MergeVideoSegmentsAsync(IReadOnlyList<string> validSegments, string mergedMkvPath)
     {

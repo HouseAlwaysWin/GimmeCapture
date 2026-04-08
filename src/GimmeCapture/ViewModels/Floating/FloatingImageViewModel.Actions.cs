@@ -8,7 +8,6 @@ using Avalonia.Media;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core;
-using System.Linq;
 using System.Reactive.Linq;
 using System;
 using SkiaSharp; // Needed for flattening
@@ -29,7 +28,7 @@ public partial class FloatingImageViewModel
              {
                  // Temporary swap of Image for flattened version if we have annotations
                  var originalImage = Image;
-                 var flattened = Annotations.Any() ? await GetFlattenedBitmapAsync() : null;
+                 var flattened = Annotations.AsValueEnumerable().Any() ? await GetFlattenedBitmapAsync() : null;
                  
                  if (flattened != null)
                  {
@@ -63,7 +62,7 @@ public partial class FloatingImageViewModel
         if (Image == null) return;
 
         // Use flattened bitmap if annotations exist, otherwise base image
-        var bitmapToCopy = Annotations.Any() ? await GetFlattenedBitmapAsync() : Image;
+        var bitmapToCopy = Annotations.AsValueEnumerable().Any() ? await GetFlattenedBitmapAsync() : Image;
         if (bitmapToCopy == null) bitmapToCopy = Image;
 
         if (IsSelectionActive)

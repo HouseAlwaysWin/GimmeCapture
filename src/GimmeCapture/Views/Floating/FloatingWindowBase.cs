@@ -8,7 +8,6 @@ using GimmeCapture.Models;
 using System;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
-using System.Linq;
 using Avalonia.Media.Imaging;
 using System.ComponentModel;
 

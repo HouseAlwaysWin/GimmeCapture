@@ -6,7 +6,6 @@ using GimmeCapture.Models;
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core;
 using GimmeCapture.Services.Platforms.Desktop;
-using System.Linq;
 using System.Reactive.Linq;
 using GimmeCapture.ViewModels.Main;
 using GimmeCapture.ViewModels.Shared;
