@@ -649,7 +649,7 @@ public partial class SnipWindowViewModel
         set => this.RaiseAndSetIfChanged(ref _isToolbarManuallyPositioned, value);
     }
 
-    private TranslationTool _currentTranslationTool = TranslationTool.Cursor;
+    private TranslationTool _currentTranslationTool = TranslationTool.Single;
     public TranslationTool CurrentTranslationTool
     {
         get => _currentTranslationTool;
@@ -672,14 +672,8 @@ public partial class SnipWindowViewModel
 
     public bool IsTranslationSelectionActive
     {
-        get => CurrentTranslationTool == TranslationTool.Single || CurrentTranslationTool == TranslationTool.Multi;
-        set 
-        {
-            if (value && CurrentTranslationTool == TranslationTool.Cursor)
-                CurrentTranslationTool = TranslationTool.Single;
-            else if (!value)
-                CurrentTranslationTool = TranslationTool.Cursor;
-        }
+        get => true;
+        set { }
     }
 
     public bool IsTranslationCursorMode

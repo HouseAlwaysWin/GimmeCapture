@@ -145,34 +145,7 @@
             <!-- 5c. Translation Mode Actions (only visible in translation mode) -->
             <Rectangle Fill="#444444" Width="1" Height="16" Margin="4,0" VerticalAlignment="Center" IsVisible="{Binding IsTranslationMode}"/>
             
-            <!-- Translation Sub-Modes -->
-            <StackPanel Orientation="Horizontal" IsVisible="{Binding IsTranslationMode}" VerticalAlignment="Center" Spacing="2">
-                <!-- Cursor Mode (Edit/Functional) -->
-                <ToggleButton Theme="{StaticResource SnipToolButton}" 
-                              IsChecked="{Binding IsTranslationCursorMode, Mode=TwoWay}"
-                              Classes.active="{Binding IsTranslationCursorMode}"
-                              ToolTip.Tip="{Binding ModeCursorTooltip}">
-                    <PathIcon Data="M13.63,21.94L10.12,16.71L7.6,18.73C7.43,18.87 7.22,18.95 7,18.95A1,1 0 0,1 6,17.95V2.95A1,1 0 0,1 7,1.95C7.24,1.95 7.47,2.04 7.64,2.18L22.65,12.17C23.11,12.45 23.25,13.06 22.95,13.52C22.82,13.73 22.63,13.87 22.4,13.95L17.58,15.6L19.85,20.36C20.08,20.86 19.86,21.45 19.36,21.68L13.63,21.94Z" Width="14" Height="14"/>
-                </ToggleButton>
-                
-                <!-- Single Mode (Default) -->
-                <ToggleButton Theme="{StaticResource SnipToolButton}" 
-                               IsChecked="{Binding IsTranslationSingleMode, Mode=TwoWay}"
-                               Classes.active="{Binding IsTranslationSingleMode}"
-                               ToolTip.Tip="{Binding ModeSingleTooltip}">
-                    <PathIcon Data="M4,4H20V20H4V4M6,6V18H18V6H6Z" Width="14" Height="14"/>
-                </ToggleButton>
-
-                <!-- Multi Mode -->
-                <ToggleButton Theme="{StaticResource SnipToolButton}" 
-                               IsChecked="{Binding IsTranslationMultiMode, Mode=TwoWay}"
-                               Classes.active="{Binding IsTranslationMultiMode}"
-                               ToolTip.Tip="{Binding ModeMultiTooltip}">
-                    <PathIcon Data="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z" Width="14" Height="14"/>
-                </ToggleButton>
-
-                <!-- Audio Mode Tool removed -->
-            </StackPanel>
+            <!-- Translation sub-modes removed: use screenshot-like flow + Ctrl+Left to add -->
             
             <!-- Language Selection (Translation Mode Only) -->
             <StackPanel Orientation="Horizontal" IsVisible="{Binding IsTranslationMode}" VerticalAlignment="Center" Margin="4,0">

@@ -381,25 +381,6 @@ public partial class SnipWindow : Window
         // 2. Translation Mode Specific Hotkeys
         if (_viewModel.IsTranslationMode)
         {
-            var transAction = _hotkeyRouter.ResolveTranslationModeHotkeyAction(
-                _viewModel.ModeCursorHotkey,
-                _viewModel.ModeSingleHotkey,
-                _viewModel.ModeMultiHotkey,
-                IsMatch);
-
-            switch (transAction)
-            {
-                case HotkeyRouterService.WindowHotkeyAction.ModeCursor:
-                    _viewModel.CurrentTranslationTool = Models.TranslationTool.Cursor;
-                    return true;
-                case HotkeyRouterService.WindowHotkeyAction.ModeSingle:
-                    _viewModel.CurrentTranslationTool = Models.TranslationTool.Single;
-                    return true;
-                case HotkeyRouterService.WindowHotkeyAction.ModeMulti:
-                    _viewModel.CurrentTranslationTool = Models.TranslationTool.Multi;
-                    return true;
-            }
-
             var specificAction = _hotkeyRouter.ResolveSpecificTranslationAction(
                 _viewModel.TranslateAllHotkey,
                 IsMatch);
@@ -657,8 +638,6 @@ public partial class SnipWindow : Window
 
             if (isTranslation && _viewModel != null)
             {
-                bool isEditMode = !_viewModel.IsTranslationSelectionActive;
-
                 foreach (var sel in _viewModel.UserSelections)
                 {
                     if (sel.Bounds.Width > 10 && sel.Bounds.Height > 10)
@@ -688,20 +667,8 @@ public partial class SnipWindow : Window
                         }
                         else
                         {
-                            if (isEditMode)
-                            {
-                                // 未翻譯且在編輯模式下，框選區域依然要能互動(例如刪除)
-                                extraRegions.Add(new Rect(
-                                    rect.X * scaling,
-                                    rect.Y * scaling,
-                                    rect.Width * scaling,
-                                    rect.Height * scaling));
-                            }
-                            else
-                            {
-                                // 未翻譯且在選取模式：與截圖/錄影相同 — 僅外框環 + 內洞穿透（非整窗再挖洞）
-                                translationRings.Add(ComputeScreenshotStyleRingPhysicalRects(rect, scaling));
-                            }
+                            // Translation behaves like screenshot/recording selection flow.
+                            translationRings.Add(ComputeScreenshotStyleRingPhysicalRects(rect, scaling));
                         }
                     }
                 }
@@ -825,22 +792,9 @@ public partial class SnipWindow : Window
             {
                 if (isTranslation)
                 {
-                    if (_viewModel?.IsTranslationSelectionActive == true)
-                    {
-                        // Single/Multi with no boxes yet: same as screenshot/recording selecting — window receives pointer everywhere.
-                        _useHitTestRegions = false;
-                        _hitTestRegions.Clear();
-                        ApplyTranslationDwmMinimalOccluderFix(hwnd, scaling, windowWidth, windowHeight);
-                        return;
-                    }
-
-                    // General (cursor), no selections yet: screenshot-style DWM fix + HTTRANSPARENT outside UI islands.
-                    var generalIslands = new System.Collections.Generic.List<Rect>();
-                    CollectTranslationGeneralModeOpaqueRects(scaling, generalIslands);
+                    // No selection yet: same as screenshot/recording selecting.
                     ApplyTranslationDwmMinimalOccluderFix(hwnd, scaling, windowWidth, windowHeight);
-                    _hitTestRegions.Clear();
-                    _hitTestRegions.AddRange(generalIslands);
-                    _useHitTestRegions = generalIslands.Count > 0;
+                    _useHitTestRegions = false;
                 }
                 else
                 {
@@ -875,16 +829,6 @@ public partial class SnipWindow : Window
                         screen.W * scaling, 
                         8 * scaling)); // Increased height slightly for visibility safety
                 }
-            }
-
-            // Translation general / cursor: screenshot-style DWM fix + HTTRANSPARENT outside UI islands.
-            if (isTranslation && _viewModel != null && !_viewModel.IsTranslationSelectionActive)
-            {
-                ApplyTranslationDwmMinimalOccluderFix(hwnd, scaling, windowWidth, windowHeight);
-                _hitTestRegions.Clear();
-                _hitTestRegions.AddRange(extraRegions);
-                _useHitTestRegions = extraRegions.Count > 0;
-                return;
             }
 
             int borderWidth = (int)((_viewModel?.SelectionBorderThickness ?? 6) * scaling);

@@ -678,42 +678,6 @@ public partial class SnipWindow : Window
             // Translation Mode Specific Hotkeys
             if (!e.Handled && _viewModel.IsTranslationMode)
             {
-                if (IsModifierMatch(_viewModel.HoldSingleHotkey, e))
-                {
-                    _viewModel.CurrentTranslationTool = Models.TranslationTool.Single;
-                    e.Handled = true;
-                }
-                else if (IsModifierMatch(_viewModel.HoldMultiHotkey, e))
-                {
-                    _viewModel.CurrentTranslationTool = Models.TranslationTool.Multi;
-                    e.Handled = true;
-                }
-
-                if (!e.Handled)
-                {
-                    var transAction = _hotkeyRouter.ResolveTranslationModeHotkeyAction(
-                        _viewModel.ModeCursorHotkey,
-                        _viewModel.ModeSingleHotkey,
-                        _viewModel.ModeMultiHotkey,
-                        IsMatch);
-
-                    switch (transAction)
-                    {
-                        case HotkeyRouterService.WindowHotkeyAction.ModeCursor:
-                            _viewModel.CurrentTranslationTool = Models.TranslationTool.Cursor;
-                            e.Handled = true;
-                            break;
-                        case HotkeyRouterService.WindowHotkeyAction.ModeSingle:
-                            _viewModel.CurrentTranslationTool = Models.TranslationTool.Single;
-                            e.Handled = true;
-                            break;
-                        case HotkeyRouterService.WindowHotkeyAction.ModeMulti:
-                            _viewModel.CurrentTranslationTool = Models.TranslationTool.Multi;
-                            e.Handled = true;
-                            break;
-                    }
-                }
-
                 if (!e.Handled)
                 {
                     var specificAction = _hotkeyRouter.ResolveSpecificTranslationAction(
@@ -732,15 +696,7 @@ public partial class SnipWindow : Window
 
     private void OnKeyUp(object? sender, KeyEventArgs e)
     {
-        if (_viewModel != null && _viewModel.IsTranslationMode)
-        {
-            if (IsModifierMatch(_viewModel.HoldSingleHotkey, e) || IsModifierMatch(_viewModel.HoldMultiHotkey, e))
-            {
-                // Revert to Cursor mode when the modifier is released
-                _viewModel.CurrentTranslationTool = Models.TranslationTool.Cursor;
-                e.Handled = true;
-            }
-        }
+        // Translation no longer uses Cursor/Single/Multi mode switching.
     }
 
     private bool IsModifierMatch(string hotkeyLabel, KeyEventArgs e)

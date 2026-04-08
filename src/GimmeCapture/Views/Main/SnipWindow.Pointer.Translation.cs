@@ -21,22 +21,30 @@ public partial class SnipWindow
             return HandleTranslationRightClick(point, sourceControl, e);
         }
 
-        if (props.IsLeftButtonPressed && _viewModel.IsTranslationSelectionActive)
+        if (props.IsLeftButtonPressed)
         {
-            // 如果是單選模式，先清除之前的選取
-            if (_viewModel.CurrentTranslationTool == TranslationTool.Single)
+            bool ctrlDown = ((e.KeyModifiers & KeyModifiers.Control) != 0) || ((GetAsyncKeyState(0x11) & 0x8000) != 0);
+            bool hasAnyBox = _viewModel.UserSelections.AsValueEnumerable()
+                .Any(s => !s.IsAudioPanel && s.Bounds.Width > 5 && s.Bounds.Height > 5);
+
+            // Match screenshot/recording-like flow:
+            // - First box: plain left-drag
+            // - Additional boxes: Ctrl+left-drag
+            if (!hasAnyBox || ctrlDown)
             {
-                _viewModel.UserSelections.Clear();
+                _viewModel.CurrentTranslationTool = ctrlDown ? TranslationTool.Multi : TranslationTool.Single;
+                _pointerState = PointerInteractionState.TranslationSelecting;
+                _translationSelectionStart = point;
+                _currentTranslationSelection = new UserSelectionRect { Bounds = new Rect(point, new Size(0, 0)) };
+                _viewModel.UserSelections.Add(_currentTranslationSelection);
+                _viewModel.UpdateMask();
+                e.Pointer.Capture(this);
+                e.Handled = true;
+                return true;
             }
 
-            _pointerState = PointerInteractionState.TranslationSelecting;
-            _translationSelectionStart = point;
-            _currentTranslationSelection = new UserSelectionRect { Bounds = new Rect(point, new Size(0, 0)) };
-            _viewModel.UserSelections.Add(_currentTranslationSelection);
-            _viewModel.UpdateMask();
-            e.Pointer.Capture(this);
-            e.Handled = true;
-            return true;
+            // Otherwise (has boxes and no Ctrl), keep normal editing/interaction flow.
+            return false;
         }
 
         return false;
@@ -185,6 +193,8 @@ public partial class SnipWindow
                 vm?.UpdateMask();
                 _currentTranslationSelection = null;
             }
+            e.Pointer.Capture(null);
+            e.Handled = true;
             return true;
         }
 
