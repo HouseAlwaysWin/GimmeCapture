@@ -65,15 +65,6 @@ public partial class SnipWindow : Window
         var point = e.GetPosition(this);
         var props = e.GetCurrentPoint(this).Properties;
         var source = e.Source as Control;
-        bool ctrlDown = ((GetAsyncKeyState(0x11) & 0x8000) != 0) || ((e.KeyModifiers & KeyModifiers.Control) != 0);
-
-        // In translation mode, Ctrl+Left must always mean "add a new box".
-        // Handle it before move/resize-handle branches can intercept the press.
-        if (_viewModel.IsTranslationMode && props.IsLeftButtonPressed && ctrlDown)
-        {
-            if (TryHandleTranslationPointerPressed(point, e))
-                return;
-        }
 
         if (TryHandleTextAnnotationPressed(point, e))
             return;
@@ -393,11 +384,15 @@ public partial class SnipWindow : Window
             // 3. Fallback to standard Selection/Translation Cross cursors if no action handles were hit
             if (!actionCursorSet)
             {
-                if (_viewModel.IsTranslationMode && _viewModel.IsTranslationSelectionActive)
+                bool trHasBox = _viewModel.UserSelections.AsValueEnumerable()
+                    .Any(s => !s.IsAudioPanel && s.Bounds.Width > 5 && s.Bounds.Height > 5);
+                bool trCtrl = (GetAsyncKeyState(0x11) & 0x8000) != 0;
+                // Translation: cross when drawing, first box, or Ctrl held for an additional box (matches full-hit region).
+                if (_viewModel.IsTranslationMode && (_pointerState == PointerInteractionState.TranslationSelecting || !trHasBox || (trHasBox && trCtrl)))
                 {
                     SetCursorShape(StandardCursorType.Cross);
                 }
-                else if (_viewModel.CurrentState == SnipState.Selecting || _viewModel.CurrentState == SnipState.Detecting || _pointerState == PointerInteractionState.TranslationSelecting)
+                else if (!_viewModel.IsTranslationMode && (_viewModel.CurrentState == SnipState.Selecting || _viewModel.CurrentState == SnipState.Detecting))
                 {
                     SetCursorShape(StandardCursorType.Cross);
                 }

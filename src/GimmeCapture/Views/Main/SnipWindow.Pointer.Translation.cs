@@ -16,6 +16,10 @@ public partial class SnipWindow
         var props = e.GetCurrentPoint(this).Properties;
         var sourceControl = e.Source as Control;
 
+        bool hasAnyBox = _viewModel.UserSelections.AsValueEnumerable()
+            .Any(s => !s.IsAudioPanel && s.Bounds.Width > 5 && s.Bounds.Height > 5);
+        bool ctrlDown = (GetAsyncKeyState(0x11) & 0x8000) != 0;
+
         if (props.IsRightButtonPressed)
         {
             return HandleTranslationRightClick(point, sourceControl, e);
@@ -23,28 +27,20 @@ public partial class SnipWindow
 
         if (props.IsLeftButtonPressed)
         {
-            bool ctrlDown = ((e.KeyModifiers & KeyModifiers.Control) != 0) || ((GetAsyncKeyState(0x11) & 0x8000) != 0);
-            bool hasAnyBox = _viewModel.UserSelections.AsValueEnumerable()
-                .Any(s => !s.IsAudioPanel && s.Bounds.Width > 5 && s.Bounds.Height > 5);
+            // First box: plain left-drag. More boxes: hold Ctrl (Win32 region switches to full hit while Ctrl is down).
+            if (hasAnyBox && !ctrlDown)
+                return false;
 
-            // Match screenshot/recording-like flow:
-            // - First box: plain left-drag
-            // - Additional boxes: Ctrl+left-drag
-            if (!hasAnyBox || ctrlDown)
-            {
-                _viewModel.CurrentTranslationTool = ctrlDown ? TranslationTool.Multi : TranslationTool.Single;
-                _pointerState = PointerInteractionState.TranslationSelecting;
-                _translationSelectionStart = point;
-                _currentTranslationSelection = new UserSelectionRect { Bounds = new Rect(point, new Size(0, 0)) };
-                _viewModel.UserSelections.Add(_currentTranslationSelection);
-                _viewModel.UpdateMask();
-                e.Pointer.Capture(this);
-                e.Handled = true;
-                return true;
-            }
-
-            // Otherwise (has boxes and no Ctrl), keep normal editing/interaction flow.
-            return false;
+            bool isAdditional = hasAnyBox && ctrlDown;
+            _viewModel.CurrentTranslationTool = isAdditional ? TranslationTool.Multi : TranslationTool.Single;
+            _pointerState = PointerInteractionState.TranslationSelecting;
+            _translationSelectionStart = point;
+            _currentTranslationSelection = new UserSelectionRect { Bounds = new Rect(point, new Size(0, 0)) };
+            _viewModel.UserSelections.Add(_currentTranslationSelection);
+            _viewModel.UpdateMask();
+            e.Pointer.Capture(this);
+            e.Handled = true;
+            return true;
         }
 
         return false;
@@ -193,6 +189,11 @@ public partial class SnipWindow
                 vm?.UpdateMask();
                 _currentTranslationSelection = null;
             }
+
+            if ((GetAsyncKeyState(0x11) & 0x8000) != 0)
+                _translationSuppressFullHitUntilCtrlUp = true;
+            RequestTranslationWindowRegionRefresh();
+
             e.Pointer.Capture(null);
             e.Handled = true;
             return true;

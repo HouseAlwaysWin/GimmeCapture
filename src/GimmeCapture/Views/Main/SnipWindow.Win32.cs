@@ -42,6 +42,12 @@ public partial class SnipWindow : Window
     private readonly List<Rect> _hitTestRegions = new();
     private bool _useHitTestRegions;
 
+    /// <summary>
+    /// While true, <see cref="UpdateWindowRegion"/> keeps ring/pass-through even if Ctrl still reads as down
+    /// (e.g. user finished a drag while holding Ctrl — restore rings until real Ctrl key-up).
+    /// </summary>
+    private bool _translationSuppressFullHitUntilCtrlUp;
+
     // --- Low-Level Keyboard Hook ---
     private const int WH_KEYBOARD_LL = 13;
     private const int WM_KEYDOWN = 0x0100;
@@ -187,7 +193,18 @@ public partial class SnipWindow : Window
         // Modifiers logic for hold shortcuts (Only applicable for TranslationMode right now)
         if (IsPureModifierKey(keyStr))
         {
-            if (_viewModel.IsTranslationMode)
+            if (_viewModel?.IsTranslationMode == true && keyStr == "Ctrl")
+            {
+                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                {
+                    if (_viewModel == null) return;
+                    if (!isKeyDown)
+                        _translationSuppressFullHitUntilCtrlUp = false;
+                    RequestTranslationWindowRegionRefresh();
+                }, Avalonia.Threading.DispatcherPriority.Input);
+            }
+
+            if (_viewModel?.IsTranslationMode == true)
             {
                 if (isKeyDown)
                 {
@@ -612,6 +629,12 @@ public partial class SnipWindow : Window
         return (outerBox, innerHole);
     }
 
+    private void RequestTranslationWindowRegionRefresh()
+    {
+        if (_viewModel == null || !OperatingSystem.IsWindows()) return;
+        UpdateWindowRegion(_viewModel.SelectionRect, _viewModel.CurrentState, _viewModel.IsDrawingMode);
+    }
+
     /// <summary>
     /// Updates the window region to create a "hole" in the selection area for mouse pass-through.
     /// This allows clicking on underlying windows (like YouTube) while keeping the border UI interactive.
@@ -677,6 +700,14 @@ public partial class SnipWindow : Window
             // Translation single/multi (untranslated selection): same ring + inner hole as screenshot — not full-window-minus-holes.
             if (isTranslation && translationRings.Count > 0)
             {
+                // Hold Ctrl: full client hit-test (same as no-selection) so the user can start a new rect outside the ring; release or finish drag restores rings.
+                bool ctrlHeld = (GetAsyncKeyState(0x11) & 0x8000) != 0;
+                if (ctrlHeld && !_translationSuppressFullHitUntilCtrlUp)
+                {
+                    ApplyTranslationDwmMinimalOccluderFix(hwnd, scaling, windowWidth, windowHeight);
+                    return;
+                }
+
                 Rect? toolbarRectRing = null;
                 if (_viewModel != null && _viewModel.IsToolbarVisible && _viewModel.ToolbarWidth > 0 && _viewModel.ToolbarHeight > 0)
                 {
