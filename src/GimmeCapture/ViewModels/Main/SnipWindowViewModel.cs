@@ -81,7 +81,10 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     public string CopyHotkey => CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Copy ?? "Ctrl+C") : (_mainVm?.Snip_Copy ?? "Ctrl+C");
     public string UndoHotkey => CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Undo ?? "Ctrl+Z") : (_mainVm?.Snip_Undo ?? "Ctrl+Z");
     public string RedoHotkey => CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Redo ?? "Ctrl+Y") : (_mainVm?.Snip_Redo ?? "Ctrl+Y");
-    public string ClearHotkey => CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Clear ?? "Delete") : (_mainVm?.Snip_Clear ?? "Delete");
+    // In translation mode, Delete is reserved for ClearAllHotkey.
+    public string ClearHotkey => CurrentMode == SnipMode.Translation
+        ? string.Empty
+        : (CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Clear ?? "Delete") : (_mainVm?.Snip_Clear ?? "Delete"));
     public string SaveHotkey => CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Save ?? "Ctrl+S") : (_mainVm?.Snip_Save ?? "Ctrl+S");
     public string CloseHotkey => CurrentMode == SnipMode.Translation ? (_mainVm?.Translate_Close ?? "Escape") : (CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Close ?? "Escape") : (_mainVm?.Snip_Close ?? "Escape"));
     
