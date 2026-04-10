@@ -43,6 +43,17 @@ public partial class SnipWindow : Window
     private bool _useHitTestRegions;
 
     /// <summary>
+    /// Translation toolbar (language row + actions) is wide; the first layout pass can report a
+    /// <see cref="SnipWindowViewModel.ToolbarWidth"/> that is still too small. Win32 region code uses
+    /// that width for <c>SetWindowRgn</c>; underestimating clips painting on the right.
+    /// </summary>
+    private static double TranslationToolbarOpaqueWidthDip(double widthIncludingPadding)
+    {
+        const double minWidth = 1080.0;
+        return Math.Max(widthIncludingPadding, minWidth);
+    }
+
+    /// <summary>
     /// While true, <see cref="UpdateWindowRegion"/> keeps ring/pass-through even if Ctrl still reads as down
     /// (e.g. user finished a drag while holding Ctrl — restore rings until real Ctrl key-up).
     /// </summary>
@@ -456,7 +467,8 @@ public partial class SnipWindow : Window
 
     private IntPtr WndProcHook(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam)
     {
-        if (msg == WM_NCHITTEST && _useHitTestRegions && !(_viewModel?.IsDrawingMode ?? false))
+        bool allowHitTestTransparent = (_viewModel?.IsTranslationMode ?? false) || !(_viewModel?.IsDrawingMode ?? false);
+        if (msg == WM_NCHITTEST && _useHitTestRegions && allowHitTestTransparent)
         {
             // Signed screen coords (multi-monitor). Must match SetWindowRgn rects (physical client pixels).
             int lp = lParam.ToInt32();
@@ -488,12 +500,33 @@ public partial class SnipWindow : Window
     /// Chromium/DWM does not treat SnipWindow as a full-screen occluder (YouTube/hardware video).
     /// Optionally merges the toolbar so it stays hit-testable.
     /// </summary>
+    /// <remarks>
+    /// When the toolbar is hidden: if Ctrl is <b>not</b> held, use disjoint islands only (video-friendly).
+    /// If Ctrl <b>is</b> held, we must use the nearly full-client region — otherwise <c>SetWindowRgn</c> leaves
+    /// almost no hit-testable area and Ctrl-drag selection is delivered to windows below. While Ctrl is held,
+    /// hardware video may be affected; release Ctrl to restore disjoint mode.
+    /// </remarks>
     private void ApplyTranslationDwmMinimalOccluderFix(IntPtr hwnd, double scaling, int windowWidth, int windowHeight)
     {
+        if (_viewModel != null && !_viewModel.IsToolbarShownOnScreen)
+        {
+            bool ctrlHeld = (GetAsyncKeyState(0x11) & 0x8000) != 0;
+            if (ctrlHeld && !_translationSuppressFullHitUntilCtrlUp)
+            {
+                Win32Helpers.SetMultiWindowHoleRegion(hwnd, windowWidth, windowHeight, new[] { new Rect(0, 0, 1, 1) }, 0, null, null);
+                _hitTestRegions.Clear();
+                _useHitTestRegions = false;
+                return;
+            }
+
+            ApplyTranslationPassThroughExceptToolbarAndLoadingBar(hwnd, scaling);
+            return;
+        }
+
         Rect? toolbarRect = null;
         if (_viewModel != null && _viewModel.IsToolbarVisible && _viewModel.ToolbarWidth > 0 && _viewModel.ToolbarHeight > 0)
         {
-            double tw = _viewModel.ToolbarWidth + 40;
+            double tw = TranslationToolbarOpaqueWidthDip(_viewModel.ToolbarWidth + 40);
             double th = _viewModel.ToolbarHeight + 40;
             double tx = _viewModel.ToolbarLeft - 20;
             double ty = _viewModel.ToolbarTop - 20;
@@ -501,6 +534,43 @@ public partial class SnipWindow : Window
         }
 
         Win32Helpers.SetMultiWindowHoleRegion(hwnd, windowWidth, windowHeight, new[] { new Rect(0, 0, 1, 1) }, 0, toolbarRect, null);
+    }
+
+    /// <summary>
+    /// Translation idle (no untranslated rings yet): only toolbar + top loading strip own hit-testing;
+    /// the rest of the overlay passes clicks to windows below so the user can interact with the desktop.
+    /// When <see cref="_viewModel"/> has no toolbar, uses a 1×1 px region as a minimal DWM-safe stub.
+    /// </summary>
+    private void ApplyTranslationPassThroughExceptToolbarAndLoadingBar(IntPtr hwnd, double scaling)
+    {
+        var opaque = new System.Collections.Generic.List<Rect>();
+        if (_viewModel != null && _viewModel.IsToolbarVisible)
+        {
+            // Keep the toolbar hit area tight to avoid blocking interaction on its right side.
+            if (_viewModel.ToolbarWidth > 1 && _viewModel.ToolbarHeight > 1)
+            {
+                const double pad = 8;
+                double tw = TranslationToolbarOpaqueWidthDip(_viewModel.ToolbarWidth + (pad * 2));
+                double th = _viewModel.ToolbarHeight + (pad * 2);
+                double tx = _viewModel.ToolbarLeft - pad;
+                double ty = _viewModel.ToolbarTop - pad;
+                opaque.Add(new Rect(tx * scaling, ty * scaling, tw * scaling, th * scaling));
+            }
+        }
+
+        if (_viewModel != null && _viewModel.ShowTopLoadingBar)
+        {
+            foreach (var screen in _viewModel.AllScreenBounds)
+            {
+                opaque.Add(new Rect(screen.X * scaling, screen.Y * scaling, screen.W * scaling, 8 * scaling));
+            }
+        }
+
+        // Keep a 1x1 region to avoid full-screen occluder heuristics while still allowing pass-through.
+        opaque.Add(new Rect(0, 0, 1, 1));
+        Win32Helpers.SetDisjointOpaqueRegions(hwnd, opaque, null);
+        _hitTestRegions.Clear();
+        _useHitTestRegions = false;
     }
 
     /// <summary>
@@ -512,7 +582,7 @@ public partial class SnipWindow : Window
 
         if (_viewModel.IsToolbarVisible && _viewModel.ToolbarWidth > 0 && _viewModel.ToolbarHeight > 0)
         {
-            double tw = _viewModel.ToolbarWidth + 40;
+            double tw = TranslationToolbarOpaqueWidthDip(_viewModel.ToolbarWidth + 40);
             double th = _viewModel.ToolbarHeight + 40;
             double tx = _viewModel.ToolbarLeft - 20;
             double ty = _viewModel.ToolbarTop - 20;
@@ -647,6 +717,11 @@ public partial class SnipWindow : Window
         var hwnd = this.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
         if (hwnd == IntPtr.Zero) return;
 
+        // Reset WM_NCHITTEST pass-through islands every refresh to avoid leaking translation-only
+        // hit-test state into screenshot/recording region logic.
+        _useHitTestRegions = false;
+        _hitTestRegions.Clear();
+
         bool isTranslation = _viewModel?.IsTranslationMode ?? false;
 
         if (!isDrawingMode && (isTranslation || (state == SnipState.Selected && selectionRect.Width > 10 && selectionRect.Height > 10)))
@@ -711,7 +786,7 @@ public partial class SnipWindow : Window
                 Rect? toolbarRectRing = null;
                 if (_viewModel != null && _viewModel.IsToolbarVisible && _viewModel.ToolbarWidth > 0 && _viewModel.ToolbarHeight > 0)
                 {
-                    double tw = _viewModel.ToolbarWidth + 40;
+                    double tw = TranslationToolbarOpaqueWidthDip(_viewModel.ToolbarWidth + 40);
                     double th = _viewModel.ToolbarHeight + 40;
                     double tx = _viewModel.ToolbarLeft - 20;
                     double ty = _viewModel.ToolbarTop - 20;
@@ -823,9 +898,18 @@ public partial class SnipWindow : Window
             {
                 if (isTranslation)
                 {
-                    // No selection yet: same as screenshot/recording selecting.
-                    ApplyTranslationDwmMinimalOccluderFix(hwnd, scaling, windowWidth, windowHeight);
-                    _useHitTestRegions = false;
+                    // No selection yet: pass-through everywhere except toolbar/loading so the user can operate
+                    // underlying apps; hold Ctrl to switch to full-window hit (see RequestTranslationWindowRegionRefresh).
+                    bool ctrlHeld = (GetAsyncKeyState(0x11) & 0x8000) != 0;
+                    if (ctrlHeld && !_translationSuppressFullHitUntilCtrlUp)
+                    {
+                        ApplyTranslationDwmMinimalOccluderFix(hwnd, scaling, windowWidth, windowHeight);
+                        _useHitTestRegions = false;
+                    }
+                    else
+                    {
+                        ApplyTranslationPassThroughExceptToolbarAndLoadingBar(hwnd, scaling);
+                    }
                 }
                 else
                 {
@@ -838,7 +922,7 @@ public partial class SnipWindow : Window
             if (_viewModel != null && _viewModel.IsToolbarVisible && _viewModel.ToolbarWidth > 0 && _viewModel.ToolbarHeight > 0)
             {
                 // V13: Robust toolbar region calculation
-                double tw = _viewModel.ToolbarWidth + 40; // More padding
+                double tw = TranslationToolbarOpaqueWidthDip(_viewModel.ToolbarWidth + 40); // More padding
                 double th = _viewModel.ToolbarHeight + 40;
                 double tx = _viewModel.ToolbarLeft - 20;
                 double ty = _viewModel.ToolbarTop - 20;
@@ -864,13 +948,17 @@ public partial class SnipWindow : Window
 
             int borderWidth = (int)((_viewModel?.SelectionBorderThickness ?? 6) * scaling);
 
-            // Translation remainder (e.g. selection mode + translated-only islands): disjoint opaque — not full-window-minus-holes.
+            // Translation remainder: translated-only islands (+ toolbar/loading already in extraRegions).
+            // Must NOT use ApplyTranslationDwmMinimalOccluderFix here — that path uses almost the full client
+            // as SetWindowRgn opaque area (full window minus a 1×1 hole), which occludes YouTube/hardware video
+            // under the overlay. Disjoint islands + 1×1 DWM stub matches idle translation behavior.
             if (isTranslation && holeRects.Count == 0)
             {
-                ApplyTranslationDwmMinimalOccluderFix(hwnd, scaling, windowWidth, windowHeight);
+                var opaque = new System.Collections.Generic.List<Rect>(extraRegions);
+                opaque.Add(new Rect(0, 0, 1, 1));
+                Win32Helpers.SetDisjointOpaqueRegions(hwnd, opaque, null);
                 _hitTestRegions.Clear();
                 _hitTestRegions.AddRange(extraRegions);
-                if (toolbarRect.HasValue) _hitTestRegions.Add(toolbarRect.Value);
                 _useHitTestRegions = _hitTestRegions.Count > 0;
                 return;
             }
@@ -893,8 +981,19 @@ public partial class SnipWindow : Window
             }
             else
             {
-                // Translation + drawing mode: avoid ClearWindowRegion — same DWM / YouTube occlusion issue.
-                ApplyTranslationDwmMinimalOccluderFix(hwnd, scaling, windowWidth, windowHeight);
+                // Translation + drawing: pointer must hit the whole overlay; disjoint-only would break ink outside tiny regions.
+                // (When toolbar is hidden, ApplyTranslationDwmMinimalOccluderFix would route to pass-through — do not use it here.)
+                Rect? drawToolbarRect = null;
+                if (_viewModel != null && _viewModel.IsToolbarVisible && _viewModel.ToolbarWidth > 0 && _viewModel.ToolbarHeight > 0)
+                {
+                    double dtw = TranslationToolbarOpaqueWidthDip(_viewModel.ToolbarWidth + 40);
+                    double dth = _viewModel.ToolbarHeight + 40;
+                    double dtx = _viewModel.ToolbarLeft - 20;
+                    double dty = _viewModel.ToolbarTop - 20;
+                    drawToolbarRect = new Rect(dtx * scaling, dty * scaling, dtw * scaling, dth * scaling);
+                }
+
+                Win32Helpers.SetMultiWindowHoleRegion(hwnd, windowWidth, windowHeight, new[] { new Rect(0, 0, 1, 1) }, 0, drawToolbarRect, null);
             }
         }
     }

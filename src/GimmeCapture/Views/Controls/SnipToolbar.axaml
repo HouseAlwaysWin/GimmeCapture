@@ -145,7 +145,7 @@
             <!-- 5c. Translation Mode Actions (only visible in translation mode) -->
             <Rectangle Fill="#444444" Width="1" Height="16" Margin="4,0" VerticalAlignment="Center" IsVisible="{Binding IsTranslationMode}"/>
             
-            <!-- Translation sub-modes removed: first box = left-drag; more boxes = hold Ctrl (full hit) then left-drag -->
+            <!-- Translation: hold Ctrl then left-drag for every selection rect (full hit while Ctrl is down) -->
             
             <!-- Language Selection (Translation Mode Only) -->
             <StackPanel Orientation="Horizontal" IsVisible="{Binding IsTranslationMode}" VerticalAlignment="Center" Margin="4,0">

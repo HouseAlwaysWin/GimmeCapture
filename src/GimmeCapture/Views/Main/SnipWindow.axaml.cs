@@ -315,6 +315,7 @@ public partial class SnipWindow : Window
                         vm.RaisePropertyChanged(nameof(vm.HideSelectionDecoration));
                         vm.RaisePropertyChanged(nameof(vm.HideFrameBorder));
                         vm.RaisePropertyChanged(nameof(vm.IsToolbarVisible));
+                        vm.RaisePropertyChanged(nameof(vm.IsToolbarShownOnScreen));
                     });
             }
 
@@ -373,6 +374,7 @@ public partial class SnipWindow : Window
                 x => x.ToolbarHeight,
                 x => x.ShowToolbar,
                 x => x.IsToolbarVisible,
+                x => x.IsToolbarShownOnScreen,
                 x => x.CurrentTranslationTool);
 
             // Recompute Win32 region when translation boxes are added/removed (not covered by SelectionRect alone).

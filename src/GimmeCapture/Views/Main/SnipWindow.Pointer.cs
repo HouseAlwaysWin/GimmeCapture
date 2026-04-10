@@ -384,11 +384,9 @@ public partial class SnipWindow : Window
             // 3. Fallback to standard Selection/Translation Cross cursors if no action handles were hit
             if (!actionCursorSet)
             {
-                bool trHasBox = _viewModel.UserSelections.AsValueEnumerable()
-                    .Any(s => !s.IsAudioPanel && s.Bounds.Width > 5 && s.Bounds.Height > 5);
                 bool trCtrl = (GetAsyncKeyState(0x11) & 0x8000) != 0;
-                // Translation: cross when drawing, first box, or Ctrl held for an additional box (matches full-hit region).
-                if (_viewModel.IsTranslationMode && (_pointerState == PointerInteractionState.TranslationSelecting || !trHasBox || (trHasBox && trCtrl)))
+                // Translation: cross only while Ctrl held (ready to drag) or actively drawing a rect (matches Ctrl-gated region).
+                if (_viewModel.IsTranslationMode && (_pointerState == PointerInteractionState.TranslationSelecting || trCtrl))
                 {
                     SetCursorShape(StandardCursorType.Cross);
                 }

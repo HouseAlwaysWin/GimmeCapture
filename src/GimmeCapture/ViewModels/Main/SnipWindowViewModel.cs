@@ -521,8 +521,19 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         get => _showToolbar;
         set 
         {
+            if (_showToolbar == value) return;
             this.RaiseAndSetIfChanged(ref _showToolbar, value);
+            if (CurrentMode == SnipMode.Translation
+                || (CurrentState == SnipState.Selected && !IsRecordingFinalizing))
+            {
+                if (!value)
+                    ParkSnipToolbarOffscreen();
+                else
+                    RestoreSnipToolbarFromOffscreenPark();
+            }
+
             this.RaisePropertyChanged(nameof(IsToolbarVisible));
+            this.RaisePropertyChanged(nameof(IsToolbarShownOnScreen));
         }
     }
 

@@ -54,10 +54,116 @@ public partial class SnipWindowViewModel
                 // Clear translated blocks when selection changes
                 TranslatedBlocks.Clear();
             }
+
+            if (value != SnipState.Selected)
+                ResetParkedToolbarIfOffScreenWhenLeavingSelection();
             
             this.RaisePropertyChanged(nameof(IsToolbarVisible));
+            this.RaisePropertyChanged(nameof(IsToolbarShownOnScreen));
             UpdateMask();
         }
+    }
+
+    private bool _toolbarParkedOffscreenSaved;
+    private double _savedParkToolbarLeft;
+    private double _savedParkToolbarTop;
+    private double _savedParkTranslationToolbarLeft;
+    private double _savedParkTranslationToolbarTop;
+
+    /// <summary>
+    /// 「隱藏工具列」：移到虛擬桌面外，保留量測與 Win32 區域。翻譯模式與截圖/錄影選取後皆適用。
+    /// </summary>
+    public void ParkSnipToolbarOffscreen()
+    {
+        const double off = -50000;
+
+        if (CurrentMode == SnipMode.Translation)
+        {
+            if (ToolbarLeft > -10000 && ToolbarWidth > 1 && ToolbarHeight > 1)
+            {
+                _savedParkToolbarLeft = ToolbarLeft;
+                _savedParkToolbarTop = ToolbarTop;
+                _savedParkTranslationToolbarLeft = TranslationToolbarLeft;
+                _savedParkTranslationToolbarTop = TranslationToolbarTop;
+                _toolbarParkedOffscreenSaved = true;
+            }
+
+            ToolbarLeft = off;
+            ToolbarTop = 0;
+            TranslationToolbarLeft = off;
+            TranslationToolbarTop = 0;
+            return;
+        }
+
+        if (CurrentState != SnipState.Selected || IsRecordingFinalizing) return;
+
+        if (ToolbarLeft > -10000 && ToolbarWidth > 1 && ToolbarHeight > 1)
+        {
+            _savedParkToolbarLeft = ToolbarLeft;
+            _savedParkToolbarTop = ToolbarTop;
+            _toolbarParkedOffscreenSaved = true;
+        }
+
+        ToolbarLeft = off;
+        ToolbarTop = 0;
+    }
+
+    public void RestoreSnipToolbarFromOffscreenPark()
+    {
+        if (CurrentMode == SnipMode.Translation)
+        {
+            if (_toolbarParkedOffscreenSaved)
+            {
+                ToolbarLeft = _savedParkToolbarLeft;
+                ToolbarTop = _savedParkToolbarTop;
+                TranslationToolbarLeft = _savedParkTranslationToolbarLeft;
+                TranslationToolbarTop = _savedParkTranslationToolbarTop;
+                _toolbarParkedOffscreenSaved = false;
+            }
+            else
+                InitializeTranslationToolbarPosition();
+            return;
+        }
+
+        if (CurrentState != SnipState.Selected || IsRecordingFinalizing) return;
+
+        _toolbarParkedOffscreenSaved = false;
+        UpdateToolbarPosition();
+    }
+
+    /// <summary>
+    /// 離開翻譯模式時還原座標，避免截圖/錄影沿用 -50000。
+    /// </summary>
+    public void ResetTranslationToolbarAfterLeavingTranslationMode()
+    {
+        if (ToolbarLeft >= -10000) return;
+
+        if (_toolbarParkedOffscreenSaved)
+        {
+            ToolbarLeft = _savedParkToolbarLeft;
+            ToolbarTop = _savedParkToolbarTop;
+            TranslationToolbarLeft = _savedParkTranslationToolbarLeft;
+            TranslationToolbarTop = _savedParkTranslationToolbarTop;
+            _toolbarParkedOffscreenSaved = false;
+        }
+        else
+        {
+            ToolbarLeft = 0;
+            ToolbarTop = 20;
+            TranslationToolbarLeft = -1;
+            TranslationToolbarTop = 20;
+        }
+    }
+
+    /// <summary>
+    /// 離開選取狀態時清除螢幕外停車座標，避免影響下一次選取。
+    /// </summary>
+    private void ResetParkedToolbarIfOffScreenWhenLeavingSelection()
+    {
+        if (ToolbarLeft >= -10000) return;
+        ToolbarLeft = 0;
+        ToolbarTop = 0;
+        _toolbarParkedOffscreenSaved = false;
     }
 
 
@@ -489,11 +595,15 @@ public partial class SnipWindowViewModel
         // 3. 處理翻譯模式選取框 (V8: 已翻譯不挖洞，與 Win32 Region 同步)
         if (CurrentMode == SnipMode.Translation)
         {
-            if (!IsTranslationSelectionActive)
+            // IsTranslationSelectionActive 曾固定為 true，導致這裡永遠走「有選區」分支，尚無框時仍保留整張全螢幕幾何，
+            // 視覺/體感像一定要先拉框。改為依「是否已有有效選區」判斷。
+            bool hasValidTranslationBox = UserSelections.AsValueEnumerable()
+                .Any(s => s.Bounds.Width > 10 && s.Bounds.Height > 10);
+
+            if (!hasValidTranslationBox)
             {
-                // V8: Edit Mode - The user wants to click through the OTHER parts of the screen!
-                // So the entire screen should be click-through, and NO FULL SCREEN MASK.
-                mainMask = new GeometryGroup(); 
+                // 尚無選區：不要鋪整張遮罩幾何（即使 MaskOpacity=0 也避免多餘層級與「待框選」感）
+                mainMask = new GeometryGroup();
             }
             else
             {
@@ -751,8 +861,14 @@ public partial class SnipWindowViewModel
     {
         // 如果使用者已經手動移動過，且還在同一個螢幕範圍內，可能不需要強行置中
         // 但目前的邏輯是：只有在尚未手動移動時才自動置中
-        if (IsToolbarManuallyPositioned && CurrentMode == SnipMode.Translation)
+        if (IsToolbarManuallyPositioned && CurrentMode == SnipMode.Translation && ShowToolbar)
         {
+            return;
+        }
+
+        if (!ShowToolbar && CurrentMode == SnipMode.Translation)
+        {
+            ParkSnipToolbarOffscreen();
             return;
         }
 
@@ -849,8 +965,19 @@ public partial class SnipWindowViewModel
             top = monitorBottom - th - 10;
         }
 
-        ToolbarTop = top;
-        ToolbarLeft = left;
+        if (!ShowToolbar && CurrentState == SnipState.Selected && !IsRecordingFinalizing)
+        {
+            _savedParkToolbarLeft = left;
+            _savedParkToolbarTop = top;
+            _toolbarParkedOffscreenSaved = true;
+            ToolbarLeft = -50000;
+            ToolbarTop = 0;
+        }
+        else
+        {
+            ToolbarTop = top;
+            ToolbarLeft = left;
+        }
         
         // Ensure MaxWidth allows full toolbar on smaller monitors
         this.RaisePropertyChanged(nameof(ToolbarMaxWidth));

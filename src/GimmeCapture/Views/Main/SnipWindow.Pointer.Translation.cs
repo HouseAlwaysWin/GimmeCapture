@@ -27,11 +27,11 @@ public partial class SnipWindow
 
         if (props.IsLeftButtonPressed)
         {
-            // First box: plain left-drag. More boxes: hold Ctrl (Win32 region switches to full hit while Ctrl is down).
-            if (hasAnyBox && !ctrlDown)
+            // Every selection rect (including the first): hold Ctrl — Win32 region uses full hit while Ctrl is down.
+            if (!ctrlDown)
                 return false;
 
-            bool isAdditional = hasAnyBox && ctrlDown;
+            bool isAdditional = hasAnyBox;
             _viewModel.CurrentTranslationTool = isAdditional ? TranslationTool.Multi : TranslationTool.Single;
             _pointerState = PointerInteractionState.TranslationSelecting;
             _translationSelectionStart = point;

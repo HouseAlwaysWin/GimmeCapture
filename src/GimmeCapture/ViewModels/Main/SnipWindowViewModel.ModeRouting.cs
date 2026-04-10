@@ -27,6 +27,7 @@ public partial class SnipWindowViewModel
         nameof(HideSelectionDecoration),
         nameof(ModeDisplayName),
         nameof(IsToolbarVisible),
+        nameof(IsToolbarShownOnScreen),
         nameof(IsAiScanCandidateLayerVisible),
         nameof(IsAiDetectedRectPreviewVisible)
     };
@@ -118,6 +119,7 @@ public partial class SnipWindowViewModel
         else if (oldMode == SnipMode.Translation)
         {
             // 退出翻譯模式：恢復遮罩
+            ResetTranslationToolbarAfterLeavingTranslationMode();
             IsMaskVisible = true;
             // 清除多重選取
             UserSelections.Clear();
@@ -165,9 +167,17 @@ public partial class SnipWindowViewModel
     }
 
     /// <summary>
-    /// 工具列是否可見：翻譯模式始終可見，其他模式需要在 Selected 狀態且未 Finalizing
+    /// SnipToolbar 是否留在視覺樹中。翻譯模式或截圖/錄影已選取時固定為 true，以便「隱藏」時停到螢幕外仍能量測寬高。
     /// </summary>
-    public bool IsToolbarVisible => ShowToolbar && (CurrentMode == SnipMode.Translation || (CurrentState == SnipState.Selected && !IsRecordingFinalizing));
+    public bool IsToolbarVisible =>
+        CurrentMode == SnipMode.Translation
+        || (CurrentState == SnipState.Selected && !IsRecordingFinalizing);
+
+    /// <summary>
+    /// 使用者是否「看得到」工具列（未停到螢幕外）；Win32 命中與 Canvas 互動以此為準。
+    /// </summary>
+    public bool IsToolbarShownOnScreen =>
+        ShowToolbar && (CurrentMode == SnipMode.Translation || (CurrentState == SnipState.Selected && !IsRecordingFinalizing));
 
     public string ModeDisplayName => CurrentMode switch
     {
@@ -208,6 +218,7 @@ public partial class SnipWindowViewModel
         {
             this.RaiseAndSetIfChanged(ref _isRecordingFinalizing, value);
             this.RaisePropertyChanged(nameof(IsToolbarVisible));
+            this.RaisePropertyChanged(nameof(IsToolbarShownOnScreen));
             SetRecordingSelectionChromeHidden(value || RecState != RecordingState.Idle);
         }
     }
@@ -611,8 +622,11 @@ public partial class SnipWindowViewModel
     {
         // 進入翻譯模式並重置選取狀態
         CurrentMode = SnipMode.Translation;
+        // Translation relies on Win32 passthrough hit-test; keep drawing mode off to avoid stale state from screenshot mode.
+        IsDrawingMode = false;
         CurrentState = SnipState.Detecting;
         SelectionRect = default;
+        UpdateMask();
         InitializeTranslationToolbarPosition();
     }
 

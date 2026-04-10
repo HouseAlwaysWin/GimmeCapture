@@ -374,8 +374,8 @@
                                   Canvas.Left="{Binding TextInputPosition.X}"
                                   Canvas.Top="{Binding TextInputPosition.Y}"/>
 
-            <!-- Toolbar Layer: when toolbar is hidden, do not capture hit-test so clicks pass through -->
-            <Canvas IsHitTestVisible="{Binding IsToolbarVisible}" ZIndex="1000">
+            <!-- Toolbar Layer: parked off-screen still lays out; only on-screen chrome captures hits -->
+            <Canvas IsHitTestVisible="{Binding IsToolbarShownOnScreen}" ZIndex="1000">
                 <ctl:SnipToolbar Name="Toolbar" 
                                  Canvas.Left="{Binding ToolbarLeft}" Canvas.Top="{Binding ToolbarTop}" 
                                  MaxWidth="{Binding ToolbarMaxWidth}"
