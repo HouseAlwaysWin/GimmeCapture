@@ -139,15 +139,13 @@
                 <StackPanel Spacing="10">
                     <TextBlock Text="{Binding [HotkeyTranslateGroup], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold" Foreground="{Binding ThemeColor, Converter={StaticResource ColorToBrushConverter}}"/>
                     <UniformGrid Columns="2">
-                        <Grid ColumnDefinitions="Auto, 5, *" RowDefinitions="Auto, Auto, Auto, Auto" Margin="0,0,10,0">
+                        <Grid ColumnDefinitions="Auto, 5, *" RowDefinitions="Auto, Auto, Auto" Margin="0,0,10,0">
                             <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding [ActionTranslateAll], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" FontSize="12"/>
                             <TextBox Grid.Row="0" Grid.Column="2" Text="{Binding Translate_TranslateAll, Mode=OneWay}" Tag="{x:Static services:HotkeyTagNames.Translate_TranslateAll}" IsReadOnly="True" KeyDown="HotkeyTextBox_KeyDown" GotFocus="HotkeyTextBox_GotFocus" LostFocus="HotkeyTextBox_LostFocus" Margin="0,2"/>
                             <TextBlock Grid.Row="1" Grid.Column="0" Text="{Binding [ActionScanAll], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" FontSize="12"/>
                             <TextBox Grid.Row="1" Grid.Column="2" Text="{Binding Translate_ScanAll, Mode=OneWay}" Tag="{x:Static services:HotkeyTagNames.Translate_ScanAll}" IsReadOnly="True" KeyDown="HotkeyTextBox_KeyDown" GotFocus="HotkeyTextBox_GotFocus" LostFocus="HotkeyTextBox_LostFocus" Margin="0,2"/>
                             <TextBlock Grid.Row="2" Grid.Column="0" Text="{Binding [ActionClearAll], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" FontSize="12"/>
                             <TextBox Grid.Row="2" Grid.Column="2" Text="{Binding Translate_ClearAll, Mode=OneWay}" Tag="{x:Static services:HotkeyTagNames.Translate_ClearAll}" IsReadOnly="True" KeyDown="HotkeyTextBox_KeyDown" GotFocus="HotkeyTextBox_GotFocus" LostFocus="HotkeyTextBox_LostFocus" Margin="0,2"/>
-                            <TextBlock Grid.Row="3" Grid.Column="0" Text="{Binding [ActionToggleSelect], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" FontSize="12"/>
-                            <TextBox Grid.Row="3" Grid.Column="2" Text="{Binding Translate_ToggleSelect, Mode=OneWay}" Tag="{x:Static services:HotkeyTagNames.Translate_ToggleSelect}" IsReadOnly="True" KeyDown="HotkeyTextBox_KeyDown" GotFocus="HotkeyTextBox_GotFocus" LostFocus="HotkeyTextBox_LostFocus" Margin="0,2"/>
                         </Grid>
                         <Grid ColumnDefinitions="Auto, 5, *" RowDefinitions="Auto, Auto, Auto, Auto, Auto, Auto, Auto" Margin="5,0,0,0">
                             <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding [ActionAutoDetect], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" FontSize="12"/>

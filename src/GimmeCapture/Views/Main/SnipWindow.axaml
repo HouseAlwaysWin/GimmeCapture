@@ -64,7 +64,6 @@
         <KeyBinding Gesture="{Binding TranslateAllHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding TranslateAllSelectionsCommand}" />
         <KeyBinding Gesture="{Binding ScanAllHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding ScanAllTextCommand}" />
         <KeyBinding Gesture="{Binding ClearAllHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding ClearAllSelectionsCommand}" />
-        <KeyBinding Gesture="{Binding ToggleSelectHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding ToggleTranslationSelectCommand}" />
         <KeyBinding Gesture="{Binding AutoDetectHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding ToggleAutoDetectCommand}" />
 
         <!-- Mode Switching -->

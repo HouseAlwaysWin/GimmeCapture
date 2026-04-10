@@ -675,17 +675,29 @@ public partial class SnipWindow : Window
             // Translation Mode Specific Hotkeys
             if (!e.Handled && _viewModel.IsTranslationMode)
             {
-                if (!e.Handled)
-                {
-                    var specificAction = _hotkeyRouter.ResolveSpecificTranslationAction(
-                        _viewModel.TranslateAllHotkey,
-                        IsMatch);
+                var specificAction = _hotkeyRouter.ResolveSpecificTranslationAction(
+                    _viewModel.TranslateAllHotkey,
+                    IsMatch);
 
-                    if (specificAction == HotkeyRouterService.WindowHotkeyAction.TranslateAll)
-                    {
-                        _viewModel.TranslateAllSelectionsCommand?.Execute().Subscribe();
-                        e.Handled = true;
-                    }
+                if (specificAction == HotkeyRouterService.WindowHotkeyAction.TranslateAll)
+                {
+                    _viewModel.TranslateAllSelectionsCommand?.Execute().Subscribe();
+                    e.Handled = true;
+                }
+                else if (IsMatch(_viewModel.ScanAllHotkey))
+                {
+                    _viewModel.ScanAllTextCommand?.Execute().Subscribe();
+                    e.Handled = true;
+                }
+                else if (IsMatch(_viewModel.AutoDetectHotkey))
+                {
+                    _viewModel.ToggleAutoDetectCommand?.Execute().Subscribe();
+                    e.Handled = true;
+                }
+                else if (IsMatch(_viewModel.ClearAllHotkey))
+                {
+                    _viewModel.ClearAllSelectionsCommand?.Execute().Subscribe();
+                    e.Handled = true;
                 }
             }
         }

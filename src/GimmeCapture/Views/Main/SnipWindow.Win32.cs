@@ -404,12 +404,6 @@ public partial class SnipWindow : Window
                 return true;
             }
 
-            if (IsMatch(_viewModel.ToggleSelectHotkey))
-            {
-                _viewModel.ToggleTranslationSelectCommand?.Execute().Subscribe();
-                return true;
-            }
-
             if (IsMatch(_viewModel.AutoDetectHotkey))
             {
                 _viewModel.ToggleAutoDetectCommand?.Execute().Subscribe();
