@@ -6,12 +6,16 @@ namespace GimmeCapture;
 
 class Program
 {
+    /// <summary>Command-line arguments passed to <see cref="Main"/> (e.g. <c>--startup</c> from Windows Run).</summary>
+    public static string[] CommandLineArgs { get; private set; } = [];
+
     // Initialization code. Don't use any Avalonia, third-party APIs or any
     // SynchronizationContext-reliant code before AppMain is called: things aren't initialized
     // yet and stuff might break.
     [STAThread]
     public static void Main(string[] args)
     {
+        CommandLineArgs = args ?? [];
         try
         {
             // Ensure Working Directory is correct (Fix for Auto-Start)
@@ -20,7 +24,7 @@ class Program
                 System.IO.Directory.SetCurrentDirectory(exeDir);
 
             BuildAvaloniaApp()
-                .StartWithClassicDesktopLifetime(args);
+                .StartWithClassicDesktopLifetime(args ?? []);
         }
         catch (Exception ex)
         {

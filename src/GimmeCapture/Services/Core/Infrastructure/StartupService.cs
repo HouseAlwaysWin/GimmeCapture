@@ -1,6 +1,6 @@
 ﻿using Microsoft.Win32;
 using System;
-using System.IO;
+using System.Collections.Generic;
 
 namespace GimmeCapture.Services.Core.Infrastructure;
 
@@ -8,6 +8,20 @@ public class StartupService
 {
     private const string AppName = "GimmeCapture";
     private const string RunKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
+
+    /// <summary>Passed when Windows launches the app from Run; app should start only in the tray (no main window).</summary>
+    public const string RunArgumentForTrayStartup = "--startup";
+
+    public static bool ShouldLaunchToTrayOnly(IReadOnlyList<string>? args)
+    {
+        if (args == null || args.Count == 0) return false;
+        for (var i = 0; i < args.Count; i++)
+        {
+            if (string.Equals(args[i], RunArgumentForTrayStartup, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        return false;
+    }
 
     public static void SetStartup(bool runOnStartup)
     {
@@ -19,15 +33,17 @@ public class StartupService
             var existingValue = key.GetValue(AppName) as string;
             var exePath = Environment.ProcessPath;
             if (string.IsNullOrEmpty(exePath)) return;
-            
-            var expectedValue = $"\"{exePath}\"";
+
+            var expectedValue = runOnStartup
+                ? $"\"{exePath}\" {RunArgumentForTrayStartup}"
+                : null;
 
             if (runOnStartup)
             {
                 // Only write if not exists or different
                 if (existingValue != expectedValue)
                 {
-                    key.SetValue(AppName, expectedValue);
+                    key.SetValue(AppName, expectedValue!);
                 }
             }
             else

@@ -1,3 +1,4 @@
+using System;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
@@ -5,6 +6,7 @@ using GimmeCapture.ViewModels.Main;
 using GimmeCapture.Views.Main;
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core;
+using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Platforms.Windows;
 
 namespace GimmeCapture;
@@ -27,7 +29,18 @@ public partial class App : Application
             {
                 DataContext = new MainWindowViewModel(),
             };
-            
+
+            if (desktop.MainWindow is { } mw && StartupService.ShouldLaunchToTrayOnly(Program.CommandLineArgs))
+            {
+                void OnOpenedForTrayOnly(object? s, EventArgs e)
+                {
+                    mw.Opened -= OnOpenedForTrayOnly;
+                    mw.Hide();
+                }
+
+                mw.Opened += OnOpenedForTrayOnly;
+            }
+
             // Setup Tray Icon
             try
             {
