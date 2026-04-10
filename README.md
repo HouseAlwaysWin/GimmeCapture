@@ -19,7 +19,7 @@ The name **GimmeCapture!!** is a tribute to the song **["Gimme chocolate!!" (Off
 ### Features
 - **Smart Snip**: High-performance screen capture with instant editing tools.
 - **Screen Recording + System Audio**: Record screen video with desktop/system audio into MP4, MKV, GIF, and more.
-- **Live Translation Mode**: OCR + translation workflow with single/multi selection, language selection, and translation result overlays.
+- **Live Translation Mode**: OCR + translation workflow with language selection, drag-region selection, and translation result overlays.
 - **Pin to Top**: Pin your snips as floating windows for easy reference.
 - **Pinned Video Player**: Play/pause, loop, seek, speed control (0.5x/1.0x/1.5x/2.0x), and audio mute toggle.
 - **Editing Tools**: Draw boxes, arrows, lines, and text directly on your capture.
@@ -33,12 +33,13 @@ The name **GimmeCapture!!** is a tribute to the song **["Gimme chocolate!!" (Off
 1. Launch the app and switch between the three modes on the toolbar: **Snip / Record / Translate**.
 2. In Snip mode, capture an area, annotate it, then copy, save, or pin it as a floating window.
 3. In Record mode, start/pause/stop recording and monitor live input/output audio levels from the toolbar.
-4. In Translate mode, choose source/target languages, select regions (single or multi), then run translate or OCR scan.
+4. In Translate mode, choose source/target languages, drag to select regions, then run translate or OCR scan.
 5. Use right-click on pinned windows to access context actions; pinned videos support playback, speed, and audio controls.
 
 ### Translation Mode Notes
 - Switch to **Translation Mode** from the toolbar language/translate icon.
-- Select source and target languages, then use **single** or **multi** selection capture.
+- Select source and target languages, then drag to select one or more text regions.
+- The selection hold modifier is configurable in **Settings > Hotkeys** (`Shift` / `Ctrl` / `Alt` / `None`), default is `Ctrl`.
 - Use **Translate All** to process all selections, or **Scan All** for OCR-only detection.
 - Translation overlays can be toggled on/off from the translation toolbar.
 
