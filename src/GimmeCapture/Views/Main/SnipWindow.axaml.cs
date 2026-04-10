@@ -292,32 +292,27 @@ public partial class SnipWindow : Window
                 vm.ToolbarHeight = b.Height;
             });
 
-            // Toggle window capture visibility based on mode/state.
-            // Recording should include on-screen drawing timeline, so keep SnipWindow capturable.
-            // Translation mode still excludes the window to prevent OCR/flicker recursion.
+            // WDA_EXCLUDEFROMCAPTURE: translation OCR / recording without annotations exclude SnipWindow from
+            // FFmpeg gdigrab so output matches full SelectionRect without chrome; annotations require capturable window + inset crop (see RecordingUsesWindowsExcludeFromCapture).
+            vm.SyncRecordingScreenCaptureAffinity = () => ApplyRecordingScreenCaptureAffinity(vm);
             if (vm.RecordingService != null)
             {
-                _recordingStateSubscription = vm.RecordingService.WhenAnyValue(x => x.State)
+                _recordingStateSubscription = Observable.Merge(
+                        vm.RecordingService.WhenAnyValue(x => x.State).Select(_ => 0),
+                        vm.WhenAnyValue(x => x.RecordingUsesWindowsExcludeFromCapture).Select(_ => 0),
+                        vm.WhenAnyValue(x => x.IsTranslationMode).Select(_ => 0))
                     .ObserveOn(RxApp.MainThreadScheduler)
-                    .Subscribe(state => 
+                    .Subscribe(_ =>
                     {
-                        var hwnd = this.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
-                        if (hwnd != IntPtr.Zero && OperatingSystem.IsWindows())
-                        {
-                            if (!vm.IsTranslationMode)
-                            {
-                                // Keep SnipWindow capturable so brush/text drawing is actually recorded.
-                                Win32Helpers.SetWindowCaptureVisibility(hwnd, true);
-                            }
-                        }
-                        
-                        // Trigger UI update for decorations
+                        ApplyRecordingScreenCaptureAffinity(vm);
                         vm.RaisePropertyChanged(nameof(vm.HideSelectionDecoration));
                         vm.RaisePropertyChanged(nameof(vm.HideFrameBorder));
                         vm.RaisePropertyChanged(nameof(vm.IsToolbarVisible));
                         vm.RaisePropertyChanged(nameof(vm.IsToolbarShownOnScreen));
                     });
             }
+
+            ApplyRecordingScreenCaptureAffinity(vm);
 
             _viewModel.IsMagnifierEnabled = true;
             _viewModel.CloseAction = () => 
@@ -777,5 +772,23 @@ public partial class SnipWindow : Window
             "HandleRight" => ResizeDirection.Right,
             _ => ResizeDirection.None
         };
+    }
+
+    /// <summary>
+    /// <see cref="Win32Helpers.SetWindowDisplayAffinity"/>: local display unchanged; screen capture APIs see through the window when excluded.
+    /// </summary>
+    private void ApplyRecordingScreenCaptureAffinity(SnipWindowViewModel vm)
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        var hwnd = this.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
+        if (hwnd == IntPtr.Zero) return;
+
+        // Do not gate RecordingUsesWindowsExcludeFromCapture on RecState: that flag is set and Sync runs
+        // before RecordingService sets State=Recording, so requiring RecState!=Idle cleared WDA and broke capture.
+        bool excludeFromCapture =
+            vm.IsTranslationMode
+            || vm.RecordingUsesWindowsExcludeFromCapture;
+
+        Win32Helpers.SetWindowCaptureVisibility(hwnd, visible: !excludeFromCapture);
     }
 }

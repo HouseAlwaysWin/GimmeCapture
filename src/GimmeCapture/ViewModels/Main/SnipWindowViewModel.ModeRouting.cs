@@ -186,7 +186,6 @@ public partial class SnipWindowViewModel
         _ => LocalizationService.Instance["CaptureModeNormal"]
     };
 
-    // True when actively recording (not idle, not paused) - used to hide selection border
     public bool IsRecordingActive => _recordingService?.State == RecordingState.Recording;
 
     // Current recording format (gif, mp4, webm, etc.)
@@ -219,16 +218,8 @@ public partial class SnipWindowViewModel
             this.RaiseAndSetIfChanged(ref _isRecordingFinalizing, value);
             this.RaisePropertyChanged(nameof(IsToolbarVisible));
             this.RaisePropertyChanged(nameof(IsToolbarShownOnScreen));
-            SetRecordingSelectionChromeHidden(value || RecState != RecordingState.Idle);
+            RaiseProperties(nameof(HideFrameBorder), nameof(HideSelectionDecoration));
         }
-    }
-    private bool _forceHideRecordingSelectionChrome;
-
-    private void SetRecordingSelectionChromeHidden(bool hidden)
-    {
-        if (_forceHideRecordingSelectionChrome == hidden) return;
-        _forceHideRecordingSelectionChrome = hidden;
-        RaiseProperties(nameof(HideFrameBorder), nameof(HideSelectionDecoration));
     }
 
     // Action Helpers
@@ -236,7 +227,7 @@ public partial class SnipWindowViewModel
     {
         get
         {
-            if (_forceHideRecordingSelectionChrome || IsRecordingFinalizing)
+            if (IsRecordingFinalizing)
             {
                 return true;
             }
@@ -250,7 +241,7 @@ public partial class SnipWindowViewModel
     {
         get
         {
-            if (_forceHideRecordingSelectionChrome || IsRecordingFinalizing)
+            if (IsRecordingFinalizing)
             {
                 return true;
             }

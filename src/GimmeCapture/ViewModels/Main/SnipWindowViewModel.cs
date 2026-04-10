@@ -198,6 +198,10 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
 
     // Actions
     public Action? CloseAction { get; set; }
+    /// <summary>
+    /// Assigned by SnipWindow: applies <see cref="GimmeCapture.Services.Interop.Win32Helpers.SetWindowDisplayAffinity"/> so FFmpeg/gdigrab can exclude chrome while keeping full SelectionRect size (Windows 10 2004+).
+    /// </summary>
+    public Action? SyncRecordingScreenCaptureAffinity { get; set; }
     public Action? HideAction { get; set; }
     public Action? ShowAction { get; set; }
     public Action? OpenRecordingProgressWindowAction { get; set; }
@@ -624,6 +628,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         _recordTimer?.Stop();
         
         CloseAction = null;
+        SyncRecordingScreenCaptureAffinity = null;
         HideAction = null;
         ShowAction = null;
         OpenRecordingProgressWindowAction = null;

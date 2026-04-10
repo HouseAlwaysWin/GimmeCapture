@@ -1,6 +1,7 @@
 using Avalonia;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Abstractions;
+using ReactiveUI;
 using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.ViewModels.Floating;
 using GimmeCapture.Views.Floating;
@@ -11,6 +12,52 @@ namespace GimmeCapture.ViewModels.Main;
 
 public partial class SnipWindowViewModel
 {
+    /// <summary>
+    /// Logical rect passed to <see cref="RecordingService.StartAsync"/>. Usually equals <see cref="SelectionRect"/> when
+    /// <see cref="RecordingUsesWindowsExcludeFromCapture"/> is true (WDA_EXCLUDEFROMCAPTURE). Otherwise may be inset when annotations prevent exclusion.
+    /// </summary>
+    private Rect? _recordingCaptureLogicalRect;
+
+    /// <summary>
+    /// When true, SnipWindow uses Windows exclude-from-capture so FFmpeg records the full <see cref="SelectionRect"/> without overlay chrome (no smaller output size).
+    /// False when <see cref="Annotations"/> is non-empty (ink must stay visible to capture) or not on Windows — then <see cref="GetRecordingCaptureRegionExcludingVisibleChrome"/> is used.
+    /// </summary>
+    private bool _recordingUsesWindowsExcludeFromCapture;
+
+    public bool RecordingUsesWindowsExcludeFromCapture => _recordingUsesWindowsExcludeFromCapture;
+
+    /// <summary>
+    /// Fallback when WDA cannot be used: crop gdigrab region inside the selection so border/corners are not in the file (output size is smaller than the selection).
+    /// </summary>
+    private Rect GetRecordingCaptureRegionExcludingVisibleChrome()
+    {
+        var r = SelectionRect;
+        if (_mainVm == null) return r;
+
+        bool hideBorder = _mainVm.HideRecordSelectionBorder;
+        bool hideDeco = _mainVm.HideRecordSelectionDecoration;
+        if (hideBorder && hideDeco)
+            return r;
+
+        const double cornerMarginPad = 1.5;
+        const double edgePad = 2.0;
+
+        double inset = 0;
+        if (!hideBorder)
+            inset = Math.Max(inset, SelectionBorderThickness * 2 + 1);
+        if (!hideDeco)
+            inset = Math.Max(inset, SelectionIconSize + SelectionBorderThickness + cornerMarginPad + edgePad);
+
+        if (inset <= 0)
+            return r;
+
+        const double minRemain = 8.0;
+        if (r.Width <= 2 * inset + minRemain || r.Height <= 2 * inset + minRemain)
+            return r;
+
+        return new Rect(r.X + inset, r.Y + inset, r.Width - 2 * inset, r.Height - 2 * inset);
+    }
+
     private void ResetRecordingDurationTracking()
     {
         _recordingAccumulatedDuration = TimeSpan.Zero;
@@ -38,7 +85,15 @@ public partial class SnipWindowViewModel
 
     private void HandleRecordingStateChanged(RecordingState newState)
     {
-        SetRecordingSelectionChromeHidden(newState != RecordingState.Idle || IsRecordingFinalizing);
+        if (newState == RecordingState.Idle)
+        {
+            if (_recordingUsesWindowsExcludeFromCapture)
+            {
+                _recordingUsesWindowsExcludeFromCapture = false;
+                this.RaisePropertyChanged(nameof(RecordingUsesWindowsExcludeFromCapture));
+            }
+            SyncRecordingScreenCaptureAffinity?.Invoke();
+        }
 
         var nowUtc = DateTime.UtcNow;
 
@@ -150,21 +205,31 @@ public partial class SnipWindowViewModel
             _currentRecordingPath = System.IO.Path.Combine(tempDir, $"GimmeCapture_{Guid.NewGuid()}.{format}");
         }
 
-        var region = SelectionRect;
+        bool useWindowsExcludeFromCapture = OperatingSystem.IsWindows() && Annotations.Count == 0;
+        _recordingUsesWindowsExcludeFromCapture = useWindowsExcludeFromCapture;
+        this.RaisePropertyChanged(nameof(RecordingUsesWindowsExcludeFromCapture));
+        SyncRecordingScreenCaptureAffinity?.Invoke();
+
+        _recordingCaptureLogicalRect = null;
+        var region = useWindowsExcludeFromCapture
+            ? SelectionRect
+            : GetRecordingCaptureRegionExcludingVisibleChrome();
 
         // Ensure size is even for ffmpeg
         if (region.Width % 2 != 0) region = region.WithWidth(region.Width - 1);
         if (region.Height % 2 != 0) region = region.WithHeight(region.Height - 1);
 
         ResetRecordingDurationTracking();
-        SetRecordingSelectionChromeHidden(true);
         if (await _recordingService.StartAsync(region, _currentRecordingPath, _mainVm!.RecordingSettings.RecordFormat ?? "mp4", _mainVm.ShowRecordCursor, ScreenOffset, VisualScaling, _mainVm.RecordingSettings.RecordFPS, _mainVm.RecordSystemAudio))
         {
+            _recordingCaptureLogicalRect = region;
             EnsureRecordingTimerStarted();
         }
         else
         {
-            SetRecordingSelectionChromeHidden(false);
+            _recordingUsesWindowsExcludeFromCapture = false;
+            this.RaisePropertyChanged(nameof(RecordingUsesWindowsExcludeFromCapture));
+            SyncRecordingScreenCaptureAffinity?.Invoke();
         }
     }
 
@@ -335,13 +400,14 @@ public partial class SnipWindowViewModel
                 }
 
                 double scaling = VisualScaling;
-                int x = (int)(SelectionRect.X * scaling) + ScreenOffset.X;
-                int y = (int)(SelectionRect.Y * scaling) + ScreenOffset.Y;
+                var cap = _recordingCaptureLogicalRect ?? SelectionRect;
+                int x = (int)(cap.X * scaling) + ScreenOffset.X;
+                int y = (int)(cap.Y * scaling) + ScreenOffset.Y;
 
-                int w = (int)(SelectionRect.Width * scaling);
-                int h = (int)(SelectionRect.Height * scaling);
-                double logW = SelectionRect.Width;
-                double logH = SelectionRect.Height;
+                int w = (int)(cap.Width * scaling);
+                int h = (int)(cap.Height * scaling);
+                double logW = cap.Width;
+                double logH = cap.Height;
 
                 Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                 {
