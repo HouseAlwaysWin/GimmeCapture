@@ -82,6 +82,8 @@ public partial class MainWindowViewModel
             nameof(Translate_Action), nameof(Translate_Toolbar), nameof(Translate_Close),
             nameof(Translate_TranslateAll), nameof(Translate_ScanAll), nameof(Translate_ClearAll),
             nameof(Translate_ToggleSelect), nameof(Translate_AutoDetect),
+            nameof(Translate_SelectionHoldModifier),
+            nameof(Translate_ModeCursor), nameof(Translate_ModeSingle), nameof(Translate_ModeMulti),
             nameof(Translate_SwitchToSnip), nameof(Translate_SwitchToRecord),
             nameof(Snip_SwitchToTranslate), nameof(Snip_SwitchToRecord)
         };

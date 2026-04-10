@@ -53,12 +53,6 @@ public partial class SnipWindow : Window
         return Math.Max(widthIncludingPadding, minWidth);
     }
 
-    /// <summary>
-    /// While true, <see cref="UpdateWindowRegion"/> keeps ring/pass-through even if Ctrl still reads as down
-    /// (e.g. user finished a drag while holding Ctrl — restore rings until real Ctrl key-up).
-    /// </summary>
-    private bool _translationSuppressFullHitUntilCtrlUp;
-
     // --- Low-Level Keyboard Hook ---
     private const int WH_KEYBOARD_LL = 13;
     private const int WM_KEYDOWN = 0x0100;
@@ -201,44 +195,29 @@ public partial class SnipWindow : Window
         bool ctrlDown = (GetAsyncKeyState(0x11) & 0x8000) != 0;
         bool altDown = (GetAsyncKeyState(0x12) & 0x8000) != 0;
 
-        // Modifiers logic for hold shortcuts (Only applicable for TranslationMode right now)
+        // Translation mode: one configurable hold-modifier for selection (Shift/Ctrl/Alt; None = no key hook).
         if (IsPureModifierKey(keyStr))
         {
-            if (_viewModel?.IsTranslationMode == true && keyStr == "Ctrl")
+            var selMod = _viewModel?.TranslationSelectionHoldModifier ?? "Ctrl";
+            if (!string.Equals(selMod, "None", StringComparison.OrdinalIgnoreCase) &&
+                _viewModel?.IsTranslationMode == true &&
+                string.Equals(keyStr, selMod, StringComparison.OrdinalIgnoreCase))
             {
                 Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                 {
                     if (_viewModel == null) return;
-                    if (!isKeyDown)
-                        _translationSuppressFullHitUntilCtrlUp = false;
+                    if (isKeyDown)
+                        _viewModel.CurrentTranslationTool = Models.TranslationTool.Single;
+                    else
+                    {
+                        _translationSuppressFullHitUntilSelectionModifierUp = false;
+                        _viewModel.CurrentTranslationTool = Models.TranslationTool.Cursor;
+                    }
                     RequestTranslationWindowRegionRefresh();
                 }, Avalonia.Threading.DispatcherPriority.Input);
+                return true;
             }
 
-            if (_viewModel?.IsTranslationMode == true)
-            {
-                if (isKeyDown)
-                {
-                    if (_viewModel.HoldSingleHotkey == keyStr)
-                    {
-                        _viewModel.CurrentTranslationTool = Models.TranslationTool.Single;
-                        return true;
-                    }
-                    else if (_viewModel.HoldMultiHotkey == keyStr)
-                    {
-                        _viewModel.CurrentTranslationTool = Models.TranslationTool.Multi;
-                        return true;
-                    }
-                }
-                else // KeyUp
-                {
-                    if (_viewModel.HoldSingleHotkey == keyStr || _viewModel.HoldMultiHotkey == keyStr)
-                    {
-                        _viewModel.CurrentTranslationTool = Models.TranslationTool.Cursor;
-                        return true;
-                    }
-                }
-            }
             return false;
         }
 
@@ -510,8 +489,8 @@ public partial class SnipWindow : Window
     {
         if (_viewModel != null && !_viewModel.IsToolbarShownOnScreen)
         {
-            bool ctrlHeld = (GetAsyncKeyState(0x11) & 0x8000) != 0;
-            if (ctrlHeld && !_translationSuppressFullHitUntilCtrlUp)
+            bool selModHeld = IsTranslationSelectionModifierDownForRegion();
+            if (selModHeld && !_translationSuppressFullHitUntilSelectionModifierUp)
             {
                 Win32Helpers.SetMultiWindowHoleRegion(hwnd, windowWidth, windowHeight, new[] { new Rect(0, 0, 1, 1) }, 0, null, null);
                 _hitTestRegions.Clear();
@@ -776,8 +755,8 @@ public partial class SnipWindow : Window
             if (isTranslation && translationRings.Count > 0)
             {
                 // Hold Ctrl: full client hit-test (same as no-selection) so the user can start a new rect outside the ring; release or finish drag restores rings.
-                bool ctrlHeld = (GetAsyncKeyState(0x11) & 0x8000) != 0;
-                if (ctrlHeld && !_translationSuppressFullHitUntilCtrlUp)
+                bool selModHeld = IsTranslationSelectionModifierDownForRegion();
+                if (selModHeld && !_translationSuppressFullHitUntilSelectionModifierUp)
                 {
                     ApplyTranslationDwmMinimalOccluderFix(hwnd, scaling, windowWidth, windowHeight);
                     return;
@@ -900,8 +879,8 @@ public partial class SnipWindow : Window
                 {
                     // No selection yet: pass-through everywhere except toolbar/loading so the user can operate
                     // underlying apps; hold Ctrl to switch to full-window hit (see RequestTranslationWindowRegionRefresh).
-                    bool ctrlHeld = (GetAsyncKeyState(0x11) & 0x8000) != 0;
-                    if (ctrlHeld && !_translationSuppressFullHitUntilCtrlUp)
+                    bool selModHeld = IsTranslationSelectionModifierDownForRegion();
+                    if (selModHeld && !_translationSuppressFullHitUntilSelectionModifierUp)
                     {
                         ApplyTranslationDwmMinimalOccluderFix(hwnd, scaling, windowWidth, windowHeight);
                         _useHitTestRegions = false;

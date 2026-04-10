@@ -78,8 +78,8 @@ public class TranslateHotkeys
     public string ClearAll { get; set; } = "Delete";
     public string ToggleSelect { get; set; } = "Tab";
     public string AutoDetect { get; set; } = "D";
-    public string HoldSingle { get; set; } = "Shift";
-    public string HoldMulti { get; set; } = "Ctrl";
+    /// <summary>Shift, Ctrl, Alt, or None — hold while dragging to box-select in translation mode.</summary>
+    public string SelectionHoldModifier { get; set; } = "Ctrl";
     public string ModeCursor { get; set; } = "D1";
     public string ModeSingle { get; set; } = "D2";
     public string ModeMulti { get; set; } = "D3";

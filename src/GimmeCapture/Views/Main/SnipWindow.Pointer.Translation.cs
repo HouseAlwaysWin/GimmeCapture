@@ -18,7 +18,7 @@ public partial class SnipWindow
 
         bool hasAnyBox = _viewModel.UserSelections.AsValueEnumerable()
             .Any(s => !s.IsAudioPanel && s.Bounds.Width > 5 && s.Bounds.Height > 5);
-        bool ctrlDown = (GetAsyncKeyState(0x11) & 0x8000) != 0;
+        bool selModDown = IsTranslationSelectionModifierDownForPointer();
 
         if (props.IsRightButtonPressed)
         {
@@ -27,8 +27,8 @@ public partial class SnipWindow
 
         if (props.IsLeftButtonPressed)
         {
-            // Every selection rect (including the first): hold Ctrl — Win32 region uses full hit while Ctrl is down.
-            if (!ctrlDown)
+            // Hold configured modifier (or none) — Win32 region uses full hit while modifier is down.
+            if (!selModDown)
                 return false;
 
             bool isAdditional = hasAnyBox;
@@ -190,8 +190,10 @@ public partial class SnipWindow
                 _currentTranslationSelection = null;
             }
 
-            if ((GetAsyncKeyState(0x11) & 0x8000) != 0)
-                _translationSuppressFullHitUntilCtrlUp = true;
+            var holdMod = _viewModel?.TranslationSelectionHoldModifier ?? "Ctrl";
+            if (!string.Equals(holdMod, "None", StringComparison.OrdinalIgnoreCase) &&
+                IsPhysicalModifierLabelDown(holdMod))
+                _translationSuppressFullHitUntilSelectionModifierUp = true;
             RequestTranslationWindowRegionRefresh();
 
             e.Pointer.Capture(null);

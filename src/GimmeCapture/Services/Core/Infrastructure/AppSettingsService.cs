@@ -43,6 +43,35 @@ public class AppSettingsService
         Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
     };
 
+    /// <summary>Migrate legacy Translate.HoldSingle / HoldMulti into SelectionHoldModifier when the new key is absent.</summary>
+    private static void MigrateTranslateSelectionHoldModifier(string json, AppSettings settings)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            if (!doc.RootElement.TryGetProperty("Translate", out var tr)) return;
+
+            static string? LegacyString(JsonElement parent, string pascalName)
+            {
+                if (parent.TryGetProperty(pascalName, out var el) && el.ValueKind == JsonValueKind.String)
+                    return el.GetString();
+                var camel = char.ToLowerInvariant(pascalName[0]) + pascalName[1..];
+                if (parent.TryGetProperty(camel, out el) && el.ValueKind == JsonValueKind.String)
+                    return el.GetString();
+                return null;
+            }
+
+            var sel = LegacyString(tr, "SelectionHoldModifier");
+            if (!string.IsNullOrWhiteSpace(sel))
+                return;
+
+            var pick = LegacyString(tr, "HoldMulti") ?? LegacyString(tr, "HoldSingle");
+            if (!string.IsNullOrEmpty(pick))
+                settings.Translate.SelectionHoldModifier = pick;
+        }
+        catch { /* ignore malformed migration */ }
+    }
+
     public async Task LoadAsync()
     {
         string? targetPath = null;
@@ -79,6 +108,7 @@ public class AppSettingsService
                 var settings = JsonSerializer.Deserialize<AppSettings>(json, GetJsonOptions());
                 if (settings != null)
                 {
+                    MigrateTranslateSelectionHoldModifier(json, settings);
                     UpdateSettings(settings);
                     DebugLog($"Successfully loaded settings from {targetPath}. Language value: {Settings.Language}");
                 }
@@ -166,7 +196,18 @@ public class AppSettingsService
         dest.Translate.Action = source.Translate.Action;
         dest.Translate.Toolbar = source.Translate.Toolbar;
         dest.Translate.Close = source.Translate.Close;
-        
+        dest.Translate.TranslateAll = source.Translate.TranslateAll;
+        dest.Translate.ScanAll = source.Translate.ScanAll;
+        dest.Translate.ClearAll = source.Translate.ClearAll;
+        dest.Translate.ToggleSelect = source.Translate.ToggleSelect;
+        dest.Translate.AutoDetect = source.Translate.AutoDetect;
+        dest.Translate.SelectionHoldModifier = source.Translate.SelectionHoldModifier;
+        dest.Translate.ModeCursor = source.Translate.ModeCursor;
+        dest.Translate.ModeSingle = source.Translate.ModeSingle;
+        dest.Translate.ModeMulti = source.Translate.ModeMulti;
+        dest.Translate.SwitchToSnip = source.Translate.SwitchToSnip;
+        dest.Translate.SwitchToRecord = source.Translate.SwitchToRecord;
+
         dest.AIResourcesDirectory = source.AIResourcesDirectory;
         dest.EnableAI = source.EnableAI;
         dest.SelectedSAM2Variant = source.SelectedSAM2Variant;
@@ -213,7 +254,11 @@ public class AppSettingsService
             {
                 var json = File.ReadAllText(targetPath);
                 var settings = JsonSerializer.Deserialize<AppSettings>(json, GetJsonOptions());
-                if (settings != null) UpdateSettings(settings);
+                if (settings != null)
+                {
+                    MigrateTranslateSelectionHoldModifier(json, settings);
+                    UpdateSettings(settings);
+                }
             }
             catch { }
         }

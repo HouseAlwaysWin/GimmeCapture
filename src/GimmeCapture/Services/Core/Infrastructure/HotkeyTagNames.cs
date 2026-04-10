@@ -54,6 +54,7 @@ public static class HotkeyTagNames
     public const string Translate_ClearAll = nameof(Translate_ClearAll);
     public const string Translate_ToggleSelect = nameof(Translate_ToggleSelect);
     public const string Translate_AutoDetect = nameof(Translate_AutoDetect);
+    public const string Translate_SelectionHoldModifier = nameof(Translate_SelectionHoldModifier);
     public const string Translate_SwitchToSnip = nameof(Translate_SwitchToSnip);
     public const string Translate_SwitchToRecord = nameof(Translate_SwitchToRecord);
 }
