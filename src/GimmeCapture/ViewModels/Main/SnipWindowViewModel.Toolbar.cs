@@ -377,8 +377,8 @@ public partial class SnipWindowViewModel
         IncreaseThicknessCommand = ReactiveCommand.Create(() => { CurrentThickness = Math.Min(CurrentThickness + 1, 30); });
         DecreaseThicknessCommand = ReactiveCommand.Create(() => { CurrentThickness = Math.Max(CurrentThickness - 1, 1); });
         
-        var canUndo = this.WhenAnyValue(x => x.HasUndo);
-        var canRedo = this.WhenAnyValue(x => x.HasRedo);
+        var canUndo = this.WhenAnyValue(x => x.HasUndo, x => x.IsInputFocused, (u, textFocus) => u && !textFocus);
+        var canRedo = this.WhenAnyValue(x => x.HasRedo, x => x.IsInputFocused, (u, textFocus) => u && !textFocus);
         UndoCommand = ReactiveCommand.Create(Undo, canUndo);
         UndoCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
         RedoCommand = ReactiveCommand.Create(Redo, canRedo);

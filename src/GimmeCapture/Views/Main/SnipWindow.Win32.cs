@@ -116,6 +116,33 @@ public partial class SnipWindow : Window
     private static extern uint MapVirtualKey(uint uCode, uint uMapType);
     private const uint MAPVK_VSC_TO_VK_EX = 3;
 
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool IsChild(IntPtr hWndParent, IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetAncestor(IntPtr hwnd, uint gaFlags);
+
+    private const uint GA_ROOT = 2;
+
+    /// <summary>
+    /// Low-level keyboard hook is process-global. Only interpret shortcuts when this Snip window (or a child control)
+    /// owns foreground focus — otherwise keys belong to apps below hit-test passthrough regions (e.g. typing in a browser field).
+    /// </summary>
+    private bool ShouldRouteLowLevelHotkeysForForegroundWindow()
+    {
+        IntPtr mine = TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
+        if (mine == IntPtr.Zero) return false;
+        IntPtr fg = GetForegroundWindow();
+        if (fg == IntPtr.Zero) return false;
+        if (fg == mine) return true;
+        if (IsChild(mine, fg)) return true;
+        return GetAncestor(fg, GA_ROOT) == mine;
+    }
+
     private IntPtr LLKeyboardHookCallback(int nCode, IntPtr wParam, IntPtr lParam)
     {
         if (nCode >= 0 && _viewModel != null)
@@ -191,9 +218,59 @@ public partial class SnipWindow : Window
     {
         if (_viewModel == null) return false;
 
+        if (!ShouldRouteLowLevelHotkeysForForegroundWindow())
+        {
+            return false;
+        }
+
         bool shiftDown = (GetAsyncKeyState(0x10) & 0x8000) != 0;
         bool ctrlDown = (GetAsyncKeyState(0x11) & 0x8000) != 0;
         bool altDown = (GetAsyncKeyState(0x12) & 0x8000) != 0;
+
+        // Escape is handled even when a text control is focused (cancel entry / dismiss selection / close).
+        if (isKeyDown && string.Equals(keyStr, "Escape", StringComparison.OrdinalIgnoreCase))
+        {
+            var vmEsc = _viewModel;
+            if (vmEsc.IsEnteringText)
+            {
+                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                {
+                    vmEsc.CancelTextEntryCommand.Execute(System.Reactive.Unit.Default).Subscribe();
+                });
+                return true;
+            }
+
+            if (vmEsc.RecState != RecordingState.Idle)
+            {
+                return true;
+            }
+
+            if (vmEsc.IsDrawingMode)
+            {
+                Avalonia.Threading.Dispatcher.UIThread.Post(() => { vmEsc.IsDrawingMode = false; });
+                return true;
+            }
+
+            if (vmEsc.CurrentState == SnipState.Selecting ||
+                vmEsc.CurrentState == SnipState.Selected)
+            {
+                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                {
+                    vmEsc.CurrentState = SnipState.Detecting;
+                    vmEsc.SelectionRect = new Rect(0, 0, 0, 0);
+                });
+                return true;
+            }
+
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => this.Close());
+            return true;
+        }
+
+        // Let keys through to SelectableTextBlock/TextBox/ComboBox (translation results, toolbars, IME, etc.).
+        if (_viewModel.IsInputFocused)
+        {
+            return false;
+        }
 
         // Translation mode: one configurable hold-modifier for selection (Shift/Ctrl/Alt; None = no key hook).
         if (IsPureModifierKey(keyStr))
@@ -224,50 +301,8 @@ public partial class SnipWindow : Window
         // Only process action hotkeys on KeyDown
         if (!isKeyDown) return false;
 
-        // --- Handle Global Escape Key explicitly ---
-        if (string.Equals(keyStr, "Escape", StringComparison.OrdinalIgnoreCase))
-        {
-            // Replicate OnKeyDown Escape logic so users can cancel screenshots/records when unfocused
-            if (_viewModel.IsEnteringText)
-            {
-                _viewModel.CancelTextEntryCommand.Execute(System.Reactive.Unit.Default).Subscribe();
-                return true;
-            }
-
-            if (_viewModel.RecState != RecordingState.Idle)
-            {
-                return true; // Ignore escape gracefully while recording
-            }
-
-            if (_viewModel.IsDrawingMode)
-            {
-                _viewModel.IsDrawingMode = false;
-                return true;
-            }
-            else if (_viewModel.CurrentState == SnipState.Selecting || 
-                     _viewModel.CurrentState == SnipState.Selected)
-            {
-                _viewModel.CurrentState = SnipState.Detecting;
-                _viewModel.SelectionRect = new Rect(0,0,0,0);
-                return true;
-            }
-            else
-            {
-                // We shouldn't directly close the window from a background thread / hook callback without dispatcher context usually,
-                // but Avalonia mostly allows Dispatcher.UIThread.Post for safety.
-                Avalonia.Threading.Dispatcher.UIThread.Post(() => this.Close());
-                return true;
-            }
-        }
-
         // --- Do NOT process other hotkeys if the user is typing in the Text annotation tool ---
         if (_viewModel.IsEnteringText)
-        {
-            return false;
-        }
-
-        // Let native text selection copy handle Ctrl+C in translation text blocks.
-        if (_viewModel.IsInputFocused && ctrlDown && string.Equals(keyStr, "C", StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }

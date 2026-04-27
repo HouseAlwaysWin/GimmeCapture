@@ -443,7 +443,12 @@ public partial class SnipWindowViewModel
         }, nameof(SetCaptureModeCommand), canExecuteHotkeys);
 
         StartRecordingCommand = CreateAsyncCommand(StartRecording, nameof(StartRecordingCommand));
-        PauseRecordingCommand = CreateAsyncCommand(PauseRecording, nameof(PauseRecordingCommand));
+
+        var canPauseRecordingHotkey = this.WhenAnyValue(
+            x => x.RecState,
+            x => x.IsInputFocused,
+            (rec, textFocus) => rec != RecordingState.Idle && !textFocus);
+        PauseRecordingCommand = CreateAsyncCommand(PauseRecording, nameof(PauseRecordingCommand), canPauseRecordingHotkey);
         StopRecordingCommand = CreateAsyncCommand(StopRecording, nameof(StopRecordingCommand));
         CopyRecordingCommand = CreateAsyncCommand(CopyRecording, nameof(CopyRecordingCommand));
 

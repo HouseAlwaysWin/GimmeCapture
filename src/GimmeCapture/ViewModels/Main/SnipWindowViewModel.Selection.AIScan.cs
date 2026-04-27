@@ -439,7 +439,10 @@ public partial class SnipWindowViewModel
         ToggleAIScanBoxCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Toggle AI Box error: {ex}"));
 
 
-        var canExecuteInTranslation = this.WhenAnyValue(x => x.CurrentMode, mode => mode == SnipMode.Translation);
+        var canExecuteInTranslation = this.WhenAnyValue(
+            x => x.CurrentMode,
+            x => x.IsInputFocused,
+            (mode, textFocus) => mode == SnipMode.Translation && !textFocus);
 
         TranslateAllSelectionsCommand = ReactiveCommand.Create(() => { _ = TranslateAllSelectionsAsync(); }, canExecuteInTranslation);
         TranslateAllSelectionsCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"TranslateAll error: {ex}"));

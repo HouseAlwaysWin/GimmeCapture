@@ -214,20 +214,42 @@ public partial class SnipWindow : Window
             // Temporarily lower existing Pin windows
             _hiddenTopmostWindows = _windowLayerService.LowerTopmostWindowsOfType<FloatingImageWindow>();
 
-            // Track Focus to fix Ctrl+C conflict with SelectableTextBlock
-            this.AddHandler(InputElement.GotFocusEvent, (s, ev) => 
+            // Track keyboard focus so global/LL hook shortcuts do not steal keys while typing in translation UI, ComboBoxes, etc.
+            // Update synchronously so the first keystroke after focus is not routed as a hotkey (Post deferred too long).
+            void OnTreeKeyboardFocusChanged(object? _, RoutedEventArgs __)
             {
-                if (_viewModel == null) return;
-                bool isTextControl = ev.Source is SelectableTextBlock || ev.Source is TextBox;
-                _viewModel.IsInputFocused = isTextControl;
-            }, RoutingStrategies.Bubble);
+                RefreshKeyboardInteractionFocusFlag();
+                Avalonia.Threading.Dispatcher.UIThread.Post(
+                    RefreshKeyboardInteractionFocusFlag,
+                    Avalonia.Threading.DispatcherPriority.Input);
+            }
 
-            this.AddHandler(InputElement.LostFocusEvent, (s, ev) => 
-            {
-                if (_viewModel == null) return;
-                _viewModel.IsInputFocused = false;
-            }, RoutingStrategies.Bubble);
+            this.AddHandler(InputElement.GotFocusEvent, OnTreeKeyboardFocusChanged, RoutingStrategies.Bubble);
+            this.AddHandler(InputElement.LostFocusEvent, OnTreeKeyboardFocusChanged, RoutingStrategies.Bubble);
+            RefreshKeyboardInteractionFocusFlag();
         }, Avalonia.Threading.DispatcherPriority.Input);
+    }
+
+    private void RefreshKeyboardInteractionFocusFlag()
+    {
+        if (_viewModel == null) return;
+        var focused = TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement();
+        _viewModel.IsInputFocused = IsKeyboardInteractionFocus(focused);
+    }
+
+    private static bool IsKeyboardInteractionFocus(IInputElement? el)
+    {
+        if (el == null) return false;
+        if (el is TextBox or SelectableTextBlock or ComboBox or AutoCompleteBox) return true;
+        if (el is Control c)
+        {
+            return c.FindAncestorOfType<TextBox>() != null
+                   || c.FindAncestorOfType<SelectableTextBlock>() != null
+                   || c.FindAncestorOfType<ComboBox>() != null
+                   || c.FindAncestorOfType<AutoCompleteBox>() != null;
+        }
+
+        return false;
     }
 
     protected override void OnClosing(WindowClosingEventArgs e)
@@ -597,15 +619,17 @@ public partial class SnipWindow : Window
             }
         }
 
-        // Manual Hotkey Routing (Bypassing XAML KeyBinding quirks)
-        if (_viewModel != null && !e.Handled)
+        // Prefer live focus (same-frame as key) — VM flag can lag one dispatcher tick behind GotFocus.
+        var focusedNow = TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement();
+        var textOrListInputFocused = IsKeyboardInteractionFocus(focusedNow);
+        if (_viewModel != null && textOrListInputFocused != _viewModel.IsInputFocused)
         {
-            // Let SelectableTextBlock/TextBox keep native copy behavior.
-            if (_viewModel.IsInputFocused && e.KeyModifiers.HasFlag(KeyModifiers.Control) && e.Key == Key.C)
-            {
-                return;
-            }
+            _viewModel.IsInputFocused = textOrListInputFocused;
+        }
 
+        // Manual Hotkey Routing (Bypassing XAML KeyBinding quirks)
+        if (_viewModel != null && !e.Handled && !textOrListInputFocused)
+        {
             System.Diagnostics.Debug.WriteLine($"[SnipWindow.axaml.cs] OnKeyDown: Key={e.Key}, Mods={e.KeyModifiers}, ActiveAction={_viewModel.ActiveActionHotkey}, IsInputFocused={_viewModel.IsInputFocused}");
 
             bool IsMatch(string hotkey)
