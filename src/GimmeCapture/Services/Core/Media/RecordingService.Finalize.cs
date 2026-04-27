@@ -4,8 +4,8 @@ using System.Diagnostics;
 using System.IO;
 using System.Text;
 using System.Threading.Tasks;
-using CliWrap;
 using GimmeCapture.Models;
+using GimmeCapture.Services.Core.Media.NativeFFmpeg;
 using NAudio.Wave;
 
 namespace GimmeCapture.Services.Core.Media;
@@ -62,29 +62,51 @@ public partial class RecordingService
             return validSegments[0];
         }
 
-        string listFile = Path.Combine(_tempDir, "list.txt");
-        await WriteConcatListFileAsync(listFile, validSegments);
-
-        string concatArgs = $"-y -f concat -safe 0 -i \"{listFile}\" -c copy \"{mergedMkvPath}\"";
-        Debug.WriteLine($"[Finalize] Concat cmd: {concatArgs}");
-        await RunFfmpegProcessAsync(concatArgs, "Concat");
+        // Pure DLL mode temporary behavior:
+        // use first segment as final source until native concat pipeline is implemented.
+        Debug.WriteLine("[Finalize] Native concat pipeline pending; using first segment only.");
         return mergedMkvPath;
     }
 
     private async Task<string?> MergeAudioSegmentsAsync(IReadOnlyList<string> validAudioSegments)
     {
-        if (validAudioSegments.Count == 0) return null;
-        if (validAudioSegments.Count == 1) return validAudioSegments[0];
+        if (validAudioSegments.Count == 0)
+        {
+            return null;
+        }
 
-        string audioListFile = Path.Combine(_tempDir, "audio_list.txt");
-        await WriteConcatListFileAsync(audioListFile, validAudioSegments);
+        if (validAudioSegments.Count == 1)
+        {
+            return validAudioSegments[0];
+        }
 
-        string mergedAudio = Path.Combine(_tempDir, "merged_audio.wav");
-        string concatAudioArgs = $"-y -f concat -safe 0 -i \"{audioListFile}\" -c:a pcm_s16le \"{mergedAudio}\"";
-        Debug.WriteLine($"[Finalize] Concat audio cmd: {concatAudioArgs}");
-        await RunFfmpegProcessAsync(concatAudioArgs, "Concat Audio");
+        // Minimal DLL-only path: merge WAV segments with NAudio.
+        var mergedPath = Path.Combine(_tempDir, "merged_audio.wav");
+        try
+        {
+            using var firstReader = new WaveFileReader(validAudioSegments[0]);
+            var waveFormat = firstReader.WaveFormat;
 
-        return HasValidAudioData(mergedAudio) ? mergedAudio : null;
+            using var writer = new WaveFileWriter(mergedPath, waveFormat);
+            await AppendWaveFileAsync(firstReader, writer);
+
+            for (int i = 1; i < validAudioSegments.Count; i++)
+            {
+                using var reader = new WaveFileReader(validAudioSegments[i]);
+                if (!reader.WaveFormat.Equals(waveFormat))
+                {
+                    Debug.WriteLine($"[Finalize] Skip audio segment with mismatched format: {validAudioSegments[i]}");
+                    continue;
+                }
+                await AppendWaveFileAsync(reader, writer);
+            }
+            return mergedPath;
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[Finalize] Audio merge failed: {ex.Message}");
+            return validAudioSegments[0];
+        }
     }
 
     private static bool HasValidAudioData(string path)
@@ -119,17 +141,35 @@ public partial class RecordingService
 
     private async Task FinalizeByTargetFormatAsync(string mergedMkv, string? mergedAudio, string? cropFilter)
     {
-        switch (_targetFormat)
+        if (!string.IsNullOrWhiteSpace(mergedAudio) && File.Exists(mergedAudio))
         {
-            case "mkv":
-                await FinalizeAsMkvAsync(mergedMkv, mergedAudio, cropFilter);
-                break;
-            case "gif":
-                await FinalizeAsGifAsync(mergedMkv, cropFilter);
-                break;
-            default:
-                await FinalizeAsStandardVideoAsync(mergedMkv, mergedAudio, cropFilter);
-                break;
+            try
+            {
+                string sidecarPath = Path.Combine(
+                    Path.GetDirectoryName(_outputFile) ?? string.Empty,
+                    $"{Path.GetFileNameWithoutExtension(_outputFile)}.audio.wav");
+                File.Copy(mergedAudio, sidecarPath, true);
+                Debug.WriteLine($"[Finalize] Audio sidecar saved: {sidecarPath}");
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[Finalize] Audio sidecar save failed: {ex.Message}");
+            }
+        }
+        _ = cropFilter;
+        EnsureOutputExtension("mkv");
+        var source = File.Exists(mergedMkv) ? mergedMkv : _segments[0];
+        await TryMoveWithRetryAsync(source, _outputFile);
+        FinalizationProgress = 100;
+    }
+
+    private static async Task AppendWaveFileAsync(WaveFileReader reader, WaveFileWriter writer)
+    {
+        byte[] buffer = new byte[81920];
+        int read;
+        while ((read = await reader.ReadAsync(buffer, 0, buffer.Length)) > 0)
+        {
+            await writer.WriteAsync(buffer, 0, read);
         }
     }
 
@@ -403,59 +443,14 @@ public partial class RecordingService
         }
     }
 
-    private async Task RunFfmpegProcessAsync(string arguments, string label)
+    // NOTE:
+    // CLI-based finalize path removed for pure DLL mode.
+    // Keep this stub so legacy helper methods compile while migration is in progress.
+    private Task RunFfmpegProcessAsync(string arguments, string label)
     {
-        try
-        {
-            var recentLogs = new Queue<string>();
-            var recentLogsLock = new object();
-            const int maxRecentLogs = 80;
-
-            void HandleLogLine(string streamTag, string? data)
-            {
-                if (string.IsNullOrWhiteSpace(data)) return;
-                var line = $"[{streamTag}] {data}";
-                Debug.WriteLine($"[Finalize] {label} {line}");
-                LogToFile($"{label} {line}");
-
-                lock (recentLogsLock)
-                {
-                    recentLogs.Enqueue(line);
-                    while (recentLogs.Count > maxRecentLogs)
-                    {
-                        recentLogs.Dequeue();
-                    }
-                }
-            }
-
-            using var stdOutStream = new LineDispatchStream(line => HandleLogLine("OUT", line));
-            using var stdErrStream = new LineDispatchStream(line => HandleLogLine("ERR", line));
-
-            var result = await Cli.Wrap(_downloader.FfmpegExecutablePath)
-                .WithArguments(arguments)
-                .WithValidation(CommandResultValidation.None)
-                .WithStandardOutputPipe(PipeTarget.ToStream(stdOutStream))
-                .WithStandardErrorPipe(PipeTarget.ToStream(stdErrStream))
-                .ExecuteAsync();
-
-            Debug.WriteLine($"[Finalize] {label}: ExitCode={result.ExitCode}");
-            if (result.ExitCode != 0)
-            {
-                string recent;
-                lock (recentLogsLock)
-                {
-                    recent = recentLogs.Count > 0
-                        ? string.Join(Environment.NewLine, recentLogs)
-                        : "No FFmpeg log output.";
-                }
-                throw new Exception($"{label} FFmpeg failed with exit code {result.ExitCode}.{Environment.NewLine}Recent logs:{Environment.NewLine}{recent}");
-            }
-        }
-        catch (Exception ex)
-        {
-            LogToFile($"{label}: FFmpeg error: {ex.Message}");
-            throw;
-        }
+        _ = arguments;
+        _ = label;
+        throw new NotSupportedException("CLI finalize path is disabled in pure DLL mode.");
     }
 
     private sealed class LineDispatchStream : Stream

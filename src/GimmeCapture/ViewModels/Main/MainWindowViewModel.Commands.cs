@@ -19,21 +19,9 @@ public partial class MainWindowViewModel
         {
             if (!FfmpegDownloader.IsFFmpegAvailable())
             {
-                var msg = LocalizationService.Instance["FFmpegDownloadConfirm"] ?? "FFmpeg is required for recording. Download now?";
-                bool confirmed = false;
-                
-                await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
-                {
-                    var mainWindow = _windowManager.GetMainWindow();
-                    if (mainWindow != null)
-                    {
-                        confirmed = await UpdateDialog.ShowDialog(mainWindow, msg, isUpdateAvailable: true);
-                    }
-                });
-
-                if (!confirmed) return;
-                await FfmpegDownloader.EnsureFFmpegAsync();
-                if (!FfmpegDownloader.IsFFmpegAvailable()) return;
+                // FFmpeg toolkit is bundled with the app. If unavailable, this installation is incomplete.
+                SetStatus("FFmpegNotReady");
+                return;
             }
         }
 

@@ -285,6 +285,7 @@ public partial class SnipWindowViewModel
     public RecordingState RecState => _recordingService?.State ?? RecordingState.Idle;
 
     private string? _currentRecordingPath;
+    private DateTime _lastActiveActionHotkeyUtc = DateTime.MinValue;
 
     // Commands (Partial declarations not needed if initialized in constructor)
     // But we need to define the properties here to be grouped
@@ -310,10 +311,20 @@ public partial class SnipWindowViewModel
     public ReactiveCommand<Unit, Unit> InteractiveRemovalCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> ToggleTopmostCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> ToggleMaskCommand { get; set; } = null!;
+    private DateTime _lastGlobalHotkeyUtc = DateTime.MinValue;
+    private int _lastGlobalHotkeyId = -1;
 
     public void HandleGlobalHotkey(int id)
     {
         if (_mainVm == null) return;
+
+        var now = DateTime.UtcNow;
+        if (id == _lastGlobalHotkeyId && (now - _lastGlobalHotkeyUtc) < TimeSpan.FromMilliseconds(600))
+        {
+            return;
+        }
+        _lastGlobalHotkeyId = id;
+        _lastGlobalHotkeyUtc = now;
         
         string pressedHotkey = _mainVm.HotkeyRouterService.GetPressedHotkeyText(id, _mainVm);
 
@@ -570,9 +581,22 @@ public partial class SnipWindowViewModel
 
     private void HandleActiveActionHotkey()
     {
+        // Guard against duplicate dispatch from low-level/global + window-level key routing.
+        // Without this, one key press can start and immediately stop recording, producing a 1-frame file.
+        var now = DateTime.UtcNow;
+        var cooldown = (CurrentMode == SnipMode.Recording)
+            ? TimeSpan.FromMilliseconds(1800)
+            : TimeSpan.FromMilliseconds(350);
+        if ((now - _lastActiveActionHotkeyUtc) < cooldown)
+        {
+            return;
+        }
+        _lastActiveActionHotkeyUtc = now;
+
         System.Diagnostics.Debug.WriteLine($"[SnipWindowViewModel] HandleActiveActionHotkeyCommand invoked. Mode: {CurrentMode}, RecState: {RecState}");
         if (CurrentMode == SnipMode.Translation)
         {
+            System.Diagnostics.Debug.WriteLine("[ActiveAction] Translation: toggle results");
             // 翻譯模式：切換結果顯示
             ShowTranslationResults = !ShowTranslationResults;
             return;
@@ -581,6 +605,16 @@ public partial class SnipWindowViewModel
         // 錄影模式（正在錄製/暫停）：停止並釘選
         if (CurrentMode == SnipMode.Recording && RecState != RecordingState.Idle)
         {
+            // Ignore accidental immediate second trigger right after recording starts
+            // (e.g. duplicate key routing / key-repeat burst).
+            if (RecState == RecordingState.Recording &&
+                (DateTime.UtcNow - _recordingActiveStartUtc) < TimeSpan.FromMilliseconds(900))
+            {
+                System.Diagnostics.Debug.WriteLine("[ActiveAction] Recording: ignored immediate stop guard");
+                return;
+            }
+
+            System.Diagnostics.Debug.WriteLine("[ActiveAction] Recording: stop/pin");
             PinCommand?.Execute().Subscribe();
             return;
         }
@@ -588,6 +622,7 @@ public partial class SnipWindowViewModel
         // 錄影模式（空閒且已選取）：開始錄影
         if (CurrentMode == SnipMode.Recording && CurrentState == SnipState.Selected)
         {
+            System.Diagnostics.Debug.WriteLine("[ActiveAction] Recording: start");
             StartRecordingCommand?.Execute().Subscribe();
             return;
         }

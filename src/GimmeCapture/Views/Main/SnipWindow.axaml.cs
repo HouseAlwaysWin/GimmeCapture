@@ -33,6 +33,7 @@ public partial class SnipWindow : Window
     private SnipWindowViewModel? _viewModel;
     private Annotation? _currentAnnotation;
     private RecordingProgressWindow? _progressWindow;
+    private bool _activeActionHotkeyHeld;
     
     // Pointer Interaction State (replaces multiple _is* booleans)
     private PointerInteractionState _pointerState = PointerInteractionState.None;
@@ -675,7 +676,13 @@ public partial class SnipWindow : Window
             switch (action)
             {
                 case HotkeyRouterService.WindowHotkeyAction.ActiveAction:
+                    if (_activeActionHotkeyHeld)
+                    {
+                        e.Handled = true;
+                        break;
+                    }
                     System.Diagnostics.Debug.WriteLine("[SnipWindow.axaml.cs] Matched ActiveActionHotkey! Firing HandleActiveActionHotkeyCommand.");
+                    _activeActionHotkeyHeld = true;
                     _viewModel.HandleActiveActionHotkeyCommand?.Execute().Subscribe();
                     e.Handled = true;
                     break;
@@ -729,7 +736,8 @@ public partial class SnipWindow : Window
 
     private void OnKeyUp(object? sender, KeyEventArgs e)
     {
-        // Translation no longer uses Cursor/Single/Multi mode switching.
+        // Release one-shot guard so long-press key-repeat does not retrigger start/stop/pin.
+        _activeActionHotkeyHeld = false;
     }
 
     private bool IsModifierMatch(string hotkeyLabel, KeyEventArgs e)

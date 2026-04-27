@@ -223,6 +223,14 @@ public partial class SnipWindow : Window
             return false;
         }
 
+        // Prevent duplicate hotkey handling in screenshot/recording mode.
+        // Those modes already process shortcuts via normal window KeyDown routing.
+        // Keep LL hook hotkeys for translation mode only.
+        if (!_viewModel.IsTranslationMode)
+        {
+            return false;
+        }
+
         bool shiftDown = (GetAsyncKeyState(0x10) & 0x8000) != 0;
         bool ctrlDown = (GetAsyncKeyState(0x11) & 0x8000) != 0;
         bool altDown = (GetAsyncKeyState(0x12) & 0x8000) != 0;

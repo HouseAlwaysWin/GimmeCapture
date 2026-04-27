@@ -2,10 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using ReactiveUI;
 using GimmeCapture.Models;
+using GimmeCapture.Services.Core.Media.NativeFFmpeg;
 using NAudio.Wave;
 
 namespace GimmeCapture.Services.Core.Media;
@@ -16,7 +18,6 @@ public partial class RecordingService : ReactiveObject
 {
     private readonly FFmpegDownloaderService _downloader;
     private readonly AppSettingsService? _settingsService;
-    private Process? _ffmpegProcess;
     private RecordingState _state = RecordingState.Idle;
     private readonly List<string> _segments = new();
     private readonly List<string> _audioSegments = new();
@@ -33,6 +34,7 @@ public partial class RecordingService : ReactiveObject
     private string _tempDir = string.Empty;
     private WasapiLoopbackCapture? _audioCapture;
     private WaveFileWriter? _audioWriter;
+    private int _startInProgress;
 
     public RecordingState State
     {
@@ -110,8 +112,16 @@ public partial class RecordingService : ReactiveObject
     /// </summary>
     public async Task<bool> StartAsync(Rect region, string outputFile, string targetFormat = "mp4", bool includeCursor = true, PixelPoint screenOffset = default, double visualScaling = 1.0, int fps = 30, bool recordSystemAudio = false)
     {
+        if (Interlocked.Exchange(ref _startInProgress, 1) == 1) return false;
+        try
+        {
         if (State != RecordingState.Idle) return false;
-        if (!_downloader.IsFFmpegAvailable()) return false;
+        if (!FFmpegRuntime.IsInitialized)
+        {
+            FFmpegRuntime.TryInitialize(out _);
+            if (!FFmpegRuntime.IsInitialized)
+                return false;
+        }
 
         _region = region;
         _outputFile = outputFile;
@@ -140,23 +150,22 @@ public partial class RecordingService : ReactiveObject
         Directory.CreateDirectory(_tempDir);
 
         return await StartSegmentAsync();
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _startInProgress, 0);
+        }
     }
 
     private async Task<bool> StartSegmentAsync()
     {
-        // Record segments in MKV format for instant pause/resume
+        // Record segments in MKV format for pause/resume workflow.
         string segmentFile = Path.Combine(_tempDir, $"segment_{_segments.Count}.mkv");
         _segments.Add(segmentFile);
 
         // Calculate physical pixels for high-DPI
         // Keep coordinate conversion consistent with screen capture services:
         // scale logical region first, then apply physical screen offset.
-        int x = (int)(_region.X * _visualScaling) + _screenOffset.X;
-        int y = (int)(_region.Y * _visualScaling) + _screenOffset.Y;
-        // Ensure even dimensions for video codecs
-        int w = ((int)(_region.Width * _visualScaling) / 2) * 2;
-        int h = ((int)(_region.Height * _visualScaling) / 2) * 2;
-
         if (_recordSystemAudio)
         {
             string audioSegment = Path.Combine(_tempDir, $"segment_{_segments.Count - 1}.wav");
@@ -171,8 +180,7 @@ public partial class RecordingService : ReactiveObject
             }
         }
 
-        var argsNoAudio = BuildSegmentArguments(x, y, w, h, segmentFile);
-        var started = await StartFfmpegSegmentAsync(argsNoAudio);
+        var started = await StartFfmpegSegmentAsync(segmentFile);
         if (!started)
         {
             StopAudioCapture();
@@ -181,17 +189,9 @@ public partial class RecordingService : ReactiveObject
         return started;
     }
 
-    private string BuildSegmentArguments(int x, int y, int w, int h, string segmentFile)
-    {
-        string drawMouse = _includeCursor ? "1" : "0";
-        string codec = _settingsService?.Settings.VideoCodec == VideoCodec.H265 ? "libx265" : "libx264";
-        return $"-y -hide_banner -nostats -loglevel warning -thread_queue_size 512 -f gdigrab -draw_mouse {drawMouse} -framerate {_fps} -offset_x {x} -offset_y {y} -video_size {w}x{h} -i desktop " +
-               $"-c:v {codec} -preset ultrafast -tune zerolatency -pix_fmt yuv420p \"{segmentFile}\"";
-    }
-
     public async Task PauseAsync()
     {
-        if (State != RecordingState.Recording || _ffmpegProcess == null) return;
+        if (State != RecordingState.Recording) return;
 
         await StopCurrentSegmentAsync();
         State = RecordingState.Paused;

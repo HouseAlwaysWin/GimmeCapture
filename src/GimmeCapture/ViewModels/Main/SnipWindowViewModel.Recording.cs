@@ -23,6 +23,8 @@ public partial class SnipWindowViewModel
     /// False when <see cref="Annotations"/> is non-empty (ink must stay visible to capture) or not on Windows — then <see cref="GetRecordingCaptureRegionExcludingVisibleChrome"/> is used.
     /// </summary>
     private bool _recordingUsesWindowsExcludeFromCapture;
+    private bool _recordStartInFlight;
+    private DateTime _lastRecordStartAttemptUtc = DateTime.MinValue;
 
     public bool RecordingUsesWindowsExcludeFromCapture => _recordingUsesWindowsExcludeFromCapture;
 
@@ -161,6 +163,21 @@ public partial class SnipWindowViewModel
 
     private async Task ExecuteStartRecordingAsync()
     {
+        var now = DateTime.UtcNow;
+        if ((now - _lastRecordStartAttemptUtc) < TimeSpan.FromMilliseconds(1200))
+        {
+            return;
+        }
+        _lastRecordStartAttemptUtc = now;
+
+        if (_recordStartInFlight)
+        {
+            return;
+        }
+
+        _recordStartInFlight = true;
+        try
+        {
         // Cancel any pending AI scans immediately
         _scanCts?.Cancel();
         _isLocalProcessing = false;
@@ -172,17 +189,18 @@ public partial class SnipWindowViewModel
         // Check if FFmpeg is available
         if (!_mainVm.FfmpegDownloader.IsFFmpegAvailable())
         {
-            if (!_mainVm.FfmpegDownloader.IsDownloading)
-            {
-                // Trigger download if not started
-                _ = _mainVm.FfmpegDownloader.EnsureFFmpegAsync();
-            }
-
             _mainVm.SetStatus("FFmpegNotReady");
             return;
         }
 
         string format = _mainVm.RecordingSettings.RecordFormat?.ToLowerInvariant() ?? "mp4";
+        if (format == "gif")
+        {
+            // Pure DLL recording pipeline currently outputs video containers only.
+            // Keep recording stable by falling back to MKV instead of creating a broken single-frame GIF.
+            format = "mkv";
+            _mainVm.SetStatus("GIF export is not available in DLL-only mode yet. Recording as MKV.");
+        }
 
         // Use TempFolder setting if available, otherwise local Temp folder in app directory
         string tempDir = _mainVm.TempDirectory;
@@ -220,16 +238,24 @@ public partial class SnipWindowViewModel
         if (region.Height % 2 != 0) region = region.WithHeight(region.Height - 1);
 
         ResetRecordingDurationTracking();
-        if (await _recordingService.StartAsync(region, _currentRecordingPath, _mainVm!.RecordingSettings.RecordFormat ?? "mp4", _mainVm.ShowRecordCursor, ScreenOffset, VisualScaling, _mainVm.RecordingSettings.RecordFPS, _mainVm.RecordSystemAudio))
+        bool enableSystemAudio = _mainVm.RecordSystemAudio;
+
+        if (await _recordingService.StartAsync(region, _currentRecordingPath, _mainVm!.RecordingSettings.RecordFormat ?? "mp4", _mainVm.ShowRecordCursor, ScreenOffset, VisualScaling, _mainVm.RecordingSettings.RecordFPS, enableSystemAudio))
         {
             _recordingCaptureLogicalRect = region;
             EnsureRecordingTimerStarted();
         }
         else
         {
+            _mainVm.SetStatus("Recording start failed. Please try again.");
             _recordingUsesWindowsExcludeFromCapture = false;
             this.RaisePropertyChanged(nameof(RecordingUsesWindowsExcludeFromCapture));
             SyncRecordingScreenCaptureAffinity?.Invoke();
+        }
+        }
+        finally
+        {
+            _recordStartInFlight = false;
         }
     }
 
@@ -384,71 +410,50 @@ public partial class SnipWindowViewModel
                     return;
                 }
 
-                var ffplayPath = _recordingService.Downloader.GetFFplayPath();
-
-                if (string.IsNullOrEmpty(ffplayPath) || !System.IO.File.Exists(ffplayPath))
+                // Restore pinned floating window behavior for recording output.
+                try
                 {
-                    System.Diagnostics.Debug.WriteLine($"找不到播放器組件 (ffplay.exe)");
-                    return;
-                }
+                    var baseRect = _recordingCaptureLogicalRect ?? SelectionRect;
+                    var originalWidth = Math.Max(2.0, baseRect.Width > 1 ? baseRect.Width : 640.0);
+                    var originalHeight = Math.Max(2.0, baseRect.Height > 1 ? baseRect.Height : 360.0);
+                    int pixelWidth = Math.Max(2, (int)Math.Round(originalWidth));
+                    int pixelHeight = Math.Max(2, (int)Math.Round(originalHeight));
+                    bool hideDecoration = _mainVm?.HideRecordPinDecoration ?? false;
+                    bool hideBorder = _mainVm?.HideRecordPinBorder ?? false;
+                    string ffmpegPath = _mainVm?.FfmpegDownloader.GetFFmpegPath() ?? string.Empty;
+                    if (string.IsNullOrWhiteSpace(ffmpegPath))
+                    {
+                        ffmpegPath = "ffmpeg";
+                    }
 
-                var ffmpegPath = ResolveFfmpegPath(ffplayPath, _recordingService.Downloader.FfmpegExecutablePath);
-                if (string.IsNullOrEmpty(ffmpegPath) || !System.IO.File.Exists(ffmpegPath))
-                {
-                    System.Diagnostics.Debug.WriteLine($"找不到編碼器組件 (ffmpeg.exe): {ffmpegPath}");
-                    return;
-                }
-
-                double scaling = VisualScaling;
-                var cap = _recordingCaptureLogicalRect ?? SelectionRect;
-                int x = (int)(cap.X * scaling) + ScreenOffset.X;
-                int y = (int)(cap.Y * scaling) + ScreenOffset.Y;
-
-                int w = (int)(cap.Width * scaling);
-                int h = (int)(cap.Height * scaling);
-                double logW = cap.Width;
-                double logH = cap.Height;
-
-                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                {
-                    var videoVm = new FloatingVideoViewModel(
+                    var vm = new FloatingVideoViewModel(
                         recordingPath,
                         ffmpegPath,
-                        w, h,
-                        logW, logH,
+                        pixelWidth,
+                        pixelHeight,
+                        originalWidth,
+                        originalHeight,
                         SelectionBorderColor,
                         SelectionBorderThickness,
-                        _mainVm?.HideRecordPinDecoration ?? false,
-                        _mainVm?.HideRecordPinBorder ?? false,
+                        hideDecoration,
+                        hideBorder,
                         new ClipboardService(),
                         _mainVm?.AppSettingsService);
 
-                    videoVm.WingScale = WingScale;
-                    videoVm.CornerIconScale = CornerIconScale;
-
-                    // Set Save Actions
-                    videoVm.PickSaveFileAction = PickSaveFileAction;
-                    videoVm.SaveAction = () =>
+                    var padding = vm.WindowPadding;
+                    var window = new FloatingVideoWindow
                     {
-                        videoVm.SaveCommand.Execute().Subscribe();
-                        return Task.CompletedTask;
+                        DataContext = vm,
+                        Width = originalWidth + padding.Left + padding.Right,
+                        Height = originalHeight + padding.Top + padding.Bottom,
+                        WindowStartupLocation = Avalonia.Controls.WindowStartupLocation.CenterScreen
                     };
-
-                    // IMPORTANT:
-                    // Do not copy Snip annotations into pinned video.
-                    // Recording already contains the real drawing timeline;
-                    // copying final annotations here would make them appear from time 0.
-
-                    var pad = videoVm.WindowPadding;
-
-                    var videoWin = new FloatingVideoWindow
-                    {
-                        DataContext = videoVm,
-                        Position = new PixelPoint(x - (int)(pad.Left * scaling), y - (int)(pad.Top * scaling))
-                    };
-
-                    videoWin.Show();
-                });
+                    window.Show();
+                }
+                catch
+                {
+                    FileLocationService.RevealInFileExplorer(recordingPath);
+                }
 
                 CloseAction?.Invoke();
             }
@@ -481,7 +486,7 @@ public partial class SnipWindowViewModel
             System.IO.Path.GetDirectoryName(path) ?? string.Empty,
             System.IO.Path.GetFileNameWithoutExtension(path));
 
-        string[] candidates = [".mp4", ".mkv", ".webm", ".mov", ".gif"];
+        string[] candidates = [".mp4", ".mkv", ".avi", ".webm", ".mov", ".gif"];
         foreach (var ext in candidates)
         {
             var alt = basePath + ext;
@@ -490,25 +495,6 @@ public partial class SnipWindowViewModel
 
         // Keep original path for diagnostics if still not found.
         return path;
-    }
-
-    private static string ResolveFfmpegPath(string ffplayPath, string fallbackFfmpegPath)
-    {
-        if (!string.IsNullOrWhiteSpace(ffplayPath))
-        {
-            var candidate = ffplayPath;
-            if (candidate.EndsWith("ffplay.exe", StringComparison.OrdinalIgnoreCase))
-            {
-                candidate = candidate[..^"ffplay.exe".Length] + "ffmpeg.exe";
-            }
-
-            if (System.IO.File.Exists(candidate))
-            {
-                return candidate;
-            }
-        }
-
-        return fallbackFfmpegPath;
     }
 
 }

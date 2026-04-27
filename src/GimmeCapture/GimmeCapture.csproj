@@ -19,6 +19,8 @@
     <None Update="config.json">
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </None>
+    <!-- Native FFmpeg shared DLLs only: run scripts/ensure-ffmpeg-libs.ps1 -->
+    <Content Include="ffmpeg-lib\*.dll" CopyToOutputDirectory="PreserveNewest" Link="ffmpeg-lib\%(Filename)%(Extension)" />
   </ItemGroup>
 
   <ItemGroup>
@@ -34,6 +36,7 @@
     </PackageReference>
     <PackageReference Include="Avalonia.ReactiveUI" Version="11.2.3" />
     <PackageReference Include="CliWrap" Version="3.10.0" />
+    <PackageReference Include="FFmpeg.AutoGen" Version="8.0.0.1" />
     <PackageReference Include="Microsoft.ML.Tokenizers" Version="2.0.0" />
     <PackageReference Include="NAudio" Version="2.2.1" />
     <PackageReference Include="SkiaSharp" Version="3.119.1" />

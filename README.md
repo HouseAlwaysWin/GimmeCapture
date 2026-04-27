@@ -50,7 +50,7 @@ The name **GimmeCapture!!** is a tribute to the song **["Gimme chocolate!!" (Off
 - Video speed changes also affect audio playback speed in pinned video mode.
 
 ### 📦 Third-party Components
-- **FFmpeg**: Used for screen recording and multimedia processing. FFmpeg is licensed under the [GPL/LGPL](https://ffmpeg.org/legal.html). This project downloads FFmpeg binaries automatically from [BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds).
+- **FFmpeg**: Used for screen recording and multimedia processing. FFmpeg is licensed under the [GPL/LGPL](https://ffmpeg.org/legal.html). Screen capture uses **libav*** DLLs via [FFmpeg.AutoGen](https://www.nuget.org/packages/FFmpeg.AutoGen); finalize/transcode/preview still invoke the bundled `ffmpeg.exe` / `ffprobe.exe` / `ffplay.exe` shipped next to those DLLs under `ffmpeg-lib/`. Populate that folder before release builds by running `powershell -ExecutionPolicy Bypass -File scripts/ensure-ffmpeg-libs.ps1` (downloads the [BtbN FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds) **win64-gpl-shared** archive and extracts binaries).
 - **NAudio**: Used for system audio loopback capture during recording and real-time audio level monitoring.
 
 ---

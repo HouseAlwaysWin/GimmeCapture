@@ -30,11 +30,12 @@ public partial class MainWindowViewModel
             .ObserveOn(RxApp.MainThreadScheduler)
             .Subscribe(status => 
             {
-                ffmpeg.IsPending = status == QueueItemStatus.Pending;
-                ffmpeg.IsProcessing = status == QueueItemStatus.Downloading;
+                // FFmpeg is now bundled with the app; there is no online install/download flow.
+                ffmpeg.IsPending = false;
+                ffmpeg.IsProcessing = false;
                 ffmpeg.HasError = status == QueueItemStatus.Failed;
-                if (status == QueueItemStatus.Failed) 
-                    ffmpeg.ErrorMessage = FfmpegDownloader.LastErrorMessage ?? "FFmpeg download failed. Please check your connection.";
+                if (status == QueueItemStatus.Failed)
+                    ffmpeg.ErrorMessage = FfmpegDownloader.LastErrorMessage ?? "Bundled FFmpeg toolkit is missing or incomplete.";
                 if (status == QueueItemStatus.Completed) ffmpeg.IsInstalled = FfmpegDownloader.IsFFmpegAvailable();
             });
 
@@ -160,7 +161,8 @@ public partial class MainWindowViewModel
 
         if (type == "FFmpeg")
         {
-            await ResourceQueue.EnqueueAsync("FFmpeg", (ct) => FfmpegDownloader.EnsureFFmpegAsync(ct));
+            // No network installation anymore; just validate bundled toolkit availability.
+            await FfmpegDownloader.EnsureFFmpegAsync();
         }
         else if (type == "AICore")
         {
@@ -210,7 +212,7 @@ public partial class MainWindowViewModel
 
             if (type == "FFmpeg")
             {
-                FfmpegDownloader.RemoveFFmpeg();
+                // Bundled runtime cannot be removed at runtime; keep as no-op.
             }
             else if (type == "AICore")
             {

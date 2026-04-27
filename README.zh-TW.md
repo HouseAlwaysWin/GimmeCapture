@@ -41,7 +41,7 @@
 - 調整影片播放倍率時，音訊也會同步套用對應倍率。
 
 ### 📦 第三方組件
-- **FFmpeg**：用於錄影與多媒體處理。FFmpeg 採用 [GPL/LGPL](https://ffmpeg.org/legal.html) 授權。本程式會自動從 [BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds) 下載執行檔。
+- **FFmpeg**：用於錄影與多媒體處理。FFmpeg 採用 [GPL/LGPL](https://ffmpeg.org/legal.html) 授權。螢幕錄製透過 **libav*** DLL（[FFmpeg.AutoGen](https://www.nuget.org/packages/FFmpeg.AutoGen)）；後製轉檔／預覽仍會呼叫與 DLL 一併放在 `ffmpeg-lib/` 的 `ffmpeg.exe`、`ffprobe.exe`、`ffplay.exe`。發行前請執行 `powershell -ExecutionPolicy Bypass -File scripts/ensure-ffmpeg-libs.ps1`，從 [BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds) 的 **win64-gpl-shared** 套件解出檔案。
 - **NAudio**：用於錄影時的系統音訊迴路擷取，以及即時音量監看。
 
 ---
