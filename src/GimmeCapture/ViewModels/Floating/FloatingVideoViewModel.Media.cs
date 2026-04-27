@@ -265,7 +265,6 @@ public partial class FloatingVideoViewModel
             _audioWaveOut = new WaveOutEvent();
             _audioWaveOut.Init(_audioReader);
             _audioWaveOut.Play();
-            StartAudioMonitor();
         }
         catch (Exception ex)
         {
@@ -278,11 +277,6 @@ public partial class FloatingVideoViewModel
     {
         try
         {
-            _audioMonitorCts?.Cancel();
-            _audioMonitorCts?.Dispose();
-            _audioMonitorCts = null;
-            _audioMonitorTask = null;
-
             _audioWaveOut?.Stop();
             _audioWaveOut?.Dispose();
             _audioWaveOut = null;
@@ -301,81 +295,6 @@ public partial class FloatingVideoViewModel
             }
         }
         catch { }
-    }
-
-    private void StartAudioMonitor()
-    {
-        _audioMonitorCts?.Cancel();
-        _audioMonitorCts?.Dispose();
-        _audioMonitorCts = new CancellationTokenSource();
-        var token = _audioMonitorCts.Token;
-        _audioMonitorTask = Task.Run(async () =>
-        {
-            while (!token.IsCancellationRequested && !_isDisposed)
-            {
-                try
-                {
-                    await Task.Delay(500, token).ConfigureAwait(false);
-                    if (token.IsCancellationRequested || _isDisposed) break;
-                    if (!_isPlaybackActive || IsMuted) continue;
-
-                    var wave = _audioWaveOut;
-                    var reader = _audioReader;
-                    if (wave == null || reader == null)
-                    {
-                        RestartAudioFromCurrentTime(force: false);
-                        continue;
-                    }
-
-                    // If audio stopped before playback ended, restart from current video time.
-                    if (wave.PlaybackState != PlaybackState.Playing && _currentTime < _totalDuration - TimeSpan.FromMilliseconds(250))
-                    {
-                        RestartAudioFromCurrentTime(force: false);
-                        continue;
-                    }
-                }
-                catch (OperationCanceledException)
-                {
-                    break;
-                }
-                catch
-                {
-                    // ignore monitor errors and keep checking
-                }
-            }
-        }, token);
-    }
-
-    private void RestartAudioFromCurrentTime(bool force)
-    {
-        if (_isDisposed || IsMuted || !_isPlaybackActive) return;
-        try
-        {
-            var now = Environment.TickCount64;
-            var last = Interlocked.Read(ref _lastAudioRestartTickMs);
-            // Avoid frequent forced restarts that cause audible jumping.
-            if (!force && last > 0 && (now - last) < 2000)
-            {
-                return;
-            }
-            Interlocked.Exchange(ref _lastAudioRestartTickMs, now);
-
-            _audioWaveOut?.Stop();
-            _audioWaveOut?.Dispose();
-            _audioWaveOut = null;
-            _audioReader?.Dispose();
-            _audioReader = null;
-
-            _audioReader = new MediaFoundationReader(VideoPath);
-            _audioReader.CurrentTime = TimeSpan.FromSeconds(Math.Max(0, _currentTime.TotalSeconds));
-            _audioWaveOut = new WaveOutEvent();
-            _audioWaveOut.Init(_audioReader);
-            _audioWaveOut.Play();
-        }
-        catch
-        {
-            // fallback: let monitor retry later
-        }
     }
 
     private void RequestCurrentTimeUiRefresh(bool force = false)

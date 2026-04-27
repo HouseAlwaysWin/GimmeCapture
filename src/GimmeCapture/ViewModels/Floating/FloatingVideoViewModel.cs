@@ -50,9 +50,6 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
     private Process? _audioPlayProcess;
     private WaveOutEvent? _audioWaveOut;
     private MediaFoundationReader? _audioReader;
-    private CancellationTokenSource? _audioMonitorCts;
-    private Task? _audioMonitorTask;
-    private long _lastAudioRestartTickMs;
     private bool _isMuted = true;
     private readonly LibavVideoFramePlayer _nativeFramePlayer = new();
 
