@@ -11,6 +11,7 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using System.Diagnostics;
 using GimmeCapture.Services.Core.Media.NativeFFmpeg;
+using NAudio.Wave;
 
 namespace GimmeCapture.ViewModels.Floating;
 
@@ -166,12 +167,14 @@ public partial class FloatingVideoViewModel
                 double startSeconds = _seekTargetSeconds >= 0 ? _seekTargetSeconds : _currentTime.TotalSeconds;
                 _seekTargetSeconds = -1;
 
-                bool loopPlayback = _isPlaybackActive && IsLooping;
+                // Keep looping control in this VM so audio/video restart together every cycle.
+                bool loopPlayback = false;
                 bool playSingleFrame = !_isPlaybackActive;
                 using var singleFrameCts = playSingleFrame ? CancellationTokenSource.CreateLinkedTokenSource(ct) : null;
 
                 try
                 {
+                    UpdateAudioStateFromPlayback();
                     await _nativeFramePlayer.PlayAsync(
                         VideoPath,
                         _width,
@@ -253,13 +256,39 @@ public partial class FloatingVideoViewModel
 
     private void StartAudioPlayback()
     {
-        // CLI-based audio playback is removed in DLL-only mode.
+        StopAudioPlayback();
+        if (_isDisposed || IsMuted || !_isPlaybackActive) return;
+        try
+        {
+            _audioReader = new MediaFoundationReader(VideoPath);
+            _audioReader.CurrentTime = TimeSpan.FromSeconds(Math.Max(0, _currentTime.TotalSeconds));
+            _audioWaveOut = new WaveOutEvent();
+            _audioWaveOut.Init(_audioReader);
+            _audioWaveOut.Play();
+            StartAudioMonitor();
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Audio Playback Error: {ex.Message}");
+            StopAudioPlayback();
+        }
     }
 
     private void StopAudioPlayback()
     {
         try
         {
+            _audioMonitorCts?.Cancel();
+            _audioMonitorCts?.Dispose();
+            _audioMonitorCts = null;
+            _audioMonitorTask = null;
+
+            _audioWaveOut?.Stop();
+            _audioWaveOut?.Dispose();
+            _audioWaveOut = null;
+            _audioReader?.Dispose();
+            _audioReader = null;
+
             if (_audioPlayProcess != null)
             {
                 if (!_audioPlayProcess.HasExited)
@@ -272,6 +301,81 @@ public partial class FloatingVideoViewModel
             }
         }
         catch { }
+    }
+
+    private void StartAudioMonitor()
+    {
+        _audioMonitorCts?.Cancel();
+        _audioMonitorCts?.Dispose();
+        _audioMonitorCts = new CancellationTokenSource();
+        var token = _audioMonitorCts.Token;
+        _audioMonitorTask = Task.Run(async () =>
+        {
+            while (!token.IsCancellationRequested && !_isDisposed)
+            {
+                try
+                {
+                    await Task.Delay(500, token).ConfigureAwait(false);
+                    if (token.IsCancellationRequested || _isDisposed) break;
+                    if (!_isPlaybackActive || IsMuted) continue;
+
+                    var wave = _audioWaveOut;
+                    var reader = _audioReader;
+                    if (wave == null || reader == null)
+                    {
+                        RestartAudioFromCurrentTime(force: false);
+                        continue;
+                    }
+
+                    // If audio stopped before playback ended, restart from current video time.
+                    if (wave.PlaybackState != PlaybackState.Playing && _currentTime < _totalDuration - TimeSpan.FromMilliseconds(250))
+                    {
+                        RestartAudioFromCurrentTime(force: false);
+                        continue;
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+                catch
+                {
+                    // ignore monitor errors and keep checking
+                }
+            }
+        }, token);
+    }
+
+    private void RestartAudioFromCurrentTime(bool force)
+    {
+        if (_isDisposed || IsMuted || !_isPlaybackActive) return;
+        try
+        {
+            var now = Environment.TickCount64;
+            var last = Interlocked.Read(ref _lastAudioRestartTickMs);
+            // Avoid frequent forced restarts that cause audible jumping.
+            if (!force && last > 0 && (now - last) < 2000)
+            {
+                return;
+            }
+            Interlocked.Exchange(ref _lastAudioRestartTickMs, now);
+
+            _audioWaveOut?.Stop();
+            _audioWaveOut?.Dispose();
+            _audioWaveOut = null;
+            _audioReader?.Dispose();
+            _audioReader = null;
+
+            _audioReader = new MediaFoundationReader(VideoPath);
+            _audioReader.CurrentTime = TimeSpan.FromSeconds(Math.Max(0, _currentTime.TotalSeconds));
+            _audioWaveOut = new WaveOutEvent();
+            _audioWaveOut.Init(_audioReader);
+            _audioWaveOut.Play();
+        }
+        catch
+        {
+            // fallback: let monitor retry later
+        }
     }
 
     private void RequestCurrentTimeUiRefresh(bool force = false)

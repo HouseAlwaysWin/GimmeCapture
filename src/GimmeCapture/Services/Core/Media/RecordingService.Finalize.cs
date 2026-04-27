@@ -141,25 +141,39 @@ public partial class RecordingService
 
     private async Task FinalizeByTargetFormatAsync(string mergedMkv, string? mergedAudio, string? cropFilter)
     {
+        _ = cropFilter;
+        EnsureOutputExtension("mkv");
+        var sourceVideo = File.Exists(mergedMkv) ? mergedMkv : _segments[0];
+
         if (!string.IsNullOrWhiteSpace(mergedAudio) && File.Exists(mergedAudio))
         {
             try
             {
-                string sidecarPath = Path.Combine(
-                    Path.GetDirectoryName(_outputFile) ?? string.Empty,
-                    $"{Path.GetFileNameWithoutExtension(_outputFile)}.audio.wav");
-                File.Copy(mergedAudio, sidecarPath, true);
-                Debug.WriteLine($"[Finalize] Audio sidecar saved: {sidecarPath}");
+                try
+                {
+                    using var wav = new WaveFileReader(mergedAudio);
+                    LogToFile($"[Finalize] Mux input audio: path={mergedAudio}, bytes={new FileInfo(mergedAudio).Length}, duration={wav.TotalTime}");
+                }
+                catch (Exception ex)
+                {
+                    LogToFile($"[Finalize] Audio probe failed: {ex.Message}");
+                }
+
+                var muxedPath = Path.Combine(_tempDir, "muxed_with_audio.mkv");
+                var muxStats = LibavMuxer.MuxVideoAndAudioToMkv(sourceVideo, mergedAudio, muxedPath);
+                LogToFile($"[Finalize] Native mux success: {muxedPath}, bytes={(File.Exists(muxedPath) ? new FileInfo(muxedPath).Length : 0)}, videoPackets={muxStats.VideoPackets}, audioPackets={muxStats.AudioPackets}");
+                await TryMoveWithRetryAsync(muxedPath, _outputFile);
+                FinalizationProgress = 100;
+                return;
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[Finalize] Audio sidecar save failed: {ex.Message}");
+                Debug.WriteLine($"[Finalize] Native audio mux failed, fallback to video-only: {ex.Message}");
+                LogToFile($"[Finalize] Native audio mux failed: {ex}");
             }
         }
-        _ = cropFilter;
-        EnsureOutputExtension("mkv");
-        var source = File.Exists(mergedMkv) ? mergedMkv : _segments[0];
-        await TryMoveWithRetryAsync(source, _outputFile);
+
+        await TryMoveWithRetryAsync(sourceVideo, _outputFile);
         FinalizationProgress = 100;
     }
 
