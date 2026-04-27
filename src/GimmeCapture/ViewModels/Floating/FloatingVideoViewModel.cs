@@ -11,6 +11,7 @@ using GimmeCapture.ViewModels.Main;
 using GimmeCapture.ViewModels.Shared;
 using System.Threading;
 using System.Diagnostics;
+using GimmeCapture.Services.Core.Media.NativeFFmpeg;
 
 namespace GimmeCapture.ViewModels.Floating;
 
@@ -47,6 +48,7 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
     private readonly int _height;
     private Process? _audioPlayProcess;
     private bool _isMuted = true;
+    private readonly LibavVideoFramePlayer _nativeFramePlayer = new();
 
     private bool _isExporting;
     public bool IsExporting
@@ -367,6 +369,7 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
         _playSemaphore.Dispose();
         _seekDebounceCts?.Dispose();
         StopAudioPlayback();
+        _nativeFramePlayer.Dispose();
         
         base.Dispose();
 

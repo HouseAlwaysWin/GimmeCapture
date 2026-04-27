@@ -10,8 +10,7 @@ using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Diagnostics;
-using CliWrap;
-using CliWrap.Buffered;
+using GimmeCapture.Services.Core.Media.NativeFFmpeg;
 
 namespace GimmeCapture.ViewModels.Floating;
 
@@ -92,16 +91,10 @@ public partial class FloatingVideoViewModel
     {
         try
         {
-            var ffprobePath = _ffmpegPath.Replace("ffmpeg.exe", "ffprobe.exe");
-            if (!File.Exists(ffprobePath)) ffprobePath = "ffprobe.exe";
-
-            var result = await Cli.Wrap(ffprobePath)
-                .WithArguments($"-v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 \"{VideoPath}\"")
-                .ExecuteBufferedAsync();
-
-            if (double.TryParse(result.StandardOutput.Trim(), out double seconds))
+            var seconds = await _nativeFramePlayer.ProbeDurationSecondsAsync(VideoPath);
+            if (seconds.HasValue && seconds.Value > 0)
             {
-                TotalDuration = TimeSpan.FromSeconds(seconds);
+                TotalDuration = TimeSpan.FromSeconds(seconds.Value);
             }
         }
         catch (Exception ex)
@@ -166,40 +159,50 @@ public partial class FloatingVideoViewModel
 
                 _trimEndReached = false;
 
-                var seekArg = "";
                 if (_seekTargetSeconds >= 0)
                 {
-                    seekArg = $"-ss {_seekTargetSeconds:F3} ";
                     _currentTime = TimeSpan.FromSeconds(_seekTargetSeconds);
-                    _seekTargetSeconds = -1;
                 }
-                else
-                {
-                    seekArg = $"-ss {_currentTime.TotalSeconds:F3} ";
-                }
+                double startSeconds = _seekTargetSeconds >= 0 ? _seekTargetSeconds : _currentTime.TotalSeconds;
+                _seekTargetSeconds = -1;
 
-                using var pipe = new MemoryStream();
-                var frameSize = _width * _height * 4;
-                
-                var filter = $"[0:v]setpts={1.0/_playbackSpeed}*PTS,fps=30,realtime[v]";
-
-                var framesArg = !_isPlaybackActive ? "-frames:v 1 " : "";
-                var ffArgs = $"{seekArg}-i \"{VideoPath}\" -filter_complex \"{filter}\" -map \"[v]\" -f image2pipe -vcodec rawvideo -pix_fmt bgra -s {_width}x{_height} -sws_flags fast_bilinear -loglevel error {framesArg}-";
-                if (generation == 1) System.Diagnostics.Debug.WriteLine($"[Playback] cmd: {ffArgs}");
-                if (generation == 1) System.Diagnostics.Debug.WriteLine($"[Playback] _ffmpegPath: {_ffmpegPath}");
-                if (generation == 1) System.Diagnostics.Debug.WriteLine($"[Playback] VideoPath exists: {File.Exists(VideoPath)}, size: {(File.Exists(VideoPath) ? new FileInfo(VideoPath).Length : 0)}");
-
-                var cmd = Cli.Wrap(_ffmpegPath)
-                    .WithArguments(ffArgs)
-                    .WithStandardOutputPipe(PipeTarget.ToStream(new FrameStreamWriter(this, frameSize, generation, trimEnd)));
+                bool loopPlayback = _isPlaybackActive && IsLooping;
+                bool playSingleFrame = !_isPlaybackActive;
+                using var singleFrameCts = playSingleFrame ? CancellationTokenSource.CreateLinkedTokenSource(ct) : null;
 
                 try
                 {
-                    await cmd.ExecuteAsync(ct);
+                    await _nativeFramePlayer.PlayAsync(
+                        VideoPath,
+                        _width,
+                        _height,
+                        startSeconds,
+                        _playbackSpeed,
+                        loopPlayback,
+                        (frameData, seconds) =>
+                        {
+                            if (_isDisposed || generation != Volatile.Read(ref _playbackGeneration)) return;
+                            if (seconds >= trimEnd)
+                            {
+                                _trimEndReached = true;
+                                singleFrameCts?.Cancel();
+                                return;
+                            }
+
+                            UpdateBitmap(frameData, generation);
+                            CurrentTime = TimeSpan.FromSeconds(Math.Max(0, seconds));
+                            RequestCurrentTimeUiRefresh();
+
+                            if (playSingleFrame)
+                            {
+                                singleFrameCts?.Cancel();
+                            }
+                        },
+                        playSingleFrame ? singleFrameCts!.Token : ct).ConfigureAwait(false);
                 }
-                catch (Exception) when (!ct.IsCancellationRequested && _trimEndReached)
+                catch (OperationCanceledException) when (playSingleFrame || _trimEndReached)
                 {
-                    // 裁切終點到達，這是預期行為
+                    // expected for one-frame seek or trim end
                 }
 
                 if (ct.IsCancellationRequested)
@@ -250,38 +253,7 @@ public partial class FloatingVideoViewModel
 
     private void StartAudioPlayback()
     {
-        try
-        {
-            StopAudioPlayback();
-
-            var ffplayPath = _ffmpegPath.Contains("ffmpeg.exe", StringComparison.OrdinalIgnoreCase)
-                ? _ffmpegPath.Replace("ffmpeg.exe", "ffplay.exe", StringComparison.OrdinalIgnoreCase)
-                : _ffmpegPath;
-
-            if (!File.Exists(ffplayPath))
-            {
-                System.Diagnostics.Debug.WriteLine($"Audio playback skipped: ffplay not found ({ffplayPath})");
-                return;
-            }
-
-            var seekSeconds = Math.Max(0, _currentTime.TotalSeconds).ToString("F3", CultureInfo.InvariantCulture);
-            var tempo = Math.Clamp(PlaybackSpeed, 0.5, 2.0).ToString("F2", CultureInfo.InvariantCulture);
-
-            var startInfo = new ProcessStartInfo
-            {
-                FileName = ffplayPath,
-                Arguments = $"-nodisp -autoexit -loglevel quiet -ss {seekSeconds} -af \"atempo={tempo}\" -i \"{VideoPath}\"",
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-
-            _audioPlayProcess = Process.Start(startInfo);
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"Audio Playback Error: {ex.Message}");
-            StopAudioPlayback();
-        }
+        // CLI-based audio playback is removed in DLL-only mode.
     }
 
     private void StopAudioPlayback()
