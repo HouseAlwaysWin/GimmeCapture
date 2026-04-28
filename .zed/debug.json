@@ -1,0 +1,27 @@
+[
+  {
+    "label": "GimmeCapture (Debug)",
+    "adapter": "netcoredbg",
+    "request": "launch",
+    "program": "$ZED_WORKTREE_ROOT/src/GimmeCapture/bin/Debug/net10.0-windows/GimmeCapture.exe",
+    "cwd": "$ZED_WORKTREE_ROOT/src/GimmeCapture",
+    "args": [],
+    "stopOnEntry": false,
+    "build": {
+      "command": "dotnet",
+      "args": [
+        "build",
+        "$ZED_WORKTREE_ROOT/src/GimmeCapture/GimmeCapture.csproj",
+        "-c",
+        "Debug"
+      ],
+      "cwd": "$ZED_WORKTREE_ROOT"
+    }
+  },
+  {
+    "label": "GimmeCapture (Attach)",
+    "adapter": "netcoredbg",
+    "request": "attach",
+    "processId": "${command:pickProcess}"
+  }
+]

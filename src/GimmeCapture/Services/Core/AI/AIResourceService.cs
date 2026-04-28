@@ -64,6 +64,16 @@ public class AIResourceService : ReactiveObject
     private const string NmtSpmUrl = "https://huggingface.co/facebook/m2m100_418M/resolve/main/sentencepiece.bpe.model?download=true";
     private const string NmtConfigUrl = "https://huggingface.co/Xenova/m2m100_418M/resolve/main/config.json?download=true";
     private const string NmtGenerationConfigUrl = "https://huggingface.co/Xenova/m2m100_418M/resolve/main/generation_config.json?download=true";
+
+    public readonly record struct LlamaModelPreset(string Id, string DisplayName, string DownloadUrl, string FileName);
+
+    private static readonly LlamaModelPreset[] LlamaModelPresets =
+    {
+        new("qwen2.5-1.5b-instruct-q4", "Qwen2.5 1.5B Instruct (Q4)", "https://huggingface.co/bartowski/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/Qwen2.5-1.5B-Instruct-Q4_K_M.gguf?download=true", "Qwen2.5-1.5B-Instruct-Q4_K_M.gguf"),
+        new("qwen2.5-3b-instruct-q4", "Qwen2.5 3B Instruct (Q4)", "https://huggingface.co/bartowski/Qwen2.5-3B-Instruct-GGUF/resolve/main/Qwen2.5-3B-Instruct-Q4_K_M.gguf?download=true", "Qwen2.5-3B-Instruct-Q4_K_M.gguf"),
+        new("llama-3.1-8b-instruct-q4", "Llama 3.1 8B Instruct (Q4)", "https://huggingface.co/bartowski/Meta-Llama-3.1-8B-Instruct-GGUF/resolve/main/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf?download=true", "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf"),
+        new("gemma-4-placeholder", "Gemma4 (custom file)", string.Empty, string.Empty),
+    };
     
     // Using a reliable direct link to ONNX Runtime GPU (Win x64)
     private const string OnnxRuntimeZipUrl = "https://github.com/microsoft/onnxruntime/releases/download/v1.20.1/onnxruntime-win-x64-gpu-1.20.1.zip";
@@ -131,6 +141,147 @@ public class AIResourceService : ReactiveObject
 
     public virtual (string Encoder, string Decoder, string Tokenizer, string Spm, string Config, string GenConfig) GetNmtPaths() => _pathService.GetNmtPaths();
 
+    public IReadOnlyList<LlamaModelPreset> GetLlamaModelPresets() => LlamaModelPresets;
+    public IReadOnlyList<LlamaModelPreset> GetDownloadableLlamaModelPresets() =>
+        LlamaModelPresets.AsValueEnumerable()
+            .Where(p => !string.IsNullOrWhiteSpace(p.DownloadUrl) && !string.IsNullOrWhiteSpace(p.FileName))
+            .ToList();
+
+    public string GetLlmModelsDir()
+    {
+        string custom = _settingsService.Settings.LlamaCustomModelPath;
+        if (!string.IsNullOrWhiteSpace(custom))
+        {
+            if (File.Exists(custom))
+            {
+                return Path.GetDirectoryName(custom) ?? custom;
+            }
+
+            return custom;
+        }
+
+        return Path.Combine(GetAIResourcesPath(), "llm", "models");
+    }
+
+    public string GetLlamaModelPathById(string modelId)
+    {
+        var preset = LlamaModelPresets.AsValueEnumerable().FirstOrDefault(p => p.Id == modelId);
+        if (!string.IsNullOrWhiteSpace(preset.FileName))
+        {
+            return Path.Combine(GetLlmModelsDir(), preset.FileName);
+        }
+
+        return string.Empty;
+    }
+
+    public bool IsLlamaPresetInstalled(string modelId)
+    {
+        string path = GetLlamaModelPathById(modelId);
+        return !string.IsNullOrWhiteSpace(path) && File.Exists(path);
+    }
+
+    public IReadOnlyList<LlamaModelPreset> GetInstalledLlamaModelPresets()
+    {
+        string modelDir = GetLlmModelsDir();
+        if (!Directory.Exists(modelDir))
+        {
+            return Array.Empty<LlamaModelPreset>();
+        }
+
+        var installed = LlamaModelPresets.AsValueEnumerable()
+            .Where(p => !string.IsNullOrWhiteSpace(p.FileName) && File.Exists(Path.Combine(modelDir, p.FileName)))
+            .ToList();
+        return installed;
+    }
+
+    public string GetSelectedLlamaModelPath()
+    {
+        var settings = _settingsService.Settings;
+        string path = GetLlamaModelPathById(settings.LlamaModelId);
+        if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
+        {
+            return path;
+        }
+
+        if (!string.IsNullOrWhiteSpace(settings.LlamaCustomModelPath))
+        {
+            if (Directory.Exists(settings.LlamaCustomModelPath))
+            {
+                var first = Directory.GetFiles(settings.LlamaCustomModelPath, "*.gguf", SearchOption.TopDirectoryOnly)
+                    .AsValueEnumerable()
+                    .FirstOrDefault();
+                return first ?? string.Empty;
+            }
+
+            return settings.LlamaCustomModelPath;
+        }
+
+        return path;
+    }
+
+    public bool IsLlamaModelReady()
+    {
+        string modelPath = GetSelectedLlamaModelPath();
+        return !string.IsNullOrWhiteSpace(modelPath) && File.Exists(modelPath);
+    }
+
+    public async Task<bool> EnsureLlamaModelAsync(string modelId, CancellationToken ct = default)
+    {
+        var preset = LlamaModelPresets.AsValueEnumerable().FirstOrDefault(p => p.Id == modelId);
+        if (string.IsNullOrWhiteSpace(preset.Id) || string.IsNullOrWhiteSpace(preset.DownloadUrl) || string.IsNullOrWhiteSpace(preset.FileName))
+        {
+            LastErrorMessage = "Selected Llama model is not downloadable. Please place a GGUF file in the custom model path.";
+            return false;
+        }
+
+        string modelDir = GetLlmModelsDir();
+        Directory.CreateDirectory(modelDir);
+        string modelPath = Path.Combine(modelDir, preset.FileName);
+        if (File.Exists(modelPath))
+        {
+            return true;
+        }
+
+        await _downloadLock.WaitAsync(ct);
+        try
+        {
+            _downloader.IsDownloading = true;
+            _downloader.CurrentDownloadName = $"LLM Model ({preset.DisplayName})";
+            _downloader.DownloadProgress = 0;
+            await _downloader.DownloadFileAsync(preset.DownloadUrl, modelPath, 0, 100, ct);
+            _settingsService.Settings.LlamaModelId = modelId;
+            return File.Exists(modelPath);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            LastErrorMessage = ex.Message;
+            return false;
+        }
+        finally
+        {
+            _downloader.IsDownloading = false;
+            _downloadLock.Release();
+        }
+    }
+
+    public bool RemoveLlamaModelPreset(string modelId)
+    {
+        try
+        {
+            string path = GetLlamaModelPathById(modelId);
+            if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
+            {
+                File.Delete(path);
+            }
+            return true;
+        }
+        catch (Exception ex)
+        {
+            LastErrorMessage = $"LLM model removal failed: {ex.Message}";
+            return false;
+        }
+    }
+
     public bool IsAICoreReady()
     {
         var modelPath = _pathService.GetAICoreModelPath();
@@ -160,8 +311,8 @@ public class AIResourceService : ReactiveObject
     // Deprecated monolithic check, keeping for compatibility if needed, but logic should move to specific checks
     public bool AreResourcesReady()
     {
-        return IsAICoreReady() && IsSAM2Ready(_settingsService.Settings.SelectedSAM2Variant) && IsOCRReady() && 
-               (_settingsService.Settings.SelectedTranslationEngine != TranslationEngine.MarianMT || IsNmtReady());
+        return IsAICoreReady() && IsSAM2Ready(_settingsService.Settings.SelectedSAM2Variant) && IsOCRReady() &&
+               (_settingsService.Settings.SelectedTranslationEngine != TranslationEngine.LlamaSharp || IsLlamaModelReady());
     }
 
     public bool IsNmtResourcesPresent()

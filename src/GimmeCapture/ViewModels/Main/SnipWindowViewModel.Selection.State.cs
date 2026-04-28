@@ -319,7 +319,7 @@ public partial class SnipWindowViewModel
         {
             try
             {
-                _translationService ??= new TranslationService(_mainVm.AIResourceService, _mainVm.AppSettingsService, _mainVm.MarianMTService);
+                _translationService ??= new TranslationService(_mainVm.AIResourceService, _mainVm.AppSettingsService);
 
                 // Keep language settings in sync before warm-up.
                 _mainVm.AppSettingsService.Settings.TargetLanguage = _mainVm.TargetLanguage;
@@ -474,7 +474,7 @@ public partial class SnipWindowViewModel
                         // Ensure TranslationService is initialized
                         if (_translationService == null && _mainVm != null)
                         {
-                            _translationService = new TranslationService(_mainVm.AIResourceService, _mainVm.AppSettingsService, _mainVm.MarianMTService);
+                            _translationService = new TranslationService(_mainVm.AIResourceService, _mainVm.AppSettingsService);
                         }
 
                         // Sync language settings before translation (must match manual translate path)

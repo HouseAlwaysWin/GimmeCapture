@@ -264,5 +264,13 @@
   "VideoQualityHigh": "高 (高品質壓縮)",
   "TrayShow": "顯示主視窗",
   "TrayExit": "結束程式",
-  "TrayCheckForUpdates": "檢查更新"
+  "TrayCheckForUpdates": "檢查更新",
+  "TranslationEngineLlamaSharp": "LlamaSharp（本機 GGUF）",
+  "StatusLlamaModelNotReady": "目前沒有可用的 Llama 模型，請先到模組管理下載。",
+  "ModuleLlamaModelsDescription": "本機翻譯（LlamaSharp）可下載的預設 GGUF 模型。",
+  "LlamaModel": "Llama 模型預設：",
+  "LlamaCustomModelPath": "自訂 GGUF 路徑：",
+  "LlamaContextSize": "上下文長度：",
+  "LlamaGpuLayers": "GPU 層數：",
+  "DownloadModel": "下載模型"
 }

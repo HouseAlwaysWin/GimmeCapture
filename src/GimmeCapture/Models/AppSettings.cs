@@ -6,7 +6,7 @@ public enum VideoCodec { H264, H265 }
 public enum VideoQuality { Low, Medium, High }
 public enum TranslationLanguage { TraditionalChinese, SimplifiedChinese, English, Japanese, Korean }
 public enum OCRLanguage { Auto, English, TraditionalChinese, SimplifiedChinese, Japanese, Korean }
-public enum TranslationEngine { Ollama, MarianMT }
+public enum TranslationEngine { LlamaSharp, Ollama, MarianMT }
 public enum AIScanEngine { OCR, SAM2 }
 
 public class TranslatedBlock
@@ -161,7 +161,9 @@ public class AppSettings
     [System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter))]
     public TranslationLanguage TargetLanguage { get; set; } = TranslationLanguage.TraditionalChinese;
     [System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter))]
-    public TranslationEngine SelectedTranslationEngine { get; set; } = TranslationEngine.Ollama;
-    public string OllamaModel { get; set; } = "";
-    public string OllamaApiUrl { get; set; } = "http://localhost:11434/api/generate";
+    public TranslationEngine SelectedTranslationEngine { get; set; } = TranslationEngine.LlamaSharp;
+    public string LlamaModelId { get; set; } = "qwen2.5-1.5b-instruct-q4";
+    public string LlamaCustomModelPath { get; set; } = string.Empty;
+    public int LlamaContextSize { get; set; } = 2048;
+    public int LlamaGpuLayers { get; set; } = 0;
 }

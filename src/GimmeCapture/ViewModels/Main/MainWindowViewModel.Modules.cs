@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using System.Reactive.Linq;
 using System.Collections.ObjectModel;
 using System.Windows.Input;
+using System.Linq;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Core;
 
@@ -90,32 +91,61 @@ public partial class MainWindowViewModel
                 if (status == QueueItemStatus.Completed) sam2.IsInstalled = AIResourceService.IsSAM2Ready(_settingsService.Settings.SelectedSAM2Variant);
             });
 
-        // MarianMT Module
-        var marian = new ModuleItem("MarianMT", "ModuleMarianMTDescription")
+        // Llama model module (preset GGUF downloads)
+        var llama = new ModuleItem("Llama Models", "ModuleLlamaModelsDescription")
         {
-            IsInstalled = AIResourceService.IsNmtReady(),
-            InstallCommand = ReactiveCommand.CreateFromTask(() => InstallModuleAsync("MarianMT")),
-            CancelCommand = ReactiveCommand.CreateFromTask(() => CancelModuleAsync("MarianMT")),
-            RemoveCommand = ReactiveCommand.CreateFromTask(() => RemoveModuleAsync("MarianMT"))
+            HasVariants = true,
+            Variants = new ObservableCollection<string>(
+                AIResourceService.GetDownloadableLlamaModelPresets().AsValueEnumerable().Select(p => p.Id).ToList()),
+            SelectedVariant = _settingsService.Settings.LlamaModelId,
+            IsInstalled = AIResourceService.IsLlamaPresetInstalled(_settingsService.Settings.LlamaModelId),
+            InstallCommand = ReactiveCommand.CreateFromTask(() => InstallModuleAsync("LlamaModels")),
+            CancelCommand = ReactiveCommand.CreateFromTask(() => CancelModuleAsync("LlamaModels")),
+            RemoveCommand = ReactiveCommand.CreateFromTask(() => RemoveModuleAsync("LlamaModels"))
         };
+
+        if (llama.Variants != null && llama.Variants.Count > 0 && string.IsNullOrWhiteSpace(llama.SelectedVariant))
+        {
+            llama.SelectedVariant = llama.Variants[0];
+        }
+
+        llama.WhenAnyValue(x => x.SelectedVariant)
+            .Subscribe(async modelId =>
+            {
+                if (_isDataLoading || string.IsNullOrWhiteSpace(modelId)) return;
+                _settingsService.Settings.LlamaModelId = modelId;
+                await SaveSettingsAsync();
+                llama.IsInstalled = AIResourceService.IsLlamaPresetInstalled(modelId);
+            });
 
         AIResourceService.WhenAnyValue(x => x.DownloadProgress)
             .Subscribe(p => {
                 if (aiCore.IsProcessing) aiCore.Progress = p;
                 if (sam2.IsProcessing) sam2.Progress = p;
                 if (ocr.IsProcessing) ocr.Progress = p;
-                if (marian.IsProcessing) marian.Progress = p;
+                if (llama.IsProcessing) llama.Progress = p;
             });
 
         aiCore.UpdateDescription();
         sam2.UpdateDescription();
         ocr.UpdateDescription();
-        marian.UpdateDescription();
+        llama.UpdateDescription();
 
         Modules.Add(aiCore);
         Modules.Add(sam2);
         Modules.Add(ocr);
-        Modules.Add(marian);
+        Modules.Add(llama);
+
+        ResourceQueue.ObserveStatus("LlamaModels")
+            .ObserveOn(RxApp.MainThreadScheduler)
+            .Subscribe(status =>
+            {
+                llama.IsPending = status == QueueItemStatus.Pending;
+                llama.IsProcessing = status == QueueItemStatus.Downloading;
+                llama.HasError = status == QueueItemStatus.Failed;
+                if (status == QueueItemStatus.Failed) llama.ErrorMessage = AIResourceService.LastErrorMessage;
+                if (status == QueueItemStatus.Completed) llama.IsInstalled = AIResourceService.IsLlamaPresetInstalled(llama.SelectedVariant);
+            });
     }
 
     public async Task InstallModuleAsync(string type)
@@ -125,7 +155,7 @@ public partial class MainWindowViewModel
             if ((m.Name == "ONNX Runtime & U2Net" && type == "AICore") ||
                 (m.Name == "SAM2 Model" && type == "SAM2") ||
                 (m.Name == "PaddleOCR v5" && type == "OCR") ||
-                (m.Name == "MarianMT" && type == "MarianMT"))
+                (m.Name == "Llama Models" && type == "LlamaModels"))
             {
                 m.HasError = false;
                 m.ErrorMessage = "";
@@ -145,9 +175,15 @@ public partial class MainWindowViewModel
         {
             await ResourceQueue.EnqueueAsync("OCR", (ct) => AIResourceService.EnsureOCRAsync(ct));
         }
-        else if (type == "MarianMT")
+        else if (type == "LlamaModels")
         {
-            await ResourceQueue.EnqueueAsync("MarianMT", (ct) => AIResourceService.EnsureNmtAsync(ct));
+            var selectedId = Modules.AsValueEnumerable()
+                .FirstOrDefault(m => m.Name == "Llama Models")?.SelectedVariant;
+            if (string.IsNullOrWhiteSpace(selectedId))
+            {
+                selectedId = _settingsService.Settings.LlamaModelId;
+            }
+            await ResourceQueue.EnqueueAsync("LlamaModels", (ct) => AIResourceService.EnsureLlamaModelAsync(selectedId ?? string.Empty, ct));
         }
     }
 
@@ -190,9 +226,14 @@ public partial class MainWindowViewModel
             {
                 AIResourceService.RemoveOCRResources();
             }
-            else if (type == "MarianMT")
+            else if (type == "LlamaModels")
             {
-                AIResourceService.RemoveNmtResources();
+                var selectedId = Modules.AsValueEnumerable()
+                    .FirstOrDefault(m => m.Name == "Llama Models")?.SelectedVariant;
+                if (!string.IsNullOrWhiteSpace(selectedId))
+                {
+                    AIResourceService.RemoveLlamaModelPreset(selectedId);
+                }
             }
             
             foreach (var m in Modules)
@@ -200,7 +241,7 @@ public partial class MainWindowViewModel
                 if (m.Name == "ONNX Runtime & U2Net") m.IsInstalled = AIResourceService.IsAICoreReady();
                 if (m.Name == "SAM2 Model") m.IsInstalled = AIResourceService.IsSAM2Ready(_settingsService.Settings.SelectedSAM2Variant);
                 if (m.Name == "PaddleOCR v5") m.IsInstalled = AIResourceService.IsOCRReady();
-                if (m.Name == "MarianMT") m.IsInstalled = AIResourceService.IsNmtReady();
+                if (m.Name == "Llama Models") m.IsInstalled = AIResourceService.IsLlamaPresetInstalled(m.SelectedVariant);
             }
         }
         catch (Exception ex)

@@ -49,27 +49,37 @@
                             </ComboBox>
                         </DockPanel>
 
-                        <!-- Ollama Specific Settings -->
-                        <StackPanel IsVisible="{Binding IsOllamaVisible}" Spacing="10" Margin="0,5,0,0">
+                        <!-- LlamaSharp Specific Settings -->
+                        <StackPanel IsVisible="{Binding IsLlamaVisible}" Spacing="10" Margin="0,5,0,0">
                             <Separator Background="#333333" Height="1" Margin="0,5"/>
-                            <TextBlock Text="Ollama" FontWeight="SemiBold" Foreground="{DynamicResource ThemeAccentBrush}"/>
+                            <TextBlock Text="LlamaSharp (GGUF)" FontWeight="SemiBold" Foreground="{DynamicResource ThemeAccentBrush}"/>
                             <StackPanel Spacing="5">
-                                <TextBlock Text="{Binding [OllamaModel], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>
+                                <TextBlock Text="{Binding [LlamaModel], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>
                                 <Grid ColumnDefinitions="*, Auto">
                                     <ComboBox Grid.Column="0" 
-                                              ItemsSource="{Binding AvailableOllamaModels}" 
-                                              SelectedItem="{Binding OllamaModel}"
+                                              ItemsSource="{Binding AvailableLlamaModels}" 
+                                              SelectedItem="{Binding LlamaModelId}"
                                               HorizontalAlignment="Stretch"
                                               Margin="0,0,10,0"/>
                                     <Button Grid.Column="1" 
                                             Content="↻" 
-                                            Command="{Binding RefreshOllamaModelsCommand}"
-                                            ToolTip.Tip="Refresh Models"
+                                            Command="{Binding RefreshLlamaModelsCommand}"
+                                            ToolTip.Tip="Refresh Downloaded Models"
                                             Theme="{StaticResource SmallGothicMetalButton}"/>
                                 </Grid>
+                                <TextBlock Text="{Binding [StatusLlamaModelNotReady], Source={x:Static services:LocalizationService.Instance}}"
+                                           Foreground="#D46A6A"
+                                           IsVisible="{Binding NoDownloadedLlamaModels}"
+                                           TextWrapping="Wrap"/>
                                 
-                                <TextBlock Text="{Binding [OllamaApiUrl], Source={x:Static services:LocalizationService.Instance}}" FontSize="12" Margin="0,5,0,0"/>
-                                <TextBox Text="{Binding OllamaApiUrl}" PlaceholderText="http://localhost:11434/api/generate"/>
+                                <TextBlock Text="{Binding [LlamaCustomModelPath], Source={x:Static services:LocalizationService.Instance}}" FontSize="12" Margin="0,5,0,0"/>
+                                <TextBox Text="{Binding LlamaCustomModelPath}" PlaceholderText="C:\\Models\\my-model.gguf or folder path"/>
+
+                                <TextBlock Text="{Binding [LlamaContextSize], Source={x:Static services:LocalizationService.Instance}}" FontSize="12" Margin="0,5,0,0"/>
+                                <TextBox Text="{Binding LlamaContextSize}" />
+
+                                <TextBlock Text="{Binding [LlamaGpuLayers], Source={x:Static services:LocalizationService.Instance}}" FontSize="12" Margin="0,5,0,0"/>
+                                <TextBox Text="{Binding LlamaGpuLayers}" />
                             </StackPanel>
                         </StackPanel>
 

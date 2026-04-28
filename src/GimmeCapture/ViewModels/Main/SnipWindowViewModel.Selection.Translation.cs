@@ -54,7 +54,7 @@ public partial class SnipWindowViewModel
             if (_translationService == null)
             {
                 if (_mainVm?.AIResourceService == null) return;
-                _translationService = new TranslationService(_mainVm.AIResourceService, _mainVm.AppSettingsService, _mainVm.MarianMTService);
+                _translationService = new TranslationService(_mainVm.AIResourceService, _mainVm.AppSettingsService);
             }
 
             // Sync language settings
@@ -383,7 +383,7 @@ public partial class SnipWindowViewModel
             if (_translationService == null)
             {
                 if (_mainVm?.AIResourceService == null) return false;
-                _translationService = new TranslationService(_mainVm.AIResourceService, _mainVm.AppSettingsService, _mainVm.MarianMTService);
+                _translationService = new TranslationService(_mainVm.AIResourceService, _mainVm.AppSettingsService);
             }
 
             var result = await _translationService.CheckEngineReadyAsync();

@@ -253,5 +253,13 @@
   "VideoQualityHigh": "高 (視覚的に無損失)",
   "TrayShow": "メインウィンドウを表示",
   "TrayExit": "終了",
-  "TrayCheckForUpdates": "アップデートを確認"
+  "TrayCheckForUpdates": "アップデートを確認",
+  "TranslationEngineLlamaSharp": "LlamaSharp（ローカル GGUF）",
+  "StatusLlamaModelNotReady": "利用可能な Llama モデルがありません。先にモジュール管理でダウンロードしてください。",
+  "ModuleLlamaModelsDescription": "ローカル翻訳（LlamaSharp）向けプリセット GGUF モデル。",
+  "LlamaModel": "Llama モデルプリセット：",
+  "LlamaCustomModelPath": "カスタム GGUF パス：",
+  "LlamaContextSize": "コンテキスト長：",
+  "LlamaGpuLayers": "GPU レイヤー数：",
+  "DownloadModel": "モデルをダウンロード"
 }

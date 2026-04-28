@@ -264,5 +264,13 @@
   "VideoQualityHigh": "High (Visually Lossless)",
   "TrayShow": "Show",
   "TrayExit": "Exit",
-  "TrayCheckForUpdates": "Check for Updates"
+  "TrayCheckForUpdates": "Check for Updates",
+  "TranslationEngineLlamaSharp": "LlamaSharp (Local GGUF)",
+  "StatusLlamaModelNotReady": "No Llama model is available. Please download one in Module Management first.",
+  "ModuleLlamaModelsDescription": "Preset GGUF model downloads for local translation (LlamaSharp).",
+  "LlamaModel": "Llama Model Preset:",
+  "LlamaCustomModelPath": "Custom GGUF Path:",
+  "LlamaContextSize": "Context Size:",
+  "LlamaGpuLayers": "GPU Layers:",
+  "DownloadModel": "Download Model"
 }

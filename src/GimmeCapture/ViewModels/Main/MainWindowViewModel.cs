@@ -105,7 +105,6 @@ public partial class MainWindowViewModel : ViewModelBase
     public UpdateService UpdateService { get; }
     public AIResourceService AIResourceService { get; }
     public AIPathService AIPathService { get; }
-    public MarianMTService MarianMTService { get; }
     public ResourceQueueService ResourceQueue => ResourceQueueService.Instance;
     
     public ObservableCollection<ModuleItem> Modules { get; } = new();
@@ -160,7 +159,6 @@ public partial class MainWindowViewModel : ViewModelBase
         var nativeResolverService = new NativeResolverService(AIPathService);
         var aiModelDownloader = new AIModelDownloader();
         AIResourceService = new AIResourceService(_settingsService, AIPathService, nativeResolverService, aiModelDownloader);
-        MarianMTService = new MarianMTService(AIResourceService);
 
         LocalizationService.Instance
             .WhenAnyValue(x => x.CurrentLanguage)
@@ -219,7 +217,7 @@ public partial class MainWindowViewModel : ViewModelBase
             }
         });
 
-        RefreshOllamaModelsCommand = ReactiveCommand.CreateFromTask(RefreshOllamaModelsAsync);
+        RefreshLlamaModelsCommand = ReactiveCommand.Create(() => RefreshLlamaModelCatalog());
 
         HotkeyService.OnHotkeyPressed = (id) => 
         {

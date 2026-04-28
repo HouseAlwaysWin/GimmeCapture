@@ -21,35 +21,24 @@ public class TranslationService
     private readonly AppSettingsService _settingsService;
     private readonly IOCREngine _ocrEngine;
     private readonly IEnumerable<ITranslationEngine> _translationEngines;
-    private readonly IOllamaApiClient _ollamaApiClient;
     private readonly AIResourceService _aiResourceService;
-    private readonly MarianMTService _marianMTService;
 
     private AppSettings _settings => _settingsService.Settings;
 
     public TranslationService(
-        AIResourceService aiResourceService, 
-        AppSettingsService settingsService, 
-        MarianMTService marianMTService)
+        AIResourceService aiResourceService,
+        AppSettingsService settingsService)
     {
         _aiResourceService = aiResourceService ?? throw new ArgumentNullException(nameof(aiResourceService));
         _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
-        _marianMTService = marianMTService ?? throw new ArgumentNullException(nameof(marianMTService));
         
         // Manual DI for now as the app doesn't use a container in constructor injection here
         var translationCache = new InMemoryTranslationCache();
-        var executionPolicy = new TranslationExecutionPolicy();
-        _ollamaApiClient = new OllamaApiClient(new HttpClient
-        {
-            // Timeout is controlled by TranslationExecutionHelper + policy.
-            Timeout = Timeout.InfiniteTimeSpan
-        }, settingsService, executionPolicy);
 
         _ocrEngine = new PaddleOCREngine(aiResourceService, settingsService);
         _translationEngines = new List<ITranslationEngine>
         {
-            new LLMTranslationEngine(_ollamaApiClient, settingsService, translationCache),
-            new MarianMTTranslationEngine(_marianMTService)
+            new LlamaSharpTranslationEngine(_aiResourceService, settingsService, translationCache)
         };
     }
 
@@ -76,46 +65,16 @@ public class TranslationService
             Debug.WriteLine($"[TranslationService] Warm-up OCR failed: {ex.Message}");
         }
 
-        if (_settings.SelectedTranslationEngine == TranslationEngine.MarianMT)
+        if (_settings.SelectedTranslationEngine == TranslationEngine.LlamaSharp)
         {
-            try
-            {
-                bool nmtReady = await _aiResourceService.EnsureNmtAsync(ct);
-                if (nmtReady)
-                {
-                    await _marianMTService.EnsureLoadedAsync(ct);
-                }
-            }
-            catch (OperationCanceledException)
-            {
-                throw;
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"[TranslationService] Warm-up MarianMT failed: {ex.Message}");
-            }
-
-            return;
-        }
-
-        if (_settings.SelectedTranslationEngine == TranslationEngine.Ollama)
-        {
-            var model = _settings.OllamaModel;
-            if (string.IsNullOrWhiteSpace(model))
+            if (!_aiResourceService.IsLlamaModelReady())
             {
                 return;
             }
 
             try
             {
-                bool ready = await _ollamaApiClient.IsReadyAsync(model, ct);
-                if (!ready)
-                {
-                    return;
-                }
-
-                // Trigger model cold-start in the background so first real translation is faster.
-                await _ollamaApiClient.GenerateAsync(model, "Reply with OK only.", ct);
+                await TranslatePlainTextAsync("warmup", OCRLanguage.English, ct);
             }
             catch (OperationCanceledException)
             {
@@ -123,7 +82,7 @@ public class TranslationService
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[TranslationService] Warm-up Ollama failed: {ex.Message}");
+                Debug.WriteLine($"[TranslationService] Warm-up LlamaSharp failed: {ex.Message}");
             }
         }
     }
@@ -131,20 +90,11 @@ public class TranslationService
     public async Task<ResourceReadyResult> CheckEngineReadyAsync()
     {
         var engineType = _settings.SelectedTranslationEngine;
-        if (engineType == TranslationEngine.MarianMT)
+        if (engineType == TranslationEngine.LlamaSharp)
         {
-            if (!_aiResourceService.IsNmtReady())
+            if (!_aiResourceService.IsLlamaModelReady())
             {
-                return ResourceReadyResult.NotReady("StatusMarianMTNotReady", true);
-            }
-        }
-        else if (engineType == TranslationEngine.Ollama)
-        {
-            var model = _settings.OllamaModel;
-            bool ready = await _ollamaApiClient.IsReadyAsync(model);
-            if (!ready)
-            {
-                return ResourceReadyResult.NotReady("StatusOllamaRequired", false);
+                return ResourceReadyResult.NotReady("StatusLlamaModelNotReady", true);
             }
         }
 
@@ -317,8 +267,8 @@ public class TranslationService
 
     private async Task<string> ForceTranslateAsync(string text, OCRLanguage sourceLang, TranslationLanguage targetLang, CancellationToken ct)
     {
-        // Force the use of LLM for retry with a stricter target language prompt
-        var llm = _translationEngines.AsValueEnumerable().OfType<LLMTranslationEngine>().FirstOrDefault();
+        // Force the use of LlamaSharp for retry with a stricter target language prompt
+        var llm = _translationEngines.AsValueEnumerable().OfType<LlamaSharpTranslationEngine>().FirstOrDefault();
         if (llm != null) return await llm.TranslateAsync(text, sourceLang, targetLang, ct);
         return string.Empty;
     }
@@ -388,7 +338,6 @@ public class TranslationService
 
     public async Task<List<string>> GetAvailableModelsAsync()
     {
-        var models = await _ollamaApiClient.GetModelsAsync();
-        return models.AsValueEnumerable().ToList();
+        return _aiResourceService.GetLlamaModelPresets().AsValueEnumerable().Select(m => m.DisplayName).ToList();
     }
 }

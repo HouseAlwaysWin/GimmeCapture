@@ -14,6 +14,7 @@ using System.Text.Json;
 using System.Collections.ObjectModel;
 using System.Reactive;
 using System.Threading;
+using System.IO;
 
 namespace GimmeCapture.ViewModels.Main;
 
@@ -26,15 +27,11 @@ public partial class MainWindowViewModel
         public Language Value { get; set; }
     }
 
-    public List<TranslationLanguage> AvailableTranslationLanguages => 
-        _selectedTranslationEngine == TranslationEngine.MarianMT
-            ? Enum.GetValues<TranslationLanguage>().AsValueEnumerable().Where(l => l != TranslationLanguage.Korean).ToList()
-            : Enum.GetValues<TranslationLanguage>().AsValueEnumerable().ToList();
+    public List<TranslationLanguage> AvailableTranslationLanguages =>
+        Enum.GetValues<TranslationLanguage>().AsValueEnumerable().ToList();
 
-    public List<OCRLanguage> AvailableOCRLanguages => 
-        _selectedTranslationEngine == TranslationEngine.MarianMT
-            ? Enum.GetValues<OCRLanguage>().AsValueEnumerable().Where(l => l != OCRLanguage.Korean).ToList()
-            : Enum.GetValues<OCRLanguage>().AsValueEnumerable().ToList();
+    public List<OCRLanguage> AvailableOCRLanguages =>
+        Enum.GetValues<OCRLanguage>().AsValueEnumerable().ToList();
 
     private OCRLanguage _sourceLanguage;
     public OCRLanguage SourceLanguage
@@ -76,7 +73,7 @@ public partial class MainWindowViewModel
         }
     }
 
-    public List<TranslationEngine> AvailableTranslationEngines { get; } = Enum.GetValues<TranslationEngine>().AsValueEnumerable().ToList();
+    public List<TranslationEngine> AvailableTranslationEngines { get; } = new() { TranslationEngine.LlamaSharp };
     public List<AIScanEngine> AvailableAIScanEngines { get; } = Enum.GetValues<AIScanEngine>().AsValueEnumerable().ToList();
     
     private TranslationEngine _selectedTranslationEngine;
@@ -88,24 +85,11 @@ public partial class MainWindowViewModel
             if (_selectedTranslationEngine != value)
             {
                 this.RaiseAndSetIfChanged(ref _selectedTranslationEngine, value);
-                this.RaisePropertyChanged(nameof(IsOllamaVisible));
+                this.RaisePropertyChanged(nameof(IsLlamaVisible));
                 
                 // Notify language lists changed
                 this.RaisePropertyChanged(nameof(AvailableOCRLanguages));
                 this.RaisePropertyChanged(nameof(AvailableTranslationLanguages));
-
-                // Auto-reset illegal selections for MarianMT
-                if (value == TranslationEngine.MarianMT)
-                {
-                    if (SourceLanguage == OCRLanguage.Korean)
-                    {
-                        SourceLanguage = OCRLanguage.Auto;
-                    }
-                    if (TargetLanguage == TranslationLanguage.Korean)
-                    {
-                        TargetLanguage = TranslationLanguage.TraditionalChinese;
-                    }
-                }
 
                 if (!_isDataLoading)
                 {
@@ -117,7 +101,7 @@ public partial class MainWindowViewModel
         }
     }
 
-    public bool IsOllamaVisible => SelectedTranslationEngine == TranslationEngine.Ollama;
+    public bool IsLlamaVisible => SelectedTranslationEngine == TranslationEngine.LlamaSharp;
 
     public LanguageOption[] AvailableLanguages { get; } = new[]
     {
@@ -705,151 +689,103 @@ public partial class MainWindowViewModel
 
 
 
-    private string _ollamaModel = "";
-    public string OllamaModel
+    private string _llamaModelId = "qwen2.5-1.5b-instruct-q4";
+    public string LlamaModelId
     {
-        get => _ollamaModel;
+        get => _llamaModelId;
         set
         {
-            _settingsService.DebugLog($"[Ollama] Setter called with: '{value}' (Current: '{_ollamaModel}', Loading: {_isDataLoading})");
-            if (string.IsNullOrWhiteSpace(value)) 
-            {
-                // If UI tries to null it out (e.g. during binding reset), force it back to the current value
-                if (!_isDataLoading) 
-                {
-                    _settingsService.DebugLog($"[Ollama] Rejecting empty value and notifying UI to revert to '{_ollamaModel}'");
-                    this.RaisePropertyChanged(nameof(OllamaModel));
-                }
-                return; 
-            }
-            
-            this.RaiseAndSetIfChanged(ref _ollamaModel, value);
+            if (string.IsNullOrWhiteSpace(value)) return;
+            this.RaiseAndSetIfChanged(ref _llamaModelId, value);
             if (!_isDataLoading)
             {
-                _settingsService.Settings.OllamaModel = value; // Immediate sync
+                _settingsService.Settings.LlamaModelId = value;
                 IsModified = true;
                 _ = SaveSettingsAsync();
             }
         }
     }
 
-    private string _ollamaApiUrl = "http://localhost:11434/api/generate";
-    public string OllamaApiUrl
+    private string _llamaCustomModelPath = string.Empty;
+    public string LlamaCustomModelPath
     {
-        get => _ollamaApiUrl;
+        get => _llamaCustomModelPath;
         set
         {
-            this.RaiseAndSetIfChanged(ref _ollamaApiUrl, value);
+            this.RaiseAndSetIfChanged(ref _llamaCustomModelPath, value);
             if (!_isDataLoading)
             {
-                _settingsService.Settings.OllamaApiUrl = value; // Immediate sync
+                _settingsService.Settings.LlamaCustomModelPath = value;
                 IsModified = true;
                 _ = SaveSettingsAsync();
             }
         }
     }
 
-
-    public ObservableCollection<string> AvailableOllamaModels { get; } = new();
-
-    public ReactiveCommand<Unit, Unit> RefreshOllamaModelsCommand { get; private set; }
-
-    public async Task RefreshOllamaModelsAsync()
+    private int _llamaContextSize = 2048;
+    public int LlamaContextSize
     {
-        try
+        get => _llamaContextSize;
+        set
         {
-            StatusText = "Refreshing Ollama Models...";
-            string baseUrl = OllamaApiUrl.Replace("/api/generate", "");
-            if (baseUrl.EndsWith("/")) baseUrl = baseUrl.TrimEnd('/');
-            
-            _settingsService.DebugLog($"[Ollama] Refreshing models from {baseUrl}...");
-            
-            using var client = new HttpClient();
-            client.Timeout = TimeSpan.FromSeconds(3);
-            var response = await client.GetStringAsync($"{baseUrl}/api/tags");
-            
-            using var doc = JsonDocument.Parse(response);
-            if (doc.RootElement.TryGetProperty("models", out var models))
+            this.RaiseAndSetIfChanged(ref _llamaContextSize, Math.Clamp(value, 512, 8192));
+            if (!_isDataLoading)
             {
-                var names = new List<string>();
-                foreach (var model in models.EnumerateArray())
-                {
-                    if (model.TryGetProperty("name", out var name))
-                    {
-                        names.Add(name.GetString() ?? "");
-                    }
-                }
-                
-                var savedModel = _ollamaModel; 
-                _settingsService.DebugLog($"[Ollama] API returned {names.Count} models. Current internal value is '{savedModel}'");
-
-                await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => 
-                {
-                    // Surgical update to avoid triggering ComboBox reset
-                    var currentItems = AvailableOllamaModels.AsValueEnumerable().ToList();
-                    
-                    // Remove items not in the new list, but KEEP the currently selected one
-                    foreach (var item in currentItems)
-                    {
-                        if (!names.Contains(item) && item != savedModel)
-                        {
-                            AvailableOllamaModels.Remove(item);
-                        }
-                    }
-
-                    // Add new items
-                    foreach (var name in names)
-                    {
-                        if (!AvailableOllamaModels.Contains(name))
-                        {
-                            AvailableOllamaModels.Add(name);
-                        }
-                    }
-
-                    // Force ComboBox to re-evaluate by clearing then re-setting.
-                    // Avalonia ComboBox won't update SelectedItem unless it sees a real change.
-                    _ollamaModel = null!;
-                    this.RaisePropertyChanged(nameof(OllamaModel));
-
-                    if (!string.IsNullOrEmpty(savedModel) && AvailableOllamaModels.Contains(savedModel))
-                    {
-                        _ollamaModel = savedModel;
-                    }
-                    else if (AvailableOllamaModels.Count > 0)
-                    {
-                        _ollamaModel = AvailableOllamaModels[0];
-                    }
-                    else
-                    {
-                        _ollamaModel = savedModel ?? "";
-                    }
-                    
-                    this.RaisePropertyChanged(nameof(OllamaModel));
-                });
+                _settingsService.Settings.LlamaContextSize = _llamaContextSize;
+                IsModified = true;
+                _ = SaveSettingsAsync();
             }
-            StatusText = "Ollama Models Refreshed";
         }
-        catch (Exception ex)
+    }
+
+    private int _llamaGpuLayers;
+    public int LlamaGpuLayers
+    {
+        get => _llamaGpuLayers;
+        set
         {
-            _settingsService.DebugLog($"[Ollama] ERROR during refresh: {ex.Message}");
-            StatusText = "Failed to refresh Ollama models";
-            
-            // Backup: Ensure the UI still knows about our loaded model
-            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => 
+            this.RaiseAndSetIfChanged(ref _llamaGpuLayers, Math.Max(0, value));
+            if (!_isDataLoading)
             {
-                if (!string.IsNullOrEmpty(_ollamaModel))
-                {
-                    if (!AvailableOllamaModels.Contains(_ollamaModel))
-                    {
-                        AvailableOllamaModels.Add(_ollamaModel);
-                    }
-                    // Ensure _ollamaModel points to the collection instance
-                    var match = AvailableOllamaModels.AsValueEnumerable().FirstOrDefault(m => m == _ollamaModel);
-                    if (match != null) _ollamaModel = match;
-                    this.RaisePropertyChanged(nameof(OllamaModel));
-                }
-            });
+                _settingsService.Settings.LlamaGpuLayers = _llamaGpuLayers;
+                IsModified = true;
+                _ = SaveSettingsAsync();
+            }
         }
+    }
+
+    public ObservableCollection<string> AvailableLlamaModels { get; } = new();
+
+    public ReactiveCommand<Unit, Unit> RefreshLlamaModelsCommand { get; private set; } = null!;
+    public bool HasDownloadedLlamaModels => AvailableLlamaModels.Count > 0 || AIResourceService.IsLlamaModelReady();
+    public bool NoDownloadedLlamaModels => !HasDownloadedLlamaModels;
+
+    public void RefreshLlamaModelCatalog()
+    {
+        var presets = AIResourceService.GetInstalledLlamaModelPresets();
+        AvailableLlamaModels.Clear();
+        foreach (var preset in presets)
+        {
+            AvailableLlamaModels.Add(preset.Id);
+        }
+
+        if (AvailableLlamaModels.Count > 0)
+        {
+            if (string.IsNullOrWhiteSpace(LlamaModelId) || !AvailableLlamaModels.Contains(LlamaModelId))
+            {
+                LlamaModelId = AvailableLlamaModels[0];
+            }
+        }
+        else
+        {
+            if (!AIResourceService.IsLlamaModelReady())
+            {
+                StatusText = LocalizationService.Instance["StatusLlamaModelNotReady"];
+            }
+        }
+
+        this.RaisePropertyChanged(nameof(HasDownloadedLlamaModels));
+        this.RaisePropertyChanged(nameof(NoDownloadedLlamaModels));
     }
 
     private bool _showRecordCursor = true;
@@ -932,9 +868,11 @@ public partial class MainWindowViewModel
             EnableAIScan = settings.EnableAIScan;
             AIScanEngine = settings.AIScanEngine;
             AIResourcesDirectory = settings.AIResourcesDirectory;
-            OllamaApiUrl = settings.OllamaApiUrl;
-            SelectedTranslationEngine = settings.SelectedTranslationEngine;
-            OllamaModel = settings.OllamaModel;
+            SelectedTranslationEngine = TranslationEngine.LlamaSharp;
+            LlamaModelId = settings.LlamaModelId;
+            LlamaCustomModelPath = settings.LlamaCustomModelPath;
+            LlamaContextSize = settings.LlamaContextSize;
+            LlamaGpuLayers = settings.LlamaGpuLayers;
             SourceLanguage = settings.SourceLanguage;
             TargetLanguage = settings.TargetLanguage;
 
@@ -961,12 +899,7 @@ public partial class MainWindowViewModel
             foreach (var prop in hotkeyProps) this.RaisePropertyChanged(prop);
 
             
-            // Seed the list so ComboBox can show the value immediately.
-            if (!string.IsNullOrEmpty(settings.OllamaModel))
-            {
-                if (!AvailableOllamaModels.Contains(settings.OllamaModel))
-                    AvailableOllamaModels.Add(settings.OllamaModel);
-            }
+            RefreshLlamaModelCatalog();
 
             if (Color.TryParse(settings.BorderColorHex, out var color))
                 BorderColor = color;
@@ -994,16 +927,8 @@ public partial class MainWindowViewModel
             _isDataLoading = false;
             InitializeModules();
 
-            // Force ComboBox to pick up OllamaModel by toggling null -> value.
-            // This must happen AFTER _isDataLoading=false so the UI binding is active.
-            var savedOllamaModel = _ollamaModel;
-            _ollamaModel = null!;
-            this.RaisePropertyChanged(nameof(OllamaModel));
-            _ollamaModel = savedOllamaModel;
-            this.RaisePropertyChanged(nameof(OllamaModel));
-
             if (AutoCheckUpdates) _ = CheckForUpdates(true);
-            _ = RefreshOllamaModelsAsync(); // Load settings first, THEN refresh models
+            RefreshLlamaModelCatalog();
         }
     }
 
@@ -1056,8 +981,10 @@ public partial class MainWindowViewModel
             settings.AIScanEngine = AIScanEngine;
             settings.TargetLanguage = TargetLanguage;
             settings.SourceLanguage = SourceLanguage;
-            settings.OllamaModel = OllamaModel;
-            settings.OllamaApiUrl = OllamaApiUrl;
+            settings.LlamaModelId = LlamaModelId;
+            settings.LlamaCustomModelPath = LlamaCustomModelPath;
+            settings.LlamaContextSize = LlamaContextSize;
+            settings.LlamaGpuLayers = LlamaGpuLayers;
             settings.SelectedTranslationEngine = SelectedTranslationEngine;
             settings.BorderColorHex = BorderColor.ToString();
             settings.ThemeColorHex = ThemeColor.ToString();

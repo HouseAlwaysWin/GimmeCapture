@@ -218,10 +218,12 @@ public class AppSettingsService
         dest.SAM2MinObjectSize = source.SAM2MinObjectSize;
         dest.SourceLanguage = source.SourceLanguage;
         dest.TargetLanguage = source.TargetLanguage;
-        dest.SelectedTranslationEngine = source.SelectedTranslationEngine;
-        dest.OllamaModel = source.OllamaModel;
-        dest.OllamaApiUrl = source.OllamaApiUrl;
-        DebugLog($"UpdateSettings: OllamaModel: '{dest.OllamaModel}', Engine: {dest.SelectedTranslationEngine}");
+        dest.SelectedTranslationEngine = TranslationEngine.LlamaSharp;
+        dest.LlamaModelId = string.IsNullOrWhiteSpace(source.LlamaModelId) ? "qwen2.5-1.5b-instruct-q4" : source.LlamaModelId;
+        dest.LlamaCustomModelPath = source.LlamaCustomModelPath;
+        dest.LlamaContextSize = source.LlamaContextSize;
+        dest.LlamaGpuLayers = source.LlamaGpuLayers;
+        DebugLog($"UpdateSettings: LlamaModelId: '{dest.LlamaModelId}', Engine: {dest.SelectedTranslationEngine}");
     }
 
 
