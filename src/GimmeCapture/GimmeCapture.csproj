@@ -15,6 +15,9 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="bin\**\*.cs;obj\**\*.cs;bin-codex\**\*.cs;obj-codex\**\*.cs" />
+    <EmbeddedResource Remove="bin\**;obj\**;bin-codex\**;obj-codex\**" />
+    <None Remove="bin\**;obj\**;bin-codex\**;obj-codex\**" />
     <AvaloniaResource Include="Assets\**" />
     <None Update="config.json">
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>

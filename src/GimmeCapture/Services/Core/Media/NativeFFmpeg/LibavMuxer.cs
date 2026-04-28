@@ -97,6 +97,8 @@ internal static class LibavMuxer
         var inAudio = audioFmt->streams[audioIn];
         bool hasVideo = ReadNextStreamPacket(videoFmt, videoIn, videoPkt);
         bool hasAudio = ReadNextStreamPacket(audioFmt, audioIn, audioPkt);
+        long firstVideoPts = hasVideo ? GetPacketPrimaryTimestamp(videoPkt) : ffmpeg.AV_NOPTS_VALUE;
+        long firstAudioPts = hasAudio ? GetPacketPrimaryTimestamp(audioPkt) : ffmpeg.AV_NOPTS_VALUE;
 
         int videoPackets = 0;
         int audioPackets = 0;
@@ -114,6 +116,7 @@ internal static class LibavMuxer
 
             if (takeVideo)
             {
+                NormalizePacketTimestamps(videoPkt, firstVideoPts);
                 ffmpeg.av_packet_rescale_ts(videoPkt, inVideo->time_base, outVideo->time_base);
                 videoPkt->stream_index = outVideo->index;
                 ThrowIfErr(ffmpeg.av_interleaved_write_frame(outFmt, videoPkt), "write_frame(video)");
@@ -123,6 +126,7 @@ internal static class LibavMuxer
             }
             else
             {
+                NormalizePacketTimestamps(audioPkt, firstAudioPts);
                 ffmpeg.av_packet_rescale_ts(audioPkt, inAudio->time_base, outAudio->time_base);
                 audioPkt->stream_index = outAudio->index;
                 ThrowIfErr(ffmpeg.av_interleaved_write_frame(outFmt, audioPkt), "write_frame(audio)");
@@ -132,6 +136,49 @@ internal static class LibavMuxer
             }
         }
         return new MuxStats(videoPackets, audioPackets);
+    }
+
+    private static unsafe long GetPacketPrimaryTimestamp(AVPacket* pkt)
+    {
+        if (pkt == null)
+        {
+            return ffmpeg.AV_NOPTS_VALUE;
+        }
+
+        if (pkt->pts != ffmpeg.AV_NOPTS_VALUE && pkt->dts != ffmpeg.AV_NOPTS_VALUE)
+        {
+            return Math.Min(pkt->pts, pkt->dts);
+        }
+
+        if (pkt->pts != ffmpeg.AV_NOPTS_VALUE)
+        {
+            return pkt->pts;
+        }
+
+        if (pkt->dts != ffmpeg.AV_NOPTS_VALUE)
+        {
+            return pkt->dts;
+        }
+
+        return ffmpeg.AV_NOPTS_VALUE;
+    }
+
+    private static unsafe void NormalizePacketTimestamps(AVPacket* pkt, long firstTimestamp)
+    {
+        if (firstTimestamp == ffmpeg.AV_NOPTS_VALUE)
+        {
+            return;
+        }
+
+        if (pkt->pts != ffmpeg.AV_NOPTS_VALUE)
+        {
+            pkt->pts = Math.Max(0, pkt->pts - firstTimestamp);
+        }
+
+        if (pkt->dts != ffmpeg.AV_NOPTS_VALUE)
+        {
+            pkt->dts = Math.Max(0, pkt->dts - firstTimestamp);
+        }
     }
 
     private static unsafe bool ReadNextStreamPacket(AVFormatContext* fmt, int streamIndex, AVPacket* pkt)

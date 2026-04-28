@@ -10,7 +10,6 @@ using System.Reactive.Linq;
 using GimmeCapture.ViewModels.Main;
 using GimmeCapture.ViewModels.Shared;
 using System.Threading;
-using System.Diagnostics;
 using GimmeCapture.Services.Core.Media.NativeFFmpeg;
 using NAudio.Wave;
 
@@ -47,10 +46,10 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
     private Task? _playbackTask;
     private readonly int _width;
     private readonly int _height;
-    private Process? _audioPlayProcess;
-    private WaveOutEvent? _audioWaveOut;
-    private MediaFoundationReader? _audioReader;
-    private bool _isMuted = true;
+    private IWavePlayer? _pinAudioPlayer;
+    private WaveStream? _audioPlaybackStream;
+    private CancellationTokenSource? _pinAudioDecodeCts;
+    private bool _isMuted;
     private readonly LibavVideoFramePlayer _nativeFramePlayer = new();
 
     private bool _isExporting;

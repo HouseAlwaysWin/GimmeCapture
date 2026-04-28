@@ -84,15 +84,26 @@ public partial class FloatingVideoViewModel
             PixelFormat.Bgra8888,
             AlphaFormat.Premul);
 
-        StartPlayback();
-        _ = DetectDurationAsync();
+        _ = BootMediaAsync();
+    }
+
+    private async Task BootMediaAsync()
+    {
+        try
+        {
+            await DetectDurationAsync().ConfigureAwait(false);
+        }
+        finally
+        {
+            Avalonia.Threading.Dispatcher.UIThread.Post(StartPlayback);
+        }
     }
 
     private async Task DetectDurationAsync()
     {
         try
         {
-            var seconds = await _nativeFramePlayer.ProbeDurationSecondsAsync(VideoPath);
+            var seconds = await _nativeFramePlayer.ProbeDurationSecondsAsync(VideoPath).ConfigureAwait(false);
             if (seconds.HasValue && seconds.Value > 0)
             {
                 TotalDuration = TimeSpan.FromSeconds(seconds.Value);
@@ -123,6 +134,7 @@ public partial class FloatingVideoViewModel
     {
         // Cancel old playback in background (never blocks)
         CancelPlaybackInBackground();
+        var generation = Interlocked.Increment(ref _playbackGeneration);
 
         // 裁切模式：判斷是否超過裁切終點或影片結尾
         var effectiveEnd = IsTrimmingMode && TrimEndSeconds > 0 
@@ -132,6 +144,12 @@ public partial class FloatingVideoViewModel
             ? TimeSpan.FromSeconds(TrimStartSeconds)
             : TimeSpan.Zero;
 
+        if (_seekTargetSeconds >= 0)
+        {
+            _currentTime = TimeSpan.FromSeconds(_seekTargetSeconds);
+            _seekTargetSeconds = -1;
+        }
+
         if (_currentTime >= effectiveEnd && effectiveEnd > TimeSpan.Zero)
         {
             _currentTime = effectiveStart;
@@ -139,15 +157,13 @@ public partial class FloatingVideoViewModel
         }
         
         _playCts = new CancellationTokenSource();
-        _playbackTask = PlaybackLoopFixed(_playCts.Token);
-        UpdateAudioStateFromPlayback();
+        _playbackTask = PlaybackLoopFixed(_playCts.Token, generation);
     }
 
-    private async Task PlaybackLoopFixed(CancellationToken ct)
+    private async Task PlaybackLoopFixed(CancellationToken ct, int generation)
     {
         // Ensure only one loop runs at a time
         await _playSemaphore.WaitAsync(ct);
-        var generation = Interlocked.Increment(ref _playbackGeneration);
         
         try
         {
@@ -160,12 +176,7 @@ public partial class FloatingVideoViewModel
 
                 _trimEndReached = false;
 
-                if (_seekTargetSeconds >= 0)
-                {
-                    _currentTime = TimeSpan.FromSeconds(_seekTargetSeconds);
-                }
-                double startSeconds = _seekTargetSeconds >= 0 ? _seekTargetSeconds : _currentTime.TotalSeconds;
-                _seekTargetSeconds = -1;
+                double startSeconds = _currentTime.TotalSeconds;
 
                 // Keep looping control in this VM so audio/video restart together every cycle.
                 bool loopPlayback = false;
@@ -258,41 +269,53 @@ public partial class FloatingVideoViewModel
     {
         StopAudioPlayback();
         if (_isDisposed || IsMuted || !_isPlaybackActive) return;
+
         try
         {
-            _audioReader = new MediaFoundationReader(VideoPath);
-            _audioReader.CurrentTime = TimeSpan.FromSeconds(Math.Max(0, _currentTime.TotalSeconds));
-            _audioWaveOut = new WaveOutEvent();
-            _audioWaveOut.Init(_audioReader);
-            _audioWaveOut.Play();
+            var reader = new MediaFoundationReader(VideoPath);
+            reader.CurrentTime = TimeSpan.FromSeconds(Math.Max(0, _currentTime.TotalSeconds));
+            _audioPlaybackStream = reader;
+            _pinAudioPlayer = CreatePinAudioOutput(_audioPlaybackStream);
+
+            _pinAudioPlayer.Play();
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Audio Playback Error: {ex.Message}");
+            Debug.WriteLine($"[PinAudio] output: {ex.Message}");
             StopAudioPlayback();
         }
+    }
+
+    private static IWavePlayer CreatePinAudioOutput(WaveStream stream)
+    {
+        var wasapi = new WasapiOut();
+        try
+        {
+            wasapi.Init(stream);
+            return wasapi;
+        }
+        catch
+        {
+            wasapi.Dispose();
+        }
+
+        var waveOut = new WaveOutEvent();
+        waveOut.Init(stream);
+        return waveOut;
     }
 
     private void StopAudioPlayback()
     {
         try
         {
-            _audioWaveOut?.Stop();
-            _audioWaveOut?.Dispose();
-            _audioWaveOut = null;
-            _audioReader?.Dispose();
-            _audioReader = null;
-
-            if (_audioPlayProcess != null)
-            {
-                if (!_audioPlayProcess.HasExited)
-                {
-                    _audioPlayProcess.Kill();
-                }
-
-                _audioPlayProcess.Dispose();
-                _audioPlayProcess = null;
-            }
+            _pinAudioDecodeCts?.Cancel();
+            _pinAudioDecodeCts?.Dispose();
+            _pinAudioDecodeCts = null;
+            _pinAudioPlayer?.Stop();
+            _pinAudioPlayer?.Dispose();
+            _pinAudioPlayer = null;
+            _audioPlaybackStream?.Dispose();
+            _audioPlaybackStream = null;
         }
         catch { }
     }

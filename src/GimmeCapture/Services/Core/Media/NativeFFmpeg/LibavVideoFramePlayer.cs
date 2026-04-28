@@ -2,6 +2,7 @@ using System;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Diagnostics;
 using FFmpeg.AutoGen;
 
 namespace GimmeCapture.Services.Core.Media.NativeFFmpeg;
@@ -113,42 +114,83 @@ internal sealed class LibavVideoFramePlayer : IDisposable
                         Seek(fmt, decCtx, videoStream, st->time_base, startSeconds);
                     }
 
-                    int frameDelayMs = Math.Max(1, (int)Math.Round((1000.0 / 30.0) / Math.Max(0.1, speed)));
+                    double loopStartSeconds = Math.Max(0, startSeconds);
                     byte[] frameBuffer = new byte[outputWidth * outputHeight * 4];
+                    bool decoderDraining = false;
+                    bool shouldResetLoop = false;
+                    double startedAtSeconds = -1;
+                    var playbackClock = Stopwatch.StartNew();
 
                     while (!ct.IsCancellationRequested)
                     {
-                        int rr = ffmpeg.av_read_frame(fmt, pkt);
-                        if (rr == ffmpeg.AVERROR_EOF)
+                        if (!decoderDraining)
                         {
-                            if (!loop) break;
-                            Seek(fmt, decCtx, videoStream, st->time_base, 0);
-                            continue;
-                        }
-                        if (rr < 0)
-                        {
-                            if (rr == ffmpeg.AVERROR(11))
+                            int rr = ffmpeg.av_read_frame(fmt, pkt);
+                            if (rr == ffmpeg.AVERROR_EOF)
                             {
-                                Thread.Sleep(1);
+                                ThrowIfErr(ffmpeg.avcodec_send_packet(decCtx, (AVPacket*)null), "send_eof");
+                                decoderDraining = true;
                                 continue;
                             }
-                            ThrowIfErr(rr, "read_frame");
-                        }
 
-                        if (pkt->stream_index != videoStream)
-                        {
+                            if (rr < 0)
+                            {
+                                if (rr == ffmpeg.AVERROR(11))
+                                {
+                                    Thread.Sleep(1);
+                                    continue;
+                                }
+
+                                ThrowIfErr(rr, "read_frame");
+                            }
+
+                            if (pkt->stream_index != videoStream)
+                            {
+                                ffmpeg.av_packet_unref(pkt);
+                                continue;
+                            }
+
+                            ThrowIfErr(ffmpeg.avcodec_send_packet(decCtx, pkt), "send_packet");
                             ffmpeg.av_packet_unref(pkt);
-                            continue;
                         }
-
-                        ThrowIfErr(ffmpeg.avcodec_send_packet(decCtx, pkt), "send_packet");
-                        ffmpeg.av_packet_unref(pkt);
 
                         while (!ct.IsCancellationRequested)
                         {
                             int gr = ffmpeg.avcodec_receive_frame(decCtx, decFrame);
-                            if (gr == ffmpeg.AVERROR(11) || gr == ffmpeg.AVERROR_EOF) break;
+                            if (gr == ffmpeg.AVERROR(11))
+                            {
+                                break;
+                            }
+
+                            if (gr == ffmpeg.AVERROR_EOF)
+                            {
+                                shouldResetLoop = loop;
+                                break;
+                            }
+
                             ThrowIfErr(gr, "receive_frame");
+
+                            long ts = decFrame->best_effort_timestamp;
+                            double seconds = ts >= 0 ? ts * ffmpeg.av_q2d(st->time_base) : 0;
+
+                            // Backward seeking lands on a keyframe before the target. Drop early frames
+                            // so video starts from the same logical time as the audio reader.
+                            if (seconds + 0.0005 < startSeconds)
+                            {
+                                continue;
+                            }
+
+                            if (startedAtSeconds < 0)
+                            {
+                                startedAtSeconds = seconds;
+                                playbackClock.Restart();
+                            }
+
+                            DelayUntilFrame(playbackClock, startedAtSeconds, seconds, speed, ct);
+                            if (ct.IsCancellationRequested)
+                            {
+                                break;
+                            }
 
                             ThrowIfErr(ffmpeg.av_frame_make_writable(outFrame), "out_frame_writable");
                             ffmpeg.sws_scale(
@@ -161,12 +203,21 @@ internal sealed class LibavVideoFramePlayer : IDisposable
                                 outFrame->linesize);
 
                             CopyBgraFrame(outFrame, outputWidth, outputHeight, frameBuffer);
-
-                            long ts = decFrame->best_effort_timestamp;
-                            double seconds = ts >= 0 ? ts * ffmpeg.av_q2d(st->time_base) : 0;
                             onFrame(frameBuffer, seconds);
+                        }
 
-                            Thread.Sleep(frameDelayMs);
+                        if (shouldResetLoop && !ct.IsCancellationRequested)
+                        {
+                            decoderDraining = false;
+                            shouldResetLoop = false;
+                            startedAtSeconds = -1;
+                            Seek(fmt, decCtx, videoStream, st->time_base, loopStartSeconds);
+                            continue;
+                        }
+
+                        if (decoderDraining)
+                        {
+                            break;
                         }
                     }
                 }
@@ -189,6 +240,29 @@ internal sealed class LibavVideoFramePlayer : IDisposable
         int sr = ffmpeg.av_seek_frame(fmt, streamIndex, ts, ffmpeg.AVSEEK_FLAG_BACKWARD);
         ThrowIfErr(sr, "seek_frame");
         ffmpeg.avcodec_flush_buffers(decCtx);
+    }
+
+    private static void DelayUntilFrame(Stopwatch playbackClock, double startedAtSeconds, double frameSeconds, double speed, CancellationToken ct)
+    {
+        double safeSpeed = Math.Max(0.1, speed);
+        double targetSeconds = Math.Max(0, frameSeconds - startedAtSeconds) / safeSpeed;
+
+        while (!ct.IsCancellationRequested)
+        {
+            double remainingSeconds = targetSeconds - playbackClock.Elapsed.TotalSeconds;
+            if (remainingSeconds <= 0)
+            {
+                return;
+            }
+
+            if (remainingSeconds > 0.02)
+            {
+                Thread.Sleep(Math.Max(1, (int)Math.Floor((remainingSeconds - 0.01) * 1000)));
+                continue;
+            }
+
+            Thread.SpinWait(256);
+        }
     }
 
     private static unsafe void CopyBgraFrame(AVFrame* frame, int width, int height, byte[] output)
