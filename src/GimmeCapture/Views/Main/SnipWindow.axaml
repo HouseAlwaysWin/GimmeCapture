@@ -13,12 +13,10 @@
         x:DataType="vm:SnipWindowViewModel"
         Title="SnipWindow"
         TransparencyLevelHint="Transparent"
-        SystemDecorations="None"
+        WindowDecorations="None"
         WindowState="Normal"
         Topmost="{Binding IsTopmost}"
         Background="Transparent"
-        ExtendClientAreaToDecorationsHint="True"
-        ExtendClientAreaChromeHints="NoChrome"
         ClipToBounds="False"
         FontFamily="{Binding CurrentFontFamily, Source={x:Static services:LocalizationService.Instance}}"
         x:CompileBindings="False">

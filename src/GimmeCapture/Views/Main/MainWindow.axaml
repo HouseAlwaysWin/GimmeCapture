@@ -17,9 +17,7 @@
         xmlns:tabs="using:GimmeCapture.Views.Main.Tabs"
         Foreground="White"
         MinWidth="720" MinHeight="500"
-        ExtendClientAreaToDecorationsHint="True"
-        ExtendClientAreaChromeHints="NoChrome"
-        ExtendClientAreaTitleBarHeightHint="-1">
+        WindowDecorations="None">
 
     <Design.DataContext>
         <!-- This only sets the DataContext for the previewer in an IDE,

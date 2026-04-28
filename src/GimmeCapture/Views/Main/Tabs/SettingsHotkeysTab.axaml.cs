@@ -59,7 +59,7 @@ public partial class SettingsHotkeysTab : UserControl
         }
     }
 
-    private void HotkeyTextBox_GotFocus(object? sender, GotFocusEventArgs e)
+    private void HotkeyTextBox_GotFocus(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
         EnsureSuspended();
     }
