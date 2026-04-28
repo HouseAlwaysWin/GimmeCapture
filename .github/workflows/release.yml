@@ -23,10 +23,14 @@ jobs:
     - name: Restore dependencies
       run: dotnet restore src/GimmeCapture/GimmeCapture.csproj
 
+    - name: Ensure bundled FFmpeg DLLs
+      shell: powershell
+      run: powershell -ExecutionPolicy Bypass -File scripts/ensure-ffmpeg-libs.ps1
+
     - name: Publish application
       run: |
         $version = "${{ github.ref_name }}".TrimStart('v')
-        dotnet publish src/GimmeCapture/GimmeCapture.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:Version=$version -o ./publish
+        dotnet publish src/GimmeCapture/GimmeCapture.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:IncludeAllContentForSelfExtract=true -p:Version=$version -o ./publish
 
     - name: Zip the application
       run: Compress-Archive -Path ./publish/* -DestinationPath GimmeCapture_win-x64.zip
