@@ -8,6 +8,9 @@ internal static class LibavMuxer
     internal readonly record struct MuxStats(int VideoPackets, int AudioPackets);
 
     public static unsafe MuxStats MuxVideoAndAudioToMkv(string videoPath, string audioPath, string outputPath)
+        => MuxVideoAndAudio(videoPath, audioPath, outputPath, "matroska");
+
+    public static unsafe MuxStats MuxVideoAndAudio(string videoPath, string audioPath, string outputPath, string containerFormat)
     {
         FFmpegRuntime.EnsureInitialized();
 
@@ -33,7 +36,7 @@ internal static class LibavMuxer
             audioIn = ffmpeg.av_find_best_stream(audioFmt, AVMediaType.AVMEDIA_TYPE_AUDIO, -1, -1, null, 0);
             if (audioIn < 0) throw new InvalidOperationException("No audio stream in input.");
 
-            ThrowIfErr(ffmpeg.avformat_alloc_output_context2(&outFmt, null, "matroska", outputPath), "alloc_output(mkv)");
+            ThrowIfErr(ffmpeg.avformat_alloc_output_context2(&outFmt, null, containerFormat, outputPath), "alloc_output");
             if (outFmt == null) throw new InvalidOperationException("Failed to create output format context.");
 
             outVideo = ffmpeg.avformat_new_stream(outFmt, null);

@@ -181,9 +181,7 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
             ThrowIfErr(ffmpeg.avcodec_parameters_to_context(decCtx, inPar), "parameters_to_context(dec)");
             ThrowIfErr(ffmpeg.avcodec_open2(decCtx, dec, null), "avcodec_open2(dec)");
 
-            // Temporary stability guard:
-            // native DLL recording path is forced to x264 first; x265 will be re-enabled after the pipeline is stable.
-            string encName = "libx264";
+            string encName = useH265 ? "libx265" : "libx264";
 
             AVCodec* enc = ffmpeg.avcodec_find_encoder_by_name(encName);
             if (enc == null)

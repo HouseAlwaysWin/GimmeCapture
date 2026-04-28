@@ -142,25 +142,40 @@ public partial class RecordingService
     private async Task FinalizeByTargetFormatAsync(string mergedMkv, string? mergedAudio, string? cropFilter)
     {
         _ = cropFilter;
-        EnsureOutputExtension("mkv");
+        if (_targetFormat == "gif")
+        {
+            EnsureOutputExtension("gif");
+            await FinalizeAsGifAsync(mergedMkv, cropFilter: null);
+            return;
+        }
+
+        if (_targetFormat == "webm")
+        {
+            EnsureOutputExtension("webm");
+            await FinalizeAsWebmAsync(mergedMkv);
+            return;
+        }
+
+        EnsureOutputExtension(GetTargetExtension());
         var sourceVideo = File.Exists(mergedMkv) ? mergedMkv : _segments[0];
 
-        if (!string.IsNullOrWhiteSpace(mergedAudio) && File.Exists(mergedAudio))
+        var targetAudio = await PrepareAudioForTargetContainerAsync(mergedAudio);
+        if (!string.IsNullOrWhiteSpace(targetAudio) && File.Exists(targetAudio))
         {
             try
             {
                 try
                 {
-                    using var wav = new WaveFileReader(mergedAudio);
-                    LogToFile($"[Finalize] Mux input audio: path={mergedAudio}, bytes={new FileInfo(mergedAudio).Length}, duration={wav.TotalTime}");
+                    using var wav = new AudioFileReader(targetAudio);
+                    LogToFile($"[Finalize] Mux input audio: path={targetAudio}, bytes={new FileInfo(targetAudio).Length}, duration={wav.TotalTime}");
                 }
                 catch (Exception ex)
                 {
                     LogToFile($"[Finalize] Audio probe failed: {ex.Message}");
                 }
 
-                var muxedPath = Path.Combine(_tempDir, "muxed_with_audio.mkv");
-                var muxStats = LibavMuxer.MuxVideoAndAudioToMkv(sourceVideo, mergedAudio, muxedPath);
+                var muxedPath = Path.Combine(_tempDir, $"muxed_with_audio.{GetTargetExtension()}");
+                var muxStats = LibavMuxer.MuxVideoAndAudio(sourceVideo, targetAudio, muxedPath, GetMuxerFormatName());
                 LogToFile($"[Finalize] Native mux success: {muxedPath}, bytes={(File.Exists(muxedPath) ? new FileInfo(muxedPath).Length : 0)}, videoPackets={muxStats.VideoPackets}, audioPackets={muxStats.AudioPackets}");
                 await TryMoveWithRetryAsync(muxedPath, _outputFile);
                 FinalizationProgress = 100;
@@ -175,6 +190,51 @@ public partial class RecordingService
 
         await TryMoveWithRetryAsync(sourceVideo, _outputFile);
         FinalizationProgress = 100;
+    }
+
+    private string GetTargetExtension() =>
+        _targetFormat switch
+        {
+            "mp4" => "mp4",
+            "mov" => "mov",
+            "webm" => "webm",
+            _ => "mkv"
+        };
+
+    private string GetMuxerFormatName() =>
+        _targetFormat switch
+        {
+            "mp4" => "mp4",
+            "mov" => "mov",
+            "webm" => "webm",
+            _ => "matroska"
+        };
+
+    private async Task<string?> PrepareAudioForTargetContainerAsync(string? mergedAudio)
+    {
+        if (string.IsNullOrWhiteSpace(mergedAudio) || !File.Exists(mergedAudio))
+        {
+            return null;
+        }
+
+        if (_targetFormat is not ("mp4" or "mov"))
+        {
+            return mergedAudio;
+        }
+
+        try
+        {
+            string aacPath = Path.Combine(_tempDir, "merged_audio.m4a");
+            using var reader = new AudioFileReader(mergedAudio);
+            MediaFoundationEncoder.EncodeToAac(reader, aacPath);
+            await Task.CompletedTask;
+            return aacPath;
+        }
+        catch (Exception ex)
+        {
+            LogToFile($"[Finalize] AAC transcode failed; fallback original audio: {ex.Message}");
+            return mergedAudio;
+        }
     }
 
     private static async Task AppendWaveFileAsync(WaveFileReader reader, WaveFileWriter writer)
@@ -213,48 +273,31 @@ public partial class RecordingService
 
     private async Task FinalizeAsGifAsync(string mergedMkv, string? cropFilter)
     {
+        _ = cropFilter;
         var quality = _settingsService?.Settings.VideoQuality ?? VideoQuality.Medium;
         int gifFps = quality switch
         {
-            VideoQuality.High => Math.Min(30, _fps),
+            VideoQuality.High => Math.Min(24, _fps),
             VideoQuality.Low => Math.Min(10, _fps),
             _ => Math.Min(15, _fps)
         };
 
-        string scale = quality switch
+        int maxWidth = quality switch
         {
-            VideoQuality.High => "iw",
-            VideoQuality.Low => "min(480,iw)",
-            _ => "min(720,iw)"
+            VideoQuality.High => 0,
+            VideoQuality.Low => 480,
+            _ => 720
         };
+        await Task.Run(() => LibavGifTranscoder.TranscodeToGif(mergedMkv, _outputFile, gifFps, maxWidth));
 
-        string dither = quality switch
-        {
-            VideoQuality.High => "bayer:bayer_scale=2",
-            VideoQuality.Low => "none",
-            _ => "bayer:bayer_scale=5"
-        };
+        FinalizationProgress = 100;
+    }
 
-        string paletteuse = quality == VideoQuality.High ? $"paletteuse=dither={dither}:new=1" : $"paletteuse=dither={dither}";
-        string palettegen = quality == VideoQuality.High ? "palettegen=stats_mode=single" : "palettegen";
-        string baseGifFilter = $"fps={gifFps},scale='{scale}':-1:flags=lanczos";
-
-        string paletteFile = Path.Combine(_tempDir, "palette.png");
-        string paletteArgs = string.IsNullOrWhiteSpace(cropFilter)
-            ? $"-y -i \"{mergedMkv}\" -vf \"{baseGifFilter},{palettegen}\" -frames:v 1 -update 1 \"{paletteFile}\""
-            : $"-y -i \"{mergedMkv}\" -vf \"{cropFilter},{baseGifFilter},{palettegen}\" -frames:v 1 -update 1 \"{paletteFile}\"";
-
-        await RunFfmpegProcessAsync(paletteArgs, "GIF Palette");
-
-        FinalizationProgress = 60;
-
-        string gifFlags = quality == VideoQuality.Low ? "-gifflags +transdiff" : "";
-        string gifArgs = string.IsNullOrWhiteSpace(cropFilter)
-            ? $"-y -i \"{mergedMkv}\" -i \"{paletteFile}\" {gifFlags} -lavfi \"{baseGifFilter} [x]; [x][1:v] {paletteuse}\" \"{_outputFile}\""
-            : $"-y -i \"{mergedMkv}\" -i \"{paletteFile}\" {gifFlags} -lavfi \"{cropFilter},{baseGifFilter} [x]; [x][1:v] {paletteuse}\" \"{_outputFile}\"";
-
-        await RunFfmpegProcessAsync(gifArgs, "GIF Encode");
-
+    private async Task FinalizeAsWebmAsync(string mergedMkv)
+    {
+        var quality = _settingsService?.Settings.VideoQuality ?? VideoQuality.Medium;
+        int webmFps = Math.Clamp(_fps, 1, 60);
+        await Task.Run(() => LibavWebmTranscoder.TranscodeToWebm(mergedMkv, _outputFile, webmFps, quality));
         FinalizationProgress = 100;
     }
 
@@ -457,14 +500,82 @@ public partial class RecordingService
         }
     }
 
-    // NOTE:
-    // CLI-based finalize path removed for pure DLL mode.
-    // Keep this stub so legacy helper methods compile while migration is in progress.
-    private Task RunFfmpegProcessAsync(string arguments, string label)
+    private async Task RunFfmpegProcessAsync(string arguments, string label)
     {
-        _ = arguments;
-        _ = label;
-        throw new NotSupportedException("CLI finalize path is disabled in pure DLL mode.");
+        var ffmpegExe = ResolveFfmpegExecutable();
+        if (string.IsNullOrWhiteSpace(ffmpegExe))
+        {
+            throw new InvalidOperationException("FFmpeg executable not found. GIF conversion requires ffmpeg.exe.");
+        }
+
+        LogToFile($"[Finalize] {label} start: {ffmpegExe} {arguments}");
+
+        using var process = new Process();
+        process.StartInfo.FileName = ffmpegExe;
+        process.StartInfo.Arguments = arguments;
+        process.StartInfo.WorkingDirectory = _tempDir;
+        process.StartInfo.UseShellExecute = false;
+        process.StartInfo.RedirectStandardOutput = true;
+        process.StartInfo.RedirectStandardError = true;
+        process.StartInfo.CreateNoWindow = true;
+
+        try
+        {
+            if (!process.Start())
+            {
+                throw new InvalidOperationException($"Failed to start ffmpeg process for {label}.");
+            }
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException(
+                "FFmpeg executable not found. GIF export requires ffmpeg.exe in app folder or system PATH.",
+                ex);
+        }
+
+        var stderrTask = process.StandardError.ReadToEndAsync();
+        var stdoutTask = process.StandardOutput.ReadToEndAsync();
+
+        await process.WaitForExitAsync();
+        var stderr = await stderrTask;
+        var stdout = await stdoutTask;
+
+        if (!string.IsNullOrWhiteSpace(stdout))
+        {
+            LogToFile($"[Finalize] {label} stdout: {stdout}");
+        }
+        if (!string.IsNullOrWhiteSpace(stderr))
+        {
+            LogToFile($"[Finalize] {label} stderr: {stderr}");
+        }
+
+        if (process.ExitCode != 0)
+        {
+            throw new InvalidOperationException($"FFmpeg {label} failed (exit {process.ExitCode}).");
+        }
+    }
+
+    private string ResolveFfmpegExecutable()
+    {
+        var downloaderPath = _downloader.GetFFmpegPath();
+        if (!string.IsNullOrWhiteSpace(downloaderPath) && File.Exists(downloaderPath))
+        {
+            return downloaderPath;
+        }
+
+        if (!string.IsNullOrWhiteSpace(_downloader.FfmpegExecutablePath) && File.Exists(_downloader.FfmpegExecutablePath))
+        {
+            return _downloader.FfmpegExecutablePath;
+        }
+
+        var localPath = Path.Combine(AppContext.BaseDirectory, "ffmpeg.exe");
+        if (File.Exists(localPath))
+        {
+            return localPath;
+        }
+
+        // Fall back to PATH lookup.
+        return "ffmpeg";
     }
 
     private sealed class LineDispatchStream : Stream
