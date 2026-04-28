@@ -3,15 +3,15 @@
     "label": "GimmeCapture (Debug)",
     "adapter": "netcoredbg",
     "request": "launch",
-    "program": "src/GimmeCapture/bin/Debug/net10.0-windows/GimmeCapture.exe",
-    "cwd": "src/GimmeCapture",
+    "program": "bin/Debug/net10.0-windows/GimmeCapture.exe",
+    "cwd": ".",
     "args": [],
     "stopOnEntry": false,
     "build": {
       "command": "dotnet",
       "args": [
         "build",
-        "src/GimmeCapture/GimmeCapture.csproj",
+        "GimmeCapture.csproj",
         "-c",
         "Debug"
       ],

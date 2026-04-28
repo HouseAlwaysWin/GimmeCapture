@@ -71,6 +71,8 @@ public class AIResourceService : ReactiveObject
     {
         new("qwen2.5-1.5b-instruct-q4", "Qwen2.5 1.5B Instruct (Q4)", "https://huggingface.co/bartowski/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/Qwen2.5-1.5B-Instruct-Q4_K_M.gguf?download=true", "Qwen2.5-1.5B-Instruct-Q4_K_M.gguf"),
         new("qwen2.5-3b-instruct-q4", "Qwen2.5 3B Instruct (Q4)", "https://huggingface.co/bartowski/Qwen2.5-3B-Instruct-GGUF/resolve/main/Qwen2.5-3B-Instruct-Q4_K_M.gguf?download=true", "Qwen2.5-3B-Instruct-Q4_K_M.gguf"),
+        new("gemma-3-1b-it-q4", "Gemma 3 1B IT (Q4)", "https://huggingface.co/bartowski/google_gemma-3-1b-it-GGUF/resolve/main/google_gemma-3-1b-it-Q4_K_M.gguf?download=true", "google_gemma-3-1b-it-Q4_K_M.gguf"),
+        new("gemma-3-4b-it-q4", "Gemma 3 4B IT (Q4)", "https://huggingface.co/bartowski/google_gemma-3-4b-it-GGUF/resolve/main/google_gemma-3-4b-it-Q4_K_M.gguf?download=true", "google_gemma-3-4b-it-Q4_K_M.gguf"),
         new("llama-3.1-8b-instruct-q4", "Llama 3.1 8B Instruct (Q4)", "https://huggingface.co/bartowski/Meta-Llama-3.1-8B-Instruct-GGUF/resolve/main/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf?download=true", "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf"),
         new("gemma-4-placeholder", "Gemma4 (custom file)", string.Empty, string.Empty),
     };

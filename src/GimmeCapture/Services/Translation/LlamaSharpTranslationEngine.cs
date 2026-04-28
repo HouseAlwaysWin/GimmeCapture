@@ -1,5 +1,7 @@
 using System;
 using System.Text;
+using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using GimmeCapture.Models;
@@ -58,7 +60,7 @@ public sealed class LlamaSharpTranslationEngine : ITranslationEngine, IDisposabl
 
         string targetLangName = GetTargetLanguageName(targetLang);
         string sourceLangName = ResolveSourceLanguageForPrompt(text, sourceLang);
-        string prompt = $"Translate the following text from {sourceLangName} to {targetLangName}. Output only translated text with no explanations:\n{text}";
+        string prompt = $"Translate \"{text}\" from {sourceLangName} to {targetLangName}. Output ONLY the translated text. No quotes. No explanations. No markdown. No json.";
 
         var inference = new InferenceParams
         {
@@ -170,12 +172,97 @@ public sealed class LlamaSharpTranslationEngine : ITranslationEngine, IDisposabl
         }
 
         string cleaned = result.Trim();
+        cleaned = ExtractFromCodeFence(cleaned);
+        cleaned = TryExtractFromJson(cleaned);
+        cleaned = RemoveCommonPrefixes(cleaned);
+
+        // Remove reasoning/thinking tags if models emit them.
+        if (cleaned.Contains("<think>", StringComparison.OrdinalIgnoreCase) &&
+            cleaned.Contains("</think>", StringComparison.OrdinalIgnoreCase))
+        {
+            int endIndex = cleaned.IndexOf("</think>", StringComparison.OrdinalIgnoreCase);
+            if (endIndex >= 0 && endIndex + 8 <= cleaned.Length)
+            {
+                cleaned = cleaned[(endIndex + 8)..].Trim();
+            }
+        }
+
         if (cleaned.StartsWith("\"", StringComparison.Ordinal) && cleaned.EndsWith("\"", StringComparison.Ordinal) && cleaned.Length > 2)
         {
             cleaned = cleaned[1..^1];
         }
 
         return cleaned.Trim();
+    }
+
+    private static string ExtractFromCodeFence(string value)
+    {
+        if (!value.StartsWith("```", StringComparison.Ordinal))
+        {
+            return value;
+        }
+
+        var match = Regex.Match(value, @"^```[a-zA-Z0-9_-]*\s*(?<body>[\s\S]*?)\s*```$");
+        return match.Success ? match.Groups["body"].Value.Trim() : value;
+    }
+
+    private static string TryExtractFromJson(string value)
+    {
+        if (!(value.StartsWith("{", StringComparison.Ordinal) && value.EndsWith("}", StringComparison.Ordinal)))
+        {
+            return value;
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(value);
+            if (doc.RootElement.ValueKind == JsonValueKind.Object)
+            {
+                if (doc.RootElement.TryGetProperty("translation", out var tr) && tr.ValueKind == JsonValueKind.String)
+                {
+                    return tr.GetString()?.Trim() ?? value;
+                }
+                if (doc.RootElement.TryGetProperty("translated", out var translated) && translated.ValueKind == JsonValueKind.String)
+                {
+                    return translated.GetString()?.Trim() ?? value;
+                }
+                if (doc.RootElement.TryGetProperty("result", out var result) && result.ValueKind == JsonValueKind.String)
+                {
+                    return result.GetString()?.Trim() ?? value;
+                }
+            }
+        }
+        catch
+        {
+            // not a strict JSON payload, keep original text
+        }
+
+        return value;
+    }
+
+    private static string RemoveCommonPrefixes(string value)
+    {
+        string cleaned = value.Trim();
+        string[] prefixes =
+        {
+            "Translation:",
+            "Translated text:",
+            "Output:",
+            "Result:",
+            "\"translation\":",
+            "'translation':",
+            "translation:"
+        };
+
+        foreach (string prefix in prefixes)
+        {
+            if (cleaned.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            {
+                cleaned = cleaned[prefix.Length..].Trim();
+            }
+        }
+
+        return cleaned;
     }
 
     private static string GetTargetLanguageName(TranslationLanguage lang) => lang switch
