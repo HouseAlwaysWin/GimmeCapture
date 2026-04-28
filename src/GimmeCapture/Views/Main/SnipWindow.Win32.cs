@@ -218,7 +218,13 @@ public partial class SnipWindow : Window
     {
         if (_viewModel == null) return false;
 
-        if (!ShouldRouteLowLevelHotkeysForForegroundWindow())
+        bool isCtrlModifierEvent = IsPureModifierKey(keyStr) && string.Equals(keyStr, "Ctrl", StringComparison.OrdinalIgnoreCase);
+        bool allowGlobalCtrlSelectionModifier =
+            _viewModel.IsTranslationMode &&
+            isCtrlModifierEvent &&
+            string.Equals(_viewModel.TranslationSelectionHoldModifier, "Ctrl", StringComparison.OrdinalIgnoreCase);
+
+        if (!allowGlobalCtrlSelectionModifier && !ShouldRouteLowLevelHotkeysForForegroundWindow())
         {
             return false;
         }
@@ -274,16 +280,20 @@ public partial class SnipWindow : Window
             return true;
         }
 
-        // Let keys through to SelectableTextBlock/TextBox/ComboBox (translation results, toolbars, IME, etc.).
-        if (_viewModel.IsInputFocused)
-        {
-            return false;
-        }
-
-        // Translation mode: one configurable hold-modifier for selection (Shift/Ctrl/Alt; None = no key hook).
+        // Translation mode modifier hook:
+        // keep this BEFORE input-focus gating so Ctrl-hold can still toggle selection behavior globally.
         if (IsPureModifierKey(keyStr))
         {
             var selMod = _viewModel?.TranslationSelectionHoldModifier ?? "Ctrl";
+            bool allowWithoutFocus = _viewModel?.IsTranslationMode == true
+                && string.Equals(keyStr, "Ctrl", StringComparison.OrdinalIgnoreCase);
+
+            // When another control (textbox/combobox/IME) is focused, only the Ctrl-hold exception is allowed.
+            if (_viewModel?.IsInputFocused == true && !allowWithoutFocus)
+            {
+                return false;
+            }
+
             if (!string.Equals(selMod, "None", StringComparison.OrdinalIgnoreCase) &&
                 _viewModel?.IsTranslationMode == true &&
                 string.Equals(keyStr, selMod, StringComparison.OrdinalIgnoreCase))
@@ -303,6 +313,12 @@ public partial class SnipWindow : Window
                 return true;
             }
 
+            return false;
+        }
+
+        // Let other keys through to SelectableTextBlock/TextBox/ComboBox (translation results, toolbars, IME, etc.).
+        if (_viewModel.IsInputFocused)
+        {
             return false;
         }
 

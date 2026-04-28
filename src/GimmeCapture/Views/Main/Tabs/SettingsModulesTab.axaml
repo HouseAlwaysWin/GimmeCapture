@@ -36,13 +36,14 @@
                                 <Button Content="{Binding ActionButtonText}" 
                                         Command="{Binding MainActionCommand}"
                                         Theme="{StaticResource SmallGothicMetalButton}"
-                                        MinWidth="80"/>
+                                        MinWidth="80"
+                                        HorizontalAlignment="Right"/>
                                 
                                 <!-- Variant Selector -->
                                 <ComboBox ItemsSource="{Binding Variants}" 
                                           SelectedItem="{Binding SelectedVariant}"
                                           IsVisible="{Binding HasVariants}"
-                                          Width="80"
+                                          Width="260"
                                           IsEnabled="{Binding !IsProcessing}"
                                           Theme="{StaticResource SmallGothicMetalComboBox}"/>
                             </StackPanel>
