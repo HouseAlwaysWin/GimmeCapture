@@ -8,7 +8,7 @@
         Title="Gimme Update!!"
         SizeToContent="WidthAndHeight"
         WindowStartupLocation="CenterOwner"
-        SystemDecorations="None"
+        WindowDecorations="None"
         CanResize="False"
         Background="Transparent"
         TransparencyLevelHint="Transparent">

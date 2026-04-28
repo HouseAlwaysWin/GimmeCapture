@@ -12,7 +12,7 @@
         x:Class="GimmeCapture.Views.Floating.FloatingVideoWindow"
         x:DataType="vm:FloatingVideoViewModel"
         Title="Pinned Video"
-        SystemDecorations="None"
+        WindowDecorations="None"
         Topmost="True"
         Background="Transparent"
         FontFamily="{Binding CurrentFontFamily, Source={x:Static services:LocalizationService.Instance}}"

@@ -9,7 +9,7 @@
         x:DataType="vm:MainWindowViewModel"
         Title="AI Resource Download"
         Width="350" Height="100"
-        SystemDecorations="None"
+        WindowDecorations="None"
         Background="Transparent"
         TransparencyLevelHint="Transparent"
         WindowStartupLocation="CenterScreen"

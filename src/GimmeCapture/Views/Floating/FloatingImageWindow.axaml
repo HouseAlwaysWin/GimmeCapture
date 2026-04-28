@@ -11,7 +11,7 @@
         x:Class="GimmeCapture.Views.Floating.FloatingImageWindow"
         x:DataType="vm:FloatingImageViewModel"
         Title="Pinned Image"
-        SystemDecorations="None"
+        WindowDecorations="None"
         Topmost="True"
         Background="Transparent"
         FontFamily="{Binding CurrentFontFamily, Source={x:Static services:LocalizationService.Instance}}"

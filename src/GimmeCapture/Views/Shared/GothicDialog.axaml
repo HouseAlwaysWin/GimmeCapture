@@ -10,7 +10,7 @@
         Title="{Binding Title}"
         Width="550" Height="300"
         WindowStartupLocation="CenterOwner"
-        SystemDecorations="None"
+        WindowDecorations="None"
         Background="Transparent"
         TransparencyLevelHint="Transparent"
         Topmost="True">

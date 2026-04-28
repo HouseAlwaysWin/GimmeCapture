@@ -27,7 +27,7 @@
                                 Theme="{StaticResource SmallGothicMetalButton}"
                                 Command="{Binding SelectTempPath}" 
                                 Margin="10,0,0,0"/>
-                        <TextBox Text="{Binding TempDirectory}" Margin="0,0,10,0" Watermark="{Binding [TempDirectoryWatermark], Source={x:Static services:LocalizationService.Instance}}"/>
+                        <TextBox Text="{Binding TempDirectory}" Margin="0,0,10,0" PlaceholderText="{Binding [TempDirectoryWatermark], Source={x:Static services:LocalizationService.Instance}}"/>
                     </DockPanel>
 
                     <DockPanel Margin="0,10,0,0">

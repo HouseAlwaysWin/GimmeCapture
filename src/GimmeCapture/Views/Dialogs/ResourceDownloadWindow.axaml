@@ -11,7 +11,7 @@
         SizeToContent="WidthAndHeight"
         MinWidth="350"
         MaxWidth="600"
-        SystemDecorations="None"
+        WindowDecorations="None"
         ShowInTaskbar="False"
         WindowStartupLocation="CenterOwner"
         Background="Transparent"

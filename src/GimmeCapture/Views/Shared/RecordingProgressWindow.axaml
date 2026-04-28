@@ -9,7 +9,7 @@
         x:DataType="vm:SnipWindowViewModel"
         Title="Processing Recording..."
         Width="350" Height="100"
-        SystemDecorations="None"
+        WindowDecorations="None"
         Background="Transparent"
         TransparencyLevelHint="Transparent"
         WindowStartupLocation="CenterScreen"
