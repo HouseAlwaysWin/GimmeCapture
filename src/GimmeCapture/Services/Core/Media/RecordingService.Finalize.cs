@@ -152,7 +152,7 @@ public partial class RecordingService
         if (_targetFormat == "webm")
         {
             EnsureOutputExtension("webm");
-            await FinalizeAsWebmAsync(mergedMkv);
+            await FinalizeAsWebmAsync(mergedMkv, mergedAudio);
             return;
         }
 
@@ -293,12 +293,60 @@ public partial class RecordingService
         FinalizationProgress = 100;
     }
 
-    private async Task FinalizeAsWebmAsync(string mergedMkv)
+    private async Task FinalizeAsWebmAsync(string mergedMkv, string? mergedAudio)
     {
         var quality = _settingsService?.Settings.VideoQuality ?? VideoQuality.Medium;
         int webmFps = Math.Clamp(_fps, 1, 60);
-        await Task.Run(() => LibavWebmTranscoder.TranscodeToWebm(mergedMkv, _outputFile, webmFps, quality));
+        string videoOnlyPath = Path.Combine(_tempDir, "webm_video_only.webm");
+
+        await Task.Run(() =>
+        {
+            LibavWebmTranscoder.TranscodeToWebm(mergedMkv, videoOnlyPath, webmFps, quality);
+        });
+
+        if (!string.IsNullOrWhiteSpace(mergedAudio) && File.Exists(mergedAudio))
+        {
+            string opusPath = Path.Combine(_tempDir, "audio_opus.ogg");
+            try
+            {
+                await Task.Run(() => LibavOpusTranscoder.EncodeWavToOpusOgg(mergedAudio, opusPath, quality));
+                var muxStats = await Task.Run(() =>
+                    LibavMuxer.MuxVideoAndAudio(videoOnlyPath, opusPath, _outputFile, "webm"));
+                LogToFile($"[Finalize] WebM native mux: {_outputFile}, videoPkts={muxStats.VideoPackets}, audioPkts={muxStats.AudioPackets}");
+            }
+            catch (Exception muxEx)
+            {
+                LogToFile($"[Finalize] WebM audio mux failed, video-only fallback: {muxEx}");
+                await Task.Run(() => LibavWebmTranscoder.TranscodeToWebm(mergedMkv, _outputFile, webmFps, quality));
+            }
+            finally
+            {
+                TryDeleteQuiet(videoOnlyPath);
+                TryDeleteQuiet(opusPath);
+            }
+        }
+        else
+        {
+            LogToFile("[Finalize] WebM: no merged audio; writing video-only file.");
+            await TryMoveWithRetryAsync(videoOnlyPath, _outputFile);
+        }
+
         FinalizationProgress = 100;
+    }
+
+    private static void TryDeleteQuiet(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+        catch
+        {
+            // ignore
+        }
     }
 
     private async Task FinalizeAsStandardVideoAsync(string mergedMkv, string? mergedAudio, string? cropFilter)

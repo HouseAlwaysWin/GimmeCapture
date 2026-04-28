@@ -270,20 +270,49 @@ public partial class FloatingVideoViewModel
         StopAudioPlayback();
         if (_isDisposed || IsMuted || !_isPlaybackActive) return;
 
+        var startSeconds = Math.Max(0, _currentTime.TotalSeconds);
         try
         {
+            if (string.Equals(Path.GetExtension(VideoPath), ".webm", StringComparison.OrdinalIgnoreCase))
+            {
+                StartDecodedAudioPlayback(startSeconds);
+                return;
+            }
+
             var reader = new MediaFoundationReader(VideoPath);
-            reader.CurrentTime = TimeSpan.FromSeconds(Math.Max(0, _currentTime.TotalSeconds));
+            reader.CurrentTime = TimeSpan.FromSeconds(startSeconds);
             _audioPlaybackStream = reader;
             _pinAudioPlayer = CreatePinAudioOutput(_audioPlaybackStream);
-
             _pinAudioPlayer.Play();
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[PinAudio] output: {ex.Message}");
+            Debug.WriteLine($"[PinAudio] primary output failed: {ex.Message}");
             StopAudioPlayback();
+
+            try
+            {
+                StartDecodedAudioPlayback(startSeconds);
+            }
+            catch (Exception fallbackEx)
+            {
+                Debug.WriteLine($"[PinAudio] FFmpeg fallback failed: {fallbackEx.Message}");
+                StopAudioPlayback();
+            }
         }
+    }
+
+    private void StartDecodedAudioPlayback(double startSeconds)
+    {
+        var decoded = LibavPinAudioPcmDecoder.Decode(VideoPath, startSeconds);
+        if (decoded.PcmBytes.Length == 0)
+        {
+            throw new InvalidOperationException("Decoded PCM is empty.");
+        }
+
+        _audioPlaybackStream = new RawSourceWaveStream(new MemoryStream(decoded.PcmBytes, writable: false), decoded.WaveFormat);
+        _pinAudioPlayer = CreatePinAudioOutput(_audioPlaybackStream);
+        _pinAudioPlayer.Play();
     }
 
     private static IWavePlayer CreatePinAudioOutput(WaveStream stream)
