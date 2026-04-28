@@ -605,12 +605,6 @@ public partial class RecordingService
 
     private string ResolveFfmpegExecutable()
     {
-        var downloaderPath = _downloader.GetFFmpegPath();
-        if (!string.IsNullOrWhiteSpace(downloaderPath) && File.Exists(downloaderPath))
-        {
-            return downloaderPath;
-        }
-
         if (!string.IsNullOrWhiteSpace(_downloader.FfmpegExecutablePath) && File.Exists(_downloader.FfmpegExecutablePath))
         {
             return _downloader.FfmpegExecutablePath;

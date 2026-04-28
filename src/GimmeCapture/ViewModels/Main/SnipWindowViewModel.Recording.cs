@@ -420,15 +420,10 @@ public partial class SnipWindowViewModel
                     int pixelHeight = Math.Max(2, (int)Math.Round(originalHeight));
                     bool hideDecoration = _mainVm?.HideRecordPinDecoration ?? false;
                     bool hideBorder = _mainVm?.HideRecordPinBorder ?? false;
-                    string ffmpegPath = _mainVm?.FfmpegDownloader.GetFFmpegPath() ?? string.Empty;
-                    if (string.IsNullOrWhiteSpace(ffmpegPath))
-                    {
-                        ffmpegPath = "ffmpeg";
-                    }
 
                     var vm = new FloatingVideoViewModel(
                         recordingPath,
-                        ffmpegPath,
+                        string.Empty,
                         pixelWidth,
                         pixelHeight,
                         originalWidth,

@@ -240,7 +240,6 @@ public partial class MainWindowViewModel : ViewModelBase
 
         var processingSources = new[] 
         {
-            FfmpegDownloader.WhenAnyValue(x => x.IsDownloading, x => x.DownloadProgress).Select(x => ("FFmpeg", x.Item1, x.Item2)),
             UpdateService.WhenAnyValue(x => x.IsDownloading, x => x.DownloadProgress).Select(x => ("Update", x.Item1, x.Item2)),
             AIResourceService.WhenAnyValue(x => x.IsDownloading, x => x.DownloadProgress).Select(x => ("AI", x.Item1, x.Item2))
         };
@@ -255,24 +254,14 @@ public partial class MainWindowViewModel : ViewModelBase
 
                 var aiState = states.AsValueEnumerable().FirstOrDefault(s => s.Item1 == "AI");
                 bool isAiDownloading = aiState.Item2;
-                
-                var ffmpegState = states.AsValueEnumerable().FirstOrDefault(s => s.Item1 == "FFmpeg");
-                bool isFfmpegDownloading = ffmpegState.Item2;
 
                 var activeModules = Modules.AsValueEnumerable().Where(m => m.IsProcessing).ToList();
                 
                 // Fix Race Condition: ResourceQueue updates lag behind Service.IsDownloading.
-                // Filter out stale modules based on service truth.
+                // Filter out stale modules based on service truth (AI modules only).
                 if (!isAiDownloading)
                 {
-                    // If AI service is done, remove all AI modules (everything except FFmpeg)
-                    activeModules = activeModules.AsValueEnumerable().Where(m => m.Name == "FFmpeg").ToList();
-                }
-                
-                if (!isFfmpegDownloading)
-                {
-                    // If FFmpeg service is done, remove FFmpeg module
-                    activeModules = activeModules.AsValueEnumerable().Where(m => m.Name != "FFmpeg").ToList();
+                    activeModules.Clear();
                 }
 
                 int activeCount = activeModules.Count + (isUpdateDownloading ? 1 : 0);

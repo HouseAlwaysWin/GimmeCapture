@@ -1,5 +1,4 @@
 using System;
-using System.Threading;
 using System.Threading.Tasks;
 using ReactiveUI;
 using GimmeCapture.Services.Core.Media.NativeFFmpeg;
@@ -55,24 +54,9 @@ public class FFmpegDownloaderService : ReactiveObject
         return ok;
     }
 
-    public bool IsFFplayAvailable() => false;
-
-    public string GetFFmpegPath() => string.Empty;
-
-    public string GetFFplayPath() => string.Empty;
-
-    public string GetFfprobePath() => string.Empty;
-
-    /// <summary>Legacy no-op: bundled build cannot be removed from install folder.</summary>
-    public void RemoveFFmpeg()
+    /// <summary>Compatibility API for legacy callsites that expected an ffmpeg.exe path.</summary>
+    public Task<bool> EnsureFFmpegAsync()
     {
-        System.Diagnostics.Debug.WriteLine("[FFmpeg] RemoveFFmpeg is deprecated (bundled toolkit).");
-    }
-
-    /// <summary>No network download — bundled DLLs must exist (see scripts/ensure-ffmpeg-libs.ps1).</summary>
-    public Task<bool> EnsureFFmpegAsync(CancellationToken ct = default)
-    {
-        _ = ct;
         IsDownloading = false;
         DownloadProgress = 100;
         return Task.FromResult(IsFFmpegAvailable());

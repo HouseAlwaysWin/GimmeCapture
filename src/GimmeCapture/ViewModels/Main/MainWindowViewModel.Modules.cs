@@ -15,30 +15,6 @@ public partial class MainWindowViewModel
     {
         Modules.Clear();
         
-        // FFmpeg Module
-        var ffmpeg = new ModuleItem("FFmpeg", "ModuleFFmpegDescription")
-        {
-            IsInstalled = FfmpegDownloader.IsFFmpegAvailable(),
-            InstallCommand = ReactiveCommand.CreateFromTask(() => InstallModuleAsync("FFmpeg")),
-            CancelCommand = ReactiveCommand.CreateFromTask(() => CancelModuleAsync("FFmpeg")),
-            RemoveCommand = ReactiveCommand.CreateFromTask(() => RemoveModuleAsync("FFmpeg"))
-        };
-        FfmpegDownloader.WhenAnyValue(x => x.DownloadProgress)
-            .Subscribe(p => ffmpeg.Progress = p);
-            
-        ResourceQueue.ObserveStatus("FFmpeg")
-            .ObserveOn(RxApp.MainThreadScheduler)
-            .Subscribe(status => 
-            {
-                // FFmpeg is now bundled with the app; there is no online install/download flow.
-                ffmpeg.IsPending = false;
-                ffmpeg.IsProcessing = false;
-                ffmpeg.HasError = status == QueueItemStatus.Failed;
-                if (status == QueueItemStatus.Failed)
-                    ffmpeg.ErrorMessage = FfmpegDownloader.LastErrorMessage ?? "Bundled FFmpeg toolkit is missing or incomplete.";
-                if (status == QueueItemStatus.Completed) ffmpeg.IsInstalled = FfmpegDownloader.IsFFmpegAvailable();
-            });
-
         // ONNX Runtime & U2Net Module (Renamed from AI Core)
         var aiCore = new ModuleItem("ONNX Runtime & U2Net", "ModuleAICoreDescription")
         {
@@ -131,13 +107,11 @@ public partial class MainWindowViewModel
                 if (marian.IsProcessing) marian.Progress = p;
             });
 
-        ffmpeg.UpdateDescription();
         aiCore.UpdateDescription();
         sam2.UpdateDescription();
         ocr.UpdateDescription();
         marian.UpdateDescription();
 
-        Modules.Add(ffmpeg);
         Modules.Add(aiCore);
         Modules.Add(sam2);
         Modules.Add(ocr);
@@ -148,8 +122,7 @@ public partial class MainWindowViewModel
     {
         foreach (var m in Modules)
         {
-            if ((m.Name == "FFmpeg" && type == "FFmpeg") ||
-                (m.Name == "ONNX Runtime & U2Net" && type == "AICore") ||
+            if ((m.Name == "ONNX Runtime & U2Net" && type == "AICore") ||
                 (m.Name == "SAM2 Model" && type == "SAM2") ||
                 (m.Name == "PaddleOCR v5" && type == "OCR") ||
                 (m.Name == "MarianMT" && type == "MarianMT"))
@@ -159,12 +132,7 @@ public partial class MainWindowViewModel
             }
         }
 
-        if (type == "FFmpeg")
-        {
-            // No network installation anymore; just validate bundled toolkit availability.
-            await FfmpegDownloader.EnsureFFmpegAsync();
-        }
-        else if (type == "AICore")
+        if (type == "AICore")
         {
             await ResourceQueue.EnqueueAsync("AICore", (ct) => AIResourceService.EnsureAICoreAsync(ct));
         }
@@ -210,11 +178,7 @@ public partial class MainWindowViewModel
 
             if (!result) return;
 
-            if (type == "FFmpeg")
-            {
-                // Bundled runtime cannot be removed at runtime; keep as no-op.
-            }
-            else if (type == "AICore")
+            if (type == "AICore")
             {
                 AIResourceService.RemoveAICoreResources(); 
             }
@@ -233,7 +197,6 @@ public partial class MainWindowViewModel
             
             foreach (var m in Modules)
             {
-                if (m.Name == "FFmpeg") m.IsInstalled = FfmpegDownloader.IsFFmpegAvailable();
                 if (m.Name == "ONNX Runtime & U2Net") m.IsInstalled = AIResourceService.IsAICoreReady();
                 if (m.Name == "SAM2 Model") m.IsInstalled = AIResourceService.IsSAM2Ready(_settingsService.Settings.SelectedSAM2Variant);
                 if (m.Name == "PaddleOCR v5") m.IsInstalled = AIResourceService.IsOCRReady();
