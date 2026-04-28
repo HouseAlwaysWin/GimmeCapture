@@ -158,45 +158,6 @@ public class InMemoryTranslationCacheBenchmarks
     public void CacheSet() => _cache.Set("Ollama|English|TraditionalChinese|test", "測試");
 }
 
-public class FakeOllamaClient : IOllamaApiClient
-{
-    public Task<string> GenerateAsync(string model, string prompt, CancellationToken cancellationToken = default)
-    {
-        return Task.FromResult("{\"response\": \"<think>thinking...</think>Translation: \\\"你好\\\"\"}");
-    }
-
-    public Task<System.Collections.Generic.IReadOnlyList<string>> GetModelsAsync(CancellationToken cancellationToken = default)
-    {
-        return Task.FromResult<System.Collections.Generic.IReadOnlyList<string>>(new[] { "llama3" });
-    }
-
-    public Task<bool> IsReadyAsync(string model, CancellationToken cancellationToken = default)
-    {
-        return Task.FromResult(true);
-    }
-}
-
-[MemoryDiagnoser]
-public class LLMTranslationEngineBenchmarks
-{
-    private LLMTranslationEngine _engine = null!;
-    private const string text = "Hello";
-
-    [GlobalSetup]
-    public void Setup()
-    {
-        var settingsService = new AppSettingsService();
-        settingsService.Settings.OllamaModel = "llama3";
-        _engine = new LLMTranslationEngine(new FakeOllamaClient(), settingsService, new InMemoryTranslationCache());
-    }
-
-    [Benchmark]
-    public async Task<string> TranslateAndParseOverhead()
-    {
-        return await _engine.TranslateAsync(text, OCRLanguage.English, TranslationLanguage.TraditionalChinese);
-    }
-}
-
 [MemoryDiagnoser]
 public class FFmpegArgumentBuildingBenchmarks
 {
