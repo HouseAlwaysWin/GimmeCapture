@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
-    <Version>0.18.0</Version>
+    <Version>0.19.0</Version>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <ErrorOnDuplicatePublishOutputFiles>false</ErrorOnDuplicatePublishOutputFiles>
@@ -23,8 +23,22 @@
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </None>
     <!-- Native FFmpeg shared DLLs only: run scripts/ensure-ffmpeg-libs.ps1 -->
-    <Content Include="ffmpeg-lib\*.dll" CopyToOutputDirectory="PreserveNewest" Link="ffmpeg-lib\%(Filename)%(Extension)" />
+    <Content Include="ffmpeg-lib\*.dll"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest"
+             Link="ffmpeg-lib\%(Filename)%(Extension)" />
   </ItemGroup>
+
+  <!-- Guardrail: fail Release/Publish if ffmpeg-lib/*.dll are missing -->
+  <Target Name="FailIfBundledFfmpegMissing"
+          BeforeTargets="Build;Publish"
+          Condition="'$(Configuration)' == 'Release'">
+    <ItemGroup>
+      <_BundledFfmpegDlls Include="ffmpeg-lib\*.dll" />
+    </ItemGroup>
+    <Error Condition="'@(_BundledFfmpegDlls)' == ''"
+           Text="Bundled FFmpeg DLLs are missing under 'src/GimmeCapture/ffmpeg-lib/'. Run scripts/ensure-ffmpeg-libs.ps1 (see ffmpeg-lib/README.txt) before Release/Publish." />
+  </Target>
 
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="12.0.1" />
