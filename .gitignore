@@ -13,6 +13,12 @@
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
 
+# Debug symbols (build / publish output; do not commit)
+*.pdb
+
+# Local publish test output
+publish-test-size/
+
 # Build results
 [Dd]ebug/
 [Dd]ebugPublic/
