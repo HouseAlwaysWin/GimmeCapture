@@ -47,46 +47,24 @@ jobs:
         )
         dotnet publish src/GimmeCapture/GimmeCapture.csproj @pub
 
-    # Framework-dependent: much smaller zip if the user already has the .NET desktop/runtime installed.
-    - name: Publish application (framework-dependent)
-      run: |
-        $version = "${{ github.ref_name }}".TrimStart('v')
-        $pub = @(
-          '-c', 'Release'
-          '-r', 'win-x64'
-          '--self-contained', 'false'
-          '-p:PublishSingleFile=true'
-          '-p:IncludeNativeLibrariesForSelfExtract=true'
-          '-p:IncludeAllContentForSelfExtract=true'
-          '-p:EnableCompressionInSingleFile=true'
-          '-p:DebugType=none'
-          '-p:DebugSymbols=false'
-          "-p:Version=$version"
-          '-o', './publish-fx'
-        )
-        dotnet publish src/GimmeCapture/GimmeCapture.csproj @pub
-
     # Native packages may copy *.pdb next to the exe; they are not needed at runtime and bloat the zip.
     - name: Strip debug symbols from publish output
       shell: powershell
       run: |
-        foreach ($dir in './publish', './publish-fx') {
+        foreach ($dir in './publish') {
           if (Test-Path $dir) {
             Get-ChildItem -Path $dir -Filter *.pdb -Recurse -File -ErrorAction SilentlyContinue | Remove-Item -Force
           }
         }
 
-    - name: Zip the applications
+    - name: Zip the application
       run: |
         Compress-Archive -Path ./publish/* -DestinationPath GimmeCapture_win-x64.zip
-        Compress-Archive -Path ./publish-fx/* -DestinationPath GimmeCapture_win-x64_framework-dependent.zip
 
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v2
       with:
-        files: |
-          GimmeCapture_win-x64.zip
-          GimmeCapture_win-x64_framework-dependent.zip
+        files: GimmeCapture_win-x64.zip
         generate_release_notes: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
