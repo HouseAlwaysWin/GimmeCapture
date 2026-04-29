@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
-    <Version>0.21.0</Version>
+    <Version>0.22.0</Version>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <ErrorOnDuplicatePublishOutputFiles>false</ErrorOnDuplicatePublishOutputFiles>
@@ -29,14 +29,6 @@
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest"
              Link="ffmpeg-lib\%(Filename)%(Extension)" />
-  </ItemGroup>
-
-  <!-- Single-file publish embeds ffmpeg-lib via IncludeAllContentForSelfExtract; do not also copy loose DLLs
-       next to the exe (was ~220MB+ duplicated in the release zip). Runtime still loads from BaseDirectory/ffmpeg-lib after extraction. -->
-  <ItemGroup Condition="'$(PublishSingleFile)' == 'true'">
-    <Content Update="ffmpeg-lib\*.dll">
-      <CopyToPublishDirectory>Never</CopyToPublishDirectory>
-    </Content>
   </ItemGroup>
 
   <!-- Guardrail: fail Release/Publish if ffmpeg-lib/*.dll are missing -->
