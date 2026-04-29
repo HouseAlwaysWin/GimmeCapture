@@ -15,9 +15,11 @@
         xmlns:c="using:GimmeCapture.Views.Controls"
         xmlns:converters="using:GimmeCapture.Converters"
         xmlns:tabs="using:GimmeCapture.Views.Main.Tabs"
+        xmlns:chrome="using:Avalonia.Controls.Chrome"
         Foreground="White"
         MinWidth="720" MinHeight="500"
-        WindowDecorations="None">
+        WindowDecorations="None"
+        ExtendClientAreaToDecorationsHint="True">
 
     <Design.DataContext>
         <!-- This only sets the DataContext for the previewer in an IDE,
@@ -25,24 +27,36 @@
         <vm:MainWindowViewModel/>
     </Design.DataContext>
 
-    <Grid RowDefinitions="Auto,*,Auto" Margin="0">
-        <!-- Custom Title Bar -->
-        <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" Background="Transparent" PointerPressed="TopBar_PointerPressed" Height="36">
+    <!-- Borderless window: OS resize frames are gone — Avalonia needs explicit WindowDecorationProperties roles on edges (see docs). -->
+    <Grid Margin="0">
+        <!-- Edge/corner resize grips (above main UI). Margins avoid covering caption buttons / tab chrome. -->
+        <Border Background="Transparent" VerticalAlignment="Top" HorizontalAlignment="Stretch" Height="8" ZIndex="10000"
+                Margin="0,0,132,0"
+                chrome:WindowDecorationProperties.ElementRole="ResizeN"/>
+        <Border Background="Transparent" VerticalAlignment="Bottom" HorizontalAlignment="Stretch" Height="8" ZIndex="10000"
+                chrome:WindowDecorationProperties.ElementRole="ResizeS"/>
+        <Border Background="Transparent" HorizontalAlignment="Left" VerticalAlignment="Stretch" Width="8" ZIndex="10000"
+                chrome:WindowDecorationProperties.ElementRole="ResizeW"/>
+        <!-- Start below custom title row so minimize/max/close stay clickable -->
+        <Border Background="Transparent" HorizontalAlignment="Right" VerticalAlignment="Stretch" Width="8" ZIndex="10000"
+                Margin="0,36,0,0"
+                chrome:WindowDecorationProperties.ElementRole="ResizeE"/>
+        <Border Background="Transparent" HorizontalAlignment="Left" VerticalAlignment="Top" Width="12" Height="12" ZIndex="10000"
+                chrome:WindowDecorationProperties.ElementRole="ResizeNW"/>
+        <!-- Skip ResizeNE: would sit under caption controls -->
+        <Border Background="Transparent" HorizontalAlignment="Left" VerticalAlignment="Bottom" Width="12" Height="12" ZIndex="10000"
+                chrome:WindowDecorationProperties.ElementRole="ResizeSW"/>
+        <Border Background="Transparent" HorizontalAlignment="Right" VerticalAlignment="Bottom" Width="12" Height="12" ZIndex="10000"
+                chrome:WindowDecorationProperties.ElementRole="ResizeSE"/>
+
+    <Grid RowDefinitions="Auto,*,Auto" Margin="0" ZIndex="0">
+        <!-- Title drag area only (caption buttons are a sibling overlay so resize strips never steal clicks) -->
+        <Grid Grid.Row="0" ColumnDefinitions="Auto,*" Background="Transparent" Height="36"
+              PointerPressed="TitleBar_PointerPressed">
             <Image Source="avares://GimmeCapture/Assets/kitsune_icon.png" Width="18" Height="18" Margin="12,0,0,0" VerticalAlignment="Center"/>
-            <TextBlock Grid.Column="1" Text="GimmeCapture!!" 
-                       HorizontalAlignment="Center" VerticalAlignment="Center" 
+            <TextBlock Grid.Column="1" Text="GimmeCapture!!"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"
                        FontWeight="SemiBold" FontSize="13" Foreground="White" LetterSpacing="1"/>
-            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" Margin="0,0,10,0" VerticalAlignment="Center">
-                <Button Theme="{StaticResource WindowControlButton}" Command="{Binding MinimizeCommand}">
-                    <Path Data="M 0,0 L 10,0" Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.5" Margin="0,6,0,0" Stretch="None"/>
-                </Button>
-                <Button Theme="{StaticResource WindowControlButton}" Command="{Binding MaximizeCommand}">
-                    <Path Data="M 0,0 L 10,0 L 10,10 L 0,10 Z" Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.5" Fill="Transparent" Stretch="None"/>
-                </Button>
-                <Button Theme="{StaticResource WindowControlButton}" Classes="close" Command="{Binding CloseCommand}">
-                    <Path Data="M 0,0 L 10,10 M 0,10 L 10,0" Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.5" Stretch="None"/>
-                </Button>
-            </StackPanel>
         </Grid>
         
         <!-- Settings Tabs -->
@@ -109,6 +123,21 @@
                 <Button Grid.Column="3" Content="{Binding [ResetDefault], Source={x:Static services:LocalizationService.Instance}}" Theme="{StaticResource GothicMetalButton}" Command="{Binding ResetToDefaultCommand}"/>
             </Grid>
         </Border>
+    </Grid>
+
+        <!-- Must be a direct child of the root grid with ZIndex above resize grips (those use 10000). -->
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top"
+                    Margin="0,0,10,0" Height="36" Spacing="4" ZIndex="20001">
+            <Button Theme="{StaticResource WindowControlButton}" Command="{Binding MinimizeCommand}">
+                <Path Data="M 0,0 L 10,0" Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.5" Margin="0,6,0,0" Stretch="None"/>
+            </Button>
+            <Button Theme="{StaticResource WindowControlButton}" Command="{Binding MaximizeCommand}">
+                <Path Data="M 0,0 L 10,0 L 10,10 L 0,10 Z" Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.5" Fill="Transparent" Stretch="None"/>
+            </Button>
+            <Button Theme="{StaticResource WindowControlButton}" Classes="close" Command="{Binding CloseCommand}">
+                <Path Data="M 0,0 L 10,10 M 0,10 L 10,0" Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.5" Stretch="None"/>
+            </Button>
+        </StackPanel>
     </Grid>
 </Window>
 

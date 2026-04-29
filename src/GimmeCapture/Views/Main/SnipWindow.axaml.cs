@@ -241,12 +241,13 @@ public partial class SnipWindow : Window
     private static bool IsKeyboardInteractionFocus(IInputElement? el)
     {
         if (el == null) return false;
-        if (el is TextBox or SelectableTextBlock or ComboBox or AutoCompleteBox) return true;
+        // ComboBox excluded: translation toolbar language combos use letter keys for search (e.g. T → "Traditional Chinese"),
+        // which steals Translate-all hotkey "T" and blocks manual routing in OnKeyDown. Users pick languages with mouse/arrows.
+        if (el is TextBox or SelectableTextBlock or AutoCompleteBox) return true;
         if (el is Control c)
         {
             return c.FindAncestorOfType<TextBox>() != null
                    || c.FindAncestorOfType<SelectableTextBlock>() != null
-                   || c.FindAncestorOfType<ComboBox>() != null
                    || c.FindAncestorOfType<AutoCompleteBox>() != null;
         }
 

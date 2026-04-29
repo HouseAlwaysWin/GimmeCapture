@@ -59,7 +59,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private void TopBar_PointerPressed(object? sender, Avalonia.Input.PointerPressedEventArgs e)
+    private void TitleBar_PointerPressed(object? sender, Avalonia.Input.PointerPressedEventArgs e)
     {
         if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
         {

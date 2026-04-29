@@ -155,6 +155,7 @@
                     <ComboBox ItemsSource="{Binding AvailableOCRLanguages}"
                               SelectedItem="{Binding SourceLanguage}"
                               Width="100" Height="26" Padding="5,0"
+                              IsTextSearchEnabled="False"
                               Theme="{StaticResource {x:Type ComboBox}}">
                         <ComboBox.ItemTemplate>
                             <DataTemplate>
@@ -172,6 +173,7 @@
                     <ComboBox ItemsSource="{Binding AvailableTranslationLanguages}"
                               SelectedItem="{Binding TargetLanguage}"
                               Width="100" Height="26" Padding="5,0"
+                              IsTextSearchEnabled="False"
                               Theme="{StaticResource {x:Type ComboBox}}">
                         <ComboBox.ItemTemplate>
                             <DataTemplate>
