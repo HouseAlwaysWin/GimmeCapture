@@ -42,29 +42,29 @@
                 <Grid Margin="15" VerticalAlignment="Center" HorizontalAlignment="Center" ClipToBounds="False">
                     <Border CornerRadius="0"
                             Background="#01FFFFFF"
-                            BoxShadow="{Binding ThemeColor, Converter={StaticResource ColorToBoxShadowConverter}}">
+                            BoxShadow="{Binding BorderColor, Converter={StaticResource ColorToBoxShadowConverter}}">
                         <Border.BorderBrush>
                             <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
-                                <GradientStop Offset="0" Color="{Binding ThemeColor}"/>
-                                <GradientStop Offset="0.5" Color="{Binding ThemeColor}"/>
-                                <GradientStop Offset="1" Color="{Binding ThemeColor}"/>
+                                <GradientStop Offset="0" Color="{Binding BorderColor}"/>
+                                <GradientStop Offset="0.5" Color="{Binding BorderColor}"/>
+                                <GradientStop Offset="1" Color="{Binding BorderColor}"/>
                             </LinearGradientBrush>
                         </Border.BorderBrush>
-                        <Border BorderBrush="{Binding ThemeColor, Converter={StaticResource ColorToBrushConverter}}" 
+                        <Border BorderBrush="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" 
                                 BorderThickness="{Binding BorderThickness, Converter={StaticResource ThicknessConverter}}">
-                            <Border BorderBrush="{Binding ThemeColor, Converter={StaticResource ColorToBrushConverter}}" BorderThickness="1" Margin="-1">
+                            <Border BorderBrush="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" BorderThickness="1" Margin="-1">
                                 <Grid Width="200" Height="120" ClipToBounds="False">
                                     <!-- Wings -->
                                     <Rectangle Width="{Binding PreviewWingWidth}" Height="{Binding PreviewWingHeight}" VerticalAlignment="Center"
                                                HorizontalAlignment="Left" Margin="{Binding PreviewLeftWingMargin}"
-                                               Fill="{Binding ThemeColor, Converter={StaticResource ColorToBrushConverter}}">
+                                               Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}">
                                         <Rectangle.OpacityMask>
                                             <ImageBrush Source="avares://GimmeCapture/Assets/wing_left.png" Stretch="Uniform" AlignmentX="Right"/>
                                         </Rectangle.OpacityMask>
                                     </Rectangle>
                                     <Rectangle Width="{Binding PreviewWingWidth}" Height="{Binding PreviewWingHeight}" VerticalAlignment="Center"
                                                HorizontalAlignment="Right" Margin="{Binding PreviewRightWingMargin}"
-                                               Fill="{Binding ThemeColor, Converter={StaticResource ColorToBrushConverter}}">
+                                               Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}">
                                         <Rectangle.OpacityMask>
                                             <ImageBrush Source="avares://GimmeCapture/Assets/wing_right.png" Stretch="Uniform" AlignmentX="Left"/>
                                         </Rectangle.OpacityMask>
@@ -72,25 +72,25 @@
 
                                     <!-- Accent Corners: Hearts & Skulls -->
                                     <Rectangle Width="{Binding PreviewIconSize}" Height="{Binding PreviewIconSize}" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="4"
-                                               Fill="{Binding ThemeColor, Converter={StaticResource ColorToBrushConverter}}">
+                                               Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}">
                                         <Rectangle.OpacityMask>
                                             <ImageBrush Source="avares://GimmeCapture/Assets/heart.png" Stretch="Uniform"/>
                                         </Rectangle.OpacityMask>
                                     </Rectangle>
                                     <Rectangle Width="{Binding PreviewIconSize}" Height="{Binding PreviewIconSize}" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="4"
-                                               Fill="{Binding ThemeColor, Converter={StaticResource ColorToBrushConverter}}">
+                                               Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}">
                                         <Rectangle.OpacityMask>
                                             <ImageBrush Source="avares://GimmeCapture/Assets/heart.png" Stretch="Uniform" />
                                         </Rectangle.OpacityMask>
                                     </Rectangle>
                                     <Rectangle Width="{Binding PreviewIconSize}" Height="{Binding PreviewIconSize}" VerticalAlignment="Top" HorizontalAlignment="Right" Margin="4"
-                                               Fill="{Binding ThemeColor, Converter={StaticResource ColorToBrushConverter}}">
+                                               Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}">
                                         <Rectangle.OpacityMask>
                                             <ImageBrush Source="avares://GimmeCapture/Assets/skull.png" Stretch="Uniform" />
                                         </Rectangle.OpacityMask>
                                     </Rectangle>
                                     <Rectangle Width="{Binding PreviewIconSize}" Height="{Binding PreviewIconSize}" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="4"
-                                               Fill="{Binding ThemeColor, Converter={StaticResource ColorToBrushConverter}}">
+                                               Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}">
                                         <Rectangle.OpacityMask>
                                             <ImageBrush Source="avares://GimmeCapture/Assets/skull.png" Stretch="Uniform" />
                                         </Rectangle.OpacityMask>

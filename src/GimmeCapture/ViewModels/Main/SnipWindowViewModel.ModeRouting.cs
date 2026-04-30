@@ -133,7 +133,7 @@ public partial class SnipWindowViewModel
         }
 
         // Common updates
-        SelectionBorderColor = _mainVm?.ThemeColor ?? Colors.Yellow;
+        SelectionBorderColor = _mainVm?.BorderColor ?? Colors.Yellow;
 
         // Notify all related properties
         RaiseProperties(_modeStatePropertyNames);

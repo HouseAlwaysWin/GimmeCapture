@@ -285,8 +285,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
             return;
         }
 
-        // Always use ThemeColor for all UI boxes per request
-        _selectionBorderColor = _mainVm.ThemeColor;
+        _selectionBorderColor = _mainVm.BorderColor;
         _selectionBorderThickness = _mainVm.BorderThickness;
         _maskOpacity = _mainVm.MaskOpacity;
     }
@@ -395,12 +394,11 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
             })
             .DisposeWith(_disposables);
 
-        // Sync Theme Color (Unified for all boxes)
-        BindDistinct(mainVm.WhenAnyValue(x => x.ThemeColor), val =>
-            {
-                SelectionBorderColor = val;
-                RaiseProperties(nameof(ThemeColor), nameof(ThemeDeepColor));
-            })
+        BindDistinct(mainVm.WhenAnyValue(x => x.ThemeColor), _ =>
+            RaiseProperties(nameof(ThemeColor), nameof(ThemeDeepColor)))
+            .DisposeWith(_disposables);
+
+        BindDistinct(mainVm.WhenAnyValue(x => x.BorderColor), val => SelectionBorderColor = val)
             .DisposeWith(_disposables);
 
         BindDistinct(mainVm.WhenAnyValue(x => x.BorderThickness), val => SelectionBorderThickness = val)
