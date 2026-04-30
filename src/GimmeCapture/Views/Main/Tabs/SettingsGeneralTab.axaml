@@ -7,7 +7,7 @@
              xmlns:converters="using:GimmeCapture.Converters"
              x:Class="GimmeCapture.Views.Main.Tabs.SettingsGeneralTab"
              x:DataType="vm:MainWindowViewModel">
-    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
         <Grid ColumnDefinitions="*, Auto" Margin="10">
             <!-- Settings Controls -->
             <StackPanel Grid.Column="0" Spacing="10">
