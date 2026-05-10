@@ -244,10 +244,16 @@ public partial class SnipWindowViewModel
         {
             _recordingCaptureLogicalRect = region;
             EnsureRecordingTimerStarted();
+            if (!string.IsNullOrWhiteSpace(_recordingService.LastStartWarning))
+            {
+                _mainVm.SetStatus(_recordingService.LastStartWarning);
+            }
         }
         else
         {
-            _mainVm.SetStatus("Recording start failed. Please try again.");
+            _mainVm.SetStatus(string.IsNullOrWhiteSpace(_recordingService.LastStartError)
+                ? "Recording start failed. Please try again."
+                : _recordingService.LastStartError);
             _recordingUsesWindowsExcludeFromCapture = false;
             this.RaisePropertyChanged(nameof(RecordingUsesWindowsExcludeFromCapture));
             SyncRecordingScreenCaptureAffinity?.Invoke();

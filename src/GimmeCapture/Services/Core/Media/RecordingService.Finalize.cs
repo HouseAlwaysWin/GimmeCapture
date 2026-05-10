@@ -156,10 +156,11 @@ public partial class RecordingService
             return;
         }
 
-        EnsureOutputExtension(GetTargetExtension());
+        string effectiveFormat = GetEffectiveTargetFormat();
+        EnsureOutputExtension(GetTargetExtension(effectiveFormat));
         var sourceVideo = File.Exists(mergedMkv) ? mergedMkv : _segments[0];
 
-        var targetAudio = await PrepareAudioForTargetContainerAsync(mergedAudio);
+        var targetAudio = await PrepareAudioForTargetContainerAsync(mergedAudio, effectiveFormat);
         if (!string.IsNullOrWhiteSpace(targetAudio) && File.Exists(targetAudio))
         {
             try
@@ -174,8 +175,8 @@ public partial class RecordingService
                     LogToFile($"[Finalize] Audio probe failed: {ex.Message}");
                 }
 
-                var muxedPath = Path.Combine(_tempDir, $"muxed_with_audio.{GetTargetExtension()}");
-                var muxStats = LibavMuxer.MuxVideoAndAudio(sourceVideo, targetAudio, muxedPath, GetMuxerFormatName());
+                var muxedPath = Path.Combine(_tempDir, $"muxed_with_audio.{GetTargetExtension(effectiveFormat)}");
+                var muxStats = LibavMuxer.MuxVideoAndAudio(sourceVideo, targetAudio, muxedPath, GetMuxerFormatName(effectiveFormat));
                 LogToFile($"[Finalize] Native mux success: {muxedPath}, bytes={(File.Exists(muxedPath) ? new FileInfo(muxedPath).Length : 0)}, videoPackets={muxStats.VideoPackets}, audioPackets={muxStats.AudioPackets}");
                 await TryMoveWithRetryAsync(muxedPath, _outputFile);
                 FinalizationProgress = 100;
@@ -188,12 +189,54 @@ public partial class RecordingService
             }
         }
 
-        await TryMoveWithRetryAsync(sourceVideo, _outputFile);
+        if (string.Equals(effectiveFormat, "mkv", StringComparison.OrdinalIgnoreCase))
+        {
+            await TryMoveWithRetryAsync(sourceVideo, _outputFile);
+        }
+        else
+        {
+            string remuxedPath = Path.Combine(_tempDir, $"remuxed_video_only.{GetTargetExtension(effectiveFormat)}");
+            var remuxStats = LibavMuxer.RemuxVideo(sourceVideo, remuxedPath, GetMuxerFormatName(effectiveFormat));
+            LogToFile($"[Finalize] Native video-only remux success: {remuxedPath}, bytes={(File.Exists(remuxedPath) ? new FileInfo(remuxedPath).Length : 0)}, videoPackets={remuxStats.VideoPackets}");
+            await TryMoveWithRetryAsync(remuxedPath, _outputFile);
+        }
+
         FinalizationProgress = 100;
     }
 
-    private string GetTargetExtension() =>
-        _targetFormat switch
+    private string GetEffectiveTargetFormat()
+    {
+        if (_targetFormat is not ("mp4" or "mov"))
+        {
+            return _targetFormat;
+        }
+
+        if (RequiresMatroskaFinalization(_lastSelectedVideoEncoderName))
+        {
+            LogToFile($"[Finalize] Encoder '{_lastSelectedVideoEncoderName}' is being finalized as MKV for compatibility.");
+            return "mkv";
+        }
+
+        return _targetFormat;
+    }
+
+    private static bool RequiresMatroskaFinalization(string encoderName)
+    {
+        if (string.IsNullOrWhiteSpace(encoderName))
+        {
+            return false;
+        }
+
+        return encoderName.Contains("_mf", StringComparison.OrdinalIgnoreCase)
+            || encoderName.Contains("_nvenc", StringComparison.OrdinalIgnoreCase)
+            || encoderName.Contains("_qsv", StringComparison.OrdinalIgnoreCase)
+            || encoderName.Contains("_amf", StringComparison.OrdinalIgnoreCase)
+            || encoderName.Contains("_vaapi", StringComparison.OrdinalIgnoreCase)
+            || encoderName.Contains("_d3d12va", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string GetTargetExtension(string format) =>
+        format switch
         {
             "mp4" => "mp4",
             "mov" => "mov",
@@ -201,8 +244,8 @@ public partial class RecordingService
             _ => "mkv"
         };
 
-    private string GetMuxerFormatName() =>
-        _targetFormat switch
+    private static string GetMuxerFormatName(string format) =>
+        format switch
         {
             "mp4" => "mp4",
             "mov" => "mov",
@@ -210,14 +253,14 @@ public partial class RecordingService
             _ => "matroska"
         };
 
-    private async Task<string?> PrepareAudioForTargetContainerAsync(string? mergedAudio)
+    private async Task<string?> PrepareAudioForTargetContainerAsync(string? mergedAudio, string effectiveFormat)
     {
         if (string.IsNullOrWhiteSpace(mergedAudio) || !File.Exists(mergedAudio))
         {
             return null;
         }
 
-        if (_targetFormat is not ("mp4" or "mov"))
+        if (effectiveFormat is not ("mp4" or "mov"))
         {
             return mergedAudio;
         }

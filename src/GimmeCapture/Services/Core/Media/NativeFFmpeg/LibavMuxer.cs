@@ -10,6 +10,65 @@ internal static class LibavMuxer
     public static unsafe MuxStats MuxVideoAndAudioToMkv(string videoPath, string audioPath, string outputPath)
         => MuxVideoAndAudio(videoPath, audioPath, outputPath, "matroska");
 
+    public static unsafe MuxStats RemuxVideo(string videoPath, string outputPath, string containerFormat)
+    {
+        FFmpegRuntime.EnsureInitialized();
+
+        AVFormatContext* videoFmt = null;
+        AVFormatContext* outFmt = null;
+        AVPacket* videoPkt = null;
+        int videoIn = -1;
+        AVStream* outVideo = null;
+
+        try
+        {
+            ThrowIfErr(ffmpeg.avformat_open_input(&videoFmt, videoPath, null, null), "open_input(video)");
+            ThrowIfErr(ffmpeg.avformat_find_stream_info(videoFmt, null), "find_stream_info(video)");
+            videoIn = ffmpeg.av_find_best_stream(videoFmt, AVMediaType.AVMEDIA_TYPE_VIDEO, -1, -1, null, 0);
+            if (videoIn < 0) throw new InvalidOperationException("No video stream in input.");
+
+            ThrowIfErr(ffmpeg.avformat_alloc_output_context2(&outFmt, null, containerFormat, outputPath), "alloc_output(video_only)");
+            if (outFmt == null) throw new InvalidOperationException("Failed to create output format context.");
+
+            outVideo = ffmpeg.avformat_new_stream(outFmt, null);
+            if (outVideo == null) throw new OutOfMemoryException("new_stream(video_only)");
+
+            var inVideoStream = videoFmt->streams[videoIn];
+            ThrowIfErr(ffmpeg.avcodec_parameters_copy(outVideo->codecpar, inVideoStream->codecpar), "copy_video_codecpar(video_only)");
+            outVideo->codecpar->codec_tag = 0;
+            outVideo->time_base = inVideoStream->time_base;
+            outVideo->disposition |= ffmpeg.AV_DISPOSITION_DEFAULT;
+
+            if ((outFmt->oformat->flags & ffmpeg.AVFMT_NOFILE) == 0)
+            {
+                ThrowIfErr(ffmpeg.avio_open(&outFmt->pb, outputPath, ffmpeg.AVIO_FLAG_WRITE), "avio_open(output_video_only)");
+            }
+
+            ThrowIfErr(ffmpeg.avformat_write_header(outFmt, null), "write_header(output_video_only)");
+
+            videoPkt = ffmpeg.av_packet_alloc();
+            if (videoPkt == null) throw new OutOfMemoryException("av_packet_alloc(video_only)");
+
+            int videoPackets = RemuxVideoPackets(videoFmt, videoIn, outFmt, outVideo, videoPkt);
+            ffmpeg.av_write_trailer(outFmt);
+            return new MuxStats(videoPackets, 0);
+        }
+        finally
+        {
+            if (videoPkt != null) ffmpeg.av_packet_free(&videoPkt);
+            if (videoFmt != null) ffmpeg.avformat_close_input(&videoFmt);
+            if (outFmt != null)
+            {
+                if ((outFmt->oformat->flags & ffmpeg.AVFMT_NOFILE) == 0 && outFmt->pb != null)
+                {
+                    ffmpeg.avio_closep(&outFmt->pb);
+                }
+
+                ffmpeg.avformat_free_context(outFmt);
+            }
+        }
+    }
+
     public static unsafe MuxStats MuxVideoAndAudio(string videoPath, string audioPath, string outputPath, string containerFormat)
     {
         FFmpegRuntime.EnsureInitialized();
@@ -202,6 +261,32 @@ internal static class LibavMuxer
         if (ts == ffmpeg.AV_NOPTS_VALUE) return long.MaxValue;
         var usTimeBase = new AVRational { num = 1, den = ffmpeg.AV_TIME_BASE };
         return ffmpeg.av_rescale_q(ts, timeBase, usTimeBase);
+    }
+
+    private static unsafe int RemuxVideoPackets(
+        AVFormatContext* videoFmt,
+        int videoIn,
+        AVFormatContext* outFmt,
+        AVStream* outVideo,
+        AVPacket* videoPkt)
+    {
+        var inVideo = videoFmt->streams[videoIn];
+        bool hasVideo = ReadNextStreamPacket(videoFmt, videoIn, videoPkt);
+        long firstVideoPts = hasVideo ? GetPacketPrimaryTimestamp(videoPkt) : ffmpeg.AV_NOPTS_VALUE;
+        int videoPackets = 0;
+
+        while (hasVideo)
+        {
+            NormalizePacketTimestamps(videoPkt, firstVideoPts);
+            ffmpeg.av_packet_rescale_ts(videoPkt, inVideo->time_base, outVideo->time_base);
+            videoPkt->stream_index = outVideo->index;
+            ThrowIfErr(ffmpeg.av_interleaved_write_frame(outFmt, videoPkt), "write_frame(video_only)");
+            videoPackets++;
+            ffmpeg.av_packet_unref(videoPkt);
+            hasVideo = ReadNextStreamPacket(videoFmt, videoIn, videoPkt);
+        }
+
+        return videoPackets;
     }
 
     private static void ThrowIfErr(int err, string ctx)

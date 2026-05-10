@@ -231,7 +231,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
             if (HotkeyRouterService.TryMapGlobalHotkeyToCaptureMode(id, out var mode))
             {
-                Avalonia.Threading.Dispatcher.UIThread.Post(() => StartCaptureCommand.Execute(mode));
+                Avalonia.Threading.Dispatcher.UIThread.Post(() => StartCaptureCommand.Execute(mode).Subscribe());
             }
         };
 

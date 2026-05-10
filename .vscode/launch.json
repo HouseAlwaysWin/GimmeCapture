@@ -5,7 +5,7 @@
             "name": "Debug GimmeCapture",
             "type": "coreclr",
             "request": "launch",
-            "preLaunchTask": "build",
+            "preLaunchTask": "debug-build",
             "program": "dotnet",
             "args": [
                 "run",
@@ -21,10 +21,10 @@
             "name": "Debug GimmeCapture (Direct)",
             "type": "coreclr",
             "request": "launch",
-            "preLaunchTask": "build",
+            "preLaunchTask": "debug-build",
             "program": "${workspaceFolder}/src/GimmeCapture/bin/Debug/net10.0-windows/GimmeCapture.exe",
             "args": [],
-            "cwd": "${workspaceFolder}/src/GimmeCapture",
+            "cwd": "${workspaceFolder}/src/GimmeCapture/bin/Debug/net10.0-windows",
             "console": "internalConsole",
             "stopAtEntry": false
         },

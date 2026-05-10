@@ -21,10 +21,10 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
     private IntPtr _oldWndProc = IntPtr.Zero;
     private WndProc? _newWndProc; // Keep reference to prevent GC
 
-    [DllImport("user32.dll")]
+    [DllImport("user32.dll", SetLastError = true)]
     private static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
 
-    [DllImport("user32.dll")]
+    [DllImport("user32.dll", SetLastError = true)]
     private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
 
     protected virtual bool NativeRegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vkey)
@@ -47,13 +47,19 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
         if (platformHandle != null)
         {
             _handle = platformHandle.Handle;
-            
-            // Register pending hotkeys
-            foreach (var kvp in _pendingRegistrations)
+
+            if (_pendingRegistrations.Count == 0)
+            {
+                return;
+            }
+
+            // Register from a snapshot because Register/Unregister mutates the pending dictionary.
+            var pending = new List<KeyValuePair<int, string>>(_pendingRegistrations);
+            _pendingRegistrations.Clear();
+            foreach (var kvp in pending)
             {
                 Register(kvp.Key, kvp.Value);
             }
-            _pendingRegistrations.Clear();
         }
     }
 
@@ -80,18 +86,26 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
 
         (uint modifiers, uint vkey) = ParseHotkey(hotkey);
 
-        if (vkey != 0)
+        if (vkey == 0)
         {
-             bool success = NativeRegisterHotKey(_handle, id, modifiers, vkey);
-             if (success)
-             {
-                 _registeredIds.Add(id);
-                 
-                 if (_oldWndProc == IntPtr.Zero)
-                 {
-                     InstallWndProcHook();
-                 }
-             }
+            System.Diagnostics.Debug.WriteLine($"[GlobalHotkey] Unsupported hotkey '{hotkey}' for ID {id}.");
+            return;
+        }
+
+        bool success = NativeRegisterHotKey(_handle, id, modifiers, vkey);
+        if (success)
+        {
+            _registeredIds.Add(id);
+            
+            if (_oldWndProc == IntPtr.Zero)
+            {
+                InstallWndProcHook();
+            }
+        }
+        else
+        {
+            int error = Marshal.GetLastWin32Error();
+            System.Diagnostics.Debug.WriteLine($"[GlobalHotkey] Failed to register ID {id} as '{hotkey}' (mods={modifiers}, vk={vkey}, win32={error}).");
         }
     }
     
@@ -187,6 +201,66 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
         else if (keyPart == "PRINTSCREEN" || keyPart == "PRTSC")
         {
             key = 0x2C;
+        }
+        else if (keyPart == "ENTER" || keyPart == "RETURN")
+        {
+            key = 0x0D;
+        }
+        else if (keyPart == "ESC" || keyPart == "ESCAPE")
+        {
+            key = 0x1B;
+        }
+        else if (keyPart == "TAB")
+        {
+            key = 0x09;
+        }
+        else if (keyPart == "SPACE")
+        {
+            key = 0x20;
+        }
+        else if (keyPart == "DELETE" || keyPart == "DEL")
+        {
+            key = 0x2E;
+        }
+        else if (keyPart == "INSERT" || keyPart == "INS")
+        {
+            key = 0x2D;
+        }
+        else if (keyPart == "BACKSPACE" || keyPart == "BKSP")
+        {
+            key = 0x08;
+        }
+        else if (keyPart == "HOME")
+        {
+            key = 0x24;
+        }
+        else if (keyPart == "END")
+        {
+            key = 0x23;
+        }
+        else if (keyPart == "PAGEUP" || keyPart == "PGUP")
+        {
+            key = 0x21;
+        }
+        else if (keyPart == "PAGEDOWN" || keyPart == "PGDN")
+        {
+            key = 0x22;
+        }
+        else if (keyPart == "LEFT")
+        {
+            key = 0x25;
+        }
+        else if (keyPart == "UP")
+        {
+            key = 0x26;
+        }
+        else if (keyPart == "RIGHT")
+        {
+            key = 0x27;
+        }
+        else if (keyPart == "DOWN")
+        {
+            key = 0x28;
         }
         else if (keyPart.Length == 1 && char.IsLetterOrDigit(keyPart[0]))
         {

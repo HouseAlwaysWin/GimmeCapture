@@ -19,6 +19,28 @@
             "problemMatcher": "$msCompile"
         },
         {
+            "label": "prepare-ffmpeg-debug-dlls",
+            "type": "process",
+            "command": "powershell",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "${workspaceFolder}\\scripts\\prepare-ffmpeg-debug.ps1"
+            ],
+            "problemMatcher": []
+        },
+        {
+            "label": "debug-build",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "build",
+                "prepare-ffmpeg-debug-dlls"
+            ],
+            "problemMatcher": []
+        },
+        {
             "label": "publish",
             "command": "dotnet",
             "type": "process",

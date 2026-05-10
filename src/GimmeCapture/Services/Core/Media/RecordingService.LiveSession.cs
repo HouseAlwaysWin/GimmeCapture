@@ -15,6 +15,7 @@ public partial class RecordingService
         if (!FFmpegRuntime.IsInitialized)
         {
             Debug.WriteLine("[RecordingService] FFmpeg native runtime not initialized.");
+            LastStartError = "FFmpeg native runtime not initialized.";
             return false;
         }
 
@@ -32,9 +33,12 @@ public partial class RecordingService
 
             var ok = await _nativeRecorder.StartAsync(segmentFile, x, y, w, h, _fps, _includeCursor, useH265)
                 .ConfigureAwait(false);
+            LastStartWarning = _nativeRecorder.LastWarningMessage ?? string.Empty;
+            _lastSelectedVideoEncoderName = _nativeRecorder.SelectedEncoderName ?? string.Empty;
             if (!ok)
             {
-                Debug.WriteLine("[RecordingService] Native gdigrab session reported failure.");
+                LastStartError = _nativeRecorder.LastErrorMessage ?? "Native gdigrab session reported failure.";
+                Debug.WriteLine($"[RecordingService] Native gdigrab session reported failure: {LastStartError}");
                 _nativeRecorder.Dispose();
                 _nativeRecorder = null;
                 State = RecordingState.Idle;
@@ -46,6 +50,7 @@ public partial class RecordingService
         }
         catch (Exception ex)
         {
+            LastStartError = ex.Message;
             Debug.WriteLine($"[RecordingService] Native recorder start failed: {ex.Message}");
             _nativeRecorder?.Dispose();
             _nativeRecorder = null;

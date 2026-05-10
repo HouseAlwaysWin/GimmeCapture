@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using FFmpeg.AutoGen;
@@ -15,11 +16,17 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
     private Task<bool>? _worker;
 
     public Task<bool>? Worker => _worker;
+    public string? LastErrorMessage { get; private set; }
+    public string? LastWarningMessage { get; private set; }
+    public string? SelectedEncoderName { get; private set; }
 
     public Task<bool> StartAsync(string outputPath, int offsetX, int offsetY, int width, int height, int fps, bool drawMouse, bool useH265)
     {
         FFmpegRuntime.EnsureInitialized();
         LogNative($"StartAsync requested: out={outputPath}, x={offsetX}, y={offsetY}, w={width}, h={height}, fps={fps}, drawMouse={drawMouse}, useH265={useH265}");
+        LastErrorMessage = null;
+        LastWarningMessage = null;
+        SelectedEncoderName = null;
         try
         {
             _cts?.Cancel();
@@ -55,6 +62,7 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
             }
             catch (Exception ex)
             {
+                LastErrorMessage = ex.Message;
                 Debug.WriteLine($"[LibavGdigrab] {ex}");
                 LogNative($"Worker exception: {ex}");
                 firstFrameTcs.TrySetException(ex);
@@ -108,7 +116,7 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
         }
     }
 
-    private static unsafe void RunTranscode(
+    private unsafe void RunTranscode(
         string outputPath,
         int offsetX,
         int offsetY,
@@ -181,30 +189,26 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
             ThrowIfErr(ffmpeg.avcodec_parameters_to_context(decCtx, inPar), "parameters_to_context(dec)");
             ThrowIfErr(ffmpeg.avcodec_open2(decCtx, dec, null), "avcodec_open2(dec)");
 
-            string encName = useH265 ? "libx265" : "libx264";
-
-            AVCodec* enc = ffmpeg.avcodec_find_encoder_by_name(encName);
-            if (enc == null)
+            encCtx = OpenRecordingEncoderContext(
+                useH265,
+                width,
+                height,
+                fps,
+                &encOpts,
+                out string encName,
+                out string? warningMessage);
+            if (encCtx == null)
             {
-                throw new InvalidOperationException($"Encoder '{encName}' unavailable.");
+                throw new InvalidOperationException("No compatible video encoder available for recording.");
             }
 
-            encCtx = ffmpeg.avcodec_alloc_context3(enc);
-            encCtx->codec_id = enc->id;
-            encCtx->width = decCtx->width > 0 ? decCtx->width : width;
-            encCtx->height = decCtx->height > 0 ? decCtx->height : height;
-            encCtx->pix_fmt = AVPixelFormat.AV_PIX_FMT_YUV420P;
-            encCtx->time_base = new AVRational { num = 1, den = fps };
-            encCtx->framerate = new AVRational { num = fps, den = 1 };
-            encCtx->gop_size = fps * 2;
-            encCtx->max_b_frames = 0;
-            encCtx->flags |= ffmpeg.AV_CODEC_FLAG_GLOBAL_HEADER;
-
-            ffmpeg.av_dict_set(&encOpts, "preset", "ultrafast", 0);
-            ffmpeg.av_dict_set(&encOpts, "tune", "zerolatency", 0);
-            ffmpeg.av_dict_set(&encOpts, "crf", "23", 0);
-
-            ThrowIfErr(ffmpeg.avcodec_open2(encCtx, enc, &encOpts), "avcodec_open2(enc)");
+            SelectedEncoderName = encName;
+            LastWarningMessage = warningMessage;
+            if (!string.IsNullOrWhiteSpace(warningMessage))
+            {
+                LogNative(warningMessage);
+            }
+            LogNative($"Selected encoder: {encName}");
 
             ThrowIfErr(
                 ffmpeg.avformat_alloc_output_context2(&outputFmt, null, "matroska", outputPath),
@@ -441,6 +445,172 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
         {
             ffmpeg.av_frame_free(frame);
         }
+    }
+
+    private static unsafe AVCodecContext* OpenRecordingEncoderContext(
+        bool preferH265,
+        int width,
+        int height,
+        int fps,
+        AVDictionary** encOpts,
+        out string selectedEncoderName,
+        out string? warningMessage)
+    {
+        string[] preferredNames = preferH265
+            ? ["libx265", "hevc_mf", "libx264", "libopenh264", "mpeg4", "h264_mf"]
+            : ["libx264", "libopenh264", "mpeg4", "h264_mf"];
+
+        selectedEncoderName = preferH265 ? "libx265" : "libx264";
+        warningMessage = null;
+        string requestedEncoderName = selectedEncoderName;
+        string? lastOpenError = null;
+        bool foundRequestedEncoder = false;
+
+        foreach (string candidateName in preferredNames)
+        {
+            AVCodec* candidate = ffmpeg.avcodec_find_encoder_by_name(candidateName);
+            if (candidate == null)
+            {
+                LogNative($"Encoder candidate unavailable: {candidateName}");
+                continue;
+            }
+
+            if (candidateName == requestedEncoderName)
+            {
+                foundRequestedEncoder = true;
+            }
+
+            AVCodecContext* candidateCtx = ffmpeg.avcodec_alloc_context3(candidate);
+            if (candidateCtx == null)
+            {
+                LogNative($"Encoder candidate alloc failed: {candidateName}");
+                continue;
+            }
+
+            AVDictionary* candidateOpts = null;
+            try
+            {
+                ConfigureEncoderContext(candidateCtx, candidate, candidateName, width, height, fps, &candidateOpts);
+                int openResult = ffmpeg.avcodec_open2(candidateCtx, candidate, &candidateOpts);
+                if (openResult >= 0)
+                {
+                    AVCodecContext* openedCtx = candidateCtx;
+                    if (encOpts != null)
+                    {
+                        *encOpts = candidateOpts;
+                    }
+                    candidateCtx = null;
+                    candidateOpts = null;
+
+                    selectedEncoderName = candidateName;
+                    if (preferH265 && candidateName != requestedEncoderName)
+                    {
+                        warningMessage = $"Encoder '{requestedEncoderName}' unavailable. Falling back to '{candidateName}'.";
+                    }
+
+                    return openedCtx;
+                }
+
+                lastOpenError = $"{candidateName}: {FFmpegErrors.Describe(openResult)} ({openResult})";
+                LogNative($"Encoder candidate open failed: {lastOpenError}");
+            }
+            finally
+            {
+                if (candidateOpts != null)
+                {
+                    ffmpeg.av_dict_free(&candidateOpts);
+                }
+
+                if (candidateCtx != null)
+                {
+                    ffmpeg.avcodec_free_context(&candidateCtx);
+                }
+            }
+        }
+
+        if (!foundRequestedEncoder)
+        {
+            throw new InvalidOperationException($"Encoder '{requestedEncoderName}' unavailable.");
+        }
+
+        throw new InvalidOperationException($"No compatible video encoder available. Last error: {lastOpenError ?? "unknown"}");
+    }
+
+    private static unsafe string GetCodecName(AVCodec* codec)
+    {
+        if (codec == null || codec->name == null)
+        {
+            return string.Empty;
+        }
+
+        return Marshal.PtrToStringAnsi((nint)codec->name) ?? string.Empty;
+    }
+
+    private static unsafe void ConfigureEncoderContext(
+        AVCodecContext* encCtx,
+        AVCodec* enc,
+        string encoderName,
+        int width,
+        int height,
+        int fps,
+        AVDictionary** encOpts)
+    {
+        encCtx->codec_id = enc->id;
+        encCtx->width = width;
+        encCtx->height = height;
+        encCtx->pix_fmt = ChooseEncoderPixelFormat(enc, encoderName);
+        encCtx->time_base = new AVRational { num = 1, den = fps };
+        encCtx->framerate = new AVRational { num = fps, den = 1 };
+        encCtx->gop_size = fps * 2;
+        encCtx->max_b_frames = 0;
+        encCtx->flags |= ffmpeg.AV_CODEC_FLAG_GLOBAL_HEADER;
+
+        if (string.Equals(encoderName, "libx264", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(encoderName, "libx265", StringComparison.OrdinalIgnoreCase))
+        {
+            ffmpeg.av_dict_set(encOpts, "preset", "ultrafast", 0);
+            ffmpeg.av_dict_set(encOpts, "tune", "zerolatency", 0);
+            ffmpeg.av_dict_set(encOpts, "crf", "23", 0);
+            return;
+        }
+
+        long targetBitrate = Math.Clamp((long)width * height * Math.Max(fps, 1) / 8, 800_000L, 16_000_000L);
+        encCtx->bit_rate = targetBitrate;
+    }
+
+    private static unsafe AVPixelFormat ChooseEncoderPixelFormat(AVCodec* enc, string encoderName)
+    {
+        AVPixelFormat[] preferredFormats = IsHardwareOrMediaFoundationEncoder(encoderName)
+            ? [AVPixelFormat.AV_PIX_FMT_NV12, AVPixelFormat.AV_PIX_FMT_YUV420P, AVPixelFormat.AV_PIX_FMT_P010LE]
+            : [AVPixelFormat.AV_PIX_FMT_YUV420P, AVPixelFormat.AV_PIX_FMT_NV12];
+
+        if (enc->pix_fmts == null)
+        {
+            return preferredFormats[0];
+        }
+
+        for (int i = 0; enc->pix_fmts[i] != AVPixelFormat.AV_PIX_FMT_NONE; i++)
+        {
+            foreach (var preferredFormat in preferredFormats)
+            {
+                if (enc->pix_fmts[i] == preferredFormat)
+                {
+                    return preferredFormat;
+                }
+            }
+        }
+
+        return enc->pix_fmts[0];
+    }
+
+    private static bool IsHardwareOrMediaFoundationEncoder(string encoderName)
+    {
+        return encoderName.Contains("_mf", StringComparison.OrdinalIgnoreCase)
+            || encoderName.Contains("_nvenc", StringComparison.OrdinalIgnoreCase)
+            || encoderName.Contains("_qsv", StringComparison.OrdinalIgnoreCase)
+            || encoderName.Contains("_amf", StringComparison.OrdinalIgnoreCase)
+            || encoderName.Contains("_vaapi", StringComparison.OrdinalIgnoreCase)
+            || encoderName.Contains("_d3d12va", StringComparison.OrdinalIgnoreCase);
     }
 
     private static void ThrowIfErr(int err, string ctx)

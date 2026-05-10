@@ -129,8 +129,8 @@ public partial class SnipWindow : Window
     private const uint GA_ROOT = 2;
 
     /// <summary>
-    /// Low-level keyboard hook is process-global. Only interpret shortcuts when this Snip window (or a child control)
-    /// owns foreground focus — otherwise keys belong to apps below hit-test passthrough regions (e.g. typing in a browser field).
+    /// Low-level keyboard hook is process-global. Foreground ownership is still the default gate.
+    /// A separate, narrower unfocused path is used for capture-flow shortcuts while the overlay is active.
     /// </summary>
     private bool ShouldRouteLowLevelHotkeysForForegroundWindow()
     {
@@ -169,11 +169,11 @@ public partial class SnipWindow : Window
 
             if ((isKeyDown || isKeyUp) && keyStr != "Unknown")
             {
-                // We route the parsed key directly to the translation mode logic.
+                // Route the parsed key through the low-level hotkey dispatcher.
                 bool handled = HandleGlobalKeyboardEvent(keyStr, vkCode, isKeyDown);
                 
                 // If the key is a modifier (Shift/Ctrl/Alt), we NEVER swallow it globally to avoid breaking typing elsewhere.
-                // If it is an action hotkey matching our translation mode, we SWALLOW it (return 1) so it doesn't trigger in apps below.
+                // If it matched one of our global capture handlers, we swallow it so it does not trigger apps underneath.
                 if (handled && !IsPureModifierKey(keyStr))
                 {
                     return new IntPtr(1); // Consume the key
@@ -214,25 +214,170 @@ public partial class SnipWindow : Window
         return "Unknown";
     }
 
+    private bool CanHandleUnfocusedCaptureHotkeys()
+    {
+        if (_viewModel == null) return false;
+        if (_viewModel.IsTranslationMode || _viewModel.IsEnteringText || _viewModel.IsInputFocused || _viewModel.IsRecordingFinalizing)
+            return false;
+
+        if (_pointerState != PointerInteractionState.None)
+            return false;
+
+        return _viewModel.CurrentState == SnipState.Detecting
+            || _viewModel.CurrentState == SnipState.Selecting
+            || _viewModel.CurrentState == SnipState.Selected
+            || _viewModel.RecState != RecordingState.Idle;
+    }
+
+    private static bool IsSafeUnfocusedCaptureHotkey(string hotkey)
+    {
+        if (string.IsNullOrWhiteSpace(hotkey))
+            return false;
+
+        var parts = hotkey.Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length == 0)
+            return false;
+
+        string keyPart = parts[^1];
+        if (keyPart.StartsWith("F", StringComparison.OrdinalIgnoreCase)
+            && int.TryParse(keyPart[1..], out int functionKey)
+            && functionKey is >= 1 and <= 24)
+        {
+            return true;
+        }
+
+        return string.Equals(keyPart, "Escape", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(keyPart, "Esc", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(keyPart, "PrintScreen", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(keyPart, "PrtSc", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool MatchesUnfocusedCaptureHotkey(string hotkey, Func<string, bool> isMatch)
+    {
+        return !string.IsNullOrWhiteSpace(hotkey)
+            && IsSafeUnfocusedCaptureHotkey(hotkey)
+            && isMatch(hotkey);
+    }
+
+    private void PostHandleDismissOrCloseHotkey()
+    {
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            var vm = _viewModel;
+            if (vm == null) return;
+
+            if (vm.IsEnteringText)
+            {
+                vm.CancelTextEntryCommand.Execute(System.Reactive.Unit.Default).Subscribe();
+                return;
+            }
+
+            if (vm.RecState != RecordingState.Idle)
+            {
+                return;
+            }
+
+            if (vm.IsDrawingMode)
+            {
+                vm.IsDrawingMode = false;
+                return;
+            }
+
+            if (vm.CurrentState == SnipState.Selecting || vm.CurrentState == SnipState.Selected)
+            {
+                vm.CurrentState = SnipState.Detecting;
+                vm.SelectionRect = new Rect(0, 0, 0, 0);
+                return;
+            }
+
+            Close();
+        }, Avalonia.Threading.DispatcherPriority.Input);
+    }
+
+    private bool TryHandleUnfocusedCaptureHotkey(Func<string, bool> isMatch)
+    {
+        if (_viewModel == null) return false;
+
+        if (MatchesUnfocusedCaptureHotkey(_viewModel.CloseHotkey, isMatch))
+        {
+            PostHandleDismissOrCloseHotkey();
+            return true;
+        }
+
+        if (MatchesUnfocusedCaptureHotkey(_viewModel.ActiveToolbarHotkey, isMatch))
+        {
+            Avalonia.Threading.Dispatcher.UIThread.Post(
+                () => _viewModel?.ToggleToolbarCommand?.Execute().Subscribe(),
+                Avalonia.Threading.DispatcherPriority.Input);
+            return true;
+        }
+
+        if (MatchesUnfocusedCaptureHotkey(_viewModel.ActiveActionHotkey, isMatch))
+        {
+            Avalonia.Threading.Dispatcher.UIThread.Post(
+                () => _viewModel?.HandleActiveActionHotkeyCommand?.Execute().Subscribe(),
+                Avalonia.Threading.DispatcherPriority.Input);
+            return true;
+        }
+
+        if (MatchesUnfocusedCaptureHotkey(_viewModel.FullscreenSelectHotkey, isMatch))
+        {
+            Avalonia.Threading.Dispatcher.UIThread.Post(
+                () => _viewModel?.SelectFullscreenCommand?.Execute().Subscribe(),
+                Avalonia.Threading.DispatcherPriority.Input);
+            return true;
+        }
+
+        if (MatchesUnfocusedCaptureHotkey(_viewModel.SwitchToSnipHotkey, isMatch))
+        {
+            Avalonia.Threading.Dispatcher.UIThread.Post(
+                () => _viewModel?.SwitchToSnipCommand?.Execute().Subscribe(),
+                Avalonia.Threading.DispatcherPriority.Input);
+            return true;
+        }
+
+        if (MatchesUnfocusedCaptureHotkey(_viewModel.SwitchToRecordHotkey, isMatch))
+        {
+            Avalonia.Threading.Dispatcher.UIThread.Post(
+                () => _viewModel?.SwitchToRecordCommand?.Execute().Subscribe(),
+                Avalonia.Threading.DispatcherPriority.Input);
+            return true;
+        }
+
+        if (MatchesUnfocusedCaptureHotkey(_viewModel.SwitchToTranslateHotkey, isMatch))
+        {
+            Avalonia.Threading.Dispatcher.UIThread.Post(
+                () => _viewModel?.SwitchToTranslateCommand?.Execute().Subscribe(),
+                Avalonia.Threading.DispatcherPriority.Input);
+            return true;
+        }
+
+        return false;
+    }
+
     private bool HandleGlobalKeyboardEvent(string keyStr, int vkCode, bool isKeyDown)
     {
         if (_viewModel == null) return false;
 
+        bool ownsForeground = ShouldRouteLowLevelHotkeysForForegroundWindow();
         bool isCtrlModifierEvent = IsPureModifierKey(keyStr) && string.Equals(keyStr, "Ctrl", StringComparison.OrdinalIgnoreCase);
         bool allowGlobalCtrlSelectionModifier =
             _viewModel.IsTranslationMode &&
             isCtrlModifierEvent &&
             string.Equals(_viewModel.TranslationSelectionHoldModifier, "Ctrl", StringComparison.OrdinalIgnoreCase);
+        bool allowUnfocusedCaptureHotkeys =
+            !_viewModel.IsTranslationMode &&
+            !ownsForeground &&
+            CanHandleUnfocusedCaptureHotkeys();
 
-        if (!allowGlobalCtrlSelectionModifier && !ShouldRouteLowLevelHotkeysForForegroundWindow())
+        if (!allowGlobalCtrlSelectionModifier && !ownsForeground && !allowUnfocusedCaptureHotkeys)
         {
             return false;
         }
 
-        // Prevent duplicate hotkey handling in screenshot/recording mode.
-        // Those modes already process shortcuts via normal window KeyDown routing.
-        // Keep LL hook hotkeys for translation mode only.
-        if (!_viewModel.IsTranslationMode)
+        // Prevent duplicate handling when the Snip window already has foreground focus.
+        // Screenshot/recording mode only uses the LL hook for the narrow unfocused capture-flow path.
+        if (!_viewModel.IsTranslationMode && !allowUnfocusedCaptureHotkeys)
         {
             return false;
         }
@@ -244,39 +389,7 @@ public partial class SnipWindow : Window
         // Escape is handled even when a text control is focused (cancel entry / dismiss selection / close).
         if (isKeyDown && string.Equals(keyStr, "Escape", StringComparison.OrdinalIgnoreCase))
         {
-            var vmEsc = _viewModel;
-            if (vmEsc.IsEnteringText)
-            {
-                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                {
-                    vmEsc.CancelTextEntryCommand.Execute(System.Reactive.Unit.Default).Subscribe();
-                });
-                return true;
-            }
-
-            if (vmEsc.RecState != RecordingState.Idle)
-            {
-                return true;
-            }
-
-            if (vmEsc.IsDrawingMode)
-            {
-                Avalonia.Threading.Dispatcher.UIThread.Post(() => { vmEsc.IsDrawingMode = false; });
-                return true;
-            }
-
-            if (vmEsc.CurrentState == SnipState.Selecting ||
-                vmEsc.CurrentState == SnipState.Selected)
-            {
-                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                {
-                    vmEsc.CurrentState = SnipState.Detecting;
-                    vmEsc.SelectionRect = new Rect(0, 0, 0, 0);
-                });
-                return true;
-            }
-
-            Avalonia.Threading.Dispatcher.UIThread.Post(() => this.Close());
+            PostHandleDismissOrCloseHotkey();
             return true;
         }
 
@@ -378,6 +491,11 @@ public partial class SnipWindow : Window
             }
 
             return false;
+        }
+
+        if (!_viewModel.IsTranslationMode)
+        {
+            return TryHandleUnfocusedCaptureHotkey(IsMatch);
         }
 
         // 1. General Window Hotkeys

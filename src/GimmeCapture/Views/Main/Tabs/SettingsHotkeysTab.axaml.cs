@@ -15,6 +15,7 @@ public partial class SettingsHotkeysTab : UserControl
     {
         InitializeComponent();
         AttachedToVisualTree += OnAttachedToVisualTree;
+        DetachedFromVisualTree += OnDetachedFromVisualTree;
     }
 
     private void OnAttachedToVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
@@ -117,5 +118,10 @@ public partial class SettingsHotkeysTab : UserControl
         }
 
         e.Handled = true;
+    }
+
+    private void OnDetachedFromVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
+    {
+        EnsureResumed();
     }
 }

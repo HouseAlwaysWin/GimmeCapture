@@ -35,6 +35,7 @@ public partial class RecordingService : ReactiveObject
     private WasapiLoopbackCapture? _audioCapture;
     private WaveFileWriter? _audioWriter;
     private int _startInProgress;
+    private string _lastSelectedVideoEncoderName = string.Empty;
 
     public RecordingState State
     {
@@ -44,6 +45,9 @@ public partial class RecordingService : ReactiveObject
 
     public string? OutputFilePath => _outputFile;
     public string? LastRecordingPath => string.IsNullOrEmpty(_outputFile) ? null : _outputFile;
+    public string LastStartError { get; private set; } = string.Empty;
+    public string LastStartWarning { get; private set; } = string.Empty;
+    public string LastSelectedVideoEncoderName => _lastSelectedVideoEncoderName;
     public void ClearLastRecording() { _outputFile = string.Empty; }
     
     public long GetCurrentRecordingSizeBytes()
@@ -115,12 +119,18 @@ public partial class RecordingService : ReactiveObject
         if (Interlocked.Exchange(ref _startInProgress, 1) == 1) return false;
         try
         {
+        LastStartError = string.Empty;
+        LastStartWarning = string.Empty;
+        _lastSelectedVideoEncoderName = string.Empty;
         if (State != RecordingState.Idle) return false;
         if (!FFmpegRuntime.IsInitialized)
         {
-            FFmpegRuntime.TryInitialize(out _);
+            FFmpegRuntime.TryInitialize(out var initError);
             if (!FFmpegRuntime.IsInitialized)
+            {
+                LastStartError = initError ?? "FFmpeg native runtime not initialized.";
                 return false;
+            }
         }
 
         _region = region;
