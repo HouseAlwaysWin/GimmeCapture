@@ -273,9 +273,9 @@ public partial class FloatingVideoViewModel
         var startSeconds = Math.Max(0, _currentTime.TotalSeconds);
         try
         {
-            if (string.Equals(Path.GetExtension(VideoPath), ".webm", StringComparison.OrdinalIgnoreCase))
+            if (ShouldUseDecodedAudioPlayback())
             {
-                StartDecodedAudioPlayback(startSeconds);
+                StartDecodedAudioPlayback(startSeconds, _playbackSpeed);
                 return;
             }
 
@@ -292,7 +292,7 @@ public partial class FloatingVideoViewModel
 
             try
             {
-                StartDecodedAudioPlayback(startSeconds);
+                StartDecodedAudioPlayback(startSeconds, _playbackSpeed);
             }
             catch (Exception fallbackEx)
             {
@@ -302,7 +302,13 @@ public partial class FloatingVideoViewModel
         }
     }
 
-    private void StartDecodedAudioPlayback(double startSeconds)
+    private bool ShouldUseDecodedAudioPlayback()
+    {
+        return string.Equals(Path.GetExtension(VideoPath), ".webm", StringComparison.OrdinalIgnoreCase)
+            || Math.Abs(_playbackSpeed - 1.0) > 0.01;
+    }
+
+    private void StartDecodedAudioPlayback(double startSeconds, double playbackSpeed)
     {
         var decoded = LibavPinAudioPcmDecoder.Decode(VideoPath, startSeconds);
         if (decoded.PcmBytes.Length == 0)
@@ -310,9 +316,23 @@ public partial class FloatingVideoViewModel
             throw new InvalidOperationException("Decoded PCM is empty.");
         }
 
-        _audioPlaybackStream = new RawSourceWaveStream(new MemoryStream(decoded.PcmBytes, writable: false), decoded.WaveFormat);
+        var playbackWaveFormat = CreatePlaybackWaveFormat(decoded.WaveFormat, playbackSpeed);
+        _audioPlaybackStream = new RawSourceWaveStream(new MemoryStream(decoded.PcmBytes, writable: false), playbackWaveFormat);
         _pinAudioPlayer = CreatePinAudioOutput(_audioPlaybackStream);
         _pinAudioPlayer.Play();
+    }
+
+    private static WaveFormat CreatePlaybackWaveFormat(WaveFormat sourceFormat, double playbackSpeed)
+    {
+        double safeSpeed = Math.Clamp(playbackSpeed, 0.25, 4.0);
+        if (Math.Abs(safeSpeed - 1.0) < 0.01)
+        {
+            return sourceFormat;
+        }
+
+        int adjustedSampleRate = (int)Math.Round(sourceFormat.SampleRate * safeSpeed);
+        adjustedSampleRate = Math.Clamp(adjustedSampleRate, 8_000, 192_000);
+        return new WaveFormat(adjustedSampleRate, sourceFormat.BitsPerSample, sourceFormat.Channels);
     }
 
     private static IWavePlayer CreatePinAudioOutput(WaveStream stream)
