@@ -268,15 +268,14 @@ public partial class RecordingService
         try
         {
             string aacPath = Path.Combine(_tempDir, "merged_audio.m4a");
-            using var reader = new AudioFileReader(mergedAudio);
-            MediaFoundationEncoder.EncodeToAac(reader, aacPath);
-            await Task.CompletedTask;
+            var quality = _settingsService?.Settings.VideoQuality ?? VideoQuality.Medium;
+            await Task.Run(() => LibavAacTranscoder.EncodeWavToM4a(mergedAudio, aacPath, quality));
             return aacPath;
         }
         catch (Exception ex)
         {
-            LogToFile($"[Finalize] AAC transcode failed; fallback original audio: {ex.Message}");
-            return mergedAudio;
+            LogToFile($"[Finalize] AAC transcode failed; using video-only MP4 fallback: {ex.Message}");
+            return null;
         }
     }
 
