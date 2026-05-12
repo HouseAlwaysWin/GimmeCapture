@@ -26,6 +26,7 @@ public abstract class FloatingWindowBase : Window
 {
     private FloatingWindowViewModelBase? _boundViewModel;
     private PropertyChangedEventHandler? _boundViewModelPropertyChangedHandler;
+    private bool _suppressWindowSizeSync;
 
     // Resize State
     protected bool _isResizing;
@@ -117,6 +118,11 @@ public abstract class FloatingWindowBase : Window
                     ev.PropertyName == nameof(FloatingWindowViewModelBase.DisplayWidth) ||
                     ev.PropertyName == nameof(FloatingWindowViewModelBase.DisplayHeight))
                 {
+                    if (_suppressWindowSizeSync || _isResizing)
+                    {
+                        return;
+                    }
+
                     SyncWindowSizeToContent();
                 }
             };
@@ -571,7 +577,8 @@ public abstract class FloatingWindowBase : Window
                     contentH -= deltaHeight;
             }
 
-            // Update ViewModel
+            // Update ViewModel without re-entering SyncWindowSizeToContent on every pointer move.
+            _suppressWindowSizeSync = true;
             vm.DisplayWidth = Math.Max(1, contentW);
             vm.DisplayHeight = Math.Max(1, contentH);
 
@@ -582,7 +589,7 @@ public abstract class FloatingWindowBase : Window
             double targetWindowW = vm.DisplayWidth + hPad;
             double targetWindowH = vm.DisplayHeight + vPad;
 
-            MinWidth = vm.ShowToolbar ? (380 + hPad) : 50;
+            MinWidth = vm.ShowToolbar ? (480 + hPad) : 50;
             MinHeight = vm.ShowToolbar ? (150 + vPad) : 50;
 
             Width = Math.Max(targetWindowW, MinWidth);
@@ -609,6 +616,10 @@ public abstract class FloatingWindowBase : Window
         catch (Exception)
         {
             // Suppress invalid resize calcs
+        }
+        finally
+        {
+            _suppressWindowSizeSync = false;
         }
     }
 

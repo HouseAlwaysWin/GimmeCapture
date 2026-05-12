@@ -438,7 +438,6 @@ public partial class FloatingVideoViewModel
                     Marshal.Copy(frameData, 0, lockedBitmap.Address, frameData.Length);
                 }
 
-                this.RaisePropertyChanged(nameof(VideoBitmap));
                 RequestRedraw?.Invoke();
                 Interlocked.Exchange(ref _lastFrameUiPostTimestampMs, Environment.TickCount64);
             }
