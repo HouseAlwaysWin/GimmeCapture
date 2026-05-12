@@ -105,7 +105,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         _ => string.Empty
     };
 
-    public string ActiveActionHotkey => CurrentMode == SnipMode.Translation ? (_mainVm?.Translate_Action ?? "Enter") : (CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Action ?? "Enter") : (_mainVm?.Snip_Pin ?? "Enter"));
+    public string ActiveActionHotkey => CurrentMode == SnipMode.Translation ? (_mainVm?.Translate_Action ?? "Shift+Enter") : (CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Action ?? "Shift+Enter") : (_mainVm?.Snip_Pin ?? "Shift+Enter"));
     public string ActiveToolbarHotkey => CurrentMode == SnipMode.Translation ? (_mainVm?.Translate_Toolbar ?? "F4") : (CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Toolbar ?? "F4") : (_mainVm?.Snip_Toolbar ?? "F4"));
     public string ActivePlaybackHotkey => _mainVm?.Record_Playback ?? "Space";
     public string RemoveBackgroundHotkey => _mainVm?.Snip_RemoveBackground ?? "Shift+R";

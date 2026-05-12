@@ -69,6 +69,23 @@ public class HotkeyServiceTests
     }
 
     [Fact]
+    public void Register_WithShiftEnter_RegistersShiftAndEnter()
+    {
+        // Arrange
+        var service = new TestableHotkeyService();
+        service.SetHandle(new IntPtr(1234));
+
+        // Act
+        service.Register(4, "Shift+Enter");
+
+        // Assert
+        Assert.Equal(1, service.RegCallCount);
+        Assert.Equal(4, service.RegHistory[0].id);
+        Assert.Equal(0x0004u, service.RegHistory[0].mods); // MOD_SHIFT
+        Assert.Equal(0x0Du, service.RegHistory[0].vkey);   // Enter
+    }
+
+    [Fact]
     public void Register_WhenNativeRegistrationFails_RaisesFailureCallback()
     {
         // Arrange

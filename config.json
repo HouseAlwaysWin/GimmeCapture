@@ -17,7 +17,16 @@
   "UseFixedRecordPath": false,
   "SnipHotkey": "Shift+F1",
   "CopyHotkey": "Ctrl\u002BC",
-  "PinHotkey": "Enter",
+  "PinHotkey": "Shift+Enter",
   "RecordHotkey": "Shift+F2",
-  "TranslateHotkey": "Shift+F3"
+  "TranslateHotkey": "Shift+F3",
+  "Snip": {
+    "Pin": "Shift+Enter"
+  },
+  "Record": {
+    "Action": "Shift+Enter"
+  },
+  "Translate": {
+    "Action": "Shift+Enter"
+  }
 }

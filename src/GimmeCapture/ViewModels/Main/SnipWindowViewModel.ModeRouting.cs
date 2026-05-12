@@ -278,7 +278,7 @@ public partial class SnipWindowViewModel
         else if (AutoActionMode == 3) // Record mode entry, do NOT auto-start
         {
              if (CurrentMode != SnipMode.Recording) CurrentMode = SnipMode.Recording;
-             // USER REQUEST: Selection only, record manually or via Enter
+             // USER REQUEST: Selection only, record manually or via Shift+Enter
         }
     }
 
@@ -483,7 +483,7 @@ public partial class SnipWindowViewModel
             }
         }, nameof(HandleRecordingModeHotkeyCommand), canExecuteHotkeys);
 
-        // Enter: current-mode action key
+        // Shift+Enter: current-mode action key for screenshot/record/translation.
         // F1/F2/F3 are reserved for Screenshot/Record/Translate mode switching while selecting.
         HandleActiveActionHotkeyCommand = CreateCommand(HandleActiveActionHotkey, nameof(HandleActiveActionHotkeyCommand), canExecuteHotkeys);
 

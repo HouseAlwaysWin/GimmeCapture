@@ -424,7 +424,7 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
 
     // Hotkeys (Virtual to allow overriding or service-based values)
     public virtual string CopyHotkey => "Ctrl+C";
-    public virtual string PinHotkey => "Enter";
+    public virtual string PinHotkey => "Shift+Enter";
     public virtual string UndoHotkey => "Ctrl+Z";
     public virtual string RedoHotkey => "Ctrl+Y";
     public virtual string ClearHotkey => "Delete";
