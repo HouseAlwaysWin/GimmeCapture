@@ -214,18 +214,9 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     public Action? SaveAction { get; set; }
     public Action? FocusWindowAction { get; set; }
     public Action<Avalonia.Media.Imaging.Bitmap, Rect, Color, double, bool, bool, string?, double>? OpenPinWindowAction { get; set; }
+    public Action<string, int, int, double, double, Color, double, bool, bool>? OpenPinnedVideoWindowAction { get; set; }
     public Func<Task<string?>>? PickSaveFileAction { get; set; }
-
-    public static class StaticData
-    {
-        public static Color[] ColorsList { get; } = new[]
-        {
-            Colors.Red, Colors.Green, Colors.Blue, 
-            Colors.Yellow, Colors.Cyan, Colors.Magenta,
-            Colors.White, Colors.Black, Colors.Gray
-        };
-    }
-    public IEnumerable<Color> PresetColors => StaticData.ColorsList;
+    public IEnumerable<Color> PresetColors => PresetColorPalette.DefaultColors;
 
     public OCRLanguage SourceLanguage
     {
@@ -641,6 +632,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         OpenRecordingProgressWindowAction = null;
         CloseRecordingProgressWindowAction = null;
         FocusWindowAction = null;
+        OpenPinnedVideoWindowAction = null;
         PickSaveFileAction = null;
     }
 }

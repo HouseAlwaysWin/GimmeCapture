@@ -447,6 +447,33 @@ public partial class SnipWindow : Window
                  return file?.Path.LocalPath;
             };
 
+            _viewModel.OpenPinnedVideoWindowAction = (recordingPath, pixelWidth, pixelHeight, originalWidth, originalHeight, color, thickness, hideDecoration, hideBorder) =>
+            {
+                var vm = new FloatingVideoViewModel(
+                    recordingPath,
+                    string.Empty,
+                    pixelWidth,
+                    pixelHeight,
+                    originalWidth,
+                    originalHeight,
+                    color,
+                    thickness,
+                    hideDecoration,
+                    hideBorder,
+                    _clipboardService,
+                    _viewModel.MainVm?.AppSettingsService);
+
+                var padding = vm.WindowPadding;
+                var window = new FloatingVideoWindow
+                {
+                    DataContext = vm,
+                    Width = originalWidth + padding.Left + padding.Right,
+                    Height = originalHeight + padding.Top + padding.Bottom,
+                    WindowStartupLocation = WindowStartupLocation.CenterScreen
+                };
+                window.Show();
+            };
+
             _viewModel.OpenPinWindowAction = (bitmap, rect, color, thickness, runAI, initialInteractive, pinnedText, inferredFontSize) =>
             {
                 // Use settings directly from MainVm to ensure consistency

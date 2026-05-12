@@ -35,7 +35,7 @@ public partial class SettingsHotkeysTab : UserControl
             .Cast<string>()
             .ToList();
 
-        var unknown = vm.HotkeyMappingService.ValidateTags(tags);
+        var unknown = vm.HotkeyMappingService.ValidateTags(tags, vm);
         if (unknown.Count > 0)
         {
             System.Diagnostics.Debug.WriteLine($"[SettingsHotkeysTab] Unknown hotkey tags: {string.Join(", ", unknown)}");

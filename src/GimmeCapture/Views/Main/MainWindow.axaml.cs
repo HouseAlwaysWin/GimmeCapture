@@ -1,6 +1,7 @@
 using System;
 using Avalonia.Controls;
 using Avalonia;
+using GimmeCapture.Models;
 using GimmeCapture.ViewModels.Main;
 using GimmeCapture.Views.Dialogs;
 using GimmeCapture.Views.Main;
@@ -155,7 +156,12 @@ public partial class MainWindow : Window
                 });
             };
 
-            vm.RequestCaptureAction = (mode) => OpenSnipWindow(mode);
+            vm.RequestCaptureAction = OpenSnipWindow;
+            vm.GetActiveSnipViewModelAction = ResolveActiveSnipViewModel;
+            vm.ShowUpdateDialogAction = async (message, isUpdateAvailable) =>
+            {
+                return await UpdateDialog.ShowDialog(this, message, isUpdateAvailable);
+            };
 
             // Monitor Downloading Status to show/hide separate window
             vm.WhenAnyValue(x => x.IsProcessing)
@@ -164,7 +170,12 @@ public partial class MainWindow : Window
         }
     }
 
-    private void OpenSnipWindow(MainWindowViewModel.CaptureMode mode)
+    private SnipWindowViewModel? ResolveActiveSnipViewModel()
+    {
+        return _windowManager.FindWindowOfType<SnipWindow>()?.DataContext as SnipWindowViewModel;
+    }
+
+    private void OpenSnipWindow(CaptureMode mode)
     {
         if (DataContext is not MainWindowViewModel vm) return;
 
@@ -207,11 +218,11 @@ public partial class MainWindow : Window
             vm
         );
         snipVm.AutoActionMode = (int)mode;
-        if (mode == MainWindowViewModel.CaptureMode.Record)
+        if (mode == CaptureMode.Record)
         {
             snipVm.CurrentMode = SnipMode.Recording;
         }
-        else if (mode == MainWindowViewModel.CaptureMode.Translate)
+        else if (mode == CaptureMode.Translate)
         {
             snipVm.CurrentMode = SnipMode.Translation;
             snipVm.InitializeTranslationToolbarPosition();

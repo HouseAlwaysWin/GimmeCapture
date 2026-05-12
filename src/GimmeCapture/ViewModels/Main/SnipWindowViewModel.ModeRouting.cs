@@ -10,9 +10,7 @@ using System.Reactive.Linq;
 using GimmeCapture.Services.Core;
 using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Abstractions;
-using GimmeCapture.ViewModels.Floating;
 using GimmeCapture.ViewModels.Shared;
-using GimmeCapture.Views.Floating;
 
 namespace GimmeCapture.ViewModels.Main;
 
@@ -328,7 +326,11 @@ public partial class SnipWindowViewModel
         _lastGlobalHotkeyId = id;
         _lastGlobalHotkeyUtc = now;
         
-        string pressedHotkey = _mainVm.HotkeyRouterService.GetPressedHotkeyText(id, _mainVm);
+        string pressedHotkey = _mainVm.HotkeyRouterService.GetPressedHotkeyText(
+            id,
+            SnipHotkey,
+            RecordHotkey,
+            TranslateHotkey);
 
         System.Diagnostics.Debug.WriteLine($"[SnipWindowViewModel] HandleGlobalHotkey ID={id}, Pressed={pressedHotkey}, ActiveAction={ActiveActionHotkey}, ActiveToolbar={ActiveToolbarHotkey}, Mode={CurrentMode}");
 
@@ -395,23 +397,23 @@ public partial class SnipWindowViewModel
         return false;
     }
 
-    public void HandleCaptureModeRequest(MainWindowViewModel.CaptureMode mode)
+    public void HandleCaptureModeRequest(CaptureMode mode)
     {
         switch (mode)
         {
-            case MainWindowViewModel.CaptureMode.Normal:
+            case CaptureMode.Normal:
                 HandleScreenshotModeHotkeyCommand?.Execute().Subscribe();
                 break;
-            case MainWindowViewModel.CaptureMode.Record:
+            case CaptureMode.Record:
                 HandleRecordingModeHotkeyCommand?.Execute().Subscribe();
                 break;
-            case MainWindowViewModel.CaptureMode.Pin:
+            case CaptureMode.Pin:
                 HandleActiveActionHotkeyCommand?.Execute().Subscribe();
                 break;
-            case MainWindowViewModel.CaptureMode.Translate:
+            case CaptureMode.Translate:
                 SetTranslationModeCommand?.Execute().Subscribe();
                 break;
-            case MainWindowViewModel.CaptureMode.Copy:
+            case CaptureMode.Copy:
                 AutoActionMode = 1;
                 if (CurrentState == SnipState.Selected) TriggerAutoAction();
                 break;

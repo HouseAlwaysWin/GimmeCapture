@@ -7,7 +7,6 @@ using System.Reactive;
 using System.Threading.Tasks;
 using GimmeCapture.Models;
 using System.Reactive.Linq;
-using GimmeCapture.ViewModels.Main;
 using GimmeCapture.ViewModels.Shared;
 using System.Threading;
 using GimmeCapture.Services.Core.Media.NativeFFmpeg;

@@ -6,7 +6,6 @@ using System.Threading.Tasks;
 using System.Reactive;
 using System.Reactive.Linq;
 using GimmeCapture.Models;
-using GimmeCapture.Views.Dialogs;
 using GimmeCapture.Services.Core;
 
 namespace GimmeCapture.ViewModels.Main;
@@ -122,8 +121,8 @@ public partial class MainWindowViewModel
                 bool? result = await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
                 {
                     var mainWindow = _windowManager.GetMainWindow();
-                    if (mainWindow == null) return false;
-                    return await UpdateDialog.ShowDialog(mainWindow, msg, isUpdateAvailable: true);
+                    if (mainWindow == null || ShowUpdateDialogAction == null) return false;
+                    return await ShowUpdateDialogAction(msg, true);
                 });
 
                 if (result == true)
@@ -138,7 +137,7 @@ public partial class MainWindowViewModel
                 bool? readyResult = await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
                 {
                     var mainWindow = _windowManager.GetMainWindow();
-                    if (mainWindow == null) return false;
+                    if (mainWindow == null || ShowUpdateDialogAction == null) return false;
 
                     // Ensure window is visible and focused
                     if (mainWindow.WindowState == Avalonia.Controls.WindowState.Minimized)
@@ -148,7 +147,7 @@ public partial class MainWindowViewModel
                     mainWindow.Activate();
                     mainWindow.Show();
 
-                    return await UpdateDialog.ShowDialog(mainWindow, readyMsg, isUpdateAvailable: true);
+                    return await ShowUpdateDialogAction(readyMsg, true);
                 });
 
                 if (readyResult == true)
@@ -163,8 +162,10 @@ public partial class MainWindowViewModel
             {
                 SetStatus("StatusReady");
                 await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () => {
-                    var mainWindow = _windowManager.GetMainWindow();
-                    if (mainWindow != null) await UpdateDialog.ShowDialog(mainWindow, LocalizationService.Instance["NoUpdateFound"], isUpdateAvailable: false);
+                    if (ShowUpdateDialogAction != null)
+                    {
+                        await ShowUpdateDialogAction(LocalizationService.Instance["NoUpdateFound"], false);
+                    }
                 });
             }
         }

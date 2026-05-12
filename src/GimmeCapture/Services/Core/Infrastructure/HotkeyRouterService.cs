@@ -1,5 +1,5 @@
 using System;
-using GimmeCapture.ViewModels.Main;
+using GimmeCapture.Models;
 
 namespace GimmeCapture.Services.Core.Infrastructure;
 
@@ -29,21 +29,21 @@ public class HotkeyRouterService
         TranslateAll
     }
 
-    public bool TryMapGlobalHotkeyToCaptureMode(int hotkeyId, out MainWindowViewModel.CaptureMode mode)
+    public bool TryMapGlobalHotkeyToCaptureMode(int hotkeyId, out CaptureMode mode)
     {
         switch (hotkeyId)
         {
             case HotkeyIds.Snip:
-                mode = MainWindowViewModel.CaptureMode.Normal;
+                mode = CaptureMode.Normal;
                 return true;
             case HotkeyIds.Record:
-                mode = MainWindowViewModel.CaptureMode.Record;
+                mode = CaptureMode.Record;
                 return true;
             case HotkeyIds.Pin:
-                mode = MainWindowViewModel.CaptureMode.Pin;
+                mode = CaptureMode.Pin;
                 return true;
             case HotkeyIds.Translate:
-                mode = MainWindowViewModel.CaptureMode.Translate;
+                mode = CaptureMode.Translate;
                 return true;
             default:
                 mode = default;
@@ -51,13 +51,17 @@ public class HotkeyRouterService
         }
     }
 
-    public string GetPressedHotkeyText(int hotkeyId, MainWindowViewModel vm)
+    public string GetPressedHotkeyText(
+        int hotkeyId,
+        string snipHotkey,
+        string recordHotkey,
+        string translateHotkey)
     {
         return hotkeyId switch
         {
-            HotkeyIds.Snip => vm.SnipHotkey,
-            HotkeyIds.Record => vm.RecordHotkey,
-            HotkeyIds.Translate => vm.TranslateHotkey,
+            HotkeyIds.Snip => snipHotkey,
+            HotkeyIds.Record => recordHotkey,
+            HotkeyIds.Translate => translateHotkey,
             _ => string.Empty
         };
     }

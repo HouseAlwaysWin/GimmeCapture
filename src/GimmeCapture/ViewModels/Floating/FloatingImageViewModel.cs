@@ -5,11 +5,10 @@ using System.Collections.Generic;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core;
-using GimmeCapture.Services.Platforms.Desktop;
 using System.Reactive.Linq;
-using GimmeCapture.ViewModels.Main;
 using GimmeCapture.ViewModels.Shared;
 using System;
+using System.Threading.Tasks;
 
 namespace GimmeCapture.ViewModels.Floating;
 
@@ -119,9 +118,10 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
     public AIResourceService AIResourceService => _aiResourceService;
     public AIPathService AIPathService => _pathService;
     public AppSettingsService AppSettingsService => _appSettingsService;
+    public Func<string, Task<bool>>? ConfirmDialogAction { get; set; }
+    public Action<string, string>? ShowDialogAction { get; set; }
 
     private readonly IClipboardService _clipboardService;
-    private readonly IWindowManager _windowManager;
     private readonly AIResourceService _aiResourceService;
     private readonly AIPathService _pathService;
     private readonly AppSettingsService _appSettingsService = null!;
@@ -239,7 +239,6 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
         PinnedText = pinnedText;
         InferredFontSize = inferredFontSize;
         _clipboardService = clipboardService;
-        _windowManager = new AvaloniaWindowManager();
         _aiResourceService = aiResourceService;
         _pathService = pathService;
         _appSettingsService = appSettingsService;

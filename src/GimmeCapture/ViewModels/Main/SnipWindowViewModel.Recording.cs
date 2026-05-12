@@ -3,8 +3,6 @@ using GimmeCapture.Models;
 using GimmeCapture.Services.Abstractions;
 using ReactiveUI;
 using GimmeCapture.Services.Core.Infrastructure;
-using GimmeCapture.ViewModels.Floating;
-using GimmeCapture.Views.Floating;
 using System;
 using System.Threading.Tasks;
 
@@ -416,42 +414,35 @@ public partial class SnipWindowViewModel
                     return;
                 }
 
-                // Restore pinned floating window behavior for recording output.
-                try
+                var baseRect = _recordingCaptureLogicalRect ?? SelectionRect;
+                var originalWidth = Math.Max(2.0, baseRect.Width > 1 ? baseRect.Width : 640.0);
+                var originalHeight = Math.Max(2.0, baseRect.Height > 1 ? baseRect.Height : 360.0);
+                int pixelWidth = Math.Max(2, (int)Math.Round(originalWidth));
+                int pixelHeight = Math.Max(2, (int)Math.Round(originalHeight));
+                bool hideDecoration = _mainVm?.HideRecordPinDecoration ?? false;
+                bool hideBorder = _mainVm?.HideRecordPinBorder ?? false;
+
+                if (OpenPinnedVideoWindowAction != null)
                 {
-                    var baseRect = _recordingCaptureLogicalRect ?? SelectionRect;
-                    var originalWidth = Math.Max(2.0, baseRect.Width > 1 ? baseRect.Width : 640.0);
-                    var originalHeight = Math.Max(2.0, baseRect.Height > 1 ? baseRect.Height : 360.0);
-                    int pixelWidth = Math.Max(2, (int)Math.Round(originalWidth));
-                    int pixelHeight = Math.Max(2, (int)Math.Round(originalHeight));
-                    bool hideDecoration = _mainVm?.HideRecordPinDecoration ?? false;
-                    bool hideBorder = _mainVm?.HideRecordPinBorder ?? false;
-
-                    var vm = new FloatingVideoViewModel(
-                        recordingPath,
-                        string.Empty,
-                        pixelWidth,
-                        pixelHeight,
-                        originalWidth,
-                        originalHeight,
-                        SelectionBorderColor,
-                        SelectionBorderThickness,
-                        hideDecoration,
-                        hideBorder,
-                        new ClipboardService(),
-                        _mainVm?.AppSettingsService);
-
-                    var padding = vm.WindowPadding;
-                    var window = new FloatingVideoWindow
+                    try
                     {
-                        DataContext = vm,
-                        Width = originalWidth + padding.Left + padding.Right,
-                        Height = originalHeight + padding.Top + padding.Bottom,
-                        WindowStartupLocation = Avalonia.Controls.WindowStartupLocation.CenterScreen
-                    };
-                    window.Show();
+                        OpenPinnedVideoWindowAction(
+                            recordingPath,
+                            pixelWidth,
+                            pixelHeight,
+                            originalWidth,
+                            originalHeight,
+                            SelectionBorderColor,
+                            SelectionBorderThickness,
+                            hideDecoration,
+                            hideBorder);
+                    }
+                    catch
+                    {
+                        FileLocationService.RevealInFileExplorer(recordingPath);
+                    }
                 }
-                catch
+                else
                 {
                     FileLocationService.RevealInFileExplorer(recordingPath);
                 }

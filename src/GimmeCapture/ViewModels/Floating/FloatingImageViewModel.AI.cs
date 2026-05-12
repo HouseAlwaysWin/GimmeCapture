@@ -9,7 +9,6 @@ using System.Reactive.Disposables;
 using System;
 using System.Threading.Tasks;
 using GimmeCapture.ViewModels.Shared;
-using GimmeCapture.Views.Floating;
 
 namespace GimmeCapture.ViewModels.Floating;
 
@@ -457,10 +456,9 @@ public partial class FloatingImageViewModel
 
         await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
         {
-            var owner = ResolveOwnerWindow();
-            if (owner != null)
+            if (ConfirmDialogAction != null)
             {
-                confirmed = await GimmeCapture.Views.Dialogs.UpdateDialog.ShowDialog(owner, msg, isUpdateAvailable: true);
+                confirmed = await ConfirmDialogAction(msg);
             }
         });
         
@@ -527,10 +525,9 @@ public partial class FloatingImageViewModel
 
         await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
         {
-            var owner = ResolveOwnerWindow();
-             if (owner != null)
+            if (ConfirmDialogAction != null)
             {
-                confirmed = await GimmeCapture.Views.Dialogs.UpdateDialog.ShowDialog(owner, msg, isUpdateAvailable: true);
+                confirmed = await ConfirmDialogAction(msg);
             }
         });
         
@@ -735,14 +732,6 @@ public partial class FloatingImageViewModel
         return _sam2Service;
     }
 
-    private Avalonia.Controls.Window? ResolveOwnerWindow()
-    {
-        return _windowManager.FindWindowByDataContext(this)
-            ?? _windowManager.GetActiveWindowOfType<FloatingImageWindow>()
-            ?? _windowManager.GetActiveWindow()
-            ?? _windowManager.GetMainWindow();
-    }
-
     private void ShowErrorDialog(string message)
     {
         ShowGothicDialog("StatusError", message);
@@ -772,20 +761,13 @@ public partial class FloatingImageViewModel
     {
         Avalonia.Threading.Dispatcher.UIThread.Post(() =>
         {
-            var owner = ResolveOwnerWindow();
-            if (owner == null)
+            if (ShowDialogAction == null)
             {
                 System.Diagnostics.Debug.WriteLine($"[Dialog] Owner not found. Title={title}, Message={message}");
                 return;
             }
 
-            var dialogVm = new GothicDialogViewModel
-            {
-                Title = title,
-                Message = message
-            };
-            var dialog = new GimmeCapture.Views.Shared.GothicDialog { DataContext = dialogVm };
-            dialog.ShowDialog<bool>(owner);
+            ShowDialogAction(title, message);
         });
     }
 }

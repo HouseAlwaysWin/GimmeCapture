@@ -13,7 +13,6 @@ using GimmeCapture.Services.Core;
 using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Platforms.Desktop;
 using GimmeCapture.Services.Platforms.Windows;
-using GimmeCapture.Views.Main;
 using System.Collections.Generic;
 
 namespace GimmeCapture.ViewModels.Main;
@@ -87,8 +86,10 @@ public partial class MainWindowViewModel : ViewModelBase
     }
 
     public Action<CaptureMode>? RequestCaptureAction { get; set; }
+    public Func<SnipWindowViewModel?>? GetActiveSnipViewModelAction { get; set; }
     public Func<Task<string?>>? PickFolderAction { get; set; }
     public Func<string, string, bool, Task<bool>>? ConfirmAction { get; set; }
+    public Func<string, bool, Task<bool>>? ShowUpdateDialogAction { get; set; }
     
     public AppSettingsService AppSettingsService => _settingsService;
     private readonly AppSettingsService _settingsService;
@@ -97,8 +98,6 @@ public partial class MainWindowViewModel : ViewModelBase
     public WindowsGlobalHotkeyService HotkeyService { get; } = new();
     public HotkeyMappingService HotkeyMappingService { get; } = new();
     public HotkeyRouterService HotkeyRouterService { get; } = new();
-
-    public enum CaptureMode { Normal, Copy, Pin, Record, Translate }
 
     public FFmpegDownloaderService FfmpegDownloader { get; }
     public RecordingService RecordingService { get; }
@@ -222,7 +221,7 @@ public partial class MainWindowViewModel : ViewModelBase
         HotkeyService.OnHotkeyPressed = (id) => 
         {
             // 如果 SnipWindow 開啟中，將熱鍵傳遞給它處理，而不是無視
-            var snipVm = _windowManager.GetWindowDataContext<SnipWindow, SnipWindowViewModel>();
+            var snipVm = GetActiveSnipViewModelAction?.Invoke();
             if (snipVm != null)
             {
                 snipVm.HandleGlobalHotkey(id);

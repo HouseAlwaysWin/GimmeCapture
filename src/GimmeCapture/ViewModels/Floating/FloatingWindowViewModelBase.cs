@@ -7,8 +7,6 @@ using System.Collections.ObjectModel;
 using System.Reactive;
 using GimmeCapture.Models;
 
-// using GimmeCapture.ViewModels.Main; // Already imported or namespace match? 
-// Check namespaces in original file. 
 using GimmeCapture.Services.Core;
 using System.Threading.Tasks;
 using Avalonia.Media.Imaging;
@@ -327,7 +325,7 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
 
     // Shared preset colors from Main ViewModel - accessing static data?
     // Referencing SnipWindowViewModel directly might be circular if not careful, but static data is fine.
-    public System.Collections.Generic.IEnumerable<Avalonia.Media.Color> PresetColors => GimmeCapture.ViewModels.Main.SnipWindowViewModel.StaticData.ColorsList;
+    public System.Collections.Generic.IEnumerable<Avalonia.Media.Color> PresetColors => PresetColorPalette.DefaultColors;
 
     // Commands
     // Commands

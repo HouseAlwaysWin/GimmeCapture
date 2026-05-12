@@ -68,6 +68,23 @@ public partial class FloatingImageWindow : FloatingWindowBase
         if (DataContext is FloatingImageViewModel vm)
         {
             // Specific Image VM Setup
+            vm.ConfirmDialogAction ??= async message =>
+            {
+                var owner = TopLevel.GetTopLevel(this) as Window ?? this;
+                return await GimmeCapture.Views.Dialogs.UpdateDialog.ShowDialog(owner, message, isUpdateAvailable: true);
+            };
+
+            vm.ShowDialogAction ??= (title, message) =>
+            {
+                var owner = TopLevel.GetTopLevel(this) as Window ?? this;
+                var dialogVm = new GimmeCapture.ViewModels.Shared.GothicDialogViewModel
+                {
+                    Title = title,
+                    Message = message
+                };
+                var dialog = new GimmeCapture.Views.Shared.GothicDialog { DataContext = dialogVm };
+                dialog.ShowDialog<bool>(owner);
+            };
             
             vm.OpenPinWindowAction ??= (bitmap, rect, color, thickness, runAI, initialInteractive, pinnedText, inferredFontSize) =>
             {
