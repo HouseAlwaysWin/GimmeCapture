@@ -277,7 +277,7 @@ public partial class MainWindowViewModel
     }
     
     // Control Settings
-    private string _snipHotkey = "F1";
+    private string _snipHotkey = "Shift+F1";
     public string SnipHotkey
     {
         get => _snipHotkey;
@@ -296,7 +296,7 @@ public partial class MainWindowViewModel
     }
 
 
-    private string _translateHotkey = "F3";
+    private string _translateHotkey = "Shift+F3";
     public string TranslateHotkey
     {
         get => _translateHotkey;
@@ -314,7 +314,7 @@ public partial class MainWindowViewModel
         }
     }
 
-    private string _recordHotkey = "F2";
+    private string _recordHotkey = "Shift+F2";
     public string RecordHotkey
     {
         get => _recordHotkey;

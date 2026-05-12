@@ -3,7 +3,9 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.VisualTree;
 using GimmeCapture.ViewModels.Main;
+using GimmeCapture.Views.Dialogs;
 using System;
+
 namespace GimmeCapture.Views.Main.Tabs;
 
 public partial class SettingsHotkeysTab : UserControl
@@ -70,7 +72,7 @@ public partial class SettingsHotkeysTab : UserControl
         EnsureResumed();
     }
 
-    private void HotkeyTextBox_KeyDown(object? sender, KeyEventArgs e)
+    private async void HotkeyTextBox_KeyDown(object? sender, KeyEventArgs e)
     {
         EnsureSuspended();
 
@@ -108,8 +110,22 @@ public partial class SettingsHotkeysTab : UserControl
             if (conflict != null)
             {
                 var conflictName = GimmeCapture.Services.Core.Infrastructure.LocalizationService.Instance[conflict] ?? conflict;
-                vm.StatusText = $"⚠ {hotkeyStr} → {conflictName}";
+                vm.StatusText = $"[Conflict] {hotkeyStr} -> {conflictName}";
                 System.Diagnostics.Debug.WriteLine($"[HotkeyConflict] {hotkeyStr} conflicts with {conflict} for tag {tag}");
+
+                if (TopLevel.GetTopLevel(this) is Window owner)
+                {
+                    await ConfirmationDialog.ShowConfirmation(
+                        owner,
+                        "\u5feb\u6377\u9375\u885d\u7a81",
+                        $"\u5feb\u6377\u9375 {hotkeyStr} \u5df2\u88ab\u300c{conflictName}\u300d\u4f7f\u7528\u3002\u8acb\u6539\u7528\u5176\u4ed6\u7d44\u5408\u3002",
+                        ConfirmationMode.OkOnly);
+
+                    if (textBox.IsFocused)
+                    {
+                        EnsureSuspended();
+                    }
+                }
             }
             else
             {

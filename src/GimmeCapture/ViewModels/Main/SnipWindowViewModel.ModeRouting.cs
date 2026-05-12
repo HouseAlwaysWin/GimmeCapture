@@ -278,7 +278,7 @@ public partial class SnipWindowViewModel
         else if (AutoActionMode == 3) // Record mode entry, do NOT auto-start
         {
              if (CurrentMode != SnipMode.Recording) CurrentMode = SnipMode.Recording;
-             // USER REQUEST: Selection only, record manually or via F3
+             // USER REQUEST: Selection only, record manually or via Enter
         }
     }
 
@@ -483,11 +483,8 @@ public partial class SnipWindowViewModel
             }
         }, nameof(HandleRecordingModeHotkeyCommand), canExecuteHotkeys);
 
-        // F3: 模式選擇器
-        // 截圖模式 -> F3 -> Pin
-        // 錄影模式 -> F3 -> Pin  
-        // 翻譯模式 -> F3 -> 無動作
-        // 未進入模式 (Detecting) -> F3 -> 進入翻譯模式
+        // Enter: current-mode action key
+        // F1/F2/F3 are reserved for Screenshot/Record/Translate mode switching while selecting.
         HandleActiveActionHotkeyCommand = CreateCommand(HandleActiveActionHotkey, nameof(HandleActiveActionHotkeyCommand), canExecuteHotkeys);
 
         SetTranslationModeCommand = CreateCommand(ToggleTranslationMode, nameof(SetTranslationModeCommand), canExecuteHotkeys);

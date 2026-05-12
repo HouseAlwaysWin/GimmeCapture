@@ -244,6 +244,8 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
     public override string TextHotkey => _appSettingsService?.Settings.Record.Text ?? base.TextHotkey;
     public override string MosaicHotkey => _appSettingsService?.Settings.Record.Mosaic ?? base.MosaicHotkey;
     public override string BlurHotkey => _appSettingsService?.Settings.Record.Blur ?? base.BlurHotkey;
+    public override string SelectionHotkey => _appSettingsService?.Settings.Snip.SelectionMode ?? base.SelectionHotkey;
+    public override string CropHotkey => _appSettingsService?.Settings.Snip.CropMode ?? base.CropHotkey;
 
     // Tooltip Hints
     public string UndoTooltip => $"{LocalizationService.Instance["Undo"]} ({UndoHotkey})";
@@ -267,9 +269,9 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
     public string ToggleToolbarTooltip => $"{LocalizationService.Instance["ActionToolbar"]} ({_appSettingsService?.Settings.Record.Toolbar ?? "H"})";
     public string CloseTooltip => $"{LocalizationService.Instance["ActionClose"]} ({CloseHotkey})";
     public string RepeatTooltip => $"{LocalizationService.Instance["ActionRepeat"]}";
-    public string SelectionTooltip => $"{LocalizationService.Instance["TipSelectionArea"]} (S)";
-    public string CropTooltip => $"{LocalizationService.Instance["TipCrop"]} (C)";
-    public string PinSelectionTooltip => $"{LocalizationService.Instance["TipPinSelection"]} (F3)";
+    public string SelectionTooltip => $"{LocalizationService.Instance["TipSelectionArea"]} ({SelectionHotkey})";
+    public string CropTooltip => $"{LocalizationService.Instance["TipCrop"]} ({CropHotkey})";
+    public string PinSelectionTooltip => $"{LocalizationService.Instance["TipPinSelection"]} ({PinHotkey})";
 
     public override Avalonia.Thickness WindowPadding
     {

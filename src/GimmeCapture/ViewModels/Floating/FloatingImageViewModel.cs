@@ -88,6 +88,8 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
     public override string TextHotkey => _appSettingsService?.Settings.Snip.Text ?? base.TextHotkey;
     public override string MosaicHotkey => _appSettingsService?.Settings.Snip.Mosaic ?? base.MosaicHotkey;
     public override string BlurHotkey => _appSettingsService?.Settings.Snip.Blur ?? base.BlurHotkey;
+    public override string SelectionHotkey => _appSettingsService?.Settings.Snip.SelectionMode ?? base.SelectionHotkey;
+    public override string CropHotkey => _appSettingsService?.Settings.Snip.CropMode ?? base.CropHotkey;
 
     public string UndoTooltip => $"{LocalizationService.Instance["Undo"]} ({UndoHotkey})";
     public string RedoTooltip => $"{LocalizationService.Instance["Redo"]} ({RedoHotkey})";
@@ -105,9 +107,9 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
     public string BlurTooltip => $"{LocalizationService.Instance["TipBlur"]} ({BlurHotkey})";
     public string ToggleToolbarTooltip => $"{LocalizationService.Instance["ActionToolbar"]} ({_appSettingsService?.Settings.Snip.Toolbar ?? "H"})";
     public string CloseTooltip => $"{LocalizationService.Instance["ActionClose"]} ({CloseHotkey})";
-    public string SelectionTooltip => $"{LocalizationService.Instance["TipSelectionArea"]} (S)";
-    public string CropTooltip => $"{LocalizationService.Instance["TipCrop"]} (C)";
-    public string PinSelectionTooltip => $"{LocalizationService.Instance["TipPinSelection"]} (F3)";
+    public string SelectionTooltip => $"{LocalizationService.Instance["TipSelectionArea"]} ({SelectionHotkey})";
+    public string CropTooltip => $"{LocalizationService.Instance["TipCrop"]} ({CropHotkey})";
+    public string PinSelectionTooltip => $"{LocalizationService.Instance["TipPinSelection"]} ({PinHotkey})";
     public string MagicWandTooltip => $"{LocalizationService.Instance["TipMagicWand"]} (W)";
     public string RemoveBackgroundTooltip => $"{LocalizationService.Instance["RemoveBackground"]} (Shift+R)";
     public string ConfirmRemovalTooltip => $"{LocalizationService.Instance["TipConfirmRemoval"]} (Enter)";

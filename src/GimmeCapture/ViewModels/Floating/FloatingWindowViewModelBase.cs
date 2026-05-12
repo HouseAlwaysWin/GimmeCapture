@@ -424,7 +424,7 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
 
     // Hotkeys (Virtual to allow overriding or service-based values)
     public virtual string CopyHotkey => "Ctrl+C";
-    public virtual string PinHotkey => "F3";
+    public virtual string PinHotkey => "Enter";
     public virtual string UndoHotkey => "Ctrl+Z";
     public virtual string RedoHotkey => "Ctrl+Y";
     public virtual string ClearHotkey => "Delete";
@@ -439,6 +439,8 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
     public virtual string TextHotkey => "T";
     public virtual string MosaicHotkey => "M";
     public virtual string BlurHotkey => "B";
+    public virtual string SelectionHotkey => "S";
+    public virtual string CropHotkey => "C";
 
     // Scale Commands
     public ReactiveCommand<Unit, Unit> IncreaseCornerIconScaleCommand { get; protected set; } = ReactiveCommand.Create(() => {});

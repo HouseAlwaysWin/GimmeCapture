@@ -15,8 +15,9 @@
   "VideoSaveDirectory": "D:\\Users\\martin\\Videos\\GimmeCapture",
   "RecordFormat": "mp4",
   "UseFixedRecordPath": false,
-  "SnipHotkey": "F1",
+  "SnipHotkey": "Shift+F1",
   "CopyHotkey": "Ctrl\u002BC",
-  "PinHotkey": "F3",
-  "RecordHotkey": "F2"
+  "PinHotkey": "Enter",
+  "RecordHotkey": "Shift+F2",
+  "TranslateHotkey": "Shift+F3"
 }

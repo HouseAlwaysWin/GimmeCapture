@@ -74,9 +74,9 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     }
 
     // Hotkeys / Tooltips (Dynamic by Mode)
-    public string SnipHotkey => _mainVm?.SnipHotkey ?? "F1";
-    public string RecordHotkey => _mainVm?.RecordHotkey ?? "F2";
-    public string TranslateHotkey => _mainVm?.TranslateHotkey ?? "F3";
+    public string SnipHotkey => _mainVm?.SnipHotkey ?? "Shift+F1";
+    public string RecordHotkey => _mainVm?.RecordHotkey ?? "Shift+F2";
+    public string TranslateHotkey => _mainVm?.TranslateHotkey ?? "Shift+F3";
     
     public string CopyHotkey => CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Copy ?? "Ctrl+C") : (_mainVm?.Snip_Copy ?? "Ctrl+C");
     public string UndoHotkey => CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Undo ?? "Ctrl+Z") : (_mainVm?.Snip_Undo ?? "Ctrl+Z");
@@ -105,7 +105,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         _ => string.Empty
     };
 
-    public string ActiveActionHotkey => CurrentMode == SnipMode.Translation ? (_mainVm?.Translate_Action ?? "F3") : (CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Action ?? "F3") : (_mainVm?.Snip_Pin ?? "F3"));
+    public string ActiveActionHotkey => CurrentMode == SnipMode.Translation ? (_mainVm?.Translate_Action ?? "Enter") : (CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Action ?? "Enter") : (_mainVm?.Snip_Pin ?? "Enter"));
     public string ActiveToolbarHotkey => CurrentMode == SnipMode.Translation ? (_mainVm?.Translate_Toolbar ?? "F4") : (CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Toolbar ?? "F4") : (_mainVm?.Snip_Toolbar ?? "F4"));
     public string ActivePlaybackHotkey => _mainVm?.Record_Playback ?? "Space";
     public string RemoveBackgroundHotkey => _mainVm?.Snip_RemoveBackground ?? "Shift+R";
@@ -113,8 +113,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
 
     // Mode-switch hotkeys (resolved per current mode)
     // Return empty string when already in the target mode to avoid conflicts
-    // (e.g., in Screenshot mode, SwitchToSnipHotkey and SwitchToTranslateHotkey
-    //  both resolved to "F1", causing SwitchToSnip to swallow the event first)
+    // so the current mode can reserve its own action key without duplicated bindings.
     public string SwitchToSnipHotkey => CurrentMode switch
     {
         SnipMode.Screenshot => string.Empty, // Already in Snip mode
@@ -132,13 +131,13 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     public string SwitchToTranslateHotkey => CurrentMode switch
     {
         SnipMode.Translation => string.Empty, // Already in Translation mode
-        SnipMode.Screenshot => _mainVm?.Snip_SwitchToTranslate ?? "F1",
-        SnipMode.Recording => _mainVm?.Record_SwitchToTranslate ?? "F2",
+        SnipMode.Screenshot => _mainVm?.Snip_SwitchToTranslate ?? "F3",
+        SnipMode.Recording => _mainVm?.Record_SwitchToTranslate ?? "F3",
         _ => string.Empty
     };
 
     // Translation mode specific hotkeys
-    public string TranslateAllHotkey => _mainVm?.Translate_TranslateAll ?? "Enter";
+    public string TranslateAllHotkey => _mainVm?.Translate_TranslateAll ?? "T";
     public string ScanAllHotkey => _mainVm?.Translate_ScanAll ?? "S";
     public string ClearAllHotkey => _mainVm?.Translate_ClearAll ?? "Delete";
     public string ToggleSelectHotkey => _mainVm?.Translate_ToggleSelect ?? "Tab";

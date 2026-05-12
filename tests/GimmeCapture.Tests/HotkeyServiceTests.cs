@@ -52,6 +52,50 @@ public class HotkeyServiceTests
     }
 
     [Fact]
+    public void Register_WithShiftModifier_RegistersShiftFunctionKey()
+    {
+        // Arrange
+        var service = new TestableHotkeyService();
+        service.SetHandle(new IntPtr(1234));
+
+        // Act
+        service.Register(3, "Shift+F1");
+
+        // Assert
+        Assert.Equal(1, service.RegCallCount);
+        Assert.Equal(3, service.RegHistory[0].id);
+        Assert.Equal(0x0004u, service.RegHistory[0].mods); // MOD_SHIFT
+        Assert.Equal(0x70u, service.RegHistory[0].vkey);   // F1
+    }
+
+    [Fact]
+    public void Register_WhenNativeRegistrationFails_RaisesFailureCallback()
+    {
+        // Arrange
+        var service = new TestableHotkeyService();
+        service.SetHandle(new IntPtr(1234));
+        service.LastRegResult = false;
+
+        int? failedId = null;
+        string? failedHotkey = null;
+        int? failedError = null;
+        service.OnHotkeyRegistrationFailed = (id, hotkey, error) =>
+        {
+            failedId = id;
+            failedHotkey = hotkey;
+            failedError = error;
+        };
+
+        // Act
+        service.Register(9, "Shift+F1");
+
+        // Assert
+        Assert.Equal(9, failedId);
+        Assert.Equal("Shift+F1", failedHotkey);
+        Assert.True(failedError.HasValue);
+    }
+
+    [Fact]
     public void Register_WhenSuspended_DoesNotCallNativeRegister()
     {
         // Arrange

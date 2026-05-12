@@ -32,7 +32,7 @@ public class SnipHotkeys
     public string Clear { get; set; } = "Delete";
     public string Save { get; set; } = "Ctrl+S";
     public string Copy { get; set; } = "Ctrl+C";
-    public string Pin { get; set; } = "F3";
+    public string Pin { get; set; } = "Enter";
     public string Close { get; set; } = "Escape";
     public string Toolbar { get; set; } = "F4";
     public string SelectionMode { get; set; } = "S";
@@ -40,7 +40,7 @@ public class SnipHotkeys
     public string RemoveBackground { get; set; } = "Shift+R";
     public string MagicWand { get; set; } = "W";
     public string FullscreenSelect { get; set; } = "F";
-    public string SwitchToTranslate { get; set; } = "F1";
+    public string SwitchToTranslate { get; set; } = "F3";
     public string SwitchToRecord { get; set; } = "F2";
 }
 
@@ -61,16 +61,16 @@ public class RecordHotkeys
     public string Copy { get; set; } = "Ctrl+C";
     public string Close { get; set; } = "Escape";
     public string Toolbar { get; set; } = "F4";
-    public string Action { get; set; } = "F3";
+    public string Action { get; set; } = "Enter";
     public string Playback { get; set; } = "Space";
     public string FullscreenSelect { get; set; } = "F";
     public string SwitchToSnip { get; set; } = "F1";
-    public string SwitchToTranslate { get; set; } = "F2";
+    public string SwitchToTranslate { get; set; } = "F3";
 }
 
 public class TranslateHotkeys
 {
-    public string Action { get; set; } = "F3";
+    public string Action { get; set; } = "Enter";
     public string Toolbar { get; set; } = "F4";
     public string Close { get; set; } = "Escape";
     public string TranslateAll { get; set; } = "T";
@@ -135,9 +135,9 @@ public class AppSettings
     public string TempDirectory { get; set; } = string.Empty;
     
     // Global Launch Hotkeys
-    public string SnipHotkey { get; set; } = "F1";
-    public string RecordHotkey { get; set; } = "F2";
-    public string TranslateHotkey { get; set; } = "F3";
+    public string SnipHotkey { get; set; } = "Shift+F1";
+    public string RecordHotkey { get; set; } = "Shift+F2";
+    public string TranslateHotkey { get; set; } = "Shift+F3";
 
     // Mode Specific Hotkeys (New Structured Way)
     public SnipHotkeys Snip { get; set; } = new();

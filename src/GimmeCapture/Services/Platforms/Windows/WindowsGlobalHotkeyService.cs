@@ -17,6 +17,7 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
     
     // Action to fire when hotkey is pressed, passing the ID
     public Action<int>? OnHotkeyPressed { get; set; }
+    public Action<int, string, int>? OnHotkeyRegistrationFailed { get; set; }
     
     private IntPtr _oldWndProc = IntPtr.Zero;
     private WndProc? _newWndProc; // Keep reference to prevent GC
@@ -106,6 +107,7 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
         {
             int error = Marshal.GetLastWin32Error();
             System.Diagnostics.Debug.WriteLine($"[GlobalHotkey] Failed to register ID {id} as '{hotkey}' (mods={modifiers}, vk={vkey}, win32={error}).");
+            OnHotkeyRegistrationFailed?.Invoke(id, hotkey, error);
         }
     }
     

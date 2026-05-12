@@ -9,6 +9,7 @@ using Avalonia.Platform;
 using Avalonia.Media;
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core;
+using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Platforms.Desktop;
 using GimmeCapture.Services.Platforms.Windows;
 using ReactiveUI;
@@ -128,6 +129,30 @@ public partial class MainWindow : Window
                 var mode = isOkOnly ? ConfirmationMode.OkOnly : ConfirmationMode.YesNoCancel;
                 var result = await ConfirmationDialog.ShowConfirmation(this, title, message, mode);
                 return result == ConfirmationResult.Yes;
+            };
+
+            vm.HotkeyService.OnHotkeyRegistrationFailed = (id, hotkey, error) =>
+            {
+                var hotkeyName = id switch
+                {
+                    HotkeyIds.Snip => LocalizationService.Instance["StartCapture"] ?? "Screenshot",
+                    HotkeyIds.Record => LocalizationService.Instance["CaptureModeRecord"] ?? "Record",
+                    HotkeyIds.Translate => LocalizationService.Instance["TranslateHotkey"] ?? "Translate",
+                    HotkeyIds.Copy => LocalizationService.Instance["TipCopy"] ?? "Copy",
+                    HotkeyIds.Pin => LocalizationService.Instance["TipPin"] ?? "Pin",
+                    _ => hotkey
+                };
+
+                vm.StatusText = $"[RegisterFailed] {hotkey} -> {hotkeyName}";
+
+                Avalonia.Threading.Dispatcher.UIThread.Post(async () =>
+                {
+                    await ConfirmationDialog.ShowConfirmation(
+                        this,
+                        "\u5feb\u6377\u9375\u8a3b\u518a\u5931\u6557",
+                        $"\u7121\u6cd5\u8a3b\u518a\u300c{hotkeyName}\u300d\u7684\u5feb\u6377\u9375 {hotkey}\u3002\u9019\u500b\u7d44\u5408\u53ef\u80fd\u5df2\u88ab Windows \u6216\u5176\u4ed6\u7a0b\u5f0f\u4f7f\u7528\u3002",
+                        ConfirmationMode.OkOnly);
+                });
             };
 
             vm.RequestCaptureAction = (mode) => OpenSnipWindow(mode);
