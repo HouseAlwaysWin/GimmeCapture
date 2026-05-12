@@ -60,6 +60,7 @@
 
         <!-- Translation Mode -->
         <KeyBinding Gesture="{Binding TranslateAllHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding TranslateAllSelectionsCommand}" />
+        <KeyBinding Gesture="{Binding TranslatePinHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding PinTranslationResultsCommand}" />
         <KeyBinding Gesture="{Binding ScanAllHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding ScanAllTextCommand}" />
         <KeyBinding Gesture="{Binding ClearAllHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding ClearAllSelectionsCommand}" />
         <KeyBinding Gesture="{Binding AutoDetectHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding ToggleAutoDetectCommand}" />

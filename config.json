@@ -27,6 +27,7 @@
     "Action": "Shift+Enter"
   },
   "Translate": {
-    "Action": "Shift+Enter"
+    "Action": "F3",
+    "Pin": "Shift+Enter"
   }
 }

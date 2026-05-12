@@ -425,6 +425,7 @@ public partial class SnipWindowViewModel
     public ReactiveCommand<TranslationTool, Unit> SelectTranslationToolCommand { get; set; } = null!;
     public ReactiveCommand<object?, Unit> CopyTranslationTextCommand { get; set; } = null!;
     public ReactiveCommand<object?, Unit> PinTranslationCommand { get; set; } = null!;
+    public ReactiveCommand<Unit, Unit> PinTranslationResultsCommand { get; set; } = null!;
 
     private void InitializeSelectionCommands()
     {
@@ -504,6 +505,8 @@ public partial class SnipWindowViewModel
 
         PinTranslationCommand = ReactiveCommand.CreateFromTask<object?>(PinTranslationAsync);
         PinTranslationCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Pin Translation error: {ex}"));
+        PinTranslationResultsCommand = ReactiveCommand.CreateFromTask(PinAllTranslationsAsync, canExecuteInTranslation);
+        PinTranslationResultsCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Pin All Translation error: {ex}"));
 
         // 監聽集合變更以即時更新遮罩挖空，並訂閱項目的屬性變更
         UserSelections.CollectionChanged += (s, e) => 

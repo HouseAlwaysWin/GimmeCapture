@@ -194,6 +194,7 @@ public class AppSettingsService
         dest.Record.Playback = source.Record.Playback;
 
         dest.Translate.Action = source.Translate.Action;
+        dest.Translate.Pin = source.Translate.Pin;
         dest.Translate.Toolbar = source.Translate.Toolbar;
         dest.Translate.Close = source.Translate.Close;
         dest.Translate.TranslateAll = source.Translate.TranslateAll;

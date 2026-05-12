@@ -46,6 +46,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         nameof(BlurTooltip),
         nameof(FullscreenSelectTooltip),
         nameof(HideTranslationResultsTooltip),
+        nameof(TranslationPinTooltip),
         nameof(TranslateAllTooltip),
         nameof(ScanAllTooltip),
         nameof(ClearAllTooltip),
@@ -105,7 +106,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         _ => string.Empty
     };
 
-    public string ActiveActionHotkey => CurrentMode == SnipMode.Translation ? (_mainVm?.Translate_Action ?? "Shift+Enter") : (CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Action ?? "Shift+Enter") : (_mainVm?.Snip_Pin ?? "Shift+Enter"));
+    public string ActiveActionHotkey => CurrentMode == SnipMode.Translation ? (_mainVm?.Translate_Action ?? "F3") : (CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Action ?? "Shift+Enter") : (_mainVm?.Snip_Pin ?? "Shift+Enter"));
     public string ActiveToolbarHotkey => CurrentMode == SnipMode.Translation ? (_mainVm?.Translate_Toolbar ?? "F4") : (CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Toolbar ?? "F4") : (_mainVm?.Snip_Toolbar ?? "F4"));
     public string ActivePlaybackHotkey => _mainVm?.Record_Playback ?? "Space";
     public string RemoveBackgroundHotkey => _mainVm?.Snip_RemoveBackground ?? "Shift+R";
@@ -138,6 +139,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
 
     // Translation mode specific hotkeys
     public string TranslateAllHotkey => _mainVm?.Translate_TranslateAll ?? "T";
+    public string TranslatePinHotkey => _mainVm?.Translate_Pin ?? "Shift+Enter";
     public string ScanAllHotkey => _mainVm?.Translate_ScanAll ?? "S";
     public string ClearAllHotkey => _mainVm?.Translate_ClearAll ?? "Delete";
     public string ToggleSelectHotkey => _mainVm?.Translate_ToggleSelect ?? "Tab";
@@ -167,6 +169,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     public string RecordTooltip => CurrentMode == SnipMode.Recording ? LocalizationService.Instance["CaptureModeRecord"] : $"{LocalizationService.Instance["CaptureModeRecord"]} ({SwitchToRecordHotkey})";
     public string TranslateTooltip => CurrentMode == SnipMode.Translation ? (LocalizationService.Instance["CaptureModeTranslation"] ?? "Translation") : $"{(LocalizationService.Instance["CaptureModeTranslation"] ?? "Translation")} ({SwitchToTranslateHotkey})";
     public string HideTranslationResultsTooltip => $"{LocalizationService.Instance["HideTranslationResults"]} ({ActiveActionHotkey})";
+    public string TranslationPinTooltip => $"{LocalizationService.Instance["MenuPinTranslation"]} ({TranslatePinHotkey})";
     public string TranslateAllTooltip => $"{LocalizationService.Instance["ActionTranslateAll"]} ({TranslateAllHotkey})";
     public string ScanAllTooltip => $"{LocalizationService.Instance["ActionScanAll"]} ({ScanAllHotkey})";
     public string ClearAllTooltip => $"{LocalizationService.Instance["ActionClearAll"]} ({ClearAllHotkey})";

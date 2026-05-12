@@ -385,6 +385,7 @@ public partial class MainWindowViewModel
 
     // Translate Mode Hotkeys
     public string Translate_Action { get => _settingsService.Settings.Translate.Action; set { if (_settingsService.Settings.Translate.Action != value) { this.RaisePropertyChanging(); _settingsService.Settings.Translate.Action = value; this.RaisePropertyChanged(); } } }
+    public string Translate_Pin { get => _settingsService.Settings.Translate.Pin; set { if (_settingsService.Settings.Translate.Pin != value) { this.RaisePropertyChanging(); _settingsService.Settings.Translate.Pin = value; this.RaisePropertyChanged(); } } }
     public string Translate_Toolbar { get => _settingsService.Settings.Translate.Toolbar; set { if (_settingsService.Settings.Translate.Toolbar != value) { this.RaisePropertyChanging(); _settingsService.Settings.Translate.Toolbar = value; this.RaisePropertyChanged(); } } }
     public string Translate_Close { get => _settingsService.Settings.Translate.Close; set { if (_settingsService.Settings.Translate.Close != value) { this.RaisePropertyChanging(); _settingsService.Settings.Translate.Close = value; this.RaisePropertyChanged(); } } }
     public string Translate_TranslateAll { get => _settingsService.Settings.Translate.TranslateAll; set { if (_settingsService.Settings.Translate.TranslateAll != value) { this.RaisePropertyChanging(); _settingsService.Settings.Translate.TranslateAll = value; this.RaisePropertyChanged(); } } }
@@ -500,7 +501,7 @@ public partial class MainWindowViewModel
 
         // 4. Translate Group (Local to Translation mode)
         var translateGroup = new[] { 
-            "Translate_Action", "Translate_Toolbar", "Translate_Close",
+            "Translate_Action", "Translate_Pin", "Translate_Toolbar", "Translate_Close",
             "Translate_TranslateAll", "Translate_ScanAll", "Translate_ClearAll",
             "Translate_ToggleSelect", "Translate_AutoDetect",
             "Translate_SelectionHoldModifier",
@@ -566,6 +567,7 @@ public partial class MainWindowViewModel
         else if (translateGroup.Contains(targetTag))
         {
             if (targetTag != "Translate_Action" && Translate_Action == hotkey) return "ActionHideTranslate";
+            if (targetTag != "Translate_Pin" && Translate_Pin == hotkey) return "MenuPinTranslation";
             if (targetTag != "Translate_Toolbar" && Translate_Toolbar == hotkey) return "ActionToolbar";
             if (targetTag != "Translate_Close" && Translate_Close == hotkey) return "ActionClose";
             if (targetTag != "Translate_TranslateAll" && Translate_TranslateAll == hotkey) return "ActionTranslateAll";
@@ -888,7 +890,7 @@ public partial class MainWindowViewModel
                 nameof(Record_Clear), nameof(Record_Save), nameof(Record_Copy), nameof(Record_Close), nameof(Record_Toolbar),
                 nameof(Record_Action), nameof(Record_Playback), nameof(Record_FullscreenSelect),
                 nameof(Record_SwitchToSnip), nameof(Record_SwitchToTranslate),
-                nameof(Translate_Action), nameof(Translate_Toolbar), nameof(Translate_Close),
+                nameof(Translate_Action), nameof(Translate_Pin), nameof(Translate_Toolbar), nameof(Translate_Close),
                 nameof(Translate_TranslateAll), nameof(Translate_ScanAll), nameof(Translate_ClearAll),
                 nameof(Translate_ToggleSelect), nameof(Translate_AutoDetect),
                 nameof(Translate_SelectionHoldModifier),

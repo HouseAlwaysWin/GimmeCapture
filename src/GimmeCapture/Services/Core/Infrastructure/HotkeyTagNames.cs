@@ -47,6 +47,7 @@ public static class HotkeyTagNames
     public const string Record_SwitchToTranslate = nameof(Record_SwitchToTranslate);
 
     public const string Translate_Action = nameof(Translate_Action);
+    public const string Translate_Pin = nameof(Translate_Pin);
     public const string Translate_Toolbar = nameof(Translate_Toolbar);
     public const string Translate_Close = nameof(Translate_Close);
     public const string Translate_TranslateAll = nameof(Translate_TranslateAll);

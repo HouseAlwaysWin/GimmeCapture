@@ -67,7 +67,7 @@ public partial class MainWindowViewModel
             nameof(Record_Clear), nameof(Record_Save), nameof(Record_Copy), nameof(Record_Close), nameof(Record_Toolbar),
             nameof(Record_Action), nameof(Record_Playback), nameof(Record_FullscreenSelect),
             nameof(Record_SwitchToSnip), nameof(Record_SwitchToTranslate),
-            nameof(Translate_Action), nameof(Translate_Toolbar), nameof(Translate_Close),
+            nameof(Translate_Action), nameof(Translate_Pin), nameof(Translate_Toolbar), nameof(Translate_Close),
             nameof(Translate_TranslateAll), nameof(Translate_ScanAll), nameof(Translate_ClearAll),
             nameof(Translate_ToggleSelect), nameof(Translate_AutoDetect),
             nameof(Translate_SelectionHoldModifier),

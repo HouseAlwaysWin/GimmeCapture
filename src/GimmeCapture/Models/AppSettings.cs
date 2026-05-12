@@ -70,7 +70,8 @@ public class RecordHotkeys
 
 public class TranslateHotkeys
 {
-    public string Action { get; set; } = "Shift+Enter";
+    public string Action { get; set; } = "F3";
+    public string Pin { get; set; } = "Shift+Enter";
     public string Toolbar { get; set; } = "F4";
     public string Close { get; set; } = "Escape";
     public string TranslateAll { get; set; } = "T";

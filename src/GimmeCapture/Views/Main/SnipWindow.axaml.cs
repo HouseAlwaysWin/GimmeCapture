@@ -716,6 +716,11 @@ public partial class SnipWindow : Window
                     _viewModel.TranslateAllSelectionsCommand?.Execute().Subscribe();
                     e.Handled = true;
                 }
+                else if (IsMatch(_viewModel.TranslatePinHotkey))
+                {
+                    _viewModel.PinTranslationResultsCommand?.Execute().Subscribe();
+                    e.Handled = true;
+                }
                 else if (IsMatch(_viewModel.ScanAllHotkey))
                 {
                     _viewModel.ScanAllTextCommand?.Execute().Subscribe();

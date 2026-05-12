@@ -484,4 +484,100 @@ public partial class SnipWindowViewModel
             CloseAction?.Invoke();
         }
     }
+
+    private async Task PinAllTranslationsAsync()
+    {
+        try
+        {
+            var translatedSelections = UserSelections
+                .AsValueEnumerable()
+                .Where(sel => sel.Bounds.Width > 0
+                    && sel.Bounds.Height > 0
+                    && !string.IsNullOrWhiteSpace(sel.TranslatedText))
+                .ToList();
+
+            var translatedBlocks = TranslatedBlocks
+                .AsValueEnumerable()
+                .Where(block => block.Bounds.Width > 0
+                    && block.Bounds.Height > 0
+                    && !string.IsNullOrWhiteSpace(block.TranslatedText))
+                .ToList();
+
+            if (translatedSelections.Count == 0 && translatedBlocks.Count == 0)
+            {
+                return;
+            }
+
+            Rect captureBounds = default;
+            bool hasBounds = false;
+
+            void Include(Rect bounds)
+            {
+                if (bounds.Width <= 0 || bounds.Height <= 0) return;
+                captureBounds = hasBounds ? captureBounds.Union(bounds) : bounds;
+                hasBounds = true;
+            }
+
+            foreach (var selection in translatedSelections)
+            {
+                Include(selection.Bounds);
+            }
+
+            foreach (var block in translatedBlocks)
+            {
+                Include(block.Bounds);
+            }
+
+            if (!hasBounds) return;
+
+            HideAction?.Invoke();
+            await Task.Delay(200);
+
+            try
+            {
+                using var skBitmap = await _captureService.CaptureScreenWithAnnotationsAsync(
+                    captureBounds,
+                    ScreenOffset,
+                    VisualScaling,
+                    Annotations,
+                    translatedSelections,
+                    translatedBlocks,
+                    _mainVm?.ShowSnipCursor ?? false);
+
+                var avaloniaBitmap = new Avalonia.Media.Imaging.WriteableBitmap(
+                    new Avalonia.PixelSize(skBitmap.Width, skBitmap.Height),
+                    new Avalonia.Vector(96, 96),
+                    Avalonia.Platform.PixelFormat.Bgra8888,
+                    Avalonia.Platform.AlphaFormat.Premul);
+
+                using var lockedOut = avaloniaBitmap.Lock();
+                unsafe
+                {
+                    Buffer.MemoryCopy(
+                        (void*)skBitmap.GetPixels(),
+                        (void*)lockedOut.Address,
+                        lockedOut.RowBytes * lockedOut.Size.Height,
+                        skBitmap.RowBytes * skBitmap.Height);
+                }
+
+                OpenPinWindowAction?.Invoke(
+                    avaloniaBitmap,
+                    captureBounds,
+                    SelectionBorderColor,
+                    SelectionBorderThickness,
+                    false,
+                    false,
+                    null,
+                    12.0);
+            }
+            finally
+            {
+                CloseAction?.Invoke();
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[TranslationMode] PinAllTranslations error: {ex}");
+        }
+    }
 }
