@@ -10,25 +10,8 @@ if ([string]::IsNullOrWhiteSpace($TargetRoot)) {
 }
 
 if ([string]::IsNullOrWhiteSpace($SourceRoot)) {
-    $envFile = Join-Path $PSScriptRoot "..\.vscode\debug.env"
-    if (Test-Path $envFile) {
-        foreach ($line in Get-Content $envFile) {
-            $trimmed = $line.Trim()
-            if ([string]::IsNullOrWhiteSpace($trimmed) -or $trimmed.StartsWith("#")) {
-                continue
-            }
-
-            $parts = $trimmed -split "=", 2
-            if ($parts.Length -eq 2 -and $parts[0].Trim() -eq "GIMMECAPTURE_FFMPEG_DIR") {
-                $SourceRoot = $parts[1].Trim()
-                break
-            }
-        }
-    }
-}
-
-if ([string]::IsNullOrWhiteSpace($SourceRoot)) {
-    throw "GIMMECAPTURE_FFMPEG_DIR is not set. Put it in .vscode\debug.env or point it at the FFmpeg shared-DLL folder, or a parent folder containing bin\."
+    $SourceRoot = Join-Path $PSScriptRoot "..\src\GimmeCapture\ffmpeg-lib"
+    Write-Host "GIMMECAPTURE_FFMPEG_DIR not set; defaulting to '$SourceRoot'"
 }
 
 $candidateDirs = @(
