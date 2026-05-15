@@ -16,6 +16,7 @@ public class AIResourceService : ReactiveObject
     private readonly NativeResolverService _resolverService;
     private readonly AIModelDownloader _downloader;
     private readonly AIModelCatalog _modelCatalog;
+    private readonly AIResourceInstaller _installer;
 
     public AIResourceService(
         AppSettingsService settingsService,
@@ -38,6 +39,23 @@ public class AIResourceService : ReactiveObject
         _resolverService = resolverService;
         _downloader = downloader;
         _modelCatalog = modelCatalog;
+        _installer = new AIResourceInstaller(
+            _settingsService,
+            _pathService,
+            _downloader,
+            _modelCatalog,
+            new AIResourceInstallerCallbacks(
+                message => LastErrorMessage = message,
+                propertyName => this.RaisePropertyChanged(propertyName),
+                () => RequestGlobalUnload?.Invoke(),
+                UnloadAllSessions,
+                UnloadSAM2Models,
+                IsAICoreReady,
+                IsSAM2Ready,
+                IsOCRReady,
+                IsNmtReady,
+                GetLlmModelsDir,
+                GetLlamaModelPathById));
 
         // Redirect progress changes
         _downloader.PropertyChanged += (s, e) =>
@@ -168,60 +186,12 @@ public class AIResourceService : ReactiveObject
 
     public async Task<bool> EnsureLlamaModelAsync(string modelId, CancellationToken ct = default)
     {
-        if (!_modelCatalog.TryGetLlamaModelPreset(modelId, out var preset) ||
-            string.IsNullOrWhiteSpace(preset.DownloadUrl) ||
-            string.IsNullOrWhiteSpace(preset.FileName))
-        {
-            LastErrorMessage = "Selected Llama model is not downloadable. Please place a GGUF file in the custom model path.";
-            return false;
-        }
-
-        string modelDir = GetLlmModelsDir();
-        Directory.CreateDirectory(modelDir);
-        string modelPath = Path.Combine(modelDir, preset.FileName);
-        if (File.Exists(modelPath))
-        {
-            return true;
-        }
-
-        await _downloadLock.WaitAsync(ct);
-        try
-        {
-            _downloader.IsDownloading = true;
-            _downloader.CurrentDownloadName = $"LLM Model ({preset.DisplayName})";
-            _downloader.DownloadProgress = 0;
-            await _downloader.DownloadFileAsync(preset.DownloadUrl, modelPath, 0, 100, ct);
-            _settingsService.Settings.LlamaModelId = modelId;
-            return File.Exists(modelPath);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            LastErrorMessage = ex.Message;
-            return false;
-        }
-        finally
-        {
-            _downloader.IsDownloading = false;
-            _downloadLock.Release();
-        }
+        return await _installer.EnsureLlamaModelAsync(modelId, ct);
     }
 
     public bool RemoveLlamaModelPreset(string modelId)
     {
-        try
-        {
-            string path = GetLlamaModelPathById(modelId);
-            if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
-            {
-                File.Delete(path);
-            }
-            return true;
-        }
-        catch (Exception ex)
-        {
-            LastErrorMessage = $"LLM model removal failed: {ex.Message}";
-            return false;
-        }
+        return _installer.RemoveLlamaModelPreset(modelId);
     }
 
     public bool IsAICoreReady()
@@ -265,93 +235,22 @@ public class AIResourceService : ReactiveObject
 
     public bool RemoveAICoreResources()
     {
-        try
-        {
-            RequestGlobalUnload?.Invoke();
-            UnloadAllSessions();
-
-            var runtimeDir = _pathService.GetRuntimeDir();
-            var modelsDir = _pathService.GetAIModelsDir();
-            var u2net = _pathService.GetAICoreModelPath();
-
-            if (File.Exists(u2net)) File.Delete(u2net);
-            if (Directory.Exists(runtimeDir)) Directory.Delete(runtimeDir, true);
-
-            this.RaisePropertyChanged(nameof(IsAICoreReady));
-            this.RaisePropertyChanged(nameof(AreResourcesReady));
-            return true;
-        }
-        catch (Exception ex)
-        {
-            LastErrorMessage = $"AI Core Removal Failed: {ex.Message}";
-            System.Diagnostics.Debug.WriteLine(LastErrorMessage);
-            return false;
-        }
+        return _installer.RemoveAICoreResources();
     }
 
     public bool RemoveSAM2Resources(SAM2Variant variant)
     {
-        try
-        {
-            RequestGlobalUnload?.Invoke();
-            UnloadSAM2Models();
-
-            var paths = _pathService.GetSAM2Paths(variant);
-            
-            if (File.Exists(paths.Encoder)) File.Delete(paths.Encoder);
-            if (File.Exists(paths.Decoder)) File.Delete(paths.Decoder);
-
-            this.RaisePropertyChanged(nameof(IsSAM2Ready));
-            this.RaisePropertyChanged(nameof(AreResourcesReady));
-            return true;
-        }
-        catch (Exception ex)
-        {
-            LastErrorMessage = $"SAM2 Removal Failed: {ex.Message}";
-            System.Diagnostics.Debug.WriteLine(LastErrorMessage);
-            return false;
-        }
+        return _installer.RemoveSAM2Resources(variant);
     }
 
     public bool RemoveOCRResources()
     {
-        try
-        {
-            RequestGlobalUnload?.Invoke();
-            
-            var baseDir = _pathService.GetAIResourcesPath();
-            var ocrDir = Path.Combine(baseDir, "ocr");
-
-            if (Directory.Exists(ocrDir)) Directory.Delete(ocrDir, true);
-
-            this.RaisePropertyChanged(nameof(IsOCRReady));
-            this.RaisePropertyChanged(nameof(AreResourcesReady));
-            return true;
-        }
-        catch (Exception ex)
-        {
-            LastErrorMessage = $"OCR Removal Failed: {ex.Message}";
-            System.Diagnostics.Debug.WriteLine(LastErrorMessage);
-            return false;
-        }
+        return _installer.RemoveOCRResources();
     }
 
     public bool RemoveNmtResources()
     {
-        try
-        {
-            var baseDir = _pathService.GetAIResourcesPath();
-            var nmtDir = Path.Combine(baseDir, "nmt");
-            if (Directory.Exists(nmtDir)) Directory.Delete(nmtDir, true);
-            this.RaisePropertyChanged(nameof(IsNmtReady));
-            return true;
-        }
-        catch (Exception ex)
-        {
-            LastErrorMessage = $"NMT Removal Failed: {ex.Message}";
-            System.Diagnostics.Debug.WriteLine(LastErrorMessage);
-            return false;
-        }
+        return _installer.RemoveNmtResources();
     }
 
     // Deprecated but kept for compatibility if referenced elsewhere
@@ -366,127 +265,14 @@ public class AIResourceService : ReactiveObject
         // BackgroundRemovalService will handle its own _session via RequestGlobalUnload
     }
 
-    private readonly SemaphoreSlim _downloadLock = new(1, 1);
-
-
     public async Task<bool> EnsureAICoreAsync(CancellationToken ct = default)
     {
-        if (IsAICoreReady()) return true;
-
-        await _downloadLock.WaitAsync(ct);
-        try
-        {
-            if (IsAICoreReady()) return true;
-
-            _downloader.IsDownloading = true;
-            _downloader.CurrentDownloadName = "AI Core";
-            _downloader.DownloadProgress = 0;
-
-            var baseDir = _pathService.GetAIResourcesPath();
-            var runtimeDir = _pathService.GetRuntimeDir();
-            var modelsDir = _pathService.GetAIModelsDir();
-
-            Directory.CreateDirectory(runtimeDir);
-            Directory.CreateDirectory(modelsDir);
-
-            var package = _modelCatalog.GetAICorePackage();
-
-            // 1. Download Runtime
-            var onnxDll = _pathService.GetOnnxDllPath();
-            if (!File.Exists(onnxDll))
-            {
-                await _downloader.DownloadAndExtractZipAsync(package.OnnxRuntimeZipUrl, runtimeDir, 0, 60, ct); 
-            }
-            else
-            {
-                _downloader.DownloadProgress = 60;
-            }
-
-            // 2. Download U2Net Model
-            var modelPath = _pathService.GetAICoreModelPath();
-            if (!File.Exists(modelPath))
-            {
-                await _downloader.DownloadFileAsync(package.U2NetModelUrl, modelPath, 60, 40, ct);
-            }
-            else
-            {
-                _downloader.DownloadProgress = 100;
-            }
-
-            return IsAICoreReady();
-        }
-        catch (OperationCanceledException)
-        {
-            return false;
-        }
-        catch (Exception ex)
-        {
-            LastErrorMessage = ex.Message;
-            return false;
-        }
-        finally
-        {
-            _downloader.IsDownloading = false;
-            _downloadLock.Release();
-        }
+        return await _installer.EnsureAICoreAsync(ct);
     }
 
     public async Task<bool> EnsureSAM2Async(SAM2Variant variant, CancellationToken ct = default)
     {
-        if (IsSAM2Ready(variant)) return true;
-
-        await _downloadLock.WaitAsync(ct);
-        try
-        {
-            if (IsSAM2Ready(variant)) return true;
-
-            _downloader.IsDownloading = true;
-            _downloader.CurrentDownloadName = $"SAM2 Model ({variant})";
-            _downloader.DownloadProgress = 0;
-
-            var baseDir = _pathService.GetAIResourcesPath();
-            var modelsDir = _pathService.GetAIModelsDir();
-            Directory.CreateDirectory(modelsDir);
-
-            var paths = _pathService.GetSAM2Paths(variant);
-            var package = _modelCatalog.GetSam2Package(variant);
-
-            // 1. Download Encoder
-            if (!File.Exists(paths.Encoder))
-            {
-                await _downloader.DownloadFileAsync(package.EncoderUrl, paths.Encoder, 0, 90, ct);
-            }
-            else
-            {
-                _downloader.DownloadProgress = 90;
-            }
-
-            // 2. Download Decoder
-            if (!File.Exists(paths.Decoder))
-            {
-                await _downloader.DownloadFileAsync(package.DecoderUrl, paths.Decoder, 90, 10, ct);
-            }
-            else
-            {
-                _downloader.DownloadProgress = 100;
-            }
-
-            return IsSAM2Ready(variant);
-        }
-        catch (OperationCanceledException)
-        {
-            return false;
-        }
-        catch (Exception ex)
-        {
-            LastErrorMessage = ex.Message;
-            return false;
-        }
-        finally
-        {
-            _downloader.IsDownloading = false;
-            _downloadLock.Release();
-        }
+        return await _installer.EnsureSAM2Async(variant, ct);
     }
 
     public virtual Task<bool> EnsureOCRAsync(CancellationToken ct = default)
@@ -496,115 +282,12 @@ public class AIResourceService : ReactiveObject
 
     public virtual async Task<bool> EnsureOCRAsync(OCRLanguage language, CancellationToken ct = default)
     {
-        if (IsOCRReady(language)) return true;
-
-        await _downloadLock.WaitAsync(ct);
-        try
-        {
-            if (IsOCRReady(language)) return true;
-
-            _downloader.IsDownloading = true;
-            _downloader.CurrentDownloadName = "OCR Models (PaddleOCR v5)";
-            _downloader.DownloadProgress = 0;
-
-            var baseDir = _pathService.GetAIResourcesPath();
-            var ocrDir = Path.Combine(baseDir, "ocr");
-            Directory.CreateDirectory(ocrDir);
-
-            var paths = _pathService.GetOCRPaths(language);
-            var package = _modelCatalog.GetOcrPackage(language);
-
-            if (!File.Exists(paths.Det))
-                await _downloader.DownloadFileAsync(package.DetectionUrl, paths.Det, 0, 40, ct);
-            else
-                _downloader.DownloadProgress = 40;
-
-            if (!File.Exists(paths.Rec))
-                await _downloader.DownloadFileAsync(package.RecognitionUrl, paths.Rec, 40, 50, ct);
-            else
-                _downloader.DownloadProgress = 90;
-
-            if (!File.Exists(paths.Dict))
-                await _downloader.DownloadFileAsync(package.DictionaryUrl, paths.Dict, 90, 10, ct);
-            else
-                _downloader.DownloadProgress = 100;
-
-            return IsOCRReady(language);
-        }
-        catch (OperationCanceledException)
-        {
-            return false;
-        }
-        catch (Exception ex)
-        {
-            LastErrorMessage = ex.Message;
-            return false;
-        }
-        finally
-        {
-            _downloader.IsDownloading = false;
-            _downloadLock.Release();
-        }
+        return await _installer.EnsureOCRAsync(language, ct);
     }
 
     public virtual async Task<bool> EnsureNmtAsync(CancellationToken ct = default)
     {
-        if (IsNmtReady()) return true;
-
-        await _downloadLock.WaitAsync(ct);
-        try
-        {
-            if (IsNmtReady()) return true;
-
-            _downloader.IsDownloading = true;
-            _downloader.CurrentDownloadName = "NMT Translation Models (MarianMT)";
-            _downloader.DownloadProgress = 0;
-
-            var baseDir = _pathService.GetAIResourcesPath();
-            var nmtDir = Path.Combine(baseDir, "nmt");
-            Directory.CreateDirectory(nmtDir);
-
-            var paths = _pathService.GetNmtPaths();
-            var package = _modelCatalog.GetNmtPackage();
-
-            if (!File.Exists(paths.Encoder))
-                await _downloader.DownloadFileAsync(package.EncoderUrl, paths.Encoder, 0, 40, ct);
-            else
-                _downloader.DownloadProgress = 40;
-
-            if (!File.Exists(paths.Decoder))
-                await _downloader.DownloadFileAsync(package.DecoderUrl, paths.Decoder, 40, 50, ct);
-            else
-                _downloader.DownloadProgress = 90;
-
-            if (!File.Exists(paths.Tokenizer))
-                await _downloader.DownloadFileAsync(package.TokenizerUrl, paths.Tokenizer, 90, 2.5, ct);
-
-            if (!File.Exists(paths.Spm))
-                await _downloader.DownloadFileAsync(package.SentencePieceUrl, paths.Spm, 92.5, 2.5, ct);
-            
-            if (!File.Exists(paths.Config))
-                await _downloader.DownloadFileAsync(package.ConfigUrl, paths.Config, 95, 2.5, ct);
-            if (!File.Exists(paths.GenConfig))
-                await _downloader.DownloadFileAsync(package.GenerationConfigUrl, paths.GenConfig, 97.5, 2.5, ct);
-
-            _downloader.DownloadProgress = 100;
-            return IsNmtReady();
-        }
-        catch (OperationCanceledException)
-        {
-            return false;
-        }
-        catch (Exception ex)
-        {
-            LastErrorMessage = ex.Message;
-            return false;
-        }
-        finally
-        {
-            _downloader.IsDownloading = false;
-            _downloadLock.Release();
-        }
+        return await _installer.EnsureNmtAsync(ct);
     }
 
     public void SetupNativeResolvers()
