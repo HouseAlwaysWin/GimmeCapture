@@ -710,7 +710,7 @@ public partial class FloatingImageViewModel
     {
         if (_sam2Service != null && _sam2Service.ModelVariantName != "Unknown") return _sam2Service;
 
-        _sam2Service = new SAM2Service(_aiResourceService, _appSettingsService);
+        _sam2Service = new SAM2Service(_sam2RuntimeService, _appSettingsService);
         // ProcessingText is handled by caller
         try
         {

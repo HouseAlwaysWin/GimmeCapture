@@ -105,6 +105,7 @@ public partial class MainWindowViewModel : ViewModelBase
     public RecordingService RecordingService { get; }
     public UpdateService UpdateService { get; }
     public AIResourceService AIResourceService { get; }
+    public SAM2RuntimeService SAM2RuntimeService { get; }
     public AIPathService AIPathService { get; }
     public ResourceQueueService ResourceQueue { get; }
     
@@ -170,6 +171,7 @@ public partial class MainWindowViewModel : ViewModelBase
         RecordingService = dependencies.RecordingService;
         UpdateService = dependencies.UpdateService;
         AIResourceService = dependencies.AIResourceService;
+        SAM2RuntimeService = dependencies.SAM2RuntimeService;
         AIPathService = dependencies.AIPathService;
         ResourceQueue = dependencies.ResourceQueue;
 

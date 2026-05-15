@@ -12,6 +12,7 @@ public sealed class AIScanSessionService : IAIScanSessionService
 {
     private readonly IScreenCaptureService _captureService;
     private readonly AIResourceService _aiResourceService;
+    private readonly SAM2RuntimeService _sam2RuntimeService;
     private readonly AppSettingsService _settingsService;
     private readonly IOcrEngineFactory _ocrEngineFactory;
     private readonly SAM2Service _sam2Service;
@@ -19,14 +20,16 @@ public sealed class AIScanSessionService : IAIScanSessionService
     public AIScanSessionService(
         IScreenCaptureService captureService,
         AIResourceService aiResourceService,
+        SAM2RuntimeService sam2RuntimeService,
         AppSettingsService settingsService,
         IOcrEngineFactory ocrEngineFactory)
     {
         _captureService = captureService ?? throw new ArgumentNullException(nameof(captureService));
         _aiResourceService = aiResourceService ?? throw new ArgumentNullException(nameof(aiResourceService));
+        _sam2RuntimeService = sam2RuntimeService ?? throw new ArgumentNullException(nameof(sam2RuntimeService));
         _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
         _ocrEngineFactory = ocrEngineFactory ?? throw new ArgumentNullException(nameof(ocrEngineFactory));
-        _sam2Service = new SAM2Service(aiResourceService, settingsService);
+        _sam2Service = new SAM2Service(_sam2RuntimeService, settingsService);
     }
 
     public Task WarmUpSam2Async(CancellationToken ct = default)

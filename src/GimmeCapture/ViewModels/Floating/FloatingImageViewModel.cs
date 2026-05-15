@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core;
+using GimmeCapture.Services.Core.AI;
 using System.Reactive.Linq;
 using GimmeCapture.ViewModels.Shared;
 using System;
@@ -116,6 +117,7 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
 
     public IClipboardService ClipboardService => _clipboardService;
     public AIResourceService AIResourceService => _aiResourceService;
+    public SAM2RuntimeService SAM2RuntimeService => _sam2RuntimeService;
     public AIPathService AIPathService => _pathService;
     public AppSettingsService AppSettingsService => _appSettingsService;
     public Func<string, Task<bool>>? ConfirmDialogAction { get; set; }
@@ -123,6 +125,7 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
 
     private readonly IClipboardService _clipboardService;
     private readonly AIResourceService _aiResourceService;
+    private readonly SAM2RuntimeService _sam2RuntimeService;
     private readonly AIPathService _pathService;
     private readonly AppSettingsService _appSettingsService = null!;
 
@@ -225,7 +228,7 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
 
     public override bool IsAnyToolActive => base.IsAnyToolActive || IsPointRemovalMode;
 
-    public FloatingImageViewModel(Bitmap image, double originalWidth, double originalHeight, Avalonia.Media.Color borderColor, double borderThickness, bool hideDecoration, bool hideBorder, IClipboardService clipboardService, AIResourceService aiResourceService, AppSettingsService appSettingsService, AIPathService pathService, string? pinnedText = null, double inferredFontSize = 12.0)
+    public FloatingImageViewModel(Bitmap image, double originalWidth, double originalHeight, Avalonia.Media.Color borderColor, double borderThickness, bool hideDecoration, bool hideBorder, IClipboardService clipboardService, AIResourceService aiResourceService, SAM2RuntimeService sam2RuntimeService, AppSettingsService appSettingsService, AIPathService pathService, string? pinnedText = null, double inferredFontSize = 12.0)
     {
         Image = image;
         OriginalWidth = originalWidth;
@@ -240,6 +243,7 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
         InferredFontSize = inferredFontSize;
         _clipboardService = clipboardService;
         _aiResourceService = aiResourceService;
+        _sam2RuntimeService = sam2RuntimeService;
         _pathService = pathService;
         _appSettingsService = appSettingsService;
 

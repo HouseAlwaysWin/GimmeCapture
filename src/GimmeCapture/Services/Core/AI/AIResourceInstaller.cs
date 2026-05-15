@@ -119,7 +119,7 @@ internal sealed class AIResourceInstaller
         try
         {
             _callbacks.RequestGlobalUnload();
-            _callbacks.UnloadSAM2Models();
+            _callbacks.UnloadSam2Runtime();
 
             var paths = _pathService.GetSAM2Paths(variant);
             if (File.Exists(paths.Encoder)) File.Delete(paths.Encoder);
@@ -411,7 +411,7 @@ internal sealed record AIResourceInstallerCallbacks(
     Action<string> RaisePropertyChanged,
     Action RequestGlobalUnload,
     Action UnloadAllSessions,
-    Action UnloadSAM2Models,
+    Action UnloadSam2Runtime,
     Func<bool> IsAICoreReady,
     Func<SAM2Variant, bool> IsSAM2Ready,
     Func<OCRLanguage, bool> IsOCRReady,

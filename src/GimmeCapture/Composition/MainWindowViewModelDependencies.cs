@@ -20,5 +20,6 @@ public sealed record MainWindowViewModelDependencies(
     RecordingService RecordingService,
     UpdateService UpdateService,
     AIResourceService AIResourceService,
+    SAM2RuntimeService SAM2RuntimeService,
     AIPathService AIPathService,
     ResourceQueueService ResourceQueue);

@@ -43,7 +43,8 @@ public class FloatingImageViewModelTests
         var mockAiResolver = new Mock<NativeResolverService>(mockAiPath.Object);
         var mockAiDownloader = new Mock<AIModelDownloader>();
         var mockAi = new Mock<AIResourceService>(mockSettings.Object, mockAiPath.Object, mockAiResolver.Object, mockAiDownloader.Object);
-        var vm = new FloatingImageViewModel(null!, 0, 0, Avalonia.Media.Colors.Red, 2.0, false, false, mockService, mockAi.Object, mockSettings.Object, mockAiPath.Object);
+        var sam2Runtime = new SAM2RuntimeService(mockAiPath.Object, mockAiResolver.Object);
+        var vm = new FloatingImageViewModel(null!, 0, 0, Avalonia.Media.Colors.Red, 2.0, false, false, mockService, mockAi.Object, sam2Runtime, mockSettings.Object, mockAiPath.Object);
 
         // Act
         await vm.CopyCommand.Execute();

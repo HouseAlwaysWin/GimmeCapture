@@ -31,7 +31,14 @@ public partial class MainWindowViewModel
         var nativeResolverService = new NativeResolverService(aiPathService);
         var aiModelDownloader = new AIModelDownloader();
         var aiModelCatalog = new AIModelCatalog();
-        var aiResourceService = new AIResourceService(settingsService, aiPathService, nativeResolverService, aiModelDownloader, aiModelCatalog);
+        var sam2RuntimeService = new SAM2RuntimeService(aiPathService, nativeResolverService);
+        var aiResourceService = new AIResourceService(
+            settingsService,
+            aiPathService,
+            nativeResolverService,
+            aiModelDownloader,
+            aiModelCatalog,
+            sam2RuntimeService.UnloadModels);
 
         return new MainWindowViewModelDependencies(
             settingsService,
@@ -48,6 +55,7 @@ public partial class MainWindowViewModel
             recordingService,
             updateService,
             aiResourceService,
+            sam2RuntimeService,
             aiPathService,
             ResourceQueueService.Instance);
     }

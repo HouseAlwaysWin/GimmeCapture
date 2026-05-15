@@ -25,6 +25,7 @@ public class MainWindowViewModelHotkeyTests
 
         var settingsService = new AppSettingsService(tempDir);
         var aiPathService = new AIPathService(settingsService);
+        var nativeResolverService = new NativeResolverService(aiPathService);
         var ffmpegDownloader = new FFmpegDownloaderService(settingsService);
         var hotkeyCoordinator = new CountingGlobalHotkeySettingsCoordinator();
         var dependencies = new MainWindowViewModelDependencies(
@@ -41,7 +42,8 @@ public class MainWindowViewModelHotkeyTests
             ffmpegDownloader,
             new RecordingService(ffmpegDownloader, settingsService),
             new UpdateService("1.2.3"),
-            new AIResourceService(settingsService, aiPathService, new NativeResolverService(aiPathService), new AIModelDownloader()),
+            new AIResourceService(settingsService, aiPathService, nativeResolverService, new AIModelDownloader()),
+            new SAM2RuntimeService(aiPathService, nativeResolverService),
             aiPathService,
             ResourceQueueService.Instance);
 

@@ -65,6 +65,7 @@ public sealed class SnipWindowFactory : ISnipWindowFactory
         var aiScanSessionService = new AIScanSessionService(
             _screenCaptureService,
             vm.AIResourceService,
+            vm.SAM2RuntimeService,
             vm.AppSettingsService,
             new PaddleOcrEngineFactory());
 

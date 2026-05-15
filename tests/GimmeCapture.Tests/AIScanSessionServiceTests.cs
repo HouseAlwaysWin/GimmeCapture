@@ -25,12 +25,14 @@ public sealed class AIScanSessionServiceTests : IDisposable
         var resolver = new NativeResolverService(pathService);
         var downloader = new AIModelDownloader();
         var aiResourceService = new AIResourceService(settingsService, pathService, resolver, downloader);
+        var sam2RuntimeService = new SAM2RuntimeService(pathService, resolver);
         var captureService = new Mock<IScreenCaptureService>();
         var ocrEngineFactory = new Mock<IOcrEngineFactory>();
 
         using var sut = new AIScanSessionService(
             captureService.Object,
             aiResourceService,
+            sam2RuntimeService,
             settingsService,
             ocrEngineFactory.Object);
 
@@ -60,6 +62,7 @@ public sealed class AIScanSessionServiceTests : IDisposable
         var resolver = new NativeResolverService(pathService);
         var downloader = new Mock<AIModelDownloader>();
         var aiResourceService = new Mock<AIResourceService>(settingsService, pathService, resolver, downloader.Object);
+        var sam2RuntimeService = new SAM2RuntimeService(pathService, resolver);
         var ocrEngineFactory = new Mock<IOcrEngineFactory>();
         var ocrEngine = new FakeOcrEngine(new List<SKRectI> { new(10, 12, 40, 36) });
         using var bitmap = CreateBitmap(100, 50, SKColors.White);
@@ -79,6 +82,7 @@ public sealed class AIScanSessionServiceTests : IDisposable
         using var sut = new AIScanSessionService(
             captureService.Object,
             aiResourceService.Object,
+            sam2RuntimeService,
             settingsService,
             ocrEngineFactory.Object);
 

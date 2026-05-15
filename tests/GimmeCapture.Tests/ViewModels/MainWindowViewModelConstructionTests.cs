@@ -37,6 +37,7 @@ public class MainWindowViewModelConstructionTests
         var aiPathService = new AIPathService(settingsService);
         var nativeResolverService = new NativeResolverService(aiPathService);
         var aiResourceService = new AIResourceService(settingsService, aiPathService, nativeResolverService, new AIModelDownloader());
+        var sam2RuntimeService = new SAM2RuntimeService(aiPathService, nativeResolverService);
         var resourceQueue = ResourceQueueService.Instance;
 
         var dependencies = new MainWindowViewModelDependencies(
@@ -54,6 +55,7 @@ public class MainWindowViewModelConstructionTests
             recordingService,
             updateService,
             aiResourceService,
+            sam2RuntimeService,
             aiPathService,
             resourceQueue);
 
@@ -65,6 +67,7 @@ public class MainWindowViewModelConstructionTests
         Assert.Same(updateService, viewModel.UpdateService);
         Assert.Same(aiPathService, viewModel.AIPathService);
         Assert.Same(aiResourceService, viewModel.AIResourceService);
+        Assert.Same(sam2RuntimeService, viewModel.SAM2RuntimeService);
         Assert.Same(resourceQueue, viewModel.ResourceQueue);
     }
 }

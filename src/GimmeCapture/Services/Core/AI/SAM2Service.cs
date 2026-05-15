@@ -11,7 +11,7 @@ namespace GimmeCapture.Services.Core.AI;
 
 public class SAM2Service : IDisposable
 {
-    private readonly AIResourceService _resourceService;
+    private readonly SAM2RuntimeService _runtimeService;
     private InferenceSession? _encoderSession;
     private InferenceSession? _decoderSession;
     private bool _isInitialized = false;
@@ -33,9 +33,9 @@ public class SAM2Service : IDisposable
     private readonly AppSettingsService _settingsService;
     private readonly SemaphoreSlim _initLock = new(1, 1);
 
-    public SAM2Service(AIResourceService resourceService, AppSettingsService settingsService)
+    public SAM2Service(SAM2RuntimeService runtimeService, AppSettingsService settingsService)
     {
-        _resourceService = resourceService;
+        _runtimeService = runtimeService;
         _settingsService = settingsService;
     }
 
@@ -48,14 +48,12 @@ public class SAM2Service : IDisposable
         {
             if (_isInitialized) return;
 
-            _resourceService.SetupNativeResolvers();
-
             var variant = _settingsService.Settings.SelectedSAM2Variant;
             ModelVariantName = variant.ToString();
 
-            // Use cached sessions from Resource Service (already warmed up there)
-            await _resourceService.LoadSAM2ModelsAsync(variant);
-            var sessions = _resourceService.GetSAM2Sessions();
+            // Use shared runtime sessions so SAM2 callers reuse the same warmed-up model pair.
+            await _runtimeService.LoadModelsAsync(variant);
+            var sessions = _runtimeService.GetSessions();
             
             _encoderSession = sessions.Encoder;
             _decoderSession = sessions.Decoder;
