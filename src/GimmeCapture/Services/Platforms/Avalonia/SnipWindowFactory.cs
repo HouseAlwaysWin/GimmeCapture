@@ -2,6 +2,7 @@ using Avalonia.Controls;
 using System;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Abstractions;
+using GimmeCapture.Services.OCR;
 using GimmeCapture.ViewModels.Main;
 using GimmeCapture.Views.Main;
 
@@ -53,6 +54,11 @@ public sealed class SnipWindowFactory : ISnipWindowFactory
         var translationSelectionMonitor = new TranslationSelectionMonitor(
             _screenCaptureService,
             translationSession);
+        var aiScanSessionService = new AIScanSessionService(
+            _screenCaptureService,
+            mainViewModel.AIResourceService,
+            mainViewModel.AppSettingsService,
+            new PaddleOcrEngineFactory());
 
         var snipVm = new SnipWindowViewModel(
             mainViewModel.BorderColor,
@@ -62,7 +68,8 @@ public sealed class SnipWindowFactory : ISnipWindowFactory
             mainViewModel.RecordingService,
             mainViewModel,
             translationSession,
-            translationSelectionMonitor);
+            translationSelectionMonitor,
+            aiScanSessionService);
 
         snipVm.AutoActionMode = mode switch
         {

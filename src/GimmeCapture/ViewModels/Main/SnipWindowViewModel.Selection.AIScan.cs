@@ -2,12 +2,13 @@ using Avalonia;
 using GimmeCapture.Models;
 using ReactiveUI;
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Reactive;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
+using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core;
-using GimmeCapture.Services.OCR;
 using GimmeCapture.Services.Platforms.Windows;
 
 namespace GimmeCapture.ViewModels.Main;
@@ -137,6 +138,12 @@ public partial class SnipWindowViewModel
             return;
         }
 
+        if (_aiScanSessionService == null)
+        {
+            System.Diagnostics.Debug.WriteLine("[AI Scan] Abort: AI scan session service is null");
+            return;
+        }
+
         // Cancel previous scan if any
         _scanCts?.Cancel();
         _scanCts = new System.Threading.CancellationTokenSource();
@@ -147,113 +154,49 @@ public partial class SnipWindowViewModel
         
         try
         {
-            if (CurrentState == SnipState.Detecting) ProcessingText = LocalizationService.Instance["StatusInitializingAI"] ?? "Initializing AI Models...";
-            // Check AI resources first
-            var aiReady = _mainVm.AIResourceService.IsSAM2Ready(_mainVm.AppSettingsService.Settings.SelectedSAM2Variant);
-            Console.WriteLine($"[AI Scan] SAM2 Ready: {aiReady}");
-            
-            if (!aiReady)
+            if (CurrentState == SnipState.Detecting)
             {
-                if (CurrentState == SnipState.Detecting) ProcessingText = LocalizationService.Instance["StatusSAM2NotFound"] ?? "ABORT: SAM2 models not found. Please download in settings.";
-                Console.WriteLine("[AI Scan] ABORT: SAM2 not ready - model may not be downloaded");
-                await Task.Delay(2000, token);
-                ShowTopLoadingBar = false;
-                return;
+                ProcessingText = LocalizationService.Instance["StatusInitializingAI"] ?? "Initializing AI Models...";
             }
 
-            token.ThrowIfCancellationRequested();
-
-            // 1. Capture full screen for SAM2 encoding
             var originalOpacity = MaskOpacity;
             MaskOpacity = 0;
-            await Task.Delay(100, token); // Let mask hide
-
-            var regionToCapture = new Rect(0, 0, ViewportSize.Width, ViewportSize.Height);
-            Console.WriteLine($"[AI Scan] Capturing region: {regionToCapture}");
-            
-            using var skBitmap = await _captureService.CaptureScreenAsync(regionToCapture, ScreenOffset, VisualScaling, false);
-            
-            MaskOpacity = originalOpacity;
-            
-            if (skBitmap == null) 
+            try
             {
-                Console.WriteLine("[AI Scan] ABORT: Capture returned null");
-                return;
-            }
-            
-            Console.WriteLine($"[AI Scan] Captured bitmap: {skBitmap.Width}x{skBitmap.Height}");
-            
-            token.ThrowIfCancellationRequested();
+                await Task.Delay(100, token);
 
-            // 2. Run scan using persistent SAM2 service (Preloaded and Warmed up)
-            if (_sam2Service == null) return;
-            
-            Console.WriteLine("[AI Scan] Using preloaded SAM2 service...");
-            await _sam2Service.InitializeAsync(); // Ensures it's ready if preload was slow
-            
-            Console.WriteLine("[AI Scan] Setting image (Fast path)...");
-            if (CurrentState == SnipState.Detecting) ProcessingText = LocalizationService.Instance["StatusAIEncoding"] ?? "AI Encoding Image...";
-            await _sam2Service.SetImageAsync(skBitmap);
-            Console.WriteLine("[AI Scan] Image set. Running AutoDetect...");
-            if (CurrentState == SnipState.Detecting) ProcessingText = LocalizationService.Instance["StatusAIDetecting"] ?? "Detecting Objects...";
-
-            token.ThrowIfCancellationRequested();
-
-            // Use higher grid density for better detection on high-res screens
-            int gridDensity = Math.Max(24, _mainVm.SAM2GridDensity);
-            var rects = await _sam2Service.AutoDetectObjectsAsync(gridDensity, _mainVm.SAM2MaxObjects, _mainVm.SAM2MinObjectSize, token); 
-            // Do NOT dispose persistent service here
-            
-            Console.WriteLine($"[AI Scan] AutoDetect returned {rects.Count} rects");
-
-            token.ThrowIfCancellationRequested();
-
-            // 4. Add detected rects to WindowRects
-            if (rects.AsValueEnumerable().Any())
-            {
-                // Only add to WindowRects (visual red boxes) if the setting is enabled
-                if (_mainVm.ShowAIScanBox)
+                var progress = new Progress<AIScanStage>(stage =>
                 {
-                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                    if (CurrentState != SnipState.Detecting)
                     {
-                        if (token.IsCancellationRequested) return;
-                        
-                        // Guard: If user has already started selecting or finished, or AI disabled, don't show rects
-                        if (CurrentState != SnipState.Detecting || _mainVm?.EnableAI != true || CurrentMode == SnipMode.Translation) return;
+                        return;
+                    }
 
-                        int addedCount = 0;
-                        double scale = VisualScaling > 0 ? VisualScaling : 1.0;
-                        
-                        foreach (var r in rects)
-                        {
-                             if (token.IsCancellationRequested) break;
+                    ProcessingText = stage switch
+                    {
+                        AIScanStage.EncodingImage => LocalizationService.Instance["StatusAIEncoding"] ?? "AI Encoding Image...",
+                        AIScanStage.DetectingObjects => LocalizationService.Instance["StatusAIDetecting"] ?? "Detecting Objects...",
+                        _ => ProcessingText
+                    };
+                });
 
-                            // Filter small objects (e.g. < 50x50 = 2500 area)
-                            double logicalWidth = r.Width / scale;
-                            double logicalHeight = r.Height / scale;
-                            double area = logicalWidth * logicalHeight;
-                            double viewportArea = ViewportSize.Width * ViewportSize.Height;
-                            
-                            // Filter tiny objects AND full-screen objects (> 95% of screen)
-                            if (logicalWidth >= 20 && logicalHeight >= 20 && area < (viewportArea * 0.95))
-                            {
-                                // Convert to logical coordinates for display
-                                var logicalRect = new Rect(r.X / scale, r.Y / scale, logicalWidth, logicalHeight);
-                                WindowRects.Add(new VisualRect(logicalRect));
-                                addedCount++;
-                            }
-                        }
-                        Console.WriteLine($"[AI Scan] Complete: {addedCount} objects added (filtered from {rects.Count})");
-                    });
-                }
-                else
+                var result = await _aiScanSessionService.RunScanAsync(CreateAIScanSessionRequest(AIScanEngine.SAM2), progress, token);
+                if (!result.IsReady)
                 {
-                     Console.WriteLine($"[AI Scan] Complete: {rects.Count} objects detected (Hidden by setting)");
+                    if (CurrentState == SnipState.Detecting && !string.IsNullOrWhiteSpace(result.NotReadyStatusKey))
+                    {
+                        ProcessingText = LocalizationService.Instance[result.NotReadyStatusKey];
+                        await Task.Delay(2000, token);
+                    }
+
+                    return;
                 }
+
+                ApplySam2ScanRects(result.DetectedRects, token);
             }
-            else
+            finally
             {
-                Console.WriteLine("[AI Scan] No objects detected");
+                MaskOpacity = originalOpacity;
             }
         }
         catch (OperationCanceledException)
@@ -302,6 +245,12 @@ public partial class SnipWindowViewModel
             return;
         }
 
+        if (_aiScanSessionService == null)
+        {
+            System.Diagnostics.Debug.WriteLine("[AI Scan][OCR] Abort: AI scan session service is null");
+            return;
+        }
+
         _scanCts?.Cancel();
         _scanCts = new System.Threading.CancellationTokenSource();
         var token = _scanCts.Token;
@@ -313,74 +262,14 @@ public partial class SnipWindowViewModel
             if (CurrentState == SnipState.Detecting)
                 ProcessingText = LocalizationService.Instance["StatusAIScanning"] ?? "AI Scanning...";
 
-            var ocrReady = await _mainVm.AIResourceService.EnsureOCRAsync();
-            if (!ocrReady)
+            var result = await _aiScanSessionService.RunScanAsync(CreateAIScanSessionRequest(AIScanEngine.OCR), ct: token);
+            if (!result.IsReady)
             {
                 System.Diagnostics.Debug.WriteLine("[AI Scan][OCR] OCR resources are not ready");
                 return;
             }
 
-            token.ThrowIfCancellationRequested();
-
-            var regionToCapture = new Rect(0, 0, ViewportSize.Width, ViewportSize.Height);
-            using var bitmap = await _captureService.CaptureScreenAsync(regionToCapture, ScreenOffset, VisualScaling, false);
-            if (bitmap == null)
-            {
-                System.Diagnostics.Debug.WriteLine("[AI Scan][OCR] Capture returned null");
-                return;
-            }
-
-            token.ThrowIfCancellationRequested();
-
-            var ocrEngine = new PaddleOCREngine(_mainVm.AIResourceService, _mainVm.AppSettingsService);
-            var ocrLang = _mainVm.AppSettingsService.Settings.SourceLanguage;
-            await ocrEngine.EnsureLoadedAsync(ocrLang);
-            var textBoxes = await Task.Run(() => ocrEngine.DetectText(bitmap), token);
-            ocrEngine.Dispose();
-
-            token.ThrowIfCancellationRequested();
-
-            if (_mainVm.ShowAIScanBox)
-            {
-                await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
-                {
-                    if (token.IsCancellationRequested) return;
-                    if (CurrentState != SnipState.Detecting || _mainVm?.EnableAI != true || CurrentMode == SnipMode.Translation) return;
-                    
-                    // Keep existing Win32-detected candidate boxes and append OCR boxes.
-                    // This preserves original selectable regions while still adding text targets.
-                    bool IsNearDuplicate(Rect a, Rect b)
-                    {
-                        const double posTolerance = 6.0;
-                        const double sizeTolerance = 8.0;
-                        return Math.Abs(a.X - b.X) <= posTolerance &&
-                               Math.Abs(a.Y - b.Y) <= posTolerance &&
-                               Math.Abs(a.Width - b.Width) <= sizeTolerance &&
-                               Math.Abs(a.Height - b.Height) <= sizeTolerance;
-                    }
-
-                    double scaleX = ViewportSize.Width / bitmap.Width;
-                    double scaleY = ViewportSize.Height / bitmap.Height;
-                    foreach (var box in textBoxes)
-                    {
-                        var logicalRect = new Rect(
-                            box.Left * scaleX,
-                            box.Top * scaleY,
-                            box.Width * scaleX,
-                            box.Height * scaleY);
-
-                        if (logicalRect.Width >= 12 && logicalRect.Height >= 8)
-                        {
-                            bool duplicated = WindowRects.AsValueEnumerable().Any(existing =>
-                                IsNearDuplicate(new Rect(existing.X, existing.Y, existing.Width, existing.Height), logicalRect));
-                            if (!duplicated)
-                            {
-                                WindowRects.Add(new VisualRect(logicalRect));
-                            }
-                        }
-                    }
-                });
-            }
+            ApplyOcrScanRects(result.DetectedRects, token);
         }
         catch (OperationCanceledException)
         {
@@ -396,6 +285,81 @@ public partial class SnipWindowViewModel
             _scanCts?.Dispose();
             _scanCts = null;
         }
+    }
+
+    private AIScanSessionRequest CreateAIScanSessionRequest(AIScanEngine engine)
+    {
+        return new AIScanSessionRequest(
+            engine,
+            new Rect(0, 0, ViewportSize.Width, ViewportSize.Height),
+            ScreenOffset,
+            VisualScaling,
+            _mainVm?.AppSettingsService.Settings.SelectedSAM2Variant ?? SAM2Variant.Tiny,
+            _mainVm?.SAM2GridDensity ?? 24,
+            _mainVm?.SAM2MaxObjects ?? 20,
+            _mainVm?.SAM2MinObjectSize ?? 20,
+            _mainVm?.AppSettingsService.Settings.SourceLanguage ?? OCRLanguage.TraditionalChinese);
+    }
+
+    private void ApplySam2ScanRects(IReadOnlyList<Rect> rects, System.Threading.CancellationToken token)
+    {
+        if (!_mainVm!.ShowAIScanBox || rects.Count == 0)
+        {
+            Console.WriteLine(rects.Count == 0
+                ? "[AI Scan] No objects detected"
+                : $"[AI Scan] Complete: {rects.Count} objects detected (Hidden by setting)");
+            return;
+        }
+
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            if (token.IsCancellationRequested) return;
+            if (CurrentState != SnipState.Detecting || _mainVm?.EnableAI != true || CurrentMode == SnipMode.Translation) return;
+
+            int addedCount = 0;
+            foreach (var rect in rects)
+            {
+                if (token.IsCancellationRequested) break;
+                WindowRects.Add(new VisualRect(rect));
+                addedCount++;
+            }
+
+            Console.WriteLine($"[AI Scan] Complete: {addedCount} objects added (filtered from {rects.Count})");
+        });
+    }
+
+    private void ApplyOcrScanRects(IReadOnlyList<Rect> rects, System.Threading.CancellationToken token)
+    {
+        if (!_mainVm!.ShowAIScanBox || rects.Count == 0)
+        {
+            return;
+        }
+
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            if (token.IsCancellationRequested) return;
+            if (CurrentState != SnipState.Detecting || _mainVm?.EnableAI != true || CurrentMode == SnipMode.Translation) return;
+
+            bool IsNearDuplicate(Rect a, Rect b)
+            {
+                const double posTolerance = 6.0;
+                const double sizeTolerance = 8.0;
+                return Math.Abs(a.X - b.X) <= posTolerance &&
+                       Math.Abs(a.Y - b.Y) <= posTolerance &&
+                       Math.Abs(a.Width - b.Width) <= sizeTolerance &&
+                       Math.Abs(a.Height - b.Height) <= sizeTolerance;
+            }
+
+            foreach (var rect in rects)
+            {
+                bool duplicated = WindowRects.AsValueEnumerable().Any(existing =>
+                    IsNearDuplicate(new Rect(existing.X, existing.Y, existing.Width, existing.Height), rect));
+                if (!duplicated)
+                {
+                    WindowRects.Add(new VisualRect(rect));
+                }
+            }
+        });
     }
 
     private Rect _activeScreenBounds = new Rect(0,0,1920,1080); // Default
@@ -530,17 +494,17 @@ public partial class SnipWindowViewModel
         };
     }
 
-    private SAM2Service? _sam2Service;
-
     private void InitializeSAM2(MainWindowViewModel mainVm)
     {
-        _sam2Service = new SAM2Service(mainVm.AIResourceService, mainVm.AppSettingsService);
         Task.Run(async () => 
         {
             try
             {
                 System.Diagnostics.Debug.WriteLine("[SAM2 Preload] Starting background initialization and warmup...");
-                await _sam2Service.InitializeAsync();
+                if (_aiScanSessionService != null)
+                {
+                    await _aiScanSessionService.WarmUpSam2Async();
+                }
                 System.Diagnostics.Debug.WriteLine("[SAM2 Preload] Background warmup complete. Ready for scan.");
             }
             catch (Exception ex)

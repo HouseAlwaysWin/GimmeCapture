@@ -66,6 +66,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     private readonly IScreenCaptureService _captureService;
     private readonly ITranslationSessionService? _translationSession;
     private readonly ITranslationSelectionMonitor? _translationSelectionMonitor;
+    private readonly IAIScanSessionService? _aiScanSessionService;
     private readonly CompositeDisposable _disposables = new();
     private readonly AudioLevelMonitorService _audioLevelMonitor = new();
     private readonly DispatcherTimer _audioMeterTimer;
@@ -236,10 +237,10 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     public List<OCRLanguage> AvailableOCRLanguages => _mainVm?.AvailableOCRLanguages ?? Enum.GetValues<OCRLanguage>().AsValueEnumerable().ToList();
     public List<TranslationLanguage> AvailableTranslationLanguages => _mainVm?.AvailableTranslationLanguages ?? Enum.GetValues<TranslationLanguage>().AsValueEnumerable().ToList();
 
-    public SnipWindowViewModel() : this(Colors.Red, 2.0, 0.5, new WindowsScreenCaptureService(), null, null, null, null) { }
+    public SnipWindowViewModel() : this(Colors.Red, 2.0, 0.5, new WindowsScreenCaptureService(), null, null, null, null, null) { }
 
     public SnipWindowViewModel(Color borderColor, double borderThickness, double maskOpacity, RecordingService? recService = null, MainWindowViewModel? mainVm = null)
-        : this(borderColor, borderThickness, maskOpacity, new WindowsScreenCaptureService(), recService, mainVm, null, null)
+        : this(borderColor, borderThickness, maskOpacity, new WindowsScreenCaptureService(), recService, mainVm, null, null, null)
     {
     }
 
@@ -251,11 +252,13 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         RecordingService? recService = null,
         MainWindowViewModel? mainVm = null,
         ITranslationSessionService? translationSession = null,
-        ITranslationSelectionMonitor? translationSelectionMonitor = null)
+        ITranslationSelectionMonitor? translationSelectionMonitor = null,
+        IAIScanSessionService? aiScanSessionService = null)
     {
         _captureService = captureService ?? throw new ArgumentNullException(nameof(captureService));
         _translationSession = translationSession;
         _translationSelectionMonitor = translationSelectionMonitor;
+        _aiScanSessionService = aiScanSessionService;
         _selectionBorderColor = borderColor;
         _selectionBorderThickness = borderThickness;
         _maskOpacity = maskOpacity;
@@ -642,8 +645,8 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         _audioMeterTimer.Stop();
         _audioLevelMonitor.Dispose();
         _disposables.Dispose();
-        _sam2Service?.Dispose();
         _translationSession?.Dispose();
+        _aiScanSessionService?.Dispose();
         _recordTimer?.Stop();
         
         CloseAction = null;
