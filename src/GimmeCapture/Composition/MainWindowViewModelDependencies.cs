@@ -43,7 +43,8 @@ public sealed record MainWindowViewModelDependencies(
         var aiPathService = new AIPathService(settingsService);
         var nativeResolverService = new NativeResolverService(aiPathService);
         var aiModelDownloader = new AIModelDownloader();
-        var aiResourceService = new AIResourceService(settingsService, aiPathService, nativeResolverService, aiModelDownloader);
+        var aiModelCatalog = new AIModelCatalog();
+        var aiResourceService = new AIResourceService(settingsService, aiPathService, nativeResolverService, aiModelDownloader, aiModelCatalog);
 
         return new MainWindowViewModelDependencies(
             settingsService,

@@ -1,7 +1,5 @@
 using System;
 using System.IO;
-using System.IO.Compression;
-using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using ReactiveUI;
@@ -13,88 +11,33 @@ namespace GimmeCapture.Services.Core.AI;
 
 public class AIResourceService : ReactiveObject
 {
-    private const string ModelUrl = "https://github.com/danielgatis/rembg/releases/download/v0.0.0/u2net.onnx";
-    private const string MobileSamEncoderUrl = "https://huggingface.co/Acly/MobileSAM/resolve/main/mobile_sam_image_encoder.onnx?download=true";
-    private const string MobileSamDecoderUrl = "https://huggingface.co/Acly/MobileSAM/resolve/main/sam_mask_decoder_multi.onnx?download=true";
-    
-    private const string Sam2TinyEncoderUrl = "https://huggingface.co/shubham0204/sam2-onnx-models/resolve/main/sam2_hiera_tiny_encoder.onnx?download=true";
-    private const string Sam2TinyDecoderUrl = "https://huggingface.co/shubham0204/sam2-onnx-models/resolve/main/sam2_hiera_tiny_decoder.onnx?download=true";
-    
-    private const string Sam2SmallEncoderUrl = "https://huggingface.co/shubham0204/sam2-onnx-models/resolve/main/sam2_hiera_small_encoder.onnx?download=true";
-    private const string Sam2SmallDecoderUrl = "https://huggingface.co/shubham0204/sam2-onnx-models/resolve/main/sam2_hiera_small_decoder.onnx?download=true";
-    
-    // Note: Base Plus is significantly larger
-    private const string Sam2BasePlusEncoderUrl = "https://huggingface.co/shubham0204/sam2-onnx-models/resolve/main/sam2_hiera_base_plus_encoder.onnx?download=true";
-    private const string Sam2BasePlusDecoderUrl = "https://huggingface.co/shubham0204/sam2-onnx-models/resolve/main/sam2_hiera_base_plus_decoder.onnx?download=true";
-    
-    private const string Sam2LargeEncoderUrl = "https://huggingface.co/SharpAI/sam2-hiera-large-onnx/resolve/main/encoder.onnx?download=true";
-    private const string Sam2LargeDecoderUrl = "https://huggingface.co/SharpAI/sam2-hiera-large-onnx/resolve/main/decoder.onnx?download=true";
-    
-    // PaddleOCR v4 ONNX Models (Using verified ModelScope mirrors for ONNX and PaddleOCR GitHub for Dicts)
-    // Universal Detection Model (ch_PP-OCRv4_det - supports all)
-    private const string OcrDetUrl = "https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.6.0/onnx/PP-OCRv4/det/ch_PP-OCRv4_det_infer.onnx"; 
-    
-    // Recognition Models
-    // English
-    private const string OcrRecEnUrl = "https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.6.0/onnx/PP-OCRv4/rec/en_PP-OCRv4_rec_infer.onnx";
-    private const string OcrDictEnUrl = "https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/release/2.7/ppocr/utils/en_dict.txt";
-    
-    // Chinese Simplified (Standard for Chinese/English mixed)
-    private const string OcrRecChsUrl = "https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.6.0/onnx/PP-OCRv4/rec/ch_PP-OCRv4_rec_infer.onnx";
-    private const string OcrDictChsUrl = "https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/release/2.7/ppocr/utils/ppocr_keys_v1.txt";
-
-    // Chinese Traditional (No direct v4 ONNX widely avail, using ch_PP-OCRv4 is usually fine or v3, let's stick to v4 chs for now as it handles TC reasonably well, or try find specific)
-    // Actually RapidOCR has specific models. Let's use the standard "ch" one as default for both Source variants for now to ensure stability, 
-    // unless I find a specific "chinese_cht" one.
-    // For now, mapping TC to the main CH model creates less friction.
-    
-    // Japanese
-    private const string OcrRecJpUrl = "https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.6.0/onnx/PP-OCRv4/rec/japan_PP-OCRv4_rec_infer.onnx";
-    private const string OcrDictJpUrl = "https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/release/2.7/ppocr/utils/dict/japan_dict.txt";
-    
-    // Korean
-    private const string OcrRecKoUrl = "https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.6.0/onnx/PP-OCRv4/rec/korean_PP-OCRv4_rec_infer.onnx";
-    private const string OcrDictKoUrl = "https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/release/2.7/ppocr/utils/dict/korean_dict.txt";
-
-    // MarianMT (M2M100 fallback for high quality ja-zh)
-    // Using quantized INT8 models for faster inference (~3-4x speedup, ~5x smaller download)
-    private const string NmtEncoderUrl = "https://huggingface.co/Xenova/m2m100_418M/resolve/main/onnx/encoder_model_quantized.onnx?download=true";
-    private const string NmtDecoderUrl = "https://huggingface.co/Xenova/m2m100_418M/resolve/main/onnx/decoder_model_quantized.onnx?download=true";
-    private const string NmtTokenizerUrl = "https://huggingface.co/Xenova/m2m100_418M/resolve/main/tokenizer.json?download=true";
-    private const string NmtSpmUrl = "https://huggingface.co/facebook/m2m100_418M/resolve/main/sentencepiece.bpe.model?download=true";
-    private const string NmtConfigUrl = "https://huggingface.co/Xenova/m2m100_418M/resolve/main/config.json?download=true";
-    private const string NmtGenerationConfigUrl = "https://huggingface.co/Xenova/m2m100_418M/resolve/main/generation_config.json?download=true";
-
-    public readonly record struct LlamaModelPreset(string Id, string DisplayName, string DownloadUrl, string FileName);
-
-    private static readonly LlamaModelPreset[] LlamaModelPresets =
-    {
-        new("qwen2.5-1.5b-instruct-q4", "Qwen2.5 1.5B Instruct (Q4)", "https://huggingface.co/bartowski/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/Qwen2.5-1.5B-Instruct-Q4_K_M.gguf?download=true", "Qwen2.5-1.5B-Instruct-Q4_K_M.gguf"),
-        new("qwen2.5-3b-instruct-q4", "Qwen2.5 3B Instruct (Q4)", "https://huggingface.co/bartowski/Qwen2.5-3B-Instruct-GGUF/resolve/main/Qwen2.5-3B-Instruct-Q4_K_M.gguf?download=true", "Qwen2.5-3B-Instruct-Q4_K_M.gguf"),
-        new("gemma-3-1b-it-q4", "Gemma 3 1B IT (Q4)", "https://huggingface.co/bartowski/google_gemma-3-1b-it-GGUF/resolve/main/google_gemma-3-1b-it-Q4_K_M.gguf?download=true", "google_gemma-3-1b-it-Q4_K_M.gguf"),
-        new("gemma-3-4b-it-q4", "Gemma 3 4B IT (Q4)", "https://huggingface.co/bartowski/google_gemma-3-4b-it-GGUF/resolve/main/google_gemma-3-4b-it-Q4_K_M.gguf?download=true", "google_gemma-3-4b-it-Q4_K_M.gguf"),
-        new("llama-3.1-8b-instruct-q4", "Llama 3.1 8B Instruct (Q4)", "https://huggingface.co/bartowski/Meta-Llama-3.1-8B-Instruct-GGUF/resolve/main/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf?download=true", "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf"),
-        new("gemma-4-placeholder", "Gemma4 (custom file)", string.Empty, string.Empty),
-    };
-    
-    // Using a reliable direct link to ONNX Runtime GPU (Win x64)
-    private const string OnnxRuntimeZipUrl = "https://github.com/microsoft/onnxruntime/releases/download/v1.20.1/onnxruntime-win-x64-gpu-1.20.1.zip";
-
     private readonly AppSettingsService _settingsService;
     private readonly AIPathService _pathService;
     private readonly NativeResolverService _resolverService;
     private readonly AIModelDownloader _downloader;
+    private readonly AIModelCatalog _modelCatalog;
 
     public AIResourceService(
         AppSettingsService settingsService,
         AIPathService pathService,
         NativeResolverService resolverService,
         AIModelDownloader downloader)
+        : this(settingsService, pathService, resolverService, downloader, new AIModelCatalog())
+    {
+    }
+
+    public AIResourceService(
+        AppSettingsService settingsService,
+        AIPathService pathService,
+        NativeResolverService resolverService,
+        AIModelDownloader downloader,
+        AIModelCatalog modelCatalog)
     {
         _settingsService = settingsService;
         _pathService = pathService;
         _resolverService = resolverService;
         _downloader = downloader;
+        _modelCatalog = modelCatalog;
 
         // Redirect progress changes
         _downloader.PropertyChanged += (s, e) =>
@@ -143,11 +86,8 @@ public class AIResourceService : ReactiveObject
 
     public virtual (string Encoder, string Decoder, string Tokenizer, string Spm, string Config, string GenConfig) GetNmtPaths() => _pathService.GetNmtPaths();
 
-    public IReadOnlyList<LlamaModelPreset> GetLlamaModelPresets() => LlamaModelPresets;
-    public IReadOnlyList<LlamaModelPreset> GetDownloadableLlamaModelPresets() =>
-        LlamaModelPresets.AsValueEnumerable()
-            .Where(p => !string.IsNullOrWhiteSpace(p.DownloadUrl) && !string.IsNullOrWhiteSpace(p.FileName))
-            .ToList();
+    public IReadOnlyList<LlamaModelPreset> GetLlamaModelPresets() => _modelCatalog.GetLlamaModelPresets();
+    public IReadOnlyList<LlamaModelPreset> GetDownloadableLlamaModelPresets() => _modelCatalog.GetDownloadableLlamaModelPresets();
 
     public string GetLlmModelsDir()
     {
@@ -167,8 +107,7 @@ public class AIResourceService : ReactiveObject
 
     public string GetLlamaModelPathById(string modelId)
     {
-        var preset = LlamaModelPresets.AsValueEnumerable().FirstOrDefault(p => p.Id == modelId);
-        if (!string.IsNullOrWhiteSpace(preset.FileName))
+        if (_modelCatalog.TryGetLlamaModelPreset(modelId, out var preset) && !string.IsNullOrWhiteSpace(preset.FileName))
         {
             return Path.Combine(GetLlmModelsDir(), preset.FileName);
         }
@@ -190,7 +129,7 @@ public class AIResourceService : ReactiveObject
             return Array.Empty<LlamaModelPreset>();
         }
 
-        var installed = LlamaModelPresets.AsValueEnumerable()
+        var installed = _modelCatalog.GetLlamaModelPresets().AsValueEnumerable()
             .Where(p => !string.IsNullOrWhiteSpace(p.FileName) && File.Exists(Path.Combine(modelDir, p.FileName)))
             .ToList();
         return installed;
@@ -229,8 +168,9 @@ public class AIResourceService : ReactiveObject
 
     public async Task<bool> EnsureLlamaModelAsync(string modelId, CancellationToken ct = default)
     {
-        var preset = LlamaModelPresets.AsValueEnumerable().FirstOrDefault(p => p.Id == modelId);
-        if (string.IsNullOrWhiteSpace(preset.Id) || string.IsNullOrWhiteSpace(preset.DownloadUrl) || string.IsNullOrWhiteSpace(preset.FileName))
+        if (!_modelCatalog.TryGetLlamaModelPreset(modelId, out var preset) ||
+            string.IsNullOrWhiteSpace(preset.DownloadUrl) ||
+            string.IsNullOrWhiteSpace(preset.FileName))
         {
             LastErrorMessage = "Selected Llama model is not downloadable. Please place a GGUF file in the custom model path.";
             return false;
@@ -449,11 +389,13 @@ public class AIResourceService : ReactiveObject
             Directory.CreateDirectory(runtimeDir);
             Directory.CreateDirectory(modelsDir);
 
+            var package = _modelCatalog.GetAICorePackage();
+
             // 1. Download Runtime
             var onnxDll = _pathService.GetOnnxDllPath();
             if (!File.Exists(onnxDll))
             {
-                await _downloader.DownloadAndExtractZipAsync(OnnxRuntimeZipUrl, runtimeDir, 0, 60, ct); 
+                await _downloader.DownloadAndExtractZipAsync(package.OnnxRuntimeZipUrl, runtimeDir, 0, 60, ct); 
             }
             else
             {
@@ -464,7 +406,7 @@ public class AIResourceService : ReactiveObject
             var modelPath = _pathService.GetAICoreModelPath();
             if (!File.Exists(modelPath))
             {
-                await _downloader.DownloadFileAsync(ModelUrl, modelPath, 60, 40, ct);
+                await _downloader.DownloadFileAsync(package.U2NetModelUrl, modelPath, 60, 40, ct);
             }
             else
             {
@@ -507,28 +449,12 @@ public class AIResourceService : ReactiveObject
             Directory.CreateDirectory(modelsDir);
 
             var paths = _pathService.GetSAM2Paths(variant);
-            
-            // Determine URLs
-            string encoderUrl = variant switch {
-                SAM2Variant.Tiny => Sam2TinyEncoderUrl,
-                SAM2Variant.Small => Sam2SmallEncoderUrl,
-                SAM2Variant.BasePlus => Sam2BasePlusEncoderUrl,
-                SAM2Variant.Large => Sam2LargeEncoderUrl,
-                _ => Sam2TinyEncoderUrl
-            };
-            
-            string decoderUrl = variant switch {
-                SAM2Variant.Tiny => Sam2TinyDecoderUrl,
-                SAM2Variant.Small => Sam2SmallDecoderUrl,
-                SAM2Variant.BasePlus => Sam2BasePlusDecoderUrl,
-                SAM2Variant.Large => Sam2LargeDecoderUrl,
-                _ => Sam2TinyDecoderUrl
-            };
+            var package = _modelCatalog.GetSam2Package(variant);
 
             // 1. Download Encoder
             if (!File.Exists(paths.Encoder))
             {
-                await _downloader.DownloadFileAsync(encoderUrl, paths.Encoder, 0, 90, ct);
+                await _downloader.DownloadFileAsync(package.EncoderUrl, paths.Encoder, 0, 90, ct);
             }
             else
             {
@@ -538,7 +464,7 @@ public class AIResourceService : ReactiveObject
             // 2. Download Decoder
             if (!File.Exists(paths.Decoder))
             {
-                await _downloader.DownloadFileAsync(decoderUrl, paths.Decoder, 90, 10, ct);
+                await _downloader.DownloadFileAsync(package.DecoderUrl, paths.Decoder, 90, 10, ct);
             }
             else
             {
@@ -586,41 +512,20 @@ public class AIResourceService : ReactiveObject
             Directory.CreateDirectory(ocrDir);
 
             var paths = _pathService.GetOCRPaths(language);
-            
-            string recUrl, dictUrl;
-            
-            switch (language)
-            {
-                case OCRLanguage.Japanese:
-                    recUrl = OcrRecJpUrl;
-                    dictUrl = OcrDictJpUrl;
-                    break;
-                case OCRLanguage.Korean:
-                    recUrl = OcrRecKoUrl;
-                    dictUrl = OcrDictKoUrl;
-                    break;
-                case OCRLanguage.English:
-                    recUrl = OcrRecEnUrl;
-                    dictUrl = OcrDictEnUrl;
-                    break;
-                default:
-                    recUrl = OcrRecChsUrl;
-                    dictUrl = OcrDictChsUrl;
-                    break;
-            }
+            var package = _modelCatalog.GetOcrPackage(language);
 
             if (!File.Exists(paths.Det))
-                await _downloader.DownloadFileAsync(OcrDetUrl, paths.Det, 0, 40, ct);
+                await _downloader.DownloadFileAsync(package.DetectionUrl, paths.Det, 0, 40, ct);
             else
                 _downloader.DownloadProgress = 40;
 
             if (!File.Exists(paths.Rec))
-                await _downloader.DownloadFileAsync(recUrl, paths.Rec, 40, 50, ct);
+                await _downloader.DownloadFileAsync(package.RecognitionUrl, paths.Rec, 40, 50, ct);
             else
                 _downloader.DownloadProgress = 90;
 
             if (!File.Exists(paths.Dict))
-                await _downloader.DownloadFileAsync(dictUrl, paths.Dict, 90, 10, ct);
+                await _downloader.DownloadFileAsync(package.DictionaryUrl, paths.Dict, 90, 10, ct);
             else
                 _downloader.DownloadProgress = 100;
 
@@ -660,27 +565,28 @@ public class AIResourceService : ReactiveObject
             Directory.CreateDirectory(nmtDir);
 
             var paths = _pathService.GetNmtPaths();
+            var package = _modelCatalog.GetNmtPackage();
 
             if (!File.Exists(paths.Encoder))
-                await _downloader.DownloadFileAsync(NmtEncoderUrl, paths.Encoder, 0, 40, ct);
+                await _downloader.DownloadFileAsync(package.EncoderUrl, paths.Encoder, 0, 40, ct);
             else
                 _downloader.DownloadProgress = 40;
 
             if (!File.Exists(paths.Decoder))
-                await _downloader.DownloadFileAsync(NmtDecoderUrl, paths.Decoder, 40, 50, ct);
+                await _downloader.DownloadFileAsync(package.DecoderUrl, paths.Decoder, 40, 50, ct);
             else
                 _downloader.DownloadProgress = 90;
 
             if (!File.Exists(paths.Tokenizer))
-                await _downloader.DownloadFileAsync(NmtTokenizerUrl, paths.Tokenizer, 90, 2.5, ct);
+                await _downloader.DownloadFileAsync(package.TokenizerUrl, paths.Tokenizer, 90, 2.5, ct);
 
             if (!File.Exists(paths.Spm))
-                await _downloader.DownloadFileAsync(NmtSpmUrl, paths.Spm, 92.5, 2.5, ct);
+                await _downloader.DownloadFileAsync(package.SentencePieceUrl, paths.Spm, 92.5, 2.5, ct);
             
             if (!File.Exists(paths.Config))
-                await _downloader.DownloadFileAsync(NmtConfigUrl, paths.Config, 95, 2.5, ct);
+                await _downloader.DownloadFileAsync(package.ConfigUrl, paths.Config, 95, 2.5, ct);
             if (!File.Exists(paths.GenConfig))
-                await _downloader.DownloadFileAsync(NmtGenerationConfigUrl, paths.GenConfig, 97.5, 2.5, ct);
+                await _downloader.DownloadFileAsync(package.GenerationConfigUrl, paths.GenConfig, 97.5, 2.5, ct);
 
             _downloader.DownloadProgress = 100;
             return IsNmtReady();
