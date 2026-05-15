@@ -65,6 +65,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     public MainWindowViewModel? MainVm => _mainVm;
     private readonly IScreenCaptureService _captureService;
     private readonly ITranslationSessionService? _translationSession;
+    private readonly ITranslationSelectionMonitor? _translationSelectionMonitor;
     private readonly CompositeDisposable _disposables = new();
     private readonly AudioLevelMonitorService _audioLevelMonitor = new();
     private readonly DispatcherTimer _audioMeterTimer;
@@ -235,10 +236,10 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     public List<OCRLanguage> AvailableOCRLanguages => _mainVm?.AvailableOCRLanguages ?? Enum.GetValues<OCRLanguage>().AsValueEnumerable().ToList();
     public List<TranslationLanguage> AvailableTranslationLanguages => _mainVm?.AvailableTranslationLanguages ?? Enum.GetValues<TranslationLanguage>().AsValueEnumerable().ToList();
 
-    public SnipWindowViewModel() : this(Colors.Red, 2.0, 0.5, new WindowsScreenCaptureService(), null, null, null) { }
+    public SnipWindowViewModel() : this(Colors.Red, 2.0, 0.5, new WindowsScreenCaptureService(), null, null, null, null) { }
 
     public SnipWindowViewModel(Color borderColor, double borderThickness, double maskOpacity, RecordingService? recService = null, MainWindowViewModel? mainVm = null)
-        : this(borderColor, borderThickness, maskOpacity, new WindowsScreenCaptureService(), recService, mainVm, null)
+        : this(borderColor, borderThickness, maskOpacity, new WindowsScreenCaptureService(), recService, mainVm, null, null)
     {
     }
 
@@ -249,10 +250,12 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         IScreenCaptureService captureService,
         RecordingService? recService = null,
         MainWindowViewModel? mainVm = null,
-        ITranslationSessionService? translationSession = null)
+        ITranslationSessionService? translationSession = null,
+        ITranslationSelectionMonitor? translationSelectionMonitor = null)
     {
         _captureService = captureService ?? throw new ArgumentNullException(nameof(captureService));
         _translationSession = translationSession;
+        _translationSelectionMonitor = translationSelectionMonitor;
         _selectionBorderColor = borderColor;
         _selectionBorderThickness = borderThickness;
         _maskOpacity = maskOpacity;

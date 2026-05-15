@@ -47,6 +47,12 @@ public sealed class SnipWindowFactory : ISnipWindowFactory
 
         var snip = new SnipWindow(_screenLayoutService, _windowLayerService);
         ConfigureWindowBounds(snip);
+        var translationSession = _translationSessionServiceFactory.Create(
+            mainViewModel.AppSettingsService,
+            mainViewModel.AIResourceService);
+        var translationSelectionMonitor = new TranslationSelectionMonitor(
+            _screenCaptureService,
+            translationSession);
 
         var snipVm = new SnipWindowViewModel(
             mainViewModel.BorderColor,
@@ -55,7 +61,8 @@ public sealed class SnipWindowFactory : ISnipWindowFactory
             _screenCaptureService,
             mainViewModel.RecordingService,
             mainViewModel,
-            _translationSessionServiceFactory.Create(mainViewModel.AppSettingsService, mainViewModel.AIResourceService));
+            translationSession,
+            translationSelectionMonitor);
 
         snipVm.AutoActionMode = mode switch
         {

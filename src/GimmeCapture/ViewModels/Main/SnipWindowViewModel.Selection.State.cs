@@ -12,7 +12,6 @@ using System.Threading;
 using GimmeCapture.Services.Core;
 using GimmeCapture.Services.Core.Media;
 using GimmeCapture.Services.Platforms.Windows;
-using GimmeCapture.Services.OCR;
 
 namespace GimmeCapture.ViewModels.Main;
 
@@ -276,7 +275,6 @@ public partial class SnipWindowViewModel
     // Auto-Detect OCR Monitor Loop
     private CancellationTokenSource? _autoDetectCts;
     private Task? _autoDetectTask;
-    private GimmeCapture.Services.OCR.PaddleOCREngine? _sharedOcrEngine;
 
     public void StartAutoDetectLoop()
     {
@@ -290,9 +288,6 @@ public partial class SnipWindowViewModel
         _autoDetectCts?.Cancel();
         _autoDetectCts?.Dispose();
         _autoDetectCts = null;
-        
-        _sharedOcrEngine?.Dispose();
-        _sharedOcrEngine = null;
     }
 
     private void StartTranslationWarmup()
@@ -325,158 +320,28 @@ public partial class SnipWindowViewModel
 
                 var activeSections = UserSelections.AsValueEnumerable().Where(s => s.IsAutoDetectEnabled).ToList();
                 if (activeSections.Count == 0) continue;
-                if (_mainVm == null || CurrentMode != SnipMode.Translation) continue;
+                var mainVm = _mainVm;
+                var translationSelectionMonitor = _translationSelectionMonitor;
+                if (mainVm == null || translationSelectionMonitor == null || CurrentMode != SnipMode.Translation) continue;
 
-                bool hasVisualSections = activeSections.AsValueEnumerable().Any();
-                if (hasVisualSections)
+                var updates = await translationSelectionMonitor.ProcessAsync(
+                    new TranslationSelectionMonitorRequest(
+                        activeSections,
+                        ScreenOffset,
+                        VisualScaling,
+                        mainVm.SourceLanguage,
+                        mainVm.TargetLanguage),
+                    token);
+
+                if (updates.Count == 0)
                 {
-                    bool isOcrReady = await _mainVm.AIResourceService.EnsureOCRAsync();
-                    if (!isOcrReady) continue;
-
-                    if (_sharedOcrEngine == null)
-                    {
-                        _sharedOcrEngine = new GimmeCapture.Services.OCR.PaddleOCREngine(_mainVm.AIResourceService, _mainVm.AppSettingsService);
-                    }
+                    continue;
                 }
 
-                var ocrLang = _mainVm.AppSettingsService.Settings.SourceLanguage;
-                // Auto detect script if source is auto
-                if (ocrLang == OCRLanguage.Auto)
+                await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
                 {
-                    // Fallback to Trad Chinese or Japanese based on some heuristic or just default to Trad Chinese for now
-                    // For better auto-detect, we might need a fast script detector
-                    ocrLang = OCRLanguage.TraditionalChinese;
-                }
-
-                if (hasVisualSections && _sharedOcrEngine != null)
-                {
-                    await _sharedOcrEngine.EnsureLoadedAsync(ocrLang, token);
-                }
-
-                foreach (var sel in activeSections)
-                {
-                    if (token.IsCancellationRequested) break;
-                    try
-                    {
-                        /* Audio panel logic removed */
-
-                        var rect = sel.Bounds;
-                        if (rect.Width <= 10 || rect.Height <= 10) continue;
-
-                        // Capture screen without flickering (UI will be hidden via WDA_EXCLUDEFROMCAPTURE in Translate mode)
-                        using var bitmap = await _captureService.CaptureScreenAsync(rect, ScreenOffset, VisualScaling, false);
-                        if (bitmap == null) continue;
-
-                        // Calculate Pixel Diff
-                        var currentPixels = bitmap.Bytes;
-                        int width = bitmap.Width;
-                        int height = bitmap.Height;
-                        bool hasSignificantChange = true; // Default to true for first run
-
-                        if (sel.LastPixels != null && sel.LastPixelWidth == width && sel.LastPixelHeight == height && currentPixels.Length == sel.LastPixels.Length)
-                        {
-                            int diffCount = 0;
-                            int totalPixels = width * height;
-                            int step = 8; // Sample every 8th pixel for better performance in large regions
-
-                            for (int i = 0; i < currentPixels.Length; i += step * 4) 
-                            {
-                                // SAD (Sum of Absolute Differences) on RGB
-                                int rDiff = currentPixels[i] - sel.LastPixels[i];
-                                int gDiff = currentPixels[i + 1] - sel.LastPixels[i + 1];
-                                int bDiff = currentPixels[i + 2] - sel.LastPixels[i + 2];
-                                
-                                // Square sum for better sensitivity to noise vs content change? 
-                                // No, SAD is fine but let's use a lower per-pixel noise threshold (30 instead of 50)
-                                // to catch subtle subtitle changes while ignoring compression artifacts.
-                                int sad = Math.Abs(rDiff) + Math.Abs(gDiff) + Math.Abs(bDiff);
-
-                                if (sad > 45) // Total difference threshold (sums to ~15 per channel)
-                                {
-                                    diffCount++;
-                                }
-                            }
-
-                            // Calculate percentage based on checked pixels
-                            double diffPercentage = (double)diffCount / (totalPixels / step);
-                            
-                            // 5% change threshold as requested
-                            if (diffPercentage < 0.05) 
-                            {
-                                hasSignificantChange = false;
-                            }
-                        }
-
-                        // Update cached pixels
-                        sel.LastPixels = currentPixels;
-                        sel.LastPixelWidth = width;
-                        sel.LastPixelHeight = height;
-
-                        if (!hasSignificantChange)
-                        {
-                            continue; // Skip OCR completely if the visual didn't change enough
-                        }
-
-                        System.Diagnostics.Debug.WriteLine($"[AutoDetect] Significant visual change detected. Running OCR & Translation...");
-
-                        if (_translationSession != null)
-                        {
-                            var (blocks, errorKey) = await _translationSession.AnalyzeAndTranslateAsync(
-                                bitmap,
-                                VisualScaling,
-                                _mainVm.SourceLanguage,
-                                _mainVm.TargetLanguage,
-                                token);
-                            if (blocks == null || blocks.Count == 0)
-                            {
-                                // Continuous detect mode: if no text is detected this round, clear stale text from previous round.
-                                await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
-                                {
-                                    if (sel.IsTranslated || !string.IsNullOrWhiteSpace(sel.TranslatedText) || !string.IsNullOrWhiteSpace(sel.OriginalText))
-                                    {
-                                        sel.LastOcrText = string.Empty;
-                                        sel.OriginalText = string.Empty;
-                                        sel.TranslatedText = string.Empty;
-                                        sel.IsTranslated = false;
-                                        sel.EstimatedTextHeight = 0;
-                                        UpdateMask();
-                                    }
-                                });
-                                continue;
-                            }
-
-                            var combinedText = string.Join("\n", blocks.AsValueEnumerable().Select(b => b.TranslatedText).Where(t => !string.IsNullOrWhiteSpace(t)).ToArray());
-                            var combinedOriginalText = string.Join("\n", blocks.AsValueEnumerable().Select(b => b.OriginalText).Where(t => !string.IsNullOrWhiteSpace(t)).ToArray());
-                            
-                            // Prevent re-updating if text hasn't logically changed despite visual noise
-                            if (combinedText == sel.TranslatedText) continue;
-                            
-                            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
-                            {
-                                sel.LastOcrText = string.Join("\n", blocks.AsValueEnumerable().Select(b => b.OriginalText).Where(t => !string.IsNullOrWhiteSpace(t)).ToArray()); // Update tracking hash
-                                sel.OriginalText = combinedOriginalText;
-                                sel.TranslatedText = combinedText;
-                                sel.IsTranslated = !string.IsNullOrWhiteSpace(combinedText);
-                                
-                                // Propagate inferred font size from blocks
-                                if (blocks.AsValueEnumerable().Any())
-                                {
-                                    sel.InferredFontSize = blocks[0].InferredFontSize;
-                                }
-
-                                if (sel.IsTranslated)
-                                {
-                                    sel.EstimatedTextHeight = EstimateTranslatedTextHeight(sel);
-                                }
-                                UpdateMask();
-                            });
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        System.Diagnostics.Debug.WriteLine($"[AutoDetect] Region OCR error: {ex.Message}");
-                    }
-                }
+                    ApplyTranslationSelectionUpdates(updates);
+                });
                 
             }
             catch (TaskCanceledException) { break; }
@@ -484,6 +349,44 @@ public partial class SnipWindowViewModel
             {
                 System.Diagnostics.Debug.WriteLine($"[AutoDetect] Loop Error: {ex.Message}");
             }
+        }
+    }
+
+    private void ApplyTranslationSelectionUpdates(IReadOnlyList<TranslationSelectionUpdate> updates)
+    {
+        bool maskChanged = false;
+
+        foreach (var update in updates)
+        {
+            var selection = update.Selection;
+            if (update.Kind == TranslationSelectionUpdateKind.Cleared)
+            {
+                selection.LastOcrText = string.Empty;
+                selection.OriginalText = string.Empty;
+                selection.TranslatedText = string.Empty;
+                selection.IsTranslated = false;
+                selection.EstimatedTextHeight = 0;
+                maskChanged = true;
+                continue;
+            }
+
+            selection.LastOcrText = update.OriginalText;
+            selection.OriginalText = update.OriginalText;
+            selection.TranslatedText = update.TranslatedText;
+            selection.IsTranslated = !string.IsNullOrWhiteSpace(update.TranslatedText);
+            selection.InferredFontSize = update.InferredFontSize;
+
+            if (selection.IsTranslated)
+            {
+                selection.EstimatedTextHeight = EstimateTranslatedTextHeight(selection);
+            }
+
+            maskChanged = true;
+        }
+
+        if (maskChanged)
+        {
+            UpdateMask();
         }
     }
 
