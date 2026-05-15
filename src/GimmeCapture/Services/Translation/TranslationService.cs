@@ -16,7 +16,7 @@ using SKRectI = SkiaSharp.SKRectI;
 
 namespace GimmeCapture.Services.Translation;
 
-public class TranslationService
+public class TranslationService : IDisposable
 {
     private readonly AppSettingsService _settingsService;
     private readonly IOCREngine _ocrEngine;
@@ -87,18 +87,18 @@ public class TranslationService
         }
     }
 
-    public async Task<ResourceReadyResult> CheckEngineReadyAsync()
+    public Task<ResourceReadyResult> CheckEngineReadyAsync()
     {
         var engineType = _settings.SelectedTranslationEngine;
         if (engineType == TranslationEngine.LlamaSharp)
         {
             if (!_aiResourceService.IsLlamaModelReady())
             {
-                return ResourceReadyResult.NotReady("StatusLlamaModelNotReady", true);
+                return Task.FromResult(ResourceReadyResult.NotReady("StatusLlamaModelNotReady"));
             }
         }
 
-        return ResourceReadyResult.Ready();
+        return Task.FromResult(ResourceReadyResult.Ready());
     }
 
     public async Task<(List<TranslatedBlock> Blocks, string ErrorKey)> AnalyzeAndTranslateAsync(SKBitmap bitmap, double scale = 1.0, CancellationToken ct = default)
@@ -339,5 +339,15 @@ public class TranslationService
     public async Task<List<string>> GetAvailableModelsAsync()
     {
         return _aiResourceService.GetLlamaModelPresets().AsValueEnumerable().Select(m => m.DisplayName).ToList();
+    }
+
+    public void Dispose()
+    {
+        _ocrEngine.Dispose();
+
+        foreach (var engine in _translationEngines.AsValueEnumerable().OfType<IDisposable>())
+        {
+            engine.Dispose();
+        }
     }
 }

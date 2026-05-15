@@ -251,14 +251,14 @@ public partial class SnipWindowViewModel
         }
     }
 
-    private int _autoActionMode = 0; // 0=Normal, 1=Copy, 2=Pin
-    public int AutoActionMode
+    private SnipAutoAction _autoActionMode = SnipAutoAction.None;
+    public SnipAutoAction AutoActionMode
     {
         get => _autoActionMode;
         set
         {
             this.RaiseAndSetIfChanged(ref _autoActionMode, value);
-            if (value > 0 && CurrentState == SnipState.Selected)
+            if (value != SnipAutoAction.None && CurrentState == SnipState.Selected)
             {
                 TriggerAutoAction();
             }
@@ -267,15 +267,15 @@ public partial class SnipWindowViewModel
 
     private void TriggerAutoAction()
     {
-        if (AutoActionMode == 1) // Copy
+        if (AutoActionMode == SnipAutoAction.Copy)
         {
             Avalonia.Threading.Dispatcher.UIThread.Post(async () => await Copy());
         }
-        else if (AutoActionMode == 2) // Pin
+        else if (AutoActionMode == SnipAutoAction.Pin)
         {
             Avalonia.Threading.Dispatcher.UIThread.Post(async () => await Pin());
         }
-        else if (AutoActionMode == 3) // Record mode entry, do NOT auto-start
+        else if (AutoActionMode == SnipAutoAction.EnterRecordMode)
         {
              if (CurrentMode != SnipMode.Recording) CurrentMode = SnipMode.Recording;
              // USER REQUEST: Selection only, record manually or via Shift+Enter
@@ -362,7 +362,7 @@ public partial class SnipWindowViewModel
                 SetTranslationModeCommand?.Execute().Subscribe();
                 break;
             case HotkeyRouterService.SnipGlobalHotkeyAction.CopyAutoAction:
-                AutoActionMode = 1;
+                AutoActionMode = SnipAutoAction.Copy;
                 if (CurrentState == SnipState.Selected) TriggerAutoAction();
                 break;
         }
@@ -414,7 +414,7 @@ public partial class SnipWindowViewModel
                 SetTranslationModeCommand?.Execute().Subscribe();
                 break;
             case CaptureMode.Copy:
-                AutoActionMode = 1;
+                AutoActionMode = SnipAutoAction.Copy;
                 if (CurrentState == SnipState.Selected) TriggerAutoAction();
                 break;
         }

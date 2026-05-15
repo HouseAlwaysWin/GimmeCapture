@@ -50,41 +50,20 @@ public partial class SnipWindowViewModel
         try
         {
             if (!await EnsureTranslationEngineReadyAsync()) return;
-
-            if (_translationService == null)
-            {
-                if (_mainVm?.AIResourceService == null) return;
-                _translationService = new TranslationService(_mainVm.AIResourceService, _mainVm.AppSettingsService);
-            }
-
-            // Sync language settings
-            if (_mainVm != null)
-            {
-                _mainVm.AppSettingsService.Settings.TargetLanguage = _mainVm.TargetLanguage;
-                _mainVm.AppSettingsService.Settings.SourceLanguage = _mainVm.SourceLanguage;
-                System.Diagnostics.Debug.WriteLine($"[TranslationMode] ===== LANGUAGE SETTINGS =====");
-                System.Diagnostics.Debug.WriteLine($"[TranslationMode]   MainVM.SourceLanguage = {_mainVm.SourceLanguage}");
-                System.Diagnostics.Debug.WriteLine($"[TranslationMode]   MainVM.TargetLanguage = {_mainVm.TargetLanguage}");
-                System.Diagnostics.Debug.WriteLine($"[TranslationMode]   AppSettings.SourceLanguage = {_mainVm.AppSettingsService.Settings.SourceLanguage}");
-                System.Diagnostics.Debug.WriteLine($"[TranslationMode]   AppSettings.TargetLanguage = {_mainVm.AppSettingsService.Settings.TargetLanguage}");
-                System.Diagnostics.Debug.WriteLine($"[TranslationMode] ==============================");
-            }
+            var mainVm = _mainVm;
+            var translationSession = _translationSession;
+            if (mainVm == null || translationSession == null) return;
 
             // Ensure warm-up has completed before the first actual translation pass.
             StartTranslationWarmup();
             await AwaitTranslationWarmupAsync(token);
 
-            // Setup new cancellation token source moved to the beginning of the function
-
             // Ensure OCR resources
-            if (_mainVm != null)
+            bool ready = await translationSession.EnsureOcrReadyAsync(mainVm.SourceLanguage, token);
+            if (!ready)
             {
-                bool ready = await _mainVm.AIResourceService.EnsureOCRAsync();
-                if (!ready)
-                {
-                    System.Diagnostics.Debug.WriteLine("[TranslationMode] OCR not ready");
-                    return;
-                }
+                System.Diagnostics.Debug.WriteLine("[TranslationMode] OCR not ready");
+                return;
             }
 
             // 逐一翻譯每個選取區域
@@ -106,7 +85,14 @@ public partial class SnipWindowViewModel
                 if (bitmap == null) continue;
 
                 token.ThrowIfCancellationRequested();
-                var (blocks, errorKey) = await Task.Run(() => _translationService.AnalyzeAndTranslateAsync(bitmap, VisualScaling, token), token);
+                var (blocks, errorKey) = await Task.Run(
+                    async () => await translationSession.AnalyzeAndTranslateAsync(
+                        bitmap,
+                        VisualScaling,
+                        mainVm.SourceLanguage,
+                        mainVm.TargetLanguage,
+                        token),
+                    token);
                 
                 if (token.IsCancellationRequested) break;
 
@@ -187,14 +173,14 @@ public partial class SnipWindowViewModel
         {
             if (!await EnsureTranslationEngineReadyAsync()) return;
 
-            if (_mainVm?.AIResourceService == null) 
+            if (_mainVm?.AIResourceService == null || _translationSession == null)
             {
-                System.Diagnostics.Debug.WriteLine("[TranslationMode] ScanAllText: mainVm or AIResourceService is NULL");
+                System.Diagnostics.Debug.WriteLine("[TranslationMode] ScanAllText: translation dependencies are NULL");
                 return;
             }
 
             // Ensure OCR resources
-            bool ready = await _mainVm.AIResourceService.EnsureOCRAsync();
+            bool ready = await _translationSession.EnsureOcrReadyAsync(_mainVm.SourceLanguage);
             if (!ready)
             {
                 System.Diagnostics.Debug.WriteLine("[TranslationMode] OCR not ready for scan");
@@ -380,40 +366,21 @@ public partial class SnipWindowViewModel
     {
         try
         {
-            if (_translationService == null)
+            if (_mainVm == null || _translationSession == null)
             {
-                if (_mainVm?.AIResourceService == null) return false;
-                _translationService = new TranslationService(_mainVm.AIResourceService, _mainVm.AppSettingsService);
+                return false;
             }
 
-            var result = await _translationService.CheckEngineReadyAsync();
+            var result = await _translationSession.CheckEngineReadyAsync(
+                _mainVm.SourceLanguage,
+                _mainVm.TargetLanguage);
             if (result.IsReady) return true;
 
-            if (_mainVm != null && result.ErrorKey != null)
+            if (result.ErrorKey != null)
             {
                 var title = LocalizationService.Instance["StatusError"];
                 var message = LocalizationService.Instance[result.ErrorKey];
-
-                if (result.ShowDownloadPrompt)
-                {
-                    // Confirmation format: Title, Message
-                    var userConfirmed = await _mainVm.ConfirmAction!(title, message, false);
-                    if (userConfirmed)
-                    {
-                        // For MarianMT, triggering download
-                        ShowTopLoadingBar = true;
-                        IsIndeterminate = true;
-                        var success = await _mainVm.AIResourceService.EnsureNmtAsync();
-                        ShowTopLoadingBar = false;
-                        IsIndeterminate = false;
-                        return success;
-                    }
-                }
-                else
-                {
-                    // General reminder (Ollama)
-                    await _mainVm.ConfirmAction!(title, message, true);
-                }
+                await _mainVm.ConfirmAction!(title, message, true);
             }
         }
         catch (Exception ex)

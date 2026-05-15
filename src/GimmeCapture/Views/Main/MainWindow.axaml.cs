@@ -48,7 +48,8 @@ public partial class MainWindow : Window
             new AvaloniaWindowManager(),
             new AvaloniaScreenLayoutService(),
             new AvaloniaWindowLayerService(),
-            new WindowsScreenCaptureService());
+            new WindowsScreenCaptureService(),
+            new TranslationSessionServiceFactory());
 
         InitializeComponent();
         DataContext = viewModel ?? new MainWindowViewModel();

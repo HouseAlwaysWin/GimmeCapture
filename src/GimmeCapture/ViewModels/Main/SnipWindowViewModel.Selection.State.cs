@@ -258,10 +258,7 @@ public partial class SnipWindowViewModel
 
     public ObservableCollection<TranslatedBlock> TranslatedBlocks { get; } = new();
     public ObservableCollection<UserSelectionRect> UserSelections { get; } = new();
-    private TranslationService? _translationService;
     private CancellationTokenSource? _translationCts;
-    private CancellationTokenSource? _translationWarmupCts;
-    private Task? _translationWarmupTask;
 
 
     private Rect _selectionRect;
@@ -300,71 +297,22 @@ public partial class SnipWindowViewModel
 
     private void StartTranslationWarmup()
     {
-        if (_mainVm == null || CurrentMode != SnipMode.Translation)
+        if (_mainVm == null || _translationSession == null || CurrentMode != SnipMode.Translation)
         {
             return;
         }
 
-        if (_translationWarmupTask is { IsCompleted: false })
-        {
-            return;
-        }
-
-        _translationWarmupCts?.Cancel();
-        _translationWarmupCts?.Dispose();
-        _translationWarmupCts = new CancellationTokenSource();
-        var token = _translationWarmupCts.Token;
-
-        _translationWarmupTask = Task.Run(async () =>
-        {
-            try
-            {
-                _translationService ??= new TranslationService(_mainVm.AIResourceService, _mainVm.AppSettingsService);
-
-                // Keep language settings in sync before warm-up.
-                _mainVm.AppSettingsService.Settings.TargetLanguage = _mainVm.TargetLanguage;
-                _mainVm.AppSettingsService.Settings.SourceLanguage = _mainVm.SourceLanguage;
-
-                await _translationService.WarmUpAsync(token);
-            }
-            catch (OperationCanceledException)
-            {
-                // Expected when leaving translation mode.
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"[TranslationWarmup] Failed: {ex.Message}");
-            }
-        }, token);
+        _translationSession.StartWarmup(_mainVm.SourceLanguage, _mainVm.TargetLanguage);
     }
 
     private void CancelTranslationWarmup()
     {
-        _translationWarmupCts?.Cancel();
-        _translationWarmupCts?.Dispose();
-        _translationWarmupCts = null;
+        _translationSession?.CancelWarmup();
     }
 
-    private async Task AwaitTranslationWarmupAsync(CancellationToken ct = default)
+    private Task AwaitTranslationWarmupAsync(CancellationToken ct = default)
     {
-        var warmupTask = _translationWarmupTask;
-        if (warmupTask == null)
-        {
-            return;
-        }
-
-        try
-        {
-            await warmupTask.WaitAsync(ct);
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"[TranslationWarmup] Await failed: {ex.Message}");
-        }
+        return _translationSession?.AwaitWarmupAsync(ct) ?? Task.CompletedTask;
     }
 
     private async Task AutoDetectLoopAsync(CancellationToken token)
@@ -471,26 +419,14 @@ public partial class SnipWindowViewModel
 
                         System.Diagnostics.Debug.WriteLine($"[AutoDetect] Significant visual change detected. Running OCR & Translation...");
 
-                        // Ensure TranslationService is initialized
-                        if (_translationService == null && _mainVm != null)
+                        if (_translationSession != null)
                         {
-                            _translationService = new TranslationService(_mainVm.AIResourceService, _mainVm.AppSettingsService);
-                        }
-
-                        // Sync language settings before translation (must match manual translate path)
-                        if (_mainVm != null)
-                        {
-                            _mainVm.AppSettingsService.Settings.TargetLanguage = _mainVm.TargetLanguage;
-                            _mainVm.AppSettingsService.Settings.SourceLanguage = _mainVm.SourceLanguage;
-                            System.Diagnostics.Debug.WriteLine($"[AutoDetect] Language sync: Source={_mainVm.SourceLanguage}, Target={_mainVm.TargetLanguage}");
-                        }
-
-                        // Ask TranslationService to translate just this text
-                        if (_translationService != null)
-                        {
-                            // We don't want to freeze the UI or show loading bars for background updates
-                            // AnalyzeAndTranslateAsync will handle OCR + LLM
-                            var (blocks, errorKey) = await _translationService.AnalyzeAndTranslateAsync(bitmap, VisualScaling, token);
+                            var (blocks, errorKey) = await _translationSession.AnalyzeAndTranslateAsync(
+                                bitmap,
+                                VisualScaling,
+                                _mainVm.SourceLanguage,
+                                _mainVm.TargetLanguage,
+                                token);
                             if (blocks == null || blocks.Count == 0)
                             {
                                 // Continuous detect mode: if no text is detected this round, clear stale text from previous round.

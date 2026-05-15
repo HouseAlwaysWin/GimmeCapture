@@ -13,17 +13,20 @@ public sealed class SnipWindowFactory : ISnipWindowFactory
     private readonly IScreenLayoutService _screenLayoutService;
     private readonly IWindowLayerService _windowLayerService;
     private readonly IScreenCaptureService _screenCaptureService;
+    private readonly ITranslationSessionServiceFactory _translationSessionServiceFactory;
 
     public SnipWindowFactory(
         IWindowManager windowManager,
         IScreenLayoutService screenLayoutService,
         IWindowLayerService windowLayerService,
-        IScreenCaptureService screenCaptureService)
+        IScreenCaptureService screenCaptureService,
+        ITranslationSessionServiceFactory translationSessionServiceFactory)
     {
         _windowManager = windowManager ?? throw new ArgumentNullException(nameof(windowManager));
         _screenLayoutService = screenLayoutService ?? throw new ArgumentNullException(nameof(screenLayoutService));
         _windowLayerService = windowLayerService ?? throw new ArgumentNullException(nameof(windowLayerService));
         _screenCaptureService = screenCaptureService ?? throw new ArgumentNullException(nameof(screenCaptureService));
+        _translationSessionServiceFactory = translationSessionServiceFactory ?? throw new ArgumentNullException(nameof(translationSessionServiceFactory));
     }
 
     public void Open(MainWindowViewModel mainViewModel, CaptureMode mode)
@@ -51,9 +54,16 @@ public sealed class SnipWindowFactory : ISnipWindowFactory
             mainViewModel.MaskOpacity,
             _screenCaptureService,
             mainViewModel.RecordingService,
-            mainViewModel);
+            mainViewModel,
+            _translationSessionServiceFactory.Create(mainViewModel.AppSettingsService, mainViewModel.AIResourceService));
 
-        snipVm.AutoActionMode = (int)mode;
+        snipVm.AutoActionMode = mode switch
+        {
+            CaptureMode.Copy => SnipAutoAction.Copy,
+            CaptureMode.Pin => SnipAutoAction.Pin,
+            CaptureMode.Record => SnipAutoAction.EnterRecordMode,
+            _ => SnipAutoAction.None
+        };
         if (mode == CaptureMode.Record)
         {
             snipVm.CurrentMode = SnipMode.Recording;

@@ -20,13 +20,15 @@ public sealed class AppBootstrapper
         var screenLayoutService = new AvaloniaScreenLayoutService();
         var windowLayerService = new AvaloniaWindowLayerService();
         var screenCaptureService = new WindowsScreenCaptureService(_mainWindowDependencies.WindowManager);
+        var translationSessionServiceFactory = new TranslationSessionServiceFactory();
 
         _downloadWindowService = new AvaloniaDownloadWindowService();
         _snipWindowFactory = new SnipWindowFactory(
             _mainWindowDependencies.WindowManager,
             screenLayoutService,
             windowLayerService,
-            screenCaptureService);
+            screenCaptureService,
+            translationSessionServiceFactory);
     }
 
     public MainWindow CreateMainWindow()
