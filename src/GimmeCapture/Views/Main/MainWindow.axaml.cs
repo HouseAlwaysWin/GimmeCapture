@@ -11,9 +11,6 @@ using Avalonia.Media;
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core;
 using GimmeCapture.Services.Core.Infrastructure;
-using GimmeCapture.Services.Platforms.Desktop;
-using GimmeCapture.Services.Platforms.Avalonia;
-using GimmeCapture.Services.Platforms.Windows;
 using ReactiveUI;
 using System.Reactive.Linq;
 
@@ -35,7 +32,7 @@ public partial class MainWindow : Window
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool GetCursorPos(out POINT lpPoint);
 
-    public MainWindow() : this(null, null, null)
+    public MainWindow() : this(new MainWindowViewModel(), new NoOpDownloadWindowService(), new NoOpSnipWindowFactory())
     {
     }
 
@@ -44,13 +41,8 @@ public partial class MainWindow : Window
         IDownloadWindowService? downloadWindowService,
         ISnipWindowFactory? snipWindowFactory)
     {
-        _downloadWindowService = downloadWindowService ?? new AvaloniaDownloadWindowService();
-        _snipWindowFactory = snipWindowFactory ?? new SnipWindowFactory(
-            new AvaloniaWindowManager(),
-            new AvaloniaScreenLayoutService(),
-            new AvaloniaWindowLayerService(),
-            new WindowsScreenCaptureService(),
-            new TranslationSessionServiceFactory());
+        _downloadWindowService = downloadWindowService ?? new NoOpDownloadWindowService();
+        _snipWindowFactory = snipWindowFactory ?? new NoOpSnipWindowFactory();
 
         InitializeComponent();
         DataContext = viewModel ?? new MainWindowViewModel();
@@ -187,7 +179,7 @@ public partial class MainWindow : Window
 
     private SnipWindowViewModel? ResolveActiveSnipViewModel()
     {
-        return _snipWindowFactory.GetActiveViewModel();
+        return _snipWindowFactory.GetActiveViewModel() as SnipWindowViewModel;
     }
 
     private void OpenSnipWindow(CaptureMode mode)

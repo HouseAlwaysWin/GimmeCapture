@@ -1,11 +1,10 @@
 using GimmeCapture.Models;
-using GimmeCapture.ViewModels.Main;
 
-namespace GimmeCapture.Services.Platforms.Avalonia;
+namespace GimmeCapture.Services.Abstractions;
 
 public interface ISnipWindowFactory
 {
-    void Open(MainWindowViewModel mainViewModel, CaptureMode mode);
+    void Open(object mainViewModel, CaptureMode mode);
 
-    SnipWindowViewModel? GetActiveViewModel();
+    object? GetActiveViewModel();
 }

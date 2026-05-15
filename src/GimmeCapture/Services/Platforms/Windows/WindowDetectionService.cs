@@ -2,10 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using Avalonia;
+using GimmeCapture.Services.Abstractions;
 
 namespace GimmeCapture.Services.Platforms.Windows;
 
-public class WindowDetectionService
+public class WindowDetectionService : IWindowDetectionService
 {
     [StructLayout(LayoutKind.Sequential)]
     public struct RECT

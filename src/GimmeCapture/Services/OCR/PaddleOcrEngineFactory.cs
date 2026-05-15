@@ -1,7 +1,7 @@
 using System;
-using GimmeCapture.Services.Core.AI;
 using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Core.Interfaces;
+using GimmeCapture.Services.Core.AI;
 
 namespace GimmeCapture.Services.OCR;
 

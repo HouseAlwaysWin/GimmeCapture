@@ -7,8 +7,6 @@ using GimmeCapture.ViewModels.Main;
 using GimmeCapture.Views.Main;
 using GimmeCapture.Services.Core;
 using GimmeCapture.Services.Core.Infrastructure;
-using GimmeCapture.Services.Platforms.Avalonia;
-using GimmeCapture.Services.Platforms.Windows;
 
 namespace GimmeCapture;
 

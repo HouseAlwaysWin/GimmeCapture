@@ -14,8 +14,6 @@ using Avalonia.Input.Raw;
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core;
 using GimmeCapture.Services.Core.Infrastructure;
-using GimmeCapture.Services.Platforms.Desktop;
-using GimmeCapture.Services.Platforms.Windows;
 using GimmeCapture.Services.Interop;
 
 using ReactiveUI;
@@ -84,7 +82,7 @@ public partial class SnipWindow : Window
         public int Y;
     }
 
-    public SnipWindow() : this(new AvaloniaScreenLayoutService(), new AvaloniaWindowLayerService())
+    public SnipWindow() : this(new NoOpScreenLayoutService(), new NoOpWindowLayerService())
     {
     }
 

@@ -11,4 +11,5 @@ public interface IGlobalHotkeyService : IDisposable
     void SuspendAll();
     void ResumeAll();
     Action<int>? OnHotkeyPressed { get; set; }
+    Action<int, string, int>? OnHotkeyRegistrationFailed { get; set; }
 }

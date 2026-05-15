@@ -2,7 +2,6 @@ using Avalonia.Controls;
 using System;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Abstractions;
-using GimmeCapture.Services.Platforms.Avalonia;
 using GimmeCapture.Services.OCR;
 using GimmeCapture.Services.Translation;
 using GimmeCapture.ViewModels.Main;
@@ -17,24 +16,31 @@ public sealed class SnipWindowFactory : ISnipWindowFactory
     private readonly IWindowLayerService _windowLayerService;
     private readonly IScreenCaptureService _screenCaptureService;
     private readonly ITranslationSessionServiceFactory _translationSessionServiceFactory;
+    private readonly IWindowDetectionService _windowDetectionService;
 
     public SnipWindowFactory(
         IWindowManager windowManager,
         IScreenLayoutService screenLayoutService,
         IWindowLayerService windowLayerService,
         IScreenCaptureService screenCaptureService,
-        ITranslationSessionServiceFactory translationSessionServiceFactory)
+        ITranslationSessionServiceFactory translationSessionServiceFactory,
+        IWindowDetectionService windowDetectionService)
     {
         _windowManager = windowManager ?? throw new ArgumentNullException(nameof(windowManager));
         _screenLayoutService = screenLayoutService ?? throw new ArgumentNullException(nameof(screenLayoutService));
         _windowLayerService = windowLayerService ?? throw new ArgumentNullException(nameof(windowLayerService));
         _screenCaptureService = screenCaptureService ?? throw new ArgumentNullException(nameof(screenCaptureService));
         _translationSessionServiceFactory = translationSessionServiceFactory ?? throw new ArgumentNullException(nameof(translationSessionServiceFactory));
+        _windowDetectionService = windowDetectionService ?? throw new ArgumentNullException(nameof(windowDetectionService));
     }
 
-    public void Open(MainWindowViewModel mainViewModel, CaptureMode mode)
+    public void Open(object mainViewModel, CaptureMode mode)
     {
         ArgumentNullException.ThrowIfNull(mainViewModel);
+        if (mainViewModel is not MainWindowViewModel vm)
+        {
+            throw new ArgumentException("Expected MainWindowViewModel.", nameof(mainViewModel));
+        }
 
         var existing = _windowManager.FindWindowOfType<SnipWindow>();
         if (existing != null)
@@ -51,24 +57,25 @@ public sealed class SnipWindowFactory : ISnipWindowFactory
         var snip = new SnipWindow(_screenLayoutService, _windowLayerService);
         ConfigureWindowBounds(snip);
         var translationSession = _translationSessionServiceFactory.Create(
-            mainViewModel.AppSettingsService,
-            mainViewModel.AIResourceService);
+            vm.AppSettingsService,
+            vm.AIResourceService);
         var translationSelectionMonitor = new TranslationSelectionMonitor(
             _screenCaptureService,
             translationSession);
         var aiScanSessionService = new AIScanSessionService(
             _screenCaptureService,
-            mainViewModel.AIResourceService,
-            mainViewModel.AppSettingsService,
+            vm.AIResourceService,
+            vm.AppSettingsService,
             new PaddleOcrEngineFactory());
 
         var snipVm = new SnipWindowViewModel(
-            mainViewModel.BorderColor,
-            mainViewModel.BorderThickness,
-            mainViewModel.MaskOpacity,
+            vm.BorderColor,
+            vm.BorderThickness,
+            vm.MaskOpacity,
             _screenCaptureService,
-            mainViewModel.RecordingService,
-            mainViewModel,
+            _windowDetectionService,
+            vm.RecordingService,
+            vm,
             translationSession,
             translationSelectionMonitor,
             aiScanSessionService);
@@ -94,9 +101,9 @@ public sealed class SnipWindowFactory : ISnipWindowFactory
         snip.Show();
     }
 
-    public SnipWindowViewModel? GetActiveViewModel()
+    public object? GetActiveViewModel()
     {
-        return _windowManager.FindWindowOfType<SnipWindow>()?.DataContext as SnipWindowViewModel;
+        return _windowManager.FindWindowOfType<SnipWindow>()?.DataContext;
     }
 
     private void ConfigureWindowBounds(Window snip)

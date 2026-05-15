@@ -9,7 +9,6 @@ using System.Reactive.Linq;
 using System.Threading.Tasks;
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core;
-using GimmeCapture.Services.Platforms.Windows;
 
 namespace GimmeCapture.ViewModels.Main;
 
@@ -39,7 +38,7 @@ public partial class SnipWindowViewModel
         CurrentMode != SnipMode.Translation && CurrentState == SnipState.Detecting && DetectedRect.Width > 0;
 
     public ObservableCollection<VisualRect> WindowRects { get; } = new();
-    private readonly WindowDetectionService _detectionService = new();
+    private readonly IWindowDetectionService _detectionService;
 
     /// <summary>
     /// Clears screenshot/recording AI candidate boxes and hover preview. Not used in translation mode.

@@ -11,8 +11,6 @@ using System.IO;
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core;
 using GimmeCapture.Services.Core.Infrastructure;
-using GimmeCapture.Services.Platforms.Desktop;
-using GimmeCapture.Services.Platforms.Windows;
 using System.Collections.Generic;
 
 namespace GimmeCapture.ViewModels.Main;
@@ -99,7 +97,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly IStartupRegistrationService _startupRegistrationService;
     private readonly ISettingsSaveCoordinator _settingsSaveCoordinator;
     private readonly IMainWindowSettingsPersistenceService _settingsPersistenceService;
-    public WindowsGlobalHotkeyService HotkeyService { get; }
+    public IGlobalHotkeyService HotkeyService { get; }
     public HotkeyMappingService HotkeyMappingService { get; }
     public HotkeyRouterService HotkeyRouterService { get; }
 
@@ -150,7 +148,7 @@ public partial class MainWindowViewModel : ViewModelBase
         Color.Parse("#E60012")  // Red
     };
 
-    public MainWindowViewModel() : this(MainWindowViewModelDependencies.CreateDefault())
+    public MainWindowViewModel() : this(CreateDesignDependencies())
     {
     }
 

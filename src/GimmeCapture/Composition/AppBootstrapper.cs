@@ -1,7 +1,5 @@
 using GimmeCapture.Services.Abstractions;
-using GimmeCapture.Services.Platforms.Desktop;
-using GimmeCapture.Services.Platforms.Avalonia;
-using GimmeCapture.Services.Platforms.Windows;
+using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.ViewModels.Main;
 using GimmeCapture.Views.Main;
 
@@ -16,20 +14,9 @@ public sealed class AppBootstrapper
 
     public AppBootstrapper()
     {
-        _mainWindowDependencies = MainWindowViewModelDependencies.CreateDefault();
-
-        var screenLayoutService = new AvaloniaScreenLayoutService();
-        var windowLayerService = new AvaloniaWindowLayerService();
-        var screenCaptureService = new WindowsScreenCaptureService(_mainWindowDependencies.WindowManager);
-        var translationSessionServiceFactory = new TranslationSessionServiceFactory();
-
-        _downloadWindowService = new AvaloniaDownloadWindowService();
-        _snipWindowFactory = new SnipWindowFactory(
-            _mainWindowDependencies.WindowManager,
-            screenLayoutService,
-            windowLayerService,
-            screenCaptureService,
-            translationSessionServiceFactory);
+        _mainWindowDependencies = MainWindowViewModelDependenciesFactory.CreateDefault();
+        _downloadWindowService = RuntimeServiceFactory.CreateDownloadWindowService();
+        _snipWindowFactory = RuntimeServiceFactory.CreateSnipWindowFactory();
     }
 
     public MainWindow CreateMainWindow()

@@ -11,7 +11,6 @@ using System.Threading.Tasks;
 using System.Threading;
 using GimmeCapture.Services.Core;
 using GimmeCapture.Services.Core.Media;
-using GimmeCapture.Services.Platforms.Windows;
 
 namespace GimmeCapture.ViewModels.Main;
 

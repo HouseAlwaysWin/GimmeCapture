@@ -13,7 +13,6 @@ using System.ComponentModel;
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core;
 using GimmeCapture.Services.Core.Media;
-using GimmeCapture.Services.Platforms.Windows;
 using GimmeCapture.ViewModels.Shared;
 using System.Reactive.Disposables;
 using Avalonia.Threading;
@@ -237,10 +236,10 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     public List<OCRLanguage> AvailableOCRLanguages => _mainVm?.AvailableOCRLanguages ?? Enum.GetValues<OCRLanguage>().AsValueEnumerable().ToList();
     public List<TranslationLanguage> AvailableTranslationLanguages => _mainVm?.AvailableTranslationLanguages ?? Enum.GetValues<TranslationLanguage>().AsValueEnumerable().ToList();
 
-    public SnipWindowViewModel() : this(Colors.Red, 2.0, 0.5, new WindowsScreenCaptureService(), null, null, null, null, null) { }
+    public SnipWindowViewModel() : this(Colors.Red, 2.0, 0.5, CreateDesignScreenCaptureService(), CreateDesignWindowDetectionService(), null, null, null, null, null) { }
 
     public SnipWindowViewModel(Color borderColor, double borderThickness, double maskOpacity, RecordingService? recService = null, MainWindowViewModel? mainVm = null)
-        : this(borderColor, borderThickness, maskOpacity, new WindowsScreenCaptureService(), recService, mainVm, null, null, null)
+        : this(borderColor, borderThickness, maskOpacity, CreateDesignScreenCaptureService(), CreateDesignWindowDetectionService(), recService, mainVm, null, null, null)
     {
     }
 
@@ -249,6 +248,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         double borderThickness,
         double maskOpacity,
         IScreenCaptureService captureService,
+        IWindowDetectionService? detectionService = null,
         RecordingService? recService = null,
         MainWindowViewModel? mainVm = null,
         ITranslationSessionService? translationSession = null,
@@ -256,6 +256,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         IAIScanSessionService? aiScanSessionService = null)
     {
         _captureService = captureService ?? throw new ArgumentNullException(nameof(captureService));
+        _detectionService = detectionService ?? CreateDesignWindowDetectionService();
         _translationSession = translationSession;
         _translationSelectionMonitor = translationSelectionMonitor;
         _aiScanSessionService = aiScanSessionService;
