@@ -26,6 +26,9 @@ public class MainWindowViewModelConstructionTests
         var windowManager = new AvaloniaWindowManager();
         var themeResourceService = new AvaloniaThemeResourceService();
         var hotkeyService = new WindowsGlobalHotkeyService();
+        var globalHotkeySettingsCoordinator = new GlobalHotkeySettingsCoordinator(hotkeyService);
+        var startupRegistrationService = new WindowsStartupRegistrationService();
+        var settingsSaveCoordinatorFactory = new DebouncedSettingsSaveCoordinatorFactory();
         var hotkeyMappingService = new HotkeyMappingService();
         var hotkeyRouterService = new HotkeyRouterService();
         var ffmpegDownloader = new FFmpegDownloaderService(settingsService);
@@ -41,6 +44,9 @@ public class MainWindowViewModelConstructionTests
             windowManager,
             themeResourceService,
             hotkeyService,
+            globalHotkeySettingsCoordinator,
+            startupRegistrationService,
+            settingsSaveCoordinatorFactory,
             hotkeyMappingService,
             hotkeyRouterService,
             ffmpegDownloader,

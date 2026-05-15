@@ -12,6 +12,9 @@ public sealed record MainWindowViewModelDependencies(
     IWindowManager WindowManager,
     IThemeResourceService ThemeResourceService,
     WindowsGlobalHotkeyService HotkeyService,
+    IGlobalHotkeySettingsCoordinator GlobalHotkeySettingsCoordinator,
+    IStartupRegistrationService StartupRegistrationService,
+    ISettingsSaveCoordinatorFactory SettingsSaveCoordinatorFactory,
     HotkeyMappingService HotkeyMappingService,
     HotkeyRouterService HotkeyRouterService,
     FFmpegDownloaderService FfmpegDownloader,
@@ -27,6 +30,9 @@ public sealed record MainWindowViewModelDependencies(
         var windowManager = new AvaloniaWindowManager();
         var themeResourceService = new AvaloniaThemeResourceService();
         var hotkeyService = new WindowsGlobalHotkeyService();
+        var globalHotkeySettingsCoordinator = new GlobalHotkeySettingsCoordinator(hotkeyService);
+        var startupRegistrationService = new WindowsStartupRegistrationService();
+        var settingsSaveCoordinatorFactory = new DebouncedSettingsSaveCoordinatorFactory();
         var hotkeyMappingService = new HotkeyMappingService();
         var hotkeyRouterService = new HotkeyRouterService();
         var ffmpegDownloader = new FFmpegDownloaderService(settingsService);
@@ -42,6 +48,9 @@ public sealed record MainWindowViewModelDependencies(
             windowManager,
             themeResourceService,
             hotkeyService,
+            globalHotkeySettingsCoordinator,
+            startupRegistrationService,
+            settingsSaveCoordinatorFactory,
             hotkeyMappingService,
             hotkeyRouterService,
             ffmpegDownloader,

@@ -105,7 +105,6 @@ public partial class App : Application
                         if (desktop.MainWindow?.DataContext is MainWindowViewModel mvm)
                         {
                             mvm.AutoCheckUpdates = !mvm.AutoCheckUpdates;
-                            _ = mvm.SaveSettingsAsync();
                         }
                     };
                     menu.Items.Add(autoUpdateItem);

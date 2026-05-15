@@ -46,8 +46,7 @@ public partial class MainWindowViewModel
                 if (!_isDataLoading)
                 {
                    _settingsService.Settings.SourceLanguage = value; // Immediate sync
-                   IsModified = true;
-                   _ = SaveSettingsAsync();
+                   MarkModifiedAndQueueSettingsSave();
                 }
             }
         }
@@ -66,8 +65,7 @@ public partial class MainWindowViewModel
                 if (!_isDataLoading)
                 {
                    _settingsService.Settings.TargetLanguage = value; // Immediate sync
-                   IsModified = true; // Mark as modified so Save can happen if auto-save or manual save
-                   _ = SaveSettingsAsync(); // Auto-save for convenience
+                   MarkModifiedAndQueueSettingsSave(); // Auto-save for convenience
                 }
             }
         }
@@ -94,8 +92,7 @@ public partial class MainWindowViewModel
                 if (!_isDataLoading)
                 {
                     _settingsService.Settings.SelectedTranslationEngine = value; // Immediate sync
-                    IsModified = true;
-                    _ = SaveSettingsAsync();
+                    MarkModifiedAndQueueSettingsSave();
                 }
             }
         }
@@ -136,8 +133,7 @@ public partial class MainWindowViewModel
                 if (!_isDataLoading)
                 {
                     _settingsService.Settings.Language = value.Value;
-                    IsModified = true;
-                    _ = SaveSettingsAsync();
+                    MarkModifiedAndQueueSettingsSave();
                 }
             }
         }
@@ -152,12 +148,11 @@ public partial class MainWindowViewModel
             if (_runOnStartup != value)
             {
                 this.RaiseAndSetIfChanged(ref _runOnStartup, value);
-                StartupService.SetStartup(value); // Apply to Windows Registry
+                _startupRegistrationService.SetStartup(value);
                 if (!_isDataLoading)
                 {
                     _settingsService.Settings.RunOnStartup = value;
-                    IsModified = true;
-                    _ = SaveSettingsAsync();
+                    MarkModifiedAndQueueSettingsSave();
                 }
             }
         }
@@ -175,8 +170,7 @@ public partial class MainWindowViewModel
                 if (!_isDataLoading)
                 {
                     _settingsService.Settings.AutoCheckUpdates = value;
-                    IsModified = true;
-                    _ = SaveSettingsAsync();
+                    MarkModifiedAndQueueSettingsSave();
                 }
             }
         }
@@ -283,14 +277,20 @@ public partial class MainWindowViewModel
         get => _snipHotkey;
         set
         {
-            this.RaiseAndSetIfChanged(ref _snipHotkey, value);
-            HotkeyService.Register(HotkeyIds.Snip, value);
-            this.RaisePropertyChanged(nameof(SnipTooltip));
-            if (!_isDataLoading)
+            var changed = _snipHotkey != value;
+            if (changed)
             {
-                _settingsService.Settings.SnipHotkey = value;
-                IsModified = true;
-                _ = SaveSettingsAsync();
+                this.RaiseAndSetIfChanged(ref _snipHotkey, value);
+            }
+            _globalHotkeySettingsCoordinator.RegisterGlobalHotkey(HotkeyIds.Snip, value);
+            if (changed)
+            {
+                this.RaisePropertyChanged(nameof(SnipTooltip));
+                if (!_isDataLoading)
+                {
+                    _settingsService.Settings.SnipHotkey = value;
+                    MarkModifiedAndQueueSettingsSave();
+                }
             }
         }
     }
@@ -302,14 +302,20 @@ public partial class MainWindowViewModel
         get => _translateHotkey;
         set
         {
-            this.RaiseAndSetIfChanged(ref _translateHotkey, value);
-            HotkeyService.Register(HotkeyIds.Translate, value);
-            this.RaisePropertyChanged(nameof(TranslateTooltip));
-            if (!_isDataLoading)
+            var changed = _translateHotkey != value;
+            if (changed)
             {
-                _settingsService.Settings.TranslateHotkey = value;
-                IsModified = true;
-                _ = SaveSettingsAsync();
+                this.RaiseAndSetIfChanged(ref _translateHotkey, value);
+            }
+            _globalHotkeySettingsCoordinator.RegisterGlobalHotkey(HotkeyIds.Translate, value);
+            if (changed)
+            {
+                this.RaisePropertyChanged(nameof(TranslateTooltip));
+                if (!_isDataLoading)
+                {
+                    _settingsService.Settings.TranslateHotkey = value;
+                    MarkModifiedAndQueueSettingsSave();
+                }
             }
         }
     }
@@ -320,14 +326,20 @@ public partial class MainWindowViewModel
         get => _recordHotkey;
         set
         {
-            this.RaiseAndSetIfChanged(ref _recordHotkey, value);
-            HotkeyService.Register(HotkeyIds.Record, value);
-            this.RaisePropertyChanged(nameof(RecordTooltip));
-            if (!_isDataLoading)
+            var changed = _recordHotkey != value;
+            if (changed)
             {
-                _settingsService.Settings.RecordHotkey = value;
-                IsModified = true;
-                _ = SaveSettingsAsync();
+                this.RaiseAndSetIfChanged(ref _recordHotkey, value);
+            }
+            _globalHotkeySettingsCoordinator.RegisterGlobalHotkey(HotkeyIds.Record, value);
+            if (changed)
+            {
+                this.RaisePropertyChanged(nameof(RecordTooltip));
+                if (!_isDataLoading)
+                {
+                    _settingsService.Settings.RecordHotkey = value;
+                    MarkModifiedAndQueueSettingsSave();
+                }
             }
         }
     }
@@ -624,7 +636,7 @@ public partial class MainWindowViewModel
                 this.RaisePropertyChanged();
                 if (!_isDataLoading)
                 {
-                    _ = SaveSettingsAsync();
+                    QueueSettingsSave();
                 }
             }
         }
@@ -641,7 +653,7 @@ public partial class MainWindowViewModel
                 this.RaisePropertyChanged();
                 if (!_isDataLoading)
                 {
-                    _ = SaveSettingsAsync();
+                    QueueSettingsSave();
                 }
             }
         }
@@ -657,7 +669,7 @@ public partial class MainWindowViewModel
             if (!_isDataLoading)
             {
                 _settingsService.Settings.EnableAI = value;
-                _ = SaveSettingsAsync();
+                QueueSettingsSave();
 
                 // 使用者關閉 AI 時，主動釋放 SAM2 模型記憶體
                 if (!value)
@@ -702,8 +714,7 @@ public partial class MainWindowViewModel
             if (!_isDataLoading)
             {
                 _settingsService.Settings.LlamaModelId = value;
-                IsModified = true;
-                _ = SaveSettingsAsync();
+                MarkModifiedAndQueueSettingsSave();
             }
         }
     }
@@ -718,8 +729,7 @@ public partial class MainWindowViewModel
             if (!_isDataLoading)
             {
                 _settingsService.Settings.LlamaCustomModelPath = value;
-                IsModified = true;
-                _ = SaveSettingsAsync();
+                MarkModifiedAndQueueSettingsSave();
             }
         }
     }
@@ -734,8 +744,7 @@ public partial class MainWindowViewModel
             if (!_isDataLoading)
             {
                 _settingsService.Settings.LlamaContextSize = _llamaContextSize;
-                IsModified = true;
-                _ = SaveSettingsAsync();
+                MarkModifiedAndQueueSettingsSave();
             }
         }
     }
@@ -750,8 +759,7 @@ public partial class MainWindowViewModel
             if (!_isDataLoading)
             {
                 _settingsService.Settings.LlamaGpuLayers = _llamaGpuLayers;
-                IsModified = true;
-                _ = SaveSettingsAsync();
+                MarkModifiedAndQueueSettingsSave();
             }
         }
     }

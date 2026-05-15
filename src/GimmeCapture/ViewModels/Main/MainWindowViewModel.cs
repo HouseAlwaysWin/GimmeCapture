@@ -96,6 +96,9 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly AppSettingsService _settingsService;
     private readonly IWindowManager _windowManager;
     private readonly IThemeResourceService _themeResourceService;
+    private readonly IGlobalHotkeySettingsCoordinator _globalHotkeySettingsCoordinator;
+    private readonly IStartupRegistrationService _startupRegistrationService;
+    private readonly ISettingsSaveCoordinator _settingsSaveCoordinator;
     public WindowsGlobalHotkeyService HotkeyService { get; }
     public HotkeyMappingService HotkeyMappingService { get; }
     public HotkeyRouterService HotkeyRouterService { get; }
@@ -158,7 +161,10 @@ public partial class MainWindowViewModel : ViewModelBase
         _settingsService = dependencies.SettingsService;
         _windowManager = dependencies.WindowManager;
         _themeResourceService = dependencies.ThemeResourceService;
+        _globalHotkeySettingsCoordinator = dependencies.GlobalHotkeySettingsCoordinator;
+        _startupRegistrationService = dependencies.StartupRegistrationService;
         HotkeyService = dependencies.HotkeyService;
+        _settingsSaveCoordinator = dependencies.SettingsSaveCoordinatorFactory.Create(SaveSettingsAsync);
         HotkeyMappingService = dependencies.HotkeyMappingService;
         HotkeyRouterService = dependencies.HotkeyRouterService;
         FfmpegDownloader = dependencies.FfmpegDownloader;
@@ -332,5 +338,16 @@ public partial class MainWindowViewModel : ViewModelBase
         };
 
         _loadTask = LoadSettingsAsync();
+    }
+
+    private void MarkModifiedAndQueueSettingsSave()
+    {
+        IsModified = true;
+        _settingsSaveCoordinator.RequestSave();
+    }
+
+    private void QueueSettingsSave()
+    {
+        _settingsSaveCoordinator.RequestSave();
     }
 }
