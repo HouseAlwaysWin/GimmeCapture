@@ -3,6 +3,7 @@ using Avalonia;
 using Avalonia.Media;
 using System;
 using System.Threading.Tasks;
+using GimmeCapture.Composition;
 using GimmeCapture.Models;
 using System.Collections.ObjectModel;
 using System.Reactive;
@@ -95,19 +96,19 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly AppSettingsService _settingsService;
     private readonly IWindowManager _windowManager;
     private readonly IThemeResourceService _themeResourceService;
-    public WindowsGlobalHotkeyService HotkeyService { get; } = new();
-    public HotkeyMappingService HotkeyMappingService { get; } = new();
-    public HotkeyRouterService HotkeyRouterService { get; } = new();
+    public WindowsGlobalHotkeyService HotkeyService { get; }
+    public HotkeyMappingService HotkeyMappingService { get; }
+    public HotkeyRouterService HotkeyRouterService { get; }
 
     public FFmpegDownloaderService FfmpegDownloader { get; }
     public RecordingService RecordingService { get; }
     public UpdateService UpdateService { get; }
     public AIResourceService AIResourceService { get; }
     public AIPathService AIPathService { get; }
-    public ResourceQueueService ResourceQueue => ResourceQueueService.Instance;
+    public ResourceQueueService ResourceQueue { get; }
     
     public ObservableCollection<ModuleItem> Modules { get; } = new();
-    public string AppVersion => System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0";
+    public string AppVersion => AppVersionInfo.CurrentVersion;
 
     // Commands - Initialized in constructor
     public ReactiveCommand<CaptureMode, Unit> StartCaptureCommand { get; } = null!;
@@ -146,18 +147,26 @@ public partial class MainWindowViewModel : ViewModelBase
         Color.Parse("#E60012")  // Red
     };
 
-    public MainWindowViewModel()
+    public MainWindowViewModel() : this(MainWindowViewModelDependencies.CreateDefault())
     {
-        _windowManager = new AvaloniaWindowManager();
-        _themeResourceService = new AvaloniaThemeResourceService();
-        _settingsService = new AppSettingsService();
-        FfmpegDownloader = new FFmpegDownloaderService(_settingsService);
-        RecordingService = new RecordingService(FfmpegDownloader, _settingsService);
-        UpdateService = new UpdateService(AppVersion);
-        AIPathService = new AIPathService(_settingsService);
-        var nativeResolverService = new NativeResolverService(AIPathService);
-        var aiModelDownloader = new AIModelDownloader();
-        AIResourceService = new AIResourceService(_settingsService, AIPathService, nativeResolverService, aiModelDownloader);
+    }
+
+    public MainWindowViewModel(MainWindowViewModelDependencies dependencies)
+    {
+        ArgumentNullException.ThrowIfNull(dependencies);
+
+        _settingsService = dependencies.SettingsService;
+        _windowManager = dependencies.WindowManager;
+        _themeResourceService = dependencies.ThemeResourceService;
+        HotkeyService = dependencies.HotkeyService;
+        HotkeyMappingService = dependencies.HotkeyMappingService;
+        HotkeyRouterService = dependencies.HotkeyRouterService;
+        FfmpegDownloader = dependencies.FfmpegDownloader;
+        RecordingService = dependencies.RecordingService;
+        UpdateService = dependencies.UpdateService;
+        AIResourceService = dependencies.AIResourceService;
+        AIPathService = dependencies.AIPathService;
+        ResourceQueue = dependencies.ResourceQueue;
 
         LocalizationService.Instance
             .WhenAnyValue(x => x.CurrentLanguage)

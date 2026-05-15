@@ -20,10 +20,8 @@ namespace GimmeCapture.Views.Main;
 
 public partial class MainWindow : Window
 {
-    private readonly IDownloadWindowService _downloadWindowService = new AvaloniaDownloadWindowService();
-    private readonly IScreenLayoutService _screenLayoutService = new AvaloniaScreenLayoutService();
-    private readonly IWindowLayerService _windowLayerService = new AvaloniaWindowLayerService();
-    private readonly IWindowManager _windowManager = new AvaloniaWindowManager();
+    private readonly IDownloadWindowService _downloadWindowService;
+    private readonly ISnipWindowFactory _snipWindowFactory;
 
     [StructLayout(LayoutKind.Sequential)]
     public struct POINT
@@ -36,9 +34,24 @@ public partial class MainWindow : Window
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool GetCursorPos(out POINT lpPoint);
 
-    public MainWindow()
+    public MainWindow() : this(null, null, null)
     {
+    }
+
+    public MainWindow(
+        MainWindowViewModel? viewModel,
+        IDownloadWindowService? downloadWindowService,
+        ISnipWindowFactory? snipWindowFactory)
+    {
+        _downloadWindowService = downloadWindowService ?? new AvaloniaDownloadWindowService();
+        _snipWindowFactory = snipWindowFactory ?? new SnipWindowFactory(
+            new AvaloniaWindowManager(),
+            new AvaloniaScreenLayoutService(),
+            new AvaloniaWindowLayerService(),
+            new WindowsScreenCaptureService());
+
         InitializeComponent();
+        DataContext = viewModel ?? new MainWindowViewModel();
         
         this.PropertyChanged += OnPropertyChanged;
         this.Closing += OnClosing;
@@ -172,63 +185,15 @@ public partial class MainWindow : Window
 
     private SnipWindowViewModel? ResolveActiveSnipViewModel()
     {
-        return _windowManager.FindWindowOfType<SnipWindow>()?.DataContext as SnipWindowViewModel;
+        return _snipWindowFactory.GetActiveViewModel();
     }
 
     private void OpenSnipWindow(CaptureMode mode)
     {
-        if (DataContext is not MainWindowViewModel vm) return;
-
-        var existing = _windowManager.FindWindowOfType<SnipWindow>();
-
-        if (existing != null)
+        if (DataContext is MainWindowViewModel vm)
         {
-            if (existing.DataContext is SnipWindowViewModel existingVm)
-            {
-                existingVm.HandleCaptureModeRequest(mode);
-            }
-            existing.Activate();
-            return;
+            _snipWindowFactory.Open(vm, mode);
         }
-
-        var snip = new SnipWindow(_screenLayoutService, _windowLayerService);
-        
-        // Multi-monitor support: Span ALL screens
-        var allScreens = snip.Screens.All;
-        if (allScreens.Count > 0)
-        {
-            var screenBounds = allScreens.AsValueEnumerable().Select(s => s.Bounds).ToList();
-            var primaryScreen = snip.Screens.Primary ?? allScreens.AsValueEnumerable().First();
-            double unifiedScaling = primaryScreen.Scaling;
-
-            if (_screenLayoutService.TryGetUnifiedDesktopPlacement(screenBounds, unifiedScaling, out var position, out var size))
-            {
-                snip.WindowStartupLocation = WindowStartupLocation.Manual;
-                snip.Position = position;
-                snip.Width = size.Width;
-                snip.Height = size.Height;
-            }
-        }
-        
-        var snipVm = new SnipWindowViewModel(
-            vm.BorderColor, 
-            vm.BorderThickness, 
-            vm.MaskOpacity,
-            vm.RecordingService,
-            vm
-        );
-        snipVm.AutoActionMode = (int)mode;
-        if (mode == CaptureMode.Record)
-        {
-            snipVm.CurrentMode = SnipMode.Recording;
-        }
-        else if (mode == CaptureMode.Translate)
-        {
-            snipVm.CurrentMode = SnipMode.Translation;
-            snipVm.InitializeTranslationToolbarPosition();
-        }
-        snip.DataContext = snipVm;
-        snip.Show();
     }
 
 

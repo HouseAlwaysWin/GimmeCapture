@@ -2,6 +2,7 @@ using System;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using GimmeCapture.Composition;
 using GimmeCapture.ViewModels.Main;
 using GimmeCapture.Views.Main;
 using GimmeCapture.Services.Abstractions;
@@ -13,6 +14,8 @@ namespace GimmeCapture;
 
 public partial class App : Application
 {
+    private AppBootstrapper? _bootstrapper;
+
     private static string FormatToggleLabel(string label, bool isOn) => isOn ? $"✓ {label}" : $"   {label}";
 
     public override void Initialize()
@@ -25,10 +28,8 @@ public partial class App : Application
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             desktop.ShutdownMode = Avalonia.Controls.ShutdownMode.OnMainWindowClose;
-            desktop.MainWindow = new MainWindow
-            {
-                DataContext = new MainWindowViewModel(),
-            };
+            _bootstrapper = new AppBootstrapper();
+            desktop.MainWindow = _bootstrapper.CreateMainWindow();
 
             if (desktop.MainWindow is { } mw && StartupService.ShouldLaunchToTrayOnly(Program.CommandLineArgs))
             {

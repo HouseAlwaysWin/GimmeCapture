@@ -233,11 +233,22 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     public List<OCRLanguage> AvailableOCRLanguages => _mainVm?.AvailableOCRLanguages ?? Enum.GetValues<OCRLanguage>().AsValueEnumerable().ToList();
     public List<TranslationLanguage> AvailableTranslationLanguages => _mainVm?.AvailableTranslationLanguages ?? Enum.GetValues<TranslationLanguage>().AsValueEnumerable().ToList();
 
-    public SnipWindowViewModel() : this(Colors.Red, 2.0, 0.5, null, null) { }
+    public SnipWindowViewModel() : this(Colors.Red, 2.0, 0.5, new WindowsScreenCaptureService(), null, null) { }
 
     public SnipWindowViewModel(Color borderColor, double borderThickness, double maskOpacity, RecordingService? recService = null, MainWindowViewModel? mainVm = null)
+        : this(borderColor, borderThickness, maskOpacity, new WindowsScreenCaptureService(), recService, mainVm)
     {
-        _captureService = new WindowsScreenCaptureService();
+    }
+
+    public SnipWindowViewModel(
+        Color borderColor,
+        double borderThickness,
+        double maskOpacity,
+        IScreenCaptureService captureService,
+        RecordingService? recService = null,
+        MainWindowViewModel? mainVm = null)
+    {
+        _captureService = captureService ?? throw new ArgumentNullException(nameof(captureService));
         _selectionBorderColor = borderColor;
         _selectionBorderThickness = borderThickness;
         _maskOpacity = maskOpacity;
