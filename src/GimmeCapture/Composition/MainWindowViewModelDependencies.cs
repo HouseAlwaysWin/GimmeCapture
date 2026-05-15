@@ -15,6 +15,7 @@ public sealed record MainWindowViewModelDependencies(
     IGlobalHotkeySettingsCoordinator GlobalHotkeySettingsCoordinator,
     IStartupRegistrationService StartupRegistrationService,
     ISettingsSaveCoordinatorFactory SettingsSaveCoordinatorFactory,
+    IMainWindowSettingsPersistenceService SettingsPersistenceService,
     HotkeyMappingService HotkeyMappingService,
     HotkeyRouterService HotkeyRouterService,
     FFmpegDownloaderService FfmpegDownloader,
@@ -33,6 +34,7 @@ public sealed record MainWindowViewModelDependencies(
         var globalHotkeySettingsCoordinator = new GlobalHotkeySettingsCoordinator(hotkeyService);
         var startupRegistrationService = new WindowsStartupRegistrationService();
         var settingsSaveCoordinatorFactory = new DebouncedSettingsSaveCoordinatorFactory();
+        var settingsPersistenceService = new MainWindowSettingsPersistenceService();
         var hotkeyMappingService = new HotkeyMappingService();
         var hotkeyRouterService = new HotkeyRouterService();
         var ffmpegDownloader = new FFmpegDownloaderService(settingsService);
@@ -51,6 +53,7 @@ public sealed record MainWindowViewModelDependencies(
             globalHotkeySettingsCoordinator,
             startupRegistrationService,
             settingsSaveCoordinatorFactory,
+            settingsPersistenceService,
             hotkeyMappingService,
             hotkeyRouterService,
             ffmpegDownloader,

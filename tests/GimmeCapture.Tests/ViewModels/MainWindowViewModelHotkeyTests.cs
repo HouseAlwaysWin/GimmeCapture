@@ -36,6 +36,7 @@ public class MainWindowViewModelHotkeyTests
             hotkeyCoordinator,
             new NoOpStartupRegistrationService(),
             new ImmediateSettingsSaveCoordinatorFactory(),
+            new MainWindowSettingsPersistenceService(),
             new HotkeyMappingService(),
             new HotkeyRouterService(),
             ffmpegDownloader,

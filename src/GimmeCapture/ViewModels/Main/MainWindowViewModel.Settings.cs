@@ -833,100 +833,11 @@ public partial class MainWindowViewModel
         _isDataLoading = true;
         try
         {
-            await _settingsService.LoadAsync();
-            var settings = _settingsService.Settings;
-            
-            RunOnStartup = settings.RunOnStartup;
-            AutoCheckUpdates = settings.AutoCheckUpdates;
-            BorderThickness = settings.BorderThickness;
-            MaskOpacity = settings.MaskOpacity;
-            AutoSave = settings.AutoSave;
-            SaveDirectory = settings.SaveDirectory;
-            SnipHotkey = settings.SnipHotkey;
-            TranslateHotkey = settings.TranslateHotkey;
-            RecordHotkey = settings.RecordHotkey;
-            RecordingSettings.RecordFormat = settings.RecordFormat;
-            RecordingSettings.VideoSaveDirectory = settings.VideoSaveDirectory;
-            RecordingSettings.VideoCodec = settings.VideoCodec;
-            RecordingSettings.VideoQuality = settings.VideoQuality;
-            RecordingSettings.UseFixedRecordPath = settings.UseFixedRecordPath;
-            HideSnipPinDecoration = settings.HideSnipPinDecoration;
-            HideSnipPinBorder = settings.HideSnipPinBorder;
-            DefaultHideSnipToolbar = settings.DefaultHideSnipToolbar;
-            DefaultHideRecordToolbar = settings.DefaultHideRecordToolbar;
-            HideRecordPinDecoration = settings.HideRecordPinDecoration;
-            HideRecordPinBorder = settings.HideRecordPinBorder;
-            HideSnipSelectionDecoration = settings.HideSnipSelectionDecoration;
-            HideSnipSelectionBorder = settings.HideSnipSelectionBorder;
-            HideRecordSelectionDecoration = settings.HideRecordSelectionDecoration;
-            HideRecordSelectionBorder = settings.HideRecordSelectionBorder;
-            ShowSnipCursor = settings.ShowSnipCursor;
-            ShowRecordCursor = settings.ShowRecordCursor;
-            RecordSystemAudio = settings.RecordSystemAudio;
-            PlaybackUiFps = settings.PlaybackUiFps;
-            PlaybackTimelineFps = settings.PlaybackTimelineFps;
-            TempDirectory = settings.TempDirectory;
-            ShowAIScanBox = settings.ShowAIScanBox;
-            EnableAI = settings.EnableAI;
-            SAM2GridDensity = settings.SAM2GridDensity;
-            SAM2MaxObjects = settings.SAM2MaxObjects;
-            SAM2MinObjectSize = settings.SAM2MinObjectSize;
-            WingScale = settings.WingScale;
-            CornerIconScale = settings.CornerIconScale;
-            RecordingSettings.RecordFPS = settings.RecordFPS;
-            RecordingSettings.MaxRecordingSizeMB = settings.MaxRecordingSizeMB;
-            EnableAIScan = settings.EnableAIScan;
-            AIScanEngine = settings.AIScanEngine;
-            AIResourcesDirectory = settings.AIResourcesDirectory;
-            SelectedTranslationEngine = TranslationEngine.LlamaSharp;
-            LlamaModelId = settings.LlamaModelId;
-            LlamaCustomModelPath = settings.LlamaCustomModelPath;
-            LlamaContextSize = settings.LlamaContextSize;
-            LlamaGpuLayers = settings.LlamaGpuLayers;
-            SourceLanguage = settings.SourceLanguage;
-            TargetLanguage = settings.TargetLanguage;
-
-            // Trigger notifications for all hotkeys (they access Settings directly now)
-            var hotkeyProps = new[] {
-                nameof(Snip_Rectangle), nameof(Snip_Ellipse), nameof(Snip_Arrow), nameof(Snip_Line), nameof(Snip_Pen),
-                nameof(Snip_Text), nameof(Snip_Mosaic), nameof(Snip_Blur), nameof(Snip_Undo), nameof(Snip_Redo),
-                nameof(Snip_Clear), nameof(Snip_Save), nameof(Snip_Copy), nameof(Snip_Pin), nameof(Snip_Close),
-                nameof(Snip_Toolbar), nameof(Snip_SelectionMode), nameof(Snip_CropMode), nameof(Snip_RemoveBackground),
-                nameof(Snip_FullscreenSelect),
-                nameof(Record_Rectangle), nameof(Record_Ellipse), nameof(Record_Arrow), nameof(Record_Line), nameof(Record_Pen),
-                nameof(Record_Text), nameof(Record_Mosaic), nameof(Record_Blur), nameof(Record_Undo), nameof(Record_Redo),
-                nameof(Record_Clear), nameof(Record_Save), nameof(Record_Copy), nameof(Record_Close), nameof(Record_Toolbar),
-                nameof(Record_Action), nameof(Record_Playback), nameof(Record_FullscreenSelect),
-                nameof(Record_SwitchToSnip), nameof(Record_SwitchToTranslate),
-                nameof(Translate_Action), nameof(Translate_Pin), nameof(Translate_Toolbar), nameof(Translate_Close),
-                nameof(Translate_TranslateAll), nameof(Translate_ScanAll), nameof(Translate_ClearAll),
-                nameof(Translate_ToggleSelect), nameof(Translate_AutoDetect),
-                nameof(Translate_SelectionHoldModifier),
-                nameof(Translate_ModeCursor), nameof(Translate_ModeSingle), nameof(Translate_ModeMulti),
-                nameof(Translate_SwitchToSnip), nameof(Translate_SwitchToRecord),
-                nameof(Snip_SwitchToTranslate), nameof(Snip_SwitchToRecord)
-            };
-            foreach (var prop in hotkeyProps) this.RaisePropertyChanged(prop);
-
-            
+            var snapshot = await _settingsPersistenceService.LoadAsync(_settingsService);
+            ApplySettingsSnapshot(snapshot);
+            RaiseSettingsBackedPropertyNotifications();
             RefreshLlamaModelCatalog();
-
-            if (Color.TryParse(settings.BorderColorHex, out var color))
-                BorderColor = color;
-                
-            if (Color.TryParse(settings.ThemeColorHex, out var themeColor))
-                ThemeColor = themeColor;
-
-            SelectedLanguageOption = AvailableLanguages.AsValueEnumerable().FirstOrDefault(x => x.Value == settings.Language) ?? AvailableLanguages[0];
-            RecordingSettings.SelectedVideoCodecOption = RecordingSettings.VideoCodecOptions.AsValueEnumerable().FirstOrDefault(x => x.Value == settings.VideoCodec);
-            RecordingSettings.SelectedVideoQualityOption = RecordingSettings.VideoQualityOptions.AsValueEnumerable().FirstOrDefault(x => x.Value == settings.VideoQuality);
-            
-            this.RaisePropertyChanged(nameof(SourceLanguage));
-            this.RaisePropertyChanged(nameof(TargetLanguage));
-            this.RaisePropertyChanged(nameof(AIScanEngine));
-
             IsModified = false;
-
         }
         catch (Exception ex)
         {
@@ -948,60 +859,7 @@ public partial class MainWindowViewModel
 
         try
         {
-            var settings = _settingsService.Settings;
-            settings.RunOnStartup = RunOnStartup;
-            settings.AutoCheckUpdates = AutoCheckUpdates;
-            settings.BorderThickness = BorderThickness;
-            settings.MaskOpacity = MaskOpacity;
-            settings.AutoSave = AutoSave;
-            settings.SaveDirectory = SaveDirectory;
-            settings.SnipHotkey = SnipHotkey;
-            settings.TranslateHotkey = TranslateHotkey;
-            settings.RecordHotkey = RecordHotkey;
-            settings.RecordFormat = RecordingSettings.RecordFormat;
-            settings.VideoSaveDirectory = RecordingSettings.VideoSaveDirectory;
-            settings.VideoCodec = RecordingSettings.VideoCodec;
-            settings.VideoQuality = RecordingSettings.VideoQuality;
-            settings.UseFixedRecordPath = RecordingSettings.UseFixedRecordPath;
-            settings.HideSnipPinDecoration = HideSnipPinDecoration;
-            settings.HideSnipPinBorder = HideSnipPinBorder;
-            settings.DefaultHideSnipToolbar = DefaultHideSnipToolbar;
-            settings.DefaultHideRecordToolbar = DefaultHideRecordToolbar;
-            settings.HideRecordPinDecoration = HideRecordPinDecoration;
-            settings.HideRecordPinBorder = HideRecordPinBorder;
-            settings.HideSnipSelectionDecoration = HideSnipSelectionDecoration;
-            settings.HideSnipSelectionBorder = HideSnipSelectionBorder;
-            settings.HideRecordSelectionDecoration = HideRecordSelectionDecoration;
-            settings.HideRecordSelectionBorder = HideRecordSelectionBorder;
-            settings.ShowSnipCursor = ShowSnipCursor;
-            settings.ShowRecordCursor = ShowRecordCursor;
-            settings.RecordSystemAudio = RecordSystemAudio;
-            settings.PlaybackUiFps = PlaybackUiFps;
-            settings.PlaybackTimelineFps = PlaybackTimelineFps;
-            settings.TempDirectory = TempDirectory;
-            settings.ShowAIScanBox = ShowAIScanBox;
-            settings.EnableAI = EnableAI;
-            settings.SAM2GridDensity = SAM2GridDensity;
-            settings.SAM2MaxObjects = SAM2MaxObjects;
-            settings.SAM2MinObjectSize = SAM2MinObjectSize;
-            settings.WingScale = WingScale;
-            settings.CornerIconScale = CornerIconScale;
-            settings.RecordFPS = RecordingSettings.RecordFPS;
-            settings.MaxRecordingSizeMB = RecordingSettings.MaxRecordingSizeMB;
-            settings.AIScanEngine = AIScanEngine;
-            settings.TargetLanguage = TargetLanguage;
-            settings.SourceLanguage = SourceLanguage;
-            settings.LlamaModelId = LlamaModelId;
-            settings.LlamaCustomModelPath = LlamaCustomModelPath;
-            settings.LlamaContextSize = LlamaContextSize;
-            settings.LlamaGpuLayers = LlamaGpuLayers;
-            settings.SelectedTranslationEngine = SelectedTranslationEngine;
-            settings.BorderColorHex = BorderColor.ToString();
-            settings.ThemeColorHex = ThemeColor.ToString();
-            settings.Language = SelectedLanguageOption.Value;
-
-            await _settingsService.SaveAsync();
-
+            await _settingsPersistenceService.SaveAsync(_settingsService, CreateSettingsSnapshot());
             IsModified = false;
             return true;
         }

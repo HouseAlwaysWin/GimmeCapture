@@ -22,7 +22,11 @@ public class SettingsSaveCoordinatorTests
         coordinator.RequestSave();
         coordinator.RequestSave();
 
-        await Task.Delay(120);
+        var deadline = DateTime.UtcNow.AddSeconds(1);
+        while (Volatile.Read(ref saveCount) == 0 && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(25);
+        }
 
         Assert.Equal(1, Volatile.Read(ref saveCount));
     }

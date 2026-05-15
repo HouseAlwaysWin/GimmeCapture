@@ -1,0 +1,100 @@
+using System;
+using System.IO;
+using System.Threading.Tasks;
+using Avalonia.Media;
+using GimmeCapture.Models;
+using GimmeCapture.Services.Core.Infrastructure;
+
+namespace GimmeCapture.Tests;
+
+public class MainWindowSettingsPersistenceServiceTests
+{
+    [Fact]
+    public async Task SaveAsync_Writes_Snapshot_State_To_Settings_And_Disk()
+    {
+        var tempDir = Path.Combine(
+            Path.GetTempPath(),
+            "GimmeCapture.Tests",
+            nameof(MainWindowSettingsPersistenceServiceTests),
+            Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+
+        var settingsService = new AppSettingsService(tempDir);
+        var persistenceService = new MainWindowSettingsPersistenceService();
+        var snapshot = new MainWindowSettingsSnapshot
+        {
+            Language = Language.Japanese,
+            RunOnStartup = true,
+            AutoCheckUpdates = false,
+            BorderThickness = 4,
+            MaskOpacity = 0.35,
+            BorderColor = Color.Parse("#123456"),
+            ThemeColor = Color.Parse("#654321"),
+            WingScale = 1.7,
+            CornerIconScale = 0.8,
+            HideSnipPinDecoration = true,
+            HideSnipPinBorder = true,
+            HideSnipSelectionDecoration = true,
+            HideSnipSelectionBorder = false,
+            HideRecordPinDecoration = true,
+            HideRecordPinBorder = false,
+            HideRecordSelectionDecoration = true,
+            HideRecordSelectionBorder = true,
+            DefaultHideSnipToolbar = true,
+            DefaultHideRecordToolbar = false,
+            AutoSave = true,
+            SaveDirectory = @"D:\captures",
+            ShowSnipCursor = true,
+            ShowRecordCursor = false,
+            RecordSystemAudio = false,
+            VideoSaveDirectory = @"D:\captures\video",
+            RecordFormat = "webm",
+            VideoCodec = VideoCodec.H265,
+            VideoQuality = VideoQuality.High,
+            RecordFps = 48,
+            MaxRecordingSizeMb = 128.5,
+            PlaybackUiFps = 45,
+            PlaybackTimelineFps = 18,
+            UseFixedRecordPath = true,
+            TempDirectory = @"D:\captures\tmp",
+            SnipHotkey = "Shift+F7",
+            RecordHotkey = "Shift+F8",
+            TranslateHotkey = "Shift+F9",
+            AIResourcesDirectory = @"D:\captures\ai",
+            EnableAI = false,
+            ShowAIScanBox = false,
+            EnableAIScan = false,
+            AIScanEngine = AIScanEngine.SAM2,
+            SAM2GridDensity = 13,
+            SAM2MaxObjects = 9,
+            SAM2MinObjectSize = 31,
+            SourceLanguage = OCRLanguage.Japanese,
+            TargetLanguage = TranslationLanguage.English,
+            SelectedTranslationEngine = TranslationEngine.LlamaSharp,
+            LlamaModelId = "custom-model",
+            LlamaCustomModelPath = @"D:\models\custom.gguf",
+            LlamaContextSize = 4096,
+            LlamaGpuLayers = 22
+        };
+
+        await persistenceService.SaveAsync(settingsService, snapshot);
+
+        var persisted = MainWindowSettingsSnapshot.FromAppSettings(settingsService.Settings);
+        var savedJson = await File.ReadAllTextAsync(Path.Combine(tempDir, "config.json"));
+
+        Assert.Equal(snapshot.Language, persisted.Language);
+        Assert.Equal(snapshot.RunOnStartup, persisted.RunOnStartup);
+        Assert.Equal(snapshot.BorderColor, persisted.BorderColor);
+        Assert.Equal(snapshot.ThemeColor, persisted.ThemeColor);
+        Assert.Equal(snapshot.RecordFormat, persisted.RecordFormat);
+        Assert.Equal(snapshot.RecordHotkey, persisted.RecordHotkey);
+        Assert.Equal(snapshot.EnableAIScan, persisted.EnableAIScan);
+        Assert.Equal(snapshot.AIScanEngine, persisted.AIScanEngine);
+        Assert.Equal(snapshot.AIResourcesDirectory, persisted.AIResourcesDirectory);
+        Assert.Equal(snapshot.LlamaModelId, persisted.LlamaModelId);
+        Assert.Equal(snapshot.LlamaGpuLayers, persisted.LlamaGpuLayers);
+        Assert.Contains("\"Language\": \"Japanese\"", savedJson);
+        Assert.Contains("\"RecordHotkey\": \"Shift\\u002BF8\"", savedJson);
+        Assert.Contains("\"AIResourcesDirectory\": \"D:\\\\captures\\\\ai\"", savedJson);
+    }
+}

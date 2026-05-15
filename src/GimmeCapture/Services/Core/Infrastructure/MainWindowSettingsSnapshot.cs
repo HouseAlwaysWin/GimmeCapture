@@ -1,0 +1,190 @@
+using System;
+using Avalonia.Media;
+using GimmeCapture.Models;
+
+namespace GimmeCapture.Services.Core.Infrastructure;
+
+public sealed class MainWindowSettingsSnapshot
+{
+    public required Language Language { get; init; }
+    public required bool RunOnStartup { get; init; }
+    public required bool AutoCheckUpdates { get; init; }
+    public required double BorderThickness { get; init; }
+    public required double MaskOpacity { get; init; }
+    public required Color BorderColor { get; init; }
+    public required Color ThemeColor { get; init; }
+    public required double WingScale { get; init; }
+    public required double CornerIconScale { get; init; }
+    public required bool HideSnipPinDecoration { get; init; }
+    public required bool HideSnipPinBorder { get; init; }
+    public required bool HideSnipSelectionDecoration { get; init; }
+    public required bool HideSnipSelectionBorder { get; init; }
+    public required bool HideRecordPinDecoration { get; init; }
+    public required bool HideRecordPinBorder { get; init; }
+    public required bool HideRecordSelectionDecoration { get; init; }
+    public required bool HideRecordSelectionBorder { get; init; }
+    public required bool DefaultHideSnipToolbar { get; init; }
+    public required bool DefaultHideRecordToolbar { get; init; }
+    public required bool AutoSave { get; init; }
+    public required string SaveDirectory { get; init; }
+    public required bool ShowSnipCursor { get; init; }
+    public required bool ShowRecordCursor { get; init; }
+    public required bool RecordSystemAudio { get; init; }
+    public required string VideoSaveDirectory { get; init; }
+    public required string RecordFormat { get; init; }
+    public required VideoCodec VideoCodec { get; init; }
+    public required VideoQuality VideoQuality { get; init; }
+    public required int RecordFps { get; init; }
+    public required double MaxRecordingSizeMb { get; init; }
+    public required int PlaybackUiFps { get; init; }
+    public required int PlaybackTimelineFps { get; init; }
+    public required bool UseFixedRecordPath { get; init; }
+    public required string TempDirectory { get; init; }
+    public required string SnipHotkey { get; init; }
+    public required string RecordHotkey { get; init; }
+    public required string TranslateHotkey { get; init; }
+    public required string AIResourcesDirectory { get; init; }
+    public required bool EnableAI { get; init; }
+    public required bool ShowAIScanBox { get; init; }
+    public required bool EnableAIScan { get; init; }
+    public required AIScanEngine AIScanEngine { get; init; }
+    public required int SAM2GridDensity { get; init; }
+    public required int SAM2MaxObjects { get; init; }
+    public required int SAM2MinObjectSize { get; init; }
+    public required OCRLanguage SourceLanguage { get; init; }
+    public required TranslationLanguage TargetLanguage { get; init; }
+    public required TranslationEngine SelectedTranslationEngine { get; init; }
+    public required string LlamaModelId { get; init; }
+    public required string LlamaCustomModelPath { get; init; }
+    public required int LlamaContextSize { get; init; }
+    public required int LlamaGpuLayers { get; init; }
+
+    public static MainWindowSettingsSnapshot FromAppSettings(AppSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        return new MainWindowSettingsSnapshot
+        {
+            Language = settings.Language,
+            RunOnStartup = settings.RunOnStartup,
+            AutoCheckUpdates = settings.AutoCheckUpdates,
+            BorderThickness = settings.BorderThickness,
+            MaskOpacity = settings.MaskOpacity,
+            BorderColor = ParseColor(settings.BorderColorHex, "#E60012"),
+            ThemeColor = ParseColor(settings.ThemeColorHex, "#E60012"),
+            WingScale = settings.WingScale,
+            CornerIconScale = settings.CornerIconScale,
+            HideSnipPinDecoration = settings.HideSnipPinDecoration,
+            HideSnipPinBorder = settings.HideSnipPinBorder,
+            HideSnipSelectionDecoration = settings.HideSnipSelectionDecoration,
+            HideSnipSelectionBorder = settings.HideSnipSelectionBorder,
+            HideRecordPinDecoration = settings.HideRecordPinDecoration,
+            HideRecordPinBorder = settings.HideRecordPinBorder,
+            HideRecordSelectionDecoration = settings.HideRecordSelectionDecoration,
+            HideRecordSelectionBorder = settings.HideRecordSelectionBorder,
+            DefaultHideSnipToolbar = settings.DefaultHideSnipToolbar,
+            DefaultHideRecordToolbar = settings.DefaultHideRecordToolbar,
+            AutoSave = settings.AutoSave,
+            SaveDirectory = settings.SaveDirectory,
+            ShowSnipCursor = settings.ShowSnipCursor,
+            ShowRecordCursor = settings.ShowRecordCursor,
+            RecordSystemAudio = settings.RecordSystemAudio,
+            VideoSaveDirectory = settings.VideoSaveDirectory,
+            RecordFormat = settings.RecordFormat,
+            VideoCodec = settings.VideoCodec,
+            VideoQuality = settings.VideoQuality,
+            RecordFps = settings.RecordFPS,
+            MaxRecordingSizeMb = settings.MaxRecordingSizeMB,
+            PlaybackUiFps = settings.PlaybackUiFps,
+            PlaybackTimelineFps = settings.PlaybackTimelineFps,
+            UseFixedRecordPath = settings.UseFixedRecordPath,
+            TempDirectory = settings.TempDirectory,
+            SnipHotkey = settings.SnipHotkey,
+            RecordHotkey = settings.RecordHotkey,
+            TranslateHotkey = settings.TranslateHotkey,
+            AIResourcesDirectory = settings.AIResourcesDirectory,
+            EnableAI = settings.EnableAI,
+            ShowAIScanBox = settings.ShowAIScanBox,
+            EnableAIScan = settings.EnableAIScan,
+            AIScanEngine = settings.AIScanEngine,
+            SAM2GridDensity = settings.SAM2GridDensity,
+            SAM2MaxObjects = settings.SAM2MaxObjects,
+            SAM2MinObjectSize = settings.SAM2MinObjectSize,
+            SourceLanguage = settings.SourceLanguage,
+            TargetLanguage = settings.TargetLanguage,
+            SelectedTranslationEngine = settings.SelectedTranslationEngine,
+            LlamaModelId = settings.LlamaModelId,
+            LlamaCustomModelPath = settings.LlamaCustomModelPath,
+            LlamaContextSize = settings.LlamaContextSize,
+            LlamaGpuLayers = settings.LlamaGpuLayers
+        };
+    }
+
+    public void ApplyTo(AppSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        settings.Language = Language;
+        settings.RunOnStartup = RunOnStartup;
+        settings.AutoCheckUpdates = AutoCheckUpdates;
+        settings.BorderThickness = BorderThickness;
+        settings.MaskOpacity = MaskOpacity;
+        settings.BorderColorHex = BorderColor.ToString();
+        settings.ThemeColorHex = ThemeColor.ToString();
+        settings.WingScale = WingScale;
+        settings.CornerIconScale = CornerIconScale;
+        settings.HideSnipPinDecoration = HideSnipPinDecoration;
+        settings.HideSnipPinBorder = HideSnipPinBorder;
+        settings.HideSnipSelectionDecoration = HideSnipSelectionDecoration;
+        settings.HideSnipSelectionBorder = HideSnipSelectionBorder;
+        settings.HideRecordPinDecoration = HideRecordPinDecoration;
+        settings.HideRecordPinBorder = HideRecordPinBorder;
+        settings.HideRecordSelectionDecoration = HideRecordSelectionDecoration;
+        settings.HideRecordSelectionBorder = HideRecordSelectionBorder;
+        settings.DefaultHideSnipToolbar = DefaultHideSnipToolbar;
+        settings.DefaultHideRecordToolbar = DefaultHideRecordToolbar;
+        settings.AutoSave = AutoSave;
+        settings.SaveDirectory = SaveDirectory;
+        settings.ShowSnipCursor = ShowSnipCursor;
+        settings.ShowRecordCursor = ShowRecordCursor;
+        settings.RecordSystemAudio = RecordSystemAudio;
+        settings.VideoSaveDirectory = VideoSaveDirectory;
+        settings.RecordFormat = RecordFormat;
+        settings.VideoCodec = VideoCodec;
+        settings.VideoQuality = VideoQuality;
+        settings.RecordFPS = RecordFps;
+        settings.MaxRecordingSizeMB = MaxRecordingSizeMb;
+        settings.PlaybackUiFps = PlaybackUiFps;
+        settings.PlaybackTimelineFps = PlaybackTimelineFps;
+        settings.UseFixedRecordPath = UseFixedRecordPath;
+        settings.TempDirectory = TempDirectory;
+        settings.SnipHotkey = SnipHotkey;
+        settings.RecordHotkey = RecordHotkey;
+        settings.TranslateHotkey = TranslateHotkey;
+        settings.AIResourcesDirectory = AIResourcesDirectory;
+        settings.EnableAI = EnableAI;
+        settings.ShowAIScanBox = ShowAIScanBox;
+        settings.EnableAIScan = EnableAIScan;
+        settings.AIScanEngine = AIScanEngine;
+        settings.SAM2GridDensity = SAM2GridDensity;
+        settings.SAM2MaxObjects = SAM2MaxObjects;
+        settings.SAM2MinObjectSize = SAM2MinObjectSize;
+        settings.SourceLanguage = SourceLanguage;
+        settings.TargetLanguage = TargetLanguage;
+        settings.SelectedTranslationEngine = SelectedTranslationEngine;
+        settings.LlamaModelId = LlamaModelId;
+        settings.LlamaCustomModelPath = LlamaCustomModelPath;
+        settings.LlamaContextSize = LlamaContextSize;
+        settings.LlamaGpuLayers = LlamaGpuLayers;
+    }
+
+    private static Color ParseColor(string colorHex, string fallbackHex)
+    {
+        if (Color.TryParse(colorHex, out var color))
+        {
+            return color;
+        }
+
+        return Color.Parse(fallbackHex);
+    }
+}

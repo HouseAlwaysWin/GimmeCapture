@@ -99,6 +99,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly IGlobalHotkeySettingsCoordinator _globalHotkeySettingsCoordinator;
     private readonly IStartupRegistrationService _startupRegistrationService;
     private readonly ISettingsSaveCoordinator _settingsSaveCoordinator;
+    private readonly IMainWindowSettingsPersistenceService _settingsPersistenceService;
     public WindowsGlobalHotkeyService HotkeyService { get; }
     public HotkeyMappingService HotkeyMappingService { get; }
     public HotkeyRouterService HotkeyRouterService { get; }
@@ -165,6 +166,7 @@ public partial class MainWindowViewModel : ViewModelBase
         _startupRegistrationService = dependencies.StartupRegistrationService;
         HotkeyService = dependencies.HotkeyService;
         _settingsSaveCoordinator = dependencies.SettingsSaveCoordinatorFactory.Create(SaveSettingsAsync);
+        _settingsPersistenceService = dependencies.SettingsPersistenceService;
         HotkeyMappingService = dependencies.HotkeyMappingService;
         HotkeyRouterService = dependencies.HotkeyRouterService;
         FfmpegDownloader = dependencies.FfmpegDownloader;

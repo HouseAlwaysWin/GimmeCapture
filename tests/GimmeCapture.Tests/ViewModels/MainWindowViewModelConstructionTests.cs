@@ -29,6 +29,7 @@ public class MainWindowViewModelConstructionTests
         var globalHotkeySettingsCoordinator = new GlobalHotkeySettingsCoordinator(hotkeyService);
         var startupRegistrationService = new WindowsStartupRegistrationService();
         var settingsSaveCoordinatorFactory = new DebouncedSettingsSaveCoordinatorFactory();
+        var settingsPersistenceService = new MainWindowSettingsPersistenceService();
         var hotkeyMappingService = new HotkeyMappingService();
         var hotkeyRouterService = new HotkeyRouterService();
         var ffmpegDownloader = new FFmpegDownloaderService(settingsService);
@@ -47,6 +48,7 @@ public class MainWindowViewModelConstructionTests
             globalHotkeySettingsCoordinator,
             startupRegistrationService,
             settingsSaveCoordinatorFactory,
+            settingsPersistenceService,
             hotkeyMappingService,
             hotkeyRouterService,
             ffmpegDownloader,
