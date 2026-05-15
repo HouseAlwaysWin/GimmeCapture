@@ -12,6 +12,7 @@ using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core;
 using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Platforms.Desktop;
+using GimmeCapture.Services.Platforms.Avalonia;
 using GimmeCapture.Services.Platforms.Windows;
 using ReactiveUI;
 using System.Reactive.Linq;

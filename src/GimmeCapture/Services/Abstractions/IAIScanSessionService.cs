@@ -6,7 +6,7 @@ using Avalonia;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Core.AI;
 
-namespace GimmeCapture.Services.Abstractions;
+namespace GimmeCapture.Services.Core.AI;
 
 public enum AIScanStage
 {

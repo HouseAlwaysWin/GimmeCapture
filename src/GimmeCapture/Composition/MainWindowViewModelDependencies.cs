@@ -5,7 +5,7 @@ using GimmeCapture.Services.Core.Media;
 using GimmeCapture.Services.Platforms.Desktop;
 using GimmeCapture.Services.Platforms.Windows;
 
-namespace GimmeCapture.Composition;
+namespace GimmeCapture.ViewModels.Main;
 
 public sealed record MainWindowViewModelDependencies(
     AppSettingsService SettingsService,

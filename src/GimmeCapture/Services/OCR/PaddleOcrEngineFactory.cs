@@ -1,5 +1,4 @@
 using System;
-using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core.AI;
 using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Core.Interfaces;

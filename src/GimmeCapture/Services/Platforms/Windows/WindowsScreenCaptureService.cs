@@ -168,7 +168,7 @@ public class WindowsScreenCaptureService : IScreenCaptureService
         });
     }
 
-    public async Task<Avalonia.Media.Imaging.WriteableBitmap?> CaptureRegionBitmapAsync(Avalonia.Rect region, Avalonia.PixelPoint screenOffset, double visualScaling)
+    public async Task<global::Avalonia.Media.Imaging.WriteableBitmap?> CaptureRegionBitmapAsync(global::Avalonia.Rect region, global::Avalonia.PixelPoint screenOffset, double visualScaling)
     {
         if (!OperatingSystem.IsWindows()) return null;
 
@@ -186,11 +186,11 @@ public class WindowsScreenCaptureService : IScreenCaptureService
                 if (widthPhysical <= 0 || heightPhysical <= 0) return null;
 
                 // Use WriteableBitmap to avoid MemoryStream & PNG Encoding overhead
-                var writeableBitmap = new Avalonia.Media.Imaging.WriteableBitmap(
+                var writeableBitmap = new global::Avalonia.Media.Imaging.WriteableBitmap(
                     new PixelSize(widthPhysical, heightPhysical), 
                     new Vector(96, 96), 
-                    Avalonia.Platform.PixelFormat.Bgra8888, 
-                    Avalonia.Platform.AlphaFormat.Premul);
+                    global::Avalonia.Platform.PixelFormat.Bgra8888, 
+                    global::Avalonia.Platform.AlphaFormat.Premul);
 
                 using (var lockedBitmap = writeableBitmap.Lock())
                 {
@@ -611,7 +611,7 @@ public class WindowsScreenCaptureService : IScreenCaptureService
 
     public async Task CopyToClipboardAsync(SKBitmap bitmap)
     {
-        await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
+        await global::Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
         {
              if (OperatingSystem.IsWindows())
              {
@@ -658,17 +658,17 @@ public class WindowsScreenCaptureService : IScreenCaptureService
                   stream.CopyTo(ms);
                   ms.Position = 0;
                   
-                  var avaloniaBitmap = new Avalonia.Media.Imaging.Bitmap(ms);
+                  var avaloniaBitmap = new global::Avalonia.Media.Imaging.Bitmap(ms);
                   
                   // Use new extension method way
-                  await Avalonia.Input.Platform.ClipboardExtensions.SetBitmapAsync(clipboard, avaloniaBitmap);
+                  await global::Avalonia.Input.Platform.ClipboardExtensions.SetBitmapAsync(clipboard, avaloniaBitmap);
               }
         });
     }
 
     public async Task CopyToClipboardAsync(string text)
     {
-        await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
+        await global::Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
         {
             if (OperatingSystem.IsWindows())
             {
@@ -702,7 +702,7 @@ public class WindowsScreenCaptureService : IScreenCaptureService
 
     public async Task CopyFileToClipboardAsync(string filePath)
     {
-        await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
+        await global::Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
         {
             var topLevel = ResolveClipboardTopLevel();
             var clipboard = topLevel?.Clipboard;
@@ -713,7 +713,7 @@ public class WindowsScreenCaptureService : IScreenCaptureService
                  var file = await storageProvider.TryGetFileFromPathAsync(new Uri(filePath));
                  if (file != null)
                  {
-                     await Avalonia.Input.Platform.ClipboardExtensions.SetFilesAsync(clipboard, new[] { file });
+                     await global::Avalonia.Input.Platform.ClipboardExtensions.SetFilesAsync(clipboard, new[] { file });
                  }
                  System.Diagnostics.Debug.WriteLine($"Avalonia Clipboard: Copied file {filePath}");
             }

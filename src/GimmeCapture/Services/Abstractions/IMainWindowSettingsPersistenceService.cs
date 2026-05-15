@@ -1,7 +1,7 @@
 using System.Threading.Tasks;
 using GimmeCapture.Services.Core.Infrastructure;
 
-namespace GimmeCapture.Services.Abstractions;
+namespace GimmeCapture.Services.Core.Infrastructure;
 
 public interface IMainWindowSettingsPersistenceService
 {

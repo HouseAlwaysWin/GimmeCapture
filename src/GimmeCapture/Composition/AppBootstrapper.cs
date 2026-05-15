@@ -1,5 +1,6 @@
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Platforms.Desktop;
+using GimmeCapture.Services.Platforms.Avalonia;
 using GimmeCapture.Services.Platforms.Windows;
 using GimmeCapture.ViewModels.Main;
 using GimmeCapture.Views.Main;

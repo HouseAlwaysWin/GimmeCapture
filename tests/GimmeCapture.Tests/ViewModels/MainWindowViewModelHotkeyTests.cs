@@ -1,7 +1,6 @@
 using System;
 using System.IO;
 using System.Threading.Tasks;
-using GimmeCapture.Composition;
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core.AI;
 using GimmeCapture.Services.Core.Infrastructure;

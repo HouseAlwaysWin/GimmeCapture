@@ -1,6 +1,5 @@
 using System;
 using System.IO;
-using GimmeCapture.Composition;
 using GimmeCapture.Services.Core.AI;
 using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Core.Media;

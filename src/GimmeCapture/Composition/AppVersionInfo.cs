@@ -1,6 +1,6 @@
 using System.Reflection;
 
-namespace GimmeCapture.Composition;
+namespace GimmeCapture.Services.Core.Infrastructure;
 
 public static class AppVersionInfo
 {

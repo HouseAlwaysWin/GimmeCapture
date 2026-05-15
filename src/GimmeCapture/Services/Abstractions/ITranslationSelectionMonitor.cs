@@ -3,7 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using GimmeCapture.Services.Translation;
 
-namespace GimmeCapture.Services.Abstractions;
+namespace GimmeCapture.Services.Translation;
 
 public interface ITranslationSelectionMonitor
 {

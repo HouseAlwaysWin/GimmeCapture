@@ -2,7 +2,9 @@ using Avalonia.Controls;
 using System;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Abstractions;
+using GimmeCapture.Services.Platforms.Avalonia;
 using GimmeCapture.Services.OCR;
+using GimmeCapture.Services.Translation;
 using GimmeCapture.ViewModels.Main;
 using GimmeCapture.Views.Main;
 

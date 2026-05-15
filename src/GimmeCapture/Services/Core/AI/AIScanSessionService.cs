@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Abstractions;
+using GimmeCapture.Services.OCR;
 
 namespace GimmeCapture.Services.Core.AI;
 

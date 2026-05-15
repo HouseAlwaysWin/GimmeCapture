@@ -1,7 +1,7 @@
 using GimmeCapture.Models;
 using GimmeCapture.ViewModels.Main;
 
-namespace GimmeCapture.Services.Abstractions;
+namespace GimmeCapture.Services.Platforms.Avalonia;
 
 public interface ISnipWindowFactory
 {

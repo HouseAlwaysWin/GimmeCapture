@@ -2,6 +2,7 @@ using Avalonia;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core.Interfaces;
+using GimmeCapture.Services.OCR;
 using SkiaSharp;
 
 namespace GimmeCapture.Tests;
