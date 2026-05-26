@@ -23,6 +23,8 @@
     <AvaloniaResource Include="Assets\**" />
     <None Update="config.json">
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Never</CopyToPublishDirectory>
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
     </None>
     <!-- Native FFmpeg shared DLLs only: run scripts/ensure-ffmpeg-libs.ps1 -->
     <Content Include="ffmpeg-lib\*.dll"

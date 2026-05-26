@@ -193,6 +193,8 @@ public class UpdateService : ReactiveObject
                 "config.json");
             var localConfigBackupPath = Path.Combine(parentDir, "config.local.backup.json");
             var appDataConfigBackupPath = Path.Combine(parentDir, "config.appdata.backup.json");
+            var localConfigMarkerPath = Path.Combine(parentDir, "config.local.exists.marker");
+            var appDataConfigMarkerPath = Path.Combine(parentDir, "config.appdata.exists.marker");
 
             var script = BuildUpdateScript(
                 tempExtractDir,
@@ -202,7 +204,9 @@ public class UpdateService : ReactiveObject
                 localConfigPath,
                 appDataConfigPath,
                 localConfigBackupPath,
-                appDataConfigBackupPath);
+                appDataConfigBackupPath,
+                localConfigMarkerPath,
+                appDataConfigMarkerPath);
             File.WriteAllText(scriptPath, script, System.Text.Encoding.Default);
 
             Process.Start(new ProcessStartInfo
@@ -233,18 +237,30 @@ public class UpdateService : ReactiveObject
         string localConfigPath,
         string appDataConfigPath,
         string localConfigBackupPath,
-        string appDataConfigBackupPath)
+        string appDataConfigBackupPath,
+        string localConfigMarkerPath,
+        string appDataConfigMarkerPath)
     {
         var appDataConfigDir = Path.GetDirectoryName(appDataConfigPath) ?? string.Empty;
 
         return $@"
 @echo off
 timeout /t 2 /nobreak > nul
-if exist ""{localConfigPath}"" copy /y ""{localConfigPath}"" ""{localConfigBackupPath}"" > nul
-if exist ""{appDataConfigPath}"" copy /y ""{appDataConfigPath}"" ""{appDataConfigBackupPath}"" > nul
+if exist ""{localConfigPath}"" (
+  copy /y ""{localConfigPath}"" ""{localConfigBackupPath}"" > nul
+  type nul > ""{localConfigMarkerPath}""
+)
+if exist ""{appDataConfigPath}"" (
+  copy /y ""{appDataConfigPath}"" ""{appDataConfigBackupPath}"" > nul
+  type nul > ""{appDataConfigMarkerPath}""
+)
 xcopy /s /y /i ""{tempExtractDir.TrimEnd('\\')}"" ""{appDir.TrimEnd('\\')}""
-if exist ""{localConfigBackupPath}"" copy /y ""{localConfigBackupPath}"" ""{localConfigPath}"" > nul
-if exist ""{appDataConfigBackupPath}"" (
+if exist ""{localConfigMarkerPath}"" (
+  copy /y ""{localConfigBackupPath}"" ""{localConfigPath}"" > nul
+) else if exist ""{appDataConfigMarkerPath}"" (
+  if exist ""{localConfigPath}"" del /f /q ""{localConfigPath}""
+)
+if exist ""{appDataConfigMarkerPath}"" (
   if not exist ""{appDataConfigDir}"" mkdir ""{appDataConfigDir}""
   copy /y ""{appDataConfigBackupPath}"" ""{appDataConfigPath}"" > nul
 )

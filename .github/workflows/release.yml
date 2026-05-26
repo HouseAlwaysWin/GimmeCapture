@@ -57,6 +57,14 @@ jobs:
           }
         }
 
+    - name: Remove packaged default config
+      shell: powershell
+      run: |
+        $configPath = Join-Path (Resolve-Path './publish') 'config.json'
+        if (Test-Path $configPath) {
+          Remove-Item $configPath -Force
+        }
+
     - name: Zip the application
       run: |
         Compress-Archive -Path ./publish/* -DestinationPath GimmeCapture_win-x64.zip
