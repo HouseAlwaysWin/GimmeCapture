@@ -97,6 +97,13 @@ public class Annotation : ReactiveObject
         set => this.RaiseAndSetIfChanged(ref _drawingModeSnapshot, value);
     }
 
+    private AnnotationEffectSettings _effectSettings = new();
+    public AnnotationEffectSettings EffectSettings
+    {
+        get => _effectSettings;
+        set => this.RaiseAndSetIfChanged(ref _effectSettings, value);
+    }
+
     public Avalonia.Points Points { get; } = new();
 
     public void AddPoint(Point p)
@@ -119,7 +126,8 @@ public class Annotation : ReactiveObject
             FontFamily = this.FontFamily,
             IsBold = this.IsBold,
             IsItalic = this.IsItalic,
-            DrawingModeSnapshot = this.DrawingModeSnapshot
+            DrawingModeSnapshot = this.DrawingModeSnapshot,
+            EffectSettings = this.EffectSettings.Clone()
         };
         foreach (var p in this.Points)
         {

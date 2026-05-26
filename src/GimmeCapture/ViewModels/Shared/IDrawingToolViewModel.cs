@@ -12,6 +12,7 @@ public interface IDrawingToolViewModel
     bool IsShapeToolActive { get; }
     bool IsPenToolActive { get; }
     bool IsTextToolActive { get; }
+    bool IsRedactionToolActive { get; }
 
     // Style Properties
     Color SelectedColor { get; set; }
@@ -53,6 +54,7 @@ public interface IDrawingToolViewModel
     
     ReactiveCommand<Unit, Unit> IncreaseThicknessCommand { get; }
     ReactiveCommand<Unit, Unit> DecreaseThicknessCommand { get; }
+    ReactiveCommand<string, Unit> SetRedactionPresetCommand { get; }
     
     ReactiveCommand<Unit, Unit> IncreaseCornerIconScaleCommand { get; }
     ReactiveCommand<Unit, Unit> DecreaseCornerIconScaleCommand { get; }
@@ -71,4 +73,5 @@ public interface IDrawingToolViewModel
     string TextTooltip { get; }
     string MosaicTooltip { get; }
     string BlurTooltip { get; }
+    string CurrentRedactionPreset { get; }
 }

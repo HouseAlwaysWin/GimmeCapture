@@ -131,22 +131,9 @@
             </Border.Height>
             
             <Panel ClipToBounds="True">
-                <Panel.Effect>
-                    <BlurEffect Radius="20"/>
-                </Panel.Effect>
-                <!-- Render the full snapshot at logical selection size, then translate so annotation region aligns -->
-                <Image Source="{Binding DrawingModeSnapshot}" Stretch="Fill"
-                       Width="{Binding $parent[local:AnnotationControl].Width}"
-                       Height="{Binding $parent[local:AnnotationControl].Height}"
-                       HorizontalAlignment="Left" VerticalAlignment="Top">
-                    <Image.RenderTransform>
-                        <MultiBinding Converter="{StaticResource PointsToInverseTranslateConverter}">
-                            <Binding Path="StartPoint"/>
-                            <Binding Path="EndPoint"/>
-                        </MultiBinding>
-                    </Image.RenderTransform>
-                </Image>
-                <Rectangle Fill="Black" Opacity="0.05"/>
+                <Image Source="{Binding $parent[local:AnnotationControl].EffectPreviewBitmap}"
+                       Stretch="Fill"
+                       RenderOptions.BitmapInterpolationMode="HighQuality"/>
                 <Rectangle Fill="Transparent" Stroke="White" StrokeThickness="1" StrokeDashArray="2,2"/>
             </Panel>
         </Border>
@@ -182,7 +169,7 @@
             
             <Panel ClipToBounds="True">
                  <!-- Pre-pixelated bitmap generated in code-behind, matching SkiaSharp output exactly -->
-                 <Image Source="{Binding $parent[local:AnnotationControl].MosaicPreviewBitmap}"
+                 <Image Source="{Binding $parent[local:AnnotationControl].EffectPreviewBitmap}"
                         Stretch="Fill" RenderOptions.BitmapInterpolationMode="None"/>
                  <Rectangle Stroke="White" StrokeThickness="1" StrokeDashArray="4,4"/>
              </Panel>

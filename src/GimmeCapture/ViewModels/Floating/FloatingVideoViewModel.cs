@@ -337,6 +337,7 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
         BorderThickness = borderThickness;
         HidePinDecoration = hideDecoration;
         HidePinBorder = hideBorder;
+        CurrentThickness = 4.0;
         _clipboardService = clipboardService;
         _appSettingsService = appSettingsService;
         _uiFrameUpdateIntervalMs = FpsToIntervalMs(_appSettingsService?.Settings.PlaybackUiFps ?? 30, 30);

@@ -277,6 +277,25 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         InitializeToolbarCommands();
         InitializeSelectionCommands();
         InitializeMainViewModelBindingsIfNeeded();
+        _editorState.Changed.Subscribe(_ =>
+        {
+            this.RaisePropertyChanged(nameof(CurrentAnnotationTool));
+            this.RaisePropertyChanged(nameof(IsShapeToolActive));
+            this.RaisePropertyChanged(nameof(IsPenToolActive));
+            this.RaisePropertyChanged(nameof(IsTextToolActive));
+            this.RaisePropertyChanged(nameof(IsRedactionToolActive));
+            this.RaisePropertyChanged(nameof(SelectedColor));
+            this.RaisePropertyChanged(nameof(CurrentThickness));
+            this.RaisePropertyChanged(nameof(CurrentFontSize));
+            this.RaisePropertyChanged(nameof(CurrentFontFamily));
+            this.RaisePropertyChanged(nameof(IsBold));
+            this.RaisePropertyChanged(nameof(IsItalic));
+            this.RaisePropertyChanged(nameof(IsEnteringText));
+            this.RaisePropertyChanged(nameof(PendingText));
+            this.RaisePropertyChanged(nameof(TextInputPosition));
+            this.RaisePropertyChanged(nameof(CurrentRedactionPreset));
+            UpdateHistoryStatus();
+        }).DisposeWith(_disposables);
 
         // Initialize Debug Compatibility
         _isTopmost = !System.Diagnostics.Debugger.IsAttached;

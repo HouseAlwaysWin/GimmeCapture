@@ -20,6 +20,15 @@ public partial class DrawingToolbar : UserControl
         });
     }
 
+    private void OnRedactionSelected(object sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            var redactionButton = this.FindControl<Button>("RedactionButton");
+            redactionButton?.Flyout?.Hide();
+        });
+    }
+
     private void InitializeComponent()
     {
         AvaloniaXamlLoader.Load(this);

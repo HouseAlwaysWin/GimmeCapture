@@ -36,19 +36,19 @@ public partial class FloatingImageViewModel
 
     protected override void Undo()
     {
-        if (_historyStack.Count == 0) return;
-        var action = _historyStack.Pop();
+        if (EditorState.HistoryStack.Count == 0) return;
+        var action = EditorState.HistoryStack.Pop();
         
         if (action is BitmapHistoryAction bh && bh.NewBitmap == null)
         {
              var actionWithNew = new BitmapHistoryAction(bh.SetBitmapAction, bh.OldBitmap, Image, getCurrentBitmap: () => Image);
              actionWithNew.Undo();
-             _redoHistoryStack.Push(actionWithNew);
+             EditorState.RedoHistoryStack.Push(actionWithNew);
         }
         else
         {
             action.Undo();
-            _redoHistoryStack.Push(action);
+            EditorState.RedoHistoryStack.Push(action);
         }
         
         UpdateHistoryStatus();

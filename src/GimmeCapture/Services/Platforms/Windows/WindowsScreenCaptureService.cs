@@ -18,6 +18,7 @@ using System.Collections.Generic;
 using GimmeCapture.Models;
 using Avalonia.Media;
 using GimmeCapture.Services.Platforms.Desktop;
+using GimmeCapture.Services.Core.Rendering;
 
 namespace GimmeCapture.Services.Platforms.Windows;
 
@@ -285,173 +286,18 @@ public class WindowsScreenCaptureService : IScreenCaptureService
                 }
             }
 
-            // 3. Render annotations
+            // 3. Render annotations through the shared renderer so preview and export stay aligned
             if (annotations != null && annotations.AsValueEnumerable().Any())
             {
-                foreach (var ann in annotations)
-                {
-                using var paint = new SKPaint
-                {
-                    Color = new SKColor(ann.Color.R, ann.Color.G, ann.Color.B, ann.Color.A),
-                    IsAntialias = true,
-                    StrokeWidth = (float)(ann.Thickness * visualScaling),
-                    Style = SKPaintStyle.Stroke
-                };
-
-                var p1 = new SKPoint((float)(ann.StartPoint.X * visualScaling), (float)(ann.StartPoint.Y * visualScaling));
-                var p2 = new SKPoint((float)(ann.EndPoint.X * visualScaling), (float)(ann.EndPoint.Y * visualScaling));
-
-                switch (ann.Type)
-                {
-                    case AnnotationType.Rectangle:
-                        canvas.DrawRect(SKRect.Create(
-                            (float)Math.Min(p1.X, p2.X), 
-                            (float)Math.Min(p1.Y, p2.Y), 
-                            Math.Abs(p1.X - p2.X), 
-                            Math.Abs(p1.Y - p2.Y)), paint);
-                        break;
-                    case AnnotationType.Ellipse:
-                        canvas.DrawOval(SKRect.Create(
-                            (float)Math.Min(p1.X, p2.X), 
-                            (float)Math.Min(p1.Y, p2.Y), 
-                            Math.Abs(p1.X - p2.X), 
-                            Math.Abs(p1.Y - p2.Y)), paint);
-                        break;
-                    case AnnotationType.Line:
-                        canvas.DrawLine(p1, p2, paint);
-                        break;
-                    case AnnotationType.Arrow:
-                        DrawArrow(canvas, p1, p2, paint, scale);
-                        break;
-                    case AnnotationType.Text:
-                        paint.Style = SKPaintStyle.Fill;
-                        // paint.TextSize and Typeface are deprecated, moved to SKFont logic below
-                        
-                        // Create Typeface with Fallback Logic
-                        var weight = ann.IsBold ? SKFontStyleWeight.Bold : SKFontStyleWeight.Normal;
-                        var slant = ann.IsItalic ? SKFontStyleSlant.Italic : SKFontStyleSlant.Upright;
-                        var style = new SKFontStyle(weight, SKFontStyleWidth.Normal, slant);
-                        
-                        SKTypeface typeface = SKTypeface.FromFamilyName(ann.FontFamily.Name, style);
-                        
-                        // Fallback Check
-                        if (!string.IsNullOrEmpty(ann.Text))
-                        {
-                            bool missingGlyph = false;
-                            if (typeface == null) typeface = SKTypeface.Default;
-                            
-                            var ids = new ushort[ann.Text.Length];
-                            using(var fontCheck = new SKFont(typeface))
-                            {
-                                fontCheck.GetGlyphs(ann.Text, ids);
-                                if (ids.AsValueEnumerable().Any(id => id == 0)) missingGlyph = true;
-                            }
-                            
-                            if (missingGlyph)
-                            {
-                                var fallback = SKFontManager.Default.MatchCharacter(ann.Text.AsValueEnumerable().FirstOrDefault(c => c > 127));
-                                if (fallback != null)
-                                {
-                                    typeface.Dispose();
-                                    typeface = fallback;
-                                }
-                            }
-                        }
-
-                        using (typeface)
-                        {
-                            // Create SKFont for drawing - Apply scale to FontSize
-                            using var font = new SKFont(typeface, (float)(ann.FontSize * visualScaling));
-                            
-                            // Draw using new API
-                            canvas.DrawText(ann.Text ?? string.Empty, p1, SKTextAlign.Left, font, paint);
-                        }
-                        break;
-                    case AnnotationType.Pen:
-                        if (ann.Points.AsValueEnumerable().Any())
-                        {
-                            using var path = new SKPath();
-                            var first = ann.Points.AsValueEnumerable().First();
-                            path.MoveTo((float)(first.X * visualScaling), (float)(first.Y * visualScaling));
-                            foreach (var p in ann.Points.AsValueEnumerable().Skip(1))
-                            {
-                                path.LineTo((float)(p.X * visualScaling), (float)(p.Y * visualScaling));
-                            }
-                            canvas.DrawPath(path, paint);
-                        }
-                        break;
-                    case AnnotationType.Mosaic:
-                        {
-                            var rect = SKRect.Create(
-                                (float)Math.Min(p1.X, p2.X), 
-                                (float)Math.Min(p1.Y, p2.Y), 
-                                Math.Abs(p1.X - p2.X), 
-                                Math.Abs(p1.Y - p2.Y));
-                            
-                            if (rect.Width <= 0 || rect.Height <= 0) break;
-
-                            int cellSize = (int)(12 * visualScaling); // Scale mosaic cells
-                            
-                            canvas.Save();
-                            canvas.ClipRect(rect);
-
-                            for (float y = rect.Top; y < rect.Bottom; y += cellSize)
-                            {
-                                for (float x = rect.Left; x < rect.Right; x += cellSize)
-                                {
-                                    float cw = Math.Min(cellSize, rect.Right - x);
-                                    float ch = Math.Min(cellSize, rect.Bottom - y);
-                                    
-                                    // Get average color of the cell from original bitmap
-                                    // Simpler approach: sample the center pixel of the cell
-                                    var sampleX = (int)(x + cw / 2);
-                                    var sampleY = (int)(y + ch / 2);
-                                    
-                                    // Clamp sample points
-                                    sampleX = Math.Clamp(sampleX, 0, bitmap.Width - 1);
-                                    sampleY = Math.Clamp(sampleY, 0, bitmap.Height - 1);
-                                    
-                                    var color = bitmap.GetPixel(sampleX, sampleY);
-                                    
-                                    using var fillPaint = new SKPaint { Color = color, Style = SKPaintStyle.Fill };
-                                    canvas.DrawRect(SKRect.Create(x, y, cw, ch), fillPaint);
-                                }
-                            }
-                            canvas.Restore();
-                        }
-                        break;
-                    case AnnotationType.Blur:
-                        {
-                            var rect = SKRect.Create(
-                                (float)Math.Min(p1.X, p2.X), 
-                                (float)Math.Min(p1.Y, p2.Y), 
-                                Math.Abs(p1.X - p2.X), 
-                                Math.Abs(p1.Y - p2.Y));
-
-                            if (rect.Width <= 0 || rect.Height <= 0) break;
-
-                            canvas.Save();
-                            canvas.ClipRect(rect);
-                            
-                            // Apply blur by drawing the bitmap onto itself with a blur filter
-                            // Scale blur sigma for visual consistency
-                            float blurSigma = (float)(20 * visualScaling);
-                            using var blurPaint = new SKPaint
-                            {
-                                ImageFilter = SKImageFilter.CreateBlur(blurSigma, blurSigma)
-                            };
-                            
-                            // Draw the region from the bitmap into the canvas via a layer or temp image
-                            // Actually, drawing the bitmap onto its own canvas with a blur filter is standard
-                            canvas.DrawBitmap(bitmap, 0, 0, blurPaint);
-                            
-                            canvas.Restore();
-                        }
-                        break;
-                }
+                AnnotationRenderService.Shared.RenderAnnotationsToBitmap(
+                    bitmap,
+                    annotations,
+                    region.Width,
+                    region.Height,
+                    bitmap.Width,
+                    bitmap.Height);
             }
         }
-    }
 
         return bitmap;
     }

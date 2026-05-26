@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Reactive;
 using GimmeCapture.Models;
+using GimmeCapture.ViewModels.Shared;
 
 using GimmeCapture.Services.Core;
 using System.Threading.Tasks;
@@ -16,6 +17,35 @@ namespace GimmeCapture.ViewModels.Floating;
 
 public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
 {
+    private readonly AnnotationEditorState _editorState = new();
+    protected AnnotationEditorState EditorState => _editorState;
+    private readonly IDisposable _editorStateSubscription;
+
+    protected FloatingWindowViewModelBase()
+    {
+        _editorStateSubscription = _editorState.Changed.Subscribe(_ =>
+        {
+            this.RaisePropertyChanged(nameof(CurrentAnnotationTool));
+            this.RaisePropertyChanged(nameof(IsShapeToolActive));
+            this.RaisePropertyChanged(nameof(IsPenToolActive));
+            this.RaisePropertyChanged(nameof(IsTextToolActive));
+            this.RaisePropertyChanged(nameof(IsRedactionToolActive));
+            this.RaisePropertyChanged(nameof(SelectedColor));
+            this.RaisePropertyChanged(nameof(CurrentThickness));
+            this.RaisePropertyChanged(nameof(CurrentFontSize));
+            this.RaisePropertyChanged(nameof(CurrentFontFamily));
+            this.RaisePropertyChanged(nameof(IsBold));
+            this.RaisePropertyChanged(nameof(IsItalic));
+            this.RaisePropertyChanged(nameof(IsEnteringText));
+            this.RaisePropertyChanged(nameof(PendingText));
+            this.RaisePropertyChanged(nameof(TextInputPosition));
+            this.RaisePropertyChanged(nameof(HasUndo));
+            this.RaisePropertyChanged(nameof(HasRedo));
+            this.RaisePropertyChanged(nameof(CurrentRedactionPreset));
+            UpdateHistoryStatus();
+        });
+    }
+
     // Actions / Delegates (View Callbacks)
     public System.Action? CloseAction { get; set; }
     public System.Func<Task>? SaveAction { get; set; }
@@ -218,18 +248,10 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
         }
     }
     
-    private AnnotationType _currentAnnotationTool = AnnotationType.None;
     public virtual AnnotationType CurrentAnnotationTool
     {
-        get => _currentAnnotationTool;
-        set 
-        {
-            this.RaiseAndSetIfChanged(ref _currentAnnotationTool, value);
-            this.RaisePropertyChanged(nameof(IsShapeToolActive));
-            this.RaisePropertyChanged(nameof(IsTextToolActive));
-            this.RaisePropertyChanged(nameof(IsPenToolActive));
-            this.RaisePropertyChanged(nameof(IsAnyToolActive));
-        }
+        get => _editorState.CurrentAnnotationTool;
+        set => _editorState.CurrentAnnotationTool = value;
     }
 
     // Helper Properties
@@ -240,74 +262,66 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
     }
     public virtual bool IsAnyToolActive => CurrentTool != FloatingTool.None || CurrentAnnotationTool != AnnotationType.None;
     
-    public bool IsShapeToolActive => CurrentAnnotationTool == AnnotationType.Rectangle || CurrentAnnotationTool == AnnotationType.Ellipse || CurrentAnnotationTool == AnnotationType.Arrow || CurrentAnnotationTool == AnnotationType.Line || CurrentAnnotationTool == AnnotationType.Mosaic || CurrentAnnotationTool == AnnotationType.Blur;
-    public bool IsPenToolActive => CurrentAnnotationTool == AnnotationType.Pen;
-    public bool IsTextToolActive => CurrentAnnotationTool == AnnotationType.Text;
+    public bool IsShapeToolActive => _editorState.IsShapeToolActive;
+    public bool IsPenToolActive => _editorState.IsPenToolActive;
+    public bool IsTextToolActive => _editorState.IsTextToolActive;
+    public bool IsRedactionToolActive => _editorState.IsRedactionToolActive;
 
-    public ObservableCollection<Annotation> Annotations { get; } = new();
+    public ObservableCollection<Annotation> Annotations => _editorState.Annotations;
 
-    private Avalonia.Media.Color _selectedColor = Avalonia.Media.Colors.Red;
     public Avalonia.Media.Color SelectedColor
     {
-        get => _selectedColor;
-        set => this.RaiseAndSetIfChanged(ref _selectedColor, value);
+        get => _editorState.SelectedColor;
+        set => _editorState.SelectedColor = value;
     }
 
-    private double _currentThickness = 4.0;
     public double CurrentThickness
     {
-        get => _currentThickness;
-        set => this.RaiseAndSetIfChanged(ref _currentThickness, value);
+        get => _editorState.CurrentThickness;
+        set => _editorState.CurrentThickness = value;
     }
 
-    private double _currentFontSize = 24.0;
     public double CurrentFontSize
     {
-        get => _currentFontSize;
-        set => this.RaiseAndSetIfChanged(ref _currentFontSize, value);
+        get => _editorState.CurrentFontSize;
+        set => _editorState.CurrentFontSize = value;
     }
     
-    private bool _isBold;
     public bool IsBold
     {
-        get => _isBold;
-        set => this.RaiseAndSetIfChanged(ref _isBold, value);
+        get => _editorState.IsBold;
+        set => _editorState.IsBold = value;
     }
 
-    private bool _isItalic;
     public bool IsItalic
     {
-        get => _isItalic;
-        set => this.RaiseAndSetIfChanged(ref _isItalic, value);
+        get => _editorState.IsItalic;
+        set => _editorState.IsItalic = value;
     }
 
     // Text Tool State
-    private bool _isEnteringText;
     public bool IsEnteringText
     {
-        get => _isEnteringText;
-        set => this.RaiseAndSetIfChanged(ref _isEnteringText, value);
+        get => _editorState.IsEnteringText;
+        set => _editorState.IsEnteringText = value;
     }
 
-    private string _pendingText = string.Empty;
     public string PendingText
     {
-        get => _pendingText;
-        set => this.RaiseAndSetIfChanged(ref _pendingText, value);
+        get => _editorState.PendingText;
+        set => _editorState.PendingText = value;
     }
 
-    private Avalonia.Point _textInputPosition;
     public Avalonia.Point TextInputPosition
     {
-        get => _textInputPosition;
-        set => this.RaiseAndSetIfChanged(ref _textInputPosition, value);
+        get => _editorState.TextInputPosition;
+        set => _editorState.TextInputPosition = value;
     }
 
-    private Avalonia.Media.FontFamily _currentFontFamily = new Avalonia.Media.FontFamily("Arial");
     public Avalonia.Media.FontFamily CurrentFontFamily
     {
-        get => _currentFontFamily;
-        set => this.RaiseAndSetIfChanged(ref _currentFontFamily, value);
+        get => _editorState.CurrentFontFamily;
+        set => _editorState.CurrentFontFamily = value;
     }
 
     public ObservableCollection<double> Thicknesses { get; } = new() { 1, 2, 4, 6, 8, 12, 16, 24 };
@@ -347,11 +361,8 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
     public ReactiveCommand<Avalonia.Media.Color, Unit> ChangeColorCommand { get; protected set; } = null!;
     public ReactiveCommand<Unit, Unit> IncreaseThicknessCommand { get; protected set; } = null!;
     public ReactiveCommand<Unit, Unit> DecreaseThicknessCommand { get; protected set; } = null!;
+    public ReactiveCommand<string, Unit> SetRedactionPresetCommand { get; protected set; } = null!;
 
-    // History
-    protected Stack<IHistoryAction> _historyStack = new();
-    protected Stack<IHistoryAction> _redoHistoryStack = new();
-    
     private bool _hasUndo;
     public bool HasUndo
     {
@@ -365,6 +376,8 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
         get => _hasRedo;
         protected set => this.RaiseAndSetIfChanged(ref _hasRedo, value);
     }
+
+    public string CurrentRedactionPreset => _editorState.CurrentRedactionPreset;
 
     // Processing State
     private bool _isProcessing;
@@ -477,30 +490,16 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
             {
                 CurrentTool = FloatingTool.None;
             }
-            CurrentAnnotationTool = targetTool;
+            _editorState.SelectTool(tool);
         }, notEnteringText);
 
         ToggleToolGroupCommand = ReactiveCommand.Create<string>(group => 
         {
-             AnnotationType targetTool = AnnotationType.None;
-             if (group == "Shapes")
-             {
-                 targetTool = IsShapeToolActive ? AnnotationType.None : AnnotationType.Rectangle;
-             }
-             else if (group == "Pen")
-             {
-                 targetTool = (CurrentAnnotationTool == AnnotationType.Pen) ? AnnotationType.None : AnnotationType.Pen;
-             }
-             else if (group == "Text")
-             {
-                 targetTool = IsTextToolActive ? AnnotationType.None : AnnotationType.Text;
-             }
-
-             if (targetTool != AnnotationType.None)
+             if (group is "Shapes" or "Pen" or "Text" or "Redaction")
              {
                  CurrentTool = FloatingTool.None;
              }
-             CurrentAnnotationTool = targetTool;
+             _editorState.ToggleToolGroup(group);
         }, notEnteringText);
     }
 
@@ -513,6 +512,7 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
         ChangeColorCommand = ReactiveCommand.Create<Avalonia.Media.Color>(c => SelectedColor = c);
         IncreaseThicknessCommand = ReactiveCommand.Create(() => { CurrentThickness = Math.Min(CurrentThickness + 1, 30); });
         DecreaseThicknessCommand = ReactiveCommand.Create(() => { CurrentThickness = Math.Max(CurrentThickness - 1, 1); });
+        SetRedactionPresetCommand = ReactiveCommand.Create<string>(preset => _editorState.SetRedactionPreset(preset));
         
         ClearAnnotationsCommand = ReactiveCommand.Create(ClearAnnotations, notEnteringText);
 
@@ -554,29 +554,17 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
     
     public void AddAnnotation(Annotation annotation)
     {
-        Annotations.Add(annotation);
-        PushUndoAction(new AnnotationHistoryAction(Annotations, annotation, true));
+        _editorState.AddAnnotation(annotation);
     }
 
     public void ClearAnnotations()
     {
-        if (Annotations.Count == 0) return;
-        PushUndoAction(new ClearAnnotationsHistoryAction(Annotations));
-        Annotations.Clear();
+        _editorState.ClearAnnotations();
     }
 
     public void PushUndoAction(IHistoryAction action)
     {
-        _historyStack.Push(action);
-        
-        // When a new action is performed, redo history is invalidated. Dispose those actions to free memory.
-        foreach (var redoAction in _redoHistoryStack)
-        {
-            redoAction.Dispose();
-        }
-        _redoHistoryStack.Clear();
-        
-        UpdateHistoryStatus();
+        _editorState.PushUndoAction(action);
     }
 
     public void PushResizeAction(Avalonia.PixelPoint oldPos, double oldW, double oldH, double oldContentW, double oldContentH,
@@ -596,34 +584,23 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
 
     protected virtual void Undo()
     {
-        if (_historyStack.Count == 0) return;
-        var action = _historyStack.Pop();
-        action.Undo();
-        _redoHistoryStack.Push(action);
-        UpdateHistoryStatus();
+        _editorState.Undo();
     }
 
     protected virtual void Redo()
     {
-        if (_redoHistoryStack.Count == 0) return;
-        var action = _redoHistoryStack.Pop();
-        action.Redo();
-        _historyStack.Push(action);
-        UpdateHistoryStatus();
+        _editorState.Redo();
     }
 
     protected void UpdateHistoryStatus()
     {
-        HasUndo = _historyStack.Count > 0;
-        HasRedo = _redoHistoryStack.Count > 0;
+        HasUndo = _editorState.HasUndo;
+        HasRedo = _editorState.HasRedo;
     }
 
     public virtual void Dispose() 
     {
-        foreach (var action in _historyStack) action.Dispose();
-        _historyStack.Clear();
-
-        foreach (var action in _redoHistoryStack) action.Dispose();
-        _redoHistoryStack.Clear();
+        _editorStateSubscription.Dispose();
+        _editorState.Dispose();
     } 
 }

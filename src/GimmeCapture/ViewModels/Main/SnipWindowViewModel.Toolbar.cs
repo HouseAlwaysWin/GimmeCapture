@@ -10,30 +10,27 @@ using System.Reactive;
 using System.Reactive.Linq;
 using GimmeCapture.Services.Core;
 using GimmeCapture.Services.Core.Media;
+using GimmeCapture.ViewModels.Shared;
 
 namespace GimmeCapture.ViewModels.Main;
 
 public partial class SnipWindowViewModel
 {
-    // Annotation Properties
-    public ObservableCollection<Annotation> Annotations { get; } = new();
+    private readonly AnnotationEditorState _editorState = new();
 
-    private AnnotationType _currentAnnotationTool = AnnotationType.None;
+    // Annotation Properties
+    public ObservableCollection<Annotation> Annotations => _editorState.Annotations;
+
     public AnnotationType CurrentAnnotationTool
     {
-        get => _currentAnnotationTool;
-        set 
-        {
-            this.RaiseAndSetIfChanged(ref _currentAnnotationTool, value);
-            this.RaisePropertyChanged(nameof(IsShapeToolActive));
-            this.RaisePropertyChanged(nameof(IsPenToolActive));
-            this.RaisePropertyChanged(nameof(IsTextToolActive));
-        }
+        get => _editorState.CurrentAnnotationTool;
+        set => _editorState.CurrentAnnotationTool = value;
     }
 
-    public bool IsShapeToolActive => CurrentAnnotationTool == AnnotationType.Rectangle || CurrentAnnotationTool == AnnotationType.Ellipse || CurrentAnnotationTool == AnnotationType.Arrow || CurrentAnnotationTool == AnnotationType.Line || CurrentAnnotationTool == AnnotationType.Mosaic || CurrentAnnotationTool == AnnotationType.Blur;
-    public bool IsPenToolActive => CurrentAnnotationTool == AnnotationType.Pen;
-    public bool IsTextToolActive => CurrentAnnotationTool == AnnotationType.Text;
+    public bool IsShapeToolActive => _editorState.IsShapeToolActive;
+    public bool IsPenToolActive => _editorState.IsPenToolActive;
+    public bool IsTextToolActive => _editorState.IsTextToolActive;
+    public bool IsRedactionToolActive => _editorState.IsRedactionToolActive;
 
     private bool _isDrawingMode = false;
     public bool IsDrawingMode
@@ -83,11 +80,10 @@ public partial class SnipWindowViewModel
         set => this.RaiseAndSetIfChanged(ref _drawingModeSnapshot, value);
     }
 
-    private Color _selectedColor = Colors.Red;
     public Color SelectedColor
     {
-        get => _selectedColor;
-        set => this.RaiseAndSetIfChanged(ref _selectedColor, value);
+        get => _editorState.SelectedColor;
+        set => _editorState.SelectedColor = value;
     }
 
     private string _customHexColor = "#FF0000";
@@ -97,41 +93,36 @@ public partial class SnipWindowViewModel
         set => this.RaiseAndSetIfChanged(ref _customHexColor, value);
     }
 
-    private double _currentThickness = 2.0;
     public double CurrentThickness
     {
-        get => _currentThickness;
-        set => this.RaiseAndSetIfChanged(ref _currentThickness, value);
+        get => _editorState.CurrentThickness;
+        set => _editorState.CurrentThickness = value;
     }
 
-    private double _currentFontSize = 24.0;
     public double CurrentFontSize
     {
-        get => _currentFontSize;
-        set => this.RaiseAndSetIfChanged(ref _currentFontSize, value);
+        get => _editorState.CurrentFontSize;
+        set => _editorState.CurrentFontSize = value;
     }
 
     public bool ShowIconSettings => true;
 
-    private FontFamily _currentFontFamily = new FontFamily("Arial");
     public FontFamily CurrentFontFamily
     {
-        get => _currentFontFamily;
-        set => this.RaiseAndSetIfChanged(ref _currentFontFamily, value);
+        get => _editorState.CurrentFontFamily;
+        set => _editorState.CurrentFontFamily = value;
     }
 
-    private bool _isBold;
     public bool IsBold
     {
-        get => _isBold;
-        set => this.RaiseAndSetIfChanged(ref _isBold, value);
+        get => _editorState.IsBold;
+        set => _editorState.IsBold = value;
     }
 
-    private bool _isItalic;
     public bool IsItalic
     {
-        get => _isItalic;
-        set => this.RaiseAndSetIfChanged(ref _isItalic, value);
+        get => _editorState.IsItalic;
+        set => _editorState.IsItalic = value;
     }
 
     public ObservableCollection<FontFamily> AvailableFonts { get; } = new ObservableCollection<FontFamily>
@@ -152,31 +143,23 @@ public partial class SnipWindowViewModel
         set => this.RaiseAndSetIfChanged(ref _isBackgroundRemoved, value);
     }
 
-    private bool _isEnteringText = false;
     public bool IsEnteringText
     {
-        get => _isEnteringText;
-        set => this.RaiseAndSetIfChanged(ref _isEnteringText, value);
+        get => _editorState.IsEnteringText;
+        set => _editorState.IsEnteringText = value;
     }
     
-    private Point _textInputPosition;
     public Point TextInputPosition
     {
-        get => _textInputPosition;
-        set => this.RaiseAndSetIfChanged(ref _textInputPosition, value);
+        get => _editorState.TextInputPosition;
+        set => _editorState.TextInputPosition = value;
     }
 
-    private string _pendingText = string.Empty;
     public string PendingText
     {
-        get => _pendingText;
-        set => this.RaiseAndSetIfChanged(ref _pendingText, value);
+        get => _editorState.PendingText;
+        set => _editorState.PendingText = value;
     }
-
-    // History
-    private Stack<IHistoryAction> _historyStack = new();
-    private Stack<IHistoryAction> _redoHistoryStack = new();
-    private bool _isUndoingOrRedoing = false;
 
     private bool _hasUndo;
     public bool HasUndo
@@ -194,101 +177,50 @@ public partial class SnipWindowViewModel
 
     private void UpdateHistoryStatus()
     {
-        HasUndo = _historyStack.Count > 0;
-        HasRedo = _redoHistoryStack.Count > 0;
+        HasUndo = _editorState.HasUndo;
+        HasRedo = _editorState.HasRedo;
     }
 
     private void Undo()
     {
-        if (_historyStack.Count == 0) return;
-        _isUndoingOrRedoing = true;
-        var action = _historyStack.Pop();
-        action.Undo();
-        _redoHistoryStack.Push(action);
-        _isUndoingOrRedoing = false;
+        _editorState.Undo();
         UpdateHistoryStatus();
     }
 
     private void Redo()
     {
-        if (_redoHistoryStack.Count == 0) return;
-        _isUndoingOrRedoing = true;
-        var action = _redoHistoryStack.Pop();
-        action.Redo();
-        _historyStack.Push(action);
-        _isUndoingOrRedoing = false;
+        _editorState.Redo();
         UpdateHistoryStatus();
     }
 
     private void PushUndoAction(IHistoryAction action)
     {
-        if (_isUndoingOrRedoing) return;
-        _historyStack.Push(action);
-        _redoHistoryStack.Clear();
+        _editorState.PushUndoAction(action);
         UpdateHistoryStatus();
     }
 
     public void AddAnnotation(Annotation annotation)
     {
-        PushUndoAction(new AnnotationHistoryAction(Annotations, annotation, true));
-        Annotations.Add(annotation);
+        _editorState.AddAnnotation(annotation);
+        UpdateHistoryStatus();
     }
 
     public void RemoveAnnotation(Annotation annotation)
     {
-        PushUndoAction(new AnnotationHistoryAction(Annotations, annotation, false));
-        Annotations.Remove(annotation);
+        _editorState.RemoveAnnotation(annotation);
+        UpdateHistoryStatus();
     }
 
     private void ClearAnnotations()
     {
-        if (Annotations.Count == 0) return;
-        PushUndoAction(new ClearAnnotationsHistoryAction(Annotations));
-        Annotations.Clear();
+        _editorState.ClearAnnotations();
         UpdateHistoryStatus();
     }
 
     public void ToggleToolGroup(string group)
     {
-        if (group == "Shapes")
-        {
-            if (IsShapeToolActive)
-            {
-                CurrentAnnotationTool = AnnotationType.None;
-                IsDrawingMode = false;
-            }
-            else
-            {
-                CurrentAnnotationTool = AnnotationType.Rectangle;
-                IsDrawingMode = true;
-            }
-        }
-        else if (group == "Pen")
-        {
-            if (IsPenToolActive)
-            {
-                CurrentAnnotationTool = AnnotationType.None;
-                IsDrawingMode = false;
-            }
-            else
-            {
-                CurrentAnnotationTool = AnnotationType.Pen;
-                IsDrawingMode = true;
-            }
-        }
-        else if (group == "Text")
-        {
-            if (IsTextToolActive)
-            {
-                CurrentAnnotationTool = AnnotationType.None;
-                IsDrawingMode = false;
-            }
-            else
-            {
-                CurrentAnnotationTool = AnnotationType.Text;
-                IsDrawingMode = true;
-            }
-        }
+        _editorState.ToggleToolGroup(group);
+        IsDrawingMode = CurrentAnnotationTool != AnnotationType.None;
     }
 
     // Commands
@@ -305,6 +237,7 @@ public partial class SnipWindowViewModel
     public ReactiveCommand<Unit, Unit> IncreaseFontSizeCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> DecreaseFontSizeCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> ApplyHexColorCommand { get; set; } = null!;
+    public ReactiveCommand<string, Unit> SetRedactionPresetCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> ChangeLanguageCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> ToggleBoldCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> ToggleItalicCommand { get; set; } = null!;
@@ -314,6 +247,7 @@ public partial class SnipWindowViewModel
     public ReactiveCommand<Unit, Unit> DecreaseCornerIconScaleCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> ToggleToolbarCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> SelectFullscreenCommand { get; set; } = null!;
+    public string CurrentRedactionPreset => _editorState.CurrentRedactionPreset;
 
     private void InitializeToolbarCommands()
     {
@@ -356,18 +290,11 @@ public partial class SnipWindowViewModel
         ClearAnnotationsCommand = ReactiveCommand.Create(ClearAnnotations, canExecuteNonTranslation);
         
         ToggleToolGroupCommand = ReactiveCommand.Create<string>(ToggleToolGroup, canExecuteNonTranslation);
+        SetRedactionPresetCommand = ReactiveCommand.Create<string>(preset => _editorState.SetRedactionPreset(preset), canExecuteNonTranslation);
         
         SelectToolCommand = ReactiveCommand.Create<AnnotationType>(t => {
-            if (CurrentAnnotationTool == t)
-            {
-                CurrentAnnotationTool = AnnotationType.None;
-                IsDrawingMode = false;
-            }
-            else
-            {
-                CurrentAnnotationTool = t;
-                IsDrawingMode = true; 
-            }
+            _editorState.SelectTool(t);
+            IsDrawingMode = CurrentAnnotationTool != AnnotationType.None;
         }, canExecuteNonTranslation);
         SelectToolCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
         

@@ -239,6 +239,7 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
         BorderThickness = borderThickness;
         HidePinDecoration = hideDecoration;
         HidePinBorder = hideBorder;
+        CurrentThickness = 4.0;
         PinnedText = pinnedText;
         InferredFontSize = inferredFontSize;
         _clipboardService = clipboardService;
