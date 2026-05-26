@@ -94,6 +94,7 @@ public class MainWindowSettingsPersistenceServiceTests
         Assert.Equal(snapshot.LlamaModelId, persisted.LlamaModelId);
         Assert.Equal(snapshot.LlamaGpuLayers, persisted.LlamaGpuLayers);
         Assert.Contains("\"Language\": \"Japanese\"", savedJson);
+        Assert.Contains("\"ConfigVersion\": 3", savedJson);
         Assert.Contains("\"RecordHotkey\": \"Shift\\u002BF8\"", savedJson);
         Assert.Contains("\"AIResourcesDirectory\": \"D:\\\\captures\\\\ai\"", savedJson);
     }
@@ -156,5 +157,37 @@ public class MainWindowSettingsPersistenceServiceTests
         Assert.Equal("Ctrl+F7", settingsService.Settings.Record.Action);
         Assert.Equal("Ctrl+F8", settingsService.Settings.Translate.Action);
         Assert.Equal("Ctrl+F9", settingsService.Settings.Translate.Pin);
+    }
+
+    [Fact]
+    public void LoadSync_DoesNotRemapVersionedConfigThatUsesOlderLookingValues()
+    {
+        var tempDir = Path.Combine(
+            Path.GetTempPath(),
+            "GimmeCapture.Tests",
+            nameof(MainWindowSettingsPersistenceServiceTests),
+            Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+
+        var configPath = Path.Combine(tempDir, "config.json");
+        File.WriteAllText(configPath,
+            """
+            {
+              "ConfigVersion": 3,
+              "Snip": { "Pin": "F6" },
+              "Record": { "Action": "F7" },
+              "Translate": { "Action": "F3", "Pin": "F9" }
+            }
+            """);
+
+        var settingsService = new AppSettingsService(tempDir);
+
+        settingsService.LoadSync();
+
+        Assert.Equal(3, settingsService.Settings.ConfigVersion);
+        Assert.Equal("F6", settingsService.Settings.Snip.Pin);
+        Assert.Equal("F7", settingsService.Settings.Record.Action);
+        Assert.Equal("F3", settingsService.Settings.Translate.Action);
+        Assert.Equal("F9", settingsService.Settings.Translate.Pin);
     }
 }

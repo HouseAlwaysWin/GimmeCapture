@@ -8,6 +8,12 @@ namespace GimmeCapture.Services.Core.Infrastructure;
 
 public class AppSettingsService
 {
+    // Config migration history:
+    // v0: Legacy configs without ConfigVersion. May still use HoldSingle/HoldMulti and pre-function-key action defaults.
+    // v1: SelectionHoldModifier introduced for translation selection behavior.
+    // v2: Action hotkeys moved to F6/F7/F8/F9 defaults.
+    // v3: Pin-like actions unified so Snip.Pin / Record.Action / Translate.Pin share F6.
+    public const int CurrentConfigVersion = 3;
     private static string LocalConfigPath => Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config.json");
     private static string AppDataPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "GimmeCapture");
     private static string AppDataConfigPath => Path.Combine(AppDataPath, "config.json");
@@ -43,7 +49,10 @@ public class AppSettingsService
         Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
     };
 
-    /// <summary>Migrate legacy Translate.HoldSingle / HoldMulti into SelectionHoldModifier when the new key is absent.</summary>
+    /// <summary>
+    /// v0 -> v1: migrate legacy Translate.HoldSingle / HoldMulti into SelectionHoldModifier
+    /// when the newer key is absent.
+    /// </summary>
     private static void MigrateTranslateSelectionHoldModifier(string json, AppSettings settings)
     {
         try
@@ -74,6 +83,7 @@ public class AppSettingsService
 
     private static void MigrateLegacyActionHotkeys(AppSettings settings)
     {
+        // v2 -> v3: unify pin-like actions on F6 while preserving clearly custom values.
         if (string.Equals(settings.Snip.Pin, "Shift+Enter", StringComparison.OrdinalIgnoreCase))
             settings.Snip.Pin = "F6";
 
@@ -87,6 +97,58 @@ public class AppSettingsService
         if (string.Equals(settings.Translate.Pin, "Shift+Enter", StringComparison.OrdinalIgnoreCase)
             || string.Equals(settings.Translate.Pin, "F9", StringComparison.OrdinalIgnoreCase))
             settings.Translate.Pin = "F6";
+    }
+
+    private static int DetectConfigVersion(string json)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.TryGetProperty("ConfigVersion", out var versionEl)
+                && versionEl.ValueKind == JsonValueKind.Number
+                && versionEl.TryGetInt32(out int version))
+            {
+                return version;
+            }
+        }
+        catch
+        {
+        }
+
+        return 0;
+    }
+
+    private static void ApplyMigrations(string json, AppSettings settings, int sourceVersion)
+    {
+        // Migrations are intentionally cumulative and version-gated.
+        // Once a config has a newer version number, we stop "guessing" based on value shapes.
+        if (sourceVersion < 1)
+        {
+            MigrateTranslateSelectionHoldModifier(json, settings);
+        }
+
+        if (sourceVersion < 2)
+        {
+            // v1 -> v2: move older action defaults onto function-key based actions.
+            if (string.Equals(settings.Snip.Pin, "Shift+Enter", StringComparison.OrdinalIgnoreCase))
+                settings.Snip.Pin = "F6";
+
+            if (string.Equals(settings.Record.Action, "Shift+Enter", StringComparison.OrdinalIgnoreCase))
+                settings.Record.Action = "F7";
+
+            if (string.Equals(settings.Translate.Action, "F3", StringComparison.OrdinalIgnoreCase))
+                settings.Translate.Action = "F8";
+
+            if (string.Equals(settings.Translate.Pin, "Shift+Enter", StringComparison.OrdinalIgnoreCase))
+                settings.Translate.Pin = "F9";
+        }
+
+        if (sourceVersion < 3)
+        {
+            MigrateLegacyActionHotkeys(settings);
+        }
+
+        settings.ConfigVersion = CurrentConfigVersion;
     }
 
     public async Task LoadAsync()
@@ -130,6 +192,7 @@ public class AppSettingsService
     public void UpdateSettings(AppSettings source)
     {
         var dest = Settings;
+        dest.ConfigVersion = source.ConfigVersion;
         dest.Language = source.Language;
         dest.RunOnStartup = source.RunOnStartup;
         dest.AutoCheckUpdates = source.AutoCheckUpdates;
@@ -296,14 +359,14 @@ public class AppSettingsService
 
     private void ApplyLoadedJson(string path, string json)
     {
+        int sourceVersion = DetectConfigVersion(json);
         var settings = JsonSerializer.Deserialize<AppSettings>(json, GetJsonOptions());
         if (settings == null)
             return;
 
-        MigrateTranslateSelectionHoldModifier(json, settings);
-        MigrateLegacyActionHotkeys(settings);
+        ApplyMigrations(json, settings, sourceVersion);
         UpdateSettings(settings);
-        DebugLog($"Successfully loaded settings from {path}. Language value: {Settings.Language}");
+        DebugLog($"Successfully loaded settings from {path}. Version {sourceVersion} -> {Settings.ConfigVersion}. Language value: {Settings.Language}");
     }
 
 
@@ -311,6 +374,7 @@ public class AppSettingsService
     {
         try
         {
+            Settings.ConfigVersion = CurrentConfigVersion;
             var options = GetJsonOptions();
             var json = JsonSerializer.Serialize(Settings, options);
 

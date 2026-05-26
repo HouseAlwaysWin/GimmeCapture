@@ -37,7 +37,7 @@ public class UpdateService : ReactiveObject
 {
     private const string RepoUrl = "https://api.github.com/repos/HouseAlwaysWin/GimmeCapture/releases/latest";
     private readonly string _currentVersion;
-    
+
     private double _downloadProgress;
     public double DownloadProgress
     {
@@ -66,7 +66,7 @@ public class UpdateService : ReactiveObject
         {
             using var client = new HttpClient();
             client.DefaultRequestHeaders.Add("User-Agent", "GimmeCapture-Updater");
-            
+
             var release = await client.GetFromJsonAsync<ReleaseInfo>(RepoUrl);
             if (release != null)
             {
@@ -81,6 +81,7 @@ public class UpdateService : ReactiveObject
         {
             Debug.WriteLine($"Update check failed: {ex.Message}");
         }
+
         return null;
     }
 
@@ -99,7 +100,9 @@ public class UpdateService : ReactiveObject
     public bool IsUpdateDownloaded(ReleaseInfo release)
     {
         var targetVersion = release.TagName.TrimStart('v');
-        return DownloadedVersion == targetVersion && !string.IsNullOrEmpty(DownloadedZipPath) && File.Exists(DownloadedZipPath);
+        return DownloadedVersion == targetVersion
+            && !string.IsNullOrEmpty(DownloadedZipPath)
+            && File.Exists(DownloadedZipPath);
     }
 
     public async Task<string?> DownloadUpdateAsync(ReleaseInfo release)
@@ -107,7 +110,9 @@ public class UpdateService : ReactiveObject
         if (IsDownloading) return null;
 
         var targetVersion = release.TagName.TrimStart('v');
-        if (DownloadedVersion == targetVersion && !string.IsNullOrEmpty(DownloadedZipPath) && File.Exists(DownloadedZipPath))
+        if (DownloadedVersion == targetVersion
+            && !string.IsNullOrEmpty(DownloadedZipPath)
+            && File.Exists(DownloadedZipPath))
         {
             return DownloadedZipPath;
         }
@@ -117,8 +122,8 @@ public class UpdateService : ReactiveObject
             IsDownloading = true;
             DownloadProgress = 0;
 
-            // Find the zip asset for Windows
-            var asset = release.Assets.Find(a => a.Name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) && a.Name.Contains("win", StringComparison.OrdinalIgnoreCase)) 
+            var asset = release.Assets.Find(a => a.Name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)
+                                                 && a.Name.Contains("win", StringComparison.OrdinalIgnoreCase))
                         ?? release.Assets.Find(a => a.Name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase));
 
             if (asset == null) throw new Exception("No suitable zip asset found in release.");
@@ -129,7 +134,7 @@ public class UpdateService : ReactiveObject
 
             using var client = new HttpClient();
             client.DefaultRequestHeaders.Add("User-Agent", "GimmeCapture-Updater");
-            
+
             using var response = await client.GetAsync(asset.DownloadUrl, HttpCompletionOption.ResponseHeadersRead);
             response.EnsureSuccessStatusCode();
 
@@ -151,7 +156,7 @@ public class UpdateService : ReactiveObject
                     DownloadProgress = (double)totalRead / totalBytes * 100;
                 }
             }
-            
+
             DownloadedZipPath = zipPath;
             DownloadedVersion = targetVersion;
             return zipPath;
@@ -174,23 +179,30 @@ public class UpdateService : ReactiveObject
             var appDir = AppDomain.CurrentDomain.BaseDirectory;
             var tempExtractDir = Path.Combine(Path.GetDirectoryName(zipPath)!, "extract");
             Directory.CreateDirectory(tempExtractDir);
-            
+
             ZipFile.ExtractToDirectory(zipPath, tempExtractDir);
 
-            // Create update script
             var scriptPath = Path.Combine(Path.GetTempPath(), "GimmeCapture_Update.bat");
             var currentExe = Process.GetCurrentProcess().MainModule?.FileName ?? "GimmeCapture.exe";
             var currentExeName = Path.GetFileName(currentExe);
             var parentDir = Path.GetDirectoryName(zipPath)!;
+            var localConfigPath = Path.Combine(appDir, "config.json");
+            var appDataConfigPath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "GimmeCapture",
+                "config.json");
+            var localConfigBackupPath = Path.Combine(parentDir, "config.local.backup.json");
+            var appDataConfigBackupPath = Path.Combine(parentDir, "config.appdata.backup.json");
 
-            var script = $@"
-@echo off
-timeout /t 2 /nobreak > nul
-xcopy /s /y /i ""{tempExtractDir.TrimEnd('\\')}"" ""{appDir.TrimEnd('\\')}""
-rd /s /q ""{parentDir.TrimEnd('\\')}""
-start """" ""{Path.Combine(appDir, currentExeName)}""
-del ""%~f0""
-";
+            var script = BuildUpdateScript(
+                tempExtractDir,
+                appDir,
+                parentDir,
+                currentExeName,
+                localConfigPath,
+                appDataConfigPath,
+                localConfigBackupPath,
+                appDataConfigBackupPath);
             File.WriteAllText(scriptPath, script, System.Text.Encoding.Default);
 
             Process.Start(new ProcessStartInfo
@@ -206,9 +218,39 @@ del ""%~f0""
         }
         catch (Exception ex)
         {
-             Avalonia.Threading.Dispatcher.UIThread.Post(() => {
-                 System.Windows.Forms.MessageBox.Show($"無法啟動更新程序: {ex.Message}", "更新錯誤");
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                System.Windows.Forms.MessageBox.Show($"?⊥????湔蝔?: {ex.Message}", "?湔?航炊");
             });
         }
+    }
+
+    public static string BuildUpdateScript(
+        string tempExtractDir,
+        string appDir,
+        string parentDir,
+        string currentExeName,
+        string localConfigPath,
+        string appDataConfigPath,
+        string localConfigBackupPath,
+        string appDataConfigBackupPath)
+    {
+        var appDataConfigDir = Path.GetDirectoryName(appDataConfigPath) ?? string.Empty;
+
+        return $@"
+@echo off
+timeout /t 2 /nobreak > nul
+if exist ""{localConfigPath}"" copy /y ""{localConfigPath}"" ""{localConfigBackupPath}"" > nul
+if exist ""{appDataConfigPath}"" copy /y ""{appDataConfigPath}"" ""{appDataConfigBackupPath}"" > nul
+xcopy /s /y /i ""{tempExtractDir.TrimEnd('\\')}"" ""{appDir.TrimEnd('\\')}""
+if exist ""{localConfigBackupPath}"" copy /y ""{localConfigBackupPath}"" ""{localConfigPath}"" > nul
+if exist ""{appDataConfigBackupPath}"" (
+  if not exist ""{appDataConfigDir}"" mkdir ""{appDataConfigDir}""
+  copy /y ""{appDataConfigBackupPath}"" ""{appDataConfigPath}"" > nul
+)
+rd /s /q ""{parentDir.TrimEnd('\\')}""
+start """" ""{Path.Combine(appDir, currentExeName)}""
+del ""%~f0""
+";
     }
 }

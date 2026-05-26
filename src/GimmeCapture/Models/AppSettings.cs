@@ -90,6 +90,7 @@ public class TranslateHotkeys
 
 public class AppSettings
 {
+    public int ConfigVersion { get; set; } = AppSettingsService.CurrentConfigVersion;
     public Language Language { get; set; } = Language.English;
     public bool RunOnStartup { get; set; }
     public bool AutoCheckUpdates { get; set; }
