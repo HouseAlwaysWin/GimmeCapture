@@ -51,13 +51,17 @@ public partial class AnnotationControl : UserControl
                 ann.WhenAnyValue(a => a.StartPoint),
                 ann.WhenAnyValue(a => a.EndPoint),
                 ann.WhenAnyValue(a => a.DrawingModeSnapshot),
+                ann.WhenAnyValue(a => a.DrawingModeReferenceSize),
                 ann.WhenAnyValue(a => a.EffectSettings.MosaicCellSize),
                 ann.WhenAnyValue(a => a.EffectSettings.BlurRadius),
                 ann.WhenAnyValue(a => a.EffectSettings.Feather),
-                (start, end, snapshot, _, _, _) => (start, end, snapshot))
-                .Throttle(TimeSpan.FromMilliseconds(33))
+                this.GetObservable(BoundsProperty),
+                (start, end, snapshot, referenceSize, _, _, _, bounds) => (start, end, snapshot, referenceSize, bounds))
+                .Throttle(TimeSpan.FromMilliseconds(16))
                 .ObserveOn(RxApp.MainThreadScheduler)
                 .Subscribe(_ => RegenerateEffectPreview(ann));
+
+            RegenerateEffectPreview(ann);
         }
     }
 
@@ -78,8 +82,12 @@ public partial class AnnotationControl : UserControl
         if (snapshot == null)
             return;
 
-        double referenceWidth = Width;
-        double referenceHeight = Height;
+        double referenceWidth = annotation.DrawingModeReferenceSize.Width;
+        double referenceHeight = annotation.DrawingModeReferenceSize.Height;
+        if (double.IsNaN(referenceWidth) || referenceWidth <= 0)
+            referenceWidth = Bounds.Width;
+        if (double.IsNaN(referenceHeight) || referenceHeight <= 0)
+            referenceHeight = Bounds.Height;
         if (double.IsNaN(referenceWidth) || referenceWidth <= 0)
             referenceWidth = snapshot.PixelSize.Width;
         if (double.IsNaN(referenceHeight) || referenceHeight <= 0)

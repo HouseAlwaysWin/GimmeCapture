@@ -10,12 +10,12 @@ namespace GimmeCapture.ViewModels.Shared;
 
 public sealed class AnnotationEditorState : ReactiveObject, IDisposable
 {
-    private static readonly AnnotationEffectSettings MosaicSmall = new() { MosaicCellSize = 12, BlurRadius = 24f, Feather = 0f };
-    private static readonly AnnotationEffectSettings MosaicMedium = new() { MosaicCellSize = 20, BlurRadius = 24f, Feather = 0f };
-    private static readonly AnnotationEffectSettings MosaicLarge = new() { MosaicCellSize = 32, BlurRadius = 24f, Feather = 0f };
-    private static readonly AnnotationEffectSettings BlurSoft = new() { MosaicCellSize = 20, BlurRadius = 24f, Feather = 0f };
-    private static readonly AnnotationEffectSettings BlurMedium = new() { MosaicCellSize = 20, BlurRadius = 40f, Feather = 0f };
-    private static readonly AnnotationEffectSettings BlurStrong = new() { MosaicCellSize = 20, BlurRadius = 60f, Feather = 0f };
+    private static readonly AnnotationEffectSettings MosaicSmall = new() { MosaicCellSize = 18, BlurRadius = 24f, Feather = 0f };
+    private static readonly AnnotationEffectSettings MosaicMedium = new() { MosaicCellSize = 30, BlurRadius = 24f, Feather = 0f };
+    private static readonly AnnotationEffectSettings MosaicLarge = new() { MosaicCellSize = 48, BlurRadius = 24f, Feather = 0f };
+    private static readonly AnnotationEffectSettings BlurSoft = new() { MosaicCellSize = 20, BlurRadius = 36f, Feather = 0f };
+    private static readonly AnnotationEffectSettings BlurMedium = new() { MosaicCellSize = 20, BlurRadius = 64f, Feather = 0f };
+    private static readonly AnnotationEffectSettings BlurStrong = new() { MosaicCellSize = 20, BlurRadius = 96f, Feather = 0f };
 
     public ObservableCollection<Annotation> Annotations { get; } = new();
 
@@ -189,16 +189,16 @@ public sealed class AnnotationEditorState : ReactiveObject, IDisposable
             {
                 return _blurSettings.BlurRadius switch
                 {
-                    <= 28f => "Soft",
-                    >= 52f => "Strong",
+                    <= 44f => "Soft",
+                    >= 80f => "Strong",
                     _ => "Medium"
                 };
             }
 
             return _mosaicSettings.MosaicCellSize switch
             {
-                <= 12 => "Small",
-                >= 32 => "Large",
+                <= 18 => "Small",
+                >= 48 => "Large",
                 _ => "Medium"
             };
         }

@@ -97,6 +97,13 @@ public class Annotation : ReactiveObject
         set => this.RaiseAndSetIfChanged(ref _drawingModeSnapshot, value);
     }
 
+    private Size _drawingModeReferenceSize;
+    public Size DrawingModeReferenceSize
+    {
+        get => _drawingModeReferenceSize;
+        set => this.RaiseAndSetIfChanged(ref _drawingModeReferenceSize, value);
+    }
+
     private AnnotationEffectSettings _effectSettings = new();
     public AnnotationEffectSettings EffectSettings
     {
@@ -127,6 +134,7 @@ public class Annotation : ReactiveObject
             IsBold = this.IsBold,
             IsItalic = this.IsItalic,
             DrawingModeSnapshot = this.DrawingModeSnapshot,
+            DrawingModeReferenceSize = this.DrawingModeReferenceSize,
             EffectSettings = this.EffectSettings.Clone()
         };
         foreach (var p in this.Points)

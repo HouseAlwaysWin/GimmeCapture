@@ -26,6 +26,19 @@ public sealed class AnnotationRenderService : IAnnotationRenderService
         if (snapshot == null)
             return null;
 
+        using var source = ConvertAvaloniaBitmapToSkBitmap(snapshot);
+        if (source == null)
+            return null;
+
+        using var preview = RenderAnnotationPreviewToSkBitmap(source, annotation, referenceWidth, referenceHeight);
+        if (preview == null)
+            return null;
+
+        return ConvertSkBitmapToWriteableBitmap(preview);
+    }
+
+    public SKBitmap? RenderAnnotationPreviewToSkBitmap(SKBitmap snapshot, Annotation annotation, double referenceWidth, double referenceHeight)
+    {
         if (annotation.Type != AnnotationType.Mosaic && annotation.Type != AnnotationType.Blur)
             return null;
 
@@ -33,22 +46,30 @@ public sealed class AnnotationRenderService : IAnnotationRenderService
         if (logicalRect.Width <= 0 || logicalRect.Height <= 0)
             return null;
 
-        using var source = ConvertAvaloniaBitmapToSkBitmap(snapshot);
-        if (source == null)
-            return null;
-
-        var roi = CreatePixelRect(logicalRect, referenceWidth, referenceHeight, source.Width, source.Height);
+        var roi = CreatePixelRect(logicalRect, referenceWidth, referenceHeight, snapshot.Width, snapshot.Height);
         if (roi.Width <= 0 || roi.Height <= 0)
             return null;
 
-        using var preview = new SKBitmap(roi.Width, roi.Height, SKColorType.Bgra8888, SKAlphaType.Premul);
-        using var canvas = new SKCanvas(preview);
-        canvas.Clear(SKColors.Transparent);
-        canvas.DrawBitmap(source, roi, new SKRect(0, 0, roi.Width, roi.Height));
-        ApplyRedactionEffect(preview, annotation, new SKRect(0, 0, roi.Width, roi.Height), 1f);
-        canvas.Flush();
+        double scaleX = snapshot.Width / referenceWidth;
+        double scaleY = snapshot.Height / referenceHeight;
+        float uniformScale = (float)Math.Min(scaleX, scaleY);
 
-        return ConvertSkBitmapToWriteableBitmap(preview);
+        using var working = snapshot.Copy();
+        ApplyRedactionEffect(
+            working,
+            annotation,
+            new SKRect(roi.Left, roi.Top, roi.Right, roi.Bottom),
+            uniformScale);
+
+        var preview = new SKBitmap(roi.Width, roi.Height, SKColorType.Bgra8888, SKAlphaType.Premul);
+        using (var canvas = new SKCanvas(preview))
+        {
+            canvas.Clear(SKColors.Transparent);
+            canvas.DrawBitmap(working, roi, new SKRect(0, 0, roi.Width, roi.Height));
+            canvas.Flush();
+        }
+
+        return preview;
     }
 
     public void RenderAnnotationsToBitmap(SKBitmap bitmap, IEnumerable<Annotation> annotations, double referenceWidth, double referenceHeight, float targetWidth, float targetHeight)
@@ -255,7 +276,7 @@ public sealed class AnnotationRenderService : IAnnotationRenderService
                 new SKRect(0, 0, expandedWidth, expandedHeight));
         }
 
-        int downsampleFactor = Math.Clamp((int)MathF.Round(blurRadius / 10f), 1, 6);
+        int downsampleFactor = Math.Clamp((int)MathF.Round(blurRadius / 8f), 2, 8);
         int reducedWidth = Math.Max(1, expandedWidth / downsampleFactor);
         int reducedHeight = Math.Max(1, expandedHeight / downsampleFactor);
 
@@ -266,10 +287,10 @@ public sealed class AnnotationRenderService : IAnnotationRenderService
             reducedCanvas.DrawBitmap(region, new SKRect(0, 0, reducedWidth, reducedHeight), reducedPaint);
         }
 
-        float reducedBlurRadius = Math.Max(1f, (blurRadius / downsampleFactor) * 0.9f);
+        float reducedBlurRadius = Math.Max(1f, (blurRadius / downsampleFactor) * 1.1f);
         using var reducedBlurred = new SKBitmap(reducedWidth, reducedHeight, SKColorType.Bgra8888, SKAlphaType.Premul);
         using (var reducedBlurCanvas = new SKCanvas(reducedBlurred))
-        using (var reducedBlurPaint = new SKPaint { ImageFilter = SKImageFilter.CreateBlur(reducedBlurRadius, reducedBlurRadius) })
+        using (var reducedBlurPaint = new SKPaint { ImageFilter = CreateClampBlur(reducedBlurRadius, reducedBlurRadius) })
         {
             reducedBlurCanvas.DrawBitmap(reduced, 0, 0, reducedBlurPaint);
         }
@@ -283,17 +304,29 @@ public sealed class AnnotationRenderService : IAnnotationRenderService
 
         using var blurred = new SKBitmap(expandedWidth, expandedHeight, SKColorType.Bgra8888, SKAlphaType.Premul);
         using (var canvas = new SKCanvas(blurred))
-        using (var blurPaint = new SKPaint { ImageFilter = SKImageFilter.CreateBlur(blurRadius * 0.45f, blurRadius * 0.45f) })
+        using (var blurPaint = new SKPaint { ImageFilter = CreateClampBlur(blurRadius * 0.7f, blurRadius * 0.7f) })
         {
             canvas.DrawBitmap(softened, 0, 0, blurPaint);
         }
 
+        // One more light pass keeps the blur strong without turning it into a gray overlay.
+        using var finalBlurred = new SKBitmap(expandedWidth, expandedHeight, SKColorType.Bgra8888, SKAlphaType.Premul);
+        using (var finalCanvas = new SKCanvas(finalBlurred))
+        using (var finalPaint = new SKPaint { ImageFilter = CreateClampBlur(blurRadius * 0.22f, blurRadius * 0.22f) })
+        {
+            finalCanvas.DrawBitmap(blurred, 0, 0, finalPaint);
+        }
+
         using var targetCanvas = new SKCanvas(target);
         targetCanvas.DrawBitmap(
-            blurred,
+            finalBlurred,
             new SKRect(innerLeft, innerTop, innerLeft + width, innerTop + height),
             new SKRect(left, top, right, bottom));
     }
+
+    private static SKImageFilter CreateClampBlur(float sigmaX, float sigmaY)
+        => SKImageFilter.CreateBlur(sigmaX, sigmaY, SKShaderTileMode.Clamp);
+
 
     private static SKColor AverageCellColor(SKBitmap source, int left, int top, int right, int bottom)
     {

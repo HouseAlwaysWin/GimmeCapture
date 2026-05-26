@@ -334,7 +334,8 @@ public abstract class FloatingWindowBase : Window
                 FontSize = vm.CurrentFontSize,
                 IsBold = vm.IsBold,
                 IsItalic = vm.IsItalic,
-                DrawingModeSnapshot = frameSnapshot
+                DrawingModeSnapshot = frameSnapshot,
+                DrawingModeReferenceSize = contentControl.Bounds.Size
             };
 
             if (_currentAnnotation.Type == AnnotationType.Pen)

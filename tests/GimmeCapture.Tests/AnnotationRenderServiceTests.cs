@@ -1,5 +1,4 @@
 using Avalonia;
-using Avalonia.Media.Imaging;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Core.Rendering;
 using SkiaSharp;
@@ -49,6 +48,28 @@ public class AnnotationRenderServiceTests
         Assert.NotEqual(insideBefore, bitmap.GetPixel(8, 8));
     }
 
+    [Fact]
+    public void RenderAnnotationPreview_BlurKeepsOpaqueEdgesWhenRegionTouchesSnapshotBounds()
+    {
+        using var snapshot = CreateSolidBitmap(40, 20, new SKColor(240, 240, 240, 255));
+        var annotation = new Annotation
+        {
+            Type = AnnotationType.Blur,
+            StartPoint = new Point(0, 0),
+            EndPoint = new Point(40, 20),
+            EffectSettings = new AnnotationEffectSettings { BlurRadius = 12f },
+            DrawingModeReferenceSize = new Size(40, 20)
+        };
+
+        using var preview = AnnotationRenderService.Shared.RenderAnnotationPreviewToSkBitmap(snapshot, annotation, 40, 20);
+
+        Assert.NotNull(preview);
+        Assert.Equal((byte)255, preview!.GetPixel(0, 0).Alpha);
+        Assert.Equal((byte)255, preview.GetPixel(preview.Width - 1, 0).Alpha);
+        Assert.Equal((byte)255, preview.GetPixel(0, preview.Height - 1).Alpha);
+        Assert.Equal((byte)255, preview.GetPixel(preview.Width - 1, preview.Height - 1).Alpha);
+    }
+
     private static SKBitmap CreateGradientBitmap(int width, int height)
     {
         var bitmap = new SKBitmap(width, height, SKColorType.Bgra8888, SKAlphaType.Premul);
@@ -57,6 +78,19 @@ public class AnnotationRenderServiceTests
             for (int x = 0; x < width; x++)
             {
                 bitmap.SetPixel(x, y, new SKColor((byte)(x * 10), (byte)(y * 10), (byte)(x + y), 255));
+            }
+        }
+        return bitmap;
+    }
+
+    private static SKBitmap CreateSolidBitmap(int width, int height, SKColor color)
+    {
+        var bitmap = new SKBitmap(width, height, SKColorType.Bgra8888, SKAlphaType.Premul);
+        for (int y = 0; y < height; y++)
+        {
+            for (int x = 0; x < width; x++)
+            {
+                bitmap.SetPixel(x, y, color);
             }
         }
         return bitmap;

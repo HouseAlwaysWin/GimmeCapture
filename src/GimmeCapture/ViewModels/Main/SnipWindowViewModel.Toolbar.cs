@@ -8,6 +8,7 @@ using System.Collections.ObjectModel;
 using System.Collections.Generic;
 using System.Reactive;
 using System.Reactive.Linq;
+using System.Threading.Tasks;
 using GimmeCapture.Services.Core;
 using GimmeCapture.Services.Core.Media;
 using GimmeCapture.ViewModels.Shared;
@@ -45,7 +46,9 @@ public partial class SnipWindowViewModel
                 {
                     try
                     {
-                        var snapshot = await _captureService.CaptureRegionBitmapAsync(SelectionRect, ScreenOffset, VisualScaling);
+                        var snapshot = CaptureDrawingModeSnapshotAsync != null
+                            ? await CaptureDrawingModeSnapshotAsync()
+                            : await _captureService.CaptureRegionBitmapAsync(SelectionRect, ScreenOffset, VisualScaling);
                         if (snapshot != null)
                         {
                             // Dispose old if exists
@@ -78,6 +81,11 @@ public partial class SnipWindowViewModel
     {
         get => _drawingModeSnapshot;
         set => this.RaiseAndSetIfChanged(ref _drawingModeSnapshot, value);
+    }
+
+    public Task<Avalonia.Media.Imaging.WriteableBitmap?> CaptureRegionBitmapAsync()
+    {
+        return _captureService.CaptureRegionBitmapAsync(SelectionRect, ScreenOffset, VisualScaling);
     }
 
     public Color SelectedColor

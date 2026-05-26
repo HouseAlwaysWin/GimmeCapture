@@ -86,7 +86,8 @@ public partial class SnipWindow
             Color = _viewModel.SelectedColor,
             Thickness = _viewModel.CurrentThickness,
             FontSize = _viewModel.CurrentFontSize,
-            DrawingModeSnapshot = _viewModel.DrawingModeSnapshot
+            DrawingModeSnapshot = _viewModel.DrawingModeSnapshot,
+            DrawingModeReferenceSize = _viewModel.SelectionRect.Size
         };
 
         if (_viewModel.CurrentAnnotationTool == AnnotationType.Pen)

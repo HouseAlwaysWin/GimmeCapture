@@ -412,6 +412,31 @@ public partial class SnipWindow : Window
                 this.Focus();
             };
 
+            _viewModel.CaptureDrawingModeSnapshotAsync = async () =>
+            {
+                var hwnd = this.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
+                bool restoreCaptureVisibility = false;
+
+                try
+                {
+                    if (hwnd != IntPtr.Zero && OperatingSystem.IsWindows())
+                    {
+                        Win32Helpers.SetWindowCaptureVisibility(hwnd, visible: false);
+                        restoreCaptureVisibility = true;
+                        await Task.Delay(50);
+                    }
+
+                    return await vm.CaptureRegionBitmapAsync();
+                }
+                finally
+                {
+                    if (restoreCaptureVisibility && hwnd != IntPtr.Zero && OperatingSystem.IsWindows())
+                    {
+                        Win32Helpers.SetWindowCaptureVisibility(hwnd, visible: true);
+                    }
+                }
+            };
+
             _viewModel.PickSaveFileAction = async () =>
             {
                  var topLevel = TopLevel.GetTopLevel(this);

@@ -216,6 +216,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     public Action? CloseRecordingProgressWindowAction { get; set; }
     public Action? SaveAction { get; set; }
     public Action? FocusWindowAction { get; set; }
+    public Func<Task<Avalonia.Media.Imaging.WriteableBitmap?>>? CaptureDrawingModeSnapshotAsync { get; set; }
     public Action<Avalonia.Media.Imaging.Bitmap, Rect, Color, double, bool, bool, string?, double>? OpenPinWindowAction { get; set; }
     public Action<string, int, int, double, double, Color, double, bool, bool>? OpenPinnedVideoWindowAction { get; set; }
     public Func<Task<string?>>? PickSaveFileAction { get; set; }
@@ -676,6 +677,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         OpenRecordingProgressWindowAction = null;
         CloseRecordingProgressWindowAction = null;
         FocusWindowAction = null;
+        CaptureDrawingModeSnapshotAsync = null;
         OpenPinnedVideoWindowAction = null;
         PickSaveFileAction = null;
     }

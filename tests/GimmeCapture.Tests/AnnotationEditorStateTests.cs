@@ -20,7 +20,7 @@ public class AnnotationEditorStateTests
         Assert.Equal("Strong", state.CurrentRedactionPreset);
 
         var effect = state.CreateEffectSettingsFor(AnnotationType.Blur);
-        Assert.Equal(60f, effect.BlurRadius);
+        Assert.Equal(96f, effect.BlurRadius);
     }
 
     [Fact]
