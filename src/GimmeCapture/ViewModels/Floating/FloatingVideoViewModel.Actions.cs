@@ -16,6 +16,7 @@ using CliWrap;
 using CliWrap.Buffered;
 using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Core.Rendering;
+using System.Linq;
 
 namespace GimmeCapture.ViewModels.Floating;
 
@@ -170,14 +171,23 @@ public partial class FloatingVideoViewModel
             string ext = targetExtension ?? Path.GetExtension(VideoPath);
             if (!ext.StartsWith(".")) ext = "." + ext;
             string outputPath = Path.Combine(tempDir, "output" + ext);
+            var overlayAnnotations = Annotations
+                .Where(a => a.Type is not AnnotationType.Mosaic and not AnnotationType.Blur)
+                .ToArray();
             
-            // 2. Render Overlay PNG (using original resolution as base)
+            // 2. Render vector/text overlay PNG only. Redaction effects are applied per-frame by FFmpeg.
             using (var surface = SKSurface.Create(new SKImageInfo((int)OriginalWidth, (int)OriginalHeight, SKColorType.Bgra8888, SKAlphaType.Premul)))
             {
                 var canvas = surface.Canvas;
                 canvas.Clear(SKColors.Transparent);
                 
-                GimmeCapture.Services.Core.Rendering.AnnotationRenderHelper.DrawAnnotationsOnCanvas(canvas, Annotations, DisplayWidth, DisplayHeight, (float)OriginalWidth, (float)OriginalHeight);
+                AnnotationRenderHelper.DrawAnnotationsOnCanvas(
+                    canvas,
+                    overlayAnnotations,
+                    DisplayWidth,
+                    DisplayHeight,
+                    (float)OriginalWidth,
+                    (float)OriginalHeight);
                 
                 using (var image = surface.Snapshot())
                 using (var data = image.Encode(SKEncodedImageFormat.Png, 100))
@@ -194,21 +204,15 @@ public partial class FloatingVideoViewModel
             // Log for diagnostics
             System.Diagnostics.Debug.WriteLine($"[Export] Start: {VideoPath} -> {outputPath}");
 
-            /* 
-               Filter Strategy:
-               Video (MP4/MKV etc):
-               [1:v][0:v]scale2ref[ovrl][refv];[refv][ovrl]overlay=0:0:shortest=1[outv]
-               -map "[outv]" -map 0:a? -c:v libx264 -c:a copy
-
-               GIF:
-               [1:v][0:v]scale2ref[ovrl][refv];[refv][ovrl]overlay=0:0:shortest=1,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse[outv]
-               -map "[outv]" (No audio, no libx264)
-            */
             bool isOutputGif = ext.Equals(".gif", StringComparison.OrdinalIgnoreCase);
-            
-            string filter = isOutputGif 
-                ? "[1:v][0:v]scale2ref[ovrl][refv];[refv][ovrl]overlay=0:0:shortest=1,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse[outv]"
-                : "[1:v][0:v]scale2ref[ovrl][refv];[refv][ovrl]overlay=0:0:shortest=1[outv]";
+            string filter = VideoAnnotationFilterBuilder.BuildFilter(
+                Annotations,
+                DisplayWidth,
+                DisplayHeight,
+                (int)OriginalWidth,
+                (int)OriginalHeight,
+                includeOverlayInput: true,
+                isOutputGif: isOutputGif);
             
             // 裁切參數：僅在裁切模式下套用
             bool applyTrim = IsTrimmingMode && (TrimStartSeconds > 0 || TrimEndSeconds < _totalDuration.TotalSeconds);

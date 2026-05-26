@@ -211,9 +211,7 @@ public sealed class AnnotationRenderService : IAnnotationRenderService
             {
                 int cellRight = Math.Min(right, x + cellSize);
                 int cellBottom = Math.Min(bottom, y + cellSize);
-                int sampleX = Math.Clamp(x + ((cellRight - x) / 2), 0, sourceCopy.Width - 1);
-                int sampleY = Math.Clamp(y + ((cellBottom - y) / 2), 0, sourceCopy.Height - 1);
-                var sample = sourceCopy.GetPixel(sampleX, sampleY);
+                var sample = AverageCellColor(sourceCopy, x, y, cellRight, cellBottom);
 
                 for (int yy = y; yy < cellBottom; yy++)
                 {
@@ -237,22 +235,97 @@ public sealed class AnnotationRenderService : IAnnotationRenderService
         if (width <= 0 || height <= 0)
             return;
 
-        using var region = new SKBitmap(width, height, SKColorType.Bgra8888, SKAlphaType.Premul);
+        float blurRadius = Math.Max(1f, settings.BlurRadius * uniformScale);
+        int padding = Math.Max(2, (int)Math.Ceiling(blurRadius * 1.75f));
+        int expandedLeft = Math.Max(0, left - padding);
+        int expandedTop = Math.Max(0, top - padding);
+        int expandedRight = Math.Min(target.Width, right + padding);
+        int expandedBottom = Math.Min(target.Height, bottom + padding);
+        int expandedWidth = expandedRight - expandedLeft;
+        int expandedHeight = expandedBottom - expandedTop;
+        int innerLeft = left - expandedLeft;
+        int innerTop = top - expandedTop;
+
+        using var region = new SKBitmap(expandedWidth, expandedHeight, SKColorType.Bgra8888, SKAlphaType.Premul);
         using (var canvas = new SKCanvas(region))
         {
-            canvas.DrawBitmap(target, new SKRect(left, top, right, bottom), new SKRect(0, 0, width, height));
+            canvas.DrawBitmap(
+                target,
+                new SKRect(expandedLeft, expandedTop, expandedRight, expandedBottom),
+                new SKRect(0, 0, expandedWidth, expandedHeight));
         }
 
-        float blurRadius = Math.Max(1f, settings.BlurRadius * uniformScale);
-        using var blurred = new SKBitmap(width, height, SKColorType.Bgra8888, SKAlphaType.Premul);
-        using (var canvas = new SKCanvas(blurred))
-        using (var blurPaint = new SKPaint { ImageFilter = SKImageFilter.CreateBlur(blurRadius, blurRadius) })
+        int downsampleFactor = Math.Clamp((int)MathF.Round(blurRadius / 10f), 1, 6);
+        int reducedWidth = Math.Max(1, expandedWidth / downsampleFactor);
+        int reducedHeight = Math.Max(1, expandedHeight / downsampleFactor);
+
+        using var reduced = new SKBitmap(reducedWidth, reducedHeight, SKColorType.Bgra8888, SKAlphaType.Premul);
+        using (var reducedCanvas = new SKCanvas(reduced))
+        using (var reducedPaint = new SKPaint { FilterQuality = SKFilterQuality.Low })
         {
-            canvas.DrawBitmap(region, 0, 0, blurPaint);
+            reducedCanvas.DrawBitmap(region, new SKRect(0, 0, reducedWidth, reducedHeight), reducedPaint);
+        }
+
+        float reducedBlurRadius = Math.Max(1f, (blurRadius / downsampleFactor) * 0.9f);
+        using var reducedBlurred = new SKBitmap(reducedWidth, reducedHeight, SKColorType.Bgra8888, SKAlphaType.Premul);
+        using (var reducedBlurCanvas = new SKCanvas(reducedBlurred))
+        using (var reducedBlurPaint = new SKPaint { ImageFilter = SKImageFilter.CreateBlur(reducedBlurRadius, reducedBlurRadius) })
+        {
+            reducedBlurCanvas.DrawBitmap(reduced, 0, 0, reducedBlurPaint);
+        }
+
+        using var softened = new SKBitmap(expandedWidth, expandedHeight, SKColorType.Bgra8888, SKAlphaType.Premul);
+        using (var softenedCanvas = new SKCanvas(softened))
+        using (var upscalePaint = new SKPaint { FilterQuality = SKFilterQuality.Medium })
+        {
+            softenedCanvas.DrawBitmap(reducedBlurred, new SKRect(0, 0, expandedWidth, expandedHeight), upscalePaint);
+        }
+
+        using var blurred = new SKBitmap(expandedWidth, expandedHeight, SKColorType.Bgra8888, SKAlphaType.Premul);
+        using (var canvas = new SKCanvas(blurred))
+        using (var blurPaint = new SKPaint { ImageFilter = SKImageFilter.CreateBlur(blurRadius * 0.45f, blurRadius * 0.45f) })
+        {
+            canvas.DrawBitmap(softened, 0, 0, blurPaint);
         }
 
         using var targetCanvas = new SKCanvas(target);
-        targetCanvas.DrawBitmap(blurred, new SKPoint(left, top));
+        targetCanvas.DrawBitmap(
+            blurred,
+            new SKRect(innerLeft, innerTop, innerLeft + width, innerTop + height),
+            new SKRect(left, top, right, bottom));
+    }
+
+    private static SKColor AverageCellColor(SKBitmap source, int left, int top, int right, int bottom)
+    {
+        ulong sumR = 0;
+        ulong sumG = 0;
+        ulong sumB = 0;
+        ulong sumA = 0;
+        int count = 0;
+
+        for (int y = top; y < bottom; y++)
+        {
+            for (int x = left; x < right; x++)
+            {
+                var pixel = source.GetPixel(x, y);
+                sumR += pixel.Red;
+                sumG += pixel.Green;
+                sumB += pixel.Blue;
+                sumA += pixel.Alpha;
+                count++;
+            }
+        }
+
+        if (count == 0)
+        {
+            return SKColors.Transparent;
+        }
+
+        return new SKColor(
+            (byte)(sumR / (ulong)count),
+            (byte)(sumG / (ulong)count),
+            (byte)(sumB / (ulong)count),
+            (byte)(sumA / (ulong)count));
     }
 
     private static SKPoint ScalePoint(Point point, float scaleX, float scaleY)
