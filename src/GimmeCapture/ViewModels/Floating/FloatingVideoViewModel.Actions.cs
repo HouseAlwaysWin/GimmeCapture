@@ -15,6 +15,7 @@ using SkiaSharp;
 using CliWrap;
 using CliWrap.Buffered;
 using GimmeCapture.Services.Core.Infrastructure;
+using GimmeCapture.Services.Core.Rendering;
 
 namespace GimmeCapture.ViewModels.Floating;
 
@@ -283,34 +284,29 @@ public partial class FloatingVideoViewModel
     {
         if (VideoBitmap == null) return null;
         
-        return await Task.Run(async () => 
+        return await Task.Run(() => 
         {
             try 
             {
-                using var locked = VideoBitmap.Lock();
-                var info = new SKImageInfo(VideoBitmap.PixelSize.Width, VideoBitmap.PixelSize.Height, SKColorType.Bgra8888);
-                using var skBitmap = new SKBitmap(info);
-                
-                unsafe 
-                {
-                    long len = (long)info.BytesSize;
-                    Buffer.MemoryCopy((void*)locked.Address, (void*)skBitmap.GetPixels(), len, len);
-                }
-                
-                using var surface = SKSurface.Create(info);
-                using var canvas = surface.Canvas;
-                
-                canvas.DrawBitmap(skBitmap, 0, 0);
-                
-                GimmeCapture.Services.Core.Rendering.AnnotationRenderHelper.DrawAnnotationsOnCanvas(canvas, Annotations, DisplayWidth, DisplayHeight, (float)VideoBitmap.PixelSize.Width, (float)VideoBitmap.PixelSize.Height);
-                
-                using var image = surface.Snapshot();
-                using var data = image.Encode(SKEncodedImageFormat.Png, 100);
-                using var resultMs = new MemoryStream();
-                data.SaveTo(resultMs);
-                if (!FloatingBitmapConversionHelper.TryCreateDetachedBitmapFromEncodedBytes(resultMs.ToArray(), out var detachedBitmap, out _))
+                if (!FloatingBitmapConversionHelper.TryCopyToSkBitmap(VideoBitmap, out var skBitmap, out _)
+                    || skBitmap == null)
                     return null;
-                return detachedBitmap;
+
+                using (skBitmap)
+                {
+                    AnnotationRenderService.Shared.RenderAnnotationsToBitmap(
+                        skBitmap,
+                        Annotations,
+                        DisplayWidth,
+                        DisplayHeight,
+                        skBitmap.Width,
+                        skBitmap.Height);
+
+                    if (!FloatingBitmapConversionHelper.TryCreateDetachedBitmapFromSkBitmap(skBitmap, out var detachedBitmap, out _))
+                        return null;
+
+                    return detachedBitmap;
+                }
             }
             catch (Exception ex)
             {

@@ -8,9 +8,10 @@ using Avalonia.Media;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core;
+using GimmeCapture.Services.Core.Rendering;
 using System.Reactive.Linq;
 using System;
-using SkiaSharp; // Needed for flattening
+using SkiaSharp;
 
 namespace GimmeCapture.ViewModels.Floating;
 
@@ -254,49 +255,25 @@ public partial class FloatingImageViewModel
         {
             try 
             {
-                // We need to draw the base image and then draw all annotations on top.
-                // Using SkiaSharp is the most robust way.
-                
-                var info = new SkiaSharp.SKImageInfo((int)Image.Size.Width, (int)Image.Size.Height, SkiaSharp.SKColorType.Bgra8888);
-                using var baseSkBitmap = new SkiaSharp.SKBitmap(info);
-                
-                var pixelSize = new Avalonia.PixelSize((int)Image.Size.Width, (int)Image.Size.Height);
-                Image.CopyPixels(new Avalonia.PixelRect(0, 0, (int)Image.Size.Width, (int)Image.Size.Height), baseSkBitmap.GetPixels(), info.BytesSize, info.RowBytes);
-                
-                using var surface = SkiaSharp.SKSurface.Create(info);
-                using var canvas = surface.Canvas;
-                
-                canvas.DrawBitmap(baseSkBitmap, 0, 0);
-                
-                // Draw Annotations
-                // We need to scale annotations from Display Coordinates to Image Coordinates
-                GimmeCapture.Services.Core.Rendering.AnnotationRenderHelper.DrawAnnotationsOnCanvas(canvas, Annotations, DisplayWidth, DisplayHeight, baseSkBitmap.Width, baseSkBitmap.Height);
-                
-                using var image = surface.Snapshot();
-                using var outSkBitmap = SkiaSharp.SKBitmap.FromImage(image);
-                
-                var outBitmap = new Avalonia.Media.Imaging.WriteableBitmap(
-                    new Avalonia.PixelSize(outSkBitmap.Width, outSkBitmap.Height),
-                    new Avalonia.Vector(96, 96),
-                    Avalonia.Platform.PixelFormat.Bgra8888,
-                    Avalonia.Platform.AlphaFormat.Premul);
+                if (!FloatingBitmapConversionHelper.TryCopyToSkBitmap(Image, out var baseSkBitmap, out _)
+                    || baseSkBitmap == null)
+                    return null;
 
-                using var lockedOut = outBitmap.Lock();
-                unsafe
+                using (baseSkBitmap)
                 {
-                    byte* srcBase = (byte*)outSkBitmap.GetPixels();
-                    byte* dstBase = (byte*)lockedOut.Address;
-                    int rows = Math.Min(outSkBitmap.Height, lockedOut.Size.Height);
-                    int bytesPerRow = Math.Min(outSkBitmap.RowBytes, lockedOut.RowBytes);
+                    AnnotationRenderService.Shared.RenderAnnotationsToBitmap(
+                        baseSkBitmap,
+                        Annotations,
+                        DisplayWidth,
+                        DisplayHeight,
+                        baseSkBitmap.Width,
+                        baseSkBitmap.Height);
 
-                    for (int row = 0; row < rows; row++)
-                    {
-                        var srcRow = srcBase + (row * outSkBitmap.RowBytes);
-                        var dstRow = dstBase + (row * lockedOut.RowBytes);
-                        Buffer.MemoryCopy(srcRow, dstRow, lockedOut.RowBytes, bytesPerRow);
-                    }
+                    if (!FloatingBitmapConversionHelper.TryCreateDetachedBitmapFromSkBitmap(baseSkBitmap, out var detachedBitmap, out _))
+                        return null;
+
+                    return detachedBitmap;
                 }
-                return outBitmap;
             }
             catch (Exception ex)
             {
