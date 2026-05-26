@@ -348,6 +348,46 @@ public partial class MainWindowViewModel
     public string RecordTooltip => $"{LocalizationService.Instance["CaptureModeRecord"]} ({RecordHotkey})";
     public string TranslateTooltip => $"{LocalizationService.Instance["TranslateHotkey"]} ({TranslateHotkey})";
 
+    private static bool IsUnifiedPinHotkeyTag(string tag)
+    {
+        return tag == "Snip_Pin"
+            || tag == "Record_Action"
+            || tag == "Translate_Pin";
+    }
+
+    private void SetUnifiedPinHotkeys(string value)
+    {
+        bool snipChanged = _settingsService.Settings.Snip.Pin != value;
+        bool recordChanged = _settingsService.Settings.Record.Action != value;
+        bool translateChanged = _settingsService.Settings.Translate.Pin != value;
+
+        if (!snipChanged && !recordChanged && !translateChanged)
+        {
+            return;
+        }
+
+        if (snipChanged)
+        {
+            this.RaisePropertyChanging(nameof(Snip_Pin));
+            _settingsService.Settings.Snip.Pin = value;
+            this.RaisePropertyChanged(nameof(Snip_Pin));
+        }
+
+        if (recordChanged)
+        {
+            this.RaisePropertyChanging(nameof(Record_Action));
+            _settingsService.Settings.Record.Action = value;
+            this.RaisePropertyChanged(nameof(Record_Action));
+        }
+
+        if (translateChanged)
+        {
+            this.RaisePropertyChanging(nameof(Translate_Pin));
+            _settingsService.Settings.Translate.Pin = value;
+            this.RaisePropertyChanged(nameof(Translate_Pin));
+        }
+    }
+
     // Snip Mode Hotkeys
     public string Snip_Rectangle { get => _settingsService.Settings.Snip.Rectangle; set { if (_settingsService.Settings.Snip.Rectangle != value) { this.RaisePropertyChanging(); _settingsService.Settings.Snip.Rectangle = value; this.RaisePropertyChanged(); } } }
     public string Snip_Ellipse { get => _settingsService.Settings.Snip.Ellipse; set { if (_settingsService.Settings.Snip.Ellipse != value) { this.RaisePropertyChanging(); _settingsService.Settings.Snip.Ellipse = value; this.RaisePropertyChanged(); } } }
@@ -362,7 +402,7 @@ public partial class MainWindowViewModel
     public string Snip_Clear { get => _settingsService.Settings.Snip.Clear; set { if (_settingsService.Settings.Snip.Clear != value) { this.RaisePropertyChanging(); _settingsService.Settings.Snip.Clear = value; this.RaisePropertyChanged(); } } }
     public string Snip_Save { get => _settingsService.Settings.Snip.Save; set { if (_settingsService.Settings.Snip.Save != value) { this.RaisePropertyChanging(); _settingsService.Settings.Snip.Save = value; this.RaisePropertyChanged(); } } }
     public string Snip_Copy { get => _settingsService.Settings.Snip.Copy; set { if (_settingsService.Settings.Snip.Copy != value) { this.RaisePropertyChanging(); _settingsService.Settings.Snip.Copy = value; this.RaisePropertyChanged(); } } }
-    public string Snip_Pin { get => _settingsService.Settings.Snip.Pin; set { if (_settingsService.Settings.Snip.Pin != value) { this.RaisePropertyChanging(); _settingsService.Settings.Snip.Pin = value; this.RaisePropertyChanged(); } } }
+    public string Snip_Pin { get => _settingsService.Settings.Snip.Pin; set => SetUnifiedPinHotkeys(value); }
     public string Snip_Close { get => _settingsService.Settings.Snip.Close; set { if (_settingsService.Settings.Snip.Close != value) { this.RaisePropertyChanging(); _settingsService.Settings.Snip.Close = value; this.RaisePropertyChanged(); } } }
     public string Snip_Toolbar { get => _settingsService.Settings.Snip.Toolbar; set { if (_settingsService.Settings.Snip.Toolbar != value) { this.RaisePropertyChanging(); _settingsService.Settings.Snip.Toolbar = value; this.RaisePropertyChanged(); } } }
     public string Snip_SelectionMode { get => _settingsService.Settings.Snip.SelectionMode; set { if (_settingsService.Settings.Snip.SelectionMode != value) { this.RaisePropertyChanging(); _settingsService.Settings.Snip.SelectionMode = value; this.RaisePropertyChanged(); } } }
@@ -389,7 +429,7 @@ public partial class MainWindowViewModel
     public string Record_Copy { get => _settingsService.Settings.Record.Copy; set { if (_settingsService.Settings.Record.Copy != value) { this.RaisePropertyChanging(); _settingsService.Settings.Record.Copy = value; this.RaisePropertyChanged(); } } }
     public string Record_Close { get => _settingsService.Settings.Record.Close; set { if (_settingsService.Settings.Record.Close != value) { this.RaisePropertyChanging(); _settingsService.Settings.Record.Close = value; this.RaisePropertyChanged(); } } }
     public string Record_Toolbar { get => _settingsService.Settings.Record.Toolbar; set { if (_settingsService.Settings.Record.Toolbar != value) { this.RaisePropertyChanging(); _settingsService.Settings.Record.Toolbar = value; this.RaisePropertyChanged(); } } }
-    public string Record_Action { get => _settingsService.Settings.Record.Action; set { if (_settingsService.Settings.Record.Action != value) { this.RaisePropertyChanging(); _settingsService.Settings.Record.Action = value; this.RaisePropertyChanged(); } } }
+    public string Record_Action { get => _settingsService.Settings.Record.Action; set => SetUnifiedPinHotkeys(value); }
     public string Record_Playback { get => _settingsService.Settings.Record.Playback; set { if (_settingsService.Settings.Record.Playback != value) { this.RaisePropertyChanging(); _settingsService.Settings.Record.Playback = value; this.RaisePropertyChanged(); } } }
     public string Record_FullscreenSelect { get => _settingsService.Settings.Record.FullscreenSelect; set { if (_settingsService.Settings.Record.FullscreenSelect != value) { this.RaisePropertyChanging(); _settingsService.Settings.Record.FullscreenSelect = value; this.RaisePropertyChanged(); } } }
     public string Record_SwitchToSnip { get => _settingsService.Settings.Record.SwitchToSnip; set { if (_settingsService.Settings.Record.SwitchToSnip != value) { this.RaisePropertyChanging(); _settingsService.Settings.Record.SwitchToSnip = value; this.RaisePropertyChanged(); } } }
@@ -397,7 +437,7 @@ public partial class MainWindowViewModel
 
     // Translate Mode Hotkeys
     public string Translate_Action { get => _settingsService.Settings.Translate.Action; set { if (_settingsService.Settings.Translate.Action != value) { this.RaisePropertyChanging(); _settingsService.Settings.Translate.Action = value; this.RaisePropertyChanged(); } } }
-    public string Translate_Pin { get => _settingsService.Settings.Translate.Pin; set { if (_settingsService.Settings.Translate.Pin != value) { this.RaisePropertyChanging(); _settingsService.Settings.Translate.Pin = value; this.RaisePropertyChanged(); } } }
+    public string Translate_Pin { get => _settingsService.Settings.Translate.Pin; set => SetUnifiedPinHotkeys(value); }
     public string Translate_Toolbar { get => _settingsService.Settings.Translate.Toolbar; set { if (_settingsService.Settings.Translate.Toolbar != value) { this.RaisePropertyChanging(); _settingsService.Settings.Translate.Toolbar = value; this.RaisePropertyChanged(); } } }
     public string Translate_Close { get => _settingsService.Settings.Translate.Close; set { if (_settingsService.Settings.Translate.Close != value) { this.RaisePropertyChanging(); _settingsService.Settings.Translate.Close = value; this.RaisePropertyChanged(); } } }
     public string Translate_TranslateAll { get => _settingsService.Settings.Translate.TranslateAll; set { if (_settingsService.Settings.Translate.TranslateAll != value) { this.RaisePropertyChanging(); _settingsService.Settings.Translate.TranslateAll = value; this.RaisePropertyChanged(); } } }
@@ -490,6 +530,22 @@ public partial class MainWindowViewModel
 
     public string? CheckHotkeyConflict(string targetTag, string hotkey)
     {
+        static string? MatchCrossActionConflict(
+            string targetTag,
+            string hotkey,
+            params (string Tag, string CurrentHotkey, string ConflictKey)[] candidates)
+        {
+            foreach (var candidate in candidates)
+            {
+                if (targetTag != candidate.Tag && string.Equals(candidate.CurrentHotkey, hotkey, StringComparison.OrdinalIgnoreCase))
+                {
+                    return candidate.ConflictKey;
+                }
+            }
+
+            return null;
+        }
+
         // 1. Global Group (Idle state triggers)
         var globalGroup = new[] { "SnipHotkey", "RecordHotkey", "TranslateHotkey", "PinHotkey", "CopyHotkey" };
         
@@ -548,7 +604,7 @@ public partial class MainWindowViewModel
             if (targetTag != "Snip_CropMode" && Snip_CropMode == hotkey) return "ActionCropMode";
             if (targetTag != "Snip_RemoveBackground" && Snip_RemoveBackground == hotkey) return "RemoveBackground";
             if (targetTag != "Snip_MagicWand" && Snip_MagicWand == hotkey) return "MagicWand";
-            if (targetTag != "Snip_Pin" && Snip_Pin == hotkey) return "TipPin";
+            if (targetTag != "Snip_Pin" && !IsUnifiedPinHotkeyTag(targetTag) && Snip_Pin == hotkey) return "TipPin";
             if (targetTag != "Snip_FullscreenSelect" && Snip_FullscreenSelect == hotkey) return "ActionSelectFullscreen";
             if (targetTag != "Snip_SwitchToTranslate" && Snip_SwitchToTranslate == hotkey) return "SwitchToTranslate";
             if (targetTag != "Snip_SwitchToRecord" && Snip_SwitchToRecord == hotkey) return "SwitchToRecord";
@@ -570,7 +626,7 @@ public partial class MainWindowViewModel
             if (targetTag != "Record_Copy" && Record_Copy == hotkey) return "TipCopy";
             if (targetTag != "Record_Close" && Record_Close == hotkey) return "ActionClose";
             if (targetTag != "Record_Toolbar" && Record_Toolbar == hotkey) return "ActionToolbar";
-            if (targetTag != "Record_Action" && Record_Action == hotkey) return "ActionStartPin";
+            if (targetTag != "Record_Action" && !IsUnifiedPinHotkeyTag(targetTag) && Record_Action == hotkey) return "ActionStartPin";
             if (targetTag != "Record_Playback" && Record_Playback == hotkey) return "ActionPlayback";
             if (targetTag != "Record_FullscreenSelect" && Record_FullscreenSelect == hotkey) return "ActionSelectFullscreen";
             if (targetTag != "Record_SwitchToSnip" && Record_SwitchToSnip == hotkey) return "SwitchToSnip";
@@ -579,7 +635,7 @@ public partial class MainWindowViewModel
         else if (translateGroup.Contains(targetTag))
         {
             if (targetTag != "Translate_Action" && Translate_Action == hotkey) return "ActionHideTranslate";
-            if (targetTag != "Translate_Pin" && Translate_Pin == hotkey) return "MenuPinTranslation";
+            if (targetTag != "Translate_Pin" && !IsUnifiedPinHotkeyTag(targetTag) && Translate_Pin == hotkey) return "MenuPinTranslation";
             if (targetTag != "Translate_Toolbar" && Translate_Toolbar == hotkey) return "ActionToolbar";
             if (targetTag != "Translate_Close" && Translate_Close == hotkey) return "ActionClose";
             if (targetTag != "Translate_TranslateAll" && Translate_TranslateAll == hotkey) return "ActionTranslateAll";
@@ -593,6 +649,28 @@ public partial class MainWindowViewModel
             if (targetTag != "Translate_ModeMulti" && Translate_ModeMulti == hotkey) return "TranslateModeMulti";
             if (targetTag != "Translate_SwitchToSnip" && Translate_SwitchToSnip == hotkey) return "SwitchToSnip";
             if (targetTag != "Translate_SwitchToRecord" && Translate_SwitchToRecord == hotkey) return "SwitchToRecord";
+        }
+
+        var crossActionCandidates = new System.Collections.Generic.List<(string Tag, string CurrentHotkey, string ConflictKey)>
+        {
+            ("Translate_Action", Translate_Action, "ActionHideTranslate")
+        };
+
+        if (!IsUnifiedPinHotkeyTag(targetTag))
+        {
+            crossActionCandidates.Add(("Snip_Pin", Snip_Pin, "TipPin"));
+            crossActionCandidates.Add(("Record_Action", Record_Action, "ActionStartPin"));
+            crossActionCandidates.Add(("Translate_Pin", Translate_Pin, "MenuPinTranslation"));
+        }
+
+        var crossActionConflict = MatchCrossActionConflict(
+            targetTag,
+            hotkey,
+            crossActionCandidates.ToArray());
+
+        if (crossActionConflict != null)
+        {
+            return crossActionConflict;
         }
 
         return null;

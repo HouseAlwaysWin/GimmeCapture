@@ -72,8 +72,31 @@ public class AppSettingsService
         catch { /* ignore malformed migration */ }
     }
 
+    private static void MigrateLegacyActionHotkeys(AppSettings settings)
+    {
+        if (string.Equals(settings.Snip.Pin, "Shift+Enter", StringComparison.OrdinalIgnoreCase))
+            settings.Snip.Pin = "F6";
+
+        if (string.Equals(settings.Record.Action, "Shift+Enter", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(settings.Record.Action, "F7", StringComparison.OrdinalIgnoreCase))
+            settings.Record.Action = "F6";
+
+        if (string.Equals(settings.Translate.Action, "F3", StringComparison.OrdinalIgnoreCase))
+            settings.Translate.Action = "F8";
+
+        if (string.Equals(settings.Translate.Pin, "Shift+Enter", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(settings.Translate.Pin, "F9", StringComparison.OrdinalIgnoreCase))
+            settings.Translate.Pin = "F6";
+    }
+
     public async Task LoadAsync()
     {
+        if (BaseDataDirectory != AppDomain.CurrentDomain.BaseDirectory && File.Exists(ConfigPath))
+        {
+            await LoadFromPathAsync(ConfigPath);
+            return;
+        }
+
         string? targetPath = null;
         DateTime localTime = DateTime.MinValue;
         DateTime appDataTime = DateTime.MinValue;
@@ -101,23 +124,7 @@ public class AppSettingsService
         DebugLog($"Loading phase. Local exists: {localExists} ({localTime}), AppData exists: {appDataExists} ({appDataTime}). Choosing: {targetPath ?? "DEFAULT"}");
 
         if (targetPath != null)
-        {
-            try
-            {
-                var json = await File.ReadAllTextAsync(targetPath);
-                var settings = JsonSerializer.Deserialize<AppSettings>(json, GetJsonOptions());
-                if (settings != null)
-                {
-                    MigrateTranslateSelectionHoldModifier(json, settings);
-                    UpdateSettings(settings);
-                    DebugLog($"Successfully loaded settings from {targetPath}. Language value: {Settings.Language}");
-                }
-            }
-            catch (Exception ex)
-            {
-                DebugLog($"ERROR loading from {targetPath}: {ex.Message}");
-            }
-        }
+            await LoadFromPathAsync(targetPath);
     }
 
     public void UpdateSettings(AppSettings source)
@@ -230,6 +237,12 @@ public class AppSettingsService
 
     public void LoadSync()
     {
+        if (BaseDataDirectory != AppDomain.CurrentDomain.BaseDirectory && File.Exists(ConfigPath))
+        {
+            LoadFromPathSync(ConfigPath);
+            return;
+        }
+
         string? targetPath = null;
         DateTime localTime = DateTime.MinValue;
         DateTime appDataTime = DateTime.MinValue;
@@ -252,19 +265,45 @@ public class AppSettingsService
         }
 
         if (targetPath != null)
+            LoadFromPathSync(targetPath);
+    }
+
+    private async Task LoadFromPathAsync(string path)
+    {
+        try
         {
-            try
-            {
-                var json = File.ReadAllText(targetPath);
-                var settings = JsonSerializer.Deserialize<AppSettings>(json, GetJsonOptions());
-                if (settings != null)
-                {
-                    MigrateTranslateSelectionHoldModifier(json, settings);
-                    UpdateSettings(settings);
-                }
-            }
-            catch { }
+            var json = await File.ReadAllTextAsync(path);
+            ApplyLoadedJson(path, json);
         }
+        catch (Exception ex)
+        {
+            DebugLog($"ERROR loading from {path}: {ex.Message}");
+        }
+    }
+
+    private void LoadFromPathSync(string path)
+    {
+        try
+        {
+            var json = File.ReadAllText(path);
+            ApplyLoadedJson(path, json);
+        }
+        catch (Exception ex)
+        {
+            DebugLog($"ERROR loading from {path}: {ex.Message}");
+        }
+    }
+
+    private void ApplyLoadedJson(string path, string json)
+    {
+        var settings = JsonSerializer.Deserialize<AppSettings>(json, GetJsonOptions());
+        if (settings == null)
+            return;
+
+        MigrateTranslateSelectionHoldModifier(json, settings);
+        MigrateLegacyActionHotkeys(settings);
+        UpdateSettings(settings);
+        DebugLog($"Successfully loaded settings from {path}. Language value: {Settings.Language}");
     }
 
 

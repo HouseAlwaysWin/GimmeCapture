@@ -32,7 +32,7 @@ public class SnipHotkeys
     public string Clear { get; set; } = "Delete";
     public string Save { get; set; } = "Ctrl+S";
     public string Copy { get; set; } = "Ctrl+C";
-    public string Pin { get; set; } = "Shift+Enter";
+    public string Pin { get; set; } = "F6";
     public string Close { get; set; } = "Escape";
     public string Toolbar { get; set; } = "F4";
     public string SelectionMode { get; set; } = "S";
@@ -61,7 +61,7 @@ public class RecordHotkeys
     public string Copy { get; set; } = "Ctrl+C";
     public string Close { get; set; } = "Escape";
     public string Toolbar { get; set; } = "F4";
-    public string Action { get; set; } = "Shift+Enter";
+    public string Action { get; set; } = "F6";
     public string Playback { get; set; } = "Space";
     public string FullscreenSelect { get; set; } = "F";
     public string SwitchToSnip { get; set; } = "F1";
@@ -70,8 +70,8 @@ public class RecordHotkeys
 
 public class TranslateHotkeys
 {
-    public string Action { get; set; } = "F3";
-    public string Pin { get; set; } = "Shift+Enter";
+    public string Action { get; set; } = "F8";
+    public string Pin { get; set; } = "F6";
     public string Toolbar { get; set; } = "F4";
     public string Close { get; set; } = "Escape";
     public string TranslateAll { get; set; } = "T";

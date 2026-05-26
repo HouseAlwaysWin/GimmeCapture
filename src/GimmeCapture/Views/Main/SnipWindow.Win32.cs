@@ -238,6 +238,9 @@ public partial class SnipWindow : Window
         if (parts.Length == 0)
             return false;
 
+        if (parts.Length > 1)
+            return false;
+
         string keyPart = parts[^1];
         if (keyPart.StartsWith("F", StringComparison.OrdinalIgnoreCase)
             && int.TryParse(keyPart[1..], out int functionKey)
@@ -495,7 +498,20 @@ public partial class SnipWindow : Window
 
         if (!_viewModel.IsTranslationMode)
         {
-            return TryHandleUnfocusedCaptureHotkey(IsMatch);
+            if (TryHandleUnfocusedCaptureHotkey(IsMatch))
+            {
+                return true;
+            }
+
+            bool isOverlayEditingState =
+                _viewModel.CurrentState == SnipState.Selected
+                || _viewModel.IsDrawingMode
+                || _viewModel.RecState != RecordingState.Idle;
+
+            if (!isOverlayEditingState)
+            {
+                return false;
+            }
         }
 
         // 1. General Window Hotkeys

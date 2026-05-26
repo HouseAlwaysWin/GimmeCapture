@@ -109,7 +109,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         _ => string.Empty
     };
 
-    public string ActiveActionHotkey => CurrentMode == SnipMode.Translation ? (_mainVm?.Translate_Action ?? "F3") : (CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Action ?? "Shift+Enter") : (_mainVm?.Snip_Pin ?? "Shift+Enter"));
+    public string ActiveActionHotkey => CurrentMode == SnipMode.Translation ? (_mainVm?.Translate_Action ?? "F8") : (CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Action ?? "F6") : (_mainVm?.Snip_Pin ?? "F6"));
     public string ActiveToolbarHotkey => CurrentMode == SnipMode.Translation ? (_mainVm?.Translate_Toolbar ?? "F4") : (CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Toolbar ?? "F4") : (_mainVm?.Snip_Toolbar ?? "F4"));
     public string ActivePlaybackHotkey => _mainVm?.Record_Playback ?? "Space";
     public string RemoveBackgroundHotkey => _mainVm?.Snip_RemoveBackground ?? "Shift+R";
@@ -142,7 +142,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
 
     // Translation mode specific hotkeys
     public string TranslateAllHotkey => _mainVm?.Translate_TranslateAll ?? "T";
-    public string TranslatePinHotkey => _mainVm?.Translate_Pin ?? "Shift+Enter";
+    public string TranslatePinHotkey => _mainVm?.Translate_Pin ?? "F6";
     public string ScanAllHotkey => _mainVm?.Translate_ScanAll ?? "S";
     public string ClearAllHotkey => _mainVm?.Translate_ClearAll ?? "Delete";
     public string ToggleSelectHotkey => _mainVm?.Translate_ToggleSelect ?? "Tab";

@@ -85,6 +85,24 @@ public class HotkeyServiceTests
         Assert.Equal(0x0Du, service.RegHistory[0].vkey);   // Enter
     }
 
+    [Theory]
+    [InlineData("F6", 0x75u)]
+    [InlineData("F7", 0x76u)]
+    [InlineData("F8", 0x77u)]
+    [InlineData("F9", 0x78u)]
+    public void Register_WithActionFunctionKeys_RegistersExpectedVirtualKeys(string hotkey, uint expectedVKey)
+    {
+        var service = new TestableHotkeyService();
+        service.SetHandle(new IntPtr(1234));
+
+        service.Register(10, hotkey);
+
+        Assert.Equal(1, service.RegCallCount);
+        Assert.Equal(10, service.RegHistory[0].id);
+        Assert.Equal(0u, service.RegHistory[0].mods);
+        Assert.Equal(expectedVKey, service.RegHistory[0].vkey);
+    }
+
     [Fact]
     public void Register_WhenNativeRegistrationFails_RaisesFailureCallback()
     {

@@ -57,6 +57,69 @@ public class MainWindowViewModelHotkeyTests
         Assert.Equal("Shift+F1", hotkeyCoordinator.LastRegisteredHotkey);
     }
 
+    [Fact]
+    public void CheckHotkeyConflict_Finds_New_DefaultActionKeyConflicts()
+    {
+        var viewModel = CreateViewModel();
+        viewModel.Snip_Pin = "F6";
+        viewModel.Record_Action = "F6";
+        viewModel.Translate_Action = "F8";
+        viewModel.Translate_Pin = "F6";
+
+        Assert.Equal("MenuPinTranslation", viewModel.CheckHotkeyConflict("Translate_Action", "F6"));
+        Assert.Null(viewModel.CheckHotkeyConflict("Record_Action", "F6"));
+        Assert.Equal("ActionHideTranslate", viewModel.CheckHotkeyConflict("Translate_Pin", "F8"));
+        Assert.Null(viewModel.CheckHotkeyConflict("Snip_Pin", "F6"));
+    }
+
+    [Fact]
+    public void UnifiedPinHotkeys_StayInSync_WhenAnyOneChanges()
+    {
+        var viewModel = CreateViewModel();
+
+        viewModel.Record_Action = "Ctrl+F6";
+
+        Assert.Equal("Ctrl+F6", viewModel.Snip_Pin);
+        Assert.Equal("Ctrl+F6", viewModel.Record_Action);
+        Assert.Equal("Ctrl+F6", viewModel.Translate_Pin);
+    }
+
+    private static MainWindowViewModel CreateViewModel()
+    {
+        var tempDir = Path.Combine(
+            Path.GetTempPath(),
+            "GimmeCapture.Tests",
+            nameof(MainWindowViewModelHotkeyTests),
+            Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+
+        var settingsService = new AppSettingsService(tempDir);
+        var aiPathService = new AIPathService(settingsService);
+        var nativeResolverService = new NativeResolverService(aiPathService);
+        var ffmpegDownloader = new FFmpegDownloaderService(settingsService);
+        var hotkeyCoordinator = new CountingGlobalHotkeySettingsCoordinator();
+        var dependencies = new MainWindowViewModelDependencies(
+            settingsService,
+            new AvaloniaWindowManager(),
+            new AvaloniaThemeResourceService(),
+            new WindowsGlobalHotkeyService(),
+            hotkeyCoordinator,
+            new NoOpStartupRegistrationService(),
+            new ImmediateSettingsSaveCoordinatorFactory(),
+            new MainWindowSettingsPersistenceService(),
+            new HotkeyMappingService(),
+            new HotkeyRouterService(),
+            ffmpegDownloader,
+            new RecordingService(ffmpegDownloader, settingsService),
+            new UpdateService("1.2.3"),
+            new AIResourceService(settingsService, aiPathService, nativeResolverService, new AIModelDownloader()),
+            new SAM2RuntimeService(aiPathService, nativeResolverService),
+            aiPathService,
+            ResourceQueueService.Instance);
+
+        return new MainWindowViewModel(dependencies);
+    }
+
     private sealed class CountingGlobalHotkeySettingsCoordinator : IGlobalHotkeySettingsCoordinator
     {
         public int RegisterCallCount { get; private set; }

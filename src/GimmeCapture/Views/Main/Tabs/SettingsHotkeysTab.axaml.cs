@@ -12,6 +12,7 @@ public partial class SettingsHotkeysTab : UserControl
 {
     private bool _tagsValidated;
     private bool _isSuspended;
+    private static readonly string[] EnterRiskTokens = ["Enter", "Return"];
 
     public SettingsHotkeysTab()
     {
@@ -130,10 +131,37 @@ public partial class SettingsHotkeysTab : UserControl
             else
             {
                 vm.HotkeyMappingService.UpdateViewModelHotkey(vm, tag, hotkeyStr);
+
+                if (UsesEnterKey(hotkeyStr) && TopLevel.GetTopLevel(this) is Window warningOwner)
+                {
+                    await ConfirmationDialog.ShowConfirmation(
+                        warningOwner,
+                        "快捷鍵風險提示",
+                        $"快捷鍵 {hotkeyStr} 已套用，但 Enter 類組合在右鍵選單、文字輸入、IME 與焦點切換時比較容易失效或干擾。\n建議優先改用 F6 / F8 這類功能鍵。",
+                        ConfirmationMode.OkOnly);
+
+                    if (textBox.IsFocused)
+                    {
+                        EnsureSuspended();
+                    }
+                }
             }
         }
 
         e.Handled = true;
+    }
+
+    private static bool UsesEnterKey(string hotkey)
+    {
+        foreach (var token in EnterRiskTokens)
+        {
+            if (hotkey.Contains(token, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private void OnDetachedFromVisualTree(object? sender, VisualTreeAttachmentEventArgs e)

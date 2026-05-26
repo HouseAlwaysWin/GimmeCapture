@@ -97,4 +97,64 @@ public class MainWindowSettingsPersistenceServiceTests
         Assert.Contains("\"RecordHotkey\": \"Shift\\u002BF8\"", savedJson);
         Assert.Contains("\"AIResourcesDirectory\": \"D:\\\\captures\\\\ai\"", savedJson);
     }
+
+    [Fact]
+    public void LoadSync_Migrates_Legacy_ActionHotkeys_Only_When_Still_On_Old_Defaults()
+    {
+        var tempDir = Path.Combine(
+            Path.GetTempPath(),
+            "GimmeCapture.Tests",
+            nameof(MainWindowSettingsPersistenceServiceTests),
+            Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+
+        var configPath = Path.Combine(tempDir, "config.json");
+        File.WriteAllText(configPath,
+            """
+            {
+              "Snip": { "Pin": "Shift+Enter" },
+              "Record": { "Action": "Shift+Enter" },
+              "Translate": { "Action": "F3", "Pin": "Shift+Enter" }
+            }
+            """);
+
+        var settingsService = new AppSettingsService(tempDir);
+
+        settingsService.LoadSync();
+
+        Assert.Equal("F6", settingsService.Settings.Snip.Pin);
+        Assert.Equal("F6", settingsService.Settings.Record.Action);
+        Assert.Equal("F8", settingsService.Settings.Translate.Action);
+        Assert.Equal("F6", settingsService.Settings.Translate.Pin);
+    }
+
+    [Fact]
+    public void LoadSync_Preserves_Custom_ActionHotkeys()
+    {
+        var tempDir = Path.Combine(
+            Path.GetTempPath(),
+            "GimmeCapture.Tests",
+            nameof(MainWindowSettingsPersistenceServiceTests),
+            Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+
+        var configPath = Path.Combine(tempDir, "config.json");
+        File.WriteAllText(configPath,
+            """
+            {
+              "Snip": { "Pin": "Ctrl+F6" },
+              "Record": { "Action": "Ctrl+F7" },
+              "Translate": { "Action": "Ctrl+F8", "Pin": "Ctrl+F9" }
+            }
+            """);
+
+        var settingsService = new AppSettingsService(tempDir);
+
+        settingsService.LoadSync();
+
+        Assert.Equal("Ctrl+F6", settingsService.Settings.Snip.Pin);
+        Assert.Equal("Ctrl+F7", settingsService.Settings.Record.Action);
+        Assert.Equal("Ctrl+F8", settingsService.Settings.Translate.Action);
+        Assert.Equal("Ctrl+F9", settingsService.Settings.Translate.Pin);
+    }
 }
