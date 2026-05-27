@@ -81,11 +81,6 @@
                 <tabs:SettingsTranslationTab/>
             </TabItem>
 
-            <!-- AI 設定 (AI) -->
-            <TabItem Header="{Binding [TabAI], Source={x:Static services:LocalizationService.Instance}}">
-                <tabs:SettingsAITab/>
-            </TabItem>
-            
             <!-- 控制 (Control/Hotkeys) -->
             <TabItem Header="{Binding [TabControl], Source={x:Static services:LocalizationService.Instance}}">
                 <tabs:SettingsHotkeysTab/>

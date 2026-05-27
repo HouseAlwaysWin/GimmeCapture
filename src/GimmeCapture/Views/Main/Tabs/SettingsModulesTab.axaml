@@ -6,51 +6,73 @@
              x:Class="GimmeCapture.Views.Main.Tabs.SettingsModulesTab"
              x:DataType="vm:MainWindowViewModel">
     <ScrollViewer>
-        <ItemsControl ItemsSource="{Binding Modules}" Margin="10">
-            <ItemsControl.ItemTemplate>
-                <DataTemplate>
-                    <Border Background="#1A1A1A" BorderBrush="#333333" BorderThickness="1" CornerRadius="4" Margin="0,0,0,10" Padding="15">
-                        <Grid ColumnDefinitions="*, Auto">
-                            <StackPanel Grid.Column="0" Spacing="5">
-                                <StackPanel Orientation="Horizontal" Spacing="10">
-                                    <TextBlock Text="{Binding Name}" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource ThemeAccentBrush}"/>
-                                    <Border Background="{Binding IsInstalled, Converter={StaticResource StatusToColorConverter}}" CornerRadius="10" Padding="8,2" VerticalAlignment="Center">
-                                        <TextBlock Text="{Binding StatusText}" FontSize="10" Foreground="White" FontWeight="Bold"/>
-                                    </Border>
-                                </StackPanel>
-                                <TextBlock Text="{Binding Description}" TextWrapping="Wrap" Opacity="0.7" FontSize="12"/>
-                                
-                                <!-- Progress Section -->
-                                <StackPanel IsVisible="{Binding IsProcessing}" Spacing="5" Margin="0,5,0,0">
-                                    <ProgressBar Value="{Binding Progress}" Height="4" Foreground="{DynamicResource ThemeAccentBrush}" Minimum="0" Maximum="100"/>
-                                    <TextBlock Text="{Binding Progress, StringFormat='{}{0:0}%'}" FontSize="10" HorizontalAlignment="Right"/>
-                                </StackPanel>
+        <StackPanel Margin="10" Spacing="10">
+            <Border Background="#1A1A1A" BorderBrush="#333333" BorderThickness="1" CornerRadius="4" Padding="15">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="{Binding [AIResourcesPath], Source={x:Static services:LocalizationService.Instance}}"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource ThemeAccentBrush}"/>
+                    <TextBlock Text="{Binding [ModuleOCRDescription], Source={x:Static services:LocalizationService.Instance}}"
+                               TextWrapping="Wrap"
+                               Opacity="0.7"
+                               FontSize="12"/>
+                    <DockPanel>
+                        <Button Content="{Binding [SelectPath], Source={x:Static services:LocalizationService.Instance}}"
+                                DockPanel.Dock="Right"
+                                Theme="{StaticResource SmallGothicMetalButton}"
+                                Command="{Binding PickAIFolderCommand}"
+                                Margin="10,0,0,0"/>
+                        <TextBox Text="{Binding AIResourcesDirectory}" Margin="0,0,10,0"/>
+                    </DockPanel>
+                </StackPanel>
+            </Border>
 
-                                <!-- Error Section -->
-                                <StackPanel IsVisible="{Binding HasError}" Spacing="5" Margin="0,5,0,0">
-                                    <TextBlock Text="{Binding ErrorMessage}" Foreground="#FF5555" FontSize="11" TextWrapping="Wrap" FontWeight="SemiBold"/>
+            <ItemsControl ItemsSource="{Binding Modules}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Background="#1A1A1A" BorderBrush="#333333" BorderThickness="1" CornerRadius="4" Margin="0,0,0,10" Padding="15">
+                            <Grid ColumnDefinitions="*, Auto">
+                                <StackPanel Grid.Column="0" Spacing="5">
+                                    <StackPanel Orientation="Horizontal" Spacing="10">
+                                        <TextBlock Text="{Binding Name}" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource ThemeAccentBrush}"/>
+                                        <Border Background="{Binding IsInstalled, Converter={StaticResource StatusToColorConverter}}" CornerRadius="10" Padding="8,2" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding StatusText}" FontSize="10" Foreground="White" FontWeight="Bold"/>
+                                        </Border>
+                                    </StackPanel>
+                                    <TextBlock Text="{Binding Description}" TextWrapping="Wrap" Opacity="0.7" FontSize="12"/>
+                                    
+                                    <!-- Progress Section -->
+                                    <StackPanel IsVisible="{Binding IsProcessing}" Spacing="5" Margin="0,5,0,0">
+                                        <ProgressBar Value="{Binding Progress}" Height="4" Foreground="{DynamicResource ThemeAccentBrush}" Minimum="0" Maximum="100"/>
+                                        <TextBlock Text="{Binding Progress, StringFormat='{}{0:0}%'}" FontSize="10" HorizontalAlignment="Right"/>
+                                    </StackPanel>
+
+                                    <!-- Error Section -->
+                                    <StackPanel IsVisible="{Binding HasError}" Spacing="5" Margin="0,5,0,0">
+                                        <TextBlock Text="{Binding ErrorMessage}" Foreground="#FF5555" FontSize="11" TextWrapping="Wrap" FontWeight="SemiBold"/>
+                                    </StackPanel>
                                 </StackPanel>
-                            </StackPanel>
-                            
-                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="10" Margin="20,0,0,0">
-                                <Button Content="{Binding ActionButtonText}" 
-                                        Command="{Binding MainActionCommand}"
-                                        Theme="{StaticResource SmallGothicMetalButton}"
-                                        MinWidth="80"
-                                        HorizontalAlignment="Right"/>
                                 
-                                <!-- Variant Selector -->
-                                <ComboBox ItemsSource="{Binding Variants}" 
-                                          SelectedItem="{Binding SelectedVariant}"
-                                          IsVisible="{Binding HasVariants}"
-                                          Width="260"
-                                          IsEnabled="{Binding !IsProcessing}"
-                                          Theme="{StaticResource SmallGothicMetalComboBox}"/>
-                            </StackPanel>
-                        </Grid>
-                    </Border>
-                </DataTemplate>
-            </ItemsControl.ItemTemplate>
-        </ItemsControl>
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="10" Margin="20,0,0,0">
+                                    <Button Content="{Binding ActionButtonText}" 
+                                            Command="{Binding MainActionCommand}"
+                                            Theme="{StaticResource SmallGothicMetalButton}"
+                                            MinWidth="80"
+                                            HorizontalAlignment="Right"/>
+                                    
+                                    <!-- Variant Selector -->
+                                    <ComboBox ItemsSource="{Binding Variants}" 
+                                              SelectedItem="{Binding SelectedVariant}"
+                                              IsVisible="{Binding HasVariants}"
+                                              Width="260"
+                                              IsEnabled="{Binding !IsProcessing}"
+                                              Theme="{StaticResource SmallGothicMetalComboBox}"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </StackPanel>
     </ScrollViewer>
 </UserControl>

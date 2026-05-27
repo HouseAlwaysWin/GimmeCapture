@@ -25,6 +25,21 @@
                     </ComboBox.ItemTemplate>
                 </ComboBox>
 
+                <Border Background="#1A1A1A"
+                        BorderBrush="#333333"
+                        BorderThickness="1"
+                        CornerRadius="4"
+                        Padding="15"
+                        Margin="0,10,0,0">
+                    <StackPanel Spacing="10">
+                        <TextBlock Text="{Binding [DetectionSettings], Source={x:Static services:LocalizationService.Instance}}"
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource ThemeAccentBrush}"/>
+                        <CheckBox IsChecked="{Binding EnableOcrSelectionDetection}"
+                                  Content="{Binding [EnableAIScan], Source={x:Static services:LocalizationService.Instance}}"/>
+                    </StackPanel>
+                </Border>
+
                 <!-- Theme Color -->
                 <StackPanel Spacing="10" Margin="0,10,0,0">
                     <TextBlock Text="{Binding [ThemeColor], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold"/>
