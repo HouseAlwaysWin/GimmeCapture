@@ -123,7 +123,7 @@
   "RecordMute": "Mute",
   "RecordUnmute": "Unmute",
   "ShowAIScanBox": "Show AI Scan Box",
-  "EnableAIScan": "Enable AI Object Detection",
+  "EnableAIScan": "Enable OCR Selection Detection",
   "AIScanEngine": "Scan Engine:",
   "AIScanEngineOCR": "OCR (Fast)",
   "AIScanEngineSAM2": "SAM2 (Accurate)",

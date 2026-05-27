@@ -18,43 +18,7 @@
                                 <TextBlock Text="{Binding [DetectionSettings], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold" Foreground="{DynamicResource ThemeAccentBrush}"/>
                                 
                                 <StackPanel Spacing="5">
-                                    <CheckBox IsChecked="{Binding ShowAIScanBox}" Content="{Binding [ShowAIScanBox], Source={x:Static services:LocalizationService.Instance}}"/>
-                                    <CheckBox IsChecked="{Binding EnableAIScan}" Content="{Binding [EnableAIScan], Source={x:Static services:LocalizationService.Instance}}"/>
-                                </StackPanel>
-                                <DockPanel>
-                                    <TextBlock Text="{Binding [AIScanEngine], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                                    <ComboBox ItemsSource="{Binding AvailableAIScanEngines}" SelectedItem="{Binding AIScanEngine}" HorizontalAlignment="Stretch">
-                                        <ComboBox.ItemTemplate>
-                                            <DataTemplate>
-                                                <TextBlock Text="{Binding Converter={x:Static converters:EnumToLocalizedConverter.Instance}, ConverterParameter='AIScanEngine'}"/>
-                                            </DataTemplate>
-                                        </ComboBox.ItemTemplate>
-                                    </ComboBox>
-                                </DockPanel>
-                                <Separator Background="#333333" Height="1" Margin="0,5"/>
-                                <StackPanel Spacing="5">
-                                    <TextBlock Text="{Binding [AIScanDensity], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>
-                                    <StackPanel Orientation="Horizontal" Spacing="10">
-                                        <Slider Minimum="4" Maximum="32" Value="{Binding SAM2GridDensity}" 
-                                                TickFrequency="1" IsSnapToTickEnabled="True" HorizontalAlignment="Stretch" Width="250"/>
-                                        <TextBlock Text="{Binding SAM2GridDensity}" VerticalAlignment="Center" Width="30"/>
-                                    </StackPanel>
-                                </StackPanel>
-                                <StackPanel Spacing="5">
-                                    <TextBlock Text="{Binding [AIScanMaxObjects], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>
-                                    <StackPanel Orientation="Horizontal" Spacing="10">
-                                        <Slider Minimum="5" Maximum="200" Value="{Binding SAM2MaxObjects}" 
-                                                TickFrequency="5" IsSnapToTickEnabled="True" HorizontalAlignment="Stretch" Width="250"/>
-                                        <TextBlock Text="{Binding SAM2MaxObjects}" VerticalAlignment="Center" Width="30"/>
-                                    </StackPanel>
-                                </StackPanel>
-                                <StackPanel Spacing="5">
-                                    <TextBlock Text="{Binding [AIScanMinSize], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>
-                                    <StackPanel Orientation="Horizontal" Spacing="10">
-                                        <Slider Minimum="5" Maximum="200" Value="{Binding SAM2MinObjectSize}" 
-                                                TickFrequency="5" IsSnapToTickEnabled="True" HorizontalAlignment="Stretch" Width="250"/>
-                                        <TextBlock Text="{Binding SAM2MinObjectSize}" VerticalAlignment="Center" Width="30"/>
-                                    </StackPanel>
+                                    <CheckBox IsChecked="{Binding EnableOcrSelectionDetection}" Content="{Binding [EnableAIScan], Source={x:Static services:LocalizationService.Instance}}"/>
                                 </StackPanel>
                             </StackPanel>
                         </Border>

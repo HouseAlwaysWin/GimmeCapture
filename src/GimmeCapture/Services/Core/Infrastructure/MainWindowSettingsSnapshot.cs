@@ -47,10 +47,6 @@ public sealed class MainWindowSettingsSnapshot
     public required bool EnableAI { get; init; }
     public required bool ShowAIScanBox { get; init; }
     public required bool EnableAIScan { get; init; }
-    public required AIScanEngine AIScanEngine { get; init; }
-    public required int SAM2GridDensity { get; init; }
-    public required int SAM2MaxObjects { get; init; }
-    public required int SAM2MinObjectSize { get; init; }
     public required OCRLanguage SourceLanguage { get; init; }
     public required TranslationLanguage TargetLanguage { get; init; }
     public required TranslationEngine SelectedTranslationEngine { get; init; }
@@ -106,10 +102,6 @@ public sealed class MainWindowSettingsSnapshot
             EnableAI = settings.EnableAI,
             ShowAIScanBox = settings.ShowAIScanBox,
             EnableAIScan = settings.EnableAIScan,
-            AIScanEngine = settings.AIScanEngine,
-            SAM2GridDensity = settings.SAM2GridDensity,
-            SAM2MaxObjects = settings.SAM2MaxObjects,
-            SAM2MinObjectSize = settings.SAM2MinObjectSize,
             SourceLanguage = settings.SourceLanguage,
             TargetLanguage = settings.TargetLanguage,
             SelectedTranslationEngine = settings.SelectedTranslationEngine,
@@ -165,10 +157,6 @@ public sealed class MainWindowSettingsSnapshot
         settings.EnableAI = EnableAI;
         settings.ShowAIScanBox = ShowAIScanBox;
         settings.EnableAIScan = EnableAIScan;
-        settings.AIScanEngine = AIScanEngine;
-        settings.SAM2GridDensity = SAM2GridDensity;
-        settings.SAM2MaxObjects = SAM2MaxObjects;
-        settings.SAM2MinObjectSize = SAM2MinObjectSize;
         settings.SourceLanguage = SourceLanguage;
         settings.TargetLanguage = TargetLanguage;
         settings.SelectedTranslationEngine = SelectedTranslationEngine;

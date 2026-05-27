@@ -13,7 +13,8 @@ public class AppSettingsService
     // v1: SelectionHoldModifier introduced for translation selection behavior.
     // v2: Action hotkeys moved to F6/F7/F8/F9 defaults.
     // v3: Pin-like actions unified so Snip.Pin / Record.Action / Translate.Pin share F6.
-    public const int CurrentConfigVersion = 3;
+    // v4: Snip AI detecting moved to OCR-only; legacy AIScanEngine/SAM2 scan tuning settings are ignored.
+    public const int CurrentConfigVersion = 4;
     private static string LocalConfigPath => Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config.json");
     private static string AppDataPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "GimmeCapture");
     private static string AppDataConfigPath => Path.Combine(AppDataPath, "config.json");
@@ -284,9 +285,6 @@ public class AppSettingsService
         dest.SelectedSAM2Variant = source.SelectedSAM2Variant;
         dest.ShowAIScanBox = source.ShowAIScanBox;
         dest.EnableAIScan = source.EnableAIScan;
-        dest.SAM2GridDensity = source.SAM2GridDensity;
-        dest.SAM2MaxObjects = source.SAM2MaxObjects;
-        dest.SAM2MinObjectSize = source.SAM2MinObjectSize;
         dest.SourceLanguage = source.SourceLanguage;
         dest.TargetLanguage = source.TargetLanguage;
         dest.SelectedTranslationEngine = TranslationEngine.LlamaSharp;

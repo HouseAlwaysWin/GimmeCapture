@@ -40,8 +40,8 @@ public partial class SnipWindowViewModel
             else
             {
                 // Restart scan if enabled (only after AllScreenBounds is populated)
-                // 翻譯模式不使用 SAM2 掃描
-                if (ShowAIScanBox && CurrentMode != SnipMode.Translation && AllScreenBounds?.Count > 0)
+                // ?折??????????SAM2 ???
+                if (EnableAIScan && CurrentMode != SnipMode.Translation && AllScreenBounds?.Count > 0)
                 {
                     TriggerAutoScanCommand?.Execute(Unit.Default).Subscribe();
                 }
@@ -71,7 +71,7 @@ public partial class SnipWindowViewModel
     private double _savedParkTranslationToolbarTop;
 
     /// <summary>
-    /// 「隱藏工具列」：移到虛擬桌面外，保留量測與 Win32 區域。翻譯模式與截圖/錄影選取後皆適用。
+    /// ??橫盲??望扔??????????謜?ｇ豰謖??踐????脰??Win32 ???貔螞蹇??????????/???閰??綽??????
     /// </summary>
     public void ParkSnipToolbarOffscreen()
     {
@@ -132,7 +132,7 @@ public partial class SnipWindowViewModel
     }
 
     /// <summary>
-    /// 離開翻譯模式時還原座標，避免截圖/錄影沿用 -50000。
+    /// ?嚚??折??????蹇??賹慫????頦????/???撒??-50000??
     /// </summary>
     public void ResetTranslationToolbarAfterLeavingTranslationMode()
     {
@@ -156,7 +156,7 @@ public partial class SnipWindowViewModel
     }
 
     /// <summary>
-    /// 離開選取狀態時清除螢幕外停車座標，避免影響下一次選取。
+    /// ?嚚??閰???????謒?嚗??叟□???瞍??謕??頦??嗆╰貔????蹓?謘甄?
     /// </summary>
     private void ResetParkedToolbarIfOffScreenWhenLeavingSelection()
     {
@@ -196,26 +196,21 @@ public partial class SnipWindowViewModel
     public bool ShowAIScanBox
     {
         get => _showAIScanBox;
-        set 
+        set
         {
             this.RaiseAndSetIfChanged(ref _showAIScanBox, value);
-            if (_mainVm != null) 
+            if (_mainVm != null)
             {
                 _mainVm.ShowAIScanBox = value;
-                
-                if (!value)
+                RefreshProjectedOcrRects();
+
+                if (value
+                    && EnableAIScan
+                    && CurrentState == SnipState.Detecting
+                    && CurrentMode != SnipMode.Translation
+                    && AllScreenBounds?.Count > 0)
                 {
-                    AIScanRects.Clear();
-                    _scanCts?.Cancel();
-                }
-                else
-                {
-                    // Trigger scan if enabled (only after AllScreenBounds is populated)
-                    // 翻譯模式不使用 SAM2
-                    if (CurrentState == SnipState.Detecting && CurrentMode != SnipMode.Translation && AllScreenBounds?.Count > 0)
-                    {
-                        TriggerAutoScanCommand?.Execute(Unit.Default).Subscribe();
-                    }
+                    TriggerAutoScanCommand?.Execute(Unit.Default).Subscribe();
                 }
             }
         }
@@ -408,12 +403,12 @@ public partial class SnipWindowViewModel
             return;
         }
 
-        // 1. 建立基礎背景幾何 (覆蓋目前的視口區域)
+        // 1. ?梁???蝞???魂???? (?穿???獢?????????
         double w = ViewportSize.Width > 0 ? ViewportSize.Width : 5000;
         double h = ViewportSize.Height > 0 ? ViewportSize.Height : 5000;
         Geometry mainMask = new RectangleGeometry(new Rect(-100, -100, w + 200, h + 200));
 
-        // 2. 處理截圖模式選取框 (全挖空)
+        // 2. ?????????閰???(?????
         if (SelectionRect.Width > 0 && SelectionRect.Height > 0 && CurrentMode != SnipMode.Translation)
         {
             if (CurrentState == SnipState.Selected)
@@ -432,17 +427,17 @@ public partial class SnipWindowViewModel
             }
         }
 
-        // 3. 處理翻譯模式選取框 (V8: 已翻譯不挖洞，與 Win32 Region 同步)
+        // 3. ????折??????閰???(V8: ??????謘??? Win32 Region ??駁?)
         if (CurrentMode == SnipMode.Translation)
         {
-            // IsTranslationSelectionActive 曾固定為 true，導致這裡永遠走「有選區」分支，尚無框時仍保留整張全螢幕幾何，
-            // 視覺/體感像一定要先拉框。改為依「是否已有有效選區」判斷。
+            // IsTranslationSelectionActive ??迫?堊垓蹌?true???皝岑謕??????????閰????????垓???????謕????嚗??????
+            // ?秋▼甇????????堊奕?????ｇ??蹇??蝞???魂??銵甇?????????????純?
             bool hasValidTranslationBox = UserSelections.AsValueEnumerable()
                 .Any(s => s.Bounds.Width > 10 && s.Bounds.Height > 10);
 
             if (!hasValidTranslationBox)
             {
-                // 尚無選區：不要鋪整張遮罩幾何（即使 MaskOpacity=0 也避免多餘層級與「待框選」感）
+                // ?垓??閰??垢??秋撚??皜豢??獢???????仿?MaskOpacity=0 ??蹓????朱??謍?????ｇ?蹓?????
                 mainMask = new GeometryGroup();
             }
             else
@@ -453,7 +448,7 @@ public partial class SnipWindowViewModel
                     {
                         var rect = sel.Bounds;
 
-                        // 翻譯模式無論是否已完成，一律排除遮罩以保持通亮
+                        // ?折??????????秋????????綽????伍??菜?隤豲??謍舀?
                         mainMask = new CombinedGeometry
                         {
                             GeometryCombineMode = GeometryCombineMode.Exclude,
@@ -682,7 +677,7 @@ public partial class SnipWindowViewModel
         }
     }
 
-    // 翻譯工具列位置（可拖曳，預設螢幕中間上方）
+    // ?折???鈭??謅??菜捕?????????澈?嚗??????謘??
     private double _translationToolbarTop = 20;
     public double TranslationToolbarTop
     {
@@ -699,8 +694,8 @@ public partial class SnipWindowViewModel
 
     public void InitializeTranslationToolbarPosition()
     {
-        // 如果使用者已經手動移動過，且還在同一個螢幕範圍內，可能不需要強行置中
-        // 但目前的邏輯是：只有在尚未手動移動時才自動置中
+        // ????輯撒???舀??秋???∪????????祗?????插???????鞈????秋撒?仿?潸??
+        // ?選?謆?????湔??????????????∪????????∟??
         if (IsToolbarManuallyPositioned && CurrentMode == SnipMode.Translation && ShowToolbar)
         {
             return;
@@ -712,14 +707,14 @@ public partial class SnipWindowViewModel
             return;
         }
 
-        // 根據滑鼠所在的螢幕 (ActiveScreenBounds) 置中工具列
+        // ?撖?????????嚗? (ActiveScreenBounds) ?菜???鈭???
         Rect bounds = ActiveScreenBounds.Width > 0 ? ActiveScreenBounds : new Rect(0, 0, ViewportSize.Width > 0 ? ViewportSize.Width : 1920, ViewportSize.Height > 0 ? ViewportSize.Height : 1080);
 
         const double margin = 20;
 
-        // 水平置中必須用「實際工具列寬度」。若用比實際更大的寬度去算 (例如強制至少 960)，
-        // Canvas.Left 會偏左，看起來像整條工具列沒有在螢幕上方置中。
-        // 尚未量測時才用較大的保守值，避免第一次量測前把過窄的寬度假設拿去置中而裁切左側。
+        // ?虜?獢??對???溘?箇??謜扔?????瞍??蹇???????皜訾?????刻??芾??(????????? 960)??
+        // Canvas.Left ????????結????皝?????謅????祗?嚗???謘獢???
+        // ?垮謓??脰?蹇?????剜???踐???瞏??頦?????????????????瞍??祈澈?頦察?菜???????拇什?瘞玲?
         double tw;
         if (ToolbarWidth > 0)
         {
@@ -747,14 +742,13 @@ public partial class SnipWindowViewModel
         TranslationToolbarLeft = left;
         TranslationToolbarTop = bounds.Y + 20;
 
-        // 同步更新 XAML 綁定的工具列位置
-        ToolbarLeft = TranslationToolbarLeft;
+        // ??駁??皝? XAML ?秋撒???扔????選???        ToolbarLeft = TranslationToolbarLeft;
         ToolbarTop = TranslationToolbarTop;
     }
 
     private void UpdateToolbarPosition()
     {
-        // 翻譯模式下工具列位置由 InitializeTranslationToolbarPosition 管理
+        // ?折???????璆????選????InitializeTranslationToolbarPosition ???
         if (CurrentMode == SnipMode.Translation) return;
 
         // Default viewport fallback

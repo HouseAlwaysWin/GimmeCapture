@@ -123,7 +123,7 @@
   "RecordMute": "靜音",
   "RecordUnmute": "開啟聲音",
   "ShowAIScanBox": "顯示 AI 偵測框",
-  "EnableAIScan": "啟用 AI 物件偵測",
+  "EnableAIScan": "啟用 OCR 選取偵測",
   "AIScanEngine": "掃描引擎:",
   "AIScanEngineOCR": "OCR（快速）",
   "AIScanEngineSAM2": "SAM2（精準）",

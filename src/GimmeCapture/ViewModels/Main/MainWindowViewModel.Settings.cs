@@ -72,7 +72,6 @@ public partial class MainWindowViewModel
     }
 
     public List<TranslationEngine> AvailableTranslationEngines { get; } = new() { TranslationEngine.LlamaSharp };
-    public List<AIScanEngine> AvailableAIScanEngines { get; } = Enum.GetValues<AIScanEngine>().AsValueEnumerable().ToList();
     
     private TranslationEngine _selectedTranslationEngine;
     public TranslationEngine SelectedTranslationEngine
@@ -699,6 +698,7 @@ public partial class MainWindowViewModel
             {
                 _settingsService.Settings.ShowAIScanBox = value;
                 this.RaisePropertyChanged();
+                this.RaisePropertyChanged(nameof(EnableOcrSelectionDetection));
             }
         }
     }
@@ -712,6 +712,7 @@ public partial class MainWindowViewModel
             {
                 _settingsService.Settings.EnableAIScan = value;
                 this.RaisePropertyChanged();
+                this.RaisePropertyChanged(nameof(EnableOcrSelectionDetection));
                 if (!_isDataLoading)
                 {
                     QueueSettingsSave();
@@ -720,19 +721,27 @@ public partial class MainWindowViewModel
         }
     }
 
-    public AIScanEngine AIScanEngine
+    public bool EnableOcrSelectionDetection
     {
-        get => _settingsService.Settings.AIScanEngine;
+        get => _settingsService.Settings.EnableAIScan && _settingsService.Settings.ShowAIScanBox;
         set
         {
-            if (_settingsService.Settings.AIScanEngine != value)
+            bool changed = _settingsService.Settings.EnableAIScan != value
+                || _settingsService.Settings.ShowAIScanBox != value;
+            if (!changed)
             {
-                _settingsService.Settings.AIScanEngine = value;
-                this.RaisePropertyChanged();
-                if (!_isDataLoading)
-                {
-                    QueueSettingsSave();
-                }
+                return;
+            }
+
+            _settingsService.Settings.EnableAIScan = value;
+            _settingsService.Settings.ShowAIScanBox = value;
+            this.RaisePropertyChanged();
+            this.RaisePropertyChanged(nameof(EnableAIScan));
+            this.RaisePropertyChanged(nameof(ShowAIScanBox));
+
+            if (!_isDataLoading)
+            {
+                QueueSettingsSave();
             }
         }
     }
@@ -757,29 +766,6 @@ public partial class MainWindowViewModel
             }
         }
     }
-
-    private int _sam2GridDensity = 8;
-    public int SAM2GridDensity
-    {
-        get => _sam2GridDensity;
-        set => this.RaiseAndSetIfChanged(ref _sam2GridDensity, value);
-    }
-
-    private int _sam2MaxObjects = 20;
-    public int SAM2MaxObjects
-    {
-        get => _sam2MaxObjects;
-        set => this.RaiseAndSetIfChanged(ref _sam2MaxObjects, value);
-    }
-
-    private int _sam2MinObjectSize = 20;
-    public int SAM2MinObjectSize
-    {
-        get => _sam2MinObjectSize;
-        set => this.RaiseAndSetIfChanged(ref _sam2MinObjectSize, value);
-    }
-
-
 
     private string _llamaModelId = "qwen2.5-1.5b-instruct-q4";
     public string LlamaModelId

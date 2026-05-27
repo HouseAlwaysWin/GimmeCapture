@@ -111,7 +111,7 @@
   "RecordMute": "ミュート",
   "RecordUnmute": "ミュート解除",
   "ShowAIScanBox": "AI 検出枠を表示",
-  "EnableAIScan": "AI オブジェクト検出を有効化",
+  "EnableAIScan": "OCR 選択検出を有効化",
   "AIScanEngine": "スキャンエンジン:",
   "AIScanEngineOCR": "OCR（高速）",
   "AIScanEngineSAM2": "SAM2（高精度）",

@@ -64,10 +64,6 @@ public class MainWindowSettingsPersistenceServiceTests
             EnableAI = false,
             ShowAIScanBox = false,
             EnableAIScan = false,
-            AIScanEngine = AIScanEngine.SAM2,
-            SAM2GridDensity = 13,
-            SAM2MaxObjects = 9,
-            SAM2MinObjectSize = 31,
             SourceLanguage = OCRLanguage.Japanese,
             TargetLanguage = TranslationLanguage.English,
             SelectedTranslationEngine = TranslationEngine.LlamaSharp,
@@ -89,14 +85,15 @@ public class MainWindowSettingsPersistenceServiceTests
         Assert.Equal(snapshot.RecordFormat, persisted.RecordFormat);
         Assert.Equal(snapshot.RecordHotkey, persisted.RecordHotkey);
         Assert.Equal(snapshot.EnableAIScan, persisted.EnableAIScan);
-        Assert.Equal(snapshot.AIScanEngine, persisted.AIScanEngine);
         Assert.Equal(snapshot.AIResourcesDirectory, persisted.AIResourcesDirectory);
         Assert.Equal(snapshot.LlamaModelId, persisted.LlamaModelId);
         Assert.Equal(snapshot.LlamaGpuLayers, persisted.LlamaGpuLayers);
         Assert.Contains("\"Language\": \"Japanese\"", savedJson);
-        Assert.Contains("\"ConfigVersion\": 3", savedJson);
+        Assert.Contains("\"ConfigVersion\": 4", savedJson);
         Assert.Contains("\"RecordHotkey\": \"Shift\\u002BF8\"", savedJson);
         Assert.Contains("\"AIResourcesDirectory\": \"D:\\\\captures\\\\ai\"", savedJson);
+        Assert.DoesNotContain("AIScanEngine", savedJson, StringComparison.Ordinal);
+        Assert.DoesNotContain("SAM2GridDensity", savedJson, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -184,7 +181,7 @@ public class MainWindowSettingsPersistenceServiceTests
 
         settingsService.LoadSync();
 
-        Assert.Equal(3, settingsService.Settings.ConfigVersion);
+        Assert.Equal(4, settingsService.Settings.ConfigVersion);
         Assert.Equal("F6", settingsService.Settings.Snip.Pin);
         Assert.Equal("F7", settingsService.Settings.Record.Action);
         Assert.Equal("F3", settingsService.Settings.Translate.Action);

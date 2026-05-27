@@ -10,24 +10,18 @@ namespace GimmeCapture.Services.Core.AI;
 
 public enum AIScanStage
 {
-    EncodingImage,
     DetectingObjects
 }
 
 public sealed record AIScanSessionRequest(
-    AIScanEngine Engine,
     Rect ViewportBounds,
     PixelPoint ScreenOffset,
     double VisualScaling,
-    SAM2Variant Sam2Variant,
-    int Sam2GridDensity,
-    int Sam2MaxObjects,
-    int Sam2MinObjectSize,
     OCRLanguage SourceLanguage);
 
 public sealed record AIScanSessionResult(
-    AIScanEngine Engine,
-    IReadOnlyList<Rect> DetectedRects,
+    IReadOnlyList<Rect> RawDetectedRects,
+    IReadOnlyList<OcrCandidate> Candidates,
     bool IsReady = true,
     string? NotReadyStatusKey = null);
 

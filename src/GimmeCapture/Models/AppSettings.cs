@@ -1,4 +1,5 @@
 using GimmeCapture.Services.Core;
+using System.Text.Json.Serialization;
 
 namespace GimmeCapture.Models;
 
@@ -149,20 +150,24 @@ public class AppSettings
     // AI
     public string AIResourcesDirectory { get; set; } = string.Empty;
     public bool EnableAI { get; set; } = true;
-    [System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter))]
+    [JsonConverter(typeof(JsonStringEnumConverter))]
     public SAM2Variant SelectedSAM2Variant { get; set; } = SAM2Variant.Tiny;
     public bool ShowAIScanBox { get; set; } = true;
     public bool EnableAIScan { get; set; } = true;
-    [System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter))]
+    [JsonIgnore]
+    [JsonConverter(typeof(JsonStringEnumConverter))]
     public AIScanEngine AIScanEngine { get; set; } = AIScanEngine.OCR;
+    [JsonIgnore]
     public int SAM2GridDensity { get; set; } = 8;
+    [JsonIgnore]
     public int SAM2MaxObjects { get; set; } = 20;
+    [JsonIgnore]
     public int SAM2MinObjectSize { get; set; } = 20;
-    [System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter))]
+    [JsonConverter(typeof(JsonStringEnumConverter))]
     public OCRLanguage SourceLanguage { get; set; } = OCRLanguage.Auto;
-    [System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter))]
+    [JsonConverter(typeof(JsonStringEnumConverter))]
     public TranslationLanguage TargetLanguage { get; set; } = TranslationLanguage.TraditionalChinese;
-    [System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter))]
+    [JsonConverter(typeof(JsonStringEnumConverter))]
     public TranslationEngine SelectedTranslationEngine { get; set; } = TranslationEngine.LlamaSharp;
     public string LlamaModelId { get; set; } = "qwen2.5-1.5b-instruct-q4";
     public string LlamaCustomModelPath { get; set; } = string.Empty;

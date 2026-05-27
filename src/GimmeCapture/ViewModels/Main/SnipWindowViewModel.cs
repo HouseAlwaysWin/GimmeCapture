@@ -402,12 +402,6 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
 
     private void InitializeMainViewModelBindings(MainWindowViewModel mainVm)
     {
-        // 只在 AI 功能啟用時才預載 SAM2 模型，避免不必要的記憶體消耗
-        if (mainVm.EnableAI)
-        {
-            InitializeSAM2(mainVm);
-        }
-
         BindDistinct(mainVm.WhenAnyValue(x => x.ShowAIScanBox), val => ShowAIScanBox = val)
             .DisposeWith(_disposables);
 
@@ -594,7 +588,14 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     public bool ShowOcrResult
     {
         get => _showOcrResult;
-        set => this.RaiseAndSetIfChanged(ref _showOcrResult, value);
+        set
+        {
+            if (_showOcrResult != value)
+            {
+                this.RaiseAndSetIfChanged(ref _showOcrResult, value);
+                RefreshProjectedOcrRects();
+            }
+        }
     }
 
     public string ShowOcrResultTooltip => $"{LocalizationService.Instance["ToggleOcrResult"]} (Debug)";

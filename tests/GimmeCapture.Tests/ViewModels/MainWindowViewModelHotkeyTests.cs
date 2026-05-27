@@ -84,6 +84,22 @@ public class MainWindowViewModelHotkeyTests
         Assert.Equal("Ctrl+F6", viewModel.Translate_Pin);
     }
 
+    [Fact]
+    public void EnableOcrSelectionDetection_KeepsUnderlyingFlagsInSync()
+    {
+        var viewModel = CreateViewModel();
+
+        viewModel.EnableOcrSelectionDetection = false;
+
+        Assert.False(viewModel.EnableAIScan);
+        Assert.False(viewModel.ShowAIScanBox);
+
+        viewModel.EnableOcrSelectionDetection = true;
+
+        Assert.True(viewModel.EnableAIScan);
+        Assert.True(viewModel.ShowAIScanBox);
+    }
+
     private static MainWindowViewModel CreateViewModel()
     {
         var tempDir = Path.Combine(

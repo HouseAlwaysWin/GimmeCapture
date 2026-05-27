@@ -17,43 +17,6 @@ public sealed class AIScanSessionServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task RunScanAsync_WhenSam2ModelMissing_ReturnsNotReadyWithoutCapturing()
-    {
-        var settingsService = new AppSettingsService(_baseDir);
-        settingsService.Settings.AIResourcesDirectory = Path.Combine(_baseDir, "AI");
-        var pathService = new AIPathService(settingsService);
-        var resolver = new NativeResolverService(pathService);
-        var downloader = new AIModelDownloader();
-        var aiResourceService = new AIResourceService(settingsService, pathService, resolver, downloader);
-        var sam2RuntimeService = new SAM2RuntimeService(pathService, resolver);
-        var captureService = new Mock<IScreenCaptureService>();
-        var ocrEngineFactory = new Mock<IOcrEngineFactory>();
-
-        using var sut = new AIScanSessionService(
-            captureService.Object,
-            aiResourceService,
-            sam2RuntimeService,
-            settingsService,
-            ocrEngineFactory.Object);
-
-        var result = await sut.RunScanAsync(new AIScanSessionRequest(
-            AIScanEngine.SAM2,
-            new Rect(0, 0, 1920, 1080),
-            new PixelPoint(0, 0),
-            1.0,
-            SAM2Variant.Tiny,
-            24,
-            20,
-            20,
-            OCRLanguage.TraditionalChinese));
-
-        Assert.False(result.IsReady);
-        Assert.Equal("StatusSAM2NotFound", result.NotReadyStatusKey);
-        Assert.Empty(result.DetectedRects);
-        captureService.Verify(service => service.CaptureScreenAsync(It.IsAny<Rect>(), It.IsAny<PixelPoint>(), It.IsAny<double>(), It.IsAny<bool>()), Times.Never);
-    }
-
-    [Fact]
     public async Task RunScanAsync_WhenOcrDetectsText_ReturnsLogicalRects()
     {
         var captureService = new Mock<IScreenCaptureService>();
@@ -87,19 +50,17 @@ public sealed class AIScanSessionServiceTests : IDisposable
             ocrEngineFactory.Object);
 
         var result = await sut.RunScanAsync(new AIScanSessionRequest(
-            AIScanEngine.OCR,
             new Rect(0, 0, 100, 50),
             new PixelPoint(0, 0),
             1.0,
-            SAM2Variant.Tiny,
-            24,
-            20,
-            20,
             OCRLanguage.Japanese));
 
-        var rect = Assert.Single(result.DetectedRects);
+        var rect = Assert.Single(result.RawDetectedRects);
         Assert.True(result.IsReady);
         Assert.Equal(new Rect(10, 12, 30, 24), rect);
+        Assert.Equal(2, result.Candidates.Count);
+        Assert.Contains(result.Candidates, candidate => candidate.Kind == OcrCandidateKind.Line);
+        Assert.Contains(result.Candidates, candidate => candidate.Kind == OcrCandidateKind.Paragraph);
     }
 
     public void Dispose()

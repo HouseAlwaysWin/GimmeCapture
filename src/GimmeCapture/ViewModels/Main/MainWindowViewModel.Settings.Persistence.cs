@@ -72,10 +72,6 @@ public partial class MainWindowViewModel
             EnableAI = EnableAI,
             ShowAIScanBox = ShowAIScanBox,
             EnableAIScan = EnableAIScan,
-            AIScanEngine = AIScanEngine,
-            SAM2GridDensity = SAM2GridDensity,
-            SAM2MaxObjects = SAM2MaxObjects,
-            SAM2MinObjectSize = SAM2MinObjectSize,
             SourceLanguage = SourceLanguage,
             TargetLanguage = TargetLanguage,
             SelectedTranslationEngine = SelectedTranslationEngine,
@@ -122,15 +118,11 @@ public partial class MainWindowViewModel
         TempDirectory = snapshot.TempDirectory;
         ShowAIScanBox = snapshot.ShowAIScanBox;
         EnableAI = snapshot.EnableAI;
-        SAM2GridDensity = snapshot.SAM2GridDensity;
-        SAM2MaxObjects = snapshot.SAM2MaxObjects;
-        SAM2MinObjectSize = snapshot.SAM2MinObjectSize;
         WingScale = snapshot.WingScale;
         CornerIconScale = snapshot.CornerIconScale;
         RecordingSettings.RecordFPS = snapshot.RecordFps;
         RecordingSettings.MaxRecordingSizeMB = snapshot.MaxRecordingSizeMb;
         EnableAIScan = snapshot.EnableAIScan;
-        AIScanEngine = snapshot.AIScanEngine;
         AIResourcesDirectory = snapshot.AIResourcesDirectory;
         SelectedTranslationEngine = snapshot.SelectedTranslationEngine;
         LlamaModelId = snapshot.LlamaModelId;
@@ -155,9 +147,9 @@ public partial class MainWindowViewModel
 
         this.RaisePropertyChanged(nameof(SourceLanguage));
         this.RaisePropertyChanged(nameof(TargetLanguage));
-        this.RaisePropertyChanged(nameof(AIScanEngine));
         this.RaisePropertyChanged(nameof(AIResourcesDirectory));
         this.RaisePropertyChanged(nameof(ShowAIScanBox));
         this.RaisePropertyChanged(nameof(EnableAIScan));
+        this.RaisePropertyChanged(nameof(EnableOcrSelectionDetection));
     }
 }

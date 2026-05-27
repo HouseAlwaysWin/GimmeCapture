@@ -9,6 +9,7 @@ using System.Reactive;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
 using GimmeCapture.Services.Abstractions;
+using GimmeCapture.Services.Core.AI;
 using GimmeCapture.Services.Core;
 using GimmeCapture.Services.Core.Interaction;
 
@@ -20,6 +21,11 @@ public partial class SnipWindowViewModel
     private readonly DispatcherTimer _hoverAnimationTimer = new() { Interval = TimeSpan.FromMilliseconds(16) };
     private IReadOnlyList<WindowCandidate> _windowCandidates = [];
     private WindowCandidate? _currentHoverCandidate;
+    private OcrCandidate? _currentHoverOcrCandidate;
+    private IReadOnlyList<Rect> _ocrRawRects = [];
+    private IReadOnlyList<OcrCandidate> _ocrLineCandidates = [];
+    private IReadOnlyList<OcrCandidate> _ocrParagraphCandidates = [];
+    private string? _currentHoverKey;
     private DateTime _lastHoverAnimationTickUtc;
 
     private Rect _hoverTargetRect;
@@ -82,6 +88,9 @@ public partial class SnipWindowViewModel
     private void ClearAiScanOverlayState()
     {
         AIScanRects.Clear();
+        _ocrRawRects = [];
+        _ocrLineCandidates = [];
+        _ocrParagraphCandidates = [];
         DismissWindowSnapHoverPreview(preserveTargetRect: false);
         _scanCts?.Cancel();
     }
@@ -115,23 +124,28 @@ public partial class SnipWindowViewModel
             return;
         }
 
-        var candidate = _detectionService.GetCandidateAtPoint(mousePos, _windowCandidates, _currentHoverCandidate);
-        if (candidate == null)
+        var windowCandidate = _detectionService.GetCandidateAtPoint(mousePos, _windowCandidates, _currentHoverCandidate);
+        var ocrCandidate = OcrCandidateHitTester.SelectCandidate(mousePos, _ocrParagraphCandidates, _ocrLineCandidates, _currentHoverOcrCandidate);
+        var selected = SelectBestHoverCandidate(windowCandidate, ocrCandidate);
+        if (selected == null)
         {
             _currentHoverCandidate = null;
+            _currentHoverOcrCandidate = null;
             HoverTargetRect = default;
             DismissWindowSnapHoverPreview(preserveTargetRect: false);
             return;
         }
 
-        HoverTargetRect = candidate.Bounds;
+        HoverTargetRect = selected.Bounds;
 
-        bool targetChanged = _currentHoverCandidate == null || !_currentHoverCandidate.IsSameIdentity(candidate);
-        _currentHoverCandidate = candidate;
+        bool targetChanged = !string.Equals(_currentHoverKey, selected.Key, StringComparison.Ordinal);
+        _currentHoverKey = selected.Key;
+        _currentHoverCandidate = selected.WindowCandidate;
+        _currentHoverOcrCandidate = selected.OcrCandidate;
 
         if (targetChanged)
         {
-            _hoverAnimationController.SetTarget(candidate.Bounds);
+            _hoverAnimationController.SetTarget(selected.Bounds);
             ApplyWindowSnapHoverAnimationState();
         }
 
@@ -208,7 +222,85 @@ public partial class SnipWindowViewModel
         {
             HoverTargetRect = default;
             _currentHoverCandidate = null;
+            _currentHoverOcrCandidate = null;
+            _currentHoverKey = null;
         }
+    }
+
+    private HoverSelection? SelectBestHoverCandidate(WindowCandidate? windowCandidate, OcrCandidate? ocrCandidate)
+    {
+        if (windowCandidate == null && ocrCandidate == null)
+        {
+            return null;
+        }
+
+        if (ocrCandidate == null)
+        {
+            return HoverSelection.FromWindow(windowCandidate!);
+        }
+
+        if (windowCandidate == null)
+        {
+            return HoverSelection.FromOcr(ocrCandidate);
+        }
+
+        if (ShouldPreferOcrCandidate(ocrCandidate, windowCandidate))
+        {
+            return HoverSelection.FromOcr(ocrCandidate);
+        }
+
+        return HoverSelection.FromWindow(windowCandidate);
+    }
+
+    private static bool ShouldPreferOcrCandidate(OcrCandidate ocrCandidate, WindowCandidate windowCandidate)
+    {
+        if (ocrCandidate.Kind == OcrCandidateKind.Line)
+        {
+            return true;
+        }
+
+        return ocrCandidate.Area < (windowCandidate.Area * 0.75);
+    }
+
+    private void RefreshProjectedOcrRects()
+    {
+        AIScanRects.Clear();
+
+        if (_mainVm?.ShowAIScanBox != true)
+        {
+            return;
+        }
+
+        IReadOnlyList<Rect> sourceRects = ShowOcrResult
+            ? _ocrRawRects
+            : _ocrParagraphCandidates.AsValueEnumerable().Select(candidate => candidate.Bounds).ToList();
+
+        foreach (var rect in sourceRects)
+        {
+            AIScanRects.Add(new VisualRect(rect));
+        }
+    }
+
+    private sealed class HoverSelection
+    {
+        private HoverSelection(Rect bounds, string key, WindowCandidate? windowCandidate, OcrCandidate? ocrCandidate)
+        {
+            Bounds = bounds;
+            Key = key;
+            WindowCandidate = windowCandidate;
+            OcrCandidate = ocrCandidate;
+        }
+
+        public Rect Bounds { get; }
+        public string Key { get; }
+        public WindowCandidate? WindowCandidate { get; }
+        public OcrCandidate? OcrCandidate { get; }
+
+        public static HoverSelection FromWindow(WindowCandidate candidate)
+            => new(candidate.Bounds, $"W:{candidate.Hwnd}:{candidate.Kind}:{candidate.ZOrder}", candidate, null);
+
+        public static HoverSelection FromOcr(OcrCandidate candidate)
+            => new(candidate.Bounds, $"O:{candidate.Kind}:{candidate.GroupId}:{candidate.Bounds.X:F1}:{candidate.Bounds.Y:F1}", null, candidate);
     }
 
     private WindowCandidate ToLocalCandidate(WindowCandidate candidate)
@@ -235,125 +327,7 @@ public partial class SnipWindowViewModel
     {
         if (CurrentMode == SnipMode.Translation) return;
 
-        var engine = _mainVm?.AIScanEngine ?? AIScanEngine.OCR;
-        if (engine == AIScanEngine.SAM2)
-        {
-            await RunSAM2ScanAsync();
-            return;
-        }
-
         await RunOCRScanAsync();
-    }
-
-    private async Task RunSAM2ScanAsync()
-    {
-        System.Diagnostics.Debug.WriteLine("[AI Scan] RunAIScanAsync started");
-
-        // Don't run AI detection if we are actually recording (RecState is not Idle)
-        // But ALLOW it if we are just in "Recording Mode" (preparing to record)
-        if (RecState != RecordingState.Idle) 
-        {
-            System.Diagnostics.Debug.WriteLine($"[AI Scan] Abort: RecState is {RecState}");
-            return;
-        }
-
-        if (CurrentMode == SnipMode.Translation)
-        {
-            System.Diagnostics.Debug.WriteLine("[AI Scan] Abort: Translation mode");
-            return;
-        }
-
-        if (_mainVm == null || !_mainVm.EnableAI) 
-        {
-            System.Diagnostics.Debug.WriteLine($"[AI Scan] Abort: EnableAI is false or MainVm is null");
-            return;
-        }
-
-        // USER REQUEST: This setting controls the SCANNING PROCESS itself.
-        // If disabled, we do NOT run the expensive SAM2 detection.
-        if (!_mainVm.EnableAIScan)
-        {
-            System.Diagnostics.Debug.WriteLine("[AI Scan] Abort: EnableAIScan is false");
-            return;
-        }
-
-        if (_aiScanSessionService == null)
-        {
-            System.Diagnostics.Debug.WriteLine("[AI Scan] Abort: AI scan session service is null");
-            return;
-        }
-
-        // Cancel previous scan if any
-        _scanCts?.Cancel();
-        _scanCts = new System.Threading.CancellationTokenSource();
-        var token = _scanCts.Token;
-
-        ShowTopLoadingBar = true;
-        Console.WriteLine("[AI Scan] ShowTopLoadingBar set to TRUE");
-        
-        try
-        {
-            if (CurrentState == SnipState.Detecting)
-            {
-                ProcessingText = LocalizationService.Instance["StatusInitializingAI"] ?? "Initializing AI Models...";
-            }
-
-            var originalOpacity = MaskOpacity;
-            MaskOpacity = 0;
-            try
-            {
-                await Task.Delay(100, token);
-
-                var progress = new Progress<AIScanStage>(stage =>
-                {
-                    if (CurrentState != SnipState.Detecting)
-                    {
-                        return;
-                    }
-
-                    ProcessingText = stage switch
-                    {
-                        AIScanStage.EncodingImage => LocalizationService.Instance["StatusAIEncoding"] ?? "AI Encoding Image...",
-                        AIScanStage.DetectingObjects => LocalizationService.Instance["StatusAIDetecting"] ?? "Detecting Objects...",
-                        _ => ProcessingText
-                    };
-                });
-
-                var result = await _aiScanSessionService.RunScanAsync(CreateAIScanSessionRequest(AIScanEngine.SAM2), progress, token);
-                if (!result.IsReady)
-                {
-                    if (CurrentState == SnipState.Detecting && !string.IsNullOrWhiteSpace(result.NotReadyStatusKey))
-                    {
-                        ProcessingText = LocalizationService.Instance[result.NotReadyStatusKey];
-                        await Task.Delay(2000, token);
-                    }
-
-                    return;
-                }
-
-                ApplySam2ScanRects(result.DetectedRects, token);
-            }
-            finally
-            {
-                MaskOpacity = originalOpacity;
-            }
-        }
-        catch (OperationCanceledException)
-        {
-             Console.WriteLine("[AI Scan] CANCELLED");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[AI Scan] ERROR: {ex.Message}");
-            Console.WriteLine($"[AI Scan] Stack: {ex.StackTrace}");
-        }
-        finally
-        {
-            ShowTopLoadingBar = false;
-            Console.WriteLine("[AI Scan] Finished");
-            _scanCts?.Dispose();
-            _scanCts = null;
-        }
     }
 
     private async Task RunOCRScanAsync()
@@ -401,14 +375,22 @@ public partial class SnipWindowViewModel
             if (CurrentState == SnipState.Detecting)
                 ProcessingText = LocalizationService.Instance["StatusAIScanning"] ?? "AI Scanning...";
 
-            var result = await _aiScanSessionService.RunScanAsync(CreateAIScanSessionRequest(AIScanEngine.OCR), ct: token);
+            var progress = new Progress<AIScanStage>(_ =>
+            {
+                if (CurrentState == SnipState.Detecting)
+                {
+                    ProcessingText = LocalizationService.Instance["StatusAIScanning"] ?? "AI Scanning...";
+                }
+            });
+
+            var result = await _aiScanSessionService.RunScanAsync(CreateAIScanSessionRequest(), progress, token);
             if (!result.IsReady)
             {
                 System.Diagnostics.Debug.WriteLine("[AI Scan][OCR] OCR resources are not ready");
                 return;
             }
 
-            ApplyOcrScanRects(result.DetectedRects, token);
+            ApplyOcrScanResult(result, token);
         }
         catch (OperationCanceledException)
         {
@@ -426,78 +408,30 @@ public partial class SnipWindowViewModel
         }
     }
 
-    private AIScanSessionRequest CreateAIScanSessionRequest(AIScanEngine engine)
+    private AIScanSessionRequest CreateAIScanSessionRequest()
     {
         return new AIScanSessionRequest(
-            engine,
             new Rect(0, 0, ViewportSize.Width, ViewportSize.Height),
             ScreenOffset,
             VisualScaling,
-            _mainVm?.AppSettingsService.Settings.SelectedSAM2Variant ?? SAM2Variant.Tiny,
-            _mainVm?.SAM2GridDensity ?? 24,
-            _mainVm?.SAM2MaxObjects ?? 20,
-            _mainVm?.SAM2MinObjectSize ?? 20,
             _mainVm?.AppSettingsService.Settings.SourceLanguage ?? OCRLanguage.TraditionalChinese);
     }
 
-    private void ApplySam2ScanRects(IReadOnlyList<Rect> rects, System.Threading.CancellationToken token)
+    private void ApplyOcrScanResult(AIScanSessionResult result, System.Threading.CancellationToken token)
     {
-        if (!_mainVm!.ShowAIScanBox || rects.Count == 0)
-        {
-            Console.WriteLine(rects.Count == 0
-                ? "[AI Scan] No objects detected"
-                : $"[AI Scan] Complete: {rects.Count} objects detected (Hidden by setting)");
-            return;
-        }
-
         Avalonia.Threading.Dispatcher.UIThread.Post(() =>
         {
             if (token.IsCancellationRequested) return;
             if (CurrentState != SnipState.Detecting || _mainVm?.EnableAI != true || CurrentMode == SnipMode.Translation) return;
 
-            int addedCount = 0;
-            foreach (var rect in rects)
-            {
-                if (token.IsCancellationRequested) break;
-                AIScanRects.Add(new VisualRect(rect));
-                addedCount++;
-            }
-
-            Console.WriteLine($"[AI Scan] Complete: {addedCount} objects added (filtered from {rects.Count})");
-        });
-    }
-
-    private void ApplyOcrScanRects(IReadOnlyList<Rect> rects, System.Threading.CancellationToken token)
-    {
-        if (!_mainVm!.ShowAIScanBox || rects.Count == 0)
-        {
-            return;
-        }
-
-        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-        {
-            if (token.IsCancellationRequested) return;
-            if (CurrentState != SnipState.Detecting || _mainVm?.EnableAI != true || CurrentMode == SnipMode.Translation) return;
-
-            bool IsNearDuplicate(Rect a, Rect b)
-            {
-                const double posTolerance = 6.0;
-                const double sizeTolerance = 8.0;
-                return Math.Abs(a.X - b.X) <= posTolerance &&
-                       Math.Abs(a.Y - b.Y) <= posTolerance &&
-                       Math.Abs(a.Width - b.Width) <= sizeTolerance &&
-                       Math.Abs(a.Height - b.Height) <= sizeTolerance;
-            }
-
-            foreach (var rect in rects)
-            {
-                bool duplicated = AIScanRects.AsValueEnumerable().Any(existing =>
-                    IsNearDuplicate(new Rect(existing.X, existing.Y, existing.Width, existing.Height), rect));
-                if (!duplicated)
-                {
-                    AIScanRects.Add(new VisualRect(rect));
-                }
-            }
+            _ocrRawRects = result.RawDetectedRects.AsValueEnumerable().ToList();
+            _ocrParagraphCandidates = result.Candidates.AsValueEnumerable()
+                .Where(candidate => candidate.Kind == OcrCandidateKind.Paragraph)
+                .ToList();
+            _ocrLineCandidates = result.Candidates.AsValueEnumerable()
+                .Where(candidate => candidate.Kind == OcrCandidateKind.Line)
+                .ToList();
+            RefreshProjectedOcrRects();
         });
     }
 
@@ -535,9 +469,8 @@ public partial class SnipWindowViewModel
         AIScanCommand = ReactiveCommand.CreateFromTask(RunAIScanAsync);
         AIScanCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"AI Scan Command error: {ex}"));
 
-        // Keep SAM2 path for manual/advanced trigger.
-        TriggerAutoScanCommand = ReactiveCommand.CreateFromTask(RunSAM2ScanAsync);
-        TriggerAutoScanCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Manual SAM2 Scan Command error: {ex}"));
+        TriggerAutoScanCommand = ReactiveCommand.CreateFromTask(RunOCRScanAsync);
+        TriggerAutoScanCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Auto OCR Scan Command error: {ex}"));
 
         ToggleAIScanBoxCommand = ReactiveCommand.Create(() => { ShowAIScanBox = !ShowAIScanBox; return Unit.Default; });
         ToggleAIScanBoxCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Toggle AI Box error: {ex}"));
@@ -611,8 +544,8 @@ public partial class SnipWindowViewModel
         PinTranslationResultsCommand = ReactiveCommand.CreateFromTask(PinAllTranslationsAsync, canExecuteInTranslation);
         PinTranslationResultsCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Pin All Translation error: {ex}"));
 
-        // 監聽集合變更以即時更新遮罩挖空，並訂閱項目的屬性變更
-        UserSelections.CollectionChanged += (s, e) => 
+        // Keep mask and audio helper state in sync with translation selection edits.
+        UserSelections.CollectionChanged += (s, e) =>
         {
             if (e.NewItems != null)
             {
@@ -631,25 +564,5 @@ public partial class SnipWindowViewModel
 
             UpdateMask();
         };
-    }
-
-    private void InitializeSAM2(MainWindowViewModel mainVm)
-    {
-        Task.Run(async () => 
-        {
-            try
-            {
-                System.Diagnostics.Debug.WriteLine("[SAM2 Preload] Starting background initialization and warmup...");
-                if (_aiScanSessionService != null)
-                {
-                    await _aiScanSessionService.WarmUpSam2Async();
-                }
-                System.Diagnostics.Debug.WriteLine("[SAM2 Preload] Background warmup complete. Ready for scan.");
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"[SAM2 Preload] Failed: {ex.Message}");
-            }
-        });
     }
 }
