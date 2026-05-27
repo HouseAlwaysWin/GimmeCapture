@@ -176,20 +176,18 @@ public partial class FloatingVideoViewModel
                 .ToArray();
             
             // 2. Render vector/text overlay PNG only. Redaction effects are applied per-frame by FFmpeg.
-            using (var surface = SKSurface.Create(new SKImageInfo((int)OriginalWidth, (int)OriginalHeight, SKColorType.Bgra8888, SKAlphaType.Premul)))
+            using (var overlayBitmap = new SKBitmap((int)OriginalWidth, (int)OriginalHeight, SKColorType.Bgra8888, SKAlphaType.Premul))
             {
-                var canvas = surface.Canvas;
-                canvas.Clear(SKColors.Transparent);
-                
-                AnnotationRenderHelper.DrawAnnotationsOnCanvas(
-                    canvas,
+                overlayBitmap.Erase(SKColors.Transparent);
+                AnnotationRenderService.Shared.RenderAnnotationsToBitmap(
+                    overlayBitmap,
                     overlayAnnotations,
                     DisplayWidth,
                     DisplayHeight,
-                    (float)OriginalWidth,
-                    (float)OriginalHeight);
-                
-                using (var image = surface.Snapshot())
+                    overlayBitmap.Width,
+                    overlayBitmap.Height);
+
+                using (var image = SKImage.FromBitmap(overlayBitmap))
                 using (var data = image.Encode(SKEncodedImageFormat.Png, 100))
                 using (var stream = File.OpenWrite(overlayPath))
                 {

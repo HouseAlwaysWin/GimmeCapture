@@ -49,6 +49,28 @@ public class AnnotationRenderServiceTests
     }
 
     [Fact]
+    public void RenderAnnotationsToBitmap_RectangleDrawsVisiblePixelsOnTransparentBitmap()
+    {
+        using var bitmap = new SKBitmap(32, 32, SKColorType.Bgra8888, SKAlphaType.Premul);
+        bitmap.Erase(SKColors.Transparent);
+
+        var annotation = new Annotation
+        {
+            Type = AnnotationType.Rectangle,
+            StartPoint = new Point(4, 4),
+            EndPoint = new Point(28, 24),
+            Color = Avalonia.Media.Colors.Red,
+            Thickness = 2
+        };
+
+        AnnotationRenderService.Shared.RenderAnnotationsToBitmap(bitmap, new[] { annotation }, 32, 32, 32, 32);
+
+        Assert.True(bitmap.GetPixel(4, 4).Alpha > 0);
+        Assert.True(bitmap.GetPixel(16, 4).Alpha > 0);
+        Assert.Equal((byte)0, bitmap.GetPixel(16, 16).Alpha);
+    }
+
+    [Fact]
     public void RenderAnnotationPreview_BlurKeepsOpaqueEdgesWhenRegionTouchesSnapshotBounds()
     {
         using var snapshot = CreateSolidBitmap(40, 20, new SKColor(240, 240, 240, 255));
