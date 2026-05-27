@@ -70,6 +70,26 @@ public class AnnotationRenderServiceTests
         Assert.Equal((byte)255, preview.GetPixel(preview.Width - 1, preview.Height - 1).Alpha);
     }
 
+    [Fact]
+    public void RenderAnnotationsToBitmap_BlurPreservesVisibleImageVariation()
+    {
+        using var bitmap = CreateStripedBitmap(80, 24);
+        var annotation = new Annotation
+        {
+            Type = AnnotationType.Blur,
+            StartPoint = new Point(0, 0),
+            EndPoint = new Point(80, 24),
+            EffectSettings = new AnnotationEffectSettings { BlurRadius = 8f }
+        };
+
+        AnnotationRenderService.Shared.RenderAnnotationsToBitmap(bitmap, new[] { annotation }, 80, 24, 80, 24);
+
+        var darkBand = bitmap.GetPixel(10, 12).Red;
+        var lightBand = bitmap.GetPixel(30, 12).Red;
+
+        Assert.True(Math.Abs(lightBand - darkBand) > 8);
+    }
+
     private static SKBitmap CreateGradientBitmap(int width, int height)
     {
         var bitmap = new SKBitmap(width, height, SKColorType.Bgra8888, SKAlphaType.Premul);
@@ -91,6 +111,20 @@ public class AnnotationRenderServiceTests
             for (int x = 0; x < width; x++)
             {
                 bitmap.SetPixel(x, y, color);
+            }
+        }
+        return bitmap;
+    }
+
+    private static SKBitmap CreateStripedBitmap(int width, int height)
+    {
+        var bitmap = new SKBitmap(width, height, SKColorType.Bgra8888, SKAlphaType.Premul);
+        for (int y = 0; y < height; y++)
+        {
+            for (int x = 0; x < width; x++)
+            {
+                byte value = ((x / 16) % 2) == 0 ? (byte)35 : (byte)220;
+                bitmap.SetPixel(x, y, new SKColor(value, value, value, 255));
             }
         }
         return bitmap;

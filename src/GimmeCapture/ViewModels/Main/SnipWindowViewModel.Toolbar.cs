@@ -213,6 +213,14 @@ public partial class SnipWindowViewModel
         UpdateHistoryStatus();
     }
 
+    public Annotation CreateAnnotationForCurrentTool(Point relPoint)
+    {
+        return _editorState.CreateAnnotationForCurrentTool(
+            relPoint,
+            DrawingModeSnapshot,
+            SelectionRect.Size);
+    }
+
     public void RemoveAnnotation(Annotation annotation)
     {
         _editorState.RemoveAnnotation(annotation);

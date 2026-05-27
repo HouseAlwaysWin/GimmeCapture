@@ -324,22 +324,10 @@ public abstract class FloatingWindowBase : Window
                 ? GetContentSnapshot()
                 : null;
 
-            _currentAnnotation = new Annotation
-            {
-                Type = vm.CurrentAnnotationTool,
-                StartPoint = pointerPosOnContent,
-                EndPoint = pointerPosOnContent,
-                Color = vm.SelectedColor,
-                Thickness = vm.CurrentThickness,
-                FontSize = vm.CurrentFontSize,
-                IsBold = vm.IsBold,
-                IsItalic = vm.IsItalic,
-                DrawingModeSnapshot = frameSnapshot,
-                DrawingModeReferenceSize = contentControl.Bounds.Size
-            };
-
-            if (_currentAnnotation.Type == AnnotationType.Pen)
-                _currentAnnotation.AddPoint(pointerPosOnContent);
+            _currentAnnotation = vm.CreateAnnotationForCurrentTool(
+                pointerPosOnContent,
+                frameSnapshot,
+                contentControl.Bounds.Size);
 
             vm.AddAnnotation(_currentAnnotation);
             e.Pointer.Capture(this);

@@ -27,9 +27,9 @@ public class VideoAnnotationFilterBuilderTests
             isOutputGif: false);
 
         Assert.Contains("boxblur=", filter);
-        Assert.Contains("luma_power=3", filter);
-        Assert.Contains("eq=contrast=0.82:brightness=-0.03:saturation=0.92", filter);
-        Assert.Contains("crop=w=283:h=200:x=0:y=0", filter);
+        Assert.Contains("luma_power=2", filter);
+        Assert.DoesNotContain("eq=contrast", filter);
+        Assert.Contains("crop=w=280:h=200:x=0:y=0", filter);
         Assert.Contains("crop=w=200:h=100:x=20:y=40", filter);
         Assert.Contains("[1:v][v1]scale2ref", filter);
         Assert.Contains("[vcomposite]null[outv]", filter);

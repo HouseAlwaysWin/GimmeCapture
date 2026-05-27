@@ -257,7 +257,7 @@ public sealed class AnnotationRenderService : IAnnotationRenderService
             return;
 
         float blurRadius = Math.Max(1f, settings.BlurRadius * uniformScale);
-        int padding = Math.Max(2, (int)Math.Ceiling(blurRadius * 1.75f));
+        int padding = Math.Max(2, (int)Math.Ceiling(blurRadius * 3f));
         int expandedLeft = Math.Max(0, left - padding);
         int expandedTop = Math.Max(0, top - padding);
         int expandedRight = Math.Min(target.Width, right + padding);
@@ -276,50 +276,16 @@ public sealed class AnnotationRenderService : IAnnotationRenderService
                 new SKRect(0, 0, expandedWidth, expandedHeight));
         }
 
-        int downsampleFactor = Math.Clamp((int)MathF.Round(blurRadius / 8f), 2, 8);
-        int reducedWidth = Math.Max(1, expandedWidth / downsampleFactor);
-        int reducedHeight = Math.Max(1, expandedHeight / downsampleFactor);
-
-        using var reduced = new SKBitmap(reducedWidth, reducedHeight, SKColorType.Bgra8888, SKAlphaType.Premul);
-        using (var reducedCanvas = new SKCanvas(reduced))
-        using (var reducedPaint = new SKPaint { FilterQuality = SKFilterQuality.Low })
-        {
-            reducedCanvas.DrawBitmap(region, new SKRect(0, 0, reducedWidth, reducedHeight), reducedPaint);
-        }
-
-        float reducedBlurRadius = Math.Max(1f, (blurRadius / downsampleFactor) * 1.1f);
-        using var reducedBlurred = new SKBitmap(reducedWidth, reducedHeight, SKColorType.Bgra8888, SKAlphaType.Premul);
-        using (var reducedBlurCanvas = new SKCanvas(reducedBlurred))
-        using (var reducedBlurPaint = new SKPaint { ImageFilter = CreateClampBlur(reducedBlurRadius, reducedBlurRadius) })
-        {
-            reducedBlurCanvas.DrawBitmap(reduced, 0, 0, reducedBlurPaint);
-        }
-
-        using var softened = new SKBitmap(expandedWidth, expandedHeight, SKColorType.Bgra8888, SKAlphaType.Premul);
-        using (var softenedCanvas = new SKCanvas(softened))
-        using (var upscalePaint = new SKPaint { FilterQuality = SKFilterQuality.Medium })
-        {
-            softenedCanvas.DrawBitmap(reducedBlurred, new SKRect(0, 0, expandedWidth, expandedHeight), upscalePaint);
-        }
-
         using var blurred = new SKBitmap(expandedWidth, expandedHeight, SKColorType.Bgra8888, SKAlphaType.Premul);
         using (var canvas = new SKCanvas(blurred))
-        using (var blurPaint = new SKPaint { ImageFilter = CreateClampBlur(blurRadius * 0.7f, blurRadius * 0.7f) })
+        using (var blurPaint = new SKPaint { ImageFilter = CreateClampBlur(blurRadius, blurRadius) })
         {
-            canvas.DrawBitmap(softened, 0, 0, blurPaint);
-        }
-
-        // One more light pass keeps the blur strong without turning it into a gray overlay.
-        using var finalBlurred = new SKBitmap(expandedWidth, expandedHeight, SKColorType.Bgra8888, SKAlphaType.Premul);
-        using (var finalCanvas = new SKCanvas(finalBlurred))
-        using (var finalPaint = new SKPaint { ImageFilter = CreateClampBlur(blurRadius * 0.22f, blurRadius * 0.22f) })
-        {
-            finalCanvas.DrawBitmap(blurred, 0, 0, finalPaint);
+            canvas.DrawBitmap(region, 0, 0, blurPaint);
         }
 
         using var targetCanvas = new SKCanvas(target);
         targetCanvas.DrawBitmap(
-            finalBlurred,
+            blurred,
             new SKRect(innerLeft, innerTop, innerLeft + width, innerTop + height),
             new SKRect(left, top, right, bottom));
     }

@@ -557,6 +557,14 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
         _editorState.AddAnnotation(annotation);
     }
 
+    public Annotation CreateAnnotationForCurrentTool(Avalonia.Point startPoint, Bitmap? drawingModeSnapshot, Avalonia.Size drawingModeReferenceSize)
+    {
+        return _editorState.CreateAnnotationForCurrentTool(
+            startPoint,
+            drawingModeSnapshot,
+            drawingModeReferenceSize);
+    }
+
     public void ClearAnnotations()
     {
         _editorState.ClearAnnotations();

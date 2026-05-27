@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using Avalonia;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
 using GimmeCapture.Models;
 using ReactiveUI;
 
@@ -13,9 +14,9 @@ public sealed class AnnotationEditorState : ReactiveObject, IDisposable
     private static readonly AnnotationEffectSettings MosaicSmall = new() { MosaicCellSize = 18, BlurRadius = 24f, Feather = 0f };
     private static readonly AnnotationEffectSettings MosaicMedium = new() { MosaicCellSize = 30, BlurRadius = 24f, Feather = 0f };
     private static readonly AnnotationEffectSettings MosaicLarge = new() { MosaicCellSize = 48, BlurRadius = 24f, Feather = 0f };
-    private static readonly AnnotationEffectSettings BlurSoft = new() { MosaicCellSize = 20, BlurRadius = 36f, Feather = 0f };
-    private static readonly AnnotationEffectSettings BlurMedium = new() { MosaicCellSize = 20, BlurRadius = 64f, Feather = 0f };
-    private static readonly AnnotationEffectSettings BlurStrong = new() { MosaicCellSize = 20, BlurRadius = 96f, Feather = 0f };
+    private static readonly AnnotationEffectSettings BlurSoft = new() { MosaicCellSize = 20, BlurRadius = 10f, Feather = 0f };
+    private static readonly AnnotationEffectSettings BlurMedium = new() { MosaicCellSize = 20, BlurRadius = 18f, Feather = 0f };
+    private static readonly AnnotationEffectSettings BlurStrong = new() { MosaicCellSize = 20, BlurRadius = 28f, Feather = 0f };
 
     public ObservableCollection<Annotation> Annotations { get; } = new();
 
@@ -156,6 +157,32 @@ public sealed class AnnotationEditorState : ReactiveObject, IDisposable
         };
     }
 
+    public Annotation CreateAnnotationForCurrentTool(Point startPoint, Bitmap? drawingModeSnapshot = null, Size drawingModeReferenceSize = default)
+    {
+        var annotation = new Annotation
+        {
+            Type = CurrentAnnotationTool,
+            StartPoint = startPoint,
+            EndPoint = startPoint,
+            Color = SelectedColor,
+            Thickness = CurrentThickness,
+            FontSize = CurrentFontSize,
+            FontFamily = CurrentFontFamily,
+            IsBold = IsBold,
+            IsItalic = IsItalic,
+            DrawingModeSnapshot = drawingModeSnapshot,
+            DrawingModeReferenceSize = drawingModeReferenceSize,
+            EffectSettings = CreateEffectSettingsFor(CurrentAnnotationTool)
+        };
+
+        if (CurrentAnnotationTool == AnnotationType.Pen)
+        {
+            annotation.AddPoint(startPoint);
+        }
+
+        return annotation;
+    }
+
     public void SetRedactionPreset(string preset)
     {
         if (_lastRedactionTool == AnnotationType.Blur || CurrentAnnotationTool == AnnotationType.Blur)
@@ -189,8 +216,8 @@ public sealed class AnnotationEditorState : ReactiveObject, IDisposable
             {
                 return _blurSettings.BlurRadius switch
                 {
-                    <= 44f => "Soft",
-                    >= 80f => "Strong",
+                    <= 12f => "Soft",
+                    >= 24f => "Strong",
                     _ => "Medium"
                 };
             }

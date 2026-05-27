@@ -78,22 +78,7 @@ public partial class SnipWindow
         _startPoint = point;
         var relPoint = new Point(point.X - _viewModel.SelectionRect.X, point.Y - _viewModel.SelectionRect.Y);
 
-        _currentAnnotation = new Annotation
-        {
-            Type = _viewModel.CurrentAnnotationTool,
-            StartPoint = relPoint,
-            EndPoint = relPoint,
-            Color = _viewModel.SelectedColor,
-            Thickness = _viewModel.CurrentThickness,
-            FontSize = _viewModel.CurrentFontSize,
-            DrawingModeSnapshot = _viewModel.DrawingModeSnapshot,
-            DrawingModeReferenceSize = _viewModel.SelectionRect.Size
-        };
-
-        if (_viewModel.CurrentAnnotationTool == AnnotationType.Pen)
-        {
-            _currentAnnotation.AddPoint(relPoint);
-        }
+        _currentAnnotation = _viewModel.CreateAnnotationForCurrentTool(relPoint);
 
         _viewModel.AddAnnotation(_currentAnnotation);
         e.Handled = true;

@@ -46,8 +46,8 @@ public static class VideoAnnotationFilterBuilder
 
             if (annotation.Type == AnnotationType.Blur)
             {
-                int radius = Math.Max(3, (int)Math.Round(annotation.EffectSettings.BlurRadius * uniformScale * 1.8f));
-                int padding = Math.Max(2, (int)Math.Ceiling(radius * 1.75));
+                int radius = Math.Max(2, (int)Math.Round(annotation.EffectSettings.BlurRadius * uniformScale));
+                int padding = Math.Max(2, (int)Math.Ceiling(radius * 3.0));
                 int expandedX = Math.Max(0, rect.X - padding);
                 int expandedY = Math.Max(0, rect.Y - padding);
                 int expandedRight = Math.Min(targetWidth, rect.X + rect.Width + padding);
@@ -58,8 +58,7 @@ public static class VideoAnnotationFilterBuilder
                 int innerY = rect.Y - expandedY;
                 filterParts.Add(
                     $"[{sourceLabel}]crop=w={expandedWidth}:h={expandedHeight}:x={expandedX}:y={expandedY}," +
-                    $"boxblur=luma_radius={radius}:luma_power=3:chroma_radius={Math.Max(1, radius / 2)}:chroma_power=2," +
-                    "eq=contrast=0.82:brightness=-0.03:saturation=0.92," +
+                    $"boxblur=luma_radius={radius}:luma_power=2:chroma_radius={Math.Max(1, radius / 2)}:chroma_power=2," +
                     $"crop=w={rect.Width}:h={rect.Height}:x={innerX}:y={innerY}[{effectLabel}]");
             }
             else
