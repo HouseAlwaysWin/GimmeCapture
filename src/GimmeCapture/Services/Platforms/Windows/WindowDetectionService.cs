@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using Avalonia;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Abstractions;
+using Microsoft.Win32;
 
 namespace GimmeCapture.Services.Platforms.Windows;
 
@@ -11,6 +12,8 @@ public class WindowDetectionService : IWindowDetectionService
 {
     private const double CandidateHysteresisPadding = 6.0;
     private const double ChildCandidateMinimumSize = 24.0;
+    private const int SyntheticTaskbarHandleBase = unchecked((int)0x70000000);
+    private const int SyntheticTaskbarChildHandleBase = unchecked((int)0x71000000);
     private const int GWL_EXSTYLE = -20;
     private const int GWL_STYLE = -16;
     private const int WS_EX_TOOLWINDOW = 0x00000080;
@@ -177,6 +180,92 @@ public class WindowDetectionService : IWindowDetectionService
         }
 
         return null;
+    }
+
+    internal static IReadOnlyList<Rect> BuildSyntheticTaskbarSegments(Rect stripBounds, bool centeredAlignment)
+    {
+        var segments = new List<Rect>(3);
+        if (stripBounds.Width < ChildCandidateMinimumSize || stripBounds.Height < ChildCandidateMinimumSize)
+        {
+            return segments;
+        }
+
+        bool isHorizontal = stripBounds.Width >= stripBounds.Height;
+        if (isHorizontal)
+        {
+            double trayWidth = ClampDimension(stripBounds.Width * 0.16, 220, 380, stripBounds.Width * 0.45);
+            Rect trayRect = new(
+                stripBounds.Right - trayWidth,
+                stripBounds.Top,
+                trayWidth,
+                stripBounds.Height);
+
+            double usableWidth = Math.Max(0, stripBounds.Width - trayWidth - 24);
+            if (usableWidth < ChildCandidateMinimumSize)
+            {
+                segments.Add(trayRect);
+                return segments;
+            }
+
+            Rect commandRect;
+            Rect appBandRect;
+            if (centeredAlignment)
+            {
+                double centeredBandWidth = ClampDimension(stripBounds.Width * 0.42, 320, 920, usableWidth);
+                double centeredBandX = stripBounds.Left + Math.Max(0, ((stripBounds.Width - trayWidth) - centeredBandWidth) / 2);
+                double commandWidth = ClampDimension(centeredBandWidth * 0.38, 180, 320, centeredBandWidth * 0.65);
+                commandRect = new(centeredBandX, stripBounds.Top, commandWidth, stripBounds.Height);
+                appBandRect = new(
+                    commandRect.Right,
+                    stripBounds.Top,
+                    Math.Max(0, centeredBandWidth - commandWidth),
+                    stripBounds.Height);
+            }
+            else
+            {
+                double leftBandWidth = ClampDimension(stripBounds.Width * 0.48, 360, 920, usableWidth);
+                double commandWidth = ClampDimension(leftBandWidth * 0.30, 160, 320, leftBandWidth * 0.6);
+                commandRect = new(stripBounds.Left, stripBounds.Top, commandWidth, stripBounds.Height);
+                appBandRect = new(
+                    commandRect.Right,
+                    stripBounds.Top,
+                    Math.Max(0, leftBandWidth - commandWidth),
+                    stripBounds.Height);
+            }
+
+            AddIfLargeEnough(segments, commandRect);
+            AddIfLargeEnough(segments, appBandRect);
+            AddIfLargeEnough(segments, trayRect);
+            return segments;
+        }
+
+        double trayHeight = ClampDimension(stripBounds.Height * 0.18, 160, 320, stripBounds.Height * 0.45);
+        Rect verticalTrayRect = new(
+            stripBounds.Left,
+            stripBounds.Bottom - trayHeight,
+            stripBounds.Width,
+            trayHeight);
+
+        double usableHeight = Math.Max(0, stripBounds.Height - trayHeight - 24);
+        if (usableHeight < ChildCandidateMinimumSize)
+        {
+            segments.Add(verticalTrayRect);
+            return segments;
+        }
+
+        double topBandHeight = ClampDimension(stripBounds.Height * 0.48, 280, 920, usableHeight);
+        double commandHeight = ClampDimension(topBandHeight * 0.22, 120, 240, topBandHeight * 0.5);
+        Rect verticalCommandRect = new(stripBounds.Left, stripBounds.Top, stripBounds.Width, commandHeight);
+        Rect verticalAppsRect = new(
+            stripBounds.Left,
+            verticalCommandRect.Bottom,
+            stripBounds.Width,
+            Math.Max(0, topBandHeight - commandHeight));
+
+        AddIfLargeEnough(segments, verticalCommandRect);
+        AddIfLargeEnough(segments, verticalAppsRect);
+        AddIfLargeEnough(segments, verticalTrayRect);
+        return segments;
     }
 
     private static bool ShouldSkipEnumeratedTopLevelWindow(
@@ -364,20 +453,74 @@ public class WindowDetectionService : IWindowDetectionService
 
             if (!IsCandidateRectAlreadyRepresented(strip, candidates))
             {
-                IntPtr syntheticHandle = new(unchecked((int)0x70000000) + monitorIndex);
-                candidates.Add(new WindowCandidate(
+                IntPtr syntheticHandle = new(SyntheticTaskbarHandleBase + monitorIndex);
+                var syntheticStripCandidate = new WindowCandidate(
                     strip,
                     syntheticHandle,
                     IntPtr.Zero,
                     syntheticHandle,
                     stripZOrder++,
-                    WindowCandidateKind.TopLevel));
+                    WindowCandidateKind.TopLevel);
+
+                candidates.Add(syntheticStripCandidate);
+                AddSyntheticTaskbarChildCandidates(syntheticStripCandidate, candidates, ref stripZOrder);
             }
 
             monitorIndex++;
             return true;
         }, IntPtr.Zero);
         nextZOrder = stripZOrder;
+    }
+
+    private void AddSyntheticTaskbarChildCandidates(WindowCandidate stripCandidate, List<WindowCandidate> candidates, ref int nextZOrder)
+    {
+        bool centeredAlignment = IsTaskbarCenteredAlignment();
+        IReadOnlyList<Rect> segments = BuildSyntheticTaskbarSegments(stripCandidate.Bounds, centeredAlignment);
+        for (int i = 0; i < segments.Count; i++)
+        {
+            IntPtr childHandle = new(SyntheticTaskbarChildHandleBase + (stripCandidate.Hwnd.ToInt32() - SyntheticTaskbarHandleBase) * 10 + i);
+            candidates.Add(new WindowCandidate(
+                segments[i],
+                childHandle,
+                stripCandidate.Hwnd,
+                stripCandidate.RootHwnd,
+                nextZOrder++,
+                WindowCandidateKind.ChildControl));
+        }
+    }
+
+    private static bool IsTaskbarCenteredAlignment()
+    {
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced", writable: false);
+            object? value = key?.GetValue("TaskbarAl");
+            return value switch
+            {
+                int intValue => intValue == 1,
+                byte byteValue => byteValue == 1,
+                _ => true
+            };
+        }
+        catch
+        {
+            return true;
+        }
+    }
+
+    private static double ClampDimension(double preferred, double min, double max, double available)
+    {
+        double resolved = Math.Min(preferred, max);
+        resolved = Math.Max(resolved, min);
+        return Math.Min(resolved, Math.Max(available, min));
+    }
+
+    private static void AddIfLargeEnough(List<Rect> segments, Rect rect)
+    {
+        if (rect.Width >= ChildCandidateMinimumSize && rect.Height >= ChildCandidateMinimumSize)
+        {
+            segments.Add(rect);
+        }
     }
 
     private static bool IsCandidateRectAlreadyRepresented(Rect target, List<WindowCandidate> candidates)
