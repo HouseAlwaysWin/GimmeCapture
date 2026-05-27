@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Threading;
 using GimmeCapture.Models;
 using ReactiveUI;
 using System;
@@ -9,44 +10,79 @@ using System.Reactive.Linq;
 using System.Threading.Tasks;
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core;
+using GimmeCapture.Services.Core.Interaction;
 
 namespace GimmeCapture.ViewModels.Main;
 
 public partial class SnipWindowViewModel
 {
-    private Rect _detectedRect;
-    public Rect DetectedRect
+    private readonly HoverRectangleAnimationController _hoverAnimationController = new(TimeSpan.FromMilliseconds(160), dashSpeed: -14.0);
+    private readonly DispatcherTimer _hoverAnimationTimer = new() { Interval = TimeSpan.FromMilliseconds(16) };
+    private IReadOnlyList<WindowCandidate> _windowCandidates = [];
+    private WindowCandidate? _currentHoverCandidate;
+    private DateTime _lastHoverAnimationTickUtc;
+
+    private Rect _hoverTargetRect;
+    public Rect HoverTargetRect
     {
-        get => _detectedRect;
-        set
-        {
-            this.RaiseAndSetIfChanged(ref _detectedRect, value);
-            this.RaisePropertyChanged(nameof(IsAiDetectedRectPreviewVisible));
-        }
+        get => _hoverTargetRect;
+        private set => this.RaiseAndSetIfChanged(ref _hoverTargetRect, value);
     }
 
     /// <summary>
-    /// Screenshot/recording: AI + Win32 window snap candidate boxes. Always false in translation (cursor / single / multi).
+    /// Screenshot/recording AI candidate boxes. Always false in translation (cursor / single / multi).
     /// </summary>
     public bool IsAiScanCandidateLayerVisible =>
         CurrentState == SnipState.Detecting && CurrentMode != SnipMode.Translation;
 
     /// <summary>
-    /// Dashed hover preview when choosing a candidate. Always false in translation mode.
+    /// Win32 window/control snap candidate boxes. Always false in translation mode.
     /// </summary>
-    public bool IsAiDetectedRectPreviewVisible =>
-        CurrentMode != SnipMode.Translation && CurrentState == SnipState.Detecting && DetectedRect.Width > 0;
+    public bool IsWindowSnapCandidateLayerVisible =>
+        CurrentState == SnipState.Detecting && CurrentMode != SnipMode.Translation;
 
     public ObservableCollection<VisualRect> WindowRects { get; } = new();
+    public ObservableCollection<VisualRect> AIScanRects { get; } = new();
     private readonly IWindowDetectionService _detectionService;
 
+    private Rect _animatedHoverRect;
+    public Rect AnimatedHoverRect
+    {
+        get => _animatedHoverRect;
+        private set
+        {
+            this.RaiseAndSetIfChanged(ref _animatedHoverRect, value);
+            this.RaisePropertyChanged(nameof(IsHoverPreviewVisible));
+        }
+    }
+
+    private double _hoverDashOffset;
+    public double HoverDashOffset
+    {
+        get => _hoverDashOffset;
+        private set => this.RaiseAndSetIfChanged(ref _hoverDashOffset, value);
+    }
+
+    public bool IsHoverPreviewVisible =>
+        CurrentMode != SnipMode.Translation
+        && CurrentState == SnipState.Detecting
+        && !IsDrawingMode
+        && RecState == RecordingState.Idle
+        && AnimatedHoverRect.Width > 0
+        && AnimatedHoverRect.Height > 0;
+
+    private void InitializeWindowSnapHoverAnimation()
+    {
+        _hoverAnimationTimer.Tick += (_, _) => AdvanceWindowSnapHoverAnimation();
+    }
+
     /// <summary>
-    /// Clears screenshot/recording AI candidate boxes and hover preview. Not used in translation mode.
-    /// </summary>
+     /// Clears screenshot/recording AI candidate boxes and hover preview. Not used in translation mode.
+     /// </summary>
     private void ClearAiScanOverlayState()
     {
-        DetectedRect = default;
-        WindowRects.Clear();
+        AIScanRects.Clear();
+        DismissWindowSnapHoverPreview(preserveTargetRect: false);
         _scanCts?.Cancel();
     }
 
@@ -57,36 +93,136 @@ public partial class SnipWindowViewModel
             return;
         }
 
-        // Get global rects (Physical pixels)
-        var globalRects = _detectionService.GetVisibleWindowRects(excludeHWnd);
-        
-        // Translate to local coordinates based on ScreenOffset (Physical)
-        // AND convert to logical coordinates by dividing by VisualScaling
-        var localRects = globalRects
-            .AsValueEnumerable()
-            .Select(r => new VisualRect(
-                (r.X - ScreenOffset.X) / VisualScaling, 
-                (r.Y - ScreenOffset.Y) / VisualScaling, 
-                r.Width / VisualScaling, 
-                r.Height / VisualScaling));
-        
+        var globalCandidates = _detectionService.GetVisibleWindowCandidates(excludeHWnd);
+        _windowCandidates = globalCandidates.AsValueEnumerable()
+            .Select(candidate => ToLocalCandidate(candidate))
+            .ToList();
+
         WindowRects.Clear();
-        foreach (var rect in localRects)
+        foreach (var rect in _windowCandidates.AsValueEnumerable().Where(candidate => candidate.Kind == WindowCandidateKind.TopLevel))
         {
-            WindowRects.Add(rect);
+            WindowRects.Add(new VisualRect(rect.Bounds));
+        }
+
+        DismissWindowSnapHoverPreview(preserveTargetRect: false);
+    }
+
+    public void UpdateWindowHover(Point mousePos)
+    {
+        if (CurrentState != SnipState.Detecting || CurrentMode == SnipMode.Translation || IsDrawingMode || RecState != RecordingState.Idle)
+        {
+            DismissWindowSnapHoverPreview(preserveTargetRect: false);
+            return;
+        }
+
+        var candidate = _detectionService.GetCandidateAtPoint(mousePos, _windowCandidates, _currentHoverCandidate);
+        if (candidate == null)
+        {
+            _currentHoverCandidate = null;
+            HoverTargetRect = default;
+            DismissWindowSnapHoverPreview(preserveTargetRect: false);
+            return;
+        }
+
+        HoverTargetRect = candidate.Bounds;
+
+        bool targetChanged = _currentHoverCandidate == null || !_currentHoverCandidate.IsSameIdentity(candidate);
+        _currentHoverCandidate = candidate;
+
+        if (targetChanged)
+        {
+            _hoverAnimationController.SetTarget(candidate.Bounds);
+            ApplyWindowSnapHoverAnimationState();
+        }
+
+        EnsureWindowSnapHoverTimerRunning();
+    }
+
+    private void AdvanceWindowSnapHoverAnimation()
+    {
+        if (!_hoverAnimationTimer.IsEnabled)
+        {
+            return;
+        }
+
+        DateTime now = DateTime.UtcNow;
+        if (_lastHoverAnimationTickUtc == default)
+        {
+            _lastHoverAnimationTickUtc = now;
+            return;
+        }
+
+        var elapsed = now - _lastHoverAnimationTickUtc;
+        _lastHoverAnimationTickUtc = now;
+        _hoverAnimationController.Advance(elapsed);
+        ApplyWindowSnapHoverAnimationState();
+
+        if (!ShouldKeepWindowSnapHoverTimerRunning())
+        {
+            _hoverAnimationTimer.Stop();
         }
     }
 
-    public void UpdateDetectedRect(Point mousePos)
+    private void EnsureWindowSnapHoverTimerRunning()
     {
-        if (CurrentState != SnipState.Detecting || CurrentMode == SnipMode.Translation) return;
-        
-        // Convert VisualRects back to Rects for detection service (or update detection service)
-        // Since VisualRect is simple, we can just project it.
-        var rectList = WindowRects.AsValueEnumerable().Select(vr => new Rect(vr.X, vr.Y, vr.Width, vr.Height)).ToList();
-        var rect = _detectionService.GetRectAtPoint(mousePos, rectList);
-        
-        DetectedRect = rect ?? new Rect(0,0,0,0);
+        if (!ShouldKeepWindowSnapHoverTimerRunning())
+        {
+            return;
+        }
+
+        _lastHoverAnimationTickUtc = DateTime.UtcNow;
+        if (!_hoverAnimationTimer.IsEnabled)
+        {
+            _hoverAnimationTimer.Start();
+        }
+    }
+
+    private bool ShouldKeepWindowSnapHoverTimerRunning()
+    {
+        return _hoverAnimationController.IsVisible
+            && CurrentState == SnipState.Detecting
+            && CurrentMode != SnipMode.Translation
+            && !IsDrawingMode
+            && RecState == RecordingState.Idle;
+    }
+
+    private void ApplyWindowSnapHoverAnimationState()
+    {
+        AnimatedHoverRect = _hoverAnimationController.IsVisible ? _hoverAnimationController.CurrentRect : default;
+        HoverDashOffset = _hoverAnimationController.DashOffset;
+    }
+
+    private void DismissWindowSnapHoverPreview(bool preserveTargetRect)
+    {
+        _hoverAnimationTimer.Stop();
+        _hoverAnimationController.Hide();
+        _lastHoverAnimationTickUtc = default;
+        AnimatedHoverRect = default;
+        HoverDashOffset = 0;
+
+        if (!preserveTargetRect)
+        {
+            HoverTargetRect = default;
+            _currentHoverCandidate = null;
+        }
+    }
+
+    private WindowCandidate ToLocalCandidate(WindowCandidate candidate)
+    {
+        Rect bounds = candidate.Bounds;
+        Rect localBounds = new(
+            (bounds.X - ScreenOffset.X) / VisualScaling,
+            (bounds.Y - ScreenOffset.Y) / VisualScaling,
+            bounds.Width / VisualScaling,
+            bounds.Height / VisualScaling);
+
+        return new WindowCandidate(
+            localBounds,
+            candidate.Hwnd,
+            candidate.ParentHwnd,
+            candidate.RootHwnd,
+            candidate.ZOrder,
+            candidate.Kind);
     }
 
     private System.Threading.CancellationTokenSource? _scanCts;
@@ -319,7 +455,7 @@ public partial class SnipWindowViewModel
             foreach (var rect in rects)
             {
                 if (token.IsCancellationRequested) break;
-                WindowRects.Add(new VisualRect(rect));
+                AIScanRects.Add(new VisualRect(rect));
                 addedCount++;
             }
 
@@ -351,11 +487,11 @@ public partial class SnipWindowViewModel
 
             foreach (var rect in rects)
             {
-                bool duplicated = WindowRects.AsValueEnumerable().Any(existing =>
+                bool duplicated = AIScanRects.AsValueEnumerable().Any(existing =>
                     IsNearDuplicate(new Rect(existing.X, existing.Y, existing.Width, existing.Height), rect));
                 if (!duplicated)
                 {
-                    WindowRects.Add(new VisualRect(rect));
+                    AIScanRects.Add(new VisualRect(rect));
                 }
             }
         });

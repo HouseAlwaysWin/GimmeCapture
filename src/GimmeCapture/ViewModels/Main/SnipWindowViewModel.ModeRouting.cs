@@ -27,7 +27,8 @@ public partial class SnipWindowViewModel
         nameof(IsToolbarVisible),
         nameof(IsToolbarShownOnScreen),
         nameof(IsAiScanCandidateLayerVisible),
-        nameof(IsAiDetectedRectPreviewVisible)
+        nameof(IsWindowSnapCandidateLayerVisible),
+        nameof(IsHoverPreviewVisible)
     };
 
     private static readonly string[] _modeHotkeyPropertyNames =

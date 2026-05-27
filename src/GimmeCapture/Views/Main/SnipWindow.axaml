@@ -128,7 +128,7 @@
         </Path>
         
             <!-- AI Scan Results Layer (Background Candidates) — 翻譯模式（含單選/多選）不顯示 -->
-            <ItemsControl ItemsSource="{Binding WindowRects}" IsHitTestVisible="True"
+            <ItemsControl ItemsSource="{Binding AIScanRects}" IsHitTestVisible="False"
                           Width="{Binding ViewportSize.Width}" Height="{Binding ViewportSize.Height}"
                           IsVisible="{Binding IsAiScanCandidateLayerVisible}">
                 <ItemsControl.Styles>
@@ -165,15 +165,42 @@
             </ItemsControl>
 
             <!-- Detection Preview Layer (Active Selection - Dashed) — 翻譯模式不顯示 -->
+            <ItemsControl ItemsSource="{Binding WindowRects}" IsHitTestVisible="False"
+                          Width="{Binding ViewportSize.Width}" Height="{Binding ViewportSize.Height}"
+                          IsVisible="{Binding IsWindowSnapCandidateLayerVisible}">
+                <ItemsControl.Styles>
+                    <Style Selector="ItemsControl > ContentPresenter" x:DataType="m:VisualRect">
+                        <Setter Property="Canvas.Left" Value="{Binding X}"/>
+                        <Setter Property="Canvas.Top" Value="{Binding Y}"/>
+                    </Style>
+                </ItemsControl.Styles>
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <Canvas />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border BorderBrush="{Binding $parent[Window].DataContext.SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}"
+                                BorderThickness="1"
+                                Background="Transparent"
+                                Opacity="0.24"
+                                Width="{Binding Width}"
+                                Height="{Binding Height}"/>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
             <Canvas IsHitTestVisible="False">
                 <Rectangle Stroke="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}"
                            StrokeThickness="2"
                            StrokeDashArray="4,2"
-                           IsVisible="{Binding IsAiDetectedRectPreviewVisible}"
-                           Width="{Binding DetectedRect.Width}"
-                           Height="{Binding DetectedRect.Height}"
-                           Canvas.Left="{Binding DetectedRect.X}"
-                           Canvas.Top="{Binding DetectedRect.Y}"
+                           StrokeDashOffset="{Binding HoverDashOffset}"
+                           IsVisible="{Binding IsHoverPreviewVisible}"
+                           Width="{Binding AnimatedHoverRect.Width}"
+                           Height="{Binding AnimatedHoverRect.Height}"
+                           Canvas.Left="{Binding AnimatedHoverRect.X}"
+                           Canvas.Top="{Binding AnimatedHoverRect.Y}"
                            Opacity="1"/>
             </Canvas>
 

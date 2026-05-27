@@ -73,6 +73,12 @@ public partial class SnipWindowViewModel
                 }
             }
             this.RaiseAndSetIfChanged(ref _isDrawingMode, value);
+            this.RaisePropertyChanged(nameof(IsHoverPreviewVisible));
+
+            if (value)
+            {
+                DismissWindowSnapHoverPreview(preserveTargetRect: false);
+            }
         }
     }
 

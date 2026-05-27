@@ -22,18 +22,20 @@ public partial class SnipWindowViewModel
         get => _currentState;
         set
         {
-            System.Diagnostics.Debug.WriteLine($"[SnipState] {_currentState} -> {value}");
+            var previousState = _currentState;
+            System.Diagnostics.Debug.WriteLine($"[SnipState] {previousState} -> {value}");
             this.RaiseAndSetIfChanged(ref _currentState, value);
             this.RaisePropertyChanged(nameof(SelectionShadowColor));
             this.RaisePropertyChanged(nameof(IsAiScanCandidateLayerVisible));
-            this.RaisePropertyChanged(nameof(IsAiDetectedRectPreviewVisible));
+            this.RaisePropertyChanged(nameof(IsWindowSnapCandidateLayerVisible));
+            this.RaisePropertyChanged(nameof(IsHoverPreviewVisible));
             
             // If we leave Detecting state (e.g. start selecting), cancel any running scan
             if (value != SnipState.Detecting)
             {
                 _scanCts?.Cancel();
-                // Optional: clear rects immediately if we want them gone 
-                // (though SnipWindow.axaml handles visibility too)
+                DismissWindowSnapHoverPreview(
+                    preserveTargetRect: previousState == SnipState.Detecting && value == SnipState.Selecting);
             }
             else
             {
@@ -203,7 +205,7 @@ public partial class SnipWindowViewModel
                 
                 if (!value)
                 {
-                    WindowRects.Clear();
+                    AIScanRects.Clear();
                     _scanCts?.Cancel();
                 }
                 else

@@ -480,7 +480,7 @@ public partial class SnipWindow : Window
         }
         else if (_viewModel.CurrentState == SnipState.Detecting && !_viewModel.IsTranslationMode)
         {
-            _viewModel.UpdateDetectedRect(currentPoint);
+            _viewModel.UpdateWindowHover(currentPoint);
         }
     }
 
@@ -520,9 +520,9 @@ public partial class SnipWindow : Window
              var currentPoint = e.GetPosition(this);
              var dist = Math.Sqrt(Math.Pow(currentPoint.X - _startPoint.X, 2) + Math.Pow(currentPoint.Y - _startPoint.Y, 2));
              
-             if (dist < 5 && _viewModel.DetectedRect.Width > 0)
+             if (dist < 5 && _viewModel.HoverTargetRect.Width > 0)
              {
-                 _viewModel.SelectionRect = _viewModel.DetectedRect;
+                 _viewModel.SelectionRect = _viewModel.HoverTargetRect;
              }
              
              _viewModel.CurrentState = SnipState.Selected;

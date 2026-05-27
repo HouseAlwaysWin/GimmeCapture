@@ -48,8 +48,8 @@ public partial class SnipWindowViewModel
 
     private sealed class DesignWindowDetectionService : IWindowDetectionService
     {
-        public List<Rect> GetVisibleWindowRects(IntPtr? excludeHWnd = null) => [];
+        public IReadOnlyList<WindowCandidate> GetVisibleWindowCandidates(IntPtr? excludeHWnd = null) => [];
 
-        public Rect? GetRectAtPoint(Point point, List<Rect> windowRects) => null;
+        public WindowCandidate? GetCandidateAtPoint(Point point, IReadOnlyList<WindowCandidate> candidates, WindowCandidate? previousCandidate = null) => null;
     }
 }

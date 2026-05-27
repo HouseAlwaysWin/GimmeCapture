@@ -309,6 +309,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
 
         InitializeToolbarReactivity();
         InitializeLocalizationBindings();
+        InitializeWindowSnapHoverAnimation();
 
         UpdateMask();
     }
@@ -374,7 +375,8 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
                     nameof(RecState),
                     nameof(IsRecordingActive),
                     nameof(HideFrameBorder),
-                    nameof(HideSelectionDecoration));
+                    nameof(HideSelectionDecoration),
+                    nameof(IsHoverPreviewVisible));
             },
             observeOnMainThread: true)
             .DisposeWith(_disposables);
@@ -665,6 +667,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         LocalizationService.Instance.PropertyChanged -= OnLocalizationPropertyChanged;
         _audioMeterTimer.Stop();
         _audioLevelMonitor.Dispose();
+        _hoverAnimationTimer.Stop();
         _disposables.Dispose();
         _translationSession?.Dispose();
         _aiScanSessionService?.Dispose();
