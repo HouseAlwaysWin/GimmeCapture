@@ -9,6 +9,8 @@ using System.Threading.Tasks;
 using System.Reactive;
 using System.Reactive.Linq;
 using System.Reactive.Threading.Tasks;
+using GimmeCapture.Services.Core.AI;
+using System.Reflection;
 
 namespace GimmeCapture.Tests;
 
@@ -51,5 +53,56 @@ public class FloatingImageViewModelTests
 
         // Assert
         Assert.False(mockService.CopyCalled);
+    }
+
+    [Fact]
+    public void ImageChange_ShouldPreserveSam2Service_AndInvalidatePreparedImage()
+    {
+        var mockService = new MockClipboardService();
+        var mockSettings = new Mock<AppSettingsService>();
+        mockSettings.Setup(s => s.Settings).Returns(new AppSettings());
+
+        var mockAiPath = new Mock<AIPathService>(mockSettings.Object);
+        var mockAiResolver = new Mock<NativeResolverService>(mockAiPath.Object);
+        var mockAiDownloader = new Mock<AIModelDownloader>();
+        var mockAi = new Mock<AIResourceService>(mockSettings.Object, mockAiPath.Object, mockAiResolver.Object, mockAiDownloader.Object);
+        var sam2Runtime = new SAM2RuntimeService(mockAiPath.Object, mockAiResolver.Object);
+        var vm = new FloatingImageViewModel(null!, 0, 0, Avalonia.Media.Colors.Red, 2.0, false, false, mockService, mockAi.Object, sam2Runtime, mockSettings.Object, mockAiPath.Object);
+        var sam2Service = new SAM2Service(sam2Runtime, mockSettings.Object);
+
+        typeof(SAM2Service).GetField("_isImagePrepared", BindingFlags.Instance | BindingFlags.NonPublic)?.SetValue(sam2Service, true);
+        typeof(SAM2Service).GetField("_preparedImageKey", BindingFlags.Instance | BindingFlags.NonPublic)?.SetValue(sam2Service, "prepared");
+        vm.SetSam2ServiceForTesting(sam2Service);
+
+        vm.HandleImageChangedForSam2();
+
+        Assert.Same(sam2Service, vm.CurrentSam2ServiceForTesting);
+        Assert.False(sam2Service.IsImagePreparedForTesting);
+        Assert.Null(sam2Service.PreparedImageKeyForTesting);
+    }
+
+    [Fact]
+    public void ReleaseSam2Resources_ShouldDisposeService_AndReleaseRuntimeLease()
+    {
+        var mockService = new MockClipboardService();
+        var mockSettings = new Mock<AppSettingsService>();
+        mockSettings.Setup(s => s.Settings).Returns(new AppSettings());
+
+        var mockAiPath = new Mock<AIPathService>(mockSettings.Object);
+        var mockAiResolver = new Mock<NativeResolverService>(mockAiPath.Object);
+        var mockAiDownloader = new Mock<AIModelDownloader>();
+        var mockAi = new Mock<AIResourceService>(mockSettings.Object, mockAiPath.Object, mockAiResolver.Object, mockAiDownloader.Object);
+        var sam2Runtime = new SAM2RuntimeService(mockAiPath.Object, mockAiResolver.Object);
+        var vm = new FloatingImageViewModel(null!, 0, 0, Avalonia.Media.Colors.Red, 2.0, false, false, mockService, mockAi.Object, sam2Runtime, mockSettings.Object, mockAiPath.Object);
+        var sam2Service = new SAM2Service(sam2Runtime, mockSettings.Object);
+
+        vm.SetSam2ServiceForTesting(sam2Service);
+        vm.EnsureSam2Lease();
+        Assert.True(sam2Runtime.HasActiveLeases);
+
+        vm.ReleaseSam2Resources();
+
+        Assert.Null(vm.CurrentSam2ServiceForTesting);
+        Assert.False(sam2Runtime.HasActiveLeases);
     }
 }

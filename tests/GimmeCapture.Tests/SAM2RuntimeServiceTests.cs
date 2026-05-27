@@ -26,6 +26,24 @@ public sealed class SAM2RuntimeServiceTests : IDisposable
         var sessions = sut.GetSessions();
         Assert.Null(sessions.Encoder);
         Assert.Null(sessions.Decoder);
+        Assert.False(sut.IsLoaded);
+        Assert.False(sut.IsLoadedAndWarmed);
+    }
+
+    [Fact]
+    public async Task EnsureLoadedAndWarmedAsync_WhenModelFilesMissing_LeavesRuntimeCold()
+    {
+        var settingsService = new AppSettingsService(_baseDir);
+        settingsService.Settings.AIResourcesDirectory = Path.Combine(_baseDir, "AI");
+        var pathService = new AIPathService(settingsService);
+        var resolverService = new NativeResolverService(pathService);
+        using var sut = new SAM2RuntimeService(pathService, resolverService);
+
+        await sut.EnsureLoadedAndWarmedAsync(SAM2Variant.Tiny);
+
+        Assert.False(sut.IsLoaded);
+        Assert.False(sut.IsLoadedAndWarmed);
+        Assert.Null(sut.LoadedVariant);
     }
 
     [Fact]
@@ -41,6 +59,26 @@ public sealed class SAM2RuntimeServiceTests : IDisposable
         var sessions = sut.GetSessions();
         Assert.Null(sessions.Encoder);
         Assert.Null(sessions.Decoder);
+        Assert.False(sut.IsLoaded);
+        Assert.False(sut.IsLoadedAndWarmed);
+    }
+
+    [Fact]
+    public void ReleaseLease_WhenLastLeaseReleased_LeavesRuntimeIdle()
+    {
+        var settingsService = new AppSettingsService(_baseDir);
+        var pathService = new AIPathService(settingsService);
+        var resolverService = new NativeResolverService(pathService);
+        using var sut = new SAM2RuntimeService(pathService, resolverService);
+
+        var leaseId = sut.AcquireLease();
+        Assert.True(sut.HasActiveLeases);
+
+        sut.ReleaseLease(leaseId);
+
+        Assert.False(sut.HasActiveLeases);
+        Assert.False(sut.IsLoaded);
+        Assert.False(sut.IsLoadedAndWarmed);
     }
 
     public void Dispose()

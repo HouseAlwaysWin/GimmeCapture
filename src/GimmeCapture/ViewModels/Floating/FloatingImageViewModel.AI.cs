@@ -242,12 +242,20 @@ public partial class FloatingImageViewModel
             return;
         }
 
+        if (!await EnsureAIResourcesAsync())
+        {
+            IsPointRemovalMode = false;
+            return;
+        }
+
+        EnsureSam2Lease();
+
         System.Console.WriteLine("[FloatingVM] Getting SAM2 Service...");
         
         IsProcessing = true;
         ProcessingText = LocalizationService.Instance["StatusInitializingAI"];
         
-        var sam2 = await GetSAM2ServiceAsync();
+        var sam2 = await GetSAM2ServiceAsync(prepareCurrentImage: true);
         if (sam2 == null) 
         {
             System.Console.WriteLine("[FloatingVM] SAM2 Service returned null.");
@@ -261,8 +269,6 @@ public partial class FloatingImageViewModel
             System.Console.WriteLine("[FloatingVM] SAM2 Service Ready. Setting up Interactive Mode.");
             IsProcessing = true;
             ProcessingText = LocalizationService.Instance["StatusInitializingAI"];
-            
-            // Image is already set by GetSAM2ServiceAsync using direct SKBitmap conversion
             
             StartInteractiveSession();
             
@@ -324,6 +330,7 @@ public partial class FloatingImageViewModel
 
         var sam2 = await GetSAM2ServiceAsync();
         if (sam2 == null) return;
+        if (!await PrepareCurrentImageForSam2Async(sam2)) return;
     
         DiagnosticText = "AI: Refining...";
         try
@@ -706,21 +713,20 @@ public partial class FloatingImageViewModel
         }
     }
 
-    private async Task<SAM2Service?> GetSAM2ServiceAsync()
+    private async Task<SAM2Service?> GetSAM2ServiceAsync(bool prepareCurrentImage = false)
     {
-        if (_sam2Service != null && _sam2Service.ModelVariantName != "Unknown") return _sam2Service;
+        if (_sam2Service == null)
+        {
+            _sam2Service = new SAM2Service(_sam2RuntimeService, _appSettingsService);
+        }
 
-        _sam2Service = new SAM2Service(_sam2RuntimeService, _appSettingsService);
-        // ProcessingText is handled by caller
         try
         {
             await _sam2Service.InitializeAsync();
-            
-             // Optimization: Pass current image to AI immediately after initialization
-            var skImage = FloatingBitmapConversionHelper.ToSkBitmap(Image);
-            if (skImage != null)
+
+            if (prepareCurrentImage && !await PrepareCurrentImageForSam2Async(_sam2Service))
             {
-                await _sam2Service.SetImageAsync(skImage);
+                return null;
             }
         }
         catch (Exception ex)
@@ -728,8 +734,17 @@ public partial class FloatingImageViewModel
             System.Diagnostics.Debug.WriteLine($"[AI] Init Failed: {ex.Message}");
             _sam2Service = null;
         }
-        // Finally block removed - caller handles IsProcessing
         return _sam2Service;
+    }
+
+    private async Task<bool> PrepareCurrentImageForSam2Async(SAM2Service sam2)
+    {
+        var skImage = FloatingBitmapConversionHelper.ToSkBitmap(Image);
+        if (skImage == null)
+            return false;
+
+        await sam2.EnsureImagePreparedAsync(skImage);
+        return true;
     }
 
     private void ShowErrorDialog(string message)

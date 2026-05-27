@@ -128,6 +128,29 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
     private readonly SAM2RuntimeService _sam2RuntimeService;
     private readonly AIPathService _pathService;
     private readonly AppSettingsService _appSettingsService = null!;
+    private string? _sam2LeaseId;
+    internal SAM2Service? CurrentSam2ServiceForTesting => _sam2Service;
+    internal void SetSam2ServiceForTesting(SAM2Service? service) => _sam2Service = service;
+    internal void HandleImageChangedForSam2()
+    {
+        _sam2Service?.InvalidatePreparedImage();
+        ResetInteractivePoints();
+    }
+    internal void EnsureSam2Lease()
+    {
+        _sam2LeaseId ??= _sam2RuntimeService.AcquireLease();
+    }
+    internal void ReleaseSam2Resources(bool unloadRuntimeWhenIdle = true)
+    {
+        _sam2Service?.Dispose();
+        _sam2Service = null;
+
+        if (_sam2LeaseId != null)
+        {
+            _sam2RuntimeService.ReleaseLease(_sam2LeaseId, unloadRuntimeWhenIdle);
+            _sam2LeaseId = null;
+        }
+    }
 
     // Overrides
     public override FloatingTool CurrentTool
@@ -142,6 +165,7 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
             if (base.CurrentTool == FloatingTool.PointRemoval)
             {
                 CancelInteractiveSession();
+                ReleaseSam2Resources();
             }
             else if (base.CurrentTool == FloatingTool.Selection)
             {
@@ -304,9 +328,7 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
         RegisterDisposable(this.WhenAnyValue(x => x.Image)
             .Subscribe(_ =>
             {
-                _sam2Service?.Dispose();
-                _sam2Service = null;
-                ResetInteractivePoints();
+                HandleImageChangedForSam2();
             }));
     }
 
@@ -315,7 +337,6 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
         _lifecycleDisposables.Dispose();
 
         base.Dispose();
-        _sam2Service?.Dispose();
-        _sam2Service = null;
+        ReleaseSam2Resources();
     }
 }

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 using System.Threading;
+using GimmeCapture.Models;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
 using SkiaSharp;
@@ -15,6 +16,9 @@ public class SAM2Service : IDisposable
     private InferenceSession? _encoderSession;
     private InferenceSession? _decoderSession;
     private bool _isInitialized = false;
+    private bool _isImagePrepared = false;
+    private string? _preparedImageKey;
+    private SAM2Variant? _initializedVariant;
 
     // SAM2 Hiera Tensors
     private DenseTensor<float>? _imageEmbeddings;
@@ -29,9 +33,13 @@ public class SAM2Service : IDisposable
     public string LastIouInfo => _lastIouInfo;
     public string ModelInfo => GetModelInfo();
     public string ModelVariantName { get; private set; } = "Unknown";
+    internal bool IsInitializedForTesting => _isInitialized;
+    internal bool IsImagePreparedForTesting => _isImagePrepared;
+    internal string? PreparedImageKeyForTesting => _preparedImageKey;
 
     private readonly AppSettingsService _settingsService;
     private readonly SemaphoreSlim _initLock = new(1, 1);
+    private readonly SemaphoreSlim _prepareLock = new(1, 1);
 
     public SAM2Service(SAM2RuntimeService runtimeService, AppSettingsService settingsService)
     {
@@ -41,18 +49,29 @@ public class SAM2Service : IDisposable
 
     public async Task InitializeAsync()
     {
-        if (_isInitialized) return;
+        var variant = _settingsService.Settings.SelectedSAM2Variant;
+        if (_isInitialized && _initializedVariant == variant && _encoderSession != null && _decoderSession != null)
+            return;
 
         await _initLock.WaitAsync();
         try
         {
-            if (_isInitialized) return;
+            variant = _settingsService.Settings.SelectedSAM2Variant;
+            if (_isInitialized && _initializedVariant == variant && _encoderSession != null && _decoderSession != null)
+                return;
 
-            var variant = _settingsService.Settings.SelectedSAM2Variant;
+            if (_initializedVariant.HasValue && _initializedVariant != variant)
+            {
+                _encoderSession = null;
+                _decoderSession = null;
+                _isInitialized = false;
+                InvalidatePreparedImage();
+            }
+
             ModelVariantName = variant.ToString();
 
             // Use shared runtime sessions so SAM2 callers reuse the same warmed-up model pair.
-            await _runtimeService.LoadModelsAsync(variant);
+            await _runtimeService.EnsureLoadedAndWarmedAsync(variant);
             var sessions = _runtimeService.GetSessions();
             
             _encoderSession = sessions.Encoder;
@@ -61,6 +80,7 @@ public class SAM2Service : IDisposable
             if (_encoderSession == null || _decoderSession == null)
                 throw new Exception($"SAM2 models for {variant} failed to load from cache.");
 
+            _initializedVariant = variant;
             _isInitialized = true;
         }
         finally
@@ -74,20 +94,68 @@ public class SAM2Service : IDisposable
     {
         using var original = SKBitmap.Decode(imageBytes);
         if (original == null) return;
-        await SetImageAsync(original);
+        await EnsureImagePreparedAsync(original);
     }
 
     public async Task SetImageAsync(SKBitmap original)
     {
+        await EnsureImagePreparedAsync(original);
+    }
+
+    public async Task EnsureImagePreparedAsync(SKBitmap original)
+    {
         if (!_isInitialized) await InitializeAsync();
         if (_encoderSession == null) return;
+
+        string imageKey = BuildImagePreparationKey(original);
+        if (_isImagePrepared && string.Equals(_preparedImageKey, imageKey, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        await _prepareLock.WaitAsync();
+        try
+        {
+            if (!_isInitialized) await InitializeAsync();
+            if (_encoderSession == null) return;
+
+            imageKey = BuildImagePreparationKey(original);
+            if (_isImagePrepared && string.Equals(_preparedImageKey, imageKey, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            await PrepareImageCoreAsync(original);
+            _preparedImageKey = imageKey;
+            _isImagePrepared = true;
+        }
+        finally
+        {
+            _prepareLock.Release();
+        }
+    }
+
+    public void InvalidatePreparedImage()
+    {
+        _imageEmbeddings = null;
+        _highResFeat0 = null;
+        _highResFeat1 = null;
+        _originalWidth = 0;
+        _originalHeight = 0;
+        _preparedImageKey = null;
+        _isImagePrepared = false;
+    }
+
+    private async Task PrepareImageCoreAsync(SKBitmap original)
+    {
+        var encoderSession = _encoderSession ?? throw new InvalidOperationException("SAM2 encoder session is not initialized.");
 
         await Task.Run(() =>
         {
             _originalWidth = original.Width;
             _originalHeight = original.Height;
 
-            var inputMetaData = _encoderSession.InputMetadata;
+            var inputMetaData = encoderSession.InputMetadata;
             var inputNames = inputMetaData.Keys.AsValueEnumerable().ToList();
             string inputName = inputNames.AsValueEnumerable().FirstOrDefault(n => n == "image" || n == "pixel_values") ?? inputNames.AsValueEnumerable().FirstOrDefault() ?? "image";
             
@@ -166,7 +234,7 @@ public class SAM2Service : IDisposable
                 : new DenseTensor<float>(buffer, new[] { 1, 3, 1024, 1024 });
 
             var inputs = new List<NamedOnnxValue> { NamedOnnxValue.CreateFromTensor(inputName, inputTensor) };
-            using var results = _encoderSession.Run(inputs);
+            using var results = encoderSession.Run(inputs);
             
             var outputNames = results.AsValueEnumerable().Select(r => r.Name).ToList();
             
@@ -189,7 +257,7 @@ public class SAM2Service : IDisposable
 
     public async Task<List<Avalonia.Rect>> AutoDetectObjectsAsync(int gridDensity = 32, int maxObjects = 20, int minSize = 20, CancellationToken cancellationToken = default)
     {
-        if (!_isInitialized || _decoderSession == null || _imageEmbeddings == null) return new List<Avalonia.Rect>();
+        if (!_isInitialized || !_isImagePrepared || _decoderSession == null || _imageEmbeddings == null) return new List<Avalonia.Rect>();
 
         return await Task.Run(() =>
         {
@@ -374,7 +442,7 @@ public class SAM2Service : IDisposable
 
     public async Task<byte[]> GetMaskAsync(IEnumerable<(double X, double Y, bool IsPositive)> points)
     {
-        if (!_isInitialized || _decoderSession == null || _imageEmbeddings == null || _highResFeat0 == null || _highResFeat1 == null) 
+        if (!_isInitialized || !_isImagePrepared || _decoderSession == null || _imageEmbeddings == null || _highResFeat0 == null || _highResFeat1 == null) 
             return Array.Empty<byte>();
 
         return await Task.Run(() =>
@@ -579,6 +647,37 @@ public class SAM2Service : IDisposable
         float areaB = (float)(b.Width * b.Height);
         float areaI = (float)(intersect.Width * intersect.Height);
         return areaI / (areaA + areaB - areaI);
+    }
+
+    private static string BuildImagePreparationKey(SKBitmap bitmap)
+    {
+        static string PixelKey(SKBitmap bmp, int x, int y)
+        {
+            var color = bmp.GetPixel(x, y);
+            return $"{color.Red:X2}{color.Green:X2}{color.Blue:X2}{color.Alpha:X2}";
+        }
+
+        int maxX = Math.Max(bitmap.Width - 1, 0);
+        int maxY = Math.Max(bitmap.Height - 1, 0);
+        int midX = bitmap.Width / 2;
+        int midY = bitmap.Height / 2;
+        int thirdX = bitmap.Width / 3;
+        int thirdY = bitmap.Height / 3;
+        int twoThirdX = (bitmap.Width * 2) / 3;
+        int twoThirdY = (bitmap.Height * 2) / 3;
+
+        return string.Join("|",
+            bitmap.Width,
+            bitmap.Height,
+            bitmap.ColorType,
+            bitmap.AlphaType,
+            PixelKey(bitmap, 0, 0),
+            PixelKey(bitmap, maxX, 0),
+            PixelKey(bitmap, 0, maxY),
+            PixelKey(bitmap, maxX, maxY),
+            PixelKey(bitmap, midX, midY),
+            PixelKey(bitmap, thirdX, thirdY),
+            PixelKey(bitmap, twoThirdX, twoThirdY));
     }
 
 

@@ -18,11 +18,56 @@ public sealed class SAM2RuntimeService : IDisposable
     private SAM2Variant? _cachedVariant;
     private bool _isWarmedUp;
     private readonly SemaphoreSlim _modelLoadingLock = new(1, 1);
+    private readonly object _leaseLock = new();
+    private readonly HashSet<string> _activeLeases = new();
 
     public SAM2RuntimeService(AIPathService pathService, NativeResolverService resolverService)
     {
         _pathService = pathService ?? throw new ArgumentNullException(nameof(pathService));
         _resolverService = resolverService ?? throw new ArgumentNullException(nameof(resolverService));
+    }
+
+    public bool IsLoaded => _cachedVariant.HasValue && _cachedEncoder != null && _cachedDecoder != null;
+    public bool IsLoadedAndWarmed => IsLoaded && _isWarmedUp;
+    public SAM2Variant? LoadedVariant => _cachedVariant;
+    public bool HasActiveLeases
+    {
+        get
+        {
+            lock (_leaseLock)
+            {
+                return _activeLeases.Count > 0;
+            }
+        }
+    }
+
+    public string AcquireLease()
+    {
+        var leaseId = Guid.NewGuid().ToString("N");
+        lock (_leaseLock)
+        {
+            _activeLeases.Add(leaseId);
+        }
+
+        return leaseId;
+    }
+
+    public void ReleaseLease(string? leaseId, bool unloadWhenIdle = true)
+    {
+        if (string.IsNullOrWhiteSpace(leaseId))
+            return;
+
+        bool shouldUnload = false;
+        lock (_leaseLock)
+        {
+            _activeLeases.Remove(leaseId);
+            shouldUnload = unloadWhenIdle && _activeLeases.Count == 0;
+        }
+
+        if (shouldUnload)
+        {
+            UnloadModels();
+        }
     }
 
     public async Task LoadModelsAsync(SAM2Variant variant)
@@ -89,6 +134,30 @@ public sealed class SAM2RuntimeService : IDisposable
         }
     }
 
+    public async Task EnsureLoadedAndWarmedAsync(SAM2Variant variant)
+    {
+        await LoadModelsAsync(variant);
+        if (_cachedVariant != variant || _cachedEncoder == null || _cachedDecoder == null || _isWarmedUp)
+        {
+            return;
+        }
+
+        await _modelLoadingLock.WaitAsync();
+        try
+        {
+            if (_cachedVariant != variant || _cachedEncoder == null || _cachedDecoder == null || _isWarmedUp)
+            {
+                return;
+            }
+
+            await Task.Run(WarmupSessions);
+        }
+        finally
+        {
+            _modelLoadingLock.Release();
+        }
+    }
+
     public (InferenceSession? Encoder, InferenceSession? Decoder) GetSessions()
     {
         return (_cachedEncoder, _cachedDecoder);
@@ -96,6 +165,14 @@ public sealed class SAM2RuntimeService : IDisposable
 
     public void UnloadModels()
     {
+        lock (_leaseLock)
+        {
+            if (_activeLeases.Count > 0)
+            {
+                return;
+            }
+        }
+
         _cachedEncoder?.Dispose();
         _cachedEncoder = null;
 

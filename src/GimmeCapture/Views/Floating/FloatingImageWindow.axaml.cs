@@ -108,6 +108,14 @@ public partial class FloatingImageWindow : FloatingWindowBase
                         newVm.RemoveBackgroundCommand.Execute().Subscribe();
                     });
                 }
+
+                if (initialInteractive)
+                {
+                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                    {
+                        newVm.IsPointRemovalMode = true;
+                    });
+                }
             };
             
             // Re-Bind VM Properties specific to ImageWindow if needed
