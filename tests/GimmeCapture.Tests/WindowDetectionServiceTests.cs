@@ -48,4 +48,28 @@ public class WindowDetectionServiceTests
         Assert.NotNull(result);
         Assert.Equal(RootHwnd, result!.Hwnd);
     }
+
+    [Fact]
+    public void TryGetDockedStripBounds_ReturnsBottomTaskbarStrip()
+    {
+        var monitorBounds = new Rect(0, 0, 1920, 1080);
+        var workArea = new Rect(0, 0, 1920, 1040);
+
+        var result = WindowDetectionService.TryGetDockedStripBounds(monitorBounds, workArea);
+
+        Assert.NotNull(result);
+        Assert.Equal(new Rect(0, 1040, 1920, 40), result!.Value);
+    }
+
+    [Fact]
+    public void TryGetDockedStripBounds_ReturnsTopTaskbarStrip()
+    {
+        var monitorBounds = new Rect(0, 0, 1920, 1080);
+        var workArea = new Rect(0, 48, 1920, 1032);
+
+        var result = WindowDetectionService.TryGetDockedStripBounds(monitorBounds, workArea);
+
+        Assert.NotNull(result);
+        Assert.Equal(new Rect(0, 0, 1920, 48), result!.Value);
+    }
 }

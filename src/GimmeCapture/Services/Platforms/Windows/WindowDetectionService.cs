@@ -19,7 +19,6 @@ public class WindowDetectionService : IWindowDetectionService
     private const int DWMWA_EXTENDED_FRAME_BOUNDS = 9;
     private const int DWMWA_CLOAKED = 14;
     private const uint GW_OWNER = 4;
-
     [StructLayout(LayoutKind.Sequential)]
     public struct RECT
     {
@@ -30,6 +29,20 @@ public class WindowDetectionService : IWindowDetectionService
 
         public Rect ToAvaloniaRect() => new(Left, Top, Math.Max(0, Right - Left), Math.Max(0, Bottom - Top));
     }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
+    private struct MONITORINFOEX
+    {
+        public int cbSize;
+        public RECT rcMonitor;
+        public RECT rcWork;
+        public uint dwFlags;
+
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
+        public string szDevice;
+    }
+
+    private delegate bool MonitorEnumProc(IntPtr hMonitor, IntPtr hdcMonitor, ref RECT lprcMonitor, IntPtr dwData);
 
     private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
 
@@ -66,6 +79,12 @@ public class WindowDetectionService : IWindowDetectionService
     [DllImport("user32.dll")]
     private static extern IntPtr GetDesktopWindow();
 
+    [DllImport("user32.dll")]
+    private static extern bool EnumDisplayMonitors(IntPtr hdc, IntPtr lprcClip, MonitorEnumProc lpfnEnum, IntPtr dwData);
+
+    [DllImport("user32.dll", CharSet = CharSet.Auto)]
+    private static extern bool GetMonitorInfo(IntPtr hMonitor, ref MONITORINFOEX lpmi);
+
     [DllImport("dwmapi.dll", EntryPoint = "DwmGetWindowAttribute")]
     private static extern int DwmGetWindowAttributeInt(IntPtr hwnd, int dwAttribute, out int pvAttribute, int cbAttribute);
 
@@ -82,7 +101,7 @@ public class WindowDetectionService : IWindowDetectionService
 
         EnumWindows((hWnd, _) =>
         {
-            if (hWnd == excludeHWnd || hWnd == shellWindow || hWnd == desktopWindow)
+            if (ShouldSkipEnumeratedTopLevelWindow(hWnd, excludeHWnd, shellWindow, desktopWindow))
             {
                 return true;
             }
@@ -100,7 +119,84 @@ public class WindowDetectionService : IWindowDetectionService
             return true;
         }, IntPtr.Zero);
 
+        AddMonitorWorkAreaStripCandidates(candidates, ref nextZOrder);
+
         return candidates;
+    }
+
+    public static Rect? TryGetDockedStripBounds(Rect monitorBounds, Rect workArea)
+    {
+        const double tolerance = 0.5;
+        if (monitorBounds.Width <= 0 || monitorBounds.Height <= 0)
+        {
+            return null;
+        }
+
+        if (Math.Abs(monitorBounds.Left - workArea.Left) <= tolerance &&
+            Math.Abs(monitorBounds.Right - workArea.Right) <= tolerance)
+        {
+            if (workArea.Top > monitorBounds.Top + tolerance)
+            {
+                return new Rect(
+                    monitorBounds.Left,
+                    monitorBounds.Top,
+                    monitorBounds.Width,
+                    workArea.Top - monitorBounds.Top);
+            }
+
+            if (workArea.Bottom < monitorBounds.Bottom - tolerance)
+            {
+                return new Rect(
+                    monitorBounds.Left,
+                    workArea.Bottom,
+                    monitorBounds.Width,
+                    monitorBounds.Bottom - workArea.Bottom);
+            }
+        }
+
+        if (Math.Abs(monitorBounds.Top - workArea.Top) <= tolerance &&
+            Math.Abs(monitorBounds.Bottom - workArea.Bottom) <= tolerance)
+        {
+            if (workArea.Left > monitorBounds.Left + tolerance)
+            {
+                return new Rect(
+                    monitorBounds.Left,
+                    monitorBounds.Top,
+                    workArea.Left - monitorBounds.Left,
+                    monitorBounds.Height);
+            }
+
+            if (workArea.Right < monitorBounds.Right - tolerance)
+            {
+                return new Rect(
+                    workArea.Right,
+                    monitorBounds.Top,
+                    monitorBounds.Right - workArea.Right,
+                    monitorBounds.Height);
+            }
+        }
+
+        return null;
+    }
+
+    private static bool ShouldSkipEnumeratedTopLevelWindow(
+        IntPtr hWnd,
+        IntPtr? excludeHWnd,
+        IntPtr shellWindow,
+        IntPtr desktopWindow)
+    {
+        if (hWnd == excludeHWnd || hWnd == desktopWindow)
+        {
+            return true;
+        }
+
+        if (hWnd != shellWindow)
+        {
+            return false;
+        }
+
+        string className = GetWindowClassName(hWnd);
+        return !IsTaskbarWindow(className);
     }
 
     public WindowCandidate? GetCandidateAtPoint(Point point, IReadOnlyList<WindowCandidate> candidates, WindowCandidate? previousCandidate = null)
@@ -110,14 +206,28 @@ public class WindowDetectionService : IWindowDetectionService
             return null;
         }
 
-        var containingCandidates = candidates.AsValueEnumerable()
-            .Where(candidate => candidate.Bounds.Contains(point))
-            .OrderBy(candidate => candidate.IsChild ? 0 : 1)
-            .ThenBy(candidate => candidate.Area)
-            .ThenBy(candidate => candidate.ZOrder)
-            .ToList();
+        WindowCandidate? bestCandidate = null;
+        WindowCandidate? previousMatch = null;
+        for (int i = 0; i < candidates.Count; i++)
+        {
+            var candidate = candidates[i];
+            if (!candidate.Bounds.Contains(point))
+            {
+                continue;
+            }
 
-        if (containingCandidates.Count == 0)
+            if (previousCandidate != null && candidate.IsSameIdentity(previousCandidate))
+            {
+                previousMatch = candidate;
+            }
+
+            if (bestCandidate == null || CompareCandidates(candidate, bestCandidate) < 0)
+            {
+                bestCandidate = candidate;
+            }
+        }
+
+        if (bestCandidate == null)
         {
             if (previousCandidate != null && previousCandidate.Bounds.Inflate(CandidateHysteresisPadding).Contains(point))
             {
@@ -127,19 +237,15 @@ public class WindowDetectionService : IWindowDetectionService
             return null;
         }
 
-        WindowCandidate bestCandidate = containingCandidates[0];
         if (previousCandidate == null)
         {
             return bestCandidate;
         }
 
-        var matchingPrevious = containingCandidates.AsValueEnumerable()
-            .FirstOrDefault(candidate => candidate.IsSameIdentity(previousCandidate));
-
-        if (matchingPrevious != null)
+        if (previousMatch != null)
         {
-            return ShouldHoldPreviousCandidate(point, matchingPrevious, bestCandidate)
-                ? matchingPrevious
+            return ShouldHoldPreviousCandidate(point, previousMatch, bestCandidate)
+                ? previousMatch
                 : bestCandidate;
         }
 
@@ -195,6 +301,23 @@ public class WindowDetectionService : IWindowDetectionService
         return insetBounds.Contains(point);
     }
 
+    private static int CompareCandidates(WindowCandidate left, WindowCandidate right)
+    {
+        int childPriority = (left.IsChild ? 0 : 1).CompareTo(right.IsChild ? 0 : 1);
+        if (childPriority != 0)
+        {
+            return childPriority;
+        }
+
+        int areaPriority = left.Area.CompareTo(right.Area);
+        if (areaPriority != 0)
+        {
+            return areaPriority;
+        }
+
+        return left.ZOrder.CompareTo(right.ZOrder);
+    }
+
     private void AddChildCandidates(WindowCandidate parentCandidate, List<WindowCandidate> candidates, ref int nextZOrder)
     {
         int childZOrder = nextZOrder;
@@ -210,6 +333,80 @@ public class WindowDetectionService : IWindowDetectionService
             return true;
         }, IntPtr.Zero);
         nextZOrder = childZOrder;
+    }
+
+    private void AddMonitorWorkAreaStripCandidates(List<WindowCandidate> candidates, ref int nextZOrder)
+    {
+        int monitorIndex = 0;
+        int stripZOrder = nextZOrder;
+        EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, (IntPtr hMonitor, IntPtr hdcMonitor, ref RECT monitorRect, IntPtr dwData) =>
+        {
+            var monitorInfo = new MONITORINFOEX
+            {
+                cbSize = Marshal.SizeOf<MONITORINFOEX>(),
+                szDevice = string.Empty
+            };
+
+            if (!GetMonitorInfo(hMonitor, ref monitorInfo))
+            {
+                monitorIndex++;
+                return true;
+            }
+
+            Rect monitorBounds = monitorInfo.rcMonitor.ToAvaloniaRect();
+            Rect workArea = monitorInfo.rcWork.ToAvaloniaRect();
+            Rect? stripBounds = TryGetDockedStripBounds(monitorBounds, workArea);
+            if (stripBounds is not { } strip || strip.Width < ChildCandidateMinimumSize || strip.Height < ChildCandidateMinimumSize)
+            {
+                monitorIndex++;
+                return true;
+            }
+
+            if (!IsCandidateRectAlreadyRepresented(strip, candidates))
+            {
+                IntPtr syntheticHandle = new(unchecked((int)0x70000000) + monitorIndex);
+                candidates.Add(new WindowCandidate(
+                    strip,
+                    syntheticHandle,
+                    IntPtr.Zero,
+                    syntheticHandle,
+                    stripZOrder++,
+                    WindowCandidateKind.TopLevel));
+            }
+
+            monitorIndex++;
+            return true;
+        }, IntPtr.Zero);
+        nextZOrder = stripZOrder;
+    }
+
+    private static bool IsCandidateRectAlreadyRepresented(Rect target, List<WindowCandidate> candidates)
+    {
+        foreach (var candidate in candidates)
+        {
+            if (candidate.Kind != WindowCandidateKind.TopLevel)
+            {
+                continue;
+            }
+
+            var intersect = candidate.Bounds.Intersect(target);
+            double intersectionArea = intersect.Width * intersect.Height;
+            if (intersectionArea <= 0)
+            {
+                continue;
+            }
+
+            double targetArea = target.Width * target.Height;
+            double candidateArea = candidate.Area;
+            bool mostlyOverlapsTarget = intersectionArea >= targetArea * 0.95;
+            bool areaComparable = candidateArea <= targetArea * 1.15 && candidateArea >= targetArea * 0.85;
+            if (mostlyOverlapsTarget && areaComparable)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private bool TryBuildTopLevelCandidate(IntPtr hWnd, int zOrder, List<Rect> coveredRegions, out WindowCandidate? candidate)
@@ -237,9 +434,10 @@ public class WindowDetectionService : IWindowDetectionService
             return false;
         }
 
-        string title = GetWindowTitle(hWnd);
         string className = GetWindowClassName(hWnd);
-        if (string.IsNullOrWhiteSpace(title) && className != "ApplicationFrameWindow")
+        bool isTaskbarWindow = IsTaskbarWindow(className);
+        string title = GetWindowTitle(hWnd);
+        if (string.IsNullOrWhiteSpace(title) && className != "ApplicationFrameWindow" && !isTaskbarWindow)
         {
             return false;
         }
@@ -247,7 +445,7 @@ public class WindowDetectionService : IWindowDetectionService
         int style = GetWindowLong(hWnd, GWL_STYLE);
         bool hasCaption = (style & WS_CAPTION) == WS_CAPTION;
         bool isAppWindow = (exStyle & WS_EX_APPWINDOW) != 0;
-        if (!hasCaption && !isAppWindow)
+        if (!hasCaption && !isAppWindow && !isTaskbarWindow)
         {
             return false;
         }
@@ -265,6 +463,12 @@ public class WindowDetectionService : IWindowDetectionService
 
         candidate = new WindowCandidate(finalRect, hWnd, IntPtr.Zero, hWnd, zOrder, WindowCandidateKind.TopLevel);
         return true;
+    }
+
+    private static bool IsTaskbarWindow(string className)
+    {
+        return string.Equals(className, "Shell_TrayWnd", StringComparison.Ordinal)
+            || string.Equals(className, "Shell_SecondaryTrayWnd", StringComparison.Ordinal);
     }
 
     private bool TryBuildChildCandidate(WindowCandidate parentCandidate, IntPtr childHwnd, int zOrder, out WindowCandidate? candidate)

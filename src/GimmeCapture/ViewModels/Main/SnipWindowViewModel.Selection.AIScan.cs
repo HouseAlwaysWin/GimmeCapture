@@ -16,7 +16,7 @@ namespace GimmeCapture.ViewModels.Main;
 
 public partial class SnipWindowViewModel
 {
-    private readonly HoverRectangleAnimationController _hoverAnimationController = new(TimeSpan.FromMilliseconds(160), dashSpeed: -14.0);
+    private readonly HoverRectangleAnimationController _hoverAnimationController = new(TimeSpan.FromMilliseconds(120), dashSpeed: -20.0);
     private readonly DispatcherTimer _hoverAnimationTimer = new() { Interval = TimeSpan.FromMilliseconds(16) };
     private IReadOnlyList<WindowCandidate> _windowCandidates = [];
     private WindowCandidate? _currentHoverCandidate;
@@ -170,10 +170,14 @@ public partial class SnipWindowViewModel
             return;
         }
 
-        _lastHoverAnimationTickUtc = DateTime.UtcNow;
         if (!_hoverAnimationTimer.IsEnabled)
         {
+            _lastHoverAnimationTickUtc = DateTime.UtcNow;
             _hoverAnimationTimer.Start();
+        }
+        else if (_lastHoverAnimationTickUtc == default)
+        {
+            _lastHoverAnimationTickUtc = DateTime.UtcNow;
         }
     }
 
