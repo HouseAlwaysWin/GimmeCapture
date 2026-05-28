@@ -13,6 +13,7 @@ public sealed class AIScanSessionService : IAIScanSessionService
     private readonly IScreenCaptureService _captureService;
     private readonly AIResourceService _aiResourceService;
     private readonly SAM2RuntimeService _sam2RuntimeService;
+    private readonly OcrRuntimeService _ocrRuntimeService;
     private readonly AppSettingsService _settingsService;
     private readonly IOcrEngineFactory _ocrEngineFactory;
     private readonly SAM2Service _sam2Service;
@@ -21,12 +22,14 @@ public sealed class AIScanSessionService : IAIScanSessionService
         IScreenCaptureService captureService,
         AIResourceService aiResourceService,
         SAM2RuntimeService sam2RuntimeService,
+        OcrRuntimeService ocrRuntimeService,
         AppSettingsService settingsService,
         IOcrEngineFactory ocrEngineFactory)
     {
         _captureService = captureService ?? throw new ArgumentNullException(nameof(captureService));
         _aiResourceService = aiResourceService ?? throw new ArgumentNullException(nameof(aiResourceService));
         _sam2RuntimeService = sam2RuntimeService ?? throw new ArgumentNullException(nameof(sam2RuntimeService));
+        _ocrRuntimeService = ocrRuntimeService ?? throw new ArgumentNullException(nameof(ocrRuntimeService));
         _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
         _ocrEngineFactory = ocrEngineFactory ?? throw new ArgumentNullException(nameof(ocrEngineFactory));
         _sam2Service = new SAM2Service(_sam2RuntimeService, settingsService);
@@ -71,7 +74,7 @@ public sealed class AIScanSessionService : IAIScanSessionService
             false);
 
         ct.ThrowIfCancellationRequested();
-        using var ocrEngine = _ocrEngineFactory.Create(_aiResourceService, _settingsService);
+        using var ocrEngine = _ocrEngineFactory.Create(_aiResourceService, _settingsService, _ocrRuntimeService);
         await ocrEngine.EnsureLoadedAsync(request.SourceLanguage, ct);
         progress?.Report(AIScanStage.DetectingObjects);
         var textBoxes = await Task.Run(() => ocrEngine.DetectText(bitmap), ct);

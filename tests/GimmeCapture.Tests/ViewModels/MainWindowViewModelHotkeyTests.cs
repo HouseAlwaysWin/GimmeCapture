@@ -27,6 +27,9 @@ public class MainWindowViewModelHotkeyTests
         var aiPathService = new AIPathService(settingsService);
         var nativeResolverService = new NativeResolverService(aiPathService);
         var ffmpegDownloader = new FFmpegDownloaderService(settingsService);
+        var aiResourceService = new AIResourceService(settingsService, aiPathService, nativeResolverService, new AIModelDownloader());
+        var sam2RuntimeService = new SAM2RuntimeService(aiPathService, nativeResolverService);
+        var ocrRuntimeService = new OcrRuntimeService(aiResourceService);
         var hotkeyCoordinator = new CountingGlobalHotkeySettingsCoordinator();
         var dependencies = new MainWindowViewModelDependencies(
             settingsService,
@@ -42,8 +45,9 @@ public class MainWindowViewModelHotkeyTests
             ffmpegDownloader,
             new RecordingService(ffmpegDownloader, settingsService),
             new UpdateService("1.2.3"),
-            new AIResourceService(settingsService, aiPathService, nativeResolverService, new AIModelDownloader()),
-            new SAM2RuntimeService(aiPathService, nativeResolverService),
+            aiResourceService,
+            sam2RuntimeService,
+            ocrRuntimeService,
             aiPathService,
             ResourceQueueService.Instance);
 
@@ -113,6 +117,9 @@ public class MainWindowViewModelHotkeyTests
         var aiPathService = new AIPathService(settingsService);
         var nativeResolverService = new NativeResolverService(aiPathService);
         var ffmpegDownloader = new FFmpegDownloaderService(settingsService);
+        var aiResourceService = new AIResourceService(settingsService, aiPathService, nativeResolverService, new AIModelDownloader());
+        var sam2RuntimeService = new SAM2RuntimeService(aiPathService, nativeResolverService);
+        var ocrRuntimeService = new OcrRuntimeService(aiResourceService);
         var hotkeyCoordinator = new CountingGlobalHotkeySettingsCoordinator();
         var dependencies = new MainWindowViewModelDependencies(
             settingsService,
@@ -128,8 +135,9 @@ public class MainWindowViewModelHotkeyTests
             ffmpegDownloader,
             new RecordingService(ffmpegDownloader, settingsService),
             new UpdateService("1.2.3"),
-            new AIResourceService(settingsService, aiPathService, nativeResolverService, new AIModelDownloader()),
-            new SAM2RuntimeService(aiPathService, nativeResolverService),
+            aiResourceService,
+            sam2RuntimeService,
+            ocrRuntimeService,
             aiPathService,
             ResourceQueueService.Instance);
 

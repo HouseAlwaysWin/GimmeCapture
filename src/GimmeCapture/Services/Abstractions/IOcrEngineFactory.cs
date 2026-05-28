@@ -7,5 +7,6 @@ public interface IOcrEngineFactory
 {
     IOCREngine Create(
         AIResourceService aiResourceService,
-        AppSettingsService settingsService);
+        AppSettingsService settingsService,
+        OcrRuntimeService ocrRuntimeService);
 }

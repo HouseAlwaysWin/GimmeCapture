@@ -37,6 +37,7 @@ public static class MainWindowViewModelDependenciesFactory
             aiModelDownloader,
             aiModelCatalog,
             sam2RuntimeService.UnloadModels);
+        var ocrRuntimeService = new OcrRuntimeService(aiResourceService);
 
         return new MainWindowViewModelDependencies(
             settingsService,
@@ -54,6 +55,7 @@ public static class MainWindowViewModelDependenciesFactory
             updateService,
             aiResourceService,
             sam2RuntimeService,
+            ocrRuntimeService,
             aiPathService,
             ResourceQueueService.Instance);
     }

@@ -9,6 +9,7 @@ using GimmeCapture.Services.OCR;
 
 
 using GimmeCapture.Services.Core.Interfaces;
+using GimmeCapture.Services.Core.AI;
 
 namespace GimmeCapture.Tests;
 
@@ -16,6 +17,7 @@ public class PaddleOCREngineTests
 {
     private readonly Mock<AIResourceService> _mockAiResource;
     private readonly Mock<AppSettingsService> _mockSettings;
+    private readonly OcrRuntimeService _ocrRuntimeService;
     private readonly PaddleOCREngine _sut;
 
     public PaddleOCREngineTests()
@@ -25,7 +27,8 @@ public class PaddleOCREngineTests
         var mockResolver = new Mock<NativeResolverService>(mockPath.Object);
         var mockDownloader = new Mock<AIModelDownloader>();
         _mockAiResource = new Mock<AIResourceService>(_mockSettings.Object, mockPath.Object, mockResolver.Object, mockDownloader.Object);
-        _sut = new PaddleOCREngine(_mockAiResource.Object, _mockSettings.Object);
+        _ocrRuntimeService = new OcrRuntimeService(_mockAiResource.Object);
+        _sut = new PaddleOCREngine(_mockAiResource.Object, _mockSettings.Object, _ocrRuntimeService);
     }
 
     [Fact]
@@ -33,17 +36,28 @@ public class PaddleOCREngineTests
     {
         // Arrange
         _mockAiResource.Setup(x => x.EnsureOCRAsync(It.IsAny<OCRLanguage>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
-        _mockAiResource.Setup(x => x.GetOCRPaths(It.IsAny<OCRLanguage>()))
-            .Returns(("det", "rec", "dict"));
+            .ReturnsAsync(false);
 
         // Act
-        // Note: It might still throw if it tries to list the file system or create InferenceSession
-        // But for unit testing the logic of EnsureLoadedAsync triggers.
-        try { await _sut.EnsureLoadedAsync(OCRLanguage.TraditionalChinese); } catch { }
+        await _sut.EnsureLoadedAsync(OCRLanguage.TraditionalChinese);
 
         // Assert
         _mockAiResource.Verify(x => x.EnsureOCRAsync(It.IsAny<OCRLanguage>(), It.IsAny<CancellationToken>()), Times.AtLeastOnce);
+    }
+
+    [Fact]
+    public async Task Dispose_ShouldReleaseRuntimeLease()
+    {
+        _mockAiResource.Setup(x => x.EnsureOCRAsync(It.IsAny<OCRLanguage>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+
+        await _sut.EnsureLoadedAsync(OCRLanguage.TraditionalChinese);
+
+        Assert.True(_ocrRuntimeService.HasActiveLeases);
+
+        _sut.Dispose();
+
+        Assert.False(_ocrRuntimeService.HasActiveLeases);
     }
 
     [Fact]

@@ -199,7 +199,7 @@ public partial class SnipWindowViewModel
             System.Diagnostics.Debug.WriteLine($"[TranslationMode] ScanAllText: Captured bitmap {bitmap.Width}x{bitmap.Height}");
 
             // 使用 PaddleOCR 偵測文字區域
-            var ocrEngine = new PaddleOCREngine(_mainVm.AIResourceService, _mainVm.AppSettingsService);
+            using var ocrEngine = new PaddleOCREngine(_mainVm.AIResourceService, _mainVm.AppSettingsService, _mainVm.OcrRuntimeService);
             var ocrLang = _mainVm.AppSettingsService.Settings.SourceLanguage;
             await ocrEngine.EnsureLoadedAsync(ocrLang);
             
@@ -240,8 +240,6 @@ public partial class SnipWindowViewModel
                 }
                 System.Diagnostics.Debug.WriteLine($"[TranslationMode] Added {UserSelections.Count} valid selections (excluded toolbar area)");
             });
-
-            ocrEngine.Dispose();
         }
         catch (Exception ex)
         {

@@ -21,11 +21,12 @@ public sealed class TranslationSessionService : ITranslationSessionService
 
     public TranslationSessionService(
         AIResourceService aiResourceService,
-        AppSettingsService settingsService)
+        AppSettingsService settingsService,
+        OcrRuntimeService ocrRuntimeService)
     {
         _aiResourceService = aiResourceService ?? throw new ArgumentNullException(nameof(aiResourceService));
         _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
-        _translationService = new TranslationService(aiResourceService, settingsService);
+        _translationService = new TranslationService(aiResourceService, settingsService, ocrRuntimeService);
     }
 
     public Task<ResourceReadyResult> CheckEngineReadyAsync(
@@ -72,6 +73,7 @@ public sealed class TranslationSessionService : ITranslationSessionService
         _warmupCts?.Cancel();
         _warmupCts?.Dispose();
         _warmupCts = null;
+        _translationService.ReleaseOcrResources();
     }
 
     public async Task AwaitWarmupAsync(CancellationToken ct = default)

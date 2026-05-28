@@ -38,6 +38,7 @@ public class MainWindowViewModelConstructionTests
         var nativeResolverService = new NativeResolverService(aiPathService);
         var aiResourceService = new AIResourceService(settingsService, aiPathService, nativeResolverService, new AIModelDownloader());
         var sam2RuntimeService = new SAM2RuntimeService(aiPathService, nativeResolverService);
+        var ocrRuntimeService = new OcrRuntimeService(aiResourceService);
         var resourceQueue = ResourceQueueService.Instance;
 
         var dependencies = new MainWindowViewModelDependencies(
@@ -56,6 +57,7 @@ public class MainWindowViewModelConstructionTests
             updateService,
             aiResourceService,
             sam2RuntimeService,
+            ocrRuntimeService,
             aiPathService,
             resourceQueue);
 
@@ -68,6 +70,7 @@ public class MainWindowViewModelConstructionTests
         Assert.Same(aiPathService, viewModel.AIPathService);
         Assert.Same(aiResourceService, viewModel.AIResourceService);
         Assert.Same(sam2RuntimeService, viewModel.SAM2RuntimeService);
+        Assert.Same(ocrRuntimeService, viewModel.OcrRuntimeService);
         Assert.Same(resourceQueue, viewModel.ResourceQueue);
     }
 }

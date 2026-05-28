@@ -8,5 +8,6 @@ public interface ITranslationSessionServiceFactory
 {
     ITranslationSessionService Create(
         AppSettingsService settingsService,
-        AIResourceService aiResourceService);
+        AIResourceService aiResourceService,
+        OcrRuntimeService ocrRuntimeService);
 }

@@ -21,50 +21,38 @@ public class PaddleOCREngine : IOCREngine
     private const int DetMaxBoxes = 256;
     private static readonly bool SaveOcrDebugImages = false;
 
-    private readonly AIResourceService _aiResourceService;
     private readonly AppSettingsService _settingsService;
-    private InferenceSession? _detSession;
-    private InferenceSession? _recSession;
+    private readonly OcrRuntimeService _ocrRuntimeService;
     private OCRLanguage? _currentOCRLanguage;
-    private List<string> _dict = new();
+    private string? _leaseId;
 
-    public PaddleOCREngine(AIResourceService aiResourceService, AppSettingsService settingsService)
+    public PaddleOCREngine(AIResourceService aiResourceService, AppSettingsService settingsService, OcrRuntimeService ocrRuntimeService)
     {
-        _aiResourceService = aiResourceService ?? throw new ArgumentNullException(nameof(aiResourceService));
+        ArgumentNullException.ThrowIfNull(aiResourceService);
         _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
+        _ocrRuntimeService = ocrRuntimeService ?? throw new ArgumentNullException(nameof(ocrRuntimeService));
     }
 
     public async Task EnsureLoadedAsync(OCRLanguage lang, CancellationToken ct = default)
     {
-        if (_currentOCRLanguage == lang && _detSession != null && _recSession != null) return;
+        if (_leaseId == null)
+        {
+            _leaseId = _ocrRuntimeService.AcquireLease();
+        }
 
         if (_currentOCRLanguage != lang)
         {
-            _detSession?.Dispose(); _detSession = null;
-            _recSession?.Dispose(); _recSession = null;
             Debug.WriteLine($"[OCR] Switching language to {lang}");
         }
 
-        await _aiResourceService.EnsureOCRAsync(lang, ct);
-        var paths = _aiResourceService.GetOCRPaths(lang);
-
-        var options = new SessionOptions();
-        options.GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL;
-
-        try { options.AppendExecutionProvider_CUDA(0); } catch { }
-        try { options.AppendExecutionProvider_DML(0); } catch { }
-
-        _detSession = new InferenceSession(paths.Det, options);
-        _recSession = new InferenceSession(paths.Rec, options);
+        await _ocrRuntimeService.EnsureLoadedAsync(lang, ct);
         _currentOCRLanguage = lang;
-
-        _dict = LoadDictionaryWithEncodingFallback(paths.Dict);
-        _dict.Insert(0, ""); // CTC Blank
     }
 
     public List<SKRectI> DetectText(SKBitmap bitmap)
     {
-        if (_detSession == null) return new List<SKRectI>();
+        var detSession = _ocrRuntimeService.DetectionSession;
+        if (detSession == null) return new List<SKRectI>();
 
         int limitSideLen = 1280;
         int w = bitmap.Width;
@@ -95,9 +83,9 @@ public class PaddleOCREngine : IOCREngine
             }
         }
 
-        string inputName = _detSession.InputMetadata.Keys.AsValueEnumerable().FirstOrDefault() ?? "x";
+        string inputName = detSession.InputMetadata.Keys.AsValueEnumerable().FirstOrDefault() ?? "x";
         var inputs = new List<NamedOnnxValue> { NamedOnnxValue.CreateFromTensor(inputName, input) };
-        using var outputs = _detSession.Run(inputs);
+        using var outputs = detSession.Run(inputs);
         var outputTensor = outputs.AsValueEnumerable().First().AsTensor<float>();
 
         return FindBoxesFromMask(outputTensor, targetWidth, targetHeight, bitmap.Width, bitmap.Height);
@@ -105,7 +93,7 @@ public class PaddleOCREngine : IOCREngine
 
     public (string text, float confidence) RecognizeText(SKBitmap bitmap, SKRectI box, CancellationToken ct = default)
     {
-        if (_recSession == null || box.Width <= 0 || box.Height <= 0) return ("", 0f);
+        if (_ocrRuntimeService.RecognitionSession == null || box.Width <= 0 || box.Height <= 0) return ("", 0f);
 
         using var cropped = new SKBitmap(box.Width, box.Height);
         using (var canvas = new SKCanvas(cropped))
@@ -177,7 +165,8 @@ public class PaddleOCREngine : IOCREngine
 
     private (string text, float confidence) RunRecognition(SKBitmap tensorBitmap)
     {
-        if (_recSession == null) return ("", 0f);
+        var recSession = _ocrRuntimeService.RecognitionSession;
+        if (recSession == null) return ("", 0f);
 
         int h = tensorBitmap.Height;
         int w = tensorBitmap.Width;
@@ -193,9 +182,9 @@ public class PaddleOCREngine : IOCREngine
             }
         }
 
-        string inputName = _recSession.InputMetadata.Keys.AsValueEnumerable().FirstOrDefault() ?? "x";
+        string inputName = recSession.InputMetadata.Keys.AsValueEnumerable().FirstOrDefault() ?? "x";
         var inputs = new List<NamedOnnxValue> { NamedOnnxValue.CreateFromTensor(inputName, input) };
-        using var outputs = _recSession.Run(inputs);
+        using var outputs = recSession.Run(inputs);
         var outputTensor = outputs.AsValueEnumerable().First().AsTensor<float>();
 
         return DecodeCTCAuto(outputTensor);
@@ -301,9 +290,10 @@ public class PaddleOCREngine : IOCREngine
         int d1 = tensor.Dimensions[1], d2 = tensor.Dimensions[2];
         var ntc = DecodeCTC(tensor, d1, d2, true);
         var nct = DecodeCTC(tensor, d2, d1, false);
+        var dictCount = _ocrRuntimeService.Dictionary.Count;
 
-        bool ntcP = _dict.Count <= d2 + 500 && _dict.Count >= d2 - 500;
-        bool nctP = _dict.Count <= d1 + 500 && _dict.Count >= d1 - 500;
+        bool ntcP = dictCount <= d2 + 500 && dictCount >= d2 - 500;
+        bool nctP = dictCount <= d1 + 500 && dictCount >= d1 - 500;
 
         if (ntcP && !nctP) return ntc;
         if (!ntcP && nctP) return nct;
@@ -313,6 +303,7 @@ public class PaddleOCREngine : IOCREngine
     private (string text, float confidence) DecodeCTC(Tensor<float> tensor, int seqLen, int classCount, bool isNTC)
     {
         var sb = new StringBuilder();
+        var dict = _ocrRuntimeService.Dictionary;
         int prevIdx = -1;
         float totalConf = 0f;
         int count = 0;
@@ -327,21 +318,15 @@ public class PaddleOCREngine : IOCREngine
                 if (v > maxVal) { maxVal = v; maxIdx = c; }
             }
 
-            if (maxIdx > 0 && maxIdx != prevIdx && maxIdx < _dict.Count)
+            if (maxIdx > 0 && maxIdx != prevIdx && maxIdx < dict.Count)
             {
-                sb.Append(_dict[maxIdx]);
+                sb.Append(dict[maxIdx]);
                 totalConf += ToProbability(maxVal);
                 count++;
             }
             prevIdx = maxIdx;
         }
         return (sb.ToString(), count > 0 ? totalConf / count : 0f);
-    }
-
-    private List<string> LoadDictionaryWithEncodingFallback(string path)
-    {
-        try { return File.ReadAllLines(path, Encoding.UTF8).AsValueEnumerable().ToList(); }
-        catch { return File.ReadAllLines(path, Encoding.GetEncoding("GBK")).AsValueEnumerable().ToList(); }
     }
 
     private void SaveDebugImage(SKBitmap bitmap)
@@ -360,7 +345,10 @@ public class PaddleOCREngine : IOCREngine
 
     public void Dispose()
     {
-        _detSession?.Dispose();
-        _recSession?.Dispose();
+        if (_leaseId != null)
+        {
+            _ocrRuntimeService.ReleaseLease(_leaseId);
+            _leaseId = null;
+        }
     }
 }

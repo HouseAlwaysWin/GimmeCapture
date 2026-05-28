@@ -9,11 +9,13 @@ public sealed class PaddleOcrEngineFactory : IOcrEngineFactory
 {
     public IOCREngine Create(
         AIResourceService aiResourceService,
-        AppSettingsService settingsService)
+        AppSettingsService settingsService,
+        OcrRuntimeService ocrRuntimeService)
     {
         ArgumentNullException.ThrowIfNull(aiResourceService);
         ArgumentNullException.ThrowIfNull(settingsService);
+        ArgumentNullException.ThrowIfNull(ocrRuntimeService);
 
-        return new PaddleOCREngine(aiResourceService, settingsService);
+        return new PaddleOCREngine(aiResourceService, settingsService, ocrRuntimeService);
     }
 }

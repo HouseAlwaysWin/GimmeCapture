@@ -106,6 +106,7 @@ public partial class MainWindowViewModel : ViewModelBase
     public UpdateService UpdateService { get; }
     public AIResourceService AIResourceService { get; }
     public SAM2RuntimeService SAM2RuntimeService { get; }
+    public OcrRuntimeService OcrRuntimeService { get; }
     public AIPathService AIPathService { get; }
     public ResourceQueueService ResourceQueue { get; }
     
@@ -172,6 +173,7 @@ public partial class MainWindowViewModel : ViewModelBase
         UpdateService = dependencies.UpdateService;
         AIResourceService = dependencies.AIResourceService;
         SAM2RuntimeService = dependencies.SAM2RuntimeService;
+        OcrRuntimeService = dependencies.OcrRuntimeService;
         AIPathService = dependencies.AIPathService;
         ResourceQueue = dependencies.ResourceQueue;
 

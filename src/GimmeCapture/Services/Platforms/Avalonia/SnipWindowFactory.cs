@@ -58,7 +58,8 @@ public sealed class SnipWindowFactory : ISnipWindowFactory
         ConfigureWindowBounds(snip);
         var translationSession = _translationSessionServiceFactory.Create(
             vm.AppSettingsService,
-            vm.AIResourceService);
+            vm.AIResourceService,
+            vm.OcrRuntimeService);
         var translationSelectionMonitor = new TranslationSelectionMonitor(
             _screenCaptureService,
             translationSession);
@@ -66,6 +67,7 @@ public sealed class SnipWindowFactory : ISnipWindowFactory
             _screenCaptureService,
             vm.AIResourceService,
             vm.SAM2RuntimeService,
+            vm.OcrRuntimeService,
             vm.AppSettingsService,
             new PaddleOcrEngineFactory());
 

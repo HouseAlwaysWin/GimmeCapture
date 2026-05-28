@@ -39,6 +39,7 @@ public partial class MainWindowViewModel
             aiModelDownloader,
             aiModelCatalog,
             sam2RuntimeService.UnloadModels);
+        var ocrRuntimeService = new OcrRuntimeService(aiResourceService);
 
         return new MainWindowViewModelDependencies(
             settingsService,
@@ -56,6 +57,7 @@ public partial class MainWindowViewModel
             updateService,
             aiResourceService,
             sam2RuntimeService,
+            ocrRuntimeService,
             aiPathService,
             ResourceQueueService.Instance);
     }

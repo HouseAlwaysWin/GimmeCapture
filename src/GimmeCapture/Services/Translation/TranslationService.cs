@@ -19,23 +19,25 @@ namespace GimmeCapture.Services.Translation;
 public class TranslationService : IDisposable
 {
     private readonly AppSettingsService _settingsService;
-    private readonly IOCREngine _ocrEngine;
+    private readonly OcrRuntimeService _ocrRuntimeService;
     private readonly IEnumerable<ITranslationEngine> _translationEngines;
     private readonly AIResourceService _aiResourceService;
+    private IOCREngine? _ocrEngine;
 
     private AppSettings _settings => _settingsService.Settings;
 
     public TranslationService(
         AIResourceService aiResourceService,
-        AppSettingsService settingsService)
+        AppSettingsService settingsService,
+        OcrRuntimeService ocrRuntimeService)
     {
         _aiResourceService = aiResourceService ?? throw new ArgumentNullException(nameof(aiResourceService));
         _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
+        _ocrRuntimeService = ocrRuntimeService ?? throw new ArgumentNullException(nameof(ocrRuntimeService));
         
         // Manual DI for now as the app doesn't use a container in constructor injection here
         var translationCache = new InMemoryTranslationCache();
 
-        _ocrEngine = new PaddleOCREngine(aiResourceService, settingsService);
         _translationEngines = new List<ITranslationEngine>
         {
             new LlamaSharpTranslationEngine(_aiResourceService, settingsService, translationCache)
@@ -53,7 +55,7 @@ public class TranslationService : IDisposable
             bool ocrReady = await _aiResourceService.EnsureOCRAsync(warmupSourceLanguage, ct);
             if (ocrReady)
             {
-                await _ocrEngine.EnsureLoadedAsync(warmupSourceLanguage, ct);
+                await GetOrCreateOcrEngine().EnsureLoadedAsync(warmupSourceLanguage, ct);
             }
         }
         catch (OperationCanceledException)
@@ -113,14 +115,15 @@ public class TranslationService : IDisposable
             Console.WriteLine($"[TranslationService] Auto-detected source: {ocrLang}");
         }
 
-        await _ocrEngine.EnsureLoadedAsync(ocrLang, ct);
-        var boxes = _ocrEngine.DetectText(bitmap);
+        var ocrEngine = GetOrCreateOcrEngine();
+        await ocrEngine.EnsureLoadedAsync(ocrLang, ct);
+        var boxes = ocrEngine.DetectText(bitmap);
         
         var recognizedBlocks = new List<(SKRectI Box, string Text, float Confidence)>();
         foreach (var box in boxes)
         {
             ct.ThrowIfCancellationRequested();
-            var (text, confidence) = _ocrEngine.RecognizeText(bitmap, box, ct);
+            var (text, confidence) = ocrEngine.RecognizeText(bitmap, box, ct);
             if (IsUsefulOcrText(text, confidence))
             {
                 recognizedBlocks.Add((box, text, confidence));
@@ -237,15 +240,22 @@ public class TranslationService : IDisposable
 
     private async Task<OCRLanguage> DetectScriptLanguageAsync(SKBitmap bitmap, CancellationToken ct)
     {
-        await _ocrEngine.EnsureLoadedAsync(OCRLanguage.TraditionalChinese, ct);
-        var boxes = _ocrEngine.DetectText(bitmap);
+        var ocrEngine = GetOrCreateOcrEngine();
+        await ocrEngine.EnsureLoadedAsync(OCRLanguage.TraditionalChinese, ct);
+        var boxes = ocrEngine.DetectText(bitmap);
         foreach (var box in boxes.AsValueEnumerable().Take(5))
         {
-            var (text, _) = _ocrEngine.RecognizeText(bitmap, box, ct);
+            var (text, _) = ocrEngine.RecognizeText(bitmap, box, ct);
             if (text.AsValueEnumerable().Any(c => (c >= 0x3040 && c <= 0x309F) || (c >= 0x30A0 && c <= 0x30FF)))
                 return OCRLanguage.Japanese;
         }
         return OCRLanguage.TraditionalChinese;
+    }
+
+    public void ReleaseOcrResources()
+    {
+        _ocrEngine?.Dispose();
+        _ocrEngine = null;
     }
 
     private async Task<string> TranslateAsync(string text, OCRLanguage sourceLang, CancellationToken ct)
@@ -343,11 +353,17 @@ public class TranslationService : IDisposable
 
     public void Dispose()
     {
-        _ocrEngine.Dispose();
+        ReleaseOcrResources();
 
         foreach (var engine in _translationEngines.AsValueEnumerable().OfType<IDisposable>())
         {
             engine.Dispose();
         }
+    }
+
+    private IOCREngine GetOrCreateOcrEngine()
+    {
+        _ocrEngine ??= new PaddleOCREngine(_aiResourceService, _settingsService, _ocrRuntimeService);
+        return _ocrEngine;
     }
 }

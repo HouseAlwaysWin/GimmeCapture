@@ -26,6 +26,7 @@ public sealed class AIScanSessionServiceTests : IDisposable
         var downloader = new Mock<AIModelDownloader>();
         var aiResourceService = new Mock<AIResourceService>(settingsService, pathService, resolver, downloader.Object);
         var sam2RuntimeService = new SAM2RuntimeService(pathService, resolver);
+        var ocrRuntimeService = new OcrRuntimeService(aiResourceService.Object);
         var ocrEngineFactory = new Mock<IOcrEngineFactory>();
         var ocrEngine = new FakeOcrEngine(new List<SKRectI> { new(10, 12, 40, 36) });
         using var bitmap = CreateBitmap(100, 50, SKColors.White);
@@ -39,13 +40,14 @@ public sealed class AIScanSessionServiceTests : IDisposable
             .ReturnsAsync(bitmap.Copy());
 
         ocrEngineFactory
-            .Setup(factory => factory.Create(aiResourceService.Object, settingsService))
+            .Setup(factory => factory.Create(aiResourceService.Object, settingsService, ocrRuntimeService))
             .Returns(ocrEngine);
 
         using var sut = new AIScanSessionService(
             captureService.Object,
             aiResourceService.Object,
             sam2RuntimeService,
+            ocrRuntimeService,
             settingsService,
             ocrEngineFactory.Object);
 

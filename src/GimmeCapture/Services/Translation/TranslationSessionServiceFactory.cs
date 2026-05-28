@@ -9,11 +9,13 @@ public sealed class TranslationSessionServiceFactory : ITranslationSessionServic
 {
     public ITranslationSessionService Create(
         AppSettingsService settingsService,
-        AIResourceService aiResourceService)
+        AIResourceService aiResourceService,
+        OcrRuntimeService ocrRuntimeService)
     {
         ArgumentNullException.ThrowIfNull(settingsService);
         ArgumentNullException.ThrowIfNull(aiResourceService);
+        ArgumentNullException.ThrowIfNull(ocrRuntimeService);
 
-        return new TranslationSessionService(aiResourceService, settingsService);
+        return new TranslationSessionService(aiResourceService, settingsService, ocrRuntimeService);
     }
 }
