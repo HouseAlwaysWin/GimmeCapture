@@ -11,7 +11,7 @@ public class UpdateServiceTests
             @"C:\Temp\extract",
             @"C:\Apps\GimmeCapture",
             @"C:\Temp\update",
-            "GimmeCapture.exe",
+            @"C:\Apps\GimmeCapture\GimmeCapture.exe",
             @"C:\Apps\GimmeCapture\config.json",
             @"C:\Users\Test\AppData\Local\GimmeCapture\config.json",
             @"C:\Temp\update\config.local.backup.json",
@@ -23,6 +23,8 @@ public class UpdateServiceTests
         Assert.Contains(@"type nul > ""C:\Temp\update\config.appdata.exists.marker""", script);
         Assert.Contains(@"copy /y ""C:\Temp\update\config.local.backup.json"" ""C:\Apps\GimmeCapture\config.json"" > nul", script);
         Assert.Contains(@"copy /y ""C:\Temp\update\config.appdata.backup.json"" ""C:\Users\Test\AppData\Local\GimmeCapture\config.json"" > nul", script);
+        Assert.Contains(@"if not exist ""C:\Apps\GimmeCapture\GimmeCapture.exe"" exit /b 1", script);
+        Assert.Contains(@"start """" ""C:\Apps\GimmeCapture\GimmeCapture.exe""", script);
     }
 
     [Fact]
@@ -32,7 +34,7 @@ public class UpdateServiceTests
             @"C:\Temp\extract",
             @"C:\Apps\GimmeCapture",
             @"C:\Temp\update",
-            "GimmeCapture.exe",
+            @"C:\Apps\GimmeCapture\GimmeCapture.exe",
             @"C:\Apps\GimmeCapture\config.json",
             @"C:\Users\Test\AppData\Local\GimmeCapture\config.json",
             @"C:\Temp\update\config.local.backup.json",
@@ -43,5 +45,38 @@ public class UpdateServiceTests
         Assert.Contains(@"if exist ""C:\Temp\update\config.local.exists.marker"" (", script);
         Assert.Contains(@") else if exist ""C:\Temp\update\config.appdata.exists.marker"" (", script);
         Assert.Contains(@"if exist ""C:\Apps\GimmeCapture\config.json"" del /f /q ""C:\Apps\GimmeCapture\config.json""", script);
+    }
+
+    [Fact]
+    public void FilterAndSortReleases_Excludes_DraftsPrereleases_And_SortsByVersion()
+    {
+        var releases = new[]
+        {
+            CreateRelease("v0.25.0", hasZip: true),
+            CreateRelease("v0.26.0", hasZip: true),
+            CreateRelease("v0.24.0", hasZip: true, prerelease: true),
+            CreateRelease("v0.27.0", hasZip: false),
+            CreateRelease("v0.23.0", hasZip: true, draft: true)
+        };
+
+        var filtered = UpdateService.FilterAndSortReleases(releases);
+
+        Assert.Collection(
+            filtered,
+            release => Assert.Equal("v0.26.0", release.TagName),
+            release => Assert.Equal("v0.25.0", release.TagName));
+    }
+
+    private static ReleaseInfo CreateRelease(string tagName, bool hasZip, bool prerelease = false, bool draft = false)
+    {
+        return new ReleaseInfo
+        {
+            TagName = tagName,
+            Prerelease = prerelease,
+            Draft = draft,
+            Assets = hasZip
+                ? new List<ReleaseAsset> { new() { Name = "GimmeCapture_win-x64.zip", DownloadUrl = "https://example.com/test.zip" } }
+                : new List<ReleaseAsset>()
+        };
     }
 }

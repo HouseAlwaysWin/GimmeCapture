@@ -152,7 +152,7 @@ public partial class MainWindowViewModel
 
                 if (readyResult == true)
                 {
-                    UpdateService.ApplyUpdate(zipPath);
+                    UpdateService.ApplyUpdate(zipPath, release.NormalizedVersion);
                 }
             }
         }

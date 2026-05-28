@@ -32,6 +32,7 @@ jobs:
     - name: Publish application (self-contained)
       run: |
         $version = "${{ github.ref_name }}".TrimStart('v')
+        $assemblyVersion = if ($version.Split('.').Count -eq 3) { "$version.0" } else { $version }
         $pub = @(
           '-c', 'Release'
           '-r', 'win-x64'
@@ -43,6 +44,9 @@ jobs:
           '-p:DebugType=none'
           '-p:DebugSymbols=false'
           "-p:Version=$version"
+          "-p:AssemblyVersion=$assemblyVersion"
+          "-p:FileVersion=$assemblyVersion"
+          "-p:InformationalVersion=$version"
           '-o', './publish'
         )
         dotnet publish src/GimmeCapture/GimmeCapture.csproj @pub

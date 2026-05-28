@@ -4,27 +4,104 @@
              xmlns:services="using:GimmeCapture.Services.Core.Infrastructure"
              x:Class="GimmeCapture.Views.Main.Tabs.SettingsAboutTab"
              x:DataType="vm:MainWindowViewModel">
-    <StackPanel Spacing="10" Margin="10" HorizontalAlignment="Center" VerticalAlignment="Center">
-        <TextBlock Text="GimmeCapture!!" FontSize="24" FontWeight="Bold" Foreground="{DynamicResource ThemeAccentBrush}" HorizontalAlignment="Center"/>
-        <TextBlock Text="{Binding AppVersion, StringFormat='Version {0}'}" Foreground="White" HorizontalAlignment="Center"/>
-        <TextBlock Text="The One Tool to Snip &amp; Record" FontStyle="Italic" Foreground="{DynamicResource ThemeDeepBrush}" HorizontalAlignment="Center"/>
-        
-        <Button Content="{Binding [GitHubProject], Source={x:Static services:LocalizationService.Instance}}"
-                Theme="{StaticResource GothicMetalButton}"
-                HorizontalAlignment="Center"
-                Margin="0,10,0,0"
-                Command="{Binding OpenProjectCommand}"/>
+    <ScrollViewer>
+        <StackPanel Spacing="14" Margin="20" HorizontalAlignment="Center" MaxWidth="520">
+            <TextBlock Text="GimmeCapture!!"
+                       FontSize="24"
+                       FontWeight="Bold"
+                       Foreground="{DynamicResource ThemeAccentBrush}"
+                       HorizontalAlignment="Center"/>
+            <TextBlock Text="{Binding CurrentVersionLabel, StringFormat={}{0}}"
+                       Foreground="White"
+                       HorizontalAlignment="Center"/>
+            <TextBlock Text="The One Tool to Snip &amp; Record"
+                       FontStyle="Italic"
+                       Foreground="{DynamicResource ThemeDeepBrush}"
+                       HorizontalAlignment="Center"/>
 
-        <Button Content="{Binding [CheckForUpdates], Source={x:Static services:LocalizationService.Instance}}" 
-                Theme="{StaticResource GothicMetalButton}" 
-                HorizontalAlignment="Center" 
-                Margin="0,20,0,0"
-                Command="{Binding CheckUpdateCommand}"/>
+            <Border Background="#1A1A1A"
+                    BorderBrush="#333333"
+                    BorderThickness="1"
+                    CornerRadius="4"
+                    Padding="15"
+                    Margin="0,10,0,0">
+                <StackPanel Spacing="10">
+                    <TextBlock Text="{Binding [AvailableVersions], Source={x:Static services:LocalizationService.Instance}}"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource ThemeAccentBrush}"/>
 
-        <!-- Version Update Progress -->
-        <StackPanel IsVisible="{Binding UpdateService.IsDownloading}" Spacing="5" Margin="0,15,0,0" Width="300">
-            <ProgressBar Value="{Binding UpdateService.DownloadProgress}" Height="4" Foreground="{DynamicResource ThemeAccentBrush}" Minimum="0" Maximum="100"/>
-            <TextBlock Text="{Binding UpdateService.DownloadProgress, StringFormat='{}{0:0}%'}" FontSize="10" HorizontalAlignment="Right" Foreground="White" Opacity="0.8"/>
+                    <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="8" ColumnSpacing="10">
+                        <TextBlock Grid.Row="0" Grid.Column="0"
+                                   Text="{Binding [CurrentVersion], Source={x:Static services:LocalizationService.Instance}}"
+                                   VerticalAlignment="Center"/>
+                        <TextBlock Grid.Row="0" Grid.Column="1"
+                                   Text="{Binding CurrentVersionLabel}"
+                                   Foreground="White"/>
+
+                        <TextBlock Grid.Row="1" Grid.Column="0"
+                                   Text="{Binding [SelectedVersion], Source={x:Static services:LocalizationService.Instance}}"
+                                   VerticalAlignment="Center"/>
+                        <ComboBox Grid.Row="1" Grid.Column="1"
+                                  ItemsSource="{Binding AvailableReleases}"
+                                  SelectedItem="{Binding SelectedRelease, Mode=TwoWay}"
+                                  HorizontalAlignment="Stretch">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="services:ReleaseInfo">
+                                    <TextBlock Text="{Binding TagName}"/>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+
+                        <TextBlock Grid.Row="2" Grid.Column="0"
+                                   Text="{Binding [PublishedAt], Source={x:Static services:LocalizationService.Instance}}"
+                                   VerticalAlignment="Center"/>
+                        <TextBlock Grid.Row="2" Grid.Column="1"
+                                   Text="{Binding SelectedReleasePublishedText}"
+                                   Foreground="White"/>
+
+                        <StackPanel Grid.Row="3" Grid.ColumnSpan="2" Spacing="6">
+                            <TextBlock Text="{Binding [LoadingReleaseList], Source={x:Static services:LocalizationService.Instance}}"
+                                       IsVisible="{Binding IsLoadingReleases}"
+                                       Foreground="{DynamicResource ThemeAccentBrush}"/>
+                            <TextBlock Text="{Binding ReleaseLoadError}"
+                                       IsVisible="{Binding HasReleaseLoadError}"
+                                       Foreground="#FF8080"
+                                       TextWrapping="Wrap"/>
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <Button Content="{Binding [RefreshReleaseList], Source={x:Static services:LocalizationService.Instance}}"
+                                        Theme="{StaticResource GothicMetalButton}"
+                                        Command="{Binding RefreshReleaseCatalogCommand}"/>
+                                <Button Content="{Binding [InstallSelectedVersion], Source={x:Static services:LocalizationService.Instance}}"
+                                        Theme="{StaticResource GothicMetalButton}"
+                                        Command="{Binding InstallSelectedReleaseCommand}"
+                                        IsEnabled="{Binding CanInstallSelectedRelease}"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Grid>
+
+                    <StackPanel IsVisible="{Binding UpdateService.IsDownloading}" Spacing="5" Margin="0,8,0,0">
+                        <ProgressBar Value="{Binding UpdateService.DownloadProgress}"
+                                     Height="4"
+                                     Foreground="{DynamicResource ThemeAccentBrush}"
+                                     Minimum="0"
+                                     Maximum="100"/>
+                        <TextBlock Text="{Binding UpdateService.DownloadProgress, StringFormat='{}{0:0}%'}"
+                                   FontSize="10"
+                                   HorizontalAlignment="Right"
+                                   Foreground="White"
+                                   Opacity="0.8"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Center" Margin="0,8,0,0">
+                <Button Content="{Binding [GitHubProject], Source={x:Static services:LocalizationService.Instance}}"
+                        Theme="{StaticResource GothicMetalButton}"
+                        Command="{Binding OpenProjectCommand}"/>
+                <Button Content="{Binding [CheckForUpdates], Source={x:Static services:LocalizationService.Instance}}"
+                        Theme="{StaticResource GothicMetalButton}"
+                        Command="{Binding CheckUpdateCommand}"/>
+            </StackPanel>
         </StackPanel>
-    </StackPanel>
+    </ScrollViewer>
 </UserControl>

@@ -7,6 +7,7 @@ using GimmeCapture.ViewModels.Main;
 using GimmeCapture.Views.Main;
 using GimmeCapture.Services.Core;
 using GimmeCapture.Services.Core.Infrastructure;
+using System.Diagnostics;
 
 namespace GimmeCapture;
 
@@ -25,6 +26,17 @@ public partial class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
+            var currentExePath = Process.GetCurrentProcess().MainModule?.FileName ?? string.Empty;
+            var verificationResult = UpdateService.VerifyPendingUpdateOnStartup(AppVersionInfo.CurrentVersion, currentExePath);
+            if (verificationResult.HasPendingUpdate && !verificationResult.IsSuccess)
+            {
+                System.Windows.Forms.MessageBox.Show(
+                    $"Update verification failed.{Environment.NewLine}{Environment.NewLine}{verificationResult.FailureMessage}",
+                    "Update Verification Failed");
+                desktop.Shutdown();
+                return;
+            }
+
             _bootstrapper = new AppBootstrapper();
             desktop.ShutdownMode = Avalonia.Controls.ShutdownMode.OnExplicitShutdown;
 

@@ -273,4 +273,13 @@
   "LlamaContextSize": "上下文長度：",
   "LlamaGpuLayers": "GPU 層數：",
   "DownloadModel": "下載模型"
+  ,
+  "CurrentVersion": "目前版本",
+  "AvailableVersions": "可用版本",
+  "SelectedVersion": "選擇版本",
+  "PublishedAt": "發佈時間",
+  "LoadingReleaseList": "正在載入版本清單...",
+  "RefreshReleaseList": "重新載入",
+  "InstallSelectedVersion": "下載並安裝",
+  "InstallSelectedVersionReady": "版本 {0} 已準備完成。立即重新啟動並安裝？"
 }

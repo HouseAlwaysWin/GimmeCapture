@@ -166,6 +166,8 @@ public partial class MainWindowViewModel : ViewModelBase
     public ReactiveCommand<Unit, Unit> IncreaseCornerIconScaleCommand { get; } = null!;
     public ReactiveCommand<Unit, Unit> DecreaseCornerIconScaleCommand { get; } = null!;
     public ReactiveCommand<Unit, Unit> PickAIFolderCommand { get; } = null!;
+    public ReactiveCommand<Unit, Unit> RefreshReleaseCatalogCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> InstallSelectedReleaseCommand { get; private set; } = null!;
 
     public Color[] SettingsColors { get; } =
     {
@@ -273,6 +275,7 @@ public partial class MainWindowViewModel : ViewModelBase
         });
 
         RefreshLlamaModelsCommand = ReactiveCommand.Create(() => RefreshLlamaModelCatalog());
+        InitializeAboutCommands();
 
         HotkeyService.OnHotkeyPressed = id =>
         {

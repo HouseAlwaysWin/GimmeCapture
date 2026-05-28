@@ -238,6 +238,11 @@ public partial class MainWindow : Window
                 _modulesTabHost!.Content ??= new SettingsModulesTab();
                 break;
             case 6:
+                if (DataContext is MainWindowViewModel aboutVm)
+                {
+                    _ = aboutVm.LoadAvailableReleasesAsync();
+                }
+
                 _aboutTabHost ??= this.FindControl<ContentControl>("AboutTabHost");
                 _aboutTabHost!.Content ??= new SettingsAboutTab();
                 break;
