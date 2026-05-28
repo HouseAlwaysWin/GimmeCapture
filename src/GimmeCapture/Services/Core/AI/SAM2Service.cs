@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
@@ -24,6 +25,8 @@ public class SAM2Service : IDisposable
     private DenseTensor<float>? _imageEmbeddings;
     private DenseTensor<float>? _highResFeat0;
     private DenseTensor<float>? _highResFeat1;
+    private string? _encoderInputName;
+    private bool _encoderInputIs5D;
     
     private int _originalWidth;
     private int _originalHeight;
@@ -65,6 +68,8 @@ public class SAM2Service : IDisposable
                 _encoderSession = null;
                 _decoderSession = null;
                 _isInitialized = false;
+                _encoderInputName = null;
+                _encoderInputIs5D = false;
                 InvalidatePreparedImage();
             }
 
@@ -155,102 +160,103 @@ public class SAM2Service : IDisposable
             _originalWidth = original.Width;
             _originalHeight = original.Height;
 
-            var inputMetaData = encoderSession.InputMetadata;
-            var inputNames = inputMetaData.Keys.AsValueEnumerable().ToList();
-            string inputName = inputNames.AsValueEnumerable().FirstOrDefault(n => n == "image" || n == "pixel_values") ?? inputNames.AsValueEnumerable().FirstOrDefault() ?? "image";
-            
-            var expectedDims = inputMetaData[inputName].Dimensions.AsValueEnumerable().ToArray();
-            bool is5D = expectedDims.Length == 5;
+            ResolveEncoderInputMetadata(encoderSession);
+            string inputName = _encoderInputName ?? "image";
             int bufferSize = 3 * 1024 * 1024;
             float[] buffer = new float[bufferSize];
 
-            // Optimization: Resize using SkiaSharp once
-            using var resized = original.Resize(new SKImageInfo(1024, 1024), new SKSamplingOptions(SKFilterMode.Linear));
-            
-            // Optimization: Fast parallelized pixel access
-            if (resized.ColorType == SKColorType.Bgra8888 || resized.ColorType == SKColorType.Rgba8888)
+            try
             {
-                unsafe
-                {
-                    byte* ptr = (byte*)resized.GetPixels().ToPointer();
-                    int rowBytes = resized.RowBytes;
-                    bool isBgra = resized.ColorType == SKColorType.Bgra8888;
-                    float inv255 = 1.0f / 255.0f;
+                using var resized = original.Resize(new SKImageInfo(1024, 1024), new SKSamplingOptions(SKFilterMode.Linear));
+                if (resized == null)
+                    throw new InvalidOperationException("Failed to resize image for SAM2 prepare.");
 
-                    // Parallel processing for all 1024 rows
+                if (resized.ColorType == SKColorType.Bgra8888 || resized.ColorType == SKColorType.Rgba8888)
+                {
+                    unsafe
+                    {
+                        byte* ptr = (byte*)resized.GetPixels().ToPointer();
+                        int rowBytes = resized.RowBytes;
+                        bool isBgra = resized.ColorType == SKColorType.Bgra8888;
+                        float inv255 = 1.0f / 255.0f;
+
+                        Parallel.For(0, 1024, y =>
+                        {
+                            byte* row = ptr + (y * rowBytes);
+                            int blueOffset = y * 1024;
+                            int greenOffset = blueOffset + (1024 * 1024);
+                            int redOffset = greenOffset + (1024 * 1024);
+
+                            for (int x = 0; x < 1024; x++)
+                            {
+                                byte b, g, r;
+                                if (isBgra)
+                                {
+                                    b = row[x * 4 + 0];
+                                    g = row[x * 4 + 1];
+                                    r = row[x * 4 + 2];
+                                }
+                                else
+                                {
+                                    r = row[x * 4 + 0];
+                                    g = row[x * 4 + 1];
+                                    b = row[x * 4 + 2];
+                                }
+
+                                buffer[blueOffset + x] = b * inv255;
+                                buffer[greenOffset + x] = g * inv255;
+                                buffer[redOffset + x] = r * inv255;
+                            }
+                        });
+                    }
+                }
+                else
+                {
+                    float inv255 = 1.0f / 255.0f;
                     Parallel.For(0, 1024, y =>
                     {
-                        byte* row = ptr + (y * rowBytes);
                         int blueOffset = y * 1024;
                         int greenOffset = blueOffset + (1024 * 1024);
                         int redOffset = greenOffset + (1024 * 1024);
-
                         for (int x = 0; x < 1024; x++)
                         {
-                            byte b, g, r;
-                            if (isBgra)
-                            {
-                                b = row[x * 4 + 0];
-                                g = row[x * 4 + 1];
-                                r = row[x * 4 + 2];
-                            }
-                            else
-                            {
-                                r = row[x * 4 + 0];
-                                g = row[x * 4 + 1];
-                                b = row[x * 4 + 2];
-                            }
-
-                            // SAM2 Order: [B, G, R]
-                            buffer[blueOffset + x] = b * inv255;
-                            buffer[greenOffset + x] = g * inv255;
-                            buffer[redOffset + x] = r * inv255;
+                            var color = resized.GetPixel(x, y);
+                            buffer[blueOffset + x] = color.Blue * inv255;
+                            buffer[greenOffset + x] = color.Green * inv255;
+                            buffer[redOffset + x] = color.Red * inv255;
                         }
                     });
                 }
-            }
-            else
-            {
-                // Fallback for non-8888 (Rare)
-                float inv255 = 1.0f / 255.0f;
-                Parallel.For(0, 1024, y =>
+
+                // Keep the encoder input shape on the same proven 4D path as the
+                // previously working implementation. Some SAM2 exports report extra
+                // dimensions in metadata, but the runtime still expects the classic
+                // NCHW image tensor here.
+                var inputTensor = new DenseTensor<float>(buffer, new[] { 1, 3, 1024, 1024 });
+
+                var inputs = new List<NamedOnnxValue>(1) { NamedOnnxValue.CreateFromTensor(inputName, inputTensor) };
+                using var results = encoderSession.Run(inputs);
+
+                var outputNames = results.AsValueEnumerable().Select(r => r.Name).ToList();
+
+                T? FindResult<T>(string[] aliases) where T : class
                 {
-                    int blueOffset = y * 1024;
-                    int greenOffset = blueOffset + (1024 * 1024);
-                    int redOffset = greenOffset + (1024 * 1024);
-                    for (int x = 0; x < 1024; x++)
-                    {
-                        var color = resized.GetPixel(x, y);
-                        buffer[blueOffset + x] = color.Blue * inv255;
-                        buffer[greenOffset + x] = color.Green * inv255;
-                        buffer[redOffset + x] = color.Red * inv255;
-                    }
-                });
+                    var found = results.AsValueEnumerable().FirstOrDefault(r => aliases.AsValueEnumerable().Any(a => r.Name == a || r.Name.Contains(a)));
+                    return found?.Value as T;
+                }
+
+                _imageEmbeddings = FindResult<Tensor<float>>(new[] { "image_embeddings", "image_embed", "embeddings" })?.ToDenseTensor()
+                    ?? throw new Exception($"Encoder Error: Missing embeddings. Got: {string.Join(", ", outputNames)}");
+
+                _highResFeat0 = FindResult<Tensor<float>>(new[] { "high_res_feats_0", "feat_0", "high_res_feat_0" })?.ToDenseTensor()
+                    ?? throw new Exception($"Encoder Error: Missing feat_0. Got: {string.Join(", ", outputNames)}");
+
+                _highResFeat1 = FindResult<Tensor<float>>(new[] { "high_res_feats_1", "feat_1", "high_res_feat_1" })?.ToDenseTensor()
+                    ?? throw new Exception($"Encoder Error: Missing feat_1. Got: {string.Join(", ", outputNames)}");
             }
-
-            // Zero-copy tensor creation
-            var inputTensor = is5D 
-                ? new DenseTensor<float>(buffer, new[] { 1, 1, 3, 1024, 1024 })
-                : new DenseTensor<float>(buffer, new[] { 1, 3, 1024, 1024 });
-
-            var inputs = new List<NamedOnnxValue> { NamedOnnxValue.CreateFromTensor(inputName, inputTensor) };
-            using var results = encoderSession.Run(inputs);
-            
-            var outputNames = results.AsValueEnumerable().Select(r => r.Name).ToList();
-            
-            T? FindResult<T>(string[] aliases) where T : class {
-                var found = results.AsValueEnumerable().FirstOrDefault(r => aliases.AsValueEnumerable().Any(a => r.Name == a || r.Name.Contains(a)));
-                return found?.Value as T;
+            finally
+            {
             }
-
-            _imageEmbeddings = FindResult<Tensor<float>>(new[] { "image_embeddings", "image_embed", "embeddings" })?.ToDenseTensor()
-                ?? throw new Exception($"Encoder Error: Missing embeddings. Got: {string.Join(", ", outputNames)}");
-                
-            _highResFeat0 = FindResult<Tensor<float>>(new[] { "high_res_feats_0", "feat_0", "high_res_feat_0" })?.ToDenseTensor()
-                ?? throw new Exception($"Encoder Error: Missing feat_0. Got: {string.Join(", ", outputNames)}");
-
-            _highResFeat1 = FindResult<Tensor<float>>(new[] { "high_res_feats_1", "feat_1", "high_res_feat_1" })?.ToDenseTensor()
-                ?? throw new Exception($"Encoder Error: Missing feat_1. Got: {string.Join(", ", outputNames)}");
             
         });
     }
@@ -636,6 +642,93 @@ public class SAM2Service : IDisposable
             resizedMask.Encode(ms, SKEncodedImageFormat.Png, 100);
             return ms.ToArray();
         });
+    }
+
+    public async Task<SKBitmap?> GetMaskBitmapAsync(IReadOnlyList<(double X, double Y, bool IsPositive)> points)
+    {
+        if (!_isInitialized || !_isImagePrepared || points.Count == 0)
+            return null;
+
+        var maskBytes = await GetMaskAsync(points);
+        if (maskBytes.Length == 0)
+            return null;
+
+        return await Task.Run(() =>
+        {
+            using var decoded = SKBitmap.Decode(maskBytes);
+            if (decoded == null)
+                return (SKBitmap?)null;
+
+            if (decoded.ColorType == SKColorType.Gray8)
+                return decoded.Copy();
+
+            var normalized = new SKBitmap(decoded.Width, decoded.Height, SKColorType.Gray8, SKAlphaType.Opaque);
+            unsafe
+            {
+                byte* dstBase = (byte*)normalized.GetPixels().ToPointer();
+                bool isBgra = decoded.ColorType == SKColorType.Bgra8888;
+                bool isRgba = decoded.ColorType == SKColorType.Rgba8888;
+
+                if (isBgra || isRgba)
+                {
+                    byte* srcBase = (byte*)decoded.GetPixels().ToPointer();
+                    for (int y = 0; y < decoded.Height; y++)
+                    {
+                        byte* srcRow = srcBase + (y * decoded.RowBytes);
+                        byte* dstRow = dstBase + (y * normalized.RowBytes);
+                        for (int x = 0; x < decoded.Width; x++)
+                        {
+                            int pixelOffset = x * 4;
+                            byte value = isBgra
+                                ? srcRow[pixelOffset + 0]
+                                : srcRow[pixelOffset + 2];
+                            dstRow[x] = value;
+                        }
+                    }
+                }
+                else
+                {
+                    for (int y = 0; y < decoded.Height; y++)
+                    {
+                        byte* dstRow = dstBase + (y * normalized.RowBytes);
+                        for (int x = 0; x < decoded.Width; x++)
+                        {
+                            var color = decoded.GetPixel(x, y);
+                            dstRow[x] = color.Red;
+                        }
+                    }
+                }
+            }
+
+            return normalized;
+        });
+    }
+
+    private void ResolveEncoderInputMetadata(InferenceSession encoderSession)
+    {
+        if (!string.IsNullOrEmpty(_encoderInputName))
+            return;
+
+        var inputMetadata = encoderSession.InputMetadata;
+        foreach (var name in inputMetadata.Keys)
+        {
+            if (name == "image" || name == "pixel_values")
+            {
+                _encoderInputName = name;
+                _encoderInputIs5D = inputMetadata[name].Dimensions.AsValueEnumerable().Count() == 5;
+                return;
+            }
+        }
+
+        foreach (var name in inputMetadata.Keys)
+        {
+            _encoderInputName = name;
+            _encoderInputIs5D = inputMetadata[name].Dimensions.AsValueEnumerable().Count() == 5;
+            return;
+        }
+
+        _encoderInputName = "image";
+        _encoderInputIs5D = false;
     }
 
 

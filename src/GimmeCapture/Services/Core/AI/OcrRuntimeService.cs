@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Text;
 using System.Threading;
@@ -50,6 +51,7 @@ public sealed class OcrRuntimeService : IDisposable
         lock (_leaseLock)
         {
             _activeLeases.Add(leaseId);
+            Debug.WriteLine($"[OcrRuntime] AcquireLease {leaseId}; count={_activeLeases.Count}");
         }
 
         return leaseId;
@@ -65,6 +67,7 @@ public sealed class OcrRuntimeService : IDisposable
         {
             _activeLeases.Remove(leaseId);
             shouldUnload = unloadWhenIdle && _activeLeases.Count == 0;
+            Debug.WriteLine($"[OcrRuntime] ReleaseLease {leaseId}; count={_activeLeases.Count}; unloadWhenIdle={unloadWhenIdle}");
         }
 
         if (shouldUnload)
@@ -104,6 +107,7 @@ public sealed class OcrRuntimeService : IDisposable
             _loadedLanguage = language;
             _dictionary = LoadDictionaryWithEncodingFallback(paths.Dict);
             _dictionary.Insert(0, string.Empty);
+            Debug.WriteLine($"[OcrRuntime] Loaded OCR runtime for {language}.");
         }
         finally
         {
@@ -123,6 +127,7 @@ public sealed class OcrRuntimeService : IDisposable
 
         ForceUnload();
         ProcessMemoryTrimService.TrimCurrentProcessWorkingSet();
+        Debug.WriteLine("[OcrRuntime] Unloaded OCR runtime.");
     }
 
     public void Dispose()

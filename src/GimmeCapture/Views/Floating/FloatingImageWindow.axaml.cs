@@ -202,7 +202,10 @@ public partial class FloatingImageWindow : FloatingWindowBase
                     var sourceSize = vm.Image.PixelSize;
                     var pixelX = relativeX * (sourceSize.Width / renderedRect.Width);
                     var pixelY = relativeY * (sourceSize.Height / renderedRect.Height);
-                    bool isPositive = !e.KeyModifiers.HasFlag(KeyModifiers.Shift);
+                    bool isInverseSelection =
+                        e.KeyModifiers.HasFlag(KeyModifiers.Control) ||
+                        e.KeyModifiers.HasFlag(KeyModifiers.Shift);
+                    bool isPositive = !isInverseSelection;
 
                     await vm.HandlePointClickAsync(pixelX, pixelY, isPositive);
                 }

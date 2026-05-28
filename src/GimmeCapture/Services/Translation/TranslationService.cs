@@ -24,6 +24,7 @@ public class TranslationService : IDisposable
     private readonly IEnumerable<ITranslationEngine> _translationEngines;
     private readonly AIResourceService _aiResourceService;
     private IOCREngine? _ocrEngine;
+    private bool _keepOcrWarm;
 
     private AppSettings _settings => _settingsService.Settings;
 
@@ -106,105 +107,109 @@ public class TranslationService : IDisposable
 
     public async Task<(List<TranslatedBlock> Blocks, string ErrorKey)> AnalyzeAndTranslateAsync(SKBitmap bitmap, double scale = 1.0, CancellationToken ct = default)
     {
-        ct.ThrowIfCancellationRequested();
-
-        var ocrLang = _settings.SourceLanguage;
-        Console.WriteLine($"[TranslationService] SourceLanguage={ocrLang}, TargetLanguage={_settings.TargetLanguage}");
-        if (ocrLang == OCRLanguage.Auto)
-        {
-            ocrLang = await DetectScriptLanguageAsync(bitmap, ct);
-            Console.WriteLine($"[TranslationService] Auto-detected source: {ocrLang}");
-        }
-
-        var ocrEngine = GetOrCreateOcrEngine();
-        await ocrEngine.EnsureLoadedAsync(ocrLang, ct);
-        var boxes = ocrEngine.DetectText(bitmap);
-        
-        var recognizedBlocks = new List<(SKRectI Box, string Text, float Confidence)>();
-        foreach (var box in boxes)
+        try
         {
             ct.ThrowIfCancellationRequested();
-            var (text, confidence) = ocrEngine.RecognizeText(bitmap, box, ct);
-            if (IsUsefulOcrText(text, confidence))
+
+            var ocrLang = _settings.SourceLanguage;
+            Console.WriteLine($"[TranslationService] SourceLanguage={ocrLang}, TargetLanguage={_settings.TargetLanguage}");
+            if (ocrLang == OCRLanguage.Auto)
             {
-                recognizedBlocks.Add((box, text, confidence));
-            }
-        }
-
-        if (recognizedBlocks.Count == 0) return (new List<TranslatedBlock>(), "StatusTranslateNoText");
-
-        recognizedBlocks.Sort(static (a, b) =>
-        {
-            int topCompare = (a.Box.Top / 16).CompareTo(b.Box.Top / 16);
-            return topCompare != 0 ? topCompare : a.Box.Left.CompareTo(b.Box.Left);
-        });
-
-        string mergedText = BuildMergedText(recognizedBlocks);
-        var unionBox = GetUnionBox(recognizedBlocks);
-
-        var translated = await TranslateAsync(mergedText, ocrLang, ct);
-        
-        if (string.IsNullOrEmpty(translated))
-        {
-            System.Diagnostics.Debug.WriteLine($"[TranslationService] FAILURE: Engine returned empty result for OCR: '{mergedText}'");
-            return (new List<TranslatedBlock>(), "StatusTranslateFailedEngine");
-        }
-        else
-        {
-            System.Diagnostics.Debug.WriteLine($"[TranslationService] Raw OCR: {mergedText}");
-            System.Diagnostics.Debug.WriteLine($"[TranslationService] Result: {translated}");
-        }
-        
-        // Infer font size from average height of OCR blocks (Pixels -> DIPs)
-        double inferredFontSize = 12.0;
-        if (recognizedBlocks.Count > 0)
-        {
-            double totalHeight = 0;
-            foreach (var block in recognizedBlocks)
-            {
-                totalHeight += block.Box.Height;
+                ocrLang = await DetectScriptLanguageAsync(bitmap, ct);
+                Console.WriteLine($"[TranslationService] Auto-detected source: {ocrLang}");
             }
 
-            double averagePixelHeight = totalHeight / recognizedBlocks.Count;
-            // Convert to DIPs by dividing by scale, and apply a 0.85 correction factor
-            // as OCR bounding boxes are usually taller than the actual text font size.
-            inferredFontSize = (averagePixelHeight / scale) * 0.85;
-            // Limit range to reasonable font sizes
-            inferredFontSize = Math.Clamp(inferredFontSize, 8.0, 72.0);
-        }
+            var ocrEngine = GetOrCreateOcrEngine();
+            await ocrEngine.EnsureLoadedAsync(ocrLang, ct);
+            var boxes = ocrEngine.DetectText(bitmap);
 
-        bool acceptable = IsTranslationAcceptable(mergedText, translated, _settings.TargetLanguage);
-        if (!acceptable)
-        {
-            // Retry for ANY language if the first attempt was unacceptable
-            translated = await ForceTranslateAsync(mergedText, ocrLang, _settings.TargetLanguage, ct);
-            acceptable = IsTranslationAcceptable(mergedText, translated, _settings.TargetLanguage);
-        }
-
-        var result = new List<TranslatedBlock>();
-        
-        // Convert unionBox (Pixels) to logical bounds (DIPs)
-        var logicalBounds = new Rect(
-            unionBox.Left / scale, 
-            unionBox.Top / scale, 
-            unionBox.Width / scale, 
-            unionBox.Height / scale);
-
-        if (acceptable)
-        {
-            result.Add(new TranslatedBlock
+            var recognizedBlocks = new List<(SKRectI Box, string Text, float Confidence)>();
+            foreach (var box in boxes)
             {
-                OriginalText = mergedText,
-                TranslatedText = translated,
-                Bounds = logicalBounds,
-                InferredFontSize = inferredFontSize
+                ct.ThrowIfCancellationRequested();
+                var (text, confidence) = ocrEngine.RecognizeText(bitmap, box, ct);
+                if (IsUsefulOcrText(text, confidence))
+                {
+                    recognizedBlocks.Add((box, text, confidence));
+                }
+            }
+
+            if (recognizedBlocks.Count == 0) return (new List<TranslatedBlock>(), "StatusTranslateNoText");
+
+            recognizedBlocks.Sort(static (a, b) =>
+            {
+                int topCompare = (a.Box.Top / 16).CompareTo(b.Box.Top / 16);
+                return topCompare != 0 ? topCompare : a.Box.Left.CompareTo(b.Box.Left);
             });
-            return (result, string.Empty);
+
+            string mergedText = BuildMergedText(recognizedBlocks);
+            var unionBox = GetUnionBox(recognizedBlocks);
+
+            var translated = await TranslateAsync(mergedText, ocrLang, ct);
+
+            if (string.IsNullOrEmpty(translated))
+            {
+                System.Diagnostics.Debug.WriteLine($"[TranslationService] FAILURE: Engine returned empty result for OCR: '{mergedText}'");
+                return (new List<TranslatedBlock>(), "StatusTranslateFailedEngine");
+            }
+            else
+            {
+                System.Diagnostics.Debug.WriteLine($"[TranslationService] Raw OCR: {mergedText}");
+                System.Diagnostics.Debug.WriteLine($"[TranslationService] Result: {translated}");
+            }
+
+            double inferredFontSize = 12.0;
+            if (recognizedBlocks.Count > 0)
+            {
+                double totalHeight = 0;
+                foreach (var block in recognizedBlocks)
+                {
+                    totalHeight += block.Box.Height;
+                }
+
+                double averagePixelHeight = totalHeight / recognizedBlocks.Count;
+                inferredFontSize = (averagePixelHeight / scale) * 0.85;
+                inferredFontSize = Math.Clamp(inferredFontSize, 8.0, 72.0);
+            }
+
+            bool acceptable = IsTranslationAcceptable(mergedText, translated, _settings.TargetLanguage);
+            if (!acceptable)
+            {
+                translated = await ForceTranslateAsync(mergedText, ocrLang, _settings.TargetLanguage, ct);
+                acceptable = IsTranslationAcceptable(mergedText, translated, _settings.TargetLanguage);
+            }
+
+            var result = new List<TranslatedBlock>();
+
+            var logicalBounds = new Rect(
+                unionBox.Left / scale,
+                unionBox.Top / scale,
+                unionBox.Width / scale,
+                unionBox.Height / scale);
+
+            if (acceptable)
+            {
+                result.Add(new TranslatedBlock
+                {
+                    OriginalText = mergedText,
+                    TranslatedText = translated,
+                    Bounds = logicalBounds,
+                    InferredFontSize = inferredFontSize
+                });
+                return (result, string.Empty);
+            }
+            else
+            {
+                System.Diagnostics.Debug.WriteLine("[TranslationService] Final translation effort failed or was unacceptable. Returning empty result.");
+                return (result, "StatusTranslateFailedAcceptable");
+            }
         }
-        else
+        finally
         {
-            System.Diagnostics.Debug.WriteLine($"[TranslationService] Final translation effort failed or was unacceptable. Returning empty result.");
-            return (result, "StatusTranslateFailedAcceptable");
+            if (!_keepOcrWarm)
+            {
+                ReleaseOcrResources();
+            }
         }
     }
 
@@ -266,6 +271,15 @@ public class TranslationService : IDisposable
     {
         _ocrEngine?.Dispose();
         _ocrEngine = null;
+    }
+
+    public void SetOcrWarmHold(bool hold)
+    {
+        _keepOcrWarm = hold;
+        if (!hold)
+        {
+            ReleaseOcrResources();
+        }
     }
 
     private async Task<string> TranslateAsync(string text, OCRLanguage sourceLang, CancellationToken ct)

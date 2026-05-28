@@ -18,6 +18,7 @@ public sealed class TranslationSessionService : ITranslationSessionService
     private readonly TranslationService _translationService;
     private CancellationTokenSource? _warmupCts;
     private Task? _warmupTask;
+    private bool _ocrWarmHoldActive;
 
     public TranslationSessionService(
         AIResourceService aiResourceService,
@@ -50,6 +51,8 @@ public sealed class TranslationSessionService : ITranslationSessionService
         _warmupCts = new CancellationTokenSource();
         var token = _warmupCts.Token;
         ApplyLanguages(sourceLanguage, targetLanguage);
+        _ocrWarmHoldActive = true;
+        _translationService.SetOcrWarmHold(true);
 
         _warmupTask = Task.Run(async () =>
         {
@@ -70,11 +73,12 @@ public sealed class TranslationSessionService : ITranslationSessionService
 
     public void CancelWarmup()
     {
+        _ocrWarmHoldActive = false;
         _warmupCts?.Cancel();
         _warmupCts?.Dispose();
         _warmupCts = null;
         _warmupTask = null;
-        _translationService.ReleaseOcrResources();
+        _translationService.SetOcrWarmHold(false);
     }
 
     public async Task AwaitWarmupAsync(CancellationToken ct = default)
@@ -118,6 +122,7 @@ public sealed class TranslationSessionService : ITranslationSessionService
         CancellationToken ct = default)
     {
         ApplyLanguages(sourceLanguage, targetLanguage);
+        _translationService.SetOcrWarmHold(_ocrWarmHoldActive);
         return _translationService.AnalyzeAndTranslateAsync(bitmap, scale, ct);
     }
 

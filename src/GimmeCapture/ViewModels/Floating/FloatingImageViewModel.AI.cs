@@ -36,13 +36,13 @@ public partial class FloatingImageViewModel
 
         public InteractiveRemovalState State { get; private set; } = InteractiveRemovalState.Idle;
         public InteractiveRemovalMode Mode { get; private set; } = InteractiveRemovalMode.RemoveSelected;
-        public byte[]? CleanMaskBytes { get; private set; }
+        public SkiaSharp.SKBitmap? CleanMaskBitmap { get; private set; }
         public IReadOnlyList<(double X, double Y, bool IsPositive)> Points => _points;
         public int PointCount => _points.Count;
         public bool IsActive => State != InteractiveRemovalState.Idle;
         public bool CanClick => State == InteractiveRemovalState.Collecting || State == InteractiveRemovalState.ReadyToConfirm;
         public bool CanUndo => PointCount > 0 && CanClick;
-        public bool CanConfirm => State == InteractiveRemovalState.ReadyToConfirm && CleanMaskBytes is { Length: > 0 };
+        public bool CanConfirm => State == InteractiveRemovalState.ReadyToConfirm && CleanMaskBitmap != null;
         public bool IsKeepSelectedMode => Mode == InteractiveRemovalMode.KeepSelected;
 
         public void Start()
@@ -55,7 +55,7 @@ public partial class FloatingImageViewModel
         {
             _points.Clear();
             Mode = InteractiveRemovalMode.RemoveSelected;
-            CleanMaskBytes = null;
+            DisposeCleanMask();
             State = InteractiveRemovalState.Idle;
         }
 
@@ -63,7 +63,7 @@ public partial class FloatingImageViewModel
         {
             _points.Clear();
             Mode = InteractiveRemovalMode.RemoveSelected;
-            CleanMaskBytes = null;
+            DisposeCleanMask();
             if (State != InteractiveRemovalState.Idle)
                 State = InteractiveRemovalState.Collecting;
         }
@@ -74,7 +74,7 @@ public partial class FloatingImageViewModel
                 return false;
 
             _points.RemoveAt(_points.Count - 1);
-            CleanMaskBytes = null;
+            DisposeCleanMask();
             State = InteractiveRemovalState.Collecting;
             return true;
         }
@@ -92,14 +92,15 @@ public partial class FloatingImageViewModel
             }
 
             _points.Add((x, y, sam2Positive));
-            CleanMaskBytes = null;
+            DisposeCleanMask();
             State = InteractiveRemovalState.Collecting;
         }
 
-        public void SetCleanMaskBytes(byte[] bytes)
+        public void SetCleanMaskBitmap(SkiaSharp.SKBitmap bitmap)
         {
-            CleanMaskBytes = bytes;
-            if (PointCount > 0 && CleanMaskBytes.Length > 0 && State != InteractiveRemovalState.Idle)
+            DisposeCleanMask();
+            CleanMaskBitmap = bitmap;
+            if (PointCount > 0 && CleanMaskBitmap != null && State != InteractiveRemovalState.Idle)
                 State = InteractiveRemovalState.ReadyToConfirm;
         }
 
@@ -124,6 +125,12 @@ public partial class FloatingImageViewModel
             }
 
             State = CanConfirm ? InteractiveRemovalState.ReadyToConfirm : InteractiveRemovalState.Collecting;
+        }
+
+        private void DisposeCleanMask()
+        {
+            CleanMaskBitmap?.Dispose();
+            CleanMaskBitmap = null;
         }
     }
 
@@ -255,12 +262,16 @@ public partial class FloatingImageViewModel
         IsProcessing = true;
         ProcessingText = LocalizationService.Instance["StatusInitializingAI"];
         
-        var sam2 = await GetSAM2ServiceAsync(prepareCurrentImage: true);
+        var sam2 = await GetSAM2ServiceAsync(prepareCurrentImage: false);
         if (sam2 == null) 
         {
             System.Console.WriteLine("[FloatingVM] SAM2 Service returned null.");
             IsProcessing = false;
             IsPointRemovalMode = false;
+            if (string.IsNullOrWhiteSpace(DiagnosticText))
+            {
+                DiagnosticText = "AI init failed.";
+            }
             return;
         }
 
@@ -271,6 +282,17 @@ public partial class FloatingImageViewModel
             ProcessingText = LocalizationService.Instance["StatusInitializingAI"];
             
             StartInteractiveSession();
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await PrepareCurrentImageForSam2Async(sam2);
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[AI] Background prepare failed: {ex}");
+                }
+            });
             
             DiagnosticText = $"{LocalizationService.Instance["StatusReady"]} [{sam2.ModelVariantName}]";
             System.Console.WriteLine("[FloatingVM] Interactive Selection Ready");
@@ -338,38 +360,35 @@ public partial class FloatingImageViewModel
             IsProcessing = true;
             ProcessingText = LocalizationService.Instance["StatusProcessing"];
             
-            var maskBytes = await sam2.GetMaskAsync(_interactiveSession.Points);
+            var cleanMask = await sam2.GetMaskBitmapAsync(_interactiveSession.Points);
             var iouInfo = sam2.LastIouInfo;
             DiagnosticText = $"AI: ({_interactiveSession.PointCount} pts) {iouInfo}";
 
-            if (maskBytes != null && maskBytes.Length > 0)
+            if (cleanMask != null)
             {
-                // Store clean mask for actual removal (without crosshairs)
-                _interactiveSession.SetCleanMaskBytes(maskBytes);
-                
-                using var grayMask = SkiaSharp.SKBitmap.Decode(maskBytes);
-                
-                // CRITICAL FIX: Convert grayscale mask to RGBA with transparency
-                // Color based on mode: Red (remove) vs Green (keep)
+                _interactiveSession.SetCleanMaskBitmap(cleanMask);
+
                 SkiaSharp.SKColor overlayColor = _interactiveSession.IsKeepSelectedMode
                     ? new SkiaSharp.SKColor(0, 255, 100, 150)   // Green for "Keep mode" (Shift+Click)
                     : new SkiaSharp.SKColor(255, 80, 80, 150);  // Red for "Remove mode" (Normal)
-                    
-                using var coloredMask = new SkiaSharp.SKBitmap(grayMask.Width, grayMask.Height, SkiaSharp.SKColorType.Rgba8888, SkiaSharp.SKAlphaType.Premul);
-                for (int y = 0; y < grayMask.Height; y++)
+
+                using var coloredMask = new SkiaSharp.SKBitmap(cleanMask.Width, cleanMask.Height, SkiaSharp.SKColorType.Rgba8888, SkiaSharp.SKAlphaType.Premul);
+                unsafe
                 {
-                    for (int x = 0; x < grayMask.Width; x++)
+                    byte* grayBase = (byte*)cleanMask.GetPixels().ToPointer();
+                    uint* colorBase = (uint*)coloredMask.GetPixels().ToPointer();
+                    uint overlayRaw = (uint)overlayColor.Blue
+                        | ((uint)overlayColor.Green << 8)
+                        | ((uint)overlayColor.Red << 16)
+                        | ((uint)overlayColor.Alpha << 24);
+
+                    for (int y = 0; y < cleanMask.Height; y++)
                     {
-                        var grayVal = grayMask.GetPixel(x, y).Red; // Grayscale: R=G=B
-                        if (grayVal > 127)
+                        byte* grayRow = grayBase + (y * cleanMask.RowBytes);
+                        uint* colorRow = (uint*)((byte*)colorBase + (y * coloredMask.RowBytes));
+                        for (int x = 0; x < cleanMask.Width; x++)
                         {
-                            // Selected area with mode-specific color
-                            coloredMask.SetPixel(x, y, overlayColor);
-                        }
-                        else
-                        {
-                            // Unselected area: Fully transparent
-                            coloredMask.SetPixel(x, y, SkiaSharp.SKColors.Transparent);
+                            colorRow[x] = grayRow[x] > 127 ? overlayRaw : 0u;
                         }
                     }
                 }
@@ -630,9 +649,9 @@ public partial class FloatingImageViewModel
             PushUndoState();
 
             var sourceImage = Image;
-            var cleanMaskBytes = _interactiveSession.CleanMaskBytes;
+            var cleanMaskBitmap = _interactiveSession.CleanMaskBitmap;
             if (sourceImage == null) throw new Exception("Source image is unavailable.");
-            if (cleanMaskBytes == null || cleanMaskBytes.Length == 0) throw new Exception("No valid mask generated.");
+            if (cleanMaskBitmap == null) throw new Exception("No valid mask generated.");
 
             // 1. Process with SkiaSharp in a background thread to prevent UI freeze
             var confirmedBitmap = await Task.Run(() =>
@@ -640,50 +659,38 @@ public partial class FloatingImageViewModel
                 if (!FloatingBitmapConversionHelper.TryCopyToSkBitmap(sourceImage, out var originalBmp, out var copyError) || originalBmp == null)
                     throw new Exception(copyError ?? "Failed to prepare source image.");
 
-                // Use CLEAN mask without crosshairs!
-                using var maskBmp = SkiaSharp.SKBitmap.Decode(cleanMaskBytes);
-                if (maskBmp == null) throw new Exception("Failed to decode interactive mask.");
-
                 using (originalBmp)
                 {
                     using var resultBmp = new SkiaSharp.SKBitmap(originalBmp.Width, originalBmp.Height, SkiaSharp.SKColorType.Bgra8888, SkiaSharp.SKAlphaType.Unpremul);
-                    var maskScaleX = (double)maskBmp.Width / originalBmp.Width;
-                    var maskScaleY = (double)maskBmp.Height / originalBmp.Height;
-                    
-                    for (int y = 0; y < originalBmp.Height; y++)
+                    var maskScaleX = (double)cleanMaskBitmap.Width / originalBmp.Width;
+                    var maskScaleY = (double)cleanMaskBitmap.Height / originalBmp.Height;
+
+                    unsafe
                     {
-                        for (int x = 0; x < originalBmp.Width; x++)
+                        uint* srcBase = (uint*)originalBmp.GetPixels().ToPointer();
+                        uint* dstBase = (uint*)resultBmp.GetPixels().ToPointer();
+                        byte* maskBase = (byte*)cleanMaskBitmap.GetPixels().ToPointer();
+
+                        for (int y = 0; y < originalBmp.Height; y++)
                         {
-                            var color = originalBmp.GetPixel(x, y);
-                            var maskX = Math.Clamp((int)(x * maskScaleX), 0, maskBmp.Width - 1);
-                            var maskY = Math.Clamp((int)(y * maskScaleY), 0, maskBmp.Height - 1);
-                            var maskColor = maskBmp.GetPixel(maskX, maskY);
-                            
-                            // Apply mask based on mode:
-                            // Normal mode: Selected = REMOVE, Unselected = KEEP
-                            // Invert mode: Selected = KEEP, Unselected = REMOVE
-                            var maskVal = maskColor.Red; // For Gray8, R=G=B=value
-                            bool isSelected = maskVal > 127;
-                            
-                            // Invert the selection if in invert mode
-                            if (_interactiveSession.IsKeepSelectedMode)
+                            uint* srcRow = (uint*)((byte*)srcBase + (y * originalBmp.RowBytes));
+                            uint* dstRow = (uint*)((byte*)dstBase + (y * resultBmp.RowBytes));
+                            int maskY = Math.Clamp((int)(y * maskScaleY), 0, cleanMaskBitmap.Height - 1);
+                            byte* maskRow = maskBase + (maskY * cleanMaskBitmap.RowBytes);
+
+                            for (int x = 0; x < originalBmp.Width; x++)
                             {
-                                isSelected = !isSelected;
+                                uint src = srcRow[x];
+                                int maskX = Math.Clamp((int)(x * maskScaleX), 0, cleanMaskBitmap.Width - 1);
+                                bool isSelected = maskRow[maskX] > 127;
+                                if (_interactiveSession.IsKeepSelectedMode)
+                                {
+                                    isSelected = !isSelected;
+                                }
+
+                                byte alpha = isSelected ? byte.MinValue : (byte)(src >> 24);
+                                dstRow[x] = (src & 0x00FFFFFFu) | ((uint)alpha << 24);
                             }
-                            
-                            byte alpha;
-                            if (isSelected)
-                            {
-                                // This pixel is in the "remove" zone - make transparent
-                                alpha = 0;
-                            }
-                            else
-                            {
-                                // This pixel is in the "keep" zone - preserve original
-                                alpha = color.Alpha;
-                            }
-                            
-                            resultBmp.SetPixel(x, y, new SkiaSharp.SKColor(color.Red, color.Green, color.Blue, alpha));
                         }
                     }
 
@@ -725,12 +732,14 @@ public partial class FloatingImageViewModel
 
             if (prepareCurrentImage && !await PrepareCurrentImageForSam2Async(_sam2Service))
             {
+                DiagnosticText = "AI prepare failed.";
                 return null;
             }
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[AI] Init Failed: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"[AI] Init Failed: {ex}");
+            DiagnosticText = $"AI init failed: {ex.Message}";
             _sam2Service = null;
         }
         return _sam2Service;
@@ -738,12 +747,24 @@ public partial class FloatingImageViewModel
 
     private async Task<bool> PrepareCurrentImageForSam2Async(SAM2Service sam2)
     {
-        var skImage = FloatingBitmapConversionHelper.ToSkBitmap(Image);
+        using var skImage = FloatingBitmapConversionHelper.ToSkBitmap(Image);
         if (skImage == null)
+        {
+            DiagnosticText = "AI prepare failed: image conversion failed.";
             return false;
+        }
 
-        await sam2.EnsureImagePreparedAsync(skImage);
-        return true;
+        try
+        {
+            await sam2.EnsureImagePreparedAsync(skImage);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[AI] Prepare image failed: {ex}");
+            DiagnosticText = $"AI prepare failed: {ex.Message}";
+            return false;
+        }
     }
 
     private void ShowErrorDialog(string message)
