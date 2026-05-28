@@ -73,6 +73,7 @@ public sealed class TranslationSessionService : ITranslationSessionService
         _warmupCts?.Cancel();
         _warmupCts?.Dispose();
         _warmupCts = null;
+        _warmupTask = null;
         _translationService.ReleaseOcrResources();
     }
 

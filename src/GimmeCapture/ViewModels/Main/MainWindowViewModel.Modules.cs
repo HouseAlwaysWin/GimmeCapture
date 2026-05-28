@@ -12,6 +12,19 @@ namespace GimmeCapture.ViewModels.Main;
 
 public partial class MainWindowViewModel
 {
+    private bool _modulesInitialized;
+
+    public void EnsureModulesInitialized()
+    {
+        if (_modulesInitialized)
+        {
+            return;
+        }
+
+        InitializeModules();
+        _modulesInitialized = true;
+    }
+
     private void InitializeModules()
     {
         Modules.Clear();

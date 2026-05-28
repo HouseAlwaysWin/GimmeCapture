@@ -73,12 +73,12 @@
 
             <!-- 錄影 (Recording) -->
             <TabItem Header="{Binding [TabRecord], Source={x:Static services:LocalizationService.Instance}}">
-                <tabs:SettingsRecordTab/>
+                <ContentControl x:Name="RecordTabHost"/>
             </TabItem>
 
             <!-- 翻譯設定 (Translation) -->
             <TabItem Header="{Binding [TabTranslation], Source={x:Static services:LocalizationService.Instance}}">
-                <tabs:SettingsTranslationTab/>
+                <ContentControl x:Name="TranslationTabHost"/>
             </TabItem>
 
             <!-- 控制 (Control/Hotkeys) -->
@@ -88,12 +88,12 @@
             
             <!-- 模組管理 (Modules) -->
             <TabItem Header="{Binding [TabModules], Source={x:Static services:LocalizationService.Instance}}">
-                <tabs:SettingsModulesTab/>
+                <ContentControl x:Name="ModulesTabHost"/>
             </TabItem>
             
             <!-- 關於 (About) -->
             <TabItem Header="{Binding [TabAbout], Source={x:Static services:LocalizationService.Instance}}">
-                <tabs:SettingsAboutTab/>
+                <ContentControl x:Name="AboutTabHost"/>
             </TabItem>
         </TabControl>
         

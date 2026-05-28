@@ -1,17 +1,17 @@
-using ReactiveUI;
 using Avalonia;
 using Avalonia.Media;
-using System;
-using System.Threading.Tasks;
 using GimmeCapture.Models;
-using System.Collections.ObjectModel;
-using System.Reactive;
-using System.Reactive.Linq;
-using System.IO;
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core;
 using GimmeCapture.Services.Core.Infrastructure;
+using ReactiveUI;
+using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.IO;
+using System.Reactive;
+using System.Reactive.Linq;
+using System.Threading.Tasks;
 
 namespace GimmeCapture.ViewModels.Main;
 
@@ -88,7 +88,7 @@ public partial class MainWindowViewModel : ViewModelBase
     public Func<Task<string?>>? PickFolderAction { get; set; }
     public Func<string, string, bool, Task<bool>>? ConfirmAction { get; set; }
     public Func<string, bool, Task<bool>>? ShowUpdateDialogAction { get; set; }
-    
+
     public AppSettingsService AppSettingsService => _settingsService;
     private readonly AppSettingsService _settingsService;
     private readonly IWindowManager _windowManager;
@@ -101,19 +101,43 @@ public partial class MainWindowViewModel : ViewModelBase
     public HotkeyMappingService HotkeyMappingService { get; }
     public HotkeyRouterService HotkeyRouterService { get; }
 
-    public FFmpegDownloaderService FfmpegDownloader { get; }
-    public RecordingService RecordingService { get; }
-    public UpdateService UpdateService { get; }
-    public AIResourceService AIResourceService { get; }
-    public SAM2RuntimeService SAM2RuntimeService { get; }
-    public OcrRuntimeService OcrRuntimeService { get; }
+    private readonly Lazy<FFmpegDownloaderService> _ffmpegDownloader;
+    private readonly Lazy<RecordingService> _recordingService;
+    private readonly Lazy<UpdateService> _updateService;
+    private readonly Lazy<AIResourceService> _aiResourceService;
+    private readonly Lazy<SAM2RuntimeService> _sam2RuntimeService;
+    private readonly Lazy<OcrRuntimeService> _ocrRuntimeService;
+    private IDisposable? _updateProcessingSubscription;
+    private IDisposable? _aiProcessingSubscription;
+
+    public FFmpegDownloaderService FfmpegDownloader => _ffmpegDownloader.Value;
+    public RecordingService RecordingService => _recordingService.Value;
+    public UpdateService UpdateService
+    {
+        get
+        {
+            EnsureUpdateProcessingSubscription();
+            return _updateService.Value;
+        }
+    }
+
+    public AIResourceService AIResourceService
+    {
+        get
+        {
+            EnsureAiProcessingSubscription();
+            return _aiResourceService.Value;
+        }
+    }
+
+    public SAM2RuntimeService SAM2RuntimeService => _sam2RuntimeService.Value;
+    public OcrRuntimeService OcrRuntimeService => _ocrRuntimeService.Value;
     public AIPathService AIPathService { get; }
     public ResourceQueueService ResourceQueue { get; }
-    
+
     public ObservableCollection<ModuleItem> Modules { get; } = new();
     public string AppVersion => AppVersionInfo.CurrentVersion;
 
-    // Commands - Initialized in constructor
     public ReactiveCommand<CaptureMode, Unit> StartCaptureCommand { get; } = null!;
     public ReactiveCommand<Unit, Unit> SaveAndCloseCommand { get; } = null!;
     public ReactiveCommand<Unit, Unit> ResetToDefaultCommand { get; } = null!;
@@ -142,12 +166,12 @@ public partial class MainWindowViewModel : ViewModelBase
     public ReactiveCommand<Unit, Unit> IncreaseCornerIconScaleCommand { get; } = null!;
     public ReactiveCommand<Unit, Unit> DecreaseCornerIconScaleCommand { get; } = null!;
     public ReactiveCommand<Unit, Unit> PickAIFolderCommand { get; } = null!;
-    
-    public Color[] SettingsColors { get; } = new[]
+
+    public Color[] SettingsColors { get; } =
     {
-        Color.Parse("#D4AF37"), // Gold
-        Color.Parse("#E0E0E0"), // Silver
-        Color.Parse("#E60012")  // Red
+        Color.Parse("#D4AF37"),
+        Color.Parse("#E0E0E0"),
+        Color.Parse("#E60012")
     };
 
     public MainWindowViewModel() : this(CreateDesignDependencies())
@@ -168,19 +192,19 @@ public partial class MainWindowViewModel : ViewModelBase
         _settingsPersistenceService = dependencies.SettingsPersistenceService;
         HotkeyMappingService = dependencies.HotkeyMappingService;
         HotkeyRouterService = dependencies.HotkeyRouterService;
-        FfmpegDownloader = dependencies.FfmpegDownloader;
-        RecordingService = dependencies.RecordingService;
-        UpdateService = dependencies.UpdateService;
-        AIResourceService = dependencies.AIResourceService;
-        SAM2RuntimeService = dependencies.SAM2RuntimeService;
-        OcrRuntimeService = dependencies.OcrRuntimeService;
+        _ffmpegDownloader = dependencies.FfmpegDownloader;
+        _recordingService = dependencies.RecordingService;
+        _updateService = dependencies.UpdateService;
+        _aiResourceService = dependencies.AIResourceService;
+        _sam2RuntimeService = dependencies.SAM2RuntimeService;
+        _ocrRuntimeService = dependencies.OcrRuntimeService;
         AIPathService = dependencies.AIPathService;
         ResourceQueue = dependencies.ResourceQueue;
 
         LocalizationService.Instance
             .WhenAnyValue(x => x.CurrentLanguage)
             .ObserveOn(RxApp.MainThreadScheduler)
-            .Subscribe(_ => 
+            .Subscribe(_ =>
             {
                 this.RaisePropertyChanged(nameof(SelectedLanguageOption));
                 StatusText = LocalizationService.Instance[_currentStatusKey];
@@ -188,7 +212,6 @@ public partial class MainWindowViewModel : ViewModelBase
 
         SetStatus("StatusReady");
 
-        // Command Initialization
         StartCaptureCommand = ReactiveCommand.CreateFromTask<CaptureMode>(StartCapture);
         SaveAndCloseCommand = ReactiveCommand.CreateFromTask(SaveAndClose);
         ResetToDefaultCommand = ReactiveCommand.CreateFromTask(ResetToDefault);
@@ -200,16 +223,27 @@ public partial class MainWindowViewModel : ViewModelBase
         ChangeThemeColorCommand = ReactiveCommand.Create<Color>(c => ThemeColor = c);
         CheckUpdateCommand = ReactiveCommand.CreateFromTask(CheckForUpdates);
         OpenProjectCommand = ReactiveCommand.Create(() => OpenProjectUrl());
-        
-        MinimizeCommand = ReactiveCommand.Create(() => {
+
+        MinimizeCommand = ReactiveCommand.Create(() =>
+        {
             var win = _windowManager.GetMainWindow();
-            if (win != null) win.WindowState = Avalonia.Controls.WindowState.Minimized;
+            if (win != null)
+            {
+                win.WindowState = Avalonia.Controls.WindowState.Minimized;
+            }
         });
-        MaximizeCommand = ReactiveCommand.Create(() => {
+        MaximizeCommand = ReactiveCommand.Create(() =>
+        {
             var win = _windowManager.GetMainWindow();
-            if (win != null) win.WindowState = win.WindowState == Avalonia.Controls.WindowState.Maximized ? Avalonia.Controls.WindowState.Normal : Avalonia.Controls.WindowState.Maximized;
+            if (win != null)
+            {
+                win.WindowState = win.WindowState == Avalonia.Controls.WindowState.Maximized
+                    ? Avalonia.Controls.WindowState.Normal
+                    : Avalonia.Controls.WindowState.Maximized;
+            }
         });
-        CloseCommand = ReactiveCommand.Create(() => {
+        CloseCommand = ReactiveCommand.Create(() =>
+        {
             _windowManager.GetMainWindow()?.Close();
         });
 
@@ -225,20 +259,23 @@ public partial class MainWindowViewModel : ViewModelBase
         DecreasePlaybackUiFpsCommand = ReactiveCommand.Create(() => { if (PlaybackUiFps > 1) PlaybackUiFps = Math.Max(1, PlaybackUiFps - 5); });
         IncreasePlaybackTimelineFpsCommand = ReactiveCommand.Create(() => { if (PlaybackTimelineFps < 120) PlaybackTimelineFps = Math.Min(120, PlaybackTimelineFps + 5); });
         DecreasePlaybackTimelineFpsCommand = ReactiveCommand.Create(() => { if (PlaybackTimelineFps > 1) PlaybackTimelineFps = Math.Max(1, PlaybackTimelineFps - 5); });
-        
-        PickAIFolderCommand = ReactiveCommand.CreateFromTask(async () => {
+
+        PickAIFolderCommand = ReactiveCommand.CreateFromTask(async () =>
+        {
             if (PickFolderAction != null)
             {
                 var path = await PickFolderAction();
-                if (!string.IsNullOrEmpty(path)) AIResourcesDirectory = path;
+                if (!string.IsNullOrEmpty(path))
+                {
+                    AIResourcesDirectory = path;
+                }
             }
         });
 
         RefreshLlamaModelsCommand = ReactiveCommand.Create(() => RefreshLlamaModelCatalog());
 
-        HotkeyService.OnHotkeyPressed = (id) => 
+        HotkeyService.OnHotkeyPressed = id =>
         {
-            // 如果 SnipWindow 開啟中，將熱鍵傳遞給它處理，而不是無視
             var snipVm = GetActiveSnipViewModelAction?.Invoke();
             if (snipVm != null)
             {
@@ -251,70 +288,6 @@ public partial class MainWindowViewModel : ViewModelBase
                 Avalonia.Threading.Dispatcher.UIThread.Post(() => StartCaptureCommand.Execute(mode).Subscribe());
             }
         };
-
-
-        var processingSources = new[] 
-        {
-            UpdateService.WhenAnyValue(x => x.IsDownloading, x => x.DownloadProgress).Select(x => ("Update", x.Item1, x.Item2)),
-            AIResourceService.WhenAnyValue(x => x.IsDownloading, x => x.DownloadProgress).Select(x => ("AI", x.Item1, x.Item2))
-        };
-
-        Observable.CombineLatest(processingSources)
-            .ObserveOn(RxApp.MainThreadScheduler)
-            .Subscribe(states => 
-            {
-                var updateState = states.AsValueEnumerable().FirstOrDefault(s => s.Item1 == "Update");
-                bool isUpdateDownloading = updateState.Item2;
-                double updateProgress = updateState.Item3;
-
-                var aiState = states.AsValueEnumerable().FirstOrDefault(s => s.Item1 == "AI");
-                bool isAiDownloading = aiState.Item2;
-
-                var activeModules = Modules.AsValueEnumerable().Where(m => m.IsProcessing).ToList();
-                
-                // Fix Race Condition: ResourceQueue updates lag behind Service.IsDownloading.
-                // Filter out stale modules based on service truth (AI modules only).
-                if (!isAiDownloading)
-                {
-                    activeModules.Clear();
-                }
-
-                int activeCount = activeModules.Count + (isUpdateDownloading ? 1 : 0);
-                
-                if (activeCount > 0)
-                {
-                    double totalProgress = activeModules.AsValueEnumerable().Sum(m => m.Progress) + (isUpdateDownloading ? updateProgress : 0);
-                    double avgProgress = totalProgress / activeCount;
-                    IsProcessing = true;
-                    ShowProcessingOverlay = true;
-                    ProgressValue = avgProgress;
-                    IsIndeterminate = false;
-
-                    if (activeCount == 1)
-                    {
-                        if (isUpdateDownloading) ProcessingText = string.Format(LocalizationService.Instance["UpdateDownloading"], (int)avgProgress);
-                        else
-                        {
-                             var module = activeModules.AsValueEnumerable().First();
-                             ProcessingText = $"{module.Name}... {(int)avgProgress}%";
-                        }
-                    }
-                    else
-                    {
-                        var prefix = LocalizationService.Instance["ComponentDownloadingProgress"].Replace("...", "").Replace("中", "");
-                        ProcessingText = $"{prefix} ({activeCount})... {(int)avgProgress}%";
-                    }
-                    StatusText = ProcessingText;
-                }
-                else
-                {
-                    SetStatus("StatusReady");
-                    IsProcessing = false;
-                    ShowProcessingOverlay = false;
-                    ProgressValue = 0;
-                    ProcessingText = "";
-                }
-            });
 
         this.PropertyChanged += (s, e) =>
         {
@@ -352,5 +325,90 @@ public partial class MainWindowViewModel : ViewModelBase
     private void QueueSettingsSave()
     {
         _settingsSaveCoordinator.RequestSave();
+    }
+
+    private void EnsureUpdateProcessingSubscription()
+    {
+        if (_updateProcessingSubscription != null)
+        {
+            return;
+        }
+
+        _updateProcessingSubscription = _updateService.Value
+            .WhenAnyValue(x => x.IsDownloading, x => x.DownloadProgress)
+            .ObserveOn(RxApp.MainThreadScheduler)
+            .Subscribe(_ => RecomputeProcessingState());
+
+        RecomputeProcessingState();
+    }
+
+    private void EnsureAiProcessingSubscription()
+    {
+        if (_aiProcessingSubscription != null)
+        {
+            return;
+        }
+
+        _aiProcessingSubscription = _aiResourceService.Value
+            .WhenAnyValue(x => x.IsDownloading, x => x.DownloadProgress)
+            .ObserveOn(RxApp.MainThreadScheduler)
+            .Subscribe(_ => RecomputeProcessingState());
+
+        RecomputeProcessingState();
+    }
+
+    private void RecomputeProcessingState()
+    {
+        bool isUpdateDownloading = _updateService.IsValueCreated && _updateService.Value.IsDownloading;
+        double updateProgress = _updateService.IsValueCreated ? _updateService.Value.DownloadProgress : 0;
+        bool isAiDownloading = _aiResourceService.IsValueCreated && _aiResourceService.Value.IsDownloading;
+
+        var activeModules = _modulesInitialized
+            ? Modules.AsValueEnumerable().Where(m => m.IsProcessing).ToList()
+            : new List<ModuleItem>();
+
+        if (!isAiDownloading)
+        {
+            activeModules.Clear();
+        }
+
+        int activeCount = activeModules.Count + (isUpdateDownloading ? 1 : 0);
+        if (activeCount > 0)
+        {
+            double totalProgress = activeModules.AsValueEnumerable().Sum(m => m.Progress) + (isUpdateDownloading ? updateProgress : 0);
+            double avgProgress = totalProgress / activeCount;
+            IsProcessing = true;
+            ShowProcessingOverlay = true;
+            ProgressValue = avgProgress;
+            IsIndeterminate = false;
+
+            if (activeCount == 1)
+            {
+                if (isUpdateDownloading)
+                {
+                    ProcessingText = string.Format(LocalizationService.Instance["UpdateDownloading"], (int)avgProgress);
+                }
+                else
+                {
+                    var module = activeModules.AsValueEnumerable().First();
+                    ProcessingText = $"{module.Name}... {(int)avgProgress}%";
+                }
+            }
+            else
+            {
+                var prefix = LocalizationService.Instance["ComponentDownloadingProgress"].Replace("...", "").Trim();
+                ProcessingText = $"{prefix} ({activeCount})... {(int)avgProgress}%";
+            }
+
+            StatusText = ProcessingText;
+        }
+        else
+        {
+            SetStatus("StatusReady");
+            IsProcessing = false;
+            ShowProcessingOverlay = false;
+            ProgressValue = 0;
+            ProcessingText = "";
+        }
     }
 }

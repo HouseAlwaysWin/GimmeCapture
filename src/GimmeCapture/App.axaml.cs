@@ -25,19 +25,17 @@ public partial class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            desktop.ShutdownMode = Avalonia.Controls.ShutdownMode.OnMainWindowClose;
             _bootstrapper = new AppBootstrapper();
-            desktop.MainWindow = _bootstrapper.CreateMainWindow();
+            desktop.ShutdownMode = Avalonia.Controls.ShutdownMode.OnExplicitShutdown;
 
-            if (desktop.MainWindow is { } mw && StartupService.ShouldLaunchToTrayOnly(Program.CommandLineArgs))
+            var launchToTrayOnly = StartupService.ShouldLaunchToTrayOnly(Program.CommandLineArgs);
+            if (!launchToTrayOnly)
             {
-                void OnOpenedForTrayOnly(object? s, EventArgs e)
-                {
-                    mw.Opened -= OnOpenedForTrayOnly;
-                    mw.Hide();
-                }
-
-                mw.Opened += OnOpenedForTrayOnly;
+                desktop.MainWindow = _bootstrapper.CreateMainWindow();
+            }
+            else
+            {
+                desktop.MainWindow = _bootstrapper.CreateTrayHostWindow();
             }
 
             // Setup Tray Icon
@@ -55,12 +53,10 @@ public partial class App : Application
                     
                     trayIcon.Clicked += (s, e) =>
                     {
-                        if (desktop.MainWindow != null)
-                        {
-                            desktop.MainWindow.Show();
-                            desktop.MainWindow.WindowState = Avalonia.Controls.WindowState.Normal;
-                            desktop.MainWindow.Activate();
-                        }
+                        var mainWindow = EnsureMainWindow(desktop);
+                        mainWindow.Show();
+                        mainWindow.WindowState = Avalonia.Controls.WindowState.Normal;
+                        mainWindow.Activate();
                     };
                     
                     var menu = new Avalonia.Controls.NativeMenu();
@@ -69,12 +65,10 @@ public partial class App : Application
                     var showItem = new Avalonia.Controls.NativeMenuItem(loc["TrayShow"] ?? "Show");
                     showItem.Click += (s, e) => 
                     {
-                         if (desktop.MainWindow != null)
-                        {
-                            desktop.MainWindow.Show();
-                            desktop.MainWindow.WindowState = Avalonia.Controls.WindowState.Normal;
-                            desktop.MainWindow.Activate();
-                        }
+                        var mainWindow = EnsureMainWindow(desktop);
+                        mainWindow.Show();
+                        mainWindow.WindowState = Avalonia.Controls.WindowState.Normal;
+                        mainWindow.Activate();
                     };
                     menu.Items.Add(showItem);
 
@@ -82,49 +76,24 @@ public partial class App : Application
                     menu.Items.Add(new Avalonia.Controls.NativeMenuItemSeparator());
 
                     // Auto Start toggle
-                    var vm = desktop.MainWindow?.DataContext as MainWindowViewModel;
                     var autoStartItem = new Avalonia.Controls.NativeMenuItem(
-                        FormatToggleLabel(loc["RunOnStartup"] ?? "Run On Startup", vm?.RunOnStartup ?? false));
+                        FormatToggleLabel(loc["RunOnStartup"] ?? "Run On Startup", _bootstrapper.RunOnStartup));
                     autoStartItem.Click += (s, e) =>
                     {
-                        if (desktop.MainWindow?.DataContext is MainWindowViewModel mvm)
-                        {
-                            mvm.RunOnStartup = !mvm.RunOnStartup;
-                            // SetStartup and SaveSettings are now completely handled within the ViewModel setter
-                        }
+                        _bootstrapper.RunOnStartup = !_bootstrapper.RunOnStartup;
+                        autoStartItem.Header = FormatToggleLabel(loc["RunOnStartup"] ?? "Run On Startup", _bootstrapper.RunOnStartup);
                     };
                     menu.Items.Add(autoStartItem);
 
                     // Auto Check Updates toggle
                     var autoUpdateItem = new Avalonia.Controls.NativeMenuItem(
-                        FormatToggleLabel(loc["AutoCheckUpdates"] ?? "Auto Check Updates", vm?.AutoCheckUpdates ?? false));
+                        FormatToggleLabel(loc["AutoCheckUpdates"] ?? "Auto Check Updates", _bootstrapper.AutoCheckUpdates));
                     autoUpdateItem.Click += (s, e) =>
                     {
-                        if (desktop.MainWindow?.DataContext is MainWindowViewModel mvm)
-                        {
-                            mvm.AutoCheckUpdates = !mvm.AutoCheckUpdates;
-                        }
+                        _bootstrapper.AutoCheckUpdates = !_bootstrapper.AutoCheckUpdates;
+                        autoUpdateItem.Header = FormatToggleLabel(loc["AutoCheckUpdates"] ?? "Auto Check Updates", _bootstrapper.AutoCheckUpdates);
                     };
                     menu.Items.Add(autoUpdateItem);
-
-                    if (vm != null)
-                    {
-                        vm.PropertyChanged += (s, e) =>
-                        {
-                            if (e.PropertyName == nameof(MainWindowViewModel.RunOnStartup))
-                            {
-                                Avalonia.Threading.Dispatcher.UIThread.Post(() => {
-                                    autoStartItem.Header = FormatToggleLabel(loc["RunOnStartup"] ?? "Run On Startup", vm.RunOnStartup);
-                                });
-                            }
-                            else if (e.PropertyName == nameof(MainWindowViewModel.AutoCheckUpdates))
-                            {
-                                Avalonia.Threading.Dispatcher.UIThread.Post(() => {
-                                    autoUpdateItem.Header = FormatToggleLabel(loc["AutoCheckUpdates"] ?? "Auto Check Updates", vm.AutoCheckUpdates);
-                                });
-                            }
-                        };
-                    }
 
                     // Separator
                     menu.Items.Add(new Avalonia.Controls.NativeMenuItemSeparator());
@@ -146,11 +115,8 @@ public partial class App : Application
                             Avalonia.Threading.Dispatcher.UIThread.Post(() => {
                                 showItem.Header = loc["TrayShow"] ?? "Show";
                                 exitItem.Header = loc["TrayExit"] ?? "Exit";
-                                if (vm != null)
-                                {
-                                    autoStartItem.Header = FormatToggleLabel(loc["RunOnStartup"] ?? "Run On Startup", vm.RunOnStartup);
-                                    autoUpdateItem.Header = FormatToggleLabel(loc["AutoCheckUpdates"] ?? "Auto Check Updates", vm.AutoCheckUpdates);
-                                }
+                                autoStartItem.Header = FormatToggleLabel(loc["RunOnStartup"] ?? "Run On Startup", _bootstrapper.RunOnStartup);
+                                autoUpdateItem.Header = FormatToggleLabel(loc["AutoCheckUpdates"] ?? "Auto Check Updates", _bootstrapper.AutoCheckUpdates);
                             });
                         }
                     };
@@ -167,5 +133,16 @@ public partial class App : Application
         }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    private MainWindow EnsureMainWindow(IClassicDesktopStyleApplicationLifetime desktop)
+    {
+        var mainWindow = _bootstrapper!.CreateMainWindow();
+        if (desktop.MainWindow != mainWindow)
+        {
+            desktop.MainWindow = mainWindow;
+        }
+
+        return mainWindow;
     }
 }

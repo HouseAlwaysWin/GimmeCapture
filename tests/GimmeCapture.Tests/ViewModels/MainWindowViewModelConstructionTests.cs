@@ -52,12 +52,12 @@ public class MainWindowViewModelConstructionTests
             settingsPersistenceService,
             hotkeyMappingService,
             hotkeyRouterService,
-            ffmpegDownloader,
-            recordingService,
-            updateService,
-            aiResourceService,
-            sam2RuntimeService,
-            ocrRuntimeService,
+            new Lazy<FFmpegDownloaderService>(() => ffmpegDownloader),
+            new Lazy<RecordingService>(() => recordingService),
+            new Lazy<UpdateService>(() => updateService),
+            new Lazy<AIResourceService>(() => aiResourceService),
+            new Lazy<SAM2RuntimeService>(() => sam2RuntimeService),
+            new Lazy<OcrRuntimeService>(() => ocrRuntimeService),
             aiPathService,
             resourceQueue);
 

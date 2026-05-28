@@ -13,6 +13,7 @@ using GimmeCapture.Services.Core;
 using GimmeCapture.Services.Core.Infrastructure;
 using ReactiveUI;
 using System.Reactive.Linq;
+using GimmeCapture.Views.Main.Tabs;
 
 namespace GimmeCapture.Views.Main;
 
@@ -20,6 +21,10 @@ public partial class MainWindow : Window
 {
     private readonly IDownloadWindowService _downloadWindowService;
     private readonly ISnipWindowFactory _snipWindowFactory;
+    private ContentControl? _recordTabHost;
+    private ContentControl? _translationTabHost;
+    private ContentControl? _modulesTabHost;
+    private ContentControl? _aboutTabHost;
 
     [StructLayout(LayoutKind.Sequential)]
     public struct POINT
@@ -51,9 +56,18 @@ public partial class MainWindow : Window
         this.Closing += OnClosing;
 
         var tabControl = this.FindControl<TabControl>("MainTabControl");
+        _recordTabHost = this.FindControl<ContentControl>("RecordTabHost");
+        _translationTabHost = this.FindControl<ContentControl>("TranslationTabHost");
+        _modulesTabHost = this.FindControl<ContentControl>("ModulesTabHost");
+        _aboutTabHost = this.FindControl<ContentControl>("AboutTabHost");
         if (tabControl != null)
         {
-            tabControl.SelectionChanged += (s, e) => UpdateDownloadWindow();
+            tabControl.SelectionChanged += (s, e) =>
+            {
+                EnsureLazyTabContent(tabControl.SelectedIndex);
+                UpdateDownloadWindow();
+            };
+            EnsureLazyTabContent(tabControl.SelectedIndex);
         }
     }
 
@@ -195,5 +209,38 @@ public partial class MainWindow : Window
     {
         if (DataContext is not MainWindowViewModel vm) return;
         _downloadWindowService.Update(this, vm, vm.IsProcessing);
+    }
+
+    private void EnsureLazyTabContent(int selectedIndex)
+    {
+        switch (selectedIndex)
+        {
+            case 2:
+                _recordTabHost ??= this.FindControl<ContentControl>("RecordTabHost");
+                _recordTabHost!.Content ??= new SettingsRecordTab();
+                break;
+            case 3:
+                if (DataContext is MainWindowViewModel translationVm)
+                {
+                    translationVm.RefreshLlamaModelCatalog();
+                }
+
+                _translationTabHost ??= this.FindControl<ContentControl>("TranslationTabHost");
+                _translationTabHost!.Content ??= new SettingsTranslationTab();
+                break;
+            case 5:
+                if (DataContext is MainWindowViewModel vm)
+                {
+                    vm.EnsureModulesInitialized();
+                }
+
+                _modulesTabHost ??= this.FindControl<ContentControl>("ModulesTabHost");
+                _modulesTabHost!.Content ??= new SettingsModulesTab();
+                break;
+            case 6:
+                _aboutTabHost ??= this.FindControl<ContentControl>("AboutTabHost");
+                _aboutTabHost!.Content ??= new SettingsAboutTab();
+                break;
+        }
     }
 }

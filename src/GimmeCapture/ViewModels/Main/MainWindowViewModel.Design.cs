@@ -24,22 +24,22 @@ public partial class MainWindowViewModel
         var settingsPersistenceService = new MainWindowSettingsPersistenceService();
         var hotkeyMappingService = new HotkeyMappingService();
         var hotkeyRouterService = new HotkeyRouterService();
-        var ffmpegDownloader = new FFmpegDownloaderService(settingsService);
-        var recordingService = new RecordingService(ffmpegDownloader, settingsService);
-        var updateService = new UpdateService(AppVersionInfo.CurrentVersion);
         var aiPathService = new AIPathService(settingsService);
         var nativeResolverService = new NativeResolverService(aiPathService);
         var aiModelDownloader = new AIModelDownloader();
         var aiModelCatalog = new AIModelCatalog();
-        var sam2RuntimeService = new SAM2RuntimeService(aiPathService, nativeResolverService);
-        var aiResourceService = new AIResourceService(
+        var ffmpegDownloader = new Lazy<FFmpegDownloaderService>(() => new FFmpegDownloaderService(settingsService));
+        var recordingService = new Lazy<RecordingService>(() => new RecordingService(ffmpegDownloader.Value, settingsService));
+        var updateService = new Lazy<UpdateService>(() => new UpdateService(AppVersionInfo.CurrentVersion));
+        var sam2RuntimeService = new Lazy<SAM2RuntimeService>(() => new SAM2RuntimeService(aiPathService, nativeResolverService));
+        var aiResourceService = new Lazy<AIResourceService>(() => new AIResourceService(
             settingsService,
             aiPathService,
             nativeResolverService,
             aiModelDownloader,
             aiModelCatalog,
-            sam2RuntimeService.UnloadModels);
-        var ocrRuntimeService = new OcrRuntimeService(aiResourceService);
+            sam2RuntimeService.Value.UnloadModels));
+        var ocrRuntimeService = new Lazy<OcrRuntimeService>(() => new OcrRuntimeService(aiResourceService.Value));
 
         return new MainWindowViewModelDependencies(
             settingsService,

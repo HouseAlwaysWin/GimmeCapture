@@ -900,7 +900,6 @@ public partial class MainWindowViewModel
             var snapshot = await _settingsPersistenceService.LoadAsync(_settingsService);
             ApplySettingsSnapshot(snapshot);
             RaiseSettingsBackedPropertyNotifications();
-            RefreshLlamaModelCatalog();
             IsModified = false;
         }
         catch (Exception ex)
@@ -910,10 +909,8 @@ public partial class MainWindowViewModel
         finally
         {
             _isDataLoading = false;
-            InitializeModules();
 
             if (AutoCheckUpdates) _ = CheckForUpdates(true);
-            RefreshLlamaModelCatalog();
         }
     }
 

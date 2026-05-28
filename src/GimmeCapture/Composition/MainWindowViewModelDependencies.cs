@@ -2,6 +2,7 @@ using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core.AI;
 using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Core.Media;
+using System;
 
 namespace GimmeCapture.ViewModels.Main;
 
@@ -16,11 +17,11 @@ public sealed record MainWindowViewModelDependencies(
     IMainWindowSettingsPersistenceService SettingsPersistenceService,
     HotkeyMappingService HotkeyMappingService,
     HotkeyRouterService HotkeyRouterService,
-    FFmpegDownloaderService FfmpegDownloader,
-    RecordingService RecordingService,
-    UpdateService UpdateService,
-    AIResourceService AIResourceService,
-    SAM2RuntimeService SAM2RuntimeService,
-    OcrRuntimeService OcrRuntimeService,
+    Lazy<FFmpegDownloaderService> FfmpegDownloader,
+    Lazy<RecordingService> RecordingService,
+    Lazy<UpdateService> UpdateService,
+    Lazy<AIResourceService> AIResourceService,
+    Lazy<SAM2RuntimeService> SAM2RuntimeService,
+    Lazy<OcrRuntimeService> OcrRuntimeService,
     AIPathService AIPathService,
     ResourceQueueService ResourceQueue);

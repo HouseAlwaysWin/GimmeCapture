@@ -4,6 +4,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using GimmeCapture.Models;
+using GimmeCapture.Services.Core.Infrastructure;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
 
@@ -181,6 +182,7 @@ public sealed class SAM2RuntimeService : IDisposable
 
         _cachedVariant = null;
         _isWarmedUp = false;
+        ProcessMemoryTrimService.TrimCurrentProcessWorkingSet();
     }
 
     public void Dispose()

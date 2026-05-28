@@ -1,7 +1,6 @@
 using Avalonia;
 using System;
 using Avalonia.ReactiveUI;
-using GimmeCapture.Services.Core.Media.NativeFFmpeg;
 
 namespace GimmeCapture;
 
@@ -23,12 +22,6 @@ class Program
             var exeDir = AppDomain.CurrentDomain.BaseDirectory;
             if (!string.IsNullOrEmpty(exeDir))
                 System.IO.Directory.SetCurrentDirectory(exeDir);
-
-            _ = FFmpegRuntime.TryInitialize(out var ffErr);
-            if (!string.IsNullOrEmpty(ffErr))
-            {
-                System.Diagnostics.Debug.WriteLine($"[FFmpeg] {ffErr}");
-            }
 
             BuildAvaloniaApp()
                 .StartWithClassicDesktopLifetime(args ?? []);

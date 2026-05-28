@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using GimmeCapture.Models;
+using GimmeCapture.Services.Core.Infrastructure;
 using Microsoft.ML.OnnxRuntime;
 
 namespace GimmeCapture.Services.Core.AI;
@@ -121,9 +122,7 @@ public sealed class OcrRuntimeService : IDisposable
         }
 
         ForceUnload();
-        GC.Collect();
-        GC.WaitForPendingFinalizers();
-        GC.Collect();
+        ProcessMemoryTrimService.TrimCurrentProcessWorkingSet();
     }
 
     public void Dispose()
