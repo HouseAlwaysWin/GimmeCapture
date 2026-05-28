@@ -81,15 +81,19 @@ public sealed class AIScanSessionService : IAIScanSessionService
 
         double scaleX = bitmap.Width > 0 ? request.ViewportBounds.Width / bitmap.Width : 1;
         double scaleY = bitmap.Height > 0 ? request.ViewportBounds.Height / bitmap.Height : 1;
-        var rawLogicalRects = textBoxes
-            .AsValueEnumerable()
-            .Select(box => new Rect(
+        var rawLogicalRects = new List<Rect>(textBoxes.Count);
+        foreach (var box in textBoxes.AsValueEnumerable())
+        {
+            var rect = new Rect(
                 box.Left * scaleX,
                 box.Top * scaleY,
                 box.Width * scaleX,
-                box.Height * scaleY))
-            .Where(rect => rect.Width >= 12 && rect.Height >= 8)
-            .ToList();
+                box.Height * scaleY);
+            if (rect.Width >= 12 && rect.Height >= 8)
+            {
+                rawLogicalRects.Add(rect);
+            }
+        }
 
         var grouped = OcrCandidateGrouper.Group(rawLogicalRects);
         return new AIScanSessionResult(grouped.RawRects, grouped.AllCandidates);

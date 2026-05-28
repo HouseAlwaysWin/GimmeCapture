@@ -266,13 +266,7 @@ public sealed class AnnotationRenderService : IAnnotationRenderService
         int innerTop = top - expandedTop;
 
         using var region = new SKBitmap(expandedWidth, expandedHeight, SKColorType.Bgra8888, SKAlphaType.Premul);
-        using (var canvas = new SKCanvas(region))
-        {
-            canvas.DrawBitmap(
-                target,
-                new SKRect(expandedLeft, expandedTop, expandedRight, expandedBottom),
-                new SKRect(0, 0, expandedWidth, expandedHeight));
-        }
+        CopyRect(target, expandedLeft, expandedTop, region, 0, 0, expandedWidth, expandedHeight);
 
         using var blurred = new SKBitmap(expandedWidth, expandedHeight, SKColorType.Bgra8888, SKAlphaType.Premul);
         using (var canvas = new SKCanvas(blurred))
@@ -281,11 +275,7 @@ public sealed class AnnotationRenderService : IAnnotationRenderService
             canvas.DrawBitmap(region, 0, 0, blurPaint);
         }
 
-        using var targetCanvas = new SKCanvas(target);
-        targetCanvas.DrawBitmap(
-            blurred,
-            new SKRect(innerLeft, innerTop, innerLeft + width, innerTop + height),
-            new SKRect(left, top, right, bottom));
+        CopyRect(blurred, innerLeft, innerTop, target, left, top, width, height);
     }
 
     private static SKImageFilter CreateClampBlur(float sigmaX, float sigmaY)
@@ -329,6 +319,16 @@ public sealed class AnnotationRenderService : IAnnotationRenderService
     {
         byte* rowPtr = (byte*)bitmap.GetPixels() + (row * bitmap.RowBytes);
         return MemoryMarshal.Cast<byte, uint>(new Span<byte>(rowPtr, bitmap.Width * 4));
+    }
+
+    private static void CopyRect(SKBitmap source, int sourceX, int sourceY, SKBitmap destination, int destinationX, int destinationY, int width, int height)
+    {
+        for (int row = 0; row < height; row++)
+        {
+            GetPixelRowUIntSpan(source, sourceY + row)
+                .Slice(sourceX, width)
+                .CopyTo(GetPixelRowUIntSpan(destination, destinationY + row).Slice(destinationX, width));
+        }
     }
 
     private static uint PackBgra(byte blue, byte green, byte red, byte alpha)

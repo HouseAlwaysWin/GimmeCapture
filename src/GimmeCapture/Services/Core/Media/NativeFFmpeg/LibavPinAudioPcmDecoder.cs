@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using FFmpeg.AutoGen;
@@ -93,7 +94,7 @@ internal static class LibavPinAudioPcmDecoder
                 }
             }
 
-            var pcmChunks = new List<byte[]>();
+            using var pcmBuffer = new PooledByteAccumulator();
             long startSample = startSeconds > 0 ? (long)Math.Round(startSeconds * sampleRate) : 0;
 
             while (true)
@@ -121,29 +122,15 @@ internal static class LibavPinAudioPcmDecoder
                 ThrowIfErr(ffmpeg.avcodec_send_packet(decCtx, pkt), "pin_audio_send_packet");
                 ffmpeg.av_packet_unref(pkt);
 
-                ReceiveAndConvert(decCtx, swr, frame, outFrm, outLayout, ast->time_base, startSample, pcmChunks);
+                ReceiveAndConvert(decCtx, swr, frame, outFrm, outLayout, ast->time_base, startSample, pcmBuffer);
             }
 
             _ = ffmpeg.avcodec_send_packet(decCtx, (AVPacket*)null);
-            ReceiveDraining(decCtx, swr, frame, outFrm, outLayout, ast->time_base, startSample, pcmChunks);
-            DrainSwrTail(swr, outFrm, outLayout, pcmChunks, sampleRate);
-
-            int total = 0;
-            foreach (var c in pcmChunks)
-            {
-                total += c.Length;
-            }
-
-            byte[] pcm = total == 0 ? Array.Empty<byte>() : new byte[total];
-            int off = 0;
-            foreach (var c in pcmChunks)
-            {
-                Buffer.BlockCopy(c, 0, pcm, off, c.Length);
-                off += c.Length;
-            }
+            ReceiveDraining(decCtx, swr, frame, outFrm, outLayout, ast->time_base, startSample, pcmBuffer);
+            DrainSwrTail(swr, outFrm, outLayout, pcmBuffer, sampleRate);
 
             var wf = new WaveFormat(sampleRate, 16, 2);
-            return new DecodeResult(pcm, wf);
+            return new DecodeResult(pcmBuffer.ToArray(), wf);
         }
         finally
         {
@@ -189,7 +176,7 @@ internal static class LibavPinAudioPcmDecoder
         AVChannelLayout outLayout,
         AVRational streamTimeBase,
         long startSample,
-        List<byte[]> pcmChunks)
+        PooledByteAccumulator pcmBuffer)
     {
         while (true)
         {
@@ -200,7 +187,7 @@ internal static class LibavPinAudioPcmDecoder
             }
 
             ThrowIfErr(gr, "pin_audio_receive_frame");
-            AppendConverted(swr, frame, outFrm, outLayout, streamTimeBase, startSample, pcmChunks);
+            AppendConverted(swr, frame, outFrm, outLayout, streamTimeBase, startSample, pcmBuffer);
         }
     }
 
@@ -212,7 +199,7 @@ internal static class LibavPinAudioPcmDecoder
         AVChannelLayout outLayout,
         AVRational streamTimeBase,
         long startSample,
-        List<byte[]> pcmChunks)
+        PooledByteAccumulator pcmBuffer)
     {
         while (true)
         {
@@ -228,7 +215,7 @@ internal static class LibavPinAudioPcmDecoder
             }
 
             ThrowIfErr(gr, "pin_audio_receive_draining");
-            AppendConverted(swr, frame, outFrm, outLayout, streamTimeBase, startSample, pcmChunks);
+            AppendConverted(swr, frame, outFrm, outLayout, streamTimeBase, startSample, pcmBuffer);
         }
     }
 
@@ -236,7 +223,7 @@ internal static class LibavPinAudioPcmDecoder
         SwrContext* swr,
         AVFrame* outFrm,
         AVChannelLayout outLayout,
-        List<byte[]> pcmChunks,
+        PooledByteAccumulator pcmBuffer,
         int sampleRate)
     {
         int sr = sampleRate > 0 ? sampleRate : 48000;
@@ -256,7 +243,7 @@ internal static class LibavPinAudioPcmDecoder
                 break;
             }
 
-            AppendConvertedPlain(outFrm, pcmChunks);
+            AppendConvertedPlain(outFrm, pcmBuffer);
             ffmpeg.av_frame_unref(outFrm);
             if (rc < 0)
             {
@@ -265,7 +252,7 @@ internal static class LibavPinAudioPcmDecoder
         }
     }
 
-    private static unsafe void AppendConvertedPlain(AVFrame* outFrm, List<byte[]> pcmChunks, int skipSamples = 0)
+    private static unsafe void AppendConvertedPlain(AVFrame* outFrm, PooledByteAccumulator pcmBuffer, int skipSamples = 0)
     {
         int nb = outFrm->nb_samples;
         int ch = outFrm->ch_layout.nb_channels > 0 ? outFrm->ch_layout.nb_channels : 2;
@@ -277,9 +264,7 @@ internal static class LibavPinAudioPcmDecoder
             return;
         }
 
-        var dst = new byte[bytes];
-        Marshal.Copy((nint)(outFrm->data[0] + (clampedSkipSamples * bytesPerSample)), dst, 0, bytes);
-        pcmChunks.Add(dst);
+        pcmBuffer.Append((byte*)outFrm->data[0] + (clampedSkipSamples * bytesPerSample), bytes);
     }
 
     private static unsafe void AppendConverted(
@@ -289,7 +274,7 @@ internal static class LibavPinAudioPcmDecoder
         AVChannelLayout outLayout,
         AVRational streamTimeBase,
         long startSample,
-        List<byte[]> pcmChunks)
+        PooledByteAccumulator pcmBuffer)
     {
         ffmpeg.av_channel_layout_copy(&outFrm->ch_layout, &outLayout);
         outFrm->sample_rate = frame->sample_rate > 0 ? frame->sample_rate : outFrm->sample_rate;
@@ -314,7 +299,7 @@ internal static class LibavPinAudioPcmDecoder
             }
         }
 
-        AppendConvertedPlain(outFrm, pcmChunks, skipSamples);
+        AppendConvertedPlain(outFrm, pcmBuffer, skipSamples);
         ffmpeg.av_frame_unref(outFrm);
     }
 
@@ -323,6 +308,73 @@ internal static class LibavPinAudioPcmDecoder
         if (err < 0)
         {
             throw FFmpegErrors.ToException(err, ctx);
+        }
+    }
+
+    private sealed class PooledByteAccumulator : IDisposable
+    {
+        private byte[] _buffer = Array.Empty<byte>();
+        private int _length;
+
+        public unsafe void Append(byte* source, int byteLength)
+        {
+            EnsureCapacity(_length + byteLength);
+            fixed (byte* destination = &_buffer[_length])
+            {
+                Buffer.MemoryCopy(source, destination, _buffer.Length - _length, byteLength);
+            }
+
+            _length += byteLength;
+        }
+
+        public byte[] ToArray()
+        {
+            if (_length == 0)
+            {
+                return Array.Empty<byte>();
+            }
+
+            var result = new byte[_length];
+            _buffer.AsSpan(0, _length).CopyTo(result);
+            return result;
+        }
+
+        private void EnsureCapacity(int required)
+        {
+            if (_buffer.Length >= required)
+            {
+                return;
+            }
+
+            int newSize = _buffer.Length == 0 ? 16 * 1024 : _buffer.Length;
+            while (newSize < required)
+            {
+                newSize *= 2;
+            }
+
+            byte[] newBuffer = ArrayPool<byte>.Shared.Rent(newSize);
+            if (_length > 0)
+            {
+                _buffer.AsSpan(0, _length).CopyTo(newBuffer);
+            }
+
+            if (_buffer.Length > 0)
+            {
+                ArrayPool<byte>.Shared.Return(_buffer);
+            }
+
+            _buffer = newBuffer;
+        }
+
+        public void Dispose()
+        {
+            if (_buffer.Length > 0)
+            {
+                ArrayPool<byte>.Shared.Return(_buffer);
+                _buffer = Array.Empty<byte>();
+            }
+
+            _length = 0;
         }
     }
 }

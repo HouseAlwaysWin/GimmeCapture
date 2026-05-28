@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Collections.Generic;
 using System.IO;
 using System.Net.Http;
+using System.Text;
 using System.Threading.Tasks;
 using System.Threading;
 using Avalonia;
@@ -132,18 +133,14 @@ public class TranslationService : IDisposable
 
         if (recognizedBlocks.Count == 0) return (new List<TranslatedBlock>(), "StatusTranslateNoText");
 
-        var sortedBlocks = recognizedBlocks
-            .AsValueEnumerable()
-            .OrderBy(b => b.Box.Top / 16)
-            .ThenBy(b => b.Box.Left)
-            .ToList();
+        recognizedBlocks.Sort(static (a, b) =>
+        {
+            int topCompare = (a.Box.Top / 16).CompareTo(b.Box.Top / 16);
+            return topCompare != 0 ? topCompare : a.Box.Left.CompareTo(b.Box.Left);
+        });
 
-        var mergedText = string.Join("\n", sortedBlocks.AsValueEnumerable().Select(b => b.Text).ToArray());
-        var unionBox = new SKRectI(
-            sortedBlocks.AsValueEnumerable().Min(b => b.Box.Left),
-            sortedBlocks.AsValueEnumerable().Min(b => b.Box.Top),
-            sortedBlocks.AsValueEnumerable().Max(b => b.Box.Right),
-            sortedBlocks.AsValueEnumerable().Max(b => b.Box.Bottom));
+        string mergedText = BuildMergedText(recognizedBlocks);
+        var unionBox = GetUnionBox(recognizedBlocks);
 
         var translated = await TranslateAsync(mergedText, ocrLang, ct);
         
@@ -160,9 +157,15 @@ public class TranslationService : IDisposable
         
         // Infer font size from average height of OCR blocks (Pixels -> DIPs)
         double inferredFontSize = 12.0;
-        if (sortedBlocks.AsValueEnumerable().Any())
+        if (recognizedBlocks.Count > 0)
         {
-            double averagePixelHeight = sortedBlocks.AsValueEnumerable().Average(b => (double)b.Box.Height);
+            double totalHeight = 0;
+            foreach (var block in recognizedBlocks)
+            {
+                totalHeight += block.Box.Height;
+            }
+
+            double averagePixelHeight = totalHeight / recognizedBlocks.Count;
             // Convert to DIPs by dividing by scale, and apply a 0.85 correction factor
             // as OCR bounding boxes are usually taller than the actual text font size.
             inferredFontSize = (averagePixelHeight / scale) * 0.85;
@@ -226,8 +229,13 @@ public class TranslationService : IDisposable
         }
 
         // Fallback: try another engine if selected one returns unacceptable output.
-        foreach (var engine in _translationEngines.AsValueEnumerable().Where(e => e.EngineType != _settings.SelectedTranslationEngine).ToList())
+        foreach (var engine in _translationEngines)
         {
+            if (engine.EngineType == _settings.SelectedTranslationEngine)
+            {
+                continue;
+            }
+
             string fallback = (await engine.TranslateAsync(text, guessedSource, _settings.TargetLanguage, ct)).Trim();
             if (IsTranslationAcceptable(text, fallback, _settings.TargetLanguage))
             {
@@ -243,8 +251,10 @@ public class TranslationService : IDisposable
         var ocrEngine = GetOrCreateOcrEngine();
         await ocrEngine.EnsureLoadedAsync(OCRLanguage.TraditionalChinese, ct);
         var boxes = ocrEngine.DetectText(bitmap);
-        foreach (var box in boxes.AsValueEnumerable().Take(5))
+        int sampleCount = Math.Min(5, boxes.Count);
+        for (int i = 0; i < sampleCount; i++)
         {
+            var box = boxes[i];
             var (text, _) = ocrEngine.RecognizeText(bitmap, box, ct);
             if (text.AsValueEnumerable().Any(c => (c >= 0x3040 && c <= 0x309F) || (c >= 0x30A0 && c <= 0x30FF)))
                 return OCRLanguage.Japanese;
@@ -348,7 +358,53 @@ public class TranslationService : IDisposable
 
     public async Task<List<string>> GetAvailableModelsAsync()
     {
-        return _aiResourceService.GetLlamaModelPresets().AsValueEnumerable().Select(m => m.DisplayName).ToList();
+        var presets = _aiResourceService.GetLlamaModelPresets();
+        var models = new List<string>(presets.Count);
+        foreach (var preset in presets.AsValueEnumerable())
+        {
+            models.Add(preset.DisplayName);
+        }
+        return models;
+    }
+
+    private static string BuildMergedText(List<(SKRectI Box, string Text, float Confidence)> blocks)
+    {
+        if (blocks.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        var builder = new StringBuilder();
+        for (int i = 0; i < blocks.Count; i++)
+        {
+            if (i > 0)
+            {
+                builder.Append('\n');
+            }
+
+            builder.Append(blocks[i].Text);
+        }
+
+        return builder.ToString();
+    }
+
+    private static SKRectI GetUnionBox(List<(SKRectI Box, string Text, float Confidence)> blocks)
+    {
+        int left = blocks[0].Box.Left;
+        int top = blocks[0].Box.Top;
+        int right = blocks[0].Box.Right;
+        int bottom = blocks[0].Box.Bottom;
+
+        for (int i = 1; i < blocks.Count; i++)
+        {
+            var box = blocks[i].Box;
+            left = Math.Min(left, box.Left);
+            top = Math.Min(top, box.Top);
+            right = Math.Max(right, box.Right);
+            bottom = Math.Max(bottom, box.Bottom);
+        }
+
+        return new SKRectI(left, top, right, bottom);
     }
 
     public void Dispose()

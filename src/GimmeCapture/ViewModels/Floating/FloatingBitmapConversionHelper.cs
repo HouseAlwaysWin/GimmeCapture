@@ -29,9 +29,23 @@ internal static class FloatingBitmapConversionHelper
 
         try
         {
-        using var ms = new System.IO.MemoryStream();
-        bitmap.Save(ms);
-            bytes = ms.ToArray();
+            if (!TryCopyToSkBitmap(bitmap, out var skBitmap, out error) || skBitmap == null)
+            {
+                return false;
+            }
+
+            using (skBitmap)
+            {
+                using var image = SKImage.FromBitmap(skBitmap);
+                using var data = image.Encode(SKEncodedImageFormat.Png, 100);
+                if (data == null)
+                {
+                    error = "Encoded bitmap bytes are empty.";
+                    return false;
+                }
+
+                bytes = data.ToArray();
+            }
             if (bytes.Length == 0)
             {
                 error = "Encoded bitmap bytes are empty.";
