@@ -32,31 +32,31 @@ public partial class MainWindowViewModel
         // ONNX Runtime & U2Net Module (Renamed from AI Core)
         var aiCore = new ModuleItem("ONNX Runtime & U2Net", "ModuleAICoreDescription")
         {
-            IsInstalled = AIResourceService.IsAICoreReady(),
+            IsInstalled = _moduleInstallCoordinator.IsAICoreInstalled(),
             InstallCommand = ReactiveCommand.CreateFromTask(() => InstallModuleAsync("AICore")),
             CancelCommand = ReactiveCommand.CreateFromTask(() => CancelModuleAsync("AICore")),
             RemoveCommand = ReactiveCommand.CreateFromTask(() => RemoveModuleAsync("AICore"))
         };
         
-        ResourceQueue.ObserveStatus("AICore")
+        _moduleInstallCoordinator.ObserveStatus("AICore")
             .ObserveOn(RxApp.MainThreadScheduler)
             .Subscribe(status => 
             {
                 aiCore.IsPending = status == QueueItemStatus.Pending;
                 aiCore.IsProcessing = status == QueueItemStatus.Downloading;
                 aiCore.HasError = status == QueueItemStatus.Failed;
-                if (status == QueueItemStatus.Failed) aiCore.ErrorMessage = AIResourceService.LastErrorMessage;
-                if (status == QueueItemStatus.Completed) aiCore.IsInstalled = AIResourceService.IsAICoreReady();
+                if (status == QueueItemStatus.Failed) aiCore.ErrorMessage = _moduleInstallCoordinator.LastErrorMessage;
+                if (status == QueueItemStatus.Completed) aiCore.IsInstalled = _moduleInstallCoordinator.IsAICoreInstalled();
             });
 
         // SAM2 Model Module
         var sam2 = new ModuleItem("SAM2 Model", "ModuleSAM2Description")
         {
             HasVariants = true,
-            Variants = new ObservableCollection<string>(Enum.GetNames(typeof(SAM2Variant))),
+            Variants = _moduleInstallCoordinator.GetSam2Variants(),
             SelectedVariant = _settingsService.Settings.SelectedSAM2Variant.ToString(),
 
-            IsInstalled = AIResourceService.IsSAM2Ready(_settingsService.Settings.SelectedSAM2Variant),
+            IsInstalled = _moduleInstallCoordinator.IsSam2Installed(_settingsService.Settings.SelectedSAM2Variant),
             InstallCommand = ReactiveCommand.CreateFromTask(() => InstallModuleAsync("SAM2")),
             CancelCommand = ReactiveCommand.CreateFromTask(() => CancelModuleAsync("SAM2")),
             RemoveCommand = ReactiveCommand.CreateFromTask(() => RemoveModuleAsync("SAM2"))
@@ -69,49 +69,48 @@ public partial class MainWindowViewModel
                 {
                     _settingsService.Settings.SelectedSAM2Variant = variant;
                     await SaveSettingsAsync(); 
-                    sam2.IsInstalled = AIResourceService.IsSAM2Ready(variant);
+                    sam2.IsInstalled = _moduleInstallCoordinator.IsSam2Installed(variant);
                 }
             });
 
         // PaddleOCR v5 Module
         var ocr = new ModuleItem("PaddleOCR v5", "ModuleOCRDescription")
         {
-            IsInstalled = AIResourceService.IsOCRReady(),
+            IsInstalled = _moduleInstallCoordinator.IsOcrInstalled(),
             InstallCommand = ReactiveCommand.CreateFromTask(() => InstallModuleAsync("OCR")),
             CancelCommand = ReactiveCommand.CreateFromTask(() => CancelModuleAsync("OCR")),
             RemoveCommand = ReactiveCommand.CreateFromTask(() => RemoveModuleAsync("OCR"))
         };
 
-        ResourceQueue.ObserveStatus("OCR")
+        _moduleInstallCoordinator.ObserveStatus("OCR")
             .ObserveOn(RxApp.MainThreadScheduler)
             .Subscribe(status => 
             {
                 ocr.IsPending = status == QueueItemStatus.Pending;
                 ocr.IsProcessing = status == QueueItemStatus.Downloading;
                 ocr.HasError = status == QueueItemStatus.Failed;
-                if (status == QueueItemStatus.Failed) ocr.ErrorMessage = AIResourceService.LastErrorMessage;
-                if (status == QueueItemStatus.Completed) ocr.IsInstalled = AIResourceService.IsOCRReady();
+                if (status == QueueItemStatus.Failed) ocr.ErrorMessage = _moduleInstallCoordinator.LastErrorMessage;
+                if (status == QueueItemStatus.Completed) ocr.IsInstalled = _moduleInstallCoordinator.IsOcrInstalled();
             });
 
-        ResourceQueue.ObserveStatus("SAM2")
+        _moduleInstallCoordinator.ObserveStatus("SAM2")
             .ObserveOn(RxApp.MainThreadScheduler)
             .Subscribe(status => 
             {
                 sam2.IsPending = status == QueueItemStatus.Pending;
                 sam2.IsProcessing = status == QueueItemStatus.Downloading;
                 sam2.HasError = status == QueueItemStatus.Failed;
-                if (status == QueueItemStatus.Failed) sam2.ErrorMessage = AIResourceService.LastErrorMessage;
-                if (status == QueueItemStatus.Completed) sam2.IsInstalled = AIResourceService.IsSAM2Ready(_settingsService.Settings.SelectedSAM2Variant);
+                if (status == QueueItemStatus.Failed) sam2.ErrorMessage = _moduleInstallCoordinator.LastErrorMessage;
+                if (status == QueueItemStatus.Completed) sam2.IsInstalled = _moduleInstallCoordinator.IsSam2Installed(_settingsService.Settings.SelectedSAM2Variant);
             });
 
         // Llama model module (preset GGUF downloads)
         var llama = new ModuleItem("Llama Models", "ModuleLlamaModelsDescription")
         {
             HasVariants = true,
-            Variants = new ObservableCollection<string>(
-                AIResourceService.GetDownloadableLlamaModelPresets().AsValueEnumerable().Select(p => p.Id).ToList()),
+            Variants = _moduleInstallCoordinator.GetDownloadableLlamaVariants(),
             SelectedVariant = _settingsService.Settings.LlamaModelId,
-            IsInstalled = AIResourceService.IsLlamaPresetInstalled(_settingsService.Settings.LlamaModelId),
+            IsInstalled = _moduleInstallCoordinator.IsLlamaInstalled(_settingsService.Settings.LlamaModelId),
             InstallCommand = ReactiveCommand.CreateFromTask(() => InstallModuleAsync("LlamaModels")),
             CancelCommand = ReactiveCommand.CreateFromTask(() => CancelModuleAsync("LlamaModels")),
             RemoveCommand = ReactiveCommand.CreateFromTask(() => RemoveModuleAsync("LlamaModels"))
@@ -128,10 +127,10 @@ public partial class MainWindowViewModel
                 if (_isDataLoading || string.IsNullOrWhiteSpace(modelId)) return;
                 _settingsService.Settings.LlamaModelId = modelId;
                 await SaveSettingsAsync();
-                llama.IsInstalled = AIResourceService.IsLlamaPresetInstalled(modelId);
+                llama.IsInstalled = _moduleInstallCoordinator.IsLlamaInstalled(modelId);
             });
 
-        AIResourceService.WhenAnyValue(x => x.DownloadProgress)
+        _moduleInstallCoordinator.ObserveDownloadProgress()
             .Subscribe(p => {
                 if (aiCore.IsProcessing) aiCore.Progress = p;
                 if (sam2.IsProcessing) sam2.Progress = p;
@@ -149,15 +148,15 @@ public partial class MainWindowViewModel
         Modules.Add(ocr);
         Modules.Add(llama);
 
-        ResourceQueue.ObserveStatus("LlamaModels")
+        _moduleInstallCoordinator.ObserveStatus("LlamaModels")
             .ObserveOn(RxApp.MainThreadScheduler)
             .Subscribe(status =>
             {
                 llama.IsPending = status == QueueItemStatus.Pending;
                 llama.IsProcessing = status == QueueItemStatus.Downloading;
                 llama.HasError = status == QueueItemStatus.Failed;
-                if (status == QueueItemStatus.Failed) llama.ErrorMessage = AIResourceService.LastErrorMessage;
-                if (status == QueueItemStatus.Completed) llama.IsInstalled = AIResourceService.IsLlamaPresetInstalled(llama.SelectedVariant);
+                if (status == QueueItemStatus.Failed) llama.ErrorMessage = _moduleInstallCoordinator.LastErrorMessage;
+                if (status == QueueItemStatus.Completed) llama.IsInstalled = _moduleInstallCoordinator.IsLlamaInstalled(llama.SelectedVariant);
             });
     }
 
@@ -175,29 +174,14 @@ public partial class MainWindowViewModel
             }
         }
 
-        if (type == "AICore")
+        var selectedId = Modules.AsValueEnumerable()
+            .FirstOrDefault(m => m.Name == "Llama Models")?.SelectedVariant;
+        if (string.IsNullOrWhiteSpace(selectedId))
         {
-            await ResourceQueue.EnqueueAsync("AICore", (ct) => AIResourceService.EnsureAICoreAsync(ct));
+            selectedId = _settingsService.Settings.LlamaModelId;
         }
-        else if (type == "SAM2")
-        {
-             var variant = _settingsService.Settings.SelectedSAM2Variant;
-             await ResourceQueue.EnqueueAsync("SAM2", (ct) => AIResourceService.EnsureSAM2Async(variant, ct));
-        }
-        else if (type == "OCR")
-        {
-            await ResourceQueue.EnqueueAsync("OCR", (ct) => AIResourceService.EnsureOCRAsync(ct));
-        }
-        else if (type == "LlamaModels")
-        {
-            var selectedId = Modules.AsValueEnumerable()
-                .FirstOrDefault(m => m.Name == "Llama Models")?.SelectedVariant;
-            if (string.IsNullOrWhiteSpace(selectedId))
-            {
-                selectedId = _settingsService.Settings.LlamaModelId;
-            }
-            await ResourceQueue.EnqueueAsync("LlamaModels", (ct) => AIResourceService.EnsureLlamaModelAsync(selectedId ?? string.Empty, ct));
-        }
+
+        await _moduleInstallCoordinator.InstallAsync(type, selectedId);
     }
 
     private async Task CancelModuleAsync(string type)
@@ -211,7 +195,7 @@ public partial class MainWindowViewModel
 
             if (result)
             {
-                ResourceQueue.Cancel(type);
+                _moduleInstallCoordinator.Cancel(type);
             }
         }
     }
@@ -227,34 +211,16 @@ public partial class MainWindowViewModel
 
             if (!result) return;
 
-            if (type == "AICore")
-            {
-                AIResourceService.RemoveAICoreResources(); 
-            }
-            else if (type == "SAM2")
-            {
-                 AIResourceService.RemoveSAM2Resources(_settingsService.Settings.SelectedSAM2Variant);
-            }
-            else if (type == "OCR")
-            {
-                AIResourceService.RemoveOCRResources();
-            }
-            else if (type == "LlamaModels")
-            {
-                var selectedId = Modules.AsValueEnumerable()
-                    .FirstOrDefault(m => m.Name == "Llama Models")?.SelectedVariant;
-                if (!string.IsNullOrWhiteSpace(selectedId))
-                {
-                    AIResourceService.RemoveLlamaModelPreset(selectedId);
-                }
-            }
+            var selectedId = Modules.AsValueEnumerable()
+                .FirstOrDefault(m => m.Name == "Llama Models")?.SelectedVariant;
+            _moduleInstallCoordinator.Remove(type, selectedId);
             
             foreach (var m in Modules)
             {
-                if (m.Name == "ONNX Runtime & U2Net") m.IsInstalled = AIResourceService.IsAICoreReady();
-                if (m.Name == "SAM2 Model") m.IsInstalled = AIResourceService.IsSAM2Ready(_settingsService.Settings.SelectedSAM2Variant);
-                if (m.Name == "PaddleOCR v5") m.IsInstalled = AIResourceService.IsOCRReady();
-                if (m.Name == "Llama Models") m.IsInstalled = AIResourceService.IsLlamaPresetInstalled(m.SelectedVariant);
+                if (m.Name == "ONNX Runtime & U2Net") m.IsInstalled = _moduleInstallCoordinator.IsAICoreInstalled();
+                if (m.Name == "SAM2 Model") m.IsInstalled = _moduleInstallCoordinator.IsSam2Installed(_settingsService.Settings.SelectedSAM2Variant);
+                if (m.Name == "PaddleOCR v5") m.IsInstalled = _moduleInstallCoordinator.IsOcrInstalled();
+                if (m.Name == "Llama Models") m.IsInstalled = _moduleInstallCoordinator.IsLlamaInstalled(m.SelectedVariant);
             }
         }
         catch (Exception ex)

@@ -66,6 +66,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     private readonly ITranslationSessionService? _translationSession;
     private readonly ITranslationSelectionMonitor? _translationSelectionMonitor;
     private readonly IAIScanSessionService? _aiScanSessionService;
+    private readonly SnipSelectionStateController _selectionStateController;
     private readonly CompositeDisposable _disposables = new();
     private readonly AudioLevelMonitorService _audioLevelMonitor = new();
     private readonly DispatcherTimer _audioMeterTimer;
@@ -266,6 +267,15 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         _maskOpacity = maskOpacity;
         _recordingService = recService;
         _mainVm = mainVm;
+        _selectionStateController = new SnipSelectionStateController(
+            shouldTriggerAutoScan: () => EnableAIScan && CurrentMode != SnipMode.Translation && AllScreenBounds?.Count > 0,
+            triggerAutoScan: () => TriggerAutoScanCommand?.Execute(Unit.Default).Subscribe(),
+            cancelScan: () => _scanCts?.Cancel(),
+            dismissHoverPreview: preserveTargetRect => DismissWindowSnapHoverPreview(preserveTargetRect),
+            triggerAutoAction: TriggerAutoAction,
+            clearTranslatedBlocks: () => TranslatedBlocks.Clear(),
+            resetParkedToolbar: ResetParkedToolbarIfOffScreenWhenLeavingSelection,
+            updateMask: UpdateMask);
         _audioMeterTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(120) };
 
         ApplyInitialMainVmVisualSettings();

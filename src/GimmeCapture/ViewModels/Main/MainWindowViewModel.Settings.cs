@@ -147,7 +147,7 @@ public partial class MainWindowViewModel
             if (_runOnStartup != value)
             {
                 this.RaiseAndSetIfChanged(ref _runOnStartup, value);
-                _startupRegistrationService.SetStartup(value);
+                _settingsSideEffectCoordinator.ApplyRunOnStartup(value);
                 if (!_isDataLoading)
                 {
                     _settingsService.Settings.RunOnStartup = value;
@@ -238,7 +238,7 @@ public partial class MainWindowViewModel
             this.RaiseAndSetIfChanged(ref _themeColor, value);
             if (old != value)
             {
-                UpdateThemeResources(value);
+                _settingsSideEffectCoordinator.ApplyThemeColors(value, ThemeDeepColor);
                 this.RaisePropertyChanged(nameof(ThemeDeepColor));
             }
         }
@@ -281,7 +281,7 @@ public partial class MainWindowViewModel
             {
                 this.RaiseAndSetIfChanged(ref _snipHotkey, value);
             }
-            _globalHotkeySettingsCoordinator.RegisterGlobalHotkey(HotkeyIds.Snip, value);
+            _settingsSideEffectCoordinator.RegisterGlobalHotkey(HotkeyIds.Snip, value);
             if (changed)
             {
                 this.RaisePropertyChanged(nameof(SnipTooltip));
@@ -306,7 +306,7 @@ public partial class MainWindowViewModel
             {
                 this.RaiseAndSetIfChanged(ref _translateHotkey, value);
             }
-            _globalHotkeySettingsCoordinator.RegisterGlobalHotkey(HotkeyIds.Translate, value);
+            _settingsSideEffectCoordinator.RegisterGlobalHotkey(HotkeyIds.Translate, value);
             if (changed)
             {
                 this.RaisePropertyChanged(nameof(TranslateTooltip));
@@ -330,7 +330,7 @@ public partial class MainWindowViewModel
             {
                 this.RaiseAndSetIfChanged(ref _recordHotkey, value);
             }
-            _globalHotkeySettingsCoordinator.RegisterGlobalHotkey(HotkeyIds.Record, value);
+            _settingsSideEffectCoordinator.RegisterGlobalHotkey(HotkeyIds.Record, value);
             if (changed)
             {
                 this.RaisePropertyChanged(nameof(RecordTooltip));
@@ -929,10 +929,5 @@ public partial class MainWindowViewModel
             System.Diagnostics.Debug.WriteLine($"Failed to save settings: {ex.Message}");
             return false;
         }
-    }
-
-    private void UpdateThemeResources(Color themeColor)
-    {
-        _themeResourceService.UpdateThemeColors(themeColor, ThemeDeepColor);
     }
 }

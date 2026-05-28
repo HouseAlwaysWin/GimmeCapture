@@ -104,7 +104,19 @@ public class MainWindowViewModelHotkeyTests
         Assert.True(viewModel.ShowAIScanBox);
     }
 
-    private static MainWindowViewModel CreateViewModel()
+    [Fact]
+    public void RunOnStartup_DelegatesToStartupRegistrationCoordinator()
+    {
+        var startupRegistration = new CountingStartupRegistrationService();
+        var viewModel = CreateViewModel(startupRegistrationService: startupRegistration);
+
+        viewModel.RunOnStartup = true;
+
+        Assert.True(startupRegistration.LastRunOnStartupValue);
+        Assert.Equal(1, startupRegistration.SetCallCount);
+    }
+
+    private static MainWindowViewModel CreateViewModel(IStartupRegistrationService? startupRegistrationService = null)
     {
         var tempDir = Path.Combine(
             Path.GetTempPath(),
@@ -127,7 +139,7 @@ public class MainWindowViewModelHotkeyTests
             new AvaloniaThemeResourceService(),
             new WindowsGlobalHotkeyService(),
             hotkeyCoordinator,
-            new NoOpStartupRegistrationService(),
+            startupRegistrationService ?? new NoOpStartupRegistrationService(),
             new ImmediateSettingsSaveCoordinatorFactory(),
             new MainWindowSettingsPersistenceService(),
             new HotkeyMappingService(),
@@ -167,6 +179,23 @@ public class MainWindowViewModelHotkeyTests
         public bool IsRegistered()
         {
             return false;
+        }
+    }
+
+    private sealed class CountingStartupRegistrationService : IStartupRegistrationService
+    {
+        public int SetCallCount { get; private set; }
+        public bool LastRunOnStartupValue { get; private set; }
+
+        public void SetStartup(bool runOnStartup)
+        {
+            SetCallCount++;
+            LastRunOnStartupValue = runOnStartup;
+        }
+
+        public bool IsRegistered()
+        {
+            return LastRunOnStartupValue;
         }
     }
 

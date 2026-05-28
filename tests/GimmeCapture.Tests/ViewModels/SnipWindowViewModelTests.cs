@@ -85,6 +85,22 @@ public class SnipWindowViewModelTests
         vm.Dispose();
     }
 
+    [Fact]
+    public void EnteringSelectedState_ClearsTranslatedBlocks()
+    {
+        var vm = new SnipWindowViewModel();
+        vm.TranslatedBlocks.Add(new TranslatedBlock
+        {
+            OriginalText = "before",
+            TranslatedText = "after",
+            Bounds = new Rect(0, 0, 10, 10)
+        });
+
+        vm.CurrentState = SnipState.Selected;
+
+        Assert.Empty(vm.TranslatedBlocks);
+    }
+
     private sealed class FakeWindowDetectionService : IWindowDetectionService
     {
         private readonly IReadOnlyList<WindowCandidate> _candidates;

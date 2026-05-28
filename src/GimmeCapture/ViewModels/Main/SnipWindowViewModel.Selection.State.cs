@@ -31,36 +31,9 @@ public partial class SnipWindowViewModel
             this.RaisePropertyChanged(nameof(IsHoverPreviewVisible));
             
             // If we leave Detecting state (e.g. start selecting), cancel any running scan
-            if (value != SnipState.Detecting)
-            {
-                _scanCts?.Cancel();
-                DismissWindowSnapHoverPreview(
-                    preserveTargetRect: previousState == SnipState.Detecting && value == SnipState.Selecting);
-            }
-            else
-            {
-                // Restart scan if enabled (only after AllScreenBounds is populated)
-                // ?折??????????SAM2 ???
-                if (EnableAIScan && CurrentMode != SnipMode.Translation && AllScreenBounds?.Count > 0)
-                {
-                    TriggerAutoScanCommand?.Execute(Unit.Default).Subscribe();
-                }
-            }
-
-            if (value == SnipState.Selected)
-            {
-                TriggerAutoAction();
-                
-                // Clear translated blocks when selection changes
-                TranslatedBlocks.Clear();
-            }
-
-            if (value != SnipState.Selected)
-                ResetParkedToolbarIfOffScreenWhenLeavingSelection();
-            
+            _selectionStateController.HandleTransition(previousState, value);
             this.RaisePropertyChanged(nameof(IsToolbarVisible));
             this.RaisePropertyChanged(nameof(IsToolbarShownOnScreen));
-            UpdateMask();
         }
     }
 

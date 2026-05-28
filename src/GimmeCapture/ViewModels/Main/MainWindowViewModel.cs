@@ -97,6 +97,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly IStartupRegistrationService _startupRegistrationService;
     private readonly ISettingsSaveCoordinator _settingsSaveCoordinator;
     private readonly IMainWindowSettingsPersistenceService _settingsPersistenceService;
+    private readonly MainWindowSettingsSideEffectCoordinator _settingsSideEffectCoordinator;
     public IGlobalHotkeyService HotkeyService { get; }
     public HotkeyMappingService HotkeyMappingService { get; }
     public HotkeyRouterService HotkeyRouterService { get; }
@@ -134,6 +135,7 @@ public partial class MainWindowViewModel : ViewModelBase
     public OcrRuntimeService OcrRuntimeService => _ocrRuntimeService.Value;
     public AIPathService AIPathService { get; }
     public ResourceQueueService ResourceQueue { get; }
+    private readonly ModuleInstallCoordinator _moduleInstallCoordinator;
 
     public ObservableCollection<ModuleItem> Modules { get; } = new();
     public string AppVersion => AppVersionInfo.CurrentVersion;
@@ -192,6 +194,12 @@ public partial class MainWindowViewModel : ViewModelBase
         HotkeyService = dependencies.HotkeyService;
         _settingsSaveCoordinator = dependencies.SettingsSaveCoordinatorFactory.Create(SaveSettingsAsync);
         _settingsPersistenceService = dependencies.SettingsPersistenceService;
+        _settingsSideEffectCoordinator = new MainWindowSettingsSideEffectCoordinator(
+            _globalHotkeySettingsCoordinator,
+            _startupRegistrationService,
+            _themeResourceService,
+            () => _settingsSaveCoordinator.RequestSave(),
+            () => IsModified = true);
         HotkeyMappingService = dependencies.HotkeyMappingService;
         HotkeyRouterService = dependencies.HotkeyRouterService;
         _ffmpegDownloader = dependencies.FfmpegDownloader;
@@ -202,6 +210,7 @@ public partial class MainWindowViewModel : ViewModelBase
         _ocrRuntimeService = dependencies.OcrRuntimeService;
         AIPathService = dependencies.AIPathService;
         ResourceQueue = dependencies.ResourceQueue;
+        _moduleInstallCoordinator = new ModuleInstallCoordinator(_aiResourceService, _settingsService, ResourceQueue);
 
         LocalizationService.Instance
             .WhenAnyValue(x => x.CurrentLanguage)
@@ -321,13 +330,12 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private void MarkModifiedAndQueueSettingsSave()
     {
-        IsModified = true;
-        _settingsSaveCoordinator.RequestSave();
+        _settingsSideEffectCoordinator.QueueSave(markModified: true);
     }
 
     private void QueueSettingsSave()
     {
-        _settingsSaveCoordinator.RequestSave();
+        _settingsSideEffectCoordinator.QueueSave(markModified: false);
     }
 
     private void EnsureUpdateProcessingSubscription()
