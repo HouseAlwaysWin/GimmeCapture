@@ -407,9 +407,9 @@ public partial class FloatingImageViewModel
                     }
                 }
 
-                using var finalMs = new System.IO.MemoryStream();
-                coloredMask.Encode(finalMs, SkiaSharp.SKEncodedImageFormat.Png, 100);
-                InteractiveMask = FloatingBitmapConversionHelper.CreateDetachedBitmapFromEncodedBytes(finalMs.ToArray());
+                if (!FloatingBitmapConversionHelper.TryCreateDetachedBitmapFromSkBitmap(coloredMask, out var interactiveMaskBitmap, out var interactiveMaskError))
+                    throw new Exception(interactiveMaskError ?? "Failed to create interactive mask preview.");
+                InteractiveMask = interactiveMaskBitmap;
                 RaiseInteractiveStateChanged();
             }
         }
@@ -634,67 +634,66 @@ public partial class FloatingImageViewModel
             if (sourceImage == null) throw new Exception("Source image is unavailable.");
             if (cleanMaskBytes == null || cleanMaskBytes.Length == 0) throw new Exception("No valid mask generated.");
 
-            if (!FloatingBitmapConversionHelper.TryEncodeBitmapToPngBytes(sourceImage, out var sourceImageBytes, out var sourceEncodeError))
-                throw new Exception(sourceEncodeError ?? "Failed to serialize source image.");
-
             // 1. Process with SkiaSharp in a background thread to prevent UI freeze
-            var imageBytes = await Task.Run(() =>
+            var confirmedBitmap = await Task.Run(() =>
             {
-                using var originalBmp = SkiaSharp.SKBitmap.Decode(sourceImageBytes);
-                if (originalBmp == null) throw new Exception("Failed to decode source image.");
+                if (!FloatingBitmapConversionHelper.TryCopyToSkBitmap(sourceImage, out var originalBmp, out var copyError) || originalBmp == null)
+                    throw new Exception(copyError ?? "Failed to prepare source image.");
 
                 // Use CLEAN mask without crosshairs!
                 using var maskBmp = SkiaSharp.SKBitmap.Decode(cleanMaskBytes);
                 if (maskBmp == null) throw new Exception("Failed to decode interactive mask.");
 
-                using var resultBmp = new SkiaSharp.SKBitmap(originalBmp.Width, originalBmp.Height, SkiaSharp.SKColorType.Bgra8888, SkiaSharp.SKAlphaType.Unpremul);
-                var maskScaleX = (double)maskBmp.Width / originalBmp.Width;
-                var maskScaleY = (double)maskBmp.Height / originalBmp.Height;
-                
-                for (int y = 0; y < originalBmp.Height; y++)
+                using (originalBmp)
                 {
-                    for (int x = 0; x < originalBmp.Width; x++)
+                    using var resultBmp = new SkiaSharp.SKBitmap(originalBmp.Width, originalBmp.Height, SkiaSharp.SKColorType.Bgra8888, SkiaSharp.SKAlphaType.Unpremul);
+                    var maskScaleX = (double)maskBmp.Width / originalBmp.Width;
+                    var maskScaleY = (double)maskBmp.Height / originalBmp.Height;
+                    
+                    for (int y = 0; y < originalBmp.Height; y++)
                     {
-                        var color = originalBmp.GetPixel(x, y);
-                        var maskX = Math.Clamp((int)(x * maskScaleX), 0, maskBmp.Width - 1);
-                        var maskY = Math.Clamp((int)(y * maskScaleY), 0, maskBmp.Height - 1);
-                        var maskColor = maskBmp.GetPixel(maskX, maskY);
-                        
-                        // Apply mask based on mode:
-                        // Normal mode: Selected = REMOVE, Unselected = KEEP
-                        // Invert mode: Selected = KEEP, Unselected = REMOVE
-                        var maskVal = maskColor.Red; // For Gray8, R=G=B=value
-                        bool isSelected = maskVal > 127;
-                        
-                        // Invert the selection if in invert mode
-                        if (_interactiveSession.IsKeepSelectedMode)
+                        for (int x = 0; x < originalBmp.Width; x++)
                         {
-                            isSelected = !isSelected;
+                            var color = originalBmp.GetPixel(x, y);
+                            var maskX = Math.Clamp((int)(x * maskScaleX), 0, maskBmp.Width - 1);
+                            var maskY = Math.Clamp((int)(y * maskScaleY), 0, maskBmp.Height - 1);
+                            var maskColor = maskBmp.GetPixel(maskX, maskY);
+                            
+                            // Apply mask based on mode:
+                            // Normal mode: Selected = REMOVE, Unselected = KEEP
+                            // Invert mode: Selected = KEEP, Unselected = REMOVE
+                            var maskVal = maskColor.Red; // For Gray8, R=G=B=value
+                            bool isSelected = maskVal > 127;
+                            
+                            // Invert the selection if in invert mode
+                            if (_interactiveSession.IsKeepSelectedMode)
+                            {
+                                isSelected = !isSelected;
+                            }
+                            
+                            byte alpha;
+                            if (isSelected)
+                            {
+                                // This pixel is in the "remove" zone - make transparent
+                                alpha = 0;
+                            }
+                            else
+                            {
+                                // This pixel is in the "keep" zone - preserve original
+                                alpha = color.Alpha;
+                            }
+                            
+                            resultBmp.SetPixel(x, y, new SkiaSharp.SKColor(color.Red, color.Green, color.Blue, alpha));
                         }
-                        
-                        byte alpha;
-                        if (isSelected)
-                        {
-                            // This pixel is in the "remove" zone - make transparent
-                            alpha = 0;
-                        }
-                        else
-                        {
-                            // This pixel is in the "keep" zone - preserve original
-                            alpha = color.Alpha;
-                        }
-                        
-                        resultBmp.SetPixel(x, y, new SkiaSharp.SKColor(color.Red, color.Green, color.Blue, alpha));
                     }
-                }
 
-                using var image = SkiaSharp.SKImage.FromBitmap(resultBmp);
-                using var data = image.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
-                return data.ToArray();
+                    if (!FloatingBitmapConversionHelper.TryCreateDetachedBitmapFromSkBitmap(resultBmp, out var detachedBitmap, out var detachError) || detachedBitmap == null)
+                        throw new Exception(detachError ?? "Failed to materialize interactive output.");
+
+                    return detachedBitmap;
+                }
             });
 
-            if (!FloatingBitmapConversionHelper.TryCreateDetachedBitmapFromEncodedBytes(imageBytes, out var confirmedBitmap, out var confirmDecodeError))
-                throw new Exception(confirmDecodeError ?? "Failed to decode interactive output.");
             Image = confirmedBitmap;
             applySucceeded = true;
 

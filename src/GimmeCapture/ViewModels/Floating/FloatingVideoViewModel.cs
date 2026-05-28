@@ -3,6 +3,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using ReactiveUI;
 using System;
+using System.Buffers;
 using System.Reactive;
 using System.Threading.Tasks;
 using GimmeCapture.Models;
@@ -24,6 +25,7 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
     private bool _isDisposed;
     private readonly object _latestFrameLock = new();
     private byte[]? _latestFrameData;
+    private int _latestFrameLength;
     private int _latestFrameGeneration;
     private long _lastFrameUiPostTimestampMs;
     private long _lastTimeUiPostTimestampMs;
@@ -382,7 +384,12 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
         oldBitmap?.Dispose();
         lock (_latestFrameLock)
         {
+            if (_latestFrameData != null)
+            {
+                ArrayPool<byte>.Shared.Return(_latestFrameData);
+            }
             _latestFrameData = null;
+            _latestFrameLength = 0;
         }
     }
 }

@@ -3,6 +3,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using ReactiveUI;
 using System;
+using System.Buffers;
 using System.Reactive;
 using System.Threading.Tasks;
 using System.IO;
@@ -393,16 +394,22 @@ public partial class FloatingVideoViewModel
         });
     }
 
-    private void QueueLatestFrame(byte[] frameData, int generation)
+    private void QueueLatestFrame(ReadOnlySpan<byte> frameData, int generation)
     {
         lock (_latestFrameLock)
         {
-            if (_latestFrameData == null || _latestFrameData.Length != frameData.Length)
+            if (_latestFrameData == null || _latestFrameLength != frameData.Length)
             {
-                _latestFrameData = new byte[frameData.Length];
+                if (_latestFrameData != null)
+                {
+                    ArrayPool<byte>.Shared.Return(_latestFrameData);
+                }
+
+                _latestFrameData = ArrayPool<byte>.Shared.Rent(frameData.Length);
+                _latestFrameLength = frameData.Length;
             }
 
-            Buffer.BlockCopy(frameData, 0, _latestFrameData, 0, frameData.Length);
+            frameData.CopyTo(_latestFrameData.AsSpan(0, frameData.Length));
             _latestFrameGeneration = generation;
         }
     }
@@ -424,10 +431,12 @@ public partial class FloatingVideoViewModel
 
                 byte[]? frameData;
                 int generation;
+                int frameLength;
                 lock (_latestFrameLock)
                 {
                     frameData = _latestFrameData;
                     generation = _latestFrameGeneration;
+                    frameLength = _latestFrameLength;
                 }
 
                 if (frameData == null) return;
@@ -435,7 +444,7 @@ public partial class FloatingVideoViewModel
 
                 using (var lockedBitmap = VideoBitmap.Lock())
                 {
-                    Marshal.Copy(frameData, 0, lockedBitmap.Address, frameData.Length);
+                    Marshal.Copy(frameData, 0, lockedBitmap.Address, frameLength);
                 }
 
                 RequestRedraw?.Invoke();
@@ -453,7 +462,7 @@ public partial class FloatingVideoViewModel
     {
         if (VideoBitmap == null || _isDisposed) return;
         if (generation != Volatile.Read(ref _playbackGeneration)) return;
-        QueueLatestFrame(frameData, generation);
+        QueueLatestFrame(frameData.AsSpan(), generation);
         TryScheduleFrameUiRefresh();
     }
 
@@ -472,7 +481,7 @@ public partial class FloatingVideoViewModel
             _frameSize = frameSize;
             _generation = generation;
             _trimEndSeconds = trimEndSeconds;
-            _buffer = new byte[frameSize];
+            _buffer = ArrayPool<byte>.Shared.Rent(frameSize);
         }
 
         public override void Write(byte[] buffer, int offset, int count)
@@ -530,5 +539,16 @@ public partial class FloatingVideoViewModel
         public override int Read(byte[] buffer, int offset, int count) => 0;
         public override long Seek(long offset, SeekOrigin origin) => 0;
         public override void SetLength(long value) { }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (_buffer.Length > 0)
+            {
+                ArrayPool<byte>.Shared.Return(_buffer);
+                _buffer = Array.Empty<byte>();
+            }
+
+            base.Dispose(disposing);
+        }
     }
 }

@@ -175,99 +175,89 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
 
     private (uint mods, uint vkey) ParseHotkey(string hk)
     {
-        // Very basic parser for "F1", "F12", "Ctrl+S" etc.
-        // For Phase 1, let's support F1-F12 and simple modifiers.
-        
-        hk = hk.ToUpper().Trim();
+        ReadOnlySpan<char> hotkey = hk.AsSpan().Trim();
         uint mods = 0;
-        
-        if (hk.Contains("CTRL")) mods |= 0x0002;
-        if (hk.Contains("ALT")) mods |= 0x0001;
-        if (hk.Contains("SHIFT")) mods |= 0x0004;
-        
-        // Extract key
-        string keyPart = hk;
-        if (hk.Contains('+'))
-        {
-            var parts = hk.Split('+');
-            keyPart = parts[parts.Length - 1].Trim();
-        }
+
+        if (hotkey.Contains("Ctrl".AsSpan(), StringComparison.OrdinalIgnoreCase)) mods |= 0x0002;
+        if (hotkey.Contains("Alt".AsSpan(), StringComparison.OrdinalIgnoreCase)) mods |= 0x0001;
+        if (hotkey.Contains("Shift".AsSpan(), StringComparison.OrdinalIgnoreCase)) mods |= 0x0004;
+
+        int plusIndex = hotkey.LastIndexOf('+');
+        ReadOnlySpan<char> keyPart = plusIndex >= 0 ? hotkey[(plusIndex + 1)..].Trim() : hotkey;
 
         uint key = 0;
-        // Function keys
-        if (keyPart.StartsWith("F") && keyPart.Length > 1 && int.TryParse(keyPart.Substring(1), out int fNum))
+        if (keyPart.Length > 1 && (keyPart[0] is 'F' or 'f') && int.TryParse(keyPart[1..], out int fNum))
         {
             if (fNum >= 1 && fNum <= 24)
                 key = (uint)(0x70 + fNum - 1);
         }
-        else if (keyPart == "PRINTSCREEN" || keyPart == "PRTSC")
+        else if (keyPart.Equals("PRINTSCREEN".AsSpan(), StringComparison.OrdinalIgnoreCase) || keyPart.Equals("PRTSC".AsSpan(), StringComparison.OrdinalIgnoreCase))
         {
             key = 0x2C;
         }
-        else if (keyPart == "ENTER" || keyPart == "RETURN")
+        else if (keyPart.Equals("ENTER".AsSpan(), StringComparison.OrdinalIgnoreCase) || keyPart.Equals("RETURN".AsSpan(), StringComparison.OrdinalIgnoreCase))
         {
             key = 0x0D;
         }
-        else if (keyPart == "ESC" || keyPart == "ESCAPE")
+        else if (keyPart.Equals("ESC".AsSpan(), StringComparison.OrdinalIgnoreCase) || keyPart.Equals("ESCAPE".AsSpan(), StringComparison.OrdinalIgnoreCase))
         {
             key = 0x1B;
         }
-        else if (keyPart == "TAB")
+        else if (keyPart.Equals("TAB".AsSpan(), StringComparison.OrdinalIgnoreCase))
         {
             key = 0x09;
         }
-        else if (keyPart == "SPACE")
+        else if (keyPart.Equals("SPACE".AsSpan(), StringComparison.OrdinalIgnoreCase))
         {
             key = 0x20;
         }
-        else if (keyPart == "DELETE" || keyPart == "DEL")
+        else if (keyPart.Equals("DELETE".AsSpan(), StringComparison.OrdinalIgnoreCase) || keyPart.Equals("DEL".AsSpan(), StringComparison.OrdinalIgnoreCase))
         {
             key = 0x2E;
         }
-        else if (keyPart == "INSERT" || keyPart == "INS")
+        else if (keyPart.Equals("INSERT".AsSpan(), StringComparison.OrdinalIgnoreCase) || keyPart.Equals("INS".AsSpan(), StringComparison.OrdinalIgnoreCase))
         {
             key = 0x2D;
         }
-        else if (keyPart == "BACKSPACE" || keyPart == "BKSP")
+        else if (keyPart.Equals("BACKSPACE".AsSpan(), StringComparison.OrdinalIgnoreCase) || keyPart.Equals("BKSP".AsSpan(), StringComparison.OrdinalIgnoreCase))
         {
             key = 0x08;
         }
-        else if (keyPart == "HOME")
+        else if (keyPart.Equals("HOME".AsSpan(), StringComparison.OrdinalIgnoreCase))
         {
             key = 0x24;
         }
-        else if (keyPart == "END")
+        else if (keyPart.Equals("END".AsSpan(), StringComparison.OrdinalIgnoreCase))
         {
             key = 0x23;
         }
-        else if (keyPart == "PAGEUP" || keyPart == "PGUP")
+        else if (keyPart.Equals("PAGEUP".AsSpan(), StringComparison.OrdinalIgnoreCase) || keyPart.Equals("PGUP".AsSpan(), StringComparison.OrdinalIgnoreCase))
         {
             key = 0x21;
         }
-        else if (keyPart == "PAGEDOWN" || keyPart == "PGDN")
+        else if (keyPart.Equals("PAGEDOWN".AsSpan(), StringComparison.OrdinalIgnoreCase) || keyPart.Equals("PGDN".AsSpan(), StringComparison.OrdinalIgnoreCase))
         {
             key = 0x22;
         }
-        else if (keyPart == "LEFT")
+        else if (keyPart.Equals("LEFT".AsSpan(), StringComparison.OrdinalIgnoreCase))
         {
             key = 0x25;
         }
-        else if (keyPart == "UP")
+        else if (keyPart.Equals("UP".AsSpan(), StringComparison.OrdinalIgnoreCase))
         {
             key = 0x26;
         }
-        else if (keyPart == "RIGHT")
+        else if (keyPart.Equals("RIGHT".AsSpan(), StringComparison.OrdinalIgnoreCase))
         {
             key = 0x27;
         }
-        else if (keyPart == "DOWN")
+        else if (keyPart.Equals("DOWN".AsSpan(), StringComparison.OrdinalIgnoreCase))
         {
             key = 0x28;
         }
         else if (keyPart.Length == 1 && char.IsLetterOrDigit(keyPart[0]))
         {
-             // ASCII (A-Z 0-9) maps directly to VK for these
-             key = (uint)keyPart[0];
+             key = char.ToUpperInvariant(keyPart[0]);
         }
 
         return (mods, key);

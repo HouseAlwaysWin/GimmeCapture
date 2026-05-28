@@ -49,18 +49,7 @@ internal static class FloatingBitmapConversionHelper
 
     public static SKBitmap? ToSkBitmap(Bitmap? avaloniaBitmap)
     {
-        if (avaloniaBitmap == null) return null;
-        try
-        {
-            using var ms = new System.IO.MemoryStream();
-            avaloniaBitmap.Save(ms);
-            ms.Seek(0, System.IO.SeekOrigin.Begin);
-            return SKBitmap.Decode(ms);
-        }
-        catch
-        {
-            return null;
-        }
+        return TryCopyToSkBitmap(avaloniaBitmap, out var skBitmap, out _) ? skBitmap : null;
     }
 
     public static bool TryCopyToSkBitmap(Bitmap? bitmap, out SKBitmap? skBitmap, out string? error)

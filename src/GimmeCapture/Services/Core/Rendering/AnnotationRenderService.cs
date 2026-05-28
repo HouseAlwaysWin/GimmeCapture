@@ -1,6 +1,7 @@
 using System;
 using System.Buffers;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
@@ -232,14 +233,11 @@ public sealed class AnnotationRenderService : IAnnotationRenderService
             {
                 int cellRight = Math.Min(right, x + cellSize);
                 int cellBottom = Math.Min(bottom, y + cellSize);
-                var sample = AverageCellColor(sourceCopy, x, y, cellRight, cellBottom);
+                uint sample = AverageCellColor(sourceCopy, x, y, cellRight, cellBottom);
 
                 for (int yy = y; yy < cellBottom; yy++)
                 {
-                    for (int xx = x; xx < cellRight; xx++)
-                    {
-                        target.SetPixel(xx, yy, sample);
-                    }
+                    GetPixelRowUIntSpan(target, yy).Slice(x, cellRight - x).Fill(sample);
                 }
             }
         }
@@ -294,7 +292,7 @@ public sealed class AnnotationRenderService : IAnnotationRenderService
         => SKImageFilter.CreateBlur(sigmaX, sigmaY, SKShaderTileMode.Clamp);
 
 
-    private static SKColor AverageCellColor(SKBitmap source, int left, int top, int right, int bottom)
+    private static uint AverageCellColor(SKBitmap source, int left, int top, int right, int bottom)
     {
         ulong sumR = 0;
         ulong sumG = 0;
@@ -304,28 +302,37 @@ public sealed class AnnotationRenderService : IAnnotationRenderService
 
         for (int y = top; y < bottom; y++)
         {
-            for (int x = left; x < right; x++)
+            var row = GetPixelRowUIntSpan(source, y).Slice(left, right - left);
+            foreach (uint pixel in row)
             {
-                var pixel = source.GetPixel(x, y);
-                sumR += pixel.Red;
-                sumG += pixel.Green;
-                sumB += pixel.Blue;
-                sumA += pixel.Alpha;
+                sumB += (byte)pixel;
+                sumG += (byte)(pixel >> 8);
+                sumR += (byte)(pixel >> 16);
+                sumA += (byte)(pixel >> 24);
                 count++;
             }
         }
 
         if (count == 0)
         {
-            return SKColors.Transparent;
+            return 0;
         }
 
-        return new SKColor(
-            (byte)(sumR / (ulong)count),
-            (byte)(sumG / (ulong)count),
+        return PackBgra(
             (byte)(sumB / (ulong)count),
+            (byte)(sumG / (ulong)count),
+            (byte)(sumR / (ulong)count),
             (byte)(sumA / (ulong)count));
     }
+
+    private static unsafe Span<uint> GetPixelRowUIntSpan(SKBitmap bitmap, int row)
+    {
+        byte* rowPtr = (byte*)bitmap.GetPixels() + (row * bitmap.RowBytes);
+        return MemoryMarshal.Cast<byte, uint>(new Span<byte>(rowPtr, bitmap.Width * 4));
+    }
+
+    private static uint PackBgra(byte blue, byte green, byte red, byte alpha)
+        => blue | ((uint)green << 8) | ((uint)red << 16) | ((uint)alpha << 24);
 
     private static SKPoint ScalePoint(Point point, float scaleX, float scaleY)
         => new((float)(point.X * scaleX), (float)(point.Y * scaleY));

@@ -71,17 +71,7 @@ public class PaddleOCREngine : IOCREngine
         var input = new DenseTensor<float>(new[] { 1, 3, targetHeight, targetWidth });
         float[] mean = { 0.485f, 0.456f, 0.406f };
         float[] std = { 0.229f, 0.224f, 0.225f };
-
-        for (int y = 0; y < targetHeight; y++)
-        {
-            for (int x = 0; x < targetWidth; x++)
-            {
-                var color = resized.GetPixel(x, y);
-                input[0, 0, y, x] = (color.Red / 255.0f - mean[0]) / std[0];
-                input[0, 1, y, x] = (color.Green / 255.0f - mean[1]) / std[1];
-                input[0, 2, y, x] = (color.Blue / 255.0f - mean[2]) / std[2];
-            }
-        }
+        FillDetectionTensor(resized, input, mean, std);
 
         string inputName = detSession.InputMetadata.Keys.AsValueEnumerable().FirstOrDefault() ?? "x";
         var inputs = new List<NamedOnnxValue> { NamedOnnxValue.CreateFromTensor(inputName, input) };
@@ -131,11 +121,17 @@ public class PaddleOCREngine : IOCREngine
     {
         long totalLuminous = 0;
         for (int y = 0; y < bitmap.Height; y++)
+        {
+            var row = GetPixelRowSpan(bitmap, y);
             for (int x = 0; x < bitmap.Width; x++)
             {
-                var color = bitmap.GetPixel(x, y);
-                totalLuminous += (long)(color.Red * 0.2126f + color.Green * 0.7152f + color.Blue * 0.0722f);
+                int offset = x * 4;
+                byte blue = row[offset];
+                byte green = row[offset + 1];
+                byte red = row[offset + 2];
+                totalLuminous += (long)(red * 0.2126f + green * 0.7152f + blue * 0.0722f);
             }
+        }
         return totalLuminous / (float)(bitmap.Width * bitmap.Height);
     }
 
@@ -171,16 +167,7 @@ public class PaddleOCREngine : IOCREngine
         int h = tensorBitmap.Height;
         int w = tensorBitmap.Width;
         var input = new DenseTensor<float>(new[] { 1, 3, h, w });
-        for (int y = 0; y < h; y++)
-        {
-            for (int x = 0; x < w; x++)
-            {
-                var color = tensorBitmap.GetPixel(x, y);
-                input[0, 0, y, x] = (color.Red / 255.0f - 0.5f) / 0.5f;
-                input[0, 1, y, x] = (color.Green / 255.0f - 0.5f) / 0.5f;
-                input[0, 2, y, x] = (color.Blue / 255.0f - 0.5f) / 0.5f;
-            }
-        }
+        FillRecognitionTensor(tensorBitmap, input);
 
         string inputName = recSession.InputMetadata.Keys.AsValueEnumerable().FirstOrDefault() ?? "x";
         var inputs = new List<NamedOnnxValue> { NamedOnnxValue.CreateFromTensor(inputName, input) };
@@ -214,7 +201,6 @@ public class PaddleOCREngine : IOCREngine
                 var queue = new Queue<(int X, int Y)>();
                 queue.Enqueue((x, y));
                 visited[y, x] = true;
-
                 while (queue.Count > 0)
                 {
                     var (cx, cy) = queue.Dequeue();
@@ -222,17 +208,10 @@ public class PaddleOCREngine : IOCREngine
                     minX = Math.Min(minX, cx); maxX = Math.Max(maxX, cx);
                     minY = Math.Min(minY, cy); maxY = Math.Max(maxY, cy);
 
-                    int[] dx = { 0, 0, 1, -1 };
-                    int[] dy = { 1, -1, 0, 0 };
-                    for (int i = 0; i < 4; i++)
-                    {
-                        int nx = cx + dx[i], ny = cy + dy[i];
-                        if (nx >= 0 && nx < w && ny >= 0 && ny < h && !visited[ny, nx] && probMap[ny, nx] > DetBoxThreshold)
-                        {
-                            visited[ny, nx] = true;
-                            queue.Enqueue((nx, ny));
-                        }
-                    }
+                    TryEnqueueBlobNeighbor(cx, cy + 1, w, h, probMap, visited, queue);
+                    TryEnqueueBlobNeighbor(cx, cy - 1, w, h, probMap, visited, queue);
+                    TryEnqueueBlobNeighbor(cx + 1, cy, w, h, probMap, visited, queue);
+                    TryEnqueueBlobNeighbor(cx - 1, cy, w, h, probMap, visited, queue);
                 }
 
                 int blobW = maxX - minX + 1, blobH = maxY - minY + 1;
@@ -276,14 +255,99 @@ public class PaddleOCREngine : IOCREngine
 
         if (h == 0 || w == 0) return false;
         probMap = new float[h, w];
-        float[] buffer = System.Linq.Enumerable.ToArray(mask);
-        for (int i = 0; i < h; i++)
-            for (int j = 0; j < w; j++)
-                probMap[i, j] = ToProbability(buffer[i * w + j]);
+        FillDetProbabilityMap(mask, probMap, h, w);
         return true;
     }
 
-    private float ToProbability(float value) => (value >= 0f && value <= 1f) ? value : 1f / (1f + MathF.Exp(-value));
+    private static unsafe void FillDetectionTensor(SKBitmap bitmap, DenseTensor<float> input, ReadOnlySpan<float> mean, ReadOnlySpan<float> std)
+    {
+        for (int y = 0; y < bitmap.Height; y++)
+        {
+            var row = GetPixelRowSpan(bitmap, y);
+            for (int x = 0; x < bitmap.Width; x++)
+            {
+                int offset = x * 4;
+                float blue = row[offset] / 255.0f;
+                float green = row[offset + 1] / 255.0f;
+                float red = row[offset + 2] / 255.0f;
+                input[0, 0, y, x] = (red - mean[0]) / std[0];
+                input[0, 1, y, x] = (green - mean[1]) / std[1];
+                input[0, 2, y, x] = (blue - mean[2]) / std[2];
+            }
+        }
+    }
+
+    private static unsafe void FillRecognitionTensor(SKBitmap bitmap, DenseTensor<float> input)
+    {
+        for (int y = 0; y < bitmap.Height; y++)
+        {
+            var row = GetPixelRowSpan(bitmap, y);
+            for (int x = 0; x < bitmap.Width; x++)
+            {
+                int offset = x * 4;
+                float blue = row[offset] / 255.0f;
+                float green = row[offset + 1] / 255.0f;
+                float red = row[offset + 2] / 255.0f;
+                input[0, 0, y, x] = (red - 0.5f) / 0.5f;
+                input[0, 1, y, x] = (green - 0.5f) / 0.5f;
+                input[0, 2, y, x] = (blue - 0.5f) / 0.5f;
+            }
+        }
+    }
+
+    private static void FillDetProbabilityMap(Tensor<float> mask, float[,] probMap, int h, int w)
+    {
+        switch (mask.Dimensions.Length)
+        {
+            case 4 when mask.Dimensions[1] == 1:
+                for (int y = 0; y < h; y++)
+                    for (int x = 0; x < w; x++)
+                        probMap[y, x] = ToProbability(mask[0, 0, y, x]);
+                return;
+            case 4 when mask.Dimensions[3] == 1:
+                for (int y = 0; y < h; y++)
+                    for (int x = 0; x < w; x++)
+                        probMap[y, x] = ToProbability(mask[0, y, x, 0]);
+                return;
+            case 4:
+                for (int y = 0; y < h; y++)
+                    for (int x = 0; x < w; x++)
+                        probMap[y, x] = ToProbability(mask[0, 0, y, x]);
+                return;
+            case 3 when mask.Dimensions[0] == 1:
+                for (int y = 0; y < h; y++)
+                    for (int x = 0; x < w; x++)
+                        probMap[y, x] = ToProbability(mask[0, y, x]);
+                return;
+            case 3:
+                for (int y = 0; y < h; y++)
+                    for (int x = 0; x < w; x++)
+                        probMap[y, x] = ToProbability(mask[y, x, 0]);
+                return;
+            case 2:
+                for (int y = 0; y < h; y++)
+                    for (int x = 0; x < w; x++)
+                        probMap[y, x] = ToProbability(mask[y, x]);
+                return;
+        }
+    }
+
+    private static unsafe ReadOnlySpan<byte> GetPixelRowSpan(SKBitmap bitmap, int row)
+    {
+        byte* rowPtr = (byte*)bitmap.GetPixels() + (row * bitmap.RowBytes);
+        return new ReadOnlySpan<byte>(rowPtr, bitmap.Width * 4);
+    }
+
+    private static void TryEnqueueBlobNeighbor(int nx, int ny, int width, int height, float[,] probMap, bool[,] visited, Queue<(int X, int Y)> queue)
+    {
+        if (nx >= 0 && nx < width && ny >= 0 && ny < height && !visited[ny, nx] && probMap[ny, nx] > DetBoxThreshold)
+        {
+            visited[ny, nx] = true;
+            queue.Enqueue((nx, ny));
+        }
+    }
+
+    private static float ToProbability(float value) => (value >= 0f && value <= 1f) ? value : 1f / (1f + MathF.Exp(-value));
 
     private (string text, float confidence) DecodeCTCAuto(Tensor<float> tensor)
     {
