@@ -39,6 +39,7 @@ public partial class MainWindowViewModel
             aiModelDownloader,
             aiModelCatalog,
             sam2RuntimeService.Value.UnloadModels));
+        var aiResourceOrchestrator = new Lazy<AIResourceOrchestrator>(() => aiResourceService.Value.Orchestrator);
         var ocrRuntimeService = new Lazy<OcrRuntimeService>(() => new OcrRuntimeService(aiResourceService.Value));
 
         return new MainWindowViewModelDependencies(
@@ -55,7 +56,9 @@ public partial class MainWindowViewModel
             ffmpegDownloader,
             recordingService,
             updateService,
+            aiModelCatalog,
             aiResourceService,
+            aiResourceOrchestrator,
             sam2RuntimeService,
             ocrRuntimeService,
             aiPathService,

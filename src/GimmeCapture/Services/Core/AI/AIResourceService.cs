@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using ReactiveUI;
@@ -10,13 +9,10 @@ namespace GimmeCapture.Services.Core.AI;
 
 public class AIResourceService : ReactiveObject
 {
-    private readonly AppSettingsService _settingsService;
-    private readonly AIPathService _pathService;
-    private readonly NativeResolverService _resolverService;
     private readonly AIModelDownloader _downloader;
     private readonly AIModelCatalog _modelCatalog;
-    private readonly Action _unloadSam2Runtime;
     private readonly AIResourceInstaller _installer;
+    private readonly AIResourceOrchestrator _orchestrator = null!;
 
     public AIResourceService(
         AppSettingsService settingsService,
@@ -45,15 +41,11 @@ public class AIResourceService : ReactiveObject
         AIModelCatalog modelCatalog,
         Action? unloadSam2Runtime)
     {
-        _settingsService = settingsService;
-        _pathService = pathService;
-        _resolverService = resolverService;
         _downloader = downloader;
         _modelCatalog = modelCatalog;
-        _unloadSam2Runtime = unloadSam2Runtime ?? (() => { });
         _installer = new AIResourceInstaller(
-            _settingsService,
-            _pathService,
+            settingsService,
+            pathService,
             _downloader,
             _modelCatalog,
             new AIResourceInstallerCallbacks(
@@ -61,13 +53,21 @@ public class AIResourceService : ReactiveObject
                 propertyName => this.RaisePropertyChanged(propertyName),
                 () => RequestGlobalUnload?.Invoke(),
                 UnloadAllSessions,
-                _unloadSam2Runtime,
-                IsAICoreReady,
-                IsSAM2Ready,
-                IsOCRReady,
-                IsNmtReady,
-                GetLlmModelsDir,
-                GetLlamaModelPathById));
+                unloadSam2Runtime ?? (() => { }),
+                () => _orchestrator.IsAICoreReady(),
+                variant => _orchestrator.IsSAM2Ready(variant),
+                language => _orchestrator.IsOCRReady(language),
+                () => _orchestrator.IsNmtReady(),
+                () => _orchestrator.GetLlmModelsDir(),
+                modelId => _orchestrator.GetLlamaModelPathById(modelId)));
+        _orchestrator = new AIResourceOrchestrator(
+            settingsService,
+            pathService,
+            resolverService,
+            _modelCatalog,
+            _installer,
+            () => RequestGlobalUnload?.Invoke(),
+            unloadSam2Runtime ?? (() => { }));
 
         // Redirect progress changes
         _downloader.PropertyChanged += (s, e) =>
@@ -78,7 +78,10 @@ public class AIResourceService : ReactiveObject
         };
     }
 
-    public string GetAIResourcesPath() => _pathService.GetAIResourcesPath();
+    public AIModelCatalog Catalog => _modelCatalog;
+    public AIResourceOrchestrator Orchestrator => _orchestrator;
+
+    public string GetAIResourcesPath() => _orchestrator.GetAIResourcesPath();
 
     private string _lastErrorMessage = string.Empty;
     public string LastErrorMessage
@@ -93,108 +96,28 @@ public class AIResourceService : ReactiveObject
     public bool IsDownloading => _downloader.IsDownloading;
     public string CurrentDownloadName => _downloader.CurrentDownloadName;
 
-    public (string Encoder, string Decoder) GetSAM2Paths(SAM2Variant variant) => _pathService.GetSAM2Paths(variant);
+    public (string Encoder, string Decoder) GetSAM2Paths(SAM2Variant variant) => _orchestrator.GetSAM2Paths(variant);
 
-    public virtual (string Det, string Rec, string Dict) GetOCRPaths(OCRLanguage language) => _pathService.GetOCRPaths(language);
+    public virtual (string Det, string Rec, string Dict) GetOCRPaths(OCRLanguage language) => _orchestrator.GetOCRPaths(language);
 
-    public virtual bool IsNmtReady()
-    {
-        var paths = GetNmtPaths();
-        string[] files = { paths.Encoder, paths.Decoder, paths.Spm, paths.Config };
-        
-        foreach (var file in files)
-        {
-            if (!File.Exists(file)) return false;
-            
-            var info = new FileInfo(file);
-            // Quantized model size checks (encoder ~288MB, decoder ~339MB)
-            if (file.EndsWith("encoder_model.onnx") && info.Length < 50 * 1024 * 1024) return false;
-            if (file.EndsWith("decoder_model.onnx") && info.Length < 50 * 1024 * 1024) return false;
-        }
-        return true;
-    }
+    public virtual bool IsNmtReady() => _orchestrator.IsNmtReady();
 
-    public virtual (string Encoder, string Decoder, string Tokenizer, string Spm, string Config, string GenConfig) GetNmtPaths() => _pathService.GetNmtPaths();
+    public virtual (string Encoder, string Decoder, string Tokenizer, string Spm, string Config, string GenConfig) GetNmtPaths() => _orchestrator.GetNmtPaths();
 
     public IReadOnlyList<LlamaModelPreset> GetLlamaModelPresets() => _modelCatalog.GetLlamaModelPresets();
     public IReadOnlyList<LlamaModelPreset> GetDownloadableLlamaModelPresets() => _modelCatalog.GetDownloadableLlamaModelPresets();
 
-    public string GetLlmModelsDir()
-    {
-        string custom = _settingsService.Settings.LlamaCustomModelPath;
-        if (!string.IsNullOrWhiteSpace(custom))
-        {
-            if (File.Exists(custom))
-            {
-                return Path.GetDirectoryName(custom) ?? custom;
-            }
+    public string GetLlmModelsDir() => _orchestrator.GetLlmModelsDir();
 
-            return custom;
-        }
+    public string GetLlamaModelPathById(string modelId) => _orchestrator.GetLlamaModelPathById(modelId);
 
-        return Path.Combine(GetAIResourcesPath(), "llm", "models");
-    }
+    public bool IsLlamaPresetInstalled(string modelId) => _orchestrator.IsLlamaPresetInstalled(modelId);
 
-    public string GetLlamaModelPathById(string modelId)
-    {
-        if (_modelCatalog.TryGetLlamaModelPreset(modelId, out var preset) && !string.IsNullOrWhiteSpace(preset.FileName))
-        {
-            return Path.Combine(GetLlmModelsDir(), preset.FileName);
-        }
+    public IReadOnlyList<LlamaModelPreset> GetInstalledLlamaModelPresets() => _orchestrator.GetInstalledLlamaModelPresets();
 
-        return string.Empty;
-    }
+    public string GetSelectedLlamaModelPath() => _orchestrator.GetSelectedLlamaModelPath();
 
-    public bool IsLlamaPresetInstalled(string modelId)
-    {
-        string path = GetLlamaModelPathById(modelId);
-        return !string.IsNullOrWhiteSpace(path) && File.Exists(path);
-    }
-
-    public IReadOnlyList<LlamaModelPreset> GetInstalledLlamaModelPresets()
-    {
-        string modelDir = GetLlmModelsDir();
-        if (!Directory.Exists(modelDir))
-        {
-            return Array.Empty<LlamaModelPreset>();
-        }
-
-        var installed = _modelCatalog.GetLlamaModelPresets().AsValueEnumerable()
-            .Where(p => !string.IsNullOrWhiteSpace(p.FileName) && File.Exists(Path.Combine(modelDir, p.FileName)))
-            .ToList();
-        return installed;
-    }
-
-    public string GetSelectedLlamaModelPath()
-    {
-        var settings = _settingsService.Settings;
-        string path = GetLlamaModelPathById(settings.LlamaModelId);
-        if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
-        {
-            return path;
-        }
-
-        if (!string.IsNullOrWhiteSpace(settings.LlamaCustomModelPath))
-        {
-            if (Directory.Exists(settings.LlamaCustomModelPath))
-            {
-                var first = Directory.GetFiles(settings.LlamaCustomModelPath, "*.gguf", SearchOption.TopDirectoryOnly)
-                    .AsValueEnumerable()
-                    .FirstOrDefault();
-                return first ?? string.Empty;
-            }
-
-            return settings.LlamaCustomModelPath;
-        }
-
-        return path;
-    }
-
-    public bool IsLlamaModelReady()
-    {
-        string modelPath = GetSelectedLlamaModelPath();
-        return !string.IsNullOrWhiteSpace(modelPath) && File.Exists(modelPath);
-    }
+    public bool IsLlamaModelReady() => _orchestrator.IsLlamaModelReady();
 
     public async Task<bool> EnsureLlamaModelAsync(string modelId, CancellationToken ct = default)
     {
@@ -206,104 +129,46 @@ public class AIResourceService : ReactiveObject
         return _installer.RemoveLlamaModelPreset(modelId);
     }
 
-    public bool IsAICoreReady()
-    {
-        var modelPath = _pathService.GetAICoreModelPath();
-        var onnxDll = _pathService.GetOnnxDllPath();
-        return File.Exists(modelPath) && File.Exists(onnxDll);
-    }
+    public bool IsAICoreReady() => _orchestrator.IsAICoreReady();
 
-    public bool IsSAM2Ready(SAM2Variant variant)
-    {
-        var paths = GetSAM2Paths(variant);
-        return File.Exists(paths.Encoder) && File.Exists(paths.Decoder);
-    }
+    public bool IsSAM2Ready(SAM2Variant variant) => _orchestrator.IsSAM2Ready(variant);
 
-    public bool IsOCRReady()
-    {
-        // Check if CURRENT selected language model exists
-        var paths = GetOCRPaths(_settingsService.Settings.SourceLanguage);
-        return File.Exists(paths.Det) && File.Exists(paths.Rec) && File.Exists(paths.Dict);
-    }
+    public bool IsOCRReady() => _orchestrator.IsOCRReady();
 
-    public bool IsOCRReady(OCRLanguage language)
-    {
-        var paths = GetOCRPaths(language);
-        return File.Exists(paths.Det) && File.Exists(paths.Rec) && File.Exists(paths.Dict);
-    }
+    public bool IsOCRReady(OCRLanguage language) => _orchestrator.IsOCRReady(language);
 
-    // Deprecated monolithic check, keeping for compatibility if needed, but logic should move to specific checks
-    public bool AreResourcesReady()
-    {
-        return IsAICoreReady() && IsSAM2Ready(_settingsService.Settings.SelectedSAM2Variant) && IsOCRReady() &&
-               (_settingsService.Settings.SelectedTranslationEngine != TranslationEngine.LlamaSharp || IsLlamaModelReady());
-    }
+    public bool AreResourcesReady() => _orchestrator.AreResourcesReady();
 
-    public bool IsNmtResourcesPresent()
-    {
-        var paths = GetNmtPaths();
-        return File.Exists(paths.Encoder) && File.Exists(paths.Decoder) && File.Exists(paths.Tokenizer);
-    }
+    public bool IsNmtResourcesPresent() => _orchestrator.IsNmtResourcesPresent();
 
-    public bool RemoveAICoreResources()
-    {
-        return _installer.RemoveAICoreResources();
-    }
+    public bool RemoveAICoreResources() => _orchestrator.RemoveAICoreResources();
 
-    public bool RemoveSAM2Resources(SAM2Variant variant)
-    {
-        return _installer.RemoveSAM2Resources(variant);
-    }
+    public bool RemoveSAM2Resources(SAM2Variant variant) => _orchestrator.RemoveSAM2Resources(variant);
 
-    public bool RemoveOCRResources()
-    {
-        return _installer.RemoveOCRResources();
-    }
+    public bool RemoveOCRResources() => _orchestrator.RemoveOCRResources();
 
-    public bool RemoveNmtResources()
-    {
-        return _installer.RemoveNmtResources();
-    }
+    public bool RemoveNmtResources() => _orchestrator.RemoveNmtResources();
 
     // Deprecated but kept for compatibility if referenced elsewhere
     public void RemoveResources()
     {
-        RemoveAICoreResources();
+        _orchestrator.RemoveResources();
     }
 
-    public void UnloadAllSessions()
-    {
-        _unloadSam2Runtime();
-        // BackgroundRemovalService will handle its own _session via RequestGlobalUnload
-    }
+    public void UnloadAllSessions() => _orchestrator.UnloadAllSessions();
 
-    public async Task<bool> EnsureAICoreAsync(CancellationToken ct = default)
-    {
-        return await _installer.EnsureAICoreAsync(ct);
-    }
+    public async Task<bool> EnsureAICoreAsync(CancellationToken ct = default) => await _orchestrator.EnsureAICoreAsync(ct);
 
-    public async Task<bool> EnsureSAM2Async(SAM2Variant variant, CancellationToken ct = default)
-    {
-        return await _installer.EnsureSAM2Async(variant, ct);
-    }
+    public async Task<bool> EnsureSAM2Async(SAM2Variant variant, CancellationToken ct = default) => await _orchestrator.EnsureSAM2Async(variant, ct);
 
-    public virtual Task<bool> EnsureOCRAsync(CancellationToken ct = default)
-    {
-        return EnsureOCRAsync(_settingsService.Settings.SourceLanguage, ct);
-    }
+    public virtual Task<bool> EnsureOCRAsync(CancellationToken ct = default) => _orchestrator.EnsureOCRAsync(ct);
 
-    public virtual async Task<bool> EnsureOCRAsync(OCRLanguage language, CancellationToken ct = default)
-    {
-        return await _installer.EnsureOCRAsync(language, ct);
-    }
+    public virtual async Task<bool> EnsureOCRAsync(OCRLanguage language, CancellationToken ct = default) => await _orchestrator.EnsureOCRAsync(language, ct);
 
-    public virtual async Task<bool> EnsureNmtAsync(CancellationToken ct = default)
-    {
-        return await _installer.EnsureNmtAsync(ct);
-    }
+    public virtual async Task<bool> EnsureNmtAsync(CancellationToken ct = default) => await _orchestrator.EnsureNmtAsync(ct);
 
     public void SetupNativeResolvers()
     {
-        _resolverService.SetupNativeResolvers();
+        _orchestrator.SetupNativeResolvers();
     }
 }

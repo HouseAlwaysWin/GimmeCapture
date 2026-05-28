@@ -36,9 +36,11 @@ public class MainWindowViewModelConstructionTests
         var updateService = new UpdateService("1.2.3");
         var aiPathService = new AIPathService(settingsService);
         var nativeResolverService = new NativeResolverService(aiPathService);
-        var aiResourceService = new AIResourceService(settingsService, aiPathService, nativeResolverService, new AIModelDownloader());
+        var aiModelCatalog = new AIModelCatalog();
+        var aiResourceService = new AIResourceService(settingsService, aiPathService, nativeResolverService, new AIModelDownloader(), aiModelCatalog);
         var sam2RuntimeService = new SAM2RuntimeService(aiPathService, nativeResolverService);
         var ocrRuntimeService = new OcrRuntimeService(aiResourceService);
+        var aiResourceOrchestrator = new Lazy<AIResourceOrchestrator>(() => aiResourceService.Orchestrator);
         var resourceQueue = ResourceQueueService.Instance;
 
         var dependencies = new MainWindowViewModelDependencies(
@@ -55,7 +57,9 @@ public class MainWindowViewModelConstructionTests
             new Lazy<FFmpegDownloaderService>(() => ffmpegDownloader),
             new Lazy<RecordingService>(() => recordingService),
             new Lazy<UpdateService>(() => updateService),
+            aiModelCatalog,
             new Lazy<AIResourceService>(() => aiResourceService),
+            aiResourceOrchestrator,
             new Lazy<SAM2RuntimeService>(() => sam2RuntimeService),
             new Lazy<OcrRuntimeService>(() => ocrRuntimeService),
             aiPathService,

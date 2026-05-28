@@ -105,7 +105,9 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly Lazy<FFmpegDownloaderService> _ffmpegDownloader;
     private readonly Lazy<RecordingService> _recordingService;
     private readonly Lazy<UpdateService> _updateService;
+    private readonly AIModelCatalog _aiModelCatalog;
     private readonly Lazy<AIResourceService> _aiResourceService;
+    private readonly Lazy<AIResourceOrchestrator> _aiResourceOrchestrator;
     private readonly Lazy<SAM2RuntimeService> _sam2RuntimeService;
     private readonly Lazy<OcrRuntimeService> _ocrRuntimeService;
     private IDisposable? _updateProcessingSubscription;
@@ -205,12 +207,19 @@ public partial class MainWindowViewModel : ViewModelBase
         _ffmpegDownloader = dependencies.FfmpegDownloader;
         _recordingService = dependencies.RecordingService;
         _updateService = dependencies.UpdateService;
+        _aiModelCatalog = dependencies.AIModelCatalog;
         _aiResourceService = dependencies.AIResourceService;
+        _aiResourceOrchestrator = dependencies.AIResourceOrchestrator;
         _sam2RuntimeService = dependencies.SAM2RuntimeService;
         _ocrRuntimeService = dependencies.OcrRuntimeService;
         AIPathService = dependencies.AIPathService;
         ResourceQueue = dependencies.ResourceQueue;
-        _moduleInstallCoordinator = new ModuleInstallCoordinator(_aiResourceService, _settingsService, ResourceQueue);
+        _moduleInstallCoordinator = new ModuleInstallCoordinator(
+            _aiModelCatalog,
+            _aiResourceService,
+            _aiResourceOrchestrator,
+            _settingsService,
+            ResourceQueue);
 
         LocalizationService.Instance
             .WhenAnyValue(x => x.CurrentLanguage)

@@ -27,9 +27,11 @@ public class MainWindowViewModelHotkeyTests
         var aiPathService = new AIPathService(settingsService);
         var nativeResolverService = new NativeResolverService(aiPathService);
         var ffmpegDownloader = new FFmpegDownloaderService(settingsService);
-        var aiResourceService = new AIResourceService(settingsService, aiPathService, nativeResolverService, new AIModelDownloader());
+        var aiModelCatalog = new AIModelCatalog();
+        var aiResourceService = new AIResourceService(settingsService, aiPathService, nativeResolverService, new AIModelDownloader(), aiModelCatalog);
         var sam2RuntimeService = new SAM2RuntimeService(aiPathService, nativeResolverService);
         var ocrRuntimeService = new OcrRuntimeService(aiResourceService);
+        var aiResourceOrchestrator = new Lazy<AIResourceOrchestrator>(() => aiResourceService.Orchestrator);
         var hotkeyCoordinator = new CountingGlobalHotkeySettingsCoordinator();
         var dependencies = new MainWindowViewModelDependencies(
             settingsService,
@@ -45,7 +47,9 @@ public class MainWindowViewModelHotkeyTests
             new Lazy<FFmpegDownloaderService>(() => ffmpegDownloader),
             new Lazy<RecordingService>(() => new RecordingService(ffmpegDownloader, settingsService)),
             new Lazy<UpdateService>(() => new UpdateService("1.2.3")),
+            aiModelCatalog,
             new Lazy<AIResourceService>(() => aiResourceService),
+            aiResourceOrchestrator,
             new Lazy<SAM2RuntimeService>(() => sam2RuntimeService),
             new Lazy<OcrRuntimeService>(() => ocrRuntimeService),
             aiPathService,
@@ -129,9 +133,11 @@ public class MainWindowViewModelHotkeyTests
         var aiPathService = new AIPathService(settingsService);
         var nativeResolverService = new NativeResolverService(aiPathService);
         var ffmpegDownloader = new FFmpegDownloaderService(settingsService);
-        var aiResourceService = new AIResourceService(settingsService, aiPathService, nativeResolverService, new AIModelDownloader());
+        var aiModelCatalog = new AIModelCatalog();
+        var aiResourceService = new AIResourceService(settingsService, aiPathService, nativeResolverService, new AIModelDownloader(), aiModelCatalog);
         var sam2RuntimeService = new SAM2RuntimeService(aiPathService, nativeResolverService);
         var ocrRuntimeService = new OcrRuntimeService(aiResourceService);
+        var aiResourceOrchestrator = new Lazy<AIResourceOrchestrator>(() => aiResourceService.Orchestrator);
         var hotkeyCoordinator = new CountingGlobalHotkeySettingsCoordinator();
         var dependencies = new MainWindowViewModelDependencies(
             settingsService,
@@ -147,7 +153,9 @@ public class MainWindowViewModelHotkeyTests
             new Lazy<FFmpegDownloaderService>(() => ffmpegDownloader),
             new Lazy<RecordingService>(() => new RecordingService(ffmpegDownloader, settingsService)),
             new Lazy<UpdateService>(() => new UpdateService("1.2.3")),
+            aiModelCatalog,
             new Lazy<AIResourceService>(() => aiResourceService),
+            aiResourceOrchestrator,
             new Lazy<SAM2RuntimeService>(() => sam2RuntimeService),
             new Lazy<OcrRuntimeService>(() => ocrRuntimeService),
             aiPathService,

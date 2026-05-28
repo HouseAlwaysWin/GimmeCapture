@@ -13,21 +13,28 @@ namespace GimmeCapture.Services.Core.AI;
 
 public sealed class ModuleInstallCoordinator
 {
+    private readonly AIModelCatalog _modelCatalog;
     private readonly Lazy<AIResourceService> _aiResourceService;
+    private readonly Lazy<AIResourceOrchestrator> _orchestrator;
     private readonly AppSettingsService _settingsService;
     private readonly ResourceQueueService _resourceQueue;
 
     public ModuleInstallCoordinator(
+        AIModelCatalog modelCatalog,
         Lazy<AIResourceService> aiResourceService,
+        Lazy<AIResourceOrchestrator> orchestrator,
         AppSettingsService settingsService,
         ResourceQueueService resourceQueue)
     {
+        _modelCatalog = modelCatalog;
         _aiResourceService = aiResourceService;
+        _orchestrator = orchestrator;
         _settingsService = settingsService;
         _resourceQueue = resourceQueue;
     }
 
     private AIResourceService AIResources => _aiResourceService.Value;
+    private AIResourceOrchestrator Orchestrator => _orchestrator.Value;
 
     public ObservableCollection<string> GetSam2Variants()
     {
@@ -37,19 +44,19 @@ public sealed class ModuleInstallCoordinator
     public ObservableCollection<string> GetDownloadableLlamaVariants()
     {
         return new ObservableCollection<string>(
-            AIResources.GetDownloadableLlamaModelPresets()
+            _modelCatalog.GetDownloadableLlamaModelPresets()
                 .AsValueEnumerable()
                 .Select(p => p.Id)
                 .ToList());
     }
 
-    public bool IsAICoreInstalled() => AIResources.IsAICoreReady();
+    public bool IsAICoreInstalled() => Orchestrator.IsAICoreReady();
 
-    public bool IsSam2Installed(SAM2Variant variant) => AIResources.IsSAM2Ready(variant);
+    public bool IsSam2Installed(SAM2Variant variant) => Orchestrator.IsSAM2Ready(variant);
 
-    public bool IsOcrInstalled() => AIResources.IsOCRReady();
+    public bool IsOcrInstalled() => Orchestrator.IsOCRReady();
 
-    public bool IsLlamaInstalled(string modelId) => AIResources.IsLlamaPresetInstalled(modelId);
+    public bool IsLlamaInstalled(string modelId) => Orchestrator.IsLlamaPresetInstalled(modelId);
 
     public string LastErrorMessage => AIResources.LastErrorMessage;
 
@@ -69,12 +76,12 @@ public sealed class ModuleInstallCoordinator
     {
         return type switch
         {
-            "AICore" => _resourceQueue.EnqueueAsync("AICore", ct => AIResources.EnsureAICoreAsync(ct)),
-            "SAM2" => _resourceQueue.EnqueueAsync("SAM2", ct => AIResources.EnsureSAM2Async(_settingsService.Settings.SelectedSAM2Variant, ct)),
-            "OCR" => _resourceQueue.EnqueueAsync("OCR", ct => AIResources.EnsureOCRAsync(ct)),
+            "AICore" => _resourceQueue.EnqueueAsync("AICore", ct => Orchestrator.EnsureAICoreAsync(ct)),
+            "SAM2" => _resourceQueue.EnqueueAsync("SAM2", ct => Orchestrator.EnsureSAM2Async(_settingsService.Settings.SelectedSAM2Variant, ct)),
+            "OCR" => _resourceQueue.EnqueueAsync("OCR", ct => Orchestrator.EnsureOCRAsync(ct)),
             "LlamaModels" => _resourceQueue.EnqueueAsync(
                 "LlamaModels",
-                ct => AIResources.EnsureLlamaModelAsync(llamaModelId ?? string.Empty, ct)),
+                ct => Orchestrator.EnsureLlamaModelAsync(llamaModelId ?? string.Empty, ct)),
             _ => Task.CompletedTask
         };
     }
@@ -89,18 +96,18 @@ public sealed class ModuleInstallCoordinator
         switch (type)
         {
             case "AICore":
-                AIResources.RemoveAICoreResources();
+                Orchestrator.RemoveAICoreResources();
                 break;
             case "SAM2":
-                AIResources.RemoveSAM2Resources(_settingsService.Settings.SelectedSAM2Variant);
+                Orchestrator.RemoveSAM2Resources(_settingsService.Settings.SelectedSAM2Variant);
                 break;
             case "OCR":
-                AIResources.RemoveOCRResources();
+                Orchestrator.RemoveOCRResources();
                 break;
             case "LlamaModels":
                 if (!string.IsNullOrWhiteSpace(llamaModelId))
                 {
-                    AIResources.RemoveLlamaModelPreset(llamaModelId);
+                    Orchestrator.RemoveLlamaModelPreset(llamaModelId);
                 }
                 break;
         }
