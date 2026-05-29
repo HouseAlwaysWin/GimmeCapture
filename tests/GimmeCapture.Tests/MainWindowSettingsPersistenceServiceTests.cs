@@ -157,6 +157,68 @@ public class MainWindowSettingsPersistenceServiceTests
     }
 
     [Fact]
+    public void LoadSync_Preserves_Legacy_FunctionKey_GlobalLaunchHotkeys()
+    {
+        var tempDir = Path.Combine(
+            Path.GetTempPath(),
+            "GimmeCapture.Tests",
+            nameof(MainWindowSettingsPersistenceServiceTests),
+            Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+
+        var configPath = Path.Combine(tempDir, "config.json");
+        File.WriteAllText(configPath,
+            """
+            {
+              "ConfigVersion": 3,
+              "SnipHotkey": "Shift+F1",
+              "RecordHotkey": "Shift+F2",
+              "TranslateHotkey": "Shift+F3"
+            }
+            """);
+
+        var settingsService = new AppSettingsService(tempDir);
+
+        settingsService.LoadSync();
+
+        Assert.Equal(4, settingsService.Settings.ConfigVersion);
+        Assert.Equal("Shift+F1", settingsService.Settings.SnipHotkey);
+        Assert.Equal("Shift+F2", settingsService.Settings.RecordHotkey);
+        Assert.Equal("Shift+F3", settingsService.Settings.TranslateHotkey);
+    }
+
+    [Fact]
+    public void LoadSync_Preserves_Custom_GlobalLaunchHotkeys()
+    {
+        var tempDir = Path.Combine(
+            Path.GetTempPath(),
+            "GimmeCapture.Tests",
+            nameof(MainWindowSettingsPersistenceServiceTests),
+            Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+
+        var configPath = Path.Combine(tempDir, "config.json");
+        File.WriteAllText(configPath,
+            """
+            {
+              "ConfigVersion": 4,
+              "SnipHotkey": "Ctrl+Shift+F10",
+              "RecordHotkey": "Ctrl+Shift+F11",
+              "TranslateHotkey": "Ctrl+Shift+F12"
+            }
+            """);
+
+        var settingsService = new AppSettingsService(tempDir);
+
+        settingsService.LoadSync();
+
+        Assert.Equal(4, settingsService.Settings.ConfigVersion);
+        Assert.Equal("Ctrl+Shift+F10", settingsService.Settings.SnipHotkey);
+        Assert.Equal("Ctrl+Shift+F11", settingsService.Settings.RecordHotkey);
+        Assert.Equal("Ctrl+Shift+F12", settingsService.Settings.TranslateHotkey);
+    }
+
+    [Fact]
     public void LoadSync_DoesNotRemapVersionedConfigThatUsesOlderLookingValues()
     {
         var tempDir = Path.Combine(

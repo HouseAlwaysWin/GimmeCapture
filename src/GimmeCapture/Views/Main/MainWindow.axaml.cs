@@ -74,12 +74,6 @@ public partial class MainWindow : Window
     protected override void OnOpened(EventArgs e)
     {
         base.OnOpened(e);
-
-        if (DataContext is MainWindowViewModel vm)
-        {
-            // Initialize Hotkey Service with this Window AFTER it has a handle
-            vm.HotkeyService.Initialize(this);
-        }
     }
 
     private void TitleBar_PointerPressed(object? sender, Avalonia.Input.PointerPressedEventArgs e)

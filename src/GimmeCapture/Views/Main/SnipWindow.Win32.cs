@@ -252,6 +252,7 @@ public partial class SnipWindow : Window
         return string.Equals(keyPart, "Escape", StringComparison.OrdinalIgnoreCase)
             || string.Equals(keyPart, "Esc", StringComparison.OrdinalIgnoreCase)
             || string.Equals(keyPart, "PrintScreen", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(keyPart, "Print", StringComparison.OrdinalIgnoreCase)
             || string.Equals(keyPart, "PrtSc", StringComparison.OrdinalIgnoreCase);
     }
 

@@ -281,5 +281,7 @@
   "LoadingReleaseList": "正在載入版本清單...",
   "RefreshReleaseList": "重新載入",
   "InstallSelectedVersion": "下載並安裝",
-  "InstallSelectedVersionReady": "版本 {0} 已準備完成。立即重新啟動並安裝？"
+  "InstallSelectedVersionReady": "版本 {0} 已準備完成。立即重新啟動並安裝？",
+  "ElevatedWindowNoticeTitle": "無法擷取系統管理員視窗",
+  "ElevatedWindowNoticeMessage": "目前焦點在以系統管理員權限執行的程式視窗，Windows 會阻擋一般權限程式的快捷鍵。\n\n請關閉 GimmeCapture，並使用「以系統管理員身分執行」重新開啟；或在該視窗以外的地方使用快捷鍵。\n\n是否立即以系統管理員身分重新啟動 GimmeCapture？"
 }

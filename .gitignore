@@ -59,3 +59,4 @@ artifacts/
 *.tmpbuild
 *.tmp
 *.dll
+*.exe

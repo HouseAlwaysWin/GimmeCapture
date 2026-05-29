@@ -53,7 +53,7 @@
                 <Button Content="{Binding [No], Source={x:Static services:LocalizationService.Instance}}" 
                         Theme="{StaticResource GothicMetalButton}"
                         MinWidth="100" Height="40"
-                        IsVisible="{Binding IsExtendedMode}"
+                        IsVisible="{Binding IsNoVisible}"
                         Click="OnNoClick"/>
                 <Button Content="{Binding [Cancel], Source={x:Static services:LocalizationService.Instance}}" 
                         Theme="{StaticResource GothicMetalButton}"

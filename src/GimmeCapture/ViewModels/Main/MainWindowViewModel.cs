@@ -84,6 +84,7 @@ public partial class MainWindowViewModel : ViewModelBase
     }
 
     public Action<CaptureMode>? RequestCaptureAction { get; set; }
+    public Action? RequestElevatedWindowPromptAction { get; set; }
     public Func<SnipWindowViewModel?>? GetActiveSnipViewModelAction { get; set; }
     public Func<Task<string?>>? PickFolderAction { get; set; }
     public Func<string, string, bool, Task<bool>>? ConfirmAction { get; set; }
@@ -308,6 +309,11 @@ public partial class MainWindowViewModel : ViewModelBase
             {
                 Avalonia.Threading.Dispatcher.UIThread.Post(() => StartCaptureCommand.Execute(mode).Subscribe());
             }
+        };
+
+        HotkeyService.OnElevatedWindowFocused = () =>
+        {
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => RequestElevatedWindowPromptAction?.Invoke());
         };
 
         this.PropertyChanged += (s, e) =>

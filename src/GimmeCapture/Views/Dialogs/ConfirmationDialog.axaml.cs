@@ -15,6 +15,7 @@ namespace GimmeCapture.Views.Dialogs
     public enum ConfirmationMode
     {
         YesNoCancel,
+        YesNo,
         OkOnly
     }
 
@@ -67,6 +68,15 @@ namespace GimmeCapture.Views.Dialogs
             set => SetValue(IsExtendedModeProperty, value);
         }
 
+        public static readonly StyledProperty<bool> IsNoVisibleProperty =
+            AvaloniaProperty.Register<ConfirmationDialog, bool>(nameof(IsNoVisible), defaultValue: true);
+
+        public bool IsNoVisible
+        {
+            get => GetValue(IsNoVisibleProperty);
+            set => SetValue(IsNoVisibleProperty, value);
+        }
+
         public ConfirmationDialog()
         {
             InitializeComponent();
@@ -89,6 +99,7 @@ namespace GimmeCapture.Views.Dialogs
                 ? LocalizationService.Instance["UpdateBtnOk"] 
                 : LocalizationService.Instance["Yes"];
             IsExtendedMode = Mode == ConfirmationMode.YesNoCancel;
+            IsNoVisible = Mode != ConfirmationMode.OkOnly;
         }
 
         public static async Task<ConfirmationResult> ShowConfirmation(Window owner)
@@ -97,7 +108,7 @@ namespace GimmeCapture.Views.Dialogs
             return await ShowConfirmation(owner, loc["UnsavedTitle"], loc["UnsavedMessage"]);
         }
 
-        public static async Task<ConfirmationResult> ShowConfirmation(Window owner, string title, string message, ConfirmationMode mode = ConfirmationMode.YesNoCancel)
+        public static async Task<ConfirmationResult> ShowConfirmation(Window owner, string title, string message, ConfirmationMode mode = ConfirmationMode.YesNoCancel, WindowStartupLocation? startupLocation = null)
         {
             var dialog = new ConfirmationDialog
             {
@@ -105,6 +116,10 @@ namespace GimmeCapture.Views.Dialogs
                 DialogMessage = message,
                 Mode = mode
             };
+            if (startupLocation.HasValue)
+            {
+                dialog.WindowStartupLocation = startupLocation.Value;
+            }
             await dialog.ShowDialog(owner);
             return dialog.Result;
         }

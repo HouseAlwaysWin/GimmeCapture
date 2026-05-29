@@ -86,6 +86,24 @@ public class HotkeyServiceTests
     }
 
     [Theory]
+    [InlineData("PrintScreen", 0u)]
+    [InlineData("Print", 0u)]
+    [InlineData("Ctrl+PrintScreen", 0x0002u)]
+    [InlineData("Shift+PrintScreen", 0x0004u)]
+    public void Register_WithPrintScreenHotkeys_RegistersSnapshotVirtualKey(string hotkey, uint expectedMods)
+    {
+        var service = new TestableHotkeyService();
+        service.SetHandle(new IntPtr(1234));
+
+        service.Register(11, hotkey);
+
+        Assert.Equal(1, service.RegCallCount);
+        Assert.Equal(11, service.RegHistory[0].id);
+        Assert.Equal(expectedMods, service.RegHistory[0].mods);
+        Assert.Equal(0x2Cu, service.RegHistory[0].vkey);
+    }
+
+    [Theory]
     [InlineData("F6", 0x75u)]
     [InlineData("F7", 0x76u)]
     [InlineData("F8", 0x77u)]

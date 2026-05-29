@@ -39,15 +39,17 @@ public partial class App : Application
 
             _bootstrapper = new AppBootstrapper();
             desktop.ShutdownMode = Avalonia.Controls.ShutdownMode.OnExplicitShutdown;
+            var hotkeyHost = _bootstrapper.CreateTrayHostWindow();
 
             var launchToTrayOnly = StartupService.ShouldLaunchToTrayOnly(Program.CommandLineArgs);
             if (!launchToTrayOnly)
             {
                 desktop.MainWindow = _bootstrapper.CreateMainWindow();
+                hotkeyHost.Show();
             }
             else
             {
-                desktop.MainWindow = _bootstrapper.CreateTrayHostWindow();
+                desktop.MainWindow = hotkeyHost;
             }
 
             // Setup Tray Icon

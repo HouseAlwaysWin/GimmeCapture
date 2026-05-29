@@ -3,6 +3,7 @@ using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Platforms.Windows;
 using GimmeCapture.ViewModels.Main;
 using GimmeCapture.Views.Main;
+using GimmeCapture.Views.Dialogs;
 using Avalonia;
 using Avalonia.Controls;
 using System;
@@ -72,7 +73,6 @@ public sealed class AppBootstrapper
         window.Opened += (_, _) =>
         {
             _mainWindowViewModel.Value.HotkeyService.Initialize(window);
-            window.Hide();
         };
 
         _trayHostWindow = window;
@@ -136,5 +136,94 @@ public sealed class AppBootstrapper
     {
         viewModel.RequestCaptureAction = mode => _snipWindowFactory.Value.Open(viewModel, mode);
         viewModel.GetActiveSnipViewModelAction = () => _snipWindowFactory.Value.GetActiveViewModel() as SnipWindowViewModel;
+        viewModel.RequestElevatedWindowPromptAction = ShowElevatedWindowNotice;
+    }
+
+    private bool _isElevatedNoticeShowing;
+
+    private async void ShowElevatedWindowNotice()
+    {
+        if (_isElevatedNoticeShowing)
+        {
+            return;
+        }
+
+        var owner = ResolveDialogOwner();
+        if (owner == null)
+        {
+            return;
+        }
+
+        _isElevatedNoticeShowing = true;
+        try
+        {
+            var loc = LocalizationService.Instance;
+            var result = await ConfirmationDialog.ShowConfirmation(
+                owner,
+                loc["ElevatedWindowNoticeTitle"],
+                loc["ElevatedWindowNoticeMessage"],
+                ConfirmationMode.YesNo,
+                WindowStartupLocation.CenterScreen);
+
+            if (result == ConfirmationResult.Yes)
+            {
+                RestartAsAdministrator();
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error showing elevated-window notice: {ex.Message}");
+        }
+        finally
+        {
+            _isElevatedNoticeShowing = false;
+        }
+    }
+
+    private Window? ResolveDialogOwner()
+    {
+        if (_mainWindow is { IsVisible: true })
+        {
+            return _mainWindow;
+        }
+
+        return _trayHostWindow ?? _mainWindow;
+    }
+
+    private void RestartAsAdministrator()
+    {
+        var exePath = Environment.ProcessPath;
+        if (string.IsNullOrEmpty(exePath))
+        {
+            return;
+        }
+
+        try
+        {
+            var startInfo = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = exePath,
+                UseShellExecute = true,
+                Verb = "runas"
+            };
+            System.Diagnostics.Process.Start(startInfo);
+
+            if (Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
+            {
+                desktop.Shutdown();
+            }
+            else
+            {
+                Environment.Exit(0);
+            }
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            // User declined the UAC elevation prompt; keep running unelevated.
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error restarting as administrator: {ex.Message}");
+        }
     }
 }
