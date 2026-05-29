@@ -55,7 +55,7 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
     private bool _selfIsElevated;
     private int _selfIntegrityLevel;
     private bool _selfIntegrityResolved;
-    private bool _previousForegroundWasElevated;
+    private readonly HashSet<uint> _notifiedElevatedPids = new();
     private long _lastElevationNoticeTicks;
 
     [DllImport("user32.dll", SetLastError = true)]
@@ -726,6 +726,7 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
         UnhookWinEvent(_foregroundEventHook);
         _foregroundEventHook = IntPtr.Zero;
         _foregroundEventDelegate = null;
+        _notifiedElevatedPids.Clear();
     }
 
     private void ForegroundEventCallback(IntPtr hWinEventHook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint dwEventThread, uint dwmsEventTime)
@@ -735,26 +736,36 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
             return;
         }
 
-        bool isElevated = IsWindowHigherIntegrity(hwnd);
+        if (GetWindowThreadProcessId(hwnd, out uint pid) == 0 || pid == 0)
+        {
+            return;
+        }
 
-        // Only react on the transition into an elevated window so users are not nagged repeatedly
-        // while the same window keeps focus.
-        bool transitionedIntoElevated = isElevated && !_previousForegroundWasElevated;
-        _previousForegroundWasElevated = isElevated;
+        // Any process running at a higher integrity level than us blocks our hotkeys (Windows UIPI):
+        // Task Manager, Registry Editor, an elevated viewer/game, etc. This is integrity-based and not
+        // tied to any specific application.
+        if (!IsProcessHigherIntegrity(pid))
+        {
+            return;
+        }
 
-        if (!transitionedIntoElevated)
+        // Notify once per distinct elevated process so every privileged app is covered, while the same
+        // app does not nag repeatedly (including when focus returns from our own dialog).
+        if (_notifiedElevatedPids.Contains(pid))
         {
             return;
         }
 
         long now = Environment.TickCount64;
-        if (_lastElevationNoticeTicks != 0 && now - _lastElevationNoticeTicks < 60_000)
+        if (_lastElevationNoticeTicks != 0 && now - _lastElevationNoticeTicks < 1500)
         {
+            // Storm guard: avoid back-to-back popups; this pid stays un-notified so it can fire later.
             return;
         }
 
+        _notifiedElevatedPids.Add(pid);
         _lastElevationNoticeTicks = now;
-        WriteDebugLog("elevated foreground window detected; raising hotkey-blocked notice");
+        WriteDebugLog($"elevated foreground pid={pid} detected; raising hotkey-blocked notice");
 
         try
         {
@@ -766,14 +777,8 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
         }
     }
 
-    private bool IsWindowHigherIntegrity(IntPtr hwnd)
+    private bool IsProcessHigherIntegrity(uint pid)
     {
-        uint pid;
-        if (GetWindowThreadProcessId(hwnd, out pid) == 0 || pid == 0)
-        {
-            return false;
-        }
-
         IntPtr hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
         if (hProcess == IntPtr.Zero)
         {
