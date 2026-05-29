@@ -439,7 +439,15 @@ public partial class SnipWindowViewModel
     public Rect ActiveScreenBounds
     {
         get => _activeScreenBounds;
-        set => this.RaiseAndSetIfChanged(ref _activeScreenBounds, value);
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _activeScreenBounds, value);
+            this.RaisePropertyChanged(nameof(ToolbarMaxWidth));
+            if (CurrentMode == SnipMode.Translation && !IsToolbarManuallyPositioned)
+            {
+                InitializeTranslationToolbarPosition();
+            }
+        }
     }
 
     private ObservableCollection<ScreenBoundsViewModel> _allScreenBounds = new();

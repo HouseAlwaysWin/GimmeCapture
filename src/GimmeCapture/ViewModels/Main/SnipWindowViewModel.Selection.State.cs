@@ -527,7 +527,19 @@ public partial class SnipWindowViewModel
     public double ToolbarWidth
     {
         get => _toolbarWidth;
-        set => this.RaiseAndSetIfChanged(ref _toolbarWidth, value);
+        set
+        {
+            if (Math.Abs(_toolbarWidth - value) < 0.5)
+            {
+                return;
+            }
+
+            this.RaiseAndSetIfChanged(ref _toolbarWidth, value);
+            if (CurrentMode == SnipMode.Translation && !IsToolbarManuallyPositioned)
+            {
+                InitializeTranslationToolbarPosition();
+            }
+        }
     }
 
     private double _toolbarHeight;
@@ -558,7 +570,19 @@ public partial class SnipWindowViewModel
         set => this.RaiseAndSetIfChanged(ref _translationOverlayLeft, value);
     }
 
-    public double ToolbarMaxWidth => (ViewportSize.Width > 100) ? ViewportSize.Width - 40 : 2000;
+    public double ToolbarMaxWidth
+    {
+        get
+        {
+            // Translation toolbar should wrap within the active monitor, not the full virtual desktop.
+            if (CurrentMode == SnipMode.Translation && ActiveScreenBounds.Width > 100)
+            {
+                return Math.Max(200, ActiveScreenBounds.Width - 40);
+            }
+
+            return ViewportSize.Width > 100 ? ViewportSize.Width - 40 : 2000;
+        }
+    }
 
     private bool _isToolbarManuallyPositioned;
     public bool IsToolbarManuallyPositioned
@@ -685,37 +709,24 @@ public partial class SnipWindowViewModel
 
         const double margin = 20;
 
-        // ?虜?獢??對???溘?箇??謜扔?????瞍??蹇???????皜訾?????刻??芾??(????????? 960)??
-        // Canvas.Left ????????結????皝?????謅????祗?嚗???謘獢???
-        // ?垮謓??脰?蹇?????剜???踐???瞏??頦?????????????????瞍??祈澈?頦察?菜???????拇什?瘞玲?
-        double tw;
-        if (ToolbarWidth > 0)
-        {
-            tw = ToolbarWidth;
-        }
-        else
-        {
-            tw = Math.Min(960, Math.Max(200, bounds.Width - margin * 2));
-        }
-        double maxTw = Math.Max(0, bounds.Width - margin * 2);
-        tw = Math.Min(tw, maxTw);
+        double tw = ToolbarWidth > 1
+            ? ToolbarWidth
+            : Math.Min(1080, Math.Max(200, bounds.Width - margin * 2));
 
         double left = bounds.X + (bounds.Width - tw) / 2;
-        double minLeft = bounds.X;
-        double maxLeft = bounds.X + bounds.Width - tw;
-        if (maxLeft < minLeft)
+        if (tw >= bounds.Width - margin * 2)
         {
-            left = minLeft;
+            left = bounds.X + margin;
         }
         else
         {
-            left = Math.Clamp(left, minLeft, maxLeft);
+            left = Math.Clamp(left, bounds.X + margin, bounds.X + bounds.Width - tw - margin);
         }
 
         TranslationToolbarLeft = left;
-        TranslationToolbarTop = bounds.Y + 20;
+        TranslationToolbarTop = bounds.Y + margin;
 
-        // ??駁??皝? XAML ?秋撒???扔????選???        ToolbarLeft = TranslationToolbarLeft;
+        ToolbarLeft = TranslationToolbarLeft;
         ToolbarTop = TranslationToolbarTop;
     }
 

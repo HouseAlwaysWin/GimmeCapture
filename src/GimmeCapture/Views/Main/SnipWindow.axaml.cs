@@ -176,6 +176,16 @@ public partial class SnipWindow : Window
                 if (_viewModel.IsTranslationMode)
                 {
                     _viewModel.InitializeTranslationToolbarPosition();
+                    // Re-center after SnipToolbar finishes layout (MaxWidth / WrapPanel need a real measure pass).
+                    await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+                    {
+                        var measuredWidth = Toolbar.Bounds.Width;
+                        if (measuredWidth > 1)
+                        {
+                            _viewModel.ToolbarWidth = measuredWidth;
+                        }
+                        _viewModel.InitializeTranslationToolbarPosition();
+                    }, Avalonia.Threading.DispatcherPriority.Loaded);
                     Console.WriteLine($"[SnipWindow] Translation toolbar at ({_viewModel.ToolbarLeft}, {_viewModel.ToolbarTop})");
                     
                     // NEW: Exclude from capture specifically for Translation Mode to prevent flickering during background OCR updates.
