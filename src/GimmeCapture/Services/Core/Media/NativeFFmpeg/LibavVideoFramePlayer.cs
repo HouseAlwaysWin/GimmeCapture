@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -115,110 +116,116 @@ internal sealed class LibavVideoFramePlayer : IDisposable
                     }
 
                     double loopStartSeconds = Math.Max(0, startSeconds);
-                    byte[] frameBuffer = new byte[outputWidth * outputHeight * 4];
+                    int frameSize = outputWidth * outputHeight * 4;
+                    byte[] frameBuffer = ArrayPool<byte>.Shared.Rent(frameSize);
                     bool decoderDraining = false;
                     bool shouldResetLoop = false;
                     double startedAtSeconds = -1;
                     var playbackClock = Stopwatch.StartNew();
 
-                    while (!ct.IsCancellationRequested)
+                    try
                     {
-                        if (!decoderDraining)
+                        while (!ct.IsCancellationRequested)
                         {
-                            int rr = ffmpeg.av_read_frame(fmt, pkt);
-                            if (rr == ffmpeg.AVERROR_EOF)
+                            if (!decoderDraining)
                             {
-                                ThrowIfErr(ffmpeg.avcodec_send_packet(decCtx, (AVPacket*)null), "send_eof");
-                                decoderDraining = true;
-                                continue;
-                            }
-
-                            if (rr < 0)
-                            {
-                                if (rr == ffmpeg.AVERROR(11))
+                                int rr = ffmpeg.av_read_frame(fmt, pkt);
+                                if (rr == ffmpeg.AVERROR_EOF)
                                 {
-                                    Thread.Sleep(1);
+                                    ThrowIfErr(ffmpeg.avcodec_send_packet(decCtx, (AVPacket*)null), "send_eof");
+                                    decoderDraining = true;
                                     continue;
                                 }
 
-                                ThrowIfErr(rr, "read_frame");
-                            }
+                                if (rr < 0)
+                                {
+                                    if (rr == ffmpeg.AVERROR(11))
+                                    {
+                                        Thread.Sleep(1);
+                                        continue;
+                                    }
 
-                            if (pkt->stream_index != videoStream)
-                            {
+                                    ThrowIfErr(rr, "read_frame");
+                                }
+
+                                if (pkt->stream_index != videoStream)
+                                {
+                                    ffmpeg.av_packet_unref(pkt);
+                                    continue;
+                                }
+
+                                ThrowIfErr(ffmpeg.avcodec_send_packet(decCtx, pkt), "send_packet");
                                 ffmpeg.av_packet_unref(pkt);
+                            }
+
+                            while (!ct.IsCancellationRequested)
+                            {
+                                int gr = ffmpeg.avcodec_receive_frame(decCtx, decFrame);
+                                if (gr == ffmpeg.AVERROR(11))
+                                {
+                                    break;
+                                }
+
+                                if (gr == ffmpeg.AVERROR_EOF)
+                                {
+                                    shouldResetLoop = loop;
+                                    break;
+                                }
+
+                                ThrowIfErr(gr, "receive_frame");
+
+                                long ts = decFrame->best_effort_timestamp;
+                                double seconds = ts >= 0 ? ts * ffmpeg.av_q2d(st->time_base) : 0;
+
+                                if (seconds + 0.0005 < startSeconds)
+                                {
+                                    continue;
+                                }
+
+                                if (startedAtSeconds < 0)
+                                {
+                                    startedAtSeconds = seconds;
+                                    playbackClock.Restart();
+                                }
+
+                                DelayUntilFrame(playbackClock, startedAtSeconds, seconds, speed, ct);
+                                if (ct.IsCancellationRequested)
+                                {
+                                    break;
+                                }
+
+                                ThrowIfErr(ffmpeg.av_frame_make_writable(outFrame), "out_frame_writable");
+                                ffmpeg.sws_scale(
+                                    sws,
+                                    decFrame->data,
+                                    decFrame->linesize,
+                                    0,
+                                    decCtx->height,
+                                    outFrame->data,
+                                    outFrame->linesize);
+
+                                CopyBgraFrame(outFrame, outputWidth, outputHeight, frameBuffer.AsSpan(0, frameSize));
+                                onFrame(frameBuffer, seconds);
+                            }
+
+                            if (shouldResetLoop && !ct.IsCancellationRequested)
+                            {
+                                decoderDraining = false;
+                                shouldResetLoop = false;
+                                startedAtSeconds = -1;
+                                Seek(fmt, decCtx, videoStream, st->time_base, loopStartSeconds);
                                 continue;
                             }
 
-                            ThrowIfErr(ffmpeg.avcodec_send_packet(decCtx, pkt), "send_packet");
-                            ffmpeg.av_packet_unref(pkt);
-                        }
-
-                        while (!ct.IsCancellationRequested)
-                        {
-                            int gr = ffmpeg.avcodec_receive_frame(decCtx, decFrame);
-                            if (gr == ffmpeg.AVERROR(11))
+                            if (decoderDraining)
                             {
                                 break;
                             }
-
-                            if (gr == ffmpeg.AVERROR_EOF)
-                            {
-                                shouldResetLoop = loop;
-                                break;
-                            }
-
-                            ThrowIfErr(gr, "receive_frame");
-
-                            long ts = decFrame->best_effort_timestamp;
-                            double seconds = ts >= 0 ? ts * ffmpeg.av_q2d(st->time_base) : 0;
-
-                            // Backward seeking lands on a keyframe before the target. Drop early frames
-                            // so video starts from the same logical time as the audio reader.
-                            if (seconds + 0.0005 < startSeconds)
-                            {
-                                continue;
-                            }
-
-                            if (startedAtSeconds < 0)
-                            {
-                                startedAtSeconds = seconds;
-                                playbackClock.Restart();
-                            }
-
-                            DelayUntilFrame(playbackClock, startedAtSeconds, seconds, speed, ct);
-                            if (ct.IsCancellationRequested)
-                            {
-                                break;
-                            }
-
-                            ThrowIfErr(ffmpeg.av_frame_make_writable(outFrame), "out_frame_writable");
-                            ffmpeg.sws_scale(
-                                sws,
-                                decFrame->data,
-                                decFrame->linesize,
-                                0,
-                                decCtx->height,
-                                outFrame->data,
-                                outFrame->linesize);
-
-                            CopyBgraFrame(outFrame, outputWidth, outputHeight, frameBuffer);
-                            onFrame(frameBuffer, seconds);
                         }
-
-                        if (shouldResetLoop && !ct.IsCancellationRequested)
-                        {
-                            decoderDraining = false;
-                            shouldResetLoop = false;
-                            startedAtSeconds = -1;
-                            Seek(fmt, decCtx, videoStream, st->time_base, loopStartSeconds);
-                            continue;
-                        }
-
-                        if (decoderDraining)
-                        {
-                            break;
-                        }
+                    }
+                    finally
+                    {
+                        ArrayPool<byte>.Shared.Return(frameBuffer);
                     }
                 }
                 finally
@@ -265,13 +272,17 @@ internal sealed class LibavVideoFramePlayer : IDisposable
         }
     }
 
-    private static unsafe void CopyBgraFrame(AVFrame* frame, int width, int height, byte[] output)
+    internal static unsafe void CopyBgraFrame(AVFrame* frame, int width, int height, Span<byte> output)
     {
         int rowBytes = width * 4;
         for (int y = 0; y < height; y++)
         {
-            IntPtr src = (IntPtr)(frame->data[0] + y * frame->linesize[0]);
-            Marshal.Copy(src, output, y * rowBytes, rowBytes);
+            byte* src = frame->data[0] + (y * frame->linesize[0]);
+            Span<byte> destination = output.Slice(y * rowBytes, rowBytes);
+            fixed (byte* dst = destination)
+            {
+                Buffer.MemoryCopy(src, dst, rowBytes, rowBytes);
+            }
         }
     }
 

@@ -8,6 +8,9 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="bin\**\*.cs;obj\**\*.cs;.tmp-build-verify\**\*.cs" />
+    <EmbeddedResource Remove="bin\**;obj\**;.tmp-build-verify\**" />
+    <None Remove="bin\**;obj\**;.tmp-build-verify\**" />
     <PackageReference Include="coverlet.collector" Version="6.0.4" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="Moq" Version="4.20.72" />

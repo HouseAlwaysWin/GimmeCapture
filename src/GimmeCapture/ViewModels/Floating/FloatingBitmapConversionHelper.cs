@@ -197,24 +197,14 @@ internal static class FloatingBitmapConversionHelper
 
         try
         {
-            using var ms = new System.IO.MemoryStream(encodedBytes);
-            using var tempBitmap = new Bitmap(ms);
+            using var tempBitmap = SKBitmap.Decode(encodedBytes);
+            if (tempBitmap == null)
+            {
+                error = "Failed to decode encoded bitmap bytes.";
+                return false;
+            }
 
-            var result = new WriteableBitmap(
-                tempBitmap.PixelSize,
-                tempBitmap.Dpi,
-                PixelFormat.Bgra8888,
-                AlphaFormat.Premul);
-
-            using var locked = result.Lock();
-            tempBitmap.CopyPixels(
-                new PixelRect(0, 0, tempBitmap.PixelSize.Width, tempBitmap.PixelSize.Height),
-                locked.Address,
-                locked.RowBytes * locked.Size.Height,
-                locked.RowBytes);
-
-            bitmap = result;
-            return true;
+            return TryCreateDetachedBitmapFromSkBitmap(tempBitmap, out bitmap, out error);
         }
         catch (Exception ex)
         {

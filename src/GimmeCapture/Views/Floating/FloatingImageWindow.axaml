@@ -364,7 +364,7 @@
                         </StackPanel>
         </Border>
 
-        <Border IsVisible="{Binding IsProcessing}" Background="#80000000" ZIndex="100">
+        <Border IsVisible="{Binding IsProcessing}" Background="Transparent" ZIndex="100">
              <ctl:ProcessingOverlay DataContext="{Binding}" IsVisible="{Binding ShowProcessingOverlay}"/>
         </Border>
 

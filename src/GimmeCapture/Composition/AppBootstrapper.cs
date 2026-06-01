@@ -6,6 +6,7 @@ using GimmeCapture.Views.Main;
 using GimmeCapture.Views.Dialogs;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Media;
 using System;
 
 namespace GimmeCapture.Composition;
@@ -62,8 +63,12 @@ public sealed class AppBootstrapper
             Width = 1,
             Height = 1,
             Opacity = 0,
+            Background = Brushes.Transparent,
             ShowInTaskbar = false,
+            ShowActivated = false,
             CanResize = false,
+            WindowDecorations = WindowDecorations.None,
+            TransparencyLevelHint = [WindowTransparencyLevel.Transparent],
             WindowStartupLocation = WindowStartupLocation.Manual,
             Position = new PixelPoint(-32000, -32000),
             Content = null,

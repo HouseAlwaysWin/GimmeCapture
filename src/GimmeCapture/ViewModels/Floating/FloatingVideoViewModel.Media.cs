@@ -442,9 +442,17 @@ public partial class FloatingVideoViewModel
                 if (frameData == null) return;
                 if (generation != Volatile.Read(ref _playbackGeneration)) return;
 
-                using (var lockedBitmap = VideoBitmap.Lock())
+                lock (_videoBitmapLock)
                 {
-                    Marshal.Copy(frameData, 0, lockedBitmap.Address, frameLength);
+                    var bitmap = VideoBitmap;
+                    if (bitmap == null) return;
+
+                    using var lockedBitmap = bitmap.Lock();
+                    int destinationCapacity = checked((int)(lockedBitmap.RowBytes * bitmap.PixelSize.Height));
+                    int bytesToCopy = Math.Min(frameLength, Math.Min(frameData.Length, destinationCapacity));
+                    if (bytesToCopy <= 0) return;
+
+                    Marshal.Copy(frameData, 0, lockedBitmap.Address, bytesToCopy);
                 }
 
                 RequestRedraw?.Invoke();

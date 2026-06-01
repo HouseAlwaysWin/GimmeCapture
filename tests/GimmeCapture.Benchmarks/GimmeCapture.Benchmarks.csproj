@@ -5,9 +5,13 @@
     <TargetFramework>net10.0-windows</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="bin\**\*.cs;obj\**\*.cs;.tmp-build-verify\**\*.cs" />
+    <EmbeddedResource Remove="bin\**;obj\**;.tmp-build-verify\**" />
+    <None Remove="bin\**;obj\**;.tmp-build-verify\**" />
     <PackageReference Include="BenchmarkDotNet" Version="0.15.8" />
   </ItemGroup>
   <ItemGroup>

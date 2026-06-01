@@ -9,6 +9,7 @@ using System;
 using System.IO;
 using System.Threading.Tasks;
 using GimmeCapture.Services.Abstractions;
+using GimmeCapture.ViewModels.Floating;
 
 namespace GimmeCapture.Services.Core.Infrastructure;
 
@@ -25,9 +26,7 @@ public class ClipboardService : IClipboardService
                 {
                     try 
                     {
-                        using var ms = new System.IO.MemoryStream();
-                        bitmap.Save(ms); // Saves as PNG by default
-                        var pngBytes = ms.ToArray();
+                        var pngBytes = FloatingBitmapConversionHelper.EncodeBitmapToPngBytes(bitmap);
                         
                         using var msForBitmap = new System.IO.MemoryStream(pngBytes);
                         using var winBitmap = new System.Drawing.Bitmap(msForBitmap);
@@ -162,9 +161,7 @@ public class ClipboardService : IClipboardService
                     try 
                     {
                         // 1. Prepare Image
-                        using var ms = new System.IO.MemoryStream();
-                        bitmap.Save(ms);
-                        var pngBytes = ms.ToArray();
+                        var pngBytes = FloatingBitmapConversionHelper.EncodeBitmapToPngBytes(bitmap);
                         using var msForBitmap = new System.IO.MemoryStream(pngBytes);
                         using var winBitmap = new System.Drawing.Bitmap(msForBitmap);
                         

@@ -24,6 +24,7 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
     internal volatile bool _trimEndReached;
     private bool _isDisposed;
     private readonly object _latestFrameLock = new();
+    private readonly object _videoBitmapLock = new();
     private byte[]? _latestFrameData;
     private int _latestFrameLength;
     private int _latestFrameGeneration;
@@ -379,8 +380,12 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
         
         base.Dispose();
 
-        var oldBitmap = VideoBitmap;
-        VideoBitmap = null;
+        WriteableBitmap? oldBitmap;
+        lock (_videoBitmapLock)
+        {
+            oldBitmap = VideoBitmap;
+            VideoBitmap = null;
+        }
         oldBitmap?.Dispose();
         lock (_latestFrameLock)
         {

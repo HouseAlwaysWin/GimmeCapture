@@ -1,9 +1,8 @@
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
-using System.Reflection;
-using System.Runtime.InteropServices;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
 using SkiaSharp;
@@ -167,70 +166,52 @@ public class BackgroundRemovalService : IDisposable
         });
     }
 
-    private bool IsSolidBackground(SKBitmap bmp, out SKColor bgColor)
+    internal static bool IsSolidBackground(SKBitmap bmp, out SKColor bgColor)
     {
         bgColor = SKColors.Empty;
-
-        // Minimum size check
         if (bmp.Width < 50 || bmp.Height < 50) return false;
 
-        // Sample pixels along the edges (top, bottom, left, right)
-        // We want to detect if the "frame" of the image is uniform.
-        var samples = new List<SKColor>();
-        
-        int step = 10; // Sample every 10 pixels
-        
-        // Top & Bottom
+        const int step = 10;
+        SampleAccumulator accumulator = default;
+        int totalSamples = 0;
+
         for (int x = 0; x < bmp.Width; x += step)
         {
-            samples.Add(bmp.GetPixel(x, 0));
-            samples.Add(bmp.GetPixel(x, bmp.Height - 1));
+            totalSamples++;
+            TryAccumulateOpaquePixel(bmp, x, 0, ref accumulator);
+            totalSamples++;
+            TryAccumulateOpaquePixel(bmp, x, bmp.Height - 1, ref accumulator);
         }
 
-        // Left & Right
         for (int y = 0; y < bmp.Height; y += step)
         {
-            samples.Add(bmp.GetPixel(0, y));
-            samples.Add(bmp.GetPixel(bmp.Width - 1, y));
+            totalSamples++;
+            TryAccumulateOpaquePixel(bmp, 0, y, ref accumulator);
+            totalSamples++;
+            TryAccumulateOpaquePixel(bmp, bmp.Width - 1, y, ref accumulator);
         }
 
-        if (samples.Count == 0) return false;
+        if (totalSamples == 0 || accumulator.Count == 0) return false;
+        if ((double)accumulator.Count / totalSamples < 0.8) return false;
 
-        // Filter out transparent pixels - if edges are transparent, it's not a solid COLOR background we can remove easily
-        var opaqueSamples = samples.AsValueEnumerable().Where(c => c.Alpha > 250).ToList();
-        
-        // If too many edge pixels are transparent, we probably shouldn't use the solid color algorithm
-        if ((double)opaqueSamples.Count / samples.Count < 0.8) 
-        {
-             return false;
-        }
+        double avgR = (double)accumulator.SumR / accumulator.Count;
+        double avgG = (double)accumulator.SumG / accumulator.Count;
+        double avgB = (double)accumulator.SumB / accumulator.Count;
 
-        // Calculate Average Color
-        long sumR = 0, sumG = 0, sumB = 0;
-        foreach (var c in opaqueSamples)
-        {
-            sumR += c.Red;
-            sumG += c.Green;
-            sumB += c.Blue;
-        }
-
-        double avgR = (double)sumR / opaqueSamples.Count;
-        double avgG = (double)sumG / opaqueSamples.Count;
-        double avgB = (double)sumB / opaqueSamples.Count;
-
-        // Calculate Standard Deviation (Variance)
-        // This tells us how much the edge pixels differ from the average.
         double sumSqDiff = 0;
-        foreach (var c in opaqueSamples)
+        for (int x = 0; x < bmp.Width; x += step)
         {
-            double dr = c.Red - avgR;
-            double dg = c.Green - avgG;
-            double db = c.Blue - avgB;
-            // Distance squared in RGB space
-            sumSqDiff += (dr*dr + dg*dg + db*db);
+            AccumulateColorVariance(bmp, x, 0, avgR, avgG, avgB, ref sumSqDiff);
+            AccumulateColorVariance(bmp, x, bmp.Height - 1, avgR, avgG, avgB, ref sumSqDiff);
         }
 
-        double meanSqDiff = sumSqDiff / opaqueSamples.Count;
+        for (int y = 0; y < bmp.Height; y += step)
+        {
+            AccumulateColorVariance(bmp, 0, y, avgR, avgG, avgB, ref sumSqDiff);
+            AccumulateColorVariance(bmp, bmp.Width - 1, y, avgR, avgG, avgB, ref sumSqDiff);
+        }
+
+        double meanSqDiff = sumSqDiff / accumulator.Count;
         double stdDev = Math.Sqrt(meanSqDiff);
 
         System.Diagnostics.Debug.WriteLine($"[BgDetection] Edge StdDev: {stdDev:F2} (Threshold: 15.0)");
@@ -250,7 +231,7 @@ public class BackgroundRemovalService : IDisposable
         return false;
     }
 
-    private bool ColorsAreSimilar(SKColor a, SKColor b, int tolerance)
+    private static bool ColorsAreSimilar(SKColor a, SKColor b, int tolerance)
     {
         return Math.Abs(a.Red - b.Red) <= tolerance &&
                Math.Abs(a.Green - b.Green) <= tolerance &&
@@ -261,74 +242,68 @@ public class BackgroundRemovalService : IDisposable
     /// Alternative background detection that samples from image corners with a small radius.
     /// More reliable than edge-only sampling when the image is cropped close to the subject.
     /// </summary>
-    private bool TryGetCornerBackgroundColor(SKBitmap bmp, out SKColor bgColor)
+    internal static bool TryGetCornerBackgroundColor(SKBitmap bmp, out SKColor bgColor)
     {
         bgColor = SKColors.Empty;
         if (bmp.Width < 20 || bmp.Height < 20) return false;
 
-        // Sample from all four corners using a 5x5 region
         int sampleSize = 5;
-        var cornerSamples = new List<SKColor>();
+        Span<SKColor> opaqueSamples = stackalloc SKColor[sampleSize * sampleSize * 4];
+        int totalSamples = 0;
+        int opaqueCount = 0;
 
-        // Top-left corner
-        for (int y = 0; y < sampleSize && y < bmp.Height; y++)
-            for (int x = 0; x < sampleSize && x < bmp.Width; x++)
-                cornerSamples.Add(bmp.GetPixel(x, y));
+        CollectCornerSamples(bmp, 0, Math.Min(sampleSize, bmp.Width), 0, Math.Min(sampleSize, bmp.Height), opaqueSamples, ref totalSamples, ref opaqueCount);
+        CollectCornerSamples(bmp, Math.Max(0, bmp.Width - sampleSize), bmp.Width, 0, Math.Min(sampleSize, bmp.Height), opaqueSamples, ref totalSamples, ref opaqueCount);
+        CollectCornerSamples(bmp, 0, Math.Min(sampleSize, bmp.Width), Math.Max(0, bmp.Height - sampleSize), bmp.Height, opaqueSamples, ref totalSamples, ref opaqueCount);
+        CollectCornerSamples(bmp, Math.Max(0, bmp.Width - sampleSize), bmp.Width, Math.Max(0, bmp.Height - sampleSize), bmp.Height, opaqueSamples, ref totalSamples, ref opaqueCount);
 
-        // Top-right corner
-        for (int y = 0; y < sampleSize && y < bmp.Height; y++)
-            for (int x = bmp.Width - sampleSize; x < bmp.Width && x >= 0; x++)
-                cornerSamples.Add(bmp.GetPixel(x, y));
+        if (totalSamples == 0 || opaqueCount < totalSamples * 0.7) return false;
 
-        // Bottom-left corner
-        for (int y = bmp.Height - sampleSize; y < bmp.Height && y >= 0; y++)
-            for (int x = 0; x < sampleSize && x < bmp.Width; x++)
-                cornerSamples.Add(bmp.GetPixel(x, y));
+        Span<SKColor> groupColors = stackalloc SKColor[opaqueSamples.Length];
+        Span<int> groupCounts = stackalloc int[opaqueSamples.Length];
+        int groupCount = 0;
 
-        // Bottom-right corner
-        for (int y = bmp.Height - sampleSize; y < bmp.Height && y >= 0; y++)
-            for (int x = bmp.Width - sampleSize; x < bmp.Width && x >= 0; x++)
-                cornerSamples.Add(bmp.GetPixel(x, y));
-
-        if (cornerSamples.Count == 0) return false;
-
-        // Filter opaque samples
-        var opaqueSamples = cornerSamples.AsValueEnumerable().Where(c => c.Alpha > 250).ToList();
-        if (opaqueSamples.Count < cornerSamples.Count * 0.7) return false;
-
-        // Group by similar colors to find dominant color
-        var groups = new List<(SKColor avg, int count)>();
-        foreach (var sample in opaqueSamples)
+        for (int i = 0; i < opaqueCount; i++)
         {
-            bool found = false;
-            for (int i = 0; i < groups.Count; i++)
+            SKColor sample = opaqueSamples[i];
+            int matchIndex = -1;
+            for (int groupIndex = 0; groupIndex < groupCount; groupIndex++)
             {
-                if (ColorsAreSimilar(sample, groups[i].avg, 30))
+                if (ColorsAreSimilar(sample, groupColors[groupIndex], 30))
                 {
-                    // Update running average (simplified)
-                    groups[i] = (groups[i].avg, groups[i].count + 1);
-                    found = true;
+                    matchIndex = groupIndex;
                     break;
                 }
             }
-            if (!found)
+
+            if (matchIndex < 0)
             {
-                groups.Add((sample, 1));
+                groupColors[groupCount] = sample;
+                groupCounts[groupCount] = 1;
+                groupCount++;
+                continue;
+            }
+
+            groupCounts[matchIndex]++;
+        }
+
+        if (groupCount == 0) return false;
+
+        int dominantIndex = 0;
+        for (int i = 1; i < groupCount; i++)
+        {
+            if (groupCounts[i] > groupCounts[dominantIndex])
+            {
+                dominantIndex = i;
             }
         }
 
-        if (groups.Count == 0) return false;
+        double ratio = (double)groupCounts[dominantIndex] / opaqueCount;
+        System.Diagnostics.Debug.WriteLine($"[CornerBg] Dominant color ratio: {ratio:P0}, Count: {groupCounts[dominantIndex]}/{opaqueCount}");
 
-        // Find most common color group
-        var dominant = groups.AsValueEnumerable().OrderByDescending(g => g.count).First();
-        
-        // Require at least 60% of samples to be this color to be considered uniform
-        double ratio = (double)dominant.count / opaqueSamples.Count;
-        System.Diagnostics.Debug.WriteLine($"[CornerBg] Dominant color ratio: {ratio:P0}, Count: {dominant.count}/{opaqueSamples.Count}");
-        
         if (ratio >= 0.6)
         {
-            bgColor = dominant.avg;
+            bgColor = groupColors[dominantIndex];
             System.Diagnostics.Debug.WriteLine($"[CornerBg] Background detected: {bgColor}");
             return true;
         }
@@ -336,37 +311,32 @@ public class BackgroundRemovalService : IDisposable
         return false;
     }
 
-    private byte[] RemoveSolidBackground(SKBitmap original, SKColor bgColor)
+    internal static byte[] RemoveSolidBackground(SKBitmap original, SKColor bgColor)
     {
-         // Use Unpremul for manual pixel manipulation
-         using var result = new SKBitmap(original.Width, original.Height, SKColorType.Bgra8888, SKAlphaType.Unpremul);
-         
-         // Increased tolerance to 60 to match the successful "Debug Manual Threshold" test.
-         // This helps remove anti-aliasing halos (pixels between 200-255).
-         int tolerance = 60; 
+        using var result = new SKBitmap(original.Width, original.Height, SKColorType.Bgra8888, SKAlphaType.Unpremul);
+        const int tolerance = 60;
 
-         for (int y = 0; y < original.Height; y++)
-         {
-             for (int x = 0; x < original.Width; x++)
-             {
-                 var color = original.GetPixel(x, y);
-                 
-                 if (ColorsAreSimilar(color, bgColor, tolerance))
-                 {
-                     // Transparent
-                     result.SetPixel(x, y, new SKColor(color.Red, color.Green, color.Blue, 0));
-                 }
-                 else
-                 {
-                     // Preserve original color (including alpha)
-                     result.SetPixel(x, y, color);
-                 }
-             }
-         }
-         
-         using var image = SKImage.FromBitmap(result);
-         using var data = image.Encode(SKEncodedImageFormat.Png, 100);
-         return data.ToArray();
+        for (int y = 0; y < original.Height; y++)
+        {
+            ReadOnlySpan<byte> srcRow = GetPixelRowSpan(original, y);
+            Span<byte> dstRow = GetPixelRowSpan(result, y);
+            for (int offset = 0; offset < srcRow.Length; offset += 4)
+            {
+                byte blue = srcRow[offset];
+                byte green = srcRow[offset + 1];
+                byte red = srcRow[offset + 2];
+                byte alpha = srcRow[offset + 3];
+
+                dstRow[offset] = blue;
+                dstRow[offset + 1] = green;
+                dstRow[offset + 2] = red;
+                dstRow[offset + 3] = ColorsAreSimilar(new SKColor(red, green, blue, alpha), bgColor, tolerance) ? (byte)0 : alpha;
+            }
+        }
+
+        using var image = SKImage.FromBitmap(result);
+        using var data = image.Encode(SKEncodedImageFormat.Png, 100);
+        return data.ToArray();
     }
 
     private byte[] RunAIInference(SKBitmap original, InferenceSession session)
@@ -395,105 +365,189 @@ public class BackgroundRemovalService : IDisposable
         return ApplyMask(original, mask, minVal, maxVal);
     }
 
-    private DenseTensor<float> ExtractPixels(SKBitmap bitmap)
+    internal static DenseTensor<float> ExtractPixels(SKBitmap bitmap)
     {
         var tensor = new DenseTensor<float>(new[] { 1, 3, 320, 320 });
-        
         for (int y = 0; y < 320; y++)
         {
+            ReadOnlySpan<byte> row = GetPixelRowSpan(bitmap, y);
             for (int x = 0; x < 320; x++)
             {
-                var color = bitmap.GetPixel(x, y);
-                // Normalization: (x / 255 - mean) / std
-                tensor[0, 0, y, x] = (float)((color.Red / 255.0 - 0.485) / 0.229);
-                tensor[0, 1, y, x] = (float)((color.Green / 255.0 - 0.456) / 0.224);
-                tensor[0, 2, y, x] = (float)((color.Blue / 255.0 - 0.406) / 0.225);
+                int offset = x * 4;
+                float blue = row[offset] / 255f;
+                float green = row[offset + 1] / 255f;
+                float red = row[offset + 2] / 255f;
+                tensor[0, 0, y, x] = (red - 0.485f) / 0.229f;
+                tensor[0, 1, y, x] = (green - 0.456f) / 0.224f;
+                tensor[0, 2, y, x] = (blue - 0.406f) / 0.225f;
             }
         }
         return tensor;
     }
 
-    private SKBitmap ProcessMask(Tensor<float> tensor, int width, int height, out float minOut, out float maxOut)
+    internal static SKBitmap ProcessMask(Tensor<float> tensor, int width, int height, out float minOut, out float maxOut)
     {
         var mask320 = new SKBitmap(320, 320, SKColorType.Gray8, SKAlphaType.Opaque);
-        
-        // Pass 1: Compute Sigmoid and find Min/Max of the probabilities
-        var probabilities = new float[320 * 320];
+        float[] probabilities = ArrayPool<float>.Shared.Rent(320 * 320);
         float minProb = float.MaxValue;
         float maxProb = float.MinValue;
 
-        for (int y = 0; y < 320; y++)
+        try
         {
-            for (int x = 0; x < 320; x++)
+            for (int y = 0; y < 320; y++)
             {
-                float val = tensor[0, 0, y, x];
-                // Sigmoid
-                float prob = (float)(1.0 / (1.0 + Math.Exp(-val)));
-                
-                probabilities[y * 320 + x] = prob;
-                
-                if (prob < minProb) minProb = prob;
-                if (prob > maxProb) maxProb = prob;
+                int rowOffset = y * 320;
+                for (int x = 0; x < 320; x++)
+                {
+                    float val = tensor[0, 0, y, x];
+                    float prob = (float)(1.0 / (1.0 + Math.Exp(-val)));
+                    probabilities[rowOffset + x] = prob;
+                    if (prob < minProb) minProb = prob;
+                    if (prob > maxProb) maxProb = prob;
+                }
             }
+
+            System.Diagnostics.Debug.WriteLine($"AI Mask Prob Range: Min={minProb}, Max={maxProb}");
+            minOut = minProb;
+            maxOut = maxProb;
+
+            float range = maxProb - minProb;
+            if (range < 0.001f) range = 1.0f;
+
+            for (int y = 0; y < 320; y++)
+            {
+                Span<byte> row = GetWritableGrayRowSpan(mask320, y);
+                int rowOffset = y * 320;
+                for (int x = 0; x < 320; x++)
+                {
+                    float normalized = (probabilities[rowOffset + x] - minProb) / range;
+                    row[x] = (byte)(normalized * 255);
+                }
+            }
+
+            return mask320.Resize(new SKImageInfo(width, height), new SKSamplingOptions(SKFilterMode.Linear));
         }
-
-        System.Diagnostics.Debug.WriteLine($"AI Mask Prob Range: Min={minProb}, Max={maxProb}");
-        minOut = minProb;
-        maxOut = maxProb;
-
-        // Avoid divide by zero if flat image
-        float range = maxProb - minProb;
-        if (range < 0.001f) range = 1.0f;
-
-        // Pass 2: Normalize and set pixels (Auto-Levels)
-        for (int y = 0; y < 320; y++)
+        finally
         {
-            for (int x = 0; x < 320; x++)
-            {
-                float prob = probabilities[y * 320 + x];
-                
-                // Normalize to 0..1 based on actual image range
-                // This forces the darkest part to Black and lightest to White
-                float normalized = (prob - minProb) / range;
-                
-                byte b = (byte)(normalized * 255);
-                mask320.SetPixel(x, y, new SKColor(b, b, b));
-            }
+            ArrayPool<float>.Shared.Return(probabilities);
         }
-        
-        return mask320.Resize(new SKImageInfo(width, height), new SKSamplingOptions(SKFilterMode.Linear));
     }
 
-    private byte[] ApplyMask(SKBitmap original, SKBitmap mask, float min, float max)
+    internal static byte[] ApplyMask(SKBitmap original, SKBitmap mask, float min, float max)
     {
         using var result = new SKBitmap(original.Width, original.Height, SKColorType.Bgra8888, SKAlphaType.Unpremul);
-        
+
         for (int y = 0; y < original.Height; y++)
         {
+            ReadOnlySpan<byte> srcRow = GetPixelRowSpan(original, y);
+            ReadOnlySpan<byte> maskRow = GetGrayRowSpan(mask, y);
+            Span<byte> dstRow = GetPixelRowSpan(result, y);
+
             for (int x = 0; x < original.Width; x++)
             {
-                var color = original.GetPixel(x, y);
-                var maskVal = mask.GetPixel(x, y).Red; 
-                
-                // Use mask value directly as Alpha for soft edges (hair, anti-aliasing)
-                // PRESERVE original transparency: new alpha is min(original_alpha, mask_alpha)
-                byte alpha = (byte)Math.Min((int)color.Alpha, (int)maskVal);
-                
-                // Optional: Clip very low values to full transparent to clean up noise
+                int offset = x * 4;
+                byte alpha = (byte)Math.Min(srcRow[offset + 3], maskRow[x]);
                 if (alpha < 10) alpha = 0;
-                // Optional: Clip very high values to full opaque (up to original alpha)
-                if (alpha > 240) alpha = color.Alpha;
-                
-                // Set pixel with new alpha
-                // Note: SkiaSharp SKColor constructors usually imply Premultiplied if we aren't careful, 
-                // but since we created the bitmap with SKAlphaType.Unpremul, raw values are preserved.
-                result.SetPixel(x, y, new SKColor(color.Red, color.Green, color.Blue, alpha));
+                if (alpha > 240) alpha = srcRow[offset + 3];
+
+                dstRow[offset] = srcRow[offset];
+                dstRow[offset + 1] = srcRow[offset + 1];
+                dstRow[offset + 2] = srcRow[offset + 2];
+                dstRow[offset + 3] = alpha;
             }
         }
-        
+
         using var image = SKImage.FromBitmap(result);
         using var data = image.Encode(SKEncodedImageFormat.Png, 100);
         return data.ToArray();
+    }
+
+    private static void CollectCornerSamples(
+        SKBitmap bitmap,
+        int startX,
+        int endX,
+        int startY,
+        int endY,
+        Span<SKColor> opaqueSamples,
+        ref int totalSamples,
+        ref int opaqueCount)
+    {
+        for (int y = startY; y < endY; y++)
+        {
+            for (int x = startX; x < endX; x++)
+            {
+                totalSamples++;
+                SKColor color = ReadPixel(bitmap, x, y);
+                if (color.Alpha <= 250)
+                {
+                    continue;
+                }
+
+                opaqueSamples[opaqueCount++] = color;
+            }
+        }
+    }
+
+    private static bool TryAccumulateOpaquePixel(SKBitmap bitmap, int x, int y, ref SampleAccumulator accumulator)
+    {
+        SKColor color = ReadPixel(bitmap, x, y);
+        if (color.Alpha <= 250)
+        {
+            return false;
+        }
+
+        accumulator.Count++;
+        accumulator.SumR += color.Red;
+        accumulator.SumG += color.Green;
+        accumulator.SumB += color.Blue;
+        return true;
+    }
+
+    private static void AccumulateColorVariance(SKBitmap bitmap, int x, int y, double avgR, double avgG, double avgB, ref double sumSqDiff)
+    {
+        SKColor color = ReadPixel(bitmap, x, y);
+        if (color.Alpha <= 250)
+        {
+            return;
+        }
+
+        double dr = color.Red - avgR;
+        double dg = color.Green - avgG;
+        double db = color.Blue - avgB;
+        sumSqDiff += (dr * dr) + (dg * dg) + (db * db);
+    }
+
+    private static unsafe SKColor ReadPixel(SKBitmap bitmap, int x, int y)
+    {
+        ReadOnlySpan<byte> row = GetPixelRowSpan(bitmap, y);
+        int offset = x * 4;
+        return new SKColor(row[offset + 2], row[offset + 1], row[offset], row[offset + 3]);
+    }
+
+    private static unsafe Span<byte> GetPixelRowSpan(SKBitmap bitmap, int row)
+    {
+        byte* rowPtr = (byte*)bitmap.GetPixels() + (row * bitmap.RowBytes);
+        return new Span<byte>(rowPtr, bitmap.Width * 4);
+    }
+
+    private static unsafe ReadOnlySpan<byte> GetGrayRowSpan(SKBitmap bitmap, int row)
+    {
+        byte* rowPtr = (byte*)bitmap.GetPixels() + (row * bitmap.RowBytes);
+        return new ReadOnlySpan<byte>(rowPtr, bitmap.Width);
+    }
+
+    private static unsafe Span<byte> GetWritableGrayRowSpan(SKBitmap bitmap, int row)
+    {
+        byte* rowPtr = (byte*)bitmap.GetPixels() + (row * bitmap.RowBytes);
+        return new Span<byte>(rowPtr, bitmap.Width);
+    }
+
+    private struct SampleAccumulator
+    {
+        public int Count;
+        public long SumR;
+        public long SumG;
+        public long SumB;
     }
 
     public void Dispose()

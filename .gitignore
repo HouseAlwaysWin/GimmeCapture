@@ -52,11 +52,22 @@ Generated\ Files/
 project.lock.json
 project.fragment.lock.json
 artifacts/
+bin-pin/
+tempobj/
+scratch/
 
 # JetBrains Rider
 .idea/
 *.sln.iml
 *.tmpbuild
 *.tmp
+*.tmp-*
+*.tmp-build-*
+.tmp-*
+.tmp-build-*
 *.dll
 *.exe
+*.so
+*.so.*
+*.dylib
+*.lib

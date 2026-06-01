@@ -3,6 +3,7 @@ using System.IO;
 using System.Text;
 using ZLinq;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using BenchmarkDotNet.Attributes;
@@ -11,7 +12,11 @@ using System.Text.Json;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Core.AI;
+using GimmeCapture.Services.Core.Media.NativeFFmpeg;
 using GimmeCapture.Services.Translation;
+using FFmpeg.AutoGen;
+using Microsoft.ML.OnnxRuntime.Tensors;
+using SkiaSharp;
 
 namespace GimmeCapture.Benchmarks;
 
@@ -314,6 +319,103 @@ public class LineDispatchStreamBenchmarks
             base.Dispose(disposing);
         }
     }
+}
+
+[MemoryDiagnoser]
+public class BackgroundRemovalPixelBenchmarks
+{
+    private SKBitmap _solidBackgroundBitmap = null!;
+    private SKBitmap _maskBitmap = null!;
+    private float[] _maskTensorData = null!;
+    private DenseTensor<float> _maskTensor = null!;
+
+    [GlobalSetup]
+    public void Setup()
+    {
+        _solidBackgroundBitmap = new SKBitmap(320, 320, SKColorType.Bgra8888, SKAlphaType.Unpremul);
+        _solidBackgroundBitmap.Erase(new SKColor(245, 245, 245, 255));
+
+        using var canvas = new SKCanvas(_solidBackgroundBitmap);
+        using var paint = new SKPaint { Color = new SKColor(32, 48, 96, 255), Style = SKPaintStyle.Fill };
+        canvas.DrawCircle(160, 160, 80, paint);
+
+        _maskBitmap = _solidBackgroundBitmap.Copy(SKColorType.Bgra8888);
+        _maskTensorData = new float[320 * 320];
+        for (int i = 0; i < _maskTensorData.Length; i++)
+        {
+            _maskTensorData[i] = (i % 320) < 160 ? -2f : 2f;
+        }
+
+        _maskTensor = new DenseTensor<float>(_maskTensorData, new[] { 1, 1, 320, 320 });
+    }
+
+    [GlobalCleanup]
+    public void Cleanup()
+    {
+        _solidBackgroundBitmap.Dispose();
+        _maskBitmap.Dispose();
+    }
+
+    [Benchmark]
+    public bool DetectSolidBackground()
+        => BackgroundRemovalService.IsSolidBackground(_solidBackgroundBitmap, out _);
+
+    [Benchmark]
+    public byte[] RemoveSolidBackground()
+        => BackgroundRemovalService.RemoveSolidBackground(_solidBackgroundBitmap, new SKColor(245, 245, 245, 255));
+
+    [Benchmark]
+    public byte[] ApplyMask()
+    {
+        using var resizedMask = BackgroundRemovalService.ProcessMask(_maskTensor, _maskBitmap.Width, _maskBitmap.Height, out _, out _);
+        return BackgroundRemovalService.ApplyMask(_maskBitmap, resizedMask, 0f, 1f);
+    }
+}
+
+[MemoryDiagnoser]
+public unsafe class LibavVideoFrameCopyBenchmarks
+{
+    private const int Width = 640;
+    private const int Height = 360;
+    private byte[] _destination = null!;
+    private byte[] _source = null!;
+    private AVFrame* _frame;
+    private GCHandle _sourceHandle;
+
+    [GlobalSetup]
+    public void Setup()
+    {
+        _destination = new byte[Width * Height * 4];
+        _source = new byte[Width * Height * 4];
+        for (int i = 0; i < _source.Length; i++)
+        {
+            _source[i] = (byte)(i % 251);
+        }
+
+        _frame = ffmpeg.av_frame_alloc();
+        _sourceHandle = GCHandle.Alloc(_source, GCHandleType.Pinned);
+        _frame->data[0] = (byte*)_sourceHandle.AddrOfPinnedObject();
+        _frame->linesize[0] = Width * 4;
+    }
+
+    [GlobalCleanup]
+    public void Cleanup()
+    {
+        if (_frame != null)
+        {
+            AVFrame* frame = _frame;
+            ffmpeg.av_frame_free(&frame);
+            _frame = null;
+        }
+
+        if (_sourceHandle.IsAllocated)
+        {
+            _sourceHandle.Free();
+        }
+    }
+
+    [Benchmark]
+    public void CopyBgraFrame() => LibavVideoFramePlayer.CopyBgraFrame(_frame, Width, Height, _destination);
 }
 
 class Program

@@ -261,7 +261,7 @@ public class TranslationService : IDisposable
         {
             var box = boxes[i];
             var (text, _) = ocrEngine.RecognizeText(bitmap, box, ct);
-            if (text.AsValueEnumerable().Any(c => (c >= 0x3040 && c <= 0x309F) || (c >= 0x30A0 && c <= 0x30FF)))
+            if (ContainsJapaneseKana(text))
                 return OCRLanguage.Japanese;
         }
         return OCRLanguage.TraditionalChinese;
@@ -312,17 +312,31 @@ public class TranslationService : IDisposable
         if (string.IsNullOrWhiteSpace(text)) return false;
         if (confidence < 0.10f) return false;
 
-        string trimmed = text.Trim();
-        if (trimmed.Length == 0) return false;
+        ReadOnlySpan<char> trimmed = text.AsSpan().Trim();
+        if (trimmed.IsEmpty) return false;
 
-        int replacementCount = trimmed.AsValueEnumerable().Count(ch => ch == '\uFFFD');
-        if (replacementCount > 0) return false;
-        if (trimmed.AsValueEnumerable().All(ch => ch == '?' || ch == '.' || ch == '-' || ch == '_' || ch == '*')) return false;
+        bool sawUseful = false;
+        bool allPlaceholder = true;
+        foreach (char ch in trimmed)
+        {
+            if (ch == '\uFFFD')
+            {
+                return false;
+            }
 
-        int useful = trimmed.AsValueEnumerable().Count(ch => char.IsLetterOrDigit(ch) || (ch >= 0x4E00 && ch <= 0x9FFF) || (ch >= 0x3040 && ch <= 0x309F) || (ch >= 0x30A0 && ch <= 0x30FF));
-        if (useful == 0) return false;
-        
-        return true;
+            bool isPlaceholder = ch is '?' or '.' or '-' or '_' or '*';
+            allPlaceholder &= isPlaceholder;
+
+            if (char.IsLetterOrDigit(ch)
+                || (ch >= 0x4E00 && ch <= 0x9FFF)
+                || (ch >= 0x3040 && ch <= 0x309F)
+                || (ch >= 0x30A0 && ch <= 0x30FF))
+            {
+                sawUseful = true;
+            }
+        }
+
+        return sawUseful && !allPlaceholder;
     }
 
     private bool IsTranslationAcceptable(string original, string translated, TranslationLanguage target)
@@ -347,7 +361,7 @@ public class TranslationService : IDisposable
     private static OCRLanguage GuessSourceLanguageFromText(string text)
     {
         if (string.IsNullOrWhiteSpace(text)) return OCRLanguage.Auto;
-        if (text.AsValueEnumerable().Any(c => c >= '\u3040' && c <= '\u30FF')) return OCRLanguage.Japanese;
+        if (ContainsJapaneseKana(text)) return OCRLanguage.Japanese;
         if (text.AsValueEnumerable().Any(c => c >= '\uAC00' && c <= '\uD7AF')) return OCRLanguage.Korean;
         if (text.AsValueEnumerable().Any(c => c >= '\u4E00' && c <= '\u9FFF')) return OCRLanguage.TraditionalChinese;
         if (text.AsValueEnumerable().Any(c => (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z'))) return OCRLanguage.English;
@@ -435,5 +449,18 @@ public class TranslationService : IDisposable
     {
         _ocrEngine ??= new PaddleOCREngine(_aiResourceService, _settingsService, _ocrRuntimeService);
         return _ocrEngine;
+    }
+
+    private static bool ContainsJapaneseKana(string text)
+    {
+        foreach (char c in text)
+        {
+            if ((c >= '\u3040' && c <= '\u309F') || (c >= '\u30A0' && c <= '\u30FF'))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

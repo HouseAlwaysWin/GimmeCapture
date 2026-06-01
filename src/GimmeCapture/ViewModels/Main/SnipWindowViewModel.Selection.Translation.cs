@@ -2,6 +2,7 @@ using Avalonia;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Core;
 using GimmeCapture.Services.OCR;
+using GimmeCapture.ViewModels.Floating;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -97,8 +98,8 @@ public partial class SnipWindowViewModel
                 if (token.IsCancellationRequested) break;
 
                 // 合併所有翻譯結果作為這個區域的翻譯文字
-                var combinedText = string.Join("\n", blocks.AsValueEnumerable().Select(b => b.TranslatedText).Where(t => !string.IsNullOrWhiteSpace(t)).ToArray());
-                var combinedOriginalText = string.Join("\n", blocks.AsValueEnumerable().Select(b => b.OriginalText).Where(t => !string.IsNullOrWhiteSpace(t)).ToArray());
+                var combinedText = BuildCombinedBlockText(blocks, static block => block.TranslatedText);
+                var combinedOriginalText = BuildCombinedBlockText(blocks, static block => block.OriginalText);
                 
                 await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
                 {
@@ -280,15 +281,7 @@ public partial class SnipWindowViewModel
             return w;
         }
 
-        var lines = text.Split('\n');
-        int totalLines = 0;
-        foreach (var line in lines)
-        {
-            double lineWidth = EstimateTextWidth(line);
-            int wrappedLines = Math.Max(1, (int)Math.Ceiling(lineWidth / usableWidth));
-            totalLines += wrappedLines;
-        }
-
+        int totalLines = CountWrappedLines(text, usableWidth, EstimateTextWidth, out _);
         return totalLines * lineHeight + padding;
     }
 
@@ -323,20 +316,13 @@ public partial class SnipWindowViewModel
         double usableWidth = Math.Max(currentWidth - padding, 40);
 
         // 計算需要的行數
-        var lines = text.Split('\n');
-        int totalLines = 0;
-        foreach (var line in lines)
-        {
-            double lineWidth = EstimateTextWidth(line);
-            int wrappedLines = Math.Max(1, (int)Math.Ceiling(lineWidth / usableWidth));
-            totalLines += wrappedLines;
-        }
+        int totalLines = CountWrappedLines(text, usableWidth, EstimateTextWidth, out int explicitLineCount);
 
         double requiredHeight = totalLines * lineHeight + padding;
         double requiredWidth = currentWidth;
 
         // 如果文字很短（單行），確保寬度足以容納
-        if (lines.Length == 1)
+        if (explicitLineCount == 1)
         {
             double singleLineWidth = EstimateTextWidth(text) + padding;
             if (singleLineWidth > currentWidth)
@@ -427,13 +413,13 @@ public partial class SnipWindowViewModel
             if (skBitmap != null)
             {
                 // 將 SKBitmap 轉換為 Avalonia Bitmap
-                using var image = SkiaSharp.SKImage.FromBitmap(skBitmap);
-                using var data = image.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
-                using var stream = new System.IO.MemoryStream();
-                data.SaveTo(stream);
-                stream.Position = 0;
+                if (!FloatingBitmapConversionHelper.TryCreateDetachedBitmapFromSkBitmap(skBitmap, out var avaloniaBitmap, out var conversionError)
+                    || avaloniaBitmap == null)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[TranslationMode] PinTranslation conversion failed: {conversionError}");
+                    return;
+                }
 
-                var avaloniaBitmap = new Avalonia.Media.Imaging.Bitmap(stream);
 
                 // 開啟釘選視窗，並傳入翻譯文字與字體大小 metadata
                 OpenPinWindowAction?.Invoke(avaloniaBitmap, bounds, SelectionBorderColor, SelectionBorderThickness, false, false, text, fontSize);
@@ -544,5 +530,56 @@ public partial class SnipWindowViewModel
         {
             System.Diagnostics.Debug.WriteLine($"[TranslationMode] PinAllTranslations error: {ex}");
         }
+    }
+
+    private static string BuildCombinedBlockText(System.Collections.Generic.IReadOnlyList<TranslatedBlock> blocks, Func<TranslatedBlock, string?> selector)
+    {
+        var builder = new System.Text.StringBuilder();
+        for (int i = 0; i < blocks.Count; i++)
+        {
+            string? value = selector(blocks[i]);
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                continue;
+            }
+
+            if (builder.Length > 0)
+            {
+                builder.Append('\n');
+            }
+
+            builder.Append(value);
+        }
+
+        return builder.ToString();
+    }
+
+    private static int CountWrappedLines(string text, double usableWidth, Func<string, double> estimateTextWidth, out int explicitLineCount)
+    {
+        explicitLineCount = 0;
+        int totalLines = 0;
+        int lineStart = 0;
+
+        while (lineStart <= text.Length)
+        {
+            int newlineIndex = text.IndexOf('\n', lineStart);
+            string line;
+            if (newlineIndex < 0)
+            {
+                line = text[lineStart..];
+                lineStart = text.Length + 1;
+            }
+            else
+            {
+                line = text.Substring(lineStart, newlineIndex - lineStart);
+                lineStart = newlineIndex + 1;
+            }
+
+            explicitLineCount++;
+            double lineWidth = estimateTextWidth(line);
+            totalLines += Math.Max(1, (int)Math.Ceiling(lineWidth / usableWidth));
+        }
+
+        return totalLines;
     }
 }

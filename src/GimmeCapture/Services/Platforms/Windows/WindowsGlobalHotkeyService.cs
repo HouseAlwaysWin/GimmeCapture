@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices;
 using GimmeCapture.Services.Abstractions;
+using GimmeCapture.Services.Core.Infrastructure;
 using Avalonia.Controls;
 using Avalonia.Platform;
 
@@ -379,94 +380,8 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
 
     private (uint mods, uint vkey) ParseHotkey(string hk)
     {
-        ReadOnlySpan<char> hotkey = hk.AsSpan().Trim();
-        uint mods = 0;
-
-        if (hotkey.Contains("Ctrl".AsSpan(), StringComparison.OrdinalIgnoreCase)) mods |= 0x0002;
-        if (hotkey.Contains("Alt".AsSpan(), StringComparison.OrdinalIgnoreCase)) mods |= 0x0001;
-        if (hotkey.Contains("Shift".AsSpan(), StringComparison.OrdinalIgnoreCase)) mods |= 0x0004;
-
-        int plusIndex = hotkey.LastIndexOf('+');
-        ReadOnlySpan<char> keyPart = plusIndex >= 0 ? hotkey[(plusIndex + 1)..].Trim() : hotkey;
-
-        uint key = 0;
-        if (keyPart.Length > 1 && (keyPart[0] is 'F' or 'f') && int.TryParse(keyPart[1..], out int fNum))
-        {
-            if (fNum >= 1 && fNum <= 24)
-                key = (uint)(0x70 + fNum - 1);
-        }
-        else if (keyPart.Equals("PRINTSCREEN".AsSpan(), StringComparison.OrdinalIgnoreCase)
-            || keyPart.Equals("PRTSC".AsSpan(), StringComparison.OrdinalIgnoreCase)
-            || keyPart.Equals("PRINT".AsSpan(), StringComparison.OrdinalIgnoreCase))
-        {
-            key = 0x2C;
-        }
-        else if (keyPart.Equals("ENTER".AsSpan(), StringComparison.OrdinalIgnoreCase) || keyPart.Equals("RETURN".AsSpan(), StringComparison.OrdinalIgnoreCase))
-        {
-            key = 0x0D;
-        }
-        else if (keyPart.Equals("ESC".AsSpan(), StringComparison.OrdinalIgnoreCase) || keyPart.Equals("ESCAPE".AsSpan(), StringComparison.OrdinalIgnoreCase))
-        {
-            key = 0x1B;
-        }
-        else if (keyPart.Equals("TAB".AsSpan(), StringComparison.OrdinalIgnoreCase))
-        {
-            key = 0x09;
-        }
-        else if (keyPart.Equals("SPACE".AsSpan(), StringComparison.OrdinalIgnoreCase))
-        {
-            key = 0x20;
-        }
-        else if (keyPart.Equals("DELETE".AsSpan(), StringComparison.OrdinalIgnoreCase) || keyPart.Equals("DEL".AsSpan(), StringComparison.OrdinalIgnoreCase))
-        {
-            key = 0x2E;
-        }
-        else if (keyPart.Equals("INSERT".AsSpan(), StringComparison.OrdinalIgnoreCase) || keyPart.Equals("INS".AsSpan(), StringComparison.OrdinalIgnoreCase))
-        {
-            key = 0x2D;
-        }
-        else if (keyPart.Equals("BACKSPACE".AsSpan(), StringComparison.OrdinalIgnoreCase) || keyPart.Equals("BKSP".AsSpan(), StringComparison.OrdinalIgnoreCase))
-        {
-            key = 0x08;
-        }
-        else if (keyPart.Equals("HOME".AsSpan(), StringComparison.OrdinalIgnoreCase))
-        {
-            key = 0x24;
-        }
-        else if (keyPart.Equals("END".AsSpan(), StringComparison.OrdinalIgnoreCase))
-        {
-            key = 0x23;
-        }
-        else if (keyPart.Equals("PAGEUP".AsSpan(), StringComparison.OrdinalIgnoreCase) || keyPart.Equals("PGUP".AsSpan(), StringComparison.OrdinalIgnoreCase))
-        {
-            key = 0x21;
-        }
-        else if (keyPart.Equals("PAGEDOWN".AsSpan(), StringComparison.OrdinalIgnoreCase) || keyPart.Equals("PGDN".AsSpan(), StringComparison.OrdinalIgnoreCase))
-        {
-            key = 0x22;
-        }
-        else if (keyPart.Equals("LEFT".AsSpan(), StringComparison.OrdinalIgnoreCase))
-        {
-            key = 0x25;
-        }
-        else if (keyPart.Equals("UP".AsSpan(), StringComparison.OrdinalIgnoreCase))
-        {
-            key = 0x26;
-        }
-        else if (keyPart.Equals("RIGHT".AsSpan(), StringComparison.OrdinalIgnoreCase))
-        {
-            key = 0x27;
-        }
-        else if (keyPart.Equals("DOWN".AsSpan(), StringComparison.OrdinalIgnoreCase))
-        {
-            key = 0x28;
-        }
-        else if (keyPart.Length == 1 && char.IsLetterOrDigit(keyPart[0]))
-        {
-             key = char.ToUpperInvariant(keyPart[0]);
-        }
-
-        return (mods, key);
+        var (mods, vkey) = HotkeyParsingHelper.ParseHotkey(hk.AsSpan());
+        return (mods, vkey);
     }
     
     // --- Window Subclassing ---

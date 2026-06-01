@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using GimmeCapture.Models;
+using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Interop;
 using GimmeCapture.ViewModels.Main;
 using System;
@@ -231,29 +232,8 @@ public partial class SnipWindow : Window
 
     private static bool IsSafeUnfocusedCaptureHotkey(string hotkey)
     {
-        if (string.IsNullOrWhiteSpace(hotkey))
-            return false;
-
-        var parts = hotkey.Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        if (parts.Length == 0)
-            return false;
-
-        if (parts.Length > 1)
-            return false;
-
-        string keyPart = parts[^1];
-        if (keyPart.StartsWith("F", StringComparison.OrdinalIgnoreCase)
-            && int.TryParse(keyPart[1..], out int functionKey)
-            && functionKey is >= 1 and <= 24)
-        {
-            return true;
-        }
-
-        return string.Equals(keyPart, "Escape", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(keyPart, "Esc", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(keyPart, "PrintScreen", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(keyPart, "Print", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(keyPart, "PrtSc", StringComparison.OrdinalIgnoreCase);
+        return !string.IsNullOrWhiteSpace(hotkey)
+            && HotkeyParsingHelper.IsSafeSingleKeyHotkey(hotkey.AsSpan());
     }
 
     private static bool MatchesUnfocusedCaptureHotkey(string hotkey, Func<string, bool> isMatch)
@@ -448,50 +428,25 @@ public partial class SnipWindow : Window
             return false;
         }
 
-        string activeKeysStr = "";
-        if (ctrlDown) activeKeysStr += "Ctrl+";
-        if (altDown) activeKeysStr += "Alt+";
-        if (shiftDown) activeKeysStr += "Shift+";
-        activeKeysStr += keyStr;
-
         bool IsMatch(string hotkey)
         {
             if (string.IsNullOrEmpty(hotkey)) return false;
-            
-            string mappedExpected = hotkey;
-            if (hotkey.StartsWith("D") && hotkey.Length == 2 && char.IsDigit(hotkey[1]))
+
+            ReadOnlySpan<char> hotkeySpan = hotkey.AsSpan().Trim();
+            ReadOnlySpan<char> keyPart = HotkeyParsingHelper.GetKeyPart(hotkeySpan);
+
+            if (hotkeySpan.IndexOf('+') < 0)
             {
-                mappedExpected = hotkey.Substring(1);
+                return !ctrlDown
+                    && !altDown
+                    && !shiftDown
+                    && keyPart.Equals(keyStr.AsSpan(), StringComparison.OrdinalIgnoreCase);
             }
-            if (string.Equals(mappedExpected, "Return", StringComparison.OrdinalIgnoreCase))
+
+            if (HotkeyParsingHelper.ModifiersMatch(hotkeySpan, ctrlDown, altDown, shiftDown)
+                && keyPart.Equals(keyStr.AsSpan(), StringComparison.OrdinalIgnoreCase))
             {
-                mappedExpected = "Enter";
-            }
-            
-            if (string.Equals(activeKeysStr, mappedExpected, StringComparison.OrdinalIgnoreCase)) return true;
-            
-            if (hotkey.Contains("+"))
-            {
-                bool hkCtrl = hotkey.IndexOf("Ctrl", StringComparison.OrdinalIgnoreCase) >= 0;
-                bool hkAlt = hotkey.IndexOf("Alt", StringComparison.OrdinalIgnoreCase) >= 0;
-                bool hkShift = hotkey.IndexOf("Shift", StringComparison.OrdinalIgnoreCase) >= 0;
-                
-                var parts = hotkey.Split('+');
-                string baseKey = parts[parts.Length - 1].Trim();
-                if (baseKey.StartsWith("D") && baseKey.Length == 2 && char.IsDigit(baseKey[1])) baseKey = baseKey.Substring(1);
-                if (string.Equals(baseKey, "Return", StringComparison.OrdinalIgnoreCase)) baseKey = "Enter";
-                
-                if (hkCtrl == ctrlDown && hkAlt == altDown && hkShift == shiftDown && string.Equals(baseKey, keyStr, StringComparison.OrdinalIgnoreCase))
-                {
-                    return true;
-                }
-            }
-            else
-            {
-                if (!ctrlDown && !altDown && !shiftDown && string.Equals(mappedExpected, keyStr, StringComparison.OrdinalIgnoreCase))
-                {
-                    return true;
-                }
+                return true;
             }
 
             return false;
