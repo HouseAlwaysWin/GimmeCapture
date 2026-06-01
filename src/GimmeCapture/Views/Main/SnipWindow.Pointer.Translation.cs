@@ -52,12 +52,6 @@ public partial class SnipWindow
 
         System.Diagnostics.Debug.WriteLine($"[TranslationRightClick] PointerPressed at {point}. Source: {sourceControl?.GetType().Name}, Name: {sourceControl?.Name}, DataContext: {sourceControl?.DataContext?.GetType().Name}");
 
-        if (sourceControl is SelectableTextBlock || sourceControl?.FindAncestorOfType<SelectableTextBlock>() != null)
-        {
-            System.Diagnostics.Debug.WriteLine("[TranslationRightClick] Hit SelectableTextBlock. Ignoring delete to allow ContextMenu.");
-            return false;
-        }
-
         var selRect = ResolveTranslationSelectionFromVisualTree(sourceControl);
 
         if (selRect == null && _viewModel.UserSelections != null)
@@ -77,19 +71,7 @@ public partial class SnipWindow
         System.Diagnostics.Debug.WriteLine($"[TranslationRightClick] Final selRect resolved: {selRect != null}");
 
         var vm = _viewModel;
-        if (selRect != null && vm != null)
-        {
-            // Audio mode panel is persistent and should not be removed by right-click.
-            if (vm.CurrentTranslationTool == TranslationTool.Audio && selRect.IsAudioPanel)
-            {
-                e.Handled = true;
-                return true;
-            }
-
-            vm.UserSelections?.Remove(selRect);
-            e.Handled = true;
-            return true;
-        }
+        if (selRect != null && vm != null) return false;
 
         return false;
     }

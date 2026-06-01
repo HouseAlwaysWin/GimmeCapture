@@ -119,6 +119,7 @@ public partial class SnipWindowViewModel
         }
         else if (oldMode == SnipMode.Translation)
         {
+            PersistTranslationSelectionsAction?.Invoke();
             // 退出翻譯模式：恢復遮罩
             ResetTranslationToolbarAfterLeavingTranslationMode();
             IsMaskVisible = true;

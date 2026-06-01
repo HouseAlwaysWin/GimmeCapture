@@ -433,6 +433,21 @@
                     <DataTemplate x:DataType="m:UserSelectionRect">
                         <Canvas ClipToBounds="False" Width="{Binding Bounds.Width}" Height="{Binding Bounds.Height}">
                             <Grid Width="{Binding Bounds.Width}" Height="{Binding Bounds.Height}">
+                                <Grid.ContextMenu>
+                                    <ContextMenu>
+                                        <MenuItem Header="{Binding $parent[Window].DataContext.MenuCopyTranslation}" 
+                                                  Command="{Binding $parent[Window].DataContext.CopyTranslationTextCommand}"
+                                                  CommandParameter="{Binding}"/>
+                                        <Separator/>
+                                        <MenuItem Header="{Binding $parent[Window].DataContext.MenuPinTranslation}" 
+                                                  Command="{Binding $parent[Window].DataContext.PinTranslationCommand}"
+                                                  CommandParameter="{Binding}"/>
+                                        <Separator/>
+                                        <MenuItem Header="{Binding [MenuClose], Source={x:Static services:LocalizationService.Instance}}" 
+                                                  Command="{Binding $parent[Window].DataContext.RemoveUserSelectionCommand}"
+                                                  CommandParameter="{Binding}"/>
+                                    </ContextMenu>
+                                </Grid.ContextMenu>
                                 <!-- 1. 底層背景與邊框 (僅顯示，不阻擋拖動) -->
                                 <Border BorderBrush="{Binding $parent[Window].DataContext.SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" 
                                         BorderThickness="1"
@@ -492,6 +507,10 @@
                                                             <MenuItem Header="{Binding $parent[Window].DataContext.MenuPinTranslation}" 
                                                                       Command="{Binding $parent[Window].DataContext.PinTranslationCommand}"
                                                                       CommandParameter="{Binding $parent[SelectableTextBlock].DataContext}"/>
+                                                            <Separator/>
+                                                            <MenuItem Header="{Binding [MenuClose], Source={x:Static services:LocalizationService.Instance}}" 
+                                                                      Command="{Binding $parent[Window].DataContext.RemoveUserSelectionCommand}"
+                                                                      CommandParameter="{Binding $parent[SelectableTextBlock].DataContext}"/>
                                                         </ContextMenu>
                                                     </SelectableTextBlock.ContextMenu>
                                                 </SelectableTextBlock>
@@ -514,6 +533,10 @@
                                                             <Separator/>
                                                             <MenuItem Header="{Binding $parent[Window].DataContext.MenuPinTranslation}" 
                                                                       Command="{Binding $parent[Window].DataContext.PinTranslationCommand}"
+                                                                      CommandParameter="{Binding $parent[SelectableTextBlock].DataContext}"/>
+                                                            <Separator/>
+                                                            <MenuItem Header="{Binding [MenuClose], Source={x:Static services:LocalizationService.Instance}}" 
+                                                                      Command="{Binding $parent[Window].DataContext.RemoveUserSelectionCommand}"
                                                                       CommandParameter="{Binding $parent[SelectableTextBlock].DataContext}"/>
                                                         </ContextMenu>
                                                     </SelectableTextBlock.ContextMenu>
@@ -564,7 +587,7 @@
                                                                   Command="{Binding $parent[Window].DataContext.PinTranslationCommand}"
                                                                   CommandParameter="{Binding $parent[SelectableTextBlock].DataContext}"/>
                                                         <Separator/>
-                                                        <MenuItem Header="刪除區域" 
+                                                        <MenuItem Header="{Binding [MenuClose], Source={x:Static services:LocalizationService.Instance}}" 
                                                                   Command="{Binding $parent[Window].DataContext.RemoveUserSelectionCommand}"
                                                                   CommandParameter="{Binding $parent[SelectableTextBlock].DataContext}"/>
                                                     </ContextMenu>
@@ -585,7 +608,7 @@
                                                                   Command="{Binding $parent[Window].DataContext.PinTranslationCommand}"
                                                                   CommandParameter="{Binding $parent[SelectableTextBlock].DataContext}"/>
                                                         <Separator/>
-                                                        <MenuItem Header="刪除區域" 
+                                                        <MenuItem Header="{Binding [MenuClose], Source={x:Static services:LocalizationService.Instance}}" 
                                                                   Command="{Binding $parent[Window].DataContext.RemoveUserSelectionCommand}"
                                                                   CommandParameter="{Binding $parent[SelectableTextBlock].DataContext}"/>
                                                     </ContextMenu>

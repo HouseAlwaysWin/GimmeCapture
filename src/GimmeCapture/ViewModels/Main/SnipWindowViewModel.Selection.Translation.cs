@@ -382,48 +382,13 @@ public partial class SnipWindowViewModel
     {
         if (item == null) return;
 
-        Rect bounds = new Rect();
-        string? text = null;
-        double fontSize = 12.0;
-
-        if (item is UserSelectionRect sel)
-        {
-            bounds = sel.Bounds;
-            text = sel.TranslatedText;
-            fontSize = sel.InferredFontSize;
-        }
-        else if (item is TranslatedBlock block)
-        {
-            bounds = block.Bounds;
-            text = block.TranslatedText;
-            fontSize = block.InferredFontSize;
-        }
-
-        if (bounds.Width <= 0 || bounds.Height <= 0) return;
-
         // 隱藏視窗以便擷取乾淨的螢幕畫面
         HideAction?.Invoke();
         await Task.Delay(200); // 等待視窗完全隱藏
 
         try
         {
-            // 擷取翻譯區域的背景圖
-            using var skBitmap = await _captureService.CaptureScreenAsync(bounds, ScreenOffset, VisualScaling, false);
-
-            if (skBitmap != null)
-            {
-                // 將 SKBitmap 轉換為 Avalonia Bitmap
-                if (!FloatingBitmapConversionHelper.TryCreateDetachedBitmapFromSkBitmap(skBitmap, out var avaloniaBitmap, out var conversionError)
-                    || avaloniaBitmap == null)
-                {
-                    System.Diagnostics.Debug.WriteLine($"[TranslationMode] PinTranslation conversion failed: {conversionError}");
-                    return;
-                }
-
-
-                // 開啟釘選視窗，並傳入翻譯文字與字體大小 metadata
-                OpenPinWindowAction?.Invoke(avaloniaBitmap, bounds, SelectionBorderColor, SelectionBorderThickness, false, false, text, fontSize);
-            }
+            await PinTranslationItemCoreAsync(item);
         }
         catch (Exception ex)
         {
@@ -433,6 +398,81 @@ public partial class SnipWindowViewModel
         {
             // 釘選後關閉擷取工作
             CloseAction?.Invoke();
+        }
+    }
+
+    internal async Task PinPersistentTranslationItemAsync(TranslationResultItem item)
+    {
+        await PinTranslationItemCoreAsync(item);
+    }
+
+    internal System.Collections.Generic.IReadOnlyList<TranslationResultItem> MaterializePersistentTranslationSelections()
+    {
+        var persistentItems = new System.Collections.Generic.List<TranslationResultItem>();
+        for (int i = UserSelections.Count - 1; i >= 0; i--)
+        {
+            var selection = UserSelections[i];
+            if (!selection.IsTranslated || string.IsNullOrWhiteSpace(selection.TranslatedText))
+            {
+                continue;
+            }
+
+            persistentItems.Add(TranslationResultItem.FromSelection(selection));
+            UserSelections.RemoveAt(i);
+        }
+
+        persistentItems.Reverse();
+        return persistentItems;
+    }
+
+    private async Task PinTranslationItemCoreAsync(object item)
+    {
+        if (!TryResolveTranslationPinPayload(item, out var bounds, out var text, out var fontSize) || bounds.Width <= 0 || bounds.Height <= 0)
+        {
+            return;
+        }
+
+        using var skBitmap = await _captureService.CaptureScreenAsync(bounds, ScreenOffset, VisualScaling, false);
+        if (skBitmap == null)
+        {
+            return;
+        }
+
+        if (!FloatingBitmapConversionHelper.TryCreateDetachedBitmapFromSkBitmap(skBitmap, out var avaloniaBitmap, out var conversionError)
+            || avaloniaBitmap == null)
+        {
+            System.Diagnostics.Debug.WriteLine($"[TranslationMode] PinTranslation conversion failed: {conversionError}");
+            return;
+        }
+
+        OpenPinWindowAction?.Invoke(avaloniaBitmap, bounds, SelectionBorderColor, SelectionBorderThickness, false, false, text, fontSize);
+    }
+
+    private static bool TryResolveTranslationPinPayload(object item, out Rect bounds, out string? text, out double fontSize)
+    {
+        bounds = default;
+        text = null;
+        fontSize = 12.0;
+
+        switch (item)
+        {
+            case UserSelectionRect sel:
+                bounds = sel.Bounds;
+                text = sel.TranslatedText;
+                fontSize = sel.InferredFontSize;
+                return true;
+            case TranslationResultItem result:
+                bounds = result.Bounds;
+                text = result.TranslatedText;
+                fontSize = result.InferredFontSize;
+                return true;
+            case TranslatedBlock block:
+                bounds = block.Bounds;
+                text = block.TranslatedText;
+                fontSize = block.InferredFontSize;
+                return true;
+            default:
+                return false;
         }
     }
 

@@ -442,6 +442,8 @@ public partial class SnipWindow : Window
                 this.Focus();
             };
 
+            _viewModel.PersistTranslationSelectionsAction = PersistTranslatedSelectionsToDetachedLayer;
+
             _viewModel.CaptureDrawingModeSnapshotAsync = async () =>
             {
                 var hwnd = this.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
@@ -656,9 +658,58 @@ public partial class SnipWindow : Window
             return;
         }
 
+        if (ResolveTranslationSelectionFromVisualTree(src) != null)
+        {
+            return;
+        }
+
         // Suppress system context menu in all capture modes.
         // HandleRightClick already handles right-click logic (cancel selection / close).
         e.Handled = true;
+    }
+
+    private void PersistTranslatedSelectionsToDetachedLayer()
+    {
+        if (_viewModel == null)
+        {
+            return;
+        }
+
+        var items = _viewModel.MaterializePersistentTranslationSelections();
+        if (items.Count == 0)
+        {
+            return;
+        }
+
+        TranslationResultLayerManager.ShowOrAppend(
+            _viewModel.ScreenOffset,
+            _viewModel.ViewportSize,
+            _viewModel.VisualScaling,
+            items,
+            CopyPersistentTranslationAsync,
+            item => _viewModel.PinPersistentTranslationItemAsync(item));
+
+        _viewModel.UpdateMask();
+    }
+
+    private async Task CopyPersistentTranslationAsync(object? item)
+    {
+        var text = item switch
+        {
+            TranslationResultItem result => !string.IsNullOrWhiteSpace(result.TranslatedText)
+                ? result.TranslatedText
+                : result.OriginalText,
+            string rawText => rawText,
+            _ => null
+        };
+
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return;
+        }
+
+        await _clipboardService.CopyTextAsync(text);
+        _viewModel?.MainVm?.SetStatus("StatusCopied");
     }
 
     private void OnKeyDown(object? sender, KeyEventArgs e)

@@ -1,0 +1,196 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="using:GimmeCapture.ViewModels.Floating"
+        xmlns:m="using:GimmeCapture.Models"
+        xmlns:services="using:GimmeCapture.Services.Core"
+        mc:Ignorable="d"
+        x:Class="GimmeCapture.Views.Floating.FloatingTranslationWindow"
+        Title="Translation Results"
+        Background="Transparent"
+        WindowDecorations="None"
+        ShowInTaskbar="False"
+        Topmost="True"
+        CanResize="False"
+        ClipToBounds="False">
+    <Canvas x:Name="RootCanvas" ClipToBounds="False">
+        <ItemsControl ItemsSource="{Binding Items}"
+                      Width="{Binding ViewportSize.Width}"
+                      Height="{Binding ViewportSize.Height}"
+                      x:CompileBindings="False">
+            <ItemsControl.Styles>
+                <Style Selector="ItemsControl > ContentPresenter">
+                    <Setter Property="Canvas.Left" Value="{Binding Bounds.X}"/>
+                    <Setter Property="Canvas.Top" Value="{Binding Bounds.Y}"/>
+                </Style>
+            </ItemsControl.Styles>
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <Canvas />
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                    <Canvas ClipToBounds="False" Width="{Binding Bounds.Width}" Height="{Binding Bounds.Height}">
+                        <Grid Width="{Binding Bounds.Width}" Height="{Binding Bounds.Height}">
+                            <Grid.ContextMenu>
+                                <ContextMenu>
+                                    <MenuItem Header="{Binding $parent[Window].DataContext.MenuCopyTranslation}"
+                                              Command="{Binding $parent[Window].DataContext.CopyItemTextCommand}"
+                                              CommandParameter="{Binding}"/>
+                                    <MenuItem Header="{Binding $parent[Window].DataContext.MenuPinTranslation}"
+                                              Command="{Binding $parent[Window].DataContext.PinItemCommand}"
+                                              CommandParameter="{Binding}"/>
+                                    <Separator/>
+                                    <MenuItem Header="{Binding $parent[Window].DataContext.MenuClose}"
+                                              Command="{Binding $parent[Window].DataContext.CloseItemCommand}"
+                                              CommandParameter="{Binding}"/>
+                                </ContextMenu>
+                            </Grid.ContextMenu>
+
+                            <Border BorderBrush="Red"
+                                    BorderThickness="1"
+                                    Background="#01000000"
+                                    Width="{Binding Bounds.Width}"
+                                    Height="{Binding Bounds.Height}"
+                                    CornerRadius="0"
+                                    Classes="TranslationItem"
+                                    IsHitTestVisible="True"/>
+
+                            <Border Classes="MoveHandle" BorderBrush="#01FFFFFF" BorderThickness="20" Background="Transparent" Cursor="SizeAll"/>
+                            <Grid Name="InnerCornerTopLeft" Width="40" Height="40" HorizontalAlignment="Left" VerticalAlignment="Top" Background="#01FFFFFF" Cursor="SizeAll" Margin="1,1,0,0" Classes="MoveHandle"/>
+                            <Grid Name="InnerCornerTopRight" Width="40" Height="40" HorizontalAlignment="Right" VerticalAlignment="Top" Background="#01FFFFFF" Cursor="SizeAll" Margin="0,1,1,0" Classes="MoveHandle"/>
+                            <Grid Name="InnerCornerBottomLeft" Width="40" Height="40" HorizontalAlignment="Left" VerticalAlignment="Bottom" Background="#01FFFFFF" Cursor="SizeAll" Margin="1,0,0,1" Classes="MoveHandle"/>
+                            <Grid Name="InnerCornerBottomRight" Width="40" Height="40" HorizontalAlignment="Right" VerticalAlignment="Bottom" Background="#01FFFFFF" Cursor="SizeAll" Margin="0,0,1,1" Classes="MoveHandle"/>
+
+                            <Panel IsHitTestVisible="True" VerticalAlignment="Stretch" HorizontalAlignment="Stretch" ClipToBounds="True" IsVisible="{Binding IsAudioPanel}">
+                                <Border Background="#CC000000"
+                                        BorderBrush="#66FFFFFF"
+                                        BorderThickness="1"
+                                        CornerRadius="4"
+                                        Margin="2"
+                                        Padding="8"
+                                        HorizontalAlignment="Stretch"
+                                        VerticalAlignment="Stretch"
+                                        ClipToBounds="True">
+                                    <Grid RowDefinitions="Auto,*,Auto,*" RowSpacing="6">
+                                        <TextBlock Grid.Row="0"
+                                                   Text="{Binding $parent[Window].DataContext.InputLabel}"
+                                                   Foreground="#B8B8B8"
+                                                   FontSize="10"/>
+                                        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                            <SelectableTextBlock Text="{Binding OriginalText}"
+                                                                 Foreground="Yellow"
+                                                                 FontSize="{Binding InferredFontSize}"
+                                                                 TextWrapping="Wrap">
+                                                <SelectableTextBlock.ContextMenu>
+                                                    <ContextMenu>
+                                                        <MenuItem Header="{Binding $parent[Window].DataContext.MenuCopyTranslation}"
+                                                                  Command="{Binding $parent[Window].DataContext.CopyItemTextCommand}"
+                                                                  CommandParameter="{Binding $parent[SelectableTextBlock].SelectedText}"/>
+                                                        <MenuItem Header="{Binding $parent[Window].DataContext.MenuPinTranslation}"
+                                                                  Command="{Binding $parent[Window].DataContext.PinItemCommand}"
+                                                                  CommandParameter="{Binding $parent[SelectableTextBlock].DataContext}"/>
+                                                        <Separator/>
+                                                        <MenuItem Header="{Binding $parent[Window].DataContext.MenuClose}"
+                                                                  Command="{Binding $parent[Window].DataContext.CloseItemCommand}"
+                                                                  CommandParameter="{Binding $parent[SelectableTextBlock].DataContext}"/>
+                                                    </ContextMenu>
+                                                </SelectableTextBlock.ContextMenu>
+                                            </SelectableTextBlock>
+                                        </ScrollViewer>
+
+                                        <TextBlock Grid.Row="2"
+                                                   Text="{Binding $parent[Window].DataContext.OutputLabel}"
+                                                   Foreground="#B8B8B8"
+                                                   FontSize="10"/>
+                                        <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                            <SelectableTextBlock Text="{Binding TranslatedText}"
+                                                                 Foreground="White"
+                                                                 FontSize="{Binding InferredFontSize}"
+                                                                 TextWrapping="Wrap">
+                                                <SelectableTextBlock.ContextMenu>
+                                                    <ContextMenu>
+                                                        <MenuItem Header="{Binding $parent[Window].DataContext.MenuCopyTranslation}"
+                                                                  Command="{Binding $parent[Window].DataContext.CopyItemTextCommand}"
+                                                                  CommandParameter="{Binding $parent[SelectableTextBlock].SelectedText}"/>
+                                                        <MenuItem Header="{Binding $parent[Window].DataContext.MenuPinTranslation}"
+                                                                  Command="{Binding $parent[Window].DataContext.PinItemCommand}"
+                                                                  CommandParameter="{Binding $parent[SelectableTextBlock].DataContext}"/>
+                                                        <Separator/>
+                                                        <MenuItem Header="{Binding $parent[Window].DataContext.MenuClose}"
+                                                                  Command="{Binding $parent[Window].DataContext.CloseItemCommand}"
+                                                                  CommandParameter="{Binding $parent[SelectableTextBlock].DataContext}"/>
+                                                    </ContextMenu>
+                                                </SelectableTextBlock.ContextMenu>
+                                            </SelectableTextBlock>
+                                        </ScrollViewer>
+
+                                        <Border Grid.RowSpan="4"
+                                                VerticalAlignment="Top"
+                                                Height="18"
+                                                Background="#01FFFFFF"
+                                                Classes="MoveHandle"
+                                                Cursor="SizeAll"
+                                                ZIndex="10"/>
+                                    </Grid>
+                                </Border>
+                            </Panel>
+
+                            <Panel IsHitTestVisible="True" VerticalAlignment="Center" HorizontalAlignment="Stretch" ClipToBounds="True">
+                                <Panel.IsVisible>
+                                    <MultiBinding Converter="{x:Static BoolConverters.And}">
+                                        <Binding Path="!IsAudioPanel"/>
+                                        <Binding Path="IsTranslated"/>
+                                    </MultiBinding>
+                                </Panel.IsVisible>
+                                <Border Background="#CC000000"
+                                        CornerRadius="4"
+                                        Padding="4"
+                                        BorderBrush="#44FFFFFF"
+                                        BorderThickness="1"
+                                        Margin="0"
+                                        MaxWidth="{Binding Bounds.Width}"
+                                        HorizontalAlignment="Center"
+                                        VerticalAlignment="Center"
+                                        ClipToBounds="True">
+                                    <StackPanel>
+                                        <SelectableTextBlock Text="{Binding TranslatedText}"
+                                                             Foreground="White"
+                                                             FontSize="{Binding InferredFontSize}"
+                                                             TextWrapping="Wrap">
+                                            <SelectableTextBlock.ContextMenu>
+                                                <ContextMenu>
+                                                    <MenuItem Header="{Binding $parent[Window].DataContext.MenuCopyTranslation}"
+                                                              Command="{Binding $parent[Window].DataContext.CopyItemTextCommand}"
+                                                              CommandParameter="{Binding $parent[SelectableTextBlock].SelectedText}"/>
+                                                    <MenuItem Header="{Binding $parent[Window].DataContext.MenuPinTranslation}"
+                                                              Command="{Binding $parent[Window].DataContext.PinItemCommand}"
+                                                              CommandParameter="{Binding $parent[SelectableTextBlock].DataContext}"/>
+                                                    <Separator/>
+                                                    <MenuItem Header="{Binding $parent[Window].DataContext.MenuClose}"
+                                                              Command="{Binding $parent[Window].DataContext.CloseItemCommand}"
+                                                              CommandParameter="{Binding $parent[SelectableTextBlock].DataContext}"/>
+                                                </ContextMenu>
+                                            </SelectableTextBlock.ContextMenu>
+                                        </SelectableTextBlock>
+                                    </StackPanel>
+                                </Border>
+                            </Panel>
+
+                            <Grid Classes="Handle" Name="HandleTopLeft" Cursor="TopLeftCorner" Width="40" Height="40" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="-20,-20,0,0" Background="#01FFFFFF"/>
+                            <Grid Classes="Handle" Name="HandleTopRight" Cursor="TopRightCorner" Width="40" Height="40" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-20,-20,0" Background="#01FFFFFF"/>
+                            <Grid Classes="Handle" Name="HandleBottomLeft" Cursor="BottomLeftCorner" Width="40" Height="40" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="-20,0,0,-20" Background="#01FFFFFF"/>
+                            <Grid Classes="Handle" Name="HandleBottomRight" Cursor="BottomRightCorner" Width="40" Height="40" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-20,-20" Background="#01FFFFFF"/>
+                            <Grid Classes="Handle" Name="HandleTop" Cursor="SizeNorthSouth" Height="20" HorizontalAlignment="Stretch" VerticalAlignment="Top" Margin="20,-10,20,0" Background="#01FFFFFF"/>
+                            <Grid Classes="Handle" Name="HandleBottom" Cursor="SizeNorthSouth" Height="20" HorizontalAlignment="Stretch" VerticalAlignment="Bottom" Margin="20,0,20,-10" Background="#01FFFFFF"/>
+                            <Grid Classes="Handle" Name="HandleLeft" Cursor="SizeWestEast" Width="20" HorizontalAlignment="Left" VerticalAlignment="Stretch" Margin="-10,20,0,20" Background="#01FFFFFF"/>
+                            <Grid Classes="Handle" Name="HandleRight" Cursor="SizeWestEast" Width="20" HorizontalAlignment="Right" VerticalAlignment="Stretch" Margin="0,20,-10,20" Background="#01FFFFFF"/>
+                        </Grid>
+                    </Canvas>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+    </Canvas>
+</Window>

@@ -56,6 +56,14 @@ bin-pin/
 tempobj/
 scratch/
 
+# NuGet cache files
+.codex-obj/
+*.nuget.dgspec.json
+*.nuget.g.props
+*.nuget.g.targets
+project.assets.json
+project.nuget.cache
+
 # JetBrains Rider
 .idea/
 *.sln.iml

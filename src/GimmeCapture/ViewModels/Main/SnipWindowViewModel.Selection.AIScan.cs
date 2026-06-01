@@ -532,6 +532,9 @@ public partial class SnipWindowViewModel
                 UserSelectionRect selection => !string.IsNullOrWhiteSpace(selection.TranslatedText)
                     ? selection.TranslatedText
                     : selection.OriginalText,
+                TranslationResultItem result => !string.IsNullOrWhiteSpace(result.TranslatedText)
+                    ? result.TranslatedText
+                    : result.OriginalText,
                 TranslatedBlock block => !string.IsNullOrWhiteSpace(block.TranslatedText)
                     ? block.TranslatedText
                     : block.OriginalText,
