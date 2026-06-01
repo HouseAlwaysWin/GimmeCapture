@@ -12,6 +12,7 @@ internal sealed class SnipSelectionStateController
     private readonly Action _clearTranslatedBlocks;
     private readonly Action _resetParkedToolbar;
     private readonly Action _updateMask;
+    private readonly Action _hideScanLoadingBar;
 
     public SnipSelectionStateController(
         Func<bool> shouldTriggerAutoScan,
@@ -21,7 +22,8 @@ internal sealed class SnipSelectionStateController
         Action triggerAutoAction,
         Action clearTranslatedBlocks,
         Action resetParkedToolbar,
-        Action updateMask)
+        Action updateMask,
+        Action hideScanLoadingBar)
     {
         _shouldTriggerAutoScan = shouldTriggerAutoScan;
         _triggerAutoScan = triggerAutoScan;
@@ -31,6 +33,7 @@ internal sealed class SnipSelectionStateController
         _clearTranslatedBlocks = clearTranslatedBlocks;
         _resetParkedToolbar = resetParkedToolbar;
         _updateMask = updateMask;
+        _hideScanLoadingBar = hideScanLoadingBar;
     }
 
     public void HandleTransition(SnipState previousState, SnipState nextState)
@@ -38,6 +41,7 @@ internal sealed class SnipSelectionStateController
         if (nextState != SnipState.Detecting)
         {
             _cancelScan();
+            _hideScanLoadingBar();
             _dismissHoverPreview(previousState == SnipState.Detecting && nextState == SnipState.Selecting);
         }
         else if (_shouldTriggerAutoScan())

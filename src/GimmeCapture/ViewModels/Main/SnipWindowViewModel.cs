@@ -115,6 +115,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     public string ActivePlaybackHotkey => _mainVm?.Record_Playback ?? "Space";
     public string RemoveBackgroundHotkey => _mainVm?.Snip_RemoveBackground ?? "Shift+R";
     public string MagicWandHotkey => _mainVm?.Snip_MagicWand ?? "W";
+    public string SnipSelectionModeHotkey => _mainVm?.Snip_SelectionMode ?? "S";
 
     // Mode-switch hotkeys (resolved per current mode)
     // Return empty string when already in the target mode to avoid conflicts
@@ -275,7 +276,14 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
             triggerAutoAction: TriggerAutoAction,
             clearTranslatedBlocks: () => TranslatedBlocks.Clear(),
             resetParkedToolbar: ResetParkedToolbarIfOffScreenWhenLeavingSelection,
-            updateMask: UpdateMask);
+            updateMask: UpdateMask,
+            hideScanLoadingBar: () =>
+            {
+                if (CurrentMode != SnipMode.Translation)
+                {
+                    ShowTopLoadingBar = false;
+                }
+            });
         _audioMeterTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(120) };
 
         ApplyInitialMainVmVisualSettings();

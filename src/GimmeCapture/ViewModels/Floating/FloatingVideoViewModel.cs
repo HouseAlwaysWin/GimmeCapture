@@ -194,6 +194,11 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
         set 
         {
             if (base.CurrentTool == value) return;
+
+            if (value == FloatingTool.Selection)
+            {
+                PausePlaybackForPreciseInteraction();
+            }
             
             if (value != FloatingTool.None)
             {
@@ -396,5 +401,17 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
             _latestFrameData = null;
             _latestFrameLength = 0;
         }
+    }
+
+    private void PausePlaybackForPreciseInteraction()
+    {
+        if (!_isPlaybackActive)
+        {
+            return;
+        }
+
+        _isPlaybackActive = false;
+        CancelPlaybackInBackground();
+        this.RaisePropertyChanged(nameof(IsPlaying));
     }
 }

@@ -395,18 +395,21 @@ public partial class SnipWindow : Window
                 _viewModel?.IsTranslationMode == true &&
                 string.Equals(keyStr, selMod, StringComparison.OrdinalIgnoreCase))
             {
-                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                void ApplyModifierState()
                 {
-                    if (_viewModel == null) return;
-                    if (isKeyDown)
-                        _viewModel.CurrentTranslationTool = Models.TranslationTool.Single;
-                    else
-                    {
-                        _translationSuppressFullHitUntilSelectionModifierUp = false;
-                        _viewModel.CurrentTranslationTool = Models.TranslationTool.Cursor;
-                    }
-                    RequestTranslationWindowRegionRefresh();
-                }, Avalonia.Threading.DispatcherPriority.Input);
+                    ApplyTranslationSelectionModifierState(isKeyDown);
+                }
+
+                if (Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
+                {
+                    ApplyModifierState();
+                }
+                else
+                {
+                    Avalonia.Threading.Dispatcher.UIThread.Post(
+                        ApplyModifierState,
+                        Avalonia.Threading.DispatcherPriority.Send);
+                }
                 return true;
             }
 
@@ -1082,6 +1085,14 @@ public partial class SnipWindow : Window
             // under the overlay. Disjoint islands + 1×1 DWM stub matches idle translation behavior.
             if (isTranslation && holeRects.Count == 0)
             {
+                bool selModHeld = IsTranslationSelectionModifierDownForRegion();
+                if (selModHeld && !_translationSuppressFullHitUntilSelectionModifierUp)
+                {
+                    ApplyTranslationDwmMinimalOccluderFix(hwnd, scaling, windowWidth, windowHeight);
+                    _useHitTestRegions = false;
+                    return;
+                }
+
                 var opaque = new System.Collections.Generic.List<Rect>(extraRegions);
                 opaque.Add(new Rect(0, 0, 1, 1));
                 Win32Helpers.SetDisjointOpaqueRegions(hwnd, opaque, null);

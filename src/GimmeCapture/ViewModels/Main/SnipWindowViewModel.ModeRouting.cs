@@ -304,6 +304,7 @@ public partial class SnipWindowViewModel
     public ReactiveCommand<Unit, Unit> CopyRecordingCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> HandleScreenshotModeHotkeyCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> HandleRecordingModeHotkeyCommand { get; set; } = null!;
+    public ReactiveCommand<Unit, Unit> ToggleSelectionModeCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> HandleActiveActionHotkeyCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> SwitchToSnipCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> SwitchToRecordCommand { get; set; } = null!;
@@ -487,6 +488,25 @@ public partial class SnipWindowViewModel
                 }
             }
         }, nameof(HandleRecordingModeHotkeyCommand), canExecuteHotkeys);
+
+        ToggleSelectionModeCommand = CreateCommand(() =>
+        {
+            if (RecState != RecordingState.Idle || CurrentMode == SnipMode.Translation)
+            {
+                return;
+            }
+
+            if (CurrentState == SnipState.Selecting || CurrentState == SnipState.Selected)
+            {
+                CurrentState = SnipState.Detecting;
+                SelectionRect = new Rect(0, 0, 0, 0);
+                return;
+            }
+
+            ShowTopLoadingBar = false;
+            CurrentState = SnipState.Selecting;
+            SelectionRect = new Rect(0, 0, 0, 0);
+        }, nameof(ToggleSelectionModeCommand), canExecuteHotkeys);
 
         // F6/F8: current-mode action keys for screenshot/record/translation.
         // F1/F2/F3 are reserved for Screenshot/Record/Translate mode switching while selecting.

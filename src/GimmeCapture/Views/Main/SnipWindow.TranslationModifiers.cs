@@ -12,6 +12,37 @@ public partial class SnipWindow
     /// </summary>
     private bool _translationSuppressFullHitUntilSelectionModifierUp;
 
+    private void ApplyTranslationSelectionModifierState(bool isKeyDown)
+    {
+        if (_viewModel == null || !_viewModel.IsTranslationMode)
+        {
+            return;
+        }
+
+        if (isKeyDown)
+        {
+            bool hasAnyBox = false;
+            foreach (var selection in _viewModel.UserSelections)
+            {
+                if (!selection.IsAudioPanel && selection.Bounds.Width > 5 && selection.Bounds.Height > 5)
+                {
+                    hasAnyBox = true;
+                    break;
+                }
+            }
+            _viewModel.CurrentTranslationTool = hasAnyBox
+                ? Models.TranslationTool.Multi
+                : Models.TranslationTool.Single;
+        }
+        else
+        {
+            _translationSuppressFullHitUntilSelectionModifierUp = false;
+            _viewModel.CurrentTranslationTool = Models.TranslationTool.Cursor;
+        }
+
+        RequestTranslationWindowRegionRefresh();
+    }
+
     private static bool IsPhysicalModifierLabelDown(string? label)
     {
         if (string.IsNullOrEmpty(label)) return false;

@@ -121,11 +121,6 @@ public partial class SnipWindow : Window
                 Console.WriteLine("[SnipWindow] ViewModel is not null, setting properties");
                 _viewModel.VisualScaling = this.RenderScaling;
                 _viewModel.ScreenOffset = this.Position;
-                if (!_viewModel.IsTranslationMode)
-                {
-                    _viewModel.RefreshWindowRects(this.TryGetPlatformHandle()?.Handle);
-                }
-
                 // Initialize Win32 Hook for click-through
                 InitializeWin32Hook();
 
@@ -158,19 +153,6 @@ public partial class SnipWindow : Window
                 
                 // Trigger AI Auto-Scan (single entry point after AllScreenBounds is ready)
                 // 翻譯模式不使用 SAM2 掃描
-                if (_viewModel.ShowAIScanBox && !_viewModel.IsTranslationMode && _viewModel.CurrentState == SnipState.Detecting)
-                {
-                    Console.WriteLine("[SnipWindow] Triggering AI Scan after AllScreenBounds ready");
-                    try
-                    {
-                        await _viewModel.AIScanCommand.Execute();
-                        Console.WriteLine("[SnipWindow] AIScanCommand completed");
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"[SnipWindow] AI Scan exception: {ex.Message}");
-                    }
-                }
                 
                 // 翻譯模式：在 ViewportSize 和 AllScreenBounds 就緒後重新初始化工具列位置
                 if (_viewModel.IsTranslationMode)
@@ -204,6 +186,44 @@ public partial class SnipWindow : Window
 
             this.Activate(); 
             this.Focus();
+
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                if (_viewModel == null || _viewModel.IsTranslationMode)
+                {
+                    return;
+                }
+
+                try
+                {
+                    _viewModel.RefreshWindowRects(this.TryGetPlatformHandle()?.Handle);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[SnipWindow] RefreshWindowRects exception: {ex.Message}");
+                }
+            }, Avalonia.Threading.DispatcherPriority.Background);
+
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                if (_viewModel == null
+                    || !_viewModel.ShowAIScanBox
+                    || _viewModel.IsTranslationMode
+                    || _viewModel.CurrentState != SnipState.Detecting)
+                {
+                    return;
+                }
+
+                Console.WriteLine("[SnipWindow] Triggering deferred AI Scan after initial overlay display");
+                try
+                {
+                    _viewModel.AIScanCommand?.Execute().Subscribe();
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[SnipWindow] Deferred AI Scan exception: {ex.Message}");
+                }
+            }, Avalonia.Threading.DispatcherPriority.Background);
             
             // Z-Order nudge: Some popups (like ComboBox dropdowns) might be stubborn.
             // Toggling Topmost and re-activating after a short delay helps.
