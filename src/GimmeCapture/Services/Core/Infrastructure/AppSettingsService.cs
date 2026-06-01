@@ -15,20 +15,26 @@ public class AppSettingsService
     // v3: Pin-like actions unified so Snip.Pin / Record.Action / Translate.Pin share F6.
     // v4: Snip AI detecting moved to OCR-only; legacy AIScanEngine/SAM2 scan tuning settings are ignored.
     public const int CurrentConfigVersion = 4;
-    private static string LocalConfigPath => Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config.json");
-    private static string AppDataPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "GimmeCapture");
-    private static string AppDataConfigPath => Path.Combine(AppDataPath, "config.json");
+    private readonly string _appVersion;
 
     public string BaseDataDirectory { get; private set; } = AppDomain.CurrentDomain.BaseDirectory;
     private string ConfigPath => Path.Combine(BaseDataDirectory, "config.json");
+    private string RuntimeLocalConfigPath => Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config.json");
+    private string RuntimeVersionedAppDataPath => AppStoragePaths.GetVersionedDataDirectory(AppDomain.CurrentDomain.BaseDirectory, _appVersion);
+    private string RuntimeVersionedAppDataConfigPath => AppStoragePaths.GetVersionedConfigPath(AppDomain.CurrentDomain.BaseDirectory, _appVersion);
+    private static string LegacyAppDataConfigPath => AppStoragePaths.GetLegacyConfigPath();
     
     public virtual AppSettings Settings { get; protected set; } = new();
 
-    public AppSettingsService() { }
+    public AppSettingsService()
+    {
+        _appVersion = AppVersionInfo.CurrentVersion;
+    }
 
-    public AppSettingsService(string baseDataDirectory)
+    public AppSettingsService(string baseDataDirectory, string? appVersion = null)
     {
         BaseDataDirectory = baseDataDirectory;
+        _appVersion = string.IsNullOrWhiteSpace(appVersion) ? AppVersionInfo.CurrentVersion : appVersion;
     }
     
     public void DebugLog(string message)
@@ -42,6 +48,12 @@ public class AppSettingsService
         }
         catch { }
     }
+
+    private bool IsRuntimeDefaultStorage =>
+        string.Equals(
+            Path.GetFullPath(BaseDataDirectory).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+            Path.GetFullPath(AppDomain.CurrentDomain.BaseDirectory).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+            StringComparison.OrdinalIgnoreCase);
 
     private JsonSerializerOptions GetJsonOptions() => new JsonSerializerOptions 
     { 
@@ -160,34 +172,32 @@ public class AppSettingsService
             return;
         }
 
+        bool appDataExists = File.Exists(RuntimeVersionedAppDataConfigPath);
+        bool localExists = File.Exists(RuntimeLocalConfigPath);
+        bool legacyAppDataExists = File.Exists(LegacyAppDataConfigPath);
         string? targetPath = null;
-        DateTime localTime = DateTime.MinValue;
-        DateTime appDataTime = DateTime.MinValue;
-
-        bool localExists = File.Exists(LocalConfigPath);
-        bool appDataExists = File.Exists(AppDataConfigPath);
-
-        if (localExists)
-        {
-            localTime = File.GetLastWriteTime(LocalConfigPath);
-            targetPath = LocalConfigPath;
-            BaseDataDirectory = AppDomain.CurrentDomain.BaseDirectory;
-        }
+        string? saveDirectoryOverride = null;
 
         if (appDataExists)
         {
-            appDataTime = File.GetLastWriteTime(AppDataConfigPath);
-            if (!localExists || appDataTime > localTime)
-            {
-                targetPath = AppDataConfigPath;
-                BaseDataDirectory = AppDataPath;
-            }
+            targetPath = RuntimeVersionedAppDataConfigPath;
+            BaseDataDirectory = RuntimeVersionedAppDataPath;
+        }
+        else if (localExists)
+        {
+            targetPath = RuntimeLocalConfigPath;
+            saveDirectoryOverride = RuntimeVersionedAppDataPath;
+        }
+        else if (legacyAppDataExists)
+        {
+            targetPath = LegacyAppDataConfigPath;
+            saveDirectoryOverride = RuntimeVersionedAppDataPath;
         }
 
-        DebugLog($"Loading phase. Local exists: {localExists} ({localTime}), AppData exists: {appDataExists} ({appDataTime}). Choosing: {targetPath ?? "DEFAULT"}");
+        DebugLog($"Loading phase. Versioned AppData exists: {appDataExists}, Local exists: {localExists}, Legacy AppData exists: {legacyAppDataExists}. Choosing: {targetPath ?? "DEFAULT"}");
 
         if (targetPath != null)
-            await LoadFromPathAsync(targetPath);
+            await LoadFromPathAsync(targetPath, saveDirectoryOverride);
     }
 
     public void UpdateSettings(AppSettings source)
@@ -304,37 +314,38 @@ public class AppSettingsService
             return;
         }
 
+        bool appDataExists = File.Exists(RuntimeVersionedAppDataConfigPath);
+        bool localExists = File.Exists(RuntimeLocalConfigPath);
+        bool legacyAppDataExists = File.Exists(LegacyAppDataConfigPath);
         string? targetPath = null;
-        DateTime localTime = DateTime.MinValue;
-        DateTime appDataTime = DateTime.MinValue;
+        string? saveDirectoryOverride = null;
 
-        if (File.Exists(LocalConfigPath))
+        if (appDataExists)
         {
-            localTime = File.GetLastWriteTime(LocalConfigPath);
-            targetPath = LocalConfigPath;
-            BaseDataDirectory = AppDomain.CurrentDomain.BaseDirectory;
+            targetPath = RuntimeVersionedAppDataConfigPath;
+            BaseDataDirectory = RuntimeVersionedAppDataPath;
         }
-
-        if (File.Exists(AppDataConfigPath))
+        else if (localExists)
         {
-            appDataTime = File.GetLastWriteTime(AppDataConfigPath);
-            if (appDataTime > localTime)
-            {
-                targetPath = AppDataConfigPath;
-                BaseDataDirectory = AppDataPath;
-            }
+            targetPath = RuntimeLocalConfigPath;
+            saveDirectoryOverride = RuntimeVersionedAppDataPath;
+        }
+        else if (legacyAppDataExists)
+        {
+            targetPath = LegacyAppDataConfigPath;
+            saveDirectoryOverride = RuntimeVersionedAppDataPath;
         }
 
         if (targetPath != null)
-            LoadFromPathSync(targetPath);
+            LoadFromPathSync(targetPath, saveDirectoryOverride);
     }
 
-    private async Task LoadFromPathAsync(string path)
+    private async Task LoadFromPathAsync(string path, string? saveDirectoryOverride = null)
     {
         try
         {
             var json = await File.ReadAllTextAsync(path);
-            ApplyLoadedJson(path, json);
+            ApplyLoadedJson(path, json, saveDirectoryOverride);
         }
         catch (Exception ex)
         {
@@ -342,12 +353,12 @@ public class AppSettingsService
         }
     }
 
-    private void LoadFromPathSync(string path)
+    private void LoadFromPathSync(string path, string? saveDirectoryOverride = null)
     {
         try
         {
             var json = File.ReadAllText(path);
-            ApplyLoadedJson(path, json);
+            ApplyLoadedJson(path, json, saveDirectoryOverride);
         }
         catch (Exception ex)
         {
@@ -355,7 +366,7 @@ public class AppSettingsService
         }
     }
 
-    private void ApplyLoadedJson(string path, string json)
+    private void ApplyLoadedJson(string path, string json, string? saveDirectoryOverride = null)
     {
         int sourceVersion = DetectConfigVersion(json);
         var settings = JsonSerializer.Deserialize<AppSettings>(json, GetJsonOptions());
@@ -364,6 +375,10 @@ public class AppSettingsService
 
         ApplyMigrations(json, settings, sourceVersion);
         UpdateSettings(settings);
+        if (!string.IsNullOrWhiteSpace(saveDirectoryOverride))
+        {
+            BaseDataDirectory = saveDirectoryOverride;
+        }
         DebugLog($"Successfully loaded settings from {path}. Version {sourceVersion} -> {Settings.ConfigVersion}. Language value: {Settings.Language}");
     }
 
@@ -378,21 +393,8 @@ public class AppSettingsService
 
             DebugLog($"Saving settings to {ConfigPath}. Language: {Settings.Language}");
 
-            // Attempt to save to current directory first if that's where we are
-            if (BaseDataDirectory == AppDomain.CurrentDomain.BaseDirectory)
-            {
-                try
-                {
-                    await File.WriteAllTextAsync(ConfigPath, json);
-                    DebugLog("Saved to local directory successfully.");
-                    return;
-                }
-                catch (Exception ex) when (ex is UnauthorizedAccessException || ex is IOException || ex is System.Security.SecurityException)
-                {
-                    DebugLog($"Local directory not writable, switching to AppData. Error: {ex.GetType().Name}");
-                    BaseDataDirectory = AppDataPath;
-                }
-            }
+            if (IsRuntimeDefaultStorage)
+                BaseDataDirectory = RuntimeVersionedAppDataPath;
 
             if (!Directory.Exists(BaseDataDirectory))
             {

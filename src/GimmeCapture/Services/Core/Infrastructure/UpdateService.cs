@@ -221,14 +221,14 @@ public sealed class UpdateService : ReactiveObject
 
             var scriptPath = Path.Combine(Path.GetTempPath(), "GimmeCapture_Update.bat");
             var parentDir = Path.GetDirectoryName(zipPath)!;
+            var currentVersionedConfigPath = AppStoragePaths.GetVersionedConfigPath(appDir, _currentVersion);
             var localConfigPath = Path.Combine(appDir, "config.json");
-            var appDataConfigPath = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "GimmeCapture",
-                "config.json");
-            var localConfigBackupPath = Path.Combine(parentDir, "config.local.backup.json");
+            var legacyConfigPath = AppStoragePaths.GetLegacyConfigPath();
+            var sourceAppDataConfigPath = File.Exists(currentVersionedConfigPath)
+                ? currentVersionedConfigPath
+                : (File.Exists(localConfigPath) ? localConfigPath : legacyConfigPath);
+            var targetAppDataConfigPath = AppStoragePaths.GetVersionedConfigPath(appDir, targetVersion);
             var appDataConfigBackupPath = Path.Combine(parentDir, "config.appdata.backup.json");
-            var localConfigMarkerPath = Path.Combine(parentDir, "config.local.exists.marker");
             var appDataConfigMarkerPath = Path.Combine(parentDir, "config.appdata.exists.marker");
 
             var script = BuildUpdateScript(
@@ -236,11 +236,9 @@ public sealed class UpdateService : ReactiveObject
                 appDir,
                 parentDir,
                 expectedExePath,
-                localConfigPath,
-                appDataConfigPath,
-                localConfigBackupPath,
+                sourceAppDataConfigPath,
+                targetAppDataConfigPath,
                 appDataConfigBackupPath,
-                localConfigMarkerPath,
                 appDataConfigMarkerPath);
             File.WriteAllText(scriptPath, script, System.Text.Encoding.Default);
 
@@ -275,7 +273,8 @@ public sealed class UpdateService : ReactiveObject
 
     public static UpdateVerificationResult VerifyPendingUpdateOnStartup(string currentVersion, string currentExePath)
     {
-        var state = ReadPendingUpdateState();
+        var currentAppDirectory = Path.GetDirectoryName(currentExePath) ?? AppDomain.CurrentDomain.BaseDirectory;
+        var state = ReadPendingUpdateState(currentAppDirectory);
         if (state == null)
         {
             return UpdateVerificationResult.None();
@@ -299,7 +298,7 @@ public sealed class UpdateService : ReactiveObject
             return UpdateVerificationResult.Failure(state, message);
         }
 
-        ClearPendingUpdateState();
+        ClearPendingUpdateState(currentAppDirectory);
         return UpdateVerificationResult.Success(state);
     }
 
@@ -308,39 +307,28 @@ public sealed class UpdateService : ReactiveObject
         string appDir,
         string parentDir,
         string expectedExePath,
-        string localConfigPath,
-        string appDataConfigPath,
-        string localConfigBackupPath,
+        string sourceAppDataConfigPath,
+        string targetAppDataConfigPath,
         string appDataConfigBackupPath,
-        string localConfigMarkerPath,
         string appDataConfigMarkerPath)
     {
-        var appDataConfigDir = Path.GetDirectoryName(appDataConfigPath) ?? string.Empty;
+        var targetAppDataConfigDir = Path.GetDirectoryName(targetAppDataConfigPath) ?? string.Empty;
 
         return $@"
 @echo off
 timeout /t 2 /nobreak > nul
 if not exist ""{extractSourceDir}"" exit /b 1
-if exist ""{localConfigPath}"" (
-  copy /y ""{localConfigPath}"" ""{localConfigBackupPath}"" > nul
-  type nul > ""{localConfigMarkerPath}""
-)
-if exist ""{appDataConfigPath}"" (
-  copy /y ""{appDataConfigPath}"" ""{appDataConfigBackupPath}"" > nul
+if exist ""{sourceAppDataConfigPath}"" (
+  copy /y ""{sourceAppDataConfigPath}"" ""{appDataConfigBackupPath}"" > nul
   type nul > ""{appDataConfigMarkerPath}""
 )
-xcopy /s /y /i ""{extractSourceDir.TrimEnd('\\')}"" ""{appDir.TrimEnd('\\')}""
-if exist ""{localConfigMarkerPath}"" (
-  copy /y ""{localConfigBackupPath}"" ""{localConfigPath}"" > nul
-) else if exist ""{appDataConfigMarkerPath}"" (
-  if exist ""{localConfigPath}"" del /f /q ""{localConfigPath}""
-)
+xcopy /s /y /i ""{extractSourceDir.TrimEnd('\\')}"" ""{appDir.TrimEnd('\\')}"" 
 if exist ""{appDataConfigMarkerPath}"" (
-  if not exist ""{appDataConfigDir}"" mkdir ""{appDataConfigDir}""
-  copy /y ""{appDataConfigBackupPath}"" ""{appDataConfigPath}"" > nul
+  if not exist ""{targetAppDataConfigDir}"" mkdir ""{targetAppDataConfigDir}""
+  copy /y ""{appDataConfigBackupPath}"" ""{targetAppDataConfigPath}"" > nul
 )
 if not exist ""{expectedExePath}"" exit /b 1
-rd /s /q ""{parentDir.TrimEnd('\\')}""
+rd /s /q ""{parentDir.TrimEnd('\\')}"" 
 start """" ""{expectedExePath}""
 del ""%~f0""
 ";
@@ -389,36 +377,43 @@ del ""%~f0""
         return extractRoot;
     }
 
-    private static string GetPendingUpdateStatePath()
+    private static string GetPendingUpdateStatePath(string appDirectory)
     {
-        var directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "GimmeCapture");
+        var path = AppStoragePaths.GetPendingUpdateStatePath(appDirectory);
+        var directory = Path.GetDirectoryName(path)!;
         Directory.CreateDirectory(directory);
-        return Path.Combine(directory, "pending-update.json");
+        return path;
     }
 
-    private static string GetFailedVerificationReportPath()
+    private static string GetFailedVerificationReportPath(string appDirectory)
     {
-        var directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "GimmeCapture");
+        var path = AppStoragePaths.GetFailedVerificationReportPath(appDirectory);
+        var directory = Path.GetDirectoryName(path)!;
         Directory.CreateDirectory(directory);
-        return Path.Combine(directory, "pending-update.failed.txt");
+        return path;
     }
 
     private static void WritePendingUpdateState(PendingUpdateState state)
     {
-        File.WriteAllText(GetPendingUpdateStatePath(), JsonSerializer.Serialize(state, PendingStateSerializerOptions));
+        File.WriteAllText(GetPendingUpdateStatePath(state.AppDirectory), JsonSerializer.Serialize(state, PendingStateSerializerOptions));
     }
 
-    private static PendingUpdateState? ReadPendingUpdateState()
+    private static PendingUpdateState? ReadPendingUpdateState(string appDirectory)
     {
-        var path = GetPendingUpdateStatePath();
-        if (!File.Exists(path))
+        var primaryPath = GetPendingUpdateStatePath(appDirectory);
+        var legacyPath = AppStoragePaths.GetLegacyPendingUpdateStatePath();
+        string? pathToRead = File.Exists(primaryPath)
+            ? primaryPath
+            : (File.Exists(legacyPath) ? legacyPath : null);
+
+        if (pathToRead == null)
         {
             return null;
         }
 
         try
         {
-            return JsonSerializer.Deserialize<PendingUpdateState>(File.ReadAllText(path), PendingStateSerializerOptions);
+            return JsonSerializer.Deserialize<PendingUpdateState>(File.ReadAllText(pathToRead), PendingStateSerializerOptions);
         }
         catch
         {
@@ -426,12 +421,20 @@ del ""%~f0""
         }
     }
 
-    private static void ClearPendingUpdateState()
+    private static void ClearPendingUpdateState(string appDirectory)
     {
-        var path = GetPendingUpdateStatePath();
-        if (File.Exists(path))
+        var paths = new[]
         {
-            File.Delete(path);
+            GetPendingUpdateStatePath(appDirectory),
+            AppStoragePaths.GetLegacyPendingUpdateStatePath()
+        };
+
+        foreach (var path in paths)
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
         }
     }
 
@@ -442,6 +445,6 @@ del ""%~f0""
                    + $"ExpectedExePath: {state.ExpectedExePath}{Environment.NewLine}"
                    + $"AppDirectory: {state.AppDirectory}{Environment.NewLine}"
                    + failureMessage;
-        File.WriteAllText(GetFailedVerificationReportPath(), report);
+        File.WriteAllText(GetFailedVerificationReportPath(state.AppDirectory), report);
     }
 }
