@@ -12,11 +12,15 @@ public class UpdateServiceTests
             @"C:\Apps\GimmeCapture",
             @"C:\Temp\update",
             @"C:\Apps\GimmeCapture\GimmeCapture.exe",
+            12345,
             @"C:\Users\Test\AppData\Local\GimmeCapture\config.json",
             @"C:\Users\Test\AppData\Local\GimmeCapture\instances\abcd1234\versions\0.29.0\config.json",
             @"C:\Temp\update\config.appdata.backup.json",
             @"C:\Temp\update\config.appdata.exists.marker");
 
+        Assert.Contains(@"tasklist /FI ""PID eq 12345"" | find ""12345"" > nul", script);
+        Assert.Contains(@":copy_retry", script);
+        Assert.Contains(@"robocopy ""C:\Temp\extract"" ""C:\Apps\GimmeCapture"" /E /R:2 /W:1 /NFL /NDL /NJH /NJS /NP > nul", script);
         Assert.Contains(@"type nul > ""C:\Temp\update\config.appdata.exists.marker""", script);
         Assert.Contains(@"copy /y ""C:\Temp\update\config.appdata.backup.json"" ""C:\Users\Test\AppData\Local\GimmeCapture\instances\abcd1234\versions\0.29.0\config.json"" > nul", script);
         Assert.Contains(@"if not exist ""C:\Apps\GimmeCapture\GimmeCapture.exe"" exit /b 1", script);
@@ -31,6 +35,7 @@ public class UpdateServiceTests
             @"C:\Apps\GimmeCapture",
             @"C:\Temp\update",
             @"C:\Apps\GimmeCapture\GimmeCapture.exe",
+            12345,
             @"C:\Users\Test\AppData\Local\GimmeCapture\config.json",
             @"C:\Users\Test\AppData\Local\GimmeCapture\instances\abcd1234\versions\0.29.0\config.json",
             @"C:\Temp\update\config.appdata.backup.json",

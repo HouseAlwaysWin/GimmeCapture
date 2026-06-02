@@ -203,6 +203,7 @@ public sealed class UpdateService : ReactiveObject
         try
         {
             var appDir = AppDomain.CurrentDomain.BaseDirectory;
+            var currentProcessId = Environment.ProcessId;
             var tempExtractDir = Path.Combine(Path.GetDirectoryName(zipPath)!, "extract");
             Directory.CreateDirectory(tempExtractDir);
 
@@ -236,6 +237,7 @@ public sealed class UpdateService : ReactiveObject
                 appDir,
                 parentDir,
                 expectedExePath,
+                currentProcessId,
                 sourceAppDataConfigPath,
                 targetAppDataConfigPath,
                 appDataConfigBackupPath,
@@ -307,6 +309,7 @@ public sealed class UpdateService : ReactiveObject
         string appDir,
         string parentDir,
         string expectedExePath,
+        int currentProcessId,
         string sourceAppDataConfigPath,
         string targetAppDataConfigPath,
         string appDataConfigBackupPath,
@@ -316,13 +319,31 @@ public sealed class UpdateService : ReactiveObject
 
         return $@"
 @echo off
-timeout /t 2 /nobreak > nul
+setlocal EnableExtensions EnableDelayedExpansion
+set ""WAIT_COUNT=0""
+:wait_for_exit
+tasklist /FI ""PID eq {currentProcessId}"" | find ""{currentProcessId}"" > nul
+if not errorlevel 1 (
+  if !WAIT_COUNT! GEQ 60 exit /b 1
+  set /a WAIT_COUNT+=1
+  timeout /t 1 /nobreak > nul
+  goto wait_for_exit
+)
 if not exist ""{extractSourceDir}"" exit /b 1
 if exist ""{sourceAppDataConfigPath}"" (
   copy /y ""{sourceAppDataConfigPath}"" ""{appDataConfigBackupPath}"" > nul
   type nul > ""{appDataConfigMarkerPath}""
 )
-xcopy /s /y /i ""{extractSourceDir.TrimEnd('\\')}"" ""{appDir.TrimEnd('\\')}"" 
+set ""COPY_COUNT=0""
+:copy_retry
+robocopy ""{extractSourceDir.TrimEnd('\\')}"" ""{appDir.TrimEnd('\\')}"" /E /R:2 /W:1 /NFL /NDL /NJH /NJS /NP > nul
+set ""ROBOCOPY_EXIT=!ERRORLEVEL!""
+if !ROBOCOPY_EXIT! GEQ 8 (
+  if !COPY_COUNT! GEQ 5 exit /b 1
+  set /a COPY_COUNT+=1
+  timeout /t 1 /nobreak > nul
+  goto copy_retry
+)
 if exist ""{appDataConfigMarkerPath}"" (
   if not exist ""{targetAppDataConfigDir}"" mkdir ""{targetAppDataConfigDir}""
   copy /y ""{appDataConfigBackupPath}"" ""{targetAppDataConfigPath}"" > nul
