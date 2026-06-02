@@ -1,6 +1,7 @@
 using Avalonia;
 using System;
 using Avalonia.ReactiveUI;
+using GimmeCapture.Services.Core.Infrastructure;
 
 namespace GimmeCapture;
 
@@ -19,7 +20,7 @@ class Program
         try
         {
             // Ensure Working Directory is correct (Fix for Auto-Start)
-            var exeDir = AppDomain.CurrentDomain.BaseDirectory;
+            var exeDir = RuntimePathProvider.GetExecutableDirectory();
             if (!string.IsNullOrEmpty(exeDir))
                 System.IO.Directory.SetCurrentDirectory(exeDir);
 

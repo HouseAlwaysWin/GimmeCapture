@@ -17,11 +17,12 @@ public class AppSettingsService
     public const int CurrentConfigVersion = 4;
     private readonly string _appVersion;
 
-    public string BaseDataDirectory { get; private set; } = AppDomain.CurrentDomain.BaseDirectory;
+    public string BaseDataDirectory { get; private set; } = RuntimePathProvider.GetExecutableDirectory();
     private string ConfigPath => Path.Combine(BaseDataDirectory, "config.json");
-    private string RuntimeLocalConfigPath => Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config.json");
-    private string RuntimeVersionedAppDataPath => AppStoragePaths.GetVersionedDataDirectory(AppDomain.CurrentDomain.BaseDirectory, _appVersion);
-    private string RuntimeVersionedAppDataConfigPath => AppStoragePaths.GetVersionedConfigPath(AppDomain.CurrentDomain.BaseDirectory, _appVersion);
+    private string RuntimeExecutableDirectory => RuntimePathProvider.GetExecutableDirectory();
+    private string RuntimeLocalConfigPath => Path.Combine(RuntimeExecutableDirectory, "config.json");
+    private string RuntimeVersionedAppDataPath => AppStoragePaths.GetVersionedDataDirectory(RuntimeExecutableDirectory, _appVersion);
+    private string RuntimeVersionedAppDataConfigPath => AppStoragePaths.GetVersionedConfigPath(RuntimeExecutableDirectory, _appVersion);
     private static string LegacyAppDataConfigPath => AppStoragePaths.GetLegacyConfigPath();
     
     public virtual AppSettings Settings { get; protected set; } = new();
@@ -52,7 +53,7 @@ public class AppSettingsService
     private bool IsRuntimeDefaultStorage =>
         string.Equals(
             Path.GetFullPath(BaseDataDirectory).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
-            Path.GetFullPath(AppDomain.CurrentDomain.BaseDirectory).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+            Path.GetFullPath(RuntimeExecutableDirectory).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
             StringComparison.OrdinalIgnoreCase);
 
     private JsonSerializerOptions GetJsonOptions() => new JsonSerializerOptions 
@@ -166,7 +167,7 @@ public class AppSettingsService
 
     public async Task LoadAsync()
     {
-        if (BaseDataDirectory != AppDomain.CurrentDomain.BaseDirectory && File.Exists(ConfigPath))
+        if (BaseDataDirectory != RuntimeExecutableDirectory && File.Exists(ConfigPath))
         {
             await LoadFromPathAsync(ConfigPath);
             return;
@@ -308,7 +309,7 @@ public class AppSettingsService
 
     public void LoadSync()
     {
-        if (BaseDataDirectory != AppDomain.CurrentDomain.BaseDirectory && File.Exists(ConfigPath))
+        if (BaseDataDirectory != RuntimeExecutableDirectory && File.Exists(ConfigPath))
         {
             LoadFromPathSync(ConfigPath);
             return;

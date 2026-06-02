@@ -202,14 +202,15 @@ public sealed class UpdateService : ReactiveObject
     {
         try
         {
-            var appDir = AppDomain.CurrentDomain.BaseDirectory;
+            var currentExePath = RuntimePathProvider.GetExecutablePath();
+            var appDir = Path.GetDirectoryName(currentExePath) ?? RuntimePathProvider.GetExecutableDirectory();
             var currentProcessId = Environment.ProcessId;
             var tempExtractDir = Path.Combine(Path.GetDirectoryName(zipPath)!, "extract");
             Directory.CreateDirectory(tempExtractDir);
 
             ZipFile.ExtractToDirectory(zipPath, tempExtractDir, overwriteFiles: true);
 
-            var currentExe = Process.GetCurrentProcess().MainModule?.FileName ?? "GimmeCapture.exe";
+            var currentExe = currentExePath;
             var currentExeName = Path.GetFileName(currentExe);
             var extractSourceDir = ResolveExtractSourceDirectory(tempExtractDir, currentExeName);
             var expectedExePath = Path.Combine(appDir, currentExeName);
@@ -275,7 +276,7 @@ public sealed class UpdateService : ReactiveObject
 
     public static UpdateVerificationResult VerifyPendingUpdateOnStartup(string currentVersion, string currentExePath)
     {
-        var currentAppDirectory = Path.GetDirectoryName(currentExePath) ?? AppDomain.CurrentDomain.BaseDirectory;
+        var currentAppDirectory = Path.GetDirectoryName(currentExePath) ?? RuntimePathProvider.GetExecutableDirectory();
         var state = ReadPendingUpdateState(currentAppDirectory);
         if (state == null)
         {
@@ -306,7 +307,7 @@ public sealed class UpdateService : ReactiveObject
 
     public static bool TryRedirectToPendingUpdatedInstance(string currentVersion, string currentExePath)
     {
-        var currentAppDirectory = Path.GetDirectoryName(currentExePath) ?? AppDomain.CurrentDomain.BaseDirectory;
+        var currentAppDirectory = Path.GetDirectoryName(currentExePath) ?? RuntimePathProvider.GetExecutableDirectory();
         if (ReadPendingUpdateState(currentAppDirectory) != null)
         {
             return false;
