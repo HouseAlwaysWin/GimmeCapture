@@ -193,6 +193,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     public string MenuCopyTranslation => LocalizationService.Instance["CopyTranslation"] ?? "Copy Translation";
 
     public Color ThemeColor => _mainVm?.ThemeColor ?? Colors.Red;
+    public Color OcrHighlightColor => _mainVm?.ThemeColor ?? SelectionBorderColor;
     public Color ThemeDeepColor 
     {
         get
@@ -445,10 +446,14 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
             .DisposeWith(_disposables);
 
         BindDistinct(mainVm.WhenAnyValue(x => x.ThemeColor), _ =>
-            RaiseProperties(nameof(ThemeColor), nameof(ThemeDeepColor)))
+            RaiseProperties(nameof(ThemeColor), nameof(OcrHighlightColor), nameof(ThemeDeepColor)))
             .DisposeWith(_disposables);
 
-        BindDistinct(mainVm.WhenAnyValue(x => x.BorderColor), val => SelectionBorderColor = val)
+        BindDistinct(mainVm.WhenAnyValue(x => x.BorderColor), val =>
+            {
+                SelectionBorderColor = val;
+                this.RaisePropertyChanged(nameof(OcrHighlightColor));
+            })
             .DisposeWith(_disposables);
 
         BindDistinct(mainVm.WhenAnyValue(x => x.BorderThickness), val => SelectionBorderThickness = val)

@@ -145,7 +145,7 @@
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
                         <!-- Interactive Candidate Box -->
-                        <Border BorderBrush="{Binding $parent[Window].DataContext.SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}" 
+                        <Border BorderBrush="{Binding $parent[Window].DataContext.OcrHighlightColor, Converter={StaticResource ColorToBrushConverter}}" 
                                 BorderThickness="1"
                                 Background="Transparent"
                                 Opacity="0.4"
@@ -153,9 +153,9 @@
                                 Height="{Binding Height}">
                             <Border.Styles>
                                 <Style Selector="Border:pointerover">
-                                    <Setter Property="BorderBrush" Value="{Binding $parent[Window].DataContext.SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}"/>
+                                    <Setter Property="BorderBrush" Value="{Binding $parent[Window].DataContext.OcrHighlightColor, Converter={StaticResource ColorToBrushConverter}}"/>
                                     <Setter Property="BorderThickness" Value="3"/>
-                                    <Setter Property="Background" Value="{Binding $parent[Window].DataContext.SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}"/>
+                                    <Setter Property="Background" Value="{Binding $parent[Window].DataContext.OcrHighlightColor, Converter={StaticResource ColorToBrushConverter}}"/>
                                     <Setter Property="Opacity" Value="0.2"/>
                                 </Style>
                             </Border.Styles>
@@ -181,7 +181,7 @@
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
-                        <Border BorderBrush="{Binding $parent[Window].DataContext.SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}"
+                        <Border BorderBrush="{Binding $parent[Window].DataContext.OcrHighlightColor, Converter={StaticResource ColorToBrushConverter}}"
                                 BorderThickness="1"
                                 Background="Transparent"
                                 Opacity="0.24"
@@ -192,7 +192,7 @@
             </ItemsControl>
 
             <Canvas IsHitTestVisible="False">
-                <Rectangle Stroke="{Binding SelectionBorderColor, Converter={StaticResource ColorToBrushConverter}}"
+                <Rectangle Stroke="{Binding OcrHighlightColor, Converter={StaticResource ColorToBrushConverter}}"
                            StrokeThickness="2"
                            StrokeDashArray="4,2"
                            StrokeDashOffset="{Binding HoverDashOffset}"
