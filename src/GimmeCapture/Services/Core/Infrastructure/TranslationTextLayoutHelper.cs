@@ -8,16 +8,16 @@ namespace GimmeCapture.Services.Core.Infrastructure;
 internal readonly record struct TranslationTextLayoutMetrics(
     Rect Bounds,
     double ContentHeight,
-    double FontSize);
+    double FontSize,
+    bool IsOverflowing);
 
 internal static class TranslationTextLayoutHelper
 {
-    private const double MinFontSize = 8.0;
+    private const double MinFontSize = 6.0;
     private const double MaxFontSize = 72.0;
-    private const double MinWidth = 80.0;
-    private const double MinHeight = 50.0;
     private const double HorizontalPadding = 12.0;
     private const double VerticalPadding = 12.0;
+    private const double OverflowTolerance = 2.0;
 
     public static TranslationTextLayoutMetrics FitBounds(
         string text,
@@ -25,52 +25,26 @@ internal static class TranslationTextLayoutHelper
         double preferredFontSize,
         Size viewportSize)
     {
+        Rect bounded = ClampToViewport(currentBounds, viewportSize);
         double fontSize = Math.Clamp(preferredFontSize, MinFontSize, MaxFontSize);
-        double width = Math.Max(currentBounds.Width, MinWidth);
-        double height = Math.Max(currentBounds.Height, MinHeight);
-        double maxWidth = Math.Max(width, Math.Min(Math.Max(width, viewportSize.Width * 0.65), viewportSize.Width - 16));
-        double maxHeight = Math.Max(height, Math.Min(Math.Max(height, viewportSize.Height * 0.7), viewportSize.Height - 16));
+        double usableWidth = Math.Max(40, bounded.Width - HorizontalPadding);
+        double usableHeight = Math.Max(20, bounded.Height - VerticalPadding);
 
-        var desired = MeasureText(text, fontSize, width);
-
-        while (desired.Height + VerticalPadding > height && width < maxWidth)
-        {
-            width = Math.Min(maxWidth, width + Math.Max(24.0, fontSize * 2.0));
-            desired = MeasureText(text, fontSize, width);
-        }
-
-        height = Math.Max(height, desired.Height + VerticalPadding);
-
-        while (height > maxHeight && fontSize > MinFontSize)
+        var desired = MeasureText(text, fontSize, usableWidth);
+        while ((desired.Height > usableHeight + OverflowTolerance || desired.Width > usableWidth + OverflowTolerance) && fontSize > MinFontSize)
         {
             fontSize = Math.Max(MinFontSize, fontSize - 0.5);
-            desired = MeasureText(text, fontSize, width);
-            height = Math.Max(currentBounds.Height, desired.Height + VerticalPadding);
-
-            if (height <= maxHeight)
-            {
-                break;
-            }
-
-            if (width < maxWidth)
-            {
-                width = Math.Min(maxWidth, width + Math.Max(16.0, fontSize * 1.5));
-                desired = MeasureText(text, fontSize, width);
-                height = Math.Max(currentBounds.Height, desired.Height + VerticalPadding);
-            }
+            desired = MeasureText(text, fontSize, usableWidth);
         }
 
-        width = Math.Max(width, Math.Min(maxWidth, desired.Width + HorizontalPadding));
-        height = Math.Min(maxHeight, Math.Max(height, desired.Height + VerticalPadding));
-
-        var fittedBounds = ClampToViewport(
-            new Rect(currentBounds.X, currentBounds.Y, width, height),
-            viewportSize);
-
-        return new TranslationTextLayoutMetrics(fittedBounds, desired.Height, fontSize);
+        bool overflowing =
+            desired.Height > usableHeight + OverflowTolerance
+            || desired.Width > usableWidth + OverflowTolerance
+            || fontSize < (preferredFontSize - 0.1);
+        return new TranslationTextLayoutMetrics(bounded, desired.Height, fontSize, overflowing);
     }
 
-    private static Size MeasureText(string text, double fontSize, double boundsWidth)
+    private static Size MeasureText(string text, double fontSize, double usableWidth)
     {
         var textBlock = new TextBlock
         {
@@ -80,26 +54,27 @@ internal static class TranslationTextLayoutHelper
             TextWrapping = TextWrapping.Wrap
         };
 
-        double availableWidth = Math.Max(40, boundsWidth - HorizontalPadding);
-        textBlock.Measure(new Size(availableWidth, double.PositiveInfinity));
+        textBlock.Measure(new Size(usableWidth, double.PositiveInfinity));
         return textBlock.DesiredSize;
     }
 
     private static Rect ClampToViewport(Rect bounds, Size viewportSize)
     {
+        double width = Math.Max(40, Math.Min(bounds.Width, Math.Max(40, viewportSize.Width)));
+        double height = Math.Max(24, Math.Min(bounds.Height, Math.Max(24, viewportSize.Height)));
         double x = bounds.X;
         double y = bounds.Y;
 
-        if (x + bounds.Width > viewportSize.Width)
+        if (x + width > viewportSize.Width)
         {
-            x = Math.Max(0, viewportSize.Width - bounds.Width);
+            x = Math.Max(0, viewportSize.Width - width);
         }
 
-        if (y + bounds.Height > viewportSize.Height)
+        if (y + height > viewportSize.Height)
         {
-            y = Math.Max(0, viewportSize.Height - bounds.Height);
+            y = Math.Max(0, viewportSize.Height - height);
         }
 
-        return new Rect(x, y, bounds.Width, bounds.Height);
+        return new Rect(x, y, width, height);
     }
 }

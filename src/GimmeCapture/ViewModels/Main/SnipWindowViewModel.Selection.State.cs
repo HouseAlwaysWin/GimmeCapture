@@ -336,6 +336,7 @@ public partial class SnipWindowViewModel
                 selection.IsTranslated = false;
                 selection.EstimatedTextHeight = 0;
                 selection.DisplayFontSize = selection.InferredFontSize;
+                selection.IsTextOverflowing = false;
                 maskChanged = true;
                 continue;
             }
@@ -346,6 +347,7 @@ public partial class SnipWindowViewModel
             selection.IsTranslated = !string.IsNullOrWhiteSpace(update.TranslatedText);
             selection.InferredFontSize = update.InferredFontSize;
             selection.DisplayFontSize = update.InferredFontSize;
+            selection.IsTextOverflowing = false;
 
             if (selection.IsTranslated)
             {

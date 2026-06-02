@@ -300,7 +300,7 @@ public partial class SnipWindowViewModel
             sel.InferredFontSize,
             ViewportSize);
 
-        return Math.Max(0, metrics.Bounds.Height - sel.Bounds.Height);
+        return Math.Max(0, metrics.ContentHeight + 12 - sel.Bounds.Height);
     }
 
     /// <summary>
@@ -320,7 +320,8 @@ public partial class SnipWindowViewModel
             ViewportSize);
 
         sel.DisplayFontSize = metrics.FontSize;
-        sel.EstimatedTextHeight = Math.Max(0, metrics.Bounds.Height - sel.Bounds.Height);
+        sel.EstimatedTextHeight = Math.Max(0, metrics.ContentHeight + 12 - sel.Bounds.Height);
+        sel.IsTextOverflowing = metrics.IsOverflowing;
 
         if (Math.Abs(metrics.Bounds.Width - sel.Bounds.Width) > 1 || Math.Abs(metrics.Bounds.Height - sel.Bounds.Height) > 1)
         {

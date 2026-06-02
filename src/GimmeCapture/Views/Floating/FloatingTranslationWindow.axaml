@@ -33,7 +33,9 @@
             <ItemsControl.ItemTemplate>
                 <DataTemplate>
                     <Canvas ClipToBounds="False" Width="{Binding Bounds.Width}" Height="{Binding Bounds.Height}">
-                        <Grid Width="{Binding Bounds.Width}" Height="{Binding Bounds.Height}">
+                        <Grid Width="{Binding Bounds.Width}" Height="{Binding Bounds.Height}"
+                              ToolTip.Tip="{Binding TranslatedText}"
+                              ToolTip.IsEnabled="{Binding IsTextOverflowing}">
                             <Grid.ContextMenu>
                                 <ContextMenu>
                                     <MenuItem Header="{Binding $parent[Window].DataContext.MenuCopyTranslation}"
@@ -137,6 +139,13 @@
                                     </Grid>
                                 </Border>
                             </Panel>
+
+                            <Border VerticalAlignment="Top"
+                                    Height="18"
+                                    Background="#01000000"
+                                    Classes="MoveHandle"
+                                    Cursor="SizeAll"
+                                    ZIndex="10"/>
 
                             <Panel IsHitTestVisible="True" VerticalAlignment="Stretch" HorizontalAlignment="Stretch" ClipToBounds="True">
                                 <Panel.IsVisible>

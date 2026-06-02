@@ -88,6 +88,13 @@ public class UserSelectionRect : ReactiveObject
         get => _displayFontSize;
         set => this.RaiseAndSetIfChanged(ref _displayFontSize, value);
     }
+
+    private bool _isTextOverflowing;
+    public bool IsTextOverflowing
+    {
+        get => _isTextOverflowing;
+        set => this.RaiseAndSetIfChanged(ref _isTextOverflowing, value);
+    }
     
     private byte[]? _lastPixels;
     public byte[]? LastPixels

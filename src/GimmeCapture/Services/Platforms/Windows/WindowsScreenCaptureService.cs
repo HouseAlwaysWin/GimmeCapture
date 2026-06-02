@@ -268,7 +268,7 @@ public class WindowsScreenCaptureService : IScreenCaptureService
                     var relBounds = new Rect(sel.Bounds.Position - region.Position, sel.Bounds.Size);
                     if (relBounds.Width <= 0 || relBounds.Height <= 0) continue;
 
-                    DrawTranslationBox(canvas, relBounds, sel.TranslatedText, sel.InferredFontSize, scale);
+                    DrawTranslationBox(canvas, relBounds, sel.TranslatedText, sel.DisplayFontSize > 0 ? sel.DisplayFontSize : sel.InferredFontSize, scale);
                 }
             }
 
@@ -307,13 +307,8 @@ public class WindowsScreenCaptureService : IScreenCaptureService
         // UI matches: Background #CC000000 (80% opacity), CornerRadius 4, Padding 6, Margin 4
         // The relBounds already represents the text region.
         
-        float margin = 4.0f * scale;
         float padding = 6.0f * scale;
         float cornerRadius = 4.0f * scale;
-
-        // Calculate box size. 
-        // Note: The UI Panel uses VerticalAlignment=Center, HorizontalAlignment=Center.
-        // We assume the relBounds is the target area where the text box should be centered.
         
         using var paint = new SKPaint
         {
@@ -336,39 +331,22 @@ public class WindowsScreenCaptureService : IScreenCaptureService
         using var typeface = SKTypeface.FromFamilyName("Microsoft JhengHei", style); // Match UI preference
         using var font = new SKFont(typeface, (float)(fontSize * scale));
 
-        // Basic line wrapping and measuring
         var lines = WrapText(text, (float)(relBounds.Width * scale - padding * 2), font);
         float lineHeight = font.Size * 1.5f;
-        float totalTextHeight = lines.Count * lineHeight;
-        float totalTextWidth = lines.AsValueEnumerable().Any() ? lines.AsValueEnumerable().Max(l => font.MeasureText(l)) : 0;
-
-        float boxWidth = totalTextWidth + padding * 2;
-        float boxHeight = totalTextHeight + padding * 2;
-
-        // Center the box within relBounds
-        float centerX = (float)(relBounds.X * scale + relBounds.Width * scale / 2);
-        float centerY = (float)(relBounds.Y * scale + relBounds.Height * scale / 2);
-
         var boxRect = new SKRect(
-            centerX - boxWidth / 2,
-            centerY - boxHeight / 2,
-            centerX + boxWidth / 2,
-            centerY + boxHeight / 2
-        );
-
-        // Clip to avoid overflow if necessary, but UI usually lets it overflow if ClipToBounds=False
-        // However, for capture, we should probably keep it reasonable.
+            (float)(relBounds.X * scale),
+            (float)(relBounds.Y * scale),
+            (float)((relBounds.X + relBounds.Width) * scale),
+            (float)((relBounds.Y + relBounds.Height) * scale));
         
         canvas.DrawRoundRect(boxRect, cornerRadius, cornerRadius, paint);
 
-        float textX = centerX - totalTextWidth / 2;
-        float textY = centerY - totalTextHeight / 2 + font.Size; // Skia draws from baseline
+        float textX = boxRect.Left + padding;
+        float textY = boxRect.Top + padding + font.Size;
 
         foreach (var line in lines)
         {
-            float lineWidth = font.MeasureText(line);
-            float lineX = centerX - lineWidth / 2; // Center each line
-            canvas.DrawText(line, lineX, textY, font, textPaint);
+            canvas.DrawText(line, textX, textY, font, textPaint);
             textY += lineHeight;
         }
     }

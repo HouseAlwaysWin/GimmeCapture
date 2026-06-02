@@ -13,6 +13,7 @@ internal sealed class TranslationResultItem : ReactiveObject
     private double _inferredFontSize = 12.0;
     private double _displayFontSize = 12.0;
     private double _estimatedTextHeight;
+    private bool _isTextOverflowing;
 
     public Rect Bounds
     {
@@ -62,6 +63,12 @@ internal sealed class TranslationResultItem : ReactiveObject
         set => this.RaiseAndSetIfChanged(ref _estimatedTextHeight, value);
     }
 
+    public bool IsTextOverflowing
+    {
+        get => _isTextOverflowing;
+        set => this.RaiseAndSetIfChanged(ref _isTextOverflowing, value);
+    }
+
     public string PrimaryText => !string.IsNullOrWhiteSpace(TranslatedText) ? TranslatedText : OriginalText;
 
     public static TranslationResultItem FromSelection(UserSelectionRect selection)
@@ -75,7 +82,8 @@ internal sealed class TranslationResultItem : ReactiveObject
             OriginalText = selection.OriginalText,
             InferredFontSize = selection.InferredFontSize,
             DisplayFontSize = selection.DisplayFontSize,
-            EstimatedTextHeight = selection.EstimatedTextHeight
+            EstimatedTextHeight = selection.EstimatedTextHeight,
+            IsTextOverflowing = selection.IsTextOverflowing
         };
     }
 }
