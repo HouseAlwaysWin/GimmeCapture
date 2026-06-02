@@ -11,6 +11,7 @@ internal sealed class TranslationResultItem : ReactiveObject
     private string _translatedText = string.Empty;
     private string _originalText = string.Empty;
     private double _inferredFontSize = 12.0;
+    private double _displayFontSize = 12.0;
     private double _estimatedTextHeight;
 
     public Rect Bounds
@@ -49,6 +50,12 @@ internal sealed class TranslationResultItem : ReactiveObject
         set => this.RaiseAndSetIfChanged(ref _inferredFontSize, value);
     }
 
+    public double DisplayFontSize
+    {
+        get => _displayFontSize;
+        set => this.RaiseAndSetIfChanged(ref _displayFontSize, value);
+    }
+
     public double EstimatedTextHeight
     {
         get => _estimatedTextHeight;
@@ -67,6 +74,7 @@ internal sealed class TranslationResultItem : ReactiveObject
             TranslatedText = selection.TranslatedText,
             OriginalText = selection.OriginalText,
             InferredFontSize = selection.InferredFontSize,
+            DisplayFontSize = selection.DisplayFontSize,
             EstimatedTextHeight = selection.EstimatedTextHeight
         };
     }

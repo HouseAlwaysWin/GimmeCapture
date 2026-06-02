@@ -45,6 +45,17 @@ internal static class TranslationResultLayerManager
         window.Activate();
     }
 
+    public static void ClearAll()
+    {
+        if (_window?.DataContext is not FloatingTranslationLayerViewModel vm)
+        {
+            return;
+        }
+
+        vm.ClearAll();
+        _window.Hide();
+    }
+
     private static FloatingTranslationWindow EnsureWindow()
     {
         if (_window != null)

@@ -148,11 +148,10 @@ public partial class FloatingTranslationWindow : Window
         var opaqueRects = new List<Rect>();
         foreach (var item in _viewModel.Items)
         {
-            double extraHeight = item.IsTranslated && !item.IsAudioPanel ? item.EstimatedTextHeight + 20 : 0;
             double x = Math.Max(0, (item.Bounds.X - 20) * scaling);
             double y = Math.Max(0, (item.Bounds.Y - 20) * scaling);
             double width = Math.Max(1, (item.Bounds.Width + 40) * scaling);
-            double height = Math.Max(1, (item.Bounds.Height + 40 + extraHeight) * scaling);
+            double height = Math.Max(1, (item.Bounds.Height + 40) * scaling);
             opaqueRects.Add(new Rect(x, y, width, height));
         }
 

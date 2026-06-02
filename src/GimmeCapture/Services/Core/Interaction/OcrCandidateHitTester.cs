@@ -49,6 +49,45 @@ public static class OcrCandidateHitTester
         return best;
     }
 
+    public static OcrCandidate? SelectTranslationCandidate(
+        Point point,
+        IReadOnlyList<OcrCandidate> paragraphCandidates,
+        IReadOnlyList<OcrCandidate> lineCandidates,
+        OcrCandidate? previousCandidate = null)
+    {
+        OcrCandidate? line = FindContainingCandidate(point, lineCandidates);
+        if (line != null)
+        {
+            if (previousCandidate != null &&
+                previousCandidate.IsSameIdentity(line))
+            {
+                return previousCandidate;
+            }
+
+            return line;
+        }
+
+        OcrCandidate? paragraph = FindContainingCandidate(point, paragraphCandidates);
+        if (paragraph == null)
+        {
+            if (previousCandidate != null && previousCandidate.Bounds.Inflate(CandidateHysteresisPadding).Contains(point))
+            {
+                return previousCandidate;
+            }
+
+            return null;
+        }
+
+        if (previousCandidate != null &&
+            previousCandidate.GroupId == paragraph.GroupId &&
+            previousCandidate.Bounds.Inflate(CandidateHysteresisPadding).Contains(point))
+        {
+            return previousCandidate;
+        }
+
+        return paragraph;
+    }
+
     private static OcrCandidate? ResolvePreferredCandidate(
         Point point,
         OcrCandidate? paragraph,

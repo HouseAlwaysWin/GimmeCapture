@@ -335,6 +335,7 @@ public partial class SnipWindowViewModel
                 selection.TranslatedText = string.Empty;
                 selection.IsTranslated = false;
                 selection.EstimatedTextHeight = 0;
+                selection.DisplayFontSize = selection.InferredFontSize;
                 maskChanged = true;
                 continue;
             }
@@ -344,10 +345,11 @@ public partial class SnipWindowViewModel
             selection.TranslatedText = update.TranslatedText;
             selection.IsTranslated = !string.IsNullOrWhiteSpace(update.TranslatedText);
             selection.InferredFontSize = update.InferredFontSize;
+            selection.DisplayFontSize = update.InferredFontSize;
 
             if (selection.IsTranslated)
             {
-                selection.EstimatedTextHeight = EstimateTranslatedTextHeight(selection);
+                AutoFitSelectionToText(selection);
             }
 
             maskChanged = true;

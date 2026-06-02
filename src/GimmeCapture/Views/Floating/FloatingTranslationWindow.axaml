@@ -82,7 +82,7 @@
                                         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                                             <SelectableTextBlock Text="{Binding OriginalText}"
                                                                  Foreground="Yellow"
-                                                                 FontSize="{Binding InferredFontSize}"
+                                                                 FontSize="{Binding DisplayFontSize}"
                                                                  TextWrapping="Wrap">
                                                 <SelectableTextBlock.ContextMenu>
                                                     <ContextMenu>
@@ -108,7 +108,7 @@
                                         <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                                             <SelectableTextBlock Text="{Binding TranslatedText}"
                                                                  Foreground="White"
-                                                                 FontSize="{Binding InferredFontSize}"
+                                                                 FontSize="{Binding DisplayFontSize}"
                                                                  TextWrapping="Wrap">
                                                 <SelectableTextBlock.ContextMenu>
                                                     <ContextMenu>
@@ -138,7 +138,7 @@
                                 </Border>
                             </Panel>
 
-                            <Panel IsHitTestVisible="True" VerticalAlignment="Center" HorizontalAlignment="Stretch" ClipToBounds="True">
+                            <Panel IsHitTestVisible="True" VerticalAlignment="Stretch" HorizontalAlignment="Stretch" ClipToBounds="True">
                                 <Panel.IsVisible>
                                     <MultiBinding Converter="{x:Static BoolConverters.And}">
                                         <Binding Path="!IsAudioPanel"/>
@@ -151,14 +151,13 @@
                                         BorderBrush="#44FFFFFF"
                                         BorderThickness="1"
                                         Margin="0"
-                                        MaxWidth="{Binding Bounds.Width}"
-                                        HorizontalAlignment="Center"
-                                        VerticalAlignment="Center"
+                                        HorizontalAlignment="Stretch"
+                                        VerticalAlignment="Stretch"
                                         ClipToBounds="True">
                                     <StackPanel>
                                         <SelectableTextBlock Text="{Binding TranslatedText}"
                                                              Foreground="White"
-                                                             FontSize="{Binding InferredFontSize}"
+                                                             FontSize="{Binding DisplayFontSize}"
                                                              TextWrapping="Wrap">
                                             <SelectableTextBlock.ContextMenu>
                                                 <ContextMenu>

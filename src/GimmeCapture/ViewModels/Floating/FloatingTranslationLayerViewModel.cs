@@ -63,6 +63,11 @@ internal sealed class FloatingTranslationLayerViewModel : ReactiveObject
         }
     }
 
+    public void ClearAll()
+    {
+        Items.Clear();
+    }
+
     private void RemoveItem(TranslationResultItem? item)
     {
         if (item == null)

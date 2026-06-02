@@ -737,11 +737,11 @@ public partial class SnipWindow : Window
                 }
                 else
                 {
-                    dest.Add(new Rect(
-                        rect.X * scaling,
-                        rect.Y * scaling,
-                        rect.Width * scaling,
-                        (rect.Height + sel.EstimatedTextHeight + 20) * scaling));
+	                    dest.Add(new Rect(
+	                        rect.X * scaling,
+	                        rect.Y * scaling,
+	                        rect.Width * scaling,
+	                        rect.Height * scaling));
                 }
             }
             else
@@ -887,11 +887,11 @@ public partial class SnipWindow : Window
                             else
                             {
                                 // 已翻譯：選取框及下方文字島嶼保持不透明
-                                extraRegions.Add(new Rect(
-                                    rect.X * scaling,
-                                    rect.Y * scaling,
-                                    rect.Width * scaling,
-                                    (rect.Height + sel.EstimatedTextHeight + 20) * scaling));
+	                                extraRegions.Add(new Rect(
+	                                    rect.X * scaling,
+	                                    rect.Y * scaling,
+	                                    rect.Width * scaling,
+	                                    rect.Height * scaling));
                             }
                         }
                         else

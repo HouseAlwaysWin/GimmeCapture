@@ -140,13 +140,13 @@ public static class OcrCandidateGrouper
     {
         double centerYDiff = Math.Abs(group.CenterY - GetCenterY(rect));
         double maxHeight = Math.Max(group.AverageHeight, rect.Height);
-        if (centerYDiff > maxHeight * 0.45)
+        if (centerYDiff > maxHeight * 0.35)
         {
             return false;
         }
 
         double averageCharHeight = (group.AverageHeight + rect.Height) / 2.0;
-        double maxHorizontalGap = Math.Max(averageCharHeight * 1.8, 20.0);
+        double maxHorizontalGap = Math.Max(averageCharHeight * 1.15, 12.0);
         double horizontalGap = rect.Left >= group.Bounds.Right
             ? rect.Left - group.Bounds.Right
             : group.Bounds.Left >= rect.Right
@@ -165,7 +165,7 @@ public static class OcrCandidateGrouper
                 : 0;
 
         double maxHeight = Math.Max(group.AverageLineHeight, line.Bounds.Height);
-        if (verticalGap > maxHeight * 0.9)
+        if (verticalGap > maxHeight * 0.55)
         {
             return false;
         }
@@ -179,7 +179,14 @@ public static class OcrCandidateGrouper
             return false;
         }
 
-        return (overlapWidth / minWidth) >= 0.35;
+        double overlapRatio = overlapWidth / minWidth;
+        double lineCenterX = line.Bounds.X + (line.Bounds.Width / 2.0);
+        double horizontalTolerance = Math.Max(group.Bounds.Width * 0.15, 18.0);
+        bool lineCenterAligned =
+            lineCenterX >= (group.Bounds.Left - horizontalTolerance) &&
+            lineCenterX <= (group.Bounds.Right + horizontalTolerance);
+
+        return overlapRatio >= 0.55 && lineCenterAligned;
     }
 
     private static int CompareByCenterYThenX(Rect left, Rect right)

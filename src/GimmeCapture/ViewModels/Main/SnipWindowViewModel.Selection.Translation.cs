@@ -1,6 +1,7 @@
 using Avalonia;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Core;
+using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.OCR;
 using GimmeCapture.ViewModels.Floating;
 using System;
@@ -121,16 +122,19 @@ public partial class SnipWindowViewModel
                     // Propagate inferred font size from blocks
                     if (blocks.AsValueEnumerable().Any())
                     {
-                        sel.InferredFontSize = blocks[0].InferredFontSize;
+                        double averageFontSize = blocks.AsValueEnumerable().Average(block => block.InferredFontSize);
+                        sel.InferredFontSize = averageFontSize;
+                        sel.DisplayFontSize = averageFontSize;
                     }
                     else if (isFailed)
                     {
                         sel.InferredFontSize = 14.0;
+                        sel.DisplayFontSize = 14.0;
                     }
 
                     if (sel.IsTranslated)
                     {
-                        sel.EstimatedTextHeight = EstimateTranslatedTextHeight(sel);
+                        AutoFitSelectionToText(sel);
                     }
 
                     // V8: 翻譯後重新整理遮罩和 Win32 Region
@@ -285,31 +289,18 @@ public partial class SnipWindowViewModel
 
     private double EstimateTranslatedTextHeight(UserSelectionRect sel)
     {
-        if (string.IsNullOrWhiteSpace(sel.TranslatedText)) return 0;
-
-        var text = sel.TranslatedText;
-        double fontSize = sel.InferredFontSize; // Use inferred font size from OCR
-        double lineHeight = fontSize * 1.8;
-        double padding = 28; // Border padding + extra
-        double currentWidth = sel.Bounds.Width;
-        double usableWidth = Math.Max(currentWidth - padding, 40);
-
-        double EstimateTextWidth(string s)
+        if (string.IsNullOrWhiteSpace(sel.TranslatedText))
         {
-            double w = 0;
-            foreach (char c in s)
-            {
-                if (c >= 0x2E80 && c <= 0x9FFF || c >= 0xF900 && c <= 0xFAFF || 
-                    c >= 0xFF00 && c <= 0xFFEF || c >= 0x3000 && c <= 0x303F)
-                    w += fontSize * 1.1; 
-                else
-                    w += fontSize * 0.6; 
-            }
-            return w;
+            return 0;
         }
 
-        int totalLines = CountWrappedLines(text, usableWidth, EstimateTextWidth, out _);
-        return totalLines * lineHeight + padding;
+        var metrics = TranslationTextLayoutHelper.FitBounds(
+            sel.TranslatedText,
+            sel.Bounds,
+            sel.InferredFontSize,
+            ViewportSize);
+
+        return Math.Max(0, metrics.Bounds.Height - sel.Bounds.Height);
     }
 
     /// <summary>
@@ -317,7 +308,27 @@ public partial class SnipWindowViewModel
     /// </summary>
     private void AutoFitSelectionToText(UserSelectionRect sel)
     {
-        if (string.IsNullOrWhiteSpace(sel.TranslatedText)) return;
+        if (string.IsNullOrWhiteSpace(sel.TranslatedText))
+        {
+            return;
+        }
+
+        var metrics = TranslationTextLayoutHelper.FitBounds(
+            sel.TranslatedText,
+            sel.Bounds,
+            sel.InferredFontSize,
+            ViewportSize);
+
+        sel.DisplayFontSize = metrics.FontSize;
+        sel.EstimatedTextHeight = Math.Max(0, metrics.Bounds.Height - sel.Bounds.Height);
+
+        if (Math.Abs(metrics.Bounds.Width - sel.Bounds.Width) > 1 || Math.Abs(metrics.Bounds.Height - sel.Bounds.Height) > 1)
+        {
+            sel.Bounds = metrics.Bounds;
+            System.Diagnostics.Debug.WriteLine($"[AutoFit] Expanded to {metrics.Bounds.Width:F0}x{metrics.Bounds.Height:F0}, font={metrics.FontSize:F1}, text='{sel.TranslatedText}'");
+        }
+
+        return;
 
         var text = sel.TranslatedText;
         double fontSize = sel.InferredFontSize; // Use inferred font size
@@ -486,12 +497,12 @@ public partial class SnipWindowViewModel
             case UserSelectionRect sel:
                 bounds = sel.Bounds;
                 text = sel.TranslatedText;
-                fontSize = sel.InferredFontSize;
+                fontSize = sel.DisplayFontSize > 0 ? sel.DisplayFontSize : sel.InferredFontSize;
                 return true;
             case TranslationResultItem result:
                 bounds = result.Bounds;
                 text = result.TranslatedText;
-                fontSize = result.InferredFontSize;
+                fontSize = result.DisplayFontSize > 0 ? result.DisplayFontSize : result.InferredFontSize;
                 return true;
             case TranslatedBlock block:
                 bounds = block.Bounds;

@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core.AI;
 using GimmeCapture.Services.Core;
+using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Core.Interaction;
 using GimmeCapture.Services.OCR;
 
@@ -29,6 +30,7 @@ public partial class SnipWindowViewModel
     private IReadOnlyList<Rect> _translationOcrRawRects = [];
     private IReadOnlyList<OcrCandidate> _translationOcrLineCandidates = [];
     private IReadOnlyList<OcrCandidate> _translationOcrParagraphCandidates = [];
+    private OcrCandidate? _currentHoverTranslationOcrCandidate;
     private Rect _translationOcrCacheViewportRect;
     private PixelPoint _translationOcrCacheScreenOffset;
     private double _translationOcrCacheVisualScaling = -1;
@@ -115,6 +117,7 @@ public partial class SnipWindowViewModel
     private void ClearTranslationOcrSearchOverlay()
     {
         TranslationOcrSearchRects.Clear();
+        _currentHoverTranslationOcrCandidate = null;
         IsTranslationOcrSearchActive = false;
     }
 
@@ -124,6 +127,7 @@ public partial class SnipWindowViewModel
         _translationOcrRawRects = [];
         _translationOcrLineCandidates = [];
         _translationOcrParagraphCandidates = [];
+        _currentHoverTranslationOcrCandidate = null;
         TranslationOcrSearchRects.Clear();
     }
 
@@ -136,7 +140,7 @@ public partial class SnipWindowViewModel
             return;
         }
 
-        foreach (var candidate in _translationOcrParagraphCandidates)
+        foreach (var candidate in _translationOcrLineCandidates)
         {
             TranslationOcrSearchRects.Add(new VisualRect(candidate.Bounds));
         }
@@ -266,22 +270,30 @@ public partial class SnipWindowViewModel
 
     internal bool TryMaterializeTranslationOcrCandidateAtPoint(Point point)
     {
-        if (CurrentMode != SnipMode.Translation || _translationOcrParagraphCandidates.Count == 0)
+        if (CurrentMode != SnipMode.Translation || (_translationOcrParagraphCandidates.Count == 0 && _translationOcrLineCandidates.Count == 0))
         {
             return false;
         }
 
-        var candidate = OcrCandidateHitTester.SelectCandidate(point, _translationOcrParagraphCandidates, Array.Empty<OcrCandidate>());
+        var candidate = OcrCandidateHitTester.SelectTranslationCandidate(
+            point,
+            _translationOcrParagraphCandidates,
+            _translationOcrLineCandidates,
+            _currentHoverTranslationOcrCandidate);
         if (candidate == null)
         {
+            _currentHoverTranslationOcrCandidate = null;
             return false;
         }
 
+        _currentHoverTranslationOcrCandidate = candidate;
         return TryMaterializeTranslationOcrCandidate(candidate);
     }
 
     private bool TryMaterializeTranslationOcrCandidate(OcrCandidate candidate)
     {
+        Rect candidateBounds = ResolveTranslationCandidateBounds(candidate);
+
         foreach (var existing in UserSelections)
         {
             if (existing.IsAudioPanel)
@@ -289,18 +301,87 @@ public partial class SnipWindowViewModel
                 continue;
             }
 
-            if (Math.Abs(existing.Bounds.X - candidate.Bounds.X) < 0.5
-                && Math.Abs(existing.Bounds.Y - candidate.Bounds.Y) < 0.5
-                && Math.Abs(existing.Bounds.Width - candidate.Bounds.Width) < 0.5
-                && Math.Abs(existing.Bounds.Height - candidate.Bounds.Height) < 0.5)
+            if (Math.Abs(existing.Bounds.X - candidateBounds.X) < 0.5
+                && Math.Abs(existing.Bounds.Y - candidateBounds.Y) < 0.5
+                && Math.Abs(existing.Bounds.Width - candidateBounds.Width) < 0.5
+                && Math.Abs(existing.Bounds.Height - candidateBounds.Height) < 0.5)
             {
                 return false;
             }
         }
 
-        UserSelections.Add(new UserSelectionRect { Bounds = candidate.Bounds });
+        UserSelections.Add(new UserSelectionRect { Bounds = candidateBounds });
         UpdateMask();
         return true;
+    }
+
+    private Rect ResolveTranslationCandidateBounds(OcrCandidate candidate)
+    {
+        if (candidate.Kind != OcrCandidateKind.Line)
+        {
+            return candidate.Bounds;
+        }
+
+        var siblingLines = _translationOcrLineCandidates.AsValueEnumerable()
+            .Where(line => line.GroupId == candidate.GroupId)
+            .OrderBy(line => line.Bounds.Y)
+            .ToList();
+
+        int selectedIndex = siblingLines.FindIndex(line => line.IsSameIdentity(candidate));
+        if (selectedIndex < 0)
+        {
+            return candidate.Bounds;
+        }
+
+        Rect combinedBounds = siblingLines[selectedIndex].Bounds;
+
+        for (int i = selectedIndex - 1; i >= 0; i--)
+        {
+            if (!CanJoinLocalTranslationCluster(siblingLines[i], combinedBounds))
+            {
+                break;
+            }
+
+            combinedBounds = combinedBounds.Union(siblingLines[i].Bounds);
+        }
+
+        for (int i = selectedIndex + 1; i < siblingLines.Count; i++)
+        {
+            if (!CanJoinLocalTranslationCluster(siblingLines[i], combinedBounds))
+            {
+                break;
+            }
+
+            combinedBounds = combinedBounds.Union(siblingLines[i].Bounds);
+        }
+
+        return combinedBounds;
+    }
+
+    private static bool CanJoinLocalTranslationCluster(OcrCandidate candidate, Rect currentBounds)
+    {
+        double verticalGap = candidate.Bounds.Top >= currentBounds.Bottom
+            ? candidate.Bounds.Top - currentBounds.Bottom
+            : currentBounds.Top >= candidate.Bounds.Bottom
+                ? currentBounds.Top - candidate.Bounds.Bottom
+                : 0;
+
+        double maxHeight = Math.Max(candidate.Bounds.Height, currentBounds.Height);
+        if (verticalGap > Math.Max(maxHeight * 0.55, 10.0))
+        {
+            return false;
+        }
+
+        double overlapWidth = Math.Max(
+            0,
+            Math.Min(candidate.Bounds.Right, currentBounds.Right) - Math.Max(candidate.Bounds.Left, currentBounds.Left));
+        double minWidth = Math.Min(candidate.Bounds.Width, currentBounds.Width);
+        if (minWidth <= 0)
+        {
+            return false;
+        }
+
+        return (overlapWidth / minWidth) >= 0.5;
     }
 
     private void MaterializeAllTranslationOcrCandidates()
@@ -745,10 +826,13 @@ public partial class SnipWindowViewModel
         ClearAllSelectionsCommand = ReactiveCommand.Create(() =>
         {
             UserSelections.Clear();
+            InvalidateTranslationOcrSearchCache();
+            TranslationResultLayerManager.ClearAll();
             if (CurrentTranslationTool == TranslationTool.Audio)
             {
                 EnsureAudioTranslationBox();
             }
+            UpdateMask();
         }, canExecuteInTranslation);
         ClearAllSelectionsCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"ClearAll error: {ex}"));
 

@@ -525,7 +525,7 @@
                                             <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                                                 <SelectableTextBlock Text="{Binding OriginalText}"
                                                                    Foreground="Yellow"
-                                                                   FontSize="{Binding InferredFontSize}"
+                                                                   FontSize="{Binding DisplayFontSize}"
                                                                    TextWrapping="Wrap">
                                                     <SelectableTextBlock.ContextMenu>
                                                         <ContextMenu>
@@ -552,7 +552,7 @@
                                             <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                                                 <SelectableTextBlock Text="{Binding TranslatedText}"
                                                                    Foreground="White"
-                                                                   FontSize="{Binding InferredFontSize}"
+                                                                   FontSize="{Binding DisplayFontSize}"
                                                                    TextWrapping="Wrap">
                                                     <SelectableTextBlock.ContextMenu>
                                                         <ContextMenu>
@@ -585,7 +585,7 @@
                                 </Panel>
 
                                 <!-- 3b. 一般翻譯框（原本樣式） -->
-                                <Panel IsHitTestVisible="True" VerticalAlignment="Center" HorizontalAlignment="Stretch" ClipToBounds="True">
+                                <Panel IsHitTestVisible="True" VerticalAlignment="Stretch" HorizontalAlignment="Stretch" ClipToBounds="True">
                                     <Panel.IsVisible>
                                         <MultiBinding Converter="{x:Static BoolConverters.And}">
                                             <Binding Path="!IsAudioPanel"/>
@@ -597,13 +597,12 @@
                                     <Border Background="#CC000000" CornerRadius="4" Padding="4"
                                             BorderBrush="#44FFFFFF" BorderThickness="1"
                                             Margin="0"
-                                            MaxWidth="{Binding Bounds.Width}"
-                                            HorizontalAlignment="Center" VerticalAlignment="Center"
+                                            HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
                                             ClipToBounds="True">
                                         <StackPanel>
                                             <SelectableTextBlock Text="{Binding TranslatedText}" 
                                                                Foreground="White" 
-                                                               FontSize="{Binding InferredFontSize}" 
+                                                               FontSize="{Binding DisplayFontSize}" 
                                                                TextWrapping="Wrap"
                                                                IsVisible="{Binding !$parent[Window].DataContext.ShowOcrResult}">
                                                 <SelectableTextBlock.ContextMenu>
@@ -624,7 +623,7 @@
                                             </SelectableTextBlock>
                                             <SelectableTextBlock Text="{Binding OriginalText}" 
                                                                Foreground="Yellow" 
-                                                               FontSize="{Binding InferredFontSize}" 
+                                                               FontSize="{Binding DisplayFontSize}" 
                                                                TextWrapping="Wrap"
                                                                IsVisible="{Binding $parent[Window].DataContext.ShowOcrResult}">
                                                 <SelectableTextBlock.ContextMenu>
