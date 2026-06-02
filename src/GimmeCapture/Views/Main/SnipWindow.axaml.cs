@@ -925,6 +925,7 @@ public partial class SnipWindow : Window
         _viewModel.TranslationOverlayLeft = currentPos.X - _translationDragOffset.X;
         _viewModel.TranslationOverlayTop = currentPos.Y - _translationDragOffset.Y;
         _viewModel.IsTranslationOverlayManuallyPositioned = true;
+        RequestTranslationWindowRegionRefresh();
         
         e.Handled = true;
     }
@@ -934,6 +935,7 @@ public partial class SnipWindow : Window
         if (_pointerState == PointerInteractionState.DraggingTranslationResult && sender is Border border)
         {
             _pointerState = PointerInteractionState.None;
+            RequestTranslationWindowRegionRefresh();
             e.Pointer.Capture(null);
             e.Handled = true;
         }

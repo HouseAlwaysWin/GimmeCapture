@@ -208,4 +208,20 @@ public partial class SnipWindow
         }
         return null;
     }
+
+    private static bool HasClassInAncestors(Control? sourceControl, string className)
+    {
+        var current = sourceControl;
+        while (current != null)
+        {
+            if (current.Classes.Contains(className))
+            {
+                return true;
+            }
+
+            current = current.GetVisualParent() as Control;
+        }
+
+        return false;
+    }
 }

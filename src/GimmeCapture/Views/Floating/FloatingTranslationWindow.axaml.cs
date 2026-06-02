@@ -208,7 +208,7 @@ public partial class FloatingTranslationWindow : Window
             return;
         }
 
-        if (HasClassInAncestors(source, "MoveHandle"))
+        if (HasClassInAncestors(source, "MoveHandle") || HasClassInAncestors(source, "TranslationItem"))
         {
             _pointerState = PointerState.Moving;
             _movingItem = item;

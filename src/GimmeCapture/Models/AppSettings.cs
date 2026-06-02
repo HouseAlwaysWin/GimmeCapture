@@ -16,6 +16,8 @@ public class TranslatedBlock
     public string TranslatedText { get; set; } = string.Empty;
     public Avalonia.Rect Bounds { get; set; }
     public double InferredFontSize { get; set; } = 12.0;
+    public double DisplayFontSize { get; set; } = 12.0;
+    public bool IsTextOverflowing { get; set; }
 }
 
 public class SnipHotkeys

@@ -72,8 +72,12 @@ public partial class SnipWindow : Window
         // Check for handle interaction (Move or Resize)
         // prioritized before drawing logic to allow adjustment while tool is active
         var sourceControl = e.Source as Control;
+        bool isTranslationText = sourceControl is SelectableTextBlock || sourceControl?.FindAncestorOfType<SelectableTextBlock>() != null;
         bool isResizeHandle = sourceControl != null && sourceControl.Classes.Contains("Handle");
-        bool isMoveHandle = sourceControl != null && (sourceControl.Classes.Contains("MoveHandle") || sourceControl.Name?.Contains("InnerCorner") == true);
+        bool isMoveHandle = sourceControl != null &&
+            (sourceControl.Classes.Contains("MoveHandle")
+             || sourceControl.Name?.Contains("InnerCorner") == true
+             || (!isTranslationText && HasClassInAncestors(sourceControl, "TranslationItem")));
         
         System.Diagnostics.Debug.WriteLine($"[PointerPressed] isResize: {isResizeHandle}, isMove: {isMoveHandle}");
 
@@ -84,6 +88,7 @@ public partial class SnipWindow : Window
 
             if (sel != null)
             {
+                if (isTranslationText) return;
                 if (props.IsRightButtonPressed) return;
 
                 _pointerState = PointerInteractionState.MovingTranslationBox;
@@ -344,7 +349,7 @@ public partial class SnipWindow : Window
                 {
                     var hit = this.InputHitTest(currentPoint) as Control;
                     bool isResizeHandle = hit != null && hit.Classes.Contains("Handle");
-                    bool isMoveHandle = hit != null && hit.Classes.Contains("MoveHandle");
+                    bool isMoveHandle = hit != null && (hit.Classes.Contains("MoveHandle") || HasClassInAncestors(hit, "TranslationItem"));
 
                     if (isResizeHandle)
                     {

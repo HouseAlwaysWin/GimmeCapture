@@ -58,9 +58,11 @@
                                     Height="{Binding Bounds.Height}"
                                     CornerRadius="0"
                                     Classes="TranslationItem"
+                                    ToolTip.Tip="{Binding TranslatedText}"
+                                    ToolTip.IsEnabled="{Binding IsTextOverflowing}"
                                     IsHitTestVisible="True"/>
 
-                            <Border Classes="MoveHandle" BorderBrush="#01FFFFFF" BorderThickness="20" Background="Transparent" Cursor="SizeAll"/>
+                            <Border Classes="MoveHandle" BorderBrush="#01FFFFFF" BorderThickness="20" Background="Transparent" Cursor="SizeAll" ToolTip.Tip="{Binding TranslatedText}" ToolTip.IsEnabled="{Binding IsTextOverflowing}"/>
                             <Grid Name="InnerCornerTopLeft" Width="40" Height="40" HorizontalAlignment="Left" VerticalAlignment="Top" Background="#01FFFFFF" Cursor="SizeAll" Margin="1,1,0,0" Classes="MoveHandle"/>
                             <Grid Name="InnerCornerTopRight" Width="40" Height="40" HorizontalAlignment="Right" VerticalAlignment="Top" Background="#01FFFFFF" Cursor="SizeAll" Margin="0,1,1,0" Classes="MoveHandle"/>
                             <Grid Name="InnerCornerBottomLeft" Width="40" Height="40" HorizontalAlignment="Left" VerticalAlignment="Bottom" Background="#01FFFFFF" Cursor="SizeAll" Margin="1,0,0,1" Classes="MoveHandle"/>
@@ -145,6 +147,8 @@
                                     Background="#01000000"
                                     Classes="MoveHandle"
                                     Cursor="SizeAll"
+                                    ToolTip.Tip="{Binding TranslatedText}"
+                                    ToolTip.IsEnabled="{Binding IsTextOverflowing}"
                                     ZIndex="10"/>
 
                             <Panel IsHitTestVisible="True" VerticalAlignment="Stretch" HorizontalAlignment="Stretch" ClipToBounds="True">

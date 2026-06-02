@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using GimmeCapture.Models;
@@ -765,6 +766,63 @@ public partial class SnipWindow : Window
                     8 * scaling));
             }
         }
+
+        AddTranslatedBlockOverlayRegions(dest, scaling);
+    }
+
+    private void AddTranslatedBlockOverlayRegions(System.Collections.Generic.List<Rect> dest, double scaling)
+    {
+        if (_viewModel == null || _viewModel.TranslatedBlocks.Count == 0)
+        {
+            return;
+        }
+
+        const double maxOuterWidth = 400.0;
+        const double contentWidth = 376.0;
+        const double itemSpacing = 4.0;
+        const double chromeHeight = 44.0;
+
+        double x = _viewModel.TranslationOverlayLeft;
+        double y = _viewModel.TranslationOverlayTop;
+
+        foreach (var block in _viewModel.TranslatedBlocks)
+        {
+            string translated = block.TranslatedText ?? string.Empty;
+            string original = block.OriginalText ?? string.Empty;
+            double fontSize = block.DisplayFontSize > 0 ? block.DisplayFontSize : block.InferredFontSize;
+
+            double translatedHeight = MeasureTranslatedBlockOverlayHeight(translated, fontSize, contentWidth);
+            double originalHeight = MeasureTranslatedBlockOverlayHeight(original, fontSize, contentWidth);
+            double contentHeight = Math.Max(translatedHeight, originalHeight);
+            double itemHeight = Math.Max(chromeHeight, contentHeight + chromeHeight);
+
+            dest.Add(new Rect(
+                Math.Max(0, x) * scaling,
+                Math.Max(0, y) * scaling,
+                maxOuterWidth * scaling,
+                itemHeight * scaling));
+
+            y += itemHeight + itemSpacing;
+        }
+    }
+
+    private static double MeasureTranslatedBlockOverlayHeight(string text, double fontSize, double contentWidth)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return 24.0;
+        }
+
+        var textBlock = new TextBlock
+        {
+            Text = text,
+            FontSize = Math.Max(6.0, fontSize),
+            TextWrapping = TextWrapping.Wrap,
+            MaxWidth = contentWidth
+        };
+
+        textBlock.Measure(new Size(contentWidth, double.PositiveInfinity));
+        return Math.Max(24.0, textBlock.DesiredSize.Height);
     }
 
     /// <summary>
@@ -879,19 +937,19 @@ public partial class SnipWindow : Window
                             {
                                 // Audio panel keeps text inside fixed box (no extra text island below).
                                 extraRegions.Add(new Rect(
-                                    rect.X * scaling,
-                                    rect.Y * scaling,
-                                    rect.Width * scaling,
-                                    rect.Height * scaling));
+                                    (rect.X - 20) * scaling,
+                                    (rect.Y - 20) * scaling,
+                                    (rect.Width + 40) * scaling,
+                                    (rect.Height + 40) * scaling));
                             }
                             else
                             {
                                 // 已翻譯：選取框及下方文字島嶼保持不透明
 	                                extraRegions.Add(new Rect(
-	                                    rect.X * scaling,
-	                                    rect.Y * scaling,
-	                                    rect.Width * scaling,
-	                                    rect.Height * scaling));
+	                                    (rect.X - 20) * scaling,
+	                                    (rect.Y - 20) * scaling,
+	                                    (rect.Width + 40) * scaling,
+	                                    (rect.Height + 40) * scaling));
                             }
                         }
                         else
@@ -901,6 +959,8 @@ public partial class SnipWindow : Window
                         }
                     }
                 }
+
+                AddTranslatedBlockOverlayRegions(extraRegions, scaling);
             }
 
             // Translation single/multi (untranslated selection): same ring + inner hole as screenshot — not full-window-minus-holes.

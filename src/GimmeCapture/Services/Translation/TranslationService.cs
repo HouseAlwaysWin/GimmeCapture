@@ -194,7 +194,8 @@ public class TranslationService : IDisposable
                     OriginalText = mergedText,
                     TranslatedText = translated,
                     Bounds = logicalBounds,
-                    InferredFontSize = inferredFontSize
+                    InferredFontSize = inferredFontSize,
+                    DisplayFontSize = inferredFontSize
                 });
                 return (result, string.Empty);
             }
