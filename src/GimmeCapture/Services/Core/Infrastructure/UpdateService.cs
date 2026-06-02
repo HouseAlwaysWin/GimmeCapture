@@ -304,6 +304,52 @@ public sealed class UpdateService : ReactiveObject
         return UpdateVerificationResult.Success(state);
     }
 
+    public static bool TryRedirectToPendingUpdatedInstance(string currentVersion, string currentExePath)
+    {
+        var currentAppDirectory = Path.GetDirectoryName(currentExePath) ?? AppDomain.CurrentDomain.BaseDirectory;
+        if (ReadPendingUpdateState(currentAppDirectory) != null)
+        {
+            return false;
+        }
+
+        var normalizedCurrentPath = Path.GetFullPath(currentExePath);
+        var normalizedCurrentVersion = currentVersion.TrimStart('v');
+
+        var redirectTarget = EnumeratePendingUpdateStates()
+            .Where(state => !string.IsNullOrWhiteSpace(state.ExpectedExePath))
+            .Select(state => new
+            {
+                State = state,
+                NormalizedExpectedPath = Path.GetFullPath(state.ExpectedExePath)
+            })
+            .Where(x => !string.Equals(x.NormalizedExpectedPath, normalizedCurrentPath, StringComparison.OrdinalIgnoreCase))
+            .Where(x => File.Exists(x.NormalizedExpectedPath))
+            .Where(x => IsNewerVersion(x.State.TargetVersion, normalizedCurrentVersion))
+            .OrderByDescending(x => ParseVersionOrNull(x.State.TargetVersion) ?? new Version(0, 0, 0))
+            .ThenByDescending(x => x.State.CreatedAt)
+            .FirstOrDefault();
+
+        if (redirectTarget == null)
+        {
+            return false;
+        }
+
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = redirectTarget.NormalizedExpectedPath,
+                UseShellExecute = true
+            });
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Pending update redirect failed: {ex.Message}");
+            return false;
+        }
+    }
+
     public static string BuildUpdateScript(
         string extractSourceDir,
         string appDir,
@@ -439,6 +485,40 @@ del ""%~f0""
         catch
         {
             return null;
+        }
+    }
+
+    private static IEnumerable<PendingUpdateState> EnumeratePendingUpdateStates()
+    {
+        var rootDirectory = AppStoragePaths.GetRootDirectory();
+        if (!Directory.Exists(rootDirectory))
+        {
+            yield break;
+        }
+
+        var seenPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var path in Directory.EnumerateFiles(rootDirectory, "pending-update.json", SearchOption.AllDirectories))
+        {
+            var normalizedPath = Path.GetFullPath(path);
+            if (!seenPaths.Add(normalizedPath))
+            {
+                continue;
+            }
+
+            PendingUpdateState? state;
+            try
+            {
+                state = JsonSerializer.Deserialize<PendingUpdateState>(File.ReadAllText(path), PendingStateSerializerOptions);
+            }
+            catch
+            {
+                continue;
+            }
+
+            if (state != null)
+            {
+                yield return state;
+            }
         }
     }
 

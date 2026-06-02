@@ -27,6 +27,12 @@ public partial class App : Application
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             var currentExePath = Process.GetCurrentProcess().MainModule?.FileName ?? string.Empty;
+            if (UpdateService.TryRedirectToPendingUpdatedInstance(AppVersionInfo.CurrentVersion, currentExePath))
+            {
+                desktop.Shutdown();
+                return;
+            }
+
             var verificationResult = UpdateService.VerifyPendingUpdateOnStartup(AppVersionInfo.CurrentVersion, currentExePath);
             if (verificationResult.HasPendingUpdate && !verificationResult.IsSuccess)
             {

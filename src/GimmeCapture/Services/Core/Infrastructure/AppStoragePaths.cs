@@ -10,6 +10,11 @@ internal static class AppStoragePaths
     private static string RootDirectory =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "GimmeCapture");
 
+    public static string GetRootDirectory()
+    {
+        return RootDirectory;
+    }
+
     public static string GetLegacyConfigPath()
     {
         return Path.Combine(RootDirectory, "config.json");
