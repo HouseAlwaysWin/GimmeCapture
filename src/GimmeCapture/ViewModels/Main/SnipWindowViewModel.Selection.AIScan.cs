@@ -12,6 +12,7 @@ using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core.AI;
 using GimmeCapture.Services.Core;
 using GimmeCapture.Services.Core.Interaction;
+using GimmeCapture.Services.OCR;
 
 namespace GimmeCapture.ViewModels.Main;
 
@@ -25,6 +26,15 @@ public partial class SnipWindowViewModel
     private IReadOnlyList<Rect> _ocrRawRects = [];
     private IReadOnlyList<OcrCandidate> _ocrLineCandidates = [];
     private IReadOnlyList<OcrCandidate> _ocrParagraphCandidates = [];
+    private IReadOnlyList<Rect> _translationOcrRawRects = [];
+    private IReadOnlyList<OcrCandidate> _translationOcrLineCandidates = [];
+    private IReadOnlyList<OcrCandidate> _translationOcrParagraphCandidates = [];
+    private Rect _translationOcrCacheViewportRect;
+    private PixelPoint _translationOcrCacheScreenOffset;
+    private double _translationOcrCacheVisualScaling = -1;
+    private bool _translationOcrCacheValid;
+    private bool _isTranslationOcrSearchActive;
+    private bool _isTranslationOcrScanRunning;
     private string? _currentHoverKey;
     private DateTime _lastHoverAnimationTickUtc;
 
@@ -49,6 +59,7 @@ public partial class SnipWindowViewModel
 
     public ObservableCollection<VisualRect> WindowRects { get; } = new();
     public ObservableCollection<VisualRect> AIScanRects { get; } = new();
+    public ObservableCollection<VisualRect> TranslationOcrSearchRects { get; } = new();
     private readonly IWindowDetectionService _detectionService;
 
     private Rect _animatedHoverRect;
@@ -77,6 +88,12 @@ public partial class SnipWindowViewModel
         && AnimatedHoverRect.Width > 0
         && AnimatedHoverRect.Height > 0;
 
+    public bool IsTranslationOcrSearchActive
+    {
+        get => _isTranslationOcrSearchActive;
+        private set => this.RaiseAndSetIfChanged(ref _isTranslationOcrSearchActive, value);
+    }
+
     private void InitializeWindowSnapHoverAnimation()
     {
         _hoverAnimationTimer.Tick += (_, _) => AdvanceWindowSnapHoverAnimation();
@@ -93,6 +110,236 @@ public partial class SnipWindowViewModel
         _ocrParagraphCandidates = [];
         DismissWindowSnapHoverPreview(preserveTargetRect: false);
         _scanCts?.Cancel();
+    }
+
+    private void ClearTranslationOcrSearchOverlay()
+    {
+        TranslationOcrSearchRects.Clear();
+        IsTranslationOcrSearchActive = false;
+    }
+
+    private void InvalidateTranslationOcrSearchCache()
+    {
+        _translationOcrCacheValid = false;
+        _translationOcrRawRects = [];
+        _translationOcrLineCandidates = [];
+        _translationOcrParagraphCandidates = [];
+        TranslationOcrSearchRects.Clear();
+    }
+
+    private void RefreshTranslationOcrSearchRects()
+    {
+        TranslationOcrSearchRects.Clear();
+
+        if (!IsTranslationOcrSearchActive || CurrentMode != SnipMode.Translation)
+        {
+            return;
+        }
+
+        foreach (var candidate in _translationOcrParagraphCandidates)
+        {
+            TranslationOcrSearchRects.Add(new VisualRect(candidate.Bounds));
+        }
+    }
+
+    private bool IsTranslationOcrCacheCurrent()
+    {
+        if (!_translationOcrCacheValid)
+        {
+            return false;
+        }
+
+        return _translationOcrCacheViewportRect == new Rect(0, 0, ViewportSize.Width, ViewportSize.Height)
+            && _translationOcrCacheScreenOffset == ScreenOffset
+            && Math.Abs(_translationOcrCacheVisualScaling - VisualScaling) < 0.0001;
+    }
+
+    private async Task EnsureTranslationOcrSearchCandidatesAsync(bool forceRefresh = false)
+    {
+        if (CurrentMode != SnipMode.Translation || _mainVm == null || _translationSession == null)
+        {
+            return;
+        }
+
+        if (!forceRefresh && IsTranslationOcrCacheCurrent())
+        {
+            RefreshTranslationOcrSearchRects();
+            return;
+        }
+
+        if (_isTranslationOcrScanRunning)
+        {
+            return;
+        }
+
+        _isTranslationOcrScanRunning = true;
+        ShowTopLoadingBar = true;
+        IsIndeterminate = true;
+
+        try
+        {
+            if (!await EnsureTranslationEngineReadyAsync())
+            {
+                return;
+            }
+
+            bool ready = await _translationSession.EnsureOcrReadyAsync(_mainVm.SourceLanguage);
+            if (!ready)
+            {
+                return;
+            }
+
+            var fullScreenRect = new Rect(0, 0, ViewportSize.Width, ViewportSize.Height);
+            using var bitmap = await _captureService.CaptureScreenAsync(fullScreenRect, ScreenOffset, VisualScaling, false);
+            if (bitmap == null)
+            {
+                return;
+            }
+
+            using var ocrEngine = new PaddleOCREngine(_mainVm.AIResourceService, _mainVm.AppSettingsService, _mainVm.OcrRuntimeService);
+            await ocrEngine.EnsureLoadedAsync(_mainVm.AppSettingsService.Settings.SourceLanguage);
+            var textBoxes = await Task.Run(() => ocrEngine.DetectText(bitmap));
+
+            double scaleX = ViewportSize.Width / bitmap.Width;
+            double scaleY = ViewportSize.Height / bitmap.Height;
+            var rawLogicalRects = new List<Rect>(textBoxes.Count);
+            var toolbarRect = GetTranslationToolbarRect();
+
+            foreach (var box in textBoxes)
+            {
+                var bounds = new Rect(
+                    box.Left * scaleX,
+                    box.Top * scaleY,
+                    box.Width * scaleX,
+                    box.Height * scaleY);
+
+                if (bounds.Width <= 10 || bounds.Height <= 5)
+                {
+                    continue;
+                }
+
+                if (toolbarRect.HasValue && bounds.Intersects(toolbarRect.Value))
+                {
+                    continue;
+                }
+
+                rawLogicalRects.Add(bounds);
+            }
+
+            var grouped = OcrCandidateGrouper.Group(rawLogicalRects);
+
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                _translationOcrRawRects = grouped.RawRects;
+                _translationOcrLineCandidates = grouped.LineCandidates;
+                _translationOcrParagraphCandidates = grouped.ParagraphCandidates;
+                _translationOcrCacheViewportRect = fullScreenRect;
+                _translationOcrCacheScreenOffset = ScreenOffset;
+                _translationOcrCacheVisualScaling = VisualScaling;
+                _translationOcrCacheValid = true;
+                RefreshTranslationOcrSearchRects();
+            });
+        }
+        finally
+        {
+            _isTranslationOcrScanRunning = false;
+            ShowTopLoadingBar = false;
+            IsIndeterminate = false;
+        }
+    }
+
+    private Rect? GetTranslationToolbarRect()
+    {
+        if (ToolbarWidth <= 0 || ToolbarHeight <= 0)
+        {
+            return null;
+        }
+
+        double tbLeft = TranslationToolbarLeft >= 0
+            ? TranslationToolbarLeft
+            : (ViewportSize.Width - (ToolbarWidth > 0 ? ToolbarWidth : 200)) / 2;
+        double tbTop = TranslationToolbarTop;
+        double tbWidth = ToolbarWidth > 0 ? ToolbarWidth + 20 : 220;
+        double tbHeight = ToolbarHeight > 0 ? ToolbarHeight + 10 : 55;
+        return new Rect(tbLeft, tbTop, tbWidth, tbHeight);
+    }
+
+    internal bool TryMaterializeTranslationOcrCandidateAtPoint(Point point)
+    {
+        if (CurrentMode != SnipMode.Translation || _translationOcrParagraphCandidates.Count == 0)
+        {
+            return false;
+        }
+
+        var candidate = OcrCandidateHitTester.SelectCandidate(point, _translationOcrParagraphCandidates, Array.Empty<OcrCandidate>());
+        if (candidate == null)
+        {
+            return false;
+        }
+
+        return TryMaterializeTranslationOcrCandidate(candidate);
+    }
+
+    private bool TryMaterializeTranslationOcrCandidate(OcrCandidate candidate)
+    {
+        foreach (var existing in UserSelections)
+        {
+            if (existing.IsAudioPanel)
+            {
+                continue;
+            }
+
+            if (Math.Abs(existing.Bounds.X - candidate.Bounds.X) < 0.5
+                && Math.Abs(existing.Bounds.Y - candidate.Bounds.Y) < 0.5
+                && Math.Abs(existing.Bounds.Width - candidate.Bounds.Width) < 0.5
+                && Math.Abs(existing.Bounds.Height - candidate.Bounds.Height) < 0.5)
+            {
+                return false;
+            }
+        }
+
+        UserSelections.Add(new UserSelectionRect { Bounds = candidate.Bounds });
+        UpdateMask();
+        return true;
+    }
+
+    private void MaterializeAllTranslationOcrCandidates()
+    {
+        if (_translationOcrParagraphCandidates.Count == 0)
+        {
+            return;
+        }
+
+        UserSelections.Clear();
+
+        foreach (var candidate in _translationOcrParagraphCandidates)
+        {
+            UserSelections.Add(new UserSelectionRect { Bounds = candidate.Bounds });
+        }
+
+        if (CurrentTranslationTool == TranslationTool.Audio)
+        {
+            EnsureAudioTranslationBox();
+        }
+
+        UpdateMask();
+    }
+
+    public async Task EnterTranslationOcrSearchAsync()
+    {
+        if (CurrentMode != SnipMode.Translation)
+        {
+            return;
+        }
+
+        IsTranslationOcrSearchActive = true;
+        RefreshTranslationOcrSearchRects();
+        await EnsureTranslationOcrSearchCandidatesAsync();
+    }
+
+    public void ExitTranslationOcrSearch()
+    {
+        ClearTranslationOcrSearchOverlay();
     }
 
     public void RefreshWindowRects(IntPtr? excludeHWnd = null)
@@ -492,7 +739,7 @@ public partial class SnipWindowViewModel
         TranslateAllSelectionsCommand = ReactiveCommand.Create(() => { _ = TranslateAllSelectionsAsync(); }, canExecuteInTranslation);
         TranslateAllSelectionsCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"TranslateAll error: {ex}"));
 
-        ScanAllTextCommand = ReactiveCommand.CreateFromTask(ScanAllTextAsync, canExecuteInTranslation);
+        ScanAllTextCommand = ReactiveCommand.CreateFromTask(ScanAllDetectedTranslationParagraphsAsync, canExecuteInTranslation);
         ScanAllTextCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"ScanAll error: {ex}"));
 
         ClearAllSelectionsCommand = ReactiveCommand.Create(() =>

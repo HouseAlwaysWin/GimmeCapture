@@ -108,6 +108,7 @@ public partial class SnipWindowViewModel
         {
             // 截圖/錄影的 AI 自動選取與視窗候選框不適用於翻譯模式
             ClearAiScanOverlayState();
+            ExitTranslationOcrSearch();
 
             // 進入翻譯模式：啟用遮罩並更新挖空區域
             SelectionRect = new Rect(0, 0, 0, 0); // 確保清空標準選取框，避免干擾挖空
@@ -120,6 +121,8 @@ public partial class SnipWindowViewModel
         else if (oldMode == SnipMode.Translation)
         {
             PersistTranslationSelectionsAction?.Invoke();
+            ExitTranslationOcrSearch();
+            InvalidateTranslationOcrSearchCache();
             // 退出翻譯模式：恢復遮罩
             ResetTranslationToolbarAfterLeavingTranslationMode();
             IsMaskVisible = true;

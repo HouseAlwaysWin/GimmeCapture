@@ -487,14 +487,22 @@ public partial class SnipWindowViewModel
     public PixelPoint ScreenOffset
     {
         get => _screenOffset;
-        set => this.RaiseAndSetIfChanged(ref _screenOffset, value);
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _screenOffset, value);
+            InvalidateTranslationOcrSearchCache();
+        }
     }
 
     private double _visualScaling = 1.0;
     public double VisualScaling
     {
         get => _visualScaling;
-        set => this.RaiseAndSetIfChanged(ref _visualScaling, value);
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _visualScaling, value);
+            InvalidateTranslationOcrSearchCache();
+        }
     }
 
     private Size _viewportSize;
@@ -504,6 +512,7 @@ public partial class SnipWindowViewModel
         set 
         {
             this.RaiseAndSetIfChanged(ref _viewportSize, value);
+            InvalidateTranslationOcrSearchCache();
             UpdateMask();
             UpdateToolbarPosition();
         }

@@ -31,6 +31,12 @@ public partial class SnipWindow
             if (!selModDown)
                 return false;
 
+            if (_viewModel.IsTranslationOcrSearchActive && _viewModel.TryMaterializeTranslationOcrCandidateAtPoint(point))
+            {
+                e.Handled = true;
+                return true;
+            }
+
             bool isAdditional = hasAnyBox;
             _viewModel.CurrentTranslationTool = isAdditional ? TranslationTool.Multi : TranslationTool.Single;
             _pointerState = PointerInteractionState.TranslationSelecting;

@@ -33,11 +33,13 @@ public partial class SnipWindow
             _viewModel.CurrentTranslationTool = hasAnyBox
                 ? Models.TranslationTool.Multi
                 : Models.TranslationTool.Single;
+            _ = _viewModel.EnterTranslationOcrSearchAsync();
         }
         else
         {
             _translationSuppressFullHitUntilSelectionModifierUp = false;
             _viewModel.CurrentTranslationTool = Models.TranslationTool.Cursor;
+            _viewModel.ExitTranslationOcrSearch();
         }
 
         RequestTranslationWindowRegionRefresh();

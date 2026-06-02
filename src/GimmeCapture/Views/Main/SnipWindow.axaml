@@ -407,6 +407,35 @@
                                  IsVisible="{Binding IsToolbarVisible}"/>
             </Canvas>
 
+            <ItemsControl ItemsSource="{Binding TranslationOcrSearchRects}"
+                          ZIndex="450"
+                          Width="{Binding ViewportSize.Width}" Height="{Binding ViewportSize.Height}"
+                          x:CompileBindings="False"
+                          IsHitTestVisible="False"
+                          IsVisible="{Binding IsTranslationOcrSearchActive}">
+                <ItemsControl.Styles>
+                    <Style Selector="ItemsControl > ContentPresenter" x:DataType="m:VisualRect">
+                        <Setter Property="Canvas.Left" Value="{Binding X}"/>
+                        <Setter Property="Canvas.Top" Value="{Binding Y}"/>
+                    </Style>
+                </ItemsControl.Styles>
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <Canvas />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="m:VisualRect">
+                        <Border BorderBrush="{Binding $parent[Window].DataContext.OcrHighlightColor, Converter={StaticResource ColorToBrushConverter}}"
+                                BorderThickness="2"
+                                Background="Transparent"
+                                Opacity="0.55"
+                                Width="{Binding Width}"
+                                Height="{Binding Height}"/>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
             <!-- Translation Selected Regions (UserSelections) -->
             <ItemsControl ItemsSource="{Binding UserSelections}" 
                           ZIndex="500"

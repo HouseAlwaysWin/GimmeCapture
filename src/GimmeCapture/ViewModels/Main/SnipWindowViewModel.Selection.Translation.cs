@@ -256,6 +256,33 @@ public partial class SnipWindowViewModel
     /// <summary>
     /// 估算翻譯文字在特定寬度下的高度，作為 HitTest Win32 Region 大小參考
     /// </summary>
+    private async Task ScanAllDetectedTranslationParagraphsAsync()
+    {
+        System.Diagnostics.Debug.WriteLine("[TranslationMode] ScanAllDetectedTranslationParagraphs triggered");
+
+        ShowTopLoadingBar = true;
+        IsIndeterminate = true;
+
+        try
+        {
+            await EnsureTranslationOcrSearchCandidatesAsync();
+            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                MaterializeAllTranslationOcrCandidates();
+                System.Diagnostics.Debug.WriteLine($"[TranslationMode] Materialized {_translationOcrParagraphCandidates.Count} paragraph candidates");
+            });
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[TranslationMode] ScanAllDetectedTranslationParagraphs error: {ex}");
+        }
+        finally
+        {
+            ShowTopLoadingBar = false;
+            IsIndeterminate = false;
+        }
+    }
+
     private double EstimateTranslatedTextHeight(UserSelectionRect sel)
     {
         if (string.IsNullOrWhiteSpace(sel.TranslatedText)) return 0;
