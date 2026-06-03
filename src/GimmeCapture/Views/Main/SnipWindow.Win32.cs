@@ -657,15 +657,9 @@ public partial class SnipWindow : Window
             return;
         }
 
-        Rect? toolbarRect = null;
-        if (_viewModel != null && _viewModel.IsToolbarVisible && _viewModel.ToolbarWidth > 0 && _viewModel.ToolbarHeight > 0)
-        {
-            double tw = TranslationToolbarOpaqueWidthDip(_viewModel.ToolbarWidth + 40);
-            double th = _viewModel.ToolbarHeight + 40;
-            double tx = _viewModel.ToolbarLeft - 20;
-            double ty = _viewModel.ToolbarTop - 20;
-            toolbarRect = new Rect(tx * scaling, ty * scaling, tw * scaling, th * scaling);
-        }
+        Rect? toolbarRect = TryGetToolbarOpaqueRect(scaling, 8, out var computedToolbarRect)
+            ? computedToolbarRect
+            : null;
 
         Win32Helpers.SetMultiWindowHoleRegion(hwnd, windowWidth, windowHeight, new[] { new Rect(0, 0, 1, 1) }, 0, toolbarRect, null);
     }
@@ -678,18 +672,9 @@ public partial class SnipWindow : Window
     private void ApplyTranslationPassThroughExceptToolbarAndLoadingBar(IntPtr hwnd, double scaling)
     {
         var opaque = new System.Collections.Generic.List<Rect>();
-        if (_viewModel != null && _viewModel.IsToolbarVisible)
+        if (TryGetToolbarOpaqueRect(scaling, 4, out var toolbarRect))
         {
-            // Keep the toolbar hit area tight to avoid blocking interaction on its right side.
-            if (_viewModel.ToolbarWidth > 1 && _viewModel.ToolbarHeight > 1)
-            {
-                const double pad = 8;
-                double tw = TranslationToolbarOpaqueWidthDip(_viewModel.ToolbarWidth + (pad * 2));
-                double th = _viewModel.ToolbarHeight + (pad * 2);
-                double tx = _viewModel.ToolbarLeft - pad;
-                double ty = _viewModel.ToolbarTop - pad;
-                opaque.Add(new Rect(tx * scaling, ty * scaling, tw * scaling, th * scaling));
-            }
+            opaque.Add(toolbarRect);
         }
 
         if (_viewModel != null && _viewModel.ShowTopLoadingBar)
@@ -707,6 +692,44 @@ public partial class SnipWindow : Window
         _useHitTestRegions = false;
     }
 
+    private bool TryGetToolbarOpaqueRect(double scaling, double logicalPadding, out Rect rect)
+    {
+        rect = default;
+
+        if (Toolbar == null || !Toolbar.IsVisible || Toolbar.Bounds.Width <= 1 || Toolbar.Bounds.Height <= 1)
+        {
+            if (_viewModel == null || !_viewModel.IsToolbarVisible || _viewModel.ToolbarWidth <= 1 || _viewModel.ToolbarHeight <= 1)
+            {
+                return false;
+            }
+
+            double tw = _viewModel.ToolbarWidth + (logicalPadding * 2);
+            double th = _viewModel.ToolbarHeight + (logicalPadding * 2);
+            double tx = _viewModel.ToolbarLeft - logicalPadding;
+            double ty = _viewModel.ToolbarTop - logicalPadding;
+            rect = new Rect(tx * scaling, ty * scaling, tw * scaling, th * scaling);
+            return true;
+        }
+
+        var topLeft = Toolbar.TranslatePoint(new Point(0, 0), this);
+        if (!topLeft.HasValue)
+        {
+            return false;
+        }
+
+        double paddedX = topLeft.Value.X - logicalPadding;
+        double paddedY = topLeft.Value.Y - logicalPadding;
+        double paddedWidth = Toolbar.Bounds.Width + (logicalPadding * 2);
+        double paddedHeight = Toolbar.Bounds.Height + (logicalPadding * 2);
+
+        rect = new Rect(
+            Math.Max(0, paddedX) * scaling,
+            Math.Max(0, paddedY) * scaling,
+            paddedWidth * scaling,
+            paddedHeight * scaling);
+        return true;
+    }
+
     /// <summary>
     /// Opaque UI islands for translation general (cursor) mode — same geometry as former WM_NCHITTEST list, for SetWindowRgn.
     /// </summary>
@@ -714,13 +737,9 @@ public partial class SnipWindow : Window
     {
         if (_viewModel == null) return;
 
-        if (_viewModel.IsToolbarVisible && _viewModel.ToolbarWidth > 0 && _viewModel.ToolbarHeight > 0)
+        if (TryGetToolbarOpaqueRect(scaling, 8, out var toolbarRect))
         {
-            double tw = TranslationToolbarOpaqueWidthDip(_viewModel.ToolbarWidth + 40);
-            double th = _viewModel.ToolbarHeight + 40;
-            double tx = _viewModel.ToolbarLeft - 20;
-            double ty = _viewModel.ToolbarTop - 20;
-            dest.Add(new Rect(tx * scaling, ty * scaling, tw * scaling, th * scaling));
+            dest.Add(toolbarRect);
         }
 
         foreach (var sel in _viewModel.UserSelections)
@@ -1032,15 +1051,9 @@ public partial class SnipWindow : Window
                     return;
                 }
 
-                Rect? toolbarRectRing = null;
-                if (_viewModel != null && _viewModel.IsToolbarVisible && _viewModel.ToolbarWidth > 0 && _viewModel.ToolbarHeight > 0)
-                {
-                    double tw = TranslationToolbarOpaqueWidthDip(_viewModel.ToolbarWidth + 40);
-                    double th = _viewModel.ToolbarHeight + 40;
-                    double tx = _viewModel.ToolbarLeft - 20;
-                    double ty = _viewModel.ToolbarTop - 20;
-                    toolbarRectRing = new Rect(tx * scaling, ty * scaling, tw * scaling, th * scaling);
-                }
+                Rect? toolbarRectRing = TryGetToolbarOpaqueRect(scaling, 8, out var computedToolbarRectRing)
+                    ? computedToolbarRectRing
+                    : null;
 
                 var ringsExtras = new System.Collections.Generic.List<Rect>(extraRegions);
                 if (_viewModel != null && _viewModel.ShowTopLoadingBar)
@@ -1060,83 +1073,34 @@ public partial class SnipWindow : Window
             }
             else if (state == SnipState.Selected)
             {
-                // V8 Fix: Use a single contiguous Bounding Box region with an inner hole!
-                // This allows full-screen pass-through outside the box AND avoids the DWM shadow 
-                // glitches caused by combining multiple disjoint `extraRegions` for wings/skulls.
-                var scaledRect = new Rect(selectionRect.X * scaling, selectionRect.Y * scaling, selectionRect.Width * scaling, selectionRect.Height * scaling);
-                
-                // Calculate outer bounding box that firmly wraps the selection + all wings/borders
-                double maxMargin = 0;
-                if (_viewModel != null)
+                var geometry = BuildSelectionInteractionGeometry(selectionRect);
+                var opaque = new System.Collections.Generic.List<Rect>();
+                foreach (var rect in geometry.EnumerateWindowRegionRects())
                 {
-                    double hSize = 40 * scaling;      // Handles
-                    double sThick = 15 * scaling;     // Frame edges
-                    double wW = _viewModel.WingWidth * scaling;
-                    double wH = _viewModel.WingHeight * scaling;
-                    double iSize = (_viewModel.SelectionIconSize + 8) * scaling; 
-                    
-                    // Base margin handles basic widths
-                    maxMargin = Math.Max(hSize / 2, Math.Max(sThick / 2, Math.Max(wW, iSize)));
-                    
-                    // Account for vertical overflowing wings on short selections
-                    double verticalOverflow = (wH / 2) - (scaledRect.Height / 2);
-                    if (verticalOverflow > maxMargin)
-                    {
-                        maxMargin = verticalOverflow + (10 * scaling); // +10px safety buffer
-                    }
-                }
-                else
-                {
-                    maxMargin = 20 * scaling;
-                }
-                
-                // Add an extra safety buffer for high-DPI or slight rounding variations
-                maxMargin += 20 * scaling;
-                
-                // The single contiguous outer region containing our graphics (avoids slicing complex PNG anti-aliasing)
-                var outerBox = new Rect(
-                    scaledRect.X - maxMargin,
-                    scaledRect.Y - maxMargin,
-                    scaledRect.Width + maxMargin * 2,
-                    scaledRect.Height + maxMargin * 2
-                );
-
-                Rect? selectedToolbarRect = null;
-                if (_viewModel != null && _viewModel.IsToolbarVisible && _viewModel.ToolbarWidth > 0 && _viewModel.ToolbarHeight > 0)
-                {
-                    double tw = _viewModel.ToolbarWidth + 20; 
-                    double th = _viewModel.ToolbarHeight + 20;
-                    selectedToolbarRect = new Rect((_viewModel.ToolbarLeft - 2) * scaling, (_viewModel.ToolbarTop - 2) * scaling, tw * scaling, th * scaling);
+                    opaque.Add(ScaleRect(rect, scaling));
                 }
 
-                // Avalonia draws borders and corners INSIDE the selectionRect Canvas.
-                // Punching a hole exactly at scaledRect deletes them! 
-                // We must shrink (deflate) the inner hole by the max inner penetration of our UI objects (~30px)
-                double innerShrink = 0;
-                if (_viewModel != null)
+                var hitTestRects = new System.Collections.Generic.List<Rect>();
+                foreach (var rect in geometry.EnumerateHitTestRects())
                 {
-                    // Corners penetrate by IconSize AND they are pushed inwards by a Margin proportional to BorderThickness.
-                    double innerIconWidth = (_viewModel.SelectionIconSize + 4) * scaling; 
-                    double borderThick = _viewModel.SelectionBorderThickness * scaling;
-                    
-                    // The inner clipping point is Additive (BorderThickness + IconSize + Safety Buffer)
-                    innerShrink = borderThick + innerIconWidth + (12 * scaling);
-                    innerShrink = Math.Max(15 * scaling, innerShrink); // At least 15px for basic UI handles
+                    hitTestRects.Add(ScaleRect(rect, scaling));
                 }
-                
-                // Safe guard: Do not shrink the hole so much that it inverts the geometry natively
-                double maxAllowedShrink = Math.Min(scaledRect.Width, scaledRect.Height) / 2.0 - 1;
-                if (maxAllowedShrink < 0) maxAllowedShrink = 0;
-                innerShrink = Math.Min(innerShrink, maxAllowedShrink);
 
-                var innerHole = new Rect(
-                    scaledRect.X + innerShrink,
-                    scaledRect.Y + innerShrink,
-                    Math.Max(0, scaledRect.Width - innerShrink * 2),
-                    Math.Max(0, scaledRect.Height - innerShrink * 2)
-                );
+                Rect? selectedToolbarRect = TryGetToolbarOpaqueRect(scaling, 4, out var computedSelectedToolbarRect)
+                    ? computedSelectedToolbarRect
+                    : null;
+                if (selectedToolbarRect.HasValue)
+                {
+                    hitTestRects.Add(selectedToolbarRect.Value);
+                }
 
-                Win32Helpers.SetBoundingBoxHoleRegion(hwnd, outerBox, innerHole, selectedToolbarRect);
+                // Keep the microscopic stub so Chromium/DWM still avoids treating this overlay
+                // as a full-screen occluder while the rest of the window stays click-through.
+                opaque.Add(new Rect(0, 0, 1, 1));
+                Win32Helpers.SetDisjointOpaqueRegions(hwnd, opaque, selectedToolbarRect);
+                _hitTestRegions.Clear();
+                _hitTestRegions.AddRange(hitTestRects);
+                _useHitTestRegions = _hitTestRegions.Count > 0;
                 return;
             }
 
@@ -1167,18 +1131,11 @@ public partial class SnipWindow : Window
                 return;
             }
 
-            Rect? toolbarRect = null;
-            if (_viewModel != null && _viewModel.IsToolbarVisible && _viewModel.ToolbarWidth > 0 && _viewModel.ToolbarHeight > 0)
+            Rect? toolbarRect = TryGetToolbarOpaqueRect(scaling, 8, out var computedToolbarRect2)
+                ? computedToolbarRect2
+                : null;
+            if (toolbarRect.HasValue)
             {
-                // V13: Robust toolbar region calculation
-                double tw = TranslationToolbarOpaqueWidthDip(_viewModel.ToolbarWidth + 40); // More padding
-                double th = _viewModel.ToolbarHeight + 40;
-                double tx = _viewModel.ToolbarLeft - 20;
-                double ty = _viewModel.ToolbarTop - 20;
-
-                toolbarRect = new Rect(tx * scaling, ty * scaling, tw * scaling, th * scaling);
-                
-                // Add to extraRegions to be absolutely sure it's opaque in SetMultiWindowHoleRegion
                 extraRegions.Add(toolbarRect.Value);
             }
 

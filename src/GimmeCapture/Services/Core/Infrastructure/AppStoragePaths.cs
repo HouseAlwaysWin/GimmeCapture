@@ -20,12 +20,15 @@ internal static class AppStoragePaths
         return Path.Combine(RootDirectory, "config.json");
     }
 
+    public static string GetInstallInstanceDirectory(string appDirectory)
+    {
+        return Path.Combine(RootDirectory, "instances", GetInstallInstanceKey(appDirectory));
+    }
+
     public static string GetVersionedDataDirectory(string appDirectory, string appVersion)
     {
         return Path.Combine(
-            RootDirectory,
-            "instances",
-            GetInstallInstanceKey(appDirectory),
+            GetInstallInstanceDirectory(appDirectory),
             "versions",
             NormalizeSegment(appVersion));
     }
@@ -53,6 +56,54 @@ internal static class AppStoragePaths
     public static string GetLegacyFailedVerificationReportPath()
     {
         return Path.Combine(RootDirectory, "pending-update.failed.txt");
+    }
+
+    public static string GetSharedAIResourcesDirectory(string appDirectory)
+    {
+        return Path.Combine(GetInstallInstanceDirectory(appDirectory), "shared", "AI");
+    }
+
+    public static bool TryMapVersionScopedAIResourcesDirectory(string aiResourcesDirectory, out string sharedDirectory)
+    {
+        sharedDirectory = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(aiResourcesDirectory))
+        {
+            return false;
+        }
+
+        try
+        {
+            string normalizedPath = Path.GetFullPath(aiResourcesDirectory)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            var aiDir = new DirectoryInfo(normalizedPath);
+            if (!string.Equals(aiDir.Name, "AI", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            var versionDir = aiDir.Parent;
+            var versionsDir = versionDir?.Parent;
+            var instanceDir = versionsDir?.Parent;
+            var instancesDir = instanceDir?.Parent;
+
+            if (versionDir == null
+                || versionsDir == null
+                || instanceDir == null
+                || instancesDir == null
+                || !string.Equals(versionsDir.Name, "versions", StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(instancesDir.Name, "instances", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            sharedDirectory = Path.Combine(instanceDir.FullName, "shared", "AI");
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private static string GetInstallInstanceKey(string appDirectory)

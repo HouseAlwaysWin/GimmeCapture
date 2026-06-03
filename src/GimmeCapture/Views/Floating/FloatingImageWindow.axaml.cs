@@ -8,11 +8,14 @@ using GimmeCapture.Models;
 using System;
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core;
+using GimmeCapture.Services.Interop;
 using Avalonia.Media.Imaging;
 using Avalonia.Media;
 using System.Reactive.Linq;
 using Avalonia.Interactivity;
 using System.ComponentModel;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace GimmeCapture.Views.Floating;
 
@@ -20,6 +23,8 @@ public partial class FloatingImageWindow : FloatingWindowBase
 {
     private bool _isAIPointing;
     private IDisposable? _toolbarBoundsSubscription;
+    private IDisposable? _mainBorderBoundsSubscription;
+    private IDisposable? _windowBoundsSubscription;
     private FloatingImageViewModel? _boundViewModel;
     private PropertyChangedEventHandler? _boundViewModelPropertyChangedHandler;
 
@@ -47,8 +52,20 @@ public partial class FloatingImageWindow : FloatingWindowBase
                     vm.ToolbarWidth = bounds.Width;
                     vm.ToolbarHeight = bounds.Height;
                 }
+
+                RefreshWindowRegion();
             });
         }
+
+        var mainBorder = this.FindControl<Border>("MainBorder");
+        if (mainBorder != null)
+        {
+            _mainBorderBoundsSubscription = mainBorder.GetObservable(Visual.BoundsProperty)
+                .Subscribe(_ => RefreshWindowRegion());
+        }
+
+        _windowBoundsSubscription = this.GetObservable(BoundsProperty)
+            .Subscribe(_ => RefreshWindowRegion());
     }
 
     protected override Control? GetContentControl() => this.FindControl<Image>("PinnedImage");
@@ -125,16 +142,37 @@ public partial class FloatingImageWindow : FloatingWindowBase
                 {
                     SyncWindowSizeToContent();
                 }
+
+                if (ev.PropertyName is nameof(FloatingImageViewModel.Image)
+                    or nameof(FloatingImageViewModel.ShowToolbar)
+                    or nameof(FloatingImageViewModel.DisplayWidth)
+                    or nameof(FloatingImageViewModel.DisplayHeight)
+                    or nameof(FloatingImageViewModel.HidePinDecoration)
+                    or nameof(FloatingImageViewModel.HidePinBorder)
+                    or nameof(FloatingImageViewModel.PinnedText))
+                {
+                    RefreshWindowRegion();
+                }
             };
             vm.PropertyChanged += _boundViewModelPropertyChangedHandler;
             _boundViewModel = vm;
         }
     }
 
+    protected override void OnOpened(EventArgs e)
+    {
+        base.OnOpened(e);
+        RefreshWindowRegion();
+    }
+
     protected override void OnClosed(EventArgs e)
     {
         _toolbarBoundsSubscription?.Dispose();
         _toolbarBoundsSubscription = null;
+        _mainBorderBoundsSubscription?.Dispose();
+        _mainBorderBoundsSubscription = null;
+        _windowBoundsSubscription?.Dispose();
+        _windowBoundsSubscription = null;
         if (_boundViewModel != null && _boundViewModelPropertyChangedHandler != null)
         {
             _boundViewModel.PropertyChanged -= _boundViewModelPropertyChangedHandler;
@@ -142,7 +180,97 @@ public partial class FloatingImageWindow : FloatingWindowBase
             _boundViewModelPropertyChangedHandler = null;
         }
 
+        var hwnd = this.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
+        if (hwnd != IntPtr.Zero && OperatingSystem.IsWindows())
+        {
+            Win32Helpers.ClearWindowRegion(hwnd);
+        }
+
         base.OnClosed(e);
+    }
+
+    private void RefreshWindowRegion()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var hwnd = this.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
+        if (hwnd == IntPtr.Zero)
+        {
+            return;
+        }
+
+        var opaqueRects = new List<Rect>();
+        AddSubtreeOpaqueRect("MainBorder", 2, opaqueRects);
+        AddSubtreeOpaqueRect("ToolbarBorder", 4, opaqueRects);
+
+        if (opaqueRects.Count == 0)
+        {
+            Win32Helpers.ClearWindowRegion(hwnd);
+            return;
+        }
+
+        opaqueRects.Add(new Rect(0, 0, 1, 1));
+        Win32Helpers.SetDisjointOpaqueRegions(hwnd, opaqueRects, null);
+    }
+
+    private void AddSubtreeOpaqueRect(string controlName, double logicalPadding, List<Rect> dest)
+    {
+        if (this.FindControl<Control>(controlName) is not Control root
+            || !root.IsVisible
+            || root.Bounds.Width <= 0
+            || root.Bounds.Height <= 0)
+        {
+            return;
+        }
+
+        Rect? union = null;
+
+        static IEnumerable<Control> EnumerateControls(Control rootControl)
+        {
+            yield return rootControl;
+            foreach (var child in rootControl.GetVisualDescendants().OfType<Control>())
+            {
+                yield return child;
+            }
+        }
+
+        foreach (var control in EnumerateControls(root))
+        {
+            if (!control.IsVisible || control.Bounds.Width <= 0 || control.Bounds.Height <= 0)
+            {
+                continue;
+            }
+
+            var topLeft = control.TranslatePoint(new Point(0, 0), this);
+            if (!topLeft.HasValue)
+            {
+                continue;
+            }
+
+            var rect = new Rect(topLeft.Value.X, topLeft.Value.Y, control.Bounds.Width, control.Bounds.Height);
+            union = union.HasValue ? union.Value.Union(rect) : rect;
+        }
+
+        if (!union.HasValue || union.Value.Width <= 0 || union.Value.Height <= 0)
+        {
+            return;
+        }
+
+        var padded = new Rect(
+            Math.Max(0, union.Value.X - logicalPadding),
+            Math.Max(0, union.Value.Y - logicalPadding),
+            union.Value.Width + (logicalPadding * 2),
+            union.Value.Height + (logicalPadding * 2));
+
+        double scaling = RenderScaling;
+        dest.Add(new Rect(
+            padded.X * scaling,
+            padded.Y * scaling,
+            padded.Width * scaling,
+            padded.Height * scaling));
     }
 
     // Override OnPointerPressed to handle AI Interactions

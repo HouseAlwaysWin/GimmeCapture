@@ -165,7 +165,7 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
     // Derived Decoration Props
     public double WingWidth => 100 * WingScale;
     public double WingHeight => 60 * WingScale;
-    public double SelectionIconSize => 22 * CornerIconScale;
+    public double SelectionIconSize => 8;
     public Thickness LeftWingMargin => new Thickness(-WingWidth, 0, 0, 0);
     public Thickness RightWingMargin => new Thickness(0, 0, -WingWidth, 0);
 

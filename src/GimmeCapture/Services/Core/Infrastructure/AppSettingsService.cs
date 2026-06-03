@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using GimmeCapture.Models;
@@ -375,12 +376,142 @@ public class AppSettingsService
             return;
 
         ApplyMigrations(json, settings, sourceVersion);
+        NormalizeAIResourcesDirectory(settings);
         UpdateSettings(settings);
         if (!string.IsNullOrWhiteSpace(saveDirectoryOverride))
         {
             BaseDataDirectory = saveDirectoryOverride;
         }
         DebugLog($"Successfully loaded settings from {path}. Version {sourceVersion} -> {Settings.ConfigVersion}. Language value: {Settings.Language}");
+    }
+
+    private void NormalizeAIResourcesDirectory(AppSettings settings)
+    {
+        string sharedAiDirectory = AppStoragePaths.GetSharedAIResourcesDirectory(RuntimeExecutableDirectory);
+        TryMigrateLegacyExecutableAiDirectory(sharedAiDirectory);
+
+        if (string.IsNullOrWhiteSpace(settings.AIResourcesDirectory))
+        {
+            settings.AIResourcesDirectory = sharedAiDirectory;
+            return;
+        }
+
+        if (!AppStoragePaths.TryMapVersionScopedAIResourcesDirectory(settings.AIResourcesDirectory, out string mappedSharedDirectory))
+        {
+            return;
+        }
+
+        string sourceDirectory = settings.AIResourcesDirectory;
+        if (!string.Equals(
+                Path.GetFullPath(sourceDirectory).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                Path.GetFullPath(mappedSharedDirectory).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                StringComparison.OrdinalIgnoreCase))
+        {
+            TryMigrateAIResourceDirectory(sourceDirectory, mappedSharedDirectory);
+        }
+
+        settings.AIResourcesDirectory = mappedSharedDirectory;
+    }
+
+    private void TryMigrateLegacyExecutableAiDirectory(string targetDirectory)
+    {
+        string legacyExecutableAiDirectory = Path.Combine(RuntimeExecutableDirectory, "AI");
+        if (string.Equals(
+                Path.GetFullPath(legacyExecutableAiDirectory).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                Path.GetFullPath(targetDirectory).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        try
+        {
+            if (!Directory.Exists(legacyExecutableAiDirectory))
+            {
+                return;
+            }
+
+            Directory.CreateDirectory(targetDirectory);
+            CopyDirectoryContents(legacyExecutableAiDirectory, targetDirectory);
+            DebugLog($"Merged legacy executable AI resources from {legacyExecutableAiDirectory} into {targetDirectory}");
+        }
+        catch (Exception ex)
+        {
+            DebugLog($"Legacy executable AI merge skipped from {legacyExecutableAiDirectory} to {targetDirectory}: {ex.Message}");
+        }
+    }
+
+    private void TryMigrateAIResourceDirectory(string sourceDirectory, string targetDirectory)
+    {
+        try
+        {
+            if (!Directory.Exists(sourceDirectory))
+            {
+                Directory.CreateDirectory(targetDirectory);
+                return;
+            }
+
+            Directory.CreateDirectory(targetDirectory);
+            MoveDirectoryContents(sourceDirectory, targetDirectory);
+
+            if (!Directory.EnumerateFileSystemEntries(sourceDirectory).Any())
+            {
+                Directory.Delete(sourceDirectory, false);
+            }
+
+            DebugLog($"Migrated AI resources from {sourceDirectory} to {targetDirectory}");
+        }
+        catch (Exception ex)
+        {
+            DebugLog($"AI resource migration skipped from {sourceDirectory} to {targetDirectory}: {ex.Message}");
+        }
+    }
+
+    private static void MoveDirectoryContents(string sourceDirectory, string targetDirectory)
+    {
+        foreach (string directory in Directory.GetDirectories(sourceDirectory))
+        {
+            string targetSubDirectory = Path.Combine(targetDirectory, Path.GetFileName(directory));
+            Directory.CreateDirectory(targetSubDirectory);
+            MoveDirectoryContents(directory, targetSubDirectory);
+
+            if (!Directory.EnumerateFileSystemEntries(directory).Any())
+            {
+                Directory.Delete(directory, false);
+            }
+        }
+
+        foreach (string file in Directory.GetFiles(sourceDirectory))
+        {
+            string targetFile = Path.Combine(targetDirectory, Path.GetFileName(file));
+            if (File.Exists(targetFile))
+            {
+                continue;
+            }
+
+            File.Move(file, targetFile);
+        }
+    }
+
+    private static void CopyDirectoryContents(string sourceDirectory, string targetDirectory)
+    {
+        foreach (string directory in Directory.GetDirectories(sourceDirectory))
+        {
+            string targetSubDirectory = Path.Combine(targetDirectory, Path.GetFileName(directory));
+            Directory.CreateDirectory(targetSubDirectory);
+            CopyDirectoryContents(directory, targetSubDirectory);
+        }
+
+        foreach (string file in Directory.GetFiles(sourceDirectory))
+        {
+            string targetFile = Path.Combine(targetDirectory, Path.GetFileName(file));
+            if (File.Exists(targetFile))
+            {
+                continue;
+            }
+
+            File.Copy(file, targetFile, overwrite: false);
+        }
     }
 
 

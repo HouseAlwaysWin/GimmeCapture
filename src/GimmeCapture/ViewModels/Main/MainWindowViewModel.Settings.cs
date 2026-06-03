@@ -109,7 +109,7 @@ public partial class MainWindowViewModel
     public string AIResourcesDirectory
     {
         get => string.IsNullOrEmpty(_settingsService.Settings.AIResourcesDirectory) 
-               ? System.IO.Path.Combine(_settingsService.BaseDataDirectory, "AI") 
+               ? AppStoragePaths.GetSharedAIResourcesDirectory(RuntimePathProvider.GetExecutableDirectory()) 
                : _settingsService.Settings.AIResourcesDirectory;
         set
         {
@@ -215,7 +215,7 @@ public partial class MainWindowViewModel
         }
     }
 
-    public double PreviewIconSize => 28 * CornerIconScale;
+    public double PreviewIconSize => 10;
     public double PreviewWingWidth => 100 * WingScale * 0.5;
     public double PreviewWingHeight => 60 * WingScale * 0.5;
     public Thickness PreviewLeftWingMargin => new Thickness(-PreviewWingWidth, 0, 0, 0);

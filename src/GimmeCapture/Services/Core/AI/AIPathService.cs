@@ -16,9 +16,9 @@ public class AIPathService
     public virtual string GetAIResourcesPath()
     {
         var path = _settingsService.Settings.AIResourcesDirectory;
-        if (string.IsNullOrEmpty(path))
+        if (string.IsNullOrWhiteSpace(path))
         {
-            path = Path.Combine(_settingsService.BaseDataDirectory, "AI");
+            path = AppStoragePaths.GetSharedAIResourcesDirectory(RuntimePathProvider.GetExecutableDirectory());
         }
         return path;
     }

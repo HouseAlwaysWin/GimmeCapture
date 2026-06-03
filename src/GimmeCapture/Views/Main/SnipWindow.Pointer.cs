@@ -69,6 +69,49 @@ public partial class SnipWindow : Window
         if (TryHandleTextAnnotationPressed(point, e))
             return;
 
+        if (!_viewModel.IsTranslationMode
+            && !_viewModel.IsDrawingMode
+            && _viewModel.RecState == RecordingState.Idle
+            && _viewModel.CurrentState == SnipState.Selected
+            && props.IsLeftButtonPressed)
+        {
+            var interactionZone = HitTestSelectionInteraction(point);
+            if (interactionZone != SelectionInteractionZone.None)
+            {
+                if (interactionZone == SelectionInteractionZone.MoveTop)
+                {
+                    _pointerState = PointerInteractionState.MovingSelection;
+                    _moveStartPoint = point;
+                    _originalRect = _viewModel.SelectionRect;
+                    e.Pointer.Capture(this);
+                    e.Handled = true;
+                    return;
+                }
+
+                _pointerState = PointerInteractionState.ResizingSelection;
+                _resizeDirection = interactionZone switch
+                {
+                    SelectionInteractionZone.ResizeTopLeft => ResizeDirection.TopLeft,
+                    SelectionInteractionZone.ResizeTopRight => ResizeDirection.TopRight,
+                    SelectionInteractionZone.ResizeBottomLeft => ResizeDirection.BottomLeft,
+                    SelectionInteractionZone.ResizeBottomRight => ResizeDirection.BottomRight,
+                    SelectionInteractionZone.ResizeLeft => ResizeDirection.Left,
+                    SelectionInteractionZone.ResizeRight => ResizeDirection.Right,
+                    SelectionInteractionZone.ResizeBottom => ResizeDirection.Bottom,
+                    _ => ResizeDirection.None
+                };
+
+                if (_resizeDirection != ResizeDirection.None)
+                {
+                    _resizeStartPoint = point;
+                    _originalRect = _viewModel.SelectionRect;
+                    e.Pointer.Capture(this);
+                    e.Handled = true;
+                    return;
+                }
+            }
+        }
+
         // Check for handle interaction (Move or Resize)
         // prioritized before drawing logic to allow adjustment while tool is active
         var sourceControl = e.Source as Control;
@@ -223,13 +266,6 @@ public partial class SnipWindow : Window
         }
         else if (props.IsLeftButtonPressed && _viewModel.RecState == RecordingState.Idle && _viewModel.CurrentState == SnipState.Selected)
         {
-            var expandedBounds = _viewModel.SelectionRect.Inflate(120);
-            if (expandedBounds.Contains(point) && !_viewModel.SelectionRect.Contains(point))
-            {
-                e.Handled = true;
-                return;
-            }
-
             if (!_viewModel.SelectionRect.Contains(point))
             {
                  _startPoint = point;
@@ -319,8 +355,45 @@ public partial class SnipWindow : Window
             bool actionCursorSet = false;
             if (_viewModel.CurrentState == SnipState.Selected || _viewModel.IsTranslationMode)
             {
+                if (!_viewModel.IsTranslationMode && !_viewModel.IsDrawingMode && _viewModel.CurrentState == SnipState.Selected)
+                {
+                    var interactionZone = HitTestSelectionInteraction(currentPoint);
+                    switch (interactionZone)
+                    {
+                        case SelectionInteractionZone.MoveTop:
+                            SetCursorShape(StandardCursorType.SizeAll);
+                            actionCursorSet = true;
+                            break;
+                        case SelectionInteractionZone.ResizeTopLeft:
+                            SetCursorShape(StandardCursorType.TopLeftCorner);
+                            actionCursorSet = true;
+                            break;
+                        case SelectionInteractionZone.ResizeTopRight:
+                            SetCursorShape(StandardCursorType.TopRightCorner);
+                            actionCursorSet = true;
+                            break;
+                        case SelectionInteractionZone.ResizeBottomLeft:
+                            SetCursorShape(StandardCursorType.BottomLeftCorner);
+                            actionCursorSet = true;
+                            break;
+                        case SelectionInteractionZone.ResizeBottomRight:
+                            SetCursorShape(StandardCursorType.BottomRightCorner);
+                            actionCursorSet = true;
+                            break;
+                        case SelectionInteractionZone.ResizeLeft:
+                        case SelectionInteractionZone.ResizeRight:
+                            SetCursorShape(StandardCursorType.SizeWestEast);
+                            actionCursorSet = true;
+                            break;
+                        case SelectionInteractionZone.ResizeBottom:
+                            SetCursorShape(StandardCursorType.SizeNorthSouth);
+                            actionCursorSet = true;
+                            break;
+                    }
+                }
+
                 // 1. Text Annotation Hover (Hand Cursor)
-                if (_viewModel.CurrentState == SnipState.Selected && _viewModel.IsDrawingMode && _viewModel.CurrentAnnotationTool == AnnotationType.Text)
+                if (!actionCursorSet && _viewModel.CurrentState == SnipState.Selected && _viewModel.IsDrawingMode && _viewModel.CurrentAnnotationTool == AnnotationType.Text)
                 {
                     var selectionSpacePoint = new Point(currentPoint.X - _viewModel.SelectionRect.X, currentPoint.Y - _viewModel.SelectionRect.Y);
                     for (int i = _viewModel.Annotations.Count - 1; i >= 0; i--)
@@ -364,7 +437,7 @@ public partial class SnipWindow : Window
                         }
                         actionCursorSet = true;
                     }
-                    else if (isMoveHandle || (!_viewModel.IsTranslationMode && !_viewModel.IsDrawingMode && _viewModel.SelectionRect.Contains(currentPoint)))
+                    else if (isMoveHandle)
                     {
                         SetCursorShape(StandardCursorType.SizeAll);
                         actionCursorSet = true;

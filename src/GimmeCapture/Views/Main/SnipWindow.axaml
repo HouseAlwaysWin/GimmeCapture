@@ -263,8 +263,7 @@
                         Margin="{Binding SelectionBorderOuterMargin}"
                         BoxShadow="{Binding SelectionShadowColor, Converter={StaticResource ColorToBoxShadowConverter}}"
                         IsVisible="{Binding HideFrameBorder, Converter={StaticResource BoolInvertConverter}}"
-                        IsHitTestVisible="{Binding IsDrawingMode, Converter={StaticResource BoolInvertConverter}}"
-                        Classes="MoveHandle">
+                        IsHitTestVisible="False">
                     <Border.BorderBrush>
                         <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
                             <GradientStop Offset="0" Color="{Binding SelectionBorderColor}"/>
@@ -279,20 +278,28 @@
                 
                 <!-- Resize Handles -->
                 <Grid Classes="Handle" Name="HandleTopLeft" Cursor="TopLeftCorner" Width="40" Height="40" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="-20,-20,0,0" Background="#01FFFFFF"
+                      IsHitTestVisible="False"
                       IsVisible="{Binding IsDrawingMode, Converter={StaticResource BoolInvertConverter}}"/>
                 <Grid Classes="Handle" Name="HandleTopRight" Cursor="TopRightCorner" Width="40" Height="40" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-20,-20,0" Background="#01FFFFFF"
+                      IsHitTestVisible="False"
                       IsVisible="{Binding IsDrawingMode, Converter={StaticResource BoolInvertConverter}}"/>
                 <Grid Classes="Handle" Name="HandleBottomLeft" Cursor="BottomLeftCorner" Width="40" Height="40" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="-20,0,0,-20" Background="#01FFFFFF"
+                      IsHitTestVisible="False"
                       IsVisible="{Binding IsDrawingMode, Converter={StaticResource BoolInvertConverter}}"/>
                 <Grid Classes="Handle" Name="HandleBottomRight" Cursor="BottomRightCorner" Width="40" Height="40" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-20,-20" Background="#01FFFFFF"
+                      IsHitTestVisible="False"
                       IsVisible="{Binding IsDrawingMode, Converter={StaticResource BoolInvertConverter}}"/>
                 <Grid Classes="Handle" Name="HandleTop" Cursor="SizeNorthSouth" Height="20" HorizontalAlignment="Stretch" VerticalAlignment="Top" Margin="20,-10,20,0" Background="#01FFFFFF"
+                      IsHitTestVisible="False"
                       IsVisible="{Binding IsDrawingMode, Converter={StaticResource BoolInvertConverter}}"/>
                 <Grid Classes="Handle" Name="HandleBottom" Cursor="SizeNorthSouth" Height="20" HorizontalAlignment="Stretch" VerticalAlignment="Bottom" Margin="20,0,20,-10" Background="#01FFFFFF"
+                      IsHitTestVisible="False"
                       IsVisible="{Binding IsDrawingMode, Converter={StaticResource BoolInvertConverter}}"/>
                 <Grid Classes="Handle" Name="HandleLeft" Cursor="SizeWestEast" Width="20" HorizontalAlignment="Left" VerticalAlignment="Stretch" Margin="-10,20,0,20" Background="#01FFFFFF"
+                      IsHitTestVisible="False"
                       IsVisible="{Binding IsDrawingMode, Converter={StaticResource BoolInvertConverter}}"/>
                 <Grid Classes="Handle" Name="HandleRight" Cursor="SizeWestEast" Width="20" HorizontalAlignment="Right" VerticalAlignment="Stretch" Margin="0,20,-10,20" Background="#01FFFFFF"
+                      IsHitTestVisible="False"
                       IsVisible="{Binding IsDrawingMode, Converter={StaticResource BoolInvertConverter}}"/>
                 
                 <!-- Decoration Layer (Unified) -->
@@ -301,6 +308,7 @@
                                       ShowWings="{Binding HideSelectionDecoration, Converter={StaticResource BoolInvertConverter}}"
                                       ShowCorners="{Binding HideSelectionDecoration, Converter={StaticResource BoolInvertConverter}}"
                                       ShowBorder="{Binding HideFrameBorder, Converter={StaticResource BoolInvertConverter}}"
+                                      IsHitTestVisible="False"
                                       SelectionThickness="{Binding SelectionBorderThickness}"
                                       WingWidth="{Binding WingWidth}"
                                       WingHeight="{Binding WingHeight}"

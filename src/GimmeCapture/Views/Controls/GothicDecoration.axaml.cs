@@ -12,7 +12,7 @@ namespace GimmeCapture.Views.Controls
             AvaloniaProperty.Register<GothicDecoration, IBrush>(nameof(DecorationBrush), Brushes.Red);
 
         public static readonly StyledProperty<double> SelectionIconSizeProperty =
-            AvaloniaProperty.Register<GothicDecoration, double>(nameof(SelectionIconSize), 22.0);
+            AvaloniaProperty.Register<GothicDecoration, double>(nameof(SelectionIconSize), 8.0);
 
         public static readonly StyledProperty<double> WingWidthProperty =
             AvaloniaProperty.Register<GothicDecoration, double>(nameof(WingWidth), 100.0);
