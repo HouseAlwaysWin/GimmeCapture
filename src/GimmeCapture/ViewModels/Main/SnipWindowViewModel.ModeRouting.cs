@@ -116,7 +116,7 @@ public partial class SnipWindowViewModel
             RaiseProperties(nameof(MaskOpacity));
             UpdateMask();
             StartAutoDetectLoop();
-            StartTranslationWarmup();
+            LogTranslationMemoryState("translation-mode-enter");
         }
         else if (oldMode == SnipMode.Translation)
         {
@@ -135,10 +135,15 @@ public partial class SnipWindowViewModel
             UpdateMask();
             StopAutoDetectLoop();
             CancelTranslationWarmup();
+            ReleaseTranslationHeavyResources(trimProcessWorkingSet: true, phase: "translation-mode-exit");
         }
 
         // Common updates
         SelectionBorderColor = _mainVm?.BorderColor ?? Colors.Yellow;
+        if (value == SnipMode.Screenshot || value == SnipMode.Recording)
+        {
+            LogTranslationMemoryState(value == SnipMode.Screenshot ? "snip-mode-enter" : "record-mode-enter");
+        }
 
         // Notify all related properties
         RaiseProperties(_modeStatePropertyNames);
@@ -685,6 +690,7 @@ public partial class SnipWindowViewModel
         SelectionRect = default;
         UpdateMask();
         InitializeTranslationToolbarPosition();
+        LogTranslationMemoryState("translation-enter-command");
     }
 
     private ReactiveCommand<Unit, Unit> CreateCommand(Action execute, string commandName)

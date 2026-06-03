@@ -30,6 +30,10 @@ public sealed class TranslationSessionService : ITranslationSessionService
         _translationService = new TranslationService(aiResourceService, settingsService, ocrRuntimeService);
     }
 
+    internal bool IsOcrLoaded => _translationService.IsOcrLoaded;
+    internal string? LoadedOcrLanguage => _translationService.LoadedOcrLanguage?.ToString();
+    internal bool IsLlamaLoaded => _translationService.IsLlamaLoaded;
+
     public Task<ResourceReadyResult> CheckEngineReadyAsync(
         OCRLanguage sourceLanguage,
         TranslationLanguage targetLanguage)
@@ -53,6 +57,11 @@ public sealed class TranslationSessionService : ITranslationSessionService
         ApplyLanguages(sourceLanguage, targetLanguage);
         _ocrWarmHoldActive = true;
         _translationService.SetOcrWarmHold(true);
+        TranslationMemoryDiagnostics.Log(
+            "translation-session-warmup-start",
+            ocrLoaded: IsOcrLoaded,
+            ocrLanguage: LoadedOcrLanguage,
+            llamaLoaded: IsLlamaLoaded);
 
         _warmupTask = Task.Run(async () =>
         {
@@ -130,6 +139,17 @@ public sealed class TranslationSessionService : ITranslationSessionService
     {
         CancelWarmup();
         _translationService.Dispose();
+    }
+
+    internal void ReleaseHeavyResources(bool trimProcessWorkingSet)
+    {
+        CancelWarmup();
+        _translationService.ReleaseHeavyResources(trimProcessWorkingSet);
+        TranslationMemoryDiagnostics.Log(
+            "translation-session-release",
+            ocrLoaded: IsOcrLoaded,
+            ocrLanguage: LoadedOcrLanguage,
+            llamaLoaded: IsLlamaLoaded);
     }
 
     private void ApplyLanguages(

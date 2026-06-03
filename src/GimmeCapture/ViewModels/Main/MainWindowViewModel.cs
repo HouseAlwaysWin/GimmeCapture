@@ -12,6 +12,7 @@ using System.IO;
 using System.Reactive;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
+using GimmeCapture.Services.Translation;
 
 namespace GimmeCapture.ViewModels.Main;
 
@@ -188,6 +189,7 @@ public partial class MainWindowViewModel : ViewModelBase
     public MainWindowViewModel(MainWindowViewModelDependencies dependencies)
     {
         ArgumentNullException.ThrowIfNull(dependencies);
+        TranslationMemoryDiagnostics.Log("app-startup");
 
         _settingsService = dependencies.SettingsService;
         _windowManager = dependencies.WindowManager;

@@ -200,12 +200,20 @@ public partial class SnipWindowViewModel
                 return;
             }
 
+            using var resizedBitmap = CreateOptimizedTranslationBitmap(
+                bitmap,
+                VisualScaling,
+                TranslationSearchCaptureMaxLongSide,
+                out _);
+            var detectionBitmap = resizedBitmap ?? bitmap;
+            LogTranslationMemoryState("translation-ocr-search-capture", bitmap: detectionBitmap);
+
             using var ocrEngine = new PaddleOCREngine(_mainVm.AIResourceService, _mainVm.AppSettingsService, _mainVm.OcrRuntimeService);
             await ocrEngine.EnsureLoadedAsync(_mainVm.AppSettingsService.Settings.SourceLanguage);
-            var textBoxes = await Task.Run(() => ocrEngine.DetectText(bitmap));
+            var textBoxes = await Task.Run(() => ocrEngine.DetectText(detectionBitmap));
 
-            double scaleX = ViewportSize.Width / bitmap.Width;
-            double scaleY = ViewportSize.Height / bitmap.Height;
+            double scaleX = ViewportSize.Width / detectionBitmap.Width;
+            double scaleY = ViewportSize.Height / detectionBitmap.Height;
             var rawLogicalRects = new List<Rect>(textBoxes.Count);
             var toolbarRect = GetTranslationToolbarRect();
 

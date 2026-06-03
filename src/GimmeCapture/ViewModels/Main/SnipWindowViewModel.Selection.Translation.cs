@@ -3,15 +3,20 @@ using GimmeCapture.Models;
 using GimmeCapture.Services.Core;
 using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.OCR;
+using GimmeCapture.Services.Translation;
 using GimmeCapture.ViewModels.Floating;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using SkiaSharp;
 
 namespace GimmeCapture.ViewModels.Main;
 
 public partial class SnipWindowViewModel
 {
+    private const int TranslationSelectionCaptureMaxLongSide = 1600;
+    private const int TranslationSearchCaptureMaxLongSide = 1600;
+
     /// <summary>
     /// 翻譯模式：翻譯所有 UserSelections 中的圈選區域
     /// </summary>
@@ -68,6 +73,8 @@ public partial class SnipWindowViewModel
                 return;
             }
 
+            LogTranslationMemoryState("translate-all-begin", selectionCount: UserSelections.Count);
+
             // 逐一翻譯每個選取區域
             var selectionsCopy = UserSelections.AsValueEnumerable().ToList();
             foreach (var sel in selectionsCopy)
@@ -81,16 +88,23 @@ public partial class SnipWindowViewModel
                 await Task.Delay(50); // 等待 UI 隱藏
 
                 using var bitmap = await _captureService.CaptureScreenAsync(sel.Bounds, ScreenOffset, VisualScaling, false);
-                
                 IsCapturing = false;
 
                 if (bitmap == null) continue;
 
+                using var resizedBitmap = CreateOptimizedTranslationBitmap(
+                    bitmap,
+                    VisualScaling,
+                    TranslationSelectionCaptureMaxLongSide,
+                    out var effectiveScale);
+                var translationBitmap = resizedBitmap ?? bitmap;
+                LogTranslationMemoryState("translate-selection-capture", selectionBounds: sel.Bounds, bitmap: translationBitmap);
+
                 token.ThrowIfCancellationRequested();
                 var (blocks, errorKey) = await Task.Run(
                     async () => await translationSession.AnalyzeAndTranslateAsync(
-                        bitmap,
-                        VisualScaling,
+                        translationBitmap,
+                        effectiveScale,
                         mainVm.SourceLanguage,
                         mainVm.TargetLanguage,
                         token),
@@ -163,6 +177,8 @@ public partial class SnipWindowViewModel
                 DismissWindowSnapHoverPreview(preserveTargetRect: false);
             });
 
+            ReleaseTranslationHeavyResources(trimProcessWorkingSet: true, phase: "translate-all-finish");
+
             IsTranslating = false;
             ShowTopLoadingBar = false;
             IsIndeterminate = false;
@@ -211,14 +227,21 @@ public partial class SnipWindowViewModel
                 System.Diagnostics.Debug.WriteLine("[TranslationMode] ScanAllText: FAILED to capture screen");
                 return;
             }
-            System.Diagnostics.Debug.WriteLine($"[TranslationMode] ScanAllText: Captured bitmap {bitmap.Width}x{bitmap.Height}");
+            using var resizedBitmap = CreateOptimizedTranslationBitmap(
+                bitmap,
+                VisualScaling,
+                TranslationSearchCaptureMaxLongSide,
+                out _);
+            var detectionBitmap = resizedBitmap ?? bitmap;
+            System.Diagnostics.Debug.WriteLine($"[TranslationMode] ScanAllText: Captured bitmap {detectionBitmap.Width}x{detectionBitmap.Height}");
+            LogTranslationMemoryState("translation-scan-all-capture", bitmap: detectionBitmap);
 
             // 使用 PaddleOCR 偵測文字區域
             using var ocrEngine = new PaddleOCREngine(_mainVm.AIResourceService, _mainVm.AppSettingsService, _mainVm.OcrRuntimeService);
             var ocrLang = _mainVm.AppSettingsService.Settings.SourceLanguage;
             await ocrEngine.EnsureLoadedAsync(ocrLang);
             
-            var textBoxes = await Task.Run(() => ocrEngine.DetectText(bitmap));
+            var textBoxes = await Task.Run(() => ocrEngine.DetectText(detectionBitmap));
 
             System.Diagnostics.Debug.WriteLine($"[TranslationMode] Found {textBoxes.Count} text regions");
 
@@ -237,8 +260,8 @@ public partial class SnipWindowViewModel
                 foreach (var box in textBoxes)
                 {
                     // 座標從 bitmap 空間轉換回螢幕邏輯座標
-                    double scaleX = ViewportSize.Width / bitmap.Width;
-                    double scaleY = ViewportSize.Height / bitmap.Height;
+                    double scaleX = ViewportSize.Width / detectionBitmap.Width;
+                    double scaleY = ViewportSize.Height / detectionBitmap.Height;
 
                     var bounds = new Rect(
                         box.Left * scaleX,
@@ -670,5 +693,72 @@ public partial class SnipWindowViewModel
         }
 
         return totalLines;
+    }
+
+    private SKBitmap? CreateOptimizedTranslationBitmap(
+        SKBitmap sourceBitmap,
+        double baseScale,
+        int maxLongSide,
+        out double effectiveScale)
+    {
+        effectiveScale = baseScale;
+        int longestSide = Math.Max(sourceBitmap.Width, sourceBitmap.Height);
+        if (longestSide <= maxLongSide)
+        {
+            return null;
+        }
+
+        double ratio = (double)maxLongSide / longestSide;
+        int targetWidth = Math.Max(1, (int)Math.Round(sourceBitmap.Width * ratio));
+        int targetHeight = Math.Max(1, (int)Math.Round(sourceBitmap.Height * ratio));
+        var resized = sourceBitmap.Resize(
+            new SKImageInfo(targetWidth, targetHeight, sourceBitmap.ColorType, sourceBitmap.AlphaType),
+            new SKSamplingOptions(SKCubicResampler.Mitchell));
+
+        if (resized == null)
+        {
+            return null;
+        }
+
+        effectiveScale = baseScale * ratio;
+        return resized;
+    }
+
+    private void ReleaseTranslationHeavyResources(bool trimProcessWorkingSet, string phase)
+    {
+        if (_translationSession is TranslationSessionService concreteSession)
+        {
+            concreteSession.ReleaseHeavyResources(trimProcessWorkingSet);
+            TranslationMemoryDiagnostics.Log(
+                phase,
+                ocrLoaded: concreteSession.IsOcrLoaded,
+                ocrLanguage: concreteSession.LoadedOcrLanguage,
+                llamaLoaded: concreteSession.IsLlamaLoaded);
+            return;
+        }
+
+        TranslationMemoryDiagnostics.Log(phase);
+    }
+
+    private void LogTranslationMemoryState(string phase, int? selectionCount = null, Rect? selectionBounds = null, SKBitmap? bitmap = null)
+    {
+        if (_translationSession is TranslationSessionService concreteSession)
+        {
+            TranslationMemoryDiagnostics.Log(
+                phase,
+                ocrLoaded: concreteSession.IsOcrLoaded,
+                ocrLanguage: concreteSession.LoadedOcrLanguage,
+                llamaLoaded: concreteSession.IsLlamaLoaded,
+                selectionCount: selectionCount,
+                bitmap: bitmap,
+                logicalBounds: selectionBounds);
+            return;
+        }
+
+        TranslationMemoryDiagnostics.Log(
+            phase,
+            selectionCount: selectionCount,
+            bitmap: bitmap,
+            logicalBounds: selectionBounds);
     }
 }

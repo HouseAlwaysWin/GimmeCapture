@@ -46,11 +46,21 @@ public class TranslationService : IDisposable
         };
     }
 
+    internal bool IsOcrLoaded => _ocrRuntimeService.IsLoaded;
+    internal OCRLanguage? LoadedOcrLanguage => _ocrRuntimeService.LoadedLanguage;
+    internal bool IsLlamaLoaded => GetLlamaEngine()?.IsModelLoaded == true;
+
     public async Task WarmUpAsync(CancellationToken ct = default)
     {
         var warmupSourceLanguage = _settings.SourceLanguage == OCRLanguage.Auto
             ? OCRLanguage.TraditionalChinese
             : _settings.SourceLanguage;
+
+        TranslationMemoryDiagnostics.Log(
+            "translation-warmup-before",
+            ocrLoaded: IsOcrLoaded,
+            ocrLanguage: LoadedOcrLanguage?.ToString(),
+            llamaLoaded: IsLlamaLoaded);
 
         try
         {
@@ -69,26 +79,11 @@ public class TranslationService : IDisposable
             Debug.WriteLine($"[TranslationService] Warm-up OCR failed: {ex.Message}");
         }
 
-        if (_settings.SelectedTranslationEngine == TranslationEngine.LlamaSharp)
-        {
-            if (!_aiResourceService.IsLlamaModelReady())
-            {
-                return;
-            }
-
-            try
-            {
-                await TranslatePlainTextAsync("warmup", OCRLanguage.English, ct);
-            }
-            catch (OperationCanceledException)
-            {
-                throw;
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"[TranslationService] Warm-up LlamaSharp failed: {ex.Message}");
-            }
-        }
+        TranslationMemoryDiagnostics.Log(
+            "translation-warmup-after",
+            ocrLoaded: IsOcrLoaded,
+            ocrLanguage: LoadedOcrLanguage?.ToString(),
+            llamaLoaded: IsLlamaLoaded);
     }
 
     public Task<ResourceReadyResult> CheckEngineReadyAsync()
@@ -110,6 +105,12 @@ public class TranslationService : IDisposable
         try
         {
             ct.ThrowIfCancellationRequested();
+            TranslationMemoryDiagnostics.Log(
+                "translation-analyze-begin",
+                ocrLoaded: IsOcrLoaded,
+                ocrLanguage: LoadedOcrLanguage?.ToString(),
+                llamaLoaded: IsLlamaLoaded,
+                bitmap: bitmap);
 
             var ocrLang = _settings.SourceLanguage;
             Console.WriteLine($"[TranslationService] SourceLanguage={ocrLang}, TargetLanguage={_settings.TargetLanguage}");
@@ -121,7 +122,20 @@ public class TranslationService : IDisposable
 
             var ocrEngine = GetOrCreateOcrEngine();
             await ocrEngine.EnsureLoadedAsync(ocrLang, ct);
+            TranslationMemoryDiagnostics.Log(
+                "translation-ocr-ready",
+                ocrLoaded: IsOcrLoaded,
+                ocrLanguage: LoadedOcrLanguage?.ToString(),
+                llamaLoaded: IsLlamaLoaded,
+                bitmap: bitmap);
             var boxes = ocrEngine.DetectText(bitmap);
+            TranslationMemoryDiagnostics.Log(
+                "translation-ocr-detect-complete",
+                ocrLoaded: IsOcrLoaded,
+                ocrLanguage: LoadedOcrLanguage?.ToString(),
+                llamaLoaded: IsLlamaLoaded,
+                selectionCount: boxes.Count,
+                bitmap: bitmap);
 
             var recognizedBlocks = new List<(SKRectI Box, string Text, float Confidence)>();
             foreach (var box in boxes)
@@ -145,7 +159,21 @@ public class TranslationService : IDisposable
             string mergedText = BuildMergedText(recognizedBlocks);
             var unionBox = GetUnionBox(recognizedBlocks);
 
+            TranslationMemoryDiagnostics.Log(
+                "translation-llama-before",
+                ocrLoaded: IsOcrLoaded,
+                ocrLanguage: LoadedOcrLanguage?.ToString(),
+                llamaLoaded: IsLlamaLoaded,
+                selectionCount: recognizedBlocks.Count,
+                bitmap: bitmap);
             var translated = await TranslateAsync(mergedText, ocrLang, ct);
+            TranslationMemoryDiagnostics.Log(
+                "translation-llama-after",
+                ocrLoaded: IsOcrLoaded,
+                ocrLanguage: LoadedOcrLanguage?.ToString(),
+                llamaLoaded: IsLlamaLoaded,
+                selectionCount: recognizedBlocks.Count,
+                bitmap: bitmap);
 
             if (string.IsNullOrEmpty(translated))
             {
@@ -211,6 +239,12 @@ public class TranslationService : IDisposable
             {
                 ReleaseOcrResources();
             }
+
+            TranslationMemoryDiagnostics.Log(
+                "translation-analyze-end",
+                ocrLoaded: IsOcrLoaded,
+                ocrLanguage: LoadedOcrLanguage?.ToString(),
+                llamaLoaded: IsLlamaLoaded);
         }
     }
 
@@ -280,6 +314,18 @@ public class TranslationService : IDisposable
         if (!hold)
         {
             ReleaseOcrResources();
+        }
+    }
+
+    internal void ReleaseHeavyResources(bool trimProcessWorkingSet = false)
+    {
+        SetOcrWarmHold(false);
+        ReleaseOcrResources();
+        GetLlamaEngine()?.ReleaseModel();
+
+        if (trimProcessWorkingSet)
+        {
+            ProcessMemoryTrimService.TrimCurrentProcessWorkingSet();
         }
     }
 
@@ -438,7 +484,7 @@ public class TranslationService : IDisposable
 
     public void Dispose()
     {
-        ReleaseOcrResources();
+        ReleaseHeavyResources(trimProcessWorkingSet: false);
 
         foreach (var engine in _translationEngines.AsValueEnumerable().OfType<IDisposable>())
         {
@@ -450,6 +496,11 @@ public class TranslationService : IDisposable
     {
         _ocrEngine ??= new PaddleOCREngine(_aiResourceService, _settingsService, _ocrRuntimeService);
         return _ocrEngine;
+    }
+
+    private LlamaSharpTranslationEngine? GetLlamaEngine()
+    {
+        return _translationEngines.AsValueEnumerable().OfType<LlamaSharpTranslationEngine>().FirstOrDefault();
     }
 
     private static bool ContainsJapaneseKana(string text)

@@ -29,6 +29,8 @@ public sealed class LlamaSharpTranslationEngine : ITranslationEngine, IDisposabl
     private readonly SemaphoreSlim _loadLock = new(1, 1);
     private readonly SemaphoreSlim _inferLock = new(1, 1);
 
+    internal bool IsModelLoaded => _executor != null && _context != null && _weights != null;
+
     public LlamaSharpTranslationEngine(
         AIResourceService aiResourceService,
         AppSettingsService settingsService,
@@ -155,6 +157,11 @@ public sealed class LlamaSharpTranslationEngine : ITranslationEngine, IDisposabl
         _weights?.Dispose();
         _weights = null;
         _loadedModelPath = null;
+    }
+
+    internal void ReleaseModel()
+    {
+        DisposeModel();
     }
 
     public void Dispose()
