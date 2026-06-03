@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Media;
 using GimmeCapture.Models;
 using GimmeCapture.ViewModels.Floating;
 using GimmeCapture.Views.Floating;
@@ -15,6 +16,7 @@ internal static class TranslationResultLayerManager
         PixelPoint screenOffset,
         Size viewportSize,
         double visualScaling,
+        Color borderColor,
         IEnumerable<TranslationResultItem> items,
         Func<object?, System.Threading.Tasks.Task> copyAction,
         Func<TranslationResultItem, System.Threading.Tasks.Task> pinAction)
@@ -28,6 +30,7 @@ internal static class TranslationResultLayerManager
         vm.ScreenOffset = screenOffset;
         vm.ViewportSize = viewportSize;
         vm.VisualScaling = visualScaling;
+        vm.BorderColor = borderColor;
         vm.CopyAction = copyAction;
         vm.PinAction = pinAction;
         vm.AddItems(items);

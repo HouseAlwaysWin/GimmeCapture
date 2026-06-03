@@ -264,6 +264,12 @@ public partial class SnipWindow : Window
                 return;
             }
 
+            if (vm.IsTranslationMode)
+            {
+                Close();
+                return;
+            }
+
             if (vm.IsDrawingMode)
             {
                 vm.IsDrawingMode = false;

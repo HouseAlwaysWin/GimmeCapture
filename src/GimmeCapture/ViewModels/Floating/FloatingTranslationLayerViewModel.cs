@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Media;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Core;
 using ReactiveUI;
@@ -14,6 +15,7 @@ internal sealed class FloatingTranslationLayerViewModel : ReactiveObject
     private PixelPoint _screenOffset;
     private Size _viewportSize;
     private double _visualScaling = 1.0;
+    private Color _borderColor = Color.Parse("#00E5FF");
 
     public ObservableCollection<TranslationResultItem> Items { get; } = new();
 
@@ -33,6 +35,12 @@ internal sealed class FloatingTranslationLayerViewModel : ReactiveObject
     {
         get => _visualScaling;
         set => this.RaiseAndSetIfChanged(ref _visualScaling, value);
+    }
+
+    public Color BorderColor
+    {
+        get => _borderColor;
+        set => this.RaiseAndSetIfChanged(ref _borderColor, value);
     }
 
     public ReactiveCommand<TranslationResultItem, Unit> CloseItemCommand { get; }

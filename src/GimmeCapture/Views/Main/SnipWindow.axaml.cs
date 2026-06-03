@@ -705,6 +705,7 @@ public partial class SnipWindow : Window
             _viewModel.ScreenOffset,
             _viewModel.ViewportSize,
             _viewModel.VisualScaling,
+            _viewModel.TranslationOcrHighlightColor,
             items,
             CopyPersistentTranslationAsync,
             item => _viewModel.PinPersistentTranslationItemAsync(item));
@@ -749,6 +750,13 @@ public partial class SnipWindow : Window
             // Prevent resetting or closing if we are actively recording
             if (_viewModel.RecState != RecordingState.Idle)
             {
+                e.Handled = true;
+                return;
+            }
+
+            if (_viewModel.IsTranslationMode)
+            {
+                Close();
                 e.Handled = true;
                 return;
             }

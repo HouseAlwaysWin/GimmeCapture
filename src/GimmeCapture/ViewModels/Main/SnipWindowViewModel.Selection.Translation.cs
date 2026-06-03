@@ -153,6 +153,16 @@ public partial class SnipWindowViewModel
         }
         finally
         {
+            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                // Translation results should not keep OCR search/debug overlays alive after completion.
+                ExitTranslationOcrSearch();
+                ShowOcrResult = false;
+                AIScanRects.Clear();
+                WindowRects.Clear();
+                DismissWindowSnapHoverPreview(preserveTargetRect: false);
+            });
+
             IsTranslating = false;
             ShowTopLoadingBar = false;
             IsIndeterminate = false;

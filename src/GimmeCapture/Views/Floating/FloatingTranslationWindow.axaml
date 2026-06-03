@@ -50,9 +50,9 @@
                                 </ContextMenu>
                             </Grid.ContextMenu>
 
-                            <Border BorderBrush="Red"
+                            <Border BorderBrush="{Binding $parent[Window].DataContext.BorderColor, Converter={StaticResource ColorToBrushConverter}}"
                                     BorderThickness="1"
-                                    Background="#01000000"
+                                    Background="Transparent"
                                     Width="{Binding Bounds.Width}"
                                     Height="{Binding Bounds.Height}"
                                     CornerRadius="0"
@@ -145,7 +145,7 @@
 
                             <Border VerticalAlignment="Top"
                                     Height="18"
-                                    Background="#01000000"
+                                    Background="Transparent"
                                     Classes="MoveHandle"
                                     Cursor="SizeAll"
                                     ToolTip.Tip="{Binding TranslatedText}"
@@ -153,10 +153,7 @@
 
                             <Panel IsHitTestVisible="True" VerticalAlignment="Stretch" HorizontalAlignment="Stretch" ClipToBounds="True">
                                 <Panel.IsVisible>
-                                    <MultiBinding Converter="{x:Static BoolConverters.And}">
-                                        <Binding Path="!IsAudioPanel"/>
-                                        <Binding Path="IsTranslated"/>
-                                    </MultiBinding>
+                                    <Binding Path="!IsAudioPanel"/>
                                 </Panel.IsVisible>
                                 <Border Background="#FF000000"
                                         CornerRadius="4"

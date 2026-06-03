@@ -194,6 +194,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
 
     public Color ThemeColor => _mainVm?.ThemeColor ?? Colors.Red;
     public Color OcrHighlightColor => _mainVm?.ThemeColor ?? SelectionBorderColor;
+    public Color TranslationOcrHighlightColor => ResolveTranslationOcrHighlightColor(ThemeColor, SelectionBorderColor);
     public Color ThemeDeepColor 
     {
         get
@@ -202,6 +203,44 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
             if (ThemeColor == Color.Parse("#E0E0E0")) return Color.Parse("#606060");
             return Color.Parse("#900000");
         }
+    }
+
+    private static Color ResolveTranslationOcrHighlightColor(Color themeColor, Color selectionBorderColor)
+    {
+        ReadOnlySpan<Color> candidates =
+        [
+            Color.Parse("#00E5FF"),
+            Color.Parse("#7CFF00"),
+            Color.Parse("#FFC400"),
+            Color.Parse("#FF4FD8"),
+            Color.Parse("#FFFFFF")
+        ];
+
+        Color best = candidates[0];
+        int bestScore = int.MinValue;
+
+        foreach (Color candidate in candidates)
+        {
+            int score = Math.Min(
+                ComputeColorDistance(candidate, themeColor),
+                ComputeColorDistance(candidate, selectionBorderColor));
+
+            if (score > bestScore)
+            {
+                best = candidate;
+                bestScore = score;
+            }
+        }
+
+        return best;
+    }
+
+    private static int ComputeColorDistance(Color left, Color right)
+    {
+        int dr = left.R - right.R;
+        int dg = left.G - right.G;
+        int db = left.B - right.B;
+        return (dr * dr) + (dg * dg) + (db * db);
     }
 
     public bool IsAIDownloading => _mainVm?.AIResourceService.IsDownloading ?? false;
@@ -446,13 +485,14 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
             .DisposeWith(_disposables);
 
         BindDistinct(mainVm.WhenAnyValue(x => x.ThemeColor), _ =>
-            RaiseProperties(nameof(ThemeColor), nameof(OcrHighlightColor), nameof(ThemeDeepColor)))
+            RaiseProperties(nameof(ThemeColor), nameof(OcrHighlightColor), nameof(TranslationOcrHighlightColor), nameof(ThemeDeepColor)))
             .DisposeWith(_disposables);
 
         BindDistinct(mainVm.WhenAnyValue(x => x.BorderColor), val =>
             {
                 SelectionBorderColor = val;
                 this.RaisePropertyChanged(nameof(OcrHighlightColor));
+                this.RaisePropertyChanged(nameof(TranslationOcrHighlightColor));
             })
             .DisposeWith(_disposables);
 

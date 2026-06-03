@@ -181,7 +181,8 @@
                             </Image>
 
                             <!-- Selectable Text Overlay for Pinned Translation -->
-                            <Border IsVisible="{Binding PinnedText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                            <Border x:Name="PinnedTextOverlay"
+                                    IsVisible="{Binding PinnedText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                                     HorizontalAlignment="Center" VerticalAlignment="Center"
                                     Padding="10" Background="#CC000000" CornerRadius="4"
                                     IsHitTestVisible="True" ZIndex="10"
@@ -197,8 +198,10 @@
                         </Grid>
                             
                         <!-- Decoration Layer (Unified) -->
-                        <Grid ClipToBounds="False">
-                            <ctl:GothicDecoration DecorationBrush="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" 
+                        <Grid x:Name="DecorationLayer" ClipToBounds="False">
+                            <ctl:GothicDecoration x:Name="PinDecoration"
+                                                  IsHitTestVisible="False"
+                                                  DecorationBrush="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}" 
                                                   Margin="{Binding SelectionBorderOuterMargin}"
                                                   ShowWings="{Binding !HidePinDecoration}"
                                                   ShowCorners="{Binding !HidePinDecoration}"
@@ -212,14 +215,16 @@
                         </Grid>
                         
                         <!-- Resize Handles - 使用負 margin 定位在視覺邊界上 (參考 SnipWindow) -->
-                        <Grid Classes="Handle" Name="HandleTopLeft" Cursor="TopLeftCorner" Width="30" Height="30" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="-15"/>
-                        <Grid Classes="Handle" Name="HandleTopRight" Cursor="TopRightCorner" Width="30" Height="30" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="-15"/>
-                        <Grid Classes="Handle" Name="HandleBottomLeft" Cursor="BottomLeftCorner" Width="30" Height="30" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="-15"/>
-                        <Grid Classes="Handle" Name="HandleBottomRight" Cursor="BottomRightCorner" Width="30" Height="30" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="-15"/>
-                        <Grid Classes="Handle" Name="HandleTop" Cursor="TopSide" Height="15" HorizontalAlignment="Stretch" VerticalAlignment="Top" Margin="15,0"/>
-                        <Grid Classes="Handle" Name="HandleBottom" Cursor="BottomSide" Height="15" HorizontalAlignment="Stretch" VerticalAlignment="Bottom" Margin="15,0"/>
-                        <Grid Classes="Handle" Name="HandleLeft" Cursor="LeftSide" Width="15" HorizontalAlignment="Left" VerticalAlignment="Stretch" Margin="0,15"/>
-                        <Grid Classes="Handle" Name="HandleRight" Cursor="RightSide" Width="15" HorizontalAlignment="Right" VerticalAlignment="Stretch" Margin="0,15"/>
+                        <Grid x:Name="ResizeHandlesLayer" ClipToBounds="False">
+                            <Grid Classes="Handle" Name="HandleTopLeft" Cursor="TopLeftCorner" Width="30" Height="30" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="-15"/>
+                            <Grid Classes="Handle" Name="HandleTopRight" Cursor="TopRightCorner" Width="30" Height="30" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="-15"/>
+                            <Grid Classes="Handle" Name="HandleBottomLeft" Cursor="BottomLeftCorner" Width="30" Height="30" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="-15"/>
+                            <Grid Classes="Handle" Name="HandleBottomRight" Cursor="BottomRightCorner" Width="30" Height="30" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="-15"/>
+                            <Grid Classes="Handle" Name="HandleTop" Cursor="TopSide" Height="15" HorizontalAlignment="Stretch" VerticalAlignment="Top" Margin="15,0"/>
+                            <Grid Classes="Handle" Name="HandleBottom" Cursor="BottomSide" Height="15" HorizontalAlignment="Stretch" VerticalAlignment="Bottom" Margin="15,0"/>
+                            <Grid Classes="Handle" Name="HandleLeft" Cursor="LeftSide" Width="15" HorizontalAlignment="Left" VerticalAlignment="Stretch" Margin="0,15"/>
+                            <Grid Classes="Handle" Name="HandleRight" Cursor="RightSide" Width="15" HorizontalAlignment="Right" VerticalAlignment="Stretch" Margin="0,15"/>
+                        </Grid>
                     </Grid>
                 </Grid>
             </Border>
