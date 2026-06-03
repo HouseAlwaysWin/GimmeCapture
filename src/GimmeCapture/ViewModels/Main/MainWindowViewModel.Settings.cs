@@ -828,7 +828,12 @@ public partial class MainWindowViewModel
         }
     }
 
-    public ObservableCollection<string> AvailableLlamaModels { get; } = new();
+    private ObservableCollection<string> _availableLlamaModels = new();
+    public ObservableCollection<string> AvailableLlamaModels
+    {
+        get => _availableLlamaModels;
+        private set => this.RaiseAndSetIfChanged(ref _availableLlamaModels, value);
+    }
 
     public ReactiveCommand<Unit, Unit> RefreshLlamaModelsCommand { get; private set; } = null!;
     public bool HasDownloadedLlamaModels => AvailableLlamaModels.Count > 0 || AIResourceService.IsLlamaModelReady();
@@ -837,17 +842,18 @@ public partial class MainWindowViewModel
     public void RefreshLlamaModelCatalog()
     {
         var presets = AIResourceService.GetInstalledLlamaModelPresets();
-        AvailableLlamaModels.Clear();
+        var nextModels = new ObservableCollection<string>();
         foreach (var preset in presets)
         {
-            AvailableLlamaModels.Add(preset.Id);
+            nextModels.Add(preset.Id);
         }
 
-        if (AvailableLlamaModels.Count > 0)
+        string nextSelectedModelId = LlamaModelId;
+        if (nextModels.Count > 0)
         {
-            if (string.IsNullOrWhiteSpace(LlamaModelId) || !AvailableLlamaModels.Contains(LlamaModelId))
+            if (string.IsNullOrWhiteSpace(nextSelectedModelId) || !nextModels.Contains(nextSelectedModelId))
             {
-                LlamaModelId = AvailableLlamaModels[0];
+                nextSelectedModelId = nextModels[0];
             }
         }
         else
@@ -856,6 +862,13 @@ public partial class MainWindowViewModel
             {
                 StatusText = LocalizationService.Instance["StatusLlamaModelNotReady"];
             }
+        }
+
+        AvailableLlamaModels = nextModels;
+
+        if (nextModels.Count > 0 && !string.Equals(LlamaModelId, nextSelectedModelId, StringComparison.Ordinal))
+        {
+            LlamaModelId = nextSelectedModelId;
         }
 
         this.RaisePropertyChanged(nameof(HasDownloadedLlamaModels));

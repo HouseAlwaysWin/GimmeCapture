@@ -156,7 +156,17 @@ public partial class MainWindowViewModel
                 llama.IsProcessing = status == QueueItemStatus.Downloading;
                 llama.HasError = status == QueueItemStatus.Failed;
                 if (status == QueueItemStatus.Failed) llama.ErrorMessage = _moduleInstallCoordinator.LastErrorMessage;
-                if (status == QueueItemStatus.Completed) llama.IsInstalled = _moduleInstallCoordinator.IsLlamaInstalled(llama.SelectedVariant);
+                if (status == QueueItemStatus.Completed)
+                {
+                    if (!string.IsNullOrWhiteSpace(llama.SelectedVariant))
+                    {
+                        _settingsService.Settings.LlamaModelId = llama.SelectedVariant;
+                        LlamaModelId = llama.SelectedVariant;
+                    }
+
+                    RefreshLlamaModelCatalog();
+                    llama.IsInstalled = _moduleInstallCoordinator.IsLlamaInstalled(llama.SelectedVariant);
+                }
             });
     }
 
