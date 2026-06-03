@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.VisualTree;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Interop;
@@ -50,9 +51,11 @@ public partial class FloatingTranslationWindow : Window
     public FloatingTranslationWindow()
     {
         InitializeComponent();
-        PointerPressed += OnPointerPressed;
-        PointerMoved += OnPointerMoved;
-        PointerReleased += OnPointerReleased;
+        // Translation text can handle pointer events for selection; tunnel routing
+        // keeps drag/resize gestures available for dense text-only boxes.
+        AddHandler(PointerPressedEvent, OnPointerPressed, RoutingStrategies.Tunnel, handledEventsToo: true);
+        AddHandler(PointerMovedEvent, OnPointerMoved, RoutingStrategies.Tunnel, handledEventsToo: true);
+        AddHandler(PointerReleasedEvent, OnPointerReleased, RoutingStrategies.Tunnel, handledEventsToo: true);
         ContextRequested += OnContextRequested;
     }
 
@@ -203,12 +206,7 @@ public partial class FloatingTranslationWindow : Window
             return;
         }
 
-        if (source is SelectableTextBlock || source?.FindAncestorOfType<SelectableTextBlock>() != null)
-        {
-            return;
-        }
-
-        if (HasClassInAncestors(source, "MoveHandle") || HasClassInAncestors(source, "TranslationItem"))
+        if (item != null)
         {
             _pointerState = PointerState.Moving;
             _movingItem = item;

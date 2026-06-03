@@ -72,23 +72,21 @@ public partial class SnipWindow : Window
         // Check for handle interaction (Move or Resize)
         // prioritized before drawing logic to allow adjustment while tool is active
         var sourceControl = e.Source as Control;
-        bool isTranslationText = sourceControl is SelectableTextBlock || sourceControl?.FindAncestorOfType<SelectableTextBlock>() != null;
         bool isResizeHandle = sourceControl != null && sourceControl.Classes.Contains("Handle");
         bool isMoveHandle = sourceControl != null &&
             (sourceControl.Classes.Contains("MoveHandle")
              || sourceControl.Name?.Contains("InnerCorner") == true
-             || (!isTranslationText && HasClassInAncestors(sourceControl, "TranslationItem")));
+             || HasClassInAncestors(sourceControl, "TranslationItem"));
         
         System.Diagnostics.Debug.WriteLine($"[PointerPressed] isResize: {isResizeHandle}, isMove: {isMoveHandle}");
 
-        if (sourceControl != null && props.IsLeftButtonPressed && isMoveHandle)
+        if (sourceControl != null && props.IsLeftButtonPressed && !isResizeHandle && (isMoveHandle || ResolveTranslationSelectionFromVisualTree(sourceControl) != null))
         {
             System.Diagnostics.Debug.WriteLine($"[PointerPressed] Entered MoveHandle block");
             var sel = ResolveTranslationSelectionFromVisualTree(sourceControl);
 
             if (sel != null)
             {
-                if (isTranslationText) return;
                 if (props.IsRightButtonPressed) return;
 
                 _pointerState = PointerInteractionState.MovingTranslationBox;
@@ -349,7 +347,7 @@ public partial class SnipWindow : Window
                 {
                     var hit = this.InputHitTest(currentPoint) as Control;
                     bool isResizeHandle = hit != null && hit.Classes.Contains("Handle");
-                    bool isMoveHandle = hit != null && (hit.Classes.Contains("MoveHandle") || HasClassInAncestors(hit, "TranslationItem"));
+                    bool isMoveHandle = hit != null && (hit.Classes.Contains("MoveHandle") || HasClassInAncestors(hit, "TranslationItem") || ResolveTranslationSelectionFromVisualTree(hit) != null);
 
                     if (isResizeHandle)
                     {

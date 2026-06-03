@@ -313,7 +313,8 @@
         <!-- Translation Layers (Visible in Translation Mode) -->
         <Canvas>
             <!-- Translation Results (Standard) -->
-            <ItemsControl ItemsSource="{Binding TranslatedBlocks}" 
+            <ItemsControl Name="TranslatedBlocksOverlay"
+                          ItemsSource="{Binding TranslatedBlocks}" 
                           Canvas.Left="{Binding TranslationOverlayLeft}"
                           Canvas.Top="{Binding TranslationOverlayTop}"
                            ZIndex="999">
@@ -333,7 +334,7 @@
                         <Border Name="TranslationBorder"
                                 BorderBrush="#66FFFFFF"
                                 BorderThickness="1"
-                                Background="#DD000000"
+                                Background="#FF000000"
                                 CornerRadius="4"
                                 Padding="12"
                                 BoxShadow="0 4 8 0 #40000000"
@@ -343,7 +344,11 @@
                                 PointerPressed="Translation_PointerPressed"
                                 PointerMoved="Translation_PointerMoved"
                                 PointerReleased="Translation_PointerReleased">
-                            <Grid RowDefinitions="18,*">
+                            <Grid RowDefinitions="18,*"
+                                  ToolTip.Tip="{Binding TranslatedText}"
+                                  PointerPressed="Translation_PointerPressed"
+                                  PointerMoved="Translation_PointerMoved"
+                                  PointerReleased="Translation_PointerReleased">
                                 <Border Grid.Row="0"
                                         Background="#01000000"
                                         Cursor="SizeAll"
@@ -351,8 +356,16 @@
                                         PointerPressed="Translation_PointerPressed"
                                         PointerMoved="Translation_PointerMoved"
                                         PointerReleased="Translation_PointerReleased"/>
-                                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-                                    <StackPanel>
+                                <ScrollViewer Grid.Row="1"
+                                              VerticalScrollBarVisibility="Auto"
+                                              ToolTip.Tip="{Binding TranslatedText}"
+                                              PointerPressed="Translation_PointerPressed"
+                                              PointerMoved="Translation_PointerMoved"
+                                              PointerReleased="Translation_PointerReleased">
+                                    <StackPanel ToolTip.Tip="{Binding TranslatedText}"
+                                                PointerPressed="Translation_PointerPressed"
+                                                PointerMoved="Translation_PointerMoved"
+                                                PointerReleased="Translation_PointerReleased">
                                         <SelectableTextBlock Text="{Binding TranslatedText}" 
                                                            Foreground="White" 
                                                            FontSize="{Binding DisplayFontSize}" 
@@ -362,6 +375,9 @@
                                                            HorizontalAlignment="Left" 
                                                            VerticalAlignment="Center"
                                                            ToolTip.Tip="{Binding TranslatedText}"
+                                                           PointerPressed="Translation_PointerPressed"
+                                                           PointerMoved="Translation_PointerMoved"
+                                                           PointerReleased="Translation_PointerReleased"
                                                            IsVisible="{Binding !$parent[Window].DataContext.ShowOcrResult}">
                                             <SelectableTextBlock.ContextMenu>
                                                 <ContextMenu>
@@ -384,6 +400,9 @@
                                                            HorizontalAlignment="Left" 
                                                            VerticalAlignment="Center"
                                                            ToolTip.Tip="{Binding TranslatedText}"
+                                                           PointerPressed="Translation_PointerPressed"
+                                                           PointerMoved="Translation_PointerMoved"
+                                                           PointerReleased="Translation_PointerReleased"
                                                            IsVisible="{Binding $parent[Window].DataContext.ShowOcrResult}">
                                             <SelectableTextBlock.ContextMenu>
                                                 <ContextMenu>
@@ -474,8 +493,7 @@
                     <DataTemplate x:DataType="m:UserSelectionRect">
                         <Canvas ClipToBounds="False" Width="{Binding Bounds.Width}" Height="{Binding Bounds.Height}">
                             <Grid Width="{Binding Bounds.Width}" Height="{Binding Bounds.Height}"
-                                  ToolTip.Tip="{Binding TranslatedText}"
-                                  ToolTip.IsEnabled="{Binding IsTextOverflowing}">
+                                  ToolTip.Tip="{Binding TranslatedText}">
                                 <Grid.ContextMenu>
                                     <ContextMenu>
                                         <MenuItem Header="{Binding $parent[Window].DataContext.MenuCopyTranslation}" 
@@ -501,13 +519,12 @@
                                         Classes="TranslationItem"
                                         IsHitTestVisible="True"
                                         ToolTip.Tip="{Binding TranslatedText}"
-                                        ToolTip.IsEnabled="{Binding IsTextOverflowing}"
                                         IsVisible="{Binding $parent[Window].DataContext.ShowTranslationResults}">
                                 </Border>
 
                                 <!-- 2. 拖動層 (MoveHandle 與 InnerCorner) -->
                                 <!-- 邊緣拖動 (20px 寬度的透明邊框) -->
-                                <Border Classes="MoveHandle" BorderBrush="#01FFFFFF" BorderThickness="20" Background="Transparent" Cursor="SizeAll" ToolTip.Tip="{Binding TranslatedText}" ToolTip.IsEnabled="{Binding IsTextOverflowing}" IsVisible="{Binding $parent[Window].DataContext.ShowTranslationResults}"/>
+                                <Border Classes="MoveHandle" BorderBrush="#01FFFFFF" BorderThickness="20" Background="Transparent" Cursor="SizeAll" ToolTip.Tip="{Binding TranslatedText}" IsVisible="{Binding $parent[Window].DataContext.ShowTranslationResults}"/>
                                 
                                 <!-- 內角拖動 (四角落內部的 40x40 區域) -->
                                 <Grid Name="InnerCornerTopLeft" Width="40" Height="40" HorizontalAlignment="Left" VerticalAlignment="Top" Background="#01FFFFFF" Cursor="SizeAll" Margin="1,1,0,0" Classes="MoveHandle" IsVisible="{Binding $parent[Window].DataContext.ShowTranslationResults}"/>
@@ -524,7 +541,7 @@
                                             <Binding Path="$parent[Window].DataContext.ShowTranslationResults"/>
                                         </MultiBinding>
                                     </Panel.IsVisible>
-                                    <Border Background="#CC000000"
+                                    <Border Background="#FF000000"
                                             BorderBrush="#66FFFFFF"
                                             BorderThickness="1"
                                             CornerRadius="4"
@@ -532,13 +549,15 @@
                                             Padding="8"
                                             HorizontalAlignment="Stretch"
                                             VerticalAlignment="Stretch"
+                                            ToolTip.Tip="{Binding TranslatedText}"
                                             ClipToBounds="True">
                                         <Grid RowDefinitions="Auto,*,Auto,*" RowSpacing="6">
                                             <TextBlock Grid.Row="0"
                                                        Text="{Binding [Input], Source={x:Static services:LocalizationService.Instance}}"
                                                        Foreground="#B8B8B8"
                                                        FontSize="10"/>
-                                            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                                                          ToolTip.Tip="{Binding TranslatedText}">
                                                 <SelectableTextBlock Text="{Binding OriginalText}"
                                                                    Foreground="Yellow"
                                                                    FontSize="{Binding DisplayFontSize}"
@@ -565,7 +584,8 @@
                                                        Text="{Binding [Output], Source={x:Static services:LocalizationService.Instance}}"
                                                        Foreground="#B8B8B8"
                                                        FontSize="10"/>
-                                            <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                            <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                                                          ToolTip.Tip="{Binding TranslatedText}">
                                                 <SelectableTextBlock Text="{Binding TranslatedText}"
                                                                    Foreground="White"
                                                                    FontSize="{Binding DisplayFontSize}"
@@ -607,7 +627,6 @@
                                         Classes="MoveHandle"
                                         Cursor="SizeAll"
                                         ToolTip.Tip="{Binding TranslatedText}"
-                                        ToolTip.IsEnabled="{Binding IsTextOverflowing}"
                                         ZIndex="10"
                                         IsVisible="{Binding $parent[Window].DataContext.ShowTranslationResults}"/>
 
@@ -620,10 +639,11 @@
                                             <Binding Path="$parent[Window].DataContext.ShowTranslationResults"/>
                                         </MultiBinding>
                                     </Panel.IsVisible>
-                                    <Border Background="#CC000000" CornerRadius="4" Padding="4"
+                                    <Border Background="#FF000000" CornerRadius="4" Padding="4"
                                             BorderBrush="#44FFFFFF" BorderThickness="1"
                                             Margin="0"
                                             HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                                            ToolTip.Tip="{Binding TranslatedText}"
                                             ClipToBounds="True">
                                         <StackPanel>
                                             <SelectableTextBlock Text="{Binding TranslatedText}" 

@@ -93,10 +93,11 @@ public partial class SnipWindow : Window
 
         InitializeComponent();
         
-        // Listen to pointer events on the window or canvas
-        PointerPressed += OnPointerPressed;
-        PointerMoved += OnPointerMoved;
-        PointerReleased += OnPointerReleased;
+        // Listen through the tunnel route so text controls inside translation boxes
+        // cannot swallow drag/resize gestures before the window sees them.
+        AddHandler(PointerPressedEvent, OnPointerPressed, RoutingStrategies.Tunnel, handledEventsToo: true);
+        AddHandler(PointerMovedEvent, OnPointerMoved, RoutingStrategies.Tunnel, handledEventsToo: true);
+        AddHandler(PointerReleasedEvent, OnPointerReleased, RoutingStrategies.Tunnel, handledEventsToo: true);
         
         // Close on Escape
         KeyDown += OnKeyDown;
@@ -432,7 +433,26 @@ public partial class SnipWindow : Window
                 .Select(_ => 0)
                 .StartWith(0);
 
-            _selectionRectSubscription = Observable.CombineLatest(trigger1, trigger2, userSelectionsChanged, (t1, t2, _) => t1)
+            var translatedBlocksChanged = Observable
+                .FromEventPattern<NotifyCollectionChangedEventHandler, NotifyCollectionChangedEventArgs>(
+                    h => vm.TranslatedBlocks.CollectionChanged += h,
+                    h => vm.TranslatedBlocks.CollectionChanged -= h)
+                .Select(_ => 0)
+                .StartWith(0);
+
+            var translationOverlayChanged = vm.WhenAnyValue(
+                    x => x.TranslationOverlayLeft,
+                    x => x.TranslationOverlayTop)
+                .Select(_ => 0)
+                .StartWith(0);
+
+            _selectionRectSubscription = Observable.CombineLatest(
+                    trigger1,
+                    trigger2,
+                    userSelectionsChanged,
+                    translatedBlocksChanged,
+                    translationOverlayChanged,
+                    (t1, t2, _, __, ___) => t1)
                 .Throttle(TimeSpan.FromMilliseconds(16))
                 .ObserveOn(RxApp.MainThreadScheduler)
                 .Subscribe(tuple => UpdateWindowRegion(tuple.Item2, tuple.Item3, tuple.Item4));
@@ -901,7 +921,7 @@ public partial class SnipWindow : Window
 
     private void Translation_PointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        if (_viewModel == null || sender is not Border border) return;
+        if (_viewModel == null || sender is not Control control) return;
         
         var props = e.GetCurrentPoint(this).Properties;
         if (props.IsLeftButtonPressed)
@@ -912,7 +932,7 @@ public partial class SnipWindow : Window
                 _translationDragOffset.X - _viewModel.TranslationOverlayLeft,
                 _translationDragOffset.Y - _viewModel.TranslationOverlayTop);
             
-            e.Pointer.Capture(border);
+            e.Pointer.Capture(control);
             e.Handled = true;
         }
     }
@@ -932,7 +952,7 @@ public partial class SnipWindow : Window
 
     private void Translation_PointerReleased(object? sender, PointerReleasedEventArgs e)
     {
-        if (_pointerState == PointerInteractionState.DraggingTranslationResult && sender is Border border)
+        if (_pointerState == PointerInteractionState.DraggingTranslationResult)
         {
             _pointerState = PointerInteractionState.None;
             RequestTranslationWindowRegionRefresh();

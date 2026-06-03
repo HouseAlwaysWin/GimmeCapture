@@ -3,12 +3,14 @@ using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
+using Avalonia.VisualTree;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Interop;
 using GimmeCapture.ViewModels.Main;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.InteropServices;
 using Avalonia.Input;
 using Avalonia.Input.Raw;
@@ -777,13 +779,20 @@ public partial class SnipWindow : Window
             return;
         }
 
+        if (TryAddTranslatedBlockVisualBounds(dest, scaling))
+        {
+            return;
+        }
+
         const double maxOuterWidth = 400.0;
         const double contentWidth = 376.0;
         const double itemSpacing = 4.0;
         const double chromeHeight = 44.0;
+        const double padding = 12.0;
 
         double x = _viewModel.TranslationOverlayLeft;
         double y = _viewModel.TranslationOverlayTop;
+        double totalHeight = 0;
 
         foreach (var block in _viewModel.TranslatedBlocks)
         {
@@ -795,15 +804,19 @@ public partial class SnipWindow : Window
             double originalHeight = MeasureTranslatedBlockOverlayHeight(original, fontSize, contentWidth);
             double contentHeight = Math.Max(translatedHeight, originalHeight);
             double itemHeight = Math.Max(chromeHeight, contentHeight + chromeHeight);
-
-            dest.Add(new Rect(
-                Math.Max(0, x) * scaling,
-                Math.Max(0, y) * scaling,
-                maxOuterWidth * scaling,
-                itemHeight * scaling));
-
-            y += itemHeight + itemSpacing;
+            totalHeight += itemHeight + itemSpacing;
         }
+
+        if (totalHeight > 0)
+        {
+            totalHeight -= itemSpacing;
+        }
+
+        dest.Add(new Rect(
+            Math.Max(0, x - padding) * scaling,
+            Math.Max(0, y - padding) * scaling,
+            (maxOuterWidth + (padding * 2)) * scaling,
+            Math.Max(chromeHeight, totalHeight + (padding * 2)) * scaling));
     }
 
     private static double MeasureTranslatedBlockOverlayHeight(string text, double fontSize, double contentWidth)
@@ -823,6 +836,51 @@ public partial class SnipWindow : Window
 
         textBlock.Measure(new Size(contentWidth, double.PositiveInfinity));
         return Math.Max(24.0, textBlock.DesiredSize.Height);
+    }
+
+    private bool TryAddTranslatedBlockVisualBounds(System.Collections.Generic.List<Rect> dest, double scaling)
+    {
+        if (TranslatedBlocksOverlay == null || !TranslatedBlocksOverlay.IsVisible)
+        {
+            return false;
+        }
+
+        Rect? union = null;
+        foreach (var border in TranslatedBlocksOverlay.GetVisualDescendants().OfType<Border>())
+        {
+            if (!string.Equals(border.Name, "TranslationBorder", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var topLeft = border.TranslatePoint(new Point(0, 0), this);
+            if (!topLeft.HasValue)
+            {
+                continue;
+            }
+
+            var rect = new Rect(topLeft.Value.X, topLeft.Value.Y, border.Bounds.Width, border.Bounds.Height);
+            union = union.HasValue ? union.Value.Union(rect) : rect;
+        }
+
+        if (!union.HasValue || union.Value.Width <= 0 || union.Value.Height <= 0)
+        {
+            return false;
+        }
+
+        const double pad = 12.0;
+        var padded = new Rect(
+            Math.Max(0, union.Value.X - pad),
+            Math.Max(0, union.Value.Y - pad),
+            union.Value.Width + (pad * 2),
+            union.Value.Height + (pad * 2));
+
+        dest.Add(new Rect(
+            padded.X * scaling,
+            padded.Y * scaling,
+            padded.Width * scaling,
+            padded.Height * scaling));
+        return true;
     }
 
     /// <summary>

@@ -304,7 +304,7 @@ public class WindowsScreenCaptureService : IScreenCaptureService
 
     private void DrawTranslationBox(SKCanvas canvas, Rect relBounds, string text, double fontSize, float scale)
     {
-        // UI matches: Background #CC000000 (80% opacity), CornerRadius 4, Padding 6, Margin 4
+        // UI matches: solid black translation text background, CornerRadius 4, Padding 6, Margin 4
         // The relBounds already represents the text region.
         
         float padding = 6.0f * scale;
@@ -312,7 +312,7 @@ public class WindowsScreenCaptureService : IScreenCaptureService
         
         using var paint = new SKPaint
         {
-            Color = new SKColor(0, 0, 0, 204), // #CC000000
+            Color = SKColors.Black,
             IsAntialias = true,
             Style = SKPaintStyle.Fill
         };
