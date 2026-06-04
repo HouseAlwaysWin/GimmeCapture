@@ -423,14 +423,16 @@ public partial class SnipWindowViewModel
             return;
         }
 
+        InvalidateTranslationOcrSearchCache();
         IsTranslationOcrSearchActive = true;
         RefreshTranslationOcrSearchRects();
-        await EnsureTranslationOcrSearchCandidatesAsync();
+        await EnsureTranslationOcrSearchCandidatesAsync(forceRefresh: true);
     }
 
     public void ExitTranslationOcrSearch()
     {
         ClearTranslationOcrSearchOverlay();
+        InvalidateTranslationOcrSearchCache();
     }
 
     public void RefreshWindowRects(IntPtr? excludeHWnd = null)

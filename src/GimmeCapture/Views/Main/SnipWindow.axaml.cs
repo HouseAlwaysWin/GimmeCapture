@@ -747,6 +747,11 @@ public partial class SnipWindow : Window
 
     private void OnKeyDown(object? sender, KeyEventArgs e)
     {
+        if (_viewModel?.IsTranslationMode == true && IsTranslationSelectionModifierKeyEvent(e))
+        {
+            ApplyTranslationSelectionModifierState(true);
+        }
+
         if (e.Key == Key.Escape)
         {
             if (_viewModel == null) return;
@@ -908,6 +913,11 @@ public partial class SnipWindow : Window
 
     private void OnKeyUp(object? sender, KeyEventArgs e)
     {
+        if (_viewModel?.IsTranslationMode == true && IsTranslationSelectionModifierKeyEvent(e))
+        {
+            ApplyTranslationSelectionModifierState(false);
+        }
+
         // Release one-shot guard so long-press key-repeat does not retrigger start/stop/pin.
         _activeActionHotkeyHeld = false;
     }

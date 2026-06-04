@@ -74,4 +74,24 @@ public partial class SnipWindow
             return true;
         return IsPhysicalModifierLabelDown(m);
     }
+
+    internal bool IsTranslationSelectionModifierKeyEvent(Avalonia.Input.KeyEventArgs e)
+    {
+        var m = _viewModel?.TranslationSelectionHoldModifier ?? "Ctrl";
+        if (string.Equals(m, "None", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        return string.Equals(m, "Ctrl", StringComparison.OrdinalIgnoreCase)
+            ? e.Key is Avalonia.Input.Key.LeftCtrl or Avalonia.Input.Key.RightCtrl
+                || string.Equals(e.PhysicalKey.ToString(), "ControlLeft", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(e.PhysicalKey.ToString(), "ControlRight", StringComparison.OrdinalIgnoreCase)
+            : string.Equals(m, "Shift", StringComparison.OrdinalIgnoreCase)
+                ? e.Key is Avalonia.Input.Key.LeftShift or Avalonia.Input.Key.RightShift
+                    || string.Equals(e.PhysicalKey.ToString(), "ShiftLeft", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(e.PhysicalKey.ToString(), "ShiftRight", StringComparison.OrdinalIgnoreCase)
+                : string.Equals(m, "Alt", StringComparison.OrdinalIgnoreCase)
+                    && (e.Key is Avalonia.Input.Key.LeftAlt or Avalonia.Input.Key.RightAlt
+                        || string.Equals(e.PhysicalKey.ToString(), "AltLeft", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(e.PhysicalKey.ToString(), "AltRight", StringComparison.OrdinalIgnoreCase));
+    }
 }
