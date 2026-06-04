@@ -1,63 +1,95 @@
-# GimmeCapture!! 🦊
+# GimmeCapture!!
 
-The One Tool to Snip & Record. A sleek, high-performance desktop utility built with Avalonia for capturing your screen with style.
-
----
-
-## 🌐 Other Languages / 其他語言 / 他の言語
-
-- [繁體中文 (Traditional Chinese)](README.zh-TW.md)
-- [日本語 (Japanese)](README.ja.md)
+The one tool to snip, record, translate, and pin your screen with style.
 
 ---
 
-## 🇺🇸 English
+## Languages
 
-### 🎸 Design Inspiration
-The name **GimmeCapture!!** is a tribute to the song **["Gimme chocolate!!" (Official Video)](https://www.youtube.com/watch?v=WIKqgE4BwAY)** by **BABYMETAL**. Just like the song, this tool aims to be fast, energetic, and heavy on style. The UI colors and theme are inspired by the iconic BABYMETAL aesthetic.
-
-### Features
-- **Smart Snip**: High-performance screen capture with instant editing tools.
-- **Screen Recording + System Audio**: Record screen video with desktop/system audio into MP4, MKV, GIF, and more.
-- **Live Translation Mode**: OCR + translation workflow with language selection, drag-region selection, and translation result overlays.
-- **Pin to Top**: Pin your snips as floating windows for easy reference.
-- **Pinned Video Player**: Play/pause, loop, seek, speed control (0.5x/1.0x/1.5x/2.0x), and audio mute toggle.
-- **Editing Tools**: Draw boxes, arrows, lines, and text directly on your capture.
-- **Customizable Hotkeys**: All shortcuts are fully customizable in the "Control" tab.
-- **Visual Personalization**: Adjustable border thickness, mask opacity, and theme colors (Gold, Silver, Red).
-- **Decoration Scaling**: Customize the size of **Side Wings (0.5x - 3.0x)** and **Corner Icons (0.4x - 1.0x)** to fit your style.
-- **Auto-start**: Option to launch automatically when Windows starts.
-- **Live Audio Metering**: Recording toolbar shows real-time input/output audio levels and dB state.
-
-### How to Use
-1. Launch the app and switch between the three modes on the toolbar: **Snip / Record / Translate**.
-2. In Snip mode, capture an area, annotate it, then copy, save, or pin it as a floating window.
-3. In Record mode, start/pause/stop recording and monitor live input/output audio levels from the toolbar.
-4. In Translate mode, choose source/target languages, drag to select regions, then run translate or OCR scan.
-5. Use right-click on pinned windows to access context actions; pinned videos support playback, speed, and audio controls.
-
-### Translation Mode Notes
-- Switch to **Translation Mode** from the toolbar language/translate icon.
-- Select source and target languages, then drag to select one or more text regions.
-- The selection hold modifier is configurable in **Settings > Hotkeys** (`Shift` / `Ctrl` / `Alt` / `None`), default is `Ctrl`.
-- Use **Translate All** to process all selections, or **Scan All** for OCR-only detection.
-- Translation overlays can be toggled on/off from the translation toolbar.
-
-### Recording / Pinned Video Notes
-- Enable or disable system audio capture in **Settings > Record**.
-- In pinned video mode, audio is **muted by default**.
-- In pinned video mode, press **Shift + M** to toggle mute/unmute audio.
-- Video speed changes also affect audio playback speed in pinned video mode.
-
-### 📦 Third-party Components
-- **FFmpeg**: Used for screen recording and multimedia processing. FFmpeg is licensed under the [GPL/LGPL](https://ffmpeg.org/legal.html). Screen capture uses **libav*** DLLs via [FFmpeg.AutoGen](https://www.nuget.org/packages/FFmpeg.AutoGen); finalize/transcode/preview still invoke the bundled `ffmpeg.exe` / `ffprobe.exe` / `ffplay.exe` shipped next to those DLLs under `ffmpeg-lib/`. Populate that folder before release builds by running `powershell -ExecutionPolicy Bypass -File scripts/ensure-ffmpeg-libs.ps1` (downloads the [BtbN FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds) **win64-gpl-shared** archive and extracts binaries).
-- **NAudio**: Used for system audio loopback capture during recording and real-time audio level monitoring.
+- [Traditional Chinese](README.zh-TW.md)
+- [Japanese](README.ja.md)
 
 ---
 
-## 🛠️ Requirements
-- Windows 10/11
-- [.NET 10 Runtime](https://dotnet.microsoft.com/download/dotnet/10.0)
+## Overview
 
-## ⚖️ License
-Released under the [MIT License](LICENSE). Created by HouseAlwaysWin.
+**GimmeCapture!!** is a Windows desktop capture tool built with **Avalonia**. It combines fast snipping, screen recording, OCR-assisted translation, floating pin windows, and lightweight annotation tools in one app.
+
+The project name is a tribute to **BABYMETAL** and the song **["Gimme chocolate!!"](https://www.youtube.com/watch?v=WIKqgE4BwAY)**. The visual style follows that same bold, high-contrast energy.
+
+## Highlights
+
+- **Snip mode**: Capture a region quickly, then copy, save, annotate, or pin it.
+- **Record mode**: Record your screen with system audio and live toolbar controls.
+- **Translate mode**: Use OCR-assisted region selection and local translation overlays.
+- **Pin windows**: Keep images and videos on top as floating reference windows.
+- **Annotation tools**: Draw boxes, arrows, lines, and text on captures.
+- **Custom hotkeys**: Configure shortcuts from the Control tab.
+- **Visual customization**: Adjust theme colors, border thickness, mask opacity, and decoration visibility.
+
+## Translation Mode
+
+Translation mode is designed for fast OCR-to-translation workflows on desktop UI, documents, comics, and screenshots.
+
+- Select one or more regions manually, or use OCR-assisted quick selection.
+- The OCR helper appears while holding the configured selection modifier.
+- Translate results stay as movable, resizable overlay boxes.
+- OCR/original text can be toggled separately for inspection.
+- Translation runs locally through **LlamaSharp (GGUF)**.
+
+### Curated local translation models
+
+The current user-facing local translation model list is:
+
+- **TranslateGemma 4B**: primary recommended model
+- **Gemma 3 4B**: stable general fallback
+
+## AI Modules
+
+AI resources are downloaded on demand from the **Modules** tab.
+
+Current module groups include:
+
+- **ONNX Runtime & U2Net**: background removal runtime and model
+- **SAM2 Model**: smart object/region selection
+- **PaddleOCR v5**: OCR detection and recognition
+- **Llama Models**: local GGUF translation models
+
+## Pin Windows
+
+Pinned windows are meant for quick reference while you work.
+
+- Pin captured images as floating windows
+- Pin video clips with playback controls
+- Keep windows on top while preserving lightweight interaction
+
+## Recording
+
+Recording mode supports:
+
+- Screen recording with desktop/system audio
+- Multiple export formats such as MP4, MKV, GIF, WebM, and MOV
+- Live recording toolbar controls
+- Audio level feedback during recording
+
+## Notes
+
+- This project is actively iterated, so translation and AI workflows may evolve across releases.
+- The Modules tab is the expected place to install or update optional AI resources.
+
+## Third-Party Components
+
+- **FFmpeg / FFmpeg.AutoGen**: media recording, playback, probing, and processing
+- **NAudio**: system audio capture and monitoring
+- **ONNX Runtime**: local AI inference runtime
+- **PaddleOCR**: OCR pipeline
+- **LlamaSharp**: local GGUF inference for translation
+
+## Requirements
+
+- Windows 10 or Windows 11
+
+## License
+
+Released under the [MIT License](LICENSE).
+
