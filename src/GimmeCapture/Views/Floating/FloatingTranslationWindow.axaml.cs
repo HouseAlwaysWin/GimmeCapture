@@ -151,10 +151,11 @@ public partial class FloatingTranslationWindow : Window
         var opaqueRects = new List<Rect>();
         foreach (var item in _viewModel.Items)
         {
-            double x = Math.Max(0, (item.Bounds.X - 20) * scaling);
-            double y = Math.Max(0, (item.Bounds.Y - 20) * scaling);
-            double width = Math.Max(1, (item.Bounds.Width + 40) * scaling);
-            double height = Math.Max(1, (item.Bounds.Height + 40) * scaling);
+            const double hitPadding = 4;
+            double x = Math.Max(0, (item.Bounds.X - hitPadding) * scaling);
+            double y = Math.Max(0, (item.Bounds.Y - hitPadding) * scaling);
+            double width = Math.Max(1, (item.Bounds.Width + hitPadding * 2) * scaling);
+            double height = Math.Max(1, (item.Bounds.Height + hitPadding * 2) * scaling);
             opaqueRects.Add(new Rect(x, y, width, height));
         }
 

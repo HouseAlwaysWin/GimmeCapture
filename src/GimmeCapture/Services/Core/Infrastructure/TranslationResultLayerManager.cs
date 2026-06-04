@@ -1,10 +1,13 @@
 using Avalonia;
+using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Media;
 using GimmeCapture.Models;
 using GimmeCapture.ViewModels.Floating;
 using GimmeCapture.Views.Floating;
+using GimmeCapture.Views.Main;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace GimmeCapture.Services.Core.Infrastructure;
 
@@ -44,8 +47,7 @@ internal static class TranslationResultLayerManager
             window.Show();
         }
 
-        window.Topmost = true;
-        window.Activate();
+        window.Topmost = !IsSnipWindowVisible();
     }
 
     public static void ClearAll()
@@ -73,5 +75,15 @@ internal static class TranslationResultLayerManager
         window.Closed += (_, _) => _window = null;
         _window = window;
         return window;
+    }
+
+    private static bool IsSnipWindowVisible()
+    {
+        if (Application.Current?.ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime desktop)
+        {
+            return false;
+        }
+
+        return desktop.Windows.OfType<SnipWindow>().Any(window => window.IsVisible);
     }
 }

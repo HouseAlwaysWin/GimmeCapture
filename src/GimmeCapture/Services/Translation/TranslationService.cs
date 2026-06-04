@@ -215,23 +215,22 @@ public class TranslationService : IDisposable
                 unionBox.Width / scale,
                 unionBox.Height / scale);
 
+            result.Add(new TranslatedBlock
+            {
+                OriginalText = mergedText,
+                TranslatedText = acceptable ? translated : string.Empty,
+                Bounds = logicalBounds,
+                InferredFontSize = inferredFontSize,
+                DisplayFontSize = inferredFontSize
+            });
+
             if (acceptable)
             {
-                result.Add(new TranslatedBlock
-                {
-                    OriginalText = mergedText,
-                    TranslatedText = translated,
-                    Bounds = logicalBounds,
-                    InferredFontSize = inferredFontSize,
-                    DisplayFontSize = inferredFontSize
-                });
                 return (result, string.Empty);
             }
-            else
-            {
-                System.Diagnostics.Debug.WriteLine("[TranslationService] Final translation effort failed or was unacceptable. Returning empty result.");
-                return (result, "StatusTranslateFailedAcceptable");
-            }
+
+            System.Diagnostics.Debug.WriteLine("[TranslationService] Final translation effort failed or was unacceptable. Returning OCR-only block.");
+            return (result, "StatusTranslateFailedAcceptable");
         }
         finally
         {
@@ -388,14 +387,22 @@ public class TranslationService : IDisposable
 
     private bool IsTranslationAcceptable(string original, string translated, TranslationLanguage target)
     {
-        if (string.IsNullOrWhiteSpace(translated)) return false;
-        if (target == TranslationLanguage.English) return true;
-
-        // For CJK targets, reject pure Latin outputs that look like untranslated text.
-        if (!ContainsTargetScript(translated, target))
+        if (string.IsNullOrWhiteSpace(translated))
         {
             return false;
         }
+
+        string trimmed = translated.Trim();
+        if (trimmed.StartsWith("User:", StringComparison.OrdinalIgnoreCase)
+            || trimmed.StartsWith("Assistant:", StringComparison.OrdinalIgnoreCase)
+            || trimmed.StartsWith("Input:", StringComparison.OrdinalIgnoreCase)
+            || trimmed.StartsWith("Output:", StringComparison.OrdinalIgnoreCase)
+            || trimmed.Contains("Translate the following", StringComparison.OrdinalIgnoreCase)
+            || trimmed.Contains("Output ONLY", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
         return true;
     }
 

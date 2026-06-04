@@ -15,8 +15,17 @@ public class AppSettingsService
     // v2: Action hotkeys moved to F6/F7/F8/F9 defaults.
     // v3: Pin-like actions unified so Snip.Pin / Record.Action / Translate.Pin share F6.
     // v4: Snip AI detecting moved to OCR-only; legacy AIScanEngine/SAM2 scan tuning settings are ignored.
-    public const int CurrentConfigVersion = 4;
+    // v5: Translation default Llama preset switches to curated Qwen3 list; deprecated ids fall back safely.
+    // v6: Translation model list narrows to TranslateGemma + Gemma 3 4B + Gemma 4 E4B.
+    // v7: Translation model list narrows to TranslateGemma 4B + Gemma 3 4B + TranslateGemma 12B.
+    // v8: TranslateGemma 12B removed from visible/default path; falls back to TranslateGemma 4B.
+    public const int CurrentConfigVersion = 8;
     private readonly string _appVersion;
+    private static readonly string[] SupportedLlamaModelIds =
+    {
+        "translategemma-4b-it",
+        "gemma-3-4b-it-q4",
+    };
 
     public string BaseDataDirectory { get; private set; } = RuntimePathProvider.GetExecutableDirectory();
     private string ConfigPath => Path.Combine(BaseDataDirectory, "config.json");
@@ -114,6 +123,28 @@ public class AppSettingsService
             settings.Translate.Pin = "F6";
     }
 
+    private static string NormalizeLlamaModelId(string? modelId)
+    {
+        var normalized = modelId switch
+        {
+            null or "" => "translategemma-4b-it",
+            "gemma-3-1b-it-q4" => "translategemma-4b-it",
+            "gemma-4-placeholder" => "translategemma-4b-it",
+            "gemma-4-E4B" => "translategemma-4b-it",
+            "translategemma-12b-it" => "translategemma-4b-it",
+            "qwen3-1.7b-instruct-q4" => "translategemma-4b-it",
+            "qwen3-4b-instruct-q4" => "translategemma-4b-it",
+            "qwen2.5-1.5b-instruct-q4" => "translategemma-4b-it",
+            "qwen2.5-3b-instruct-q4" => "translategemma-4b-it",
+            "llama-3.1-8b-instruct-q4" => "translategemma-4b-it",
+            _ => modelId
+        };
+
+        return Array.Exists(SupportedLlamaModelIds, id => string.Equals(id, normalized, StringComparison.Ordinal))
+            ? normalized
+            : "translategemma-4b-it";
+    }
+
     private static int DetectConfigVersion(string json)
     {
         try
@@ -161,6 +192,11 @@ public class AppSettingsService
         if (sourceVersion < 3)
         {
             MigrateLegacyActionHotkeys(settings);
+        }
+
+        if (sourceVersion < 8)
+        {
+            settings.LlamaModelId = NormalizeLlamaModelId(settings.LlamaModelId);
         }
 
         settings.ConfigVersion = CurrentConfigVersion;
@@ -300,7 +336,7 @@ public class AppSettingsService
         dest.SourceLanguage = source.SourceLanguage;
         dest.TargetLanguage = source.TargetLanguage;
         dest.SelectedTranslationEngine = TranslationEngine.LlamaSharp;
-        dest.LlamaModelId = string.IsNullOrWhiteSpace(source.LlamaModelId) ? "qwen2.5-1.5b-instruct-q4" : source.LlamaModelId;
+        dest.LlamaModelId = NormalizeLlamaModelId(source.LlamaModelId);
         dest.LlamaCustomModelPath = source.LlamaCustomModelPath;
         dest.LlamaContextSize = source.LlamaContextSize;
         dest.LlamaGpuLayers = source.LlamaGpuLayers;

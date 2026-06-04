@@ -48,10 +48,12 @@ public partial class SnipWindowViewModel
     }
 
     /// <summary>
-    /// Screenshot/recording AI candidate boxes. Always false in translation (cursor / single / multi).
+    /// Screenshot/recording AI candidate boxes, plus OCR raw rect debug overlay in translation mode.
     /// </summary>
     public bool IsAiScanCandidateLayerVisible =>
-        CurrentState == SnipState.Detecting && CurrentMode != SnipMode.Translation;
+        _mainVm?.ShowAIScanBox == true &&
+        ((CurrentState == SnipState.Detecting && CurrentMode != SnipMode.Translation)
+         || (CurrentMode == SnipMode.Translation && ShowOcrResult));
 
     /// <summary>
     /// Win32 window/control snap candidate boxes. Always false in translation mode.

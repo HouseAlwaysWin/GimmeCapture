@@ -767,7 +767,7 @@ public partial class MainWindowViewModel
         }
     }
 
-    private string _llamaModelId = "qwen2.5-1.5b-instruct-q4";
+    private string _llamaModelId = "translategemma-4b-it";
     public string LlamaModelId
     {
         get => _llamaModelId;
@@ -828,7 +828,11 @@ public partial class MainWindowViewModel
         }
     }
 
-    private ObservableCollection<string> _availableLlamaModels = new();
+    private ObservableCollection<string> _availableLlamaModels = new(
+    [
+        "translategemma-4b-it",
+        "gemma-3-4b-it-q4"
+    ]);
     public ObservableCollection<string> AvailableLlamaModels
     {
         get => _availableLlamaModels;
@@ -836,16 +840,22 @@ public partial class MainWindowViewModel
     }
 
     public ReactiveCommand<Unit, Unit> RefreshLlamaModelsCommand { get; private set; } = null!;
-    public bool HasDownloadedLlamaModels => AvailableLlamaModels.Count > 0 || AIResourceService.IsLlamaModelReady();
+    public bool HasDownloadedLlamaModels => AIResourceService.GetInstalledLlamaModelPresets().Count > 0 || AIResourceService.IsLlamaModelReady();
     public bool NoDownloadedLlamaModels => !HasDownloadedLlamaModels;
 
     public void RefreshLlamaModelCatalog()
     {
-        var presets = AIResourceService.GetInstalledLlamaModelPresets();
+        var presets = AIResourceService.GetDownloadableLlamaModelPresets();
         var nextModels = new ObservableCollection<string>();
         foreach (var preset in presets)
         {
             nextModels.Add(preset.Id);
+        }
+
+        if (nextModels.Count == 0)
+        {
+            nextModels.Add("translategemma-4b-it");
+            nextModels.Add("gemma-3-4b-it-q4");
         }
 
         string nextSelectedModelId = LlamaModelId;
@@ -856,12 +866,9 @@ public partial class MainWindowViewModel
                 nextSelectedModelId = nextModels[0];
             }
         }
-        else
+        else if (!AIResourceService.IsLlamaModelReady())
         {
-            if (!AIResourceService.IsLlamaModelReady())
-            {
-                StatusText = LocalizationService.Instance["StatusLlamaModelNotReady"];
-            }
+            StatusText = LocalizationService.Instance["StatusLlamaModelNotReady"];
         }
 
         AvailableLlamaModels = nextModels;
@@ -912,6 +919,7 @@ public partial class MainWindowViewModel
         {
             var snapshot = await _settingsPersistenceService.LoadAsync(_settingsService);
             ApplySettingsSnapshot(snapshot);
+            RefreshLlamaModelCatalog();
             RaiseSettingsBackedPropertyNotifications();
             IsModified = false;
         }

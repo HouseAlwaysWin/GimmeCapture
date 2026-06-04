@@ -171,7 +171,7 @@ public class AppSettings
     public TranslationLanguage TargetLanguage { get; set; } = TranslationLanguage.TraditionalChinese;
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public TranslationEngine SelectedTranslationEngine { get; set; } = TranslationEngine.LlamaSharp;
-    public string LlamaModelId { get; set; } = "qwen2.5-1.5b-instruct-q4";
+    public string LlamaModelId { get; set; } = "translategemma-4b-it";
     public string LlamaCustomModelPath { get; set; } = string.Empty;
     public int LlamaContextSize { get; set; } = 2048;
     public int LlamaGpuLayers { get; set; } = 0;

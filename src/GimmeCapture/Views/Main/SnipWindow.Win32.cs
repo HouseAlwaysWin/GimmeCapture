@@ -571,12 +571,6 @@ public partial class SnipWindow : Window
                 return true;
             }
 
-            if (IsMatch(_viewModel.AutoDetectHotkey))
-            {
-                _viewModel.ToggleAutoDetectCommand?.Execute().Subscribe();
-                return true;
-            }
-            
             if (IsMatch(_viewModel.ClearAllHotkey))
             {
                 _viewModel.ClearAllSelectionsCommand?.Execute().Subscribe();
@@ -1208,8 +1202,8 @@ public partial class SnipWindow : Window
                 {
                     double dtw = TranslationToolbarOpaqueWidthDip(_viewModel.ToolbarWidth + 40);
                     double dth = _viewModel.ToolbarHeight + 40;
-                    double dtx = _viewModel.ToolbarLeft - 20;
-                    double dty = _viewModel.ToolbarTop - 20;
+                    double dtx = Math.Max(0, _viewModel.ToolbarLeft - 20);
+                    double dty = Math.Max(0, _viewModel.ToolbarTop - 20);
                     drawToolbarRect = new Rect(dtx * scaling, dty * scaling, dtw * scaling, dth * scaling);
                 }
 

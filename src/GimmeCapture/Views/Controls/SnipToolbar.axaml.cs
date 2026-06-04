@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Markup.Xaml;
+using Avalonia.VisualTree;
 
 namespace GimmeCapture.Views.Controls;
 
@@ -26,6 +27,20 @@ public partial class SnipToolbar : UserControl
     
     private void OnToolbarPointerPressed(object? sender, PointerPressedEventArgs e)
     {
+        if (e.Source is Visual visual)
+        {
+            var current = visual;
+            while (current != null)
+            {
+                if (current is ComboBox || current is ContextMenu)
+                {
+                    return;
+                }
+
+                current = current.GetVisualParent();
+            }
+        }
+
         // Mark the event as handled so it doesn't bubble up to the canvas
         // This happens AFTER child controls have processed the event
         e.Handled = true;

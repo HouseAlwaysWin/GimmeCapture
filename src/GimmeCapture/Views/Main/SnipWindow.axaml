@@ -28,6 +28,8 @@
         <cv:BoolToFontStyleConverter x:Key="BoolToFontStyleConverter"/>
         <cv:StringToKeyGestureConverter x:Key="StringToKeyGestureConverter"/>
         <cv:BoolToHiddenOpacityConverter x:Key="BoolToHiddenOpacityConverter"/>
+        <cv:TranslationDisplayTextConverter x:Key="TranslationDisplayTextConverter"/>
+        <cv:TranslationSelectionVisibilityConverter x:Key="TranslationSelectionVisibilityConverter"/>
     </Window.Resources>
     <Window.KeyBindings>
         <!-- Actions (Dynamic by Mode) -->
@@ -63,7 +65,6 @@
         <KeyBinding Gesture="{Binding TranslatePinHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding PinTranslationResultsCommand}" />
         <KeyBinding Gesture="{Binding ScanAllHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding ScanAllTextCommand}" />
         <KeyBinding Gesture="{Binding ClearAllHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding ClearAllSelectionsCommand}" />
-        <KeyBinding Gesture="{Binding AutoDetectHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding ToggleAutoDetectCommand}" />
 
         <!-- Mode Switching -->
         <KeyBinding Gesture="{Binding SwitchToSnipHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding SwitchToSnipCommand}" />
@@ -374,7 +375,7 @@
                                                 PointerPressed="Translation_PointerPressed"
                                                 PointerMoved="Translation_PointerMoved"
                                                 PointerReleased="Translation_PointerReleased">
-                                        <SelectableTextBlock Text="{Binding TranslatedText}" 
+                                        <SelectableTextBlock
                                                            Foreground="White" 
                                                            FontSize="{Binding DisplayFontSize}" 
                                                            FontWeight="Medium" 
@@ -382,11 +383,17 @@
                                                            xml:space="preserve" 
                                                            HorizontalAlignment="Left" 
                                                            VerticalAlignment="Center"
-                                                           ToolTip.Tip="{Binding TranslatedText}"
                                                            PointerPressed="Translation_PointerPressed"
                                                            PointerMoved="Translation_PointerMoved"
                                                            PointerReleased="Translation_PointerReleased"
                                                            IsVisible="True">
+                                            <SelectableTextBlock.Text>
+                                                <MultiBinding Converter="{StaticResource TranslationDisplayTextConverter}">
+                                                    <Binding Path="OriginalText"/>
+                                                    <Binding Path="TranslatedText"/>
+                                                    <Binding Path="$parent[Window].DataContext.ShowOcrResult"/>
+                                                </MultiBinding>
+                                            </SelectableTextBlock.Text>
                                             <SelectableTextBlock.ContextMenu>
                                                 <ContextMenu>
                                                     <MenuItem Header="{Binding $parent[Window].DataContext.MenuCopyTranslation}" 
@@ -534,45 +541,20 @@
                                             VerticalAlignment="Stretch"
                                             ToolTip.Tip="{Binding TranslatedText}"
                                             ClipToBounds="True">
-                                        <Grid RowDefinitions="Auto,*,Auto,*" RowSpacing="6">
-                                            <TextBlock Grid.Row="0"
-                                                       Text="{Binding [Input], Source={x:Static services:LocalizationService.Instance}}"
-                                                       Foreground="#B8B8B8"
-                                                       FontSize="10"/>
-                                            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                                        <Grid RowDefinitions="*,Auto">
+                                            <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                                                           ToolTip.Tip="{Binding TranslatedText}">
-                                                <SelectableTextBlock Text="{Binding OriginalText}"
-                                                                   Foreground="Yellow"
-                                                                   FontSize="{Binding DisplayFontSize}"
-                                                                   TextWrapping="Wrap">
-                                                    <SelectableTextBlock.ContextMenu>
-                                                        <ContextMenu>
-                                                            <MenuItem Header="{Binding $parent[Window].DataContext.MenuCopyTranslation}" 
-                                                                      Command="{Binding $parent[Window].DataContext.CopyTranslationTextCommand}"
-                                                                      CommandParameter="{Binding $parent[SelectableTextBlock].SelectedText}"/>
-                                                            <Separator/>
-                                                            <MenuItem Header="{Binding $parent[Window].DataContext.MenuPinTranslation}" 
-                                                                      Command="{Binding $parent[Window].DataContext.PinTranslationCommand}"
-                                                                      CommandParameter="{Binding $parent[SelectableTextBlock].DataContext}"/>
-                                                            <Separator/>
-                                                            <MenuItem Header="{Binding [MenuClose], Source={x:Static services:LocalizationService.Instance}}" 
-                                                                      Command="{Binding $parent[Window].DataContext.RemoveUserSelectionCommand}"
-                                                                      CommandParameter="{Binding $parent[SelectableTextBlock].DataContext}"/>
-                                                        </ContextMenu>
-                                                    </SelectableTextBlock.ContextMenu>
-                                                </SelectableTextBlock>
-                                            </ScrollViewer>
-
-                                            <TextBlock Grid.Row="2"
-                                                       Text="{Binding [Output], Source={x:Static services:LocalizationService.Instance}}"
-                                                       Foreground="#B8B8B8"
-                                                       FontSize="10"/>
-                                            <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
-                                                          ToolTip.Tip="{Binding TranslatedText}">
-                                                <SelectableTextBlock Text="{Binding TranslatedText}"
+                                                <SelectableTextBlock
                                                                    Foreground="White"
                                                                    FontSize="{Binding DisplayFontSize}"
                                                                    TextWrapping="Wrap">
+                                                    <SelectableTextBlock.Text>
+                                                        <MultiBinding Converter="{StaticResource TranslationDisplayTextConverter}">
+                                                            <Binding Path="OriginalText"/>
+                                                            <Binding Path="TranslatedText"/>
+                                                            <Binding Path="$parent[Window].DataContext.ShowOcrResult"/>
+                                                        </MultiBinding>
+                                                    </SelectableTextBlock.Text>
                                                     <SelectableTextBlock.ContextMenu>
                                                         <ContextMenu>
                                                             <MenuItem Header="{Binding $parent[Window].DataContext.MenuCopyTranslation}" 
@@ -591,8 +573,7 @@
                                                 </SelectableTextBlock>
                                             </ScrollViewer>
 
-                                            <!-- Drag handle strip for audio panel -->
-                                            <Border Grid.RowSpan="4"
+                                            <Border Grid.RowSpan="2"
                                                     VerticalAlignment="Top"
                                                     Height="18"
                                                     Background="#01FFFFFF"
@@ -610,15 +591,25 @@
                                         Classes="MoveHandle"
                                         Cursor="SizeAll"
                                         ToolTip.Tip="{Binding TranslatedText}"
-                                        ZIndex="10"
-                                        IsVisible="{Binding IsTranslated}"/>
+                                        ZIndex="10">
+                                    <Border.IsVisible>
+                                        <MultiBinding Converter="{StaticResource TranslationSelectionVisibilityConverter}">
+                                            <Binding Path="OriginalText"/>
+                                            <Binding Path="TranslatedText"/>
+                                            <Binding Path="$parent[Window].DataContext.ShowOcrResult"/>
+                                            <Binding Path="$parent[Window].DataContext.IsCapturing"/>
+                                            <Binding Path="$parent[Window].DataContext.ShowTranslationResults"/>
+                                        </MultiBinding>
+                                    </Border.IsVisible>
+                                </Border>
 
                                 <Panel IsHitTestVisible="True" VerticalAlignment="Stretch" HorizontalAlignment="Stretch" ClipToBounds="True">
                                     <Panel.IsVisible>
-                                        <MultiBinding Converter="{x:Static BoolConverters.And}">
-                                            <Binding Path="!IsAudioPanel"/>
-                                            <Binding Path="IsTranslated"/>
-                                            <Binding Path="!$parent[Window].DataContext.IsCapturing"/>
+                                        <MultiBinding Converter="{StaticResource TranslationSelectionVisibilityConverter}">
+                                            <Binding Path="OriginalText"/>
+                                            <Binding Path="TranslatedText"/>
+                                            <Binding Path="$parent[Window].DataContext.ShowOcrResult"/>
+                                            <Binding Path="$parent[Window].DataContext.IsCapturing"/>
                                             <Binding Path="$parent[Window].DataContext.ShowTranslationResults"/>
                                         </MultiBinding>
                                     </Panel.IsVisible>
@@ -629,11 +620,18 @@
                                             ToolTip.Tip="{Binding TranslatedText}"
                                             ClipToBounds="True">
                                         <StackPanel>
-                                            <SelectableTextBlock Text="{Binding TranslatedText}" 
+                                            <SelectableTextBlock
                                                                Foreground="White" 
                                                                FontSize="{Binding DisplayFontSize}" 
                                                                TextWrapping="Wrap"
                                                                IsVisible="True">
+                                                <SelectableTextBlock.Text>
+                                                    <MultiBinding Converter="{StaticResource TranslationDisplayTextConverter}">
+                                                        <Binding Path="OriginalText"/>
+                                                        <Binding Path="TranslatedText"/>
+                                                        <Binding Path="$parent[Window].DataContext.ShowOcrResult"/>
+                                                    </MultiBinding>
+                                                </SelectableTextBlock.Text>
                                                 <SelectableTextBlock.ContextMenu>
                                                     <ContextMenu>
                                                         <MenuItem Header="{Binding $parent[Window].DataContext.MenuCopyTranslation}" 

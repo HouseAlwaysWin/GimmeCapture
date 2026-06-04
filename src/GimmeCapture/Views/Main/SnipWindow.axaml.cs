@@ -226,20 +226,23 @@ public partial class SnipWindow : Window
                 }
             }, Avalonia.Threading.DispatcherPriority.Background);
             
-            // Z-Order nudge: Some popups (like ComboBox dropdowns) might be stubborn.
-            // Toggling Topmost and re-activating after a short delay helps.
-            _ = Task.Run(async () => 
+            // Avoid topmost nudging in translation mode because it can steal z-order
+            // back from ComboBox popups and other transient UI.
+            if (_viewModel?.IsTranslationMode != true)
             {
-                await Task.Delay(500);
-                await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => 
+                _ = Task.Run(async () =>
                 {
-                    this.Topmost = false;
-                    this.Topmost = true;
-                    this.Activate();
-                    this.Focus();
-                    Console.WriteLine("[SnipWindow] Z-Order nudge applied.");
+                    await Task.Delay(500);
+                    await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+                    {
+                        this.Topmost = false;
+                        this.Topmost = true;
+                        this.Activate();
+                        this.Focus();
+                        Console.WriteLine("[SnipWindow] Z-Order nudge applied.");
+                    });
                 });
-            });
+            }
 
             // Temporarily lower existing Pin windows
             _hiddenTopmostWindows = _windowLayerService.LowerTopmostWindowsOfType<FloatingImageWindow>();
@@ -425,6 +428,14 @@ public partial class SnipWindow : Window
                 x => x.IsToolbarShownOnScreen,
                 x => x.CurrentTranslationTool);
 
+            var trigger3 = vm.WhenAnyValue(
+                    x => x.ToolbarLeft,
+                    x => x.ToolbarTop,
+                    x => x.TranslationToolbarLeft,
+                    x => x.TranslationToolbarTop)
+                .Select(_ => 0)
+                .StartWith(0);
+
             // Recompute Win32 region when translation boxes are added/removed (not covered by SelectionRect alone).
             var userSelectionsChanged = Observable
                 .FromEventPattern<NotifyCollectionChangedEventHandler, NotifyCollectionChangedEventArgs>(
@@ -449,10 +460,11 @@ public partial class SnipWindow : Window
             _selectionRectSubscription = Observable.CombineLatest(
                     trigger1,
                     trigger2,
+                    trigger3,
                     userSelectionsChanged,
                     translatedBlocksChanged,
                     translationOverlayChanged,
-                    (t1, t2, _, __, ___) => t1)
+                    (t1, t2, _, __, ___, ____) => t1)
                 .Throttle(TimeSpan.FromMilliseconds(16))
                 .ObserveOn(RxApp.MainThreadScheduler)
                 .Subscribe(tuple => UpdateWindowRegion(tuple.Item2, tuple.Item3, tuple.Item4));
@@ -883,11 +895,6 @@ public partial class SnipWindow : Window
                 else if (IsMatch(_viewModel.ScanAllHotkey))
                 {
                     _viewModel.ScanAllTextCommand?.Execute().Subscribe();
-                    e.Handled = true;
-                }
-                else if (IsMatch(_viewModel.AutoDetectHotkey))
-                {
-                    _viewModel.ToggleAutoDetectCommand?.Execute().Subscribe();
                     e.Handled = true;
                 }
                 else if (IsMatch(_viewModel.ClearAllHotkey))

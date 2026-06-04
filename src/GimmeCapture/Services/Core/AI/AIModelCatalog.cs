@@ -20,19 +20,31 @@ public sealed class AIModelCatalog
 {
     private static readonly LlamaModelPreset[] LlamaModelPresets =
     {
+        new("translategemma-4b-it", "TranslateGemma 4B IT (Q4)", "https://huggingface.co/SandLogicTechnologies/translategemma-4b-it-GGUF/resolve/main/translategemma-4b_Q4_K_M.gguf?download=true", "translategemma-4b_Q4_K_M.gguf"),
+        new("gemma-3-4b-it-q4", "Gemma 3 4B IT (Q4)", "https://huggingface.co/bartowski/google_gemma-3-4b-it-GGUF/resolve/main/google_gemma-3-4b-it-Q4_K_M.gguf?download=true", "google_gemma-3-4b-it-Q4_K_M.gguf"),
+        new("gemma-4-E4B", "Gemma 4 E4B IT (Q4)", "https://huggingface.co/ggml-org/gemma-4-E4B-it-GGUF/resolve/main/gemma-4-E4B-it-Q4_K_M.gguf?download=true", "gemma-4-E4B-it-Q4_K_M.gguf"),
+        new("translategemma-12b-it", "TranslateGemma 12B IT (Q4)", "https://huggingface.co/bullerwins/translategemma-12b-it-GGUF/resolve/main/translategemma-12b-it-Q4_K_M.gguf?download=true", "translategemma-12b-it-Q4_K_M.gguf"),
+        new("qwen3-1.7b-instruct-q4", "Qwen3 1.7B Instruct (Q4)", "https://huggingface.co/bartowski/Qwen_Qwen3-1.7B-GGUF/resolve/main/Qwen_Qwen3-1.7B-Q4_K_M.gguf?download=true", "Qwen_Qwen3-1.7B-Q4_K_M.gguf"),
+        new("qwen3-4b-instruct-q4", "Qwen3 4B Instruct (Q4)", "https://huggingface.co/Qwen/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf?download=true", "Qwen3-4B-Q4_K_M.gguf"),
         new("qwen2.5-1.5b-instruct-q4", "Qwen2.5 1.5B Instruct (Q4)", "https://huggingface.co/bartowski/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/Qwen2.5-1.5B-Instruct-Q4_K_M.gguf?download=true", "Qwen2.5-1.5B-Instruct-Q4_K_M.gguf"),
         new("qwen2.5-3b-instruct-q4", "Qwen2.5 3B Instruct (Q4)", "https://huggingface.co/bartowski/Qwen2.5-3B-Instruct-GGUF/resolve/main/Qwen2.5-3B-Instruct-Q4_K_M.gguf?download=true", "Qwen2.5-3B-Instruct-Q4_K_M.gguf"),
         new("gemma-3-1b-it-q4", "Gemma 3 1B IT (Q4)", "https://huggingface.co/bartowski/google_gemma-3-1b-it-GGUF/resolve/main/google_gemma-3-1b-it-Q4_K_M.gguf?download=true", "google_gemma-3-1b-it-Q4_K_M.gguf"),
-        new("gemma-3-4b-it-q4", "Gemma 3 4B IT (Q4)", "https://huggingface.co/bartowski/google_gemma-3-4b-it-GGUF/resolve/main/google_gemma-3-4b-it-Q4_K_M.gguf?download=true", "google_gemma-3-4b-it-Q4_K_M.gguf"),
         new("llama-3.1-8b-instruct-q4", "Llama 3.1 8B Instruct (Q4)", "https://huggingface.co/bartowski/Meta-Llama-3.1-8B-Instruct-GGUF/resolve/main/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf?download=true", "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf"),
         new("gemma-4-placeholder", "Gemma4 (custom file)", string.Empty, string.Empty),
+    };
+
+    private static readonly string[] DownloadableLlamaModelIds =
+    {
+        "translategemma-4b-it",
+        "gemma-3-4b-it-q4",
     };
 
     public IReadOnlyList<LlamaModelPreset> GetLlamaModelPresets() => LlamaModelPresets;
 
     public IReadOnlyList<LlamaModelPreset> GetDownloadableLlamaModelPresets() =>
-        LlamaModelPresets.AsValueEnumerable()
-            .Where(p => !string.IsNullOrWhiteSpace(p.DownloadUrl) && !string.IsNullOrWhiteSpace(p.FileName))
+        DownloadableLlamaModelIds.AsValueEnumerable()
+            .Select(id => TryGetLlamaModelPreset(id, out var preset) ? preset : default)
+            .Where(p => !string.IsNullOrWhiteSpace(p.Id) && !string.IsNullOrWhiteSpace(p.DownloadUrl) && !string.IsNullOrWhiteSpace(p.FileName))
             .ToList();
 
     public bool TryGetLlamaModelPreset(string modelId, out LlamaModelPreset preset)

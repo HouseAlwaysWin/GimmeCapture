@@ -84,7 +84,7 @@ public sealed class AIResourceOrchestrator
             return Array.Empty<LlamaModelPreset>();
         }
 
-        return _modelCatalog.GetLlamaModelPresets().AsValueEnumerable()
+        return _modelCatalog.GetDownloadableLlamaModelPresets().AsValueEnumerable()
             .Where(p => !string.IsNullOrWhiteSpace(p.FileName) && File.Exists(Path.Combine(modelDir, p.FileName)))
             .ToList();
     }

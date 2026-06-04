@@ -197,6 +197,19 @@ public partial class SnipWindow : Window
                     return;
                 }
 
+                // Let ComboBox handle its own popup/open interactions.
+                // Without this, clicking the language selectors starts toolbar dragging
+                // before the dropdown can open or select another item.
+                if (sourceControl is ComboBox || sourceControl?.FindAncestorOfType<ComboBox>() != null)
+                {
+                    return;
+                }
+
+                if (_viewModel.IsTranslationMode && !IsTranslationToolbarDragStripHit(sourceControl))
+                {
+                    return;
+                }
+
                 // Otherwise, start dragging the toolbar
                 _pointerState = PointerInteractionState.DraggingToolbar;
                 _toolbarDragOffset = e.GetPosition(toolbar); // Position relative to toolbar
@@ -482,8 +495,30 @@ public partial class SnipWindow : Window
         // 1. Toolbar Dragging
         if (_pointerState == PointerInteractionState.DraggingToolbar)
         {
-            _viewModel.ToolbarLeft = currentPoint.X - _toolbarDragOffset.X;
-            _viewModel.ToolbarTop = currentPoint.Y - _toolbarDragOffset.Y;
+            double tw = _viewModel.ToolbarWidth > 0 ? _viewModel.ToolbarWidth : 600;
+            double th = _viewModel.ToolbarHeight > 0 ? _viewModel.ToolbarHeight : 45;
+            Rect clampBounds = _viewModel.ActiveScreenBounds.Width > 0
+                ? _viewModel.ActiveScreenBounds
+                : new Rect(0, 0,
+                    _viewModel.ViewportSize.Width > 0 ? _viewModel.ViewportSize.Width : 1920,
+                    _viewModel.ViewportSize.Height > 0 ? _viewModel.ViewportSize.Height : 1080);
+
+            double left = Math.Clamp(
+                currentPoint.X - _toolbarDragOffset.X,
+                clampBounds.X,
+                Math.Max(clampBounds.X, clampBounds.Right - tw));
+            double top = Math.Clamp(
+                currentPoint.Y - _toolbarDragOffset.Y,
+                clampBounds.Y,
+                Math.Max(clampBounds.Y, clampBounds.Bottom - th));
+
+            _viewModel.ToolbarLeft = left;
+            _viewModel.ToolbarTop = top;
+            if (_viewModel.IsTranslationMode)
+            {
+                _viewModel.TranslationToolbarLeft = left;
+                _viewModel.TranslationToolbarTop = top;
+            }
             _viewModel.IsToolbarManuallyPositioned = true;
             return;
         }
@@ -558,6 +593,19 @@ public partial class SnipWindow : Window
         {
             _viewModel.UpdateWindowHover(currentPoint);
         }
+    }
+
+    private static bool IsTranslationToolbarDragStripHit(Control? sourceControl)
+    {
+        for (Control? current = sourceControl; current != null; current = current.GetVisualParent() as Control)
+        {
+            if (string.Equals(current.Name, "TranslationToolbarDragStrip", StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private void OnPointerReleased(object? sender, PointerReleasedEventArgs e)

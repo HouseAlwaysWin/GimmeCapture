@@ -6,6 +6,7 @@ using GimmeCapture.Services.OCR;
 using GimmeCapture.Services.Translation;
 using GimmeCapture.ViewModels.Floating;
 using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using SkiaSharp;
@@ -115,21 +116,35 @@ public partial class SnipWindowViewModel
                 // 合併所有翻譯結果作為這個區域的翻譯文字
                 var combinedText = BuildCombinedBlockText(blocks, static block => block.TranslatedText);
                 var combinedOriginalText = BuildCombinedBlockText(blocks, static block => block.OriginalText);
+                var translatedOcrRects = blocks
+                    .AsValueEnumerable()
+                    .Select(static block => block.Bounds)
+                    .Where(static bounds => bounds.Width > 0 && bounds.Height > 0)
+                    .ToList();
                 
                 await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
                 {
-                    bool isFailed = string.IsNullOrWhiteSpace(combinedText);
+                    _ocrRawRects = translatedOcrRects;
+                    if (ShowOcrResult)
+                    {
+                        RefreshProjectedOcrRects();
+                    }
+
+                    bool isFailed = ShouldRejectTranslatedSelectionResult(combinedText, combinedOriginalText);
                     if (isFailed)
                     {
                         var failMsgKey = string.IsNullOrEmpty(errorKey) ? "StatusTranslateFailed" : errorKey;
                         _mainVm?.SetStatus(failMsgKey);
-                        sel.TranslatedText = LocalizationService.Instance[failMsgKey];
-                    }
-                    else
-                    {
-                        sel.TranslatedText = combinedText;
+                        sel.TranslatedText = string.Empty;
+                        sel.OriginalText = combinedOriginalText;
+                        sel.IsTranslated = false;
+                        sel.EstimatedTextHeight = 0;
+                        sel.IsTextOverflowing = false;
+                        UpdateMask();
+                        return;
                     }
 
+                    sel.TranslatedText = combinedText;
                     sel.OriginalText = combinedOriginalText;
                     sel.IsTranslated = true;
 
@@ -154,6 +169,10 @@ public partial class SnipWindowViewModel
                     // V8: 翻譯後重新整理遮罩和 Win32 Region
                     // 因為 IsTranslated 不在 WhenAnyValue 訂閱中，必須手動觸發
                     UpdateMask();
+                    if (ShowOcrResult)
+                    {
+                        RefreshProjectedOcrRects();
+                    }
                 });
             }
         }
@@ -171,10 +190,13 @@ public partial class SnipWindowViewModel
             {
                 // Translation results should not keep OCR search/debug overlays alive after completion.
                 ExitTranslationOcrSearch();
-                ShowOcrResult = false;
                 AIScanRects.Clear();
                 WindowRects.Clear();
                 DismissWindowSnapHoverPreview(preserveTargetRect: false);
+                if (ShowOcrResult)
+                {
+                    RefreshProjectedOcrRects();
+                }
             });
 
             ReleaseTranslationHeavyResources(trimProcessWorkingSet: true, phase: "translate-all-finish");
@@ -189,6 +211,102 @@ public partial class SnipWindowViewModel
         Console.WriteLine($"[TranslationMode] Unexpected outer error: {ex}");
     }
 }
+
+    private static bool ShouldRejectTranslatedSelectionResult(string translatedText, string originalText)
+    {
+        if (string.IsNullOrWhiteSpace(translatedText))
+        {
+            return true;
+        }
+
+        string normalizedTranslated = NormalizeTranslationValidationText(translatedText);
+
+        if (string.IsNullOrWhiteSpace(normalizedTranslated))
+        {
+            return true;
+        }
+
+        string[] translatedLines = translatedText
+            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (translatedLines.Length == 0)
+        {
+            return true;
+        }
+
+        int rejectedLines = 0;
+        foreach (var line in translatedLines)
+        {
+            if (IsRejectedTranslationLine(line, originalText))
+            {
+                rejectedLines++;
+            }
+        }
+
+        return rejectedLines == translatedLines.Length;
+    }
+
+    private static bool IsRejectedTranslationLine(string line, string originalText)
+    {
+        if (string.IsNullOrWhiteSpace(line))
+        {
+            return true;
+        }
+
+        string normalizedLine = NormalizeTranslationValidationText(line);
+        if (string.IsNullOrWhiteSpace(normalizedLine))
+        {
+            return true;
+        }
+
+        string[] rejectedMarkers =
+        [
+            "user:",
+            "assistant:",
+            "input:",
+            "output:",
+            "translate the following",
+            "output only",
+            "markdown",
+            "json",
+            "__unused_translation_marker__",
+            "翻譯してください",
+            "翻訳してください",
+            "請翻譯",
+            "翻譯:",
+            "翻訳:",
+            "譯文:"
+        ];
+
+        foreach (var marker in rejectedMarkers)
+        {
+            if (normalizedLine.StartsWith(marker, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        string normalizedOriginal = NormalizeTranslationValidationText(originalText);
+        if (normalizedLine.Length >= 12
+            && !string.IsNullOrWhiteSpace(normalizedOriginal)
+            && string.Equals(normalizedLine, normalizedOriginal, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    private static string NormalizeTranslationValidationText(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        return string.Concat(value.Where(static c => !char.IsWhiteSpace(c) && !char.IsPunctuation(c)))
+            .Trim()
+            .ToLowerInvariant();
+    }
 
     /// <summary>
     /// 翻譯模式：PaddleOCR 掃描全螢幕偵測可翻譯文字區域
@@ -647,10 +765,17 @@ public partial class SnipWindowViewModel
     private static string BuildCombinedBlockText(System.Collections.Generic.IReadOnlyList<TranslatedBlock> blocks, Func<TranslatedBlock, string?> selector)
     {
         var builder = new System.Text.StringBuilder();
+        var seen = new System.Collections.Generic.HashSet<string>(StringComparer.Ordinal);
         for (int i = 0; i < blocks.Count; i++)
         {
             string? value = selector(blocks[i]);
             if (string.IsNullOrWhiteSpace(value))
+            {
+                continue;
+            }
+
+            string dedupeKey = NormalizeCombinedBlockTextValue(value);
+            if (dedupeKey.Length == 0 || !seen.Add(dedupeKey))
             {
                 continue;
             }
@@ -664,6 +789,11 @@ public partial class SnipWindowViewModel
         }
 
         return builder.ToString();
+    }
+
+    private static string NormalizeCombinedBlockTextValue(string value)
+    {
+        return string.Concat(value.Where(static c => !char.IsWhiteSpace(c))).Trim();
     }
 
     private static int CountWrappedLines(string text, double usableWidth, Func<string, double> estimateTextWidth, out int explicitLineCount)
