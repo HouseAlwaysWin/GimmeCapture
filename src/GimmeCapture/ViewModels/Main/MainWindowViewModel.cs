@@ -174,6 +174,7 @@ public partial class MainWindowViewModel : ViewModelBase
     public ReactiveCommand<Unit, Unit> PickAIFolderCommand { get; } = null!;
     public ReactiveCommand<Unit, Unit> RefreshReleaseCatalogCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> InstallSelectedReleaseCommand { get; private set; } = null!;
+    public ReactiveCommand<string, Unit> SelectLlamaModelCommand { get; private set; } = null!;
 
     public Color[] SettingsColors { get; } =
     {
@@ -296,6 +297,20 @@ public partial class MainWindowViewModel : ViewModelBase
         });
 
         RefreshLlamaModelsCommand = ReactiveCommand.Create(() => RefreshLlamaModelCatalog());
+        SelectLlamaModelCommand = ReactiveCommand.Create<string>(modelId =>
+        {
+            if (string.IsNullOrWhiteSpace(modelId))
+            {
+                return;
+            }
+
+            if (!string.Equals(LlamaModelId, modelId, StringComparison.Ordinal))
+            {
+                LlamaModelId = modelId;
+            }
+
+            IsLlamaModelPickerOpen = false;
+        });
         InitializeAboutCommands();
 
         HotkeyService.OnHotkeyPressed = id =>

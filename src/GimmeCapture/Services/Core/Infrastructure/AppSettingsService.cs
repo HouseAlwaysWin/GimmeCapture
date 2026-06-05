@@ -19,12 +19,14 @@ public class AppSettingsService
     // v6: Translation model list narrows to TranslateGemma + Gemma 3 4B + Gemma 4 E4B.
     // v7: Translation model list narrows to TranslateGemma 4B + Gemma 3 4B + TranslateGemma 12B.
     // v8: TranslateGemma 12B removed from visible/default path; falls back to TranslateGemma 4B.
-    public const int CurrentConfigVersion = 8;
+    // v9: TranslateGemma 12B restored as an optional supported preset.
+    public const int CurrentConfigVersion = 9;
     private readonly string _appVersion;
     private static readonly string[] SupportedLlamaModelIds =
     {
         "translategemma-4b-it",
         "gemma-3-4b-it-q4",
+        "translategemma-12b-it",
     };
 
     public string BaseDataDirectory { get; private set; } = RuntimePathProvider.GetExecutableDirectory();
@@ -131,7 +133,6 @@ public class AppSettingsService
             "gemma-3-1b-it-q4" => "translategemma-4b-it",
             "gemma-4-placeholder" => "translategemma-4b-it",
             "gemma-4-E4B" => "translategemma-4b-it",
-            "translategemma-12b-it" => "translategemma-4b-it",
             "qwen3-1.7b-instruct-q4" => "translategemma-4b-it",
             "qwen3-4b-instruct-q4" => "translategemma-4b-it",
             "qwen2.5-1.5b-instruct-q4" => "translategemma-4b-it",

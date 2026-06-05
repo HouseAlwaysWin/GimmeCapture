@@ -775,6 +775,8 @@ public partial class MainWindowViewModel
         {
             if (string.IsNullOrWhiteSpace(value)) return;
             this.RaiseAndSetIfChanged(ref _llamaModelId, value);
+            SyncSelectedLlamaModelSelection();
+            this.RaisePropertyChanged(nameof(SelectedLlamaModelDisplayName));
             if (!_isDataLoading)
             {
                 _settingsService.Settings.LlamaModelId = value;
@@ -828,15 +830,91 @@ public partial class MainWindowViewModel
         }
     }
 
-    private ObservableCollection<string> _availableLlamaModels = new(
+    public sealed class LlamaModelOption
+    {
+        public required string Id { get; init; }
+        public required string DisplayName { get; init; }
+
+        public override string ToString() => DisplayName;
+    }
+
+    private ObservableCollection<LlamaModelOption> _availableLlamaModels = new(
     [
-        "translategemma-4b-it",
-        "gemma-3-4b-it-q4"
+        new() { Id = "translategemma-4b-it", DisplayName = "TranslateGemma 4B" },
+        new() { Id = "gemma-3-4b-it-q4", DisplayName = "Gemma 3 4B" },
+        new() { Id = "translategemma-12b-it", DisplayName = "TranslateGemma 12B (Experimental)" }
     ]);
-    public ObservableCollection<string> AvailableLlamaModels
+    public ObservableCollection<LlamaModelOption> AvailableLlamaModels
     {
         get => _availableLlamaModels;
-        private set => this.RaiseAndSetIfChanged(ref _availableLlamaModels, value);
+        private set
+        {
+            this.RaiseAndSetIfChanged(ref _availableLlamaModels, value);
+            this.RaisePropertyChanged(nameof(SelectedLlamaModelDisplayName));
+        }
+    }
+
+    private LlamaModelOption? _selectedLlamaModelOption;
+    public LlamaModelOption? SelectedLlamaModelOption
+    {
+        get => _selectedLlamaModelOption;
+        set
+        {
+            if (ReferenceEquals(_selectedLlamaModelOption, value))
+            {
+                return;
+            }
+
+            this.RaiseAndSetIfChanged(ref _selectedLlamaModelOption, value);
+            SyncSelectedLlamaModelIndexCore(value);
+            this.RaisePropertyChanged(nameof(SelectedLlamaModelDisplayName));
+
+            if (value != null && !string.Equals(LlamaModelId, value.Id, StringComparison.Ordinal))
+            {
+                LlamaModelId = value.Id;
+            }
+        }
+    }
+
+    private bool _isLlamaModelPickerOpen;
+    public bool IsLlamaModelPickerOpen
+    {
+        get => _isLlamaModelPickerOpen;
+        set => this.RaiseAndSetIfChanged(ref _isLlamaModelPickerOpen, value);
+    }
+
+    public string SelectedLlamaModelDisplayName =>
+        SelectedLlamaModelOption?.DisplayName
+        ?? ToLlamaModelOption(LlamaModelId).DisplayName;
+
+    private int _selectedLlamaModelIndex = -1;
+    public int SelectedLlamaModelIndex
+    {
+        get => _selectedLlamaModelIndex;
+        set
+        {
+            if (_selectedLlamaModelIndex == value)
+            {
+                return;
+            }
+
+            this.RaiseAndSetIfChanged(ref _selectedLlamaModelIndex, value);
+
+            LlamaModelOption? nextOption = value >= 0 && value < AvailableLlamaModels.Count
+                ? AvailableLlamaModels[value]
+                : null;
+
+            if (!ReferenceEquals(_selectedLlamaModelOption, nextOption))
+            {
+                _selectedLlamaModelOption = nextOption;
+                this.RaisePropertyChanged(nameof(SelectedLlamaModelOption));
+            }
+
+            if (nextOption != null && !string.Equals(LlamaModelId, nextOption.Id, StringComparison.Ordinal))
+            {
+                LlamaModelId = nextOption.Id;
+            }
+        }
     }
 
     public ReactiveCommand<Unit, Unit> RefreshLlamaModelsCommand { get; private set; } = null!;
@@ -846,24 +924,27 @@ public partial class MainWindowViewModel
     public void RefreshLlamaModelCatalog()
     {
         var presets = AIResourceService.GetDownloadableLlamaModelPresets();
-        var nextModels = new ObservableCollection<string>();
+        var nextModels = new List<LlamaModelOption>();
         foreach (var preset in presets)
         {
-            nextModels.Add(preset.Id);
+            nextModels.Add(ToLlamaModelOption(preset.Id));
         }
 
         if (nextModels.Count == 0)
         {
-            nextModels.Add("translategemma-4b-it");
-            nextModels.Add("gemma-3-4b-it-q4");
+            nextModels.Add(ToLlamaModelOption("translategemma-4b-it"));
+            nextModels.Add(ToLlamaModelOption("gemma-3-4b-it-q4"));
+            nextModels.Add(ToLlamaModelOption("translategemma-12b-it"));
         }
 
         string nextSelectedModelId = LlamaModelId;
         if (nextModels.Count > 0)
         {
-            if (string.IsNullOrWhiteSpace(nextSelectedModelId) || !nextModels.Contains(nextSelectedModelId))
+            if (string.IsNullOrWhiteSpace(nextSelectedModelId)
+                || !nextModels.AsValueEnumerable().Any(static option => !string.IsNullOrWhiteSpace(option.Id))
+                || !nextModels.AsValueEnumerable().Any(option => string.Equals(option.Id, nextSelectedModelId, StringComparison.Ordinal)))
             {
-                nextSelectedModelId = nextModels[0];
+                nextSelectedModelId = nextModels[0].Id;
             }
         }
         else if (!AIResourceService.IsLlamaModelReady())
@@ -871,16 +952,72 @@ public partial class MainWindowViewModel
             StatusText = LocalizationService.Instance["StatusLlamaModelNotReady"];
         }
 
-        AvailableLlamaModels = nextModels;
+        ReplaceLlamaModelOptions(nextModels);
 
         if (nextModels.Count > 0 && !string.Equals(LlamaModelId, nextSelectedModelId, StringComparison.Ordinal))
         {
             LlamaModelId = nextSelectedModelId;
         }
+        else
+        {
+            SyncSelectedLlamaModelSelection();
+        }
 
         this.RaisePropertyChanged(nameof(HasDownloadedLlamaModels));
         this.RaisePropertyChanged(nameof(NoDownloadedLlamaModels));
     }
+
+    private void ReplaceLlamaModelOptions(IEnumerable<LlamaModelOption> nextModels)
+    {
+        var collection = new ObservableCollection<LlamaModelOption>(nextModels);
+        AvailableLlamaModels = collection;
+    }
+
+    private void SyncSelectedLlamaModelSelection()
+    {
+        var nextOption = AvailableLlamaModels.AsValueEnumerable()
+            .FirstOrDefault(option => string.Equals(option.Id, LlamaModelId, StringComparison.Ordinal));
+
+        if (!ReferenceEquals(_selectedLlamaModelOption, nextOption))
+        {
+            _selectedLlamaModelOption = nextOption;
+            this.RaisePropertyChanged(nameof(SelectedLlamaModelOption));
+            this.RaisePropertyChanged(nameof(SelectedLlamaModelDisplayName));
+        }
+
+        SyncSelectedLlamaModelIndexCore(nextOption);
+    }
+
+    private void SyncSelectedLlamaModelIndexCore(LlamaModelOption? option)
+    {
+        int nextIndex = -1;
+        if (option != null)
+        {
+            for (int i = 0; i < AvailableLlamaModels.Count; i++)
+            {
+                if (ReferenceEquals(AvailableLlamaModels[i], option)
+                    || string.Equals(AvailableLlamaModels[i].Id, option.Id, StringComparison.Ordinal))
+                {
+                    nextIndex = i;
+                    break;
+                }
+            }
+        }
+
+        if (_selectedLlamaModelIndex != nextIndex)
+        {
+            _selectedLlamaModelIndex = nextIndex;
+            this.RaisePropertyChanged(nameof(SelectedLlamaModelIndex));
+        }
+    }
+
+    private static LlamaModelOption ToLlamaModelOption(string modelId) => modelId switch
+    {
+        "translategemma-4b-it" => new LlamaModelOption { Id = modelId, DisplayName = "TranslateGemma 4B" },
+        "gemma-3-4b-it-q4" => new LlamaModelOption { Id = modelId, DisplayName = "Gemma 3 4B" },
+        "translategemma-12b-it" => new LlamaModelOption { Id = modelId, DisplayName = "TranslateGemma 12B (Experimental)" },
+        _ => new LlamaModelOption { Id = modelId, DisplayName = modelId }
+    };
 
     private bool _showRecordCursor = true;
     public bool ShowRecordCursor

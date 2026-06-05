@@ -37,6 +37,7 @@ public sealed class AIModelCatalog
     {
         "translategemma-4b-it",
         "gemma-3-4b-it-q4",
+        "translategemma-12b-it",
     };
 
     public IReadOnlyList<LlamaModelPreset> GetLlamaModelPresets() => LlamaModelPresets;

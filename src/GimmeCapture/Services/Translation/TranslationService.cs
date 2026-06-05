@@ -166,7 +166,10 @@ public class TranslationService : IDisposable
                 llamaLoaded: IsLlamaLoaded,
                 selectionCount: recognizedBlocks.Count,
                 bitmap: bitmap);
-            var translated = await TranslateAsync(mergedText, ocrLang, ct);
+            var translated = SanitizeTranslationCandidate(
+                mergedText,
+                await TranslateAsync(mergedText, ocrLang, ct),
+                _settings.TargetLanguage);
             TranslationMemoryDiagnostics.Log(
                 "translation-llama-after",
                 ocrLoaded: IsOcrLoaded,
@@ -203,7 +206,10 @@ public class TranslationService : IDisposable
             bool acceptable = IsTranslationAcceptable(mergedText, translated, _settings.TargetLanguage);
             if (!acceptable)
             {
-                translated = await ForceTranslateAsync(mergedText, ocrLang, _settings.TargetLanguage, ct);
+                translated = SanitizeTranslationCandidate(
+                    mergedText,
+                    await ForceTranslateAsync(mergedText, ocrLang, _settings.TargetLanguage, ct),
+                    _settings.TargetLanguage);
                 acceptable = IsTranslationAcceptable(mergedText, translated, _settings.TargetLanguage);
             }
 
@@ -250,7 +256,7 @@ public class TranslationService : IDisposable
     public async Task<string> TranslatePlainTextAsync(string text, OCRLanguage sourceLang, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(text)) return string.Empty;
-        string translated = (await TranslateAsync(text, sourceLang, ct)).Trim();
+        string translated = SanitizeTranslationCandidate(text, await TranslateAsync(text, sourceLang, ct), _settings.TargetLanguage);
         if (IsTranslationAcceptable(text, translated, _settings.TargetLanguage))
         {
             return translated;
@@ -260,7 +266,7 @@ public class TranslationService : IDisposable
         var guessedSource = GuessSourceLanguageFromText(text);
         if (guessedSource != sourceLang)
         {
-            string retried = (await TranslateAsync(text, guessedSource, ct)).Trim();
+            string retried = SanitizeTranslationCandidate(text, await TranslateAsync(text, guessedSource, ct), _settings.TargetLanguage);
             if (IsTranslationAcceptable(text, retried, _settings.TargetLanguage))
             {
                 return retried;
@@ -275,7 +281,10 @@ public class TranslationService : IDisposable
                 continue;
             }
 
-            string fallback = (await engine.TranslateAsync(text, guessedSource, _settings.TargetLanguage, ct)).Trim();
+            string fallback = SanitizeTranslationCandidate(
+                text,
+                await engine.TranslateAsync(text, guessedSource, _settings.TargetLanguage, ct),
+                _settings.TargetLanguage);
             if (IsTranslationAcceptable(text, fallback, _settings.TargetLanguage))
             {
                 return fallback;
@@ -393,18 +402,188 @@ public class TranslationService : IDisposable
         }
 
         string trimmed = translated.Trim();
-        if (trimmed.StartsWith("User:", StringComparison.OrdinalIgnoreCase)
-            || trimmed.StartsWith("Assistant:", StringComparison.OrdinalIgnoreCase)
-            || trimmed.StartsWith("Input:", StringComparison.OrdinalIgnoreCase)
-            || trimmed.StartsWith("Output:", StringComparison.OrdinalIgnoreCase)
-            || trimmed.Contains("Translate the following", StringComparison.OrdinalIgnoreCase)
-            || trimmed.Contains("Output ONLY", StringComparison.OrdinalIgnoreCase))
+        if (IsObviousPromptOrControlText(trimmed))
         {
             return false;
         }
 
-        return true;
+        string normalizedOriginal = NormalizeTranslationComparisonText(original);
+        string normalizedTranslated = NormalizeTranslationComparisonText(trimmed);
+        if (normalizedTranslated.Length >= 4
+            && string.Equals(normalizedOriginal, normalizedTranslated, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        return target switch
+        {
+            TranslationLanguage.English => ContainsLatinLetter(trimmed),
+            TranslationLanguage.Korean => ContainsHangul(trimmed),
+            TranslationLanguage.Japanese => ContainsJapaneseKana(trimmed)
+                || !string.Equals(normalizedOriginal, normalizedTranslated, StringComparison.Ordinal),
+            TranslationLanguage.TraditionalChinese or TranslationLanguage.SimplifiedChinese => IsChineseTranslationAcceptable(original, trimmed, normalizedOriginal, normalizedTranslated),
+            _ => true
+        };
     }
+
+    private static string SanitizeTranslationCandidate(string original, string translated, TranslationLanguage target)
+    {
+        if (string.IsNullOrWhiteSpace(translated))
+        {
+            return string.Empty;
+        }
+
+        string normalizedOriginal = NormalizeTranslationComparisonText(original);
+        string[] rawLines = translated.Replace("\r\n", "\n", StringComparison.Ordinal)
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var candidates = new List<string>();
+        foreach (var rawLine in rawLines)
+        {
+            string line = rawLine.Trim();
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                continue;
+            }
+
+            if (IsObviousPromptOrControlText(line))
+            {
+                continue;
+            }
+
+            string normalizedLine = NormalizeTranslationComparisonText(line);
+            if (normalizedLine.Length == 0 || !seen.Add(normalizedLine))
+            {
+                continue;
+            }
+
+            candidates.Add(line);
+        }
+
+        if (candidates.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        if (candidates.Count > 1)
+        {
+            candidates.RemoveAll(line =>
+            {
+                string normalized = NormalizeTranslationComparisonText(line);
+                return normalized.Length >= 4
+                    && string.Equals(normalized, normalizedOriginal, StringComparison.Ordinal);
+            });
+        }
+
+        if (candidates.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        var targetPreferred = SelectTargetPreferredLines(candidates, original, target);
+        if (targetPreferred.Count > 0)
+        {
+            candidates = targetPreferred;
+        }
+
+        return string.Join(Environment.NewLine, candidates).Trim();
+    }
+
+    private static List<string> SelectTargetPreferredLines(List<string> lines, string original, TranslationLanguage target)
+    {
+        static List<string> KeepWhere(IEnumerable<string> source, Func<string, bool> predicate)
+        {
+            var kept = source.AsValueEnumerable().Where(predicate).ToList();
+            return kept;
+        }
+
+        return target switch
+        {
+            TranslationLanguage.English => KeepWhere(lines, ContainsLatinLetter),
+            TranslationLanguage.Korean => KeepWhere(lines, ContainsHangul),
+            TranslationLanguage.Japanese => KeepWhere(lines, ContainsJapaneseKana),
+            TranslationLanguage.TraditionalChinese or TranslationLanguage.SimplifiedChinese when ContainsJapaneseKana(original) =>
+                KeepWhere(lines, line => ContainsCjk(line) && !ContainsJapaneseKana(line)),
+            TranslationLanguage.TraditionalChinese or TranslationLanguage.SimplifiedChinese when ContainsHangul(original) =>
+                KeepWhere(lines, line => ContainsCjk(line) && !ContainsHangul(line)),
+            TranslationLanguage.TraditionalChinese or TranslationLanguage.SimplifiedChinese when ContainsLatinLetter(original) =>
+                KeepWhere(lines, ContainsCjk),
+            _ => new List<string>()
+        };
+    }
+
+    private static bool IsObviousPromptOrControlText(string text)
+    {
+        string trimmed = text.Trim();
+        return trimmed.StartsWith("User:", StringComparison.OrdinalIgnoreCase)
+            || trimmed.StartsWith("Assistant:", StringComparison.OrdinalIgnoreCase)
+            || trimmed.StartsWith("Input:", StringComparison.OrdinalIgnoreCase)
+            || trimmed.StartsWith("Output:", StringComparison.OrdinalIgnoreCase)
+            || trimmed.StartsWith("System:", StringComparison.OrdinalIgnoreCase)
+            || trimmed.StartsWith("翻譯:", StringComparison.OrdinalIgnoreCase)
+            || trimmed.StartsWith("翻訳:", StringComparison.OrdinalIgnoreCase)
+            || trimmed.StartsWith("譯文:", StringComparison.OrdinalIgnoreCase)
+            || trimmed.Contains("Translate the following", StringComparison.OrdinalIgnoreCase)
+            || trimmed.Contains("Output ONLY", StringComparison.OrdinalIgnoreCase)
+            || trimmed.Contains("No explanations", StringComparison.OrdinalIgnoreCase)
+            || trimmed.Contains("No markdown", StringComparison.OrdinalIgnoreCase)
+            || trimmed.Contains("No json", StringComparison.OrdinalIgnoreCase)
+            || trimmed.Contains("翻訳してください", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string NormalizeTranslationComparisonText(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        var builder = new StringBuilder(value.Length);
+        foreach (char c in value)
+        {
+            if (!char.IsWhiteSpace(c) && !char.IsPunctuation(c))
+            {
+                builder.Append(char.ToLowerInvariant(c));
+            }
+        }
+
+        return builder.ToString().Trim();
+    }
+
+    private static bool IsChineseTranslationAcceptable(string original, string translated, string normalizedOriginal, string normalizedTranslated)
+    {
+        if (ContainsJapaneseKana(original))
+        {
+            return ContainsCjk(translated)
+                && !ContainsJapaneseKana(translated)
+                && !string.Equals(normalizedOriginal, normalizedTranslated, StringComparison.Ordinal);
+        }
+
+        if (ContainsHangul(original))
+        {
+            return ContainsCjk(translated)
+                && !ContainsHangul(translated)
+                && !string.Equals(normalizedOriginal, normalizedTranslated, StringComparison.Ordinal);
+        }
+
+        if (ContainsLatinLetter(original))
+        {
+            return ContainsCjk(translated);
+        }
+
+        return ContainsCjk(translated)
+            || !string.Equals(normalizedOriginal, normalizedTranslated, StringComparison.Ordinal);
+    }
+
+    private static bool ContainsLatinLetter(string text) =>
+        text.AsValueEnumerable().Any(static c => (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z'));
+
+    private static bool ContainsHangul(string text) =>
+        text.AsValueEnumerable().Any(static c => c >= '\uAC00' && c <= '\uD7AF');
+
+    private static bool ContainsCjk(string text) =>
+        text.AsValueEnumerable().Any(static c => c >= '\u4E00' && c <= '\u9FFF');
 
     private string BuildTargetLanguageFallbackText(string text, TranslationLanguage target)
     {

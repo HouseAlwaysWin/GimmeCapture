@@ -233,16 +233,15 @@ public partial class SnipWindowViewModel
             return true;
         }
 
-        int rejectedLines = 0;
         foreach (var line in translatedLines)
         {
-            if (IsRejectedTranslationLine(line, originalText))
+            if (!IsRejectedTranslationLine(line, originalText))
             {
-                rejectedLines++;
+                return false;
             }
         }
 
-        return rejectedLines == translatedLines.Length;
+        return true;
     }
 
     private static bool IsRejectedTranslationLine(string line, string originalText)
@@ -283,14 +282,6 @@ public partial class SnipWindowViewModel
             {
                 return true;
             }
-        }
-
-        string normalizedOriginal = NormalizeTranslationValidationText(originalText);
-        if (normalizedLine.Length >= 12
-            && !string.IsNullOrWhiteSpace(normalizedOriginal)
-            && string.Equals(normalizedLine, normalizedOriginal, StringComparison.Ordinal))
-        {
-            return true;
         }
 
         return false;
