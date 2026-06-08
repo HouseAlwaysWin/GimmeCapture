@@ -259,12 +259,16 @@ public partial class SnipWindowViewModel
 
         string[] rejectedMarkers =
         [
-            "user:",
-            "assistant:",
-            "input:",
-            "output:",
-            "translate the following",
-            "output only",
+            "user",
+            "assistant",
+            "input",
+            "output",
+            "translatethefollowing",
+            "translateinto",
+            "translateto",
+            "targetlanguageis",
+            "thetargetlanguageis",
+            "outputonly",
             "markdown",
             "json",
             "__unused_translation_marker__",
@@ -278,7 +282,8 @@ public partial class SnipWindowViewModel
 
         foreach (var marker in rejectedMarkers)
         {
-            if (normalizedLine.StartsWith(marker, StringComparison.OrdinalIgnoreCase))
+            if (normalizedLine.StartsWith(marker, StringComparison.OrdinalIgnoreCase)
+                || normalizedLine.Contains(marker, StringComparison.OrdinalIgnoreCase))
             {
                 return true;
             }

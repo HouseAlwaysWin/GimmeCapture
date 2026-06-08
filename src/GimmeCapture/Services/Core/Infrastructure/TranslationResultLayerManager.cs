@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Media;
 using GimmeCapture.Models;
+using GimmeCapture.ViewModels.Main;
 using GimmeCapture.ViewModels.Floating;
 using GimmeCapture.Views.Floating;
 using GimmeCapture.Views.Main;
@@ -47,7 +48,7 @@ internal static class TranslationResultLayerManager
             window.Show();
         }
 
-        window.Topmost = !IsSnipWindowVisible();
+        RefreshWindowState();
     }
 
     public static void ClearAll()
@@ -59,6 +60,22 @@ internal static class TranslationResultLayerManager
 
         vm.ClearAll();
         _window.Hide();
+    }
+
+    public static void RefreshWindowState()
+    {
+        if (_window == null)
+        {
+            return;
+        }
+
+        if (_window.DataContext is FloatingTranslationLayerViewModel vm && vm.Items.Count == 0)
+        {
+            _window.Hide();
+            return;
+        }
+
+        _window.Topmost = !IsTranslationSnipWindowVisible();
     }
 
     private static FloatingTranslationWindow EnsureWindow()
@@ -77,13 +94,18 @@ internal static class TranslationResultLayerManager
         return window;
     }
 
-    private static bool IsSnipWindowVisible()
+    private static bool IsTranslationSnipWindowVisible()
     {
         if (Application.Current?.ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime desktop)
         {
             return false;
         }
 
-        return desktop.Windows.OfType<SnipWindow>().Any(window => window.IsVisible);
+        return desktop.Windows
+            .OfType<SnipWindow>()
+            .Any(window =>
+                window.IsVisible
+                && window.DataContext is SnipWindowViewModel vm
+                && vm.IsTranslationMode);
     }
 }

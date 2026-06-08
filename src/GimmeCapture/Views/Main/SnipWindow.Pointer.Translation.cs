@@ -167,11 +167,16 @@ public partial class SnipWindow
         {
             _pointerState = PointerInteractionState.None;
             var vm = _viewModel;
+            bool materializedValidSelection = false;
             if (_currentTranslationSelection != null)
             {
                 if (_currentTranslationSelection.Bounds.Width < 10 || _currentTranslationSelection.Bounds.Height < 5)
                 {
                     vm?.UserSelections?.Remove(_currentTranslationSelection);
+                }
+                else
+                {
+                    materializedValidSelection = true;
                 }
 
                 vm?.UpdateMask();
@@ -179,9 +184,12 @@ public partial class SnipWindow
             }
 
             var holdMod = _viewModel?.TranslationSelectionHoldModifier ?? "Ctrl";
-            if (!string.Equals(holdMod, "None", StringComparison.OrdinalIgnoreCase) &&
+            if (materializedValidSelection &&
+                !string.Equals(holdMod, "None", StringComparison.OrdinalIgnoreCase) &&
                 IsPhysicalModifierLabelDown(holdMod))
+            {
                 _translationSuppressFullHitUntilSelectionModifierUp = true;
+            }
             RequestTranslationWindowRegionRefresh();
 
             e.Pointer.Capture(null);

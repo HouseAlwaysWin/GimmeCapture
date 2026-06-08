@@ -111,6 +111,7 @@ public partial class SnipWindow : Window
     {
         base.OnClosed(e);
         UninstallLLKeyboardHook();
+        TranslationResultLayerManager.RefreshWindowState();
     }
 
     [DllImport("user32.dll")]

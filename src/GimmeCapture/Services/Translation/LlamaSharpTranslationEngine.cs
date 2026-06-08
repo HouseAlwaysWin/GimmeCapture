@@ -17,6 +17,8 @@ namespace GimmeCapture.Services.Translation;
 
 public sealed class LlamaSharpTranslationEngine : ITranslationEngine, IDisposable
 {
+    private const string TranslationPromptCacheVersion = "prompt-v4";
+
     public TranslationEngine EngineType => TranslationEngine.LlamaSharp;
 
     private readonly AIResourceService _aiResourceService;
@@ -49,7 +51,7 @@ public sealed class LlamaSharpTranslationEngine : ITranslationEngine, IDisposabl
             return string.Empty;
         }
 
-        var cacheKey = _cache.BuildKey(EngineType, sourceLang, targetLang, text);
+        var cacheKey = $"{TranslationPromptCacheVersion}|{_cache.BuildKey(EngineType, sourceLang, targetLang, text)}";
         if (_cache.TryGet(cacheKey, out var cached))
         {
             return cached;
@@ -63,11 +65,37 @@ public sealed class LlamaSharpTranslationEngine : ITranslationEngine, IDisposabl
 
         string targetLangName = GetTargetLanguageName(targetLang);
         string sourceLangName = ResolveSourceLanguageForPrompt(text, sourceLang);
-        string prompt = $"Translate \"{text}\" from {sourceLangName} to {targetLangName}. Output ONLY the translated text. No quotes. No explanations. No markdown. No json.";
+        string prompt = BuildTranslationPrompt(text, sourceLangName, targetLangName, targetLang);
+        string result = await TranslateWithPromptAsync(prompt, text, ct);
+
+        if (ShouldRetryWithMinimalPrompt(text, result, targetLang))
+        {
+            string retryPrompt = BuildMinimalRetryPrompt(text, sourceLangName, targetLangName, targetLang);
+            string retried = await TranslateWithPromptAsync(retryPrompt, text, ct);
+            if (!string.IsNullOrWhiteSpace(retried))
+            {
+                result = retried;
+            }
+        }
+
+        if (ShouldCacheTranslation(text, result, targetLang))
+        {
+            _cache.Set(cacheKey, result);
+        }
+
+        return result;
+    }
+
+    private async Task<string> TranslateWithPromptAsync(string prompt, string sourceText, CancellationToken ct)
+    {
+        if (_executor == null)
+        {
+            return string.Empty;
+        }
 
         var inference = new InferenceParams
         {
-            MaxTokens = 512,
+            MaxTokens = EstimateMaxTokens(sourceText),
             AntiPrompts = new[] { "User:", "Assistant:" },
             OverflowStrategy = ContextOverflowStrategy.TruncateAndReprefill
         };
@@ -90,13 +118,7 @@ public sealed class LlamaSharpTranslationEngine : ITranslationEngine, IDisposabl
             _inferLock.Release();
         }
 
-        string result = CleanupTranslationResult(sb.ToString());
-        if (!string.IsNullOrWhiteSpace(result))
-        {
-            _cache.Set(cacheKey, result);
-        }
-
-        return result;
+        return CleanupTranslationResult(sb.ToString());
     }
 
     private async Task EnsureLoadedAsync(CancellationToken ct)
@@ -182,7 +204,6 @@ public sealed class LlamaSharpTranslationEngine : ITranslationEngine, IDisposabl
         cleaned = ExtractFromCodeFence(cleaned);
         cleaned = TryExtractFromJson(cleaned);
         cleaned = RemoveCommonPrefixes(cleaned);
-        cleaned = CollapseRepeatedLines(cleaned);
 
         if (cleaned.Contains("<think>", StringComparison.OrdinalIgnoreCase) &&
             cleaned.Contains("</think>", StringComparison.OrdinalIgnoreCase))
@@ -201,7 +222,130 @@ public sealed class LlamaSharpTranslationEngine : ITranslationEngine, IDisposabl
             cleaned = cleaned[1..^1];
         }
 
+        cleaned = CollapseRepeatedLines(cleaned);
+        cleaned = CollapseRepeatedTokenCycles(cleaned);
         return cleaned.Trim();
+    }
+
+    private static string BuildTranslationPrompt(string text, string sourceLangName, string targetLangName, TranslationLanguage targetLang)
+    {
+        string targetSpecificRule = targetLang switch
+        {
+            TranslationLanguage.Japanese =>
+                "Write natural Japanese. Translate even short labels, conjunctions, and UI words. Use kana where natural. No romaji. No explanations.",
+            TranslationLanguage.Korean =>
+                "Write natural Korean Hangul. No explanations. No romanization.",
+            TranslationLanguage.English =>
+                "Write natural English only. No explanations.",
+            TranslationLanguage.TraditionalChinese =>
+                "Write natural Traditional Chinese only. No explanations.",
+            TranslationLanguage.SimplifiedChinese =>
+                "Write natural Simplified Chinese only. No explanations.",
+            _ => string.Empty
+        };
+
+        return
+            $"Translate the SOURCE text from {sourceLangName} to {targetLangName}." + Environment.NewLine +
+            "Reply with the translation only." + Environment.NewLine +
+            "Keep the same line breaks." + Environment.NewLine +
+            "Do not include the source text, notes, lists, or setup words." + Environment.NewLine +
+            targetSpecificRule + Environment.NewLine +
+            "SOURCE:" + Environment.NewLine +
+            text + Environment.NewLine +
+            "TRANSLATION:";
+    }
+
+    private static string BuildMinimalRetryPrompt(string text, string sourceLangName, string targetLangName, TranslationLanguage targetLang)
+    {
+        string targetRule = targetLang switch
+        {
+            TranslationLanguage.Japanese =>
+                "Rewrite every line as natural Japanese. Translate short connectors and labels too. Use kana where natural. Do not leave Chinese unchanged when a Japanese wording exists. No romaji. No explanation.",
+            TranslationLanguage.Korean =>
+                "Rewrite every line as natural Korean Hangul. No romanization. No explanation.",
+            TranslationLanguage.English =>
+                "Rewrite every line as natural English. No explanation.",
+            TranslationLanguage.TraditionalChinese =>
+                "Rewrite every line as natural Traditional Chinese. No explanation.",
+            TranslationLanguage.SimplifiedChinese =>
+                "Rewrite every line as natural Simplified Chinese. No explanation.",
+            _ => $"{targetLangName} only."
+        };
+
+        return
+            $"Rewrite the SOURCE text from {sourceLangName} to {targetLangName}.{Environment.NewLine}" +
+            $"{targetRule}{Environment.NewLine}" +
+            "Reply with the translation only. Keep line breaks." + Environment.NewLine +
+            "SOURCE:" + Environment.NewLine +
+            text + Environment.NewLine +
+            "TRANSLATION:";
+    }
+
+    private static bool ShouldRetryWithMinimalPrompt(string sourceText, string translated, TranslationLanguage targetLang)
+    {
+        if (string.IsNullOrWhiteSpace(translated))
+        {
+            return true;
+        }
+
+        string normalizedSource = NormalizeForRetry(sourceText);
+        string normalizedTranslated = NormalizeForRetry(translated);
+
+        bool looksInstructional = LooksLikeInstructionalOutput(translated);
+        bool unchanged = normalizedSource.Length > 0
+            && string.Equals(normalizedSource, normalizedTranslated, StringComparison.Ordinal);
+        if (looksInstructional || unchanged)
+        {
+            return true;
+        }
+
+        if (targetLang == TranslationLanguage.Japanese)
+        {
+            bool sourceLooksChinese = ContainsCjk(sourceText) && !ContainsJapaneseKana(sourceText);
+            bool cjkOnlyOutput = ContainsCjk(translated) && !ContainsJapaneseKana(translated) && !ContainsLatinLetter(translated);
+            bool tooShortOrTooSimilar = normalizedTranslated.Length <= Math.Max(2, normalizedSource.Length)
+                || (normalizedSource.Length > 0
+                    && (normalizedTranslated.Contains(normalizedSource, StringComparison.Ordinal)
+                        || normalizedSource.Contains(normalizedTranslated, StringComparison.Ordinal)));
+
+            return sourceLooksChinese && cjkOnlyOutput && tooShortOrTooSimilar;
+        }
+
+        return false;
+    }
+
+    private static bool ShouldCacheTranslation(string sourceText, string translated, TranslationLanguage targetLang)
+    {
+        if (string.IsNullOrWhiteSpace(translated))
+        {
+            return false;
+        }
+
+        string trimmed = translated.Trim();
+        if (LooksLikeInstructionalOutput(trimmed))
+        {
+            return false;
+        }
+
+        string collapsedLines = CollapseRepeatedLines(trimmed);
+        string collapsedTokens = CollapseRepeatedTokenCycles(collapsedLines);
+        if (collapsedTokens.Length > 0 && collapsedTokens.Length + 8 < trimmed.Length)
+        {
+            return false;
+        }
+
+        return !ShouldRetryWithMinimalPrompt(sourceText, trimmed, targetLang);
+    }
+
+    private static int EstimateMaxTokens(string text)
+    {
+        int length = string.IsNullOrWhiteSpace(text) ? 0 : text.Trim().Length;
+        if (length <= 0)
+        {
+            return 48;
+        }
+
+        return Math.Clamp(length * 4, 24, 192);
     }
 
     private static string CollapseRepeatedLines(string value)
@@ -237,6 +381,56 @@ public sealed class LlamaSharpTranslationEngine : ITranslationEngine, IDisposabl
         }
 
         return kept.Length == 0 ? string.Empty : kept.ToString().Trim();
+    }
+
+    private static string CollapseRepeatedTokenCycles(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        string trimmed = value.Trim();
+        string[] tokens = Regex.Split(trimmed, @"[\s,\u3001\uFF0C;\uFF1B/|]+")
+            .Where(static token => !string.IsNullOrWhiteSpace(token))
+            .ToArray();
+        if (tokens.Length < 4)
+        {
+            return trimmed;
+        }
+
+        for (int cycleLength = 1; cycleLength <= Math.Min(4, tokens.Length / 2); cycleLength++)
+        {
+            if (!IsMostlyRepeatedTokenCycle(tokens, cycleLength))
+            {
+                continue;
+            }
+
+            return string.Join("\u3001", tokens.Take(cycleLength).Distinct(StringComparer.Ordinal)).Trim();
+        }
+
+        return trimmed;
+    }
+
+    private static bool IsMostlyRepeatedTokenCycle(string[] tokens, int cycleLength)
+    {
+        if (tokens.Length < (cycleLength * 2) + 1)
+        {
+            return false;
+        }
+
+        int comparisons = 0;
+        int matches = 0;
+        for (int i = cycleLength; i < tokens.Length; i++)
+        {
+            comparisons++;
+            if (string.Equals(tokens[i], tokens[i % cycleLength], StringComparison.Ordinal))
+            {
+                matches++;
+            }
+        }
+
+        return comparisons > 0 && matches * 5 >= comparisons * 4;
     }
 
     private static string ExtractFromCodeFence(string value)
@@ -294,6 +488,8 @@ public sealed class LlamaSharpTranslationEngine : ITranslationEngine, IDisposabl
             "Translated text:",
             "Output:",
             "Result:",
+            "TRANSLATION:",
+            "Translation only:",
             "\"translation\":",
             "'translation':",
             "translation:"
@@ -331,4 +527,52 @@ public sealed class LlamaSharpTranslationEngine : ITranslationEngine, IDisposabl
              text.Any(c => c >= 0xAC00 && c <= 0xD7AF) ? "Korean" :
              text.Any(c => c >= 0x4E00 && c <= 0x9FFF) ? "Chinese" : "English"
     };
+
+    private static bool LooksLikeInstructionalOutput(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        string normalized = NormalizeForRetry(value);
+        return value.Contains("Translate", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("target language", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("SOURCE:", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("TRANSLATION:", StringComparison.OrdinalIgnoreCase)
+            || normalized.Contains("replywiththetranslationonly", StringComparison.Ordinal)
+            || normalized.Contains("keeplinebreaks", StringComparison.Ordinal)
+            || normalized.Contains("donotincludethesourcetext", StringComparison.Ordinal);
+    }
+
+    private static string NormalizeForRetry(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        var builder = new StringBuilder(value.Length);
+        foreach (char c in value)
+        {
+            if (!char.IsWhiteSpace(c) && !char.IsPunctuation(c))
+            {
+                builder.Append(char.ToLowerInvariant(c));
+            }
+        }
+
+        return builder.ToString().Trim();
+    }
+
+    private static bool ContainsJapaneseKana(string text) =>
+        !string.IsNullOrWhiteSpace(text)
+        && text.Any(static c => c is >= '\u3040' and <= '\u30FF');
+
+    private static bool ContainsLatinLetter(string text) =>
+        !string.IsNullOrWhiteSpace(text)
+        && text.Any(static c => (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z'));
+
+    private static bool ContainsCjk(string text) =>
+        !string.IsNullOrWhiteSpace(text)
+        && text.Any(static c => c >= '\u4E00' && c <= '\u9FFF');
 }

@@ -288,6 +288,7 @@ public partial class SnipWindow : Window
 
     protected override void OnClosing(WindowClosingEventArgs e)
     {
+        PersistTranslatedSelectionsForClosingIfNeeded();
         base.OnClosing(e);
         
         // Cleanup subscriptions
@@ -320,6 +321,16 @@ public partial class SnipWindow : Window
         // Restore Pin windows to Topmost
         _windowLayerService.RestoreTopmostWindows(_hiddenTopmostWindows);
         _hiddenTopmostWindows = [];
+    }
+
+    private void PersistTranslatedSelectionsForClosingIfNeeded()
+    {
+        if (_viewModel?.IsTranslationMode != true)
+        {
+            return;
+        }
+
+        _viewModel.PersistTranslationSelectionsAction?.Invoke();
     }
 
     protected override void OnDataContextChanged(EventArgs e)

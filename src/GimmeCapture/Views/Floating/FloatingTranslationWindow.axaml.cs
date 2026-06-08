@@ -62,6 +62,12 @@ public partial class FloatingTranslationWindow : Window
     protected override void OnOpened(EventArgs e)
     {
         base.OnOpened(e);
+        var hwnd = this.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
+        if (hwnd != IntPtr.Zero && OperatingSystem.IsWindows())
+        {
+            Win32Helpers.SetWindowCaptureVisibility(hwnd, visible: false);
+        }
+
         RefreshWindowRegion();
     }
 

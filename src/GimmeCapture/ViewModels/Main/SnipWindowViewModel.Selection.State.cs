@@ -293,14 +293,25 @@ public partial class SnipWindowViewModel
                 var translationSelectionMonitor = _translationSelectionMonitor;
                 if (mainVm == null || translationSelectionMonitor == null || CurrentMode != SnipMode.Translation) continue;
 
-                var updates = await translationSelectionMonitor.ProcessAsync(
-                    new TranslationSelectionMonitorRequest(
-                        activeSections,
-                        ScreenOffset,
-                        VisualScaling,
-                        mainVm.SourceLanguage,
-                        mainVm.TargetLanguage),
-                    token);
+                await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => IsCapturing = true);
+                await Task.Delay(40, token);
+
+                IReadOnlyList<TranslationSelectionUpdate> updates;
+                try
+                {
+                    updates = await translationSelectionMonitor.ProcessAsync(
+                        new TranslationSelectionMonitorRequest(
+                            activeSections,
+                            ScreenOffset,
+                            VisualScaling,
+                            mainVm.SourceLanguage,
+                            mainVm.TargetLanguage),
+                        token);
+                }
+                finally
+                {
+                    await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => IsCapturing = false);
+                }
 
                 if (updates.Count == 0)
                 {

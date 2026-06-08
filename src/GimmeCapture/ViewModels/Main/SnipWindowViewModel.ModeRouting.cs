@@ -151,6 +151,8 @@ public partial class SnipWindowViewModel
         // Notify hotkeys and tooltips
         RaiseProperties(_modeHotkeyPropertyNames);
         RaiseProperties(_modeTooltipPropertyNames);
+
+        TranslationResultLayerManager.RefreshWindowState();
     }
     
     private bool _isGlobalAutoDetectEnabled;

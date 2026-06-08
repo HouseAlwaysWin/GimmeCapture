@@ -421,19 +421,36 @@
                                   Canvas.Top="{Binding TextInputPosition.Y}"/>
 
             <!-- Toolbar Layer: parked off-screen still lays out; only on-screen chrome captures hits -->
-            <Canvas IsHitTestVisible="{Binding IsToolbarShownOnScreen}" ZIndex="1000">
+            <Canvas ZIndex="1000">
+                <Canvas.IsHitTestVisible>
+                    <MultiBinding Converter="{x:Static BoolConverters.And}">
+                        <Binding Path="IsToolbarShownOnScreen"/>
+                        <Binding Path="!IsCapturing"/>
+                    </MultiBinding>
+                </Canvas.IsHitTestVisible>
                 <ctl:SnipToolbar Name="Toolbar" 
                                  Canvas.Left="{Binding ToolbarLeft}" Canvas.Top="{Binding ToolbarTop}" 
-                                 MaxWidth="{Binding ToolbarMaxWidth}"
-                                 IsVisible="{Binding IsToolbarVisible}"/>
+                                 MaxWidth="{Binding ToolbarMaxWidth}">
+                    <ctl:SnipToolbar.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="IsToolbarVisible"/>
+                            <Binding Path="!IsCapturing"/>
+                        </MultiBinding>
+                    </ctl:SnipToolbar.IsVisible>
+                </ctl:SnipToolbar>
             </Canvas>
 
             <ItemsControl ItemsSource="{Binding TranslationOcrSearchRects}"
                           ZIndex="450"
                           Width="{Binding ViewportSize.Width}" Height="{Binding ViewportSize.Height}"
                           x:CompileBindings="False"
-                          IsHitTestVisible="False"
-                          IsVisible="{Binding IsTranslationOcrSearchActive}">
+                          IsHitTestVisible="False">
+                <ItemsControl.IsVisible>
+                    <MultiBinding Converter="{x:Static BoolConverters.And}">
+                        <Binding Path="IsTranslationOcrSearchActive"/>
+                        <Binding Path="!IsCapturing"/>
+                    </MultiBinding>
+                </ItemsControl.IsVisible>
                 <ItemsControl.Styles>
                     <Style Selector="ItemsControl > ContentPresenter" x:DataType="m:VisualRect">
                         <Setter Property="Canvas.Left" Value="{Binding X}"/>

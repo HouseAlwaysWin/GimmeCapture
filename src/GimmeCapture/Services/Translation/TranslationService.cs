@@ -170,6 +170,7 @@ public class TranslationService : IDisposable
                 mergedText,
                 await TranslateAsync(mergedText, ocrLang, ct),
                 _settings.TargetLanguage);
+            string bestEffortTranslation = TryPromoteBestEffortTranslation(mergedText, translated, _settings.TargetLanguage);
             TranslationMemoryDiagnostics.Log(
                 "translation-llama-after",
                 ocrLoaded: IsOcrLoaded,
@@ -181,6 +182,17 @@ public class TranslationService : IDisposable
             if (string.IsNullOrEmpty(translated))
             {
                 System.Diagnostics.Debug.WriteLine($"[TranslationService] FAILURE: Engine returned empty result for OCR: '{mergedText}'");
+                var perBlockFallback = await TranslateRecognizedBlocksSeparatelyAsync(
+                    recognizedBlocks,
+                    ocrLang,
+                    _settings.TargetLanguage,
+                    scale,
+                    ct);
+                if (perBlockFallback.Count > 0)
+                {
+                    return (perBlockFallback, string.Empty);
+                }
+
                 return (new List<TranslatedBlock>(), "StatusTranslateFailedEngine");
             }
             else
@@ -206,10 +218,17 @@ public class TranslationService : IDisposable
             bool acceptable = IsTranslationAcceptable(mergedText, translated, _settings.TargetLanguage);
             if (!acceptable)
             {
-                translated = SanitizeTranslationCandidate(
+                string retriedTranslation = SanitizeTranslationCandidate(
                     mergedText,
                     await ForceTranslateAsync(mergedText, ocrLang, _settings.TargetLanguage, ct),
                     _settings.TargetLanguage);
+                string retriedBestEffort = TryPromoteBestEffortTranslation(mergedText, retriedTranslation, _settings.TargetLanguage);
+                if (retriedBestEffort.Length > bestEffortTranslation.Length)
+                {
+                    bestEffortTranslation = retriedBestEffort;
+                }
+
+                translated = retriedTranslation;
                 acceptable = IsTranslationAcceptable(mergedText, translated, _settings.TargetLanguage);
             }
 
@@ -224,7 +243,7 @@ public class TranslationService : IDisposable
             result.Add(new TranslatedBlock
             {
                 OriginalText = mergedText,
-                TranslatedText = acceptable ? translated : string.Empty,
+                TranslatedText = acceptable ? translated : bestEffortTranslation,
                 Bounds = logicalBounds,
                 InferredFontSize = inferredFontSize,
                 DisplayFontSize = inferredFontSize
@@ -233,6 +252,32 @@ public class TranslationService : IDisposable
             if (acceptable)
             {
                 return (result, string.Empty);
+            }
+
+            if (!string.IsNullOrWhiteSpace(bestEffortTranslation))
+            {
+                System.Diagnostics.Debug.WriteLine("[TranslationService] Using best-effort translation fallback.");
+                return (result, string.Empty);
+            }
+
+            var perBlockTranslation = await TranslateRecognizedBlocksSeparatelyAsync(
+                recognizedBlocks,
+                ocrLang,
+                _settings.TargetLanguage,
+                scale,
+                ct);
+            if (perBlockTranslation.Count > 0)
+            {
+                System.Diagnostics.Debug.WriteLine("[TranslationService] Falling back to per-block translation.");
+                return (perBlockTranslation, string.Empty);
+            }
+
+            string originalFallbackText = BuildFailureFallbackText(mergedText, _settings.TargetLanguage);
+            if (!string.IsNullOrWhiteSpace(originalFallbackText))
+            {
+                result[0].TranslatedText = originalFallbackText;
+                System.Diagnostics.Debug.WriteLine("[TranslationService] Falling back to sanitized OCR text.");
+                return (result, "StatusTranslateFailedAcceptable");
             }
 
             System.Diagnostics.Debug.WriteLine("[TranslationService] Final translation effort failed or was unacceptable. Returning OCR-only block.");
@@ -257,6 +302,7 @@ public class TranslationService : IDisposable
     {
         if (string.IsNullOrWhiteSpace(text)) return string.Empty;
         string translated = SanitizeTranslationCandidate(text, await TranslateAsync(text, sourceLang, ct), _settings.TargetLanguage);
+        string bestEffortTranslation = TryPromoteBestEffortTranslation(text, translated, _settings.TargetLanguage);
         if (IsTranslationAcceptable(text, translated, _settings.TargetLanguage))
         {
             return translated;
@@ -267,6 +313,12 @@ public class TranslationService : IDisposable
         if (guessedSource != sourceLang)
         {
             string retried = SanitizeTranslationCandidate(text, await TranslateAsync(text, guessedSource, ct), _settings.TargetLanguage);
+            string retriedBestEffort = TryPromoteBestEffortTranslation(text, retried, _settings.TargetLanguage);
+            if (retriedBestEffort.Length > bestEffortTranslation.Length)
+            {
+                bestEffortTranslation = retriedBestEffort;
+            }
+
             if (IsTranslationAcceptable(text, retried, _settings.TargetLanguage))
             {
                 return retried;
@@ -285,13 +337,67 @@ public class TranslationService : IDisposable
                 text,
                 await engine.TranslateAsync(text, guessedSource, _settings.TargetLanguage, ct),
                 _settings.TargetLanguage);
+            string fallbackBestEffort = TryPromoteBestEffortTranslation(text, fallback, _settings.TargetLanguage);
+            if (fallbackBestEffort.Length > bestEffortTranslation.Length)
+            {
+                bestEffortTranslation = fallbackBestEffort;
+            }
+
             if (IsTranslationAcceptable(text, fallback, _settings.TargetLanguage))
             {
                 return fallback;
             }
         }
 
-        return string.Empty;
+        return bestEffortTranslation;
+    }
+
+    private async Task<List<TranslatedBlock>> TranslateRecognizedBlocksSeparatelyAsync(
+        List<(SKRectI Box, string Text, float Confidence)> recognizedBlocks,
+        OCRLanguage sourceLanguage,
+        TranslationLanguage targetLanguage,
+        double scale,
+        CancellationToken ct)
+    {
+        var results = new List<TranslatedBlock>(recognizedBlocks.Count);
+
+        foreach (var block in recognizedBlocks)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            string originalText = block.Text?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(originalText))
+            {
+                continue;
+            }
+
+            string translatedText = await TranslatePlainTextAsync(originalText, sourceLanguage, ct);
+            if (string.IsNullOrWhiteSpace(translatedText))
+            {
+                translatedText = BuildFailureFallbackText(originalText, targetLanguage);
+            }
+
+            if (string.IsNullOrWhiteSpace(translatedText))
+            {
+                continue;
+            }
+
+            double inferredFontSize = Math.Clamp((block.Box.Height / scale) * 0.85, 8.0, 72.0);
+            results.Add(new TranslatedBlock
+            {
+                OriginalText = originalText,
+                TranslatedText = translatedText,
+                Bounds = new Rect(
+                    block.Box.Left / scale,
+                    block.Box.Top / scale,
+                    block.Box.Width / scale,
+                    block.Box.Height / scale),
+                InferredFontSize = inferredFontSize,
+                DisplayFontSize = inferredFontSize
+            });
+        }
+
+        return results;
     }
 
     private async Task<OCRLanguage> DetectScriptLanguageAsync(SKBitmap bitmap, CancellationToken ct)
@@ -407,6 +513,11 @@ public class TranslationService : IDisposable
             return false;
         }
 
+        if (LooksLikeRunawayRepetition(original, trimmed))
+        {
+            return false;
+        }
+
         string normalizedOriginal = NormalizeTranslationComparisonText(original);
         string normalizedTranslated = NormalizeTranslationComparisonText(trimmed);
         if (normalizedTranslated.Length >= 4
@@ -419,8 +530,7 @@ public class TranslationService : IDisposable
         {
             TranslationLanguage.English => ContainsLatinLetter(trimmed),
             TranslationLanguage.Korean => ContainsHangul(trimmed),
-            TranslationLanguage.Japanese => ContainsJapaneseKana(trimmed)
-                || !string.Equals(normalizedOriginal, normalizedTranslated, StringComparison.Ordinal),
+            TranslationLanguage.Japanese => IsJapaneseTranslationAcceptable(original, trimmed, normalizedOriginal, normalizedTranslated),
             TranslationLanguage.TraditionalChinese or TranslationLanguage.SimplifiedChinese => IsChineseTranslationAcceptable(original, trimmed, normalizedOriginal, normalizedTranslated),
             _ => true
         };
@@ -441,13 +551,8 @@ public class TranslationService : IDisposable
         var candidates = new List<string>();
         foreach (var rawLine in rawLines)
         {
-            string line = rawLine.Trim();
+            string line = SanitizeTranslationCandidateLine(original, rawLine, target);
             if (string.IsNullOrWhiteSpace(line))
-            {
-                continue;
-            }
-
-            if (IsObviousPromptOrControlText(line))
             {
                 continue;
             }
@@ -486,8 +591,30 @@ public class TranslationService : IDisposable
         {
             candidates = targetPreferred;
         }
+        else
+        {
+            var strippedCandidates = StripSourceLanguageArtifacts(candidates, original, target);
+            if (strippedCandidates.Count > 0)
+            {
+                var strippedPreferred = SelectTargetPreferredLines(strippedCandidates, original, target);
+                candidates = strippedPreferred.Count > 0 ? strippedPreferred : strippedCandidates;
+            }
+        }
 
         return string.Join(Environment.NewLine, candidates).Trim();
+    }
+
+    private static string SanitizeTranslationCandidateLine(string original, string line, TranslationLanguage target)
+    {
+        if (string.IsNullOrWhiteSpace(line))
+        {
+            return string.Empty;
+        }
+
+        string cleaned = CollapseRepeatedTranslationArtifacts(original, line.Trim());
+        cleaned = StripRomanizedGlosses(cleaned, target);
+        cleaned = TrimTranslationArtifacts(cleaned);
+        return IsObviousPromptOrControlText(cleaned) ? string.Empty : cleaned;
     }
 
     private static List<string> SelectTargetPreferredLines(List<string> lines, string original, TranslationLanguage target)
@@ -502,7 +629,9 @@ public class TranslationService : IDisposable
         {
             TranslationLanguage.English => KeepWhere(lines, ContainsLatinLetter),
             TranslationLanguage.Korean => KeepWhere(lines, ContainsHangul),
-            TranslationLanguage.Japanese => KeepWhere(lines, ContainsJapaneseKana),
+            TranslationLanguage.Japanese => KeepWhere(
+                lines,
+                line => (ContainsJapaneseKana(line) || ContainsCjk(line)) && !LooksLikeMostlyLatinInstruction(line)),
             TranslationLanguage.TraditionalChinese or TranslationLanguage.SimplifiedChinese when ContainsJapaneseKana(original) =>
                 KeepWhere(lines, line => ContainsCjk(line) && !ContainsJapaneseKana(line)),
             TranslationLanguage.TraditionalChinese or TranslationLanguage.SimplifiedChinese when ContainsHangul(original) =>
@@ -513,9 +642,656 @@ public class TranslationService : IDisposable
         };
     }
 
+    private static List<string> StripSourceLanguageArtifacts(List<string> lines, string original, TranslationLanguage target)
+    {
+        bool stripJapanese = target is TranslationLanguage.TraditionalChinese or TranslationLanguage.SimplifiedChinese
+            && ContainsJapaneseKana(original);
+        bool stripKorean = target is TranslationLanguage.TraditionalChinese or TranslationLanguage.SimplifiedChinese
+            && ContainsHangul(original);
+
+        if (!stripJapanese && !stripKorean)
+        {
+            return new List<string>();
+        }
+
+        var stripped = new List<string>(lines.Count);
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var line in lines)
+        {
+            string cleaned = StripSourceLanguageArtifactsFromLine(line, stripJapanese, stripKorean);
+            if (string.IsNullOrWhiteSpace(cleaned))
+            {
+                continue;
+            }
+
+            string normalized = NormalizeTranslationComparisonText(cleaned);
+            if (normalized.Length == 0 || !seen.Add(normalized))
+            {
+                continue;
+            }
+
+            stripped.Add(cleaned);
+        }
+
+        return stripped;
+    }
+
+    private static string StripSourceLanguageArtifactsFromLine(string line, bool stripJapanese, bool stripKorean)
+    {
+        if (string.IsNullOrWhiteSpace(line))
+        {
+            return string.Empty;
+        }
+
+        string cleaned = line.Trim();
+        cleaned = RemoveBracketedSourceSegmentsSafe(cleaned, stripJapanese, stripKorean);
+        cleaned = StripTrailingSourceSegment(cleaned, stripJapanese, stripKorean);
+        return TrimSourceArtifacts(cleaned);
+    }
+
+    private static string StripRomanizedGlosses(string line, TranslationLanguage target)
+    {
+        if (string.IsNullOrWhiteSpace(line))
+        {
+            return string.Empty;
+        }
+
+        if (!ContainsCjk(line) && !ContainsHangul(line))
+        {
+            return line.Trim();
+        }
+
+        string cleaned = line.Trim();
+        cleaned = RemoveBracketedLatinGlossSegments(cleaned);
+        cleaned = StripTrailingLatinGlossSegment(cleaned);
+        return TrimTranslationArtifacts(cleaned);
+    }
+
+    private static string RemoveBracketedLatinGlossSegments(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        ReadOnlySpan<(char Open, char Close)> brackets =
+        [
+            ('(', ')'),
+            ('\uFF08', '\uFF09'),
+            ('[', ']'),
+            ('\uFF3B', '\uFF3D'),
+            ('{', '}'),
+            ('\uFF5B', '\uFF5D')
+        ];
+
+        string result = value;
+        foreach (var (open, close) in brackets)
+        {
+            int searchStart = 0;
+            while (searchStart < result.Length)
+            {
+                int start = result.IndexOf(open, searchStart);
+                if (start < 0)
+                {
+                    break;
+                }
+
+                int end = result.IndexOf(close, start + 1);
+                if (end < 0)
+                {
+                    break;
+                }
+
+                string inner = result.Substring(start + 1, end - start - 1);
+                if (!ContainsLatinLetter(inner) || ContainsCjk(inner) || ContainsHangul(inner))
+                {
+                    searchStart = end + 1;
+                    continue;
+                }
+
+                string left = result[..start].TrimEnd();
+                string right = result[(end + 1)..].TrimStart();
+                result = left.Length > 0 && right.Length > 0
+                    ? $"{left} {right}"
+                    : left + right;
+                searchStart = 0;
+            }
+        }
+
+        return result;
+    }
+
+    private static string StripTrailingLatinGlossSegment(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        string[] separators =
+        [
+            " - ",
+            " / ",
+            " | ",
+            ":",
+            "/",
+            "|"
+        ];
+
+        foreach (var separator in separators)
+        {
+            int index = value.LastIndexOf(separator, StringComparison.Ordinal);
+            if (index <= 0 || index + separator.Length >= value.Length)
+            {
+                continue;
+            }
+
+            string left = value[..index].TrimEnd();
+            string right = value[(index + separator.Length)..].TrimStart();
+            if (left.Length == 0 || right.Length == 0)
+            {
+                continue;
+            }
+
+            if ((ContainsCjk(left) || ContainsHangul(left))
+                && ContainsLatinLetter(right)
+                && !ContainsCjk(right)
+                && !ContainsHangul(right))
+            {
+                return left;
+            }
+        }
+
+        return value;
+    }
+
+    private static string TrimTranslationArtifacts(string value)
+    {
+        return value.Trim().Trim(
+            ' ',
+            '\t',
+            '-',
+            '/',
+            '|',
+            ':',
+            ',',
+            ';',
+            '\u3001',
+            '\u3002',
+            '\uFF0C',
+            '\uFF1B',
+            '\uFF1A');
+    }
+
+    private static bool LooksLikeMostlyLatinInstruction(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        string normalized = NormalizeTranslationComparisonText(value);
+        if (normalized.Length == 0)
+        {
+            return false;
+        }
+
+        int latinCount = 0;
+        foreach (char c in normalized)
+        {
+            if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'))
+            {
+                latinCount++;
+            }
+        }
+
+        return latinCount >= Math.Max(8, normalized.Length / 2);
+    }
+
+    private static string RemoveBracketedSourceSegmentsSafe(string value, bool stripJapanese, bool stripKorean)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        ReadOnlySpan<(char Open, char Close)> brackets =
+        [
+            ('(', ')'),
+            ('\uFF08', '\uFF09'),
+            ('[', ']'),
+            ('\uFF3B', '\uFF3D'),
+            ('{', '}'),
+            ('\uFF5B', '\uFF5D'),
+            ('\u300C', '\u300D'),
+            ('\u300E', '\u300F'),
+            ('\u3010', '\u3011'),
+            ('\u3008', '\u3009'),
+            ('\u300A', '\u300B')
+        ];
+
+        string result = value;
+        foreach (var (open, close) in brackets)
+        {
+            int searchStart = 0;
+            while (searchStart < result.Length)
+            {
+                int start = result.IndexOf(open, searchStart);
+                if (start < 0)
+                {
+                    break;
+                }
+
+                int end = result.IndexOf(close, start + 1);
+                if (end < 0)
+                {
+                    break;
+                }
+
+                string inner = result.Substring(start + 1, end - start - 1);
+                if (!ContainsSourceScript(inner, stripJapanese, stripKorean))
+                {
+                    searchStart = end + 1;
+                    continue;
+                }
+
+                string left = result[..start].TrimEnd();
+                string right = result[(end + 1)..].TrimStart();
+                result = left.Length > 0 && right.Length > 0
+                    ? $"{left} {right}"
+                    : left + right;
+                searchStart = 0;
+            }
+        }
+
+        return result;
+    }
+
+    private static string RemoveBracketedSourceSegments(string value, bool stripJapanese, bool stripKorean)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        ReadOnlySpan<(char Open, char Close)> brackets =
+        [
+            ('(', ')'),
+            ('（', '）'),
+            ('[', ']'),
+            ('［', '］'),
+            ('{', '}'),
+            ('｛', '｝'),
+            ('「', '」'),
+            ('『', '』'),
+            ('【', '】'),
+            ('〈', '〉'),
+            ('《', '》')
+        ];
+
+        string result = value;
+        foreach (var (open, close) in brackets)
+        {
+            int searchStart = 0;
+            while (searchStart < result.Length)
+            {
+                int start = result.IndexOf(open, searchStart);
+                if (start < 0)
+                {
+                    break;
+                }
+
+                int end = result.IndexOf(close, start + 1);
+                if (end < 0)
+                {
+                    break;
+                }
+
+                string inner = result.Substring(start + 1, end - start - 1);
+                if (!ContainsSourceScript(inner, stripJapanese, stripKorean))
+                {
+                    searchStart = end + 1;
+                    continue;
+                }
+
+                string left = result[..start].TrimEnd();
+                string right = result[(end + 1)..].TrimStart();
+                result = left.Length > 0 && right.Length > 0
+                    ? $"{left} {right}"
+                    : left + right;
+                searchStart = 0;
+            }
+        }
+
+        return result;
+    }
+
+    private static string StripTrailingSourceSegment(string value, bool stripJapanese, bool stripKorean)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        string[] separators =
+        [
+            " - ",
+            " – ",
+            " — ",
+            " / ",
+            " | ",
+            "：",
+            ":",
+            "/",
+            "|"
+        ];
+
+        foreach (var separator in separators)
+        {
+            int index = value.LastIndexOf(separator, StringComparison.Ordinal);
+            if (index <= 0 || index + separator.Length >= value.Length)
+            {
+                continue;
+            }
+
+            string left = value[..index].TrimEnd();
+            string right = value[(index + separator.Length)..].TrimStart();
+            if (left.Length == 0 || right.Length == 0)
+            {
+                continue;
+            }
+
+            if (ContainsSourceScript(right, stripJapanese, stripKorean)
+                && ContainsCjk(left)
+                && !ContainsSourceScript(left, stripJapanese, stripKorean))
+            {
+                return left;
+            }
+        }
+
+        return value;
+    }
+
+    private static string TrimSourceArtifacts(string value)
+    {
+        return value.Trim().Trim(
+            ' ',
+            '\t',
+            '-',
+            '–',
+            '—',
+            '/',
+            '|',
+            ':',
+            '：',
+            '・',
+            '･',
+            '、',
+            '，',
+            ',',
+            ';',
+            '；');
+    }
+
+    private static string CollapseRepeatedTranslationArtifacts(string original, string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        string trimmed = value.Trim();
+        string normalizedOriginal = NormalizeTranslationComparisonText(original);
+        string collapsed = TryCollapseRepeatedTokenCycle(TokenizeTranslationValue(trimmed), normalizedOriginal);
+        return string.IsNullOrWhiteSpace(collapsed) ? trimmed : collapsed;
+    }
+
+    private static string BuildFailureFallbackText(string original, TranslationLanguage target)
+    {
+        if (string.IsNullOrWhiteSpace(original))
+        {
+            return string.Empty;
+        }
+
+        if (!ShouldUseOriginalTextFallback(original, target))
+        {
+            return string.Empty;
+        }
+
+        string[] lines = original.Replace("\r\n", "\n", StringComparison.Ordinal)
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var kept = new List<string>(lines.Length);
+
+        foreach (string rawLine in lines)
+        {
+            string cleaned = SanitizeTranslationCandidateLine(original, rawLine, TranslationLanguage.TraditionalChinese);
+            if (string.IsNullOrWhiteSpace(cleaned))
+            {
+                continue;
+            }
+
+            string normalized = NormalizeTranslationComparisonText(cleaned);
+            if (normalized.Length == 0 || !seen.Add(normalized))
+            {
+                continue;
+            }
+
+            kept.Add(cleaned);
+        }
+
+        return string.Join(Environment.NewLine, kept).Trim();
+    }
+
+    private static bool ShouldUseOriginalTextFallback(string original, TranslationLanguage target)
+    {
+        return target switch
+        {
+            TranslationLanguage.TraditionalChinese or TranslationLanguage.SimplifiedChinese => ContainsCjk(original),
+            TranslationLanguage.Japanese => ContainsJapaneseKana(original) || ContainsCjk(original),
+            TranslationLanguage.Korean => ContainsHangul(original),
+            TranslationLanguage.English => ContainsLatinLetter(original),
+            _ => false
+        };
+    }
+
+    private static bool LooksLikeRunawayRepetition(string original, string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        string trimmed = value.Trim();
+        if (trimmed.Length <= Math.Max(24, original.Length * 4))
+        {
+            return false;
+        }
+
+        string[] tokens = TokenizeTranslationValue(trimmed);
+        if (tokens.Length < 6)
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(TryCollapseRepeatedTokenCycle(tokens, NormalizeTranslationComparisonText(original))))
+        {
+            return true;
+        }
+
+        int uniqueCount = new HashSet<string>(tokens, StringComparer.OrdinalIgnoreCase).Count;
+        return uniqueCount <= 3 && tokens.Length >= uniqueCount * 4;
+    }
+
+    private static string[] TokenizeTranslationValue(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return Array.Empty<string>();
+        }
+
+        return Array.FindAll(
+            System.Text.RegularExpressions.Regex.Split(value.Trim(), @"[\s,\u3001\uFF0C;\uFF1B/|]+"),
+            static token => !string.IsNullOrWhiteSpace(token));
+    }
+
+    private static string TryCollapseRepeatedTokenCycle(string[] tokens, string normalizedOriginal)
+    {
+        if (tokens.Length < 4)
+        {
+            return string.Empty;
+        }
+
+        for (int cycleLength = 1; cycleLength <= Math.Min(4, tokens.Length / 2); cycleLength++)
+        {
+            if (!IsMostlyRepeatedTokenCycle(tokens, cycleLength))
+            {
+                continue;
+            }
+
+            var cycleTokens = new List<string>(cycleLength);
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            for (int i = 0; i < cycleLength && i < tokens.Length; i++)
+            {
+                if (seen.Add(tokens[i]))
+                {
+                    cycleTokens.Add(tokens[i]);
+                }
+            }
+
+            foreach (string token in cycleTokens)
+            {
+                if (!string.IsNullOrWhiteSpace(normalizedOriginal)
+                    && string.Equals(NormalizeTranslationComparisonText(token), normalizedOriginal, StringComparison.Ordinal))
+                {
+                    return token.Trim();
+                }
+            }
+
+            return string.Join("\u3001", cycleTokens).Trim();
+        }
+
+        return string.Empty;
+    }
+
+    private static bool IsMostlyRepeatedTokenCycle(string[] tokens, int cycleLength)
+    {
+        if (tokens.Length < (cycleLength * 2) + 1)
+        {
+            return false;
+        }
+
+        int comparisons = 0;
+        int matches = 0;
+        for (int i = cycleLength; i < tokens.Length; i++)
+        {
+            comparisons++;
+            if (string.Equals(tokens[i], tokens[i % cycleLength], StringComparison.Ordinal))
+            {
+                matches++;
+            }
+        }
+
+        return comparisons > 0 && matches * 5 >= comparisons * 4;
+    }
+
+    private static bool IsJapaneseTranslationAcceptable(
+        string original,
+        string translated,
+        string normalizedOriginal,
+        string normalizedTranslated)
+    {
+        if (LooksLikeMostlyLatinInstruction(translated))
+        {
+            return false;
+        }
+
+        if (ContainsJapaneseKana(translated))
+        {
+            return true;
+        }
+
+        if (string.Equals(normalizedOriginal, normalizedTranslated, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        if (ContainsJapaneseKana(original))
+        {
+            return ContainsCjk(translated);
+        }
+
+        if (ContainsLatinLetter(original) || ContainsHangul(original))
+        {
+            return ContainsCjk(translated);
+        }
+
+        if (ContainsCjk(original))
+        {
+            return ContainsCjk(translated);
+        }
+
+        return ContainsCjk(translated);
+    }
+
+    private static string TryPromoteBestEffortTranslation(string original, string translated, TranslationLanguage target)
+    {
+        if (string.IsNullOrWhiteSpace(translated))
+        {
+            return string.Empty;
+        }
+
+        string trimmed = translated.Trim();
+        if (IsObviousPromptOrControlText(trimmed))
+        {
+            return string.Empty;
+        }
+
+        string normalizedOriginal = NormalizeTranslationComparisonText(original);
+        string normalizedTranslated = NormalizeTranslationComparisonText(trimmed);
+        if (normalizedTranslated.Length == 0
+            || string.Equals(normalizedOriginal, normalizedTranslated, StringComparison.Ordinal))
+        {
+            return string.Empty;
+        }
+
+        if (trimmed.Length > Math.Max(80, original.Length * 6))
+        {
+            return string.Empty;
+        }
+
+        if (LooksLikeRunawayRepetition(original, trimmed))
+        {
+            return string.Empty;
+        }
+
+        return target switch
+        {
+            TranslationLanguage.TraditionalChinese or TranslationLanguage.SimplifiedChinese =>
+                ContainsCjk(trimmed) ? trimmed : string.Empty,
+            TranslationLanguage.Japanese =>
+                IsJapaneseTranslationAcceptable(original, trimmed, normalizedOriginal, normalizedTranslated)
+                    ? trimmed
+                    : string.Empty,
+            TranslationLanguage.Korean =>
+                ContainsHangul(trimmed) ? trimmed : string.Empty,
+            TranslationLanguage.English =>
+                ContainsLatinLetter(trimmed) ? trimmed : string.Empty,
+            _ => trimmed
+        };
+    }
+
+    private static bool ContainsSourceScript(string text, bool stripJapanese, bool stripKorean)
+    {
+        return (stripJapanese && ContainsJapaneseKana(text))
+            || (stripKorean && ContainsHangul(text));
+    }
+
     private static bool IsObviousPromptOrControlText(string text)
     {
         string trimmed = text.Trim();
+        string normalized = NormalizeTranslationComparisonText(trimmed);
         return trimmed.StartsWith("User:", StringComparison.OrdinalIgnoreCase)
             || trimmed.StartsWith("Assistant:", StringComparison.OrdinalIgnoreCase)
             || trimmed.StartsWith("Input:", StringComparison.OrdinalIgnoreCase)
@@ -525,6 +1301,14 @@ public class TranslationService : IDisposable
             || trimmed.StartsWith("翻訳:", StringComparison.OrdinalIgnoreCase)
             || trimmed.StartsWith("譯文:", StringComparison.OrdinalIgnoreCase)
             || trimmed.Contains("Translate the following", StringComparison.OrdinalIgnoreCase)
+            || trimmed.Contains("Translate into", StringComparison.OrdinalIgnoreCase)
+            || trimmed.Contains("Translate to", StringComparison.OrdinalIgnoreCase)
+            || trimmed.Contains("target language is", StringComparison.OrdinalIgnoreCase)
+            || normalized.Contains("translatethefollowing", StringComparison.Ordinal)
+            || normalized.Contains("translateinto", StringComparison.Ordinal)
+            || normalized.Contains("translateto", StringComparison.Ordinal)
+            || normalized.Contains("thetargetlanguageis", StringComparison.Ordinal)
+            || normalized.Contains("targetlanguageis", StringComparison.Ordinal)
             || trimmed.Contains("Output ONLY", StringComparison.OrdinalIgnoreCase)
             || trimmed.Contains("No explanations", StringComparison.OrdinalIgnoreCase)
             || trimmed.Contains("No markdown", StringComparison.OrdinalIgnoreCase)
