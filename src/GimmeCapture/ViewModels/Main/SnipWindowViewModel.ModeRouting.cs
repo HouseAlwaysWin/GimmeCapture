@@ -102,6 +102,7 @@ public partial class SnipWindowViewModel
         if (oldMode == value) return;
 
         this.RaiseAndSetIfChanged(ref _currentMode, value, nameof(CurrentMode));
+        SyncAudioMeterTimerWithMode();
 
         // Logic from old IsRecordingMode / IsTranslationMode setters
         if (value == SnipMode.Translation)

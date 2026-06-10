@@ -321,6 +321,8 @@ public partial class SnipWindow : Window
         // Restore Pin windows to Topmost
         _windowLayerService.RestoreTopmostWindows(_hiddenTopmostWindows);
         _hiddenTopmostWindows = [];
+
+        _ = ProcessMemoryTrimService.RequestIdleTrimAsync("snip-window-closed");
     }
 
     private void PersistTranslatedSelectionsForClosingIfNeeded()

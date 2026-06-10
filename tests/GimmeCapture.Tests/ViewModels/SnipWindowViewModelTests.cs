@@ -101,6 +101,29 @@ public class SnipWindowViewModelTests
         Assert.Empty(vm.TranslatedBlocks);
     }
 
+    [Fact]
+    public void AudioMeterTimer_ShouldRunOnlyInRecordingMode()
+    {
+        var vm = new SnipWindowViewModel();
+        try
+        {
+            Assert.False(vm.IsAudioMeterTimerEnabledForTesting);
+
+            vm.CurrentMode = SnipMode.Recording;
+            Assert.True(vm.IsAudioMeterTimerEnabledForTesting);
+
+            vm.CurrentMode = SnipMode.Translation;
+            Assert.False(vm.IsAudioMeterTimerEnabledForTesting);
+
+            vm.CurrentMode = SnipMode.Screenshot;
+            Assert.False(vm.IsAudioMeterTimerEnabledForTesting);
+        }
+        finally
+        {
+            vm.Dispose();
+        }
+    }
+
     private sealed class FakeWindowDetectionService : IWindowDetectionService
     {
         private readonly IReadOnlyList<WindowCandidate> _candidates;

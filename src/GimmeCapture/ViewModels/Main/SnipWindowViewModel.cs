@@ -70,6 +70,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     private readonly CompositeDisposable _disposables = new();
     private readonly AudioLevelMonitorService _audioLevelMonitor = new();
     private readonly DispatcherTimer _audioMeterTimer;
+    internal bool IsAudioMeterTimerEnabledForTesting => _audioMeterTimer.IsEnabled;
 
     private SnipMode _currentMode = SnipMode.Screenshot;
     public SnipMode CurrentMode
@@ -331,7 +332,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         InitializeRecordingBindingsIfNeeded();
 
         _audioMeterTimer.Tick += (_, _) => RefreshAudioLevels();
-        _audioMeterTimer.Start();
+        SyncAudioMeterTimerWithMode();
 
         InitializeActionCommands();
         InitializeToolbarCommands();
@@ -588,7 +589,6 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
 
     private void RefreshAudioLevels()
     {
-        // Only show active metering in recording mode to reduce visual noise.
         if (CurrentMode != SnipMode.Recording)
         {
             InputAudioLevel = 0.0;
@@ -601,6 +601,27 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
             InputAudioLevel = QuantizeAudioLevel(_audioLevelMonitor.InputPeak);
             OutputAudioLevel = QuantizeAudioLevel(_audioLevelMonitor.OutputPeak);
             return;
+        }
+
+        InputAudioLevel = 0.0;
+        OutputAudioLevel = 0.0;
+    }
+
+    private void SyncAudioMeterTimerWithMode()
+    {
+        if (CurrentMode == SnipMode.Recording)
+        {
+            if (!_audioMeterTimer.IsEnabled)
+            {
+                _audioMeterTimer.Start();
+            }
+
+            return;
+        }
+
+        if (_audioMeterTimer.IsEnabled)
+        {
+            _audioMeterTimer.Stop();
         }
 
         InputAudioLevel = 0.0;
