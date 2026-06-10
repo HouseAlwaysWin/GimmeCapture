@@ -69,4 +69,24 @@ public class PaddleOCREngineTests
         // In this refactor, IsUsefulOcrText was moved to TranslationService. 
         // We'll test it there.
     }
+
+    [Fact]
+    public void ExpandRecognitionBox_ShouldPreserveVerticalContextForSmallText()
+    {
+        var box = new SKRectI(10, 10, 110, 24);
+
+        var expanded = PaddleOCREngine.ExpandRecognitionBox(box, 200, 100);
+
+        Assert.Equal(new SKRectI(8, 3, 112, 31), expanded);
+    }
+
+    [Fact]
+    public void ExpandRecognitionBox_ShouldClampToBitmapBounds()
+    {
+        var box = new SKRectI(1, 2, 99, 16);
+
+        var expanded = PaddleOCREngine.ExpandRecognitionBox(box, 100, 20);
+
+        Assert.Equal(new SKRectI(0, 0, 100, 20), expanded);
+    }
 }

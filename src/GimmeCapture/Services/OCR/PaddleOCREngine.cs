@@ -317,10 +317,13 @@ public class PaddleOCREngine : IOCREngine
         }
     }
 
-    private static SKRectI ExpandRecognitionBox(SKRectI box, int bitmapWidth, int bitmapHeight)
+    internal static SKRectI ExpandRecognitionBox(SKRectI box, int bitmapWidth, int bitmapHeight)
     {
         int padX = Math.Max(2, (int)MathF.Ceiling(box.Height * 0.06f));
-        const int padY = 1;
+        // DB detection follows the visible strokes closely. Keeping that tight
+        // crop makes small CJK glyphs fill the 48px recognizer input and
+        // distorts their proportions, so retain more vertical line spacing.
+        int padY = Math.Clamp((int)MathF.Ceiling(box.Height * 0.45f), 2, 7);
 
         return new SKRectI(
             Math.Max(0, box.Left - padX),
