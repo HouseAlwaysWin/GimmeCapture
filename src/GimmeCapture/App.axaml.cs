@@ -150,6 +150,8 @@ public partial class App : Application
             {
                 System.Diagnostics.Debug.WriteLine($"Error setting up tray icon: {ex.Message}");
             }
+
+            _ = ProcessMemoryTrimService.ScheduleStartupTrimAsync();
         }
 
         base.OnFrameworkInitializationCompleted();
