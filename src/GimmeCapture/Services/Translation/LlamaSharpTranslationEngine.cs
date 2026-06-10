@@ -59,6 +59,7 @@ public sealed class LlamaSharpTranslationEngine : ITranslationEngine, IDisposabl
             return cached;
         }
 
+        ProcessMemoryTrimService.NotifyActivity("translation");
         await EnsureLoadedAsync(ct);
         if (_executor == null)
         {

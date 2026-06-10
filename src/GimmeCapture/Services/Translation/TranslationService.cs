@@ -508,7 +508,7 @@ public class TranslationService : IDisposable
 
         if (trimProcessWorkingSet)
         {
-            ProcessMemoryTrimService.TrimCurrentProcessWorkingSet();
+            _ = ProcessMemoryTrimService.RequestIdleTrimAsync("translation-resources-released");
         }
     }
 

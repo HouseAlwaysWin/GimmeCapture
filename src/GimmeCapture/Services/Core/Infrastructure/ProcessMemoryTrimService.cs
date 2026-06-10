@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Runtime;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -9,7 +11,7 @@ namespace GimmeCapture.Services.Core.Infrastructure;
 
 public static class ProcessMemoryTrimService
 {
-    private static readonly ProcessMemoryTrimCoordinator Coordinator = new(TrimCore);
+    private static readonly IdleMemoryTrimScheduler Scheduler = new(TrimCore);
 
     [DllImport("psapi.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -17,16 +19,23 @@ public static class ProcessMemoryTrimService
 
     public static void TrimCurrentProcessWorkingSet()
     {
-        Coordinator.TrimNow("runtime");
+        Scheduler.TrimNow("explicit");
     }
 
-    internal static Task<bool> ScheduleStartupTrimAsync(
+    public static Task<bool> RequestIdleTrimAsync(
+        string reason,
         TimeSpan? delay = null,
         CancellationToken ct = default)
     {
-        return Coordinator.ScheduleStartupTrimAsync(
+        return Scheduler.RequestTrimAsync(
+            reason,
             delay ?? TimeSpan.FromSeconds(2),
             ct);
+    }
+
+    public static void NotifyActivity(string reason)
+    {
+        Scheduler.NotifyActivity(reason);
     }
 
     private static void TrimCore(string reason)
@@ -85,7 +94,7 @@ public static class ProcessMemoryTrimService
     }
 }
 
-internal sealed class ProcessMemoryTrimCoordinator
+internal sealed class IdleMemoryTrimScheduler
 {
     private static readonly TimeSpan DefaultMinimumTrimInterval = TimeSpan.FromSeconds(5);
 
@@ -94,11 +103,12 @@ internal sealed class ProcessMemoryTrimCoordinator
     private readonly Func<TimeSpan, CancellationToken, Task> _delayAsync;
     private readonly Func<DateTimeOffset> _utcNow;
     private readonly TimeSpan _minimumTrimInterval;
-    private long _trimVersion;
-    private int _startupTrimScheduled;
+    private readonly HashSet<string> _pendingReasons = new(StringComparer.Ordinal);
+    private CancellationTokenSource? _pendingTrimCts;
+    private long _activityVersion;
     private DateTimeOffset? _lastTrimAtUtc;
 
-    internal ProcessMemoryTrimCoordinator(
+    internal IdleMemoryTrimScheduler(
         Action<string> trimAction,
         Func<TimeSpan, CancellationToken, Task>? delayAsync = null,
         Func<DateTimeOffset>? utcNow = null,
@@ -114,6 +124,9 @@ internal sealed class ProcessMemoryTrimCoordinator
     {
         lock (_trimGate)
         {
+            CancelPendingTrimLocked(clearReasons: true);
+            _activityVersion++;
+
             var now = _utcNow();
             if (_lastTrimAtUtc.HasValue
                 && now - _lastTrimAtUtc.Value < _minimumTrimInterval)
@@ -122,51 +135,124 @@ internal sealed class ProcessMemoryTrimCoordinator
                 return false;
             }
 
-            _trimVersion++;
             _lastTrimAtUtc = now;
             _trimAction(reason);
             return true;
         }
     }
 
-    internal async Task<bool> ScheduleStartupTrimAsync(
+    internal Task<bool> RequestTrimAsync(
+        string reason,
         TimeSpan delay,
         CancellationToken ct = default)
     {
-        if (Interlocked.CompareExchange(ref _startupTrimScheduled, 1, 0) != 0)
+        if (string.IsNullOrWhiteSpace(reason))
         {
-            Debug.WriteLine("[MemoryTrim] Startup trim already scheduled; skipping duplicate request.");
-            return false;
+            throw new ArgumentException("A trim reason is required.", nameof(reason));
         }
 
-        long observedTrimVersion;
+        CancellationTokenSource requestCts;
+        long observedActivityVersion;
+        TimeSpan effectiveDelay;
         lock (_trimGate)
         {
-            observedTrimVersion = _trimVersion;
+            _pendingReasons.Add(reason.Trim());
+            CancelPendingTrimLocked(clearReasons: false);
+            requestCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            _pendingTrimCts = requestCts;
+            observedActivityVersion = _activityVersion;
+            effectiveDelay = CalculateEffectiveDelay(delay, _utcNow());
         }
 
+        return RunPendingTrimAsync(
+            requestCts,
+            observedActivityVersion,
+            effectiveDelay);
+    }
+
+    internal void NotifyActivity(string reason)
+    {
+        lock (_trimGate)
+        {
+            _activityVersion++;
+            CancelPendingTrimLocked(clearReasons: true);
+        }
+
+        Debug.WriteLine($"[MemoryTrim] activity={reason}; pending idle trim cancelled.");
+    }
+
+    private async Task<bool> RunPendingTrimAsync(
+        CancellationTokenSource requestCts,
+        long observedActivityVersion,
+        TimeSpan delay)
+    {
         try
         {
-            await _delayAsync(delay, ct).ConfigureAwait(false);
+            await _delayAsync(delay, requestCts.Token).ConfigureAwait(false);
+
+            lock (_trimGate)
+            {
+                if (!ReferenceEquals(_pendingTrimCts, requestCts)
+                    || requestCts.IsCancellationRequested
+                    || _activityVersion != observedActivityVersion)
+                {
+                    return false;
+                }
+
+                var now = _utcNow();
+                if (_lastTrimAtUtc.HasValue
+                    && now - _lastTrimAtUtc.Value < _minimumTrimInterval)
+                {
+                    Debug.WriteLine("[MemoryTrim] Idle trim skipped; a trim ran recently.");
+                    return false;
+                }
+
+                string combinedReason = string.Join("+", _pendingReasons.OrderBy(static value => value, StringComparer.Ordinal));
+                _pendingReasons.Clear();
+                _pendingTrimCts = null;
+                _lastTrimAtUtc = now;
+                _trimAction($"idle:{combinedReason}");
+                return true;
+            }
         }
         catch (OperationCanceledException)
         {
-            Debug.WriteLine("[MemoryTrim] Startup trim cancelled.");
             return false;
         }
-
-        lock (_trimGate)
+        finally
         {
-            if (_trimVersion != observedTrimVersion)
+            lock (_trimGate)
             {
-                Debug.WriteLine("[MemoryTrim] Runtime trim already occurred during startup delay; skipping startup trim.");
-                return false;
+                if (ReferenceEquals(_pendingTrimCts, requestCts))
+                {
+                    _pendingTrimCts = null;
+                    _pendingReasons.Clear();
+                }
             }
 
-            _trimVersion++;
-            _lastTrimAtUtc = _utcNow();
-            _trimAction("startup-delayed");
-            return true;
+            requestCts.Dispose();
+        }
+    }
+
+    private TimeSpan CalculateEffectiveDelay(TimeSpan requestedDelay, DateTimeOffset now)
+    {
+        var normalizedDelay = requestedDelay < TimeSpan.Zero ? TimeSpan.Zero : requestedDelay;
+        if (!_lastTrimAtUtc.HasValue)
+        {
+            return normalizedDelay;
+        }
+
+        var remainingInterval = (_lastTrimAtUtc.Value + _minimumTrimInterval) - now;
+        return remainingInterval > normalizedDelay ? remainingInterval : normalizedDelay;
+    }
+
+    private void CancelPendingTrimLocked(bool clearReasons)
+    {
+        _pendingTrimCts?.Cancel();
+        _pendingTrimCts = null;
+        if (clearReasons)
+        {
+            _pendingReasons.Clear();
         }
     }
 }

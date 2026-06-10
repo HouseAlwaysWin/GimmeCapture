@@ -47,6 +47,7 @@ public sealed class OcrRuntimeService : IDisposable
 
     public string AcquireLease()
     {
+        ProcessMemoryTrimService.NotifyActivity("ocr");
         var leaseId = Guid.NewGuid().ToString("N");
         lock (_leaseLock)
         {
@@ -126,7 +127,7 @@ public sealed class OcrRuntimeService : IDisposable
         }
 
         ForceUnload();
-        ProcessMemoryTrimService.TrimCurrentProcessWorkingSet();
+        _ = ProcessMemoryTrimService.RequestIdleTrimAsync("ocr-unloaded");
         Debug.WriteLine("[OcrRuntime] Unloaded OCR runtime.");
     }
 

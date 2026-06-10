@@ -44,6 +44,7 @@ public sealed class SAM2RuntimeService : IDisposable
 
     public string AcquireLease()
     {
+        ProcessMemoryTrimService.NotifyActivity("sam2");
         var leaseId = Guid.NewGuid().ToString("N");
         lock (_leaseLock)
         {
@@ -73,6 +74,7 @@ public sealed class SAM2RuntimeService : IDisposable
 
     public async Task LoadModelsAsync(SAM2Variant variant)
     {
+        ProcessMemoryTrimService.NotifyActivity("sam2");
         if (_cachedVariant == variant && _cachedEncoder != null && _cachedDecoder != null)
         {
             return;
@@ -174,6 +176,8 @@ public sealed class SAM2RuntimeService : IDisposable
             }
         }
 
+        bool releasedResources = _cachedEncoder != null || _cachedDecoder != null;
+
         _cachedEncoder?.Dispose();
         _cachedEncoder = null;
 
@@ -182,7 +186,10 @@ public sealed class SAM2RuntimeService : IDisposable
 
         _cachedVariant = null;
         _isWarmedUp = false;
-        ProcessMemoryTrimService.TrimCurrentProcessWorkingSet();
+        if (releasedResources)
+        {
+            _ = ProcessMemoryTrimService.RequestIdleTrimAsync("sam2-unloaded");
+        }
     }
 
     public void Dispose()
