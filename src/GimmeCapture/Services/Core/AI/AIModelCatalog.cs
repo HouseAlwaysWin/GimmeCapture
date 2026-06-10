@@ -91,6 +91,10 @@ public sealed class AIModelCatalog
     public OcrModelPackage GetOcrPackage(OCRLanguage language) =>
         language switch
         {
+            OCRLanguage.TraditionalChinese => new(
+                "https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.6.0/onnx/PP-OCRv4/det/ch_PP-OCRv4_det_infer.onnx",
+                "https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.6.0/onnx/PP-OCRv4/rec/chinese_cht_PP-OCRv3_rec_infer.onnx",
+                "https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/release/2.7/ppocr/utils/dict/chinese_cht_dict.txt"),
             OCRLanguage.Japanese => new(
                 "https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.6.0/onnx/PP-OCRv4/det/ch_PP-OCRv4_det_infer.onnx",
                 "https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.6.0/onnx/PP-OCRv4/rec/japan_PP-OCRv4_rec_infer.onnx",

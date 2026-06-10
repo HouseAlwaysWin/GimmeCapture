@@ -2,6 +2,8 @@ using Avalonia;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Core.Infrastructure;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace GimmeCapture.ViewModels.Main;
@@ -37,12 +39,20 @@ public partial class SnipWindowViewModel
                 ShowProcessingOverlay = true;
                 IsIndeterminate = true;
                 ProcessingText = LocalizationService.Instance["StatusProcessing"] ?? "Processing...";
-                using var bitmap = await _captureService.CaptureScreenWithAnnotationsAsync(SelectionRect, ScreenOffset, VisualScaling, Annotations, UserSelections, TranslatedBlocks, _mainVm?.ShowSnipCursor ?? false);
+                using var bitmap = await _captureService.CaptureScreenWithAnnotationsAsync(
+                    SelectionRect,
+                    ScreenOffset,
+                    VisualScaling,
+                    Annotations,
+                    GetTranslationSelectionsForCapture(),
+                    TranslatedBlocks,
+                    _mainVm?.ShowSnipCursor ?? false);
                 await _captureService.CopyToClipboardAsync(bitmap);
                 _mainVm?.SetStatus("StatusCopied");
             }
             finally
             {
+                PersistTranslatedSelectionsAfterCaptureIfNeeded();
                 _isLocalProcessing = false;
                 ShowProcessingOverlay = false;
                 CloseAction?.Invoke();
@@ -70,7 +80,14 @@ public partial class SnipWindowViewModel
                 ShowProcessingOverlay = true;
                 IsIndeterminate = true;
                 ProcessingText = LocalizationService.Instance["StatusSaving"] ?? "Saving...";
-                using var bitmap = await _captureService.CaptureScreenWithAnnotationsAsync(SelectionRect, ScreenOffset, VisualScaling, Annotations, UserSelections, TranslatedBlocks, _mainVm?.ShowSnipCursor ?? false);
+                using var bitmap = await _captureService.CaptureScreenWithAnnotationsAsync(
+                    SelectionRect,
+                    ScreenOffset,
+                    VisualScaling,
+                    Annotations,
+                    GetTranslationSelectionsForCapture(),
+                    TranslatedBlocks,
+                    _mainVm?.ShowSnipCursor ?? false);
 
                 string? savedPath = null;
 
@@ -117,6 +134,7 @@ public partial class SnipWindowViewModel
             }
             finally
             {
+                PersistTranslatedSelectionsAfterCaptureIfNeeded();
                 _isLocalProcessing = false;
                 ShowProcessingOverlay = false;
                 CloseAction?.Invoke();
@@ -153,7 +171,14 @@ public partial class SnipWindowViewModel
 
             try
             {
-                using var skBitmap = await _captureService.CaptureScreenWithAnnotationsAsync(SelectionRect, ScreenOffset, VisualScaling, Annotations, UserSelections, TranslatedBlocks, _mainVm?.ShowSnipCursor ?? false);
+                using var skBitmap = await _captureService.CaptureScreenWithAnnotationsAsync(
+                    SelectionRect,
+                    ScreenOffset,
+                    VisualScaling,
+                    Annotations,
+                    GetTranslationSelectionsForCapture(),
+                    TranslatedBlocks,
+                    _mainVm?.ShowSnipCursor ?? false);
 
                 // Convert SKBitmap to Avalonia Bitmap without PNG stream roundtrip
                 var avaloniaBitmap = new Avalonia.Media.Imaging.WriteableBitmap(
@@ -177,8 +202,33 @@ public partial class SnipWindowViewModel
             }
             finally
             {
+                PersistTranslatedSelectionsAfterCaptureIfNeeded();
                 CloseAction?.Invoke();
             }
         }
+    }
+
+    private void PersistTranslatedSelectionsAfterCaptureIfNeeded()
+    {
+        if (CurrentMode != SnipMode.Translation)
+        {
+            return;
+        }
+
+        PersistTranslationSelectionsAction?.Invoke();
+    }
+
+    private IReadOnlyList<UserSelectionRect> GetTranslationSelectionsForCapture()
+    {
+        var detachedSelections = TranslationResultLayerManager.GetCaptureSelectionSnapshots(
+            ScreenOffset,
+            VisualScaling);
+
+        if (detachedSelections.Count == 0)
+        {
+            return UserSelections;
+        }
+
+        return UserSelections.Concat(detachedSelections).ToList();
     }
 }

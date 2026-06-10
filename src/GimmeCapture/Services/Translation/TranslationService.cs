@@ -142,9 +142,10 @@ public class TranslationService : IDisposable
             {
                 ct.ThrowIfCancellationRequested();
                 var (text, confidence) = ocrEngine.RecognizeText(bitmap, box, ct);
-                if (IsUsefulOcrText(text, confidence))
+                string cleanedText = SanitizeRecognizedOcrText(text);
+                if (IsUsefulOcrText(cleanedText, confidence))
                 {
-                    recognizedBlocks.Add((box, text, confidence));
+                    recognizedBlocks.Add((box, cleanedText, confidence));
                 }
             }
 
@@ -187,13 +188,14 @@ public class TranslationService : IDisposable
                     ocrLang,
                     _settings.TargetLanguage,
                     scale,
+                    includeOriginalOnlyBlocksOnFailure: false,
                     ct);
                 if (perBlockFallback.Count > 0)
                 {
                     return (perBlockFallback, string.Empty);
                 }
 
-                return (new List<TranslatedBlock>(), "StatusTranslateFailedEngine");
+                return (CreateOriginalOnlyFallbackBlocks(recognizedBlocks, scale), "StatusTranslateFailedEngine");
             }
             else
             {
@@ -232,6 +234,18 @@ public class TranslationService : IDisposable
                 acceptable = IsTranslationAcceptable(mergedText, translated, _settings.TargetLanguage);
             }
 
+            List<TranslatedBlock>? perBlockTranslation = null;
+            if (!acceptable)
+            {
+                perBlockTranslation = await TranslateRecognizedBlocksSeparatelyAsync(
+                    recognizedBlocks,
+                    ocrLang,
+                    _settings.TargetLanguage,
+                    scale,
+                    includeOriginalOnlyBlocksOnFailure: false,
+                    ct);
+            }
+
             var result = new List<TranslatedBlock>();
 
             var logicalBounds = new Rect(
@@ -254,29 +268,25 @@ public class TranslationService : IDisposable
                 return (result, string.Empty);
             }
 
+            if (perBlockTranslation is { Count: > 0 })
+            {
+                System.Diagnostics.Debug.WriteLine("[TranslationService] Falling back to per-block translation.");
+                return (perBlockTranslation, string.Empty);
+            }
+
             if (!string.IsNullOrWhiteSpace(bestEffortTranslation))
             {
                 System.Diagnostics.Debug.WriteLine("[TranslationService] Using best-effort translation fallback.");
                 return (result, string.Empty);
             }
 
-            var perBlockTranslation = await TranslateRecognizedBlocksSeparatelyAsync(
-                recognizedBlocks,
-                ocrLang,
-                _settings.TargetLanguage,
-                scale,
-                ct);
-            if (perBlockTranslation.Count > 0)
-            {
-                System.Diagnostics.Debug.WriteLine("[TranslationService] Falling back to per-block translation.");
-                return (perBlockTranslation, string.Empty);
-            }
-
             string originalFallbackText = BuildFailureFallbackText(mergedText, _settings.TargetLanguage);
             if (!string.IsNullOrWhiteSpace(originalFallbackText))
             {
-                result[0].TranslatedText = originalFallbackText;
-                System.Diagnostics.Debug.WriteLine("[TranslationService] Falling back to sanitized OCR text.");
+                result[0].TranslatedText = string.Empty;
+                result[0].OriginalText = originalFallbackText;
+                System.Diagnostics.Debug.WriteLine("[TranslationService] Falling back to visible sanitized OCR text.");
+
                 return (result, "StatusTranslateFailedAcceptable");
             }
 
@@ -357,6 +367,7 @@ public class TranslationService : IDisposable
         OCRLanguage sourceLanguage,
         TranslationLanguage targetLanguage,
         double scale,
+        bool includeOriginalOnlyBlocksOnFailure,
         CancellationToken ct)
     {
         var results = new List<TranslatedBlock>(recognizedBlocks.Count);
@@ -374,10 +385,13 @@ public class TranslationService : IDisposable
             string translatedText = await TranslatePlainTextAsync(originalText, sourceLanguage, ct);
             if (string.IsNullOrWhiteSpace(translatedText))
             {
-                translatedText = BuildFailureFallbackText(originalText, targetLanguage);
+                if (includeOriginalOnlyBlocksOnFailure)
+                {
+                    translatedText = string.Empty;
+                }
             }
 
-            if (string.IsNullOrWhiteSpace(translatedText))
+            if (string.IsNullOrWhiteSpace(translatedText) && !includeOriginalOnlyBlocksOnFailure)
             {
                 continue;
             }
@@ -400,20 +414,75 @@ public class TranslationService : IDisposable
         return results;
     }
 
+    private static List<TranslatedBlock> CreateOriginalOnlyFallbackBlocks(
+        List<(SKRectI Box, string Text, float Confidence)> recognizedBlocks,
+        double scale)
+    {
+        var results = new List<TranslatedBlock>(recognizedBlocks.Count);
+        foreach (var block in recognizedBlocks)
+        {
+            string originalText = block.Text?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(originalText))
+            {
+                continue;
+            }
+
+            double inferredFontSize = Math.Clamp((block.Box.Height / scale) * 0.85, 8.0, 72.0);
+            results.Add(new TranslatedBlock
+            {
+                OriginalText = originalText,
+                TranslatedText = string.Empty,
+                Bounds = new Rect(
+                    block.Box.Left / scale,
+                    block.Box.Top / scale,
+                    block.Box.Width / scale,
+                    block.Box.Height / scale),
+                InferredFontSize = inferredFontSize,
+                DisplayFontSize = inferredFontSize
+            });
+        }
+
+        return results;
+    }
+
     private async Task<OCRLanguage> DetectScriptLanguageAsync(SKBitmap bitmap, CancellationToken ct)
     {
         var ocrEngine = GetOrCreateOcrEngine();
         await ocrEngine.EnsureLoadedAsync(OCRLanguage.TraditionalChinese, ct);
         var boxes = ocrEngine.DetectText(bitmap);
-        int sampleCount = Math.Min(5, boxes.Count);
+        int sampleCount = Math.Min(8, boxes.Count);
+        int kanaCount = 0;
+        int meaningfulCount = 0;
+
         for (int i = 0; i < sampleCount; i++)
         {
             var box = boxes[i];
             var (text, _) = ocrEngine.RecognizeText(bitmap, box, ct);
-            if (ContainsJapaneseKana(text))
-                return OCRLanguage.Japanese;
+            text = SanitizeRecognizedOcrText(text);
+            kanaCount += CountJapaneseKana(text);
+            meaningfulCount += CountMeaningfulChars(text);
         }
-        return OCRLanguage.TraditionalChinese;
+
+        // The Chinese recognizer can occasionally emit one stray kana for small
+        // Traditional Chinese glyphs. Require strong aggregate evidence before
+        // swapping to the Japanese model, otherwise the second OCR pass degrades.
+        return kanaCount >= 3 && meaningfulCount > 0 && (kanaCount * 5) >= meaningfulCount
+            ? OCRLanguage.Japanese
+            : OCRLanguage.TraditionalChinese;
+    }
+
+    private static int CountJapaneseKana(string text)
+    {
+        int count = 0;
+        foreach (char ch in text)
+        {
+            if (ch >= '\u3040' && ch <= '\u30FF')
+            {
+                count++;
+            }
+        }
+
+        return count;
     }
 
     public void ReleaseOcrResources()
@@ -478,9 +547,11 @@ public class TranslationService : IDisposable
 
         bool sawUseful = false;
         bool allPlaceholder = true;
+        int usefulCount = 0;
+        int suspiciousCount = 0;
         foreach (char ch in trimmed)
         {
-            if (ch == '\uFFFD')
+            if (IsInvalidOcrCharacter(ch))
             {
                 return false;
             }
@@ -491,13 +562,34 @@ public class TranslationService : IDisposable
             if (char.IsLetterOrDigit(ch)
                 || (ch >= 0x4E00 && ch <= 0x9FFF)
                 || (ch >= 0x3040 && ch <= 0x309F)
-                || (ch >= 0x30A0 && ch <= 0x30FF))
+                || (ch >= 0x30A0 && ch <= 0x30FF)
+                || (ch >= 0xAC00 && ch <= 0xD7AF))
             {
                 sawUseful = true;
+                usefulCount++;
+            }
+            else if (!char.IsWhiteSpace(ch) && !char.IsPunctuation(ch))
+            {
+                suspiciousCount++;
             }
         }
 
-        return sawUseful && !allPlaceholder;
+        if (!sawUseful || allPlaceholder)
+        {
+            return false;
+        }
+
+        if (suspiciousCount > usefulCount)
+        {
+            return false;
+        }
+
+        if (usefulCount <= 2 && confidence < 0.30f)
+        {
+            return false;
+        }
+
+        return true;
     }
 
     private bool IsTranslationAcceptable(string original, string translated, TranslationLanguage target)
@@ -508,12 +600,17 @@ public class TranslationService : IDisposable
         }
 
         string trimmed = translated.Trim();
-        if (IsObviousPromptOrControlText(trimmed))
+        if (IsObviousPromptOrControlText(trimmed) || LooksLikeTranslationMetaOrAssistantReply(trimmed, target))
         {
             return false;
         }
 
         if (LooksLikeRunawayRepetition(original, trimmed))
+        {
+            return false;
+        }
+
+        if (HasUnexpectedTranslationLineCount(original, trimmed))
         {
             return false;
         }
@@ -614,7 +711,12 @@ public class TranslationService : IDisposable
         string cleaned = CollapseRepeatedTranslationArtifacts(original, line.Trim());
         cleaned = StripRomanizedGlosses(cleaned, target);
         cleaned = TrimTranslationArtifacts(cleaned);
-        return IsObviousPromptOrControlText(cleaned) ? string.Empty : cleaned;
+        if (IsObviousPromptOrControlText(cleaned) || LooksLikeTranslationMetaOrAssistantReply(cleaned, target))
+        {
+            return string.Empty;
+        }
+
+        return cleaned;
     }
 
     private static List<string> SelectTargetPreferredLines(List<string> lines, string original, TranslationLanguage target)
@@ -849,6 +951,136 @@ public class TranslationService : IDisposable
         return latinCount >= Math.Max(8, normalized.Length / 2);
     }
 
+    private static bool HasUnexpectedTranslationLineCount(string original, string translated)
+    {
+        string[] originalLines = original.Replace("\r\n", "\n", StringComparison.Ordinal)
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        string[] translatedLines = translated.Replace("\r\n", "\n", StringComparison.Ordinal)
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        if (originalLines.Length == 0 || translatedLines.Length == 0)
+        {
+            return false;
+        }
+
+        if (originalLines.Length == 1)
+        {
+            return translatedLines.Length > 1;
+        }
+
+        return translatedLines.Length > Math.Max(originalLines.Length + 1, originalLines.Length * 2);
+    }
+
+    private static bool LooksLikeTranslationMetaOrAssistantReply(string line, TranslationLanguage target)
+    {
+        if (string.IsNullOrWhiteSpace(line))
+        {
+            return false;
+        }
+
+        string trimmed = line.Trim();
+        string normalized = NormalizeTranslationComparisonText(trimmed);
+        string[] extraGenericMarkers =
+        [
+            "thetranslationis",
+            "translationonly",
+            "\u4ee5\u4e0b\u662f\u7ffb\u8b6f",
+            "\u7ffb\u8b6f\u5982\u4e0b",
+            "\u4ee5\u4e0b\u304c\u7ffb\u8a33",
+            "\u7ffb\u8a33\u7d50\u679c"
+        ];
+
+        foreach (string marker in extraGenericMarkers)
+        {
+            if (normalized.Contains(NormalizeTranslationComparisonText(marker), StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        string[] genericMarkers =
+        [
+            "translationresult",
+            "translatedtext",
+            "hereisthetranslation",
+            "followingtranslation",
+            "以下是翻譯",
+            "以下是翻译",
+            "翻譯如下",
+            "翻译如下",
+            "日本語訳",
+            "翻訳結果",
+            "以下の通り",
+            "以下は",
+            "以下を",
+            "説明",
+            "解説",
+            "summary",
+            "note"
+        ];
+
+        foreach (string marker in genericMarkers)
+        {
+            if (normalized.Contains(NormalizeTranslationComparisonText(marker), StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        if (target != TranslationLanguage.Japanese)
+        {
+            return false;
+        }
+
+        string[] explicitJapaneseAssistantMarkers =
+        [
+            "\u627f\u77e5\u3044\u305f\u3057\u307e\u3057\u305f",
+            "\u304b\u3057\u3053\u307e\u308a\u307e\u3057\u305f",
+            "\u7533\u3057\u8a33\u3054\u3056\u3044\u307e\u305b\u3093",
+            "\u78ba\u8a8d\u3055\u305b\u3066\u3044\u305f\u3060\u304d\u307e\u3059",
+            "\u304a\u8abf\u3079\u3044\u305f\u3057\u307e\u3059",
+            "\u304a\u77e5\u3089\u305b\u304f\u3060\u3055\u3044",
+            "\u3082\u3057\u53ef\u80fd\u3067\u3042\u308c\u3070",
+            "\u304a\u624b\u6570\u3067\u3059\u304c",
+            "\u304a\u554f\u3044\u5408\u308f\u305b",
+            "\u3054\u9023\u7d61\u304f\u3060\u3055\u3044",
+            "\u3054\u78ba\u8a8d\u304f\u3060\u3055\u3044",
+            "\u3044\u305f\u3060\u3051\u307e\u3059\u304b"
+        ];
+
+        foreach (string marker in explicitJapaneseAssistantMarkers)
+        {
+            if (normalized.Contains(NormalizeTranslationComparisonText(marker), StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        string[] japaneseAssistantMarkers =
+        [
+            "承知いたしました",
+            "申し訳ございません",
+            "お調べいたします",
+            "確認させていただきます",
+            "もし可能であれば",
+            "お客様",
+            "ご提示",
+            "させていただきます",
+            "大変申し訳",
+            "ご連絡ください"
+        ];
+
+        foreach (string marker in japaneseAssistantMarkers)
+        {
+            if (trimmed.Contains(marker, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private static string RemoveBracketedSourceSegmentsSafe(string value, bool stripJapanese, bool stripKorean)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -1066,7 +1298,7 @@ public class TranslationService : IDisposable
 
         foreach (string rawLine in lines)
         {
-            string cleaned = SanitizeTranslationCandidateLine(original, rawLine, TranslationLanguage.TraditionalChinese);
+            string cleaned = SanitizeRecognizedOcrText(rawLine);
             if (string.IsNullOrWhiteSpace(cleaned))
             {
                 continue;
@@ -1084,16 +1316,142 @@ public class TranslationService : IDisposable
         return string.Join(Environment.NewLine, kept).Trim();
     }
 
+    private static string SanitizeRecognizedOcrText(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return string.Empty;
+        }
+
+        string[] rawLines = text.Replace("\r\n", "\n", StringComparison.Ordinal)
+            .Replace('\r', '\n')
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var kept = new List<string>(rawLines.Length);
+
+        foreach (string rawLine in rawLines)
+        {
+            var builder = new StringBuilder(rawLine.Length);
+            bool lastWasSpace = false;
+
+            foreach (char ch in rawLine)
+            {
+                if (IsInvalidOcrCharacter(ch))
+                {
+                    continue;
+                }
+
+                if (char.IsWhiteSpace(ch))
+                {
+                    if (!lastWasSpace)
+                    {
+                        builder.Append(' ');
+                        lastWasSpace = true;
+                    }
+
+                    continue;
+                }
+
+                lastWasSpace = false;
+                builder.Append(ch);
+            }
+
+            string cleaned = NormalizeTerminalOcrPunctuation(builder.ToString().Trim());
+            if (string.IsNullOrWhiteSpace(cleaned) || IsLowSignalOcrLine(cleaned))
+            {
+                continue;
+            }
+
+            string normalized = NormalizeTranslationComparisonText(cleaned);
+            if (normalized.Length == 0 || !seen.Add(normalized))
+            {
+                continue;
+            }
+
+            kept.Add(cleaned);
+        }
+
+        return string.Join(Environment.NewLine, kept).Trim();
+    }
+
+    private static string NormalizeTerminalOcrPunctuation(string text)
+    {
+        if (text.Length < 2)
+        {
+            return text;
+        }
+
+        char last = text[^1];
+        char previous = text[^2];
+        bool followsCjkText = (previous >= '\u4E00' && previous <= '\u9FFF')
+            || (previous >= '\u3040' && previous <= '\u30FF');
+
+        return followsCjkText && last is '\u00B7' or '\u2022' or '\u2027'
+            ? text[..^1] + '\u3002'
+            : text;
+    }
+
+    private static bool IsLowSignalOcrLine(string line)
+    {
+        if (string.IsNullOrWhiteSpace(line))
+        {
+            return true;
+        }
+
+        int usefulCount = 0;
+        int suspiciousCount = 0;
+        int punctuationCount = 0;
+
+        foreach (char ch in line)
+        {
+            if (char.IsLetterOrDigit(ch)
+                || (ch >= 0x4E00 && ch <= 0x9FFF)
+                || (ch >= 0x3040 && ch <= 0x30FF)
+                || (ch >= 0xAC00 && ch <= 0xD7AF))
+            {
+                usefulCount++;
+                continue;
+            }
+
+            if (char.IsPunctuation(ch))
+            {
+                punctuationCount++;
+                continue;
+            }
+
+            if (!char.IsWhiteSpace(ch))
+            {
+                suspiciousCount++;
+            }
+        }
+
+        if (usefulCount == 0)
+        {
+            return true;
+        }
+
+        if (suspiciousCount > usefulCount)
+        {
+            return true;
+        }
+
+        return usefulCount <= 1 && punctuationCount + suspiciousCount >= 2;
+    }
+
+    private static bool IsInvalidOcrCharacter(char ch)
+    {
+        return ch == '\uFFFD'
+            || char.IsControl(ch)
+            || ch is '\u200B' or '\u200C' or '\u200D' or '\u2060' or '\uFEFF'
+            || (ch >= '\uD800' && ch <= '\uDFFF')
+            || (ch >= '\uE000' && ch <= '\uF8FF');
+    }
+
     private static bool ShouldUseOriginalTextFallback(string original, TranslationLanguage target)
     {
-        return target switch
-        {
-            TranslationLanguage.TraditionalChinese or TranslationLanguage.SimplifiedChinese => ContainsCjk(original),
-            TranslationLanguage.Japanese => ContainsJapaneseKana(original) || ContainsCjk(original),
-            TranslationLanguage.Korean => ContainsHangul(original),
-            TranslationLanguage.English => ContainsLatinLetter(original),
-            _ => false
-        };
+        _ = target;
+        return CountMeaningfulChars(original) > 0;
     }
 
     private static bool LooksLikeRunawayRepetition(string original, string value)
@@ -1229,7 +1587,17 @@ public class TranslationService : IDisposable
 
         if (ContainsCjk(original))
         {
-            return ContainsCjk(translated);
+            if (!ContainsCjk(translated))
+            {
+                return false;
+            }
+
+            if (CountMeaningfulChars(original) > 4 && !ContainsJapaneseKana(translated))
+            {
+                return false;
+            }
+
+            return true;
         }
 
         return ContainsCjk(translated);
@@ -1243,7 +1611,7 @@ public class TranslationService : IDisposable
         }
 
         string trimmed = translated.Trim();
-        if (IsObviousPromptOrControlText(trimmed))
+        if (IsObviousPromptOrControlText(trimmed) || LooksLikeTranslationMetaOrAssistantReply(trimmed, target))
         {
             return string.Empty;
         }
@@ -1262,6 +1630,11 @@ public class TranslationService : IDisposable
         }
 
         if (LooksLikeRunawayRepetition(original, trimmed))
+        {
+            return string.Empty;
+        }
+
+        if (HasUnexpectedTranslationLineCount(original, trimmed))
         {
             return string.Empty;
         }
@@ -1368,6 +1741,28 @@ public class TranslationService : IDisposable
 
     private static bool ContainsCjk(string text) =>
         text.AsValueEnumerable().Any(static c => c >= '\u4E00' && c <= '\u9FFF');
+
+    private static int CountMeaningfulChars(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return 0;
+        }
+
+        int count = 0;
+        foreach (char c in text)
+        {
+            if (char.IsLetterOrDigit(c)
+                || (c >= '\u4E00' && c <= '\u9FFF')
+                || (c >= '\u3040' && c <= '\u30FF')
+                || (c >= '\uAC00' && c <= '\uD7AF'))
+            {
+                count++;
+            }
+        }
+
+        return count;
+    }
 
     private string BuildTargetLanguageFallbackText(string text, TranslationLanguage target)
     {

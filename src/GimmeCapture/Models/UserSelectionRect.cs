@@ -116,4 +116,11 @@ public class UserSelectionRect : ReactiveObject
         get => _lastPixelHeight;
         set => this.RaiseAndSetIfChanged(ref _lastPixelHeight, value);
     }
+
+    private int _consecutiveTranslationMisses;
+    public int ConsecutiveTranslationMisses
+    {
+        get => _consecutiveTranslationMisses;
+        set => this.RaiseAndSetIfChanged(ref _consecutiveTranslationMisses, value);
+    }
 }

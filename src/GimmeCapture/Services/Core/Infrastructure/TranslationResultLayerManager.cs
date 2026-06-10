@@ -62,6 +62,54 @@ internal static class TranslationResultLayerManager
         _window.Hide();
     }
 
+    public static IReadOnlyList<UserSelectionRect> GetCaptureSelectionSnapshots(
+        PixelPoint targetScreenOffset,
+        double targetVisualScaling)
+    {
+        if (_window?.DataContext is not FloatingTranslationLayerViewModel vm
+            || vm.Items.Count == 0
+            || targetVisualScaling <= 0)
+        {
+            return Array.Empty<UserSelectionRect>();
+        }
+
+        double sourceScaling = vm.VisualScaling > 0 ? vm.VisualScaling : 1.0;
+        var snapshots = new List<UserSelectionRect>(vm.Items.Count);
+
+        foreach (var item in vm.Items)
+        {
+            string displayText = item.PrimaryText;
+            if (string.IsNullOrWhiteSpace(displayText)
+                || item.Bounds.Width <= 0
+                || item.Bounds.Height <= 0)
+            {
+                continue;
+            }
+
+            double physicalX = vm.ScreenOffset.X + (item.Bounds.X * sourceScaling);
+            double physicalY = vm.ScreenOffset.Y + (item.Bounds.Y * sourceScaling);
+            var targetBounds = new Rect(
+                (physicalX - targetScreenOffset.X) / targetVisualScaling,
+                (physicalY - targetScreenOffset.Y) / targetVisualScaling,
+                item.Bounds.Width * sourceScaling / targetVisualScaling,
+                item.Bounds.Height * sourceScaling / targetVisualScaling);
+
+            snapshots.Add(new UserSelectionRect
+            {
+                Bounds = targetBounds,
+                IsTranslated = true,
+                TranslatedText = displayText,
+                OriginalText = item.OriginalText,
+                InferredFontSize = item.InferredFontSize * sourceScaling / targetVisualScaling,
+                DisplayFontSize = item.DisplayFontSize * sourceScaling / targetVisualScaling,
+                EstimatedTextHeight = item.EstimatedTextHeight * sourceScaling / targetVisualScaling,
+                IsTextOverflowing = item.IsTextOverflowing
+            });
+        }
+
+        return snapshots;
+    }
+
     public static void RefreshWindowState()
     {
         if (_window == null)

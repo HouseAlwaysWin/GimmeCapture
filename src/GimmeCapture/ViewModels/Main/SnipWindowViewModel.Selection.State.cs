@@ -16,6 +16,8 @@ namespace GimmeCapture.ViewModels.Main;
 
 public partial class SnipWindowViewModel
 {
+    private const int TranslationMissTolerance = 2;
+
     private SnipState _currentState = SnipState.Detecting;
     public SnipState CurrentState
     {
@@ -341,6 +343,12 @@ public partial class SnipWindowViewModel
             var selection = update.Selection;
             if (update.Kind == TranslationSelectionUpdateKind.Cleared)
             {
+                selection.ConsecutiveTranslationMisses++;
+                if (ShouldPreservePreviousTranslation(selection))
+                {
+                    continue;
+                }
+
                 selection.LastOcrText = string.Empty;
                 selection.OriginalText = string.Empty;
                 selection.TranslatedText = string.Empty;
@@ -348,14 +356,29 @@ public partial class SnipWindowViewModel
                 selection.EstimatedTextHeight = 0;
                 selection.DisplayFontSize = selection.InferredFontSize;
                 selection.IsTextOverflowing = false;
+                selection.ConsecutiveTranslationMisses = 0;
                 maskChanged = true;
                 continue;
+            }
+
+            if (string.IsNullOrWhiteSpace(update.TranslatedText))
+            {
+                selection.ConsecutiveTranslationMisses++;
+                if (ShouldPreservePreviousTranslation(selection))
+                {
+                    continue;
+                }
+            }
+            else
+            {
+                selection.ConsecutiveTranslationMisses = 0;
             }
 
             selection.LastOcrText = update.OriginalText;
             selection.OriginalText = update.OriginalText;
             selection.TranslatedText = update.TranslatedText;
-            selection.IsTranslated = !string.IsNullOrWhiteSpace(update.TranslatedText);
+            selection.IsTranslated = !string.IsNullOrWhiteSpace(update.TranslatedText)
+                || !string.IsNullOrWhiteSpace(update.OriginalText);
             selection.InferredFontSize = update.InferredFontSize;
             selection.DisplayFontSize = update.InferredFontSize;
             selection.IsTextOverflowing = false;
@@ -372,6 +395,13 @@ public partial class SnipWindowViewModel
         {
             UpdateMask();
         }
+    }
+
+    private static bool ShouldPreservePreviousTranslation(UserSelectionRect selection)
+    {
+        return selection.ConsecutiveTranslationMisses < TranslationMissTolerance
+            && selection.IsTranslated
+            && !string.IsNullOrWhiteSpace(selection.TranslatedText);
     }
 
     /* Speech helper methods removed */

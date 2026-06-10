@@ -19,6 +19,8 @@ public class PaddleOCREngine : IOCREngine
     private const float DetBoxThreshold = 0.3f;
     private const float DetMinAreaRatio = 0.00005f;
     private const int DetMaxBoxes = 256;
+    private const float RecognitionRetryConfidenceThreshold = 0.72f;
+    private const float LowContrastThreshold = 64f;
     private static readonly bool SaveOcrDebugImages = false;
 
     private readonly AppSettingsService _settingsService;
@@ -85,34 +87,43 @@ public class PaddleOCREngine : IOCREngine
     {
         if (_ocrRuntimeService.RecognitionSession == null || box.Width <= 0 || box.Height <= 0) return ("", 0f);
 
-        using var cropped = new SKBitmap(box.Width, box.Height);
+        var expandedBox = ExpandRecognitionBox(box, bitmap.Width, bitmap.Height);
+        using var cropped = new SKBitmap(expandedBox.Width, expandedBox.Height);
         using (var canvas = new SKCanvas(cropped))
         {
-            canvas.DrawBitmap(bitmap, box, new SKRect(0, 0, box.Width, box.Height));
+            canvas.DrawBitmap(bitmap, expandedBox, new SKRect(0, 0, expandedBox.Width, expandedBox.Height));
         }
 
         bool shouldInvert = AnalyzeLuminance(cropped) < 120;
+        bool shouldEnhance = AnalyzeContrast(cropped) < LowContrastThreshold || box.Height < 28;
 
-        int targetHeight = 48;
-        int textWidth = (int)(box.Width * ((float)targetHeight / box.Height));
+        const int targetHeight = 48;
+        int textWidth = (int)MathF.Ceiling(cropped.Width * ((float)targetHeight / cropped.Height));
         textWidth = Math.Clamp(textWidth, 16, 1536);
         int paddedWidth = (textWidth + 31) / 32 * 32;
 
-        using var normalBitmap = PrepareTensorBitmap(cropped, textWidth, paddedWidth, targetHeight, false);
-        var normalResult = RunRecognition(normalBitmap);
-        var bestResult = normalResult;
+        var bestResult = EvaluateRecognitionCandidate(cropped, textWidth, paddedWidth, targetHeight, invert: false, enhanceContrast: false);
 
         if (shouldInvert)
         {
-            using var invertedBitmap = PrepareTensorBitmap(cropped, textWidth, paddedWidth, targetHeight, true);
-            var invertedResult = RunRecognition(invertedBitmap);
-            if (invertedResult.confidence > bestResult.confidence || (string.IsNullOrWhiteSpace(bestResult.text) && !string.IsNullOrWhiteSpace(invertedResult.text)))
-            {
-                bestResult = invertedResult;
-            }
+            bestResult = SelectBetterRecognitionResult(
+                bestResult,
+                EvaluateRecognitionCandidate(cropped, textWidth, paddedWidth, targetHeight, invert: true, enhanceContrast: false));
         }
 
-        if (SaveOcrDebugImages) SaveDebugImage(normalBitmap);
+        if (shouldEnhance || bestResult.confidence < RecognitionRetryConfidenceThreshold)
+        {
+            bestResult = SelectBetterRecognitionResult(
+                bestResult,
+                EvaluateRecognitionCandidate(cropped, textWidth, paddedWidth, targetHeight, invert: false, enhanceContrast: true));
+
+            if (shouldInvert)
+            {
+                bestResult = SelectBetterRecognitionResult(
+                    bestResult,
+                    EvaluateRecognitionCandidate(cropped, textWidth, paddedWidth, targetHeight, invert: true, enhanceContrast: true));
+            }
+        }
 
         return bestResult;
     }
@@ -135,7 +146,30 @@ public class PaddleOCREngine : IOCREngine
         return totalLuminous / (float)(bitmap.Width * bitmap.Height);
     }
 
-    private SKBitmap PrepareTensorBitmap(SKBitmap cropped, int textWidth, int paddedWidth, int targetHeight, bool invert)
+    private float AnalyzeContrast(SKBitmap bitmap)
+    {
+        byte min = byte.MaxValue;
+        byte max = byte.MinValue;
+
+        for (int y = 0; y < bitmap.Height; y++)
+        {
+            var row = GetPixelRowSpan(bitmap, y);
+            for (int x = 0; x < bitmap.Width; x++)
+            {
+                int offset = x * 4;
+                byte blue = row[offset];
+                byte green = row[offset + 1];
+                byte red = row[offset + 2];
+                byte luminance = (byte)Math.Clamp((red * 0.2126f) + (green * 0.7152f) + (blue * 0.0722f), 0f, 255f);
+                if (luminance < min) min = luminance;
+                if (luminance > max) max = luminance;
+            }
+        }
+
+        return max - min;
+    }
+
+    private SKBitmap PrepareTensorBitmap(SKBitmap cropped, int textWidth, int paddedWidth, int targetHeight, bool invert, bool enhanceContrast)
     {
         var bitmap = new SKBitmap(paddedWidth, targetHeight);
         using var canvas = new SKCanvas(bitmap);
@@ -153,10 +187,146 @@ public class PaddleOCREngine : IOCREngine
             });
         }
 
-        using var resized = cropped.Resize(new SKImageInfo(textWidth, targetHeight), new SKSamplingOptions(SKCubicResampler.Mitchell));
+        // PaddleOCR's reference preprocessing uses linear interpolation. Cubic
+        // resampling can add ringing around small anti-aliased CJK strokes.
+        using var resized = cropped.Resize(
+            new SKImageInfo(textWidth, targetHeight),
+            new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.None));
         if (resized != null) canvas.DrawBitmap(resized, 0, 0, paint);
-        
+
+        if (enhanceContrast)
+        {
+            EnhanceBitmapForOcr(bitmap);
+        }
+
         return bitmap;
+    }
+
+    private (string text, float confidence) EvaluateRecognitionCandidate(
+        SKBitmap cropped,
+        int textWidth,
+        int paddedWidth,
+        int targetHeight,
+        bool invert,
+        bool enhanceContrast)
+    {
+        using var prepared = PrepareTensorBitmap(cropped, textWidth, paddedWidth, targetHeight, invert, enhanceContrast);
+        if (SaveOcrDebugImages)
+        {
+            SaveDebugImage(prepared);
+        }
+
+        return RunRecognition(prepared);
+    }
+
+    private (string text, float confidence) SelectBetterRecognitionResult(
+        (string text, float confidence) current,
+        (string text, float confidence) candidate)
+    {
+        if (string.IsNullOrWhiteSpace(current.text))
+        {
+            return candidate;
+        }
+
+        return ScoreRecognitionResult(candidate) > ScoreRecognitionResult(current) + 0.75d
+            ? candidate
+            : current;
+    }
+
+    private double ScoreRecognitionResult((string text, float confidence) result)
+    {
+        if (string.IsNullOrWhiteSpace(result.text))
+        {
+            return double.NegativeInfinity;
+        }
+
+        int usefulCount = 0;
+        int suspiciousCount = 0;
+        foreach (char ch in result.text)
+        {
+            if (char.IsLetterOrDigit(ch)
+                || (ch >= 0x4E00 && ch <= 0x9FFF)
+                || (ch >= 0x3040 && ch <= 0x30FF)
+                || (ch >= 0xAC00 && ch <= 0xD7AF))
+            {
+                usefulCount++;
+            }
+            else if (!char.IsWhiteSpace(ch) && !char.IsPunctuation(ch))
+            {
+                suspiciousCount++;
+            }
+        }
+
+        double score = (result.confidence * 100d)
+            + (Math.Min(usefulCount, 8) * 0.25d)
+            - (suspiciousCount * 6d);
+        score += _currentOCRLanguage switch
+        {
+            OCRLanguage.TraditionalChinese or OCRLanguage.SimplifiedChinese when ContainsCjk(result.text) => 1d,
+            OCRLanguage.Japanese when ContainsJapaneseKana(result.text) || ContainsCjk(result.text) => 1d,
+            OCRLanguage.Korean when ContainsHangul(result.text) => 1d,
+            OCRLanguage.English when ContainsLatinLetter(result.text) => 1d,
+            _ => 0d
+        };
+
+        return score;
+    }
+
+    private static void EnhanceBitmapForOcr(SKBitmap bitmap)
+    {
+        byte min = byte.MaxValue;
+        byte max = byte.MinValue;
+
+        for (int y = 0; y < bitmap.Height; y++)
+        {
+            var row = GetPixelRowSpan(bitmap, y);
+            for (int x = 0; x < bitmap.Width; x++)
+            {
+                int offset = x * 4;
+                byte blue = row[offset];
+                byte green = row[offset + 1];
+                byte red = row[offset + 2];
+                byte luminance = (byte)Math.Clamp((red * 0.2126f) + (green * 0.7152f) + (blue * 0.0722f), 0f, 255f);
+                if (luminance < min) min = luminance;
+                if (luminance > max) max = luminance;
+            }
+        }
+
+        float range = Math.Max(1f, max - min);
+        for (int y = 0; y < bitmap.Height; y++)
+        {
+            var row = GetPixelRowSpan(bitmap, y);
+            Span<byte> writableRow = row.ToArray();
+            for (int x = 0; x < bitmap.Width; x++)
+            {
+                int offset = x * 4;
+                byte blue = writableRow[offset];
+                byte green = writableRow[offset + 1];
+                byte red = writableRow[offset + 2];
+                float luminance = (red * 0.2126f) + (green * 0.7152f) + (blue * 0.0722f);
+                float normalized = ((luminance - min) / range) * 255f;
+                byte value = (byte)Math.Clamp(MathF.Round(normalized), 0f, 255f);
+
+                writableRow[offset] = value;
+                writableRow[offset + 1] = value;
+                writableRow[offset + 2] = value;
+                writableRow[offset + 3] = 255;
+            }
+
+            WritePixelRow(bitmap, y, writableRow);
+        }
+    }
+
+    private static SKRectI ExpandRecognitionBox(SKRectI box, int bitmapWidth, int bitmapHeight)
+    {
+        int padX = Math.Max(2, (int)MathF.Ceiling(box.Height * 0.06f));
+        const int padY = 1;
+
+        return new SKRectI(
+            Math.Max(0, box.Left - padX),
+            Math.Max(0, box.Top - padY),
+            Math.Min(bitmapWidth, box.Right + padX),
+            Math.Min(bitmapHeight, box.Bottom + padY));
     }
 
     private (string text, float confidence) RunRecognition(SKBitmap tensorBitmap)
@@ -338,6 +508,12 @@ public class PaddleOCREngine : IOCREngine
         return new ReadOnlySpan<byte>(rowPtr, bitmap.Width * 4);
     }
 
+    private static unsafe void WritePixelRow(SKBitmap bitmap, int row, ReadOnlySpan<byte> data)
+    {
+        byte* rowPtr = (byte*)bitmap.GetPixels() + (row * bitmap.RowBytes);
+        data.CopyTo(new Span<byte>(rowPtr, bitmap.Width * 4));
+    }
+
     private static void TryEnqueueBlobNeighbor(int nx, int ny, int width, int height, float[,] probMap, bool[,] visited, Queue<(int X, int Y)> queue)
     {
         if (nx >= 0 && nx < width && ny >= 0 && ny < height && !visited[ny, nx] && probMap[ny, nx] > DetBoxThreshold)
@@ -356,12 +532,12 @@ public class PaddleOCREngine : IOCREngine
         var nct = DecodeCTC(tensor, d2, d1, false);
         var dictCount = _ocrRuntimeService.Dictionary.Count;
 
-        bool ntcP = dictCount <= d2 + 500 && dictCount >= d2 - 500;
-        bool nctP = dictCount <= d1 + 500 && dictCount >= d1 - 500;
+        bool ntcP = Math.Abs(dictCount - d2) <= 8;
+        bool nctP = Math.Abs(dictCount - d1) <= 8;
 
         if (ntcP && !nctP) return ntc;
         if (!ntcP && nctP) return nct;
-        return nct.text.Length > ntc.text.Length ? nct : (ntc.text.Length > nct.text.Length ? ntc : (nct.confidence > ntc.confidence ? nct : ntc));
+        return nct.confidence > ntc.confidence ? nct : ntc;
     }
 
     private (string text, float confidence) DecodeCTC(Tensor<float> tensor, int seqLen, int classCount, bool isNTC)
@@ -415,4 +591,20 @@ public class PaddleOCREngine : IOCREngine
             _leaseId = null;
         }
     }
+
+    private static bool ContainsLatinLetter(string text) =>
+        !string.IsNullOrWhiteSpace(text)
+        && text.AsValueEnumerable().Any(static c => (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z'));
+
+    private static bool ContainsHangul(string text) =>
+        !string.IsNullOrWhiteSpace(text)
+        && text.AsValueEnumerable().Any(static c => c >= '\uAC00' && c <= '\uD7AF');
+
+    private static bool ContainsCjk(string text) =>
+        !string.IsNullOrWhiteSpace(text)
+        && text.AsValueEnumerable().Any(static c => c >= '\u4E00' && c <= '\u9FFF');
+
+    private static bool ContainsJapaneseKana(string text) =>
+        !string.IsNullOrWhiteSpace(text)
+        && text.AsValueEnumerable().Any(static c => c >= '\u3040' && c <= '\u30FF');
 }

@@ -48,7 +48,7 @@ public class AIPathService
             OCRLanguage.Japanese => "jp",
             OCRLanguage.Korean => "ko",
             OCRLanguage.English => "en",
-            OCRLanguage.TraditionalChinese => "ch",
+            OCRLanguage.TraditionalChinese => "cht",
             OCRLanguage.SimplifiedChinese => "ch",
             _ => "ch" 
         };

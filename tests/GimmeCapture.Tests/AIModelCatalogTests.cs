@@ -19,7 +19,7 @@ public class AIModelCatalogTests
     }
 
     [Theory]
-    [InlineData(OCRLanguage.TraditionalChinese, "ch_PP-OCRv4_rec_infer.onnx", "ppocr_keys_v1.txt")]
+    [InlineData(OCRLanguage.TraditionalChinese, "chinese_cht_PP-OCRv3_rec_infer.onnx", "chinese_cht_dict.txt")]
     [InlineData(OCRLanguage.SimplifiedChinese, "ch_PP-OCRv4_rec_infer.onnx", "ppocr_keys_v1.txt")]
     [InlineData(OCRLanguage.English, "en_PP-OCRv4_rec_infer.onnx", "en_dict.txt")]
     [InlineData(OCRLanguage.Japanese, "japan_PP-OCRv4_rec_infer.onnx", "japan_dict.txt")]
@@ -31,6 +31,21 @@ public class AIModelCatalogTests
         Assert.EndsWith("ch_PP-OCRv4_det_infer.onnx", package.DetectionUrl, StringComparison.Ordinal);
         Assert.EndsWith(expectedRecognitionFile, package.RecognitionUrl, StringComparison.Ordinal);
         Assert.EndsWith(expectedDictionaryFile, package.DictionaryUrl, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void GetOcrPaths_ShouldKeepTraditionalAndSimplifiedModelsSeparate()
+    {
+        var settings = new AppSettingsService(Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N")));
+        var paths = new AIPathService(settings);
+
+        var traditional = paths.GetOCRPaths(OCRLanguage.TraditionalChinese);
+        var simplified = paths.GetOCRPaths(OCRLanguage.SimplifiedChinese);
+
+        Assert.EndsWith("ocr_rec_cht.onnx", traditional.Rec, StringComparison.Ordinal);
+        Assert.EndsWith("ocr_dict_cht.txt", traditional.Dict, StringComparison.Ordinal);
+        Assert.EndsWith("ocr_rec_ch.onnx", simplified.Rec, StringComparison.Ordinal);
+        Assert.EndsWith("ocr_dict_ch.txt", simplified.Dict, StringComparison.Ordinal);
     }
 
     [Fact]

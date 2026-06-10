@@ -130,11 +130,22 @@ public partial class SnipWindowViewModel
                         RefreshProjectedOcrRects();
                     }
 
-                    bool isFailed = ShouldRejectTranslatedSelectionResult(combinedText, combinedOriginalText);
+                    bool isOcrFallback = IsVisibleOcrFallback(combinedText, combinedOriginalText);
+                    bool isFailed = !isOcrFallback
+                        && ShouldRejectTranslatedSelectionResult(combinedText, combinedOriginalText);
                     if (isFailed)
                     {
                         var failMsgKey = string.IsNullOrEmpty(errorKey) ? "StatusTranslateFailed" : errorKey;
                         _mainVm?.SetStatus(failMsgKey);
+
+                        if (sel.IsTranslated && !string.IsNullOrWhiteSpace(sel.TranslatedText))
+                        {
+                            sel.ConsecutiveTranslationMisses++;
+                            UpdateMask();
+                            return;
+                        }
+
+                        sel.ConsecutiveTranslationMisses = 0;
                         sel.TranslatedText = string.Empty;
                         sel.OriginalText = combinedOriginalText;
                         sel.IsTranslated = false;
@@ -146,7 +157,9 @@ public partial class SnipWindowViewModel
 
                     sel.TranslatedText = combinedText;
                     sel.OriginalText = combinedOriginalText;
-                    sel.IsTranslated = true;
+                    sel.IsTranslated = !string.IsNullOrWhiteSpace(combinedText)
+                        || !string.IsNullOrWhiteSpace(combinedOriginalText);
+                    sel.ConsecutiveTranslationMisses = 0;
 
                     // Propagate inferred font size from blocks
                     if (blocks.AsValueEnumerable().Any())
@@ -244,6 +257,24 @@ public partial class SnipWindowViewModel
         return true;
     }
 
+    private static bool IsVisibleOcrFallback(string translatedText, string originalText)
+    {
+        if (string.IsNullOrWhiteSpace(originalText))
+        {
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(translatedText))
+        {
+            return true;
+        }
+
+        return string.Equals(
+            NormalizeTranslationValidationText(translatedText),
+            NormalizeTranslationValidationText(originalText),
+            StringComparison.Ordinal);
+    }
+
     private static bool IsRejectedTranslationLine(string line, string originalText)
     {
         if (string.IsNullOrWhiteSpace(line))
@@ -253,6 +284,13 @@ public partial class SnipWindowViewModel
 
         string normalizedLine = NormalizeTranslationValidationText(line);
         if (string.IsNullOrWhiteSpace(normalizedLine))
+        {
+            return true;
+        }
+
+        string normalizedOriginal = NormalizeTranslationValidationText(originalText);
+        if (!string.IsNullOrWhiteSpace(normalizedOriginal)
+            && string.Equals(normalizedLine, normalizedOriginal, StringComparison.Ordinal))
         {
             return true;
         }

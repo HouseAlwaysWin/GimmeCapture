@@ -25,6 +25,6 @@ public sealed class TranslationSelectionVisibilityConverter : IMultiValueConvert
             return true;
         }
 
-        return showOcrResult && !string.IsNullOrWhiteSpace(originalText);
+        return !string.IsNullOrWhiteSpace(originalText);
     }
 }
