@@ -67,7 +67,6 @@ public class SnipWindowViewModelTests
         var vm = new SnipWindowViewModel(
             Colors.Red,
             2.0,
-            0.5,
             captureService: capture.Object,
             detectionService: detection);
         vm.ScreenOffset = default;
@@ -117,6 +116,24 @@ public class SnipWindowViewModelTests
 
             vm.CurrentMode = SnipMode.Screenshot;
             Assert.False(vm.IsAudioMeterTimerEnabledForTesting);
+        }
+        finally
+        {
+            vm.Dispose();
+        }
+    }
+
+    [Fact]
+    public void SelectionChanges_RefreshInteractionRegionWithoutScreenMask()
+    {
+        var vm = new SnipWindowViewModel();
+        try
+        {
+            int initialRevision = vm.InteractionRegionRevision;
+
+            vm.SelectionRect = new Rect(20, 30, 200, 100);
+
+            Assert.True(vm.InteractionRegionRevision > initialRevision);
         }
         finally
         {

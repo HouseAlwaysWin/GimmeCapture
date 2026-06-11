@@ -24,20 +24,6 @@
                 <!-- Mock Background -->
                 <Image Source="avares://GimmeCapture/Assets/kitsune_icon.png" Opacity="0.1" Stretch="Uniform" Margin="20"/>
                 
-                <!-- Selection Preview Mask (Excludes Center Area) -->
-                <Path Fill="Black" Opacity="{Binding MaskOpacity}" IsHitTestVisible="False">
-                    <Path.Data>
-                        <CombinedGeometry GeometryCombineMode="Exclude">
-                            <CombinedGeometry.Geometry1>
-                                <RectangleGeometry Rect="0,0,550,250" />
-                            </CombinedGeometry.Geometry1>
-                            <CombinedGeometry.Geometry2>
-                                <RectangleGeometry Rect="175,65,200,120" />
-                            </CombinedGeometry.Geometry2>
-                        </CombinedGeometry>
-                    </Path.Data>
-                </Path>
-                
                 <!-- Selection Preview -->
                 <Grid Margin="15" VerticalAlignment="Center" HorizontalAlignment="Center" ClipToBounds="False">
                     <Border CornerRadius="0"

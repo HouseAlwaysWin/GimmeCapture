@@ -43,7 +43,7 @@ public partial class SnipWindow
             _translationSelectionStart = point;
             _currentTranslationSelection = new UserSelectionRect { Bounds = new Rect(point, new Size(0, 0)) };
             _viewModel.UserSelections.Add(_currentTranslationSelection);
-            _viewModel.UpdateMask();
+            _viewModel.RefreshInteractionRegion();
             e.Pointer.Capture(this);
             e.Handled = true;
             return true;
@@ -112,7 +112,7 @@ public partial class SnipWindow
             if (newH < 40) newH = 40;
 
             _resizingTranslationItem.Bounds = new Rect(newX, newY, Math.Max(0, newW), Math.Max(0, newH));
-            _viewModel.UpdateMask();
+            _viewModel.RefreshInteractionRegion();
             e.Handled = true;
             return true;
         }
@@ -179,7 +179,7 @@ public partial class SnipWindow
                     materializedValidSelection = true;
                 }
 
-                vm?.UpdateMask();
+                vm?.RefreshInteractionRegion();
                 _currentTranslationSelection = null;
             }
 

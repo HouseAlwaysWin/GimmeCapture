@@ -85,17 +85,6 @@
                                 </StackPanel>
                             </StackPanel>
                             
-                            <!-- Mask Opacity -->
-                            <StackPanel Spacing="5">
-                                <TextBlock Text="{Binding [MaskOpacity], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>
-                                <StackPanel Orientation="Horizontal" Spacing="10">
-                                    <Slider Minimum="0.05" Maximum="1.0" Value="{Binding MaskOpacity}" HorizontalAlignment="Stretch" Width="250" />
-                                    <c:CompactNumericStep Value="{Binding MaskOpacity}"
-                                                          IncreaseCommand="{Binding IncreaseOpacityCommand}"
-                                                          DecreaseCommand="{Binding DecreaseOpacityCommand}"/>
-                                </StackPanel>
-                            </StackPanel>
-
                             <!-- Wing Scale -->
                             <StackPanel Spacing="5">
                                 <TextBlock Text="{Binding [WingScale], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>

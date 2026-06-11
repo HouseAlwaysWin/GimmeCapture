@@ -141,7 +141,7 @@ public partial class SnipWindowViewModel
                         if (sel.IsTranslated && !string.IsNullOrWhiteSpace(sel.TranslatedText))
                         {
                             sel.ConsecutiveTranslationMisses++;
-                            UpdateMask();
+                            RefreshInteractionRegion();
                             return;
                         }
 
@@ -151,7 +151,7 @@ public partial class SnipWindowViewModel
                         sel.IsTranslated = false;
                         sel.EstimatedTextHeight = 0;
                         sel.IsTextOverflowing = false;
-                        UpdateMask();
+                        RefreshInteractionRegion();
                         return;
                     }
 
@@ -179,9 +179,8 @@ public partial class SnipWindowViewModel
                         AutoFitSelectionToText(sel);
                     }
 
-                    // V8: 翻譯後重新整理遮罩和 Win32 Region
-                    // 因為 IsTranslated 不在 WhenAnyValue 訂閱中，必須手動觸發
-                    UpdateMask();
+                    // IsTranslated is not covered by the window-level subscription.
+                    RefreshInteractionRegion();
                     if (ShowOcrResult)
                     {
                         RefreshProjectedOcrRects();

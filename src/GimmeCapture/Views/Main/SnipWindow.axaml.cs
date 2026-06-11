@@ -421,11 +421,10 @@ public partial class SnipWindow : Window
                 }
             };
             
-            // Subscribe to Geometry and state changes to update window region
-            // Subscribe to Geometry and state changes to update window region
+            // Subscribe to selection and state changes to update the native interaction region.
             // Split into two subscriptions if arguments exceed 7 to avoid compilation error
             var trigger1 = vm.WhenAnyValue(
-                x => x.MaskGeometry,
+                x => x.InteractionRegionRevision,
                 x => x.SelectionRect, 
                 x => x.CurrentState, 
                 x => x.IsDrawingMode,
@@ -735,7 +734,7 @@ public partial class SnipWindow : Window
             CopyPersistentTranslationAsync,
             item => _viewModel.PinPersistentTranslationItemAsync(item));
 
-        _viewModel.UpdateMask();
+        _viewModel.RefreshInteractionRegion();
     }
 
     private async Task CopyPersistentTranslationAsync(object? item)

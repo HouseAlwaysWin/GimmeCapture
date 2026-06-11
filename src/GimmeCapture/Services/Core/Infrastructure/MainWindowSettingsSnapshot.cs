@@ -10,7 +10,6 @@ public sealed class MainWindowSettingsSnapshot
     public required bool RunOnStartup { get; init; }
     public required bool AutoCheckUpdates { get; init; }
     public required double BorderThickness { get; init; }
-    public required double MaskOpacity { get; init; }
     public required Color BorderColor { get; init; }
     public required Color ThemeColor { get; init; }
     public required double WingScale { get; init; }
@@ -65,7 +64,6 @@ public sealed class MainWindowSettingsSnapshot
             RunOnStartup = settings.RunOnStartup,
             AutoCheckUpdates = settings.AutoCheckUpdates,
             BorderThickness = settings.BorderThickness,
-            MaskOpacity = settings.MaskOpacity,
             BorderColor = ParseColor(settings.BorderColorHex, "#E60012"),
             ThemeColor = ParseColor(settings.ThemeColorHex, "#E60012"),
             WingScale = settings.WingScale,
@@ -120,7 +118,6 @@ public sealed class MainWindowSettingsSnapshot
         settings.RunOnStartup = RunOnStartup;
         settings.AutoCheckUpdates = AutoCheckUpdates;
         settings.BorderThickness = BorderThickness;
-        settings.MaskOpacity = MaskOpacity;
         settings.BorderColorHex = BorderColor.ToString();
         settings.ThemeColorHex = ThemeColor.ToString();
         settings.WingScale = WingScale;

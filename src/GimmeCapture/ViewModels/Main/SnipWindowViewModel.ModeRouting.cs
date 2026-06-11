@@ -111,11 +111,7 @@ public partial class SnipWindowViewModel
             ClearAiScanOverlayState();
             ExitTranslationOcrSearch();
 
-            // 進入翻譯模式：啟用遮罩並更新挖空區域
-            SelectionRect = new Rect(0, 0, 0, 0); // 確保清空標準選取框，避免干擾挖空
-            IsMaskVisible = true;
-            RaiseProperties(nameof(MaskOpacity));
-            UpdateMask();
+            SelectionRect = new Rect(0, 0, 0, 0);
             StartAutoDetectLoop();
             LogTranslationMemoryState("translation-mode-enter");
         }
@@ -124,16 +120,12 @@ public partial class SnipWindowViewModel
             PersistTranslationSelectionsAction?.Invoke();
             ExitTranslationOcrSearch();
             InvalidateTranslationOcrSearchCache();
-            // 退出翻譯模式：恢復遮罩
             ResetTranslationToolbarAfterLeavingTranslationMode();
-            IsMaskVisible = true;
             // 清除多重選取
             UserSelections.Clear();
             // 關閉自動偵測
             IsGlobalAutoDetectEnabled = false;
             
-            RaiseProperties(nameof(MaskOpacity));
-            UpdateMask();
             StopAutoDetectLoop();
             CancelTranslationWarmup();
             ReleaseTranslationHeavyResources(trimProcessWorkingSet: true, phase: "translation-mode-exit");
@@ -153,6 +145,7 @@ public partial class SnipWindowViewModel
         RaiseProperties(_modeHotkeyPropertyNames);
         RaiseProperties(_modeTooltipPropertyNames);
 
+        _selectionStateController.HandleModeTransition(oldMode, value, CurrentState);
         TranslationResultLayerManager.RefreshWindowState();
     }
     
@@ -324,7 +317,6 @@ public partial class SnipWindowViewModel
     public ReactiveCommand<Unit, Unit> RemoveBackgroundCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> InteractiveRemovalCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> ToggleTopmostCommand { get; set; } = null!;
-    public ReactiveCommand<Unit, Unit> ToggleMaskCommand { get; set; } = null!;
     private DateTime _lastGlobalHotkeyUtc = DateTime.MinValue;
     private int _lastGlobalHotkeyId = -1;
 
@@ -559,11 +551,6 @@ public partial class SnipWindowViewModel
             _mainVm?.SetStatus(IsTopmost ? "Topmost ON" : "Topmost OFF");
         }, nameof(ToggleTopmostCommand));
         
-        ToggleMaskCommand = CreateCommand(() =>
-        {
-            IsMaskVisible = !IsMaskVisible;
-            System.Diagnostics.Debug.WriteLine($"[SnipWindow] Mask toggled to: {IsMaskVisible}");
-        }, nameof(ToggleMaskCommand));
     }
 
     private IObservable<bool> CreateCanExecuteHotkeys()
@@ -691,7 +678,7 @@ public partial class SnipWindowViewModel
         IsDrawingMode = false;
         CurrentState = SnipState.Detecting;
         SelectionRect = default;
-        UpdateMask();
+        RefreshInteractionRegion();
         InitializeTranslationToolbarPosition();
         LogTranslationMemoryState("translation-enter-command");
     }

@@ -149,8 +149,6 @@ public partial class MainWindowViewModel : ViewModelBase
     public ReactiveCommand<Unit, Unit> ResetToDefaultCommand { get; } = null!;
     public ReactiveCommand<Unit, Unit> IncreaseThicknessCommand { get; } = null!;
     public ReactiveCommand<Unit, Unit> DecreaseThicknessCommand { get; } = null!;
-    public ReactiveCommand<Unit, Unit> IncreaseOpacityCommand { get; } = null!;
-    public ReactiveCommand<Unit, Unit> DecreaseOpacityCommand { get; } = null!;
     public ReactiveCommand<Color, Unit> ChangeColorCommand { get; } = null!;
     public ReactiveCommand<Color, Unit> ChangeThemeColorCommand { get; } = null!;
     public ReactiveCommand<Unit, Unit> CheckUpdateCommand { get; } = null!;
@@ -241,8 +239,6 @@ public partial class MainWindowViewModel : ViewModelBase
         ResetToDefaultCommand = ReactiveCommand.CreateFromTask(ResetToDefault);
         IncreaseThicknessCommand = ReactiveCommand.Create(() => { if (BorderThickness < 9) BorderThickness += 1; });
         DecreaseThicknessCommand = ReactiveCommand.Create(() => { if (BorderThickness > 1) BorderThickness -= 1; });
-        IncreaseOpacityCommand = ReactiveCommand.Create(() => { if (MaskOpacity < 1.0) MaskOpacity = Math.Min(1.0, MaskOpacity + 0.05); });
-        DecreaseOpacityCommand = ReactiveCommand.Create(() => { if (MaskOpacity > 0.05) MaskOpacity = Math.Max(0.05, MaskOpacity - 0.05); });
         ChangeColorCommand = ReactiveCommand.Create<Color>(c => BorderColor = c);
         ChangeThemeColorCommand = ReactiveCommand.Create<Color>(c => ThemeColor = c);
         CheckUpdateCommand = ReactiveCommand.CreateFromTask(CheckForUpdates);

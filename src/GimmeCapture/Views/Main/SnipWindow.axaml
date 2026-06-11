@@ -118,16 +118,6 @@
             </ContextMenu>
         </Grid.ContextMenu>
         
-        <!-- 背景遮罩層 -->
-        <Path Fill="Black" Data="{Binding MaskGeometry}" Opacity="{Binding MaskOpacity}" IsHitTestVisible="False" Stretch="None">
-            <Path.IsVisible>
-                <MultiBinding Converter="{x:Static BoolConverters.And}">
-                    <Binding Path="IsMaskVisible"/>
-                    <Binding Path="!IsRecordingFinalizing"/>
-                </MultiBinding>
-            </Path.IsVisible>
-        </Path>
-        
             <!-- AI Scan Results Layer (Background Candidates) — 翻譯模式（含單選/多選）不顯示 -->
             <ItemsControl ItemsSource="{Binding AIScanRects}" IsHitTestVisible="False"
                           Width="{Binding ViewportSize.Width}" Height="{Binding ViewportSize.Height}"

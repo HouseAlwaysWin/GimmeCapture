@@ -35,7 +35,6 @@ public partial class MainWindowViewModel
             RunOnStartup = RunOnStartup,
             AutoCheckUpdates = AutoCheckUpdates,
             BorderThickness = BorderThickness,
-            MaskOpacity = MaskOpacity,
             BorderColor = BorderColor,
             ThemeColor = ThemeColor,
             WingScale = WingScale,
@@ -89,7 +88,6 @@ public partial class MainWindowViewModel
         RunOnStartup = snapshot.RunOnStartup;
         AutoCheckUpdates = snapshot.AutoCheckUpdates;
         BorderThickness = snapshot.BorderThickness;
-        MaskOpacity = snapshot.MaskOpacity;
         AutoSave = snapshot.AutoSave;
         SaveDirectory = snapshot.SaveDirectory;
         SnipHotkey = snapshot.SnipHotkey;

@@ -74,7 +74,6 @@ public sealed class SnipWindowFactory : ISnipWindowFactory
         var snipVm = new SnipWindowViewModel(
             vm.BorderColor,
             vm.BorderThickness,
-            vm.MaskOpacity,
             _screenCaptureService,
             _windowDetectionService,
             vm.RecordingService,

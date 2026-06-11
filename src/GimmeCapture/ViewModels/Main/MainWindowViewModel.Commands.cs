@@ -47,7 +47,6 @@ public partial class MainWindowViewModel
         RunOnStartup = defaultSettings.RunOnStartup;
         AutoCheckUpdates = defaultSettings.AutoCheckUpdates;
         BorderThickness = defaultSettings.BorderThickness;
-        MaskOpacity = defaultSettings.MaskOpacity;
         AutoSave = defaultSettings.AutoSave;
         SnipHotkey = defaultSettings.SnipHotkey;
         TranslateHotkey = defaultSettings.TranslateHotkey;

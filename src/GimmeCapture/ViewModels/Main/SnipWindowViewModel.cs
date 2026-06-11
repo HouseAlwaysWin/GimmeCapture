@@ -281,17 +281,16 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     public List<OCRLanguage> AvailableOCRLanguages => _mainVm?.AvailableOCRLanguages ?? Enum.GetValues<OCRLanguage>().AsValueEnumerable().ToList();
     public List<TranslationLanguage> AvailableTranslationLanguages => _mainVm?.AvailableTranslationLanguages ?? Enum.GetValues<TranslationLanguage>().AsValueEnumerable().ToList();
 
-    public SnipWindowViewModel() : this(Colors.Red, 2.0, 0.5, CreateDesignScreenCaptureService(), CreateDesignWindowDetectionService(), null, null, null, null, null) { }
+    public SnipWindowViewModel() : this(Colors.Red, 2.0, CreateDesignScreenCaptureService(), CreateDesignWindowDetectionService(), null, null, null, null, null) { }
 
-    public SnipWindowViewModel(Color borderColor, double borderThickness, double maskOpacity, RecordingService? recService = null, MainWindowViewModel? mainVm = null)
-        : this(borderColor, borderThickness, maskOpacity, CreateDesignScreenCaptureService(), CreateDesignWindowDetectionService(), recService, mainVm, null, null, null)
+    public SnipWindowViewModel(Color borderColor, double borderThickness, RecordingService? recService = null, MainWindowViewModel? mainVm = null)
+        : this(borderColor, borderThickness, CreateDesignScreenCaptureService(), CreateDesignWindowDetectionService(), recService, mainVm, null, null, null)
     {
     }
 
     public SnipWindowViewModel(
         Color borderColor,
         double borderThickness,
-        double maskOpacity,
         IScreenCaptureService captureService,
         IWindowDetectionService? detectionService = null,
         RecordingService? recService = null,
@@ -307,7 +306,6 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         _aiScanSessionService = aiScanSessionService;
         _selectionBorderColor = borderColor;
         _selectionBorderThickness = borderThickness;
-        _maskOpacity = maskOpacity;
         _recordingService = recService;
         _mainVm = mainVm;
         _selectionStateController = new SnipSelectionStateController(
@@ -318,7 +316,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
             triggerAutoAction: TriggerAutoAction,
             clearTranslatedBlocks: () => TranslatedBlocks.Clear(),
             resetParkedToolbar: ResetParkedToolbarIfOffScreenWhenLeavingSelection,
-            updateMask: UpdateMask,
+            refreshInteractionRegion: RefreshInteractionRegion,
             hideScanLoadingBar: () =>
             {
                 if (CurrentMode != SnipMode.Translation)
@@ -360,8 +358,6 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
 
         // Initialize Debug Compatibility
         _isTopmost = !System.Diagnostics.Debugger.IsAttached;
-        _isMaskVisible = true;
-        
         if (System.Diagnostics.Debugger.IsAttached)
         {
             Console.WriteLine("[SnipWindow] Debugger detected. IsTopmost = false. Press Ctrl+Alt+T to toggle.");
@@ -371,7 +367,6 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         InitializeLocalizationBindings();
         InitializeWindowSnapHoverAnimation();
 
-        UpdateMask();
     }
 
     private void ApplyInitialMainVmVisualSettings()
@@ -383,7 +378,6 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
 
         _selectionBorderColor = _mainVm.BorderColor;
         _selectionBorderThickness = _mainVm.BorderThickness;
-        _maskOpacity = _mainVm.MaskOpacity;
     }
 
     private void InitializeRecordingBindingsIfNeeded()
@@ -498,9 +492,6 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
             .DisposeWith(_disposables);
 
         BindDistinct(mainVm.WhenAnyValue(x => x.BorderThickness), val => SelectionBorderThickness = val)
-            .DisposeWith(_disposables);
-
-        BindDistinct(mainVm.WhenAnyValue(x => x.MaskOpacity), val => MaskOpacity = val)
             .DisposeWith(_disposables);
 
         // Real-time sync for decoration scales from MainVM
@@ -699,13 +690,6 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     {
         get => _isTopmost;
         set => this.RaiseAndSetIfChanged(ref _isTopmost, value);
-    }
-
-    private bool _isMaskVisible = true;
-    public bool IsMaskVisible
-    {
-        get => _isMaskVisible;
-        set => this.RaiseAndSetIfChanged(ref _isMaskVisible, value);
     }
 
     private bool _isIndeterminate;

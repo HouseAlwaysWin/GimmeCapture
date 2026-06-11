@@ -321,7 +321,7 @@ public partial class SnipWindowViewModel
         }
 
         UserSelections.Add(new UserSelectionRect { Bounds = candidateBounds });
-        UpdateMask();
+        RefreshInteractionRegion();
         return true;
     }
 
@@ -413,7 +413,7 @@ public partial class SnipWindowViewModel
             EnsureAudioTranslationBox();
         }
 
-        UpdateMask();
+        RefreshInteractionRegion();
     }
 
     public async Task EnterTranslationOcrSearchAsync()
@@ -844,7 +844,7 @@ public partial class SnipWindowViewModel
             {
                 EnsureAudioTranslationBox();
             }
-            UpdateMask();
+            RefreshInteractionRegion();
         }, canExecuteInTranslation);
         ClearAllSelectionsCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"ClearAll error: {ex}"));
 
@@ -898,7 +898,7 @@ public partial class SnipWindowViewModel
         PinTranslationResultsCommand = ReactiveCommand.CreateFromTask(PinAllTranslationsAsync, canExecuteInTranslation);
         PinTranslationResultsCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Pin All Translation error: {ex}"));
 
-        // Keep mask and audio helper state in sync with translation selection edits.
+        // Keep native interaction regions and audio helper state in sync with selection edits.
         UserSelections.CollectionChanged += (s, e) =>
         {
             if (e.NewItems != null)
@@ -906,7 +906,7 @@ public partial class SnipWindowViewModel
                 foreach (UserSelectionRect item in e.NewItems)
                 {
                     item.WhenAnyValue(x => x.Bounds, x => x.IsTranslated)
-                        .Subscribe(_ => UpdateMask());
+                        .Subscribe(_ => RefreshInteractionRegion());
                 }
             }
 
@@ -916,7 +916,7 @@ public partial class SnipWindowViewModel
                 EnsureAudioTranslationBox();
             }
 
-            UpdateMask();
+            RefreshInteractionRegion();
         };
     }
 }

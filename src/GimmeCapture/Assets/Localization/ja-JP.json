@@ -27,7 +27,6 @@
   "RunOnStartup": "スタートアップ起動",
   "AutoCheckUpdates": "自動更新チェック",
   "BorderThickness": "枠線の太さ:",
-  "MaskOpacity": "マスクの不透明度:",
   "BorderColor": "枠線の色:",
   "ThemeColor": "テーマカラー:",
   "AutoSave": "自動保存 (ダイアログなし)",

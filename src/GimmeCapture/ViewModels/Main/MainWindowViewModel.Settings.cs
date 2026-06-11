@@ -183,13 +183,6 @@ public partial class MainWindowViewModel
         set => this.RaiseAndSetIfChanged(ref _borderThickness, value);
     }
 
-    private double _maskOpacity;
-    public double MaskOpacity
-    {
-        get => _maskOpacity;
-        set => this.RaiseAndSetIfChanged(ref _maskOpacity, value);
-    }
-
     private double _wingScale = 1.0;
     public double WingScale
     {

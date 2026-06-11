@@ -247,7 +247,6 @@ public class AppSettingsService
         dest.RunOnStartup = source.RunOnStartup;
         dest.AutoCheckUpdates = source.AutoCheckUpdates;
         dest.BorderThickness = source.BorderThickness;
-        dest.MaskOpacity = source.MaskOpacity;
         dest.BorderColorHex = source.BorderColorHex;
         dest.ThemeColorHex = source.ThemeColorHex;
         dest.WingScale = source.WingScale;

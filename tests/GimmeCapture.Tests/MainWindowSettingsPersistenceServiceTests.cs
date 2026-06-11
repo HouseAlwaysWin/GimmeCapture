@@ -27,7 +27,6 @@ public class MainWindowSettingsPersistenceServiceTests
             RunOnStartup = true,
             AutoCheckUpdates = false,
             BorderThickness = 4,
-            MaskOpacity = 0.35,
             BorderColor = Color.Parse("#123456"),
             ThemeColor = Color.Parse("#654321"),
             WingScale = 1.7,
@@ -248,5 +247,32 @@ public class MainWindowSettingsPersistenceServiceTests
         Assert.Equal("F7", settingsService.Settings.Record.Action);
         Assert.Equal("F3", settingsService.Settings.Translate.Action);
         Assert.Equal("F9", settingsService.Settings.Translate.Pin);
+    }
+
+    [Fact]
+    public void LoadSync_IgnoresRemovedMaskOpacitySetting()
+    {
+        var tempDir = Path.Combine(
+            Path.GetTempPath(),
+            "GimmeCapture.Tests",
+            nameof(LoadSync_IgnoresRemovedMaskOpacitySetting),
+            Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        File.WriteAllText(
+            Path.Combine(tempDir, "config.json"),
+            $$"""
+            {
+              "ConfigVersion": {{AppSettingsService.CurrentConfigVersion}},
+              "MaskOpacity": 0.75,
+              "BorderThickness": 3
+            }
+            """);
+
+        var settingsService = new AppSettingsService(tempDir);
+
+        settingsService.LoadSync();
+
+        Assert.Equal(3, settingsService.Settings.BorderThickness);
+        Assert.Equal(AppSettingsService.CurrentConfigVersion, settingsService.Settings.ConfigVersion);
     }
 }

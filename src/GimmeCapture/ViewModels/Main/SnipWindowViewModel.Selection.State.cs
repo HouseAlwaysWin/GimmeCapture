@@ -158,7 +158,7 @@ public partial class SnipWindowViewModel
             if (value != _showTopLoadingBar)
             {
                 this.RaiseAndSetIfChanged(ref _showTopLoadingBar, value);
-                UpdateMask();
+                RefreshInteractionRegion();
             }
         }
     }
@@ -238,7 +238,7 @@ public partial class SnipWindowViewModel
         set 
         {
             this.RaiseAndSetIfChanged(ref _selectionRect, value);
-            UpdateMask();
+            RefreshInteractionRegion();
             UpdateToolbarPosition();
         }
     }
@@ -336,7 +336,7 @@ public partial class SnipWindowViewModel
 
     private void ApplyTranslationSelectionUpdates(IReadOnlyList<TranslationSelectionUpdate> updates)
     {
-        bool maskChanged = false;
+        bool interactionRegionChanged = false;
 
         foreach (var update in updates)
         {
@@ -357,7 +357,7 @@ public partial class SnipWindowViewModel
                 selection.DisplayFontSize = selection.InferredFontSize;
                 selection.IsTextOverflowing = false;
                 selection.ConsecutiveTranslationMisses = 0;
-                maskChanged = true;
+                interactionRegionChanged = true;
                 continue;
             }
 
@@ -388,12 +388,12 @@ public partial class SnipWindowViewModel
                 AutoFitSelectionToText(selection);
             }
 
-            maskChanged = true;
+            interactionRegionChanged = true;
         }
 
-        if (maskChanged)
+        if (interactionRegionChanged)
         {
-            UpdateMask();
+            RefreshInteractionRegion();
         }
     }
 
@@ -406,91 +406,22 @@ public partial class SnipWindowViewModel
 
     /* Speech helper methods removed */
 
-    private Geometry _maskGeometry = new GeometryGroup();
-    public Geometry MaskGeometry
+    private int _interactionRegionRevision;
+    public int InteractionRegionRevision
     {
-        get => _maskGeometry;
-        set => this.RaiseAndSetIfChanged(ref _maskGeometry, value);
+        get => _interactionRegionRevision;
+        private set => this.RaiseAndSetIfChanged(ref _interactionRegionRevision, value);
     }
 
-    public void UpdateMask()
+    public void RefreshInteractionRegion()
     {
         if (!Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
         {
-            Avalonia.Threading.Dispatcher.UIThread.Post(UpdateMask);
+            Avalonia.Threading.Dispatcher.UIThread.Post(RefreshInteractionRegion);
             return;
         }
 
-        // 1. ?梁???蝞???魂???? (?穿???獢?????????
-        double w = ViewportSize.Width > 0 ? ViewportSize.Width : 5000;
-        double h = ViewportSize.Height > 0 ? ViewportSize.Height : 5000;
-        Geometry mainMask = new RectangleGeometry(new Rect(-100, -100, w + 200, h + 200));
-
-        // 2. ?????????閰???(?????
-        if (SelectionRect.Width > 0 && SelectionRect.Height > 0 && CurrentMode != SnipMode.Translation)
-        {
-            if (CurrentState == SnipState.Selected)
-            {
-                // V8: When the box is set (Selected), remove the full screen mask
-                mainMask = new GeometryGroup();
-            }
-            else
-            {
-                mainMask = new CombinedGeometry
-                {
-                    GeometryCombineMode = GeometryCombineMode.Exclude,
-                    Geometry1 = mainMask,
-                    Geometry2 = new RectangleGeometry(SelectionRect)
-                };
-            }
-        }
-
-        // 3. ????折??????閰???(V8: ??????謘??? Win32 Region ??駁?)
-        if (CurrentMode == SnipMode.Translation)
-        {
-            // IsTranslationSelectionActive ??迫?堊垓蹌?true???皝岑謕??????????閰????????垓???????謕????嚗??????
-            // ?秋▼甇????????堊奕?????ｇ??蹇??蝞???魂??銵甇?????????????純?
-            bool hasValidTranslationBox = UserSelections.AsValueEnumerable()
-                .Any(s => s.Bounds.Width > 10 && s.Bounds.Height > 10);
-
-            if (!hasValidTranslationBox)
-            {
-                // ?垓??閰??垢??秋撚??皜豢??獢???????仿?MaskOpacity=0 ??蹓????朱??謍?????ｇ?蹓?????
-                mainMask = new GeometryGroup();
-            }
-            else
-            {
-                foreach (var sel in UserSelections)
-                {
-                    if (sel.Bounds.Width > 10 && sel.Bounds.Height > 10)
-                    {
-                        var rect = sel.Bounds;
-
-                        // ?折??????????秋????????綽????伍??菜?隤豲??謍舀?
-                        mainMask = new CombinedGeometry
-                        {
-                            GeometryCombineMode = GeometryCombineMode.Exclude,
-                            Geometry1 = mainMask,
-                            Geometry2 = new RectangleGeometry(rect)
-                        };
-                    }
-                }
-            }
-        }
-
-        MaskGeometry = mainMask;
-        System.Diagnostics.Debug.WriteLine($"[Mask] UpdateMask (V8) done. Viewport: {w}x{h}");
-    }
-
-    private double _maskOpacity = 0.5;
-    public double MaskOpacity
-    {
-        get => CurrentMode == SnipMode.Translation ? 0.0 : _maskOpacity;
-        set 
-        {
-            this.RaiseAndSetIfChanged(ref _maskOpacity, value);
-            this.RaisePropertyChanged(nameof(MaskOpacity));
-        }
+        InteractionRegionRevision++;
     }
 
     private Color _selectionBorderColor = Colors.Transparent;
@@ -558,7 +489,7 @@ public partial class SnipWindowViewModel
         {
             this.RaiseAndSetIfChanged(ref _viewportSize, value);
             InvalidateTranslationOcrSearchCache();
-            UpdateMask();
+            RefreshInteractionRegion();
             UpdateToolbarPosition();
         }
     }
@@ -662,7 +593,7 @@ public partial class SnipWindowViewModel
             this.RaisePropertyChanged(nameof(TranslateAllTooltip));
             this.RaisePropertyChanged(nameof(ScanAllTooltip));
             this.RaisePropertyChanged(nameof(ToggleSelectTooltip));
-            UpdateMask();
+            RefreshInteractionRegion();
         }
     }
 

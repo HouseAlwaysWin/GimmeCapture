@@ -27,7 +27,6 @@
   "RunOnStartup": "開機自動啟動",
   "AutoCheckUpdates": "自動檢查更新",
   "BorderThickness": "邊框粗細:",
-  "MaskOpacity": "遮罩透明度:",
   "BorderColor": "邊框顏色:",
   "ThemeColor": "主題配色:",
   "AutoSave": "自動儲存 (跳過對話框)",
