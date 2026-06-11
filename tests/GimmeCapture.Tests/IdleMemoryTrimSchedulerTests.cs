@@ -71,6 +71,23 @@ public sealed class IdleMemoryTrimSchedulerTests
     }
 
     [Fact]
+    public async Task MainWindowRestore_ShouldCancelPendingTrayTrim()
+    {
+        var delay = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var reasons = new List<string>();
+        var scheduler = new IdleMemoryTrimScheduler(
+            reasons.Add,
+            (_, _) => delay.Task);
+
+        var pending = scheduler.RequestTrimAsync("main-window-tray", TimeSpan.FromSeconds(2));
+        scheduler.NotifyActivity("main-window-visible");
+        delay.SetResult();
+
+        Assert.False(await pending);
+        Assert.Empty(reasons);
+    }
+
+    [Fact]
     public void TrimNow_ShouldSkipBackToBackRequests()
     {
         var now = DateTimeOffset.UtcNow;

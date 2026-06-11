@@ -102,6 +102,7 @@ public partial class MainWindow : Window
         e.Cancel = true;
         Hide();
         UpdateDownloadWindow();
+        _ = ProcessMemoryTrimService.RequestIdleTrimAsync("main-window-tray");
         
         // 如果有修改，仍可以在後台提示
         if (DataContext is MainWindowViewModel vm && vm.IsModified)
@@ -116,6 +117,11 @@ public partial class MainWindow : Window
 
     private void OnPropertyChanged(object? sender, Avalonia.AvaloniaPropertyChangedEventArgs e)
     {
+        if (e.Property == Window.IsVisibleProperty && IsVisible)
+        {
+            ProcessMemoryTrimService.NotifyActivity("main-window-visible");
+        }
+
         if (e.Property == Window.WindowStateProperty || e.Property == Window.IsVisibleProperty || e.Property == Window.BoundsProperty)
         {
             UpdateDownloadWindow();
