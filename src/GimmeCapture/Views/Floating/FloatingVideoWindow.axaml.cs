@@ -24,10 +24,7 @@ public partial class FloatingVideoWindow : FloatingWindowBase
     public FloatingVideoWindow()
     {
         InitializeComponent();
-        
-        // Base constructor handles Event Handler registration
-        
-        PositionChanged += (s, e) => UpdateToolbarClamping();
+        // Base constructor handles shared pointer and toolbar edge placement.
     }
     
     protected override Control? GetContentControl() => this.FindControl<Image>("PinnedVideo");
@@ -94,49 +91,6 @@ public partial class FloatingVideoWindow : FloatingWindowBase
         }
     }
 
-    private void UpdateToolbarClamping()
-    {
-        if (DataContext is FloatingVideoViewModel vm)
-        {
-            if (!vm.ShowToolbar) return;
-
-            var screen = Screens.ScreenFromWindow(this);
-            if (screen != null)
-            {
-                double scaling = screen.Scaling;
-                
-                // Position.Y is physical pixels. Bounds.Height is logical pixels.
-                // WindowBottom = Physical Top + (Logical Height * Scaling)
-                double windowBottomPhysical = Position.Y + (Bounds.Height * scaling);
-                double screenBottomPhysical = screen.WorkingArea.Bottom;
-
-                // Default Margin in VM is 10.
-                double defaultBottomMargin = 10;
-                
-                // If Window Bottom is below Screen Bottom, we need to push the toolbar UP.
-                if (windowBottomPhysical > screenBottomPhysical)
-                {
-                    double overlapPhysical = windowBottomPhysical - screenBottomPhysical;
-                    double overlapLogical = overlapPhysical / scaling;
-                    
-                    double newBottomMargin = defaultBottomMargin + overlapLogical;
-                    
-                    // Cap it so it doesn't fly away (e.g. max window height - buffer)
-                    if (newBottomMargin > Bounds.Height - 50) newBottomMargin = Bounds.Height - 50;
-
-                    vm.ToolbarMargin = new Avalonia.Thickness(0, 0, 0, newBottomMargin);
-                }
-                else
-                {
-                    // Reset to default if fully on screen
-                    if (vm.ToolbarMargin.Bottom != defaultBottomMargin)
-                    {
-                         vm.ToolbarMargin = new Avalonia.Thickness(0, 0, 0, defaultBottomMargin);
-                    }
-                }
-            }
-        }
-    }
     // ── 裁切拉桿邏輯 ──
     private Grid? _trimTrackGrid;
     private Thumb? _trimStartThumb;

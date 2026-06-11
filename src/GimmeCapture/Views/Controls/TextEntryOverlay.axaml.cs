@@ -3,6 +3,7 @@ using System.Reactive;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using GimmeCapture.ViewModels.Shared;
 using ReactiveUI;
@@ -17,18 +18,32 @@ public partial class TextEntryOverlay : UserControl
     {
         InitializeComponent();
         
-        var panel = this.FindControl<StackPanel>("TextEntryPanel");
-        if (panel != null)
+        _panelVisibleSubscription = this.GetObservable(IsVisibleProperty).Subscribe(visible =>
         {
-            _panelVisibleSubscription = panel.GetObservable(IsVisibleProperty).Subscribe(visible =>
+            if (visible)
             {
-                if (visible)
+                FocusTextInput();
+            }
+        });
+    }
+
+    public void FocusTextInput()
+    {
+        Dispatcher.UIThread.Post(
+            () =>
+            {
+                var textBox = this.FindControl<TextBox>("TextInputOverlay");
+                if (textBox == null) return;
+
+                if (TopLevel.GetTopLevel(this) is Window window)
                 {
-                    var textBox = this.FindControl<TextBox>("TextInputOverlay");
-                    textBox?.Focus();
+                    window.Activate();
                 }
-            });
-        }
+
+                textBox.Focus();
+                textBox.CaretIndex = textBox.Text?.Length ?? 0;
+            },
+            DispatcherPriority.Input);
     }
 
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)

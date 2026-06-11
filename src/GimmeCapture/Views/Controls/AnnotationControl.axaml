@@ -174,5 +174,10 @@
                  <Rectangle Stroke="White" StrokeThickness="1" StrokeDashArray="4,4"/>
              </Panel>
         </Border>
+
+        <local:AnnotationSelectionAdorner Annotation="{Binding}"
+                                           Width="{Binding $parent[local:AnnotationControl].Bounds.Width}"
+                                           Height="{Binding $parent[local:AnnotationControl].Bounds.Height}"
+                                           IsHitTestVisible="False"/>
     </Canvas>
 </UserControl>

@@ -30,6 +30,9 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
             this.RaisePropertyChanged(nameof(IsPenToolActive));
             this.RaisePropertyChanged(nameof(IsTextToolActive));
             this.RaisePropertyChanged(nameof(IsRedactionToolActive));
+            this.RaisePropertyChanged(nameof(IsAnyToolActive));
+            this.RaisePropertyChanged(nameof(SelectedAnnotation));
+            this.RaisePropertyChanged(nameof(StyleAnnotationTool));
             this.RaisePropertyChanged(nameof(SelectedColor));
             this.RaisePropertyChanged(nameof(CurrentThickness));
             this.RaisePropertyChanged(nameof(CurrentFontSize));
@@ -268,6 +271,8 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
     public bool IsRedactionToolActive => _editorState.IsRedactionToolActive;
 
     public ObservableCollection<Annotation> Annotations => _editorState.Annotations;
+    public Annotation? SelectedAnnotation => _editorState.SelectedAnnotation;
+    public AnnotationType StyleAnnotationTool => _editorState.StyleAnnotationTool;
 
     public Avalonia.Media.Color SelectedColor
     {
@@ -490,16 +495,17 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
             {
                 CurrentTool = FloatingTool.None;
             }
-            _editorState.SelectTool(tool);
+            CurrentAnnotationTool = targetTool;
         }, notEnteringText);
 
         ToggleToolGroupCommand = ReactiveCommand.Create<string>(group => 
         {
-             if (group is "Shapes" or "Pen" or "Text" or "Redaction")
-             {
-                 CurrentTool = FloatingTool.None;
-             }
-             _editorState.ToggleToolGroup(group);
+            var targetTool = _editorState.GetToolGroupTarget(group);
+            if (targetTool != AnnotationType.None)
+            {
+                CurrentTool = FloatingTool.None;
+            }
+            CurrentAnnotationTool = targetTool;
         }, notEnteringText);
     }
 
@@ -509,9 +515,9 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
 
         IncreaseFontSizeCommand = ReactiveCommand.Create(() => { CurrentFontSize = Math.Min(CurrentFontSize + 2, 72); });
         DecreaseFontSizeCommand = ReactiveCommand.Create(() => { CurrentFontSize = Math.Max(CurrentFontSize - 2, 8); });
-        ChangeColorCommand = ReactiveCommand.Create<Avalonia.Media.Color>(c => SelectedColor = c);
-        IncreaseThicknessCommand = ReactiveCommand.Create(() => { CurrentThickness = Math.Min(CurrentThickness + 1, 30); });
-        DecreaseThicknessCommand = ReactiveCommand.Create(() => { CurrentThickness = Math.Max(CurrentThickness - 1, 1); });
+        ChangeColorCommand = ReactiveCommand.Create<Avalonia.Media.Color>(_editorState.ApplySelectedColor);
+        IncreaseThicknessCommand = ReactiveCommand.Create(() => _editorState.ApplySelectedThickness(Math.Min(CurrentThickness + 1, 30)));
+        DecreaseThicknessCommand = ReactiveCommand.Create(() => _editorState.ApplySelectedThickness(Math.Max(CurrentThickness - 1, 1)));
         SetRedactionPresetCommand = ReactiveCommand.Create<string>(preset => _editorState.SetRedactionPreset(preset));
         
         ClearAnnotationsCommand = ReactiveCommand.Create(ClearAnnotations, notEnteringText);
@@ -556,6 +562,23 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
     {
         _editorState.AddAnnotation(annotation);
     }
+
+    public void BeginPendingAnnotation(Annotation annotation) => _editorState.BeginPendingAnnotation(annotation);
+
+    public bool CommitPendingAnnotation(Annotation annotation) => _editorState.CommitPendingAnnotation(annotation);
+
+    public void CancelPendingAnnotation(Annotation annotation) => _editorState.CancelPendingAnnotation(annotation);
+
+    public void RemoveAnnotation(Annotation annotation) => _editorState.RemoveAnnotation(annotation);
+
+    public void SelectAnnotation(Annotation? annotation) => _editorState.SelectAnnotation(annotation);
+
+    public void ClearAnnotationSelection() => _editorState.ClearSelection();
+
+    public AnnotationSnapshot BeginAnnotationEdit(Annotation annotation) => _editorState.BeginAnnotationEdit(annotation);
+
+    public void CommitAnnotationEdit(Annotation annotation, AnnotationSnapshot before) =>
+        _editorState.CommitAnnotationEdit(annotation, before);
 
     public Annotation CreateAnnotationForCurrentTool(Avalonia.Point startPoint, Bitmap? drawingModeSnapshot, Avalonia.Size drawingModeReferenceSize)
     {

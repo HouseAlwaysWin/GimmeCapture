@@ -5,6 +5,7 @@ using Avalonia.VisualTree;
 using Avalonia.Controls.Primitives;
 using GimmeCapture.ViewModels.Floating;
 using GimmeCapture.Models;
+using GimmeCapture.Services.Core;
 using System;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
@@ -27,6 +28,7 @@ public abstract class FloatingWindowBase : Window
     private FloatingWindowViewModelBase? _boundViewModel;
     private PropertyChangedEventHandler? _boundViewModelPropertyChangedHandler;
     private bool _suppressWindowSizeSync;
+    private IDisposable? _toolbarPlacementBoundsSubscription;
 
     // Resize State
     protected bool _isResizing;
@@ -52,6 +54,9 @@ public abstract class FloatingWindowBase : Window
     protected bool _isDraggingAnnotation;
     protected Annotation? _draggingAnnotation;
     protected Point _dragOffset;
+    protected AnnotationSnapshot? _annotationEditBefore;
+    protected AnnotationHitZone _annotationHitZone;
+    protected Point _annotationDragStart;
 
     // Selection State
     protected bool _isSelecting;
@@ -72,6 +77,9 @@ public abstract class FloatingWindowBase : Window
         AddHandler(ContextRequestedEvent, OnContextRequested, RoutingStrategies.Tunnel);
         
         KeyDown += OnKeyDown;
+        PositionChanged += (_, _) => QueueToolbarEdgePlacement();
+        _toolbarPlacementBoundsSubscription = this.GetObservable(BoundsProperty)
+            .Subscribe(_ => QueueToolbarEdgePlacement());
     }
 
     /// <summary>
@@ -125,12 +133,20 @@ public abstract class FloatingWindowBase : Window
 
                     SyncWindowSizeToContent();
                 }
+
+                if (ev.PropertyName is nameof(FloatingWindowViewModelBase.ShowToolbar)
+                    or nameof(FloatingWindowViewModelBase.ToolbarHeight)
+                    or nameof(FloatingWindowViewModelBase.WindowPadding))
+                {
+                    QueueToolbarEdgePlacement();
+                }
             };
             vm.PropertyChanged += _boundViewModelPropertyChangedHandler;
             _boundViewModel = vm;
             
             // Force initial sync
             SyncWindowSizeToContent();
+            QueueToolbarEdgePlacement();
         }
     }
 
@@ -142,6 +158,9 @@ public abstract class FloatingWindowBase : Window
             _boundViewModel = null;
             _boundViewModelPropertyChangedHandler = null;
         }
+
+        _toolbarPlacementBoundsSubscription?.Dispose();
+        _toolbarPlacementBoundsSubscription = null;
 
         base.OnClosed(e);
     }
@@ -166,6 +185,46 @@ public abstract class FloatingWindowBase : Window
              
              InvalidateMeasure();
              InvalidateArrange();
+             QueueToolbarEdgePlacement();
+        }
+    }
+
+    private void QueueToolbarEdgePlacement()
+    {
+        Dispatcher.UIThread.Post(UpdateToolbarEdgePlacement, DispatcherPriority.Loaded);
+    }
+
+    private void UpdateToolbarEdgePlacement()
+    {
+        if (DataContext is not FloatingWindowViewModelBase vm || !vm.ShowToolbar)
+        {
+            return;
+        }
+
+        var screen = Screens.ScreenFromWindow(this);
+        if (screen == null || Bounds.Height <= 0)
+        {
+            return;
+        }
+
+        const double defaultBottomMargin = 10;
+        var scaling = screen.Scaling > 0 ? screen.Scaling : RenderScaling;
+        var windowBottomPhysical = Position.Y + Bounds.Height * scaling;
+        var overlapPhysical = Math.Max(0, windowBottomPhysical - screen.WorkingArea.Bottom);
+        var overlapLogical = overlapPhysical / Math.Max(0.1, scaling);
+        var toolbarHeight = vm.ToolbarHeight > 0 ? vm.ToolbarHeight : 32;
+        var maximumBottomMargin = Math.Max(
+            defaultBottomMargin,
+            Bounds.Height - toolbarHeight - defaultBottomMargin);
+        var targetBottomMargin = Math.Clamp(
+            defaultBottomMargin + overlapLogical,
+            defaultBottomMargin,
+            maximumBottomMargin);
+
+        vm.IsToolbarFlipped = overlapLogical > 0.5;
+        if (Math.Abs(vm.ToolbarMargin.Bottom - targetBottomMargin) > 0.5)
+        {
+            vm.ToolbarMargin = new Thickness(0, 0, 0, targetBottomMargin);
         }
     }
 
@@ -239,11 +298,13 @@ public abstract class FloatingWindowBase : Window
             if (contentControl == null) return;
 
             var pointerPosOnContent = e.GetPosition(contentControl);
+            var contentBounds = new Rect(0, 0, contentControl.Bounds.Width, contentControl.Bounds.Height);
+            var interactionBounds = vm.SelectedAnnotation != null
+                ? contentBounds.Inflate(AnnotationInteractionService.HandleRadius + 2)
+                : contentBounds;
 
             // Restrict drawing interaction to the content area
-            if (pointerPosOnContent.X < 0 || pointerPosOnContent.Y < 0 || 
-                pointerPosOnContent.X > contentControl.Bounds.Width || 
-                pointerPosOnContent.Y > contentControl.Bounds.Height)
+            if (!interactionBounds.Contains(pointerPosOnContent))
             {
                 return;
             }
@@ -261,6 +322,35 @@ public abstract class FloatingWindowBase : Window
                 return;
             }
 
+            var annotationHit = AnnotationInteractionService.HitTest(
+                vm.Annotations,
+                vm.SelectedAnnotation,
+                pointerPosOnContent);
+            if (annotationHit.IsHit && annotationHit.Annotation != null)
+            {
+                _isDraggingAnnotation = true;
+                _draggingAnnotation = annotationHit.Annotation;
+                _annotationHitZone = annotationHit.Zone;
+                _annotationDragStart = pointerPosOnContent;
+                _annotationEditBefore = vm.BeginAnnotationEdit(annotationHit.Annotation);
+                if (annotationHit.Annotation.Type == AnnotationType.Text)
+                {
+                    _dragOffset = new Point(
+                        pointerPosOnContent.X - annotationHit.Annotation.StartPoint.X,
+                        pointerPosOnContent.Y - annotationHit.Annotation.StartPoint.Y);
+                }
+                e.Pointer.Capture(this);
+                e.Handled = true;
+                return;
+            }
+
+            if (!contentBounds.Contains(pointerPosOnContent))
+            {
+                return;
+            }
+
+            vm.ClearAnnotationSelection();
+
             if (vm.CurrentAnnotationTool == AnnotationType.Text)
             {
                 // Check if clicking existing text to edit/drag
@@ -277,7 +367,7 @@ public abstract class FloatingWindowBase : Window
                             if (e.ClickCount == 2)
                             {
                                 // Edit Mode
-                                vm.Annotations.Remove(ann);
+                                vm.RemoveAnnotation(ann);
                                 vm.IsEnteringText = true;
                                 vm.TextInputPosition = ann.StartPoint;
                                 vm.PendingText = ann.Text;
@@ -297,6 +387,9 @@ public abstract class FloatingWindowBase : Window
                                 _isDraggingAnnotation = true;
                                 _draggingAnnotation = ann;
                                 _dragOffset = new Point(pointerPosOnContent.X - ann.StartPoint.X, pointerPosOnContent.Y - ann.StartPoint.Y);
+                                _annotationHitZone = AnnotationHitZone.Body;
+                                _annotationDragStart = pointerPosOnContent;
+                                _annotationEditBefore = vm.BeginAnnotationEdit(ann);
                                 e.Pointer.Capture(this);
                                 e.Handled = true;
                                 return;
@@ -329,7 +422,7 @@ public abstract class FloatingWindowBase : Window
                 frameSnapshot,
                 contentControl.Bounds.Size);
 
-            vm.AddAnnotation(_currentAnnotation);
+            vm.BeginPendingAnnotation(_currentAnnotation);
             e.Pointer.Capture(this);
             e.Handled = true;
             return;
@@ -380,6 +473,8 @@ public abstract class FloatingWindowBase : Window
         var currentPoint = e.GetCurrentPoint(this);
         var pointerPos = currentPoint.Position;
 
+        UpdateAnnotationCursor(e, vm);
+
         if (_isResizing)
         {
             PerformResizing(e, vm);
@@ -410,6 +505,9 @@ public abstract class FloatingWindowBase : Window
             if (contentControl != null)
             {
                 var pointerPosOnContent = e.GetPosition(contentControl);
+                pointerPosOnContent = new Point(
+                    Math.Clamp(pointerPosOnContent.X, 0, contentControl.Bounds.Width),
+                    Math.Clamp(pointerPosOnContent.Y, 0, contentControl.Bounds.Height));
                 if (_currentAnnotation.Type == AnnotationType.Pen)
                 {
                     _currentAnnotation.AddPoint(pointerPosOnContent);
@@ -427,13 +525,29 @@ public abstract class FloatingWindowBase : Window
             if (contentControl != null)
             {
                 var pointerPosOnContent = e.GetPosition(contentControl);
-                var newStart = new Point(pointerPosOnContent.X - _dragOffset.X, pointerPosOnContent.Y - _dragOffset.Y);
-                
-                var deltaX = newStart.X - _draggingAnnotation.StartPoint.X;
-                var deltaY = newStart.Y - _draggingAnnotation.StartPoint.Y;
-
-                _draggingAnnotation.StartPoint = newStart;
-                _draggingAnnotation.EndPoint = new Point(_draggingAnnotation.EndPoint.X + deltaX, _draggingAnnotation.EndPoint.Y + deltaY);
+                if (_draggingAnnotation.Type == AnnotationType.Text)
+                {
+                    var estimatedWidth = _draggingAnnotation.Text.Length * _draggingAnnotation.FontSize * 0.6;
+                    var estimatedHeight = _draggingAnnotation.FontSize * 1.5;
+                    var newStart = new Point(
+                        Math.Clamp(pointerPosOnContent.X - _dragOffset.X, 0, Math.Max(0, contentControl.Bounds.Width - estimatedWidth)),
+                        Math.Clamp(pointerPosOnContent.Y - _dragOffset.Y, 0, Math.Max(0, contentControl.Bounds.Height - estimatedHeight)));
+                    var delta = newStart - _draggingAnnotation.StartPoint;
+                    _draggingAnnotation.StartPoint = newStart;
+                    _draggingAnnotation.EndPoint = new Point(
+                        _draggingAnnotation.EndPoint.X + delta.X,
+                        _draggingAnnotation.EndPoint.Y + delta.Y);
+                }
+                else if (_annotationEditBefore != null)
+                {
+                    AnnotationInteractionService.ApplyTransform(
+                        _draggingAnnotation,
+                        _annotationEditBefore,
+                        _annotationHitZone,
+                        _annotationDragStart,
+                        pointerPosOnContent,
+                        contentControl.Bounds.Size);
+                }
             }
         }
         
@@ -472,13 +586,25 @@ public abstract class FloatingWindowBase : Window
         {
             e.Pointer.Capture(null);
             _isDrawing = false;
+            if (DataContext is FloatingWindowViewModelBase vm && _currentAnnotation != null)
+            {
+                vm.CommitPendingAnnotation(_currentAnnotation);
+            }
             _currentAnnotation = null;
         }
         else if (_isDraggingAnnotation)
         {
             e.Pointer.Capture(null);
+            if (DataContext is FloatingWindowViewModelBase vm
+                && _draggingAnnotation != null
+                && _annotationEditBefore != null)
+            {
+                vm.CommitAnnotationEdit(_draggingAnnotation, _annotationEditBefore);
+            }
             _isDraggingAnnotation = false;
             _draggingAnnotation = null;
+            _annotationEditBefore = null;
+            _annotationHitZone = AnnotationHitZone.None;
         }
         else if (_isMaybeMoving)
         {
@@ -486,6 +612,65 @@ public abstract class FloatingWindowBase : Window
             _isMaybeMoving = false;
             _pendingMoveEvent = null;
         }
+    }
+
+    private void UpdateAnnotationCursor(PointerEventArgs e, FloatingWindowViewModelBase vm)
+    {
+        if (vm.CurrentAnnotationTool == AnnotationType.None || vm.IsProcessing)
+        {
+            return;
+        }
+
+        if (_isDraggingAnnotation)
+        {
+            Cursor = CreateAnnotationCursor(_annotationHitZone);
+            return;
+        }
+
+        if (_isDrawing || _isSelecting || _isResizing)
+        {
+            return;
+        }
+
+        var contentControl = GetContentControl();
+        if (contentControl == null)
+        {
+            return;
+        }
+
+        var point = e.GetPosition(contentControl);
+        var contentBounds = new Rect(0, 0, contentControl.Bounds.Width, contentControl.Bounds.Height);
+        var interactionBounds = vm.SelectedAnnotation != null
+            ? contentBounds.Inflate(AnnotationInteractionService.HandleRadius + 2)
+            : contentBounds;
+        if (!interactionBounds.Contains(point))
+        {
+            Cursor = new Cursor(StandardCursorType.Arrow);
+            return;
+        }
+
+        var hit = AnnotationInteractionService.HitTest(vm.Annotations, vm.SelectedAnnotation, point);
+        Cursor = hit.IsHit
+            ? CreateAnnotationCursor(hit.Zone)
+            : new Cursor(contentBounds.Contains(point)
+                ? (vm.CurrentAnnotationTool == AnnotationType.Text
+                    ? StandardCursorType.Ibeam
+                    : StandardCursorType.Cross)
+                : StandardCursorType.Arrow);
+    }
+
+    private static Cursor CreateAnnotationCursor(AnnotationHitZone zone)
+    {
+        var cursorType = zone switch
+        {
+            AnnotationHitZone.TopLeft or AnnotationHitZone.BottomRight => StandardCursorType.TopLeftCorner,
+            AnnotationHitZone.TopRight or AnnotationHitZone.BottomLeft => StandardCursorType.TopRightCorner,
+            AnnotationHitZone.Top or AnnotationHitZone.Bottom => StandardCursorType.SizeNorthSouth,
+            AnnotationHitZone.Left or AnnotationHitZone.Right => StandardCursorType.SizeWestEast,
+            AnnotationHitZone.StartPoint or AnnotationHitZone.EndPoint => StandardCursorType.Hand,
+            _ => StandardCursorType.SizeAll
+        };
+        return new Cursor(cursorType);
     }
 
     private void BeginMoveDrag(PointerEventArgs e)

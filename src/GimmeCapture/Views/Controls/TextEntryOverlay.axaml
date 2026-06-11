@@ -6,12 +6,14 @@
              xmlns:services="using:GimmeCapture.Services.Core.Infrastructure"
              mc:Ignorable="d" d:DesignWidth="300" d:DesignHeight="100"
              x:Class="GimmeCapture.Views.Controls.TextEntryOverlay"
-             x:DataType="shared:IDrawingToolViewModel">
+             x:DataType="shared:IDrawingToolViewModel"
+             IsVisible="{Binding IsEnteringText}">
     
     <StackPanel Name="TextEntryPanel" 
-                IsVisible="{Binding IsEnteringText}" 
                 Orientation="Vertical" Spacing="2">
         <TextBox Name="TextInputOverlay" 
+                 Focusable="True"
+                 IsTabStop="True"
                  Text="{Binding PendingText, Mode=TwoWay}" 
                  FontFamily="{Binding CurrentFontFamily}" 
                  FontSize="{Binding CurrentFontSize}"

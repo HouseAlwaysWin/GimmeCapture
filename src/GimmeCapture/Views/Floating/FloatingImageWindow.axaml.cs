@@ -187,7 +187,9 @@ public partial class FloatingImageWindow : FloatingWindowBase
                     or nameof(FloatingImageViewModel.DisplayHeight)
                     or nameof(FloatingImageViewModel.HidePinDecoration)
                     or nameof(FloatingImageViewModel.HidePinBorder)
-                    or nameof(FloatingImageViewModel.PinnedText))
+                    or nameof(FloatingImageViewModel.PinnedText)
+                    or nameof(FloatingImageViewModel.ToolbarMargin)
+                    or nameof(FloatingImageViewModel.IsToolbarFlipped))
                 {
                     RefreshWindowRegion();
                 }

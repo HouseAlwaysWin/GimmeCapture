@@ -30,6 +30,9 @@ public partial class SnipWindow : Window
     private Point _startPoint;
     private SnipWindowViewModel? _viewModel;
     private Annotation? _currentAnnotation;
+    private AnnotationSnapshot? _annotationEditBefore;
+    private AnnotationHitZone _annotationHitZone;
+    private Point _annotationDragStart;
     private RecordingProgressWindow? _progressWindow;
     private bool _activeActionHotkeyHeld;
     
@@ -818,7 +821,10 @@ public partial class SnipWindow : Window
         }
 
         // Manual Hotkey Routing (Bypassing XAML KeyBinding quirks)
-        if (_viewModel != null && !e.Handled && !textOrListInputFocused)
+        if (_viewModel != null
+            && !e.Handled
+            && !_viewModel.IsEnteringText
+            && !textOrListInputFocused)
         {
             System.Diagnostics.Debug.WriteLine($"[SnipWindow.axaml.cs] OnKeyDown: Key={e.Key}, Mods={e.KeyModifiers}, ActiveAction={_viewModel.ActiveActionHotkey}, IsInputFocused={_viewModel.IsInputFocused}");
 

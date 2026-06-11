@@ -343,6 +343,8 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
             this.RaisePropertyChanged(nameof(IsPenToolActive));
             this.RaisePropertyChanged(nameof(IsTextToolActive));
             this.RaisePropertyChanged(nameof(IsRedactionToolActive));
+            this.RaisePropertyChanged(nameof(SelectedAnnotation));
+            this.RaisePropertyChanged(nameof(StyleAnnotationTool));
             this.RaisePropertyChanged(nameof(SelectedColor));
             this.RaisePropertyChanged(nameof(CurrentThickness));
             this.RaisePropertyChanged(nameof(CurrentFontSize));

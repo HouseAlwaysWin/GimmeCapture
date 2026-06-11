@@ -140,6 +140,27 @@ public class AnnotationHistoryAction : IHistoryAction
     public void Dispose() { }
 }
 
+public sealed class AnnotationEditHistoryAction : IHistoryAction
+{
+    private readonly Annotation _annotation;
+    private readonly AnnotationSnapshot _before;
+    private readonly AnnotationSnapshot _after;
+
+    public AnnotationEditHistoryAction(
+        Annotation annotation,
+        AnnotationSnapshot before,
+        AnnotationSnapshot after)
+    {
+        _annotation = annotation;
+        _before = before;
+        _after = after;
+    }
+
+    public void Undo() => _before.ApplyTo(_annotation);
+    public void Redo() => _after.ApplyTo(_annotation);
+    public void Dispose() { }
+}
+
 public class ClearAnnotationsHistoryAction : IHistoryAction
 {
     private readonly ObservableCollection<Annotation> _annotations;

@@ -202,6 +202,7 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
             
             if (value != FloatingTool.None)
             {
+                IsTrimmingMode = false;
                 CurrentAnnotationTool = AnnotationType.None;
             }
 
@@ -220,6 +221,7 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
             
             if (value != AnnotationType.None)
             {
+                IsTrimmingMode = false;
                 CurrentTool = FloatingTool.None;
             }
 

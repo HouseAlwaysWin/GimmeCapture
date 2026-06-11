@@ -21,11 +21,24 @@ public partial class SnipWindowViewModel
 
     // Annotation Properties
     public ObservableCollection<Annotation> Annotations => _editorState.Annotations;
+    public Annotation? SelectedAnnotation => _editorState.SelectedAnnotation;
+    public AnnotationType StyleAnnotationTool => _editorState.StyleAnnotationTool;
 
     public AnnotationType CurrentAnnotationTool
     {
         get => _editorState.CurrentAnnotationTool;
-        set => _editorState.CurrentAnnotationTool = value;
+        set
+        {
+            if (_editorState.CurrentAnnotationTool == value) return;
+
+            if (_editorState.IsEnteringText)
+            {
+                _editorState.IsEnteringText = false;
+                _editorState.PendingText = string.Empty;
+            }
+
+            _editorState.CurrentAnnotationTool = value;
+        }
     }
 
     public bool IsShapeToolActive => _editorState.IsShapeToolActive;
@@ -219,6 +232,29 @@ public partial class SnipWindowViewModel
         UpdateHistoryStatus();
     }
 
+    public void BeginPendingAnnotation(Annotation annotation) => _editorState.BeginPendingAnnotation(annotation);
+
+    public bool CommitPendingAnnotation(Annotation annotation)
+    {
+        var committed = _editorState.CommitPendingAnnotation(annotation);
+        UpdateHistoryStatus();
+        return committed;
+    }
+
+    public void CancelPendingAnnotation(Annotation annotation) => _editorState.CancelPendingAnnotation(annotation);
+
+    public void SelectAnnotation(Annotation? annotation) => _editorState.SelectAnnotation(annotation);
+
+    public void ClearAnnotationSelection() => _editorState.ClearSelection();
+
+    public AnnotationSnapshot BeginAnnotationEdit(Annotation annotation) => _editorState.BeginAnnotationEdit(annotation);
+
+    public void CommitAnnotationEdit(Annotation annotation, AnnotationSnapshot before)
+    {
+        _editorState.CommitAnnotationEdit(annotation, before);
+        UpdateHistoryStatus();
+    }
+
     public Annotation CreateAnnotationForCurrentTool(Point relPoint)
     {
         return _editorState.CreateAnnotationForCurrentTool(
@@ -241,8 +277,16 @@ public partial class SnipWindowViewModel
 
     public void ToggleToolGroup(string group)
     {
-        _editorState.ToggleToolGroup(group);
+        CurrentAnnotationTool = _editorState.GetToolGroupTarget(group);
         IsDrawingMode = CurrentAnnotationTool != AnnotationType.None;
+    }
+
+    private void DeactivateDrawingInteraction()
+    {
+        _editorState.CurrentAnnotationTool = AnnotationType.None;
+        IsDrawingMode = false;
+        IsEnteringText = false;
+        PendingText = string.Empty;
     }
 
     // Commands
@@ -273,10 +317,15 @@ public partial class SnipWindowViewModel
 
     private void InitializeToolbarCommands()
     {
-        var canExecuteHotkeys = this.WhenAnyValue(x => x.IsInputFocused, x => !x);
+        var canExecuteHotkeys = this.WhenAnyValue(
+            x => x.IsInputFocused,
+            x => x.IsEnteringText,
+            (focused, enteringText) => !focused && !enteringText);
+        // Pointer-driven toolbar commands must remain available while a text box owns focus.
+        // Keyboard routing separately blocks drawing hotkeys during text entry.
         var canExecuteNonTranslation = this.WhenAnyValue(
-            x => x.IsInputFocused, x => x.CurrentMode,
-            (focused, mode) => !focused && mode != SnipMode.Translation);
+            x => x.CurrentMode,
+            mode => mode != SnipMode.Translation);
 
         ConfirmTextEntryCommand = ReactiveCommand.Create(() => 
         {
@@ -315,19 +364,27 @@ public partial class SnipWindowViewModel
         SetRedactionPresetCommand = ReactiveCommand.Create<string>(preset => _editorState.SetRedactionPreset(preset), canExecuteNonTranslation);
         
         SelectToolCommand = ReactiveCommand.Create<AnnotationType>(t => {
-            _editorState.SelectTool(t);
+            CurrentAnnotationTool = CurrentAnnotationTool == t ? AnnotationType.None : t;
             IsDrawingMode = CurrentAnnotationTool != AnnotationType.None;
         }, canExecuteNonTranslation);
         SelectToolCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
         
-        ChangeColorCommand = ReactiveCommand.Create<Color>(c => SelectedColor = c);
+        ChangeColorCommand = ReactiveCommand.Create<Color>(_editorState.ApplySelectedColor);
         ChangeColorCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
         
-        IncreaseThicknessCommand = ReactiveCommand.Create(() => { CurrentThickness = Math.Min(CurrentThickness + 1, 30); });
-        DecreaseThicknessCommand = ReactiveCommand.Create(() => { CurrentThickness = Math.Max(CurrentThickness - 1, 1); });
+        IncreaseThicknessCommand = ReactiveCommand.Create(() => _editorState.ApplySelectedThickness(Math.Min(CurrentThickness + 1, 30)));
+        DecreaseThicknessCommand = ReactiveCommand.Create(() => _editorState.ApplySelectedThickness(Math.Max(CurrentThickness - 1, 1)));
         
-        var canUndo = this.WhenAnyValue(x => x.HasUndo, x => x.IsInputFocused, (u, textFocus) => u && !textFocus);
-        var canRedo = this.WhenAnyValue(x => x.HasRedo, x => x.IsInputFocused, (u, textFocus) => u && !textFocus);
+        var canUndo = this.WhenAnyValue(
+            x => x.HasUndo,
+            x => x.IsInputFocused,
+            x => x.IsEnteringText,
+            (undo, textFocus, enteringText) => undo && !textFocus && !enteringText);
+        var canRedo = this.WhenAnyValue(
+            x => x.HasRedo,
+            x => x.IsInputFocused,
+            x => x.IsEnteringText,
+            (redo, textFocus, enteringText) => redo && !textFocus && !enteringText);
         UndoCommand = ReactiveCommand.Create(Undo, canUndo);
         UndoCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
         RedoCommand = ReactiveCommand.Create(Redo, canRedo);
@@ -395,7 +452,7 @@ public partial class SnipWindowViewModel
                 return;
             }
 
-            IsDrawingMode = false;
+            DeactivateDrawingInteraction();
             CurrentState = SnipState.Selected;
             SelectionRect = ResolveFullscreenSelectionRect();
         }, canExecuteNonTranslation);

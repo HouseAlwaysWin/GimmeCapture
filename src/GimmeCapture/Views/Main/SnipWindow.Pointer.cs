@@ -36,6 +36,7 @@ public partial class SnipWindow : Window
     private void OnPointerPressed(object? sender, PointerPressedEventArgs e)
     {
         if (_viewModel == null) return;
+        var source = e.Source as Control;
 
         // Debounce: If we just finished text entry, ignore clicks for a short moment
         if ((DateTime.Now - _lastTextFinishTime).TotalMilliseconds < 300)
@@ -47,27 +48,47 @@ public partial class SnipWindow : Window
         // Prevent recursive text entry (If clicking to finish text, don't restart it immediately)
         if (_viewModel.IsEnteringText)
         {
-             var src = e.Source as Control;
-             // If clicking on the textbox itself or its children, let it function
-             if (src != null && (src.Name == "TextInputOverlay" || src.FindAncestorOfType<TextBox>() != null))
-             {
-                 return;
-             }
-             
-             // If clicking the OK button
-             if (src is Button b && b.Content as string == "OK") return;
- 
-             _viewModel.ConfirmTextEntryCommand.Execute(Unit.Default).Subscribe();
-             e.Handled = true;
-             return;
+            if (source is TextEntryOverlay
+                || source?.FindAncestorOfType<TextEntryOverlay>() != null)
+            {
+                return;
+            }
+
+            _viewModel.ConfirmTextEntryCommand.Execute(Unit.Default).Subscribe();
+            _lastTextFinishTime = DateTime.Now;
+
+            // Let the same click reach another toolbar button so switching tools is immediate.
+            if (source is SnipToolbar || source?.FindAncestorOfType<SnipToolbar>() != null)
+            {
+                return;
+            }
+
+            e.Handled = true;
+            return;
         }
 
         var point = e.GetPosition(this);
         var props = e.GetCurrentPoint(this).Properties;
-        var source = e.Source as Control;
 
-        if (TryHandleTextAnnotationPressed(point, e))
-            return;
+        var isDrawingUiInteraction = source is Button
+            or TextBox
+            or ComboBox
+            or Slider
+            || source?.FindAncestorOfType<Button>() != null
+            || source?.FindAncestorOfType<TextBox>() != null
+            || source?.FindAncestorOfType<ComboBox>() != null
+            || source?.FindAncestorOfType<Slider>() != null
+            || source is SnipToolbar
+            || source?.FindAncestorOfType<SnipToolbar>() != null;
+
+        if (!isDrawingUiInteraction)
+        {
+            if (TryHandleTextAnnotationPressed(point, e))
+                return;
+
+            if (TryHandleEditableAnnotationPressed(point, e))
+                return;
+        }
 
         if (!_viewModel.IsTranslationMode
             && !_viewModel.IsDrawingMode
@@ -191,21 +212,19 @@ public partial class SnipWindow : Window
 
             if (toolbarAncestor is Views.Controls.SnipToolbar toolbar)
             {
-                // If clicking a button, let the button handle it
-                if (sourceControl is Button || sourceControl?.FindAncestorOfType<Button>() != null)
+                // Normal screenshot/recording toolbars are anchored to SelectionRect.
+                // Only translation mode exposes an explicit drag strip.
+                if (!_viewModel.IsTranslationMode)
                 {
                     return;
                 }
 
-                // Let ComboBox handle its own popup/open interactions.
-                // Without this, clicking the language selectors starts toolbar dragging
-                // before the dropdown can open or select another item.
-                if (sourceControl is ComboBox || sourceControl?.FindAncestorOfType<ComboBox>() != null)
+                if (IsInteractiveToolbarControl(sourceControl))
                 {
                     return;
                 }
 
-                if (_viewModel.IsTranslationMode && !IsTranslationToolbarDragStripHit(sourceControl))
+                if (!IsTranslationToolbarDragStripHit(sourceControl))
                 {
                     return;
                 }
@@ -341,9 +360,14 @@ public partial class SnipWindow : Window
             SetCursorShape(StandardCursorType.Arrow);
             specialCursorSet = true;
         }
-        else if (_pointerState == PointerInteractionState.DraggingToolbar || _pointerState == PointerInteractionState.MovingTranslationBox || _pointerState == PointerInteractionState.MovingSelection || _pointerState == PointerInteractionState.DraggingAnnotation)
+        else if (_pointerState == PointerInteractionState.DraggingToolbar || _pointerState == PointerInteractionState.MovingTranslationBox || _pointerState == PointerInteractionState.MovingSelection)
         {
             SetCursorShape(StandardCursorType.SizeAll);
+            specialCursorSet = true;
+        }
+        else if (_pointerState == PointerInteractionState.DraggingAnnotation)
+        {
+            SetCursorForAnnotationZone(_annotationHitZone);
             specialCursorSet = true;
         }
         else if (_pointerState == PointerInteractionState.ResizingSelection || _pointerState == PointerInteractionState.ResizingTranslationBox)
@@ -368,6 +392,25 @@ public partial class SnipWindow : Window
             bool actionCursorSet = false;
             if (_viewModel.CurrentState == SnipState.Selected || _viewModel.IsTranslationMode)
             {
+                if (!_viewModel.IsTranslationMode
+                    && _viewModel.IsDrawingMode
+                    && _viewModel.CurrentAnnotationTool != AnnotationType.None
+                    && _viewModel.SelectionRect.Inflate(AnnotationInteractionService.HandleRadius + 2).Contains(currentPoint))
+                {
+                    var relativePoint = new Point(
+                        currentPoint.X - _viewModel.SelectionRect.X,
+                        currentPoint.Y - _viewModel.SelectionRect.Y);
+                    var annotationHit = AnnotationInteractionService.HitTest(
+                        _viewModel.Annotations,
+                        _viewModel.SelectedAnnotation,
+                        relativePoint);
+                    if (annotationHit.IsHit)
+                    {
+                        SetCursorForAnnotationZone(annotationHit.Zone);
+                        actionCursorSet = true;
+                    }
+                }
+
                 if (!_viewModel.IsTranslationMode && !_viewModel.IsDrawingMode && _viewModel.CurrentState == SnipState.Selected)
                 {
                     var interactionZone = HitTestSelectionInteraction(currentPoint);
@@ -595,6 +638,36 @@ public partial class SnipWindow : Window
         }
     }
 
+    private void SetCursorForAnnotationZone(AnnotationHitZone zone)
+    {
+        switch (zone)
+        {
+            case AnnotationHitZone.TopLeft:
+            case AnnotationHitZone.BottomRight:
+                SetCursorShape(StandardCursorType.TopLeftCorner);
+                break;
+            case AnnotationHitZone.TopRight:
+            case AnnotationHitZone.BottomLeft:
+                SetCursorShape(StandardCursorType.TopRightCorner);
+                break;
+            case AnnotationHitZone.Top:
+            case AnnotationHitZone.Bottom:
+                SetCursorShape(StandardCursorType.SizeNorthSouth);
+                break;
+            case AnnotationHitZone.Left:
+            case AnnotationHitZone.Right:
+                SetCursorShape(StandardCursorType.SizeWestEast);
+                break;
+            case AnnotationHitZone.StartPoint:
+            case AnnotationHitZone.EndPoint:
+                SetCursorShape(StandardCursorType.Hand);
+                break;
+            default:
+                SetCursorShape(StandardCursorType.SizeAll);
+                break;
+        }
+    }
+
     private static bool IsTranslationToolbarDragStripHit(Control? sourceControl)
     {
         for (Control? current = sourceControl; current != null; current = current.GetVisualParent() as Control)
@@ -602,6 +675,30 @@ public partial class SnipWindow : Window
             if (string.Equals(current.Name, "TranslationToolbarDragStrip", StringComparison.Ordinal))
             {
                 return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsInteractiveToolbarControl(Control? sourceControl)
+    {
+        for (Control? current = sourceControl; current != null; current = current.GetVisualParent() as Control)
+        {
+            if (current is Button
+                or TextBox
+                or ComboBox
+                or Slider
+                or Avalonia.Controls.Primitives.Thumb
+                or SelectableTextBlock
+                or ICommandSource)
+            {
+                return true;
+            }
+
+            if (current is SnipToolbar)
+            {
+                break;
             }
         }
 

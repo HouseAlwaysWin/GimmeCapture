@@ -110,9 +110,11 @@
         </Button>
 
         <!-- Text Tool -->
-        <Button Theme="{StaticResource SnipToolButton}" FontSize="12" BorderThickness="1" 
+        <Button x:Name="TextButton"
+                        Theme="{StaticResource SnipToolButton}" FontSize="12" BorderThickness="1"
                         Classes.active="{Binding IsTextToolActive}"
                         Command="{Binding ToggleToolGroupCommand}" CommandParameter="Text"
+                        Click="OnTextToolClicked"
                         ToolTip.Tip="{Binding TextTooltip}">
             <Button.Flyout>
                 <Flyout Placement="Top">
@@ -187,27 +189,27 @@
                             <Separator Background="#333333" Height="1" Margin="0,2"/>
                             
                             <!-- Thickness (Universal) -->
-                            <StackPanel IsVisible="{Binding CurrentAnnotationTool, Converter={StaticResource EnumNotMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Text}}" Orientation="Horizontal" Spacing="4" HorizontalAlignment="Center">
+                            <StackPanel IsVisible="{Binding StyleAnnotationTool, Converter={StaticResource EnumNotMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Text}}" Orientation="Horizontal" Spacing="4" HorizontalAlignment="Center">
                                 <TextBlock Text="{Binding [Size], Source={x:Static services:LocalizationService.Instance}}" FontSize="9" Foreground="Gray" VerticalAlignment="Center" Margin="0,0,4,0"/>
                                 <c:CompactNumericStep Value="{Binding CurrentThickness, Mode=TwoWay}" 
                                                       IncreaseCommand="{Binding IncreaseThicknessCommand}"
                                                       DecreaseCommand="{Binding DecreaseThicknessCommand}"/>
                             </StackPanel>
 
-                            <StackPanel IsVisible="{Binding CurrentAnnotationTool, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Mosaic}}" Orientation="Horizontal" Spacing="4" HorizontalAlignment="Center">
+                            <StackPanel IsVisible="{Binding StyleAnnotationTool, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Mosaic}}" Orientation="Horizontal" Spacing="4" HorizontalAlignment="Center">
                                 <Button Theme="{StaticResource SnipButton}" Command="{Binding SetRedactionPresetCommand}" CommandParameter="Small" Content="S"/>
                                 <Button Theme="{StaticResource SnipButton}" Command="{Binding SetRedactionPresetCommand}" CommandParameter="Medium" Content="M"/>
                                 <Button Theme="{StaticResource SnipButton}" Command="{Binding SetRedactionPresetCommand}" CommandParameter="Large" Content="L"/>
                             </StackPanel>
 
-                            <StackPanel IsVisible="{Binding CurrentAnnotationTool, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Blur}}" Orientation="Horizontal" Spacing="4" HorizontalAlignment="Center">
+                            <StackPanel IsVisible="{Binding StyleAnnotationTool, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Blur}}" Orientation="Horizontal" Spacing="4" HorizontalAlignment="Center">
                                 <Button Theme="{StaticResource SnipButton}" Command="{Binding SetRedactionPresetCommand}" CommandParameter="Soft" Content="Soft"/>
                                 <Button Theme="{StaticResource SnipButton}" Command="{Binding SetRedactionPresetCommand}" CommandParameter="Medium" Content="Med"/>
                                 <Button Theme="{StaticResource SnipButton}" Command="{Binding SetRedactionPresetCommand}" CommandParameter="Strong" Content="Strong"/>
                             </StackPanel>
                             
                             <!-- Font Size (For Text) -->
-                            <StackPanel IsVisible="{Binding CurrentAnnotationTool, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Text}}" Orientation="Horizontal" Spacing="4" HorizontalAlignment="Center">
+                            <StackPanel IsVisible="{Binding StyleAnnotationTool, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Text}}" Orientation="Horizontal" Spacing="4" HorizontalAlignment="Center">
                                 <TextBlock Text="{Binding [Size], Source={x:Static services:LocalizationService.Instance}}" FontSize="9" Foreground="Gray" VerticalAlignment="Center" Margin="0,0,4,0"/>
                                 <c:CompactNumericStep Value="{Binding CurrentFontSize, Mode=TwoWay}" 
                                                       IncreaseCommand="{Binding IncreaseFontSizeCommand}"

@@ -101,6 +101,7 @@ public partial class SnipWindowViewModel
         var oldMode = _currentMode;
         if (oldMode == value) return;
 
+        DeactivateDrawingInteraction();
         this.RaiseAndSetIfChanged(ref _currentMode, value, nameof(CurrentMode));
         SyncAudioMeterTimerWithMode();
 
@@ -500,6 +501,7 @@ public partial class SnipWindowViewModel
                 return;
             }
 
+            DeactivateDrawingInteraction();
             if (CurrentState == SnipState.Selecting || CurrentState == SnipState.Selected)
             {
                 CurrentState = SnipState.Detecting;
@@ -674,8 +676,6 @@ public partial class SnipWindowViewModel
     {
         // 進入翻譯模式並重置選取狀態
         CurrentMode = SnipMode.Translation;
-        // Translation relies on Win32 passthrough hit-test; keep drawing mode off to avoid stale state from screenshot mode.
-        IsDrawingMode = false;
         CurrentState = SnipState.Detecting;
         SelectionRect = default;
         RefreshInteractionRegion();

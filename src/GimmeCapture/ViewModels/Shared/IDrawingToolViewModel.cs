@@ -13,6 +13,8 @@ public interface IDrawingToolViewModel
     bool IsPenToolActive { get; }
     bool IsTextToolActive { get; }
     bool IsRedactionToolActive { get; }
+    Annotation? SelectedAnnotation { get; }
+    AnnotationType StyleAnnotationTool { get; }
 
     // Style Properties
     Color SelectedColor { get; set; }

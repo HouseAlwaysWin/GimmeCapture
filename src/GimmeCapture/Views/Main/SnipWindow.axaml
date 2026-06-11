@@ -38,15 +38,7 @@
         <KeyBinding Gesture="{Binding CloseHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding CloseCommand}" />
         <KeyBinding Gesture="{Binding ClearHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding ClearAnnotationsCommand}" />
 
-        <!-- Drawing Tools (Dynamic by Mode) -->
-        <KeyBinding Gesture="{Binding RectangleHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding SelectToolCommand}" CommandParameter="{x:Static m:AnnotationType.Rectangle}" />
-        <KeyBinding Gesture="{Binding EllipseHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding SelectToolCommand}" CommandParameter="{x:Static m:AnnotationType.Ellipse}" />
-        <KeyBinding Gesture="{Binding ArrowHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding SelectToolCommand}" CommandParameter="{x:Static m:AnnotationType.Arrow}" />
-        <KeyBinding Gesture="{Binding LineHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding SelectToolCommand}" CommandParameter="{x:Static m:AnnotationType.Line}" />
-        <KeyBinding Gesture="{Binding PenHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding ToggleToolGroupCommand}" CommandParameter="Pen" />
-        <KeyBinding Gesture="{Binding TextHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding ToggleToolGroupCommand}" CommandParameter="Text" />
-        <KeyBinding Gesture="{Binding MosaicHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding SelectToolCommand}" CommandParameter="{x:Static m:AnnotationType.Mosaic}" />
-        <KeyBinding Gesture="{Binding BlurHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding SelectToolCommand}" CommandParameter="{x:Static m:AnnotationType.Blur}" />
+        <!-- Drawing hotkeys are routed by SnipWindow's keyboard hook so text input can suppress them safely. -->
         <KeyBinding Gesture="{Binding FullscreenSelectHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding SelectFullscreenCommand}" />
 
         <!-- History (Dynamic by Mode) -->
@@ -407,11 +399,6 @@
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
 
-            <!-- Text Entry Overlay -->
-            <ctl:TextEntryOverlay DataContext="{Binding}"
-                                  Canvas.Left="{Binding TextInputPosition.X}"
-                                  Canvas.Top="{Binding TextInputPosition.Y}"/>
-
             <!-- Toolbar Layer: parked off-screen still lays out; only on-screen chrome captures hits -->
             <Canvas ZIndex="1000">
                 <Canvas.IsHitTestVisible>
@@ -676,6 +663,15 @@
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
+        </Canvas>
+
+        <!-- Dedicated text input layer. Keep it outside translation overlays so it owns focus and hit testing. -->
+        <Canvas ZIndex="1500"
+                IsHitTestVisible="{Binding IsEnteringText}">
+            <ctl:TextEntryOverlay x:Name="TextEntryOverlay"
+                                  DataContext="{Binding}"
+                                  Canvas.Left="{Binding TextInputPosition.X}"
+                                  Canvas.Top="{Binding TextInputPosition.Y}"/>
         </Canvas>
         
         <!-- Multi-monitor Loading Bars -->

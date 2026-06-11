@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Media;
 using ReactiveUI;
 using System.Collections.ObjectModel;
+using System.Text.Json.Serialization;
 
 namespace GimmeCapture.Models;
 
@@ -110,6 +111,29 @@ public class Annotation : ReactiveObject
         get => _effectSettings;
         set => this.RaiseAndSetIfChanged(ref _effectSettings, value);
     }
+
+    private bool _isSelected;
+
+    [JsonIgnore]
+    public bool IsSelected
+    {
+        get => _isSelected;
+        set
+        {
+            if (_isSelected == value) return;
+            this.RaiseAndSetIfChanged(ref _isSelected, value);
+            this.RaisePropertyChanged(nameof(ShowsAreaSelection));
+            this.RaisePropertyChanged(nameof(ShowsLineSelection));
+        }
+    }
+
+    [JsonIgnore]
+    public bool ShowsAreaSelection =>
+        IsSelected && Type is AnnotationType.Rectangle or AnnotationType.Ellipse or AnnotationType.Mosaic or AnnotationType.Blur;
+
+    [JsonIgnore]
+    public bool ShowsLineSelection =>
+        IsSelected && Type is AnnotationType.Line or AnnotationType.Arrow;
 
     public Avalonia.Points Points { get; } = new();
 

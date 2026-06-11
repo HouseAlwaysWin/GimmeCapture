@@ -92,7 +92,14 @@ public partial class FloatingVideoViewModel
     {
         ToggleTrimCommand = ReactiveCommand.Create(() =>
         {
-            IsTrimmingMode = !IsTrimmingMode;
+            var activateTrim = !IsTrimmingMode;
+            if (activateTrim)
+            {
+                CurrentTool = FloatingTool.None;
+                CurrentAnnotationTool = Models.AnnotationType.None;
+            }
+
+            IsTrimmingMode = activateTrim;
 
             // 第一次開啟時，將終點設為影片總長
             if (IsTrimmingMode && Math.Abs(_trimEndSeconds) < 0.001 && _totalDuration.TotalSeconds > 0)

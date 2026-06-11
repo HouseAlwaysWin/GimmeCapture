@@ -75,4 +75,102 @@ public class AnnotationEditorStateTests
         Assert.Equal(new Size(100, 80), annotation.DrawingModeReferenceSize);
         Assert.Equal(28f, annotation.EffectSettings.BlurRadius);
     }
+
+    [Fact]
+    public void PendingAnnotation_IsCommittedOnceAndSelected()
+    {
+        var state = new AnnotationEditorState();
+        state.SelectTool(AnnotationType.Rectangle);
+        var annotation = state.CreateAnnotationForCurrentTool(new Point(10, 10));
+        annotation.EndPoint = new Point(40, 50);
+
+        state.BeginPendingAnnotation(annotation);
+        Assert.False(state.HasUndo);
+
+        Assert.True(state.CommitPendingAnnotation(annotation));
+        Assert.True(state.HasUndo);
+        Assert.Same(annotation, state.SelectedAnnotation);
+        Assert.True(annotation.IsSelected);
+
+        state.Undo();
+        Assert.Empty(state.Annotations);
+        Assert.Null(state.SelectedAnnotation);
+    }
+
+    [Fact]
+    public void PendingAnnotation_RejectsTinyGeometryWithoutHistory()
+    {
+        var state = new AnnotationEditorState();
+        state.SelectTool(AnnotationType.Rectangle);
+        var annotation = state.CreateAnnotationForCurrentTool(new Point(10, 10));
+        annotation.EndPoint = new Point(14, 14);
+
+        state.BeginPendingAnnotation(annotation);
+
+        Assert.False(state.CommitPendingAnnotation(annotation));
+        Assert.Empty(state.Annotations);
+        Assert.False(state.HasUndo);
+    }
+
+    [Fact]
+    public void AnnotationEdit_IsOneUndoStep()
+    {
+        var state = new AnnotationEditorState();
+        var annotation = new Annotation
+        {
+            Type = AnnotationType.Arrow,
+            StartPoint = new Point(10, 10),
+            EndPoint = new Point(40, 40),
+            Thickness = 2
+        };
+        state.AddAnnotation(annotation);
+        var before = state.BeginAnnotationEdit(annotation);
+        annotation.EndPoint = new Point(80, 60);
+        state.CommitAnnotationEdit(annotation, before);
+
+        state.Undo();
+        Assert.Equal(new Point(40, 40), annotation.EndPoint);
+
+        state.Redo();
+        Assert.Equal(new Point(80, 60), annotation.EndPoint);
+    }
+
+    [Fact]
+    public void SelectedThicknessChange_IsUndoable()
+    {
+        var state = new AnnotationEditorState();
+        var annotation = new Annotation
+        {
+            Type = AnnotationType.Rectangle,
+            StartPoint = new Point(10, 10),
+            EndPoint = new Point(40, 40),
+            Thickness = 2
+        };
+        state.AddAnnotation(annotation);
+
+        state.ApplySelectedThickness(7);
+        Assert.Equal(7, annotation.Thickness);
+
+        state.Undo();
+        Assert.Equal(2, annotation.Thickness);
+    }
+
+    [Fact]
+    public void ToolChange_ClearsVisualSelectionWithoutRemovingAnnotation()
+    {
+        var state = new AnnotationEditorState();
+        var annotation = new Annotation
+        {
+            Type = AnnotationType.Rectangle,
+            StartPoint = new Point(10, 10),
+            EndPoint = new Point(40, 40)
+        };
+        state.AddAnnotation(annotation);
+
+        state.SelectTool(AnnotationType.Arrow);
+
+        Assert.Null(state.SelectedAnnotation);
+        Assert.False(annotation.IsSelected);
+        Assert.Single(state.Annotations);
+    }
 }
