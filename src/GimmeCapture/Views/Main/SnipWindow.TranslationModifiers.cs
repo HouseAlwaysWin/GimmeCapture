@@ -11,13 +11,28 @@ public partial class SnipWindow
     /// After finishing a drag while the selection modifier is still held, keep ring hit-test until key-up.
     /// </summary>
     private bool _translationSuppressFullHitUntilSelectionModifierUp;
+    private bool _translationSelectionModifierHeld;
 
     private void ApplyTranslationSelectionModifierState(bool isKeyDown)
     {
         if (_viewModel == null || !_viewModel.IsTranslationMode)
         {
+            ResetTranslationSelectionModifierState();
             return;
         }
+
+        // Avalonia and the low-level keyboard hook can both report the same transition.
+        // Key-repeat also produces additional key-down events on some systems.
+        if (_translationSelectionModifierHeld == isKeyDown)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[TranslationOCR] Ignored duplicate selection modifier state: down={isKeyDown}");
+            return;
+        }
+
+        _translationSelectionModifierHeld = isKeyDown;
+        System.Diagnostics.Debug.WriteLine(
+            $"[TranslationOCR] Selection modifier transition: down={isKeyDown}");
 
         if (isKeyDown)
         {
@@ -43,6 +58,12 @@ public partial class SnipWindow
         }
 
         RequestTranslationWindowRegionRefresh();
+    }
+
+    private void ResetTranslationSelectionModifierState()
+    {
+        _translationSelectionModifierHeld = false;
+        _translationSuppressFullHitUntilSelectionModifierUp = false;
     }
 
     private static bool IsPhysicalModifierLabelDown(string? label)

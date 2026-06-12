@@ -141,6 +141,27 @@ public class SnipWindowViewModelTests
         }
     }
 
+    [Fact]
+    public async Task EnterTranslationOcrSearch_WhenAlreadyActive_DoesNotClearVisibleCandidates()
+    {
+        var vm = new SnipWindowViewModel();
+        try
+        {
+            vm.CurrentMode = SnipMode.Translation;
+            await vm.EnterTranslationOcrSearchAsync();
+            vm.TranslationOcrSearchRects.Add(new VisualRect(new Rect(10, 20, 100, 30)));
+
+            await vm.EnterTranslationOcrSearchAsync();
+
+            Assert.Single(vm.TranslationOcrSearchRects);
+            Assert.True(vm.IsTranslationOcrSearchActive);
+        }
+        finally
+        {
+            vm.Dispose();
+        }
+    }
+
     private sealed class FakeWindowDetectionService : IWindowDetectionService
     {
         private readonly IReadOnlyList<WindowCandidate> _candidates;

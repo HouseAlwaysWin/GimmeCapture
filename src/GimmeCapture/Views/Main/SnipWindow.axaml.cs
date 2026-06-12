@@ -48,6 +48,7 @@ public partial class SnipWindow : Window
     private IDisposable? _viewportBoundsSubscription;
     private IDisposable? _toolbarBoundsSubscription;
     private IDisposable? _recordingStateSubscription;
+    private IDisposable? _translationModeSubscription;
     private Rect _originalRect;
     
     // Services
@@ -303,6 +304,8 @@ public partial class SnipWindow : Window
         _toolbarBoundsSubscription = null;
         _recordingStateSubscription?.Dispose();
         _recordingStateSubscription = null;
+        _translationModeSubscription?.Dispose();
+        _translationModeSubscription = null;
         
         // Release ViewModel resources
         _viewModel?.Dispose();
@@ -349,11 +352,24 @@ public partial class SnipWindow : Window
         _toolbarBoundsSubscription = null;
         _recordingStateSubscription?.Dispose();
         _recordingStateSubscription = null;
+        _translationModeSubscription?.Dispose();
+        _translationModeSubscription = null;
+        ResetTranslationSelectionModifierState();
 
         _viewModel = DataContext as SnipWindowViewModel;
         if (_viewModel != null)
         {
             var vm = _viewModel;
+            _translationModeSubscription = vm.WhenAnyValue(x => x.IsTranslationMode)
+                .ObserveOn(RxApp.MainThreadScheduler)
+                .Subscribe(isTranslationMode =>
+                {
+                    if (!isTranslationMode)
+                    {
+                        ResetTranslationSelectionModifierState();
+                    }
+                });
+
             _viewportBoundsSubscription = this.GetObservable(Visual.BoundsProperty)
                 .Subscribe(b => vm.ViewportSize = b.Size);
             

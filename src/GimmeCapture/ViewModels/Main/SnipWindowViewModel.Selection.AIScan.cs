@@ -423,6 +423,15 @@ public partial class SnipWindowViewModel
             return;
         }
 
+        // Ctrl key-repeat and the Avalonia/Win32 keyboard paths may report the same
+        // press more than once. Re-entering used to clear the overlay and force a
+        // new scan each time, which appeared as continuous flickering.
+        if (IsTranslationOcrSearchActive)
+        {
+            System.Diagnostics.Debug.WriteLine("[TranslationOCR] Ignored duplicate OCR search entry.");
+            return;
+        }
+
         InvalidateTranslationOcrSearchCache();
         IsTranslationOcrSearchActive = true;
         RefreshTranslationOcrSearchRects();
