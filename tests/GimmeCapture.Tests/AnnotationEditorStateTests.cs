@@ -136,6 +136,35 @@ public class AnnotationEditorStateTests
     }
 
     [Fact]
+    public void RemoveSelectedAnnotation_RemovesOnlySelectionAndSupportsUndo()
+    {
+        var state = new AnnotationEditorState();
+        var first = new Annotation
+        {
+            Type = AnnotationType.Rectangle,
+            StartPoint = new Point(10, 10),
+            EndPoint = new Point(40, 40)
+        };
+        var selected = new Annotation
+        {
+            Type = AnnotationType.Ellipse,
+            StartPoint = new Point(50, 50),
+            EndPoint = new Point(90, 90)
+        };
+        state.AddAnnotation(first);
+        state.AddAnnotation(selected);
+
+        Assert.True(state.RemoveSelectedAnnotation());
+        Assert.Single(state.Annotations);
+        Assert.Same(first, state.Annotations[0]);
+        Assert.Null(state.SelectedAnnotation);
+
+        state.Undo();
+        Assert.Equal(2, state.Annotations.Count);
+        Assert.Contains(selected, state.Annotations);
+    }
+
+    [Fact]
     public void SelectedThicknessChange_IsUndoable()
     {
         var state = new AnnotationEditorState();

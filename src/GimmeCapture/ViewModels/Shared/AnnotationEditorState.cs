@@ -436,6 +436,18 @@ public sealed class AnnotationEditorState : ReactiveObject, IDisposable
         PushUndoAction(new AnnotationHistoryAction(Annotations, annotation, false));
     }
 
+    public bool RemoveSelectedAnnotation()
+    {
+        var annotation = SelectedAnnotation;
+        if (annotation == null)
+        {
+            return false;
+        }
+
+        RemoveAnnotation(annotation);
+        return true;
+    }
+
     public void ClearAnnotations()
     {
         if (Annotations.Count == 0) return;

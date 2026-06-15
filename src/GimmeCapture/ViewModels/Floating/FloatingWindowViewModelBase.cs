@@ -352,6 +352,7 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
     public ReactiveCommand<AnnotationType, Unit> SelectToolCommand { get; protected set; } = null!;
     public ReactiveCommand<Unit, Unit> ConfirmTextEntryCommand { get; protected set; } = null!;
     public ReactiveCommand<Unit, Unit> CancelTextEntryCommand { get; protected set; } = null!;
+    public ReactiveCommand<Unit, Unit> DeleteSelectedAnnotationCommand { get; protected set; } = null!;
     public ReactiveCommand<Unit, Unit> ClearAnnotationsCommand { get; protected set; } = null!;
     public ReactiveCommand<Unit, Unit> UndoCommand { get; protected set; } = null!;
     public ReactiveCommand<Unit, Unit> RedoCommand { get; protected set; } = null!;
@@ -519,7 +520,15 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
         IncreaseThicknessCommand = ReactiveCommand.Create(() => _editorState.ApplySelectedThickness(Math.Min(CurrentThickness + 1, 30)));
         DecreaseThicknessCommand = ReactiveCommand.Create(() => _editorState.ApplySelectedThickness(Math.Max(CurrentThickness - 1, 1)));
         SetRedactionPresetCommand = ReactiveCommand.Create<string>(preset => _editorState.SetRedactionPreset(preset));
-        
+
+        var canDeleteSelected = this.WhenAnyValue(
+            x => x.SelectedAnnotation,
+            x => x.IsEnteringText,
+            (annotation, enteringText) => annotation != null && !enteringText)
+            .ObserveOn(RxApp.MainThreadScheduler);
+        DeleteSelectedAnnotationCommand = ReactiveCommand.Create(
+            () => { _editorState.RemoveSelectedAnnotation(); },
+            canDeleteSelected);
         ClearAnnotationsCommand = ReactiveCommand.Create(ClearAnnotations, notEnteringText);
 
         var canUndo = this.WhenAnyValue(x => x.HasUndo, x => x.IsEnteringText, (u, t) => u && !t).ObserveOn(RxApp.MainThreadScheduler);

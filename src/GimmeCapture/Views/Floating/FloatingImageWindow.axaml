@@ -37,7 +37,7 @@
         <!-- History -->
         <KeyBinding Gesture="Ctrl+Z" Command="{Binding UndoShortcutCommand}" />
         <KeyBinding Gesture="Ctrl+Y" Command="{Binding RedoCommand}" />
-        <KeyBinding Gesture="Delete" Command="{Binding ClearAnnotationsCommand}" />
+        <KeyBinding Gesture="Delete" Command="{Binding DeleteSelectedAnnotationCommand}" />
 
         <!-- Mode Actions -->
         <KeyBinding Gesture="{Binding SelectionHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding SelectionCommand}" />
