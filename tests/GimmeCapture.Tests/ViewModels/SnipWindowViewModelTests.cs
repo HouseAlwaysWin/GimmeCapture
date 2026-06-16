@@ -100,6 +100,56 @@ public class SnipWindowViewModelTests
         Assert.Empty(vm.TranslatedBlocks);
     }
 
+    [Fact]
+    public void EnteringSelectedState_AppliesDefaultHideSnipToolbarSetting()
+    {
+        var mainVm = new MainWindowViewModel { DefaultHideSnipToolbar = true };
+        using var vm = new SnipWindowViewModel(Colors.Red, 2.0, recService: null, mainVm);
+
+        Assert.True(vm.ShowToolbar);
+
+        vm.SelectionRect = new Rect(10, 10, 120, 80);
+        vm.CurrentState = SnipState.Selecting;
+        vm.CurrentState = SnipState.Selected;
+
+        Assert.False(vm.ShowToolbar);
+        Assert.False(vm.IsToolbarShownOnScreen);
+        Assert.True(vm.ToolbarLeft < -10000);
+    }
+
+    [Fact]
+    public void EnteringSelectedRecordingState_AppliesDefaultHideRecordToolbarSetting()
+    {
+        var mainVm = new MainWindowViewModel { DefaultHideRecordToolbar = true };
+        using var vm = new SnipWindowViewModel(Colors.Red, 2.0, recService: null, mainVm);
+
+        vm.CurrentMode = SnipMode.Recording;
+        vm.SelectionRect = new Rect(10, 10, 120, 80);
+        vm.CurrentState = SnipState.Selecting;
+        vm.CurrentState = SnipState.Selected;
+
+        Assert.False(vm.ShowToolbar);
+        Assert.False(vm.IsToolbarShownOnScreen);
+        Assert.True(vm.ToolbarLeft < -10000);
+    }
+
+    [Fact]
+    public void ShowingDefaultHiddenToolbar_RestoresOnScreenInteraction()
+    {
+        var mainVm = new MainWindowViewModel { DefaultHideSnipToolbar = true };
+        using var vm = new SnipWindowViewModel(Colors.Red, 2.0, recService: null, mainVm);
+        vm.SelectionRect = new Rect(10, 10, 120, 80);
+        vm.ToolbarWidth = 300;
+        vm.ToolbarHeight = 40;
+        vm.CurrentState = SnipState.Selecting;
+        vm.CurrentState = SnipState.Selected;
+
+        vm.ShowToolbar = true;
+
+        Assert.True(vm.IsToolbarShownOnScreen);
+        Assert.True(vm.ToolbarLeft > -10000);
+    }
+
     [Theory]
     [InlineData(false, SnipAutoAction.None)]
     [InlineData(true, SnipAutoAction.Pin)]

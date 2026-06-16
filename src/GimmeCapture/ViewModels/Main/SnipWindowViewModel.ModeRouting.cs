@@ -103,6 +103,10 @@ public partial class SnipWindowViewModel
 
         DeactivateDrawingInteraction();
         this.RaiseAndSetIfChanged(ref _currentMode, value, nameof(CurrentMode));
+        if (CurrentState == SnipState.Selected)
+        {
+            ApplyDefaultToolbarVisibilityForMode(value);
+        }
         SyncAudioMeterTimerWithMode();
 
         // Logic from old IsRecordingMode / IsTranslationMode setters

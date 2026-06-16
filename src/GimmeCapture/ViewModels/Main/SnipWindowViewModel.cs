@@ -382,6 +382,27 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         _selectionBorderThickness = _mainVm.BorderThickness;
     }
 
+    private void ApplyDefaultToolbarVisibilityForMode(SnipMode mode)
+    {
+        if (_mainVm == null
+            || mode == SnipMode.Translation
+            || CurrentState != SnipState.Selected
+            || IsRecordingFinalizing)
+        {
+            return;
+        }
+
+        bool shouldShowToolbar = mode == SnipMode.Recording
+            ? !_mainVm.DefaultHideRecordToolbar
+            : !_mainVm.DefaultHideSnipToolbar;
+
+        ShowToolbar = shouldShowToolbar;
+        if (!shouldShowToolbar)
+        {
+            ParkSnipToolbarOffscreen();
+        }
+    }
+
     private void InitializeRecordingBindingsIfNeeded()
     {
         if (_recordingService != null)

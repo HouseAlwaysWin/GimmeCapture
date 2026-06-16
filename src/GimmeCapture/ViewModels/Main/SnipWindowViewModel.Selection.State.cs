@@ -25,6 +25,7 @@ public partial class SnipWindowViewModel
         set
         {
             var previousState = _currentState;
+            bool enteringSelected = previousState != SnipState.Selected && value == SnipState.Selected;
             System.Diagnostics.Debug.WriteLine($"[SnipState] {previousState} -> {value}");
             this.RaiseAndSetIfChanged(ref _currentState, value);
             this.RaisePropertyChanged(nameof(SelectionShadowColor));
@@ -34,6 +35,10 @@ public partial class SnipWindowViewModel
             
             // If we leave Detecting state (e.g. start selecting), cancel any running scan
             _selectionStateController.HandleTransition(previousState, value);
+            if (enteringSelected)
+            {
+                ApplyDefaultToolbarVisibilityForMode(CurrentMode);
+            }
             this.RaisePropertyChanged(nameof(IsToolbarVisible));
             this.RaisePropertyChanged(nameof(IsToolbarShownOnScreen));
         }
