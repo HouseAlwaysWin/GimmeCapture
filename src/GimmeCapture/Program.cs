@@ -1,7 +1,7 @@
 using Avalonia;
 using System;
-using Avalonia.ReactiveUI;
 using GimmeCapture.Services.Core.Infrastructure;
+using ReactiveUI.Avalonia;
 
 namespace GimmeCapture;
 
@@ -17,6 +17,7 @@ class Program
     public static void Main(string[] args)
     {
         CommandLineArgs = args ?? [];
+        AppLog.Initialize();
         try
         {
             // Ensure Working Directory is correct (Fix for Auto-Start)
@@ -29,11 +30,15 @@ class Program
         }
         catch (Exception ex)
         {
+            AppLog.Error("Program.Startup", ex);
             // Startup failure can happen before Avalonia UI is fully available,
             // so keep the fatal prompt on a platform-native dialog.
             var message = $"Application Startup Failed:\n{ex.Message}\n\nStack:\n{ex.StackTrace}";
             System.Windows.Forms.MessageBox.Show(message, "GimmeCapture Fatal Error");
-            System.Diagnostics.Debug.WriteLine($"FATAL: {ex}");
+        }
+        finally
+        {
+            AppLog.Shutdown();
         }
     }
 
@@ -43,5 +48,5 @@ class Program
             .UsePlatformDetect()
             .WithInterFont()
             .LogToTrace()
-            .UseReactiveUI();
+            .UseReactiveUI(_ => { });
 }

@@ -1,15 +1,27 @@
-﻿using System;
+using System;
 using System.IO;
 using System.IO.Compression;
-using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
+using GimmeCapture.Services.Abstractions;
 using ReactiveUI;
 
 namespace GimmeCapture.Services.Core.AI;
 
 public class AIModelDownloader : ReactiveObject
 {
+    private readonly IArtifactDownloader _artifactDownloader;
+
+    public AIModelDownloader()
+        : this(new ArtifactDownloader(SharedHttpClient.Instance))
+    {
+    }
+
+    public AIModelDownloader(IArtifactDownloader artifactDownloader)
+    {
+        _artifactDownloader = artifactDownloader ?? throw new ArgumentNullException(nameof(artifactDownloader));
+    }
+
     private double _downloadProgress;
     public double DownloadProgress
     {
@@ -31,80 +43,97 @@ public class AIModelDownloader : ReactiveObject
         set => this.RaiseAndSetIfChanged(ref _currentDownloadName, value);
     }
 
-    public virtual async Task DownloadFileAsync(string url, string destination, double progressOffset, double progressWeight, CancellationToken ct)
+    private ArtifactDownloadStage _downloadStage;
+    public ArtifactDownloadStage DownloadStage
     {
-        using var client = new HttpClient();
-        client.Timeout = TimeSpan.FromMinutes(60);
-        client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36");
-        
-        System.Diagnostics.Debug.WriteLine($"[AI] Downloading {url} to {destination}");
-        
-        string tempPath = destination + ".tmp";
-        
+        get => _downloadStage;
+        private set => this.RaiseAndSetIfChanged(ref _downloadStage, value);
+    }
+
+    public virtual async Task DownloadFileAsync(
+        ArtifactDescriptor descriptor,
+        string destination,
+        double progressOffset,
+        double progressWeight,
+        CancellationToken cancellationToken)
+    {
+        var destinationDirectory = Path.GetDirectoryName(destination)
+            ?? throw new ArgumentException("Destination must have a parent directory.", nameof(destination));
+        var destinationDescriptor = descriptor with { FileName = Path.GetFileName(destination) };
+        var progress = new InlineProgress<ArtifactDownloadProgress>(value =>
+        {
+            DownloadStage = value.Stage;
+            DownloadProgress = progressOffset + (value.Percentage / 100 * progressWeight);
+        });
+
+        await _artifactDownloader
+            .DownloadAsync(destinationDescriptor, destinationDirectory, progress, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    public virtual async Task DownloadAndExtractZipAsync(
+        ArtifactDescriptor descriptor,
+        string outputDirectory,
+        double progressOffset,
+        double progressWeight,
+        CancellationToken cancellationToken)
+    {
+        var zipPath = Path.Combine(outputDirectory, descriptor.FileName);
+        await DownloadFileAsync(descriptor, zipPath, progressOffset, progressWeight, cancellationToken)
+            .ConfigureAwait(false);
+
         try
         {
-            using var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
-            response.EnsureSuccessStatusCode();
-
-            var totalBytes = response.Content.Headers.ContentLength ?? -1L;
-            using var contentStream = await response.Content.ReadAsStreamAsync(ct);
-            using var fileStream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None, 8192, true);
-
-            var buffer = new byte[8192];
-            long totalRead = 0;
-            int read;
-
-            while ((read = await contentStream.ReadAsync(buffer, 0, buffer.Length, ct)) > 0)
+            await Task.Run(() =>
             {
-                await fileStream.WriteAsync(buffer, 0, read, ct);
-                totalRead += read;
-
-                if (totalBytes != -1)
+                using var archive = ZipFile.OpenRead(zipPath);
+                foreach (var entry in archive.Entries)
                 {
-                    DownloadProgress = progressOffset + ((double)totalRead / totalBytes * progressWeight);
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (!entry.FullName.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    var fileName = Path.GetFileName(entry.FullName);
+                    if (string.IsNullOrWhiteSpace(fileName))
+                    {
+                        continue;
+                    }
+
+                    entry.ExtractToFile(Path.Combine(outputDirectory, fileName), overwrite: true);
                 }
-            }
-            
-            await fileStream.FlushAsync(ct);
-            fileStream.Close();
-
-            if (totalBytes != -1 && totalRead < totalBytes)
-            {
-                throw new IOException($"Download truncated: Expected {totalBytes} bytes but only received {totalRead} bytes.");
-            }
-
-            if (File.Exists(destination)) File.Delete(destination);
-            File.Move(tempPath, destination);
+            }, cancellationToken).ConfigureAwait(false);
         }
-        catch (Exception)
+        finally
         {
-            if (File.Exists(tempPath)) try { File.Delete(tempPath); } catch { }
-            throw;
+            if (File.Exists(zipPath))
+            {
+                File.Delete(zipPath);
+            }
         }
     }
 
-    public virtual async Task DownloadAndExtractZipAsync(string url, string outputDir, double progressOffset, double progressWeight, CancellationToken ct)
+    [Obsolete("Use the ArtifactDescriptor overload so downloads are integrity checked.")]
+    public virtual Task DownloadFileAsync(
+        string url,
+        string destination,
+        double progressOffset,
+        double progressWeight,
+        CancellationToken cancellationToken) =>
+        throw new InvalidOperationException("Unverified URL downloads are disabled.");
+
+    [Obsolete("Use the ArtifactDescriptor overload so downloads are integrity checked.")]
+    public virtual Task DownloadAndExtractZipAsync(
+        string url,
+        string outputDirectory,
+        double progressOffset,
+        double progressWeight,
+        CancellationToken cancellationToken) =>
+        throw new InvalidOperationException("Unverified URL downloads are disabled.");
+
+    private sealed class InlineProgress<T>(Action<T> report) : IProgress<T>
     {
-        string zipPath = Path.Combine(outputDir, "temp_ai.zip");
-        await DownloadFileAsync(url, zipPath, progressOffset, progressWeight, ct);
-
-        await Task.Run(() =>
-        {
-            if (ct.IsCancellationRequested) return;
-
-            using (ZipArchive archive = ZipFile.OpenRead(zipPath))
-            {
-                foreach (ZipArchiveEntry entry in archive.Entries)
-                {
-                    if (entry.FullName.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
-                    {
-                        string fileName = Path.GetFileName(entry.FullName);
-                        string destinationPath = Path.Combine(outputDir, fileName);
-                        entry.ExtractToFile(destinationPath, true);
-                    }
-                }
-            }
-            File.Delete(zipPath);
-        }, ct);
+        public void Report(T value) => report(value);
     }
 }

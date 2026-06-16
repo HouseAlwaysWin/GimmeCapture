@@ -197,17 +197,6 @@ public partial class MainWindowViewModel
         }
     }
 
-    private double _cornerIconScale = 1.0;
-    public double CornerIconScale
-    {
-        get => _cornerIconScale;
-        set
-        {
-            this.RaiseAndSetIfChanged(ref _cornerIconScale, value);
-            this.RaisePropertyChanged(nameof(PreviewIconSize));
-        }
-    }
-
     public double PreviewIconSize => 10;
     public double PreviewWingWidth => 100 * WingScale * 0.5;
     public double PreviewWingHeight => 60 * WingScale * 0.5;

@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Runtime.InteropServices;
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core.Infrastructure;
@@ -32,10 +31,6 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
     private bool _llCtrlDown;
     private bool _llAltDown;
     private readonly string _messageWindowClassName = $"GimmeCaptureHotkeyMessageWindow_{Environment.ProcessId}_{Guid.NewGuid():N}";
-    private readonly string _debugLogPath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "GimmeCapture",
-        "hotkey-debug.log");
     private ushort _messageWindowClassAtom;
     private IntPtr _messageWindowInstance = IntPtr.Zero;
     
@@ -965,25 +960,15 @@ public class WindowsGlobalHotkeyService : IGlobalHotkeyService
         }
         catch (System.Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Error in hotkey callback: {ex}");
-            WriteDebugLog($"callback error id={id} source={source} error={ex}");
+            AppLog.Error("Hotkey.Callback", ex);
+            WriteDebugLog($"callback error id={id} source={source}");
             return false;
         }
     }
 
     private void WriteDebugLog(string message)
     {
-        try
-        {
-            Directory.CreateDirectory(Path.GetDirectoryName(_debugLogPath)!);
-            File.AppendAllText(
-                _debugLogPath,
-                $"{DateTimeOffset.Now:O} {message}{Environment.NewLine}");
-        }
-        catch
-        {
-            // Diagnostics must never interfere with global hotkey routing.
-        }
+        _ = message;
     }
 
     public void Dispose()

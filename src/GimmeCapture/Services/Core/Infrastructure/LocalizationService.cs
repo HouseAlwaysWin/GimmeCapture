@@ -83,7 +83,7 @@ namespace GimmeCapture.Services.Core.Infrastructure;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[LocalizationService] Failed to load translation for {lang}: {ex.Message}");
+                AppLog.Warning("Localization.Load", ex);
                 _translations[lang] = new Dictionary<string, string>();
             }
         }

@@ -33,8 +33,8 @@ internal sealed class AIResourceInstaller
     public async Task<bool> EnsureLlamaModelAsync(string modelId, CancellationToken ct = default)
     {
         if (!_modelCatalog.TryGetLlamaModelPreset(modelId, out var preset) ||
-            string.IsNullOrWhiteSpace(preset.DownloadUrl) ||
-            string.IsNullOrWhiteSpace(preset.FileName))
+            !preset.IsDownloadable ||
+            preset.Artifact is null)
         {
             _callbacks.SetLastErrorMessage("Selected Llama model is not downloadable. Please place a GGUF file in the custom model path.");
             return false;
@@ -54,7 +54,7 @@ internal sealed class AIResourceInstaller
             _downloader.IsDownloading = true;
             _downloader.CurrentDownloadName = $"LLM Model ({preset.DisplayName})";
             _downloader.DownloadProgress = 0;
-            await _downloader.DownloadFileAsync(preset.DownloadUrl, modelPath, 0, 100, ct);
+            await _downloader.DownloadFileAsync(preset.Artifact, modelPath, 0, 100, ct);
             _settingsService.Settings.LlamaModelId = modelId;
             return File.Exists(modelPath);
         }
@@ -197,7 +197,7 @@ internal sealed class AIResourceInstaller
             var onnxDll = _pathService.GetOnnxDllPath();
             if (!File.Exists(onnxDll))
             {
-                await _downloader.DownloadAndExtractZipAsync(package.OnnxRuntimeZipUrl, _pathService.GetRuntimeDir(), 0, 60, ct);
+                await _downloader.DownloadAndExtractZipAsync(package.OnnxRuntimeZip, _pathService.GetRuntimeDir(), 0, 60, ct);
             }
             else
             {
@@ -207,7 +207,7 @@ internal sealed class AIResourceInstaller
             var modelPath = _pathService.GetAICoreModelPath();
             if (!File.Exists(modelPath))
             {
-                await _downloader.DownloadFileAsync(package.U2NetModelUrl, modelPath, 60, 40, ct);
+                await _downloader.DownloadFileAsync(package.U2NetModel, modelPath, 60, 40, ct);
             }
             else
             {
@@ -252,7 +252,7 @@ internal sealed class AIResourceInstaller
 
             if (!File.Exists(paths.Encoder))
             {
-                await _downloader.DownloadFileAsync(package.EncoderUrl, paths.Encoder, 0, 90, ct);
+                await _downloader.DownloadFileAsync(package.Encoder, paths.Encoder, 0, 90, ct);
             }
             else
             {
@@ -261,7 +261,7 @@ internal sealed class AIResourceInstaller
 
             if (!File.Exists(paths.Decoder))
             {
-                await _downloader.DownloadFileAsync(package.DecoderUrl, paths.Decoder, 90, 10, ct);
+                await _downloader.DownloadFileAsync(package.Decoder, paths.Decoder, 90, 10, ct);
             }
             else
             {
@@ -306,17 +306,17 @@ internal sealed class AIResourceInstaller
             var package = _modelCatalog.GetOcrPackage(language);
 
             if (!File.Exists(paths.Det))
-                await _downloader.DownloadFileAsync(package.DetectionUrl, paths.Det, 0, 40, ct);
+                await _downloader.DownloadFileAsync(package.Detection, paths.Det, 0, 40, ct);
             else
                 _downloader.DownloadProgress = 40;
 
             if (!File.Exists(paths.Rec))
-                await _downloader.DownloadFileAsync(package.RecognitionUrl, paths.Rec, 40, 50, ct);
+                await _downloader.DownloadFileAsync(package.Recognition, paths.Rec, 40, 50, ct);
             else
                 _downloader.DownloadProgress = 90;
 
             if (!File.Exists(paths.Dict))
-                await _downloader.DownloadFileAsync(package.DictionaryUrl, paths.Dict, 90, 10, ct);
+                await _downloader.DownloadFileAsync(package.Dictionary, paths.Dict, 90, 10, ct);
             else
                 _downloader.DownloadProgress = 100;
 
@@ -358,25 +358,25 @@ internal sealed class AIResourceInstaller
             var package = _modelCatalog.GetNmtPackage();
 
             if (!File.Exists(paths.Encoder))
-                await _downloader.DownloadFileAsync(package.EncoderUrl, paths.Encoder, 0, 40, ct);
+                await _downloader.DownloadFileAsync(package.Encoder, paths.Encoder, 0, 40, ct);
             else
                 _downloader.DownloadProgress = 40;
 
             if (!File.Exists(paths.Decoder))
-                await _downloader.DownloadFileAsync(package.DecoderUrl, paths.Decoder, 40, 50, ct);
+                await _downloader.DownloadFileAsync(package.Decoder, paths.Decoder, 40, 50, ct);
             else
                 _downloader.DownloadProgress = 90;
 
             if (!File.Exists(paths.Tokenizer))
-                await _downloader.DownloadFileAsync(package.TokenizerUrl, paths.Tokenizer, 90, 2.5, ct);
+                await _downloader.DownloadFileAsync(package.Tokenizer, paths.Tokenizer, 90, 2.5, ct);
 
             if (!File.Exists(paths.Spm))
-                await _downloader.DownloadFileAsync(package.SentencePieceUrl, paths.Spm, 92.5, 2.5, ct);
+                await _downloader.DownloadFileAsync(package.SentencePiece, paths.Spm, 92.5, 2.5, ct);
 
             if (!File.Exists(paths.Config))
-                await _downloader.DownloadFileAsync(package.ConfigUrl, paths.Config, 95, 2.5, ct);
+                await _downloader.DownloadFileAsync(package.Config, paths.Config, 95, 2.5, ct);
             if (!File.Exists(paths.GenConfig))
-                await _downloader.DownloadFileAsync(package.GenerationConfigUrl, paths.GenConfig, 97.5, 2.5, ct);
+                await _downloader.DownloadFileAsync(package.GenerationConfig, paths.GenConfig, 97.5, 2.5, ct);
 
             _downloader.DownloadProgress = 100;
             return _callbacks.IsNmtReady();

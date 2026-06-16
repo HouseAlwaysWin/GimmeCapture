@@ -1,6 +1,6 @@
 using ReactiveUI;
+using GimmeCapture.Services.Core.Infrastructure;
 using System;
-using System.Diagnostics;
 using System.Reactive;
 using System.Reactive.Disposables;
 using System.Threading.Tasks;
@@ -78,6 +78,6 @@ internal static class ReactiveCommandLifecycleHelper
         string scope)
     {
         lifecycleDisposables.Add(command.ThrownExceptions.Subscribe(ex =>
-            Debug.WriteLine($"[{scope}:{commandName}] {ex}")));
+            AppLog.Error($"{scope}.{commandName}", ex)));
     }
 }

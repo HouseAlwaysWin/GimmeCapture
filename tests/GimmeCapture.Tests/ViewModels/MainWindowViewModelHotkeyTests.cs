@@ -53,7 +53,7 @@ public class MainWindowViewModelHotkeyTests
             new Lazy<SAM2RuntimeService>(() => sam2RuntimeService),
             new Lazy<OcrRuntimeService>(() => ocrRuntimeService),
             aiPathService,
-            ResourceQueueService.Instance);
+            new ResourceQueueService());
 
         var viewModel = new MainWindowViewModel(dependencies);
 
@@ -159,7 +159,7 @@ public class MainWindowViewModelHotkeyTests
             new Lazy<SAM2RuntimeService>(() => sam2RuntimeService),
             new Lazy<OcrRuntimeService>(() => ocrRuntimeService),
             aiPathService,
-            ResourceQueueService.Instance);
+            new ResourceQueueService());
 
         return new MainWindowViewModel(dependencies);
     }

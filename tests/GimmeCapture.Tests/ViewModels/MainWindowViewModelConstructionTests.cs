@@ -41,7 +41,7 @@ public class MainWindowViewModelConstructionTests
         var sam2RuntimeService = new SAM2RuntimeService(aiPathService, nativeResolverService);
         var ocrRuntimeService = new OcrRuntimeService(aiResourceService);
         var aiResourceOrchestrator = new Lazy<AIResourceOrchestrator>(() => aiResourceService.Orchestrator);
-        var resourceQueue = ResourceQueueService.Instance;
+        var resourceQueue = new ResourceQueueService();
 
         var dependencies = new MainWindowViewModelDependencies(
             settingsService,

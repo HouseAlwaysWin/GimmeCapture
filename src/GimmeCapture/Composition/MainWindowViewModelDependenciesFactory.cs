@@ -30,6 +30,7 @@ public static class MainWindowViewModelDependenciesFactory
         var nativeResolverService = new NativeResolverService(aiPathService);
         var aiModelDownloader = new AIModelDownloader();
         var aiModelCatalog = new AIModelCatalog();
+        var resourceQueue = new ResourceQueueService();
         var ffmpegDownloader = new Lazy<FFmpegDownloaderService>(() => new FFmpegDownloaderService(settingsService));
         var recordingService = new Lazy<RecordingService>(() => new RecordingService(ffmpegDownloader.Value, settingsService));
         var updateService = new Lazy<UpdateService>(() => new UpdateService(AppVersionInfo.CurrentVersion));
@@ -64,6 +65,6 @@ public static class MainWindowViewModelDependenciesFactory
             sam2RuntimeService,
             ocrRuntimeService,
             aiPathService,
-            ResourceQueueService.Instance);
+            resourceQueue);
     }
 }

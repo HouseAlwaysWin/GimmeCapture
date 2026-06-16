@@ -154,17 +154,6 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
         }
     }
 
-    private double _cornerIconScale = 1.0;
-    public double CornerIconScale
-    {
-        get => _cornerIconScale;
-        set
-        {
-            this.RaiseAndSetIfChanged(ref _cornerIconScale, value);
-            this.RaisePropertyChanged(nameof(SelectionIconSize));
-        }
-    }
-
     // Derived Decoration Props
     public double WingWidth => 100 * WingScale;
     public double WingHeight => 60 * WingScale;
@@ -460,8 +449,6 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
     public virtual string CropHotkey => "C";
 
     // Scale Commands
-    public ReactiveCommand<Unit, Unit> IncreaseCornerIconScaleCommand { get; protected set; } = ReactiveCommand.Create(() => {});
-    public ReactiveCommand<Unit, Unit> DecreaseCornerIconScaleCommand { get; protected set; } = ReactiveCommand.Create(() => {});
     public ReactiveCommand<Unit, Unit> IncreaseWingScaleCommand { get; protected set; } = ReactiveCommand.Create(() => {});
     public ReactiveCommand<Unit, Unit> DecreaseWingScaleCommand { get; protected set; } = ReactiveCommand.Create(() => {});
 
@@ -480,7 +467,7 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
             if (SaveAction != null) await SaveAction();
         });
 
-        var notEnteringText = this.WhenAnyValue(x => x.IsEnteringText).Select(x => !x).ObserveOn(RxApp.MainThreadScheduler);
+        var notEnteringText = this.WhenAnyValue(x => x.IsEnteringText).Select(x => !x).ObserveOn(RxSchedulers.MainThreadScheduler);
 
         ToggleToolbarCommand = ReactiveCommand.Create(() => { ShowToolbar = !ShowToolbar; }, notEnteringText);
 
@@ -512,7 +499,7 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
 
     protected void InitializeAnnotationCommands()
     {
-        var notEnteringText = this.WhenAnyValue(x => x.IsEnteringText).Select(x => !x).ObserveOn(RxApp.MainThreadScheduler);
+        var notEnteringText = this.WhenAnyValue(x => x.IsEnteringText).Select(x => !x).ObserveOn(RxSchedulers.MainThreadScheduler);
 
         IncreaseFontSizeCommand = ReactiveCommand.Create(() => { CurrentFontSize = Math.Min(CurrentFontSize + 2, 72); });
         DecreaseFontSizeCommand = ReactiveCommand.Create(() => { CurrentFontSize = Math.Max(CurrentFontSize - 2, 8); });
@@ -525,16 +512,16 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
             x => x.SelectedAnnotation,
             x => x.IsEnteringText,
             (annotation, enteringText) => annotation != null && !enteringText)
-            .ObserveOn(RxApp.MainThreadScheduler);
+            .ObserveOn(RxSchedulers.MainThreadScheduler);
         DeleteSelectedAnnotationCommand = ReactiveCommand.Create(
             () => { _editorState.RemoveSelectedAnnotation(); },
             canDeleteSelected);
         ClearAnnotationsCommand = ReactiveCommand.Create(ClearAnnotations, notEnteringText);
 
-        var canUndo = this.WhenAnyValue(x => x.HasUndo, x => x.IsEnteringText, (u, t) => u && !t).ObserveOn(RxApp.MainThreadScheduler);
+        var canUndo = this.WhenAnyValue(x => x.HasUndo, x => x.IsEnteringText, (u, t) => u && !t).ObserveOn(RxSchedulers.MainThreadScheduler);
         UndoCommand = ReactiveCommand.Create(Undo, canUndo);
 
-        var canRedo = this.WhenAnyValue(x => x.HasRedo, x => x.IsEnteringText, (r, t) => r && !t).ObserveOn(RxApp.MainThreadScheduler);
+        var canRedo = this.WhenAnyValue(x => x.HasRedo, x => x.IsEnteringText, (r, t) => r && !t).ObserveOn(RxSchedulers.MainThreadScheduler);
         RedoCommand = ReactiveCommand.Create(Redo, canRedo);
 
         ConfirmTextEntryCommand = ReactiveCommand.Create(() => 

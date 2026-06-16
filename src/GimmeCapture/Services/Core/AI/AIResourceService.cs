@@ -75,6 +75,7 @@ public class AIResourceService : ReactiveObject
             if (e.PropertyName == nameof(AIModelDownloader.DownloadProgress)) this.RaisePropertyChanged(nameof(DownloadProgress));
             if (e.PropertyName == nameof(AIModelDownloader.IsDownloading)) this.RaisePropertyChanged(nameof(IsDownloading));
             if (e.PropertyName == nameof(AIModelDownloader.CurrentDownloadName)) this.RaisePropertyChanged(nameof(CurrentDownloadName));
+            if (e.PropertyName == nameof(AIModelDownloader.DownloadStage)) this.RaisePropertyChanged(nameof(DownloadStage));
         };
     }
 
@@ -95,6 +96,7 @@ public class AIResourceService : ReactiveObject
     public double DownloadProgress => _downloader.DownloadProgress;
     public bool IsDownloading => _downloader.IsDownloading;
     public string CurrentDownloadName => _downloader.CurrentDownloadName;
+    public ArtifactDownloadStage DownloadStage => _downloader.DownloadStage;
 
     public (string Encoder, string Decoder) GetSAM2Paths(SAM2Variant variant) => _orchestrator.GetSAM2Paths(variant);
 

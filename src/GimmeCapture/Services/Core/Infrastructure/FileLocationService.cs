@@ -24,7 +24,7 @@ public static class FileLocationService
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Failed to open file location: {ex.Message}");
+            AppLog.Warning("FileLocation.Reveal", ex);
         }
     }
 }

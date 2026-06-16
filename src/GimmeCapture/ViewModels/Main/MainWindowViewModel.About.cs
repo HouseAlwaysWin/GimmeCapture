@@ -2,6 +2,8 @@ using GimmeCapture.Services.Core.Infrastructure;
 using ReactiveUI;
 using System;
 using System.Collections.ObjectModel;
+using System.Linq;
+using System.Reactive.Linq;
 using System.Threading.Tasks;
 
 namespace GimmeCapture.ViewModels.Main;
@@ -54,11 +56,47 @@ public partial class MainWindowViewModel
         && !string.Equals(SelectedRelease.NormalizedVersion, AppVersion.TrimStart('v'), StringComparison.OrdinalIgnoreCase)
         && SelectedRelease.GetPreferredZipAsset() != null
         && !UpdateService.IsDownloading;
+    public string UpdateDownloadStageText => LocalizationService.Instance[UpdateService.DownloadStage switch
+    {
+        ArtifactDownloadStage.Verifying => "DownloadStageVerifying",
+        ArtifactDownloadStage.Completed => "DownloadStageCompleted",
+        ArtifactDownloadStage.Cancelled => "DownloadStageCancelled",
+        ArtifactDownloadStage.Failed => "DownloadStageFailed",
+        _ => "DownloadStageDownloading"
+    }];
+    public bool HasUpdateDownloadError =>
+        UpdateService.DownloadStage == ArtifactDownloadStage.Failed
+        && !string.IsNullOrWhiteSpace(UpdateService.LastErrorMessage);
 
     private void InitializeAboutCommands()
     {
         RefreshReleaseCatalogCommand = ReactiveCommand.CreateFromTask(() => LoadAvailableReleasesAsync(true));
         InstallSelectedReleaseCommand = ReactiveCommand.CreateFromTask(InstallSelectedReleaseAsync);
+        CopyDiagnosticsCommand = ReactiveCommand.CreateFromTask(CopyDiagnosticsAsync);
+        CancelUpdateDownloadCommand = ReactiveCommand.Create(UpdateService.CancelDownload);
+        UpdateService.WhenAnyValue(x => x.DownloadStage, x => x.IsDownloading)
+            .ObserveOn(RxSchedulers.MainThreadScheduler)
+            .Subscribe(_ =>
+            {
+                this.RaisePropertyChanged(nameof(UpdateDownloadStageText));
+                this.RaisePropertyChanged(nameof(HasUpdateDownloadError));
+                this.RaisePropertyChanged(nameof(CanInstallSelectedRelease));
+            });
+    }
+
+    private async Task CopyDiagnosticsAsync()
+    {
+        EnsureModulesInitialized();
+        var moduleDiagnostics = Modules.Select(module => new ModuleDiagnostic(
+            module.Name,
+            module.StatusText));
+        string renderer = Environment.GetEnvironmentVariable("AVALONIA_RENDERER") is { Length: > 0 } configuredRenderer
+            ? $"Avalonia/Skia ({configuredRenderer})"
+            : "Avalonia/Skia (backend auto)";
+        string diagnostics = DiagnosticInfoService.Build(CurrentVersionLabel, moduleDiagnostics, renderer);
+
+        await new ClipboardService().CopyTextAsync(diagnostics);
+        SetStatus("DiagnosticsCopied");
     }
 
     public async Task LoadAvailableReleasesAsync(bool forceRefresh = false)

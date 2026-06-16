@@ -20,23 +20,30 @@ jobs:
       with:
         dotnet-version: '10.0.x'
 
-    - name: Restore dependencies
-      run: dotnet restore src/GimmeCapture/GimmeCapture.csproj
-
     - name: Ensure bundled FFmpeg DLLs
       shell: powershell
       run: powershell -ExecutionPolicy Bypass -File scripts/ensure-ffmpeg-libs.ps1
+
+    - name: Verify
+      shell: powershell
+      run: powershell -ExecutionPolicy Bypass -File scripts/verify.ps1
 
     # Self-contained: largest but needs no .NET install. EnableCompressionInSingleFile shrinks the exe;
     # DebugType=none avoids shipping PDBs in the artifact.
     - name: Publish application (self-contained)
       run: |
         $version = "${{ github.ref_name }}".TrimStart('v')
-        $assemblyVersion = if ($version.Split('.').Count -eq 3) { "$version.0" } else { $version }
+        $coreVersion = $version.Split('-')[0]
+        $parts = $coreVersion.Split('.')
+        if ($parts.Count -ne 3) {
+          throw "Tag version must contain major.minor.patch: $version"
+        }
+        $assemblyVersion = "$($parts[0]).$($parts[1]).$($parts[2]).0"
         $pub = @(
           '-c', 'Release'
           '-r', 'win-x64'
           '--self-contained', 'true'
+          '--locked-mode'
           '-p:PublishSingleFile=true'
           '-p:IncludeNativeLibrariesForSelfExtract=true'
           '-p:IncludeAllContentForSelfExtract=true'
@@ -73,10 +80,19 @@ jobs:
       run: |
         Compress-Archive -Path ./publish/* -DestinationPath GimmeCapture_win-x64.zip
 
+    - name: Generate checksum manifest
+      shell: powershell
+      run: |
+        $hash = (Get-FileHash GimmeCapture_win-x64.zip -Algorithm SHA256).Hash.ToLowerInvariant()
+        "$hash  GimmeCapture_win-x64.zip" | Set-Content -Encoding ascii SHA256SUMS.txt
+
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v2
       with:
-        files: GimmeCapture_win-x64.zip
+        files: |
+          GimmeCapture_win-x64.zip
+          SHA256SUMS.txt
         generate_release_notes: true
+        prerelease: ${{ contains(github.ref_name, '-') }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

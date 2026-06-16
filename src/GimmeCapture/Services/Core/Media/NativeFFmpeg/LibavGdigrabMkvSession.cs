@@ -640,14 +640,6 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
 
     private static void LogNative(string message)
     {
-        try
-        {
-            var path = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "recording_native_debug.log");
-            System.IO.File.AppendAllText(path, $"[{DateTime.Now:HH:mm:ss.fff}] {message}{Environment.NewLine}");
-        }
-        catch
-        {
-            // ignore logging failures
-        }
+        System.Diagnostics.Debug.WriteLine($"[RecordingNative] {message}");
     }
 }

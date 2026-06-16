@@ -145,7 +145,8 @@ public partial class SnipWindowViewModel
                     if (currentBytes > maxMb * 1024 * 1024)
                     {
                         System.Diagnostics.Debug.WriteLine($"Recording size limit reached: {currentBytes / 1024.0 / 1024.0:F2} MB > {maxMb} MB. Pinning...");
-                        Avalonia.Threading.Dispatcher.UIThread.Post(() => { _ = ExecutePinRecordingAsync(); });
+                        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                            ExecutePinRecordingAsync().Forget("Recording.ExecutePin"));
                     }
                 }
             }

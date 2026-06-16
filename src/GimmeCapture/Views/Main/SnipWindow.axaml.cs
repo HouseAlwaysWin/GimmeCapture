@@ -119,11 +119,9 @@ public partial class SnipWindow : Window
         // Defer Z-Order logic to ensure window is fully initialized
         Avalonia.Threading.Dispatcher.UIThread.Post(async () =>
         {
-            Console.WriteLine("[SnipWindow] OnOpened Post callback executing");
             
             if (_viewModel != null)
             {
-                Console.WriteLine("[SnipWindow] ViewModel is not null, setting properties");
                 _viewModel.VisualScaling = this.RenderScaling;
                 _viewModel.ScreenOffset = this.Position;
                 // Initialize Win32 Hook for click-through
@@ -132,7 +130,6 @@ public partial class SnipWindow : Window
                 // Populate AllScreenBounds for multi-monitor UI
                 double scaling = this.RenderScaling;
                 var allScreens = this.Screens.All;
-                Console.WriteLine($"[SnipWindow] Detected {allScreens.Count} screens for multi-monitor UI.");
                 var physicalScreenBounds = allScreens.AsValueEnumerable().Select(s => s.Bounds).ToList();
                 var relativeScreenBounds = _screenLayoutService.BuildRelativeScreenBounds(physicalScreenBounds, this.Position, scaling);
                 var screenBoundsList = new System.Collections.Generic.List<ScreenBoundsViewModel>(relativeScreenBounds.Count);
@@ -147,7 +144,6 @@ public partial class SnipWindow : Window
                     });
                 }
                 _viewModel.AllScreenBounds = new System.Collections.ObjectModel.ObservableCollection<ScreenBoundsViewModel>(screenBoundsList);
-                Console.WriteLine($"[SnipWindow] AllScreenBounds populated with {_viewModel.AllScreenBounds.Count} items.");
                 
                 // Initial Active Screen Update
                 if (GetCursorPos(out POINT p))
@@ -173,20 +169,18 @@ public partial class SnipWindow : Window
                         }
                         _viewModel.InitializeTranslationToolbarPosition();
                     }, Avalonia.Threading.DispatcherPriority.Loaded);
-                    Console.WriteLine($"[SnipWindow] Translation toolbar at ({_viewModel.ToolbarLeft}, {_viewModel.ToolbarTop})");
                     
                     // NEW: Exclude from capture specifically for Translation Mode to prevent flickering during background OCR updates.
                     var hwnd = this.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
                     if (hwnd != IntPtr.Zero && OperatingSystem.IsWindows())
                     {
                         Win32Helpers.SetWindowCaptureVisibility(hwnd, false);
-                        Console.WriteLine("[SnipWindow] Applied WDA_EXCLUDEFROMCAPTURE for Translation Mode.");
                     }
                 }
             }
             else
             {
-                Console.WriteLine("[SnipWindow] WARNING: _viewModel is null in OnOpened!");
+                AppLog.Information("SnipWindow.OpenedWithoutViewModel");
             }
 
             this.Activate(); 
@@ -205,7 +199,7 @@ public partial class SnipWindow : Window
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"[SnipWindow] RefreshWindowRects exception: {ex.Message}");
+                    AppLog.Warning("SnipWindow.RefreshWindowRects", ex);
                 }
             }, Avalonia.Threading.DispatcherPriority.Background);
 
@@ -219,14 +213,13 @@ public partial class SnipWindow : Window
                     return;
                 }
 
-                Console.WriteLine("[SnipWindow] Triggering deferred AI Scan after initial overlay display");
                 try
                 {
                     _viewModel.AIScanCommand?.Execute().Subscribe();
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"[SnipWindow] Deferred AI Scan exception: {ex.Message}");
+                    AppLog.Warning("SnipWindow.DeferredAIScan", ex);
                 }
             }, Avalonia.Threading.DispatcherPriority.Background);
             
@@ -234,7 +227,7 @@ public partial class SnipWindow : Window
             // back from ComboBox popups and other transient UI.
             if (_viewModel?.IsTranslationMode != true)
             {
-                _ = Task.Run(async () =>
+                Task.Run(async () =>
                 {
                     await Task.Delay(500);
                     await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
@@ -243,9 +236,8 @@ public partial class SnipWindow : Window
                         this.Topmost = true;
                         this.Activate();
                         this.Focus();
-                        Console.WriteLine("[SnipWindow] Z-Order nudge applied.");
                     });
-                });
+                }).Forget("SnipWindow.TopmostNudge");
             }
 
             // Temporarily lower existing Pin windows
@@ -328,7 +320,9 @@ public partial class SnipWindow : Window
         _windowLayerService.RestoreTopmostWindows(_hiddenTopmostWindows);
         _hiddenTopmostWindows = [];
 
-        _ = ProcessMemoryTrimService.RequestIdleTrimAsync("snip-window-closed");
+        ProcessMemoryTrimService.RequestIdleWorkingSetTrimAsync("snip-window-closed")
+            .Forget("MemoryTrim.SnipWindowClosed");
+
     }
 
     private void PersistTranslatedSelectionsForClosingIfNeeded()
@@ -361,7 +355,7 @@ public partial class SnipWindow : Window
         {
             var vm = _viewModel;
             _translationModeSubscription = vm.WhenAnyValue(x => x.IsTranslationMode)
-                .ObserveOn(RxApp.MainThreadScheduler)
+                .ObserveOn(RxSchedulers.MainThreadScheduler)
                 .Subscribe(isTranslationMode =>
                 {
                     if (!isTranslationMode)
@@ -389,7 +383,7 @@ public partial class SnipWindow : Window
                         vm.RecordingService.WhenAnyValue(x => x.State).Select(_ => 0),
                         vm.WhenAnyValue(x => x.RecordingUsesWindowsExcludeFromCapture).Select(_ => 0),
                         vm.WhenAnyValue(x => x.IsTranslationMode).Select(_ => 0))
-                    .ObserveOn(RxApp.MainThreadScheduler)
+                    .ObserveOn(RxSchedulers.MainThreadScheduler)
                     .Subscribe(_ =>
                     {
                         ApplyRecordingScreenCaptureAffinity(vm);
@@ -497,7 +491,7 @@ public partial class SnipWindow : Window
                     translationOverlayChanged,
                     (t1, t2, _, __, ___, ____) => t1)
                 .Throttle(TimeSpan.FromMilliseconds(16))
-                .ObserveOn(RxApp.MainThreadScheduler)
+                .ObserveOn(RxSchedulers.MainThreadScheduler)
                 .Subscribe(tuple => UpdateWindowRegion(tuple.Item2, tuple.Item3, tuple.Item4));
             
             _viewModel.FocusWindowAction = () =>
@@ -607,9 +601,8 @@ public partial class SnipWindow : Window
                 }
                 
                 if (_viewModel.MainVm == null) return;
-                var vm = new FloatingImageViewModel(bitmap, rect.Width, rect.Height, color, thickness, hideDecoration, hideBorder, _clipboardService, aiService, _viewModel.MainVm.SAM2RuntimeService, _viewModel.MainVm.AppSettingsService, _viewModel.MainVm.AIPathService, pinnedText, inferredFontSize);
+                var vm = new FloatingImageViewModel(bitmap, rect.Width, rect.Height, color, thickness, hideDecoration, hideBorder, _clipboardService, aiService, _viewModel.MainVm.SAM2RuntimeService, _viewModel.MainVm.AppSettingsService, _viewModel.MainVm.AIPathService, _viewModel.MainVm.ResourceQueue, pinnedText, inferredFontSize);
                 vm.WingScale = _viewModel.WingScale;
-                vm.CornerIconScale = _viewModel.CornerIconScale;
                 
                 try
                 {

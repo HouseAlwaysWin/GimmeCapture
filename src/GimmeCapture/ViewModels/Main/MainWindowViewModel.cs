@@ -138,7 +138,7 @@ public partial class MainWindowViewModel : ViewModelBase
     public SAM2RuntimeService SAM2RuntimeService => _sam2RuntimeService.Value;
     public OcrRuntimeService OcrRuntimeService => _ocrRuntimeService.Value;
     public AIPathService AIPathService { get; }
-    public ResourceQueueService ResourceQueue { get; }
+    public IResourceQueueService ResourceQueue { get; }
     private readonly ModuleInstallCoordinator _moduleInstallCoordinator;
 
     public ObservableCollection<ModuleItem> Modules { get; } = new();
@@ -167,11 +167,11 @@ public partial class MainWindowViewModel : ViewModelBase
     public ReactiveCommand<Unit, Unit> IncreasePlaybackTimelineFpsCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> DecreasePlaybackTimelineFpsCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit>? ToggleRecordCommand { get; set; }
-    public ReactiveCommand<Unit, Unit> IncreaseCornerIconScaleCommand { get; } = null!;
-    public ReactiveCommand<Unit, Unit> DecreaseCornerIconScaleCommand { get; } = null!;
     public ReactiveCommand<Unit, Unit> PickAIFolderCommand { get; } = null!;
     public ReactiveCommand<Unit, Unit> RefreshReleaseCatalogCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> InstallSelectedReleaseCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> CopyDiagnosticsCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> CancelUpdateDownloadCommand { get; private set; } = null!;
     public ReactiveCommand<string, Unit> SelectLlamaModelCommand { get; private set; } = null!;
 
     public Color[] SettingsColors { get; } =
@@ -225,10 +225,11 @@ public partial class MainWindowViewModel : ViewModelBase
 
         LocalizationService.Instance
             .WhenAnyValue(x => x.CurrentLanguage)
-            .ObserveOn(RxApp.MainThreadScheduler)
+            .ObserveOn(RxSchedulers.MainThreadScheduler)
             .Subscribe(_ =>
             {
                 this.RaisePropertyChanged(nameof(SelectedLanguageOption));
+                this.RaisePropertyChanged(nameof(UpdateDownloadStageText));
                 StatusText = LocalizationService.Instance[_currentStatusKey];
             });
 
@@ -269,8 +270,6 @@ public partial class MainWindowViewModel : ViewModelBase
 
         IncreaseWingScaleCommand = ReactiveCommand.Create(() => { if (WingScale < 3.0) WingScale = Math.Round(WingScale + 0.1, 1); });
         DecreaseWingScaleCommand = ReactiveCommand.Create(() => { if (WingScale > 0.5) WingScale = Math.Round(WingScale - 0.1, 1); });
-        IncreaseCornerIconScaleCommand = ReactiveCommand.Create(() => { if (CornerIconScale < 1.0) CornerIconScale = Math.Round(CornerIconScale + 0.1, 1); });
-        DecreaseCornerIconScaleCommand = ReactiveCommand.Create(() => { if (CornerIconScale > 0.4) CornerIconScale = Math.Round(CornerIconScale - 0.1, 1); });
         IncreaseRecordFPSCommand = ReactiveCommand.Create(() => { if (RecordingSettings.RecordFPS < 60) RecordingSettings.RecordFPS = Math.Min(60, RecordingSettings.RecordFPS + 5); });
         DecreaseRecordFPSCommand = ReactiveCommand.Create(() => { if (RecordingSettings.RecordFPS > 5) RecordingSettings.RecordFPS = Math.Max(5, RecordingSettings.RecordFPS - 5); });
         IncreaseMaxRecordingSizeMBCommand = ReactiveCommand.Create(() => { if (RecordingSettings.MaxRecordingSizeMB < 5000) RecordingSettings.MaxRecordingSizeMB = Math.Min(5000, Math.Round(RecordingSettings.MaxRecordingSizeMB + 0.1, 1)); });
@@ -375,7 +374,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
         _updateProcessingSubscription = _updateService.Value
             .WhenAnyValue(x => x.IsDownloading, x => x.DownloadProgress)
-            .ObserveOn(RxApp.MainThreadScheduler)
+            .ObserveOn(RxSchedulers.MainThreadScheduler)
             .Subscribe(_ => RecomputeProcessingState());
 
         RecomputeProcessingState();
@@ -390,7 +389,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
         _aiProcessingSubscription = _aiResourceService.Value
             .WhenAnyValue(x => x.IsDownloading, x => x.DownloadProgress)
-            .ObserveOn(RxApp.MainThreadScheduler)
+            .ObserveOn(RxSchedulers.MainThreadScheduler)
             .Subscribe(_ => RecomputeProcessingState());
 
         RecomputeProcessingState();

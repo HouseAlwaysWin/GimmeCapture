@@ -30,7 +30,6 @@ public class MainWindowSettingsPersistenceServiceTests
             BorderColor = Color.Parse("#123456"),
             ThemeColor = Color.Parse("#654321"),
             WingScale = 1.7,
-            CornerIconScale = 0.8,
             HideSnipPinDecoration = true,
             HideSnipPinBorder = true,
             HideSnipSelectionDecoration = true,
@@ -88,7 +87,7 @@ public class MainWindowSettingsPersistenceServiceTests
         Assert.Equal(snapshot.LlamaModelId, persisted.LlamaModelId);
         Assert.Equal(snapshot.LlamaGpuLayers, persisted.LlamaGpuLayers);
         Assert.Contains("\"Language\": \"Japanese\"", savedJson);
-        Assert.Contains("\"ConfigVersion\": 4", savedJson);
+        Assert.Contains($"\"ConfigVersion\": {AppSettingsService.CurrentConfigVersion}", savedJson);
         Assert.Contains("\"RecordHotkey\": \"Shift\\u002BF8\"", savedJson);
         Assert.Contains("\"AIResourcesDirectory\": \"D:\\\\captures\\\\ai\"", savedJson);
         Assert.DoesNotContain("AIScanEngine", savedJson, StringComparison.Ordinal);
@@ -180,7 +179,7 @@ public class MainWindowSettingsPersistenceServiceTests
 
         settingsService.LoadSync();
 
-        Assert.Equal(4, settingsService.Settings.ConfigVersion);
+        Assert.Equal(AppSettingsService.CurrentConfigVersion, settingsService.Settings.ConfigVersion);
         Assert.Equal("Shift+F1", settingsService.Settings.SnipHotkey);
         Assert.Equal("Shift+F2", settingsService.Settings.RecordHotkey);
         Assert.Equal("Shift+F3", settingsService.Settings.TranslateHotkey);
@@ -211,7 +210,7 @@ public class MainWindowSettingsPersistenceServiceTests
 
         settingsService.LoadSync();
 
-        Assert.Equal(4, settingsService.Settings.ConfigVersion);
+        Assert.Equal(AppSettingsService.CurrentConfigVersion, settingsService.Settings.ConfigVersion);
         Assert.Equal("Ctrl+Shift+F10", settingsService.Settings.SnipHotkey);
         Assert.Equal("Ctrl+Shift+F11", settingsService.Settings.RecordHotkey);
         Assert.Equal("Ctrl+Shift+F12", settingsService.Settings.TranslateHotkey);
@@ -242,7 +241,7 @@ public class MainWindowSettingsPersistenceServiceTests
 
         settingsService.LoadSync();
 
-        Assert.Equal(4, settingsService.Settings.ConfigVersion);
+        Assert.Equal(AppSettingsService.CurrentConfigVersion, settingsService.Settings.ConfigVersion);
         Assert.Equal("F6", settingsService.Settings.Snip.Pin);
         Assert.Equal("F7", settingsService.Settings.Record.Action);
         Assert.Equal("F3", settingsService.Settings.Translate.Action);
@@ -264,6 +263,7 @@ public class MainWindowSettingsPersistenceServiceTests
             {
               "ConfigVersion": {{AppSettingsService.CurrentConfigVersion}},
               "MaskOpacity": 0.75,
+              "CornerIconScale": 0.8,
               "BorderThickness": 3
             }
             """);

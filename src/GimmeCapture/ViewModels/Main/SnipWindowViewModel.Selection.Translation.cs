@@ -190,11 +190,11 @@ public partial class SnipWindowViewModel
         }
         catch (OperationCanceledException)
         {
-            Console.WriteLine("[TranslationMode] TranslateAll cancelled");
+            AppLog.Information("Translation.TranslateAllCancelled");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[TranslationMode] TranslateAll error: {ex}");
+            AppLog.Warning("Translation.TranslateAll", ex);
         }
         finally
         {
@@ -220,7 +220,7 @@ public partial class SnipWindowViewModel
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"[TranslationMode] Unexpected outer error: {ex}");
+        AppLog.Warning("Translation.Outer", ex);
     }
 }
 
@@ -510,62 +510,7 @@ public partial class SnipWindowViewModel
         if (Math.Abs(metrics.Bounds.Width - sel.Bounds.Width) > 1 || Math.Abs(metrics.Bounds.Height - sel.Bounds.Height) > 1)
         {
             sel.Bounds = metrics.Bounds;
-            System.Diagnostics.Debug.WriteLine($"[AutoFit] Expanded to {metrics.Bounds.Width:F0}x{metrics.Bounds.Height:F0}, font={metrics.FontSize:F1}, text='{sel.TranslatedText}'");
-        }
-
-        return;
-
-        var text = sel.TranslatedText;
-        double fontSize = sel.InferredFontSize; // Use inferred font size
-        double lineHeight = fontSize * 1.8; // 行高
-        double padding = 28; // Border padding + margin + extra
-
-        // 估算文字寬度（考慮 CJK 全形字元）
-        double EstimateTextWidth(string s)
-        {
-            double w = 0;
-            foreach (char c in s)
-            {
-                if (c >= 0x2E80 && c <= 0x9FFF || c >= 0xF900 && c <= 0xFAFF || 
-                    c >= 0xFF00 && c <= 0xFFEF || c >= 0x3000 && c <= 0x303F)
-                    w += fontSize * 1.1; // CJK 全形
-                else
-                    w += fontSize * 0.6; // Latin 半形
-            }
-            return w;
-        }
-
-        double currentWidth = sel.Bounds.Width;
-        double usableWidth = Math.Max(currentWidth - padding, 40);
-
-        // 計算需要的行數
-        int totalLines = CountWrappedLines(text, usableWidth, EstimateTextWidth, out int explicitLineCount);
-
-        double requiredHeight = totalLines * lineHeight + padding;
-        double requiredWidth = currentWidth;
-
-        // 如果文字很短（單行），確保寬度足以容納
-        if (explicitLineCount == 1)
-        {
-            double singleLineWidth = EstimateTextWidth(text) + padding;
-            if (singleLineWidth > currentWidth)
-            {
-                requiredWidth = Math.Min(singleLineWidth, 500);
-            }
-        }
-
-        // 只擴展，不縮小
-        double newWidth = Math.Max(currentWidth, requiredWidth);
-        double newHeight = Math.Max(sel.Bounds.Height, requiredHeight);
-
-        // 最小尺寸
-        newWidth = Math.Max(newWidth, 80);
-        newHeight = Math.Max(newHeight, 50);
-
-        if (Math.Abs(newWidth - sel.Bounds.Width) > 1 || Math.Abs(newHeight - sel.Bounds.Height) > 1)
-        {
-            sel.Bounds = new Rect(sel.Bounds.X, sel.Bounds.Y, newWidth, newHeight);
-            System.Diagnostics.Debug.WriteLine($"[AutoFit] Expanded to {newWidth:F0}x{newHeight:F0} for {totalLines} lines, text='{text}'");
+            System.Diagnostics.Debug.WriteLine($"[AutoFit] Expanded to {metrics.Bounds.Width:F0}x{metrics.Bounds.Height:F0}, font={metrics.FontSize:F1}.");
         }
     }
 

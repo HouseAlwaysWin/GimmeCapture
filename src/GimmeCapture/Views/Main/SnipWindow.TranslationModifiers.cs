@@ -48,7 +48,7 @@ public partial class SnipWindow
             _viewModel.CurrentTranslationTool = hasAnyBox
                 ? Models.TranslationTool.Multi
                 : Models.TranslationTool.Single;
-            _ = _viewModel.EnterTranslationOcrSearchAsync();
+            _viewModel.EnterTranslationOcrSearchAsync().Forget("Translation.EnterOcrSearch");
         }
         else
         {

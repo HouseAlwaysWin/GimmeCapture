@@ -39,14 +39,16 @@ public partial class MainWindowViewModel
         };
         
         _moduleInstallCoordinator.ObserveStatus("AICore")
-            .ObserveOn(RxApp.MainThreadScheduler)
-            .Subscribe(status => 
+            .ObserveOn(RxSchedulers.MainThreadScheduler)
+            .Subscribe(snapshot =>
             {
-                aiCore.IsPending = status == QueueItemStatus.Pending;
-                aiCore.IsProcessing = status == QueueItemStatus.Downloading;
-                aiCore.HasError = status == QueueItemStatus.Failed;
-                if (status == QueueItemStatus.Failed) aiCore.ErrorMessage = _moduleInstallCoordinator.LastErrorMessage;
-                if (status == QueueItemStatus.Completed) aiCore.IsInstalled = _moduleInstallCoordinator.IsAICoreInstalled();
+                aiCore.QueueStatus = snapshot.Status;
+                aiCore.IsPending = snapshot.Status == ResourceQueueStatus.Pending;
+                aiCore.IsProcessing = snapshot.Status == ResourceQueueStatus.Running;
+                aiCore.HasError = snapshot.Status == ResourceQueueStatus.Failed;
+                aiCore.Progress = snapshot.Progress;
+                if (snapshot.Status == ResourceQueueStatus.Failed) aiCore.ErrorMessage = snapshot.ErrorMessage ?? _moduleInstallCoordinator.LastErrorMessage;
+                if (snapshot.Status == ResourceQueueStatus.Completed) aiCore.IsInstalled = _moduleInstallCoordinator.IsAICoreInstalled();
             });
 
         // SAM2 Model Module
@@ -83,25 +85,29 @@ public partial class MainWindowViewModel
         };
 
         _moduleInstallCoordinator.ObserveStatus("OCR")
-            .ObserveOn(RxApp.MainThreadScheduler)
-            .Subscribe(status => 
+            .ObserveOn(RxSchedulers.MainThreadScheduler)
+            .Subscribe(snapshot =>
             {
-                ocr.IsPending = status == QueueItemStatus.Pending;
-                ocr.IsProcessing = status == QueueItemStatus.Downloading;
-                ocr.HasError = status == QueueItemStatus.Failed;
-                if (status == QueueItemStatus.Failed) ocr.ErrorMessage = _moduleInstallCoordinator.LastErrorMessage;
-                if (status == QueueItemStatus.Completed) ocr.IsInstalled = _moduleInstallCoordinator.IsOcrInstalled();
+                ocr.QueueStatus = snapshot.Status;
+                ocr.IsPending = snapshot.Status == ResourceQueueStatus.Pending;
+                ocr.IsProcessing = snapshot.Status == ResourceQueueStatus.Running;
+                ocr.HasError = snapshot.Status == ResourceQueueStatus.Failed;
+                ocr.Progress = snapshot.Progress;
+                if (snapshot.Status == ResourceQueueStatus.Failed) ocr.ErrorMessage = snapshot.ErrorMessage ?? _moduleInstallCoordinator.LastErrorMessage;
+                if (snapshot.Status == ResourceQueueStatus.Completed) ocr.IsInstalled = _moduleInstallCoordinator.IsOcrInstalled();
             });
 
         _moduleInstallCoordinator.ObserveStatus("SAM2")
-            .ObserveOn(RxApp.MainThreadScheduler)
-            .Subscribe(status => 
+            .ObserveOn(RxSchedulers.MainThreadScheduler)
+            .Subscribe(snapshot =>
             {
-                sam2.IsPending = status == QueueItemStatus.Pending;
-                sam2.IsProcessing = status == QueueItemStatus.Downloading;
-                sam2.HasError = status == QueueItemStatus.Failed;
-                if (status == QueueItemStatus.Failed) sam2.ErrorMessage = _moduleInstallCoordinator.LastErrorMessage;
-                if (status == QueueItemStatus.Completed) sam2.IsInstalled = _moduleInstallCoordinator.IsSam2Installed(_settingsService.Settings.SelectedSAM2Variant);
+                sam2.QueueStatus = snapshot.Status;
+                sam2.IsPending = snapshot.Status == ResourceQueueStatus.Pending;
+                sam2.IsProcessing = snapshot.Status == ResourceQueueStatus.Running;
+                sam2.HasError = snapshot.Status == ResourceQueueStatus.Failed;
+                sam2.Progress = snapshot.Progress;
+                if (snapshot.Status == ResourceQueueStatus.Failed) sam2.ErrorMessage = snapshot.ErrorMessage ?? _moduleInstallCoordinator.LastErrorMessage;
+                if (snapshot.Status == ResourceQueueStatus.Completed) sam2.IsInstalled = _moduleInstallCoordinator.IsSam2Installed(_settingsService.Settings.SelectedSAM2Variant);
             });
 
         // Llama model module (preset GGUF downloads)
@@ -131,11 +137,12 @@ public partial class MainWindowViewModel
             });
 
         _moduleInstallCoordinator.ObserveDownloadProgress()
-            .Subscribe(p => {
-                if (aiCore.IsProcessing) aiCore.Progress = p;
-                if (sam2.IsProcessing) sam2.Progress = p;
-                if (ocr.IsProcessing) ocr.Progress = p;
-                if (llama.IsProcessing) llama.Progress = p;
+            .ObserveOn(RxSchedulers.MainThreadScheduler)
+            .Subscribe(state => {
+                if (aiCore.IsProcessing) aiCore.SetDownloadProgress(state.Progress, state.Stage);
+                if (sam2.IsProcessing) sam2.SetDownloadProgress(state.Progress, state.Stage);
+                if (ocr.IsProcessing) ocr.SetDownloadProgress(state.Progress, state.Stage);
+                if (llama.IsProcessing) llama.SetDownloadProgress(state.Progress, state.Stage);
             });
 
         aiCore.UpdateDescription();
@@ -149,14 +156,16 @@ public partial class MainWindowViewModel
         Modules.Add(llama);
 
         _moduleInstallCoordinator.ObserveStatus("LlamaModels")
-            .ObserveOn(RxApp.MainThreadScheduler)
-            .Subscribe(status =>
+            .ObserveOn(RxSchedulers.MainThreadScheduler)
+            .Subscribe(snapshot =>
             {
-                llama.IsPending = status == QueueItemStatus.Pending;
-                llama.IsProcessing = status == QueueItemStatus.Downloading;
-                llama.HasError = status == QueueItemStatus.Failed;
-                if (status == QueueItemStatus.Failed) llama.ErrorMessage = _moduleInstallCoordinator.LastErrorMessage;
-                if (status == QueueItemStatus.Completed)
+                llama.QueueStatus = snapshot.Status;
+                llama.IsPending = snapshot.Status == ResourceQueueStatus.Pending;
+                llama.IsProcessing = snapshot.Status == ResourceQueueStatus.Running;
+                llama.HasError = snapshot.Status == ResourceQueueStatus.Failed;
+                llama.Progress = snapshot.Progress;
+                if (snapshot.Status == ResourceQueueStatus.Failed) llama.ErrorMessage = snapshot.ErrorMessage ?? _moduleInstallCoordinator.LastErrorMessage;
+                if (snapshot.Status == ResourceQueueStatus.Completed)
                 {
                     if (!string.IsNullOrWhiteSpace(llama.SelectedVariant))
                     {
@@ -298,11 +307,37 @@ public partial class MainWindowViewModel
             set => this.RaiseAndSetIfChanged(ref _progress, value);
         }
 
+        private ArtifactDownloadStage _downloadStage;
+        public ArtifactDownloadStage DownloadStage
+        {
+            get => _downloadStage;
+            private set
+            {
+                this.RaiseAndSetIfChanged(ref _downloadStage, value);
+                UpdateDescription();
+            }
+        }
+
+        private ResourceQueueStatus? _queueStatus;
+        public ResourceQueueStatus? QueueStatus
+        {
+            get => _queueStatus;
+            set
+            {
+                this.RaiseAndSetIfChanged(ref _queueStatus, value);
+                UpdateDescription();
+            }
+        }
+
         private bool _hasError;
         public bool HasError
         {
             get => _hasError;
-            set => this.RaiseAndSetIfChanged(ref _hasError, value);
+            set
+            {
+                this.RaiseAndSetIfChanged(ref _hasError, value);
+                UpdateDescription();
+            }
         }
 
         private string _errorMessage = "";
@@ -349,6 +384,12 @@ public partial class MainWindowViewModel
                 .Subscribe(_ => UpdateDescription());
             UpdateDescription();
         }
+
+        public void SetDownloadProgress(double progress, ArtifactDownloadStage stage)
+        {
+            Progress = progress;
+            DownloadStage = stage;
+        }
         
         public void UpdateDescription()
         {
@@ -360,7 +401,20 @@ public partial class MainWindowViewModel
             }
             else if (IsProcessing)
             {
-                StatusText = LocalizationService.Instance["ComponentDownloadingProgress"];
+                StatusText = LocalizationService.Instance[
+                    DownloadStage == ArtifactDownloadStage.Verifying
+                        ? "DownloadStageVerifying"
+                        : DownloadStage == ArtifactDownloadStage.Completed
+                            ? "DownloadStageCompleted"
+                        : "DownloadStageDownloading"];
+            }
+            else if (QueueStatus == ResourceQueueStatus.Cancelled)
+            {
+                StatusText = LocalizationService.Instance["DownloadStageCancelled"];
+            }
+            else if (HasError || QueueStatus == ResourceQueueStatus.Failed)
+            {
+                StatusText = LocalizationService.Instance["DownloadStageFailed"];
             }
             else
             {
@@ -376,9 +430,11 @@ public partial class MainWindowViewModel
             }
             else
             {
-                ActionButtonText = IsInstalled 
-                    ? LocalizationService.Instance["RemoveModule"] 
-                    : LocalizationService.Instance["InstallModule"];
+                ActionButtonText = HasError
+                    ? LocalizationService.Instance["RetryDownload"]
+                    : IsInstalled
+                        ? LocalizationService.Instance["RemoveModule"]
+                        : LocalizationService.Instance["InstallModule"];
                 MainActionCommand = IsInstalled ? RemoveCommand : InstallCommand;
             }
         }

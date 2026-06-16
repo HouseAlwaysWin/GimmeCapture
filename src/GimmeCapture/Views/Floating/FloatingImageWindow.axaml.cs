@@ -144,10 +144,9 @@ public partial class FloatingImageWindow : FloatingWindowBase
             vm.OpenPinWindowAction ??= (bitmap, rect, color, thickness, runAI, initialInteractive, pinnedText, inferredFontSize) =>
             {
                 var newVm = new FloatingImageViewModel(bitmap, rect.Width, rect.Height, color, thickness, vm.HidePinDecoration, vm.HidePinBorder, 
-                    vm.ClipboardService, vm.AIResourceService, vm.SAM2RuntimeService, vm.AppSettingsService, vm.AIPathService, pinnedText, inferredFontSize);
+                    vm.ClipboardService, vm.AIResourceService, vm.SAM2RuntimeService, vm.AppSettingsService, vm.AIPathService, vm.ResourceQueue, pinnedText, inferredFontSize);
                 
                 newVm.WingScale = vm.WingScale;
-                newVm.CornerIconScale = vm.CornerIconScale;
                 
                 var newWin = new FloatingImageWindow
                 {
@@ -724,7 +723,6 @@ public partial class FloatingImageWindow : FloatingWindowBase
     // Handlers specific to XAML events not covered by Base
     private void OnAIToolSelected(object sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
-        System.Console.WriteLine("[FloatingWindow] OnAIToolSelected Clicked");
         Avalonia.Threading.Dispatcher.UIThread.Post(() => {
             var aiToolsButton = this.FindControl<Button>("AIToolsButton");
             aiToolsButton?.Flyout?.Hide();

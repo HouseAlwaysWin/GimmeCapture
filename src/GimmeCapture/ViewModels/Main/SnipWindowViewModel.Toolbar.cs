@@ -309,8 +309,6 @@ public partial class SnipWindowViewModel
     public ReactiveCommand<Unit, Unit> ToggleItalicCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> IncreaseWingScaleCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> DecreaseWingScaleCommand { get; set; } = null!;
-    public ReactiveCommand<Unit, Unit> IncreaseCornerIconScaleCommand { get; set; } = null!;
-    public ReactiveCommand<Unit, Unit> DecreaseCornerIconScaleCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> ToggleToolbarCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> SelectFullscreenCommand { get; set; } = null!;
     public string CurrentRedactionPreset => _editorState.CurrentRedactionPreset;
@@ -434,11 +432,6 @@ public partial class SnipWindowViewModel
         DecreaseWingScaleCommand = ReactiveCommand.Create(() => { if (WingScale > 0.5) WingScale = Math.Round(WingScale - 0.1, 1); });
         DecreaseWingScaleCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
 
-        IncreaseCornerIconScaleCommand = ReactiveCommand.Create(() => { if (CornerIconScale < 1.0) CornerIconScale = Math.Round(CornerIconScale + 0.1, 1); });
-        IncreaseCornerIconScaleCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
-        DecreaseCornerIconScaleCommand = ReactiveCommand.Create(() => { if (CornerIconScale > 0.4) CornerIconScale = Math.Round(CornerIconScale - 0.1, 1); });
-        DecreaseCornerIconScaleCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
-
         ToggleToolbarCommand = ReactiveCommand.Create(() => { ShowToolbar = !ShowToolbar; });
         ToggleToolbarCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
 
@@ -493,20 +486,6 @@ public partial class SnipWindowViewModel
                 this.RaisePropertyChanged(nameof(WingHeight));
                 this.RaisePropertyChanged(nameof(LeftWingMargin));
                 this.RaisePropertyChanged(nameof(RightWingMargin));
-            }
-        }
-    }
-
-    public double CornerIconScale
-    {
-        get => _mainVm?.CornerIconScale ?? 1.0;
-        set
-        {
-            if (_mainVm != null)
-            {
-                _mainVm.CornerIconScale = value;
-                this.RaisePropertyChanged();
-                this.RaisePropertyChanged(nameof(SelectionIconSize));
             }
         }
     }

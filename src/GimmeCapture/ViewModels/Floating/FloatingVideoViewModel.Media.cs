@@ -85,7 +85,7 @@ public partial class FloatingVideoViewModel
             PixelFormat.Bgra8888,
             AlphaFormat.Premul);
 
-        _ = BootMediaAsync();
+        _bootMediaTask = BootMediaAsync();
     }
 
     private async Task BootMediaAsync()
@@ -96,7 +96,16 @@ public partial class FloatingVideoViewModel
         }
         finally
         {
-            Avalonia.Threading.Dispatcher.UIThread.Post(StartPlayback);
+            if (!_isDisposed)
+            {
+                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                {
+                    if (!_isDisposed)
+                    {
+                        StartPlayback();
+                    }
+                });
+            }
         }
     }
 
@@ -121,11 +130,17 @@ public partial class FloatingVideoViewModel
     /// </summary>
     private void CancelPlaybackInBackground()
     {
-        var oldCts = _playCts;
-        _playCts = null;
+        var oldCts = Interlocked.Exchange(ref _playCts, null);
         if (oldCts != null)
         {
-            Task.Run(() => { try { oldCts.Cancel(); oldCts.Dispose(); } catch { } });
+            try
+            {
+                oldCts.Cancel();
+                oldCts.Dispose();
+            }
+            catch (ObjectDisposedException)
+            {
+            }
         }
 
         StopAudioPlayback();
@@ -133,6 +148,11 @@ public partial class FloatingVideoViewModel
 
     private void StartPlayback()
     {
+        if (_isDisposed)
+        {
+            return;
+        }
+
         // Cancel old playback in background (never blocks)
         CancelPlaybackInBackground();
         var generation = Interlocked.Increment(ref _playbackGeneration);

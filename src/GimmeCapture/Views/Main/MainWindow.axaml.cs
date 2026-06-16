@@ -102,7 +102,8 @@ public partial class MainWindow : Window
         e.Cancel = true;
         Hide();
         UpdateDownloadWindow();
-        _ = ProcessMemoryTrimService.RequestIdleTrimAsync("main-window-tray");
+        ProcessMemoryTrimService.RequestIdleWorkingSetTrimAsync("main-window-tray")
+            .Forget("MemoryTrim.MainWindowTray");
         
         // 如果有修改，仍可以在後台提示
         if (DataContext is MainWindowViewModel vm && vm.IsModified)
@@ -186,7 +187,7 @@ public partial class MainWindow : Window
 
             // Monitor Downloading Status to show/hide separate window
             vm.WhenAnyValue(x => x.IsProcessing)
-              .ObserveOn(RxApp.MainThreadScheduler)
+              .ObserveOn(RxSchedulers.MainThreadScheduler)
               .Subscribe(_ => UpdateDownloadWindow());
         }
     }
@@ -240,7 +241,7 @@ public partial class MainWindow : Window
             case 6:
                 if (DataContext is MainWindowViewModel aboutVm)
                 {
-                    _ = aboutVm.LoadAvailableReleasesAsync();
+                    aboutVm.LoadAvailableReleasesAsync().Forget("About.LoadAvailableReleases");
                 }
 
                 _aboutTabHost ??= this.FindControl<ContentControl>("AboutTabHost");

@@ -26,4 +26,4 @@ public sealed record MainWindowViewModelDependencies(
     Lazy<SAM2RuntimeService> SAM2RuntimeService,
     Lazy<OcrRuntimeService> OcrRuntimeService,
     AIPathService AIPathService,
-    ResourceQueueService ResourceQueue);
+    IResourceQueueService ResourceQueue);

@@ -59,7 +59,7 @@ public class ClipboardService : IClipboardService
                     }
                     catch (Exception ex)
                     {
-                        System.Diagnostics.Debug.WriteLine($"WinForms Clipboard failed: {ex}");
+                        AppLog.Warning("Clipboard.CopyImage.WinForms", ex);
                         // Continue to fallback if WinForms fails (though uncommon for basic copy)
                     }
                 });
@@ -71,7 +71,7 @@ public class ClipboardService : IClipboardService
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Failed to copy image: {ex}");
+            AppLog.Warning("Clipboard.CopyImage", ex);
         }
     }
 
@@ -123,7 +123,7 @@ public class ClipboardService : IClipboardService
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"Failed to set clipboard file drop: {ex}");
+                    AppLog.Warning("Clipboard.CopyFile.WinForms", ex);
                 }
             });
         }
@@ -192,7 +192,7 @@ public class ClipboardService : IClipboardService
                     }
                     catch (Exception ex)
                     {
-                        System.Diagnostics.Debug.WriteLine($"WinForms Multi-Copy failed: {ex}");
+                        AppLog.Warning("Clipboard.CopyFileAndImage.WinForms", ex);
                     }
                 });
             }
@@ -205,7 +205,7 @@ public class ClipboardService : IClipboardService
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Failed to multi-copy: {ex}");
+            AppLog.Warning("Clipboard.CopyFileAndImage", ex);
         }
     }
 

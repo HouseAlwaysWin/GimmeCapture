@@ -219,7 +219,7 @@ public sealed class LlamaSharpTranslationEngine : ITranslationEngine, IDisposabl
         _inferLock.Dispose();
     }
 
-    private static string CleanupTranslationResult(string result)
+    internal static string CleanupTranslationResult(string result)
     {
         if (string.IsNullOrWhiteSpace(result))
         {
@@ -291,7 +291,7 @@ public sealed class LlamaSharpTranslationEngine : ITranslationEngine, IDisposabl
             "</source>";
     }
 
-    private static string BuildTranslateGemmaPrompt(
+    internal static string BuildTranslateGemmaPrompt(
         string text,
         OCRLanguage sourceLang,
         TranslationLanguage targetLang)
@@ -341,7 +341,7 @@ public sealed class LlamaSharpTranslationEngine : ITranslationEngine, IDisposabl
             "</source>";
     }
 
-    private static bool ShouldRetryWithMinimalPrompt(string sourceText, string translated, TranslationLanguage targetLang)
+    internal static bool ShouldRetryWithMinimalPrompt(string sourceText, string translated, TranslationLanguage targetLang)
     {
         if (string.IsNullOrWhiteSpace(translated))
         {

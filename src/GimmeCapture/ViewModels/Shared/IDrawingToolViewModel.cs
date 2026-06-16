@@ -33,7 +33,6 @@ public interface IDrawingToolViewModel
 
     // SnipWindow Specific (Optional via ShowIconSettings)
     bool ShowIconSettings { get; }
-    double CornerIconScale { get; set; }
     double WingScale { get; set; }
     
     // Presets
@@ -57,9 +56,6 @@ public interface IDrawingToolViewModel
     ReactiveCommand<Unit, Unit> IncreaseThicknessCommand { get; }
     ReactiveCommand<Unit, Unit> DecreaseThicknessCommand { get; }
     ReactiveCommand<string, Unit> SetRedactionPresetCommand { get; }
-    
-    ReactiveCommand<Unit, Unit> IncreaseCornerIconScaleCommand { get; }
-    ReactiveCommand<Unit, Unit> DecreaseCornerIconScaleCommand { get; }
     
     ReactiveCommand<Unit, Unit> IncreaseWingScaleCommand { get; }
     ReactiveCommand<Unit, Unit> DecreaseWingScaleCommand { get; }

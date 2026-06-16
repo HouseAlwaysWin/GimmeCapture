@@ -11,31 +11,39 @@ namespace GimmeCapture.Services.Core.Infrastructure;
 
 public static class ProcessMemoryTrimService
 {
-    private static readonly IdleMemoryTrimScheduler Scheduler = new(TrimCore);
+    private static readonly IdleMemoryTrimScheduler FullTrimScheduler = new(TrimCore);
+    private static readonly IdleMemoryTrimScheduler WorkingSetTrimScheduler = new(TrimWorkingSetCore);
 
     [DllImport("psapi.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool EmptyWorkingSet(IntPtr hProcess);
-
-    public static void TrimCurrentProcessWorkingSet()
-    {
-        Scheduler.TrimNow("explicit");
-    }
 
     public static Task<bool> RequestIdleTrimAsync(
         string reason,
         TimeSpan? delay = null,
         CancellationToken ct = default)
     {
-        return Scheduler.RequestTrimAsync(
+        return FullTrimScheduler.RequestTrimAsync(
             reason,
-            delay ?? TimeSpan.FromSeconds(2),
+            delay ?? TimeSpan.FromSeconds(30),
+            ct);
+    }
+
+    public static Task<bool> RequestIdleWorkingSetTrimAsync(
+        string reason,
+        TimeSpan? delay = null,
+        CancellationToken ct = default)
+    {
+        return WorkingSetTrimScheduler.RequestTrimAsync(
+            reason,
+            delay ?? TimeSpan.FromSeconds(5),
             ct);
     }
 
     public static void NotifyActivity(string reason)
     {
-        Scheduler.NotifyActivity(reason);
+        FullTrimScheduler.NotifyActivity(reason);
+        WorkingSetTrimScheduler.NotifyActivity(reason);
     }
 
     private static void TrimCore(string reason)
@@ -43,7 +51,7 @@ public static class ProcessMemoryTrimService
         try
         {
             var before = CaptureSnapshot();
-            Debug.WriteLine($"[MemoryTrim] reason={reason} phase=before {before}");
+            AppLog.Information($"MemoryTrim.Before.{reason}.{before}");
 
             GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
             GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true, compacting: true);
@@ -55,12 +63,32 @@ public static class ProcessMemoryTrimService
             process.Refresh();
 
             var after = CaptureSnapshot();
-            Debug.WriteLine($"[MemoryTrim] reason={reason} phase=after {after}");
+            AppLog.Information($"MemoryTrim.After.{reason}.{after}");
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[MemoryTrim] reason={reason} failed: {ex.Message}");
+            AppLog.Warning("MemoryTrim.Run", ex);
             // Best-effort memory trim only.
+        }
+    }
+
+    private static void TrimWorkingSetCore(string reason)
+    {
+        try
+        {
+            var before = CaptureSnapshot();
+            AppLog.Information($"MemoryTrim.WorkingSetBefore.{reason}.{before}");
+
+            using var process = Process.GetCurrentProcess();
+            _ = EmptyWorkingSet(process.Handle);
+            process.Refresh();
+
+            var after = CaptureSnapshot();
+            AppLog.Information($"MemoryTrim.WorkingSetAfter.{reason}.{after}");
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warning("MemoryTrim.WorkingSetRun", ex);
         }
     }
 
@@ -131,7 +159,7 @@ internal sealed class IdleMemoryTrimScheduler
             if (_lastTrimAtUtc.HasValue
                 && now - _lastTrimAtUtc.Value < _minimumTrimInterval)
             {
-                Debug.WriteLine($"[MemoryTrim] reason={reason} skipped; a trim ran recently.");
+                AppLog.Information("MemoryTrim.Skipped.Recent");
                 return false;
             }
 
@@ -178,7 +206,7 @@ internal sealed class IdleMemoryTrimScheduler
             CancelPendingTrimLocked(clearReasons: true);
         }
 
-        Debug.WriteLine($"[MemoryTrim] activity={reason}; pending idle trim cancelled.");
+        AppLog.Information($"MemoryTrim.Activity.{reason}");
     }
 
     private async Task<bool> RunPendingTrimAsync(
@@ -203,7 +231,7 @@ internal sealed class IdleMemoryTrimScheduler
                 if (_lastTrimAtUtc.HasValue
                     && now - _lastTrimAtUtc.Value < _minimumTrimInterval)
                 {
-                    Debug.WriteLine("[MemoryTrim] Idle trim skipped; a trim ran recently.");
+                    AppLog.Information("MemoryTrim.IdleSkipped.Recent");
                     return false;
                 }
 

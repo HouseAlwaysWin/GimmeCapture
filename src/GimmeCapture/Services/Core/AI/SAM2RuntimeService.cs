@@ -188,7 +188,8 @@ public sealed class SAM2RuntimeService : IDisposable
         _isWarmedUp = false;
         if (releasedResources)
         {
-            _ = ProcessMemoryTrimService.RequestIdleTrimAsync("sam2-unloaded");
+            ProcessMemoryTrimService.RequestIdleTrimAsync("sam2-unloaded")
+                .Forget("MemoryTrim.Sam2Unloaded");
         }
     }
 

@@ -8,10 +8,11 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
 using System;
+using System.Threading.Tasks;
 
 namespace GimmeCapture.Composition;
 
-public sealed class AppBootstrapper
+public sealed class AppBootstrapper : IAsyncDisposable
 {
     private readonly AppSettingsService _settingsService;
     private readonly IStartupRegistrationService _startupRegistrationService;
@@ -107,7 +108,7 @@ public sealed class AppBootstrapper
 
             _settingsService.Settings.RunOnStartup = value;
             _startupRegistrationService.SetStartup(value);
-            _ = _settingsService.SaveAsync();
+            _settingsService.SaveAsync().Forget("Settings.SaveRunOnStartup");
         }
     }
 
@@ -133,7 +134,7 @@ public sealed class AppBootstrapper
             }
 
             _settingsService.Settings.AutoCheckUpdates = value;
-            _ = _settingsService.SaveAsync();
+            _settingsService.SaveAsync().Forget("Settings.SaveAutoCheckUpdates");
         }
     }
 
@@ -141,12 +142,13 @@ public sealed class AppBootstrapper
     {
         viewModel.RequestCaptureAction = mode => _snipWindowFactory.Value.Open(viewModel, mode);
         viewModel.GetActiveSnipViewModelAction = () => _snipWindowFactory.Value.GetActiveViewModel() as SnipWindowViewModel;
-        viewModel.RequestElevatedWindowPromptAction = ShowElevatedWindowNotice;
+        viewModel.RequestElevatedWindowPromptAction = () =>
+            ShowElevatedWindowNoticeAsync().Forget("ElevatedNotice.Show");
     }
 
     private bool _isElevatedNoticeShowing;
 
-    private async void ShowElevatedWindowNotice()
+    private async Task ShowElevatedWindowNoticeAsync()
     {
         if (_isElevatedNoticeShowing)
         {
@@ -177,7 +179,7 @@ public sealed class AppBootstrapper
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Error showing elevated-window notice: {ex.Message}");
+            AppLog.Warning("ElevatedNotice.Show", ex);
         }
         finally
         {
@@ -228,7 +230,33 @@ public sealed class AppBootstrapper
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Error restarting as administrator: {ex.Message}");
+            AppLog.Warning("ElevatedNotice.RestartAsAdministrator", ex);
         }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (!_mainWindowDependencies.IsValueCreated)
+        {
+            return;
+        }
+
+        var dependencies = _mainWindowDependencies.Value;
+        if (dependencies.OcrRuntimeService.IsValueCreated)
+        {
+            dependencies.OcrRuntimeService.Value.Dispose();
+        }
+
+        if (dependencies.SAM2RuntimeService.IsValueCreated)
+        {
+            dependencies.SAM2RuntimeService.Value.Dispose();
+        }
+
+        if (dependencies.HotkeyService is IDisposable disposableHotkeyService)
+        {
+            disposableHotkeyService.Dispose();
+        }
+
+        await dependencies.ResourceQueue.DisposeAsync().ConfigureAwait(false);
     }
 }

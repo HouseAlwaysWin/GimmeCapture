@@ -10,6 +10,8 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
+using System.Threading;
+using GimmeCapture.Services.Abstractions;
 
 namespace GimmeCapture.Services.Core.Infrastructure;
 
@@ -42,6 +44,9 @@ public sealed class ReleaseInfo
                                 && a.Name.Contains("win", StringComparison.OrdinalIgnoreCase))
                ?? Assets.Find(a => a.Name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase));
     }
+
+    public ReleaseAsset? GetChecksumAsset() =>
+        Assets.Find(a => string.Equals(a.Name, "SHA256SUMS.txt", StringComparison.OrdinalIgnoreCase));
 }
 
 public sealed class ReleaseAsset
@@ -51,6 +56,9 @@ public sealed class ReleaseAsset
 
     [JsonPropertyName("browser_download_url")]
     public string DownloadUrl { get; set; } = string.Empty;
+
+    [JsonPropertyName("size")]
+    public long Size { get; set; }
 }
 
 public sealed class PendingUpdateState
@@ -77,6 +85,9 @@ public sealed class UpdateService : ReactiveObject
 {
     private const string ReleasesUrl = "https://api.github.com/repos/HouseAlwaysWin/GimmeCapture/releases";
     private readonly string _currentVersion;
+    private readonly HttpClient _httpClient;
+    private readonly IArtifactDownloader _artifactDownloader;
+    private CancellationTokenSource? _downloadCancellation;
     private static readonly JsonSerializerOptions PendingStateSerializerOptions = new(JsonSerializerDefaults.Web) { WriteIndented = true };
 
     private double _downloadProgress;
@@ -95,10 +106,28 @@ public sealed class UpdateService : ReactiveObject
 
     public string? DownloadedZipPath { get; private set; }
     public string? DownloadedVersion { get; private set; }
+    private ArtifactDownloadStage _downloadStage;
+    public ArtifactDownloadStage DownloadStage
+    {
+        get => _downloadStage;
+        private set => this.RaiseAndSetIfChanged(ref _downloadStage, value);
+    }
 
-    public UpdateService(string currentVersion)
+    private string? _lastErrorMessage;
+    public string? LastErrorMessage
+    {
+        get => _lastErrorMessage;
+        private set => this.RaiseAndSetIfChanged(ref _lastErrorMessage, value);
+    }
+
+    public UpdateService(
+        string currentVersion,
+        HttpClient? httpClient = null,
+        IArtifactDownloader? artifactDownloader = null)
     {
         _currentVersion = currentVersion.TrimStart('v');
+        _httpClient = httpClient ?? SharedHttpClient.Instance;
+        _artifactDownloader = artifactDownloader ?? new ArtifactDownloader(_httpClient);
     }
 
     public async Task<ReleaseInfo?> CheckForUpdateAsync()
@@ -110,15 +139,14 @@ public sealed class UpdateService : ReactiveObject
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Update check failed: {ex.Message}");
+            AppLog.Warning("Update.Check", ex);
             return null;
         }
     }
 
     public async Task<IReadOnlyList<ReleaseInfo>> GetAvailableReleasesAsync()
     {
-        using var client = CreateClient();
-        var releases = await client.GetFromJsonAsync<List<ReleaseInfo>>(ReleasesUrl) ?? new List<ReleaseInfo>();
+        var releases = await _httpClient.GetFromJsonAsync<List<ReleaseInfo>>(ReleasesUrl) ?? new List<ReleaseInfo>();
         return FilterAndSortReleases(releases);
     }
 
@@ -130,7 +158,9 @@ public sealed class UpdateService : ReactiveObject
             && File.Exists(DownloadedZipPath);
     }
 
-    public async Task<string?> DownloadUpdateAsync(ReleaseInfo release)
+    public async Task<string?> DownloadUpdateAsync(
+        ReleaseInfo release,
+        CancellationToken cancellationToken = default)
     {
         if (IsDownloading)
         {
@@ -145,10 +175,16 @@ public sealed class UpdateService : ReactiveObject
             return DownloadedZipPath;
         }
 
+        string? downloadDirectory = null;
+        bool downloadSucceeded = false;
         try
         {
+            using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            _downloadCancellation = linkedCancellation;
             IsDownloading = true;
             DownloadProgress = 0;
+            DownloadStage = ArtifactDownloadStage.Downloading;
+            LastErrorMessage = null;
 
             var asset = release.GetPreferredZipAsset();
             if (asset == null)
@@ -156,45 +192,69 @@ public sealed class UpdateService : ReactiveObject
                 throw new InvalidOperationException("No suitable zip asset found in release.");
             }
 
-            var tempPath = Path.Combine(Path.GetTempPath(), "GimmeCapture_Update_" + Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(tempPath);
-            var zipPath = Path.Combine(tempPath, asset.Name);
+            var checksumAsset = release.GetChecksumAsset()
+                ?? throw new InvalidOperationException("Release checksum manifest is missing.");
+            var checksumManifest = await _httpClient
+                .GetStringAsync(checksumAsset.DownloadUrl, linkedCancellation.Token)
+                .ConfigureAwait(false);
+            var expectedSha256 = ParseChecksum(checksumManifest, asset.Name)
+                ?? throw new InvalidDataException($"Checksum for {asset.Name} was not found.");
 
-            using var client = CreateClient();
-            using var response = await client.GetAsync(asset.DownloadUrl, HttpCompletionOption.ResponseHeadersRead);
-            response.EnsureSuccessStatusCode();
-
-            var totalBytes = response.Content.Headers.ContentLength ?? -1L;
-            await using var contentStream = await response.Content.ReadAsStreamAsync();
-            await using var fileStream = new FileStream(zipPath, FileMode.Create, FileAccess.Write, FileShare.None, 8192, true);
-
-            var buffer = new byte[8192];
-            long totalRead = 0;
-            int read;
-
-            while ((read = await contentStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+            downloadDirectory = Path.Combine(Path.GetTempPath(), "GimmeCapture_Update_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(downloadDirectory);
+            var descriptor = new ArtifactDescriptor(
+                new Uri(asset.DownloadUrl),
+                asset.Name,
+                expectedSha256,
+                asset.Size);
+            var progress = new Progress<ArtifactDownloadProgress>(value =>
             {
-                await fileStream.WriteAsync(buffer, 0, read);
-                totalRead += read;
-
-                if (totalBytes > 0)
-                {
-                    DownloadProgress = (double)totalRead / totalBytes * 100;
-                }
-            }
+                DownloadStage = value.Stage;
+                DownloadProgress = value.Percentage;
+            });
+            var zipPath = await _artifactDownloader
+                .DownloadAsync(descriptor, downloadDirectory, progress, linkedCancellation.Token)
+                .ConfigureAwait(false);
 
             DownloadedZipPath = zipPath;
             DownloadedVersion = targetVersion;
+            downloadSucceeded = true;
             return zipPath;
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Download failed: {ex.Message}");
+            AppLog.Warning("Update.Download", ex);
+            LastErrorMessage = ex.Message;
+            DownloadStage = ex is OperationCanceledException
+                ? ArtifactDownloadStage.Cancelled
+                : ArtifactDownloadStage.Failed;
             return null;
         }
         finally
         {
+            _downloadCancellation = null;
             IsDownloading = false;
+            if (!downloadSucceeded && downloadDirectory != null)
+            {
+                try
+                {
+                    Directory.Delete(downloadDirectory, recursive: true);
+                }
+                catch
+                {
+                }
+            }
+        }
+    }
+
+    public void CancelDownload()
+    {
+        try
+        {
+            _downloadCancellation?.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
         }
     }
 
@@ -205,10 +265,10 @@ public sealed class UpdateService : ReactiveObject
             var currentExePath = RuntimePathProvider.GetExecutablePath();
             var appDir = Path.GetDirectoryName(currentExePath) ?? RuntimePathProvider.GetExecutableDirectory();
             var currentProcessId = Environment.ProcessId;
-            var tempExtractDir = Path.Combine(Path.GetDirectoryName(zipPath)!, "extract");
+            var tempExtractDir = Path.Combine(Path.GetDirectoryName(zipPath)!, "extract-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(tempExtractDir);
 
-            ZipFile.ExtractToDirectory(zipPath, tempExtractDir, overwriteFiles: true);
+            SafeZipExtractor.ExtractToDirectory(zipPath, tempExtractDir, overwriteFiles: true);
 
             var currentExe = currentExePath;
             var currentExeName = Path.GetFileName(currentExe);
@@ -346,7 +406,7 @@ public sealed class UpdateService : ReactiveObject
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Pending update redirect failed: {ex.Message}");
+            AppLog.Warning("Update.PendingRedirect", ex);
             return false;
         }
     }
@@ -363,6 +423,8 @@ public sealed class UpdateService : ReactiveObject
         string appDataConfigMarkerPath)
     {
         var targetAppDataConfigDir = Path.GetDirectoryName(targetAppDataConfigPath) ?? string.Empty;
+        var appBackupDir = Path.Combine(parentDir, "app-backup");
+        var pendingUpdateStatePath = AppStoragePaths.GetPendingUpdateStatePath(appDir);
 
         return $@"
 @echo off
@@ -371,12 +433,16 @@ set ""WAIT_COUNT=0""
 :wait_for_exit
 tasklist /FI ""PID eq {currentProcessId}"" | find ""{currentProcessId}"" > nul
 if not errorlevel 1 (
-  if !WAIT_COUNT! GEQ 60 exit /b 1
+  if !WAIT_COUNT! GEQ 60 goto wait_failed
   set /a WAIT_COUNT+=1
   timeout /t 1 /nobreak > nul
   goto wait_for_exit
 )
-if not exist ""{extractSourceDir}"" exit /b 1
+if not exist ""{extractSourceDir}"" goto update_failed
+if exist ""{appBackupDir}"" rd /s /q ""{appBackupDir}""
+mkdir ""{appBackupDir}""
+robocopy ""{appDir.TrimEnd('\\')}"" ""{appBackupDir.TrimEnd('\\')}"" /E /R:2 /W:1 /NFL /NDL /NJH /NJS /NP > nul
+if !ERRORLEVEL! GEQ 8 goto update_failed
 if exist ""{sourceAppDataConfigPath}"" (
   copy /y ""{sourceAppDataConfigPath}"" ""{appDataConfigBackupPath}"" > nul
   type nul > ""{appDataConfigMarkerPath}""
@@ -386,27 +452,49 @@ set ""COPY_COUNT=0""
 robocopy ""{extractSourceDir.TrimEnd('\\')}"" ""{appDir.TrimEnd('\\')}"" /E /R:2 /W:1 /NFL /NDL /NJH /NJS /NP > nul
 set ""ROBOCOPY_EXIT=!ERRORLEVEL!""
 if !ROBOCOPY_EXIT! GEQ 8 (
-  if !COPY_COUNT! GEQ 5 exit /b 1
+  if !COPY_COUNT! GEQ 5 goto rollback
   set /a COPY_COUNT+=1
   timeout /t 1 /nobreak > nul
   goto copy_retry
 )
+if not exist ""{expectedExePath}"" goto rollback
 if exist ""{appDataConfigMarkerPath}"" (
   if not exist ""{targetAppDataConfigDir}"" mkdir ""{targetAppDataConfigDir}""
   copy /y ""{appDataConfigBackupPath}"" ""{targetAppDataConfigPath}"" > nul
 )
-if not exist ""{expectedExePath}"" exit /b 1
 rd /s /q ""{parentDir.TrimEnd('\\')}"" 
 start """" ""{expectedExePath}""
 del ""%~f0""
+exit /b 0
+
+:rollback
+robocopy ""{appBackupDir.TrimEnd('\\')}"" ""{appDir.TrimEnd('\\')}"" /MIR /R:2 /W:1 /NFL /NDL /NJH /NJS /NP > nul
+
+:update_failed
+if exist ""{pendingUpdateStatePath}"" del /f /q ""{pendingUpdateStatePath}""
+if exist ""{expectedExePath}"" start """" ""{expectedExePath}""
+exit /b 1
+
+:wait_failed
+if exist ""{pendingUpdateStatePath}"" del /f /q ""{pendingUpdateStatePath}""
+exit /b 1
 ";
     }
 
-    private static HttpClient CreateClient()
+    internal static string? ParseChecksum(string manifest, string fileName)
     {
-        var client = new HttpClient();
-        client.DefaultRequestHeaders.Add("User-Agent", "GimmeCapture-Updater");
-        return client;
+        foreach (var line in manifest.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
+        {
+            var parts = line.Trim().Split((char[]?)null, 2, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length == 2 &&
+                parts[0].Length == 64 &&
+                string.Equals(parts[1].TrimStart('*'), fileName, StringComparison.OrdinalIgnoreCase))
+            {
+                return parts[0].ToLowerInvariant();
+            }
+        }
+
+        return null;
     }
 
     private static bool IsNewerVersion(string newVer, string currentVer)

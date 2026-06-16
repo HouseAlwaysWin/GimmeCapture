@@ -15,14 +15,17 @@ using NAudio.Wave;
 
 namespace GimmeCapture.ViewModels.Floating;
 
-public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDrawingToolViewModel, IDisposable
+public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDrawingToolViewModel, IAsyncDisposable
 {
     private readonly int _uiFrameUpdateIntervalMs;
     private readonly int _uiTimeUpdateIntervalMs;
     private readonly SemaphoreSlim _playSemaphore = new(1, 1);
+    private readonly object _disposeLock = new();
     private int _playbackGeneration = 0;
     internal volatile bool _trimEndReached;
     private bool _isDisposed;
+    private Task? _disposeTask;
+    private Task? _bootMediaTask;
     private readonly object _latestFrameLock = new();
     private readonly object _videoBitmapLock = new();
     private byte[]? _latestFrameData;
@@ -165,15 +168,7 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
                 _seekDebounceCts?.Cancel();
                 _seekDebounceCts = new CancellationTokenSource();
                 var token = _seekDebounceCts.Token;
-                _ = Task.Delay(300, token).ContinueWith(t =>
-                {
-                    if (!t.IsCanceled)
-                    {
-                        _isDraggingSlider = false;
-                        _seekTargetSeconds = value;
-                        StartPlayback();
-                    }
-                }, TaskScheduler.Default);
+                DebounceSeekAsync(value, token).Forget("FloatingVideo.DebounceSeek");
             }
         }
     }
@@ -364,26 +359,53 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
         InitializeMediaCommands(); // Media init last as it starts playback
     }
 
-    public override async void Dispose()
+    public ValueTask DisposeAsync()
     {
-        if (_isDisposed) return;
+        lock (_disposeLock)
+        {
+            _disposeTask ??= DisposeCoreAsync();
+            return new ValueTask(_disposeTask);
+        }
+    }
+
+    public override void Dispose()
+    {
+        DisposeAsync().AsTask().GetAwaiter().GetResult();
+    }
+
+    private async Task DisposeCoreAsync()
+    {
         _isDisposed = true;
+        Interlocked.Increment(ref _playbackGeneration);
 
         CancelPlaybackInBackground();
-        
+
         try
         {
-            if (_playbackTask != null)
+            if (_bootMediaTask is not null)
+            {
+                await _bootMediaTask;
+            }
+
+            if (_playbackTask is not null)
             {
                 await _playbackTask;
             }
         }
-        catch { }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Video disposal wait failed: {ex}");
+        }
 
-        _playSemaphore.Dispose();
+        _seekDebounceCts?.Cancel();
         _seekDebounceCts?.Dispose();
+        _seekDebounceCts = null;
         StopAudioPlayback();
         _nativeFramePlayer.Dispose();
+        _playSemaphore.Dispose();
         
         base.Dispose();
 
@@ -403,6 +425,14 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
             _latestFrameData = null;
             _latestFrameLength = 0;
         }
+    }
+
+    private async Task DebounceSeekAsync(double value, CancellationToken cancellationToken)
+    {
+        await Task.Delay(300, cancellationToken).ConfigureAwait(false);
+        _isDraggingSlider = false;
+        _seekTargetSeconds = value;
+        StartPlayback();
     }
 
     private void PausePlaybackForPreciseInteraction()

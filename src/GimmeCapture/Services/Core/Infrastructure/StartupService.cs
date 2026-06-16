@@ -57,7 +57,7 @@ public class StartupService
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Error setting startup: {ex.Message}");
+            AppLog.Warning("StartupRegistration.Set", ex);
         }
     }
 

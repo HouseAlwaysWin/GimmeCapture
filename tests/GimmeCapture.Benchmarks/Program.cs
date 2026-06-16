@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Running;
 using System.Text.Json;
@@ -13,6 +14,7 @@ using GimmeCapture.Models;
 using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Core.AI;
 using GimmeCapture.Services.Core.Media.NativeFFmpeg;
+using GimmeCapture.Services.Core.Rendering;
 using GimmeCapture.Services.Translation;
 using FFmpeg.AutoGen;
 using Microsoft.ML.OnnxRuntime.Tensors;
@@ -416,6 +418,109 @@ public unsafe class LibavVideoFrameCopyBenchmarks
 
     [Benchmark]
     public void CopyBgraFrame() => LibavVideoFramePlayer.CopyBgraFrame(_frame, Width, Height, _destination);
+}
+
+[MemoryDiagnoser]
+public class TranslationSanitizerBenchmarks
+{
+    private const string Original = "神級研究員\n重要";
+    private const string Translation =
+        "5. Translate into Japanese.\n神級研究員\n重要。\n神級研究員 (Shin-kyuu kenkyuuin)\n重要 (Juuyou)";
+
+    [Benchmark]
+    public string SanitizeTranslation() =>
+        TranslationTextSanitizer.Sanitize(Original, Translation, TranslationLanguage.Japanese);
+
+    [Benchmark]
+    public string SanitizeOcr() =>
+        OcrTextSanitizer.Sanitize("※※\n\u200B因為\uFEFF\n***");
+}
+
+[MemoryDiagnoser]
+public class OcrGroupingBenchmarks
+{
+    private Rect[] _rects = null!;
+
+    [GlobalSetup]
+    public void Setup()
+    {
+        var rects = new List<Rect>(240);
+        for (int paragraph = 0; paragraph < 20; paragraph++)
+        {
+            double top = paragraph * 90;
+            for (int line = 0; line < 3; line++)
+            {
+                for (int segment = 0; segment < 4; segment++)
+                {
+                    rects.Add(new Rect(segment * 72, top + (line * 22), 60, 16));
+                }
+            }
+        }
+
+        _rects = rects.ToArray();
+    }
+
+    [Benchmark]
+    public OcrCandidateGroupingResult GroupCandidates() => OcrCandidateGrouper.Group(_rects);
+}
+
+[MemoryDiagnoser]
+public class AnnotationRenderBenchmarks
+{
+    private SKBitmap _bitmap = null!;
+    private Annotation[] _annotations = null!;
+
+    [GlobalSetup]
+    public void Setup()
+    {
+        _bitmap = new SKBitmap(1280, 720, SKColorType.Bgra8888, SKAlphaType.Premul);
+        _annotations =
+        [
+            new Annotation
+            {
+                Type = AnnotationType.Rectangle,
+                StartPoint = new Avalonia.Point(40, 40),
+                EndPoint = new Avalonia.Point(420, 240),
+                Color = Avalonia.Media.Colors.Red,
+                Thickness = 4
+            },
+            new Annotation
+            {
+                Type = AnnotationType.Arrow,
+                StartPoint = new Avalonia.Point(80, 500),
+                EndPoint = new Avalonia.Point(900, 180),
+                Color = Avalonia.Media.Colors.Gold,
+                Thickness = 6
+            },
+            new Annotation
+            {
+                Type = AnnotationType.Pen,
+                Color = Avalonia.Media.Colors.White,
+                Thickness = 3
+            }
+        ];
+
+        for (int i = 0; i < 100; i++)
+        {
+            _annotations[2].AddPoint(new Avalonia.Point(100 + (i * 7), 360 + Math.Sin(i / 5d) * 60));
+        }
+    }
+
+    [GlobalCleanup]
+    public void Cleanup() => _bitmap.Dispose();
+
+    [Benchmark]
+    public void RenderAnnotations()
+    {
+        _bitmap.Erase(SKColors.Black);
+        AnnotationRenderService.Shared.RenderAnnotationsToBitmap(
+            _bitmap,
+            _annotations,
+            1280,
+            720,
+            1280,
+            720);
+    }
 }
 
 class Program

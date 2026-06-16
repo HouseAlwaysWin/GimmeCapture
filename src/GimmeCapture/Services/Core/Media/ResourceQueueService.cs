@@ -1,264 +1,410 @@
 using System;
-using System.Collections.Concurrent;
-using System.Threading;
-using System.Threading.Tasks;
-using ReactiveUI;
+using System.Collections.Generic;
+using System.Linq;
 using System.Reactive.Linq;
-using System.Reactive.Disposables;
 using System.Reactive.Subjects;
+using System.Threading;
+using System.Threading.Channels;
+using System.Threading.Tasks;
+using GimmeCapture.Services.Abstractions;
 
 namespace GimmeCapture.Services.Core.Media;
 
-public enum QueueItemStatus
+public enum ResourceQueueStatus
 {
     Pending,
-    Downloading,
+    Running,
     Completed,
-    Failed
+    Failed,
+    Cancelled
 }
 
-public class DownloadQueueItem : ReactiveObject
+public sealed record ResourceQueueSnapshot(
+    string Key,
+    ResourceQueueStatus Status,
+    double Progress,
+    string? ErrorMessage,
+    DateTimeOffset UpdatedAt);
+
+public sealed record ResourceQueueResult(
+    string Key,
+    ResourceQueueStatus Status,
+    string? ErrorMessage = null)
 {
-    private string _name = string.Empty;
-    public string Name
-    {
-        get => _name;
-        set => this.RaiseAndSetIfChanged(ref _name, value);
-    }
-
-    private QueueItemStatus _status;
-    public QueueItemStatus Status
-    {
-        get => _status;
-        set => this.RaiseAndSetIfChanged(ref _status, value);
-    }
-
-    private double _progress;
-    public double Progress
-    {
-        get => _progress;
-        set => this.RaiseAndSetIfChanged(ref _progress, value);
-    }
-
-    public Func<Task<bool>>? DownloadAction { get; set; }
+    public bool IsSuccess => Status == ResourceQueueStatus.Completed;
 }
 
-public class ResourceQueueService : ReactiveObject
+public sealed class ResourceQueueService : IResourceQueueService
 {
-    private static ResourceQueueService? _instance;
-    public static ResourceQueueService Instance => _instance ??= new ResourceQueueService();
+    public const int DefaultWorkerCount = 3;
 
-    private readonly SemaphoreSlim _semaphore = new(3, 3);
-    private readonly ConcurrentQueue<DownloadQueueItem> _queue = new();
-    private readonly ConcurrentDictionary<string, DownloadQueueItem> _activeItems = new();
-    private readonly ISubject<(string Name, QueueItemStatus Status)> _statusSubject = new Subject<(string Name, QueueItemStatus Status)>();
-    
-    private bool _isProcessing;
+    private readonly object _gate = new();
+    private readonly Dictionary<string, QueueEntry> _entries = new(StringComparer.Ordinal);
+    private readonly Channel<QueueEntry> _channel;
+    private readonly CancellationTokenSource _shutdown = new();
+    private readonly Subject<ResourceQueueSnapshot> _snapshotSubject = new();
+    private readonly ISubject<ResourceQueueSnapshot> _snapshots;
+    private readonly Task[] _workers;
+    private bool _disposed;
+
+    public ResourceQueueService(int workerCount = DefaultWorkerCount)
+    {
+        if (workerCount <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(workerCount));
+        }
+
+        _channel = Channel.CreateUnbounded<QueueEntry>(new UnboundedChannelOptions
+        {
+            AllowSynchronousContinuations = false,
+            SingleReader = workerCount == 1,
+            SingleWriter = false
+        });
+        _snapshots = Subject.Synchronize(_snapshotSubject);
+        _workers = Enumerable.Range(0, workerCount)
+            .Select(_ => Task.Run(() => WorkerAsync(_shutdown.Token)))
+            .ToArray();
+    }
+
     public bool IsProcessing
     {
-        get => _isProcessing;
-        set => this.RaiseAndSetIfChanged(ref _isProcessing, value);
+        get
+        {
+            lock (_gate)
+            {
+                return _entries.Values.Any(entry =>
+                    entry.Snapshot.Status is ResourceQueueStatus.Pending or ResourceQueueStatus.Running);
+            }
+        }
     }
 
-    public IObservable<QueueItemStatus> ObserveStatus(string name)
+    public ResourceQueueSnapshot? GetSnapshot(string key)
     {
-        return Observable.Create<QueueItemStatus>(observer =>
+        ArgumentException.ThrowIfNullOrWhiteSpace(key);
+
+        lock (_gate)
         {
-            if (_activeItems.TryGetValue(name, out var item))
+            return _entries.TryGetValue(key, out var entry) ? entry.Snapshot : null;
+        }
+    }
+
+    public IObservable<ResourceQueueSnapshot> Observe(string key)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(key);
+
+        return Observable.Create<ResourceQueueSnapshot>(observer =>
+        {
+            var current = GetSnapshot(key);
+            if (current is not null)
             {
-                observer.OnNext(item.Status);
+                observer.OnNext(current);
             }
-            
-            return _statusSubject
-                .Where(x => x.Name == name)
-                .Select(x => x.Status)
+
+            return _snapshots
+                .Where(snapshot => string.Equals(snapshot.Key, key, StringComparison.Ordinal))
                 .Subscribe(observer);
         });
     }
 
-    public QueueItemStatus? GetStatus(string name)
+    public Task<ResourceQueueResult> EnqueueAsync(
+        string key,
+        Func<CancellationToken, IProgress<double>, Task<bool>> work,
+        Action<double>? progressCallback = null)
     {
-        if (_activeItems.TryGetValue(name, out var item))
+        ArgumentException.ThrowIfNullOrWhiteSpace(key);
+        ArgumentNullException.ThrowIfNull(work);
+
+        QueueEntry entry;
+        lock (_gate)
         {
-            return item.Status;
+            ObjectDisposedException.ThrowIf(_disposed, this);
+
+            if (_entries.TryGetValue(key, out var existing) &&
+                !existing.Completion.Task.IsCompleted)
+            {
+                return existing.Completion.Task;
+            }
+
+            entry = new QueueEntry(key, work, progressCallback);
+            _entries[key] = entry;
         }
-        return null;
+
+        Publish(entry.Snapshot);
+        if (!_channel.Writer.TryWrite(entry))
+        {
+            Complete(entry, ResourceQueueStatus.Failed, "The resource queue is not accepting work.");
+        }
+
+        return entry.Completion.Task;
     }
 
-    private readonly ConcurrentDictionary<string, CancellationTokenSource> _cancellationTokens = new();
-
-    public void Cancel(string name)
+    public Task<ResourceQueueResult> EnqueueAsync(
+        string key,
+        Func<CancellationToken, Task<bool>> work,
+        Action<double>? progressCallback = null)
     {
-        System.Diagnostics.Debug.WriteLine($"[ResourceQueue] Attempting to cancel {name}...");
-        if (_cancellationTokens.TryGetValue(name, out var cts))
-        {
-            try
-            {
-                if (cts.IsCancellationRequested)
-                {
-                     System.Diagnostics.Debug.WriteLine($"[ResourceQueue] {name} is ALREADY cancelled.");
-                }
-                else
-                {
-                    cts.Cancel();
-                    System.Diagnostics.Debug.WriteLine($"[ResourceQueue] Cancelled item: {name}");
-                }
-            }
-            catch (ObjectDisposedException) 
-            {
-                 System.Diagnostics.Debug.WriteLine($"[ResourceQueue] CTS for {name} was disposed.");
-            }
-        }
-        else
-        {
-            System.Diagnostics.Debug.WriteLine($"[ResourceQueue] CTS for {name} NOT FOUND in _cancellationTokens.");
-        }
+        ArgumentNullException.ThrowIfNull(work);
+        return EnqueueAsync(key, (token, _) => work(token), progressCallback);
     }
 
-    public Task<bool> EnqueueAsync(string name, Func<CancellationToken, Task<bool>> downloadAction, Action<double>? progressCallback = null)
+    public Task<ResourceQueueResult> EnqueueAsync(
+        string key,
+        Func<Task<bool>> work,
+        Action<double>? progressCallback = null)
     {
-        // Deduplication: If already pending or downloading, don't queue again.
-        if (_activeItems.TryGetValue(name, out var existingItem) && 
-            (existingItem.Status == QueueItemStatus.Pending || existingItem.Status == QueueItemStatus.Downloading))
-        {
-            return Task.FromResult(true);
-        }
+        ArgumentNullException.ThrowIfNull(work);
+        return EnqueueAsync(key, (_, _) => work(), progressCallback);
+    }
 
-        var item = new DownloadQueueItem
-        {
-            Name = name,
-            Status = QueueItemStatus.Pending,
-            DownloadAction = null // We use a wrapper or internal storage for the CT-aware action
-        };
+    public bool Cancel(string key)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(key);
 
-        // We need a way to store the CT-aware action. 
-        // Let's modify DownloadQueueItem or use a wrapper.
-        // For simplicity, let's wrap it here and assign to DownloadAction (which expects Task<bool> with no args).
-        // But wait, we need to create the CTS *when processing starts* or just before?
-        // If we create it now, we can allow cancelling Pending items too.
-        
-        var cts = new CancellationTokenSource();
-        _cancellationTokens.AddOrUpdate(name, cts, (k, v) => cts);
-
-        item.DownloadAction = async () => 
+        QueueEntry? entry;
+        ResourceQueueStatus currentStatus;
+        lock (_gate)
         {
-            try
-            {
-                // Re-get CTS in case it changed (unlikely for same ID)
-                if (!_cancellationTokens.TryGetValue(name, out var myCts)) return false;
-                return await downloadAction(myCts.Token);
-            }
-            catch (OperationCanceledException)
+            if (!_entries.TryGetValue(key, out entry) ||
+                entry.Snapshot.Status is ResourceQueueStatus.Completed or ResourceQueueStatus.Failed or ResourceQueueStatus.Cancelled)
             {
                 return false;
             }
-            finally
-            {
-               // Cleanup happens in ProcessQueueAsync or here?
-            }
-        };
-        
-        // Publish initial status
-        _statusSubject.OnNext((name, QueueItemStatus.Pending));
-        
-        // Forward future status changes
-        item.WhenAnyValue(x => x.Status)
-            .Subscribe(status => _statusSubject.OnNext((name, status)));
 
-        _queue.Enqueue(item);
-        _activeItems.AddOrUpdate(name, item, (k, v) => item);
-        
-        if (!IsProcessing)
-        {
-            _ = Task.Run(ProcessQueueAsync);
+            currentStatus = entry.Snapshot.Status;
         }
 
-        return Task.FromResult(true);
-    }
-    
-    // Legacy overload
-    public Task<bool> EnqueueAsync(string name, Func<Task<bool>> downloadAction, Action<double>? progressCallback = null)
-    {
-        return EnqueueAsync(name, (ct) => downloadAction(), progressCallback);
+        entry.Cancellation.Cancel();
+        if (currentStatus == ResourceQueueStatus.Pending)
+        {
+            Complete(entry, ResourceQueueStatus.Cancelled);
+        }
+        else
+        {
+            Update(entry, ResourceQueueStatus.Cancelled, entry.Snapshot.Progress, null);
+        }
+        return true;
     }
 
-    private async Task ProcessQueueAsync()
+    public async ValueTask DisposeAsync()
     {
-        if (IsProcessing) return;
-        
+        QueueEntry[] entries;
+        lock (_gate)
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            _disposed = true;
+            entries = _entries.Values.ToArray();
+        }
+
+        foreach (var entry in entries)
+        {
+            entry.Cancellation.Cancel();
+            Complete(entry, ResourceQueueStatus.Cancelled);
+        }
+
+        _channel.Writer.TryComplete();
+        _shutdown.Cancel();
+
         try
         {
-            IsProcessing = true;
-            
-            while (!_queue.IsEmpty)
-            {
-                // Wait for a slot
-                await _semaphore.WaitAsync();
+            await Task.WhenAll(_workers).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+        }
 
-                if (_queue.TryDequeue(out var item))
+        foreach (var entry in entries)
+        {
+            entry.Cancellation.Dispose();
+        }
+
+        _snapshotSubject.OnCompleted();
+        _snapshotSubject.Dispose();
+        _shutdown.Dispose();
+    }
+
+    private async Task WorkerAsync(CancellationToken shutdownToken)
+    {
+        try
+        {
+            await foreach (var entry in _channel.Reader.ReadAllAsync(shutdownToken).ConfigureAwait(false))
+            {
+                if (entry.Completion.Task.IsCompleted)
                 {
-                    // Dispatch to background task
-                    _ = Task.Run(async () => 
-                    {
-                        try 
-                        {
-                            // Retrieve the canonical item from dictionary to ensure updates are visible
-                            if (!_activeItems.TryGetValue(item.Name, out var activeItem))
-                            {
-                                activeItem = item;
-                            }
-                            
-                            // Check cancellation before starting
-                            if (_cancellationTokens.TryGetValue(activeItem.Name, out var cts) && cts.IsCancellationRequested)
-                            {
-                                activeItem.Status = QueueItemStatus.Failed; // Or separate Cancelled status?
-                                // "Failed" is probably safer for now as UI handles it as "Stop processing"
-                            }
-                            else
-                            {
-                                activeItem.Status = QueueItemStatus.Downloading;
-                                
-                                if (activeItem.DownloadAction != null)
-                                {
-                                    bool success = await activeItem.DownloadAction();
-                                    activeItem.Status = success ? QueueItemStatus.Completed : QueueItemStatus.Failed;
-                                }
-                                else
-                                {
-                                    activeItem.Status = QueueItemStatus.Failed;
-                                }
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            System.Diagnostics.Debug.WriteLine($"Queue Download Error ({item.Name}): {ex.Message}");
-                            if (_activeItems.TryGetValue(item.Name, out var activeItem))
-                            {
-                                activeItem.Status = QueueItemStatus.Failed;
-                            }
-                        }
-                        finally
-                        {
-                            _semaphore.Release();
-                            
-                            // Cleanup CTS
-                             if (_cancellationTokens.TryRemove(item.Name, out var cts))
-                             {
-                                 cts.Dispose();
-                             }
-                        }
-                    });
+                    continue;
                 }
-                else
+
+                Update(entry, ResourceQueueStatus.Running, entry.Snapshot.Progress, null);
+                var progress = new InlineProgress<double>(value =>
                 {
-                    _semaphore.Release();
-                    break; 
+                    var normalized = Math.Clamp(value, 0, 100);
+                    if (UpdateProgress(entry, normalized))
+                    {
+                        entry.ProgressCallback?.Invoke(normalized);
+                    }
+                });
+
+                try
+                {
+                    var succeeded = await entry.Work(entry.Cancellation.Token, progress).ConfigureAwait(false);
+                    if (entry.Cancellation.IsCancellationRequested)
+                    {
+                        Complete(entry, ResourceQueueStatus.Cancelled);
+                    }
+                    else
+                    {
+                        Complete(
+                            entry,
+                            succeeded ? ResourceQueueStatus.Completed : ResourceQueueStatus.Failed,
+                            succeeded ? null : "The queued operation reported failure.");
+                    }
+                }
+                catch (OperationCanceledException) when (entry.Cancellation.IsCancellationRequested)
+                {
+                    Complete(entry, ResourceQueueStatus.Cancelled);
+                }
+                catch (Exception ex)
+                {
+                    Complete(entry, ResourceQueueStatus.Failed, ex.Message);
                 }
             }
         }
-        finally
+        catch (OperationCanceledException) when (shutdownToken.IsCancellationRequested)
         {
-            IsProcessing = false;
         }
+    }
+
+    private bool UpdateProgress(QueueEntry entry, double progress)
+    {
+        ResourceQueueSnapshot? snapshot = null;
+        lock (_gate)
+        {
+            if (IsCurrentEntry(entry) && entry.Snapshot.Status == ResourceQueueStatus.Running)
+            {
+                entry.Snapshot = entry.Snapshot with
+                {
+                    Progress = progress,
+                    UpdatedAt = DateTimeOffset.UtcNow
+                };
+                snapshot = entry.Snapshot;
+            }
+        }
+
+        if (snapshot is not null)
+        {
+            Publish(snapshot);
+            return true;
+        }
+
+        return false;
+    }
+
+    private void Update(
+        QueueEntry entry,
+        ResourceQueueStatus status,
+        double progress,
+        string? errorMessage)
+    {
+        ResourceQueueSnapshot? snapshot = null;
+        lock (_gate)
+        {
+            if (IsCurrentEntry(entry) && !entry.Completion.Task.IsCompleted)
+            {
+                entry.Snapshot = new ResourceQueueSnapshot(
+                    entry.Key,
+                    status,
+                    progress,
+                    errorMessage,
+                    DateTimeOffset.UtcNow);
+                snapshot = entry.Snapshot;
+            }
+        }
+
+        if (snapshot is not null)
+        {
+            Publish(snapshot);
+        }
+    }
+
+    private void Complete(
+        QueueEntry entry,
+        ResourceQueueStatus status,
+        string? errorMessage = null)
+    {
+        ResourceQueueSnapshot? snapshot = null;
+        ResourceQueueResult? result = null;
+        lock (_gate)
+        {
+            if (IsCurrentEntry(entry) && !entry.Completion.Task.IsCompleted)
+            {
+                var progress = status == ResourceQueueStatus.Completed ? 100 : entry.Snapshot.Progress;
+                entry.Snapshot = new ResourceQueueSnapshot(
+                    entry.Key,
+                    status,
+                    progress,
+                    errorMessage,
+                    DateTimeOffset.UtcNow);
+                snapshot = entry.Snapshot;
+                result = new ResourceQueueResult(entry.Key, status, errorMessage);
+            }
+        }
+
+        if (snapshot is null || result is null)
+        {
+            return;
+        }
+
+        Publish(snapshot);
+        entry.Completion.TrySetResult(result);
+    }
+
+    private bool IsCurrentEntry(QueueEntry entry)
+    {
+        return _entries.TryGetValue(entry.Key, out var current) && ReferenceEquals(current, entry);
+    }
+
+    private void Publish(ResourceQueueSnapshot snapshot)
+    {
+        _snapshots.OnNext(snapshot);
+    }
+
+    private sealed class QueueEntry
+    {
+        public QueueEntry(
+            string key,
+            Func<CancellationToken, IProgress<double>, Task<bool>> work,
+            Action<double>? progressCallback)
+        {
+            Key = key;
+            Work = work;
+            ProgressCallback = progressCallback;
+            Snapshot = new ResourceQueueSnapshot(
+                key,
+                ResourceQueueStatus.Pending,
+                0,
+                null,
+                DateTimeOffset.UtcNow);
+        }
+
+        public string Key { get; }
+
+        public Func<CancellationToken, IProgress<double>, Task<bool>> Work { get; }
+
+        public Action<double>? ProgressCallback { get; }
+
+        public CancellationTokenSource Cancellation { get; } = new();
+
+        public TaskCompletionSource<ResourceQueueResult> Completion { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public ResourceQueueSnapshot Snapshot { get; set; }
+    }
+
+    private sealed class InlineProgress<T>(Action<T> report) : IProgress<T>
+    {
+        public void Report(T value) => report(value);
     }
 }

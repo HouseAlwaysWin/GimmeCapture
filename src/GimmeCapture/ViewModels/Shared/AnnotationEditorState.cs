@@ -578,7 +578,7 @@ public sealed class AnnotationEditorState : ReactiveObject, IDisposable
         _styleCommitCancellation?.Dispose();
         var cancellation = new CancellationTokenSource();
         _styleCommitCancellation = cancellation;
-        _ = CommitStyleAfterDelayAsync(cancellation.Token);
+        CommitStyleAfterDelayAsync(cancellation.Token).Forget("Annotation.CommitStyle");
     }
 
     private async Task CommitStyleAfterDelayAsync(CancellationToken cancellationToken)

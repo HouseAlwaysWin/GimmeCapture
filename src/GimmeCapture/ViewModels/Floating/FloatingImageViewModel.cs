@@ -120,6 +120,7 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
     public SAM2RuntimeService SAM2RuntimeService => _sam2RuntimeService;
     public AIPathService AIPathService => _pathService;
     public AppSettingsService AppSettingsService => _appSettingsService;
+    public IResourceQueueService ResourceQueue => _resourceQueue;
     public Func<string, Task<bool>>? ConfirmDialogAction { get; set; }
     public Action<string, string>? ShowDialogAction { get; set; }
 
@@ -127,6 +128,7 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
     private readonly AIResourceService _aiResourceService;
     private readonly SAM2RuntimeService _sam2RuntimeService;
     private readonly AIPathService _pathService;
+    private readonly IResourceQueueService _resourceQueue;
     private readonly AppSettingsService _appSettingsService = null!;
     private string? _sam2LeaseId;
     internal SAM2Service? CurrentSam2ServiceForTesting => _sam2Service;
@@ -159,7 +161,6 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
         set 
         {
             if (base.CurrentTool == value) return;
-            System.Console.WriteLine($"[FloatingVM] Tool Changing: {base.CurrentTool} -> {value}");
             
             // Cleanup previous tool state
             if (base.CurrentTool == FloatingTool.PointRemoval)
@@ -187,8 +188,7 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
             // Initialization for new tool
             if (value == FloatingTool.PointRemoval)
             {
-                System.Console.WriteLine("[FloatingVM] Starting Interactive Removal Async...");
-                _ = StartInteractiveRemovalAsync();
+                StartInteractiveRemovalAsync().Forget("FloatingImage.StartInteractiveRemoval");
             }
         }
     }
@@ -243,7 +243,6 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
         get => CurrentTool == FloatingTool.PointRemoval;
         set 
         {
-            System.Console.WriteLine($"[FloatingVM] IsPointRemovalMode set to {value}");
             if (value) CurrentTool = FloatingTool.PointRemoval;
             else if (CurrentTool == FloatingTool.PointRemoval) CurrentTool = FloatingTool.None;
             this.RaisePropertyChanged();
@@ -252,7 +251,7 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
 
     public override bool IsAnyToolActive => base.IsAnyToolActive || IsPointRemovalMode;
 
-    public FloatingImageViewModel(Bitmap image, double originalWidth, double originalHeight, Avalonia.Media.Color borderColor, double borderThickness, bool hideDecoration, bool hideBorder, IClipboardService clipboardService, AIResourceService aiResourceService, SAM2RuntimeService sam2RuntimeService, AppSettingsService appSettingsService, AIPathService pathService, string? pinnedText = null, double inferredFontSize = 12.0)
+    public FloatingImageViewModel(Bitmap image, double originalWidth, double originalHeight, Avalonia.Media.Color borderColor, double borderThickness, bool hideDecoration, bool hideBorder, IClipboardService clipboardService, AIResourceService aiResourceService, SAM2RuntimeService sam2RuntimeService, AppSettingsService appSettingsService, AIPathService pathService, IResourceQueueService resourceQueue, string? pinnedText = null, double inferredFontSize = 12.0)
     {
         Image = image;
         OriginalWidth = originalWidth;
@@ -270,6 +269,7 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
         _aiResourceService = aiResourceService;
         _sam2RuntimeService = sam2RuntimeService;
         _pathService = pathService;
+        _resourceQueue = resourceQueue;
         _appSettingsService = appSettingsService;
 
         // Apply Default Toolbar Visibility

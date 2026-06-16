@@ -762,15 +762,6 @@ public partial class RecordingService
 
     private void LogToFile(string message)
     {
-        try
-        {
-            var logPath = Path.Combine(_settingsService?.BaseDataDirectory ?? AppDomain.CurrentDomain.BaseDirectory, "recording_debug.log");
-            File.AppendAllText(logPath, $"[{DateTime.Now:HH:mm:ss.fff}] {message}{Environment.NewLine}");
-            Debug.WriteLine($"[RecordingService] {message}");
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"[RecordingService] Failed to write log file: {ex.Message}");
-        }
+        Debug.WriteLine($"[RecordingService] {message}");
     }
 }

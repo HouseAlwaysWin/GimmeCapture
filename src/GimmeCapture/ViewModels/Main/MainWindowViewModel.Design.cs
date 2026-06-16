@@ -62,7 +62,7 @@ public partial class MainWindowViewModel
             sam2RuntimeService,
             ocrRuntimeService,
             aiPathService,
-            ResourceQueueService.Instance);
+            new ResourceQueueService());
     }
 
     private sealed class NoOpWindowManager : IWindowManager

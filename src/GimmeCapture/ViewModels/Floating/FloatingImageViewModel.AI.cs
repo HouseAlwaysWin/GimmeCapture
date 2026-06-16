@@ -231,17 +231,14 @@ public partial class FloatingImageViewModel
 
     private async Task StartInteractiveRemovalAsync()
     {
-        System.Console.WriteLine("[FloatingVM] StartInteractiveRemovalAsync Entered");
         if (CurrentTool != FloatingTool.PointRemoval) 
         {
-             System.Console.WriteLine($"[FloatingVM] CurrentTool is {CurrentTool}, not PointRemoval. Aborting.");
              return;
         }
 
         // Check if AI is enabled
         if (!_appSettingsService.Settings.EnableAI)
         {
-            System.Console.WriteLine("[FloatingVM] AI Disabled settings check failed.");
             DiagnosticText = LocalizationService.Instance["AIDisabled"];
             CurrentTool = FloatingTool.None;
 
@@ -257,7 +254,6 @@ public partial class FloatingImageViewModel
 
         EnsureSam2Lease();
 
-        System.Console.WriteLine("[FloatingVM] Getting SAM2 Service...");
         
         IsProcessing = true;
         ProcessingText = LocalizationService.Instance["StatusInitializingAI"];
@@ -265,7 +261,6 @@ public partial class FloatingImageViewModel
         var sam2 = await GetSAM2ServiceAsync(prepareCurrentImage: false);
         if (sam2 == null) 
         {
-            System.Console.WriteLine("[FloatingVM] SAM2 Service returned null.");
             IsProcessing = false;
             IsPointRemovalMode = false;
             if (string.IsNullOrWhiteSpace(DiagnosticText))
@@ -277,12 +272,11 @@ public partial class FloatingImageViewModel
 
         try
         {
-            System.Console.WriteLine("[FloatingVM] SAM2 Service Ready. Setting up Interactive Mode.");
             IsProcessing = true;
             ProcessingText = LocalizationService.Instance["StatusInitializingAI"];
             
             StartInteractiveSession();
-            _ = Task.Run(async () =>
+            Task.Run(async () =>
             {
                 try
                 {
@@ -290,16 +284,15 @@ public partial class FloatingImageViewModel
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[AI] Background prepare failed: {ex}");
+                    AppLog.Warning("FloatingImage.PrepareSam2", ex);
                 }
-            });
+            }).Forget("FloatingImage.PrepareSam2Background");
             
             DiagnosticText = $"{LocalizationService.Instance["StatusReady"]} [{sam2.ModelVariantName}]";
-            System.Console.WriteLine("[FloatingVM] Interactive Selection Ready");
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"FloatingVM: Failed to start interactive removal: {ex}");
+            AppLog.Warning("FloatingImage.StartInteractiveRemoval", ex);
             DiagnosticText = LocalizationService.Instance["StatusError"]; // Or specify a new one
             CurrentTool = FloatingTool.None;
 
@@ -342,7 +335,7 @@ public partial class FloatingImageViewModel
     // Synchronous wrapper for right-click undo
     public void UndoLastInteractivePoint()
     {
-        _ = UndoLastPointAsync();
+        UndoLastPointAsync().Forget("FloatingImage.UndoLastPoint");
     }
 
     private async Task RefineMaskAsync()
@@ -498,8 +491,8 @@ public partial class FloatingImageViewModel
         if (_aiResourceService.IsAICoreReady() && _aiResourceService.IsSAM2Ready(variant)) return true;
 
         // 2. Check if already downloading (Background)
-        var currentStatus = ResourceQueueService.Instance.GetStatus("AI");
-        if (currentStatus == QueueItemStatus.Pending || currentStatus == QueueItemStatus.Downloading)
+        var currentStatus = _resourceQueue.GetSnapshot("AI")?.Status;
+        if (currentStatus is ResourceQueueStatus.Pending or ResourceQueueStatus.Running)
         {
             ShowGothicDialog("StatusProcessing", "ComponentDownloadingProgress");
             return false;
@@ -510,15 +503,15 @@ public partial class FloatingImageViewModel
         if (!confirmed) return false;
 
         // 4. Start Download (Fire and Forget from UI perspective)
-        _ = ResourceQueueService.Instance.EnqueueAsync("AI", async () =>
+        _resourceQueue.EnqueueAsync("AI", async ct =>
         {
              // Download Core and Selected Variant
-             bool coreReady = await _aiResourceService.EnsureAICoreAsync();
+             bool coreReady = await _aiResourceService.EnsureAICoreAsync(ct);
              if (!coreReady) return false;
              
              var variant = _appSettingsService.Settings.SelectedSAM2Variant;
-             return await _aiResourceService.EnsureSAM2Async(variant);
-        });
+             return await _aiResourceService.EnsureSAM2Async(variant, ct);
+        }).Forget("FloatingImage.EnqueueAI");
 
         return false;
     }
@@ -538,8 +531,8 @@ public partial class FloatingImageViewModel
         if (_aiResourceService.IsAICoreReady()) return true;
 
         // 2. Check if already downloading (Background)
-        var currentStatus = ResourceQueueService.Instance.GetStatus("AI Core");
-        if (currentStatus == QueueItemStatus.Pending || currentStatus == QueueItemStatus.Downloading)
+        var currentStatus = _resourceQueue.GetSnapshot("AI Core")?.Status;
+        if (currentStatus is ResourceQueueStatus.Pending or ResourceQueueStatus.Running)
         {
             ShowGothicDialog("StatusProcessing", "ComponentDownloadingProgress");
             return false;
@@ -560,10 +553,10 @@ public partial class FloatingImageViewModel
         if (!confirmed) return false;
 
         // 4. Start Download
-        _ = ResourceQueueService.Instance.EnqueueAsync("AI Core", async () =>
+        _resourceQueue.EnqueueAsync("AI Core", async ct =>
         {
-             return await _aiResourceService.EnsureAICoreAsync();
-        });
+             return await _aiResourceService.EnsureAICoreAsync(ct);
+        }).Forget("FloatingImage.EnqueueAICore");
 
         return false;
     }

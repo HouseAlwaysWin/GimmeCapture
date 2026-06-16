@@ -838,7 +838,9 @@ public partial class SnipWindowViewModel
             x => x.IsInputFocused,
             (mode, textFocus) => mode == SnipMode.Translation && !textFocus);
 
-        TranslateAllSelectionsCommand = ReactiveCommand.Create(() => { _ = TranslateAllSelectionsAsync(); }, canExecuteInTranslation);
+        TranslateAllSelectionsCommand = ReactiveCommand.Create(
+            () => TranslateAllSelectionsAsync().Forget("Translation.TranslateAllSelections"),
+            canExecuteInTranslation);
         TranslateAllSelectionsCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"TranslateAll error: {ex}"));
 
         ScanAllTextCommand = ReactiveCommand.CreateFromTask(ScanAllDetectedTranslationParagraphsAsync, canExecuteInTranslation);

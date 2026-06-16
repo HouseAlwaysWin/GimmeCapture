@@ -37,16 +37,13 @@ public class DecorationScaleTests
     }
 
     [Fact]
-    public void FloatingWindowViewModelBase_ShouldCalculateCorrectIconSize()
+    public void FloatingWindowViewModelBase_ShouldUseFixedIconSize()
     {
         // Arrange
         var vm = new TestFloatingViewModel();
         
-        // Act
-        vm.CornerIconScale = 0.5;
-
         // Assert
-        Assert.Equal(11.0, vm.SelectionIconSize); // 22 * 0.5
+        Assert.Equal(8.0, vm.SelectionIconSize);
     }
 
     [Fact]
@@ -66,13 +63,6 @@ public class DecorationScaleTests
         Assert.Contains(nameof(vm.WingHeight), changedProperties);
         Assert.Contains(nameof(vm.WindowPadding), changedProperties);
 
-        // Act 2
-        changedProperties.Clear();
-        vm.CornerIconScale = 0.8;
-
-        // Assert 2
-        Assert.Contains(nameof(vm.CornerIconScale), changedProperties);
-        Assert.Contains(nameof(vm.SelectionIconSize), changedProperties);
     }
 
     [Fact]

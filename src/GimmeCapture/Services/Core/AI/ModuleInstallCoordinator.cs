@@ -6,6 +6,7 @@ using System.Reactive.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using GimmeCapture.Models;
+using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core.Infrastructure;
 using ReactiveUI;
 
@@ -17,14 +18,14 @@ public sealed class ModuleInstallCoordinator
     private readonly Lazy<AIResourceService> _aiResourceService;
     private readonly Lazy<AIResourceOrchestrator> _orchestrator;
     private readonly AppSettingsService _settingsService;
-    private readonly ResourceQueueService _resourceQueue;
+    private readonly IResourceQueueService _resourceQueue;
 
     public ModuleInstallCoordinator(
         AIModelCatalog modelCatalog,
         Lazy<AIResourceService> aiResourceService,
         Lazy<AIResourceOrchestrator> orchestrator,
         AppSettingsService settingsService,
-        ResourceQueueService resourceQueue)
+        IResourceQueueService resourceQueue)
     {
         _modelCatalog = modelCatalog;
         _aiResourceService = aiResourceService;
@@ -62,33 +63,63 @@ public sealed class ModuleInstallCoordinator
 
     public double DownloadProgress => AIResources.DownloadProgress;
 
-    public IObservable<QueueItemStatus> ObserveStatus(string type)
+    public ArtifactDownloadStage DownloadStage => AIResources.DownloadStage;
+
+    public IObservable<ResourceQueueSnapshot> ObserveStatus(string type)
     {
-        return _resourceQueue.ObserveStatus(type);
+        return _resourceQueue.Observe(type);
     }
 
-    public IObservable<double> ObserveDownloadProgress()
+    public IObservable<(double Progress, ArtifactDownloadStage Stage)> ObserveDownloadProgress()
     {
-        return AIResources.WhenAnyValue(x => x.DownloadProgress);
+        return AIResources.WhenAnyValue(
+            x => x.DownloadProgress,
+            x => x.DownloadStage,
+            (progress, stage) => (progress, stage));
     }
 
-    public Task InstallAsync(string type, string? llamaModelId = null, CancellationToken cancellationToken = default)
+    public async Task InstallAsync(string type, string? llamaModelId = null, CancellationToken cancellationToken = default)
     {
-        return type switch
+        var task = type switch
         {
-            "AICore" => _resourceQueue.EnqueueAsync("AICore", ct => Orchestrator.EnsureAICoreAsync(ct)),
-            "SAM2" => _resourceQueue.EnqueueAsync("SAM2", ct => Orchestrator.EnsureSAM2Async(_settingsService.Settings.SelectedSAM2Variant, ct)),
-            "OCR" => _resourceQueue.EnqueueAsync("OCR", ct => Orchestrator.EnsureOCRAsync(ct)),
+            "AICore" => _resourceQueue.EnqueueAsync(
+                "AICore",
+                (ct, progress) => ExecuteWithProgressAsync(token => Orchestrator.EnsureAICoreAsync(token), ct, progress)),
+            "SAM2" => _resourceQueue.EnqueueAsync(
+                "SAM2",
+                (ct, progress) => ExecuteWithProgressAsync(
+                    token => Orchestrator.EnsureSAM2Async(_settingsService.Settings.SelectedSAM2Variant, token),
+                    ct,
+                    progress)),
+            "OCR" => _resourceQueue.EnqueueAsync(
+                "OCR",
+                (ct, progress) => ExecuteWithProgressAsync(token => Orchestrator.EnsureOCRAsync(token), ct, progress)),
             "LlamaModels" => _resourceQueue.EnqueueAsync(
                 "LlamaModels",
-                ct => Orchestrator.EnsureLlamaModelAsync(llamaModelId ?? string.Empty, ct)),
-            _ => Task.CompletedTask
+                (ct, progress) => ExecuteWithProgressAsync(
+                    token => Orchestrator.EnsureLlamaModelAsync(llamaModelId ?? string.Empty, token),
+                    ct,
+                    progress)),
+            _ => Task.FromResult(new ResourceQueueResult(type, ResourceQueueStatus.Failed, "Unknown module type."))
         };
+
+        await task.WaitAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public void Cancel(string type)
     {
         _resourceQueue.Cancel(type);
+    }
+
+    private async Task<bool> ExecuteWithProgressAsync(
+        Func<CancellationToken, Task<bool>> operation,
+        CancellationToken cancellationToken,
+        IProgress<double> progress)
+    {
+        using var subscription = AIResources
+            .WhenAnyValue(x => x.DownloadProgress)
+            .Subscribe(progress.Report);
+        return await operation(cancellationToken).ConfigureAwait(false);
     }
 
     public void Remove(string type, string? llamaModelId = null)

@@ -80,6 +80,9 @@
                     </Grid>
 
                     <StackPanel IsVisible="{Binding UpdateService.IsDownloading}" Spacing="5" Margin="0,8,0,0">
+                        <TextBlock Text="{Binding UpdateDownloadStageText}"
+                                   Foreground="{DynamicResource ThemeAccentBrush}"
+                                   FontSize="11"/>
                         <ProgressBar Value="{Binding UpdateService.DownloadProgress}"
                                      Height="4"
                                      Foreground="{DynamicResource ThemeAccentBrush}"
@@ -90,7 +93,16 @@
                                    HorizontalAlignment="Right"
                                    Foreground="White"
                                    Opacity="0.8"/>
+                        <Button Content="{Binding [CancelDownload], Source={x:Static services:LocalizationService.Instance}}"
+                                Theme="{StaticResource SmallGothicMetalButton}"
+                                Command="{Binding CancelUpdateDownloadCommand}"
+                                HorizontalAlignment="Right"/>
                     </StackPanel>
+                    <TextBlock Text="{Binding UpdateService.LastErrorMessage}"
+                               IsVisible="{Binding HasUpdateDownloadError}"
+                               Foreground="#FF8080"
+                               TextWrapping="Wrap"
+                               FontSize="11"/>
                 </StackPanel>
             </Border>
 
@@ -101,6 +113,9 @@
                 <Button Content="{Binding [CheckForUpdates], Source={x:Static services:LocalizationService.Instance}}"
                         Theme="{StaticResource GothicMetalButton}"
                         Command="{Binding CheckUpdateCommand}"/>
+                <Button Content="{Binding [CopyDiagnostics], Source={x:Static services:LocalizationService.Instance}}"
+                        Theme="{StaticResource GothicMetalButton}"
+                        Command="{Binding CopyDiagnosticsCommand}"/>
             </StackPanel>
         </StackPanel>
     </ScrollViewer>

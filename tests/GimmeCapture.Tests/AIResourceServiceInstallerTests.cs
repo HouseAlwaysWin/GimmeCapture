@@ -30,16 +30,16 @@ public sealed class AIResourceServiceInstallerTests : IDisposable
     [Fact]
     public async Task EnsureLlamaModelAsync_WhenPresetAlreadyExists_DoesNotDownload()
     {
-        var modelPath = _sut.GetLlamaModelPathById("gemma-3-1b-it-q4");
+        var modelPath = _sut.GetLlamaModelPathById("translategemma-4b-it");
         Directory.CreateDirectory(Path.GetDirectoryName(modelPath)!);
         File.WriteAllText(modelPath, "existing");
 
-        var result = await _sut.EnsureLlamaModelAsync("gemma-3-1b-it-q4");
+        var result = await _sut.EnsureLlamaModelAsync("translategemma-4b-it");
 
         Assert.True(result);
         _downloader.Verify(
             downloader => downloader.DownloadFileAsync(
-                It.IsAny<string>(),
+                It.IsAny<ArtifactDescriptor>(),
                 It.IsAny<string>(),
                 It.IsAny<double>(),
                 It.IsAny<double>(),
@@ -50,11 +50,11 @@ public sealed class AIResourceServiceInstallerTests : IDisposable
     [Fact]
     public void RemoveLlamaModelPreset_WhenPresetExists_DeletesFile()
     {
-        var modelPath = _sut.GetLlamaModelPathById("gemma-3-1b-it-q4");
+        var modelPath = _sut.GetLlamaModelPathById("translategemma-4b-it");
         Directory.CreateDirectory(Path.GetDirectoryName(modelPath)!);
         File.WriteAllText(modelPath, "existing");
 
-        var result = _sut.RemoveLlamaModelPreset("gemma-3-1b-it-q4");
+        var result = _sut.RemoveLlamaModelPreset("translategemma-4b-it");
 
         Assert.True(result);
         Assert.False(File.Exists(modelPath));

@@ -45,6 +45,8 @@ public partial class App : Application
 
             _bootstrapper = new AppBootstrapper();
             desktop.ShutdownMode = Avalonia.Controls.ShutdownMode.OnExplicitShutdown;
+            desktop.Exit += (_, _) =>
+                _bootstrapper.DisposeAsync().AsTask().GetAwaiter().GetResult();
             var hotkeyHost = _bootstrapper.CreateTrayHostWindow();
 
             var launchToTrayOnly = StartupService.ShouldLaunchToTrayOnly(Program.CommandLineArgs);
@@ -148,10 +150,8 @@ public partial class App : Application
             }
             catch (System.Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error setting up tray icon: {ex.Message}");
+                AppLog.Warning("App.TrayIconSetup", ex);
             }
-
-            _ = ProcessMemoryTrimService.RequestIdleTrimAsync("startup");
         }
 
         base.OnFrameworkInitializationCompleted();

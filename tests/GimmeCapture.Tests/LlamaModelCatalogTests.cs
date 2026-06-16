@@ -16,7 +16,7 @@ public class LlamaModelCatalogTests : IDisposable
 
         _settings = new AppSettingsService(_baseDir);
         _settings.Settings.AIResourcesDirectory = Path.Combine(_baseDir, "AI");
-        _settings.Settings.LlamaModelId = "gemma-3-1b-it-q4";
+        _settings.Settings.LlamaModelId = "translategemma-4b-it";
 
         var pathService = new AIPathService(_settings);
         var resolver = new NativeResolverService(pathService);
@@ -25,13 +25,21 @@ public class LlamaModelCatalogTests : IDisposable
     }
 
     [Fact]
-    public void DownloadablePresets_ShouldContainGemma3_1B_And_4B()
+    public void DownloadablePresets_ShouldContainCuratedModels()
     {
         var presets = _sut.GetDownloadableLlamaModelPresets();
         var ids = presets.Select(x => x.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        Assert.Contains("gemma-3-1b-it-q4", ids);
+        Assert.Contains("translategemma-4b-it", ids);
         Assert.Contains("gemma-3-4b-it-q4", ids);
+        Assert.Contains("translategemma-12b-it", ids);
+        Assert.Equal(3, ids.Count);
+        Assert.All(presets, preset =>
+        {
+            Assert.True(preset.IsSelectable);
+            Assert.True(preset.IsDownloadable);
+            Assert.NotNull(preset.Artifact);
+        });
     }
 
     [Fact]
@@ -50,14 +58,14 @@ public class LlamaModelCatalogTests : IDisposable
     [Fact]
     public void GetInstalledLlamaModelPresets_ShouldOnlyReturnExistingFiles()
     {
-        var gemma1bPath = _sut.GetLlamaModelPathById("gemma-3-1b-it-q4");
-        Directory.CreateDirectory(Path.GetDirectoryName(gemma1bPath)!);
-        File.WriteAllText(gemma1bPath, "dummy");
+        var translateGemmaPath = _sut.GetLlamaModelPathById("translategemma-4b-it");
+        Directory.CreateDirectory(Path.GetDirectoryName(translateGemmaPath)!);
+        File.WriteAllText(translateGemmaPath, "dummy");
 
         var installed = _sut.GetInstalledLlamaModelPresets();
         var ids = installed.Select(x => x.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        Assert.Contains("gemma-3-1b-it-q4", ids);
+        Assert.Contains("translategemma-4b-it", ids);
         Assert.DoesNotContain("gemma-3-4b-it-q4", ids);
     }
 

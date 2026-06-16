@@ -20,14 +20,9 @@ public class AppSettingsService
     // v7: Translation model list narrows to TranslateGemma 4B + Gemma 3 4B + TranslateGemma 12B.
     // v8: TranslateGemma 12B removed from visible/default path; falls back to TranslateGemma 4B.
     // v9: TranslateGemma 12B restored as an optional supported preset.
-    public const int CurrentConfigVersion = 9;
+    // v10: Llama preset support and migration metadata moved into AIModelCatalog.
+    public const int CurrentConfigVersion = 10;
     private readonly string _appVersion;
-    private static readonly string[] SupportedLlamaModelIds =
-    {
-        "translategemma-4b-it",
-        "gemma-3-4b-it-q4",
-        "translategemma-12b-it",
-    };
 
     public string BaseDataDirectory { get; private set; } = RuntimePathProvider.GetExecutableDirectory();
     private string ConfigPath => Path.Combine(BaseDataDirectory, "config.json");
@@ -52,14 +47,7 @@ public class AppSettingsService
     
     public void DebugLog(string message)
     {
-        try
-        {
-            var logPath = Path.Combine(BaseDataDirectory, "settings_debug.log");
-            var timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
-            File.AppendAllText(logPath, $"[{timestamp}] {message}{Environment.NewLine}");
-            System.Diagnostics.Debug.WriteLine($"[Settings] {message}");
-        }
-        catch { }
+        AppLog.Information($"Settings.{message}");
     }
 
     private bool IsRuntimeDefaultStorage =>
@@ -127,23 +115,7 @@ public class AppSettingsService
 
     private static string NormalizeLlamaModelId(string? modelId)
     {
-        var normalized = modelId switch
-        {
-            null or "" => "translategemma-4b-it",
-            "gemma-3-1b-it-q4" => "translategemma-4b-it",
-            "gemma-4-placeholder" => "translategemma-4b-it",
-            "gemma-4-E4B" => "translategemma-4b-it",
-            "qwen3-1.7b-instruct-q4" => "translategemma-4b-it",
-            "qwen3-4b-instruct-q4" => "translategemma-4b-it",
-            "qwen2.5-1.5b-instruct-q4" => "translategemma-4b-it",
-            "qwen2.5-3b-instruct-q4" => "translategemma-4b-it",
-            "llama-3.1-8b-instruct-q4" => "translategemma-4b-it",
-            _ => modelId
-        };
-
-        return Array.Exists(SupportedLlamaModelIds, id => string.Equals(id, normalized, StringComparison.Ordinal))
-            ? normalized
-            : "translategemma-4b-it";
+        return AIModelCatalog.NormalizeLlamaModelId(modelId);
     }
 
     private static int DetectConfigVersion(string json)
@@ -195,7 +167,7 @@ public class AppSettingsService
             MigrateLegacyActionHotkeys(settings);
         }
 
-        if (sourceVersion < 8)
+        if (sourceVersion < 10)
         {
             settings.LlamaModelId = NormalizeLlamaModelId(settings.LlamaModelId);
         }
@@ -250,7 +222,6 @@ public class AppSettingsService
         dest.BorderColorHex = source.BorderColorHex;
         dest.ThemeColorHex = source.ThemeColorHex;
         dest.WingScale = source.WingScale;
-        dest.CornerIconScale = source.CornerIconScale;
         dest.HideSnipPinDecoration = source.HideSnipPinDecoration;
         dest.HideSnipPinBorder = source.HideSnipPinBorder;
         dest.HideSnipSelectionDecoration = source.HideSnipSelectionDecoration;

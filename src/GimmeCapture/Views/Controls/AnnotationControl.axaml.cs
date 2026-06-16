@@ -58,7 +58,7 @@ public partial class AnnotationControl : UserControl
                 this.GetObservable(BoundsProperty),
                 (start, end, snapshot, referenceSize, _, _, _, bounds) => (start, end, snapshot, referenceSize, bounds))
                 .Throttle(TimeSpan.FromMilliseconds(16))
-                .ObserveOn(RxApp.MainThreadScheduler)
+                .ObserveOn(RxSchedulers.MainThreadScheduler)
                 .Subscribe(_ => RegenerateEffectPreview(ann));
 
             RegenerateEffectPreview(ann);

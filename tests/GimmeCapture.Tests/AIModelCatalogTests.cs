@@ -13,9 +13,20 @@ public class AIModelCatalogTests
         var presets = _sut.GetDownloadableLlamaModelPresets();
         var ids = presets.Select(x => x.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        Assert.Contains("gemma-3-1b-it-q4", ids);
+        Assert.Contains("translategemma-4b-it", ids);
         Assert.Contains("gemma-3-4b-it-q4", ids);
+        Assert.Contains("translategemma-12b-it", ids);
+        Assert.Equal(3, ids.Count);
         Assert.DoesNotContain("gemma-4-placeholder", ids);
+    }
+
+    [Theory]
+    [InlineData("gemma-4-placeholder", "gemma-4-placeholder")]
+    [InlineData("qwen3-1.7b-instruct-q4", AIModelCatalog.DefaultLlamaModelId)]
+    [InlineData("unknown-model", AIModelCatalog.DefaultLlamaModelId)]
+    public void NormalizeLlamaModelId_UsesPresetMetadata(string sourceId, string expectedId)
+    {
+        Assert.Equal(expectedId, AIModelCatalog.NormalizeLlamaModelId(sourceId));
     }
 
     [Theory]
@@ -28,9 +39,16 @@ public class AIModelCatalogTests
     {
         var package = _sut.GetOcrPackage(language);
 
-        Assert.EndsWith("ch_PP-OCRv4_det_infer.onnx", package.DetectionUrl, StringComparison.Ordinal);
-        Assert.EndsWith(expectedRecognitionFile, package.RecognitionUrl, StringComparison.Ordinal);
-        Assert.EndsWith(expectedDictionaryFile, package.DictionaryUrl, StringComparison.Ordinal);
+        Assert.EndsWith("ch_PP-OCRv4_det_infer.onnx", package.Detection.Uri.AbsoluteUri, StringComparison.Ordinal);
+        Assert.EndsWith(expectedRecognitionFile, package.Recognition.Uri.AbsoluteUri, StringComparison.Ordinal);
+        Assert.EndsWith(expectedDictionaryFile, package.Dictionary.Uri.AbsoluteUri, StringComparison.Ordinal);
+        Assert.All(
+            new[] { package.Detection, package.Recognition, package.Dictionary },
+            descriptor =>
+            {
+                Assert.Equal(64, descriptor.Sha256.Length);
+                Assert.True(descriptor.ExpectedSize > 0);
+            });
     }
 
     [Fact]
@@ -53,7 +71,7 @@ public class AIModelCatalogTests
     {
         var package = _sut.GetSam2Package(SAM2Variant.Large);
 
-        Assert.Contains("sam2-hiera-large-onnx", package.EncoderUrl, StringComparison.Ordinal);
-        Assert.Contains("sam2-hiera-large-onnx", package.DecoderUrl, StringComparison.Ordinal);
+        Assert.Contains("sam2-hiera-large-onnx", package.Encoder.Uri.AbsoluteUri, StringComparison.Ordinal);
+        Assert.Contains("sam2-hiera-large-onnx", package.Decoder.Uri.AbsoluteUri, StringComparison.Ordinal);
     }
 }

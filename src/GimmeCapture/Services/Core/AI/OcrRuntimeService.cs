@@ -127,7 +127,8 @@ public sealed class OcrRuntimeService : IDisposable
         }
 
         ForceUnload();
-        _ = ProcessMemoryTrimService.RequestIdleTrimAsync("ocr-unloaded");
+        ProcessMemoryTrimService.RequestIdleTrimAsync("ocr-unloaded")
+            .Forget("MemoryTrim.OcrUnloaded");
         Debug.WriteLine("[OcrRuntime] Unloaded OCR runtime.");
     }
 

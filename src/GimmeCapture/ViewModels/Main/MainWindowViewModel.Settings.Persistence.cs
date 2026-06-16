@@ -38,7 +38,6 @@ public partial class MainWindowViewModel
             BorderColor = BorderColor,
             ThemeColor = ThemeColor,
             WingScale = WingScale,
-            CornerIconScale = CornerIconScale,
             HideSnipPinDecoration = HideSnipPinDecoration,
             HideSnipPinBorder = HideSnipPinBorder,
             HideSnipSelectionDecoration = HideSnipSelectionDecoration,
@@ -117,7 +116,6 @@ public partial class MainWindowViewModel
         ShowAIScanBox = snapshot.ShowAIScanBox;
         EnableAI = snapshot.EnableAI;
         WingScale = snapshot.WingScale;
-        CornerIconScale = snapshot.CornerIconScale;
         RecordingSettings.RecordFPS = snapshot.RecordFps;
         RecordingSettings.MaxRecordingSizeMB = snapshot.MaxRecordingSizeMb;
         EnableAIScan = snapshot.EnableAIScan;

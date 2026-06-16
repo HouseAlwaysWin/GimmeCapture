@@ -1,9 +1,9 @@
 using System;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
-using Avalonia.ReactiveUI;
 using GimmeCapture.ViewModels.Shared;
 using ReactiveUI;
+using ReactiveUI.Avalonia;
 
 namespace GimmeCapture.Views.Shared;
 

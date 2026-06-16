@@ -31,7 +31,7 @@ public class ProcessManagerService
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Process Managed Error ({key}): {ex.Message}");
+            AppLog.Warning("ProcessManager.Start", ex);
         }
         finally
         {

@@ -425,7 +425,7 @@ public class BackgroundRemovalService : IDisposable
                 }
             }
 
-            return mask320.Resize(new SKImageInfo(width, height), new SKSamplingOptions(SKFilterMode.Linear));
+            return ResizeGrayMask(mask320, width, height);
         }
         finally
         {
@@ -435,18 +435,26 @@ public class BackgroundRemovalService : IDisposable
 
     internal static byte[] ApplyMask(SKBitmap original, SKBitmap mask, float min, float max)
     {
+        if (mask.Width != original.Width || mask.Height != original.Height)
+        {
+            throw new ArgumentException("Mask dimensions must match the source image.", nameof(mask));
+        }
+
         using var result = new SKBitmap(original.Width, original.Height, SKColorType.Bgra8888, SKAlphaType.Unpremul);
+        var maskColorType = mask.ColorType;
+        bool canReadMaskRow = maskColorType is SKColorType.Gray8 or SKColorType.Alpha8 or SKColorType.Bgra8888 or SKColorType.Rgba8888;
 
         for (int y = 0; y < original.Height; y++)
         {
             ReadOnlySpan<byte> srcRow = GetPixelRowSpan(original, y);
-            ReadOnlySpan<byte> maskRow = GetGrayRowSpan(mask, y);
+            ReadOnlySpan<byte> maskRow = canReadMaskRow ? GetBitmapRowSpan(mask, y) : default;
             Span<byte> dstRow = GetPixelRowSpan(result, y);
 
             for (int x = 0; x < original.Width; x++)
             {
                 int offset = x * 4;
-                byte alpha = (byte)Math.Min(srcRow[offset + 3], maskRow[x]);
+                byte maskAlpha = ReadMaskAlpha(mask, maskRow, x, y);
+                byte alpha = (byte)Math.Min(srcRow[offset + 3], maskAlpha);
                 if (alpha < 10) alpha = 0;
                 if (alpha > 240) alpha = srcRow[offset + 3];
 
@@ -460,6 +468,61 @@ public class BackgroundRemovalService : IDisposable
         using var image = SKImage.FromBitmap(result);
         using var data = image.Encode(SKEncodedImageFormat.Png, 100);
         return data.ToArray();
+    }
+
+    private static SKBitmap ResizeGrayMask(SKBitmap source, int width, int height)
+    {
+        if (source.ColorType != SKColorType.Gray8)
+        {
+            throw new ArgumentException("Source mask must be Gray8.", nameof(source));
+        }
+
+        var resized = new SKBitmap(width, height, SKColorType.Gray8, SKAlphaType.Opaque);
+        if (width == source.Width && height == source.Height)
+        {
+            source.CopyTo(resized);
+            return resized;
+        }
+
+        double scaleX = source.Width / (double)width;
+        double scaleY = source.Height / (double)height;
+
+        for (int y = 0; y < height; y++)
+        {
+            double sourceY = ((y + 0.5d) * scaleY) - 0.5d;
+            int y0 = Math.Clamp((int)Math.Floor(sourceY), 0, source.Height - 1);
+            int y1 = Math.Min(y0 + 1, source.Height - 1);
+            double fy = Math.Clamp(sourceY - y0, 0d, 1d);
+
+            ReadOnlySpan<byte> sourceRow0 = GetGrayRowSpan(source, y0);
+            ReadOnlySpan<byte> sourceRow1 = GetGrayRowSpan(source, y1);
+            Span<byte> resizedRow = GetWritableGrayRowSpan(resized, y);
+
+            for (int x = 0; x < width; x++)
+            {
+                double sourceX = ((x + 0.5d) * scaleX) - 0.5d;
+                int x0 = Math.Clamp((int)Math.Floor(sourceX), 0, source.Width - 1);
+                int x1 = Math.Min(x0 + 1, source.Width - 1);
+                double fx = Math.Clamp(sourceX - x0, 0d, 1d);
+
+                double top = sourceRow0[x0] + ((sourceRow0[x1] - sourceRow0[x0]) * fx);
+                double bottom = sourceRow1[x0] + ((sourceRow1[x1] - sourceRow1[x0]) * fx);
+                resizedRow[x] = (byte)Math.Clamp((int)Math.Round(top + ((bottom - top) * fy)), 0, 255);
+            }
+        }
+
+        return resized;
+    }
+
+    private static byte ReadMaskAlpha(SKBitmap mask, ReadOnlySpan<byte> row, int x, int y)
+    {
+        return mask.ColorType switch
+        {
+            SKColorType.Gray8 or SKColorType.Alpha8 => row[x],
+            SKColorType.Bgra8888 => row[(x * 4) + 2],
+            SKColorType.Rgba8888 => row[x * 4],
+            _ => mask.GetPixel(x, y).Red
+        };
     }
 
     private static void CollectCornerSamples(
@@ -534,6 +597,12 @@ public class BackgroundRemovalService : IDisposable
     {
         byte* rowPtr = (byte*)bitmap.GetPixels() + (row * bitmap.RowBytes);
         return new ReadOnlySpan<byte>(rowPtr, bitmap.Width);
+    }
+
+    private static unsafe ReadOnlySpan<byte> GetBitmapRowSpan(SKBitmap bitmap, int row)
+    {
+        byte* rowPtr = (byte*)bitmap.GetPixels() + (row * bitmap.RowBytes);
+        return new ReadOnlySpan<byte>(rowPtr, bitmap.RowBytes);
     }
 
     private static unsafe Span<byte> GetWritableGrayRowSpan(SKBitmap bitmap, int row)

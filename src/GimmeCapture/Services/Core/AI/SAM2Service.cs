@@ -165,7 +165,6 @@ public class SAM2Service : IDisposable
             int bufferSize = 3 * 1024 * 1024;
             float[] buffer = new float[bufferSize];
 
-            try
             {
                 using var resized = original.Resize(new SKImageInfo(1024, 1024), new SKSamplingOptions(SKFilterMode.Linear));
                 if (resized == null)
@@ -254,10 +253,7 @@ public class SAM2Service : IDisposable
                 _highResFeat1 = FindResult<Tensor<float>>(new[] { "high_res_feats_1", "feat_1", "high_res_feat_1" })?.ToDenseTensor()
                     ?? throw new Exception($"Encoder Error: Missing feat_1. Got: {string.Join(", ", outputNames)}");
             }
-            finally
-            {
-            }
-            
+
         });
     }
 
@@ -281,13 +277,11 @@ public class SAM2Service : IDisposable
                 }
             }
             
-            Console.WriteLine($"[AI Scan] Processing {points.Count} grid points...");
 
             var decInputMetaData = _decoderSession.InputMetadata;
             var decInputNames = decInputMetaData.Keys.AsValueEnumerable().ToList();
 
             // Process each point individually (batch=1) in PARALLEL
-            int processedCount = 0;
             var lockObj = new object();
 
             Parallel.ForEach(points, new ParallelOptions { MaxDegreeOfParallelism = 4, CancellationToken = cancellationToken }, (pt, state) =>
@@ -428,20 +422,13 @@ public class SAM2Service : IDisposable
                         }
                     }
 
-                    lock (lockObj)
-                    {
-                        processedCount++;
-                        if (processedCount % 10 == 0 || processedCount == points.Count)
-                            Console.WriteLine($"[AI Scan] Processed {processedCount}/{points.Count} points, found {results.Count} objects");
-                    }
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"[AI Scan] Point ({pt.X:F0},{pt.Y:F0}) failed: {ex.Message}");
+                    AppLog.Warning("SAM2.GridPoint", ex);
                 }
             });
 
-            Console.WriteLine($"[AI Scan] Complete: {results.Count} objects found");
             return results;
         });
     }

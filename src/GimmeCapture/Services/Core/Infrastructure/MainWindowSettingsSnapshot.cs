@@ -13,7 +13,6 @@ public sealed class MainWindowSettingsSnapshot
     public required Color BorderColor { get; init; }
     public required Color ThemeColor { get; init; }
     public required double WingScale { get; init; }
-    public required double CornerIconScale { get; init; }
     public required bool HideSnipPinDecoration { get; init; }
     public required bool HideSnipPinBorder { get; init; }
     public required bool HideSnipSelectionDecoration { get; init; }
@@ -67,7 +66,6 @@ public sealed class MainWindowSettingsSnapshot
             BorderColor = ParseColor(settings.BorderColorHex, "#E60012"),
             ThemeColor = ParseColor(settings.ThemeColorHex, "#E60012"),
             WingScale = settings.WingScale,
-            CornerIconScale = settings.CornerIconScale,
             HideSnipPinDecoration = settings.HideSnipPinDecoration,
             HideSnipPinBorder = settings.HideSnipPinBorder,
             HideSnipSelectionDecoration = settings.HideSnipSelectionDecoration,
@@ -121,7 +119,6 @@ public sealed class MainWindowSettingsSnapshot
         settings.BorderColorHex = BorderColor.ToString();
         settings.ThemeColorHex = ThemeColor.ToString();
         settings.WingScale = WingScale;
-        settings.CornerIconScale = CornerIconScale;
         settings.HideSnipPinDecoration = HideSnipPinDecoration;
         settings.HideSnipPinBorder = HideSnipPinBorder;
         settings.HideSnipSelectionDecoration = HideSnipSelectionDecoration;

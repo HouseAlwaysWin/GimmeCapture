@@ -20,7 +20,7 @@ public class HotkeyMappingService
         }
         else
         {
-            System.Diagnostics.Debug.WriteLine($"[HotkeyMappingService] Unknown hotkey tag: {tag}");
+            AppLog.Information("HotkeyMapping.UnknownTag");
         }
     }
 

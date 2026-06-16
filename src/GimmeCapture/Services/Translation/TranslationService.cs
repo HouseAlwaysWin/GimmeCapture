@@ -1,5 +1,4 @@
 using System;
-using System.Diagnostics;
 using System.Collections.Generic;
 using System.IO;
 using System.Net.Http;
@@ -23,6 +22,7 @@ public class TranslationService : IDisposable
     private readonly OcrRuntimeService _ocrRuntimeService;
     private readonly IEnumerable<ITranslationEngine> _translationEngines;
     private readonly AIResourceService _aiResourceService;
+    private readonly TranslationPipeline _translationPipeline = new();
     private IOCREngine? _ocrEngine;
     private bool _keepOcrWarm;
 
@@ -76,7 +76,7 @@ public class TranslationService : IDisposable
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[TranslationService] Warm-up OCR failed: {ex.Message}");
+            AppLog.Warning("Translation.WarmupOcr", ex);
         }
 
         TranslationMemoryDiagnostics.Log(
@@ -113,11 +113,9 @@ public class TranslationService : IDisposable
                 bitmap: bitmap);
 
             var ocrLang = _settings.SourceLanguage;
-            Console.WriteLine($"[TranslationService] SourceLanguage={ocrLang}, TargetLanguage={_settings.TargetLanguage}");
             if (ocrLang == OCRLanguage.Auto)
             {
                 ocrLang = await DetectScriptLanguageAsync(bitmap, ct);
-                Console.WriteLine($"[TranslationService] Auto-detected source: {ocrLang}");
             }
 
             var ocrEngine = GetOrCreateOcrEngine();
@@ -142,7 +140,7 @@ public class TranslationService : IDisposable
             {
                 ct.ThrowIfCancellationRequested();
                 var (text, confidence) = ocrEngine.RecognizeText(bitmap, box, ct);
-                string cleanedText = SanitizeRecognizedOcrText(text);
+                string cleanedText = OcrTextSanitizer.Sanitize(text);
                 if (IsUsefulOcrText(cleanedText, confidence))
                 {
                     recognizedBlocks.Add((box, cleanedText, confidence));
@@ -167,11 +165,11 @@ public class TranslationService : IDisposable
                 llamaLoaded: IsLlamaLoaded,
                 selectionCount: recognizedBlocks.Count,
                 bitmap: bitmap);
-            var translated = SanitizeTranslationCandidate(
+            var translated = _translationPipeline.SanitizeTranslation(
                 mergedText,
                 await TranslateAsync(mergedText, ocrLang, ct),
                 _settings.TargetLanguage);
-            string bestEffortTranslation = TryPromoteBestEffortTranslation(mergedText, translated, _settings.TargetLanguage);
+            string bestEffortTranslation = _translationPipeline.PromoteBestEffort(mergedText, translated, _settings.TargetLanguage);
             TranslationMemoryDiagnostics.Log(
                 "translation-llama-after",
                 ocrLoaded: IsOcrLoaded,
@@ -182,7 +180,7 @@ public class TranslationService : IDisposable
 
             if (string.IsNullOrEmpty(translated))
             {
-                System.Diagnostics.Debug.WriteLine($"[TranslationService] FAILURE: Engine returned empty result for OCR: '{mergedText}'");
+                AppLog.Information("Translation.EmptyEngineResult");
                 var perBlockFallback = await TranslateRecognizedBlocksSeparatelyAsync(
                     recognizedBlocks,
                     ocrLang,
@@ -197,12 +195,6 @@ public class TranslationService : IDisposable
 
                 return (CreateOriginalOnlyFallbackBlocks(recognizedBlocks, scale), "StatusTranslateFailedEngine");
             }
-            else
-            {
-                System.Diagnostics.Debug.WriteLine($"[TranslationService] Raw OCR: {mergedText}");
-                System.Diagnostics.Debug.WriteLine($"[TranslationService] Result: {translated}");
-            }
-
             double inferredFontSize = 12.0;
             if (recognizedBlocks.Count > 0)
             {
@@ -217,21 +209,21 @@ public class TranslationService : IDisposable
                 inferredFontSize = Math.Clamp(inferredFontSize, 8.0, 72.0);
             }
 
-            bool acceptable = IsTranslationAcceptable(mergedText, translated, _settings.TargetLanguage);
+            bool acceptable = _translationPipeline.IsAcceptable(mergedText, translated, _settings.TargetLanguage);
             if (!acceptable)
             {
-                string retriedTranslation = SanitizeTranslationCandidate(
+                string retriedTranslation = _translationPipeline.SanitizeTranslation(
                     mergedText,
                     await ForceTranslateAsync(mergedText, ocrLang, _settings.TargetLanguage, ct),
                     _settings.TargetLanguage);
-                string retriedBestEffort = TryPromoteBestEffortTranslation(mergedText, retriedTranslation, _settings.TargetLanguage);
+                string retriedBestEffort = _translationPipeline.PromoteBestEffort(mergedText, retriedTranslation, _settings.TargetLanguage);
                 if (retriedBestEffort.Length > bestEffortTranslation.Length)
                 {
                     bestEffortTranslation = retriedBestEffort;
                 }
 
                 translated = retriedTranslation;
-                acceptable = IsTranslationAcceptable(mergedText, translated, _settings.TargetLanguage);
+                acceptable = _translationPipeline.IsAcceptable(mergedText, translated, _settings.TargetLanguage);
             }
 
             List<TranslatedBlock>? perBlockTranslation = null;
@@ -270,27 +262,27 @@ public class TranslationService : IDisposable
 
             if (perBlockTranslation is { Count: > 0 })
             {
-                System.Diagnostics.Debug.WriteLine("[TranslationService] Falling back to per-block translation.");
+                AppLog.Information("Translation.Fallback.PerBlock");
                 return (perBlockTranslation, string.Empty);
             }
 
             if (!string.IsNullOrWhiteSpace(bestEffortTranslation))
             {
-                System.Diagnostics.Debug.WriteLine("[TranslationService] Using best-effort translation fallback.");
+                AppLog.Information("Translation.Fallback.BestEffort");
                 return (result, string.Empty);
             }
 
-            string originalFallbackText = BuildFailureFallbackText(mergedText, _settings.TargetLanguage);
+            string originalFallbackText = _translationPipeline.BuildFailureFallback(mergedText, _settings.TargetLanguage);
             if (!string.IsNullOrWhiteSpace(originalFallbackText))
             {
                 result[0].TranslatedText = string.Empty;
                 result[0].OriginalText = originalFallbackText;
-                System.Diagnostics.Debug.WriteLine("[TranslationService] Falling back to visible sanitized OCR text.");
+                AppLog.Information("Translation.Fallback.OcrOnly");
 
                 return (result, "StatusTranslateFailedAcceptable");
             }
 
-            System.Diagnostics.Debug.WriteLine("[TranslationService] Final translation effort failed or was unacceptable. Returning OCR-only block.");
+            AppLog.Information("Translation.Fallback.Unacceptable");
             return (result, "StatusTranslateFailedAcceptable");
         }
         finally
@@ -311,9 +303,9 @@ public class TranslationService : IDisposable
     public async Task<string> TranslatePlainTextAsync(string text, OCRLanguage sourceLang, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(text)) return string.Empty;
-        string translated = SanitizeTranslationCandidate(text, await TranslateAsync(text, sourceLang, ct), _settings.TargetLanguage);
-        string bestEffortTranslation = TryPromoteBestEffortTranslation(text, translated, _settings.TargetLanguage);
-        if (IsTranslationAcceptable(text, translated, _settings.TargetLanguage))
+        string translated = _translationPipeline.SanitizeTranslation(text, await TranslateAsync(text, sourceLang, ct), _settings.TargetLanguage);
+        string bestEffortTranslation = _translationPipeline.PromoteBestEffort(text, translated, _settings.TargetLanguage);
+        if (_translationPipeline.IsAcceptable(text, translated, _settings.TargetLanguage))
         {
             return translated;
         }
@@ -322,14 +314,14 @@ public class TranslationService : IDisposable
         var guessedSource = GuessSourceLanguageFromText(text);
         if (guessedSource != sourceLang)
         {
-            string retried = SanitizeTranslationCandidate(text, await TranslateAsync(text, guessedSource, ct), _settings.TargetLanguage);
-            string retriedBestEffort = TryPromoteBestEffortTranslation(text, retried, _settings.TargetLanguage);
+            string retried = _translationPipeline.SanitizeTranslation(text, await TranslateAsync(text, guessedSource, ct), _settings.TargetLanguage);
+            string retriedBestEffort = _translationPipeline.PromoteBestEffort(text, retried, _settings.TargetLanguage);
             if (retriedBestEffort.Length > bestEffortTranslation.Length)
             {
                 bestEffortTranslation = retriedBestEffort;
             }
 
-            if (IsTranslationAcceptable(text, retried, _settings.TargetLanguage))
+            if (_translationPipeline.IsAcceptable(text, retried, _settings.TargetLanguage))
             {
                 return retried;
             }
@@ -343,17 +335,17 @@ public class TranslationService : IDisposable
                 continue;
             }
 
-            string fallback = SanitizeTranslationCandidate(
+            string fallback = _translationPipeline.SanitizeTranslation(
                 text,
                 await engine.TranslateAsync(text, guessedSource, _settings.TargetLanguage, ct),
                 _settings.TargetLanguage);
-            string fallbackBestEffort = TryPromoteBestEffortTranslation(text, fallback, _settings.TargetLanguage);
+            string fallbackBestEffort = _translationPipeline.PromoteBestEffort(text, fallback, _settings.TargetLanguage);
             if (fallbackBestEffort.Length > bestEffortTranslation.Length)
             {
                 bestEffortTranslation = fallbackBestEffort;
             }
 
-            if (IsTranslationAcceptable(text, fallback, _settings.TargetLanguage))
+            if (_translationPipeline.IsAcceptable(text, fallback, _settings.TargetLanguage))
             {
                 return fallback;
             }
@@ -458,7 +450,7 @@ public class TranslationService : IDisposable
         {
             var box = boxes[i];
             var (text, _) = ocrEngine.RecognizeText(bitmap, box, ct);
-            text = SanitizeRecognizedOcrText(text);
+            text = OcrTextSanitizer.Sanitize(text);
             kanaCount += CountJapaneseKana(text);
             meaningfulCount += CountMeaningfulChars(text);
         }
@@ -508,7 +500,8 @@ public class TranslationService : IDisposable
 
         if (trimProcessWorkingSet)
         {
-            _ = ProcessMemoryTrimService.RequestIdleTrimAsync("translation-resources-released");
+            ProcessMemoryTrimService.RequestIdleTrimAsync("translation-resources-released")
+                .Forget("MemoryTrim.TranslationResourcesReleased");
         }
     }
 
@@ -517,14 +510,13 @@ public class TranslationService : IDisposable
         var engine = _translationEngines.AsValueEnumerable().FirstOrDefault(e => e.EngineType == _settings.SelectedTranslationEngine);
         if (engine == null) 
         {
-            System.Diagnostics.Debug.WriteLine($"[TranslationService] NO ENGINE FOUND for {_settings.SelectedTranslationEngine}");
+            AppLog.Information("Translation.EngineNotFound");
             return string.Empty; 
         }
-        Console.WriteLine($"[TranslationService] Using engine: {engine.EngineType} for {sourceLang} -> {_settings.TargetLanguage}");
         var result = await engine.TranslateAsync(text, sourceLang, _settings.TargetLanguage, ct);
         if (string.IsNullOrEmpty(result))
         {
-             System.Diagnostics.Debug.WriteLine($"[TranslationService] Engine {engine.EngineType} failed to translate.");
+            AppLog.Information("Translation.EngineReturnedEmpty");
         }
         return result ?? string.Empty;
     }
@@ -592,7 +584,7 @@ public class TranslationService : IDisposable
         return true;
     }
 
-    private bool IsTranslationAcceptable(string original, string translated, TranslationLanguage target)
+    internal static bool IsTranslationAcceptableCore(string original, string translated, TranslationLanguage target)
     {
         if (string.IsNullOrWhiteSpace(translated))
         {
@@ -627,13 +619,13 @@ public class TranslationService : IDisposable
         {
             TranslationLanguage.English => ContainsLatinLetter(trimmed),
             TranslationLanguage.Korean => ContainsHangul(trimmed),
-            TranslationLanguage.Japanese => IsJapaneseTranslationAcceptable(original, trimmed, normalizedOriginal, normalizedTranslated),
+            TranslationLanguage.Japanese => IsJapaneseTranslationAcceptableCore(original, trimmed, normalizedOriginal, normalizedTranslated),
             TranslationLanguage.TraditionalChinese or TranslationLanguage.SimplifiedChinese => IsChineseTranslationAcceptable(original, trimmed, normalizedOriginal, normalizedTranslated),
             _ => true
         };
     }
 
-    private static string SanitizeTranslationCandidate(string original, string translated, TranslationLanguage target)
+    internal static string SanitizeTranslationCandidateCore(string original, string translated, TranslationLanguage target)
     {
         if (string.IsNullOrWhiteSpace(translated))
         {
@@ -1279,166 +1271,6 @@ public class TranslationService : IDisposable
         return string.IsNullOrWhiteSpace(collapsed) ? trimmed : collapsed;
     }
 
-    private static string BuildFailureFallbackText(string original, TranslationLanguage target)
-    {
-        if (string.IsNullOrWhiteSpace(original))
-        {
-            return string.Empty;
-        }
-
-        if (!ShouldUseOriginalTextFallback(original, target))
-        {
-            return string.Empty;
-        }
-
-        string[] lines = original.Replace("\r\n", "\n", StringComparison.Ordinal)
-            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var kept = new List<string>(lines.Length);
-
-        foreach (string rawLine in lines)
-        {
-            string cleaned = SanitizeRecognizedOcrText(rawLine);
-            if (string.IsNullOrWhiteSpace(cleaned))
-            {
-                continue;
-            }
-
-            string normalized = NormalizeTranslationComparisonText(cleaned);
-            if (normalized.Length == 0 || !seen.Add(normalized))
-            {
-                continue;
-            }
-
-            kept.Add(cleaned);
-        }
-
-        return string.Join(Environment.NewLine, kept).Trim();
-    }
-
-    private static string SanitizeRecognizedOcrText(string text)
-    {
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            return string.Empty;
-        }
-
-        string[] rawLines = text.Replace("\r\n", "\n", StringComparison.Ordinal)
-            .Replace('\r', '\n')
-            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var kept = new List<string>(rawLines.Length);
-
-        foreach (string rawLine in rawLines)
-        {
-            var builder = new StringBuilder(rawLine.Length);
-            bool lastWasSpace = false;
-
-            foreach (char ch in rawLine)
-            {
-                if (IsInvalidOcrCharacter(ch))
-                {
-                    continue;
-                }
-
-                if (char.IsWhiteSpace(ch))
-                {
-                    if (!lastWasSpace)
-                    {
-                        builder.Append(' ');
-                        lastWasSpace = true;
-                    }
-
-                    continue;
-                }
-
-                lastWasSpace = false;
-                builder.Append(ch);
-            }
-
-            string cleaned = NormalizeTerminalOcrPunctuation(builder.ToString().Trim());
-            if (string.IsNullOrWhiteSpace(cleaned) || IsLowSignalOcrLine(cleaned))
-            {
-                continue;
-            }
-
-            string normalized = NormalizeTranslationComparisonText(cleaned);
-            if (normalized.Length == 0 || !seen.Add(normalized))
-            {
-                continue;
-            }
-
-            kept.Add(cleaned);
-        }
-
-        return string.Join(Environment.NewLine, kept).Trim();
-    }
-
-    private static string NormalizeTerminalOcrPunctuation(string text)
-    {
-        if (text.Length < 2)
-        {
-            return text;
-        }
-
-        char last = text[^1];
-        char previous = text[^2];
-        bool followsCjkText = (previous >= '\u4E00' && previous <= '\u9FFF')
-            || (previous >= '\u3040' && previous <= '\u30FF');
-
-        return followsCjkText && last is '\u00B7' or '\u2022' or '\u2027'
-            ? text[..^1] + '\u3002'
-            : text;
-    }
-
-    private static bool IsLowSignalOcrLine(string line)
-    {
-        if (string.IsNullOrWhiteSpace(line))
-        {
-            return true;
-        }
-
-        int usefulCount = 0;
-        int suspiciousCount = 0;
-        int punctuationCount = 0;
-
-        foreach (char ch in line)
-        {
-            if (char.IsLetterOrDigit(ch)
-                || (ch >= 0x4E00 && ch <= 0x9FFF)
-                || (ch >= 0x3040 && ch <= 0x30FF)
-                || (ch >= 0xAC00 && ch <= 0xD7AF))
-            {
-                usefulCount++;
-                continue;
-            }
-
-            if (char.IsPunctuation(ch))
-            {
-                punctuationCount++;
-                continue;
-            }
-
-            if (!char.IsWhiteSpace(ch))
-            {
-                suspiciousCount++;
-            }
-        }
-
-        if (usefulCount == 0)
-        {
-            return true;
-        }
-
-        if (suspiciousCount > usefulCount)
-        {
-            return true;
-        }
-
-        return usefulCount <= 1 && punctuationCount + suspiciousCount >= 2;
-    }
-
     private static bool IsInvalidOcrCharacter(char ch)
     {
         return ch == '\uFFFD'
@@ -1446,12 +1278,6 @@ public class TranslationService : IDisposable
             || ch is '\u200B' or '\u200C' or '\u200D' or '\u2060' or '\uFEFF'
             || (ch >= '\uD800' && ch <= '\uDFFF')
             || (ch >= '\uE000' && ch <= '\uF8FF');
-    }
-
-    private static bool ShouldUseOriginalTextFallback(string original, TranslationLanguage target)
-    {
-        _ = target;
-        return CountMeaningfulChars(original) > 0;
     }
 
     private static bool LooksLikeRunawayRepetition(string original, string value)
@@ -1554,7 +1380,7 @@ public class TranslationService : IDisposable
         return comparisons > 0 && matches * 5 >= comparisons * 4;
     }
 
-    private static bool IsJapaneseTranslationAcceptable(
+    internal static bool IsJapaneseTranslationAcceptableCore(
         string original,
         string translated,
         string normalizedOriginal,
@@ -1603,7 +1429,7 @@ public class TranslationService : IDisposable
         return ContainsCjk(translated);
     }
 
-    private static string TryPromoteBestEffortTranslation(string original, string translated, TranslationLanguage target)
+    internal static string TryPromoteBestEffortTranslationCore(string original, string translated, TranslationLanguage target)
     {
         if (string.IsNullOrWhiteSpace(translated))
         {
@@ -1644,7 +1470,7 @@ public class TranslationService : IDisposable
             TranslationLanguage.TraditionalChinese or TranslationLanguage.SimplifiedChinese =>
                 ContainsCjk(trimmed) ? trimmed : string.Empty,
             TranslationLanguage.Japanese =>
-                IsJapaneseTranslationAcceptable(original, trimmed, normalizedOriginal, normalizedTranslated)
+                IsJapaneseTranslationAcceptableCore(original, trimmed, normalizedOriginal, normalizedTranslated)
                     ? trimmed
                     : string.Empty,
             TranslationLanguage.Korean =>

@@ -48,7 +48,7 @@ public sealed class DebouncedSettingsSaveCoordinatorFactory : ISettingsSaveCoord
                 version = ++_version;
             }
 
-            _ = RunAsync(version, cts.Token);
+            RunAsync(version, cts.Token).Forget("Settings.DebouncedSave");
         }
 
         private async Task RunAsync(int version, CancellationToken cancellationToken)

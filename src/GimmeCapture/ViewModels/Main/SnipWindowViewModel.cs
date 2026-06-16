@@ -362,7 +362,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         _isTopmost = !System.Diagnostics.Debugger.IsAttached;
         if (System.Diagnostics.Debugger.IsAttached)
         {
-            Console.WriteLine("[SnipWindow] Debugger detected. IsTopmost = false. Press Ctrl+Alt+T to toggle.");
+            AppLog.Information("SnipWindow.DebuggerDetected");
         }
 
         InitializeToolbarReactivity();
@@ -403,7 +403,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         // Reactive toolbar positioning for translation mode
         this.WhenAnyValue(x => x.ViewportSize, x => x.ToolbarWidth, x => x.CurrentMode, x => x.ActiveScreenBounds)
             .DistinctUntilChanged()
-            .Throttle(TimeSpan.FromMilliseconds(50), RxApp.MainThreadScheduler)
+            .Throttle(TimeSpan.FromMilliseconds(50), RxSchedulers.MainThreadScheduler)
             .Subscribe(_ =>
             {
                 if (CurrentMode == SnipMode.Translation)
@@ -508,9 +508,6 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
             })
             .DisposeWith(_disposables);
 
-        BindDistinct(mainVm.WhenAnyValue(x => x.CornerIconScale), _ => RaiseProperties(nameof(CornerIconScale), nameof(SelectionIconSize)))
-            .DisposeWith(_disposables);
-
         BindDistinct(mainVm.WhenAnyValue(x => x.Translate_SelectionHoldModifier), _ =>
             this.RaisePropertyChanged(nameof(TranslationSelectionHoldModifier)))
             .DisposeWith(_disposables);
@@ -521,7 +518,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         var stream = source.DistinctUntilChanged();
         if (observeOnMainThread)
         {
-            stream = stream.ObserveOn(RxApp.MainThreadScheduler);
+            stream = stream.ObserveOn(RxSchedulers.MainThreadScheduler);
         }
 
         return stream.Subscribe(onNext);
