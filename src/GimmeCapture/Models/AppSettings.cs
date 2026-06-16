@@ -108,6 +108,7 @@ public class AppSettings
     public bool HideSnipPinBorder { get; set; } = false;
     public bool HideSnipSelectionDecoration { get; set; } = false;
     public bool HideSnipSelectionBorder { get; set; } = false;
+    public bool AutoPinScreenshotSelection { get; set; } = false;
 
     public bool HideRecordPinDecoration { get; set; } = false;
     public bool HideRecordPinBorder { get; set; } = false;

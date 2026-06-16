@@ -100,6 +100,28 @@ public class SnipWindowViewModelTests
         Assert.Empty(vm.TranslatedBlocks);
     }
 
+    [Theory]
+    [InlineData(false, SnipAutoAction.None)]
+    [InlineData(true, SnipAutoAction.Pin)]
+    public void ResolveAutoActionMode_Normal_UsesAutoPinSetting(bool autoPinSelection, SnipAutoAction expectedAction)
+    {
+        var action = SnipWindowViewModel.ResolveAutoActionMode(CaptureMode.Normal, autoPinSelection);
+
+        Assert.Equal(expectedAction, action);
+    }
+
+    [Theory]
+    [InlineData(CaptureMode.Copy, SnipAutoAction.Copy)]
+    [InlineData(CaptureMode.Pin, SnipAutoAction.Pin)]
+    [InlineData(CaptureMode.Record, SnipAutoAction.EnterRecordMode)]
+    [InlineData(CaptureMode.Translate, SnipAutoAction.None)]
+    public void ResolveAutoActionMode_PreservesExplicitCaptureModes(CaptureMode mode, SnipAutoAction expectedAction)
+    {
+        var action = SnipWindowViewModel.ResolveAutoActionMode(mode, autoPinScreenshotSelection: true);
+
+        Assert.Equal(expectedAction, action);
+    }
+
     [Fact]
     public void AudioMeterTimer_ShouldRunOnlyInRecordingMode()
     {

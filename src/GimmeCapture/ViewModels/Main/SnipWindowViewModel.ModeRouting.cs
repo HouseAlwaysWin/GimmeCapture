@@ -409,6 +409,7 @@ public partial class SnipWindowViewModel
         switch (mode)
         {
             case CaptureMode.Normal:
+                AutoActionMode = ResolveAutoActionMode(mode, _mainVm?.AutoPinScreenshotSelection == true);
                 HandleScreenshotModeHotkeyCommand?.Execute().Subscribe();
                 break;
             case CaptureMode.Record:
@@ -425,6 +426,18 @@ public partial class SnipWindowViewModel
                 if (CurrentState == SnipState.Selected) TriggerAutoAction();
                 break;
         }
+    }
+
+    internal static SnipAutoAction ResolveAutoActionMode(CaptureMode mode, bool autoPinScreenshotSelection)
+    {
+        return mode switch
+        {
+            CaptureMode.Normal when autoPinScreenshotSelection => SnipAutoAction.Pin,
+            CaptureMode.Copy => SnipAutoAction.Copy,
+            CaptureMode.Pin => SnipAutoAction.Pin,
+            CaptureMode.Record => SnipAutoAction.EnterRecordMode,
+            _ => SnipAutoAction.None
+        };
     }
 
 

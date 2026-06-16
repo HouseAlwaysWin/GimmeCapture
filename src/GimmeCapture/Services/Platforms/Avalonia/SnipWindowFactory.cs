@@ -82,13 +82,7 @@ public sealed class SnipWindowFactory : ISnipWindowFactory
             translationSelectionMonitor,
             aiScanSessionService);
 
-        snipVm.AutoActionMode = mode switch
-        {
-            CaptureMode.Copy => SnipAutoAction.Copy,
-            CaptureMode.Pin => SnipAutoAction.Pin,
-            CaptureMode.Record => SnipAutoAction.EnterRecordMode,
-            _ => SnipAutoAction.None
-        };
+        snipVm.AutoActionMode = SnipWindowViewModel.ResolveAutoActionMode(mode, vm.AutoPinScreenshotSelection);
         if (mode == CaptureMode.Record)
         {
             snipVm.CurrentMode = SnipMode.Recording;

@@ -113,6 +113,7 @@
   "HideSnipPinBorder": "Hide Pin Window Border",
   "HideSnipSelectionDecoration": "Hide Selection Window Decorations",
   "HideSnipSelectionBorder": "Hide Selection Window Border",
+  "AutoPinScreenshotSelection": "Auto-pin selected screenshot",
   "ShowSnipCursor": "Show Cursor in Snip",
   "UseFixedRecordPath": "Always save to same file",
   "TempPath": "Temporary File Path:",

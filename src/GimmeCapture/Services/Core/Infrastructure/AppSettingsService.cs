@@ -226,6 +226,7 @@ public class AppSettingsService
         dest.HideSnipPinBorder = source.HideSnipPinBorder;
         dest.HideSnipSelectionDecoration = source.HideSnipSelectionDecoration;
         dest.HideSnipSelectionBorder = source.HideSnipSelectionBorder;
+        dest.AutoPinScreenshotSelection = source.AutoPinScreenshotSelection;
         dest.HideRecordPinDecoration = source.HideRecordPinDecoration;
         dest.HideRecordPinBorder = source.HideRecordPinBorder;
         dest.HideRecordSelectionDecoration = source.HideRecordSelectionDecoration;

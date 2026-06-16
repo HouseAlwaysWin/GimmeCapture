@@ -495,6 +495,13 @@ public partial class MainWindowViewModel
         set => this.RaiseAndSetIfChanged(ref _hideSnipSelectionBorder, value);
     }
 
+    private bool _autoPinScreenshotSelection = false;
+    public bool AutoPinScreenshotSelection
+    {
+        get => _autoPinScreenshotSelection;
+        set => this.RaiseAndSetIfChanged(ref _autoPinScreenshotSelection, value);
+    }
+
     private bool _hideRecordSelectionDecoration = false;
     public bool HideRecordSelectionDecoration
     {

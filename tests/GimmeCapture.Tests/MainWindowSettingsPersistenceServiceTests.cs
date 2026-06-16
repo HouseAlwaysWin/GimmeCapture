@@ -34,6 +34,7 @@ public class MainWindowSettingsPersistenceServiceTests
             HideSnipPinBorder = true,
             HideSnipSelectionDecoration = true,
             HideSnipSelectionBorder = false,
+            AutoPinScreenshotSelection = true,
             HideRecordPinDecoration = true,
             HideRecordPinBorder = false,
             HideRecordSelectionDecoration = true,
@@ -82,6 +83,7 @@ public class MainWindowSettingsPersistenceServiceTests
         Assert.Equal(snapshot.ThemeColor, persisted.ThemeColor);
         Assert.Equal(snapshot.RecordFormat, persisted.RecordFormat);
         Assert.Equal(snapshot.RecordHotkey, persisted.RecordHotkey);
+        Assert.Equal(snapshot.AutoPinScreenshotSelection, persisted.AutoPinScreenshotSelection);
         Assert.Equal(snapshot.EnableAIScan, persisted.EnableAIScan);
         Assert.Equal(snapshot.AIResourcesDirectory, persisted.AIResourcesDirectory);
         Assert.Equal(snapshot.LlamaModelId, persisted.LlamaModelId);
@@ -89,6 +91,7 @@ public class MainWindowSettingsPersistenceServiceTests
         Assert.Contains("\"Language\": \"Japanese\"", savedJson);
         Assert.Contains($"\"ConfigVersion\": {AppSettingsService.CurrentConfigVersion}", savedJson);
         Assert.Contains("\"RecordHotkey\": \"Shift\\u002BF8\"", savedJson);
+        Assert.Contains("\"AutoPinScreenshotSelection\": true", savedJson);
         Assert.Contains("\"AIResourcesDirectory\": \"D:\\\\captures\\\\ai\"", savedJson);
         Assert.DoesNotContain("AIScanEngine", savedJson, StringComparison.Ordinal);
         Assert.DoesNotContain("SAM2GridDensity", savedJson, StringComparison.Ordinal);

@@ -81,6 +81,7 @@ public partial class MainWindowViewModel
         HideRecordPinBorder = false;
         HideSnipSelectionDecoration = false;
         HideSnipSelectionBorder = false;
+        AutoPinScreenshotSelection = defaultSettings.AutoPinScreenshotSelection;
         HideRecordSelectionDecoration = false;
         HideRecordSelectionBorder = false;
         ShowSnipCursor = defaultSettings.ShowSnipCursor;

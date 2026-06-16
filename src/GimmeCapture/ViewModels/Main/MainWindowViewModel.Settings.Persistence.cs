@@ -42,6 +42,7 @@ public partial class MainWindowViewModel
             HideSnipPinBorder = HideSnipPinBorder,
             HideSnipSelectionDecoration = HideSnipSelectionDecoration,
             HideSnipSelectionBorder = HideSnipSelectionBorder,
+            AutoPinScreenshotSelection = AutoPinScreenshotSelection,
             HideRecordPinDecoration = HideRecordPinDecoration,
             HideRecordPinBorder = HideRecordPinBorder,
             HideRecordSelectionDecoration = HideRecordSelectionDecoration,
@@ -105,6 +106,7 @@ public partial class MainWindowViewModel
         HideRecordPinBorder = snapshot.HideRecordPinBorder;
         HideSnipSelectionDecoration = snapshot.HideSnipSelectionDecoration;
         HideSnipSelectionBorder = snapshot.HideSnipSelectionBorder;
+        AutoPinScreenshotSelection = snapshot.AutoPinScreenshotSelection;
         HideRecordSelectionDecoration = snapshot.HideRecordSelectionDecoration;
         HideRecordSelectionBorder = snapshot.HideRecordSelectionBorder;
         ShowSnipCursor = snapshot.ShowSnipCursor;

@@ -17,6 +17,7 @@ public sealed class MainWindowSettingsSnapshot
     public required bool HideSnipPinBorder { get; init; }
     public required bool HideSnipSelectionDecoration { get; init; }
     public required bool HideSnipSelectionBorder { get; init; }
+    public required bool AutoPinScreenshotSelection { get; init; }
     public required bool HideRecordPinDecoration { get; init; }
     public required bool HideRecordPinBorder { get; init; }
     public required bool HideRecordSelectionDecoration { get; init; }
@@ -70,6 +71,7 @@ public sealed class MainWindowSettingsSnapshot
             HideSnipPinBorder = settings.HideSnipPinBorder,
             HideSnipSelectionDecoration = settings.HideSnipSelectionDecoration,
             HideSnipSelectionBorder = settings.HideSnipSelectionBorder,
+            AutoPinScreenshotSelection = settings.AutoPinScreenshotSelection,
             HideRecordPinDecoration = settings.HideRecordPinDecoration,
             HideRecordPinBorder = settings.HideRecordPinBorder,
             HideRecordSelectionDecoration = settings.HideRecordSelectionDecoration,
@@ -123,6 +125,7 @@ public sealed class MainWindowSettingsSnapshot
         settings.HideSnipPinBorder = HideSnipPinBorder;
         settings.HideSnipSelectionDecoration = HideSnipSelectionDecoration;
         settings.HideSnipSelectionBorder = HideSnipSelectionBorder;
+        settings.AutoPinScreenshotSelection = AutoPinScreenshotSelection;
         settings.HideRecordPinDecoration = HideRecordPinDecoration;
         settings.HideRecordPinBorder = HideRecordPinBorder;
         settings.HideRecordSelectionDecoration = HideRecordSelectionDecoration;
