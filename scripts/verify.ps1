@@ -71,20 +71,23 @@ if ($coveragePercent -lt $CoverageThreshold) {
 }
 
 if (-not $SkipPublish) {
-    Invoke-DotNet publish $appProject `
-        --configuration Release `
-        --runtime win-x64 `
-        --self-contained true `
-        --no-restore `
-        --artifacts-path $artifacts `
-        --disable-build-servers `
-        -p:PublishSingleFile=true `
-        -p:IncludeNativeLibrariesForSelfExtract=true `
-        -p:IncludeAllContentForSelfExtract=true `
-        -p:EnableCompressionInSingleFile=true `
-        -p:DebugType=none `
-        -p:DebugSymbols=false `
-        --output $publish
+    $publishArgs = @(
+        "publish", $appProject,
+        "--configuration", "Release",
+        "--runtime", "win-x64",
+        "--self-contained", "true",
+        "--no-restore",
+        "--artifacts-path", $artifacts,
+        "--disable-build-servers",
+        "-p:PublishSingleFile=true",
+        "-p:IncludeNativeLibrariesForSelfExtract=true",
+        "-p:IncludeAllContentForSelfExtract=true",
+        "-p:EnableCompressionInSingleFile=true",
+        "-p:DebugType=none",
+        "-p:DebugSymbols=false",
+        "--output", $publish
+    )
+    Invoke-DotNet @publishArgs
 
     $publishedExe = Join-Path $publish "GimmeCapture.exe"
     if (-not (Test-Path -LiteralPath $publishedExe)) {
