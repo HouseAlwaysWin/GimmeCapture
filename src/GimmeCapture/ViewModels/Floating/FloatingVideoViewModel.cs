@@ -11,6 +11,7 @@ using System.Reactive.Linq;
 using GimmeCapture.ViewModels.Shared;
 using System.Threading;
 using GimmeCapture.Services.Core.Media.NativeFFmpeg;
+using GimmeCapture.Services.Core.Infrastructure;
 using NAudio.Wave;
 
 namespace GimmeCapture.ViewModels.Floating;
@@ -359,37 +360,59 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
         InitializeMediaCommands(); // Media init last as it starts playback
     }
 
-    public ValueTask DisposeAsync()
+    public Task BeginDispose()
     {
         lock (_disposeLock)
         {
-            _disposeTask ??= DisposeCoreAsync();
-            return new ValueTask(_disposeTask);
+            if (_disposeTask == null)
+            {
+                _isDisposed = true;
+                Interlocked.Increment(ref _playbackGeneration);
+                RequestRedraw = null;
+
+                var playbackCts = CancelPlaybackToken();
+                var audioDecodeCts = CancelAudioDecodeToken();
+                _disposeTask = Task.Run(() => DisposeCoreAsync(playbackCts, audioDecodeCts));
+            }
+
+            return _disposeTask;
         }
     }
 
+    public ValueTask DisposeAsync() => new(BeginDispose());
+
     public override void Dispose()
     {
-        DisposeAsync().AsTask().GetAwaiter().GetResult();
+        BeginDispose().Forget("FloatingVideo.Dispose");
     }
 
-    private async Task DisposeCoreAsync()
+    private async Task DisposeCoreAsync(CancellationTokenSource? playbackCts, CancellationTokenSource? audioDecodeCts)
     {
-        _isDisposed = true;
-        Interlocked.Increment(ref _playbackGeneration);
+        playbackCts?.Dispose();
+        audioDecodeCts?.Dispose();
 
-        CancelPlaybackInBackground();
+        _seekDebounceCts?.Cancel();
+        _seekDebounceCts?.Dispose();
+        _seekDebounceCts = null;
+        StopAudioPlayback();
 
+        var playbackCompleted = true;
         try
         {
             if (_bootMediaTask is not null)
             {
-                await _bootMediaTask;
+                await WaitForTaskOrTimeoutAsync(
+                    _bootMediaTask,
+                    TimeSpan.FromSeconds(2),
+                    "FloatingVideo.BootMedia");
             }
 
             if (_playbackTask is not null)
             {
-                await _playbackTask;
+                playbackCompleted = await WaitForTaskOrTimeoutAsync(
+                    _playbackTask,
+                    TimeSpan.FromSeconds(2),
+                    "FloatingVideo.Playback");
             }
         }
         catch (OperationCanceledException)
@@ -400,20 +423,20 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
             System.Diagnostics.Debug.WriteLine($"Video disposal wait failed: {ex}");
         }
 
-        _seekDebounceCts?.Cancel();
-        _seekDebounceCts?.Dispose();
-        _seekDebounceCts = null;
         StopAudioPlayback();
         _nativeFramePlayer.Dispose();
-        _playSemaphore.Dispose();
+        if (playbackCompleted)
+        {
+            _playSemaphore.Dispose();
+        }
         
         base.Dispose();
 
         WriteableBitmap? oldBitmap;
         lock (_videoBitmapLock)
         {
-            oldBitmap = VideoBitmap;
-            VideoBitmap = null;
+            oldBitmap = _videoBitmap;
+            _videoBitmap = null;
         }
         oldBitmap?.Dispose();
         lock (_latestFrameLock)
@@ -424,6 +447,31 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
             }
             _latestFrameData = null;
             _latestFrameLength = 0;
+        }
+    }
+
+    private static async Task<bool> WaitForTaskOrTimeoutAsync(Task task, TimeSpan timeout, string operation)
+    {
+        try
+        {
+            var timeoutTask = Task.Delay(timeout);
+            if (await Task.WhenAny(task, timeoutTask).ConfigureAwait(false) != task)
+            {
+                System.Diagnostics.Debug.WriteLine($"{operation} did not finish within {timeout.TotalMilliseconds:0} ms; continuing disposal.");
+                return false;
+            }
+
+            await task.ConfigureAwait(false);
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            return true;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"{operation} finished with error during disposal: {ex}");
+            return true;
         }
     }
 

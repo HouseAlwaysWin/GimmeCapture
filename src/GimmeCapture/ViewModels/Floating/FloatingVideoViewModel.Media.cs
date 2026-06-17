@@ -130,12 +130,11 @@ public partial class FloatingVideoViewModel
     /// </summary>
     private void CancelPlaybackInBackground()
     {
-        var oldCts = Interlocked.Exchange(ref _playCts, null);
+        var oldCts = CancelPlaybackToken();
         if (oldCts != null)
         {
             try
             {
-                oldCts.Cancel();
                 oldCts.Dispose();
             }
             catch (ObjectDisposedException)
@@ -144,6 +143,40 @@ public partial class FloatingVideoViewModel
         }
 
         StopAudioPlayback();
+    }
+
+    private CancellationTokenSource? CancelPlaybackToken()
+    {
+        var oldCts = Interlocked.Exchange(ref _playCts, null);
+        if (oldCts != null)
+        {
+            try
+            {
+                oldCts.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+        }
+
+        return oldCts;
+    }
+
+    private CancellationTokenSource? CancelAudioDecodeToken()
+    {
+        var oldCts = Interlocked.Exchange(ref _pinAudioDecodeCts, null);
+        if (oldCts != null)
+        {
+            try
+            {
+                oldCts.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+        }
+
+        return oldCts;
     }
 
     private void StartPlayback()
@@ -301,6 +334,12 @@ public partial class FloatingVideoViewModel
             }
 
             var reader = new MediaFoundationReader(VideoPath);
+            if (_isDisposed)
+            {
+                reader.Dispose();
+                return;
+            }
+
             reader.CurrentTime = TimeSpan.FromSeconds(startSeconds);
             _audioPlaybackStream = reader;
             _pinAudioPlayer = CreatePinAudioOutput(_audioPlaybackStream);
@@ -308,6 +347,11 @@ public partial class FloatingVideoViewModel
         }
         catch (Exception ex)
         {
+            if (_isDisposed)
+            {
+                return;
+            }
+
             Debug.WriteLine($"[PinAudio] primary output failed: {ex.Message}");
             StopAudioPlayback();
 
@@ -331,16 +375,59 @@ public partial class FloatingVideoViewModel
 
     private void StartDecodedAudioPlayback(double startSeconds, double playbackSpeed)
     {
-        var decoded = LibavPinAudioPcmDecoder.Decode(VideoPath, startSeconds);
+        if (_isDisposed)
+        {
+            return;
+        }
+
+        _pinAudioDecodeCts = new CancellationTokenSource();
+        if (_isDisposed)
+        {
+            CancelAudioDecodeToken()?.Dispose();
+            return;
+        }
+
+        var token = _pinAudioDecodeCts.Token;
+        var decoded = LibavPinAudioPcmDecoder.Decode(VideoPath, startSeconds, token);
+        if (_isDisposed || token.IsCancellationRequested)
+        {
+            return;
+        }
+
         if (decoded.PcmBytes.Length == 0)
         {
             throw new InvalidOperationException("Decoded PCM is empty.");
         }
 
         var playbackWaveFormat = CreatePlaybackWaveFormat(decoded.WaveFormat, playbackSpeed);
-        _audioPlaybackStream = new RawSourceWaveStream(new MemoryStream(decoded.PcmBytes, writable: false), playbackWaveFormat);
-        _pinAudioPlayer = CreatePinAudioOutput(_audioPlaybackStream);
-        _pinAudioPlayer.Play();
+        var stream = new RawSourceWaveStream(new MemoryStream(decoded.PcmBytes, writable: false), playbackWaveFormat);
+        if (_isDisposed || token.IsCancellationRequested)
+        {
+            stream.Dispose();
+            return;
+        }
+
+        IWavePlayer? player = null;
+        try
+        {
+            player = CreatePinAudioOutput(stream);
+            if (_isDisposed || token.IsCancellationRequested)
+            {
+                player.Dispose();
+                stream.Dispose();
+                return;
+            }
+
+            _audioPlaybackStream = stream;
+            _pinAudioPlayer = player;
+            player.Play();
+        }
+        catch
+        {
+            player?.Dispose();
+            stream.Dispose();
+            throw;
+        }
     }
 
     private static WaveFormat CreatePlaybackWaveFormat(WaveFormat sourceFormat, double playbackSpeed)

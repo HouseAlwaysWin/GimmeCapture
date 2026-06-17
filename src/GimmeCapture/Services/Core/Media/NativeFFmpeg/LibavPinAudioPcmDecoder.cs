@@ -2,6 +2,7 @@ using System;
 using System.Buffers;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using System.Threading;
 using FFmpeg.AutoGen;
 using NAudio.Wave;
 
@@ -15,8 +16,9 @@ internal static class LibavPinAudioPcmDecoder
 {
     internal sealed record DecodeResult(byte[] PcmBytes, WaveFormat WaveFormat);
 
-    internal static unsafe DecodeResult Decode(string path, double startSeconds)
+    internal static unsafe DecodeResult Decode(string path, double startSeconds, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         FFmpegRuntime.EnsureInitialized();
 
         AVFormatContext* fmt = null;
@@ -99,6 +101,7 @@ internal static class LibavPinAudioPcmDecoder
 
             while (true)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 int rr = ffmpeg.av_read_frame(fmt, pkt);
                 if (rr == ffmpeg.AVERROR_EOF)
                 {
@@ -122,12 +125,13 @@ internal static class LibavPinAudioPcmDecoder
                 ThrowIfErr(ffmpeg.avcodec_send_packet(decCtx, pkt), "pin_audio_send_packet");
                 ffmpeg.av_packet_unref(pkt);
 
-                ReceiveAndConvert(decCtx, swr, frame, outFrm, outLayout, ast->time_base, startSample, pcmBuffer);
+                ReceiveAndConvert(decCtx, swr, frame, outFrm, outLayout, ast->time_base, startSample, pcmBuffer, cancellationToken);
             }
 
+            cancellationToken.ThrowIfCancellationRequested();
             _ = ffmpeg.avcodec_send_packet(decCtx, (AVPacket*)null);
-            ReceiveDraining(decCtx, swr, frame, outFrm, outLayout, ast->time_base, startSample, pcmBuffer);
-            DrainSwrTail(swr, outFrm, outLayout, pcmBuffer, sampleRate);
+            ReceiveDraining(decCtx, swr, frame, outFrm, outLayout, ast->time_base, startSample, pcmBuffer, cancellationToken);
+            DrainSwrTail(swr, outFrm, outLayout, pcmBuffer, sampleRate, cancellationToken);
 
             var wf = new WaveFormat(sampleRate, 16, 2);
             return new DecodeResult(pcmBuffer.ToArray(), wf);
@@ -176,10 +180,12 @@ internal static class LibavPinAudioPcmDecoder
         AVChannelLayout outLayout,
         AVRational streamTimeBase,
         long startSample,
-        PooledByteAccumulator pcmBuffer)
+        PooledByteAccumulator pcmBuffer,
+        CancellationToken cancellationToken)
     {
         while (true)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             int gr = ffmpeg.avcodec_receive_frame(decCtx, frame);
             if (gr == ffmpeg.AVERROR(11) || gr == ffmpeg.AVERROR_EOF)
             {
@@ -199,10 +205,12 @@ internal static class LibavPinAudioPcmDecoder
         AVChannelLayout outLayout,
         AVRational streamTimeBase,
         long startSample,
-        PooledByteAccumulator pcmBuffer)
+        PooledByteAccumulator pcmBuffer,
+        CancellationToken cancellationToken)
     {
         while (true)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             int gr = ffmpeg.avcodec_receive_frame(decCtx, frame);
             if (gr == ffmpeg.AVERROR_EOF)
             {
@@ -224,11 +232,13 @@ internal static class LibavPinAudioPcmDecoder
         AVFrame* outFrm,
         AVChannelLayout outLayout,
         PooledByteAccumulator pcmBuffer,
-        int sampleRate)
+        int sampleRate,
+        CancellationToken cancellationToken)
     {
         int sr = sampleRate > 0 ? sampleRate : 48000;
         for (int i = 0; i < 64; i++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             ffmpeg.av_channel_layout_copy(&outFrm->ch_layout, &outLayout);
             outFrm->format = (int)AVSampleFormat.AV_SAMPLE_FMT_S16;
             outFrm->sample_rate = sr;

@@ -97,7 +97,6 @@ public partial class FloatingVideoWindow : FloatingWindowBase
     private Thumb? _trimEndThumb;
     private IDisposable? _trimSubscription;
     private bool _disposeStarted;
-    private bool _allowClose;
 
     private void InitializeTrimThumbs(FloatingVideoViewModel vm)
     {
@@ -177,21 +176,14 @@ public partial class FloatingVideoWindow : FloatingWindowBase
         _trimEndThumb.RenderTransform = new Avalonia.Media.TranslateTransform(endX, 0);
     }
 
-    protected override async void OnClosing(WindowClosingEventArgs e)
+    protected override void OnClosing(WindowClosingEventArgs e)
     {
-        if (_allowClose)
-        {
-            base.OnClosing(e);
-            return;
-        }
-
         base.OnClosing(e);
         if (e.Cancel)
         {
             return;
         }
 
-        e.Cancel = true;
         if (_disposeStarted)
         {
             return;
@@ -211,10 +203,8 @@ public partial class FloatingVideoWindow : FloatingWindowBase
 
         if (DataContext is FloatingVideoViewModel vm)
         {
-            await vm.DisposeAsync();
+            vm.RequestRedraw = null;
+            vm.BeginDispose().Forget("FloatingVideoWindow.DisposeOnClose");
         }
-
-        _allowClose = true;
-        Close();
     }
 }
