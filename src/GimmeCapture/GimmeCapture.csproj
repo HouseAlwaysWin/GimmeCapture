@@ -21,7 +21,8 @@
     <Compile Remove="bin\**\*.cs;obj\**\*.cs;bin-*\**\*.cs;obj-*\**\*.cs" />
     <EmbeddedResource Remove="bin\**;obj\**;bin-*\**;obj-*\**" />
     <None Remove="bin\**;obj\**;bin-*\**;obj-*\**" />
-    <AvaloniaResource Include="Assets\**" />
+    <AvaloniaResource Include="Assets\**"
+                      Exclude="Assets\Fonts\**\static\**" />
     <None Update="config.json">
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
       <CopyToPublishDirectory>Never</CopyToPublishDirectory>
