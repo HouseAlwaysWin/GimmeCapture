@@ -39,6 +39,7 @@ public partial class SnipWindowViewModel
             {
                 ApplyDefaultToolbarVisibilityForMode(CurrentMode);
             }
+            RefreshSelectedSnapshotLock();
             this.RaisePropertyChanged(nameof(IsToolbarVisible));
             this.RaisePropertyChanged(nameof(IsToolbarShownOnScreen));
         }

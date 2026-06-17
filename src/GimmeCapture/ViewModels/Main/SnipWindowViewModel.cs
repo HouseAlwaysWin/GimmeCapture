@@ -762,6 +762,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         _translationSession?.Dispose();
         _aiScanSessionService?.Dispose();
         _recordTimer?.Stop();
+        DisposeDrawingModeSnapshot();
         
         CloseAction = null;
         SyncRecordingScreenCaptureAffinity = null;

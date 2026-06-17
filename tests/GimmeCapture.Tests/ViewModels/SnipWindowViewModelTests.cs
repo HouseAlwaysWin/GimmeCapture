@@ -152,12 +152,29 @@ public class SnipWindowViewModelTests
 
     [Theory]
     [InlineData(false, SnipAutoAction.None)]
-    [InlineData(true, SnipAutoAction.Pin)]
-    public void ResolveAutoActionMode_Normal_UsesAutoPinSetting(bool autoPinSelection, SnipAutoAction expectedAction)
+    [InlineData(true, SnipAutoAction.None)]
+    public void ResolveAutoActionMode_Normal_DoesNotAutoPin(bool autoPinSelection, SnipAutoAction expectedAction)
     {
         var action = SnipWindowViewModel.ResolveAutoActionMode(CaptureMode.Normal, autoPinSelection);
 
         Assert.Equal(expectedAction, action);
+    }
+
+    [Fact]
+    public void SelectedSnapshotLock_OnlyLocksSelectedScreenshotState()
+    {
+        using var vm = new SnipWindowViewModel();
+
+        vm.LockSelectedScreenshotSelection = true;
+        vm.SelectionRect = new Rect(10, 10, 120, 80);
+        vm.CurrentMode = SnipMode.Screenshot;
+        vm.CurrentState = SnipState.Selected;
+
+        Assert.True(vm.IsSelectionSnapshotLocked);
+
+        vm.CurrentMode = SnipMode.Recording;
+
+        Assert.False(vm.IsSelectionSnapshotLocked);
     }
 
     [Theory]

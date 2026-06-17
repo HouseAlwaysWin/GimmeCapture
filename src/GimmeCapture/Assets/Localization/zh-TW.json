@@ -105,7 +105,7 @@
   "HideSnipPinBorder": "隱藏釘選視窗邊框",
   "HideSnipSelectionDecoration": "隱藏選取視窗裝飾",
   "HideSnipSelectionBorder": "隱藏選取視窗邊框",
-  "AutoPinScreenshotSelection": "選取截圖後自動釘選當下畫面",
+  "AutoPinScreenshotSelection": "選取截圖後鎖定畫面不穿透",
   "ShowSnipCursor": "擷圖時顯示游標",
   "UseFixedRecordPath": "總是儲存至相同檔案",
   "TempPath": "暫存檔案路徑:",

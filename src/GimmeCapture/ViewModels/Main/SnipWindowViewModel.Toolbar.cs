@@ -54,35 +54,14 @@ public partial class SnipWindowViewModel
         {
             if (value && !_isDrawingMode)
             {
-                // Entering drawing mode - capture snapshot
-                Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () => 
-                {
-                    try
-                    {
-                        var snapshot = CaptureDrawingModeSnapshotAsync != null
-                            ? await CaptureDrawingModeSnapshotAsync()
-                            : await _captureService.CaptureRegionBitmapAsync(SelectionRect, ScreenOffset, VisualScaling);
-                        if (snapshot != null)
-                        {
-                            // Dispose old if exists
-                            if (DrawingModeSnapshot != null) DrawingModeSnapshot.Dispose();
-                            DrawingModeSnapshot = snapshot;
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        System.Diagnostics.Debug.WriteLine($"Capture failed: {ex}");
-                    }
-                });
+                BeginDrawingModeSnapshotCapture(forceCapture: DrawingModeSnapshot == null);
             }
             else if (!value && _isDrawingMode)
             {
-                // Exiting drawing mode - clear and dispose snapshot
-                if (_drawingModeSnapshot != null)
+                // Keep the frozen selection snapshot when the normal snip flow is locked.
+                if (!IsSelectionSnapshotLocked)
                 {
-                    var temp = _drawingModeSnapshot;
-                    DrawingModeSnapshot = null;
-                    temp.Dispose();
+                    DisposeDrawingModeSnapshot();
                 }
             }
             this.RaiseAndSetIfChanged(ref _isDrawingMode, value);
@@ -105,6 +84,145 @@ public partial class SnipWindowViewModel
     public Task<Avalonia.Media.Imaging.WriteableBitmap?> CaptureRegionBitmapAsync()
     {
         return _captureService.CaptureRegionBitmapAsync(SelectionRect, ScreenOffset, VisualScaling);
+    }
+
+    private bool _lockSelectedScreenshotSelection;
+    public bool LockSelectedScreenshotSelection
+    {
+        get => _lockSelectedScreenshotSelection;
+        set
+        {
+            if (_lockSelectedScreenshotSelection == value) return;
+            this.RaiseAndSetIfChanged(ref _lockSelectedScreenshotSelection, value);
+            RefreshSelectedSnapshotLock();
+        }
+    }
+
+    private bool _isSelectionSnapshotLocked;
+    public bool IsSelectionSnapshotLocked
+    {
+        get => _isSelectionSnapshotLocked;
+        private set
+        {
+            if (_isSelectionSnapshotLocked == value) return;
+            this.RaiseAndSetIfChanged(ref _isSelectionSnapshotLocked, value);
+            RefreshInteractionRegion();
+        }
+    }
+
+    private int _selectionSnapshotCaptureVersion;
+
+    public void RefreshSelectedSnapshotLock(bool forceCapture = false)
+    {
+        if (ShouldLockSelectedSnapshot())
+        {
+            BeginSelectedSnapshotLockCapture(forceCapture);
+        }
+        else
+        {
+            ClearSelectedSnapshotLock();
+        }
+    }
+
+    private bool ShouldLockSelectedSnapshot()
+    {
+        return LockSelectedScreenshotSelection
+            && CurrentMode == SnipMode.Screenshot
+            && CurrentState == SnipState.Selected
+            && SelectionRect.Width > 1
+            && SelectionRect.Height > 1;
+    }
+
+    private void BeginSelectedSnapshotLockCapture(bool forceCapture)
+    {
+        IsSelectionSnapshotLocked = true;
+
+        if (DrawingModeSnapshot != null && !forceCapture)
+        {
+            return;
+        }
+
+        if (forceCapture)
+        {
+            DisposeDrawingModeSnapshot();
+        }
+
+        BeginDrawingModeSnapshotCapture(forceCapture: true, lockSnapshot: true);
+    }
+
+    private void ClearSelectedSnapshotLock()
+    {
+        _selectionSnapshotCaptureVersion++;
+        IsSelectionSnapshotLocked = false;
+
+        if (!IsDrawingMode)
+        {
+            DisposeDrawingModeSnapshot();
+        }
+    }
+
+    private void BeginDrawingModeSnapshotCapture(bool forceCapture, bool lockSnapshot = false)
+    {
+        if (!forceCapture && DrawingModeSnapshot != null)
+        {
+            return;
+        }
+
+        int captureVersion = ++_selectionSnapshotCaptureVersion;
+        _ = Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
+        {
+            Avalonia.Media.Imaging.WriteableBitmap? snapshot = null;
+            try
+            {
+                snapshot = CaptureDrawingModeSnapshotAsync != null
+                    ? await CaptureDrawingModeSnapshotAsync()
+                    : await _captureService.CaptureRegionBitmapAsync(SelectionRect, ScreenOffset, VisualScaling);
+
+                if (snapshot == null)
+                {
+                    if (lockSnapshot)
+                    {
+                        IsSelectionSnapshotLocked = false;
+                    }
+                    return;
+                }
+
+                if (captureVersion != _selectionSnapshotCaptureVersion
+                    || (lockSnapshot && !ShouldLockSelectedSnapshot()))
+                {
+                    snapshot.Dispose();
+                    return;
+                }
+
+                DisposeDrawingModeSnapshot();
+                DrawingModeSnapshot = snapshot;
+                snapshot = null;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Capture failed: {ex}");
+                if (lockSnapshot)
+                {
+                    IsSelectionSnapshotLocked = false;
+                }
+            }
+            finally
+            {
+                snapshot?.Dispose();
+            }
+        });
+    }
+
+    private void DisposeDrawingModeSnapshot()
+    {
+        if (_drawingModeSnapshot == null)
+        {
+            return;
+        }
+
+        var temp = _drawingModeSnapshot;
+        DrawingModeSnapshot = null;
+        temp.Dispose();
     }
 
     public Color SelectedColor
@@ -446,8 +564,8 @@ public partial class SnipWindowViewModel
             }
 
             DeactivateDrawingInteraction();
-            CurrentState = SnipState.Selected;
             SelectionRect = ResolveFullscreenSelectionRect();
+            CurrentState = SnipState.Selected;
         }, canExecuteNonTranslation);
         SelectFullscreenCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
     }

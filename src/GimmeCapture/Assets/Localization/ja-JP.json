@@ -99,7 +99,7 @@
   "HideSnipPinBorder": "ピン留めウィンドウの枠線を隠す",
   "HideSnipSelectionDecoration": "選択ウィンドウの裝飾を隠す",
   "HideSnipSelectionBorder": "選択ウィンドウの枠線を隠す",
-  "AutoPinScreenshotSelection": "選択したスクリーンショットを自動でピン留め",
+  "AutoPinScreenshotSelection": "選択したスクリーンショットを固定して透過クリックしない",
   "ShowSnipCursor": "キャプチャ時にカーソルを表示",
   "UseFixedRecordPath": "固定録畫パスを使用",
   "VideoFormat": "動画フォーマット:",

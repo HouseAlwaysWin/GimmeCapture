@@ -1076,12 +1076,24 @@ public partial class SnipWindow : Window
             {
                 var geometry = BuildSelectionInteractionGeometry(selectionRect);
                 var opaque = new System.Collections.Generic.List<Rect>();
+                bool lockSelectedSnapshot = _viewModel?.IsSelectionSnapshotLocked == true;
+
+                if (lockSelectedSnapshot)
+                {
+                    opaque.Add(ScaleRect(selectionRect, scaling));
+                }
+
                 foreach (var rect in geometry.EnumerateWindowRegionRects())
                 {
                     opaque.Add(ScaleRect(rect, scaling));
                 }
 
                 var hitTestRects = new System.Collections.Generic.List<Rect>();
+                if (lockSelectedSnapshot)
+                {
+                    hitTestRects.Add(ScaleRect(selectionRect, scaling));
+                }
+
                 foreach (var rect in geometry.EnumerateHitTestRects())
                 {
                     hitTestRects.Add(ScaleRect(rect, scaling));

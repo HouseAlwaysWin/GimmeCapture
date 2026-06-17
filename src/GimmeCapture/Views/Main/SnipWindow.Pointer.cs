@@ -725,6 +725,7 @@ public partial class SnipWindow : Window
              _pointerState = PointerInteractionState.None;
              _resizeDirection = ResizeDirection.None;
              _viewModel.CurrentState = SnipState.Selected;
+             _viewModel.RefreshSelectedSnapshotLock(forceCapture: true);
              e.Pointer.Capture(null);
              return;
         }
@@ -732,6 +733,7 @@ public partial class SnipWindow : Window
         if (_pointerState == PointerInteractionState.MovingSelection)
         {
             _pointerState = PointerInteractionState.None;
+            _viewModel.RefreshSelectedSnapshotLock(forceCapture: true);
             e.Pointer.Capture(null);
             return;
         }

@@ -107,6 +107,7 @@ public partial class SnipWindowViewModel
         {
             ApplyDefaultToolbarVisibilityForMode(value);
         }
+        RefreshSelectedSnapshotLock();
         SyncAudioMeterTimerWithMode();
 
         // Logic from old IsRecordingMode / IsTranslationMode setters
@@ -413,19 +414,24 @@ public partial class SnipWindowViewModel
         switch (mode)
         {
             case CaptureMode.Normal:
+                LockSelectedScreenshotSelection = _mainVm?.AutoPinScreenshotSelection == true;
                 AutoActionMode = ResolveAutoActionMode(mode, _mainVm?.AutoPinScreenshotSelection == true);
                 HandleScreenshotModeHotkeyCommand?.Execute().Subscribe();
                 break;
             case CaptureMode.Record:
+                LockSelectedScreenshotSelection = false;
                 HandleRecordingModeHotkeyCommand?.Execute().Subscribe();
                 break;
             case CaptureMode.Pin:
+                LockSelectedScreenshotSelection = false;
                 HandleActiveActionHotkeyCommand?.Execute().Subscribe();
                 break;
             case CaptureMode.Translate:
+                LockSelectedScreenshotSelection = false;
                 SetTranslationModeCommand?.Execute().Subscribe();
                 break;
             case CaptureMode.Copy:
+                LockSelectedScreenshotSelection = false;
                 AutoActionMode = SnipAutoAction.Copy;
                 if (CurrentState == SnipState.Selected) TriggerAutoAction();
                 break;
@@ -436,7 +442,7 @@ public partial class SnipWindowViewModel
     {
         return mode switch
         {
-            CaptureMode.Normal when autoPinScreenshotSelection => SnipAutoAction.Pin,
+            CaptureMode.Normal => SnipAutoAction.None,
             CaptureMode.Copy => SnipAutoAction.Copy,
             CaptureMode.Pin => SnipAutoAction.Pin,
             CaptureMode.Record => SnipAutoAction.EnterRecordMode,

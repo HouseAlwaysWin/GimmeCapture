@@ -82,6 +82,7 @@ public sealed class SnipWindowFactory : ISnipWindowFactory
             translationSelectionMonitor,
             aiScanSessionService);
 
+        snipVm.LockSelectedScreenshotSelection = mode == CaptureMode.Normal && vm.AutoPinScreenshotSelection;
         snipVm.AutoActionMode = SnipWindowViewModel.ResolveAutoActionMode(mode, vm.AutoPinScreenshotSelection);
         if (mode == CaptureMode.Record)
         {
