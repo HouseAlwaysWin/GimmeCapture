@@ -60,9 +60,8 @@ if ($remoteTagExitCode -ne 2) {
 Write-Host "Starting release process for $version..." -ForegroundColor Cyan
 
 $csprojPath = "src/GimmeCapture/GimmeCapture.csproj"
-$solutionPath = "GimmeCapture.slnx"
 $verifyScript = "scripts/verify.ps1"
-$releaseFiles = @(
+$rollbackFiles = @(
     "src/GimmeCapture/GimmeCapture.csproj",
     "src/GimmeCapture/packages.lock.json",
     "tests/GimmeCapture.Tests/packages.lock.json",
@@ -76,6 +75,17 @@ try {
     # MSBuild imports process environment variables as properties. A VERSION
     # value such as v0.44.0 would override the valid Version in the project.
     [Environment]::SetEnvironmentVariable("VERSION", $null, "Process")
+
+    Write-Host "Verifying current main before changing the release version..." -ForegroundColor Gray
+    & $verifyScript
+
+    $verifyChanges = @(git status --porcelain)
+    if ($LASTEXITCODE -ne 0) {
+        throw "Unable to inspect verification changes."
+    }
+    if ($verifyChanges.Count -gt 0) {
+        throw "Verification modified tracked files: $($verifyChanges -join ', ')"
+    }
 
     Write-Host "Updating $csprojPath to version $versionPlain..." -ForegroundColor Gray
     $csproj = Get-Content -LiteralPath $csprojPath -Raw
@@ -92,28 +102,16 @@ try {
         $updatedCsproj,
         [Text.UTF8Encoding]::new($false))
 
-    Write-Host "Regenerating win-x64 package lock files..." -ForegroundColor Gray
-    Invoke-Checked -Command "dotnet" -Arguments @(
-        "restore",
-        $solutionPath,
-        "--runtime", "win-x64",
-        "--force-evaluate",
-        "--disable-parallel"
-    )
-
-    Write-Host "Verifying release build..." -ForegroundColor Gray
-    & $verifyScript
-
     $changedFiles = @(git status --porcelain | ForEach-Object { $_.Substring(3) })
     if ($LASTEXITCODE -ne 0) {
         throw "Unable to inspect release changes."
     }
-    $unexpectedFiles = @($changedFiles | Where-Object { $_ -notin $releaseFiles })
+    $unexpectedFiles = @($changedFiles | Where-Object { $_ -ne $csprojPath })
     if ($unexpectedFiles.Count -gt 0) {
         throw "Release produced unexpected changes: $($unexpectedFiles -join ', ')"
     }
 
-    & git add -- $releaseFiles
+    & git add -- $csprojPath
     if ($LASTEXITCODE -ne 0) {
         throw "Unable to stage release files."
     }
@@ -144,7 +142,8 @@ try {
 catch {
     if (-not $releaseCommitted) {
         Write-Warning "Release failed before commit. Reverting generated release changes."
-        & git restore --source=HEAD --staged --worktree -- $releaseFiles
+        & dotnet build-server shutdown | Out-Null
+        & git restore --source=HEAD --staged --worktree -- $rollbackFiles
         if ($LASTEXITCODE -ne 0) {
             Write-Warning "Automatic rollback failed. Inspect the working tree before retrying."
         }

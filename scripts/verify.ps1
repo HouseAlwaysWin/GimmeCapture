@@ -30,7 +30,8 @@ Invoke-DotNet restore $solution `
     --locked-mode `
     --runtime win-x64 `
     --artifacts-path $artifacts `
-    --disable-parallel
+    --disable-parallel `
+    --disable-build-servers
 Invoke-DotNet build $solution `
     --configuration Release `
     --no-restore `
