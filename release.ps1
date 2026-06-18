@@ -62,73 +62,96 @@ Write-Host "Starting release process for $version..." -ForegroundColor Cyan
 $csprojPath = "src/GimmeCapture/GimmeCapture.csproj"
 $solutionPath = "GimmeCapture.slnx"
 $verifyScript = "scripts/verify.ps1"
-$versionPlain = $version.TrimStart('v')
-
-Write-Host "Updating $csprojPath to version $versionPlain..." -ForegroundColor Gray
-$csproj = Get-Content -LiteralPath $csprojPath -Raw
-$updatedCsproj = [regex]::Replace(
-    $csproj,
-    '<Version>[^<]*</Version>',
-    "<Version>$versionPlain</Version>",
-    1)
-if ($updatedCsproj -eq $csproj) {
-    throw "Version $versionPlain is already set or the Version element was not found."
-}
-[IO.File]::WriteAllText(
-    (Resolve-Path $csprojPath),
-    $updatedCsproj,
-    [Text.UTF8Encoding]::new($false))
-
-Write-Host "Regenerating win-x64 package lock files..." -ForegroundColor Gray
-Invoke-Checked -Command "dotnet" -Arguments @(
-    "restore",
-    $solutionPath,
-    "--runtime", "win-x64",
-    "--force-evaluate",
-    "--disable-parallel"
-)
-
-Write-Host "Verifying release build..." -ForegroundColor Gray
-& $verifyScript
-
 $releaseFiles = @(
     "src/GimmeCapture/GimmeCapture.csproj",
     "src/GimmeCapture/packages.lock.json",
     "tests/GimmeCapture.Tests/packages.lock.json",
     "tests/GimmeCapture.Benchmarks/packages.lock.json"
 )
+$versionPlain = $version.TrimStart('v')
+$inheritedVersion = [Environment]::GetEnvironmentVariable("VERSION", "Process")
+$releaseCommitted = $false
 
-$changedFiles = @(git status --porcelain | ForEach-Object { $_.Substring(3) })
-if ($LASTEXITCODE -ne 0) {
-    throw "Unable to inspect release changes."
+try {
+    # MSBuild imports process environment variables as properties. A VERSION
+    # value such as v0.44.0 would override the valid Version in the project.
+    [Environment]::SetEnvironmentVariable("VERSION", $null, "Process")
+
+    Write-Host "Updating $csprojPath to version $versionPlain..." -ForegroundColor Gray
+    $csproj = Get-Content -LiteralPath $csprojPath -Raw
+    $updatedCsproj = [regex]::Replace(
+        $csproj,
+        '<Version>[^<]*</Version>',
+        "<Version>$versionPlain</Version>",
+        1)
+    if ($updatedCsproj -eq $csproj) {
+        throw "Version $versionPlain is already set or the Version element was not found."
+    }
+    [IO.File]::WriteAllText(
+        (Resolve-Path $csprojPath),
+        $updatedCsproj,
+        [Text.UTF8Encoding]::new($false))
+
+    Write-Host "Regenerating win-x64 package lock files..." -ForegroundColor Gray
+    Invoke-Checked -Command "dotnet" -Arguments @(
+        "restore",
+        $solutionPath,
+        "--runtime", "win-x64",
+        "--force-evaluate",
+        "--disable-parallel"
+    )
+
+    Write-Host "Verifying release build..." -ForegroundColor Gray
+    & $verifyScript
+
+    $changedFiles = @(git status --porcelain | ForEach-Object { $_.Substring(3) })
+    if ($LASTEXITCODE -ne 0) {
+        throw "Unable to inspect release changes."
+    }
+    $unexpectedFiles = @($changedFiles | Where-Object { $_ -notin $releaseFiles })
+    if ($unexpectedFiles.Count -gt 0) {
+        throw "Release produced unexpected changes: $($unexpectedFiles -join ', ')"
+    }
+
+    & git add -- $releaseFiles
+    if ($LASTEXITCODE -ne 0) {
+        throw "Unable to stage release files."
+    }
+
+    Invoke-Checked -Command "git" -Arguments @(
+        "commit",
+        "-m", "chore: release $version"
+    )
+    $releaseCommitted = $true
+
+    Invoke-Checked -Command "git" -Arguments @(
+        "tag",
+        "-a", $version,
+        "-m", "Release $version"
+    )
+
+    Write-Host "Pushing release commit and tag to GitHub..." -ForegroundColor Cyan
+    Invoke-Checked -Command "git" -Arguments @(
+        "push",
+        "--atomic",
+        "origin",
+        "main",
+        $version
+    )
+
+    Write-Host "Successfully triggered release! Check GitHub Actions." -ForegroundColor Green
 }
-$unexpectedFiles = @($changedFiles | Where-Object { $_ -notin $releaseFiles })
-if ($unexpectedFiles.Count -gt 0) {
-    throw "Release produced unexpected changes: $($unexpectedFiles -join ', ')"
+catch {
+    if (-not $releaseCommitted) {
+        Write-Warning "Release failed before commit. Reverting generated release changes."
+        & git restore --source=HEAD --staged --worktree -- $releaseFiles
+        if ($LASTEXITCODE -ne 0) {
+            Write-Warning "Automatic rollback failed. Inspect the working tree before retrying."
+        }
+    }
+
+    throw
 }
-
-& git add -- $releaseFiles
-if ($LASTEXITCODE -ne 0) {
-    throw "Unable to stage release files."
+finally {
+    [Environment]::SetEnvironmentVariable("VERSION", $inheritedVersion, "Process")
 }
-
-Invoke-Checked -Command "git" -Arguments @(
-    "commit",
-    "-m", "chore: release $version"
-)
-Invoke-Checked -Command "git" -Arguments @(
-    "tag",
-    "-a", $version,
-    "-m", "Release $version"
-)
-
-Write-Host "Pushing release commit and tag to GitHub..." -ForegroundColor Cyan
-Invoke-Checked -Command "git" -Arguments @(
-    "push",
-    "--atomic",
-    "origin",
-    "main",
-    $version
-)
-
-Write-Host "Successfully triggered release! Check GitHub Actions." -ForegroundColor Green
