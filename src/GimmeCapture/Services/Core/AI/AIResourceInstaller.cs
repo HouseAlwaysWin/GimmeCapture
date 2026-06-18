@@ -158,25 +158,6 @@ internal sealed class AIResourceInstaller
         }
     }
 
-    public bool RemoveNmtResources()
-    {
-        try
-        {
-            var nmtDir = Path.Combine(_pathService.GetAIResourcesPath(), "nmt");
-            if (Directory.Exists(nmtDir)) Directory.Delete(nmtDir, true);
-
-            _callbacks.RaisePropertyChanged(nameof(AIResourceService.IsNmtReady));
-            return true;
-        }
-        catch (Exception ex)
-        {
-            string message = $"NMT Removal Failed: {ex.Message}";
-            _callbacks.SetLastErrorMessage(message);
-            Debug.WriteLine(message);
-            return false;
-        }
-    }
-
     public async Task<bool> EnsureAICoreAsync(CancellationToken ct = default)
     {
         if (_callbacks.IsAICoreReady()) return true;
@@ -338,65 +319,6 @@ internal sealed class AIResourceInstaller
         }
     }
 
-    public async Task<bool> EnsureNmtAsync(CancellationToken ct = default)
-    {
-        if (_callbacks.IsNmtReady()) return true;
-
-        await _downloadLock.WaitAsync(ct);
-        try
-        {
-            if (_callbacks.IsNmtReady()) return true;
-
-            _downloader.IsDownloading = true;
-            _downloader.CurrentDownloadName = "NMT Translation Models (MarianMT)";
-            _downloader.DownloadProgress = 0;
-
-            var nmtDir = Path.Combine(_pathService.GetAIResourcesPath(), "nmt");
-            Directory.CreateDirectory(nmtDir);
-
-            var paths = _pathService.GetNmtPaths();
-            var package = _modelCatalog.GetNmtPackage();
-
-            if (!File.Exists(paths.Encoder))
-                await _downloader.DownloadFileAsync(package.Encoder, paths.Encoder, 0, 40, ct);
-            else
-                _downloader.DownloadProgress = 40;
-
-            if (!File.Exists(paths.Decoder))
-                await _downloader.DownloadFileAsync(package.Decoder, paths.Decoder, 40, 50, ct);
-            else
-                _downloader.DownloadProgress = 90;
-
-            if (!File.Exists(paths.Tokenizer))
-                await _downloader.DownloadFileAsync(package.Tokenizer, paths.Tokenizer, 90, 2.5, ct);
-
-            if (!File.Exists(paths.Spm))
-                await _downloader.DownloadFileAsync(package.SentencePiece, paths.Spm, 92.5, 2.5, ct);
-
-            if (!File.Exists(paths.Config))
-                await _downloader.DownloadFileAsync(package.Config, paths.Config, 95, 2.5, ct);
-            if (!File.Exists(paths.GenConfig))
-                await _downloader.DownloadFileAsync(package.GenerationConfig, paths.GenConfig, 97.5, 2.5, ct);
-
-            _downloader.DownloadProgress = 100;
-            return _callbacks.IsNmtReady();
-        }
-        catch (OperationCanceledException)
-        {
-            return false;
-        }
-        catch (Exception ex)
-        {
-            _callbacks.SetLastErrorMessage(ex.Message);
-            return false;
-        }
-        finally
-        {
-            _downloader.IsDownloading = false;
-            _downloadLock.Release();
-        }
-    }
-
     private void RaiseReadinessProperties(params string[] propertyNames)
     {
         foreach (var propertyName in propertyNames)
@@ -415,6 +337,5 @@ internal sealed record AIResourceInstallerCallbacks(
     Func<bool> IsAICoreReady,
     Func<SAM2Variant, bool> IsSAM2Ready,
     Func<OCRLanguage, bool> IsOCRReady,
-    Func<bool> IsNmtReady,
     Func<string> GetLlmModelsDir,
     Func<string, string> GetLlamaModelPathById);

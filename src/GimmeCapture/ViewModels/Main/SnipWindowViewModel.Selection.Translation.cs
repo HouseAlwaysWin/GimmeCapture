@@ -550,9 +550,8 @@ public partial class SnipWindowViewModel
     {
         if (item == null) return;
 
-        // 隱藏視窗以便擷取乾淨的螢幕畫面
-        HideAction?.Invoke();
-        await Task.Delay(200); // 等待視窗完全隱藏
+        await _captureVisibilityCoordinator.HideAndWaitForCaptureAsync(
+            HideAction ?? (() => { }));
 
         try
         {
@@ -689,8 +688,8 @@ public partial class SnipWindowViewModel
 
             if (!hasBounds) return;
 
-            HideAction?.Invoke();
-            await Task.Delay(200);
+            await _captureVisibilityCoordinator.HideAndWaitForCaptureAsync(
+                HideAction ?? (() => { }));
 
             try
             {

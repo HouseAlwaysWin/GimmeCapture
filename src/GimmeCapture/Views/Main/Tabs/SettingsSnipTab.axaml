@@ -28,6 +28,36 @@
                         <CheckBox IsChecked="{Binding AutoPinScreenshotSelection}" Content="{Binding [AutoPinScreenshotSelection], Source={x:Static services:LocalizationService.Instance}}"/>
                         <CheckBox IsChecked="{Binding DefaultHideSnipToolbar}" Content="{Binding [DefaultHideSnipToolbar], Source={x:Static services:LocalizationService.Instance}}"/>
                         <CheckBox IsChecked="{Binding ShowSnipCursor}" Content="{Binding [ShowSnipCursor], Source={x:Static services:LocalizationService.Instance}}"/>
+                        <Grid ColumnDefinitions="Auto,*" Margin="0,6,0,0">
+                            <TextBlock Text="{Binding [CaptureDelay], Source={x:Static services:LocalizationService.Instance}}"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,12,0"/>
+                            <ComboBox Grid.Column="1"
+                                      ItemsSource="{Binding AvailableCaptureDelays}"
+                                      SelectedValue="{Binding CaptureDelay}"
+                                      SelectedValueBinding="{Binding Value}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:CompileBindings="False">
+                                        <TextBlock Text="{Binding DisplayName}"/>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </Grid>
+                        <Grid ColumnDefinitions="Auto,*">
+                            <TextBlock Text="{Binding [OcrTextLayout], Source={x:Static services:LocalizationService.Instance}}"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,12,0"/>
+                            <ComboBox Grid.Column="1"
+                                      ItemsSource="{Binding AvailableOcrTextLayouts}"
+                                      SelectedValue="{Binding OcrTextLayout}"
+                                      SelectedValueBinding="{Binding Value}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:CompileBindings="False">
+                                        <TextBlock Text="{Binding DisplayName}"/>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </Grid>
                     </StackPanel>
                 </StackPanel>
             </StackPanel>

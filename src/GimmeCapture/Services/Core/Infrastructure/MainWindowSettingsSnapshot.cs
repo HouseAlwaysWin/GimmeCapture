@@ -18,6 +18,8 @@ public sealed class MainWindowSettingsSnapshot
     public required bool HideSnipSelectionDecoration { get; init; }
     public required bool HideSnipSelectionBorder { get; init; }
     public required bool AutoPinScreenshotSelection { get; init; }
+    public required CaptureDelay CaptureDelay { get; init; }
+    public required OcrTextLayout OcrTextLayout { get; init; }
     public required bool HideRecordPinDecoration { get; init; }
     public required bool HideRecordPinBorder { get; init; }
     public required bool HideRecordSelectionDecoration { get; init; }
@@ -42,6 +44,7 @@ public sealed class MainWindowSettingsSnapshot
     public required string SnipHotkey { get; init; }
     public required string RecordHotkey { get; init; }
     public required string TranslateHotkey { get; init; }
+    public required string TextCopyHotkey { get; init; }
     public required string AIResourcesDirectory { get; init; }
     public required bool EnableAI { get; init; }
     public required bool ShowAIScanBox { get; init; }
@@ -72,6 +75,8 @@ public sealed class MainWindowSettingsSnapshot
             HideSnipSelectionDecoration = settings.HideSnipSelectionDecoration,
             HideSnipSelectionBorder = settings.HideSnipSelectionBorder,
             AutoPinScreenshotSelection = settings.AutoPinScreenshotSelection,
+            CaptureDelay = settings.CaptureDelay,
+            OcrTextLayout = settings.OcrTextLayout,
             HideRecordPinDecoration = settings.HideRecordPinDecoration,
             HideRecordPinBorder = settings.HideRecordPinBorder,
             HideRecordSelectionDecoration = settings.HideRecordSelectionDecoration,
@@ -96,6 +101,7 @@ public sealed class MainWindowSettingsSnapshot
             SnipHotkey = settings.SnipHotkey,
             RecordHotkey = settings.RecordHotkey,
             TranslateHotkey = settings.TranslateHotkey,
+            TextCopyHotkey = settings.TextCopyHotkey,
             AIResourcesDirectory = settings.AIResourcesDirectory,
             EnableAI = settings.EnableAI,
             ShowAIScanBox = settings.ShowAIScanBox,
@@ -126,6 +132,8 @@ public sealed class MainWindowSettingsSnapshot
         settings.HideSnipSelectionDecoration = HideSnipSelectionDecoration;
         settings.HideSnipSelectionBorder = HideSnipSelectionBorder;
         settings.AutoPinScreenshotSelection = AutoPinScreenshotSelection;
+        settings.CaptureDelay = CaptureDelay;
+        settings.OcrTextLayout = OcrTextLayout;
         settings.HideRecordPinDecoration = HideRecordPinDecoration;
         settings.HideRecordPinBorder = HideRecordPinBorder;
         settings.HideRecordSelectionDecoration = HideRecordSelectionDecoration;
@@ -150,6 +158,7 @@ public sealed class MainWindowSettingsSnapshot
         settings.SnipHotkey = SnipHotkey;
         settings.RecordHotkey = RecordHotkey;
         settings.TranslateHotkey = TranslateHotkey;
+        settings.TextCopyHotkey = TextCopyHotkey;
         settings.AIResourcesDirectory = AIResourcesDirectory;
         settings.EnableAI = EnableAI;
         settings.ShowAIScanBox = ShowAIScanBox;

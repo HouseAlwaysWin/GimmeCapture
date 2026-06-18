@@ -29,14 +29,6 @@ public readonly record struct OcrModelPackage(
     ArtifactDescriptor Recognition,
     ArtifactDescriptor Dictionary);
 
-public readonly record struct NmtModelPackage(
-    ArtifactDescriptor Encoder,
-    ArtifactDescriptor Decoder,
-    ArtifactDescriptor Tokenizer,
-    ArtifactDescriptor SentencePiece,
-    ArtifactDescriptor Config,
-    ArtifactDescriptor GenerationConfig);
-
 public sealed class AIModelCatalog
 {
     public const string DefaultLlamaModelId = "translategemma-4b-it";
@@ -235,39 +227,6 @@ public sealed class AIModelCatalog
                     26_249))
         };
     }
-
-    public NmtModelPackage GetNmtPackage() =>
-        new(
-            Descriptor(
-                "https://huggingface.co/Xenova/m2m100_418M/resolve/main/onnx/encoder_model_quantized.onnx?download=true",
-                "encoder_model_quantized.onnx",
-                "13a94e354a9140764eb81102d77d3ec6952d796e6f113c651eeb3c3443da0386",
-                287_856_370),
-            Descriptor(
-                "https://huggingface.co/Xenova/m2m100_418M/resolve/main/onnx/decoder_model_quantized.onnx?download=true",
-                "decoder_model_quantized.onnx",
-                "6015e31c8976659aedb06058c4dadf0f400d087a3f9830f838e68f220d79bcb6",
-                339_181_945),
-            Descriptor(
-                "https://huggingface.co/Xenova/m2m100_418M/resolve/main/tokenizer.json?download=true",
-                "tokenizer.json",
-                "03d9e111731c2d71f39a2c2a88499743e4c251385d07f0384b4349a23ba54363",
-                7_988_527),
-            Descriptor(
-                "https://huggingface.co/facebook/m2m100_418M/resolve/main/sentencepiece.bpe.model?download=true",
-                "sentencepiece.bpe.model",
-                "d8f7c76ed2a5e0822be39f0a4f95a55eb19c78f4593ce609e2edbc2aea4d380a",
-                2_423_393),
-            Descriptor(
-                "https://huggingface.co/Xenova/m2m100_418M/resolve/main/config.json?download=true",
-                "config.json",
-                "1dbdf77ddc7809acd4c54ccf0eab46f840b40174afb1b6f6de8787244e832938",
-                908),
-            Descriptor(
-                "https://huggingface.co/Xenova/m2m100_418M/resolve/main/generation_config.json?download=true",
-                "generation_config.json",
-                "722210dd0bee7bef4e8e7f9a8574d8c56a2dfff723d73f390ce67892740b9009",
-                233));
 
     private static LlamaModelPreset DownloadablePreset(
         string id,

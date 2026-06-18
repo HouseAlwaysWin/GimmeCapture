@@ -5,6 +5,7 @@ public static class HotkeyTagNames
     public const string SnipHotkey = nameof(SnipHotkey);
     public const string RecordHotkey = nameof(RecordHotkey);
     public const string TranslateHotkey = nameof(TranslateHotkey);
+    public const string TextCopyHotkey = nameof(TextCopyHotkey);
 
     public const string Snip_Rectangle = nameof(Snip_Rectangle);
     public const string Snip_Ellipse = nameof(Snip_Ellipse);

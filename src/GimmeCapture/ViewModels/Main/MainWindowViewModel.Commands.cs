@@ -28,6 +28,47 @@ public partial class MainWindowViewModel
         RequestCaptureAction?.Invoke(mode);
         SetStatus("StatusSnip");
     }
+
+    internal async Task<CaptureLaunchResult> RunCaptureActionAsync(
+        CaptureMode mode,
+        Func<Task> captureAsync)
+    {
+        ArgumentNullException.ThrowIfNull(captureAsync);
+
+        CaptureLaunchResult? launchResult = null;
+        try
+        {
+            launchResult = await _captureLaunchCoordinator.TryLaunchAsync(
+                mode,
+                CaptureDelay,
+                async (remaining, cancellationToken) =>
+                {
+                    if (ShowCaptureCountdownAction != null)
+                    {
+                        await ShowCaptureCountdownAction(remaining, cancellationToken);
+                    }
+                },
+                async () =>
+                {
+                    CloseCaptureCountdownAction?.Invoke();
+                    await captureAsync();
+                });
+
+            if (launchResult == CaptureLaunchResult.Cancelled)
+            {
+                SetStatus("CaptureDelayCancelled");
+            }
+        }
+        finally
+        {
+            if (launchResult != CaptureLaunchResult.AlreadyRunning)
+            {
+                CloseCaptureCountdownAction?.Invoke();
+            }
+        }
+
+        return launchResult ?? CaptureLaunchResult.Cancelled;
+    }
     
     private async Task SaveAndClose()
     {
@@ -51,6 +92,7 @@ public partial class MainWindowViewModel
         SnipHotkey = defaultSettings.SnipHotkey;
         TranslateHotkey = defaultSettings.TranslateHotkey;
         RecordHotkey = defaultSettings.RecordHotkey;
+        TextCopyHotkey = defaultSettings.TextCopyHotkey;
         RecordingSettings.RecordFormat = defaultSettings.RecordFormat;
         RecordingSettings.VideoCodec = defaultSettings.VideoCodec;
         
@@ -82,6 +124,8 @@ public partial class MainWindowViewModel
         HideSnipSelectionDecoration = false;
         HideSnipSelectionBorder = false;
         AutoPinScreenshotSelection = defaultSettings.AutoPinScreenshotSelection;
+        CaptureDelay = defaultSettings.CaptureDelay;
+        OcrTextLayout = defaultSettings.OcrTextLayout;
         HideRecordSelectionDecoration = false;
         HideRecordSelectionBorder = false;
         ShowSnipCursor = defaultSettings.ShowSnipCursor;

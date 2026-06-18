@@ -43,6 +43,8 @@ public partial class MainWindowViewModel
             HideSnipSelectionDecoration = HideSnipSelectionDecoration,
             HideSnipSelectionBorder = HideSnipSelectionBorder,
             AutoPinScreenshotSelection = AutoPinScreenshotSelection,
+            CaptureDelay = CaptureDelay,
+            OcrTextLayout = OcrTextLayout,
             HideRecordPinDecoration = HideRecordPinDecoration,
             HideRecordPinBorder = HideRecordPinBorder,
             HideRecordSelectionDecoration = HideRecordSelectionDecoration,
@@ -67,6 +69,7 @@ public partial class MainWindowViewModel
             SnipHotkey = SnipHotkey,
             RecordHotkey = RecordHotkey,
             TranslateHotkey = TranslateHotkey,
+            TextCopyHotkey = TextCopyHotkey,
             AIResourcesDirectory = AIResourcesDirectory,
             EnableAI = EnableAI,
             ShowAIScanBox = ShowAIScanBox,
@@ -93,6 +96,7 @@ public partial class MainWindowViewModel
         SnipHotkey = snapshot.SnipHotkey;
         TranslateHotkey = snapshot.TranslateHotkey;
         RecordHotkey = snapshot.RecordHotkey;
+        TextCopyHotkey = snapshot.TextCopyHotkey;
         RecordingSettings.RecordFormat = snapshot.RecordFormat;
         RecordingSettings.VideoSaveDirectory = snapshot.VideoSaveDirectory;
         RecordingSettings.VideoCodec = snapshot.VideoCodec;
@@ -107,6 +111,8 @@ public partial class MainWindowViewModel
         HideSnipSelectionDecoration = snapshot.HideSnipSelectionDecoration;
         HideSnipSelectionBorder = snapshot.HideSnipSelectionBorder;
         AutoPinScreenshotSelection = snapshot.AutoPinScreenshotSelection;
+        CaptureDelay = snapshot.CaptureDelay;
+        OcrTextLayout = snapshot.OcrTextLayout;
         HideRecordSelectionDecoration = snapshot.HideRecordSelectionDecoration;
         HideRecordSelectionBorder = snapshot.HideRecordSelectionBorder;
         ShowSnipCursor = snapshot.ShowSnipCursor;
@@ -149,5 +155,7 @@ public partial class MainWindowViewModel
         this.RaisePropertyChanged(nameof(ShowAIScanBox));
         this.RaisePropertyChanged(nameof(EnableAIScan));
         this.RaisePropertyChanged(nameof(EnableOcrSelectionDetection));
+        this.RaisePropertyChanged(nameof(AvailableCaptureDelays));
+        this.RaisePropertyChanged(nameof(AvailableOcrTextLayouts));
     }
 }

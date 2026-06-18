@@ -320,9 +320,6 @@ public partial class SnipWindow : Window
         _windowLayerService.RestoreTopmostWindows(_hiddenTopmostWindows);
         _hiddenTopmostWindows = [];
 
-        ProcessMemoryTrimService.RequestIdleWorkingSetTrimAsync("snip-window-closed")
-            .Forget("MemoryTrim.SnipWindowClosed");
-
     }
 
     private void PersistTranslatedSelectionsForClosingIfNeeded()
@@ -496,6 +493,7 @@ public partial class SnipWindow : Window
             
             _viewModel.FocusWindowAction = () =>
             {
+                this.Activate();
                 this.Focus();
             };
 

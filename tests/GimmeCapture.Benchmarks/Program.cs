@@ -133,16 +133,14 @@ public class AIPathServiceBenchmarks
     [Benchmark]
     public (string, string, string) OCRPaths() => _pathService.GetOCRPaths(OCRLanguage.TraditionalChinese);
 
-    [Benchmark]
-    public (string, string, string, string, string, string) NmtPaths() => _pathService.GetNmtPaths();
 }
 
 [MemoryDiagnoser]
 public class InMemoryTranslationCacheBenchmarks
 {
     private InMemoryTranslationCache _cache = null!;
-    private string _hitKey = "Ollama|English|TraditionalChinese|hello";
-    private string _missKey = "Ollama|English|TraditionalChinese|world";
+    private string _hitKey = "LlamaSharp|English|TraditionalChinese|hello";
+    private string _missKey = "LlamaSharp|English|TraditionalChinese|world";
 
     [GlobalSetup]
     public void Setup()
@@ -150,7 +148,7 @@ public class InMemoryTranslationCacheBenchmarks
         _cache = new InMemoryTranslationCache();
         for (int i = 0; i < 500; i++)
         {
-            _cache.Set($"Ollama|English|TraditionalChinese|word{i}", $"word{i} translated");
+            _cache.Set($"LlamaSharp|English|TraditionalChinese|word{i}", $"word{i} translated");
         }
         _cache.Set(_hitKey, "你好");
     }
@@ -162,7 +160,7 @@ public class InMemoryTranslationCacheBenchmarks
     public bool CacheMiss() => _cache.TryGet(_missKey, out _);
 
     [Benchmark]
-    public void CacheSet() => _cache.Set("Ollama|English|TraditionalChinese|test", "測試");
+    public void CacheSet() => _cache.Set("LlamaSharp|English|TraditionalChinese|test", "測試");
 }
 
 [MemoryDiagnoser]

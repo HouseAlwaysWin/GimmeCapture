@@ -24,7 +24,6 @@ internal static class LibavGifTranscoder
         AVFrame* encFrame = null;
         int videoIn = -1;
         AVStream* outStream = null;
-        long frameIndex = 0;
 
         try
         {
@@ -64,6 +63,14 @@ internal static class LibavGifTranscoder
             }
 
             int fps = Math.Clamp(targetFps, 1, 60);
+            AVRational guessedFrameRate = ffmpeg.av_guess_frame_rate(inFmt, inStream, null);
+            double sourceFps = guessedFrameRate.num > 0 && guessedFrameRate.den > 0
+                ? ffmpeg.av_q2d(guessedFrameRate)
+                : fps;
+            var frameTimeline = new GifFrameTimeline(
+                ffmpeg.av_q2d(inStream->time_base),
+                fps,
+                sourceFps);
 
             ThrowIfErr(ffmpeg.avformat_alloc_output_context2(&outFmt, null, "gif", outputPath), "gif_alloc_output");
             if (outFmt == null)
@@ -151,11 +158,29 @@ internal static class LibavGifTranscoder
                 ThrowIfErr(ffmpeg.avcodec_send_packet(decCtx, inPkt), "gif_send_packet");
                 ffmpeg.av_packet_unref(inPkt);
 
-                ReceiveAndEncode(decCtx, encCtx, sws, decFrame, encFrame, outFmt, outStream, outPkt, ref frameIndex);
+                ReceiveAndEncode(
+                    decCtx,
+                    encCtx,
+                    sws,
+                    decFrame,
+                    encFrame,
+                    outFmt,
+                    outStream,
+                    outPkt,
+                    frameTimeline);
             }
 
             ThrowIfErr(ffmpeg.avcodec_send_packet(decCtx, null), "gif_flush_decoder");
-            ReceiveAndEncode(decCtx, encCtx, sws, decFrame, encFrame, outFmt, outStream, outPkt, ref frameIndex);
+            ReceiveAndEncode(
+                decCtx,
+                encCtx,
+                sws,
+                decFrame,
+                encFrame,
+                outFmt,
+                outStream,
+                outPkt,
+                frameTimeline);
 
             ThrowIfErr(ffmpeg.avcodec_send_frame(encCtx, null), "gif_flush_encoder");
             WriteEncoded(encCtx, outFmt, outStream, outPkt);
@@ -192,7 +217,7 @@ internal static class LibavGifTranscoder
         AVFormatContext* outFmt,
         AVStream* outStream,
         AVPacket* outPkt,
-        ref long frameIndex)
+        GifFrameTimeline frameTimeline)
     {
         while (true)
         {
@@ -203,6 +228,14 @@ internal static class LibavGifTranscoder
             }
             ThrowIfErr(gr, "gif_receive_frame");
 
+            long? inputTimestamp = decFrame->best_effort_timestamp != ffmpeg.AV_NOPTS_VALUE
+                ? decFrame->best_effort_timestamp
+                : null;
+            if (!frameTimeline.TrySchedule(inputTimestamp, out long outputPts))
+            {
+                continue;
+            }
+
             ThrowIfErr(ffmpeg.av_frame_make_writable(encFrame), "gif_make_writable");
             ffmpeg.sws_scale(
                 sws,
@@ -212,7 +245,7 @@ internal static class LibavGifTranscoder
                 decFrame->height,
                 encFrame->data,
                 encFrame->linesize);
-            encFrame->pts = frameIndex++;
+            encFrame->pts = outputPts;
 
             ThrowIfErr(ffmpeg.avcodec_send_frame(encCtx, encFrame), "gif_send_frame");
             WriteEncoded(encCtx, outFmt, outStream, outPkt);
@@ -247,5 +280,52 @@ internal static class LibavGifTranscoder
         {
             throw FFmpegErrors.ToException(err, ctx);
         }
+    }
+}
+
+internal sealed class GifFrameTimeline
+{
+    private readonly double _inputTimeBaseSeconds;
+    private readonly int _targetFps;
+    private readonly double _fallbackSourceFps;
+    private long? _firstInputTimestamp;
+    private long _decodedFrameIndex;
+    private long _lastOutputPts = -1;
+
+    public GifFrameTimeline(double inputTimeBaseSeconds, int targetFps, double fallbackSourceFps)
+    {
+        _inputTimeBaseSeconds = inputTimeBaseSeconds > 0 ? inputTimeBaseSeconds : 0;
+        _targetFps = Math.Clamp(targetFps, 1, 60);
+        _fallbackSourceFps = fallbackSourceFps > 0 ? fallbackSourceFps : _targetFps;
+    }
+
+    public bool TrySchedule(long? inputTimestamp, out long outputPts)
+    {
+        double elapsedSeconds;
+        if (inputTimestamp.HasValue && _inputTimeBaseSeconds > 0)
+        {
+            _firstInputTimestamp ??= inputTimestamp.Value;
+            elapsedSeconds = Math.Max(
+                0,
+                (inputTimestamp.Value - _firstInputTimestamp.Value) * _inputTimeBaseSeconds);
+        }
+        else
+        {
+            elapsedSeconds = _decodedFrameIndex / _fallbackSourceFps;
+        }
+
+        _decodedFrameIndex++;
+        long candidatePts = Math.Max(
+            0,
+            (long)Math.Floor((elapsedSeconds * _targetFps) + 0.000001));
+        if (candidatePts <= _lastOutputPts)
+        {
+            outputPts = 0;
+            return false;
+        }
+
+        _lastOutputPts = candidatePts;
+        outputPts = candidatePts;
+        return true;
     }
 }

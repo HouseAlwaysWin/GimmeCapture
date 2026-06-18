@@ -23,6 +23,10 @@ jobs:
       shell: powershell
       run: powershell -ExecutionPolicy Bypass -File scripts/ensure-ffmpeg-libs.ps1
 
+    - name: Check localization parity
+      shell: powershell
+      run: powershell -ExecutionPolicy Bypass -File scripts/check-localization.ps1
+
     - name: Verify
       shell: powershell
       run: powershell -ExecutionPolicy Bypass -File scripts/verify.ps1

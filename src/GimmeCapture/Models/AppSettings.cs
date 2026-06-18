@@ -7,8 +7,10 @@ public enum VideoCodec { H264, H265 }
 public enum VideoQuality { Low, Medium, High }
 public enum TranslationLanguage { TraditionalChinese, SimplifiedChinese, English, Japanese, Korean }
 public enum OCRLanguage { Auto, English, TraditionalChinese, SimplifiedChinese, Japanese, Korean }
-public enum TranslationEngine { LlamaSharp, Ollama, MarianMT }
+public enum TranslationEngine { LlamaSharp }
 public enum AIScanEngine { OCR, SAM2 }
+public enum CaptureDelay { Off = 0, OneSecond = 1, ThreeSeconds = 3, FiveSeconds = 5, TenSeconds = 10 }
+public enum OcrTextLayout { PreserveLines, SingleLine }
 
 public class TranslatedBlock
 {
@@ -109,6 +111,10 @@ public class AppSettings
     public bool HideSnipSelectionDecoration { get; set; } = false;
     public bool HideSnipSelectionBorder { get; set; } = false;
     public bool AutoPinScreenshotSelection { get; set; } = false;
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public CaptureDelay CaptureDelay { get; set; } = CaptureDelay.Off;
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public OcrTextLayout OcrTextLayout { get; set; } = OcrTextLayout.PreserveLines;
 
     public bool HideRecordPinDecoration { get; set; } = false;
     public bool HideRecordPinBorder { get; set; } = false;
@@ -142,6 +148,7 @@ public class AppSettings
     public string SnipHotkey { get; set; } = "Shift+F1";
     public string RecordHotkey { get; set; } = "Shift+F2";
     public string TranslateHotkey { get; set; } = "Shift+F3";
+    public string TextCopyHotkey { get; set; } = "Shift+F4";
 
     // Mode Specific Hotkeys (New Structured Way)
     public SnipHotkeys Snip { get; set; } = new();

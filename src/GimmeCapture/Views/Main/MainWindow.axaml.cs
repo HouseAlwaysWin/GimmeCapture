@@ -13,6 +13,8 @@ using GimmeCapture.Services.Core;
 using GimmeCapture.Services.Core.Infrastructure;
 using ReactiveUI;
 using System.Reactive.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using GimmeCapture.Views.Main.Tabs;
 
 namespace GimmeCapture.Views.Main;
@@ -25,6 +27,7 @@ public partial class MainWindow : Window
     private ContentControl? _translationTabHost;
     private ContentControl? _modulesTabHost;
     private ContentControl? _aboutTabHost;
+    private CaptureCountdownWindow? _captureCountdownWindow;
 
     [StructLayout(LayoutKind.Sequential)]
     public struct POINT
@@ -163,6 +166,7 @@ public partial class MainWindow : Window
                     HotkeyIds.Translate => LocalizationService.Instance["TranslateHotkey"] ?? "Translate",
                     HotkeyIds.Copy => LocalizationService.Instance["TipCopy"] ?? "Copy",
                     HotkeyIds.Pin => LocalizationService.Instance["TipPin"] ?? "Pin",
+                    HotkeyIds.TextCopy => LocalizationService.Instance["TextCopyHotkey"],
                     _ => hotkey
                 };
 
@@ -179,6 +183,9 @@ public partial class MainWindow : Window
             };
 
             vm.RequestCaptureAction = OpenSnipWindow;
+            vm.ShowCaptureCountdownAction = ShowCaptureCountdownAsync;
+            vm.CloseCaptureCountdownAction = CloseCaptureCountdown;
+            vm.RequestOpenModulesAction = OpenModulesTab;
             vm.GetActiveSnipViewModelAction = ResolveActiveSnipViewModel;
             vm.ShowUpdateDialogAction = async (message, isUpdateAvailable) =>
             {
@@ -203,6 +210,54 @@ public partial class MainWindow : Window
         {
             _snipWindowFactory.Open(vm, mode);
         }
+    }
+
+    private Task ShowCaptureCountdownAsync(int seconds, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (DataContext is not MainWindowViewModel vm)
+        {
+            return Task.CompletedTask;
+        }
+
+        _captureCountdownWindow ??= new CaptureCountdownWindow(vm.CancelCaptureCountdown);
+        _captureCountdownWindow.UpdateCountdown(seconds);
+        if (!_captureCountdownWindow.IsVisible)
+        {
+            _captureCountdownWindow.Show();
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private void CloseCaptureCountdown()
+    {
+        if (_captureCountdownWindow == null)
+        {
+            return;
+        }
+
+        _captureCountdownWindow.Close();
+        _captureCountdownWindow = null;
+    }
+
+    private void OpenModulesTab()
+    {
+        var tabControl = this.FindControl<TabControl>("MainTabControl");
+        if (tabControl == null)
+        {
+            return;
+        }
+
+        if (WindowState == WindowState.Minimized)
+        {
+            WindowState = WindowState.Normal;
+        }
+
+        Show();
+        Activate();
+        tabControl.SelectedIndex = 5;
     }
 
 

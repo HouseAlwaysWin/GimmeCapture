@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using GimmeCapture.Models;
 
@@ -21,7 +22,8 @@ public class AppSettingsService
     // v8: TranslateGemma 12B removed from visible/default path; falls back to TranslateGemma 4B.
     // v9: TranslateGemma 12B restored as an optional supported preset.
     // v10: Llama preset support and migration metadata moved into AIModelCatalog.
-    public const int CurrentConfigVersion = 10;
+    // v11: Legacy translation engines migrate to LlamaSharp; delayed capture and quick OCR settings added.
+    public const int CurrentConfigVersion = 11;
     private readonly string _appVersion;
 
     public string BaseDataDirectory { get; private set; } = RuntimePathProvider.GetExecutableDirectory();
@@ -137,6 +139,32 @@ public class AppSettingsService
         return 0;
     }
 
+    private static string NormalizeLegacyTranslationEngineJson(string json)
+    {
+        try
+        {
+            var root = JsonNode.Parse(json) as JsonObject;
+            if (root == null)
+            {
+                return json;
+            }
+
+            foreach (string propertyName in new[] { "SelectedTranslationEngine", "selectedTranslationEngine" })
+            {
+                if (root.ContainsKey(propertyName))
+                {
+                    root[propertyName] = nameof(TranslationEngine.LlamaSharp);
+                }
+            }
+
+            return root.ToJsonString();
+        }
+        catch
+        {
+            return json;
+        }
+    }
+
     private static void ApplyMigrations(string json, AppSettings settings, int sourceVersion)
     {
         // Migrations are intentionally cumulative and version-gated.
@@ -170,6 +198,11 @@ public class AppSettingsService
         if (sourceVersion < 10)
         {
             settings.LlamaModelId = NormalizeLlamaModelId(settings.LlamaModelId);
+        }
+
+        if (sourceVersion < 11)
+        {
+            settings.SelectedTranslationEngine = TranslationEngine.LlamaSharp;
         }
 
         settings.ConfigVersion = CurrentConfigVersion;
@@ -227,6 +260,8 @@ public class AppSettingsService
         dest.HideSnipSelectionDecoration = source.HideSnipSelectionDecoration;
         dest.HideSnipSelectionBorder = source.HideSnipSelectionBorder;
         dest.AutoPinScreenshotSelection = source.AutoPinScreenshotSelection;
+        dest.CaptureDelay = source.CaptureDelay;
+        dest.OcrTextLayout = source.OcrTextLayout;
         dest.HideRecordPinDecoration = source.HideRecordPinDecoration;
         dest.HideRecordPinBorder = source.HideRecordPinBorder;
         dest.HideRecordSelectionDecoration = source.HideRecordSelectionDecoration;
@@ -245,6 +280,7 @@ public class AppSettingsService
         dest.SnipHotkey = source.SnipHotkey;
         dest.RecordHotkey = source.RecordHotkey;
         dest.TranslateHotkey = source.TranslateHotkey;
+        dest.TextCopyHotkey = source.TextCopyHotkey;
 
         // Structured Hotkeys
         dest.Snip.Rectangle = source.Snip.Rectangle;
@@ -379,7 +415,8 @@ public class AppSettingsService
     private void ApplyLoadedJson(string path, string json, string? saveDirectoryOverride = null)
     {
         int sourceVersion = DetectConfigVersion(json);
-        var settings = JsonSerializer.Deserialize<AppSettings>(json, GetJsonOptions());
+        string normalizedJson = NormalizeLegacyTranslationEngineJson(json);
+        var settings = JsonSerializer.Deserialize<AppSettings>(normalizedJson, GetJsonOptions());
         if (settings == null)
             return;
 

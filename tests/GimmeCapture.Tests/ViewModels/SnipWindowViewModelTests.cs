@@ -182,6 +182,7 @@ public class SnipWindowViewModelTests
     [InlineData(CaptureMode.Pin, SnipAutoAction.Pin)]
     [InlineData(CaptureMode.Record, SnipAutoAction.EnterRecordMode)]
     [InlineData(CaptureMode.Translate, SnipAutoAction.None)]
+    [InlineData(CaptureMode.TextCopy, SnipAutoAction.TextCopy)]
     public void ResolveAutoActionMode_PreservesExplicitCaptureModes(CaptureMode mode, SnipAutoAction expectedAction)
     {
         var action = SnipWindowViewModel.ResolveAutoActionMode(mode, autoPinScreenshotSelection: true);
@@ -210,6 +211,27 @@ public class SnipWindowViewModelTests
         {
             vm.Dispose();
         }
+    }
+
+    [Theory]
+    [InlineData(RecordingState.Idle, SnipState.Selected, false, (int)RecordingPinAction.StartRecording)]
+    [InlineData(RecordingState.Idle, SnipState.Selected, true, (int)RecordingPinAction.StartRecording)]
+    [InlineData(RecordingState.Recording, SnipState.Selected, false, (int)RecordingPinAction.PinRecording)]
+    [InlineData(RecordingState.Paused, SnipState.Selected, false, (int)RecordingPinAction.PinRecording)]
+    [InlineData(RecordingState.Idle, SnipState.Detecting, true, (int)RecordingPinAction.PinRecording)]
+    [InlineData(RecordingState.Idle, SnipState.Detecting, false, (int)RecordingPinAction.None)]
+    public void ResolveRecordingPinAction_PrioritizesNewSelectedRecording(
+        RecordingState recordingState,
+        SnipState currentState,
+        bool hasCurrentRecording,
+        int expected)
+    {
+        Assert.Equal(
+            (RecordingPinAction)expected,
+            SnipWindowViewModel.ResolveRecordingPinAction(
+                recordingState,
+                currentState,
+                hasCurrentRecording));
     }
 
     [Fact]

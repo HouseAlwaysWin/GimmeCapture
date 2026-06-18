@@ -14,6 +14,13 @@ using GimmeCapture.ViewModels.Shared;
 
 namespace GimmeCapture.ViewModels.Main;
 
+internal enum RecordingPinAction
+{
+    None,
+    StartRecording,
+    PinRecording
+}
+
 public partial class SnipWindowViewModel
 {
     private static readonly string[] _modeStatePropertyNames =
@@ -292,6 +299,11 @@ public partial class SnipWindowViewModel
              if (CurrentMode != SnipMode.Recording) CurrentMode = SnipMode.Recording;
              // USER REQUEST: Selection only, record manually or via the record action hotkey.
         }
+        else if (AutoActionMode == SnipAutoAction.TextCopy)
+        {
+            Avalonia.Threading.Dispatcher.UIThread.Post(
+                () => ExecuteTextCopyAsync().Forget("QuickOcr.ExecuteTextCopy"));
+        }
     }
 
     public RecordingState RecState => _recordingService?.State ?? RecordingState.Idle;
@@ -342,7 +354,8 @@ public partial class SnipWindowViewModel
             id,
             SnipHotkey,
             RecordHotkey,
-            TranslateHotkey);
+            TranslateHotkey,
+            TextCopyHotkey);
 
         System.Diagnostics.Debug.WriteLine($"[SnipWindowViewModel] HandleGlobalHotkey ID={id}, Pressed={pressedHotkey}, ActiveAction={ActiveActionHotkey}, ActiveToolbar={ActiveToolbarHotkey}, Mode={CurrentMode}");
 
@@ -375,7 +388,9 @@ public partial class SnipWindowViewModel
                 break;
             case HotkeyRouterService.SnipGlobalHotkeyAction.CopyAutoAction:
                 AutoActionMode = SnipAutoAction.Copy;
-                if (CurrentState == SnipState.Selected) TriggerAutoAction();
+                break;
+            case HotkeyRouterService.SnipGlobalHotkeyAction.TextCopyAutoAction:
+                AutoActionMode = SnipAutoAction.TextCopy;
                 break;
         }
     }
@@ -433,7 +448,10 @@ public partial class SnipWindowViewModel
             case CaptureMode.Copy:
                 LockSelectedScreenshotSelection = false;
                 AutoActionMode = SnipAutoAction.Copy;
-                if (CurrentState == SnipState.Selected) TriggerAutoAction();
+                break;
+            case CaptureMode.TextCopy:
+                LockSelectedScreenshotSelection = false;
+                AutoActionMode = SnipAutoAction.TextCopy;
                 break;
         }
     }
@@ -446,6 +464,7 @@ public partial class SnipWindowViewModel
             CaptureMode.Copy => SnipAutoAction.Copy,
             CaptureMode.Pin => SnipAutoAction.Pin,
             CaptureMode.Record => SnipAutoAction.EnterRecordMode,
+            CaptureMode.TextCopy => SnipAutoAction.TextCopy,
             _ => SnipAutoAction.None
         };
     }
@@ -600,29 +619,44 @@ public partial class SnipWindowViewModel
             return;
         }
 
-        if (RecState == RecordingState.Recording || RecState == RecordingState.Paused)
+        bool hasCurrentRecording = !string.IsNullOrEmpty(_currentRecordingPath)
+                                   && System.IO.File.Exists(_currentRecordingPath);
+        switch (ResolveRecordingPinAction(RecState, CurrentState, hasCurrentRecording))
         {
-            await PinRecording();
-            return;
+            case RecordingPinAction.StartRecording:
+                await StartRecording();
+                break;
+            case RecordingPinAction.PinRecording:
+                await PinRecording();
+                break;
+        }
+    }
+
+    internal static RecordingPinAction ResolveRecordingPinAction(
+        RecordingState recordingState,
+        SnipState currentState,
+        bool hasCurrentRecording)
+    {
+        if (recordingState is RecordingState.Recording or RecordingState.Paused)
+        {
+            return RecordingPinAction.PinRecording;
         }
 
-        if (RecState != RecordingState.Idle)
+        if (recordingState != RecordingState.Idle)
         {
-            return;
+            return RecordingPinAction.None;
         }
 
-        var lastPath = _recordingService?.LastRecordingPath;
-        if (!string.IsNullOrEmpty(lastPath) && System.IO.File.Exists(lastPath))
+        // A selected idle region always represents a new recording request.
+        // A finalized path from an older SnipWindow must never take precedence.
+        if (currentState == SnipState.Selected)
         {
-            await PinRecording();
-            _recordingService?.ClearLastRecording();
-            return;
+            return RecordingPinAction.StartRecording;
         }
 
-        if (CurrentState == SnipState.Selected)
-        {
-            await StartRecording();
-        }
+        return hasCurrentRecording
+            ? RecordingPinAction.PinRecording
+            : RecordingPinAction.None;
     }
 
     private void HandleActiveActionHotkey()

@@ -35,6 +35,8 @@ public class MainWindowSettingsPersistenceServiceTests
             HideSnipSelectionDecoration = true,
             HideSnipSelectionBorder = false,
             AutoPinScreenshotSelection = true,
+            CaptureDelay = CaptureDelay.FiveSeconds,
+            OcrTextLayout = OcrTextLayout.SingleLine,
             HideRecordPinDecoration = true,
             HideRecordPinBorder = false,
             HideRecordSelectionDecoration = true,
@@ -59,6 +61,7 @@ public class MainWindowSettingsPersistenceServiceTests
             SnipHotkey = "Shift+F7",
             RecordHotkey = "Shift+F8",
             TranslateHotkey = "Shift+F9",
+            TextCopyHotkey = "Shift+F10",
             AIResourcesDirectory = @"D:\captures\ai",
             EnableAI = false,
             ShowAIScanBox = false,
@@ -84,6 +87,9 @@ public class MainWindowSettingsPersistenceServiceTests
         Assert.Equal(snapshot.RecordFormat, persisted.RecordFormat);
         Assert.Equal(snapshot.RecordHotkey, persisted.RecordHotkey);
         Assert.Equal(snapshot.AutoPinScreenshotSelection, persisted.AutoPinScreenshotSelection);
+        Assert.Equal(snapshot.CaptureDelay, persisted.CaptureDelay);
+        Assert.Equal(snapshot.OcrTextLayout, persisted.OcrTextLayout);
+        Assert.Equal(snapshot.TextCopyHotkey, persisted.TextCopyHotkey);
         Assert.Equal(snapshot.EnableAIScan, persisted.EnableAIScan);
         Assert.Equal(snapshot.AIResourcesDirectory, persisted.AIResourcesDirectory);
         Assert.Equal(snapshot.LlamaModelId, persisted.LlamaModelId);
@@ -92,9 +98,38 @@ public class MainWindowSettingsPersistenceServiceTests
         Assert.Contains($"\"ConfigVersion\": {AppSettingsService.CurrentConfigVersion}", savedJson);
         Assert.Contains("\"RecordHotkey\": \"Shift\\u002BF8\"", savedJson);
         Assert.Contains("\"AutoPinScreenshotSelection\": true", savedJson);
+        Assert.Contains("\"CaptureDelay\": \"FiveSeconds\"", savedJson);
         Assert.Contains("\"AIResourcesDirectory\": \"D:\\\\captures\\\\ai\"", savedJson);
         Assert.DoesNotContain("AIScanEngine", savedJson, StringComparison.Ordinal);
         Assert.DoesNotContain("SAM2GridDensity", savedJson, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("Ollama")]
+    [InlineData("MarianMT")]
+    public void LoadSync_Migrates_Removed_Translation_Engines_To_LlamaSharp(string legacyEngine)
+    {
+        var tempDir = Path.Combine(
+            Path.GetTempPath(),
+            "GimmeCapture.Tests",
+            nameof(LoadSync_Migrates_Removed_Translation_Engines_To_LlamaSharp),
+            Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        File.WriteAllText(
+            Path.Combine(tempDir, "config.json"),
+            $$"""
+            {
+              "ConfigVersion": 10,
+              "SelectedTranslationEngine": "{{legacyEngine}}"
+            }
+            """);
+
+        var settingsService = new AppSettingsService(tempDir);
+
+        settingsService.LoadSync();
+
+        Assert.Equal(TranslationEngine.LlamaSharp, settingsService.Settings.SelectedTranslationEngine);
+        Assert.Equal(AppSettingsService.CurrentConfigVersion, settingsService.Settings.ConfigVersion);
     }
 
     [Fact]

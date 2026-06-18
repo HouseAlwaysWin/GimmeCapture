@@ -140,7 +140,7 @@ public partial class RecordingService : ReactiveObject
         _screenOffset = screenOffset;
         _visualScaling = visualScaling;
         _fps = fps;
-        _recordSystemAudio = recordSystemAudio;
+        _recordSystemAudio = RecordingAudioPolicy.ShouldRecordSystemAudio(recordSystemAudio, _targetFormat);
         _segments.Clear();
         _audioSegments.Clear();
 

@@ -27,6 +27,24 @@ public partial class MainWindowViewModel
         public Language Value { get; set; }
     }
 
+    public sealed record CaptureDelayOption(CaptureDelay Value, string DisplayName);
+    public sealed record OcrTextLayoutOption(OcrTextLayout Value, string DisplayName);
+
+    public IReadOnlyList<CaptureDelayOption> AvailableCaptureDelays =>
+    [
+        new(CaptureDelay.Off, LocalizationService.Instance["CaptureDelayOff"]),
+        new(CaptureDelay.OneSecond, string.Format(LocalizationService.Instance["CaptureDelaySeconds"], 1)),
+        new(CaptureDelay.ThreeSeconds, string.Format(LocalizationService.Instance["CaptureDelaySeconds"], 3)),
+        new(CaptureDelay.FiveSeconds, string.Format(LocalizationService.Instance["CaptureDelaySeconds"], 5)),
+        new(CaptureDelay.TenSeconds, string.Format(LocalizationService.Instance["CaptureDelaySeconds"], 10))
+    ];
+
+    public IReadOnlyList<OcrTextLayoutOption> AvailableOcrTextLayouts =>
+    [
+        new(OcrTextLayout.PreserveLines, LocalizationService.Instance["OcrPreserveLines"]),
+        new(OcrTextLayout.SingleLine, LocalizationService.Instance["OcrSingleLine"])
+    ];
+
     public List<TranslationLanguage> AvailableTranslationLanguages =>
         Enum.GetValues<TranslationLanguage>().AsValueEnumerable().ToList();
 
@@ -502,6 +520,20 @@ public partial class MainWindowViewModel
         set => this.RaiseAndSetIfChanged(ref _autoPinScreenshotSelection, value);
     }
 
+    private CaptureDelay _captureDelay;
+    public CaptureDelay CaptureDelay
+    {
+        get => _captureDelay;
+        set => this.RaiseAndSetIfChanged(ref _captureDelay, value);
+    }
+
+    private OcrTextLayout _ocrTextLayout;
+    public OcrTextLayout OcrTextLayout
+    {
+        get => _ocrTextLayout;
+        set => this.RaiseAndSetIfChanged(ref _ocrTextLayout, value);
+    }
+
     private bool _hideRecordSelectionDecoration = false;
     public bool HideRecordSelectionDecoration
     {
@@ -535,7 +567,7 @@ public partial class MainWindowViewModel
         }
 
         // 1. Global Group (Idle state triggers)
-        var globalGroup = new[] { "SnipHotkey", "RecordHotkey", "TranslateHotkey", "PinHotkey", "CopyHotkey" };
+        var globalGroup = new[] { "SnipHotkey", "RecordHotkey", "TranslateHotkey", "TextCopyHotkey", "PinHotkey", "CopyHotkey" };
         
         // 2. Snip Group (Local to Screenshot mode)
         var snipGroup = new[] { 
@@ -570,6 +602,7 @@ public partial class MainWindowViewModel
             if (targetTag != "SnipHotkey" && SnipHotkey == hotkey) return "SnipHotkey";
             if (targetTag != "RecordHotkey" && RecordHotkey == hotkey) return "RecordHotkey";
             if (targetTag != "TranslateHotkey" && TranslateHotkey == hotkey) return "TranslateHotkey";
+            if (targetTag != "TextCopyHotkey" && TextCopyHotkey == hotkey) return "TextCopyHotkey";
         }
         else if (snipGroup.Contains(targetTag))
         {
@@ -865,6 +898,27 @@ public partial class MainWindowViewModel
         }
     }
 
+    private string _textCopyHotkey = "Shift+F4";
+    public string TextCopyHotkey
+    {
+        get => _textCopyHotkey;
+        set
+        {
+            var changed = _textCopyHotkey != value;
+            if (changed)
+            {
+                this.RaiseAndSetIfChanged(ref _textCopyHotkey, value);
+            }
+
+            _settingsSideEffectCoordinator.RegisterGlobalHotkey(HotkeyIds.TextCopy, value);
+            if (changed && !_isDataLoading)
+            {
+                _settingsService.Settings.TextCopyHotkey = value;
+                MarkModifiedAndQueueSettingsSave();
+            }
+        }
+    }
+
     private bool _isLlamaModelPickerOpen;
     public bool IsLlamaModelPickerOpen
     {
@@ -1036,7 +1090,11 @@ public partial class MainWindowViewModel
         set => this.RaiseAndSetIfChanged(ref _playbackTimelineFps, Math.Clamp(value, 1, 120));
     }
 
-    public string[] AvailableRecordFormats { get; } = { "mp4", "mkv", "gif", "webm", "mov" };
+    public bool IsGifAvailable => RecordingFormatCapabilities.IsGifAvailable();
+    public string GifUnavailableReason => LocalizationService.Instance["GifUnavailableReason"];
+    public string[] AvailableRecordFormats => IsGifAvailable
+        ? ["mp4", "mkv", "gif", "webm", "mov"]
+        : ["mp4", "mkv", "webm", "mov"];
 
     public async Task LoadSettingsAsync()
     {

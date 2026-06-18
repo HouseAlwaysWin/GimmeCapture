@@ -11,6 +11,7 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Reactive;
 using System.Reactive.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using GimmeCapture.Services.Translation;
 
@@ -77,6 +78,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private bool _isDataLoading = true;
     private Task? _loadTask;
     private string _currentStatusKey = "StatusReady";
+    private readonly CaptureLaunchCoordinator _captureLaunchCoordinator = new();
 
     public void SetStatus(string key)
     {
@@ -85,11 +87,19 @@ public partial class MainWindowViewModel : ViewModelBase
     }
 
     public Action<CaptureMode>? RequestCaptureAction { get; set; }
+    public Func<int, CancellationToken, Task>? ShowCaptureCountdownAction { get; set; }
+    public Action? CloseCaptureCountdownAction { get; set; }
     public Action? RequestElevatedWindowPromptAction { get; set; }
+    public Action? RequestOpenModulesAction { get; set; }
     public Func<SnipWindowViewModel?>? GetActiveSnipViewModelAction { get; set; }
     public Func<Task<string?>>? PickFolderAction { get; set; }
     public Func<string, string, bool, Task<bool>>? ConfirmAction { get; set; }
     public Func<string, bool, Task<bool>>? ShowUpdateDialogAction { get; set; }
+
+    public void CancelCaptureCountdown()
+    {
+        _captureLaunchCoordinator.Cancel();
+    }
 
     public AppSettingsService AppSettingsService => _settingsService;
     private readonly AppSettingsService _settingsService;
@@ -230,6 +240,9 @@ public partial class MainWindowViewModel : ViewModelBase
             {
                 this.RaisePropertyChanged(nameof(SelectedLanguageOption));
                 this.RaisePropertyChanged(nameof(UpdateDownloadStageText));
+                this.RaisePropertyChanged(nameof(AvailableCaptureDelays));
+                this.RaisePropertyChanged(nameof(AvailableOcrTextLayouts));
+                this.RaisePropertyChanged(nameof(GifUnavailableReason));
                 StatusText = LocalizationService.Instance[_currentStatusKey];
             });
 

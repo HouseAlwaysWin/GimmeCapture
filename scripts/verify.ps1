@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [int]$CoverageThreshold = 20,
+    [int]$CoverageThreshold = 25,
     [switch]$SkipPublish
 )
 
@@ -25,6 +25,11 @@ function Invoke-DotNet {
 
 New-Item -ItemType Directory -Force -Path $artifacts | Out-Null
 Write-Host "Verification artifacts: $artifacts"
+
+& powershell -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "check-localization.ps1")
+if ($LASTEXITCODE -ne 0) {
+    throw "Localization parity check failed with exit code $LASTEXITCODE."
+}
 
 Invoke-DotNet restore $solution `
     --locked-mode `

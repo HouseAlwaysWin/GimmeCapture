@@ -5,11 +5,90 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Threading;
+using GimmeCapture.Services.Abstractions;
 
 namespace GimmeCapture.ViewModels.Main;
 
 public partial class SnipWindowViewModel
 {
+    private CancellationTokenSource? _quickOcrCts;
+    private int _quickOcrRunning;
+
+    private async Task ExecuteTextCopyAsync()
+    {
+        if (_quickOcrService == null || _mainVm == null
+            || SelectionRect.Width <= 0 || SelectionRect.Height <= 0)
+        {
+            return;
+        }
+
+        if (Interlocked.CompareExchange(ref _quickOcrRunning, 1, 0) != 0)
+        {
+            return;
+        }
+
+        using var cts = new CancellationTokenSource();
+        _quickOcrCts = cts;
+
+        try
+        {
+            await _captureVisibilityCoordinator.HideAndWaitForCaptureAsync(
+                HideAction ?? (() => { }),
+                cts.Token);
+
+            _isLocalProcessing = true;
+            ShowProcessingOverlay = true;
+            IsIndeterminate = true;
+            ProcessingText = LocalizationService.Instance["QuickOcrProcessing"];
+
+            using var bitmap = await _captureService.CaptureScreenAsync(
+                SelectionRect,
+                ScreenOffset,
+                VisualScaling,
+                includeCursor: false);
+            var result = await _quickOcrService.RecognizeAsync(
+                bitmap,
+                _mainVm.SourceLanguage,
+                _mainVm.OcrTextLayout,
+                cts.Token);
+
+            switch (result.Status)
+            {
+                case QuickOcrStatus.Success:
+                    await _captureService.CopyToClipboardAsync(result.Text);
+                    _mainVm.SetStatus("QuickOcrCopied");
+                    break;
+                case QuickOcrStatus.ModuleMissing:
+                    _mainVm.SetStatus("QuickOcrModuleMissing");
+                    _mainVm.RequestOpenModulesAction?.Invoke();
+                    break;
+                case QuickOcrStatus.NoText:
+                    _mainVm.SetStatus("QuickOcrNoText");
+                    break;
+                default:
+                    _mainVm.SetStatus("QuickOcrFailed");
+                    break;
+            }
+        }
+        catch (OperationCanceledException) when (cts.IsCancellationRequested)
+        {
+            // Expected when the snip window is closed while OCR is still running.
+        }
+        finally
+        {
+            if (ReferenceEquals(_quickOcrCts, cts))
+            {
+                _quickOcrCts = null;
+            }
+
+            Volatile.Write(ref _quickOcrRunning, 0);
+            _isLocalProcessing = false;
+            ShowProcessingOverlay = false;
+            CloseAction?.Invoke();
+        }
+    }
+
     private async Task ExecuteCopyAsync()
     {
         // If recording is processing, ignore copy command to prevent overwriting with screenshot
@@ -30,33 +109,38 @@ public partial class SnipWindowViewModel
 
         if (SelectionRect.Width > 0 && SelectionRect.Height > 0)
         {
-            HideAction?.Invoke();
-            await Task.Delay(200); // Wait for UI update
+            await RunCaptureActionAsync(CaptureMode.Copy, ExecuteCopyCaptureAsync);
+        }
+    }
 
-            try
-            {
-                _isLocalProcessing = true;
-                ShowProcessingOverlay = true;
-                IsIndeterminate = true;
-                ProcessingText = LocalizationService.Instance["StatusProcessing"] ?? "Processing...";
-                using var bitmap = await _captureService.CaptureScreenWithAnnotationsAsync(
-                    SelectionRect,
-                    ScreenOffset,
-                    VisualScaling,
-                    Annotations,
-                    GetTranslationSelectionsForCapture(),
-                    TranslatedBlocks,
-                    _mainVm?.ShowSnipCursor ?? false);
-                await _captureService.CopyToClipboardAsync(bitmap);
-                _mainVm?.SetStatus("StatusCopied");
-            }
-            finally
-            {
-                PersistTranslatedSelectionsAfterCaptureIfNeeded();
-                _isLocalProcessing = false;
-                ShowProcessingOverlay = false;
-                CloseAction?.Invoke();
-            }
+    private async Task ExecuteCopyCaptureAsync()
+    {
+        await _captureVisibilityCoordinator.HideAndWaitForCaptureAsync(
+            HideAction ?? (() => { }));
+
+        try
+        {
+            _isLocalProcessing = true;
+            ShowProcessingOverlay = true;
+            IsIndeterminate = true;
+            ProcessingText = LocalizationService.Instance["StatusProcessing"] ?? "Processing...";
+            using var bitmap = await _captureService.CaptureScreenWithAnnotationsAsync(
+                SelectionRect,
+                ScreenOffset,
+                VisualScaling,
+                Annotations,
+                GetTranslationSelectionsForCapture(),
+                TranslatedBlocks,
+                _mainVm?.ShowSnipCursor ?? false);
+            await _captureService.CopyToClipboardAsync(bitmap);
+            _mainVm?.SetStatus("StatusCopied");
+        }
+        finally
+        {
+            PersistTranslatedSelectionsAfterCaptureIfNeeded();
+            _isLocalProcessing = false;
+            ShowProcessingOverlay = false;
+            CloseAction?.Invoke();
         }
     }
 
@@ -71,8 +155,8 @@ public partial class SnipWindowViewModel
 
         if (SelectionRect.Width > 0 && SelectionRect.Height > 0)
         {
-            HideAction?.Invoke();
-            await Task.Delay(200); // Wait for UI update
+            await _captureVisibilityCoordinator.HideAndWaitForCaptureAsync(
+                HideAction ?? (() => { }));
 
             try
             {
@@ -151,60 +235,90 @@ public partial class SnipWindowViewModel
             runAI = false;
         }
 
-        // If recording is active or we are in recording mode with a valid path, use PinRecording
+        // Recording mode owns its own recording path. Do not consume a stale
+        // LastRecordingPath left by a previously closed SnipWindow.
         if (CurrentMode == SnipMode.Recording)
         {
-            var lastPath = _recordingService?.LastRecordingPath;
-            bool hasVideo = !string.IsNullOrEmpty(lastPath) && System.IO.File.Exists(lastPath);
+            bool hasCurrentRecording = !string.IsNullOrEmpty(_currentRecordingPath)
+                                       && System.IO.File.Exists(_currentRecordingPath);
 
-            if (RecState == RecordingState.Recording || RecState == RecordingState.Paused || hasVideo)
+            switch (ResolveRecordingPinAction(RecState, CurrentState, hasCurrentRecording))
             {
-                await PinRecording();
-                return;
+                case RecordingPinAction.StartRecording:
+                    await StartRecording();
+                    break;
+                case RecordingPinAction.PinRecording:
+                    await PinRecording();
+                    break;
             }
+
+            return;
         }
 
         if (SelectionRect.Width > 0 && SelectionRect.Height > 0)
         {
-            HideAction?.Invoke();
-            await Task.Delay(200); // Wait for UI update
+            await RunCaptureActionAsync(
+                CaptureMode.Pin,
+                () => ExecutePinCaptureAsync(runAI, initialInteractive));
+        }
+    }
 
-            try
+    private async Task ExecutePinCaptureAsync(bool runAI, bool initialInteractive)
+    {
+        await _captureVisibilityCoordinator.HideAndWaitForCaptureAsync(
+            HideAction ?? (() => { }));
+
+        try
+        {
+            using var skBitmap = await _captureService.CaptureScreenWithAnnotationsAsync(
+                SelectionRect,
+                ScreenOffset,
+                VisualScaling,
+                Annotations,
+                GetTranslationSelectionsForCapture(),
+                TranslatedBlocks,
+                _mainVm?.ShowSnipCursor ?? false);
+
+            // Convert SKBitmap to Avalonia Bitmap without PNG stream roundtrip
+            var avaloniaBitmap = new Avalonia.Media.Imaging.WriteableBitmap(
+                new Avalonia.PixelSize(skBitmap.Width, skBitmap.Height),
+                new Avalonia.Vector(96, 96),
+                Avalonia.Platform.PixelFormat.Bgra8888,
+                Avalonia.Platform.AlphaFormat.Premul);
+
+            using var lockedOut = avaloniaBitmap.Lock();
+            unsafe
             {
-                using var skBitmap = await _captureService.CaptureScreenWithAnnotationsAsync(
-                    SelectionRect,
-                    ScreenOffset,
-                    VisualScaling,
-                    Annotations,
-                    GetTranslationSelectionsForCapture(),
-                    TranslatedBlocks,
-                    _mainVm?.ShowSnipCursor ?? false);
-
-                // Convert SKBitmap to Avalonia Bitmap without PNG stream roundtrip
-                var avaloniaBitmap = new Avalonia.Media.Imaging.WriteableBitmap(
-                    new Avalonia.PixelSize(skBitmap.Width, skBitmap.Height),
-                    new Avalonia.Vector(96, 96),
-                    Avalonia.Platform.PixelFormat.Bgra8888,
-                    Avalonia.Platform.AlphaFormat.Premul);
-
-                using var lockedOut = avaloniaBitmap.Lock();
-                unsafe
-                {
-                    Buffer.MemoryCopy(
-                        (void*)skBitmap.GetPixels(),
-                        (void*)lockedOut.Address,
-                        lockedOut.RowBytes * lockedOut.Size.Height,
-                        skBitmap.RowBytes * skBitmap.Height);
-                }
-
-                // Open Floating Window
-                OpenPinWindowAction?.Invoke(avaloniaBitmap, SelectionRect, SelectionBorderColor, SelectionBorderThickness, runAI, initialInteractive, null, 12.0);
+                Buffer.MemoryCopy(
+                    (void*)skBitmap.GetPixels(),
+                    (void*)lockedOut.Address,
+                    lockedOut.RowBytes * lockedOut.Size.Height,
+                    skBitmap.RowBytes * skBitmap.Height);
             }
-            finally
-            {
-                PersistTranslatedSelectionsAfterCaptureIfNeeded();
-                CloseAction?.Invoke();
-            }
+
+            // Open Floating Window
+            OpenPinWindowAction?.Invoke(avaloniaBitmap, SelectionRect, SelectionBorderColor, SelectionBorderThickness, runAI, initialInteractive, null, 12.0);
+        }
+        finally
+        {
+            PersistTranslatedSelectionsAfterCaptureIfNeeded();
+            CloseAction?.Invoke();
+        }
+    }
+
+    private async Task RunCaptureActionAsync(CaptureMode mode, Func<Task> captureAsync)
+    {
+        if (_mainVm == null)
+        {
+            await captureAsync();
+            return;
+        }
+
+        var result = await _mainVm.RunCaptureActionAsync(mode, captureAsync);
+        if (result != CaptureLaunchResult.Launched)
+        {
+            ShowAction?.Invoke();
+            FocusWindowAction?.Invoke();
         }
     }
 

@@ -57,7 +57,6 @@ public class AIResourceService : ReactiveObject
                 () => _orchestrator.IsAICoreReady(),
                 variant => _orchestrator.IsSAM2Ready(variant),
                 language => _orchestrator.IsOCRReady(language),
-                () => _orchestrator.IsNmtReady(),
                 () => _orchestrator.GetLlmModelsDir(),
                 modelId => _orchestrator.GetLlamaModelPathById(modelId)));
         _orchestrator = new AIResourceOrchestrator(
@@ -102,10 +101,6 @@ public class AIResourceService : ReactiveObject
 
     public virtual (string Det, string Rec, string Dict) GetOCRPaths(OCRLanguage language) => _orchestrator.GetOCRPaths(language);
 
-    public virtual bool IsNmtReady() => _orchestrator.IsNmtReady();
-
-    public virtual (string Encoder, string Decoder, string Tokenizer, string Spm, string Config, string GenConfig) GetNmtPaths() => _orchestrator.GetNmtPaths();
-
     public IReadOnlyList<LlamaModelPreset> GetLlamaModelPresets() => _modelCatalog.GetLlamaModelPresets();
     public IReadOnlyList<LlamaModelPreset> GetDownloadableLlamaModelPresets() => _modelCatalog.GetDownloadableLlamaModelPresets();
 
@@ -141,15 +136,11 @@ public class AIResourceService : ReactiveObject
 
     public bool AreResourcesReady() => _orchestrator.AreResourcesReady();
 
-    public bool IsNmtResourcesPresent() => _orchestrator.IsNmtResourcesPresent();
-
     public bool RemoveAICoreResources() => _orchestrator.RemoveAICoreResources();
 
     public bool RemoveSAM2Resources(SAM2Variant variant) => _orchestrator.RemoveSAM2Resources(variant);
 
     public bool RemoveOCRResources() => _orchestrator.RemoveOCRResources();
-
-    public bool RemoveNmtResources() => _orchestrator.RemoveNmtResources();
 
     // Deprecated but kept for compatibility if referenced elsewhere
     public void RemoveResources()
@@ -166,8 +157,6 @@ public class AIResourceService : ReactiveObject
     public virtual Task<bool> EnsureOCRAsync(CancellationToken ct = default) => _orchestrator.EnsureOCRAsync(ct);
 
     public virtual async Task<bool> EnsureOCRAsync(OCRLanguage language, CancellationToken ct = default) => await _orchestrator.EnsureOCRAsync(language, ct);
-
-    public virtual async Task<bool> EnsureNmtAsync(CancellationToken ct = default) => await _orchestrator.EnsureNmtAsync(ct);
 
     public void SetupNativeResolvers()
     {

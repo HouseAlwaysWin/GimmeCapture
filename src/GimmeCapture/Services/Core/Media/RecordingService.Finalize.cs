@@ -62,10 +62,11 @@ public partial class RecordingService
             return validSegments[0];
         }
 
-        // Pure DLL mode temporary behavior:
-        // use first segment as final source until native concat pipeline is implemented.
-        Debug.WriteLine("[Finalize] Native concat pipeline pending; using first segment only.");
-        return mergedMkvPath;
+        // Native concat is not available yet. Returning a real segment keeps
+        // finalization functional after pause/resume instead of referencing a
+        // merged path that was never created.
+        Debug.WriteLine("[Finalize] Native concat pipeline pending; using first valid segment.");
+        return validSegments[0];
     }
 
     private async Task<string?> MergeAudioSegmentsAsync(IReadOnlyList<string> validAudioSegments)
@@ -575,14 +576,9 @@ public partial class RecordingService
     {
         try
         {
-            if (!Directory.Exists(_tempDir)) return;
-            if (_tempDir.Contains("Recordings_"))
-            {
-                Directory.Delete(_tempDir, true);
-                return;
-            }
-
-            Directory.Delete(_tempDir, true);
+            string baseDataDir = _settingsService?.BaseDataDirectory ?? AppDomain.CurrentDomain.BaseDirectory;
+            string expectedParent = Path.Combine(baseDataDir, "Temp");
+            RecordingTempDirectory.TryDeleteSessionDirectory(_tempDir, expectedParent);
         }
         catch (Exception ex)
         {

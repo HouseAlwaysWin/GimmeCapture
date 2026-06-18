@@ -60,20 +60,6 @@ public class AIPathService
         );
     }
 
-    public virtual (string Encoder, string Decoder, string Tokenizer, string Spm, string Config, string GenConfig) GetNmtPaths()
-    {
-        var baseDir = GetAIResourcesPath();
-        var nmtDir = Path.Combine(baseDir, "nmt");
-        return (
-            Path.Combine(nmtDir, "encoder_model.onnx"),
-            Path.Combine(nmtDir, "decoder_model.onnx"),
-            Path.Combine(nmtDir, "tokenizer.json"),
-            Path.Combine(nmtDir, "sentencepiece.bpe.model"),
-            Path.Combine(nmtDir, "config.json"),
-            Path.Combine(nmtDir, "generation_config.json")
-        );
-    }
-
     public virtual string GetAICoreModelPath()
     {
         return Path.Combine(GetAIResourcesPath(), "models", "u2net.onnx");

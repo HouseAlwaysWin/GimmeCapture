@@ -41,9 +41,6 @@ public sealed class AIResourceOrchestrator
 
     public (string Det, string Rec, string Dict) GetOCRPaths(OCRLanguage language) => _pathService.GetOCRPaths(language);
 
-    public (string Encoder, string Decoder, string Tokenizer, string Spm, string Config, string GenConfig) GetNmtPaths()
-        => _pathService.GetNmtPaths();
-
     public string GetLlmModelsDir()
     {
         string custom = _settingsService.Settings.LlamaCustomModelPath;
@@ -145,26 +142,6 @@ public sealed class AIResourceOrchestrator
         return File.Exists(paths.Det) && File.Exists(paths.Rec) && File.Exists(paths.Dict);
     }
 
-    public bool IsNmtReady()
-    {
-        var paths = GetNmtPaths();
-        string[] files = { paths.Encoder, paths.Decoder, paths.Spm, paths.Config };
-
-        foreach (var file in files)
-        {
-            if (!File.Exists(file))
-            {
-                return false;
-            }
-
-            var info = new FileInfo(file);
-            if (file.EndsWith("encoder_model.onnx") && info.Length < 50 * 1024 * 1024) return false;
-            if (file.EndsWith("decoder_model.onnx") && info.Length < 50 * 1024 * 1024) return false;
-        }
-
-        return true;
-    }
-
     public bool AreResourcesReady()
     {
         return IsAICoreReady()
@@ -173,19 +150,11 @@ public sealed class AIResourceOrchestrator
             && (_settingsService.Settings.SelectedTranslationEngine != TranslationEngine.LlamaSharp || IsLlamaModelReady());
     }
 
-    public bool IsNmtResourcesPresent()
-    {
-        var paths = GetNmtPaths();
-        return File.Exists(paths.Encoder) && File.Exists(paths.Decoder) && File.Exists(paths.Tokenizer);
-    }
-
     public bool RemoveAICoreResources() => _installer.RemoveAICoreResources();
 
     public bool RemoveSAM2Resources(SAM2Variant variant) => _installer.RemoveSAM2Resources(variant);
 
     public bool RemoveOCRResources() => _installer.RemoveOCRResources();
-
-    public bool RemoveNmtResources() => _installer.RemoveNmtResources();
 
     public void RemoveResources()
     {
@@ -204,8 +173,6 @@ public sealed class AIResourceOrchestrator
     public Task<bool> EnsureOCRAsync(CancellationToken ct = default) => EnsureOCRAsync(_settingsService.Settings.SourceLanguage, ct);
 
     public Task<bool> EnsureOCRAsync(OCRLanguage language, CancellationToken ct = default) => _installer.EnsureOCRAsync(language, ct);
-
-    public Task<bool> EnsureNmtAsync(CancellationToken ct = default) => _installer.EnsureNmtAsync(ct);
 
     public Task<bool> EnsureLlamaModelAsync(string modelId, CancellationToken ct = default) => _installer.EnsureLlamaModelAsync(modelId, ct);
 

@@ -290,5 +290,22 @@
   "LlamaGpuLayers": "GPU Layers:",
   "DownloadModel": "Download Model",
   "ElevatedWindowNoticeTitle": "Can't capture administrator windows",
-  "ElevatedWindowNoticeMessage": "The focused window belongs to a program running with administrator privileges. Windows blocks global hotkeys from non-elevated apps in this case.\n\nClose GimmeCapture and reopen it using \"Run as administrator\", or trigger the hotkey from outside that window.\n\nRestart GimmeCapture as administrator now?"
+  "ElevatedWindowNoticeMessage": "The focused window belongs to a program running with administrator privileges. Windows blocks global hotkeys from non-elevated apps in this case.\n\nClose GimmeCapture and reopen it using \"Run as administrator\", or trigger the hotkey from outside that window.\n\nRestart GimmeCapture as administrator now?",
+  "ModuleAIDescription": "Shared runtime files required by local AI modules.",
+  "ModuleVoskDescription": "Offline speech recognition model for audio translation.",
+  "TranslateModeAudio": "Audio Mode",
+  "CaptureDelay": "Capture delay:",
+  "CaptureDelayOff": "Off",
+  "CaptureDelaySeconds": "{0} seconds",
+  "CaptureDelayCancelled": "Delayed capture cancelled.",
+  "OcrTextLayout": "OCR text layout:",
+  "OcrPreserveLines": "Preserve line breaks",
+  "OcrSingleLine": "Merge into one line",
+  "TextCopyHotkey": "Quick OCR Copy",
+  "QuickOcrProcessing": "Recognizing text...",
+  "QuickOcrCopied": "Recognized text copied to the clipboard.",
+  "QuickOcrModuleMissing": "PaddleOCR is not installed. Install it from Modules first.",
+  "QuickOcrNoText": "No recognizable text was found in the selection.",
+  "QuickOcrFailed": "Text recognition failed.",
+  "GifUnavailableReason": "The GIF encoder is unavailable in this installation, so GIF output is disabled."
 }

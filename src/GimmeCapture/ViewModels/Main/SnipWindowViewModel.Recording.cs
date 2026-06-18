@@ -193,12 +193,10 @@ public partial class SnipWindowViewModel
         }
 
         string format = _mainVm.RecordingSettings.RecordFormat?.ToLowerInvariant() ?? "mp4";
-        if (format == "gif")
+        if (format == "gif" && !RecordingFormatCapabilities.IsGifAvailable())
         {
-            // Pure DLL recording pipeline currently outputs video containers only.
-            // Keep recording stable by falling back to MKV instead of creating a broken single-frame GIF.
-            format = "mkv";
-            _mainVm.SetStatus("GIF export is not available in DLL-only mode yet. Recording as MKV.");
+            _mainVm.SetStatus("GifUnavailableReason");
+            return;
         }
 
         // Use TempFolder setting if available, otherwise local Temp folder in app directory
@@ -239,7 +237,7 @@ public partial class SnipWindowViewModel
         ResetRecordingDurationTracking();
         bool enableSystemAudio = _mainVm.RecordSystemAudio;
 
-        if (await _recordingService.StartAsync(region, _currentRecordingPath, _mainVm!.RecordingSettings.RecordFormat ?? "mp4", _mainVm.ShowRecordCursor, ScreenOffset, VisualScaling, _mainVm.RecordingSettings.RecordFPS, enableSystemAudio))
+        if (await _recordingService.StartAsync(region, _currentRecordingPath, format, _mainVm.ShowRecordCursor, ScreenOffset, VisualScaling, _mainVm.RecordingSettings.RecordFPS, enableSystemAudio))
         {
             _recordingCaptureLogicalRect = region;
             EnsureRecordingTimerStarted();
@@ -385,7 +383,6 @@ public partial class SnipWindowViewModel
         if (ShowProcessingOverlay || _recordingService == null) return;
 
         bool hasRecordingContext = _recordingService.State != RecordingState.Idle
-                                   || !string.IsNullOrEmpty(_recordingService.LastRecordingPath)
                                    || !string.IsNullOrEmpty(_currentRecordingPath);
 
         _isLocalProcessing = true;
@@ -399,7 +396,8 @@ public partial class SnipWindowViewModel
 
             if (hasRecordingContext)
             {
-                string? recordingPath = await ResolveRecordingFilePathAsync(_recordingService.OutputFilePath ?? _recordingService.LastRecordingPath ?? _currentRecordingPath);
+                string? recordingPath = await ResolveRecordingFilePathAsync(
+                    _recordingService.OutputFilePath ?? _currentRecordingPath);
 
                 System.Diagnostics.Debug.WriteLine($"[Pin] OutputFilePath={_recordingService.OutputFilePath}");
                 System.Diagnostics.Debug.WriteLine($"[Pin] LastRecordingPath={_recordingService.LastRecordingPath}");
@@ -448,6 +446,9 @@ public partial class SnipWindowViewModel
                     FileLocationService.RevealInFileExplorer(recordingPath);
                 }
 
+                _recordingService.ClearLastRecording();
+                _currentRecordingPath = null;
+                _recordingCaptureLogicalRect = null;
                 CloseAction?.Invoke();
             }
         }

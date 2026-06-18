@@ -7,4 +7,5 @@ public static class HotkeyIds
     public const int Pin = 9002;
     public const int Record = 9003;
     public const int Translate = 9004;
+    public const int TextCopy = 9005;
 }

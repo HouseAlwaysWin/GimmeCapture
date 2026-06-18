@@ -13,7 +13,8 @@ public class HotkeyRouterService
         ScreenshotMode,
         RecordingMode,
         TranslateMode,
-        CopyAutoAction
+        CopyAutoAction,
+        TextCopyAutoAction
     }
 
     public enum WindowHotkeyAction
@@ -45,6 +46,9 @@ public class HotkeyRouterService
             case HotkeyIds.Translate:
                 mode = CaptureMode.Translate;
                 return true;
+            case HotkeyIds.TextCopy:
+                mode = CaptureMode.TextCopy;
+                return true;
             default:
                 mode = default;
                 return false;
@@ -55,13 +59,15 @@ public class HotkeyRouterService
         int hotkeyId,
         string snipHotkey,
         string recordHotkey,
-        string translateHotkey)
+        string translateHotkey,
+        string textCopyHotkey = "")
     {
         return hotkeyId switch
         {
             HotkeyIds.Snip => snipHotkey,
             HotkeyIds.Record => recordHotkey,
             HotkeyIds.Translate => translateHotkey,
+            HotkeyIds.TextCopy => textCopyHotkey,
             _ => string.Empty
         };
     }
@@ -85,6 +91,7 @@ public class HotkeyRouterService
             HotkeyIds.Pin => SnipGlobalHotkeyAction.ActiveAction,
             HotkeyIds.Translate => SnipGlobalHotkeyAction.TranslateMode,
             HotkeyIds.Copy => SnipGlobalHotkeyAction.CopyAutoAction,
+            HotkeyIds.TextCopy => SnipGlobalHotkeyAction.TextCopyAutoAction,
             _ => SnipGlobalHotkeyAction.None
         };
     }

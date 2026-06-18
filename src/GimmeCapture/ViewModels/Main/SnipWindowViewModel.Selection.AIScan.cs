@@ -713,9 +713,10 @@ public partial class SnipWindowViewModel
             return;
         }
 
-        _scanCts?.Cancel();
-        _scanCts = new System.Threading.CancellationTokenSource();
-        var token = _scanCts.Token;
+        var scanCts = new System.Threading.CancellationTokenSource();
+        var previousScanCts = System.Threading.Interlocked.Exchange(ref _scanCts, scanCts);
+        previousScanCts?.Cancel();
+        var token = scanCts.Token;
 
         ShowTopLoadingBar = true;
 
@@ -752,8 +753,8 @@ public partial class SnipWindowViewModel
         finally
         {
             ShowTopLoadingBar = false;
-            _scanCts?.Dispose();
-            _scanCts = null;
+            System.Threading.Interlocked.CompareExchange(ref _scanCts, null, scanCts);
+            scanCts.Dispose();
         }
     }
 

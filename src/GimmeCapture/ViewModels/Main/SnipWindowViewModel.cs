@@ -21,7 +21,7 @@ namespace GimmeCapture.ViewModels.Main;
 
 public enum SnipState { Idle, Detecting, Selecting, Selected }
 public enum SnipMode { Screenshot, Recording, Translation }
-public enum SnipAutoAction { None, Copy, Pin, EnterRecordMode }
+public enum SnipAutoAction { None, Copy, Pin, EnterRecordMode, TextCopy }
 
 public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingToolViewModel
 {
@@ -66,6 +66,8 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     private readonly ITranslationSessionService? _translationSession;
     private readonly ITranslationSelectionMonitor? _translationSelectionMonitor;
     private readonly IAIScanSessionService? _aiScanSessionService;
+    private readonly IQuickOcrService? _quickOcrService;
+    private readonly ICaptureVisibilityCoordinator _captureVisibilityCoordinator;
     private readonly SnipSelectionStateController _selectionStateController;
     private readonly CompositeDisposable _disposables = new();
     private readonly AudioLevelMonitorService _audioLevelMonitor = new();
@@ -83,6 +85,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     public string SnipHotkey => _mainVm?.SnipHotkey ?? "Shift+F1";
     public string RecordHotkey => _mainVm?.RecordHotkey ?? "Shift+F2";
     public string TranslateHotkey => _mainVm?.TranslateHotkey ?? "Shift+F3";
+    public string TextCopyHotkey => _mainVm?.TextCopyHotkey ?? "Shift+F4";
     
     public string CopyHotkey => CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Copy ?? "Ctrl+C") : (_mainVm?.Snip_Copy ?? "Ctrl+C");
     public string UndoHotkey => CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Undo ?? "Ctrl+Z") : (_mainVm?.Snip_Undo ?? "Ctrl+Z");
@@ -281,10 +284,10 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     public List<OCRLanguage> AvailableOCRLanguages => _mainVm?.AvailableOCRLanguages ?? Enum.GetValues<OCRLanguage>().AsValueEnumerable().ToList();
     public List<TranslationLanguage> AvailableTranslationLanguages => _mainVm?.AvailableTranslationLanguages ?? Enum.GetValues<TranslationLanguage>().AsValueEnumerable().ToList();
 
-    public SnipWindowViewModel() : this(Colors.Red, 2.0, CreateDesignScreenCaptureService(), CreateDesignWindowDetectionService(), null, null, null, null, null) { }
+    public SnipWindowViewModel() : this(Colors.Red, 2.0, CreateDesignScreenCaptureService(), CreateDesignWindowDetectionService(), null, null, null, null, null, null, null) { }
 
     public SnipWindowViewModel(Color borderColor, double borderThickness, RecordingService? recService = null, MainWindowViewModel? mainVm = null)
-        : this(borderColor, borderThickness, CreateDesignScreenCaptureService(), CreateDesignWindowDetectionService(), recService, mainVm, null, null, null)
+        : this(borderColor, borderThickness, CreateDesignScreenCaptureService(), CreateDesignWindowDetectionService(), recService, mainVm, null, null, null, null, null)
     {
     }
 
@@ -297,19 +300,26 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         MainWindowViewModel? mainVm = null,
         ITranslationSessionService? translationSession = null,
         ITranslationSelectionMonitor? translationSelectionMonitor = null,
-        IAIScanSessionService? aiScanSessionService = null)
+        IAIScanSessionService? aiScanSessionService = null,
+        IQuickOcrService? quickOcrService = null,
+        ICaptureVisibilityCoordinator? captureVisibilityCoordinator = null)
     {
         _captureService = captureService ?? throw new ArgumentNullException(nameof(captureService));
         _detectionService = detectionService ?? CreateDesignWindowDetectionService();
         _translationSession = translationSession;
         _translationSelectionMonitor = translationSelectionMonitor;
         _aiScanSessionService = aiScanSessionService;
+        _quickOcrService = quickOcrService;
+        _captureVisibilityCoordinator = captureVisibilityCoordinator ?? new ImmediateCaptureVisibilityCoordinator();
         _selectionBorderColor = borderColor;
         _selectionBorderThickness = borderThickness;
         _recordingService = recService;
         _mainVm = mainVm;
         _selectionStateController = new SnipSelectionStateController(
-            shouldTriggerAutoScan: () => EnableAIScan && CurrentMode != SnipMode.Translation && AllScreenBounds?.Count > 0,
+            shouldTriggerAutoScan: () =>
+                EnableAIScan
+                && CurrentMode != SnipMode.Translation
+                && AllScreenBounds?.Count > 0,
             triggerAutoScan: () => TriggerAutoScanCommand?.Execute(Unit.Default).Subscribe(),
             cancelScan: () => _scanCts?.Cancel(),
             dismissHoverPreview: preserveTargetRect => DismissWindowSnapHoverPreview(preserveTargetRect),
@@ -751,6 +761,8 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
 
     public void Dispose()
     {
+        _scanCts?.Cancel();
+        _quickOcrCts?.Cancel();
         CancelTranslationWarmup();
         _translationCts?.Cancel();
         _translationCts?.Dispose();

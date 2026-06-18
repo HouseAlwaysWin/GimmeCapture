@@ -21,6 +21,7 @@ public class TranslationService : IDisposable
     private readonly AppSettingsService _settingsService;
     private readonly OcrRuntimeService _ocrRuntimeService;
     private readonly IEnumerable<ITranslationEngine> _translationEngines;
+    private readonly TranslationEngineRunner _translationEngineRunner;
     private readonly AIResourceService _aiResourceService;
     private readonly TranslationPipeline _translationPipeline = new();
     private IOCREngine? _ocrEngine;
@@ -44,6 +45,7 @@ public class TranslationService : IDisposable
         {
             new LlamaSharpTranslationEngine(_aiResourceService, settingsService, translationCache)
         };
+        _translationEngineRunner = new TranslationEngineRunner(_translationEngines);
     }
 
     internal bool IsOcrLoaded => _ocrRuntimeService.IsLoaded;
@@ -141,7 +143,7 @@ public class TranslationService : IDisposable
                 ct.ThrowIfCancellationRequested();
                 var (text, confidence) = ocrEngine.RecognizeText(bitmap, box, ct);
                 string cleanedText = OcrTextSanitizer.Sanitize(text);
-                if (IsUsefulOcrText(cleanedText, confidence))
+                if (OcrTextQualityPolicy.IsUseful(cleanedText, confidence))
                 {
                     recognizedBlocks.Add((box, cleanedText, confidence));
                 }
@@ -327,30 +329,6 @@ public class TranslationService : IDisposable
             }
         }
 
-        // Fallback: try another engine if selected one returns unacceptable output.
-        foreach (var engine in _translationEngines)
-        {
-            if (engine.EngineType == _settings.SelectedTranslationEngine)
-            {
-                continue;
-            }
-
-            string fallback = _translationPipeline.SanitizeTranslation(
-                text,
-                await engine.TranslateAsync(text, guessedSource, _settings.TargetLanguage, ct),
-                _settings.TargetLanguage);
-            string fallbackBestEffort = _translationPipeline.PromoteBestEffort(text, fallback, _settings.TargetLanguage);
-            if (fallbackBestEffort.Length > bestEffortTranslation.Length)
-            {
-                bestEffortTranslation = fallbackBestEffort;
-            }
-
-            if (_translationPipeline.IsAcceptable(text, fallback, _settings.TargetLanguage))
-            {
-                return fallback;
-            }
-        }
-
         return bestEffortTranslation;
     }
 
@@ -507,81 +485,21 @@ public class TranslationService : IDisposable
 
     private async Task<string> TranslateAsync(string text, OCRLanguage sourceLang, CancellationToken ct)
     {
-        var engine = _translationEngines.AsValueEnumerable().FirstOrDefault(e => e.EngineType == _settings.SelectedTranslationEngine);
-        if (engine == null) 
-        {
-            AppLog.Information("Translation.EngineNotFound");
-            return string.Empty; 
-        }
-        var result = await engine.TranslateAsync(text, sourceLang, _settings.TargetLanguage, ct);
-        if (string.IsNullOrEmpty(result))
-        {
-            AppLog.Information("Translation.EngineReturnedEmpty");
-        }
-        return result ?? string.Empty;
+        return await _translationEngineRunner.TranslateSelectedAsync(
+            text,
+            sourceLang,
+            _settings.TargetLanguage,
+            _settings.SelectedTranslationEngine,
+            ct);
     }
 
     private async Task<string> ForceTranslateAsync(string text, OCRLanguage sourceLang, TranslationLanguage targetLang, CancellationToken ct)
     {
-        // Force the use of LlamaSharp for retry with a stricter target language prompt
-        var llm = _translationEngines.AsValueEnumerable().OfType<LlamaSharpTranslationEngine>().FirstOrDefault();
-        if (llm != null) return await llm.TranslateAsync(text, sourceLang, targetLang, ct);
-        return string.Empty;
-    }
-
-    private bool IsUsefulOcrText(string text, float confidence)
-    {
-        if (string.IsNullOrWhiteSpace(text)) return false;
-        if (confidence < 0.10f) return false;
-
-        ReadOnlySpan<char> trimmed = text.AsSpan().Trim();
-        if (trimmed.IsEmpty) return false;
-
-        bool sawUseful = false;
-        bool allPlaceholder = true;
-        int usefulCount = 0;
-        int suspiciousCount = 0;
-        foreach (char ch in trimmed)
-        {
-            if (IsInvalidOcrCharacter(ch))
-            {
-                return false;
-            }
-
-            bool isPlaceholder = ch is '?' or '.' or '-' or '_' or '*';
-            allPlaceholder &= isPlaceholder;
-
-            if (char.IsLetterOrDigit(ch)
-                || (ch >= 0x4E00 && ch <= 0x9FFF)
-                || (ch >= 0x3040 && ch <= 0x309F)
-                || (ch >= 0x30A0 && ch <= 0x30FF)
-                || (ch >= 0xAC00 && ch <= 0xD7AF))
-            {
-                sawUseful = true;
-                usefulCount++;
-            }
-            else if (!char.IsWhiteSpace(ch) && !char.IsPunctuation(ch))
-            {
-                suspiciousCount++;
-            }
-        }
-
-        if (!sawUseful || allPlaceholder)
-        {
-            return false;
-        }
-
-        if (suspiciousCount > usefulCount)
-        {
-            return false;
-        }
-
-        if (usefulCount <= 2 && confidence < 0.30f)
-        {
-            return false;
-        }
-
-        return true;
+        return await _translationEngineRunner.TranslateWithLlamaAsync(
+            text,
+            sourceLang,
+            targetLang,
+            ct);
     }
 
     internal static bool IsTranslationAcceptableCore(string original, string translated, TranslationLanguage target)
@@ -1269,15 +1187,6 @@ public class TranslationService : IDisposable
         string normalizedOriginal = NormalizeTranslationComparisonText(original);
         string collapsed = TryCollapseRepeatedTokenCycle(TokenizeTranslationValue(trimmed), normalizedOriginal);
         return string.IsNullOrWhiteSpace(collapsed) ? trimmed : collapsed;
-    }
-
-    private static bool IsInvalidOcrCharacter(char ch)
-    {
-        return ch == '\uFFFD'
-            || char.IsControl(ch)
-            || ch is '\u200B' or '\u200C' or '\u200D' or '\u2060' or '\uFEFF'
-            || (ch >= '\uD800' && ch <= '\uDFFF')
-            || (ch >= '\uE000' && ch <= '\uF8FF');
     }
 
     private static bool LooksLikeRunawayRepetition(string original, string value)

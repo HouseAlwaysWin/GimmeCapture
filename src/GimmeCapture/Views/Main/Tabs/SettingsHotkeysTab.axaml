@@ -13,7 +13,7 @@
             <Border Background="#1A1A1A" Padding="15" CornerRadius="4" BorderBrush="#333333" BorderThickness="1" Margin="0,0,0,10">
                 <StackPanel Spacing="10">
                     <TextBlock Text="{Binding [HotkeyStartupGroup], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold" Foreground="{Binding ThemeColor, Converter={StaticResource ColorToBrushConverter}}"/>
-                    <Grid ColumnDefinitions="Auto, 10, *, 20, Auto, 10, *" RowDefinitions="Auto, Auto, Auto">
+                    <Grid ColumnDefinitions="Auto, 10, *, 20, Auto, 10, *" RowDefinitions="Auto, Auto, Auto, Auto">
                         <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding [SnipHotkey], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center"/>
                         <TextBox Grid.Row="0" Grid.Column="2" Text="{Binding SnipHotkey, Mode=OneWay}" Tag="{x:Static services:HotkeyTagNames.SnipHotkey}" IsReadOnly="True" KeyDown="HotkeyTextBox_KeyDown" GotFocus="HotkeyTextBox_GotFocus" LostFocus="HotkeyTextBox_LostFocus"/>
 
@@ -22,6 +22,9 @@
 
                         <TextBlock Grid.Row="2" Grid.Column="0" Text="{Binding [TranslateHotkey], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,10,0,0"/>
                         <TextBox Grid.Row="2" Grid.Column="2" Text="{Binding TranslateHotkey, Mode=OneWay}" Tag="{x:Static services:HotkeyTagNames.TranslateHotkey}" IsReadOnly="True" Margin="0,10,0,0" KeyDown="HotkeyTextBox_KeyDown" GotFocus="HotkeyTextBox_GotFocus" LostFocus="HotkeyTextBox_LostFocus"/>
+
+                        <TextBlock Grid.Row="3" Grid.Column="0" Text="{Binding [TextCopyHotkey], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,10,0,0"/>
+                        <TextBox Grid.Row="3" Grid.Column="2" Text="{Binding TextCopyHotkey, Mode=OneWay}" Tag="{x:Static services:HotkeyTagNames.TextCopyHotkey}" IsReadOnly="True" Margin="0,10,0,0" KeyDown="HotkeyTextBox_KeyDown" GotFocus="HotkeyTextBox_GotFocus" LostFocus="HotkeyTextBox_LostFocus"/>
 
                         <TextBlock Grid.Row="0" Grid.Column="4" VerticalAlignment="Center"/>
                         <TextBox Grid.Row="0" Grid.Column="6" IsVisible="False"/>

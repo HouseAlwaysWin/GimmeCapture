@@ -76,9 +76,9 @@ public static class FFmpegRuntime
     /// <summary>Throws <see cref="InvalidOperationException"/> if not initialized.</summary>
     public static void EnsureInitialized()
     {
-        if (!_initialized)
+        if (!_initialized && !TryInitialize(out var errorMessage))
         {
-            throw new InvalidOperationException("FFmpegRuntime not initialized. Call TryInitialize first.");
+            throw new InvalidOperationException(errorMessage ?? "FFmpegRuntime initialization failed.");
         }
     }
 }
