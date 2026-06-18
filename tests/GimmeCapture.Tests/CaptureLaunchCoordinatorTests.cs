@@ -11,7 +11,6 @@ public class CaptureLaunchCoordinatorTests
 {
     [Theory]
     [InlineData(CaptureMode.Normal)]
-    [InlineData(CaptureMode.Record)]
     [InlineData(CaptureMode.Translate)]
     [InlineData(CaptureMode.TextCopy)]
     public async Task TryLaunchAsync_BypassesDelay_ForNonDelayedModes(CaptureMode mode)
@@ -39,15 +38,18 @@ public class CaptureLaunchCoordinatorTests
         Assert.Equal(1, launchCalls);
     }
 
-    [Fact]
-    public async Task TryLaunchAsync_CountsDown_AndLaunchesOnce()
+    [Theory]
+    [InlineData(CaptureMode.Copy)]
+    [InlineData(CaptureMode.Pin)]
+    [InlineData(CaptureMode.Record)]
+    public async Task TryLaunchAsync_CountsDown_AndLaunchesOnce(CaptureMode mode)
     {
         var ticks = new List<int>();
         int launchCalls = 0;
         var coordinator = new CaptureLaunchCoordinator((_, _) => Task.CompletedTask);
 
         var result = await coordinator.TryLaunchAsync(
-            CaptureMode.Copy,
+            mode,
             CaptureDelay.ThreeSeconds,
             (remaining, _) =>
             {

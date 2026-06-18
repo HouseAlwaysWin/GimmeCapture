@@ -67,6 +67,21 @@
                     <CheckBox Content="{Binding [HideRecordPinBorder], Source={x:Static services:LocalizationService.Instance}}" IsChecked="{Binding HideRecordPinBorder}" Margin="0,5,0,0"/>
                     <CheckBox Content="{Binding [HideRecordSelectionDecoration], Source={x:Static services:LocalizationService.Instance}}" IsChecked="{Binding HideRecordSelectionDecoration}" Margin="0,5,0,0"/>
                     <CheckBox Content="{Binding [HideRecordSelectionBorder], Source={x:Static services:LocalizationService.Instance}}" IsChecked="{Binding HideRecordSelectionBorder}" Margin="0,5,0,0"/>
+                        <Grid ColumnDefinitions="Auto,*" Margin="0,6,0,0">
+                            <TextBlock Text="{Binding [CaptureDelay], Source={x:Static services:LocalizationService.Instance}}"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,12,0"/>
+                            <ComboBox Grid.Column="1"
+                                      ItemsSource="{Binding AvailableCaptureDelays}"
+                                      SelectedValue="{Binding CaptureDelay}"
+                                      SelectedValueBinding="{Binding Value}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:CompileBindings="False">
+                                        <TextBlock Text="{Binding DisplayName}"/>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </Grid>
                         <StackPanel Spacing="5" Margin="0,5,0,0">
                             <TextBlock Text="{Binding [RecordFPS], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>
                             <StackPanel Orientation="Horizontal" Spacing="10">

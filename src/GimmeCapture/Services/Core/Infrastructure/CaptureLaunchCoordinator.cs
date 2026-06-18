@@ -26,7 +26,7 @@ public sealed class CaptureLaunchCoordinator
     public bool IsRunning => Volatile.Read(ref _isRunning) != 0;
 
     public static bool UsesDelay(CaptureMode mode) =>
-        mode is CaptureMode.Copy or CaptureMode.Pin;
+        mode is CaptureMode.Copy or CaptureMode.Pin or CaptureMode.Record;
 
     public async Task<CaptureLaunchResult> TryLaunchAsync(
         CaptureMode mode,

@@ -177,6 +177,43 @@ public partial class SnipWindowViewModel
         _recordStartInFlight = true;
         try
         {
+            if (_recordingService == null || _mainVm == null)
+            {
+                return;
+            }
+
+            // Validate before showing the countdown so the user does not wait
+            // only to discover that recording cannot start.
+            if (!_mainVm.FfmpegDownloader.IsFFmpegAvailable())
+            {
+                _mainVm.SetStatus("FFmpegNotReady");
+                return;
+            }
+
+            string format = _mainVm.RecordingSettings.RecordFormat?.ToLowerInvariant() ?? "mp4";
+            if (format == "gif" && !RecordingFormatCapabilities.IsGifAvailable())
+            {
+                _mainVm.SetStatus("GifUnavailableReason");
+                return;
+            }
+
+            var launchResult = await _mainVm.RunCaptureActionAsync(
+                CaptureMode.Record,
+                () => StartRecordingCoreAsync(format));
+            if (launchResult != CaptureLaunchResult.Launched)
+            {
+                ShowAction?.Invoke();
+                FocusWindowAction?.Invoke();
+            }
+        }
+        finally
+        {
+            _recordStartInFlight = false;
+        }
+    }
+
+    private async Task StartRecordingCoreAsync(string format)
+    {
         // Cancel any pending AI scans immediately
         _scanCts?.Cancel();
         _isLocalProcessing = false;
@@ -184,20 +221,6 @@ public partial class SnipWindowViewModel
         ProcessingText = string.Empty;
 
         if (_recordingService == null || _mainVm == null) return;
-
-        // Check if FFmpeg is available
-        if (!_mainVm.FfmpegDownloader.IsFFmpegAvailable())
-        {
-            _mainVm.SetStatus("FFmpegNotReady");
-            return;
-        }
-
-        string format = _mainVm.RecordingSettings.RecordFormat?.ToLowerInvariant() ?? "mp4";
-        if (format == "gif" && !RecordingFormatCapabilities.IsGifAvailable())
-        {
-            _mainVm.SetStatus("GifUnavailableReason");
-            return;
-        }
 
         // Use TempFolder setting if available, otherwise local Temp folder in app directory
         string tempDir = _mainVm.TempDirectory;
@@ -254,11 +277,6 @@ public partial class SnipWindowViewModel
             _recordingUsesWindowsExcludeFromCapture = false;
             this.RaisePropertyChanged(nameof(RecordingUsesWindowsExcludeFromCapture));
             SyncRecordingScreenCaptureAffinity?.Invoke();
-        }
-        }
-        finally
-        {
-            _recordStartInFlight = false;
         }
     }
 
