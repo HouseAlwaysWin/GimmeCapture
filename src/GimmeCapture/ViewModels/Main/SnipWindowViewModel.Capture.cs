@@ -182,7 +182,7 @@ public partial class SnipWindowViewModel
                     {
                         dir = System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.MyPictures), "GimmeCapture");
                     }
-                    try { System.IO.Directory.CreateDirectory(dir); } catch { }
+                    FileLocationService.EnsureDirectory(dir, "SnipCapture.EnsureSaveDirectory");
 
                     var fileName = CaptureFileNameService.BuildFileName("png");
                     var path = System.IO.Path.Combine(dir, fileName);

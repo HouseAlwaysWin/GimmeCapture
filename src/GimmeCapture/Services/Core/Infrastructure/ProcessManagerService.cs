@@ -48,7 +48,7 @@ public class ProcessManagerService
                 cts.Cancel();
                 cts.Dispose();
             }
-            catch { /* Ignore */ }
+            catch (Exception ex) { AppLog.Warning("ProcessManager.StopProcess", ex); }
         }
         await Task.CompletedTask;
     }

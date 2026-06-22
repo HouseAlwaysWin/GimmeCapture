@@ -229,12 +229,12 @@ public partial class SnipWindowViewModel
             tempDir = System.IO.Path.Combine(_mainVm.AppSettingsService.BaseDataDirectory, "Temp");
         }
 
-        try { System.IO.Directory.CreateDirectory(tempDir); } catch { }
+        FileLocationService.EnsureDirectory(tempDir, "SnipRecording.EnsureTempDirectory");
 
         if (_mainVm.RecordingSettings.UseFixedRecordPath && !string.IsNullOrEmpty(_mainVm.RecordingSettings.VideoSaveDirectory))
         {
             // Ensure directory exists
-            try { System.IO.Directory.CreateDirectory(_mainVm.RecordingSettings.VideoSaveDirectory); } catch { }
+            FileLocationService.EnsureDirectory(_mainVm.RecordingSettings.VideoSaveDirectory, "SnipRecording.EnsureVideoDirectory");
             string fileName = CaptureFileNameService.BuildFileName(format);
             _currentRecordingPath = System.IO.Path.Combine(_mainVm.RecordingSettings.VideoSaveDirectory, fileName);
         }

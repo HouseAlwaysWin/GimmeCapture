@@ -94,7 +94,10 @@ public class AppSettingsService
             if (!string.IsNullOrEmpty(pick))
                 settings.Translate.SelectionHoldModifier = pick;
         }
-        catch { /* ignore malformed migration */ }
+        catch (Exception ex)
+        {
+            AppLog.Warning("AppSettings.MigrateLegacySelectionModifier", ex);
+        }
     }
 
     private static void MigrateLegacyActionHotkeys(AppSettings settings)

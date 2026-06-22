@@ -10,6 +10,7 @@ using System.Reactive;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
 using GimmeCapture.Services.Core;
+using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Core.Media;
 using GimmeCapture.ViewModels.Shared;
 
@@ -524,7 +525,7 @@ public partial class SnipWindowViewModel
                     SelectedColor = Color.FromRgb(r, g, b);
                 }
             }
-            catch { }
+            catch (Exception ex) { AppLog.Warning("SnipToolbar.ApplyHexColor", ex); }
         });
         ApplyHexColorCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
 

@@ -11,6 +11,9 @@ namespace GimmeCapture.Services.Core.AI;
 
 public class BackgroundRemovalService : IDisposable
 {
+    /// <summary>Fixed square input resolution required by the U2Net background-removal model.</summary>
+    private const int U2NetInputSize = 320;
+
     private InferenceSession? _session;
     private readonly AIResourceService _aiResourceService;
     private readonly AIPathService _pathService;
@@ -343,7 +346,7 @@ public class BackgroundRemovalService : IDisposable
     {
         // 1. Preprocess (Resize to 320x320 and Normalize)
         // Use High quality (Cubic) for better detail preservation -> Reverted to Linear for safety
-        int inputSize = 320;
+        int inputSize = U2NetInputSize;
         using var resized = original.Resize(new SKImageInfo(inputSize, inputSize), new SKSamplingOptions(SKFilterMode.Linear));
         
         var inputTensor = ExtractPixels(resized);
@@ -367,11 +370,11 @@ public class BackgroundRemovalService : IDisposable
 
     internal static DenseTensor<float> ExtractPixels(SKBitmap bitmap)
     {
-        var tensor = new DenseTensor<float>(new[] { 1, 3, 320, 320 });
-        for (int y = 0; y < 320; y++)
+        var tensor = new DenseTensor<float>(new[] { 1, 3, U2NetInputSize, U2NetInputSize });
+        for (int y = 0; y < U2NetInputSize; y++)
         {
             ReadOnlySpan<byte> row = GetPixelRowSpan(bitmap, y);
-            for (int x = 0; x < 320; x++)
+            for (int x = 0; x < U2NetInputSize; x++)
             {
                 int offset = x * 4;
                 float blue = row[offset] / 255f;
@@ -387,17 +390,17 @@ public class BackgroundRemovalService : IDisposable
 
     internal static SKBitmap ProcessMask(Tensor<float> tensor, int width, int height, out float minOut, out float maxOut)
     {
-        var mask320 = new SKBitmap(320, 320, SKColorType.Gray8, SKAlphaType.Opaque);
-        float[] probabilities = ArrayPool<float>.Shared.Rent(320 * 320);
+        var mask320 = new SKBitmap(U2NetInputSize, U2NetInputSize, SKColorType.Gray8, SKAlphaType.Opaque);
+        float[] probabilities = ArrayPool<float>.Shared.Rent(U2NetInputSize * U2NetInputSize);
         float minProb = float.MaxValue;
         float maxProb = float.MinValue;
 
         try
         {
-            for (int y = 0; y < 320; y++)
+            for (int y = 0; y < U2NetInputSize; y++)
             {
-                int rowOffset = y * 320;
-                for (int x = 0; x < 320; x++)
+                int rowOffset = y * U2NetInputSize;
+                for (int x = 0; x < U2NetInputSize; x++)
                 {
                     float val = tensor[0, 0, y, x];
                     float prob = (float)(1.0 / (1.0 + Math.Exp(-val)));
@@ -414,11 +417,11 @@ public class BackgroundRemovalService : IDisposable
             float range = maxProb - minProb;
             if (range < 0.001f) range = 1.0f;
 
-            for (int y = 0; y < 320; y++)
+            for (int y = 0; y < U2NetInputSize; y++)
             {
                 Span<byte> row = GetWritableGrayRowSpan(mask320, y);
-                int rowOffset = y * 320;
-                for (int x = 0; x < 320; x++)
+                int rowOffset = y * U2NetInputSize;
+                for (int x = 0; x < U2NetInputSize; x++)
                 {
                     float normalized = (probabilities[rowOffset + x] - minProb) / range;
                     row[x] = (byte)(normalized * 255);

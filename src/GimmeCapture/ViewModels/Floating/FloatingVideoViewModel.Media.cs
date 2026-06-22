@@ -11,6 +11,7 @@ using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Diagnostics;
+using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Core.Media.NativeFFmpeg;
 using NAudio.Wave;
 
@@ -474,7 +475,7 @@ public partial class FloatingVideoViewModel
             _audioPlaybackStream?.Dispose();
             _audioPlaybackStream = null;
         }
-        catch { }
+        catch (Exception ex) { AppLog.Warning("FloatingVideo.DisposeAudio", ex); }
     }
 
     private void RequestCurrentTimeUiRefresh(bool force = false)
@@ -565,7 +566,7 @@ public partial class FloatingVideoViewModel
                 RequestRedraw?.Invoke();
                 Interlocked.Exchange(ref _lastFrameUiPostTimestampMs, Environment.TickCount64);
             }
-            catch { }
+            catch (Exception ex) { AppLog.Warning("FloatingVideo.PostFrameToUi", ex); }
             finally
             {
                 Interlocked.Exchange(ref _isFrameUiPostPending, 0);

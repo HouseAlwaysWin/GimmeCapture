@@ -108,8 +108,7 @@ public sealed class SAM2RuntimeService : IDisposable
                         LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_ERROR
                     };
 
-                    try { options.AppendExecutionProvider_CUDA(0); } catch { }
-                    try { options.AppendExecutionProvider_DML(0); } catch { }
+                    OnnxProviderConfigurator.AppendGpuProvidersWithFallback(options);
 
                     System.Diagnostics.Debug.WriteLine($"[AI] Loading Encoder: {paths.Encoder}");
                     _cachedEncoder = new InferenceSession(paths.Encoder, options);

@@ -11,6 +11,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 using GimmeCapture.Services.Abstractions;
+using GimmeCapture.Services.Core.Infrastructure;
 using Avalonia.Controls;
 
 
@@ -125,7 +126,7 @@ public class WindowsScreenCaptureService : IScreenCaptureService
                                 }
                             }
                         }
-                        catch { /* Ignore cursor errors */ }
+                        catch (Exception ex) { AppLog.Warning("ScreenCapture.DrawCursor", ex); }
                     }
                 }
                 

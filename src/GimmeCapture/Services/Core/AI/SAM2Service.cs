@@ -13,6 +13,9 @@ namespace GimmeCapture.Services.Core.AI;
 
 public class SAM2Service : IDisposable
 {
+    /// <summary>Fixed square input resolution the SAM2 encoder expects (image is stretched to this grid).</summary>
+    private const int Sam2InputSize = 1024;
+
     private readonly SAM2RuntimeService _runtimeService;
     private InferenceSession? _encoderSession;
     private InferenceSession? _decoderSession;
@@ -162,11 +165,11 @@ public class SAM2Service : IDisposable
 
             ResolveEncoderInputMetadata(encoderSession);
             string inputName = _encoderInputName ?? "image";
-            int bufferSize = 3 * 1024 * 1024;
+            int bufferSize = 3 * Sam2InputSize * Sam2InputSize;
             float[] buffer = new float[bufferSize];
 
             {
-                using var resized = original.Resize(new SKImageInfo(1024, 1024), new SKSamplingOptions(SKFilterMode.Linear));
+                using var resized = original.Resize(new SKImageInfo(Sam2InputSize, Sam2InputSize), new SKSamplingOptions(SKFilterMode.Linear));
                 if (resized == null)
                     throw new InvalidOperationException("Failed to resize image for SAM2 prepare.");
 
@@ -179,14 +182,14 @@ public class SAM2Service : IDisposable
                         bool isBgra = resized.ColorType == SKColorType.Bgra8888;
                         float inv255 = 1.0f / 255.0f;
 
-                        Parallel.For(0, 1024, y =>
+                        Parallel.For(0, Sam2InputSize, y =>
                         {
                             byte* row = ptr + (y * rowBytes);
-                            int blueOffset = y * 1024;
-                            int greenOffset = blueOffset + (1024 * 1024);
-                            int redOffset = greenOffset + (1024 * 1024);
+                            int blueOffset = y * Sam2InputSize;
+                            int greenOffset = blueOffset + (Sam2InputSize * Sam2InputSize);
+                            int redOffset = greenOffset + (Sam2InputSize * Sam2InputSize);
 
-                            for (int x = 0; x < 1024; x++)
+                            for (int x = 0; x < Sam2InputSize; x++)
                             {
                                 byte b, g, r;
                                 if (isBgra)
@@ -212,12 +215,12 @@ public class SAM2Service : IDisposable
                 else
                 {
                     float inv255 = 1.0f / 255.0f;
-                    Parallel.For(0, 1024, y =>
+                    Parallel.For(0, Sam2InputSize, y =>
                     {
-                        int blueOffset = y * 1024;
-                        int greenOffset = blueOffset + (1024 * 1024);
-                        int redOffset = greenOffset + (1024 * 1024);
-                        for (int x = 0; x < 1024; x++)
+                        int blueOffset = y * Sam2InputSize;
+                        int greenOffset = blueOffset + (Sam2InputSize * Sam2InputSize);
+                        int redOffset = greenOffset + (Sam2InputSize * Sam2InputSize);
+                        for (int x = 0; x < Sam2InputSize; x++)
                         {
                             var color = resized.GetPixel(x, y);
                             buffer[blueOffset + x] = color.Blue * inv255;
@@ -231,7 +234,7 @@ public class SAM2Service : IDisposable
                 // previously working implementation. Some SAM2 exports report extra
                 // dimensions in metadata, but the runtime still expects the classic
                 // NCHW image tensor here.
-                var inputTensor = new DenseTensor<float>(buffer, new[] { 1, 3, 1024, 1024 });
+                var inputTensor = new DenseTensor<float>(buffer, new[] { 1, 3, Sam2InputSize, Sam2InputSize });
 
                 var inputs = new List<NamedOnnxValue>(1) { NamedOnnxValue.CreateFromTensor(inputName, inputTensor) };
                 using var results = encoderSession.Run(inputs);

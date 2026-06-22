@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using GimmeCapture.Models;
+using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Core.Interfaces;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
@@ -583,7 +584,10 @@ public class PaddleOCREngine : IOCREngine
             using var data = img.Encode(SKEncodedImageFormat.Png, 100);
             File.WriteAllBytes(file, data.ToArray());
         }
-        catch { }
+        catch (Exception ex)
+        {
+            AppLog.Warning("PaddleOCR.SaveDebugImage", ex);
+        }
     }
 
     public void Dispose()

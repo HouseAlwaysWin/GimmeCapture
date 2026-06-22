@@ -99,8 +99,7 @@ public sealed class OcrRuntimeService : IDisposable
                 GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL
             };
 
-            try { options.AppendExecutionProvider_CUDA(0); } catch { }
-            try { options.AppendExecutionProvider_DML(0); } catch { }
+            OnnxProviderConfigurator.AppendGpuProvidersWithFallback(options);
 
             ForceUnload();
             _detSession = new InferenceSession(paths.Det, options);
@@ -157,6 +156,10 @@ public sealed class OcrRuntimeService : IDisposable
     private static List<string> LoadDictionaryWithEncodingFallback(string path)
     {
         try { return File.ReadAllLines(path, Encoding.UTF8).AsValueEnumerable().ToList(); }
-        catch { return File.ReadAllLines(path, Encoding.GetEncoding("GBK")).AsValueEnumerable().ToList(); }
+        catch (Exception ex)
+        {
+            AppLog.Warning("OcrRuntime.LoadDictionary.Utf8Fallback", ex);
+            return File.ReadAllLines(path, Encoding.GetEncoding("GBK")).AsValueEnumerable().ToList();
+        }
     }
 }
