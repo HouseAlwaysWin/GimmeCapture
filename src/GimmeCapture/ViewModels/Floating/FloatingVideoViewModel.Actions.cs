@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Media.Imaging;
 using ReactiveUI;
 using System.Reactive;
@@ -29,13 +30,184 @@ public partial class FloatingVideoViewModel
     private void InitializeActionCommands()
     {
         // CloseCommand is in Base.
-        
-        // Placeholders for now
-        CropCommand = ReactiveCommand.Create(() => { });
-        PinSelectionCommand = ReactiveCommand.Create(() => { });
+
+        var canUseSelection = this.WhenAnyValue(x => x.IsSelectionActive);
+        // Crop replaces (closes the source window); PinSelection is additive (keeps it).
+        CropCommand = ReactiveCommand.CreateFromTask(CropAsync, canUseSelection);
+        PinSelectionCommand = ReactiveCommand.CreateFromTask(PinSelectionAsync, canUseSelection);
 
         CopyCommand = ReactiveCommand.CreateFromTask(CopyAsync);
         SaveCommand = ReactiveCommand.CreateFromTask(SaveAsync);
+    }
+
+    private Task CropAsync() => ExportAndPinSelectionAsync(closeSource: true);
+
+    private Task PinSelectionAsync() => ExportAndPinSelectionAsync(closeSource: false);
+
+    /// <summary>
+    /// Exports the current selection (cropped, honoring the active trim range) to a new
+    /// video file and opens it as a new pinned floating window. Annotations are not burnt
+    /// in, mirroring the image crop behavior (their coordinates would not align post-crop).
+    /// </summary>
+    private async Task ExportAndPinSelectionAsync(bool closeSource)
+    {
+        if (!IsSelectionActive || IsProcessing) return;
+        if (OpenPinnedVideoWindowAction == null) return;
+        if (!TryGetSelectionPixelRect(out var crop)) return;
+
+        IsProcessing = true;
+        ProcessingText = LocalizationService.Instance["StatusProcessing"] ?? "Processing...";
+        try
+        {
+            string? exported = await ExportCroppedRegionAsync(crop, Path.GetExtension(VideoPath));
+            if (string.IsNullOrEmpty(exported) || !File.Exists(exported))
+            {
+                System.Diagnostics.Debug.WriteLine("[Crop] Export produced no output.");
+                return;
+            }
+
+            // Move the export to a stable per-pin temp file so the GUID export dir can be reused/cleaned.
+            string pinDir = Path.Combine(Path.GetTempPath(), "GimmeCapture_Pins");
+            Directory.CreateDirectory(pinDir);
+            string pinnedPath = Path.Combine(pinDir, $"crop_{Guid.NewGuid():N}{Path.GetExtension(exported)}");
+            File.Copy(exported, pinnedPath, true);
+
+            OpenPinnedVideoWindowAction?.Invoke(
+                pinnedPath,
+                crop.Width,
+                crop.Height,
+                crop.Width,
+                crop.Height,
+                BorderColor,
+                BorderThickness,
+                HidePinDecoration,
+                HidePinBorder);
+
+            if (closeSource)
+            {
+                CloseAction?.Invoke();
+            }
+            else
+            {
+                SelectionRect = new Avalonia.Rect();
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[Crop] Failed: {ex}");
+        }
+        finally
+        {
+            IsProcessing = false;
+        }
+    }
+
+    /// <summary>
+    /// Maps the display-space <see cref="FloatingWindowViewModelBase.SelectionRect"/> to even,
+    /// in-bounds pixel coordinates suitable for an ffmpeg <c>crop</c> filter / yuv420p output.
+    /// </summary>
+    private bool TryGetSelectionPixelRect(out PixelRect crop)
+    {
+        crop = SelectionToPixelCropRect(SelectionRect, DisplayWidth, DisplayHeight, OriginalWidth, OriginalHeight);
+        return crop.Width >= 2 && crop.Height >= 2;
+    }
+
+    internal static PixelRect SelectionToPixelCropRect(
+        Avalonia.Rect selection,
+        double displayWidth,
+        double displayHeight,
+        double originalWidth,
+        double originalHeight)
+    {
+        int videoW = Math.Max(0, (int)Math.Round(originalWidth));
+        int videoH = Math.Max(0, (int)Math.Round(originalHeight));
+        if (videoW < 2 || videoH < 2) return new PixelRect(0, 0, 0, 0);
+
+        double scaleX = displayWidth > 0 ? originalWidth / displayWidth : 1.0;
+        double scaleY = displayHeight > 0 ? originalHeight / displayHeight : 1.0;
+
+        int x = Math.Clamp((int)Math.Round(selection.X * scaleX), 0, videoW - 2);
+        int y = Math.Clamp((int)Math.Round(selection.Y * scaleY), 0, videoH - 2);
+
+        // Even width/height (yuv420p), clamped so x+w / y+h stay in bounds.
+        int w = (int)Math.Round(selection.Width * scaleX);
+        int h = (int)Math.Round(selection.Height * scaleY);
+        w = Math.Min(w, videoW - x);
+        h = Math.Min(h, videoH - y);
+        w = (w / 2) * 2;
+        h = (h / 2) * 2;
+
+        return new PixelRect(x, y, Math.Max(0, w), Math.Max(0, h));
+    }
+
+    private async Task<string?> ExportCroppedRegionAsync(PixelRect crop, string? targetExtension)
+    {
+        if (string.IsNullOrEmpty(VideoPath) || !File.Exists(VideoPath)) return null;
+
+        IsExporting = true;
+        ExportProgress = 0;
+        try
+        {
+            string tempDir = Path.Combine(Path.GetTempPath(), "GimmeCapture_Export_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(tempDir);
+
+            string ext = targetExtension ?? Path.GetExtension(VideoPath);
+            if (!ext.StartsWith(".")) ext = "." + ext;
+            string outputPath = Path.Combine(tempDir, "output" + ext);
+
+            var ffmpegPath = FFmpegPath;
+            if (ffmpegPath.Contains("ffplay.exe")) ffmpegPath = ffmpegPath.Replace("ffplay.exe", "ffmpeg.exe");
+
+            bool applyTrim = IsTrimmingMode && (TrimStartSeconds > 0 || TrimEndSeconds < _totalDuration.TotalSeconds);
+            bool isOutputGif = ext.Equals(".gif", StringComparison.OrdinalIgnoreCase);
+            string cropFilter = $"crop={crop.Width}:{crop.Height}:{crop.X}:{crop.Y}";
+
+            var result = await Cli.Wrap(ffmpegPath)
+                .WithArguments(args =>
+                {
+                    args.Add("-y");
+                    if (applyTrim && TrimStartSeconds > 0)
+                    {
+                        args.Add("-ss").Add(TrimStartSeconds.ToString("F3"));
+                    }
+                    args.Add("-i").Add(VideoPath);
+                    if (applyTrim)
+                    {
+                        args.Add("-to").Add((TrimEndSeconds - TrimStartSeconds).ToString("F3"));
+                    }
+                    args.Add("-vf").Add(cropFilter);
+                    if (!isOutputGif)
+                    {
+                        args.Add("-map").Add("0:v:0")
+                            .Add("-map").Add("0:a?")
+                            .Add("-c:v").Add("libx264")
+                            .Add("-preset").Add("ultrafast")
+                            .Add("-pix_fmt").Add("yuv420p")
+                            .Add("-crf").Add("23")
+                            .Add("-c:a").Add("copy");
+                    }
+                    args.Add(outputPath);
+                })
+                .WithValidation(CommandResultValidation.None)
+                .ExecuteBufferedAsync();
+
+            if (File.Exists(outputPath) && new FileInfo(outputPath).Length > 0)
+            {
+                return outputPath;
+            }
+
+            System.Diagnostics.Debug.WriteLine($"[Crop] FFmpeg failed. Code: {result.ExitCode}, Err: {result.StandardError}");
+            return null;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[Crop] Export failed: {ex}");
+            return null;
+        }
+        finally
+        {
+            IsExporting = false;
+        }
     }
     
     private async Task CopyAsync()

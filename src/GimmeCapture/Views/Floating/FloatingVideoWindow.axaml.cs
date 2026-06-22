@@ -86,6 +86,38 @@ public partial class FloatingVideoWindow : FloatingWindowBase
                 return file?.Path.LocalPath;
             };
 
+            // Self-wire sibling-pin creation so Crop/PinSelection can open a new
+            // floating video window. The new window's OnDataContextChanged re-wires
+            // this delegate, so cropped windows can be cropped again.
+            vm.OpenPinnedVideoWindowAction ??= (recordingPath, pixelWidth, pixelHeight, originalWidth, originalHeight, color, thickness, hideDecoration, hideBorder) =>
+            {
+                var newVm = new FloatingVideoViewModel(
+                    recordingPath,
+                    string.Empty,
+                    pixelWidth,
+                    pixelHeight,
+                    originalWidth,
+                    originalHeight,
+                    color,
+                    thickness,
+                    hideDecoration,
+                    hideBorder,
+                    vm.ClipboardService,
+                    vm.AppSettingsService);
+
+                newVm.WingScale = vm.WingScale;
+
+                var padding = newVm.WindowPadding;
+                var newWin = new FloatingVideoWindow
+                {
+                    DataContext = newVm,
+                    Width = originalWidth + padding.Left + padding.Right,
+                    Height = originalHeight + padding.Top + padding.Bottom,
+                    Position = new PixelPoint(Position.X + 40, Position.Y + 40)
+                };
+                newWin.Show();
+            };
+
             // 裁切拉桿初始化
             InitializeTrimThumbs(vm);
         }

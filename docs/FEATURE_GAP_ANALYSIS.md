@@ -68,7 +68,11 @@ private async Task<string> MergeVideoSegmentsAsync(IReadOnlyList<string> validSe
   - `src/GimmeCapture/Services/Core/Media/NativeFFmpeg/LibavGdigrabMkvSession.cs`
 - **建議**：以 libav 實作多段 MKV concat（demux→remux，避免重編碼），或在 concat 完成前先以 UI 警示阻擋（暫時緩解）。
 
-### 1.2 空的 UI 指令（佔位）
+### 1.2 空的 UI 指令（佔位）— ✅ 已修復
+> `CropCommand`/`PinSelectionCommand` 已實作：選取區域 → 以 ffmpeg `crop`（沿用 trim）
+> 匯出 → 開新釘選視窗（Crop 關閉來源、PinSelection 保留）；canExecute 綁定
+> `IsSelectionActive`。另記：暫停/續錄 UI 本就存在（`SnipToolbar.axaml`）。以下為原始描述。
+
 **位置**：`src/GimmeCapture/ViewModels/Floating/FloatingVideoViewModel.Actions.cs:33-35`
 
 ```csharp
@@ -95,9 +99,9 @@ PinSelectionCommand = ReactiveCommand.Create(() => { });
 
 | 項目 | 現況 | 建議 |
 |------|------|------|
-| 影片分段 concat | stub，遺失資料（見 §1.1） | **P0**，以 `LibavMuxer` 實作 remux concat |
-| 暫停 / 續錄 | `RecordingState` 列舉存在，但 `SnipWindowViewModel.Recording.cs` / `FloatingVideoViewModel` 缺對應 pause/resume command 與 UI 綁定 | 補 command + 工具列按鈕 |
-| 影片 Crop | 未實作（§1.2） | 後製裁切管線 |
+| 影片分段 concat | ✅ 已修復（`LibavMuxer.ConcatVideoSegments`） | — |
+| 暫停 / 續錄 | ✅ 已存在（`SnipToolbar.axaml` 按鈕 + `PauseRecordingCommand` toggle） | concat 修復後才真正可用 |
+| 影片 Crop / PinSelection | ✅ 已實作（§1.2） | — |
 | 錄影中音量回饋 | `AudioLevelMonitorService` 已有資料 | UI 加上音量條視覺化 |
 | Webcam 子母畫面 | 無 | 中長期功能 |
 | 游標 highlight / 聚光 | 僅標準游標（`ShowRecordCursor`） | 教學錄影常用 |
