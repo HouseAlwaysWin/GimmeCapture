@@ -94,6 +94,8 @@ public partial class MainWindowViewModel : ViewModelBase
     public Func<SnipWindowViewModel?>? GetActiveSnipViewModelAction { get; set; }
     public Func<Task<string?>>? PickFolderAction { get; set; }
     public Func<string, string, bool, Task<bool>>? ConfirmAction { get; set; }
+    /// <summary>Two-button Yes/No confirmation (no Cancel). Returns true on Yes.</summary>
+    public Func<string, string, Task<bool>>? ConfirmYesNoAction { get; set; }
     public Func<string, bool, Task<bool>>? ShowUpdateDialogAction { get; set; }
 
     public void CancelCaptureCountdown()

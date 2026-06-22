@@ -45,6 +45,7 @@ public class MainWindowSettingsPersistenceServiceTests
             DefaultHideRecordToolbar = false,
             AutoSave = true,
             EnableHistory = false,
+            RevealAfterSave = false,
             SaveDirectory = @"D:\captures",
             ShowSnipCursor = true,
             ShowRecordCursor = false,

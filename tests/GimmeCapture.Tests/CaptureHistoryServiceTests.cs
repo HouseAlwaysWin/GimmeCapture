@@ -100,6 +100,57 @@ public class CaptureHistoryServiceTests
     }
 
     [Fact]
+    public async Task Remove_WithDeleteSourceFile_DeletesTheFile()
+    {
+        var tempDir = NewTempDir();
+        var settings = new AppSettingsService(tempDir);
+        var service = new CaptureHistoryService(settings, rootDirectoryOverride: tempDir);
+        var imagePath = WritePng(tempDir, "shot.png");
+        await service.AddImageAsync(imagePath);
+        var item = Assert.Single(await service.GetItemsAsync());
+
+        await service.RemoveAsync(item.Id, deleteSourceFile: true);
+
+        Assert.Empty(await service.GetItemsAsync());
+        Assert.False(File.Exists(imagePath), "Source file should be deleted when requested.");
+        Assert.False(File.Exists(item.ThumbnailPath!), "Thumbnail should be deleted.");
+    }
+
+    [Fact]
+    public async Task Clear_WithDeleteSourceFiles_DeletesAllFiles()
+    {
+        var tempDir = NewTempDir();
+        var settings = new AppSettingsService(tempDir);
+        var service = new CaptureHistoryService(settings, rootDirectoryOverride: tempDir);
+        var p1 = WritePng(tempDir, "a.png");
+        var p2 = WritePng(tempDir, "b.png");
+        await service.AddImageAsync(p1);
+        await service.AddImageAsync(p2);
+        Assert.Equal(2, (await service.GetItemsAsync()).Count);
+
+        await service.ClearAsync(deleteSourceFiles: true);
+
+        Assert.Empty(await service.GetItemsAsync());
+        Assert.False(File.Exists(p1), "Source file a.png should be deleted.");
+        Assert.False(File.Exists(p2), "Source file b.png should be deleted.");
+    }
+
+    [Fact]
+    public async Task AddImage_RaisesChangedEvent()
+    {
+        var tempDir = NewTempDir();
+        var settings = new AppSettingsService(tempDir);
+        var service = new CaptureHistoryService(settings, rootDirectoryOverride: tempDir);
+        var imagePath = WritePng(tempDir, "shot.png");
+        int raised = 0;
+        service.Changed += () => raised++;
+
+        await service.AddImageAsync(imagePath);
+
+        Assert.True(raised >= 1, "Changed should be raised after adding an item.");
+    }
+
+    [Fact]
     public async Task Load_DropsEntries_WhoseSourceFileWasDeleted()
     {
         var tempDir = NewTempDir();

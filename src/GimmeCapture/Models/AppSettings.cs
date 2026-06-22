@@ -130,6 +130,8 @@ public class AppSettings
     public string SaveDirectory { get; set; } = "";
     /// <summary>When true, saved screenshots and finalized recordings are recorded in the capture history panel.</summary>
     public bool EnableHistory { get; set; } = true;
+    /// <summary>When true, the saved file is revealed in File Explorer after a screenshot save or recording finish.</summary>
+    public bool RevealAfterSave { get; set; } = true;
     
     public bool ShowSnipCursor { get; set; } = false;
     public bool ShowRecordCursor { get; set; } = true;

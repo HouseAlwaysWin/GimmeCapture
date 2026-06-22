@@ -24,6 +24,7 @@ public sealed class CaptureHistoryService
     private readonly AppSettingsService _settingsService;
     private readonly string _historyDir;
     private readonly string _thumbsDir;
+    private readonly string _capturesDir;
     private readonly string _indexPath;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
@@ -35,6 +36,9 @@ public sealed class CaptureHistoryService
 
     private List<CaptureHistoryItem>? _items;
 
+    /// <summary>Raised (off the gate) after the index changes, so an open history panel can refresh live.</summary>
+    public event Action? Changed;
+
     public CaptureHistoryService(AppSettingsService settingsService, string? rootDirectoryOverride = null)
     {
         _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
@@ -43,10 +47,25 @@ public sealed class CaptureHistoryService
             : rootDirectoryOverride!;
         _historyDir = Path.Combine(root, "history");
         _thumbsDir = Path.Combine(_historyDir, "thumbs");
+        _capturesDir = Path.Combine(_historyDir, "captures");
         _indexPath = Path.Combine(_historyDir, "history.json");
     }
 
     private bool IsEnabled => _settingsService.Settings.EnableHistory;
+
+    /// <summary>
+    /// Returns a path inside the history-owned captures folder for persisting a capture that would
+    /// otherwise be clipboard-only (e.g. Copy). Files here are deleted on remove and on retention prune.
+    /// </summary>
+    public string CreateManagedCapturePath(string extension)
+    {
+        FileLocationService.EnsureDirectory(_capturesDir, "CaptureHistory.EnsureCaptures");
+        string name = $"GimmeCapture_{DateTime.Now:yyyyMMdd_HHmmss}_{Guid.NewGuid().ToString("N")[..6]}.{extension}";
+        return Path.Combine(_capturesDir, name);
+    }
+
+    private bool IsManaged(string path) =>
+        !string.IsNullOrEmpty(path) && path.StartsWith(_capturesDir, StringComparison.OrdinalIgnoreCase);
 
     public async Task AddImageAsync(string filePath, CancellationToken ct = default)
     {
@@ -83,6 +102,8 @@ public sealed class CaptureHistoryService
         {
             _gate.Release();
         }
+
+        Changed?.Invoke();
     }
 
     public async Task AddVideoAsync(string filePath, int pixelWidth, int pixelHeight, CancellationToken ct = default)
@@ -119,6 +140,8 @@ public sealed class CaptureHistoryService
         {
             _gate.Release();
         }
+
+        Changed?.Invoke();
     }
 
     public async Task<IReadOnlyList<CaptureHistoryItem>> GetItemsAsync()
@@ -159,6 +182,8 @@ public sealed class CaptureHistoryService
         {
             _gate.Release();
         }
+
+        Changed?.Invoke();
     }
 
     public async Task ClearAsync(bool deleteSourceFiles = false)
@@ -182,6 +207,8 @@ public sealed class CaptureHistoryService
         {
             _gate.Release();
         }
+
+        Changed?.Invoke();
     }
 
     private void AddItemLocked(CaptureHistoryItem item)
@@ -198,7 +225,8 @@ public sealed class CaptureHistoryService
             foreach (var old in pruned)
             {
                 _items.Remove(old);
-                DeleteThumbnail(old);
+                // History-owned captures (e.g. Copy) are deleted on prune; externally-saved files are kept.
+                DeleteAssociatedFiles(old, deleteSourceFile: IsManaged(old.FilePath));
             }
         }
     }

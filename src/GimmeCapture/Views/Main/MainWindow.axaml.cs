@@ -157,6 +157,12 @@ public partial class MainWindow : Window
                 return result == ConfirmationResult.Yes;
             };
 
+            vm.ConfirmYesNoAction = async (title, message) =>
+            {
+                var result = await ConfirmationDialog.ShowConfirmation(this, title, message, ConfirmationMode.YesNo);
+                return result == ConfirmationResult.Yes;
+            };
+
             vm.HotkeyService.OnHotkeyRegistrationFailed = (id, hotkey, error) =>
             {
                 var hotkeyName = id switch

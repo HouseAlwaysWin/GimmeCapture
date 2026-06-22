@@ -15,6 +15,7 @@ public partial class MainWindowViewModel
 {
     private readonly ClipboardService _historyClipboardService = new();
     private IReadOnlyList<HistoryItemViewModel> _allHistoryItems = [];
+    private bool _historyViewActive;
 
     /// <summary>Filtered, newest-first history items bound to the History tab grid.</summary>
     public ObservableCollection<HistoryItemViewModel> HistoryItems { get; } = new();
@@ -57,6 +58,8 @@ public partial class MainWindowViewModel
             item => { if (item != null) FileLocationService.RevealInFileExplorer(item.FilePath); });
         RemoveHistoryItemCommand = ReactiveCommand.CreateFromTask<HistoryItemViewModel>(RemoveHistoryItemAsync);
 
+        CaptureHistory.Changed += OnCaptureHistoryChanged;
+
         RefreshHistoryCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("History.Refresh", ex));
         ClearHistoryCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("History.Clear", ex));
         OpenHistoryItemCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("History.Open", ex));
@@ -65,7 +68,23 @@ public partial class MainWindowViewModel
         RemoveHistoryItemCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("History.Remove", ex));
     }
 
-    /// <summary>Loads the history index and rebuilds the (filtered) bound collection. Called when the tab is shown.</summary>
+    /// <summary>Called by the History tab when it appears/disappears. While active, the panel auto-refreshes on new captures.</summary>
+    public void SetHistoryViewActive(bool active)
+    {
+        _historyViewActive = active;
+        if (active)
+        {
+            LoadHistoryAsync().Forget("History.LoadOnActivate");
+        }
+    }
+
+    private void OnCaptureHistoryChanged()
+    {
+        if (!_historyViewActive) return;
+        Avalonia.Threading.Dispatcher.UIThread.Post(() => LoadHistoryAsync().Forget("History.AutoRefresh"));
+    }
+
+    /// <summary>Loads the history index and rebuilds the (filtered) bound collection.</summary>
     public async Task LoadHistoryAsync()
     {
         var items = await CaptureHistory.GetItemsAsync();
@@ -101,15 +120,42 @@ public partial class MainWindowViewModel
 
     private async Task ClearHistoryAsync()
     {
-        await CaptureHistory.ClearAsync();
-        await LoadHistoryAsync();
+        if (HistoryItems.Count == 0 && _allHistoryItems.Count == 0) return;
+
+        // Clear deletes every saved file too (high blast radius) — confirm first. Yes/No only.
+        var title = LocalizationService.Instance["HistoryClearTitle"];
+        var message = LocalizationService.Instance["HistoryClearConfirm"];
+        if (ConfirmYesNoAction != null)
+        {
+            if (!await ConfirmYesNoAction(title, message)) return;
+        }
+        else if (ConfirmAction != null)
+        {
+            if (!await ConfirmAction(title, message, false)) return;
+        }
+
+        // Refresh comes from CaptureHistory.Changed.
+        await CaptureHistory.ClearAsync(deleteSourceFiles: true);
     }
 
     private async Task RemoveHistoryItemAsync(HistoryItemViewModel item)
     {
         if (item == null) return;
-        await CaptureHistory.RemoveAsync(item.Id);
-        await LoadHistoryAsync();
+
+        // Remove deletes the underlying saved file, so confirm first (irreversible). Yes/No only.
+        var title = LocalizationService.Instance["HistoryRemoveTitle"];
+        var message = string.Format(LocalizationService.Instance["HistoryRemoveConfirm"], item.FileName);
+        if (ConfirmYesNoAction != null)
+        {
+            if (!await ConfirmYesNoAction(title, message)) return;
+        }
+        else if (ConfirmAction != null)
+        {
+            if (!await ConfirmAction(title, message, false)) return;
+        }
+
+        // Refresh comes from CaptureHistory.Changed.
+        await CaptureHistory.RemoveAsync(item.Id, deleteSourceFile: true);
     }
 
     private async Task CopyHistoryItemAsync(HistoryItemViewModel item)

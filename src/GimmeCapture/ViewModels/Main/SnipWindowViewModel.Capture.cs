@@ -134,6 +134,15 @@ public partial class SnipWindowViewModel
                 _mainVm?.ShowSnipCursor ?? false);
             await _captureService.CopyToClipboardAsync(bitmap);
             _mainVm?.SetStatus("StatusCopied");
+
+            // Copies are clipboard-only by default; when history is on, persist a managed copy so it
+            // shows up in the history panel (and is cleaned up on remove/prune).
+            if (_mainVm != null && _mainVm.EnableHistory)
+            {
+                var copyPath = _mainVm.CaptureHistory.CreateManagedCapturePath("png");
+                await _captureService.SaveToFileAsync(bitmap, copyPath);
+                _mainVm.CaptureHistory.AddImageAsync(copyPath).Forget("CaptureHistory.AddCopy");
+            }
         }
         finally
         {
@@ -214,7 +223,10 @@ public partial class SnipWindowViewModel
                 if (!string.IsNullOrWhiteSpace(savedPath))
                 {
                     _mainVm?.CaptureHistory.AddImageAsync(savedPath).Forget("CaptureHistory.AddImage");
-                    FileLocationService.RevealInFileExplorer(savedPath);
+                    if (_mainVm?.RevealAfterSave ?? true)
+                    {
+                        FileLocationService.RevealInFileExplorer(savedPath);
+                    }
                 }
             }
             finally

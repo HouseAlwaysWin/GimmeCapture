@@ -350,7 +350,10 @@ public partial class SnipWindowViewModel
             int pw = Math.Max(2, (int)Math.Round(baseRect.Width > 1 ? baseRect.Width : 640.0));
             int ph = Math.Max(2, (int)Math.Round(baseRect.Height > 1 ? baseRect.Height : 360.0));
             _mainVm?.CaptureHistory.AddVideoAsync(revealPath, pw, ph).Forget("CaptureHistory.AddVideo");
-            FileLocationService.RevealInFileExplorer(revealPath);
+            if (_mainVm?.RevealAfterSave ?? true)
+            {
+                FileLocationService.RevealInFileExplorer(revealPath);
+            }
         }
 
         CloseAction?.Invoke();

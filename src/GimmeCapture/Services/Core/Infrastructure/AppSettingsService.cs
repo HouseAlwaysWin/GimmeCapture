@@ -271,6 +271,7 @@ public class AppSettingsService
         dest.HideRecordSelectionBorder = source.HideRecordSelectionBorder;
         dest.AutoSave = source.AutoSave;
         dest.EnableHistory = source.EnableHistory;
+        dest.RevealAfterSave = source.RevealAfterSave;
         dest.SaveDirectory = source.SaveDirectory;
         dest.ShowSnipCursor = source.ShowSnipCursor;
         dest.ShowRecordCursor = source.ShowRecordCursor;

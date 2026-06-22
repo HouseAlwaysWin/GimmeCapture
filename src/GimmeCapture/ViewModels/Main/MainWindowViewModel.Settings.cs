@@ -269,6 +269,13 @@ public partial class MainWindowViewModel
         set => this.RaiseAndSetIfChanged(ref _enableHistory, value);
     }
 
+    private bool _revealAfterSave = true;
+    public bool RevealAfterSave
+    {
+        get => _revealAfterSave;
+        set => this.RaiseAndSetIfChanged(ref _revealAfterSave, value);
+    }
+
     private string _saveDirectory = string.Empty;
     public string SaveDirectory
     {
