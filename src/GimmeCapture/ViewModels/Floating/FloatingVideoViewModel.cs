@@ -304,13 +304,20 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
     private readonly GimmeCapture.Services.Abstractions.IClipboardService _clipboardService;
     public GimmeCapture.Services.Abstractions.IClipboardService ClipboardService => _clipboardService;
     private readonly AppSettingsService? _appSettingsService;
+    public AppSettingsService? AppSettingsService => _appSettingsService;
 
     // Actions & Commands
     public System.Func<Task>? CopyAction { get; set; }
     public ReactiveCommand<Unit, Unit> CopyCommand { get; private set; } = null!;
-    public ReactiveCommand<Unit, Unit> CropCommand { get; private set; } = null!; // Future implementation
-    public ReactiveCommand<Unit, Unit> PinSelectionCommand { get; private set; } = null!; // Future implementation
+    public ReactiveCommand<Unit, Unit> CropCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> PinSelectionCommand { get; private set; } = null!;
     public System.Func<Task<string?>>? PickSaveFileAction { get; set; }
+
+    // Spawns a new pinned video window (cropped selection). Signature mirrors
+    // SnipWindowViewModel.OpenPinnedVideoWindowAction; self-wired by the view so
+    // any floating video window can pin a sibling.
+    // (path, pixelWidth, pixelHeight, originalWidth, originalHeight, borderColor, borderThickness, hideDecoration, hideBorder)
+    public System.Action<string, int, int, double, double, Avalonia.Media.Color, double, bool, bool>? OpenPinnedVideoWindowAction { get; set; }
 
     // Annotation Proxies
     public bool CanUndo => HasUndo;
@@ -369,6 +376,7 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
                 _isDisposed = true;
                 Interlocked.Increment(ref _playbackGeneration);
                 RequestRedraw = null;
+                OpenPinnedVideoWindowAction = null;
 
                 var playbackCts = CancelPlaybackToken();
                 var audioDecodeCts = CancelAudioDecodeToken();

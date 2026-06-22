@@ -62,10 +62,27 @@ public partial class RecordingService
             return validSegments[0];
         }
 
-        // Native concat is not available yet. Returning a real segment keeps
-        // finalization functional after pause/resume instead of referencing a
-        // merged path that was never created.
-        Debug.WriteLine("[Finalize] Native concat pipeline pending; using first valid segment.");
+        // Concatenate pause/resume segments by copying packets (no re-encode). Falling
+        // back to the first segment would silently drop everything recorded after the
+        // first pause, so failures are logged and degrade gracefully.
+        try
+        {
+            var stats = await Task.Run(() =>
+                LibavMuxer.ConcatVideoSegments(validSegments, mergedMkvPath, "matroska"));
+            LogToFile($"[Finalize] Native concat: {mergedMkvPath}, segments={validSegments.Count}, videoPackets={stats.VideoPackets}");
+
+            if (File.Exists(mergedMkvPath) && new FileInfo(mergedMkvPath).Length > 0)
+            {
+                return mergedMkvPath;
+            }
+
+            LogToFile("[Finalize] Native concat produced empty output; using first valid segment.");
+        }
+        catch (Exception ex)
+        {
+            LogToFile($"[Finalize] Native concat failed; using first valid segment: {ex}");
+        }
+
         return validSegments[0];
     }
 
