@@ -119,10 +119,12 @@ PinSelectionCommand = ReactiveCommand.Create(() => { });
 
 **缺口 / 需加強**：
 
-- **高亮筆**：缺半透明 highlighter 覆蓋工具。
-- **步驟編號 / callout**：procedural 截圖常用的自動編號圓圈與引線標記。
-- **截圖後 Crop**：選取已存在，但無後製裁切 UI。
-- **圖層 z-order**：所有標註依清單順序繪製，無 bring-to-front / send-to-back。
+- ✅ **高亮筆**：已實作半透明 highlighter（area 型別）。
+- ✅ **步驟編號**：已實作自動編號圓圈標記（拖曳定大小）。
+- ✅ **圖層 z-order**：已實作 bring-to-front / send-to-back（含 undo）。
+- ✅ **形狀填滿**：Rectangle/Ellipse 可切換實心填滿。
+- **截圖後 Crop**：浮動圖片視窗已有 Crop；Snip 編輯器內後製裁切仍可加強。
+- **callout 引線標記**：步驟編號目前無引線（callout）變體。
 - **形狀變換**：無旋轉 / 縮放既有圖形的控制點。
 - **Emoji / 貼圖**：無插入支援。
 - **Feather 整合**：`AnnotationEffectSettings.Feather` 已存在但 UI 未完整整合。
