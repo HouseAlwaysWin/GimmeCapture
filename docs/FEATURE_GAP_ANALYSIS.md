@@ -40,7 +40,10 @@ GimmeCapture 是一個 Windows-only 的 Avalonia 12 / .NET 10 截圖工具，涵
 
 ## 1. 🔴 正確性 Bug（最高優先 — 已用程式碼證實）
 
-### 1.1 錄影多分段合併遺失資料
+### 1.1 錄影多分段合併遺失資料 — ✅ 已修復（P0）
+> 已於 `LibavMuxer.ConcatVideoSegments` 實作原生 remux concat，並在
+> `MergeVideoSegmentsAsync` 串接所有分段（失敗時才退回第一段並記錄）。以下為原始問題描述。
+
 **位置**：`src/GimmeCapture/Services/Core/Media/RecordingService.Finalize.cs:58-70`
 
 `MergeVideoSegmentsAsync` 在分段數 > 1 時，原生 concat 尚未實作，**只回傳第一段**：

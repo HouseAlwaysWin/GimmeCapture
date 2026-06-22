@@ -44,6 +44,15 @@ public class RecordingContractTests
     }
 
     [Fact]
+    public void ConcatVideoSegments_WithNoSegments_ThrowsArgumentException()
+    {
+        Assert.Throws<ArgumentException>(() =>
+            LibavMuxer.ConcatVideoSegments(Array.Empty<string>(), "out.mkv", "matroska"));
+        Assert.Throws<ArgumentException>(() =>
+            LibavMuxer.ConcatVideoSegments(null!, "out.mkv", "matroska"));
+    }
+
+    [Fact]
     public void GifTranscoder_ProducesReadableAnimatedGif()
     {
         Assert.True(RecordingFormatCapabilities.IsGifAvailable());

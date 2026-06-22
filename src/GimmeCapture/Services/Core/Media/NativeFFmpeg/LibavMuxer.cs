@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using FFmpeg.AutoGen;
 
 namespace GimmeCapture.Services.Core.Media.NativeFFmpeg;
@@ -9,6 +10,155 @@ internal static class LibavMuxer
 
     public static unsafe MuxStats MuxVideoAndAudioToMkv(string videoPath, string audioPath, string outputPath)
         => MuxVideoAndAudio(videoPath, audioPath, outputPath, "matroska");
+
+    /// <summary>
+    /// Concatenates multiple recorded video segments (produced back-to-back in the same
+    /// session, e.g. after pause/resume) into a single output by copying packets without
+    /// re-encoding. All segments must share the same codec/resolution, which holds because
+    /// they originate from the same recording configuration.
+    /// </summary>
+    public static unsafe MuxStats ConcatVideoSegments(
+        IReadOnlyList<string> segmentPaths,
+        string outputPath,
+        string containerFormat)
+    {
+        if (segmentPaths == null || segmentPaths.Count == 0)
+        {
+            throw new ArgumentException("No segments to concatenate.", nameof(segmentPaths));
+        }
+
+        FFmpegRuntime.EnsureInitialized();
+
+        AVFormatContext* outFmt = null;
+        AVPacket* pkt = null;
+        AVStream* outVideo = null;
+        bool headerWritten = false;
+
+        try
+        {
+            ThrowIfErr(ffmpeg.avformat_alloc_output_context2(&outFmt, null, containerFormat, outputPath), "alloc_output(concat)");
+            if (outFmt == null) throw new InvalidOperationException("Failed to create output format context.");
+
+            pkt = ffmpeg.av_packet_alloc();
+            if (pkt == null) throw new OutOfMemoryException("av_packet_alloc(concat)");
+
+            // Running timestamp offset (in output time_base) so each segment starts where
+            // the previous one ended, keeping PTS/DTS monotonic across boundaries.
+            long nextOffset = 0;
+            int totalVideoPackets = 0;
+
+            foreach (var segmentPath in segmentPaths)
+            {
+                AVFormatContext* inFmt = null;
+                try
+                {
+                    ThrowIfErr(ffmpeg.avformat_open_input(&inFmt, segmentPath, null, null), "open_input(concat)");
+                    ThrowIfErr(ffmpeg.avformat_find_stream_info(inFmt, null), "find_stream_info(concat)");
+                    int videoIn = ffmpeg.av_find_best_stream(inFmt, AVMediaType.AVMEDIA_TYPE_VIDEO, -1, -1, null, 0);
+                    if (videoIn < 0)
+                    {
+                        // Skip segments without a usable video stream rather than aborting.
+                        continue;
+                    }
+
+                    var inVideo = inFmt->streams[videoIn];
+
+                    if (!headerWritten)
+                    {
+                        outVideo = ffmpeg.avformat_new_stream(outFmt, null);
+                        if (outVideo == null) throw new OutOfMemoryException("new_stream(concat)");
+                        ThrowIfErr(ffmpeg.avcodec_parameters_copy(outVideo->codecpar, inVideo->codecpar), "copy_video_codecpar(concat)");
+                        outVideo->codecpar->codec_tag = 0;
+                        outVideo->time_base = inVideo->time_base;
+                        outVideo->disposition |= ffmpeg.AV_DISPOSITION_DEFAULT;
+
+                        if ((outFmt->oformat->flags & ffmpeg.AVFMT_NOFILE) == 0)
+                        {
+                            ThrowIfErr(ffmpeg.avio_open(&outFmt->pb, outputPath, ffmpeg.AVIO_FLAG_WRITE), "avio_open(concat)");
+                        }
+
+                        ThrowIfErr(ffmpeg.avformat_write_header(outFmt, null), "write_header(concat)");
+                        headerWritten = true;
+                    }
+
+                    long offset = nextOffset;
+                    bool hasPkt = ReadNextStreamPacket(inFmt, videoIn, pkt);
+                    long firstPts = hasPkt ? GetPacketPrimaryTimestamp(pkt) : ffmpeg.AV_NOPTS_VALUE;
+                    long segMaxEnd = 0;
+                    int segPackets = 0;
+                    bool sawDuration = false;
+
+                    while (hasPkt)
+                    {
+                        // Re-base this segment to start at 0, convert to the output time_base,
+                        // then push it past the previous segment with the running offset.
+                        NormalizePacketTimestamps(pkt, firstPts);
+                        ffmpeg.av_packet_rescale_ts(pkt, inVideo->time_base, outVideo->time_base);
+                        if (pkt->pts != ffmpeg.AV_NOPTS_VALUE) pkt->pts += offset;
+                        if (pkt->dts != ffmpeg.AV_NOPTS_VALUE) pkt->dts += offset;
+                        pkt->stream_index = outVideo->index;
+
+                        long endRef = pkt->pts != ffmpeg.AV_NOPTS_VALUE ? pkt->pts : pkt->dts;
+                        if (pkt->dts != ffmpeg.AV_NOPTS_VALUE && pkt->dts > endRef) endRef = pkt->dts;
+                        if (endRef != ffmpeg.AV_NOPTS_VALUE)
+                        {
+                            long end = endRef + (pkt->duration > 0 ? pkt->duration : 0);
+                            if (end > segMaxEnd) segMaxEnd = end;
+                        }
+                        if (pkt->duration > 0) sawDuration = true;
+
+                        ThrowIfErr(ffmpeg.av_interleaved_write_frame(outFmt, pkt), "write_frame(concat)");
+                        totalVideoPackets++;
+                        segPackets++;
+                        ffmpeg.av_packet_unref(pkt);
+                        hasPkt = ReadNextStreamPacket(inFmt, videoIn, pkt);
+                    }
+
+                    // Advance the offset to the end of this segment. When packet durations
+                    // are missing, segMaxEnd is the last frame's timestamp, so add one
+                    // estimated frame to avoid overlapping the next segment's first frame.
+                    if (segMaxEnd <= offset)
+                    {
+                        nextOffset = offset + 1;
+                    }
+                    else if (sawDuration)
+                    {
+                        nextOffset = segMaxEnd;
+                    }
+                    else
+                    {
+                        long avgFrameDur = segPackets > 1 ? (segMaxEnd - offset) / segPackets : 1;
+                        nextOffset = segMaxEnd + Math.Max(avgFrameDur, 1);
+                    }
+                }
+                finally
+                {
+                    if (inFmt != null) ffmpeg.avformat_close_input(&inFmt);
+                }
+            }
+
+            if (!headerWritten)
+            {
+                throw new InvalidOperationException("No video stream found in any segment.");
+            }
+
+            ffmpeg.av_write_trailer(outFmt);
+            return new MuxStats(totalVideoPackets, 0);
+        }
+        finally
+        {
+            if (pkt != null) ffmpeg.av_packet_free(&pkt);
+            if (outFmt != null)
+            {
+                if ((outFmt->oformat->flags & ffmpeg.AVFMT_NOFILE) == 0 && outFmt->pb != null)
+                {
+                    ffmpeg.avio_closep(&outFmt->pb);
+                }
+
+                ffmpeg.avformat_free_context(outFmt);
+            }
+        }
+    }
 
     public static unsafe MuxStats RemuxVideo(string videoPath, string outputPath, string containerFormat)
     {
