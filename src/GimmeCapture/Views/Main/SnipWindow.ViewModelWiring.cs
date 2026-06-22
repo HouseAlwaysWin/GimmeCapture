@@ -1,0 +1,397 @@
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.VisualTree;
+using GimmeCapture.ViewModels.Main;
+using GimmeCapture.ViewModels.Floating;
+using GimmeCapture.Views.Floating;
+using GimmeCapture.Views.Main;
+using GimmeCapture.Views.Shared;
+using GimmeCapture.Models;
+using System;
+using Avalonia.Platform;
+using Avalonia.Input.Raw;
+using GimmeCapture.Services.Abstractions;
+using GimmeCapture.Services.Core;
+using GimmeCapture.Services.Core.Infrastructure;
+using GimmeCapture.Services.Interop;
+using ReactiveUI;
+using Avalonia.Interactivity;
+using System.Reactive.Linq;
+using System.Threading.Tasks;
+using System.Collections.Generic;
+using System.Collections.Specialized;
+
+namespace GimmeCapture.Views.Main;
+
+// OnDataContextChanged: wires the SnipWindowViewModel's action delegates (close/hide/show, pin/record
+// windows, dialogs, capture affinity, etc.) to this window. Split out of SnipWindow.axaml.cs
+// (god class reduction) — no behavior change.
+public partial class SnipWindow : Window
+{
+    protected override void OnDataContextChanged(EventArgs e)
+    {
+        base.OnDataContextChanged(e);
+        _selectionRectSubscription?.Dispose();
+        _selectionRectSubscription = null;
+        _viewportBoundsSubscription?.Dispose();
+        _viewportBoundsSubscription = null;
+        _toolbarBoundsSubscription?.Dispose();
+        _toolbarBoundsSubscription = null;
+        _recordingStateSubscription?.Dispose();
+        _recordingStateSubscription = null;
+        _translationModeSubscription?.Dispose();
+        _translationModeSubscription = null;
+        ResetTranslationSelectionModifierState();
+
+        _viewModel = DataContext as SnipWindowViewModel;
+        if (_viewModel != null)
+        {
+            var vm = _viewModel;
+            _translationModeSubscription = vm.WhenAnyValue(x => x.IsTranslationMode)
+                .ObserveOn(RxSchedulers.MainThreadScheduler)
+                .Subscribe(isTranslationMode =>
+                {
+                    if (!isTranslationMode)
+                    {
+                        ResetTranslationSelectionModifierState();
+                    }
+                });
+
+            _viewportBoundsSubscription = this.GetObservable(Visual.BoundsProperty)
+                .Subscribe(b => vm.ViewportSize = b.Size);
+            
+            // Sync Toolbar size to VM for adaptive positioning
+            _toolbarBoundsSubscription = this.Toolbar.GetObservable(Visual.BoundsProperty).Subscribe(b =>
+            {
+                vm.ToolbarWidth = b.Width;
+                vm.ToolbarHeight = b.Height;
+            });
+
+            // WDA_EXCLUDEFROMCAPTURE: translation OCR / recording without annotations exclude SnipWindow from
+            // FFmpeg gdigrab so output matches full SelectionRect without chrome; annotations require capturable window + inset crop (see RecordingUsesWindowsExcludeFromCapture).
+            vm.SyncRecordingScreenCaptureAffinity = () => ApplyRecordingScreenCaptureAffinity(vm);
+            if (vm.RecordingService != null)
+            {
+                _recordingStateSubscription = Observable.Merge(
+                        vm.RecordingService.WhenAnyValue(x => x.State).Select(_ => 0),
+                        vm.WhenAnyValue(x => x.RecordingUsesWindowsExcludeFromCapture).Select(_ => 0),
+                        vm.WhenAnyValue(x => x.IsTranslationMode).Select(_ => 0))
+                    .ObserveOn(RxSchedulers.MainThreadScheduler)
+                    .Subscribe(_ =>
+                    {
+                        ApplyRecordingScreenCaptureAffinity(vm);
+                        vm.RaisePropertyChanged(nameof(vm.HideSelectionDecoration));
+                        vm.RaisePropertyChanged(nameof(vm.HideFrameBorder));
+                        vm.RaisePropertyChanged(nameof(vm.IsToolbarVisible));
+                        vm.RaisePropertyChanged(nameof(vm.IsToolbarShownOnScreen));
+                    });
+            }
+
+            ApplyRecordingScreenCaptureAffinity(vm);
+
+            _viewModel.IsMagnifierEnabled = true;
+            _viewModel.CloseAction = () => 
+            {
+                Close();
+            };
+            
+            _viewModel.HideAction = () => Hide();
+            _viewModel.ShowAction = () => Show();
+
+            // Own the dialog to the snip overlay so it appears above the topmost overlay and the
+            // overlay's hit-test region is disabled while modal (otherwise clicks are swallowed).
+            _viewModel.ShowOkDialogAction = async (title, message) =>
+            {
+                await GimmeCapture.Views.Dialogs.ConfirmationDialog.ShowConfirmation(
+                    this, title, message, GimmeCapture.Views.Dialogs.ConfirmationMode.OkOnly);
+            };
+
+            _viewModel.OpenRecordingProgressWindowAction = () =>
+            {
+                if (_progressWindow != null) return;
+                
+                _progressWindow = new RecordingProgressWindow
+                {
+                    DataContext = _viewModel,
+                    WindowStartupLocation = WindowStartupLocation.CenterScreen
+                };
+                _progressWindow.Show();
+                Hide(); // Hide main window to allow user interaction
+            };
+
+            _viewModel.CloseRecordingProgressWindowAction = () =>
+            {
+                if (_progressWindow != null)
+                {
+                    _progressWindow.Close();
+                    _progressWindow = null;
+                }
+                
+                // Show main window back after finalization (e.g. for file picker)
+                // Unless it was already closed/closing
+                if (this.IsVisible)
+                {
+                    Show();
+                }
+            };
+            
+            // Subscribe to selection and state changes to update the native interaction region.
+            // Split into two subscriptions if arguments exceed 7 to avoid compilation error
+            var trigger1 = vm.WhenAnyValue(
+                x => x.InteractionRegionRevision,
+                x => x.SelectionRect, 
+                x => x.CurrentState, 
+                x => x.IsDrawingMode,
+                x => x.IsTranslationMode,
+                x => x.IsTranslationSelectionActive,
+                x => x.RecState);
+                
+            var trigger2 = vm.WhenAnyValue(
+                x => x.ToolbarWidth,
+                x => x.ToolbarHeight,
+                x => x.ShowToolbar,
+                x => x.IsToolbarVisible,
+                x => x.IsToolbarShownOnScreen,
+                x => x.CurrentTranslationTool);
+
+            var trigger3 = vm.WhenAnyValue(
+                    x => x.ToolbarLeft,
+                    x => x.ToolbarTop,
+                    x => x.TranslationToolbarLeft,
+                    x => x.TranslationToolbarTop)
+                .Select(_ => 0)
+                .StartWith(0);
+
+            // Recompute Win32 region when translation boxes are added/removed (not covered by SelectionRect alone).
+            var userSelectionsChanged = Observable
+                .FromEventPattern<NotifyCollectionChangedEventHandler, NotifyCollectionChangedEventArgs>(
+                    h => vm.UserSelections.CollectionChanged += h,
+                    h => vm.UserSelections.CollectionChanged -= h)
+                .Select(_ => 0)
+                .StartWith(0);
+
+            var translatedBlocksChanged = Observable
+                .FromEventPattern<NotifyCollectionChangedEventHandler, NotifyCollectionChangedEventArgs>(
+                    h => vm.TranslatedBlocks.CollectionChanged += h,
+                    h => vm.TranslatedBlocks.CollectionChanged -= h)
+                .Select(_ => 0)
+                .StartWith(0);
+
+            var translationOverlayChanged = vm.WhenAnyValue(
+                    x => x.TranslationOverlayLeft,
+                    x => x.TranslationOverlayTop)
+                .Select(_ => 0)
+                .StartWith(0);
+
+            _selectionRectSubscription = Observable.CombineLatest(
+                    trigger1,
+                    trigger2,
+                    trigger3,
+                    userSelectionsChanged,
+                    translatedBlocksChanged,
+                    translationOverlayChanged,
+                    (t1, t2, _, __, ___, ____) => t1)
+                .Throttle(TimeSpan.FromMilliseconds(16))
+                .ObserveOn(RxSchedulers.MainThreadScheduler)
+                .Subscribe(tuple => UpdateWindowRegion(tuple.Item2, tuple.Item3, tuple.Item4));
+            
+            _viewModel.FocusWindowAction = () =>
+            {
+                this.Activate();
+                this.Focus();
+            };
+
+            _viewModel.PersistTranslationSelectionsAction = PersistTranslatedSelectionsToDetachedLayer;
+
+            _viewModel.CaptureDrawingModeSnapshotAsync = async () =>
+            {
+                var hwnd = this.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
+                bool restoreCaptureVisibility = false;
+
+                try
+                {
+                    if (hwnd != IntPtr.Zero && OperatingSystem.IsWindows())
+                    {
+                        Win32Helpers.SetWindowCaptureVisibility(hwnd, visible: false);
+                        restoreCaptureVisibility = true;
+                        await Task.Delay(50);
+                    }
+
+                    return await vm.CaptureRegionBitmapAsync();
+                }
+                finally
+                {
+                    if (restoreCaptureVisibility && hwnd != IntPtr.Zero && OperatingSystem.IsWindows())
+                    {
+                        Win32Helpers.SetWindowCaptureVisibility(hwnd, visible: true);
+                    }
+                }
+            };
+
+            _viewModel.PickSaveFileAction = async () =>
+            {
+                 var topLevel = TopLevel.GetTopLevel(this);
+                 if (topLevel == null) return null;
+                 
+                 bool isRecording = _viewModel.IsRecordingMode;
+                 string defaultExt = isRecording ? _viewModel.RecordFormat : "png";
+                 string fileTypeName = isRecording ? $"{defaultExt.ToUpper()} Video" : "PNG Image";
+                 string pattern = $"*.{defaultExt}";
+                 
+                 var fileChoices = new System.Collections.Generic.List<Avalonia.Platform.Storage.FilePickerFileType>();
+                 if (isRecording)
+                 {
+                     fileChoices.Add(new Avalonia.Platform.Storage.FilePickerFileType("Video Files") { Patterns = new[] { "*.mp4", "*.mkv", "*.gif", "*.webm", "*.mov" } });
+                     fileChoices.Add(new Avalonia.Platform.Storage.FilePickerFileType("All Files") { Patterns = new[] { "*.*" } });
+                 }
+                 else
+                 {
+                     fileChoices.Add(new Avalonia.Platform.Storage.FilePickerFileType(fileTypeName) { Patterns = new[] { pattern } });
+                 }
+
+                 var file = await topLevel.StorageProvider.SaveFilePickerAsync(new Avalonia.Platform.Storage.FilePickerSaveOptions
+                 {
+                     Title = isRecording ? "Save Recording" : "Save Screenshot",
+                     DefaultExtension = defaultExt,
+                     ShowOverwritePrompt = true,
+                    SuggestedFileName = CaptureFileNameService.SuggestedBaseName(),
+                     FileTypeChoices = fileChoices
+                 });
+                 
+                 return file?.Path.LocalPath;
+            };
+
+            _viewModel.OpenPinnedVideoWindowAction = (recordingPath, pixelWidth, pixelHeight, originalWidth, originalHeight, color, thickness, hideDecoration, hideBorder) =>
+            {
+                var vm = new FloatingVideoViewModel(
+                    recordingPath,
+                    string.Empty,
+                    pixelWidth,
+                    pixelHeight,
+                    originalWidth,
+                    originalHeight,
+                    color,
+                    thickness,
+                    hideDecoration,
+                    hideBorder,
+                    _clipboardService,
+                    _viewModel.MainVm?.AppSettingsService);
+
+                var padding = vm.WindowPadding;
+                var window = new FloatingVideoWindow
+                {
+                    DataContext = vm,
+                    Width = originalWidth + padding.Left + padding.Right,
+                    Height = originalHeight + padding.Top + padding.Bottom,
+                    WindowStartupLocation = WindowStartupLocation.CenterScreen
+                };
+                window.Show();
+            };
+
+            _viewModel.OpenPinWindowAction = (bitmap, rect, color, thickness, runAI, initialInteractive, pinnedText, inferredFontSize) =>
+            {
+                // Use settings directly from MainVm to ensure consistency
+                bool hideDecoration = _viewModel.MainVm?.HideSnipPinDecoration ?? false;
+                bool hideBorder = _viewModel.MainVm?.HideSnipPinBorder ?? false;
+                var aiService = _viewModel.MainVm?.AIResourceService;
+                
+                if (aiService == null)
+                {
+                     // Fallback check (shouldn't happen if MainVm is set)
+                     System.Diagnostics.Debug.WriteLine("AIResourceService is null!");
+                     return;
+                }
+                
+                if (_viewModel.MainVm == null) return;
+                var vm = new FloatingImageViewModel(bitmap, rect.Width, rect.Height, color, thickness, hideDecoration, hideBorder, _clipboardService, aiService, _viewModel.MainVm.SAM2RuntimeService, _viewModel.MainVm.AppSettingsService, _viewModel.MainVm.AIPathService, _viewModel.MainVm.ResourceQueue, pinnedText, inferredFontSize);
+                vm.WingScale = _viewModel.WingScale;
+                
+                try
+                {
+                    // Calculate Window Size & Position based on the padding needed for decorations
+                    // The 'rect' is the IMAGE position/size in Logical pixels.
+                    // Window Position must be in PHYSICAL pixels.
+                    double scaling = _viewModel.VisualScaling;
+                    var padding = vm.WindowPadding;
+                    
+                    // Convert Logical Rect to Physical Screen coordinates
+                    int physicalX = (int)(rect.X * scaling) + _viewModel.ScreenOffset.X;
+                    int physicalY = (int)(rect.Y * scaling) + _viewModel.ScreenOffset.Y;
+                    
+                    // Convert Logical Padding to Physical
+                    int physicalPaddingLeft = (int)(padding.Left * scaling);
+                    int physicalPaddingTop = (int)(padding.Top * scaling);
+                    
+                    // Create Window
+                    var win = new FloatingImageWindow
+                    {
+                        DataContext = vm,
+                        // Set physical position using converted values
+                        Position = new PixelPoint(physicalX - physicalPaddingLeft, physicalY - physicalPaddingTop),
+                        // Width/Height in Avalonia are Logical
+                        Width = rect.Width + padding.Left + padding.Right,
+                        Height = rect.Height + padding.Top + padding.Bottom
+                    };
+                    
+                    // Auto-Run AI if requested
+                    if (runAI)
+                    {
+                        // Use dispatcher to ensure window is shown/initialized before starting
+                         Avalonia.Threading.Dispatcher.UIThread.Post(() => {
+                            vm.RemoveBackgroundCommand.Execute().Subscribe();
+                         });
+                    }
+
+                    // Initial Interactive mode if requested
+                    if (initialInteractive)
+                    {
+                        Avalonia.Threading.Dispatcher.UIThread.Post(() => {
+                            vm.IsPointRemovalMode = true;
+                        });
+                    }
+
+                    // Save Action
+                    vm.SaveAction = async () =>
+                    {
+                        try
+                        {
+                            var topLevel = TopLevel.GetTopLevel(win);
+                            if (topLevel?.StorageProvider is { } storageProvider)
+                            {
+                                var file = await storageProvider.SaveFilePickerAsync(new Avalonia.Platform.Storage.FilePickerSaveOptions
+                                {
+                                    Title = "Save Pinned Image",
+                                    DefaultExtension = "png",
+                                    ShowOverwritePrompt = true,
+                                    SuggestedFileName = CaptureFileNameService.SuggestedBaseName(),
+                                    FileTypeChoices = new[]
+                                    {
+                                        new Avalonia.Platform.Storage.FilePickerFileType("PNG Image") { Patterns = new[] { "*.png" } }
+                                    }
+                                });
+
+                                if (file != null)
+                                {
+                                    using var stream = await file.OpenWriteAsync();
+                                    vm.Image?.Save(stream); // Save current image (might be transparent)
+                                    FileLocationService.RevealInFileExplorer(file.Path.LocalPath);
+                                }
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"Failed to save pinned image: {ex}");
+                        }
+                    };
+                    
+                    win.Show();
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Error showing Floating Window: {ex}");
+                }
+            };
+        }
+    }
+}
