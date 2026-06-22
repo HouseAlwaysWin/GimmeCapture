@@ -169,7 +169,7 @@ public static class AnnotationInteractionService
     public static bool IsEditable(AnnotationType type) => IsArea(type) || IsLine(type);
 
     public static bool IsArea(AnnotationType type) =>
-        type is AnnotationType.Rectangle or AnnotationType.Ellipse or AnnotationType.Mosaic or AnnotationType.Blur;
+        type is AnnotationType.Rectangle or AnnotationType.Ellipse or AnnotationType.Mosaic or AnnotationType.Blur or AnnotationType.Highlighter or AnnotationType.Step;
 
     public static bool IsLine(AnnotationType type) =>
         type is AnnotationType.Line or AnnotationType.Arrow;

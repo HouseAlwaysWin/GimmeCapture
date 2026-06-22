@@ -16,7 +16,9 @@ public enum AnnotationType
     Text,
     Pen,
     Mosaic,
-    Blur
+    Blur,
+    Highlighter,
+    Step
 }
 
 public class Annotation : ReactiveObject
@@ -112,6 +114,20 @@ public class Annotation : ReactiveObject
         set => this.RaiseAndSetIfChanged(ref _effectSettings, value);
     }
 
+    private bool _isFilled;
+    public bool IsFilled
+    {
+        get => _isFilled;
+        set => this.RaiseAndSetIfChanged(ref _isFilled, value);
+    }
+
+    private int _stepNumber;
+    public int StepNumber
+    {
+        get => _stepNumber;
+        set => this.RaiseAndSetIfChanged(ref _stepNumber, value);
+    }
+
     private bool _isSelected;
 
     [JsonIgnore]
@@ -129,7 +145,7 @@ public class Annotation : ReactiveObject
 
     [JsonIgnore]
     public bool ShowsAreaSelection =>
-        IsSelected && Type is AnnotationType.Rectangle or AnnotationType.Ellipse or AnnotationType.Mosaic or AnnotationType.Blur;
+        IsSelected && Type is AnnotationType.Rectangle or AnnotationType.Ellipse or AnnotationType.Mosaic or AnnotationType.Blur or AnnotationType.Highlighter or AnnotationType.Step;
 
     [JsonIgnore]
     public bool ShowsLineSelection =>
@@ -159,7 +175,9 @@ public class Annotation : ReactiveObject
             IsItalic = this.IsItalic,
             DrawingModeSnapshot = this.DrawingModeSnapshot,
             DrawingModeReferenceSize = this.DrawingModeReferenceSize,
-            EffectSettings = this.EffectSettings.Clone()
+            EffectSettings = this.EffectSettings.Clone(),
+            IsFilled = this.IsFilled,
+            StepNumber = this.StepNumber
         };
         foreach (var p in this.Points)
         {

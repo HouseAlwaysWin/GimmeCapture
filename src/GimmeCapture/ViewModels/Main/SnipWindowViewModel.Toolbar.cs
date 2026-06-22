@@ -271,6 +271,12 @@ public partial class SnipWindowViewModel
         set => _editorState.IsItalic = value;
     }
 
+    public bool IsShapeFilled
+    {
+        get => _editorState.CurrentFill;
+        set => _editorState.CurrentFill = value;
+    }
+
     public ObservableCollection<FontFamily> AvailableFonts { get; } = new ObservableCollection<FontFamily>
     {
         new FontFamily("Arial"), 

@@ -15,6 +15,8 @@ public sealed class AnnotationSnapshot
     public bool IsBold { get; init; }
     public bool IsItalic { get; init; }
     public AnnotationEffectSettings EffectSettings { get; init; } = new();
+    public bool IsFilled { get; init; }
+    public int StepNumber { get; init; }
 
     public static AnnotationSnapshot Capture(Annotation annotation)
     {
@@ -29,7 +31,9 @@ public sealed class AnnotationSnapshot
             FontFamily = annotation.FontFamily,
             IsBold = annotation.IsBold,
             IsItalic = annotation.IsItalic,
-            EffectSettings = annotation.EffectSettings.Clone()
+            EffectSettings = annotation.EffectSettings.Clone(),
+            IsFilled = annotation.IsFilled,
+            StepNumber = annotation.StepNumber
         };
     }
 
@@ -45,6 +49,8 @@ public sealed class AnnotationSnapshot
         annotation.IsBold = IsBold;
         annotation.IsItalic = IsItalic;
         annotation.EffectSettings = EffectSettings.Clone();
+        annotation.IsFilled = IsFilled;
+        annotation.StepNumber = StepNumber;
     }
 
     public bool HasSameValues(AnnotationSnapshot other)
@@ -60,6 +66,8 @@ public sealed class AnnotationSnapshot
             && IsItalic == other.IsItalic
             && EffectSettings.MosaicCellSize == other.EffectSettings.MosaicCellSize
             && EffectSettings.BlurRadius.Equals(other.EffectSettings.BlurRadius)
-            && EffectSettings.Feather.Equals(other.EffectSettings.Feather);
+            && EffectSettings.Feather.Equals(other.EffectSettings.Feather)
+            && IsFilled == other.IsFilled
+            && StepNumber == other.StepNumber;
     }
 }

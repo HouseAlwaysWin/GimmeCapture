@@ -22,6 +22,7 @@ public interface IDrawingToolViewModel
     double CurrentFontSize { get; set; }
     bool IsBold { get; set; }
     bool IsItalic { get; set; }
+    bool IsShapeFilled { get; set; }
     System.Collections.ObjectModel.ObservableCollection<FontFamily> AvailableFonts { get; }
     FontFamily CurrentFontFamily { get; set; }
     System.Action? FocusWindowAction { get; set; }
@@ -71,5 +72,7 @@ public interface IDrawingToolViewModel
     string TextTooltip { get; }
     string MosaicTooltip { get; }
     string BlurTooltip { get; }
+    string HighlighterTooltip { get; }
+    string StepTooltip { get; }
     string CurrentRedactionPreset { get; }
 }

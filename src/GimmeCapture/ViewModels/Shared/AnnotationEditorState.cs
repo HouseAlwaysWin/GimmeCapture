@@ -77,6 +77,23 @@ public sealed class AnnotationEditorState : ReactiveObject, IDisposable
         }
     }
 
+    private bool _currentFill;
+    public bool CurrentFill
+    {
+        get => _currentFill;
+        set
+        {
+            if (_currentFill == value) return;
+            this.RaiseAndSetIfChanged(ref _currentFill, value);
+            if (!_isSynchronizingSelectedStyle && SelectedAnnotation != null && SupportsFill(SelectedAnnotation.Type))
+            {
+                var before = AnnotationSnapshot.Capture(SelectedAnnotation);
+                SelectedAnnotation.IsFilled = value;
+                CommitAnnotationEdit(SelectedAnnotation, before);
+            }
+        }
+    }
+
     private double _currentFontSize = 24.0;
     public double CurrentFontSize
     {
@@ -192,6 +209,10 @@ public sealed class AnnotationEditorState : ReactiveObject, IDisposable
                 this.RaiseAndSetIfChanged(ref _selectedColor, annotation.Color, nameof(SelectedColor));
                 this.RaiseAndSetIfChanged(ref _currentThickness, annotation.Thickness, nameof(CurrentThickness));
             }
+            if (SupportsFill(annotation.Type))
+            {
+                this.RaiseAndSetIfChanged(ref _currentFill, annotation.IsFilled, nameof(CurrentFill));
+            }
         }
         finally
         {
@@ -275,7 +296,9 @@ public sealed class AnnotationEditorState : ReactiveObject, IDisposable
             IsItalic = IsItalic,
             DrawingModeSnapshot = drawingModeSnapshot,
             DrawingModeReferenceSize = drawingModeReferenceSize,
-            EffectSettings = CreateEffectSettingsFor(CurrentAnnotationTool)
+            EffectSettings = CreateEffectSettingsFor(CurrentAnnotationTool),
+            IsFilled = SupportsFill(CurrentAnnotationTool) && CurrentFill,
+            StepNumber = CurrentAnnotationTool == AnnotationType.Step ? NextStepNumber(Annotations) : 0
         };
 
         if (CurrentAnnotationTool == AnnotationType.Pen)
@@ -512,13 +535,31 @@ public sealed class AnnotationEditorState : ReactiveObject, IDisposable
     }
 
     private static bool IsShapeTool(AnnotationType tool)
-        => tool is AnnotationType.Rectangle or AnnotationType.Ellipse or AnnotationType.Arrow or AnnotationType.Line;
+        => tool is AnnotationType.Rectangle or AnnotationType.Ellipse or AnnotationType.Arrow or AnnotationType.Line or AnnotationType.Highlighter or AnnotationType.Step;
 
     private static bool IsRedactionTool(AnnotationType tool)
         => tool is AnnotationType.Mosaic or AnnotationType.Blur;
 
     private static bool SupportsStrokeStyle(AnnotationType tool)
-        => tool is AnnotationType.Rectangle or AnnotationType.Ellipse or AnnotationType.Arrow or AnnotationType.Line;
+        => tool is AnnotationType.Rectangle or AnnotationType.Ellipse or AnnotationType.Arrow or AnnotationType.Line or AnnotationType.Highlighter or AnnotationType.Step;
+
+    // Fill toggle only applies to outlined shapes; Highlighter/Step are always filled.
+    public static bool SupportsFill(AnnotationType tool)
+        => tool is AnnotationType.Rectangle or AnnotationType.Ellipse;
+
+    /// <summary>Returns the next 1-based step badge number (max existing + 1).</summary>
+    public static int NextStepNumber(IEnumerable<Annotation> annotations)
+    {
+        int max = 0;
+        foreach (var a in annotations)
+        {
+            if (a.Type == AnnotationType.Step && a.StepNumber > max)
+            {
+                max = a.StepNumber;
+            }
+        }
+        return max + 1;
+    }
 
     public void ApplySelectedColor(Color color)
     {

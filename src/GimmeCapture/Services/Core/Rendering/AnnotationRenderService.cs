@@ -108,8 +108,32 @@ public sealed class AnnotationRenderService : IAnnotationRenderService
             case AnnotationType.Ellipse:
             {
                 var rect = ScaleRect(GetLogicalRect(ann), scaleX, scaleY);
+                if (ann.IsFilled)
+                {
+                    using var fill = new SKPaint { Color = paint.Color, Style = SKPaintStyle.Fill, IsAntialias = true };
+                    if (ann.Type == AnnotationType.Rectangle) canvas.DrawRect(rect, fill);
+                    else canvas.DrawOval(rect, fill);
+                }
                 if (ann.Type == AnnotationType.Rectangle) canvas.DrawRect(rect, paint);
                 else canvas.DrawOval(rect, paint);
+                break;
+            }
+            case AnnotationType.Highlighter:
+            {
+                var rect = ScaleRect(GetLogicalRect(ann), scaleX, scaleY);
+                using var hl = new SKPaint
+                {
+                    Color = paint.Color.WithAlpha((byte)(paint.Color.Alpha * 0.35f)),
+                    Style = SKPaintStyle.Fill,
+                    IsAntialias = true
+                };
+                canvas.DrawRect(rect, hl);
+                break;
+            }
+            case AnnotationType.Step:
+            {
+                var rect = ScaleRect(GetLogicalRect(ann), scaleX, scaleY);
+                DrawStep(canvas, ann, rect, paint, uniformScale);
                 break;
             }
             case AnnotationType.Line:
@@ -200,6 +224,29 @@ public sealed class AnnotationRenderService : IAnnotationRenderService
             Style = SKPaintStyle.Fill
         };
         canvas.DrawPath(path, fillPaint);
+    }
+
+    private static void DrawStep(SKCanvas canvas, Annotation ann, SKRect rect, SKPaint paint, float uniformScale)
+    {
+        float cx = rect.MidX;
+        float cy = rect.MidY;
+        // Radius from the drawn area; fall back to a sensible default for a click without drag.
+        float radius = Math.Max(rect.Width, rect.Height) / 2f;
+        if (radius < 8f * uniformScale)
+        {
+            radius = 14f * uniformScale;
+        }
+
+        using var fill = new SKPaint { Color = paint.Color, Style = SKPaintStyle.Fill, IsAntialias = true };
+        canvas.DrawCircle(cx, cy, radius, fill);
+
+        string label = ann.StepNumber.ToString();
+        using var textPaint = new SKPaint { Color = SKColors.White, IsAntialias = true, Style = SKPaintStyle.Fill };
+        using var font = new SKFont(SKTypeface.Default, radius * 1.1f);
+        float textWidth = font.MeasureText(label);
+        var metrics = font.Metrics;
+        float baseline = cy - (metrics.Ascent + metrics.Descent) / 2f;
+        canvas.DrawText(label, cx - textWidth / 2f, baseline, font, textPaint);
     }
 
     private static void ApplyRedactionEffect(SKBitmap target, Annotation annotation, SKRect rect, float uniformScale)

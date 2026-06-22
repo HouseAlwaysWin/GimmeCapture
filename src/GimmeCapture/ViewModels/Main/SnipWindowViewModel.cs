@@ -44,6 +44,8 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         nameof(TextTooltip),
         nameof(MosaicTooltip),
         nameof(BlurTooltip),
+        nameof(HighlighterTooltip),
+        nameof(StepTooltip),
         nameof(FullscreenSelectTooltip),
         nameof(HideTranslationResultsTooltip),
         nameof(TranslationPinTooltip),
@@ -173,6 +175,8 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     public string TextTooltip => $"{LocalizationService.Instance["TipText"]} ({TextHotkey})";
     public string MosaicTooltip => $"{LocalizationService.Instance["TipMosaic"]} ({MosaicHotkey})";
     public string BlurTooltip => $"{LocalizationService.Instance["TipBlur"]} ({BlurHotkey})";
+    public string HighlighterTooltip => LocalizationService.Instance["TipHighlighter"];
+    public string StepTooltip => LocalizationService.Instance["TipStep"];
     public string FullscreenSelectTooltip => $"{LocalizationService.Instance["ActionSelectFullscreen"]} ({FullscreenSelectHotkey})";
     public string SnipTooltip => CurrentMode == SnipMode.Screenshot ? LocalizationService.Instance["CaptureModeNormal"] : $"{LocalizationService.Instance["CaptureModeNormal"]} ({SwitchToSnipHotkey})";
     public string RecordTooltip => CurrentMode == SnipMode.Recording ? LocalizationService.Instance["CaptureModeRecord"] : $"{LocalizationService.Instance["CaptureModeRecord"]} ({SwitchToRecordHotkey})";
@@ -367,6 +371,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
             this.RaisePropertyChanged(nameof(CurrentFontFamily));
             this.RaisePropertyChanged(nameof(IsBold));
             this.RaisePropertyChanged(nameof(IsItalic));
+            this.RaisePropertyChanged(nameof(IsShapeFilled));
             this.RaisePropertyChanged(nameof(IsEnteringText));
             this.RaisePropertyChanged(nameof(PendingText));
             this.RaisePropertyChanged(nameof(TextInputPosition));

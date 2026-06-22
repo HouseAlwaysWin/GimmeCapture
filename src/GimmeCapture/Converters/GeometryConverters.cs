@@ -76,6 +76,20 @@ public class RectHeightConverter : IValueConverter, IMultiValueConverter
     public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => throw new NotImplementedException();
 }
 
+// Step badge live-preview font size: scales with the smaller of the drawn circle's dimensions.
+public class StepFontSizeConverter : IMultiValueConverter
+{
+    public object? Convert(IList<object?> values, Type targetType, object? parameter, CultureInfo culture)
+    {
+        if (values.Count >= 2 && values[0] is Point p1 && values[1] is Point p2)
+        {
+            double size = Math.Min(Math.Abs(p1.X - p2.X), Math.Abs(p1.Y - p2.Y));
+            return Math.Max(8.0, size * 0.55);
+        }
+        return 12.0;
+    }
+}
+
 public class AnnotationToLeftConverter : IMultiValueConverter
 {
     public object? Convert(IList<object?> values, Type targetType, object? parameter, CultureInfo culture)

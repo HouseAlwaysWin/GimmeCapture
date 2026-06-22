@@ -39,6 +39,7 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
             this.RaisePropertyChanged(nameof(CurrentFontFamily));
             this.RaisePropertyChanged(nameof(IsBold));
             this.RaisePropertyChanged(nameof(IsItalic));
+            this.RaisePropertyChanged(nameof(IsShapeFilled));
             this.RaisePropertyChanged(nameof(IsEnteringText));
             this.RaisePropertyChanged(nameof(PendingText));
             this.RaisePropertyChanged(nameof(TextInputPosition));
@@ -291,6 +292,12 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
     {
         get => _editorState.IsItalic;
         set => _editorState.IsItalic = value;
+    }
+
+    public bool IsShapeFilled
+    {
+        get => _editorState.CurrentFill;
+        set => _editorState.CurrentFill = value;
     }
 
     // Text Tool State
