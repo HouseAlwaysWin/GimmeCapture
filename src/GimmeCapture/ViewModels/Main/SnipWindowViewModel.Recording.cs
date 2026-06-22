@@ -346,6 +346,10 @@ public partial class SnipWindowViewModel
 
         if (!string.IsNullOrEmpty(revealPath))
         {
+            var baseRect = _recordingCaptureLogicalRect ?? SelectionRect;
+            int pw = Math.Max(2, (int)Math.Round(baseRect.Width > 1 ? baseRect.Width : 640.0));
+            int ph = Math.Max(2, (int)Math.Round(baseRect.Height > 1 ? baseRect.Height : 360.0));
+            _mainVm?.CaptureHistory.AddVideoAsync(revealPath, pw, ph).Forget("CaptureHistory.AddVideo");
             FileLocationService.RevealInFileExplorer(revealPath);
         }
 
@@ -463,6 +467,8 @@ public partial class SnipWindowViewModel
                 {
                     FileLocationService.RevealInFileExplorer(recordingPath);
                 }
+
+                _mainVm?.CaptureHistory.AddVideoAsync(recordingPath, pixelWidth, pixelHeight).Forget("CaptureHistory.AddVideo");
 
                 _recordingService.ClearLastRecording();
                 _currentRecordingPath = null;

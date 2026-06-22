@@ -1,0 +1,81 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:GimmeCapture.ViewModels.Main"
+             xmlns:services="using:GimmeCapture.Services.Core.Infrastructure"
+             x:Class="GimmeCapture.Views.Main.Tabs.SettingsHistoryTab"
+             x:DataType="vm:MainWindowViewModel">
+    <Grid RowDefinitions="Auto,*" Margin="10">
+
+        <!-- Toolbar: enable toggle + search + refresh + clear -->
+        <StackPanel Grid.Row="0" Spacing="8">
+            <CheckBox IsChecked="{Binding EnableHistory}"
+                      Content="{Binding [EnableHistory], Source={x:Static services:LocalizationService.Instance}}"/>
+            <Grid ColumnDefinitions="*,Auto,Auto">
+                <TextBox Grid.Column="0" Text="{Binding HistorySearchText}"
+                         Watermark="{Binding [HistorySearch], Source={x:Static services:LocalizationService.Instance}}"
+                         Margin="0,0,8,0"/>
+                <Button Grid.Column="1" Margin="0,0,6,0"
+                        Theme="{StaticResource SmallGothicMetalButton}"
+                        Content="{Binding [HistoryRefresh], Source={x:Static services:LocalizationService.Instance}}"
+                        Command="{Binding RefreshHistoryCommand}"/>
+                <Button Grid.Column="2"
+                        Theme="{StaticResource SmallGothicMetalButton}"
+                        Content="{Binding [HistoryClear], Source={x:Static services:LocalizationService.Instance}}"
+                        Command="{Binding ClearHistoryCommand}"/>
+            </Grid>
+        </StackPanel>
+
+        <!-- Empty state -->
+        <TextBlock Grid.Row="1"
+                   Text="{Binding [HistoryEmpty], Source={x:Static services:LocalizationService.Instance}}"
+                   IsVisible="{Binding IsHistoryEmpty}"
+                   Opacity="0.55" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+
+        <!-- Thumbnail grid -->
+        <ScrollViewer Grid.Row="1" Margin="0,8,0,0" IsVisible="{Binding !IsHistoryEmpty}">
+            <ItemsControl ItemsSource="{Binding HistoryItems}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel/>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:HistoryItemViewModel">
+                        <Border Width="210" Margin="6" Background="#1A1A1A" CornerRadius="6" Padding="8">
+                            <StackPanel Spacing="6">
+                                <Panel Height="110" Background="#0D0D0D">
+                                    <Image Source="{Binding Thumbnail}" Stretch="Uniform" IsVisible="{Binding HasThumbnail}"/>
+                                    <TextBlock Text="🎞" FontSize="40" Opacity="0.5"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                                               IsVisible="{Binding !HasThumbnail}"/>
+                                    <Border Background="#AA000000" CornerRadius="3" Padding="5,1"
+                                            HorizontalAlignment="Right" VerticalAlignment="Top" Margin="4"
+                                            IsVisible="{Binding IsVideo}">
+                                        <TextBlock Text="▶" FontSize="10" Foreground="White"/>
+                                    </Border>
+                                </Panel>
+                                <TextBlock Text="{Binding FileName}" FontSize="11" TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Text="{Binding CapturedAtLocal}" FontSize="10" Opacity="0.6"/>
+                                <WrapPanel>
+                                    <Button Margin="0,0,4,4" Theme="{StaticResource SmallGothicMetalButton}"
+                                            Content="{Binding [HistoryOpen], Source={x:Static services:LocalizationService.Instance}}"
+                                            Command="{Binding OpenCommand}" CommandParameter="{Binding}"/>
+                                    <Button Margin="0,0,4,4" Theme="{StaticResource SmallGothicMetalButton}"
+                                            IsVisible="{Binding IsImage}"
+                                            Content="{Binding [HistoryCopy], Source={x:Static services:LocalizationService.Instance}}"
+                                            Command="{Binding CopyCommand}" CommandParameter="{Binding}"/>
+                                    <Button Margin="0,0,4,4" Theme="{StaticResource SmallGothicMetalButton}"
+                                            Content="{Binding [HistoryReveal], Source={x:Static services:LocalizationService.Instance}}"
+                                            Command="{Binding RevealCommand}" CommandParameter="{Binding}"/>
+                                    <Button Margin="0,0,4,4" Theme="{StaticResource SmallGothicMetalButton}"
+                                            Content="{Binding [HistoryRemove], Source={x:Static services:LocalizationService.Instance}}"
+                                            Command="{Binding RemoveCommand}" CommandParameter="{Binding}"/>
+                                </WrapPanel>
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

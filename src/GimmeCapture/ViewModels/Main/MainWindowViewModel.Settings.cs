@@ -261,7 +261,14 @@ public partial class MainWindowViewModel
         get => _autoSave;
         set => this.RaiseAndSetIfChanged(ref _autoSave, value);
     }
-    
+
+    private bool _enableHistory = true;
+    public bool EnableHistory
+    {
+        get => _enableHistory;
+        set => this.RaiseAndSetIfChanged(ref _enableHistory, value);
+    }
+
     private string _saveDirectory = string.Empty;
     public string SaveDirectory
     {

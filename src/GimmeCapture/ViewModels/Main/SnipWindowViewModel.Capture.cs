@@ -213,6 +213,7 @@ public partial class SnipWindowViewModel
 
                 if (!string.IsNullOrWhiteSpace(savedPath))
                 {
+                    _mainVm?.CaptureHistory.AddImageAsync(savedPath).Forget("CaptureHistory.AddImage");
                     FileLocationService.RevealInFileExplorer(savedPath);
                 }
             }

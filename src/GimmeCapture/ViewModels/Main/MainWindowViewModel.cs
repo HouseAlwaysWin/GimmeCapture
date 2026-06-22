@@ -102,6 +102,8 @@ public partial class MainWindowViewModel : ViewModelBase
     }
 
     public AppSettingsService AppSettingsService => _settingsService;
+    /// <summary>Capture history index for saved screenshots and finalized recordings (B3 history panel).</summary>
+    public CaptureHistoryService CaptureHistory { get; }
     private readonly AppSettingsService _settingsService;
     private readonly IWindowManager _windowManager;
     private readonly IThemeResourceService _themeResourceService;
@@ -201,6 +203,7 @@ public partial class MainWindowViewModel : ViewModelBase
         TranslationMemoryDiagnostics.Log("app-startup");
 
         _settingsService = dependencies.SettingsService;
+        CaptureHistory = new CaptureHistoryService(_settingsService);
         _windowManager = dependencies.WindowManager;
         _themeResourceService = dependencies.ThemeResourceService;
         _globalHotkeySettingsCoordinator = dependencies.GlobalHotkeySettingsCoordinator;
@@ -303,6 +306,8 @@ public partial class MainWindowViewModel : ViewModelBase
                 }
             }
         });
+
+        InitializeHistoryCommands();
 
         RefreshLlamaModelsCommand = ReactiveCommand.Create(() => RefreshLlamaModelCatalog());
         SelectLlamaModelCommand = ReactiveCommand.Create<string>(modelId =>

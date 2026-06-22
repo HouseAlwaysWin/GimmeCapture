@@ -27,6 +27,7 @@ public sealed class MainWindowSettingsSnapshot
     public required bool DefaultHideSnipToolbar { get; init; }
     public required bool DefaultHideRecordToolbar { get; init; }
     public required bool AutoSave { get; init; }
+    public required bool EnableHistory { get; init; }
     public required string SaveDirectory { get; init; }
     public required bool ShowSnipCursor { get; init; }
     public required bool ShowRecordCursor { get; init; }
@@ -84,6 +85,7 @@ public sealed class MainWindowSettingsSnapshot
             DefaultHideSnipToolbar = settings.DefaultHideSnipToolbar,
             DefaultHideRecordToolbar = settings.DefaultHideRecordToolbar,
             AutoSave = settings.AutoSave,
+            EnableHistory = settings.EnableHistory,
             SaveDirectory = settings.SaveDirectory,
             ShowSnipCursor = settings.ShowSnipCursor,
             ShowRecordCursor = settings.ShowRecordCursor,
@@ -141,6 +143,7 @@ public sealed class MainWindowSettingsSnapshot
         settings.DefaultHideSnipToolbar = DefaultHideSnipToolbar;
         settings.DefaultHideRecordToolbar = DefaultHideRecordToolbar;
         settings.AutoSave = AutoSave;
+        settings.EnableHistory = EnableHistory;
         settings.SaveDirectory = SaveDirectory;
         settings.ShowSnipCursor = ShowSnipCursor;
         settings.ShowRecordCursor = ShowRecordCursor;

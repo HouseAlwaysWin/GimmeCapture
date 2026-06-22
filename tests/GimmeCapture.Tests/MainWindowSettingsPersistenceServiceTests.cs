@@ -44,6 +44,7 @@ public class MainWindowSettingsPersistenceServiceTests
             DefaultHideSnipToolbar = true,
             DefaultHideRecordToolbar = false,
             AutoSave = true,
+            EnableHistory = false,
             SaveDirectory = @"D:\captures",
             ShowSnipCursor = true,
             ShowRecordCursor = false,
@@ -87,6 +88,7 @@ public class MainWindowSettingsPersistenceServiceTests
         Assert.Equal(snapshot.RecordFormat, persisted.RecordFormat);
         Assert.Equal(snapshot.RecordHotkey, persisted.RecordHotkey);
         Assert.Equal(snapshot.AutoPinScreenshotSelection, persisted.AutoPinScreenshotSelection);
+        Assert.Equal(snapshot.EnableHistory, persisted.EnableHistory);
         Assert.Equal(snapshot.CaptureDelay, persisted.CaptureDelay);
         Assert.Equal(snapshot.OcrTextLayout, persisted.OcrTextLayout);
         Assert.Equal(snapshot.TextCopyHotkey, persisted.TextCopyHotkey);

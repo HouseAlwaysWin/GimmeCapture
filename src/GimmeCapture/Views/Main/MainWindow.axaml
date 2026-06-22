@@ -91,6 +91,11 @@
                 <ContentControl x:Name="ModulesTabHost"/>
             </TabItem>
             
+            <!-- 歷史 (History) -->
+            <TabItem Header="{Binding [TabHistory], Source={x:Static services:LocalizationService.Instance}}">
+                <tabs:SettingsHistoryTab/>
+            </TabItem>
+
             <!-- 關於 (About) -->
             <TabItem Header="{Binding [TabAbout], Source={x:Static services:LocalizationService.Instance}}">
                 <ContentControl x:Name="AboutTabHost"/>

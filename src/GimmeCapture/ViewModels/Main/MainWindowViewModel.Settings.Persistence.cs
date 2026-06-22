@@ -52,6 +52,7 @@ public partial class MainWindowViewModel
             DefaultHideSnipToolbar = DefaultHideSnipToolbar,
             DefaultHideRecordToolbar = DefaultHideRecordToolbar,
             AutoSave = AutoSave,
+            EnableHistory = EnableHistory,
             SaveDirectory = SaveDirectory,
             ShowSnipCursor = ShowSnipCursor,
             ShowRecordCursor = ShowRecordCursor,
@@ -92,6 +93,7 @@ public partial class MainWindowViewModel
         AutoCheckUpdates = snapshot.AutoCheckUpdates;
         BorderThickness = snapshot.BorderThickness;
         AutoSave = snapshot.AutoSave;
+        EnableHistory = snapshot.EnableHistory;
         SaveDirectory = snapshot.SaveDirectory;
         SnipHotkey = snapshot.SnipHotkey;
         TranslateHotkey = snapshot.TranslateHotkey;

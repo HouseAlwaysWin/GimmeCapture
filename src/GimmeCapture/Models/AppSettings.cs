@@ -128,6 +128,8 @@ public class AppSettings
     // Output
     public bool AutoSave { get; set; }
     public string SaveDirectory { get; set; } = "";
+    /// <summary>When true, saved screenshots and finalized recordings are recorded in the capture history panel.</summary>
+    public bool EnableHistory { get; set; } = true;
     
     public bool ShowSnipCursor { get; set; } = false;
     public bool ShowRecordCursor { get; set; } = true;
