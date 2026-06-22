@@ -5,6 +5,7 @@ using Avalonia.VisualTree;
 using GimmeCapture.ViewModels.Main;
 using GimmeCapture.Views.Dialogs;
 using System;
+using System.Threading.Tasks;
 
 namespace GimmeCapture.Views.Main.Tabs;
 
@@ -74,6 +75,20 @@ public partial class SettingsHotkeysTab : UserControl
     }
 
     private async void HotkeyTextBox_KeyDown(object? sender, KeyEventArgs e)
+    {
+        // Event handlers must be void; wrap the awaitable body so a dialog/await fault is
+        // logged instead of surfacing as an unobserved async-void crash on the dispatcher.
+        try
+        {
+            await HandleHotkeyKeyDownAsync(sender, e);
+        }
+        catch (Exception ex)
+        {
+            GimmeCapture.Services.Core.Infrastructure.AppLog.Error("SettingsHotkeys.KeyDown", ex);
+        }
+    }
+
+    private async Task HandleHotkeyKeyDownAsync(object? sender, KeyEventArgs e)
     {
         EnsureSuspended();
 

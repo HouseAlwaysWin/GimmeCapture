@@ -262,6 +262,12 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     public Action? CloseRecordingProgressWindowAction { get; set; }
     public Action? SaveAction { get; set; }
     public Action? FocusWindowAction { get; set; }
+    /// <summary>
+    /// Shows an OK-only dialog owned by the snip overlay window itself. Assigned by SnipWindow so the
+    /// dialog renders above the topmost overlay and the overlay's hit-test region is disabled while modal
+    /// (otherwise the full-screen overlay swallows the clicks — see the "no Llama model" error case).
+    /// </summary>
+    public Func<string, string, Task>? ShowOkDialogAction { get; set; }
     internal Action? PersistTranslationSelectionsAction { get; set; }
     public Func<Task<Avalonia.Media.Imaging.WriteableBitmap?>>? CaptureDrawingModeSnapshotAsync { get; set; }
     public Action<Avalonia.Media.Imaging.Bitmap, Rect, Color, double, bool, bool, string?, double>? OpenPinWindowAction { get; set; }

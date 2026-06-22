@@ -532,7 +532,17 @@ public partial class SnipWindowViewModel
             {
                 var title = LocalizationService.Instance["StatusError"];
                 var message = LocalizationService.Instance[result.ErrorKey];
-                await _mainVm.ConfirmAction!(title, message, true);
+
+                // Prefer the snip-overlay-owned dialog so the topmost overlay doesn't swallow the
+                // clicks; fall back to the main-window dialog only if the snip action isn't wired.
+                if (ShowOkDialogAction != null)
+                {
+                    await ShowOkDialogAction(title, message);
+                }
+                else if (_mainVm.ConfirmAction != null)
+                {
+                    await _mainVm.ConfirmAction(title, message, true);
+                }
             }
         }
         catch (Exception ex)

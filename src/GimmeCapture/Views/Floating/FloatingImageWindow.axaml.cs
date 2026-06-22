@@ -8,6 +8,7 @@ using GimmeCapture.Models;
 using System;
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core;
+using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Interop;
 using Avalonia.Media.Imaging;
 using Avalonia.Media;
@@ -668,11 +669,11 @@ public partial class FloatingImageWindow : FloatingWindowBase
         }
     }
 
-    protected override async void OnPointerReleased(PointerReleasedEventArgs e)
+    protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         // 1. Let Base handle Resize, Drawing, Selection release
         base.OnPointerReleased(e);
-        
+
         // 2. AI Interaction Release
         if (_isAIPointing)
         {
@@ -681,7 +682,7 @@ public partial class FloatingImageWindow : FloatingWindowBase
             {
                 var pos = e.GetPosition(imageControl);
                 var renderedRect = GetImageRenderedRect(imageControl as Image);
-                
+
                 if (renderedRect.Contains(pos))
                 {
                     var relativeX = pos.X - renderedRect.X;
@@ -694,7 +695,10 @@ public partial class FloatingImageWindow : FloatingWindowBase
                         e.KeyModifiers.HasFlag(KeyModifiers.Shift);
                     bool isPositive = !isInverseSelection;
 
-                    await vm.HandlePointClickAsync(pixelX, pixelY, isPositive);
+                    // Fire-and-forget: OnPointerReleased overrides a void member, so we cannot await here.
+                    // .Forget() observes and logs faults instead of letting an async-void exception crash the app.
+                    vm.HandlePointClickAsync(pixelX, pixelY, isPositive)
+                        .Forget("FloatingImage.HandlePointClickRelease");
                 }
             }
             e.Pointer.Capture(null);

@@ -402,6 +402,14 @@ public partial class SnipWindow : Window
             _viewModel.HideAction = () => Hide();
             _viewModel.ShowAction = () => Show();
 
+            // Own the dialog to the snip overlay so it appears above the topmost overlay and the
+            // overlay's hit-test region is disabled while modal (otherwise clicks are swallowed).
+            _viewModel.ShowOkDialogAction = async (title, message) =>
+            {
+                await GimmeCapture.Views.Dialogs.ConfirmationDialog.ShowConfirmation(
+                    this, title, message, GimmeCapture.Views.Dialogs.ConfirmationMode.OkOnly);
+            };
+
             _viewModel.OpenRecordingProgressWindowAction = () =>
             {
                 if (_progressWindow != null) return;
