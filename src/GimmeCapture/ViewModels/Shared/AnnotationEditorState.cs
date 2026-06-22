@@ -471,6 +471,37 @@ public sealed class AnnotationEditorState : ReactiveObject, IDisposable
         return true;
     }
 
+    public void BringToFront(Annotation annotation)
+    {
+        int oldIndex = Annotations.IndexOf(annotation);
+        if (oldIndex < 0 || oldIndex == Annotations.Count - 1) return;
+        int newIndex = Annotations.Count - 1;
+        Annotations.Move(oldIndex, newIndex);
+        PushUndoAction(new AnnotationReorderHistoryAction(Annotations, annotation, oldIndex, newIndex));
+    }
+
+    public void SendToBack(Annotation annotation)
+    {
+        int oldIndex = Annotations.IndexOf(annotation);
+        if (oldIndex <= 0) return;
+        Annotations.Move(oldIndex, 0);
+        PushUndoAction(new AnnotationReorderHistoryAction(Annotations, annotation, oldIndex, 0));
+    }
+
+    public bool BringSelectedToFront()
+    {
+        if (SelectedAnnotation == null) return false;
+        BringToFront(SelectedAnnotation);
+        return true;
+    }
+
+    public bool SendSelectedToBack()
+    {
+        if (SelectedAnnotation == null) return false;
+        SendToBack(SelectedAnnotation);
+        return true;
+    }
+
     public void ClearAnnotations()
     {
         if (Annotations.Count == 0) return;

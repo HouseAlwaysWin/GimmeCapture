@@ -86,6 +86,8 @@ public partial class SnipWindowViewModel
         nameof(BlurTooltip),
         nameof(HighlighterTooltip),
         nameof(StepTooltip),
+        nameof(BringToFrontTooltip),
+        nameof(SendToBackTooltip),
         nameof(FullscreenSelectTooltip),
         nameof(SnipTooltip),
         nameof(RecordTooltip),

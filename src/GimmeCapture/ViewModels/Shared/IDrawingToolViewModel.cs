@@ -48,6 +48,9 @@ public interface IDrawingToolViewModel
     
     ReactiveCommand<Unit, Unit> UndoCommand { get; }
     ReactiveCommand<Unit, Unit> RedoCommand { get; }
+
+    ReactiveCommand<Unit, Unit> BringToFrontCommand { get; }
+    ReactiveCommand<Unit, Unit> SendToBackCommand { get; }
     
     ReactiveCommand<Color, Unit> ChangeColorCommand { get; }
 
@@ -74,5 +77,7 @@ public interface IDrawingToolViewModel
     string BlurTooltip { get; }
     string HighlighterTooltip { get; }
     string StepTooltip { get; }
+    string BringToFrontTooltip { get; }
+    string SendToBackTooltip { get; }
     string CurrentRedactionPreset { get; }
 }

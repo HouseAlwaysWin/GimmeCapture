@@ -140,6 +140,34 @@ public class AnnotationHistoryAction : IHistoryAction
     public void Dispose() { }
 }
 
+public sealed class AnnotationReorderHistoryAction : IHistoryAction
+{
+    private readonly ObservableCollection<Annotation> _annotations;
+    private readonly Annotation _annotation;
+    private readonly int _oldIndex;
+    private readonly int _newIndex;
+
+    public AnnotationReorderHistoryAction(ObservableCollection<Annotation> annotations, Annotation annotation, int oldIndex, int newIndex)
+    {
+        _annotations = annotations;
+        _annotation = annotation;
+        _oldIndex = oldIndex;
+        _newIndex = newIndex;
+    }
+
+    public void Undo() => MoveTo(_oldIndex);
+    public void Redo() => MoveTo(_newIndex);
+
+    private void MoveTo(int targetIndex)
+    {
+        int current = _annotations.IndexOf(_annotation);
+        if (current < 0 || targetIndex < 0 || targetIndex >= _annotations.Count) return;
+        if (current != targetIndex) _annotations.Move(current, targetIndex);
+    }
+
+    public void Dispose() { }
+}
+
 public sealed class AnnotationEditHistoryAction : IHistoryAction
 {
     private readonly Annotation _annotation;

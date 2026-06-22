@@ -107,6 +107,8 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
     public string BlurTooltip => $"{LocalizationService.Instance["TipBlur"]} ({BlurHotkey})";
     public string HighlighterTooltip => LocalizationService.Instance["TipHighlighter"];
     public string StepTooltip => LocalizationService.Instance["TipStep"];
+    public string BringToFrontTooltip => LocalizationService.Instance["TipBringToFront"];
+    public string SendToBackTooltip => LocalizationService.Instance["TipSendToBack"];
     public string ToggleToolbarTooltip => $"{LocalizationService.Instance["ActionToolbar"]} ({_appSettingsService?.Settings.Snip.Toolbar ?? "H"})";
     public string CloseTooltip => $"{LocalizationService.Instance["ActionClose"]} ({CloseHotkey})";
     public string SelectionTooltip => $"{LocalizationService.Instance["TipSelectionArea"]} ({SelectionHotkey})";

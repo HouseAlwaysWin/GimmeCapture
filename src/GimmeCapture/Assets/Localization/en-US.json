@@ -253,6 +253,8 @@
   "TipHighlighter": "Highlighter",
   "TipStep": "Step Number",
   "TipFill": "Fill",
+  "TipBringToFront": "Bring to Front",
+  "TipSendToBack": "Send to Back",
   "OCRLanguage": "OCR Source Language:",
   "OCRLangAuto": "Auto Detect",
   "OCRLangEnglish": "English",

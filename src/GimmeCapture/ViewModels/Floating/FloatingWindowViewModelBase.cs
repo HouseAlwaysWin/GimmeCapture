@@ -352,6 +352,8 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
     public ReactiveCommand<Unit, Unit> ClearAnnotationsCommand { get; protected set; } = null!;
     public ReactiveCommand<Unit, Unit> UndoCommand { get; protected set; } = null!;
     public ReactiveCommand<Unit, Unit> RedoCommand { get; protected set; } = null!;
+    public ReactiveCommand<Unit, Unit> BringToFrontCommand { get; protected set; } = null!;
+    public ReactiveCommand<Unit, Unit> SendToBackCommand { get; protected set; } = null!;
     public ReactiveCommand<string, Unit> ToggleToolGroupCommand { get; protected set; } = null!;
     public ReactiveCommand<Unit, Unit> SelectionCommand { get; protected set; } = null!;
     public ReactiveCommand<Unit, Unit> CloseCommand { get; protected set; } = null!;
@@ -523,6 +525,8 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
         DeleteSelectedAnnotationCommand = ReactiveCommand.Create(
             () => { _editorState.RemoveSelectedAnnotation(); },
             canDeleteSelected);
+        BringToFrontCommand = ReactiveCommand.Create(() => { _editorState.BringSelectedToFront(); }, canDeleteSelected);
+        SendToBackCommand = ReactiveCommand.Create(() => { _editorState.SendSelectedToBack(); }, canDeleteSelected);
         ClearAnnotationsCommand = ReactiveCommand.Create(ClearAnnotations, notEnteringText);
 
         var canUndo = this.WhenAnyValue(x => x.HasUndo, x => x.IsEnteringText, (u, t) => u && !t).ObserveOn(RxSchedulers.MainThreadScheduler);

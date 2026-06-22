@@ -243,6 +243,16 @@
                       Width="14" Height="14"
                       Foreground="{Binding SelectedColor, Converter={StaticResource ColorToBrushConverter}}"/>
         </Button>
+
+        <!-- Layer order (enabled when an annotation is selected) -->
+        <Button Theme="{StaticResource SnipButton}" FontSize="12" BorderThickness="1"
+                Command="{Binding BringToFrontCommand}" ToolTip.Tip="{Binding BringToFrontTooltip}">
+            <PathIcon Data="M2,2H16V16H2V2M22,8V22H8V18H10V20H20V10H18V8H22Z" Width="14" Height="14"/>
+        </Button>
+        <Button Theme="{StaticResource SnipButton}" FontSize="12" BorderThickness="1"
+                Command="{Binding SendToBackCommand}" ToolTip.Tip="{Binding SendToBackTooltip}">
+            <PathIcon Data="M2,2H16V16H2V2M4,4V14H14V4H4M22,8V22H8V18H18V8H22Z" Width="14" Height="14"/>
+        </Button>
     </StackPanel>
 </UserControl>
 
