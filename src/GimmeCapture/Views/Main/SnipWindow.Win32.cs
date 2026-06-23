@@ -380,6 +380,27 @@ public partial class SnipWindow : Window
         bool ctrlDown = (GetAsyncKeyState(0x11) & 0x8000) != 0;
         bool altDown = (GetAsyncKeyState(0x12) & 0x8000) != 0;
 
+        // Manual scrolling capture owns the keyboard and must be handled BEFORE the generic
+        // Escape/dismiss handler below — otherwise Esc would dismiss the (hidden) overlay
+        // instead of cancelling the scroll session. The Pin key (F6) finishes, Esc cancels,
+        // and every other key passes through so the user can keep scrolling.
+        if (_viewModel.IsManualScrollActive)
+        {
+            if (isKeyDown && IsMatch(_viewModel.ActiveActionHotkey))
+            {
+                _viewModel.FinishManualScrollCapture(cancelled: false);
+                return true;
+            }
+
+            if (isKeyDown && IsMatch(_viewModel.CloseHotkey))
+            {
+                _viewModel.FinishManualScrollCapture(cancelled: true);
+                return true;
+            }
+
+            return false;
+        }
+
         // Escape is handled even when a text control is focused (cancel entry / dismiss selection / close).
         if (isKeyDown && string.Equals(keyStr, "Escape", StringComparison.OrdinalIgnoreCase))
         {
@@ -459,26 +480,6 @@ public partial class SnipWindow : Window
             if (HotkeyParsingHelper.ModifiersMatch(hotkeySpan, ctrlDown, altDown, shiftDown)
                 && keyPart.Equals(keyStr.AsSpan(), StringComparison.OrdinalIgnoreCase))
             {
-                return true;
-            }
-
-            return false;
-        }
-
-        // Manual scrolling capture owns the keyboard: the Pin key (F6) finishes, the Close key
-        // (Esc) cancels, and every other key passes through to the target window so the user can
-        // keep scrolling (incl. PageDown/Space/arrows). This runs even while the overlay is hidden.
-        if (_viewModel.IsManualScrollActive)
-        {
-            if (IsMatch(_viewModel.ActiveActionHotkey))
-            {
-                _viewModel.FinishManualScrollCapture(cancelled: false);
-                return true;
-            }
-
-            if (IsMatch(_viewModel.CloseHotkey))
-            {
-                _viewModel.FinishManualScrollCapture(cancelled: true);
                 return true;
             }
 
