@@ -244,12 +244,16 @@
                       Foreground="{Binding SelectedColor, Converter={StaticResource ColorToBrushConverter}}"/>
         </Button>
 
-        <!-- Layer order (enabled when an annotation is selected) -->
+        <!-- Layer order: only shown when an annotation is selected (these act on the selection) -->
+        <Rectangle Fill="#444444" Width="1" Height="16" Margin="2,0" VerticalAlignment="Center"
+                   IsVisible="{Binding SelectedAnnotation, Converter={StaticResource ObjectNotNullConverter}}"/>
         <Button Theme="{StaticResource SnipButton}" FontSize="12" BorderThickness="1"
+                IsVisible="{Binding SelectedAnnotation, Converter={StaticResource ObjectNotNullConverter}}"
                 Command="{Binding BringToFrontCommand}" ToolTip.Tip="{Binding BringToFrontTooltip}">
             <PathIcon Data="M2,2H16V16H2V2M22,8V22H8V18H10V20H20V10H18V8H22Z" Width="14" Height="14"/>
         </Button>
         <Button Theme="{StaticResource SnipButton}" FontSize="12" BorderThickness="1"
+                IsVisible="{Binding SelectedAnnotation, Converter={StaticResource ObjectNotNullConverter}}"
                 Command="{Binding SendToBackCommand}" ToolTip.Tip="{Binding SendToBackTooltip}">
             <PathIcon Data="M2,2H16V16H2V2M4,4V14H14V4H4M22,8V22H8V18H18V8H22Z" Width="14" Height="14"/>
         </Button>
