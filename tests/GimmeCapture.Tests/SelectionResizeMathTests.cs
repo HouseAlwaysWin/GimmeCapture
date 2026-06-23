@@ -27,16 +27,19 @@ public class SelectionResizeMathTests
         Assert.Equal(40, h);   // 50 - 10
     }
 
+    // The direction is passed as a string (parsed below) because ResizeDirection is
+    // internal and a public xUnit test method cannot expose it in its signature (CS0051).
     [Theory]
-    [InlineData(ResizeDirection.Top, 10, 20, 100, 50, 10, 30, 100, 30)]    // y+=dy, h-=dy
-    [InlineData(ResizeDirection.Bottom, 10, 20, 100, 50, 10, 20, 100, 70)] // h+=dy
-    [InlineData(ResizeDirection.Left, 10, 20, 100, 50, 30, 20, 80, 50)]    // x+=dx, w-=dx
-    [InlineData(ResizeDirection.Right, 10, 20, 100, 50, 10, 20, 130, 50)]  // w+=dx
+    [InlineData("Top", 10, 20, 100, 50, 10, 30, 100, 30)]    // y+=dy, h-=dy
+    [InlineData("Bottom", 10, 20, 100, 50, 10, 20, 100, 70)] // h+=dy
+    [InlineData("Left", 10, 20, 100, 50, 30, 20, 80, 50)]    // x+=dx, w-=dx
+    [InlineData("Right", 10, 20, 100, 50, 10, 20, 130, 50)]  // w+=dx
     public void ApplyResizeDelta_Edges_MoveOnlyTheirComponent(
-        ResizeDirection dir, double ox, double oy, double ow, double oh,
+        string dir, double ox, double oy, double ow, double oh,
         double ex, double ey, double ew, double eh)
     {
-        var (x, y, w, h) = SelectionResizeMath.ApplyResizeDelta(new Rect(ox, oy, ow, oh), dir, 20, 20);
+        var direction = System.Enum.Parse<ResizeDirection>(dir);
+        var (x, y, w, h) = SelectionResizeMath.ApplyResizeDelta(new Rect(ox, oy, ow, oh), direction, 20, 20);
         Assert.Equal(ex, x);
         Assert.Equal(ey, y);
         Assert.Equal(ew, w);
