@@ -11,6 +11,7 @@ public sealed class ResourceQueueServiceTests
         await using var queue = new ResourceQueueService(workerCount: 3);
         var running = 0;
         var maxRunning = 0;
+        using var started = new SemaphoreSlim(0);
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
         var tasks = Enumerable.Range(0, 8)
@@ -18,14 +19,29 @@ public sealed class ResourceQueueServiceTests
             {
                 var current = Interlocked.Increment(ref running);
                 UpdateMax(ref maxRunning, current);
+                started.Release();
                 await release.Task.WaitAsync(token);
                 Interlocked.Decrement(ref running);
                 return true;
             }))
             .ToArray();
 
-        await WaitUntilAsync(() => Volatile.Read(ref running) == 3);
+        // Deterministically wait until exactly the worker count of jobs have entered.
+        for (int i = 0; i < 3; i++)
+        {
+            Assert.True(
+                await started.WaitAsync(TimeSpan.FromSeconds(30)),
+                "Timed out waiting for a worker to start.");
+        }
+
+        Assert.Equal(3, Volatile.Read(ref running));
         Assert.Equal(3, Volatile.Read(ref maxRunning));
+
+        // The cap holds: no 4th job can start while the first three hold their slots
+        // (all workers are blocked on `release`, so this is deterministically false).
+        Assert.False(
+            await started.WaitAsync(TimeSpan.FromMilliseconds(200)),
+            "A fourth job started, exceeding the worker count.");
 
         release.SetResult();
         var results = await Task.WhenAll(tasks);
@@ -167,15 +183,6 @@ public sealed class ResourceQueueServiceTests
         await queue.DisposeAsync();
 
         Assert.Equal(ResourceQueueStatus.Cancelled, (await completion).Status);
-    }
-
-    private static async Task WaitUntilAsync(Func<bool> condition)
-    {
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-        while (!condition())
-        {
-            await Task.Delay(10, timeout.Token);
-        }
     }
 
     private static void UpdateMax(ref int target, int value)
