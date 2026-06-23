@@ -238,7 +238,7 @@ public partial class RecordingService
         return _targetFormat;
     }
 
-    private static bool RequiresMatroskaFinalization(string encoderName)
+    internal static bool RequiresMatroskaFinalization(string encoderName)
     {
         if (string.IsNullOrWhiteSpace(encoderName))
         {
@@ -253,7 +253,7 @@ public partial class RecordingService
             || encoderName.Contains("_d3d12va", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static string GetTargetExtension(string format) =>
+    internal static string GetTargetExtension(string format) =>
         format switch
         {
             "mp4" => "mp4",
@@ -262,7 +262,7 @@ public partial class RecordingService
             _ => "mkv"
         };
 
-    private static string GetMuxerFormatName(string format) =>
+    internal static string GetMuxerFormatName(string format) =>
         format switch
         {
             "mp4" => "mp4",
