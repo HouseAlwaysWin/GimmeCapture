@@ -22,9 +22,9 @@ public partial class SnipWindowViewModel
     private int _manualMinOverlap;
     private int _manualIgnoreRight;
 
-    private const int ManualTickMs = 150;
+    private const int ManualTickMs = 90;            // capture often so fast scrolls still overlap
     private const int ManualMinNewRows = 2;
-    private const double ManualRowMismatchTolerance = 0.12;
+    private const double ManualRowMismatchTolerance = 0.20; // tolerate a static header/footer in the region
 
     /// <summary>True while a manual scrolling-capture session is running (overlay hidden).</summary>
     public bool IsManualScrollActive => _manualScrollActive;
