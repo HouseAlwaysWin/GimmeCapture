@@ -72,6 +72,7 @@ public partial class MainWindowViewModel
             RecordHotkey = RecordHotkey,
             TranslateHotkey = TranslateHotkey,
             TextCopyHotkey = TextCopyHotkey,
+            ScrollingCaptureHotkey = ScrollingCaptureHotkey,
             AIResourcesDirectory = AIResourcesDirectory,
             EnableAI = EnableAI,
             ShowAIScanBox = ShowAIScanBox,
@@ -101,6 +102,7 @@ public partial class MainWindowViewModel
         TranslateHotkey = snapshot.TranslateHotkey;
         RecordHotkey = snapshot.RecordHotkey;
         TextCopyHotkey = snapshot.TextCopyHotkey;
+        ScrollingCaptureHotkey = snapshot.ScrollingCaptureHotkey;
         RecordingSettings.RecordFormat = snapshot.RecordFormat;
         RecordingSettings.VideoSaveDirectory = snapshot.VideoSaveDirectory;
         RecordingSettings.VideoCodec = snapshot.VideoCodec;

@@ -14,7 +14,8 @@ public class HotkeyRouterService
         RecordingMode,
         TranslateMode,
         CopyAutoAction,
-        TextCopyAutoAction
+        TextCopyAutoAction,
+        ScrollingCaptureAutoAction
     }
 
     public enum WindowHotkeyAction
@@ -48,6 +49,9 @@ public class HotkeyRouterService
                 return true;
             case HotkeyIds.TextCopy:
                 mode = CaptureMode.TextCopy;
+                return true;
+            case HotkeyIds.ScrollingCapture:
+                mode = CaptureMode.ScrollingCapture;
                 return true;
             default:
                 mode = default;
@@ -92,6 +96,7 @@ public class HotkeyRouterService
             HotkeyIds.Translate => SnipGlobalHotkeyAction.TranslateMode,
             HotkeyIds.Copy => SnipGlobalHotkeyAction.CopyAutoAction,
             HotkeyIds.TextCopy => SnipGlobalHotkeyAction.TextCopyAutoAction,
+            HotkeyIds.ScrollingCapture => SnipGlobalHotkeyAction.ScrollingCaptureAutoAction,
             _ => SnipGlobalHotkeyAction.None
         };
     }

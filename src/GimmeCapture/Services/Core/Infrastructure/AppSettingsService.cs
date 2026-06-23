@@ -286,6 +286,7 @@ public class AppSettingsService
         dest.RecordHotkey = source.RecordHotkey;
         dest.TranslateHotkey = source.TranslateHotkey;
         dest.TextCopyHotkey = source.TextCopyHotkey;
+        dest.ScrollingCaptureHotkey = source.ScrollingCaptureHotkey;
 
         // Structured Hotkeys
         dest.Snip.Rectangle = source.Snip.Rectangle;

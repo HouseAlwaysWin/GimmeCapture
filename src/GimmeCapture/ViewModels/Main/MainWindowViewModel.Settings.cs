@@ -670,6 +670,27 @@ public partial class MainWindowViewModel
         }
     }
 
+    private string _scrollingCaptureHotkey = "Shift+F5";
+    public string ScrollingCaptureHotkey
+    {
+        get => _scrollingCaptureHotkey;
+        set
+        {
+            var changed = _scrollingCaptureHotkey != value;
+            if (changed)
+            {
+                this.RaiseAndSetIfChanged(ref _scrollingCaptureHotkey, value);
+            }
+
+            _settingsSideEffectCoordinator.RegisterGlobalHotkey(HotkeyIds.ScrollingCapture, value);
+            if (changed && !_isDataLoading)
+            {
+                _settingsService.Settings.ScrollingCaptureHotkey = value;
+                MarkModifiedAndQueueSettingsSave();
+            }
+        }
+    }
+
     private bool _isLlamaModelPickerOpen;
     public bool IsLlamaModelPickerOpen
     {

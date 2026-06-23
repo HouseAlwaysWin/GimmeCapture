@@ -119,6 +119,7 @@ public partial class MainWindowViewModel
             ["RecordHotkey"] = RecordHotkey,
             ["TranslateHotkey"] = TranslateHotkey,
             ["TextCopyHotkey"] = TextCopyHotkey,
+            ["ScrollingCaptureHotkey"] = ScrollingCaptureHotkey,
 
             ["Snip_Rectangle"] = Snip_Rectangle,
             ["Snip_Ellipse"] = Snip_Ellipse,

@@ -324,6 +324,7 @@
   "OcrPreserveLines": "Preserve line breaks",
   "OcrSingleLine": "Merge into one line",
   "TextCopyHotkey": "Quick OCR Copy",
+  "ScrollingCaptureHotkey": "Scrolling Capture",
   "QuickOcrProcessing": "Recognizing text...",
   "QuickOcrCopied": "Recognized text copied to the clipboard.",
   "QuickOcrModuleMissing": "PaddleOCR is not installed. Install it from Modules first.",
