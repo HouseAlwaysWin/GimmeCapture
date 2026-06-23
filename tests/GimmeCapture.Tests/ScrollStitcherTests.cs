@@ -311,9 +311,11 @@ public class ScrollStitcherTests
 
         Assert.Equal(3, ccw.Width);
         Assert.Equal(4, ccw.Height);
-        // CCW: source bottom-left (0, height-1) lands at the result's top-right (col 2, row 0),
-        // i.e. the source's bottom edge becomes the result's right column.
-        Assert.Equal(src.GetPixel(0, 2), ccw.GetPixel(2, 0));
+        // CCW: the source's bottom row (r = height-1 = 2) maps to the result's right column
+        // (col = height-1 = 2). Bottom-right (3,2) lands at the top of that column (2,0);
+        // bottom-left (0,2) lands at its bottom (2,3).
+        Assert.Equal(src.GetPixel(3, 2), ccw.GetPixel(2, 0));
+        Assert.Equal(src.GetPixel(0, 2), ccw.GetPixel(2, 3));
     }
 
     [Fact]
