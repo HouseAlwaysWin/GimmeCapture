@@ -70,11 +70,6 @@ public partial class SnipWindow : Window
         ResizingTranslationBox
     }
 
-    private enum ResizeDirection
-    {
-        None, TopLeft, TopRight, BottomLeft, BottomRight, Top, Bottom, Left, Right
-    }
-
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
     public static extern bool GetCursorPos(out POINT lpPoint);

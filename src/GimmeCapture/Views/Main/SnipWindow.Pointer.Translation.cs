@@ -91,22 +91,7 @@ public partial class SnipWindow
             var dx = currentPoint.X - _translationResizeStartPoint.X;
             var dy = currentPoint.Y - _translationResizeStartPoint.Y;
 
-            double newX = _originalTranslationRect.X;
-            double newY = _originalTranslationRect.Y;
-            double newW = _originalTranslationRect.Width;
-            double newH = _originalTranslationRect.Height;
-
-            switch (_translationResizeDirection)
-            {
-                case ResizeDirection.TopLeft:     newX += dx; newY += dy; newW -= dx; newH -= dy; break;
-                case ResizeDirection.TopRight:    newY += dy; newW += dx; newH -= dy; break;
-                case ResizeDirection.BottomLeft:  newX += dx; newW -= dx; newH += dy; break;
-                case ResizeDirection.BottomRight: newW += dx; newH += dy; break;
-                case ResizeDirection.Top:         newY += dy; newH -= dy; break;
-                case ResizeDirection.Bottom:      newH += dy; break;
-                case ResizeDirection.Left:        newX += dx; newW -= dx; break;
-                case ResizeDirection.Right:       newW += dx; break;
-            }
+            var (newX, newY, newW, newH) = SelectionResizeMath.ApplyResizeDelta(_originalTranslationRect, _translationResizeDirection, dx, dy);
 
             if (newW < 40) newW = 40;
             if (newH < 40) newH = 40;
