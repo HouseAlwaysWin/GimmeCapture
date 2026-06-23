@@ -99,6 +99,13 @@ internal static class ScrollStitcher
 
         int allowedRowSampleDiffs = (int)(sampleCount * RowPixelMismatchTolerance);
 
+        // Per-row "distinctiveness" weight from the established frame: how much each row
+        // differs from the one above it (a content edge / text line). Uniform bands (blank
+        // gaps, flat backgrounds) get ~0 weight so they don't dilute the match — only the
+        // textured content drives alignment, which makes the true shift a sharp, unique
+        // minimum even on noisy pages like Discord.
+        double[] prevWeights = ComputeRowWeights(prevSig, height, sampleCount);
+
         // d = signed shift. d >= 0 aligns previous[r+d] with next[r] (content moved up);
         // d < 0 aligns previous[r] with next[r-d] (content moved down). Score every shift
         // first, then judge the winner against its competitors for ambiguity.
@@ -113,7 +120,8 @@ internal static class ScrollStitcher
             int nextStart = d >= 0 ? 0 : -d;
             int allowedRowMismatches = (int)(overlap * clampedRatio);
 
-            long totalDiffs = 0;
+            double weightedDiff = 0;
+            double weightSum = 0;
             int rowMismatches = 0;
             bool gated = false;
             for (int r = 0; r < overlap; r++)
@@ -123,7 +131,10 @@ internal static class ScrollStitcher
                     nextSig, (nextStart + r) * sampleCount * 4,
                     sampleCount);
 
-                totalDiffs += diffs;
+                double w = prevWeights[prevStart + r];
+                weightedDiff += diffs * w;
+                weightSum += w;
+
                 if (diffs > allowedRowSampleDiffs)
                 {
                     rowMismatches++;
@@ -135,9 +146,10 @@ internal static class ScrollStitcher
                 }
             }
 
-            if (!gated)
+            // Need enough textured content in the overlap to trust the alignment.
+            if (!gated && weightSum > 1e-9)
             {
-                scores[d + maxShift] = (double)totalDiffs / ((long)overlap * sampleCount);
+                scores[d + maxShift] = weightedDiff / (weightSum * sampleCount);
             }
         }
 
@@ -211,6 +223,37 @@ internal static class ScrollStitcher
         }
 
         return previous.Height - shift.Rows;
+    }
+
+    /// <summary>
+    /// Per-row distinctiveness weight: the summed B/G/R difference between each row's samples
+    /// and the row above it. Content edges / text lines score high; uniform bands score ~0.
+    /// Used to weight the alignment match so featureless regions don't create false overlaps.
+    /// </summary>
+    private static double[] ComputeRowWeights(byte[] sig, int height, int sampleCount)
+    {
+        var weights = new double[height];
+        int stride = sampleCount * 4;
+        for (int row = 1; row < height; row++)
+        {
+            int cur = row * stride;
+            int prev = (row - 1) * stride;
+            long sum = 0;
+            for (int i = 0; i < sampleCount; i++)
+            {
+                int o = i * 4;
+                sum += Math.Abs(sig[cur + o] - sig[prev + o]);
+                sum += Math.Abs(sig[cur + o + 1] - sig[prev + o + 1]);
+                sum += Math.Abs(sig[cur + o + 2] - sig[prev + o + 2]);
+            }
+
+            // Per-sample average vertical gradient. Uniform rows -> 0 (ignored); textured
+            // rows (text, edges) -> large, so they dominate the alignment score.
+            weights[row] = sum / (double)(sampleCount * 3);
+        }
+
+        weights[0] = height > 1 ? weights[1] : 1.0;
+        return weights;
     }
 
     /// <summary>
