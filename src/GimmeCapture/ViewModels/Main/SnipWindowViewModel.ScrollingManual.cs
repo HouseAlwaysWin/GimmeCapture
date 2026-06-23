@@ -24,16 +24,11 @@ public partial class SnipWindowViewModel
     private int _manualMaxHeight;
     private int _manualMinOverlap;
     private int _manualIgnoreRight;
-    // Consecutive static frames that failed to align anywhere in the strip. Re-anchoring
-    // (appending a non-overlapping frame) only happens after enough of these, so a transient
-    // mismatch never causes a duplicate — we prefer a small gap over re-appending content.
-    private int _manualReanchorCount;
 
     private CancellationTokenSource? _manualCts;
     private Task? _manualPipelineTask;
     private Channel<SKBitmap>? _manualFrameChannel;
 
-    private const int ManualMinNewRows = 2;
     // Fraction of overlap rows allowed to differ. Higher because rows are matched by
     // pixel-similarity (not byte-exact), so a chat re-rendering a few rows per frame
     // (Discord, GPU-composited apps) still stitches.
@@ -41,9 +36,6 @@ public partial class SnipWindowViewModel
     // Bounded capture queue: a few frames of slack so a slow stitch (Append on a tall strip)
     // doesn't stall capture, without unbounded memory growth.
     private const int ManualQueueCapacity = 8;
-    // How many consecutive static + unmatched frames are required before re-anchoring onto
-    // disconnected new content (after a fast flick). Guards against duplicating on a transient.
-    private const int ManualReanchorConfirmFrames = 4;
 
     /// <summary>True while a manual scrolling-capture session is running (overlay hidden).</summary>
     public bool IsManualScrollActive => _manualScrollActive;
@@ -77,7 +69,6 @@ public partial class SnipWindowViewModel
         // those overlays come and go — otherwise it fails to align and gets re-appended.
         _manualIgnoreRight = Math.Clamp((int)(180 * scaling), (int)(24 * scaling), physW * 35 / 100);
         _manualMaxHeight = Math.Max(physH, physH * 40);
-        _manualReanchorCount = 0;
 
         try
         {
@@ -182,53 +173,14 @@ public partial class SnipWindowViewModel
                     int height = frame.Height;
                     bool grew = false;
 
-                    // Align the frame directly against the real edges of the accumulated strip
-                    // (not against a running position), so the placement can never drift and the
-                    // same content is never appended twice. The quick search only looks near the
-                    // strip edges (cheap); a deeper full search is done only when the view settles.
+                    // Align the frame against the real edges of the accumulated strip and only
+                    // ever extend by the validated overlap. We NEVER append content that doesn't
+                    // overlap the strip, so the same content can never be appended twice (no
+                    // duplication, no runaway jumps). A frame that doesn't overlap (a fast flick
+                    // past, or a transient mismatch) is simply skipped; the anchor still advances,
+                    // so capture resumes as soon as the view overlaps the strip edge again.
                     ScrollStitcher.FrameAlignment align = ScrollStitcher.AlignFrameToStrip(
                         _manualAccumulated, frame, _manualMinOverlap, _manualIgnoreRight, ManualRowMismatchTolerance, height);
-
-                    if (align.Found)
-                    {
-                        _manualReanchorCount = 0;
-                    }
-                    else
-                    {
-                        // The edge search failed. Decide whether the view has settled (user stopped)
-                        // by comparing against the previous frame.
-                        ScrollStitcher.VerticalShift settle = ScrollStitcher.FindVerticalShift(
-                            _manualPrevFrame, frame, _manualMinOverlap, _manualIgnoreRight, ManualRowMismatchTolerance);
-
-                        if (settle.Found && Math.Abs(settle.Rows) < ManualMinNewRows)
-                        {
-                            // Static. Search the whole strip — the frame may be deep inside
-                            // (scrolled back to the middle), which must NOT be re-appended.
-                            align = ScrollStitcher.AlignFrameToStrip(
-                                _manualAccumulated, frame, _manualMinOverlap, _manualIgnoreRight, ManualRowMismatchTolerance);
-
-                            if (align.Found)
-                            {
-                                _manualReanchorCount = 0;
-                            }
-                            else if (++_manualReanchorCount >= ManualReanchorConfirmFrames)
-                            {
-                                // Confirmed disconnected new content past a gap: re-anchor. Requiring
-                                // several consecutive static unmatched frames means a transient mismatch
-                                // never duplicates already-captured content.
-                                SKBitmap grown = ScrollStitcher.Append(_manualAccumulated, frame, 0); // overlap 0 => append whole frame
-                                _manualAccumulated.Dispose();
-                                _manualAccumulated = grown;
-                                grew = true;
-                                _manualReanchorCount = 0;
-                            }
-                        }
-                        else
-                        {
-                            // Still moving (mid-flick): wait, don't count toward re-anchoring.
-                            _manualReanchorCount = 0;
-                        }
-                    }
 
                     if (align.Found)
                     {
