@@ -127,7 +127,14 @@ public partial class SnipWindow : Window
                 if (_scrollHintWindow == null)
                 {
                     var hint = LocalizationService.Instance["ScrollingHintText"];
-                    _scrollHintWindow = new ScrollingCaptureHintWindow(hint);
+                    var finishLabel = LocalizationService.Instance["ScrollingFinish"];
+                    var cancelLabel = LocalizationService.Instance["Cancel"];
+                    _scrollHintWindow = new ScrollingCaptureHintWindow(
+                        hint,
+                        finishLabel,
+                        cancelLabel,
+                        () => _viewModel.FinishManualScrollCapture(cancelled: false),
+                        () => _viewModel.FinishManualScrollCapture(cancelled: true));
                     _scrollHintWindow.Show();
                 }
             };
