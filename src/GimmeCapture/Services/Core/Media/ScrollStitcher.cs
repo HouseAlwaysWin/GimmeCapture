@@ -24,11 +24,16 @@ internal static class ScrollStitcher
     /// differ in size.
     /// </summary>
     /// <param name="ignoreRightColumns">Columns to ignore on the right edge (e.g. a moving scrollbar).</param>
+    /// <param name="maxRowMismatchRatio">
+    /// Fraction of overlap rows allowed to differ and still count as a match (0 = exact).
+    /// Tolerates minor per-frame rendering differences (hover, blinking caret, lazy-loaded rows).
+    /// </param>
     public static int FindVerticalOverlap(
         SKBitmap previous,
         SKBitmap next,
         int minOverlapRows = 8,
-        int ignoreRightColumns = 0)
+        int ignoreRightColumns = 0,
+        double maxRowMismatchRatio = 0.0)
     {
         ArgumentNullException.ThrowIfNull(previous);
         ArgumentNullException.ThrowIfNull(next);
@@ -45,6 +50,7 @@ internal static class ScrollStitcher
         }
 
         int effectiveMin = Math.Clamp(minOverlapRows, 1, height);
+        double clampedRatio = Math.Clamp(maxRowMismatchRatio, 0.0, 1.0);
 
         ulong[] prevHashes = ComputeRowHashes(previous, ignoreRightColumns);
         ulong[] nextHashes = ComputeRowHashes(next, ignoreRightColumns);
@@ -53,13 +59,19 @@ internal static class ScrollStitcher
         for (int s = 0; s <= height - effectiveMin; s++)
         {
             int overlap = height - s;
+            int allowedMismatches = (int)(overlap * clampedRatio);
+            int mismatches = 0;
             bool match = true;
             for (int r = 0; r < overlap; r++)
             {
                 if (prevHashes[s + r] != nextHashes[r])
                 {
-                    match = false;
-                    break;
+                    mismatches++;
+                    if (mismatches > allowedMismatches)
+                    {
+                        match = false;
+                        break;
+                    }
                 }
             }
 

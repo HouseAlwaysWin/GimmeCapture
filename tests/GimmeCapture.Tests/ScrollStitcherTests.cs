@@ -44,6 +44,23 @@ public class ScrollStitcherTests
     }
 
     [Fact]
+    public void FindVerticalOverlap_WithTolerance_IgnoresAFewMismatchedRows()
+    {
+        using var previous = MakeFrame(10, 20, sourceOffset: 0);
+        using var next = MakeFrame(10, 20, sourceOffset: 5); // overlap 15 at scroll of 5
+        // Corrupt one row inside the overlap region to simulate a per-frame render diff.
+        for (int x = 0; x < 10; x++)
+        {
+            next.SetPixel(x, 3, new SKColor(1, 2, 3, 255));
+        }
+
+        // Exact matching can no longer confirm the 15-row overlap (one row differs).
+        Assert.NotEqual(15, ScrollStitcher.FindVerticalOverlap(previous, next));
+        // With tolerance the overlap is still detected despite the single mismatched row.
+        Assert.Equal(15, ScrollStitcher.FindVerticalOverlap(previous, next, minOverlapRows: 8, ignoreRightColumns: 0, maxRowMismatchRatio: 0.2));
+    }
+
+    [Fact]
     public void FindVerticalOverlap_DisjointFrames_ReturnsZero()
     {
         using var previous = MakeFrame(10, 20, sourceOffset: 0);

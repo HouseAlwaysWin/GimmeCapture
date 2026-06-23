@@ -256,7 +256,22 @@ public partial class FloatingImageWindow : FloatingWindowBase
 
         if (opaqueRects.Count == 0)
         {
-            Win32Helpers.ClearWindowRegion(hwnd);
+            // Degenerate layout (e.g. a very tall image shrunk small enough that the rendered
+            // image rect collapses): never drop the whole region, or the window becomes
+            // invisible/unclickable. Fall back to a full-window region so it stays usable.
+            var bounds = this.Bounds;
+            if (DataContext is FloatingImageViewModel { Image: not null } && bounds.Width >= 1 && bounds.Height >= 1)
+            {
+                Win32Helpers.SetDisjointOpaqueRegions(
+                    hwnd,
+                    new List<Rect> { new Rect(0, 0, bounds.Width, bounds.Height) },
+                    null);
+            }
+            else
+            {
+                Win32Helpers.ClearWindowRegion(hwnd);
+            }
+
             return;
         }
 
