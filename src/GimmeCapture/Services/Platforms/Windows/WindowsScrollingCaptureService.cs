@@ -18,10 +18,9 @@ namespace GimmeCapture.Services.Platforms.Windows;
 public sealed class WindowsScrollingCaptureService : IScrollingCaptureService
 {
     // Tunables for the scroll loop.
-    private const int WheelNotchesPerStep = 3;     // amount scrolled each step (must be < a viewport so frames overlap)
     private const int InitialSettleMs = 350;       // wait for the target to focus + paint before the first frame
-    private const int RenderDelayMs = 250;         // wait for content to render after scrolling
-    private const int MaxFrames = 80;              // hard cap on total scroll iterations (incl. retries)
+    private const int RenderDelayMs = 350;         // wait for content to render after scrolling (smooth-scroll settle)
+    private const int MaxFrames = 150;             // hard cap on total scroll iterations (incl. retries)
     private const int MaxHeightMultiplier = 40;    // result height cap = viewport height * this
     private const int MinNewRowsToContinue = 2;    // below this an attempt counts as "no progress"
     private const int MaxNoProgressAttempts = 3;   // consecutive no-progress attempts before concluding bottom
@@ -76,6 +75,11 @@ public sealed class WindowsScrollingCaptureService : IScrollingCaptureService
         int maxHeight = physH * MaxHeightMultiplier;
         int noProgress = 0;
 
+        // Scroll only a fraction of the region per step so consecutive frames always overlap
+        // (a fixed large step over-scrolls small regions, leaving no common rows to stitch).
+        // ~1 notch per ~400px of region height, capped, so small regions step gently.
+        int wheelNotches = Math.Clamp(physH / 400, 1, 3);
+
         try
         {
             for (int i = 0; i < MaxFrames; i++)
@@ -86,7 +90,7 @@ public sealed class WindowsScrollingCaptureService : IScrollingCaptureService
                 // (important when triggered via a global hotkey, where focus can drift).
                 ForceForeground(targetHwnd);
                 SetCursorPos(centerX, centerY);
-                SendWheel(centerX, centerY, -WheelNotchesPerStep);
+                SendWheel(centerX, centerY, -wheelNotches);
                 await Task.Delay(RenderDelayMs, cancellationToken).ConfigureAwait(false);
 
                 SKBitmap next = await _captureService

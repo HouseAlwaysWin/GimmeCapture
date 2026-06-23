@@ -314,24 +314,70 @@ public partial class SnipWindow : Window
                     // Window Position must be in PHYSICAL pixels.
                     double scaling = _viewModel.VisualScaling;
                     var padding = vm.WindowPadding;
-                    
+
+                    // Clamp oversized pins (e.g. a tall scrolling-capture stitch) to fit the
+                    // target screen. Without this the window opens larger than the screen and its
+                    // bottom/corner resize handles are off-screen, so it can't be resized.
+                    double screenW = 0, screenH = 0, scrLeft = 0, scrTop = 0;
+                    bool haveScreen = false;
+                    if (_viewModel.AllScreenBounds != null)
+                    {
+                        foreach (var s in _viewModel.AllScreenBounds)
+                        {
+                            if (new Rect(s.X, s.Y, s.W, s.H).Intersects(rect))
+                            {
+                                screenW = s.W; screenH = s.H; scrLeft = s.X; scrTop = s.Y; haveScreen = true;
+                                break;
+                            }
+                        }
+
+                        if (!haveScreen && _viewModel.AllScreenBounds.Count > 0)
+                        {
+                            var s = _viewModel.AllScreenBounds[0];
+                            screenW = s.W; screenH = s.H; scrLeft = s.X; scrTop = s.Y; haveScreen = true;
+                        }
+                    }
+
+                    bool clampedToScreen = false;
+                    if (haveScreen)
+                    {
+                        double contentW = vm.DisplayWidth + padding.Left + padding.Right;
+                        double contentH = vm.DisplayHeight + padding.Top + padding.Bottom;
+                        double fit = System.Math.Min((screenW * 0.95) / contentW, (screenH * 0.90) / contentH);
+                        if (double.IsFinite(fit) && fit > 0 && fit < 1.0)
+                        {
+                            vm.DisplayWidth *= fit;
+                            vm.DisplayHeight *= fit;
+                            clampedToScreen = true;
+                        }
+                    }
+
                     // Convert Logical Rect to Physical Screen coordinates
                     int physicalX = (int)(rect.X * scaling) + _viewModel.ScreenOffset.X;
                     int physicalY = (int)(rect.Y * scaling) + _viewModel.ScreenOffset.Y;
-                    
+
                     // Convert Logical Padding to Physical
                     int physicalPaddingLeft = (int)(padding.Left * scaling);
                     int physicalPaddingTop = (int)(padding.Top * scaling);
-                    
+
+                    // A clamped pin is placed at the target screen's top-left (+margin) so the whole
+                    // window, including every resize handle, is on-screen. Normal pins stay anchored
+                    // to the selection.
+                    var pinPosition = clampedToScreen
+                        ? new PixelPoint(
+                            (int)(scrLeft * scaling) + _viewModel.ScreenOffset.X + 20,
+                            (int)(scrTop * scaling) + _viewModel.ScreenOffset.Y + 20)
+                        : new PixelPoint(physicalX - physicalPaddingLeft, physicalY - physicalPaddingTop);
+
                     // Create Window
                     var win = new FloatingImageWindow
                     {
                         DataContext = vm,
                         // Set physical position using converted values
-                        Position = new PixelPoint(physicalX - physicalPaddingLeft, physicalY - physicalPaddingTop),
-                        // Width/Height in Avalonia are Logical
-                        Width = rect.Width + padding.Left + padding.Right,
-                        Height = rect.Height + padding.Top + padding.Bottom
+                        Position = pinPosition,
+                        // Width/Height in Avalonia are Logical (use the possibly-clamped display size)
+                        Width = vm.DisplayWidth + padding.Left + padding.Right,
+                        Height = vm.DisplayHeight + padding.Top + padding.Bottom
                     };
                     
                     // Auto-Run AI if requested

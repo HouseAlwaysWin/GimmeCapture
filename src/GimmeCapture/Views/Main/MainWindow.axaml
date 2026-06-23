@@ -105,18 +105,10 @@
         <!-- Bottom Actions -->
         <Border Grid.Row="2" BorderBrush="#1E1E1E" BorderThickness="0,1,0,0" Padding="10,10,10,10">
             <Grid ColumnDefinitions="Auto,*,Auto,Auto">
-                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10">
-                    <Button Content="{Binding [StartCapture], Source={x:Static services:LocalizationService.Instance}}"
-                            Theme="{StaticResource GothicMetalButton}"
-                            Command="{Binding StartCaptureCommand}"
-                            ToolTip.Tip="{Binding SnipTooltip}"/>
-                    <Button Content="{Binding [ScrollingCapture], Source={x:Static services:LocalizationService.Instance}}"
-                            Theme="{StaticResource GothicMetalButton}"
-                            Command="{Binding ScrollingCaptureCommand}"
-                            ToolTip.Tip="{Binding [ScrollingCaptureTip], Source={x:Static services:LocalizationService.Instance}}"/>
-                </StackPanel>
-                
-                <TextBlock Grid.Column="1" 
+                <!-- Capture is triggered via global hotkeys (Snip = Shift+F1, Scrolling = Shift+F5);
+                     the on-screen capture buttons were removed. -->
+
+                <TextBlock Grid.Column="1"
                            Text="{Binding StatusText}" 
                            VerticalAlignment="Center" 
                            Margin="10,0" 
