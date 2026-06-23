@@ -29,6 +29,17 @@ internal static class ScrollStitcher
     // report no match instead of stitching garbage.
     private const double MaxMatchSampleDiffRatio = 0.5;
 
+    // The best alignment must beat the best *competing* alignment (one that is at least
+    // ShiftSeparationRows away) by this margin. A clean scroll produces one sharp minimum;
+    // ambiguous frames (uniform bands, hover highlights, mid-animation) produce several
+    // similar candidates — when the winner is not clearly the best, skip the frame rather
+    // than risk stitching it at the wrong offset (the cause of the Discord scrambling).
+    private const double AmbiguityMargin = 0.035;
+
+    // Competing alignments nearer than this to the winner are treated as the same minimum
+    // (sub-pixel neighbours), not as a rival candidate.
+    private const int ShiftSeparationRows = 3;
+
     /// <summary>
     /// The signed vertical motion of the content between two frames.
     /// <list type="bullet">
@@ -44,9 +55,11 @@ internal static class ScrollStitcher
     /// Finds the signed vertical shift that best aligns <paramref name="next"/> onto
     /// <paramref name="previous"/>. Rows are matched by sampled pixels with a colour
     /// tolerance (not byte-exact hashing), and the globally best-scoring shift is chosen
-    /// (not merely the first acceptable one), so repetitive content does not lock onto a
-    /// wrong small shift. Returns <c>Found == false</c> when no overlap of at least
-    /// <paramref name="minOverlapRows"/> rows aligns well enough.
+    /// (not merely the first acceptable one). The winner is also checked for ambiguity:
+    /// if a competing alignment scores almost as well, the match is rejected
+    /// (<c>Found == false</c>) rather than risk stitching at the wrong offset. Also returns
+    /// <c>Found == false</c> when no overlap of at least <paramref name="minOverlapRows"/>
+    /// rows aligns well enough.
     /// </summary>
     /// <param name="ignoreRightColumns">Columns to ignore on the right edge (e.g. a moving scrollbar).</param>
     /// <param name="maxRowMismatchRatio">
@@ -86,13 +99,13 @@ internal static class ScrollStitcher
 
         int allowedRowSampleDiffs = (int)(sampleCount * RowPixelMismatchTolerance);
 
-        double bestScore = double.MaxValue;
-        int bestShift = 0;
-        bool found = false;
-
         // d = signed shift. d >= 0 aligns previous[r+d] with next[r] (content moved up);
-        // d < 0 aligns previous[r] with next[r-d] (content moved down).
+        // d < 0 aligns previous[r] with next[r-d] (content moved down). Score every shift
+        // first, then judge the winner against its competitors for ambiguity.
         int maxShift = height - effectiveMin;
+        var scores = new double[(2 * maxShift) + 1]; // index = d + maxShift
+        Array.Fill(scores, double.MaxValue);
+
         for (int d = -maxShift; d <= maxShift; d++)
         {
             int overlap = height - Math.Abs(d);
@@ -122,15 +135,25 @@ internal static class ScrollStitcher
                 }
             }
 
-            if (gated)
+            if (!gated)
+            {
+                scores[d + maxShift] = (double)totalDiffs / ((long)overlap * sampleCount);
+            }
+        }
+
+        // Best alignment = lowest score; on ties prefer the larger overlap (smaller scroll).
+        double bestScore = double.MaxValue;
+        int bestShift = 0;
+        bool found = false;
+        for (int d = -maxShift; d <= maxShift; d++)
+        {
+            double score = scores[d + maxShift];
+            if (score == double.MaxValue)
             {
                 continue;
             }
 
-            double score = (double)totalDiffs / ((long)overlap * sampleCount);
-            // Prefer the lowest-difference alignment; on ties prefer the larger overlap
-            // (the smaller scroll), which is the more conservative interpretation.
-            if (score < bestScore || (score == bestScore && overlap > height - Math.Abs(bestShift)))
+            if (score < bestScore || (score == bestScore && Math.Abs(d) < Math.Abs(bestShift)))
             {
                 bestScore = score;
                 bestShift = d;
@@ -139,6 +162,28 @@ internal static class ScrollStitcher
         }
 
         if (!found || bestScore > MaxMatchSampleDiffRatio)
+        {
+            return new VerticalShift(0, false);
+        }
+
+        // Reject ambiguous matches: the winner must clearly beat the best rival that is at
+        // least ShiftSeparationRows away. If no such rival exists, the minimum is unambiguous.
+        double rivalScore = double.MaxValue;
+        for (int d = -maxShift; d <= maxShift; d++)
+        {
+            if (Math.Abs(d - bestShift) < ShiftSeparationRows)
+            {
+                continue;
+            }
+
+            double score = scores[d + maxShift];
+            if (score < rivalScore)
+            {
+                rivalScore = score;
+            }
+        }
+
+        if (rivalScore != double.MaxValue && rivalScore - bestScore < AmbiguityMargin)
         {
             return new VerticalShift(0, false);
         }

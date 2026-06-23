@@ -140,6 +140,41 @@ public class ScrollStitcherTests
     }
 
     [Fact]
+    public void FindVerticalShift_AmbiguousPeriodicContent_NotFound()
+    {
+        // A vertically periodic pattern aligns equally well at several different shifts, so
+        // the true scroll cannot be told apart from a wrong one: it must be rejected rather
+        // than stitched at a guessed offset (this is what scrambled the Discord captures).
+        static SKColor Periodic(int row)
+        {
+            byte v = (byte)((row % 4) * 60);
+            return new SKColor(v, v, v, 255);
+        }
+
+        static SKBitmap MakePeriodic(int w, int h, int off)
+        {
+            var b = new SKBitmap(new SKImageInfo(w, h, SKColorType.Bgra8888, SKAlphaType.Premul));
+            for (int y = 0; y < h; y++)
+            {
+                var c = Periodic(off + y);
+                for (int x = 0; x < w; x++)
+                {
+                    b.SetPixel(x, y, c);
+                }
+            }
+
+            return b;
+        }
+
+        using var previous = MakePeriodic(20, 40, off: 0);
+        using var next = MakePeriodic(20, 40, off: 2); // also aligns at -2, +6, ... (period 4)
+
+        var shift = ScrollStitcher.FindVerticalShift(previous, next, minOverlapRows: 8, maxRowMismatchRatio: 0.2);
+
+        Assert.False(shift.Found);
+    }
+
+    [Fact]
     public void Prepend_AddsNewRowsAtTop()
     {
         using var accumulated = MakeFrame(10, 20, sourceOffset: 5); // rows 5..24 captured so far
