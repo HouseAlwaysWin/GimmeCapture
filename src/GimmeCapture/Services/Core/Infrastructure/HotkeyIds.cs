@@ -9,8 +9,4 @@ public static class HotkeyIds
     public const int Translate = 9004;
     public const int TextCopy = 9005;
     public const int ScrollingCapture = 9006;
-
-    // Registered only transiently during a manual scrolling-capture session (not user-configurable).
-    public const int ScrollingCaptureFinish = 9007;
-    public const int ScrollingCaptureCancel = 9008;
 }

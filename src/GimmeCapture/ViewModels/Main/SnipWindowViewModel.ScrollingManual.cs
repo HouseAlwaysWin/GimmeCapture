@@ -26,6 +26,9 @@ public partial class SnipWindowViewModel
     private const int ManualMinNewRows = 2;
     private const double ManualRowMismatchTolerance = 0.12;
 
+    /// <summary>True while a manual scrolling-capture session is running (overlay hidden).</summary>
+    public bool IsManualScrollActive => _manualScrollActive;
+
     /// <summary>Show the on-screen hint (capture-excluded) with the localized instruction.</summary>
     public Action? ShowScrollingHintAction { get; set; }
 
@@ -66,15 +69,8 @@ public partial class SnipWindowViewModel
         _manualPrevFrame = _manualAccumulated.Copy();
         _manualScrollActive = true;
 
-        try
-        {
-            _mainVm?.HotkeyService.Register(HotkeyIds.ScrollingCaptureFinish, "F6");
-            _mainVm?.HotkeyService.Register(HotkeyIds.ScrollingCaptureCancel, "Escape");
-        }
-        catch (Exception ex)
-        {
-            AppLog.Warning("ManualScroll.RegisterHotkeys", ex);
-        }
+        // Finish (F6) / cancel (Esc) are handled by the snip key hook (SnipWindow.Win32.cs),
+        // which receives keys even while the overlay is hidden — no separate global hotkey needed.
 
         ShowScrollingHintAction?.Invoke();
         UpdateScrollingHintAction?.Invoke(_manualAccumulated.Height);
@@ -164,16 +160,6 @@ public partial class SnipWindowViewModel
 
         _manualScrollTimer?.Stop();
         _manualScrollTimer = null;
-
-        try
-        {
-            _mainVm?.HotkeyService.Unregister(HotkeyIds.ScrollingCaptureFinish);
-            _mainVm?.HotkeyService.Unregister(HotkeyIds.ScrollingCaptureCancel);
-        }
-        catch (Exception ex)
-        {
-            AppLog.Warning("ManualScroll.UnregisterHotkeys", ex);
-        }
 
         HideScrollingHintAction?.Invoke();
 

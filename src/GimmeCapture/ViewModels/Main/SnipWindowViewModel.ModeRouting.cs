@@ -350,22 +350,12 @@ public partial class SnipWindowViewModel
     {
         if (_mainVm == null) return;
 
-        // Manual scrolling-capture finish/cancel keys (registered only while a session is active).
-        // F6 finishes; Esc cancels; pressing the trigger (Shift+F5) again also finishes as a
-        // reliable fallback in case the temporary F6 hotkey could not be registered.
-        if (_manualScrollActive)
+        // While a manual scrolling-capture session is active, pressing the trigger (Shift+F5)
+        // again finishes it. F6 (finish) / Esc (cancel) are handled by the snip key hook.
+        if (_manualScrollActive && id == HotkeyIds.ScrollingCapture)
         {
-            if (id == HotkeyIds.ScrollingCaptureFinish || id == HotkeyIds.ScrollingCapture)
-            {
-                FinishManualScrollCapture(cancelled: false);
-                return;
-            }
-
-            if (id == HotkeyIds.ScrollingCaptureCancel)
-            {
-                FinishManualScrollCapture(cancelled: true);
-                return;
-            }
+            FinishManualScrollCapture(cancelled: false);
+            return;
         }
 
         var now = DateTime.UtcNow;
@@ -866,10 +856,17 @@ public partial class SnipWindowViewModel
         await ExecutePinAsync(runAI, initialInteractive);
     }
 
-    private void Close() 
-    { 
+    private void Close()
+    {
+        // During manual scrolling capture the Close key (Esc) cancels the session.
+        if (_manualScrollActive)
+        {
+            FinishManualScrollCapture(cancelled: true);
+            return;
+        }
+
         _scanCts?.Cancel();
-        CloseAction?.Invoke(); 
+        CloseAction?.Invoke();
     }
     
     public void HandleRightClick()

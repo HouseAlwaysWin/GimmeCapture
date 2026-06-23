@@ -465,6 +465,26 @@ public partial class SnipWindow : Window
             return false;
         }
 
+        // Manual scrolling capture owns the keyboard: the Pin key (F6) finishes, the Close key
+        // (Esc) cancels, and every other key passes through to the target window so the user can
+        // keep scrolling (incl. PageDown/Space/arrows). This runs even while the overlay is hidden.
+        if (_viewModel.IsManualScrollActive)
+        {
+            if (IsMatch(_viewModel.ActiveActionHotkey))
+            {
+                _viewModel.FinishManualScrollCapture(cancelled: false);
+                return true;
+            }
+
+            if (IsMatch(_viewModel.CloseHotkey))
+            {
+                _viewModel.FinishManualScrollCapture(cancelled: true);
+                return true;
+            }
+
+            return false;
+        }
+
         if (!_viewModel.IsTranslationMode)
         {
             if (TryHandleUnfocusedCaptureHotkey(IsMatch))

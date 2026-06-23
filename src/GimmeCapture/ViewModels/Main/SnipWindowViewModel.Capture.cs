@@ -242,6 +242,13 @@ public partial class SnipWindowViewModel
 
     private async Task ExecutePinAsync(bool runAI = false, bool initialInteractive = false)
     {
+        // During manual scrolling capture the Pin key (F6) finishes the session instead of pinning.
+        if (_manualScrollActive)
+        {
+            FinishManualScrollCapture(cancelled: false);
+            return;
+        }
+
         System.Diagnostics.Debug.WriteLine($"[SnipWindowViewModel] Pin() called. runAI={runAI}, SelectionRect={SelectionRect}");
         // Guard: If AI is disabled globally, prevent running it
         if (runAI && (_mainVm == null || !_mainVm.EnableAI))
