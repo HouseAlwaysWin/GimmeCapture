@@ -85,8 +85,13 @@ public partial class SnipWindowViewModel
         _manualFinishing = false;
         _manualScrollActive = true;
 
-        // Finish (F6) / cancel (Esc) are handled by the snip key hook (SnipWindow.Win32.cs),
-        // which receives keys even while the overlay is hidden — no separate global hotkey needed.
+        // Register finish (Pin key) / cancel (Close key) as temporary GLOBAL hotkeys for the
+        // session. RegisterHotKey delivers WM_HOTKEY to a hidden message window regardless of
+        // focus — and even against elevated foreground windows — unlike the low-level keyboard
+        // hook, which is silently blocked there. Routed via HandleGlobalHotkey. The snip key
+        // hook + buttons remain as redundant fallbacks.
+        _mainVm?.HotkeyService?.Register(HotkeyIds.ScrollingCaptureFinish, ActiveActionHotkey);
+        _mainVm?.HotkeyService?.Register(HotkeyIds.ScrollingCaptureCancel, CloseHotkey);
 
         ShowScrollingHintAction?.Invoke();
         UpdateScrollingHintAction?.Invoke(_manualAccumulated.Height);
@@ -322,6 +327,8 @@ public partial class SnipWindowViewModel
         }
         finally
         {
+            _mainVm?.HotkeyService?.Unregister(HotkeyIds.ScrollingCaptureFinish);
+            _mainVm?.HotkeyService?.Unregister(HotkeyIds.ScrollingCaptureCancel);
             _manualCts?.Dispose();
             _manualCts = null;
             _manualPipelineTask = null;
