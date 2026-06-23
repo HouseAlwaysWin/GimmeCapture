@@ -214,6 +214,29 @@ public class ScrollStitcherTests
     }
 
     [Fact]
+    public void LocateFrameInStrip_FindsFrameOffset()
+    {
+        using var strip = MakeFrame(20, 60, sourceOffset: 0);   // rows 0..59
+        using var frame = MakeFrame(20, 20, sourceOffset: 25);  // a window showing rows 25..44
+
+        var loc = ScrollStitcher.LocateFrameInStrip(strip, frame);
+
+        Assert.True(loc.Found);
+        Assert.Equal(25, loc.Rows);
+    }
+
+    [Fact]
+    public void LocateFrameInStrip_DisjointFrame_NotFound()
+    {
+        using var strip = MakeFrame(20, 60, sourceOffset: 0);    // rows 0..59
+        using var frame = MakeFrame(20, 20, sourceOffset: 200);  // content not in the strip
+
+        var loc = ScrollStitcher.LocateFrameInStrip(strip, frame);
+
+        Assert.False(loc.Found);
+    }
+
+    [Fact]
     public void IsAcceptableStep_NotFound_IsRejected()
     {
         var shift = new ScrollStitcher.VerticalShift(0, Found: false);

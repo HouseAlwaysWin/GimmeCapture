@@ -244,6 +244,138 @@ internal static class ScrollStitcher
     }
 
     /// <summary>
+    /// Finds where <paramref name="frame"/> (a full region capture) sits inside the taller
+    /// <paramref name="strip"/> (the accumulated long image), i.e. the row offset at which the
+    /// frame best aligns. Used to re-localize after a fast scroll desynced the running position:
+    /// <c>Rows</c> is the absolute top offset (>= 0) within the strip; <c>Found == false</c>
+    /// means the frame could not be confidently located (it is new content past the captured
+    /// range). Only offsets within <paramref name="searchMargin"/> of the strip's top and bottom
+    /// edges are evaluated, to bound cost (recovery expects the view near where we left off).
+    /// </summary>
+    public static VerticalShift LocateFrameInStrip(
+        SKBitmap strip,
+        SKBitmap frame,
+        int ignoreRightColumns = 0,
+        double maxRowMismatchRatio = 0.0,
+        int searchMargin = int.MaxValue)
+    {
+        ArgumentNullException.ThrowIfNull(strip);
+        ArgumentNullException.ThrowIfNull(frame);
+
+        if (strip.Width != frame.Width || strip.Width <= 0 || frame.Height <= 0 || strip.Height < frame.Height)
+        {
+            return new VerticalShift(0, false);
+        }
+
+        int frameH = frame.Height;
+        int maxOffset = strip.Height - frameH;
+        double clampedRatio = Math.Clamp(maxRowMismatchRatio, 0.0, 1.0);
+
+        byte[] frameSig = ComputeRowSignatures(frame, ignoreRightColumns, out int sampleCount);
+        byte[] stripSig = ComputeRowSignatures(strip, ignoreRightColumns, out _);
+        if (sampleCount == 0)
+        {
+            return new VerticalShift(0, false);
+        }
+
+        double[] frameWeights = ComputeRowWeights(frameSig, frameH, sampleCount);
+        int allowedRowSampleDiffs = (int)(sampleCount * RowPixelMismatchTolerance);
+        int allowedRowMismatches = (int)(frameH * clampedRatio);
+        int margin = searchMargin <= 0 ? maxOffset : Math.Min(searchMargin, maxOffset);
+
+        var scores = new double[maxOffset + 1];
+        Array.Fill(scores, double.MaxValue);
+
+        for (int o = 0; o <= maxOffset; o++)
+        {
+            // Only evaluate near the top or bottom edge of the strip.
+            if (o > margin && o < maxOffset - margin)
+            {
+                continue;
+            }
+
+            double weightedDiff = 0;
+            double weightSum = 0;
+            int rowMismatches = 0;
+            bool gated = false;
+            for (int r = 0; r < frameH; r++)
+            {
+                int diffs = RowSampleDiffs(
+                    frameSig, r * sampleCount * 4,
+                    stripSig, (o + r) * sampleCount * 4,
+                    sampleCount);
+
+                double w = frameWeights[r];
+                weightedDiff += diffs * w;
+                weightSum += w;
+
+                if (diffs > allowedRowSampleDiffs)
+                {
+                    rowMismatches++;
+                    if (rowMismatches > allowedRowMismatches)
+                    {
+                        gated = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!gated && weightSum > 1e-9)
+            {
+                scores[o] = weightedDiff / (weightSum * sampleCount);
+            }
+        }
+
+        double bestScore = double.MaxValue;
+        int bestOffset = 0;
+        bool found = false;
+        for (int o = 0; o <= maxOffset; o++)
+        {
+            double score = scores[o];
+            if (score == double.MaxValue)
+            {
+                continue;
+            }
+
+            if (score < bestScore)
+            {
+                bestScore = score;
+                bestOffset = o;
+                found = true;
+            }
+        }
+
+        if (!found || bestScore > MaxMatchSampleDiffRatio)
+        {
+            return new VerticalShift(0, false);
+        }
+
+        // Reject an ambiguous location: a clear winner must beat the best rival that is at
+        // least ShiftSeparationRows away.
+        double rivalScore = double.MaxValue;
+        for (int o = 0; o <= maxOffset; o++)
+        {
+            if (Math.Abs(o - bestOffset) < ShiftSeparationRows)
+            {
+                continue;
+            }
+
+            double score = scores[o];
+            if (score < rivalScore)
+            {
+                rivalScore = score;
+            }
+        }
+
+        if (rivalScore != double.MaxValue && rivalScore - bestScore < AmbiguityMargin)
+        {
+            return new VerticalShift(0, false);
+        }
+
+        return new VerticalShift(bestOffset, true);
+    }
+
+    /// <summary>
     /// Per-row distinctiveness weight: the summed B/G/R difference between each row's samples
     /// and the row above it. Content edges / text lines score high; uniform bands score ~0.
     /// Used to weight the alignment match so featureless regions don't create false overlaps.
