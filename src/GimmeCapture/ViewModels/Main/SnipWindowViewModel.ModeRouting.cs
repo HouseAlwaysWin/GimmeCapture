@@ -350,11 +350,19 @@ public partial class SnipWindowViewModel
     {
         if (_mainVm == null) return;
 
-        // While a manual scrolling-capture session is active, pressing the trigger (Shift+F5)
-        // again finishes it. F6 (finish) / Esc (cancel) are handled by the snip key hook.
-        if (_manualScrollActive && id == HotkeyIds.ScrollingCapture)
+        // While a manual scrolling-capture session is active: pressing the trigger (Shift+F5)
+        // again finishes it, and the temporary global hotkeys registered for the session finish
+        // (Pin key) or cancel (Close key). These work even when the target window is focused,
+        // unlike the low-level keyboard hook.
+        if (_manualScrollActive && (id == HotkeyIds.ScrollingCapture || id == HotkeyIds.ScrollingCaptureFinish))
         {
             FinishManualScrollCapture(cancelled: false);
+            return;
+        }
+
+        if (_manualScrollActive && id == HotkeyIds.ScrollingCaptureCancel)
+        {
+            FinishManualScrollCapture(cancelled: true);
             return;
         }
 
