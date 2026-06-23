@@ -22,6 +22,7 @@ namespace GimmeCapture.Views.Main;
 public partial class MainWindow : Window
 {
     private readonly IDownloadWindowService _downloadWindowService;
+    private readonly IToastService _toastService;
     private readonly ISnipWindowFactory _snipWindowFactory;
 
     [StructLayout(LayoutKind.Sequential)]
@@ -35,16 +36,18 @@ public partial class MainWindow : Window
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool GetCursorPos(out POINT lpPoint);
 
-    public MainWindow() : this(new MainWindowViewModel(), new NoOpDownloadWindowService(), new NoOpSnipWindowFactory())
+    public MainWindow() : this(new MainWindowViewModel(), new NoOpDownloadWindowService(), new NoOpToastService(), new NoOpSnipWindowFactory())
     {
     }
 
     public MainWindow(
         MainWindowViewModel? viewModel,
         IDownloadWindowService? downloadWindowService,
+        IToastService? toastService,
         ISnipWindowFactory? snipWindowFactory)
     {
         _downloadWindowService = downloadWindowService ?? new NoOpDownloadWindowService();
+        _toastService = toastService ?? new NoOpToastService();
         _snipWindowFactory = snipWindowFactory ?? new NoOpSnipWindowFactory();
 
         InitializeComponent();

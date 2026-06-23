@@ -81,6 +81,8 @@ public partial class MainWindow
                 });
             };
 
+            vm.ShowToastAction = (message, severity) => _toastService.Show(message, severity);
+
             vm.RequestCaptureAction = OpenSnipWindow;
             vm.ShowCaptureCountdownAction = ShowCaptureCountdownAsync;
             vm.CloseCaptureCountdownAction = CloseCaptureCountdown;

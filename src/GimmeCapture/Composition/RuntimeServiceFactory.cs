@@ -25,6 +25,11 @@ public static class RuntimeServiceFactory
         return new AvaloniaDownloadWindowService();
     }
 
+    public static IToastService CreateToastService()
+    {
+        return new AvaloniaToastService();
+    }
+
     public static SnipWindowShellServices CreateSnipWindowShellServices()
     {
         return new SnipWindowShellServices(

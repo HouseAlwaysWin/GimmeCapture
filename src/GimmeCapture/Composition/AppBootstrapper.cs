@@ -20,6 +20,7 @@ public sealed class AppBootstrapper : IAsyncDisposable
     private readonly Lazy<MainWindowViewModelDependencies> _mainWindowDependencies;
     private readonly Lazy<MainWindowViewModel> _mainWindowViewModel;
     private readonly Lazy<IDownloadWindowService> _downloadWindowService;
+    private readonly Lazy<IToastService> _toastService;
     private readonly Lazy<ISnipWindowFactory> _snipWindowFactory;
     private MainWindow? _mainWindow;
     private Window? _trayHostWindow;
@@ -41,6 +42,7 @@ public sealed class AppBootstrapper : IAsyncDisposable
             return viewModel;
         });
         _downloadWindowService = new Lazy<IDownloadWindowService>(RuntimeServiceFactory.CreateDownloadWindowService);
+        _toastService = new Lazy<IToastService>(RuntimeServiceFactory.CreateToastService);
         _snipWindowFactory = new Lazy<ISnipWindowFactory>(RuntimeServiceFactory.CreateSnipWindowFactory);
     }
 
@@ -49,6 +51,7 @@ public sealed class AppBootstrapper : IAsyncDisposable
         return _mainWindow ??= new MainWindow(
             _mainWindowViewModel.Value,
             _downloadWindowService.Value,
+            _toastService.Value,
             _snipWindowFactory.Value);
     }
 
