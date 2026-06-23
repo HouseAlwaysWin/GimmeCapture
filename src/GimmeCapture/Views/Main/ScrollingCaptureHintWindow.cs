@@ -80,8 +80,12 @@ public sealed class ScrollingCaptureHintWindow : Window
         {
             var hwnd = TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
             Win32Helpers.SetWindowCaptureVisibility(hwnd, visible: false);
-            PositionNearAnchor();
+            UpdatePosition();
         };
+
+        // SizeToContent finalises the size after Opened, so reposition once the real
+        // dimensions are known — otherwise the placement uses a stale/zero size.
+        SizeChanged += (_, _) => UpdatePosition();
     }
 
     public void UpdateHint(int capturedRows)
@@ -89,11 +93,17 @@ public sealed class ScrollingCaptureHintWindow : Window
         _text.Text = $"{_baseText}   ({capturedRows}px)";
     }
 
-    // Pin the hint to the bottom-centre of the screen that holds the region (or the
-    // top-centre when the region itself sits in the bottom band), so it stays in a fixed,
-    // predictable place and never lands on top of the selection.
-    private void PositionNearAnchor()
+    // Attach the hint just outside the captured region, like a screenshot tool's action bar:
+    // directly below the region's bottom edge, flipping to just above the top edge when there's
+    // no room below. It is always OUTSIDE the region and stays on the region's own screen.
+    private void UpdatePosition()
     {
+        // Wait until the window has a real measured size.
+        if (Bounds.Width <= 0 || Bounds.Height <= 0)
+        {
+            return;
+        }
+
         var center = new PixelPoint(_anchor.X + (_anchor.Width / 2), _anchor.Y + (_anchor.Height / 2));
         var screen = Screens?.ScreenFromPoint(center)
             ?? Screens?.Primary
@@ -105,23 +115,33 @@ public sealed class ScrollingCaptureHintWindow : Window
 
         var wa = screen.WorkingArea;
         double scale = screen.Scaling <= 0 ? 1.0 : screen.Scaling;
-        int w = (int)((Bounds.Width > 0 ? Bounds.Width : 440) * scale);
-        int h = (int)((Bounds.Height > 0 ? Bounds.Height : 60) * scale);
-        int margin = (int)(16 * scale);
+        int w = (int)(Bounds.Width * scale);
+        int h = (int)(Bounds.Height * scale);
+        int gap = (int)(12 * scale);
 
-        // Always horizontally centred on the screen (never drifts to the left edge).
-        int x = wa.X + ((wa.Width - w) / 2);
+        // Horizontally centred on the region, clamped to the screen.
+        int x = _anchor.X + ((_anchor.Width - w) / 2);
         x = Math.Clamp(x, wa.X, Math.Max(wa.X, wa.Right - w));
 
-        int yBottom = wa.Bottom - h - margin;
-        int yTop = wa.Y + margin;
+        // Vertically: just below the region; if it would run off the screen, just above it.
+        int belowY = _anchor.Y + _anchor.Height + gap;
+        int aboveY = _anchor.Y - gap - h;
+        int y;
+        if (belowY + h <= wa.Bottom)
+        {
+            y = belowY;
+        }
+        else if (aboveY >= wa.Y)
+        {
+            y = aboveY;
+        }
+        else
+        {
+            // The region is taller than the screen leaves room for on either side; keep the hint
+            // outside the bottom edge as far as the screen allows.
+            y = Math.Max(wa.Y, wa.Bottom - h);
+        }
 
-        // Default to the bottom band; if the region reaches into it (and the top is clear),
-        // use the top band instead so the hint never covers the selection.
-        bool regionInBottomBand = _anchor.Y + _anchor.Height > yBottom;
-        bool regionInTopBand = _anchor.Y < yTop + h;
-        int y = (regionInBottomBand && !regionInTopBand) ? yTop : yBottom;
-
-        Position = new PixelPoint(x, Math.Clamp(y, wa.Y, Math.Max(wa.Y, wa.Bottom - h)));
+        Position = new PixelPoint(x, y);
     }
 }
