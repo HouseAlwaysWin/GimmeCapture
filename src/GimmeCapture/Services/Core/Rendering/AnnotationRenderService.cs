@@ -55,18 +55,38 @@ public sealed class AnnotationRenderService : IAnnotationRenderService
         double scaleY = snapshot.Height / referenceHeight;
         float uniformScale = (float)Math.Min(scaleX, scaleY);
 
-        using var working = snapshot.Copy();
-        ApplyRedactionEffect(
-            working,
-            annotation,
-            new SKRect(roi.Left, roi.Top, roi.Right, roi.Bottom),
-            uniformScale);
+        // Operate on just the padded ROI instead of a full-snapshot copy (which is ~8 MB at 1080p and
+        // was allocated on every live-drag frame). The margin matches the blur's own neighbor-sampling
+        // padding, so the effect sees the same surrounding pixels and the output is identical to
+        // processing the whole snapshot; mosaic needs no margin (cells are self-contained).
+        int pad = 0;
+        if (annotation.Type == AnnotationType.Blur)
+        {
+            float blurRadius = Math.Max(1f, annotation.EffectSettings.BlurRadius * uniformScale);
+            pad = Math.Max(2, (int)Math.Ceiling(blurRadius * 3f));
+        }
+
+        int padLeft = Math.Max(0, roi.Left - pad);
+        int padTop = Math.Max(0, roi.Top - pad);
+        int padRight = Math.Min(snapshot.Width, roi.Right + pad);
+        int padBottom = Math.Min(snapshot.Height, roi.Bottom + pad);
+        int padWidth = padRight - padLeft;
+        int padHeight = padBottom - padTop;
+        if (padWidth <= 0 || padHeight <= 0)
+            return null;
+
+        using var working = new SKBitmap(padWidth, padHeight, SKColorType.Bgra8888, SKAlphaType.Premul);
+        CopyRect(snapshot, padLeft, padTop, working, 0, 0, padWidth, padHeight);
+
+        // ROI expressed in the cropped working buffer's coordinate space.
+        var workingRoi = new SKRect(roi.Left - padLeft, roi.Top - padTop, roi.Right - padLeft, roi.Bottom - padTop);
+        ApplyRedactionEffect(working, annotation, workingRoi, uniformScale);
 
         var preview = new SKBitmap(roi.Width, roi.Height, SKColorType.Bgra8888, SKAlphaType.Premul);
         using (var canvas = new SKCanvas(preview))
         {
             canvas.Clear(SKColors.Transparent);
-            canvas.DrawBitmap(working, roi, new SKRect(0, 0, roi.Width, roi.Height));
+            canvas.DrawBitmap(working, workingRoi, new SKRect(0, 0, roi.Width, roi.Height));
             canvas.Flush();
         }
 
@@ -314,14 +334,17 @@ public sealed class AnnotationRenderService : IAnnotationRenderService
         int innerLeft = left - expandedLeft;
         int innerTop = top - expandedTop;
 
-        using var region = new SKBitmap(expandedWidth, expandedHeight, SKColorType.Bgra8888, SKAlphaType.Premul);
-        CopyRect(target, expandedLeft, expandedTop, region, 0, 0, expandedWidth, expandedHeight);
-
+        // Blur the padded ROI directly out of the target into a single destination buffer. Drawing
+        // the sub-rect of `target` straight into `blurred` (instead of first copying it into a
+        // separate `region` bitmap) gives identical clamp-blur output with one fewer allocation —
+        // this path runs on every pointer move during a live drag, so the saved copy matters.
         using var blurred = new SKBitmap(expandedWidth, expandedHeight, SKColorType.Bgra8888, SKAlphaType.Premul);
         using (var canvas = new SKCanvas(blurred))
         using (var blurPaint = new SKPaint { ImageFilter = CreateClampBlur(blurRadius, blurRadius) })
         {
-            canvas.DrawBitmap(region, 0, 0, blurPaint);
+            var src = new SKRect(expandedLeft, expandedTop, expandedRight, expandedBottom);
+            var dst = new SKRect(0, 0, expandedWidth, expandedHeight);
+            canvas.DrawBitmap(target, src, dst, blurPaint);
         }
 
         CopyRect(blurred, innerLeft, innerTop, target, left, top, width, height);
