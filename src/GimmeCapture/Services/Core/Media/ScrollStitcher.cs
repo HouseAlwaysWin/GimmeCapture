@@ -40,6 +40,12 @@ internal static class ScrollStitcher
     // (sub-pixel neighbours), not as a rival candidate.
     private const int ShiftSeparationRows = 3;
 
+    // Row-subsampling target for AlignFrameToStrip: score roughly this many rows of the overlap
+    // regardless of frame height, keeping the per-frame match cheap on tall regions so the
+    // capture pipeline keeps a high frame rate (smaller gaps). Offsets stay pixel-accurate.
+    private const int CoarseTargetRows = 256;
+    private const int MaxRowStep = 8;
+
     /// <summary>
     /// The signed vertical motion of the content between two frames.
     /// <list type="bullet">
@@ -273,6 +279,11 @@ internal static class ScrollStitcher
         double[] frameWeights = ComputeRowWeights(frameSig, frameH, sampleCount);
         int allowedRowSampleDiffs = (int)(sampleCount * RowPixelMismatchTolerance);
 
+        // Score on every rowStep-th row so the per-frame cost stays bounded on tall regions
+        // (~O(frameH^2 / rowStep)). Offsets are still searched at full pixel resolution, so the
+        // chosen placement — and therefore the stitch seam — remains pixel-accurate.
+        int rowStep = Math.Clamp(frameH / CoarseTargetRows, 1, MaxRowStep);
+
         int lo = -(frameH - effectiveMin); // frame overhangs the top
         int hi = stripH - effectiveMin;    // frame overhangs the bottom
         int margin = searchMargin <= 0 ? (hi - lo) : searchMargin;
@@ -296,12 +307,13 @@ internal static class ScrollStitcher
                 continue;
             }
 
-            int allowedRowMismatches = (int)(overlap * clampedRatio);
+            int sampledRows = ((overlap + rowStep - 1) / rowStep);
+            int allowedRowMismatches = (int)(sampledRows * clampedRatio);
             double weightedDiff = 0;
             double weightSum = 0;
             int rowMismatches = 0;
             bool gated = false;
-            for (int r = startR; r < endR; r++)
+            for (int r = startR; r < endR; r += rowStep)
             {
                 int diffs = RowSampleDiffs(
                     frameSig, r * sampleCount * 4,
