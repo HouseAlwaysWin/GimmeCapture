@@ -24,7 +24,6 @@ public sealed class ScrollingCaptureRegionWindow : Window
         Topmost = true;
         ShowActivated = false;
         WindowDecorations = Avalonia.Controls.WindowDecorations.None;
-        SystemDecorations = SystemDecorations.None;
         TransparencyLevelHint = [WindowTransparencyLevel.Transparent];
         Background = Brushes.Transparent;
         WindowStartupLocation = WindowStartupLocation.Manual;
