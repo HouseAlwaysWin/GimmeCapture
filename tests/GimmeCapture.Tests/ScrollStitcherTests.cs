@@ -61,6 +61,32 @@ public class ScrollStitcherTests
     }
 
     [Fact]
+    public void FindVerticalOverlap_ToleratesSubpixelJitterAcrossEntireOverlap()
+    {
+        using var previous = MakeFrame(40, 30, sourceOffset: 0);
+        using var next = MakeFrame(40, 30, sourceOffset: 6); // scrolled down 6px -> overlap 24
+
+        // Simulate a GPU-composited app (e.g. Discord) re-rendering every row with tiny
+        // per-channel differences. Byte-exact hashing would reject every shift; the
+        // sampled colour-tolerance matcher should still recover the 24-row overlap.
+        for (int y = 0; y < 30; y++)
+        {
+            for (int x = 0; x < 40; x++)
+            {
+                var c = next.GetPixel(x, y);
+                byte jitter = (byte)((x + y) % 5); // 0..4, well under the colour tolerance
+                next.SetPixel(x, y, new SKColor(
+                    (byte)Math.Min(255, c.Red + jitter),
+                    (byte)Math.Min(255, c.Green + jitter),
+                    (byte)Math.Min(255, c.Blue + jitter),
+                    255));
+            }
+        }
+
+        Assert.Equal(24, ScrollStitcher.FindVerticalOverlap(previous, next, minOverlapRows: 8));
+    }
+
+    [Fact]
     public void FindVerticalOverlap_DisjointFrames_ReturnsZero()
     {
         using var previous = MakeFrame(10, 20, sourceOffset: 0);
