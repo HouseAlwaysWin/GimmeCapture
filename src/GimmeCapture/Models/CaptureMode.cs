@@ -7,5 +7,6 @@ public enum CaptureMode
     Pin,
     Record,
     Translate,
-    TextCopy
+    TextCopy,
+    ScrollingCapture
 }

@@ -159,6 +159,7 @@ public partial class MainWindowViewModel : ViewModelBase
     public string AppVersion => AppVersionInfo.CurrentVersion;
 
     public ReactiveCommand<CaptureMode, Unit> StartCaptureCommand { get; } = null!;
+    public ReactiveCommand<Unit, Unit> ScrollingCaptureCommand { get; } = null!;
     public ReactiveCommand<Unit, Unit> SaveAndCloseCommand { get; } = null!;
     public ReactiveCommand<Unit, Unit> ResetToDefaultCommand { get; } = null!;
     public ReactiveCommand<Unit, Unit> IncreaseThicknessCommand { get; } = null!;
@@ -254,6 +255,7 @@ public partial class MainWindowViewModel : ViewModelBase
         SetStatus("StatusReady");
 
         StartCaptureCommand = ReactiveCommand.CreateFromTask<CaptureMode>(StartCapture);
+        ScrollingCaptureCommand = ReactiveCommand.CreateFromTask(() => StartCapture(CaptureMode.ScrollingCapture));
         SaveAndCloseCommand = ReactiveCommand.CreateFromTask(SaveAndClose);
         ResetToDefaultCommand = ReactiveCommand.CreateFromTask(ResetToDefault);
         IncreaseThicknessCommand = ReactiveCommand.Create(() => { if (BorderThickness < 9) BorderThickness += 1; });

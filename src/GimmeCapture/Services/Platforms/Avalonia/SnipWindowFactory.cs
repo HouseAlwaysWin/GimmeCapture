@@ -3,6 +3,7 @@ using System;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.OCR;
+using GimmeCapture.Services.Platforms.Windows;
 using GimmeCapture.Services.Translation;
 using GimmeCapture.ViewModels.Main;
 using GimmeCapture.Views.Main;
@@ -77,6 +78,10 @@ public sealed class SnipWindowFactory : ISnipWindowFactory
                 vm.OcrRuntimeService,
                 new PaddleOcrEngineFactory()));
 
+        var scrollingCaptureService = new WindowsScrollingCaptureService(
+            _screenCaptureService,
+            _windowDetectionService);
+
         var snipVm = new SnipWindowViewModel(
             vm.BorderColor,
             vm.BorderThickness,
@@ -88,7 +93,8 @@ public sealed class SnipWindowFactory : ISnipWindowFactory
             translationSelectionMonitor,
             aiScanSessionService,
             quickOcrService,
-            new AvaloniaCaptureVisibilityCoordinator());
+            new AvaloniaCaptureVisibilityCoordinator(),
+            scrollingCaptureService);
 
         snipVm.LockSelectedScreenshotSelection = mode == CaptureMode.Normal && vm.AutoPinScreenshotSelection;
         snipVm.AutoActionMode = SnipWindowViewModel.ResolveAutoActionMode(mode, vm.AutoPinScreenshotSelection);
