@@ -16,10 +16,12 @@ public sealed class ScrollingCaptureHintWindow : Window
 {
     private readonly TextBlock _text;
     private readonly string _baseText;
+    private readonly PixelRect _anchor;
 
-    public ScrollingCaptureHintWindow(string hintText, string finishLabel, string cancelLabel, Action onFinish, Action onCancel)
+    public ScrollingCaptureHintWindow(string hintText, string finishLabel, string cancelLabel, PixelRect anchorPhysical, Action onFinish, Action onCancel)
     {
         _baseText = hintText ?? string.Empty;
+        _anchor = anchorPhysical;
 
         CanResize = false;
         ShowInTaskbar = false;
@@ -78,7 +80,7 @@ public sealed class ScrollingCaptureHintWindow : Window
         {
             var hwnd = TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
             Win32Helpers.SetWindowCaptureVisibility(hwnd, visible: false);
-            PositionBottomCenter();
+            PositionNearAnchor();
         };
     }
 
@@ -87,9 +89,15 @@ public sealed class ScrollingCaptureHintWindow : Window
         _text.Text = $"{_baseText}   ({capturedRows}px)";
     }
 
-    private void PositionBottomCenter()
+    // Place the hint just below the captured region (or above it when there's no room),
+    // horizontally centred on the region and clamped to the screen — so it stays close to the
+    // selection without ever covering it.
+    private void PositionNearAnchor()
     {
-        var screen = Screens?.Primary ?? (Screens is { All.Count: > 0 } s ? s.All[0] : null);
+        var center = new PixelPoint(_anchor.X + (_anchor.Width / 2), _anchor.Y + (_anchor.Height / 2));
+        var screen = Screens?.ScreenFromPoint(center)
+            ?? Screens?.Primary
+            ?? (Screens is { All.Count: > 0 } s ? s.All[0] : null);
         if (screen == null)
         {
             return;
@@ -97,12 +105,29 @@ public sealed class ScrollingCaptureHintWindow : Window
 
         var wa = screen.WorkingArea;
         double scale = screen.Scaling <= 0 ? 1.0 : screen.Scaling;
-        double logicalW = Bounds.Width > 0 ? Bounds.Width : 440;
-        double logicalH = Bounds.Height > 0 ? Bounds.Height : 60;
-        int w = (int)(logicalW * scale);
-        int h = (int)(logicalH * scale);
-        int x = wa.X + ((wa.Width - w) / 2);
-        int y = wa.Bottom - h - (int)(48 * scale);
+        int w = (int)((Bounds.Width > 0 ? Bounds.Width : 440) * scale);
+        int h = (int)((Bounds.Height > 0 ? Bounds.Height : 60) * scale);
+        int gap = (int)(12 * scale);
+
+        int x = _anchor.X + ((_anchor.Width - w) / 2);
+        x = Math.Clamp(x, wa.X, Math.Max(wa.X, wa.Right - w));
+
+        int below = _anchor.Y + _anchor.Height + gap;
+        int above = _anchor.Y - gap - h;
+        int y;
+        if (below + h <= wa.Bottom)
+        {
+            y = below; // preferred: just under the region
+        }
+        else if (above >= wa.Y)
+        {
+            y = above; // no room below: just above the region
+        }
+        else
+        {
+            y = Math.Max(wa.Y, wa.Bottom - h); // region fills the screen: pin to bottom
+        }
+
         Position = new PixelPoint(x, y);
     }
 }
