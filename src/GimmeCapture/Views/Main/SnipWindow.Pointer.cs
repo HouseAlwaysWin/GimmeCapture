@@ -574,36 +574,9 @@ public partial class SnipWindow : Window
         {
              var deltaX = currentPoint.X - _resizeStartPoint.X;
              var deltaY = currentPoint.Y - _resizeStartPoint.Y;
-             
-             double x = _originalRect.X;
-             double y = _originalRect.Y;
-             double w = _originalRect.Width;
-             double h = _originalRect.Height;
 
-             switch (_resizeDirection)
-             {
-                 case ResizeDirection.TopLeft:
-                     x += deltaX; y += deltaY; w -= deltaX; h -= deltaY; break;
-                 case ResizeDirection.TopRight:
-                     y += deltaY; w += deltaX; h -= deltaY; break;
-                 case ResizeDirection.BottomLeft:
-                     x += deltaX; w -= deltaX; h += deltaY; break;
-                 case ResizeDirection.BottomRight:
-                     w += deltaX; h += deltaY; break;
-                 case ResizeDirection.Top:
-                     y += deltaY; h -= deltaY; break;
-                 case ResizeDirection.Bottom:
-                     h += deltaY; break;
-                 case ResizeDirection.Left:
-                     x += deltaX; w -= deltaX; break;
-                 case ResizeDirection.Right:
-                     w += deltaX; break;
-             }
-
-             if (w < 0) { x += w; w = Math.Abs(w); }
-             if (h < 0) { y += h; h = Math.Abs(h); }
-             
-             _viewModel.SelectionRect = new Rect(x, y, w, h);
+             var (x, y, w, h) = SelectionResizeMath.ApplyResizeDelta(_originalRect, _resizeDirection, deltaX, deltaY);
+             _viewModel.SelectionRect = SelectionResizeMath.NormalizeRect(x, y, w, h);
              return;
         }
         
