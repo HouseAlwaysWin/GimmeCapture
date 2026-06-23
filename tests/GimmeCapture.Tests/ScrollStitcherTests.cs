@@ -214,64 +214,50 @@ public class ScrollStitcherTests
     }
 
     [Fact]
-    public void LocateFrameInStrip_FindsFrameOffset()
+    public void AlignFrameToStrip_FrameFullyInside_ReturnsOffset()
     {
         using var strip = MakeFrame(20, 60, sourceOffset: 0);   // rows 0..59
-        using var frame = MakeFrame(20, 20, sourceOffset: 25);  // a window showing rows 25..44
+        using var frame = MakeFrame(20, 20, sourceOffset: 25);  // window showing rows 25..44 (inside)
 
-        var loc = ScrollStitcher.LocateFrameInStrip(strip, frame);
+        var align = ScrollStitcher.AlignFrameToStrip(strip, frame);
 
-        Assert.True(loc.Found);
-        Assert.Equal(25, loc.Rows);
+        Assert.True(align.Found);
+        Assert.Equal(25, align.Offset);
     }
 
     [Fact]
-    public void LocateFrameInStrip_DisjointFrame_NotFound()
+    public void AlignFrameToStrip_FrameOverhangsBottom_ReturnsOffset()
+    {
+        using var strip = MakeFrame(20, 40, sourceOffset: 0);   // rows 0..39
+        using var frame = MakeFrame(20, 20, sourceOffset: 30);  // rows 30..49 -> overlaps bottom, 10 new rows
+
+        var align = ScrollStitcher.AlignFrameToStrip(strip, frame);
+
+        Assert.True(align.Found);
+        Assert.Equal(30, align.Offset); // 30+20 > 40 -> overhangs bottom
+    }
+
+    [Fact]
+    public void AlignFrameToStrip_FrameOverhangsTop_ReturnsNegativeOffset()
+    {
+        using var strip = MakeFrame(20, 40, sourceOffset: 10);  // rows 10..49
+        using var frame = MakeFrame(20, 20, sourceOffset: 0);   // rows 0..19 -> overlaps top, 10 new rows
+
+        var align = ScrollStitcher.AlignFrameToStrip(strip, frame);
+
+        Assert.True(align.Found);
+        Assert.Equal(-10, align.Offset); // frame's row 0 sits 10 rows above the strip top
+    }
+
+    [Fact]
+    public void AlignFrameToStrip_DisjointFrame_NotFound()
     {
         using var strip = MakeFrame(20, 60, sourceOffset: 0);    // rows 0..59
         using var frame = MakeFrame(20, 20, sourceOffset: 200);  // content not in the strip
 
-        var loc = ScrollStitcher.LocateFrameInStrip(strip, frame);
+        var align = ScrollStitcher.AlignFrameToStrip(strip, frame);
 
-        Assert.False(loc.Found);
+        Assert.False(align.Found);
     }
 
-    [Fact]
-    public void IsAcceptableStep_NotFound_IsRejected()
-    {
-        var shift = new ScrollStitcher.VerticalShift(0, Found: false);
-        Assert.False(ScrollStitcher.IsAcceptableStep(shift, height: 100, maxStepFraction: 0.55, minNewRows: 2));
-    }
-
-    [Fact]
-    public void IsAcceptableStep_BelowMinNewRows_IsRejected()
-    {
-        var shift = new ScrollStitcher.VerticalShift(1, Found: true);
-        Assert.False(ScrollStitcher.IsAcceptableStep(shift, height: 100, maxStepFraction: 0.55, minNewRows: 2));
-    }
-
-    [Fact]
-    public void IsAcceptableStep_AboveMaxFraction_IsRejected()
-    {
-        // 60 > 0.55 * 100 == 55 -> the user scrolled too far between frames.
-        var shift = new ScrollStitcher.VerticalShift(60, Found: true);
-        Assert.False(ScrollStitcher.IsAcceptableStep(shift, height: 100, maxStepFraction: 0.55, minNewRows: 2));
-    }
-
-    [Fact]
-    public void IsAcceptableStep_WithinBounds_IsAccepted()
-    {
-        var down = new ScrollStitcher.VerticalShift(30, Found: true);
-        var up = new ScrollStitcher.VerticalShift(-30, Found: true); // upward scroll also acceptable
-        Assert.True(ScrollStitcher.IsAcceptableStep(down, height: 100, maxStepFraction: 0.55, minNewRows: 2));
-        Assert.True(ScrollStitcher.IsAcceptableStep(up, height: 100, maxStepFraction: 0.55, minNewRows: 2));
-    }
-
-    [Fact]
-    public void IsAcceptableStep_ExactlyAtFractionBoundary_IsAccepted()
-    {
-        // 55 == 0.55 * 100 -> boundary is inclusive.
-        var shift = new ScrollStitcher.VerticalShift(55, Found: true);
-        Assert.True(ScrollStitcher.IsAcceptableStep(shift, height: 100, maxStepFraction: 0.55, minNewRows: 2));
-    }
 }

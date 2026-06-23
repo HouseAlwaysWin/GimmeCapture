@@ -25,16 +25,6 @@ public partial class SnipWindowViewModel
     private int _manualMinOverlap;
     private int _manualIgnoreRight;
 
-    // Row index within _manualAccumulated where the current viewport (_manualPrevFrame) top
-    // sits. Tracked like a panorama's absolute position so scrolling back over already-captured
-    // content neither duplicates nor scrambles the strip — only genuinely new extents grow it.
-    private int _manualViewTop;
-
-    // True after a step too large to trust (a fast flick): the running position is no longer
-    // known, so we stop stitching and wait. When scrolling slows, the next trackable frame
-    // re-localizes against the accumulated strip (or re-anchors) and clears this.
-    private bool _manualDesynced;
-
     private CancellationTokenSource? _manualCts;
     private Task? _manualPipelineTask;
     private Channel<SKBitmap>? _manualFrameChannel;
@@ -47,11 +37,6 @@ public partial class SnipWindowViewModel
     // Bounded capture queue: a few frames of slack so a slow stitch (Append on a tall strip)
     // doesn't stall capture, without unbounded memory growth.
     private const int ManualQueueCapacity = 8;
-    // A single step moving more than this fraction of the frame height means the frames barely
-    // overlapped (the user flicked fast): we can't trust the alignment, so mark the session
-    // desynced and skip it rather than stitch at a wrong offset — but we keep advancing the
-    // frame anchor and re-localize when scrolling slows, so it never freezes.
-    private const double ManualMaxStepFraction = 0.7;
 
     /// <summary>True while a manual scrolling-capture session is running (overlay hidden).</summary>
     public bool IsManualScrollActive => _manualScrollActive;
@@ -94,8 +79,6 @@ public partial class SnipWindowViewModel
         }
 
         _manualPrevFrame = _manualAccumulated.Copy();
-        _manualViewTop = 0;
-        _manualDesynced = false;
         _manualFinishing = false;
         _manualScrollActive = true;
 
@@ -168,8 +151,8 @@ public partial class SnipWindowViewModel
         }
     }
 
-    // Stitches frames in order off the UI thread. Owns _manualAccumulated/_manualPrevFrame/
-    // _manualViewTop for the duration of the session.
+    // Stitches frames in order off the UI thread. Owns _manualAccumulated/_manualPrevFrame
+    // for the duration of the session.
     private async Task ManualConsumerLoopAsync(CancellationToken token)
     {
         try
@@ -185,71 +168,61 @@ public partial class SnipWindowViewModel
                     }
 
                     int height = frame.Height;
-
-                    // Signed shift vs the immediately-previous frame: > 0 scrolled down (new
-                    // content at bottom), < 0 scrolled up (new content at top).
-                    ScrollStitcher.VerticalShift shift = ScrollStitcher.FindVerticalShift(
-                        _manualPrevFrame, frame, _manualMinOverlap, _manualIgnoreRight, ManualRowMismatchTolerance);
-
-                    // A trackable step is a confident match that moved no more than the guard:
-                    // adjacent frames overlapped enough to trust the measured shift.
-                    bool trackable = shift.Found && Math.Abs(shift.Rows) <= ManualMaxStepFraction * height;
                     bool grew = false;
 
-                    if (trackable && !_manualDesynced)
+                    // Align the frame directly against the real edges of the accumulated strip
+                    // (not against a running position), so the placement can never drift and the
+                    // same content is never appended twice. The quick search only looks near the
+                    // strip edges (cheap); a deeper full search is done only when the view settles.
+                    ScrollStitcher.FrameAlignment align = ScrollStitcher.AlignFrameToStrip(
+                        _manualAccumulated, frame, _manualMinOverlap, _manualIgnoreRight, ManualRowMismatchTolerance, height);
+
+                    if (!align.Found)
                     {
-                        // Fast path: extend the strip by the measured shift.
-                        int newViewTop = _manualViewTop + shift.Rows;
+                        // The edge search failed. Only act once the view has settled (user stopped),
+                        // so a fast flick doesn't pile up garbage frames.
+                        ScrollStitcher.VerticalShift settle = ScrollStitcher.FindVerticalShift(
+                            _manualPrevFrame, frame, _manualMinOverlap, _manualIgnoreRight, ManualRowMismatchTolerance);
 
-                        if (newViewTop + height > _manualAccumulated.Height)
+                        if (settle.Found && Math.Abs(settle.Rows) < ManualMinNewRows)
                         {
-                            int extra = newViewTop + height - _manualAccumulated.Height;
-                            SKBitmap grown = ScrollStitcher.Append(_manualAccumulated, frame, height - extra);
-                            _manualAccumulated.Dispose();
-                            _manualAccumulated = grown;
-                            grew = true;
-                        }
-                        else if (newViewTop < 0)
-                        {
-                            int extra = -newViewTop;
-                            SKBitmap grown = ScrollStitcher.Prepend(_manualAccumulated, frame, extra);
-                            _manualAccumulated.Dispose();
-                            _manualAccumulated = grown;
-                            newViewTop = 0;
-                            grew = true;
-                        }
-                        // else: scrolled back over already-captured content — track only.
+                            // Search the whole strip — the frame may be deep inside (scrolled back
+                            // to the middle), which must NOT be re-appended.
+                            align = ScrollStitcher.AlignFrameToStrip(
+                                _manualAccumulated, frame, _manualMinOverlap, _manualIgnoreRight, ManualRowMismatchTolerance);
 
-                        _manualViewTop = Math.Clamp(newViewTop, 0, Math.Max(0, _manualAccumulated.Height - height));
+                            if (!align.Found)
+                            {
+                                // Genuinely new, disconnected content past a gap: re-anchor.
+                                SKBitmap grown = ScrollStitcher.Append(_manualAccumulated, frame, 0); // overlap 0 => append whole frame
+                                _manualAccumulated.Dispose();
+                                _manualAccumulated = grown;
+                                grew = true;
+                            }
+                        }
                     }
-                    else if (trackable) // && _manualDesynced
-                    {
-                        // Recovering: scrolling has slowed enough to track again. Re-localize the
-                        // frame within the strip; if it isn't there (new content past a gap),
-                        // re-anchor by appending it fresh. Either way the position is known again.
-                        ScrollStitcher.VerticalShift loc = ScrollStitcher.LocateFrameInStrip(
-                            _manualAccumulated, frame, _manualIgnoreRight, ManualRowMismatchTolerance, height);
 
-                        if (loc.Found)
+                    if (align.Found)
+                    {
+                        int stripH = _manualAccumulated.Height;
+                        if (align.Offset < 0)
                         {
-                            _manualViewTop = Math.Clamp(loc.Rows, 0, Math.Max(0, _manualAccumulated.Height - height));
-                        }
-                        else
-                        {
-                            SKBitmap grown = ScrollStitcher.Append(_manualAccumulated, frame, 0); // overlap 0 => append whole frame
+                            // Frame overhangs the top: prepend the new head rows.
+                            SKBitmap grown = ScrollStitcher.Prepend(_manualAccumulated, frame, -align.Offset);
                             _manualAccumulated.Dispose();
                             _manualAccumulated = grown;
-                            _manualViewTop = Math.Max(0, _manualAccumulated.Height - height);
                             grew = true;
                         }
-
-                        _manualDesynced = false;
-                    }
-                    else
-                    {
-                        // Untrackable step (fast flick / no overlap): position is unknown. Skip
-                        // stitching and wait — but the anchor still advances below so we never freeze.
-                        _manualDesynced = true;
+                        else if (align.Offset + height > stripH)
+                        {
+                            // Frame overhangs the bottom: append the new tail rows.
+                            int overlap = stripH - align.Offset;
+                            SKBitmap grown = ScrollStitcher.Append(_manualAccumulated, frame, overlap);
+                            _manualAccumulated.Dispose();
+                            _manualAccumulated = grown;
+                            grew = true;
+                        }
+                        // else: frame lies fully inside the strip (scrolled back) — nothing new.
                     }
 
                     _manualPrevFrame.Dispose();

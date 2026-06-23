@@ -52,24 +52,6 @@ internal static class ScrollStitcher
     public readonly record struct VerticalShift(int Rows, bool Found);
 
     /// <summary>
-    /// Whether a detected shift is safe to stitch: it must be a confident match, move at
-    /// least <paramref name="minNewRows"/> rows, and move no more than
-    /// <paramref name="maxStepFraction"/> of the frame height. A step larger than that means
-    /// the two frames barely overlapped (the user scrolled too far between captures), so the
-    /// alignment is unreliable and the frame should be skipped rather than mis-stitched.
-    /// </summary>
-    public static bool IsAcceptableStep(VerticalShift shift, int height, double maxStepFraction, int minNewRows)
-    {
-        if (!shift.Found || height <= 0)
-        {
-            return false;
-        }
-
-        int rows = Math.Abs(shift.Rows);
-        return rows >= minNewRows && rows <= maxStepFraction * height;
-    }
-
-    /// <summary>
     /// Finds the signed vertical shift that best aligns <paramref name="next"/> onto
     /// <paramref name="previous"/>. Rows are matched by sampled pixels with a colour
     /// tolerance (not byte-exact hashing), and the globally best-scoring shift is chosen
@@ -243,18 +225,27 @@ internal static class ScrollStitcher
         return previous.Height - shift.Rows;
     }
 
+    /// <summary>The placement of a frame against the accumulated strip (see <see cref="AlignFrameToStrip"/>).</summary>
+    /// <param name="Offset">
+    /// Strip row index where the frame's first row sits. Negative => the frame overhangs the top
+    /// (new content above); <c>Offset + frame.Height &gt; strip.Height</c> => it overhangs the
+    /// bottom (new content below); otherwise the frame lies fully inside the strip.
+    /// </param>
+    /// <param name="Found">False when the frame doesn't confidently overlap the strip at all.</param>
+    public readonly record struct FrameAlignment(int Offset, bool Found);
+
     /// <summary>
-    /// Finds where <paramref name="frame"/> (a full region capture) sits inside the taller
-    /// <paramref name="strip"/> (the accumulated long image), i.e. the row offset at which the
-    /// frame best aligns. Used to re-localize after a fast scroll desynced the running position:
-    /// <c>Rows</c> is the absolute top offset (>= 0) within the strip; <c>Found == false</c>
-    /// means the frame could not be confidently located (it is new content past the captured
-    /// range). Only offsets within <paramref name="searchMargin"/> of the strip's top and bottom
-    /// edges are evaluated, to bound cost (recovery expects the view near where we left off).
+    /// Aligns a full region <paramref name="frame"/> against the accumulated <paramref name="strip"/>,
+    /// allowing the frame to overhang either edge, and returns where the frame sits. Matching the
+    /// frame directly against the real strip content (rather than summing per-frame shifts) means
+    /// the position can never drift, so the same content is never appended twice. Only offsets
+    /// within <paramref name="searchMargin"/> rows of either edge are evaluated, to bound cost.
+    /// <c>Found == false</c> means the frame doesn't overlap the strip (new content past a gap).
     /// </summary>
-    public static VerticalShift LocateFrameInStrip(
+    public static FrameAlignment AlignFrameToStrip(
         SKBitmap strip,
         SKBitmap frame,
+        int minOverlapRows = 8,
         int ignoreRightColumns = 0,
         double maxRowMismatchRatio = 0.0,
         int searchMargin = int.MaxValue)
@@ -262,43 +253,55 @@ internal static class ScrollStitcher
         ArgumentNullException.ThrowIfNull(strip);
         ArgumentNullException.ThrowIfNull(frame);
 
-        if (strip.Width != frame.Width || strip.Width <= 0 || frame.Height <= 0 || strip.Height < frame.Height)
+        if (strip.Width != frame.Width || strip.Width <= 0 || frame.Height <= 0 || strip.Height <= 0)
         {
-            return new VerticalShift(0, false);
+            return new FrameAlignment(0, false);
         }
 
         int frameH = frame.Height;
-        int maxOffset = strip.Height - frameH;
+        int stripH = strip.Height;
+        int effectiveMin = Math.Clamp(minOverlapRows, 1, Math.Min(frameH, stripH));
         double clampedRatio = Math.Clamp(maxRowMismatchRatio, 0.0, 1.0);
 
         byte[] frameSig = ComputeRowSignatures(frame, ignoreRightColumns, out int sampleCount);
         byte[] stripSig = ComputeRowSignatures(strip, ignoreRightColumns, out _);
         if (sampleCount == 0)
         {
-            return new VerticalShift(0, false);
+            return new FrameAlignment(0, false);
         }
 
         double[] frameWeights = ComputeRowWeights(frameSig, frameH, sampleCount);
         int allowedRowSampleDiffs = (int)(sampleCount * RowPixelMismatchTolerance);
-        int allowedRowMismatches = (int)(frameH * clampedRatio);
-        int margin = searchMargin <= 0 ? maxOffset : Math.Min(searchMargin, maxOffset);
 
-        var scores = new double[maxOffset + 1];
+        int lo = -(frameH - effectiveMin); // frame overhangs the top
+        int hi = stripH - effectiveMin;    // frame overhangs the bottom
+        int margin = searchMargin <= 0 ? (hi - lo) : searchMargin;
+
+        var scores = new double[hi - lo + 1]; // index = o - lo
         Array.Fill(scores, double.MaxValue);
 
-        for (int o = 0; o <= maxOffset; o++)
+        for (int o = lo; o <= hi; o++)
         {
-            // Only evaluate near the top or bottom edge of the strip.
-            if (o > margin && o < maxOffset - margin)
+            // Only evaluate near the top or bottom edge (where new content appears).
+            if (o - lo > margin && hi - o > margin)
             {
                 continue;
             }
 
+            int startR = Math.Max(0, -o);
+            int endR = Math.Min(frameH, stripH - o);
+            int overlap = endR - startR;
+            if (overlap < effectiveMin)
+            {
+                continue;
+            }
+
+            int allowedRowMismatches = (int)(overlap * clampedRatio);
             double weightedDiff = 0;
             double weightSum = 0;
             int rowMismatches = 0;
             bool gated = false;
-            for (int r = 0; r < frameH; r++)
+            for (int r = startR; r < endR; r++)
             {
                 int diffs = RowSampleDiffs(
                     frameSig, r * sampleCount * 4,
@@ -322,57 +325,50 @@ internal static class ScrollStitcher
 
             if (!gated && weightSum > 1e-9)
             {
-                scores[o] = weightedDiff / (weightSum * sampleCount);
+                scores[o - lo] = weightedDiff / (weightSum * sampleCount);
             }
         }
 
         double bestScore = double.MaxValue;
         int bestOffset = 0;
         bool found = false;
-        for (int o = 0; o <= maxOffset; o++)
+        for (int i = 0; i < scores.Length; i++)
         {
-            double score = scores[o];
-            if (score == double.MaxValue)
+            if (scores[i] < bestScore)
             {
-                continue;
-            }
-
-            if (score < bestScore)
-            {
-                bestScore = score;
-                bestOffset = o;
+                bestScore = scores[i];
+                bestOffset = i + lo;
                 found = true;
             }
         }
 
         if (!found || bestScore > MaxMatchSampleDiffRatio)
         {
-            return new VerticalShift(0, false);
+            return new FrameAlignment(0, false);
         }
 
-        // Reject an ambiguous location: a clear winner must beat the best rival that is at
-        // least ShiftSeparationRows away.
+        // Reject an ambiguous placement: a clear winner must beat the best rival at least
+        // ShiftSeparationRows away.
         double rivalScore = double.MaxValue;
-        for (int o = 0; o <= maxOffset; o++)
+        for (int i = 0; i < scores.Length; i++)
         {
-            if (Math.Abs(o - bestOffset) < ShiftSeparationRows)
+            if (Math.Abs((i + lo) - bestOffset) < ShiftSeparationRows)
             {
                 continue;
             }
 
-            double score = scores[o];
-            if (score < rivalScore)
+            if (scores[i] < rivalScore)
             {
-                rivalScore = score;
+                rivalScore = scores[i];
             }
         }
 
         if (rivalScore != double.MaxValue && rivalScore - bestScore < AmbiguityMargin)
         {
-            return new VerticalShift(0, false);
+            return new FrameAlignment(0, false);
         }
 
-        return new VerticalShift(bestOffset, true);
+        return new FrameAlignment(bestOffset, true);
     }
 
     /// <summary>
