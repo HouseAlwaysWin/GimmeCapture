@@ -244,15 +244,7 @@ public partial class MainWindowViewModel
         }
     }
 
-    public Color ThemeDeepColor 
-    {
-        get
-        {
-            if (ThemeColor == Color.Parse("#D4AF37")) return Color.Parse("#8B7500");
-            if (ThemeColor == Color.Parse("#E0E0E0")) return Color.Parse("#606060");
-            return Color.Parse("#900000");
-        }
-    }
+    public Color ThemeDeepColor => ThemeColorPalette.GetDeepColor(ThemeColor);
 
     // Output Settings
     private bool _autoSave;
@@ -621,9 +613,9 @@ public partial class MainWindowViewModel
 
     private ObservableCollection<LlamaModelOption> _availableLlamaModels = new(
     [
-        new() { Id = "translategemma-4b-it", DisplayName = "TranslateGemma 4B" },
-        new() { Id = "gemma-3-4b-it-q4", DisplayName = "Gemma 3 4B" },
-        new() { Id = "translategemma-12b-it", DisplayName = "TranslateGemma 12B (Experimental)" }
+        ToLlamaModelOption("translategemma-4b-it"),
+        ToLlamaModelOption("gemma-3-4b-it-q4"),
+        ToLlamaModelOption("translategemma-12b-it")
     ]);
     public ObservableCollection<LlamaModelOption> AvailableLlamaModels
     {
@@ -813,13 +805,8 @@ public partial class MainWindowViewModel
         }
     }
 
-    private static LlamaModelOption ToLlamaModelOption(string modelId) => modelId switch
-    {
-        "translategemma-4b-it" => new LlamaModelOption { Id = modelId, DisplayName = "TranslateGemma 4B" },
-        "gemma-3-4b-it-q4" => new LlamaModelOption { Id = modelId, DisplayName = "Gemma 3 4B" },
-        "translategemma-12b-it" => new LlamaModelOption { Id = modelId, DisplayName = "TranslateGemma 12B (Experimental)" },
-        _ => new LlamaModelOption { Id = modelId, DisplayName = modelId }
-    };
+    private static LlamaModelOption ToLlamaModelOption(string modelId) =>
+        new() { Id = modelId, DisplayName = LlamaModelDisplayNames.Get(modelId) };
 
     private bool _showRecordCursor = true;
     public bool ShowRecordCursor
