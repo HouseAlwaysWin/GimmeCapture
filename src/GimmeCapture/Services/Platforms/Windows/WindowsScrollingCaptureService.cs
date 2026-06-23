@@ -19,11 +19,14 @@ public sealed class WindowsScrollingCaptureService : IScrollingCaptureService
 {
     // Tunables for the scroll loop.
     private const int WheelNotchesPerStep = 3;     // amount scrolled each step (must be < a viewport so frames overlap)
+    private const int InitialSettleMs = 350;       // wait for the target to focus + paint before the first frame
     private const int RenderDelayMs = 250;         // wait for content to render after scrolling
-    private const int MaxFrames = 60;              // hard cap on scroll steps
+    private const int MaxFrames = 80;              // hard cap on total scroll iterations (incl. retries)
     private const int MaxHeightMultiplier = 40;    // result height cap = viewport height * this
-    private const int MinNewRowsToContinue = 2;    // below this we consider the bottom reached
+    private const int MinNewRowsToContinue = 2;    // below this an attempt counts as "no progress"
+    private const int MaxNoProgressAttempts = 3;   // consecutive no-progress attempts before concluding bottom
     private const int ScrollbarIgnorePx = 18;      // ignore a moving scrollbar on the right edge
+    private const double RowMismatchTolerance = 0.12; // fraction of overlap rows allowed to differ
 
     private const uint MOUSEEVENTF_WHEEL = 0x0800;
     private const uint INPUT_MOUSE = 0;
@@ -58,9 +61,10 @@ public sealed class WindowsScrollingCaptureService : IScrollingCaptureService
         int centerX = physX + (physW / 2);
         int centerY = physY + (physH / 2);
 
-        FocusWindowUnderPoint(centerX, centerY);
+        IntPtr targetHwnd = ResolveTargetHwnd(centerX, centerY);
+        ForceForeground(targetHwnd);
         SetCursorPos(centerX, centerY);
-        await Task.Delay(120, cancellationToken).ConfigureAwait(false);
+        await Task.Delay(InitialSettleMs, cancellationToken).ConfigureAwait(false);
 
         SKBitmap accumulated = await _captureService
             .CaptureScreenAsync(region, screenOffset, visualScaling, includeCursor: false)
@@ -70,6 +74,7 @@ public sealed class WindowsScrollingCaptureService : IScrollingCaptureService
         int ignoreRight = (int)(ScrollbarIgnorePx * visualScaling);
         int minOverlap = Math.Max(8, physH / 10);
         int maxHeight = physH * MaxHeightMultiplier;
+        int noProgress = 0;
 
         try
         {
@@ -77,26 +82,35 @@ public sealed class WindowsScrollingCaptureService : IScrollingCaptureService
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
+                // Re-assert focus + cursor each step so the wheel reaches the target window
+                // (important when triggered via a global hotkey, where focus can drift).
+                ForceForeground(targetHwnd);
+                SetCursorPos(centerX, centerY);
                 SendWheel(centerX, centerY, -WheelNotchesPerStep);
                 await Task.Delay(RenderDelayMs, cancellationToken).ConfigureAwait(false);
-                SetCursorPos(centerX, centerY);
 
                 SKBitmap next = await _captureService
                     .CaptureScreenAsync(region, screenOffset, visualScaling, includeCursor: false)
                     .ConfigureAwait(false);
 
-                int overlap = ScrollStitcher.FindVerticalOverlap(previousFrame, next, minOverlap, ignoreRight);
-                int newRows = next.Height - overlap;
+                int overlap = ScrollStitcher.FindVerticalOverlap(previousFrame, next, minOverlap, ignoreRight, RowMismatchTolerance);
+                int newRows = overlap == 0 ? 0 : next.Height - overlap;
 
-                // overlap == 0: no common rows found (e.g. scrolled more than a viewport) — stop
-                // rather than risk duplicating/garbling content.
-                // newRows below threshold: the view did not move, i.e. we reached the bottom.
-                if (overlap == 0 || newRows < MinNewRowsToContinue)
+                // No new content this attempt (didn't scroll yet / couldn't align). Retry a few
+                // times before concluding we've reached the bottom — this absorbs transient focus
+                // and render lag instead of stopping after a single frame.
+                if (newRows < MinNewRowsToContinue)
                 {
                     next.Dispose();
-                    break;
+                    if (++noProgress >= MaxNoProgressAttempts)
+                    {
+                        break;
+                    }
+
+                    continue;
                 }
 
+                noProgress = 0;
                 SKBitmap grown = ScrollStitcher.Append(accumulated, next, overlap);
                 accumulated.Dispose();
                 accumulated = grown;
@@ -126,7 +140,7 @@ public sealed class WindowsScrollingCaptureService : IScrollingCaptureService
         return accumulated;
     }
 
-    private void FocusWindowUnderPoint(int screenX, int screenY)
+    private IntPtr ResolveTargetHwnd(int screenX, int screenY)
     {
         try
         {
@@ -134,16 +148,44 @@ public sealed class WindowsScrollingCaptureService : IScrollingCaptureService
             var target = _windowDetectionService.GetCandidateAtPoint(new Point(screenX, screenY), candidates);
             if (target != null)
             {
-                IntPtr hwnd = target.RootHwnd != IntPtr.Zero ? target.RootHwnd : target.Hwnd;
-                if (hwnd != IntPtr.Zero)
-                {
-                    SetForegroundWindow(hwnd);
-                }
+                return target.RootHwnd != IntPtr.Zero ? target.RootHwnd : target.Hwnd;
             }
         }
         catch (Exception ex)
         {
             AppLog.Warning("ScrollingCapture.FocusWindow", ex);
+        }
+
+        return IntPtr.Zero;
+    }
+
+    // SetForegroundWindow is unreliable across processes (especially from a global-hotkey
+    // context). Attaching our input thread to the current foreground thread lets it succeed.
+    private static void ForceForeground(IntPtr hwnd)
+    {
+        if (hwnd == IntPtr.Zero)
+        {
+            return;
+        }
+
+        try
+        {
+            uint foreThread = GetWindowThreadProcessId(GetForegroundWindow(), out _);
+            uint appThread = GetCurrentThreadId();
+            if (foreThread != appThread)
+            {
+                AttachThreadInput(foreThread, appThread, true);
+                SetForegroundWindow(hwnd);
+                AttachThreadInput(foreThread, appThread, false);
+            }
+            else
+            {
+                SetForegroundWindow(hwnd);
+            }
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warning("ScrollingCapture.ForceForeground", ex);
         }
     }
 
@@ -199,4 +241,17 @@ public sealed class WindowsScrollingCaptureService : IScrollingCaptureService
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);
+
+    [DllImport("kernel32.dll")]
+    private static extern uint GetCurrentThreadId();
 }
