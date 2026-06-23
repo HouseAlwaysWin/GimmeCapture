@@ -147,7 +147,7 @@ Translation/OCR 服務拆分、Snip 大型 ViewModel partial 拆檔、UI 解耦
 
 | 項目 | 現況 | 目標 |
 |------|------|------|
-| Settings/Hotkey 邊界 | `MainWindowViewModel.Settings.cs` 約 1011 行，混合 UI / 持久化 / hotkey 註冊 | 拆出持久化與註冊協調器 |
+| Settings/Hotkey 邊界 | `MainWindowViewModel.Settings.cs` 約 1011 行，混合 UI / 持久化 / hotkey 註冊（持久化、side-effect、衝突偵測已陸續抽出：`MainWindowSettingsPersistenceService`、`MainWindowSettingsSideEffectCoordinator`、`HotkeyConflictValidator`） | 持續拆出剩餘 UI/註冊邊界 |
 | Snip session 編排 | 仍留在 `SnipWindowViewModel.*`（`Selection.State.cs` 約 992 行） | 抽出 session controller / state machine |
 | AI 資源編排 | `AIResourceService` 約 855 行仍有 drift | 持續拆分 catalog/installer/runtime/queue |
 | App Shell / Tray | 分散在 `App` 與 `MainWindow` code-behind | 抽出 TrayController / AppShellService |
