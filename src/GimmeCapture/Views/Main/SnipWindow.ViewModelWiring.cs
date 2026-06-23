@@ -29,6 +29,8 @@ namespace GimmeCapture.Views.Main;
 // (god class reduction) — no behavior change.
 public partial class SnipWindow : Window
 {
+    private ScrollingCaptureHintWindow? _scrollHintWindow;
+
     protected override void OnDataContextChanged(EventArgs e)
     {
         base.OnDataContextChanged(e);
@@ -98,6 +100,21 @@ public partial class SnipWindow : Window
             
             _viewModel.HideAction = () => Hide();
             _viewModel.ShowAction = () => Show();
+
+            // Manual scrolling-capture hint (capture-excluded, non-stealing).
+            _viewModel.ShowScrollingHintAction = () =>
+            {
+                if (_scrollHintWindow != null) return;
+                var hint = LocalizationService.Instance["ScrollingHintText"];
+                _scrollHintWindow = new ScrollingCaptureHintWindow(hint);
+                _scrollHintWindow.Show();
+            };
+            _viewModel.UpdateScrollingHintAction = rows => _scrollHintWindow?.UpdateHint(rows);
+            _viewModel.HideScrollingHintAction = () =>
+            {
+                _scrollHintWindow?.Close();
+                _scrollHintWindow = null;
+            };
 
             // Own the dialog to the snip overlay so it appears above the topmost overlay and the
             // overlay's hit-test region is disabled while modal (otherwise clicks are swallowed).

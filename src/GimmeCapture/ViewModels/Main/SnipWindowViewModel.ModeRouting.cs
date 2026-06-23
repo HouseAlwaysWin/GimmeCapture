@@ -350,6 +350,24 @@ public partial class SnipWindowViewModel
     {
         if (_mainVm == null) return;
 
+        // Manual scrolling-capture finish/cancel keys (registered only while a session is active).
+        // F6 finishes; Esc cancels; pressing the trigger (Shift+F5) again also finishes as a
+        // reliable fallback in case the temporary F6 hotkey could not be registered.
+        if (_manualScrollActive)
+        {
+            if (id == HotkeyIds.ScrollingCaptureFinish || id == HotkeyIds.ScrollingCapture)
+            {
+                FinishManualScrollCapture(cancelled: false);
+                return;
+            }
+
+            if (id == HotkeyIds.ScrollingCaptureCancel)
+            {
+                FinishManualScrollCapture(cancelled: true);
+                return;
+            }
+        }
+
         var now = DateTime.UtcNow;
         if (id == _lastGlobalHotkeyId && (now - _lastGlobalHotkeyUtc) < TimeSpan.FromMilliseconds(600))
         {

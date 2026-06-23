@@ -7,6 +7,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Threading;
 using GimmeCapture.Services.Abstractions;
+using SkiaSharp;
 
 namespace GimmeCapture.ViewModels.Main;
 
@@ -319,77 +320,60 @@ public partial class SnipWindowViewModel
         }
     }
 
-    private async Task ExecuteScrollingCapture()
+    private Task ExecuteScrollingCapture()
     {
         if (CurrentMode == SnipMode.Recording || CurrentMode == SnipMode.Translation)
         {
-            return;
+            return Task.CompletedTask;
         }
 
         if (SelectionRect.Width > 0 && SelectionRect.Height > 0)
         {
-            // Reuse the Pin capture-launch bookkeeping (countdown/visibility); the result
-            // is a pinned floating window just like Pin.
-            await RunCaptureActionAsync(CaptureMode.Pin, ExecuteScrollingCaptureAsync);
+            // Manual scrolling capture: user scrolls the target by hand, F6 finishes.
+            return StartManualScrollCaptureAsync();
         }
+
+        return Task.CompletedTask;
     }
 
-    private async Task ExecuteScrollingCaptureAsync()
+    // Converts a stitched physical-pixel SKBitmap into an Avalonia bitmap and opens it as a
+    // pinned floating window (sizing/fit-to-screen handled inside OpenPinWindowAction).
+    // The caller owns and disposes the source SKBitmap.
+    internal void OpenStitchedPin(SKBitmap skBitmap)
     {
-        if (_scrollingCaptureService == null)
+        if (skBitmap == null || skBitmap.Width <= 0 || skBitmap.Height <= 0)
         {
-            AppLog.Information("ScrollingCapture.NoService");
-            CloseAction?.Invoke();
             return;
         }
 
-        await _captureVisibilityCoordinator.HideAndWaitForCaptureAsync(HideAction ?? (() => { }));
+        var avaloniaBitmap = new Avalonia.Media.Imaging.WriteableBitmap(
+            new Avalonia.PixelSize(skBitmap.Width, skBitmap.Height),
+            new Avalonia.Vector(96, 96),
+            Avalonia.Platform.PixelFormat.Bgra8888,
+            Avalonia.Platform.AlphaFormat.Premul);
 
-        try
+        using (var lockedOut = avaloniaBitmap.Lock())
         {
-            using var skBitmap = await _scrollingCaptureService.CaptureAsync(
-                SelectionRect,
-                ScreenOffset,
-                VisualScaling);
-
-            if (skBitmap == null || skBitmap.Width <= 0 || skBitmap.Height <= 0)
+            unsafe
             {
-                return;
+                Buffer.MemoryCopy(
+                    (void*)skBitmap.GetPixels(),
+                    (void*)lockedOut.Address,
+                    lockedOut.RowBytes * lockedOut.Size.Height,
+                    skBitmap.RowBytes * skBitmap.Height);
             }
-
-            var avaloniaBitmap = new Avalonia.Media.Imaging.WriteableBitmap(
-                new Avalonia.PixelSize(skBitmap.Width, skBitmap.Height),
-                new Avalonia.Vector(96, 96),
-                Avalonia.Platform.PixelFormat.Bgra8888,
-                Avalonia.Platform.AlphaFormat.Premul);
-
-            using (var lockedOut = avaloniaBitmap.Lock())
-            {
-                unsafe
-                {
-                    Buffer.MemoryCopy(
-                        (void*)skBitmap.GetPixels(),
-                        (void*)lockedOut.Address,
-                        lockedOut.RowBytes * lockedOut.Size.Height,
-                        skBitmap.RowBytes * skBitmap.Height);
-                }
-            }
-
-            // The stitched bitmap is in physical pixels; present it at logical size so DPI matches.
-            double scaling = VisualScaling <= 0 ? 1.0 : VisualScaling;
-            var pinRect = new Rect(
-                SelectionRect.X,
-                SelectionRect.Y,
-                skBitmap.Width / scaling,
-                skBitmap.Height / scaling);
-
-            OpenPinWindowAction?.Invoke(
-                avaloniaBitmap, pinRect, SelectionBorderColor, SelectionBorderThickness, false, false, null, 12.0);
         }
-        finally
-        {
-            CloseAction?.Invoke();
-        }
+
+        // The stitched bitmap is in physical pixels; present it at logical size so DPI matches.
+        double scaling = VisualScaling <= 0 ? 1.0 : VisualScaling;
+        var pinRect = new Rect(
+            SelectionRect.X,
+            SelectionRect.Y,
+            skBitmap.Width / scaling,
+            skBitmap.Height / scaling);
+
+        OpenPinWindowAction?.Invoke(
+            avaloniaBitmap, pinRect, SelectionBorderColor, SelectionBorderThickness, false, false, null, 12.0);
     }
 
     private async Task RunCaptureActionAsync(CaptureMode mode, Func<Task> captureAsync)
