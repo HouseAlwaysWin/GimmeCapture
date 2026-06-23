@@ -36,6 +36,9 @@
             <cv:AnnotationToLeftConverter x:Key="AnnotationToLeftConverter"/>
             <cv:AnnotationToTopConverter x:Key="AnnotationToTopConverter"/>
             <cv:PenGeometryConverter x:Key="PenGeometryConverter"/>
+            <cv:FillBrushConverter x:Key="FillBrushConverter"/>
+            <cv:StepFontSizeConverter x:Key="StepFontSizeConverter"/>
+            <cv:FillSupportedConverter x:Key="FillSupportedConverter"/>
             <cv:BoolToCrossCursorConverter x:Key="BoolToCrossCursorConverter"/>
             <cv:BoolToOpacityConverter x:Key="BoolToOpacityConverter"/>
             <cv:ThicknessToLeftTopMarginConverter x:Key="ThicknessToLeftTopMarginConverter"/>

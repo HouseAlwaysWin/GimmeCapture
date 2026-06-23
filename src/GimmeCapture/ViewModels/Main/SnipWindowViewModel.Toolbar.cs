@@ -271,6 +271,12 @@ public partial class SnipWindowViewModel
         set => _editorState.IsItalic = value;
     }
 
+    public bool IsShapeFilled
+    {
+        get => _editorState.CurrentFill;
+        set => _editorState.CurrentFill = value;
+    }
+
     public ObservableCollection<FontFamily> AvailableFonts { get; } = new ObservableCollection<FontFamily>
     {
         new FontFamily("Arial"), 
@@ -414,6 +420,8 @@ public partial class SnipWindowViewModel
     public ReactiveCommand<Color, Unit> ChangeColorCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> UndoCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> RedoCommand { get; set; } = null!;
+    public ReactiveCommand<Unit, Unit> BringToFrontCommand { get; set; } = null!;
+    public ReactiveCommand<Unit, Unit> SendToBackCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> ClearAnnotationsCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> ConfirmTextEntryCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> CancelTextEntryCommand { get; set; } = null!;
@@ -506,6 +514,16 @@ public partial class SnipWindowViewModel
         UndoCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
         RedoCommand = ReactiveCommand.Create(Redo, canRedo);
         RedoCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
+
+        var canReorder = this.WhenAnyValue(
+            x => x.SelectedAnnotation,
+            x => x.IsInputFocused,
+            x => x.IsEnteringText,
+            (annotation, textFocus, enteringText) => annotation != null && !textFocus && !enteringText);
+        BringToFrontCommand = ReactiveCommand.Create(() => { _editorState.BringSelectedToFront(); }, canReorder);
+        BringToFrontCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
+        SendToBackCommand = ReactiveCommand.Create(() => { _editorState.SendSelectedToBack(); }, canReorder);
+        SendToBackCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));
 
         IncreaseFontSizeCommand = ReactiveCommand.Create(() => { if (CurrentFontSize < 72) CurrentFontSize += 2; }, canExecuteHotkeys);
         IncreaseFontSizeCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Command error: {ex}"));

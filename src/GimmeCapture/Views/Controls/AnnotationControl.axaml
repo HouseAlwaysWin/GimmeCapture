@@ -12,6 +12,12 @@
         <Rectangle Stroke="{Binding Color, Converter={StaticResource ColorToBrushConverter}}"
                    StrokeThickness="{Binding Thickness}"
                    IsVisible="{Binding Type, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Rectangle}}">
+            <Rectangle.Fill>
+                <MultiBinding Converter="{StaticResource FillBrushConverter}">
+                    <Binding Path="Color"/>
+                    <Binding Path="IsFilled"/>
+                </MultiBinding>
+            </Rectangle.Fill>
             <Canvas.Left>
                 <MultiBinding Converter="{StaticResource RectXConverter}">
                     <Binding Path="StartPoint"/>
@@ -41,6 +47,12 @@
         <Ellipse Stroke="{Binding Color, Converter={StaticResource ColorToBrushConverter}}"
                  StrokeThickness="{Binding Thickness}"
                  IsVisible="{Binding Type, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Ellipse}}">
+            <Ellipse.Fill>
+                <MultiBinding Converter="{StaticResource FillBrushConverter}">
+                    <Binding Path="Color"/>
+                    <Binding Path="IsFilled"/>
+                </MultiBinding>
+            </Ellipse.Fill>
             <Canvas.Left>
                 <MultiBinding Converter="{StaticResource RectXConverter}">
                     <Binding Path="StartPoint"/>
@@ -101,6 +113,75 @@
               StrokeJoin="Round"
               Data="{Binding Points, Converter={StaticResource PenGeometryConverter}}"
               IsVisible="{Binding Type, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Pen}}"/>
+
+        <!-- Highlighter: translucent filled rectangle, no border -->
+        <Rectangle Opacity="0.35"
+                   Fill="{Binding Color, Converter={StaticResource ColorToBrushConverter}}"
+                   IsVisible="{Binding Type, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Highlighter}}">
+            <Canvas.Left>
+                <MultiBinding Converter="{StaticResource RectXConverter}">
+                    <Binding Path="StartPoint"/>
+                    <Binding Path="EndPoint"/>
+                </MultiBinding>
+            </Canvas.Left>
+            <Canvas.Top>
+                <MultiBinding Converter="{StaticResource RectYConverter}">
+                    <Binding Path="StartPoint"/>
+                    <Binding Path="EndPoint"/>
+                </MultiBinding>
+            </Canvas.Top>
+            <Rectangle.Width>
+                <MultiBinding Converter="{StaticResource RectWidthConverter}">
+                    <Binding Path="StartPoint"/>
+                    <Binding Path="EndPoint"/>
+                </MultiBinding>
+            </Rectangle.Width>
+            <Rectangle.Height>
+                <MultiBinding Converter="{StaticResource RectHeightConverter}">
+                    <Binding Path="StartPoint"/>
+                    <Binding Path="EndPoint"/>
+                </MultiBinding>
+            </Rectangle.Height>
+        </Rectangle>
+
+        <!-- Step badge: filled circle with centered number -->
+        <Panel IsVisible="{Binding Type, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Step}}">
+            <Canvas.Left>
+                <MultiBinding Converter="{StaticResource RectXConverter}">
+                    <Binding Path="StartPoint"/>
+                    <Binding Path="EndPoint"/>
+                </MultiBinding>
+            </Canvas.Left>
+            <Canvas.Top>
+                <MultiBinding Converter="{StaticResource RectYConverter}">
+                    <Binding Path="StartPoint"/>
+                    <Binding Path="EndPoint"/>
+                </MultiBinding>
+            </Canvas.Top>
+            <Panel.Width>
+                <MultiBinding Converter="{StaticResource RectWidthConverter}">
+                    <Binding Path="StartPoint"/>
+                    <Binding Path="EndPoint"/>
+                </MultiBinding>
+            </Panel.Width>
+            <Panel.Height>
+                <MultiBinding Converter="{StaticResource RectHeightConverter}">
+                    <Binding Path="StartPoint"/>
+                    <Binding Path="EndPoint"/>
+                </MultiBinding>
+            </Panel.Height>
+            <Ellipse Stretch="Fill" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                     Fill="{Binding Color, Converter={StaticResource ColorToBrushConverter}}"/>
+            <TextBlock Text="{Binding StepNumber}" Foreground="White" FontWeight="Bold"
+                       HorizontalAlignment="Center" VerticalAlignment="Center">
+                <TextBlock.FontSize>
+                    <MultiBinding Converter="{StaticResource StepFontSizeConverter}">
+                        <Binding Path="StartPoint"/>
+                        <Binding Path="EndPoint"/>
+                    </MultiBinding>
+                </TextBlock.FontSize>
+            </TextBlock>
+        </Panel>
 
         <Border IsVisible="{Binding Type, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Blur}}"
                 ClipToBounds="True"

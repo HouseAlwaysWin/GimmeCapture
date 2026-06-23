@@ -22,6 +22,7 @@ public interface IDrawingToolViewModel
     double CurrentFontSize { get; set; }
     bool IsBold { get; set; }
     bool IsItalic { get; set; }
+    bool IsShapeFilled { get; set; }
     System.Collections.ObjectModel.ObservableCollection<FontFamily> AvailableFonts { get; }
     FontFamily CurrentFontFamily { get; set; }
     System.Action? FocusWindowAction { get; set; }
@@ -47,6 +48,9 @@ public interface IDrawingToolViewModel
     
     ReactiveCommand<Unit, Unit> UndoCommand { get; }
     ReactiveCommand<Unit, Unit> RedoCommand { get; }
+
+    ReactiveCommand<Unit, Unit> BringToFrontCommand { get; }
+    ReactiveCommand<Unit, Unit> SendToBackCommand { get; }
     
     ReactiveCommand<Color, Unit> ChangeColorCommand { get; }
 
@@ -71,5 +75,9 @@ public interface IDrawingToolViewModel
     string TextTooltip { get; }
     string MosaicTooltip { get; }
     string BlurTooltip { get; }
+    string HighlighterTooltip { get; }
+    string StepTooltip { get; }
+    string BringToFrontTooltip { get; }
+    string SendToBackTooltip { get; }
     string CurrentRedactionPreset { get; }
 }

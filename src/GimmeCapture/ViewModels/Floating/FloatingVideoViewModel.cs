@@ -267,6 +267,10 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
     public string TextTooltip => $"{LocalizationService.Instance["TipText"]} ({TextHotkey})";
     public string MosaicTooltip => $"{LocalizationService.Instance["TipMosaic"]} ({MosaicHotkey})";
     public string BlurTooltip => $"{LocalizationService.Instance["TipBlur"]} ({BlurHotkey})";
+    public string HighlighterTooltip => LocalizationService.Instance["TipHighlighter"];
+    public string StepTooltip => LocalizationService.Instance["TipStep"];
+    public string BringToFrontTooltip => LocalizationService.Instance["TipBringToFront"];
+    public string SendToBackTooltip => LocalizationService.Instance["TipSendToBack"];
     public string PlaybackTooltip => $"{LocalizationService.Instance["ActionPlayback"]} ({PlaybackHotkey})";
     public string MuteTooltip => IsMuted
         ? $"{(LocalizationService.Instance["RecordUnmute"] ?? "Unmute")} ({MuteHotkey})"
