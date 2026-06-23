@@ -308,6 +308,10 @@ public partial class SnipWindowViewModel
             Avalonia.Threading.Dispatcher.UIThread.Post(
                 () => ExecuteTextCopyAsync().Forget("QuickOcr.ExecuteTextCopy"));
         }
+        else if (AutoActionMode == SnipAutoAction.ScrollingCapture)
+        {
+            Avalonia.Threading.Dispatcher.UIThread.Post(async () => await ExecuteScrollingCapture());
+        }
     }
 
     public RecordingState RecState => _recordingService?.State ?? RecordingState.Idle;
@@ -457,6 +461,10 @@ public partial class SnipWindowViewModel
                 LockSelectedScreenshotSelection = false;
                 AutoActionMode = SnipAutoAction.TextCopy;
                 break;
+            case CaptureMode.ScrollingCapture:
+                LockSelectedScreenshotSelection = false;
+                AutoActionMode = SnipAutoAction.ScrollingCapture;
+                break;
         }
     }
 
@@ -469,6 +477,7 @@ public partial class SnipWindowViewModel
             CaptureMode.Pin => SnipAutoAction.Pin,
             CaptureMode.Record => SnipAutoAction.EnterRecordMode,
             CaptureMode.TextCopy => SnipAutoAction.TextCopy,
+            CaptureMode.ScrollingCapture => SnipAutoAction.ScrollingCapture,
             _ => SnipAutoAction.None
         };
     }

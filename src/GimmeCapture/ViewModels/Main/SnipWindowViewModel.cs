@@ -21,7 +21,7 @@ namespace GimmeCapture.ViewModels.Main;
 
 public enum SnipState { Idle, Detecting, Selecting, Selected }
 public enum SnipMode { Screenshot, Recording, Translation }
-public enum SnipAutoAction { None, Copy, Pin, EnterRecordMode, TextCopy }
+public enum SnipAutoAction { None, Copy, Pin, EnterRecordMode, TextCopy, ScrollingCapture }
 
 public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingToolViewModel
 {
@@ -71,6 +71,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     private readonly ITranslationSelectionMonitor? _translationSelectionMonitor;
     private readonly IAIScanSessionService? _aiScanSessionService;
     private readonly IQuickOcrService? _quickOcrService;
+    private readonly IScrollingCaptureService? _scrollingCaptureService;
     private readonly ICaptureVisibilityCoordinator _captureVisibilityCoordinator;
     private readonly SnipSelectionStateController _selectionStateController;
     private readonly CompositeDisposable _disposables = new();
@@ -316,9 +317,11 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         ITranslationSelectionMonitor? translationSelectionMonitor = null,
         IAIScanSessionService? aiScanSessionService = null,
         IQuickOcrService? quickOcrService = null,
-        ICaptureVisibilityCoordinator? captureVisibilityCoordinator = null)
+        ICaptureVisibilityCoordinator? captureVisibilityCoordinator = null,
+        IScrollingCaptureService? scrollingCaptureService = null)
     {
         _captureService = captureService ?? throw new ArgumentNullException(nameof(captureService));
+        _scrollingCaptureService = scrollingCaptureService;
         _detectionService = detectionService ?? CreateDesignWindowDetectionService();
         _translationSession = translationSession;
         _translationSelectionMonitor = translationSelectionMonitor;

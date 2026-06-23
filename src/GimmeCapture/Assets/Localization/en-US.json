@@ -54,6 +54,8 @@
   "TranslateHotkey": "Translate Hotkey:",
   "HotkeysActive": "* Global Listener Active (Kitsune Mode Ready)",
   "StartCapture": "Start Capture (Snip)",
+  "ScrollingCapture": "Scrolling Capture",
+  "ScrollingCaptureTip": "Select a region over a scrollable window; it auto-scrolls and stitches a long screenshot.",
   "StatusReady": "Ready",
   "RemoveBackground": "Remove Background",
   "AIDownloadTitle": "AI Modules Required",

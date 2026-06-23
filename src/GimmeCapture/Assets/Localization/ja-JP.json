@@ -54,6 +54,8 @@
   "TranslateHotkey": "翻訳ホットキー (Translate):",
   "HotkeysActive": "* グローバルリスナー有効 (Kitsune Mode Ready)",
   "StartCapture": "キャプチャ開始",
+  "ScrollingCapture": "スクロールキャプチャ",
+  "ScrollingCaptureTip": "スクロール可能なウィンドウ上で領域を選択すると、自動でスクロールして長いスクリーンショットを連結します。",
   "StatusReady": "待機中",
   "StatusSnip": "キャプチャ中...",
   "StatusSaved": "保存しました！",
