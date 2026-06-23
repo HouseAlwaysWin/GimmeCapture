@@ -105,6 +105,54 @@ public class ScrollStitcherTests
     }
 
     [Fact]
+    public void FindVerticalShift_DownwardScroll_ReturnsPositiveRows()
+    {
+        using var previous = MakeFrame(20, 30, sourceOffset: 0);
+        using var next = MakeFrame(20, 30, sourceOffset: 5); // scrolled down -> new content at bottom
+
+        var shift = ScrollStitcher.FindVerticalShift(previous, next, minOverlapRows: 8);
+
+        Assert.True(shift.Found);
+        Assert.Equal(5, shift.Rows);
+    }
+
+    [Fact]
+    public void FindVerticalShift_UpwardScroll_ReturnsNegativeRows()
+    {
+        using var previous = MakeFrame(20, 30, sourceOffset: 5);
+        using var next = MakeFrame(20, 30, sourceOffset: 0); // scrolled up -> new content at top
+
+        var shift = ScrollStitcher.FindVerticalShift(previous, next, minOverlapRows: 8);
+
+        Assert.True(shift.Found);
+        Assert.Equal(-5, shift.Rows);
+    }
+
+    [Fact]
+    public void FindVerticalShift_DisjointFrames_NotFound()
+    {
+        using var previous = MakeFrame(20, 30, sourceOffset: 0);
+        using var next = MakeFrame(20, 30, sourceOffset: 100);
+
+        var shift = ScrollStitcher.FindVerticalShift(previous, next, minOverlapRows: 8);
+
+        Assert.False(shift.Found);
+    }
+
+    [Fact]
+    public void Prepend_AddsNewRowsAtTop()
+    {
+        using var accumulated = MakeFrame(10, 20, sourceOffset: 5); // rows 5..24 captured so far
+        using var next = MakeFrame(10, 20, sourceOffset: 0);        // scrolled up to reveal rows 0..4
+
+        using var result = ScrollStitcher.Prepend(accumulated, next, newRows: 5);
+
+        Assert.Equal(25, result.Height);
+        Assert.Equal(ColorForRow(0), result.GetPixel(0, 0)); // new content at the very top
+        Assert.Equal(ColorForRow(5), result.GetPixel(0, 5)); // original accumulated top preserved below it
+    }
+
+    [Fact]
     public void Append_AddsOnlyNewRows()
     {
         using var accumulated = MakeFrame(10, 20, sourceOffset: 0);

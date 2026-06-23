@@ -22,6 +22,11 @@ public partial class SnipWindowViewModel
     private int _manualMinOverlap;
     private int _manualIgnoreRight;
 
+    // Row index within _manualAccumulated where the current viewport (_manualPrevFrame) top
+    // sits. Tracked like a panorama's absolute position so scrolling back over already-captured
+    // content neither duplicates nor scrambles the strip — only genuinely new extents grow it.
+    private int _manualViewTop;
+
     private const int ManualTickMs = 90;            // capture often so fast scrolls still overlap
     private const int ManualMinNewRows = 2;
     // Fraction of overlap rows allowed to differ. Higher now that rows are matched by
@@ -70,6 +75,7 @@ public partial class SnipWindowViewModel
         }
 
         _manualPrevFrame = _manualAccumulated.Copy();
+        _manualViewTop = 0;
         _manualScrollActive = true;
 
         // Finish (F6) / cancel (Esc) are handled by the snip key hook (SnipWindow.Win32.cs),
@@ -116,28 +122,54 @@ public partial class SnipWindowViewModel
             }
 
             // Stitch synchronously on the UI thread so it can't race FinishManualScrollCapture.
-            int overlap = ScrollStitcher.FindVerticalOverlap(
+            // The shift is signed: > 0 the user scrolled down (new content at bottom),
+            // < 0 they scrolled up (new content at top).
+            ScrollStitcher.VerticalShift shift = ScrollStitcher.FindVerticalShift(
                 _manualPrevFrame, next, _manualMinOverlap, _manualIgnoreRight, ManualRowMismatchTolerance);
-            int newRows = overlap == 0 ? 0 : next.Height - overlap;
 
-            if (newRows >= ManualMinNewRows)
+            if (!shift.Found || Math.Abs(shift.Rows) < ManualMinNewRows)
             {
-                SKBitmap grown = ScrollStitcher.Append(_manualAccumulated, next, overlap);
+                next.Dispose();
+                return;
+            }
+
+            int height = next.Height;
+            int newViewTop = _manualViewTop + shift.Rows;
+            bool grew = false;
+
+            if (newViewTop + height > _manualAccumulated.Height)
+            {
+                // Viewport moved past the bottom of what we've captured: append the new tail.
+                int extra = newViewTop + height - _manualAccumulated.Height;
+                SKBitmap grown = ScrollStitcher.Append(_manualAccumulated, next, height - extra);
                 _manualAccumulated.Dispose();
                 _manualAccumulated = grown;
-                _manualPrevFrame.Dispose();
-                _manualPrevFrame = next;
+                grew = true;
+            }
+            else if (newViewTop < 0)
+            {
+                // Viewport moved above the top of what we've captured: prepend the new head.
+                int extra = -newViewTop;
+                SKBitmap grown = ScrollStitcher.Prepend(_manualAccumulated, next, extra);
+                _manualAccumulated.Dispose();
+                _manualAccumulated = grown;
+                newViewTop = 0; // after prepending, the strip origin shifts to the new top
+                grew = true;
+            }
+            // else: scrolled back over already-captured content — track position, add nothing.
 
+            _manualViewTop = Math.Clamp(newViewTop, 0, Math.Max(0, _manualAccumulated.Height - height));
+            _manualPrevFrame.Dispose();
+            _manualPrevFrame = next;
+
+            if (grew)
+            {
                 UpdateScrollingHintAction?.Invoke(_manualAccumulated.Height);
 
                 if (_manualAccumulated.Height >= _manualMaxHeight)
                 {
                     FinishManualScrollCapture(cancelled: false);
                 }
-            }
-            else
-            {
-                next.Dispose();
             }
         }
         finally

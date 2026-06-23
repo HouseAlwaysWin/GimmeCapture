@@ -4,8 +4,9 @@ using SkiaSharp;
 namespace GimmeCapture.Services.Core.Media;
 
 /// <summary>
-/// Pure image-stitching helpers for scrolling capture: detect the vertical overlap
-/// between two consecutive frames of the same region and append the new content.
+/// Pure image-stitching helpers for scrolling capture. Works like a phone's panorama
+/// mode: detect how far the content moved between two consecutive frames of the same
+/// region (a signed vertical shift) and grow the captured strip on the correct side.
 /// Kept free of Win32/UI so it can be unit tested. Operates on BGRA8888 SKBitmaps.
 /// </summary>
 internal static class ScrollStitcher
@@ -23,24 +24,36 @@ internal static class ScrollStitcher
     // Tolerates a hover highlight, blinking caret or a single moving glyph within a row.
     private const double RowPixelMismatchTolerance = 0.18;
 
+    // If even the best-aligned shift still has more than this fraction of sampled pixels
+    // differing, the frames don't really overlap (scrolled too far, or unrelated content):
+    // report no match instead of stitching garbage.
+    private const double MaxMatchSampleDiffRatio = 0.5;
+
     /// <summary>
-    /// Returns how many rows at the bottom of <paramref name="previous"/> coincide with
-    /// rows at the top of <paramref name="next"/> (the overlap). With a downward scroll of
-    /// <c>s</c> pixels, <c>next</c> equals <c>previous</c> shifted up by <c>s</c>, so the
-    /// overlap is <c>height - s</c> and the new content is the bottom <c>s</c> rows of
-    /// <paramref name="next"/>.
-    /// Returns <c>height</c> when the frames are identical (no scroll happened) and 0 when
-    /// no overlap of at least <paramref name="minOverlapRows"/> rows is found or the frames
-    /// differ in size.
-    /// Rows are matched by sampled pixels with a colour tolerance (not byte-exact hashing),
-    /// so frames that re-render with minor per-pixel differences still align.
+    /// The signed vertical motion of the content between two frames.
+    /// <list type="bullet">
+    /// <item><c>Rows &gt; 0</c>: content moved up (the user scrolled down); new content is at the BOTTOM.</item>
+    /// <item><c>Rows &lt; 0</c>: content moved down (the user scrolled up); new content is at the TOP.</item>
+    /// <item><c>Rows == 0</c>: no movement.</item>
+    /// </list>
+    /// <c>Found == false</c> means no confident alignment — do not stitch this frame.
+    /// </summary>
+    public readonly record struct VerticalShift(int Rows, bool Found);
+
+    /// <summary>
+    /// Finds the signed vertical shift that best aligns <paramref name="next"/> onto
+    /// <paramref name="previous"/>. Rows are matched by sampled pixels with a colour
+    /// tolerance (not byte-exact hashing), and the globally best-scoring shift is chosen
+    /// (not merely the first acceptable one), so repetitive content does not lock onto a
+    /// wrong small shift. Returns <c>Found == false</c> when no overlap of at least
+    /// <paramref name="minOverlapRows"/> rows aligns well enough.
     /// </summary>
     /// <param name="ignoreRightColumns">Columns to ignore on the right edge (e.g. a moving scrollbar).</param>
     /// <param name="maxRowMismatchRatio">
-    /// Fraction of overlap rows allowed to differ and still count as a match (0 = exact).
-    /// Tolerates minor per-frame rendering differences (hover, blinking caret, lazy-loaded rows).
+    /// Fraction of overlap rows allowed to be "changed" and still accept the alignment
+    /// (0 = every row must match). Tolerates a static header/footer or a few re-rendered rows.
     /// </param>
-    public static int FindVerticalOverlap(
+    public static VerticalShift FindVerticalShift(
         SKBitmap previous,
         SKBitmap next,
         int minOverlapRows = 8,
@@ -52,60 +65,115 @@ internal static class ScrollStitcher
 
         if (previous.Width != next.Width || previous.Height != next.Height || previous.Width <= 0)
         {
-            return 0;
+            return new VerticalShift(0, false);
         }
 
         int height = previous.Height;
         if (height <= 0)
         {
-            return 0;
+            return new VerticalShift(0, false);
         }
 
         int effectiveMin = Math.Clamp(minOverlapRows, 1, height);
         double clampedRatio = Math.Clamp(maxRowMismatchRatio, 0.0, 1.0);
 
-        // Sampled BGRA bytes per row: [row * sampleStride .. +sampleStride). sampleStride is
-        // sampleCount*4. A 0-width signature (no usable columns) means every row "matches".
         byte[] prevSig = ComputeRowSignatures(previous, ignoreRightColumns, out int sampleCount);
         byte[] nextSig = ComputeRowSignatures(next, ignoreRightColumns, out _);
-        int sampleStride = sampleCount * 4;
-        int allowedRowPixelMismatches = (int)(sampleCount * RowPixelMismatchTolerance);
-
-        // s = scroll distance in rows; smallest matching s == largest overlap.
-        for (int s = 0; s <= height - effectiveMin; s++)
+        if (sampleCount == 0)
         {
-            int overlap = height - s;
-            int allowedMismatches = (int)(overlap * clampedRatio);
-            int mismatches = 0;
-            bool match = true;
+            return new VerticalShift(0, false);
+        }
+
+        int allowedRowSampleDiffs = (int)(sampleCount * RowPixelMismatchTolerance);
+
+        double bestScore = double.MaxValue;
+        int bestShift = 0;
+        bool found = false;
+
+        // d = signed shift. d >= 0 aligns previous[r+d] with next[r] (content moved up);
+        // d < 0 aligns previous[r] with next[r-d] (content moved down).
+        int maxShift = height - effectiveMin;
+        for (int d = -maxShift; d <= maxShift; d++)
+        {
+            int overlap = height - Math.Abs(d);
+            int prevStart = d >= 0 ? d : 0;
+            int nextStart = d >= 0 ? 0 : -d;
+            int allowedRowMismatches = (int)(overlap * clampedRatio);
+
+            long totalDiffs = 0;
+            int rowMismatches = 0;
+            bool gated = false;
             for (int r = 0; r < overlap; r++)
             {
-                if (!RowsMatch(prevSig, (s + r) * sampleStride, nextSig, r * sampleStride, sampleCount, allowedRowPixelMismatches))
+                int diffs = RowSampleDiffs(
+                    prevSig, (prevStart + r) * sampleCount * 4,
+                    nextSig, (nextStart + r) * sampleCount * 4,
+                    sampleCount);
+
+                totalDiffs += diffs;
+                if (diffs > allowedRowSampleDiffs)
                 {
-                    mismatches++;
-                    if (mismatches > allowedMismatches)
+                    rowMismatches++;
+                    if (rowMismatches > allowedRowMismatches)
                     {
-                        match = false;
+                        gated = true;
                         break;
                     }
                 }
             }
 
-            if (match)
+            if (gated)
             {
-                return overlap;
+                continue;
+            }
+
+            double score = (double)totalDiffs / ((long)overlap * sampleCount);
+            // Prefer the lowest-difference alignment; on ties prefer the larger overlap
+            // (the smaller scroll), which is the more conservative interpretation.
+            if (score < bestScore || (score == bestScore && overlap > height - Math.Abs(bestShift)))
+            {
+                bestScore = score;
+                bestShift = d;
+                found = true;
             }
         }
 
-        return 0;
+        if (!found || bestScore > MaxMatchSampleDiffRatio)
+        {
+            return new VerticalShift(0, false);
+        }
+
+        return new VerticalShift(bestShift, true);
     }
 
     /// <summary>
-    /// Two rows match when at most <paramref name="allowedPixelMismatches"/> of their sampled
-    /// columns differ; a column differs when any B/G/R channel is off by more than
-    /// <see cref="ColorTolerance"/>. Alpha is ignored (capture frames are opaque).
+    /// Backwards-compatible overlap query for the downward-scroll case: returns how many
+    /// rows at the bottom of <paramref name="previous"/> coincide with the top of
+    /// <paramref name="next"/>. Returns <c>height</c> for identical frames and 0 when the
+    /// best alignment is an upward scroll or no confident overlap is found.
     /// </summary>
-    private static bool RowsMatch(byte[] a, int aOffset, byte[] b, int bOffset, int sampleCount, int allowedPixelMismatches)
+    public static int FindVerticalOverlap(
+        SKBitmap previous,
+        SKBitmap next,
+        int minOverlapRows = 8,
+        int ignoreRightColumns = 0,
+        double maxRowMismatchRatio = 0.0)
+    {
+        VerticalShift shift = FindVerticalShift(previous, next, minOverlapRows, ignoreRightColumns, maxRowMismatchRatio);
+        if (!shift.Found || shift.Rows < 0)
+        {
+            return 0;
+        }
+
+        return previous.Height - shift.Rows;
+    }
+
+    /// <summary>
+    /// Counts how many of the two rows' sampled columns differ; a column differs when any
+    /// B/G/R channel is off by more than <see cref="ColorTolerance"/>. Alpha is ignored
+    /// (capture frames are opaque).
+    /// </summary>
+    private static int RowSampleDiffs(byte[] a, int aOffset, byte[] b, int bOffset, int sampleCount)
     {
         int diffs = 0;
         for (int i = 0; i < sampleCount; i++)
@@ -117,14 +185,10 @@ internal static class ScrollStitcher
             if (db > ColorTolerance || dg > ColorTolerance || dr > ColorTolerance)
             {
                 diffs++;
-                if (diffs > allowedPixelMismatches)
-                {
-                    return false;
-                }
             }
         }
 
-        return true;
+        return diffs;
     }
 
     /// <summary>
@@ -152,6 +216,34 @@ internal static class ScrollStitcher
         var src = new SKRect(0, srcTop, next.Width, next.Height);
         var dst = new SKRect(0, accumulated.Height, next.Width, accumulated.Height + newRows);
         canvas.DrawBitmap(next, src, dst);
+
+        return result;
+    }
+
+    /// <summary>
+    /// Returns a new bitmap consisting of the top <paramref name="newRows"/> rows of
+    /// <paramref name="next"/> placed above <paramref name="accumulated"/> (the upward-scroll
+    /// case). If there is no new content, a copy of <paramref name="accumulated"/> is returned.
+    /// </summary>
+    public static SKBitmap Prepend(SKBitmap accumulated, SKBitmap next, int newRows)
+    {
+        ArgumentNullException.ThrowIfNull(accumulated);
+        ArgumentNullException.ThrowIfNull(next);
+
+        newRows = Math.Clamp(newRows, 0, next.Height);
+        if (newRows <= 0)
+        {
+            return accumulated.Copy();
+        }
+
+        int width = accumulated.Width;
+        var result = new SKBitmap(new SKImageInfo(width, accumulated.Height + newRows, SKColorType.Bgra8888, SKAlphaType.Premul));
+        using var canvas = new SKCanvas(result);
+
+        var src = new SKRect(0, 0, next.Width, newRows);
+        var dst = new SKRect(0, 0, next.Width, newRows);
+        canvas.DrawBitmap(next, src, dst);
+        canvas.DrawBitmap(accumulated, 0, newRows);
 
         return result;
     }
