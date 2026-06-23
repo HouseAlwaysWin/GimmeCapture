@@ -89,9 +89,9 @@ public sealed class ScrollingCaptureHintWindow : Window
         _text.Text = $"{_baseText}   ({capturedRows}px)";
     }
 
-    // Place the hint just below the captured region (or above it when there's no room),
-    // horizontally centred on the region and clamped to the screen — so it stays close to the
-    // selection without ever covering it.
+    // Pin the hint to the bottom-centre of the screen that holds the region (or the
+    // top-centre when the region itself sits in the bottom band), so it stays in a fixed,
+    // predictable place and never lands on top of the selection.
     private void PositionNearAnchor()
     {
         var center = new PixelPoint(_anchor.X + (_anchor.Width / 2), _anchor.Y + (_anchor.Height / 2));
@@ -107,27 +107,21 @@ public sealed class ScrollingCaptureHintWindow : Window
         double scale = screen.Scaling <= 0 ? 1.0 : screen.Scaling;
         int w = (int)((Bounds.Width > 0 ? Bounds.Width : 440) * scale);
         int h = (int)((Bounds.Height > 0 ? Bounds.Height : 60) * scale);
-        int gap = (int)(12 * scale);
+        int margin = (int)(16 * scale);
 
-        int x = _anchor.X + ((_anchor.Width - w) / 2);
+        // Always horizontally centred on the screen (never drifts to the left edge).
+        int x = wa.X + ((wa.Width - w) / 2);
         x = Math.Clamp(x, wa.X, Math.Max(wa.X, wa.Right - w));
 
-        int below = _anchor.Y + _anchor.Height + gap;
-        int above = _anchor.Y - gap - h;
-        int y;
-        if (below + h <= wa.Bottom)
-        {
-            y = below; // preferred: just under the region
-        }
-        else if (above >= wa.Y)
-        {
-            y = above; // no room below: just above the region
-        }
-        else
-        {
-            y = Math.Max(wa.Y, wa.Bottom - h); // region fills the screen: pin to bottom
-        }
+        int yBottom = wa.Bottom - h - margin;
+        int yTop = wa.Y + margin;
 
-        Position = new PixelPoint(x, y);
+        // Default to the bottom band; if the region reaches into it (and the top is clear),
+        // use the top band instead so the hint never covers the selection.
+        bool regionInBottomBand = _anchor.Y + _anchor.Height > yBottom;
+        bool regionInTopBand = _anchor.Y < yTop + h;
+        int y = (regionInBottomBand && !regionInTopBand) ? yTop : yBottom;
+
+        Position = new PixelPoint(x, Math.Clamp(y, wa.Y, Math.Max(wa.Y, wa.Bottom - h)));
     }
 }
