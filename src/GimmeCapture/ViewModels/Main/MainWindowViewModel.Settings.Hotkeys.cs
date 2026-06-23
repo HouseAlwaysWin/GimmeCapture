@@ -9,13 +9,6 @@ namespace GimmeCapture.ViewModels.Main;
 // conflict checking. Split out of MainWindowViewModel.Settings.cs (god class reduction) — no behavior change.
 public partial class MainWindowViewModel
 {
-    private static bool IsUnifiedPinHotkeyTag(string tag)
-    {
-        return tag == "Snip_Pin"
-            || tag == "Record_Action"
-            || tag == "Translate_Pin";
-    }
-
     private void SetUnifiedPinHotkeys(string value)
     {
         bool snipChanged = _settingsService.Settings.Snip.Pin != value;
@@ -115,152 +108,80 @@ public partial class MainWindowViewModel
 
     public System.Collections.Generic.List<string> ModifierOptions { get; } = new() { "Shift", "Ctrl", "Alt", "None" };
 
+    // Thin wrapper: snapshot the current hotkey values by tag and delegate the (pure) conflict
+    // logic to HotkeyConflictValidator so it can be unit-tested in isolation. Tag names match
+    // property names exactly.
     public string? CheckHotkeyConflict(string targetTag, string hotkey)
     {
-        static string? MatchCrossActionConflict(
-            string targetTag,
-            string hotkey,
-            params (string Tag, string CurrentHotkey, string ConflictKey)[] candidates)
+        var current = new System.Collections.Generic.Dictionary<string, string>(StringComparer.Ordinal)
         {
-            foreach (var candidate in candidates)
-            {
-                if (targetTag != candidate.Tag && string.Equals(candidate.CurrentHotkey, hotkey, StringComparison.OrdinalIgnoreCase))
-                {
-                    return candidate.ConflictKey;
-                }
-            }
+            ["SnipHotkey"] = SnipHotkey,
+            ["RecordHotkey"] = RecordHotkey,
+            ["TranslateHotkey"] = TranslateHotkey,
+            ["TextCopyHotkey"] = TextCopyHotkey,
 
-            return null;
-        }
+            ["Snip_Rectangle"] = Snip_Rectangle,
+            ["Snip_Ellipse"] = Snip_Ellipse,
+            ["Snip_Arrow"] = Snip_Arrow,
+            ["Snip_Line"] = Snip_Line,
+            ["Snip_Pen"] = Snip_Pen,
+            ["Snip_Text"] = Snip_Text,
+            ["Snip_Mosaic"] = Snip_Mosaic,
+            ["Snip_Blur"] = Snip_Blur,
+            ["Snip_Undo"] = Snip_Undo,
+            ["Snip_Redo"] = Snip_Redo,
+            ["Snip_Clear"] = Snip_Clear,
+            ["Snip_Save"] = Snip_Save,
+            ["Snip_Copy"] = Snip_Copy,
+            ["Snip_Close"] = Snip_Close,
+            ["Snip_Toolbar"] = Snip_Toolbar,
+            ["Snip_SelectionMode"] = Snip_SelectionMode,
+            ["Snip_CropMode"] = Snip_CropMode,
+            ["Snip_RemoveBackground"] = Snip_RemoveBackground,
+            ["Snip_MagicWand"] = Snip_MagicWand,
+            ["Snip_Pin"] = Snip_Pin,
+            ["Snip_FullscreenSelect"] = Snip_FullscreenSelect,
+            ["Snip_SwitchToTranslate"] = Snip_SwitchToTranslate,
+            ["Snip_SwitchToRecord"] = Snip_SwitchToRecord,
 
-        // 1. Global Group (Idle state triggers)
-        var globalGroup = new[] { "SnipHotkey", "RecordHotkey", "TranslateHotkey", "TextCopyHotkey", "PinHotkey", "CopyHotkey" };
-        
-        // 2. Snip Group (Local to Screenshot mode)
-        var snipGroup = new[] { 
-            "Snip_Rectangle", "Snip_Ellipse", "Snip_Arrow", "Snip_Line", "Snip_Pen", 
-            "Snip_Text", "Snip_Mosaic", "Snip_Blur", "Snip_Undo", "Snip_Redo", 
-            "Snip_Clear", "Snip_Save", "Snip_Copy", "Snip_Close", 
-            "Snip_Toolbar", "Snip_SelectionMode", "Snip_CropMode", "Snip_Pin", "Snip_FullscreenSelect",
-            "Snip_SwitchToTranslate", "Snip_SwitchToRecord"
+            ["Record_Rectangle"] = Record_Rectangle,
+            ["Record_Ellipse"] = Record_Ellipse,
+            ["Record_Arrow"] = Record_Arrow,
+            ["Record_Line"] = Record_Line,
+            ["Record_Pen"] = Record_Pen,
+            ["Record_Text"] = Record_Text,
+            ["Record_Mosaic"] = Record_Mosaic,
+            ["Record_Blur"] = Record_Blur,
+            ["Record_Undo"] = Record_Undo,
+            ["Record_Redo"] = Record_Redo,
+            ["Record_Clear"] = Record_Clear,
+            ["Record_Save"] = Record_Save,
+            ["Record_Copy"] = Record_Copy,
+            ["Record_Close"] = Record_Close,
+            ["Record_Toolbar"] = Record_Toolbar,
+            ["Record_Action"] = Record_Action,
+            ["Record_Playback"] = Record_Playback,
+            ["Record_FullscreenSelect"] = Record_FullscreenSelect,
+            ["Record_SwitchToSnip"] = Record_SwitchToSnip,
+            ["Record_SwitchToTranslate"] = Record_SwitchToTranslate,
+
+            ["Translate_Action"] = Translate_Action,
+            ["Translate_Pin"] = Translate_Pin,
+            ["Translate_Toolbar"] = Translate_Toolbar,
+            ["Translate_Close"] = Translate_Close,
+            ["Translate_TranslateAll"] = Translate_TranslateAll,
+            ["Translate_ScanAll"] = Translate_ScanAll,
+            ["Translate_ClearAll"] = Translate_ClearAll,
+            ["Translate_ToggleSelect"] = Translate_ToggleSelect,
+            ["Translate_AutoDetect"] = Translate_AutoDetect,
+            ["Translate_SelectionHoldModifier"] = Translate_SelectionHoldModifier,
+            ["Translate_ModeCursor"] = Translate_ModeCursor,
+            ["Translate_ModeSingle"] = Translate_ModeSingle,
+            ["Translate_ModeMulti"] = Translate_ModeMulti,
+            ["Translate_SwitchToSnip"] = Translate_SwitchToSnip,
+            ["Translate_SwitchToRecord"] = Translate_SwitchToRecord,
         };
 
-        // 3. Record Group (Local to Video Recording mode)
-        var recordGroup = new[] { 
-            "Record_Rectangle", "Record_Ellipse", "Record_Arrow", "Record_Line", "Record_Pen", 
-            "Record_Text", "Record_Mosaic", "Record_Blur", "Record_Undo", "Record_Redo", 
-            "Record_Clear", "Record_Save", "Record_Copy", "Record_Close", "Record_Toolbar", 
-            "Record_Action", "Record_Playback", "Record_FullscreenSelect",
-            "Record_SwitchToSnip", "Record_SwitchToTranslate"
-        };
-
-        // 4. Translate Group (Local to Translation mode)
-        var translateGroup = new[] { 
-            "Translate_Action", "Translate_Pin", "Translate_Toolbar", "Translate_Close",
-            "Translate_TranslateAll", "Translate_ScanAll", "Translate_ClearAll",
-            "Translate_ToggleSelect", "Translate_AutoDetect",
-            "Translate_SelectionHoldModifier",
-            "Translate_ModeCursor", "Translate_ModeSingle", "Translate_ModeMulti",
-            "Translate_SwitchToSnip", "Translate_SwitchToRecord"
-        };
-
-        if (globalGroup.Contains(targetTag))
-        {
-            if (targetTag != "SnipHotkey" && SnipHotkey == hotkey) return "SnipHotkey";
-            if (targetTag != "RecordHotkey" && RecordHotkey == hotkey) return "RecordHotkey";
-            if (targetTag != "TranslateHotkey" && TranslateHotkey == hotkey) return "TranslateHotkey";
-            if (targetTag != "TextCopyHotkey" && TextCopyHotkey == hotkey) return "TextCopyHotkey";
-        }
-        else if (snipGroup.Contains(targetTag))
-        {
-            if (targetTag != "Snip_Rectangle" && Snip_Rectangle == hotkey) return "TipRectangle";
-            if (targetTag != "Snip_Ellipse" && Snip_Ellipse == hotkey) return "TipEllipse";
-            if (targetTag != "Snip_Arrow" && Snip_Arrow == hotkey) return "TipArrow";
-            if (targetTag != "Snip_Line" && Snip_Line == hotkey) return "TipLine";
-            if (targetTag != "Snip_Pen" && Snip_Pen == hotkey) return "TipPen";
-            if (targetTag != "Snip_Text" && Snip_Text == hotkey) return "TipText";
-            if (targetTag != "Snip_Mosaic" && Snip_Mosaic == hotkey) return "TipMosaic";
-            if (targetTag != "Snip_Blur" && Snip_Blur == hotkey) return "TipBlur";
-            if (targetTag != "Snip_Undo" && Snip_Undo == hotkey) return "Undo";
-            if (targetTag != "Snip_Redo" && Snip_Redo == hotkey) return "Redo";
-            if (targetTag != "Snip_Clear" && Snip_Clear == hotkey) return "Clear";
-            if (targetTag != "Snip_Save" && Snip_Save == hotkey) return "Save";
-            if (targetTag != "Snip_Copy" && Snip_Copy == hotkey) return "TipCopy";
-            if (targetTag != "Snip_Close" && Snip_Close == hotkey) return "ActionClose";
-            if (targetTag != "Snip_Toolbar" && Snip_Toolbar == hotkey) return "ActionToolbar";
-            if (targetTag != "Snip_SelectionMode" && Snip_SelectionMode == hotkey) return "ActionSelectionMode";
-            if (targetTag != "Snip_CropMode" && Snip_CropMode == hotkey) return "ActionCropMode";
-            if (targetTag != "Snip_RemoveBackground" && Snip_RemoveBackground == hotkey) return "RemoveBackground";
-            if (targetTag != "Snip_MagicWand" && Snip_MagicWand == hotkey) return "MagicWand";
-            if (targetTag != "Snip_Pin" && !IsUnifiedPinHotkeyTag(targetTag) && Snip_Pin == hotkey) return "TipPin";
-            if (targetTag != "Snip_FullscreenSelect" && Snip_FullscreenSelect == hotkey) return "ActionSelectFullscreen";
-            if (targetTag != "Snip_SwitchToTranslate" && Snip_SwitchToTranslate == hotkey) return "SwitchToTranslate";
-            if (targetTag != "Snip_SwitchToRecord" && Snip_SwitchToRecord == hotkey) return "SwitchToRecord";
-        }
-        else if (recordGroup.Contains(targetTag))
-        {
-            if (targetTag != "Record_Rectangle" && Record_Rectangle == hotkey) return "TipRectangle";
-            if (targetTag != "Record_Ellipse" && Record_Ellipse == hotkey) return "TipEllipse";
-            if (targetTag != "Record_Arrow" && Record_Arrow == hotkey) return "TipArrow";
-            if (targetTag != "Record_Line" && Record_Line == hotkey) return "TipLine";
-            if (targetTag != "Record_Pen" && Record_Pen == hotkey) return "TipPen";
-            if (targetTag != "Record_Text" && Record_Text == hotkey) return "TipText";
-            if (targetTag != "Record_Mosaic" && Record_Mosaic == hotkey) return "TipMosaic";
-            if (targetTag != "Record_Blur" && Record_Blur == hotkey) return "TipBlur";
-            if (targetTag != "Record_Undo" && Record_Undo == hotkey) return "Undo";
-            if (targetTag != "Record_Redo" && Record_Redo == hotkey) return "Redo";
-            if (targetTag != "Record_Clear" && Record_Clear == hotkey) return "Clear";
-            if (targetTag != "Record_Save" && Record_Save == hotkey) return "Save";
-            if (targetTag != "Record_Copy" && Record_Copy == hotkey) return "TipCopy";
-            if (targetTag != "Record_Close" && Record_Close == hotkey) return "ActionClose";
-            if (targetTag != "Record_Toolbar" && Record_Toolbar == hotkey) return "ActionToolbar";
-            if (targetTag != "Record_Action" && !IsUnifiedPinHotkeyTag(targetTag) && Record_Action == hotkey) return "ActionStartPin";
-            if (targetTag != "Record_Playback" && Record_Playback == hotkey) return "ActionPlayback";
-            if (targetTag != "Record_FullscreenSelect" && Record_FullscreenSelect == hotkey) return "ActionSelectFullscreen";
-            if (targetTag != "Record_SwitchToSnip" && Record_SwitchToSnip == hotkey) return "SwitchToSnip";
-            if (targetTag != "Record_SwitchToTranslate" && Record_SwitchToTranslate == hotkey) return "SwitchToTranslate";
-        }
-        else if (translateGroup.Contains(targetTag))
-        {
-            if (targetTag != "Translate_Action" && Translate_Action == hotkey) return "ActionHideTranslate";
-            if (targetTag != "Translate_Pin" && !IsUnifiedPinHotkeyTag(targetTag) && Translate_Pin == hotkey) return "MenuPinTranslation";
-            if (targetTag != "Translate_Toolbar" && Translate_Toolbar == hotkey) return "ActionToolbar";
-            if (targetTag != "Translate_Close" && Translate_Close == hotkey) return "ActionClose";
-            if (targetTag != "Translate_TranslateAll" && Translate_TranslateAll == hotkey) return "ActionTranslateAll";
-            if (targetTag != "Translate_ScanAll" && Translate_ScanAll == hotkey) return "ActionScanAll";
-            if (targetTag != "Translate_ClearAll" && Translate_ClearAll == hotkey) return "ActionClearAll";
-            if (targetTag != "Translate_ToggleSelect" && Translate_ToggleSelect == hotkey) return "ActionToggleSelect";
-            if (targetTag != "Translate_AutoDetect" && Translate_AutoDetect == hotkey) return "ActionAutoDetect";
-            if (targetTag != "Translate_SelectionHoldModifier" && Translate_SelectionHoldModifier == hotkey) return "ActionSelectionHoldModifier";
-            if (targetTag != "Translate_ModeCursor" && Translate_ModeCursor == hotkey) return "TranslateModeCursor";
-            if (targetTag != "Translate_ModeSingle" && Translate_ModeSingle == hotkey) return "TranslateModeSingle";
-            if (targetTag != "Translate_ModeMulti" && Translate_ModeMulti == hotkey) return "TranslateModeMulti";
-            if (targetTag != "Translate_SwitchToSnip" && Translate_SwitchToSnip == hotkey) return "SwitchToSnip";
-            if (targetTag != "Translate_SwitchToRecord" && Translate_SwitchToRecord == hotkey) return "SwitchToRecord";
-        }
-
-        var crossActionCandidates = new System.Collections.Generic.List<(string Tag, string CurrentHotkey, string ConflictKey)>
-        {
-            ("Translate_Action", Translate_Action, "ActionHideTranslate")
-        };
-
-        if (!IsUnifiedPinHotkeyTag(targetTag))
-        {
-            crossActionCandidates.Add(("Snip_Pin", Snip_Pin, "TipPin"));
-            crossActionCandidates.Add(("Record_Action", Record_Action, "ActionStartPin"));
-            crossActionCandidates.Add(("Translate_Pin", Translate_Pin, "MenuPinTranslation"));
-        }
-
-        var crossActionConflict = MatchCrossActionConflict(
-            targetTag,
-            hotkey,
-            crossActionCandidates.ToArray());
-
-        if (crossActionConflict != null)
-        {
-            return crossActionConflict;
-        }
-
-        return null;
+        return HotkeyConflictValidator.FindConflict(targetTag, hotkey, current);
     }
 }
