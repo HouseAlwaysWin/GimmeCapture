@@ -579,7 +579,7 @@ public partial class MainWindowViewModel
         get => _llamaContextSize;
         set
         {
-            this.RaiseAndSetIfChanged(ref _llamaContextSize, Math.Clamp(value, 512, 8192));
+            this.RaiseAndSetIfChanged(ref _llamaContextSize, IntParameterValidator.ClampLlamaContextSize(value));
             if (!_isDataLoading)
             {
                 _settingsService.Settings.LlamaContextSize = _llamaContextSize;
@@ -594,7 +594,7 @@ public partial class MainWindowViewModel
         get => _llamaGpuLayers;
         set
         {
-            this.RaiseAndSetIfChanged(ref _llamaGpuLayers, Math.Max(0, value));
+            this.RaiseAndSetIfChanged(ref _llamaGpuLayers, IntParameterValidator.ClampGpuLayers(value));
             if (!_isDataLoading)
             {
                 _settingsService.Settings.LlamaGpuLayers = _llamaGpuLayers;
@@ -784,19 +784,7 @@ public partial class MainWindowViewModel
 
     private void SyncSelectedLlamaModelIndexCore(LlamaModelOption? option)
     {
-        int nextIndex = -1;
-        if (option != null)
-        {
-            for (int i = 0; i < AvailableLlamaModels.Count; i++)
-            {
-                if (ReferenceEquals(AvailableLlamaModels[i], option)
-                    || string.Equals(AvailableLlamaModels[i].Id, option.Id, StringComparison.Ordinal))
-                {
-                    nextIndex = i;
-                    break;
-                }
-            }
-        }
+        int nextIndex = ModelOptionSelector.FindIndexById(option, AvailableLlamaModels, m => m.Id);
 
         if (_selectedLlamaModelIndex != nextIndex)
         {
@@ -826,14 +814,14 @@ public partial class MainWindowViewModel
     public int PlaybackUiFps
     {
         get => _playbackUiFps;
-        set => this.RaiseAndSetIfChanged(ref _playbackUiFps, Math.Clamp(value, 1, 120));
+        set => this.RaiseAndSetIfChanged(ref _playbackUiFps, IntParameterValidator.ClampPlaybackFps(value));
     }
 
     private int _playbackTimelineFps = 15;
     public int PlaybackTimelineFps
     {
         get => _playbackTimelineFps;
-        set => this.RaiseAndSetIfChanged(ref _playbackTimelineFps, Math.Clamp(value, 1, 120));
+        set => this.RaiseAndSetIfChanged(ref _playbackTimelineFps, IntParameterValidator.ClampPlaybackFps(value));
     }
 
     public bool IsGifAvailable => RecordingFormatCapabilities.IsGifAvailable();
