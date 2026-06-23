@@ -495,6 +495,99 @@ internal static class ScrollStitcher
     }
 
     /// <summary>
+    /// Returns <paramref name="src"/> rotated 90° clockwise (BGRA8888); the result has swapped
+    /// dimensions (width = src.Height, height = src.Width). The source's top row maps to the
+    /// result's right column. The exact inverse of <see cref="RotateCcw90"/>; used to restore screen
+    /// orientation after a horizontal-scroll strip has been stitched in rotated space.
+    /// </summary>
+    public static SKBitmap RotateCw90(SKBitmap src)
+    {
+        ArgumentNullException.ThrowIfNull(src);
+
+        int w = src.Width;
+        int h = src.Height;
+        var result = new SKBitmap(new SKImageInfo(h, w, SKColorType.Bgra8888, SKAlphaType.Premul));
+        if (w <= 0 || h <= 0)
+        {
+            return result;
+        }
+
+        IntPtr srcPixels = src.GetPixels();
+        IntPtr dstPixels = result.GetPixels();
+        if (srcPixels == IntPtr.Zero || dstPixels == IntPtr.Zero)
+        {
+            return result;
+        }
+
+        int srcStride = src.RowBytes;
+        int dstStride = result.RowBytes;
+        unsafe
+        {
+            byte* srcBase = (byte*)srcPixels;
+            byte* dstBase = (byte*)dstPixels;
+            for (int r = 0; r < h; r++)
+            {
+                uint* srcRow = (uint*)(srcBase + ((long)r * srcStride));
+                int dstCol = h - 1 - r; // src(c, r) -> dst(col = h-1-r, row = c)
+                for (int c = 0; c < w; c++)
+                {
+                    *((uint*)(dstBase + ((long)c * dstStride)) + dstCol) = srcRow[c];
+                }
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Returns <paramref name="src"/> rotated 90° counter-clockwise (BGRA8888); the result has
+    /// swapped dimensions (width = src.Height, height = src.Width). The source's bottom row maps to
+    /// the result's right column. Used to fold a horizontal scroll into the vertical "stitch space"
+    /// so the exact same alignment/append/prepend logic applies — and so the cross-axis right-edge
+    /// exclusion (<c>ignoreRightColumns</c>) lands on a bottom horizontal scrollbar. The exact
+    /// inverse of <see cref="RotateCw90"/>.
+    /// </summary>
+    public static SKBitmap RotateCcw90(SKBitmap src)
+    {
+        ArgumentNullException.ThrowIfNull(src);
+
+        int w = src.Width;
+        int h = src.Height;
+        var result = new SKBitmap(new SKImageInfo(h, w, SKColorType.Bgra8888, SKAlphaType.Premul));
+        if (w <= 0 || h <= 0)
+        {
+            return result;
+        }
+
+        IntPtr srcPixels = src.GetPixels();
+        IntPtr dstPixels = result.GetPixels();
+        if (srcPixels == IntPtr.Zero || dstPixels == IntPtr.Zero)
+        {
+            return result;
+        }
+
+        int srcStride = src.RowBytes;
+        int dstStride = result.RowBytes;
+        unsafe
+        {
+            byte* srcBase = (byte*)srcPixels;
+            byte* dstBase = (byte*)dstPixels;
+            for (int r = 0; r < h; r++)
+            {
+                uint* srcRow = (uint*)(srcBase + ((long)r * srcStride));
+                int dstCol = r; // src(c, r) -> dst(col = r, row = w-1-c)
+                for (int c = 0; c < w; c++)
+                {
+                    int dstRow = w - 1 - c;
+                    *((uint*)(dstBase + ((long)dstRow * dstStride)) + dstCol) = srcRow[c];
+                }
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
     /// Builds a per-row signature of <paramref name="sampleCount"/> BGRA samples taken at
     /// evenly-spaced columns across the usable width (excluding <paramref name="ignoreRightColumns"/>).
     /// Returned as a flat byte array of length <c>height * sampleCount * 4</c>; row <c>r</c>

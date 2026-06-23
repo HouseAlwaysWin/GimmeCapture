@@ -260,4 +260,104 @@ public class ScrollStitcherTests
         Assert.False(align.Found);
     }
 
+    // Each source column maps to a deterministic color (rows are uniform), so a horizontal scroll
+    // — the columns shifting — is the left/right analogue of MakeFrame's vertical case.
+    private static SKBitmap MakeColumnFrame(int width, int height, int sourceOffset)
+    {
+        var bmp = new SKBitmap(new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Premul));
+        for (int x = 0; x < width; x++)
+        {
+            var color = ColorForRow(sourceOffset + x);
+            for (int y = 0; y < height; y++)
+            {
+                bmp.SetPixel(x, y, color);
+            }
+        }
+
+        return bmp;
+    }
+
+    private static SKBitmap MakePattern(int width, int height)
+    {
+        var bmp = new SKBitmap(new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Premul));
+        for (int y = 0; y < height; y++)
+        {
+            for (int x = 0; x < width; x++)
+            {
+                bmp.SetPixel(x, y, new SKColor((byte)(x * 30), (byte)(y * 40), (byte)((x + y) * 20), 255));
+            }
+        }
+
+        return bmp;
+    }
+
+    [Fact]
+    public void RotateCw90_SwapsDimensionsAndMapsTopRowToRightColumn()
+    {
+        using var src = MakePattern(4, 3); // width 4, height 3
+        using var cw = ScrollStitcher.RotateCw90(src);
+
+        Assert.Equal(3, cw.Width);  // = src.Height
+        Assert.Equal(4, cw.Height); // = src.Width
+        // CW: source top-left (0,0) lands at the result's top-right (col = height-1 = 2, row 0).
+        Assert.Equal(src.GetPixel(0, 0), cw.GetPixel(2, 0));
+    }
+
+    [Fact]
+    public void RotateCcw90_MapsBottomRowToRightColumn()
+    {
+        using var src = MakePattern(4, 3); // width 4, height 3
+        using var ccw = ScrollStitcher.RotateCcw90(src);
+
+        Assert.Equal(3, ccw.Width);
+        Assert.Equal(4, ccw.Height);
+        // CCW: source bottom-left (0, height-1) lands at the result's top-right (col 2, row 0),
+        // i.e. the source's bottom edge becomes the result's right column.
+        Assert.Equal(src.GetPixel(0, 2), ccw.GetPixel(2, 0));
+    }
+
+    [Fact]
+    public void RotateCw90_ThenCcw90_RoundTripsToOriginal()
+    {
+        using var src = MakePattern(7, 5);
+        using var cw = ScrollStitcher.RotateCw90(src);
+        using var back = ScrollStitcher.RotateCcw90(cw);
+
+        Assert.Equal(src.Width, back.Width);
+        Assert.Equal(src.Height, back.Height);
+        for (int y = 0; y < src.Height; y++)
+        {
+            for (int x = 0; x < src.Width; x++)
+            {
+                Assert.Equal(src.GetPixel(x, y), back.GetPixel(x, y));
+            }
+        }
+    }
+
+    [Fact]
+    public void HorizontalScroll_StitchesViaRotation()
+    {
+        // Two frames of a horizontally-scrollable view: prev shows source columns 0..19, next is
+        // scrolled right by 5 (columns 5..24). Folding through CCW rotation lets the existing
+        // vertical alignment + grow logic stitch them; rotating back (CW) yields the wide strip.
+        using var prev = MakeColumnFrame(20, 10, sourceOffset: 0);
+        using var next = MakeColumnFrame(20, 10, sourceOffset: 5);
+
+        using var accRotated = ScrollStitcher.RotateCcw90(prev);
+        using var frameRotated = ScrollStitcher.RotateCcw90(next);
+
+        var align = ScrollStitcher.AlignFrameToStrip(accRotated, frameRotated, minOverlapRows: 4);
+        Assert.True(align.Found);
+
+        using SKBitmap grownRotated = align.Offset < 0
+            ? ScrollStitcher.Prepend(accRotated, frameRotated, -align.Offset)
+            : ScrollStitcher.Append(accRotated, frameRotated, accRotated.Height - align.Offset);
+        using SKBitmap result = ScrollStitcher.RotateCw90(grownRotated);
+
+        Assert.Equal(25, result.Width); // 20 + 5 new columns
+        Assert.Equal(10, result.Height);
+        Assert.Equal(ColorForRow(0), result.GetPixel(0, 0));    // original left edge (source col 0)
+        Assert.Equal(ColorForRow(24), result.GetPixel(24, 0));  // new right edge (source col 24)
+        Assert.Equal(ColorForRow(12), result.GetPixel(12, 5));  // interior column preserved
+    }
 }
