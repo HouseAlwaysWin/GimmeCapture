@@ -76,7 +76,6 @@ public partial class SnipWindowViewModel
         nameof(SaveTooltip),
         nameof(CopyTooltip),
         nameof(PinTooltip),
-        nameof(ScrollingCaptureTooltip),
         nameof(RectangleTooltip),
         nameof(EllipseTooltip),
         nameof(ArrowTooltip),
@@ -326,7 +325,6 @@ public partial class SnipWindowViewModel
     public ReactiveCommand<Unit, Unit> CopyCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> SaveCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> PinCommand { get; set; } = null!;
-    public ReactiveCommand<Unit, Unit> ScrollingCaptureCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> CloseCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> ToggleModeCommand { get; set; } = null!;
     public ReactiveCommand<bool, Unit> SetCaptureModeCommand { get; set; } = null!;
@@ -521,14 +519,6 @@ public partial class SnipWindowViewModel
             canExecuteHotkeys);
 
         SaveCommand = CreateAsyncCommand(Save, nameof(SaveCommand), canExecuteHotkeys);
-
-        // Route through AutoActionMode exactly like the Shift+F5 hotkey path (which posts
-        // ExecuteScrollingCapture to the dispatcher). Calling ExecuteScrollingCapture directly
-        // from the click hid the window mid-command and left the overlay in a broken state.
-        ScrollingCaptureCommand = CreateCommand(
-            () => { AutoActionMode = SnipAutoAction.ScrollingCapture; },
-            nameof(ScrollingCaptureCommand),
-            canExecuteHotkeys);
 
         CloseCommand = CreateCommand(Close, nameof(CloseCommand), canExecuteHotkeys);
 

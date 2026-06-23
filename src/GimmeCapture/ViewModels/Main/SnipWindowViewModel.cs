@@ -169,7 +169,6 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     public string SaveTooltip => $"{LocalizationService.Instance["TipSave"]} ({SaveHotkey})";
     public string CopyTooltip => $"{LocalizationService.Instance["TipCopy"]} ({CopyHotkey})";
     public string PinTooltip => CurrentMode == SnipMode.Translation ? string.Empty : (CurrentMode == SnipMode.Recording ? $"{LocalizationService.Instance["ActionStartPin"]} ({ActiveActionHotkey})" : $"{LocalizationService.Instance["TipPin"]} ({ActiveActionHotkey})");
-    public string ScrollingCaptureTooltip => $"{LocalizationService.Instance["ScrollingCapture"]} ({_mainVm?.ScrollingCaptureHotkey ?? "Shift+F5"})";
     public string RectangleTooltip => $"{LocalizationService.Instance["TipRectangle"]} ({RectangleHotkey})";
     public string EllipseTooltip => $"{LocalizationService.Instance["TipEllipse"]} ({EllipseHotkey})";
     public string ArrowTooltip => $"{LocalizationService.Instance["TipArrow"]} ({ArrowHotkey})";
