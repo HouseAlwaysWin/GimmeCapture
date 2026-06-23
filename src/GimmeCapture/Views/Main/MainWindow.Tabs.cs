@@ -72,7 +72,7 @@ public partial class MainWindow
                 _modulesTabHost ??= this.FindControl<ContentControl>("ModulesTabHost");
                 _modulesTabHost!.Content ??= new SettingsModulesTab();
                 break;
-            case 6:
+            case 7:
                 if (DataContext is MainWindowViewModel aboutVm)
                 {
                     aboutVm.LoadAvailableReleasesAsync().Forget("About.LoadAvailableReleases");
