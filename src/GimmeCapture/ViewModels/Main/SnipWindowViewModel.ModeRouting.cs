@@ -522,7 +522,13 @@ public partial class SnipWindowViewModel
 
         SaveCommand = CreateAsyncCommand(Save, nameof(SaveCommand), canExecuteHotkeys);
 
-        ScrollingCaptureCommand = CreateAsyncCommand(ExecuteScrollingCapture, nameof(ScrollingCaptureCommand), canExecuteHotkeys);
+        // Route through AutoActionMode exactly like the Shift+F5 hotkey path (which posts
+        // ExecuteScrollingCapture to the dispatcher). Calling ExecuteScrollingCapture directly
+        // from the click hid the window mid-command and left the overlay in a broken state.
+        ScrollingCaptureCommand = CreateCommand(
+            () => { AutoActionMode = SnipAutoAction.ScrollingCapture; },
+            nameof(ScrollingCaptureCommand),
+            canExecuteHotkeys);
 
         CloseCommand = CreateCommand(Close, nameof(CloseCommand), canExecuteHotkeys);
 
