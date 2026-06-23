@@ -24,6 +24,10 @@ public partial class SnipWindowViewModel
     private int _manualMaxHeight;
     private int _manualMinOverlap;
     private int _manualIgnoreRight;
+    // Consecutive static frames that failed to align anywhere in the strip. Re-anchoring
+    // (appending a non-overlapping frame) only happens after enough of these, so a transient
+    // mismatch never causes a duplicate — we prefer a small gap over re-appending content.
+    private int _manualReanchorCount;
 
     private CancellationTokenSource? _manualCts;
     private Task? _manualPipelineTask;
@@ -37,6 +41,9 @@ public partial class SnipWindowViewModel
     // Bounded capture queue: a few frames of slack so a slow stitch (Append on a tall strip)
     // doesn't stall capture, without unbounded memory growth.
     private const int ManualQueueCapacity = 8;
+    // How many consecutive static + unmatched frames are required before re-anchoring onto
+    // disconnected new content (after a fast flick). Guards against duplicating on a transient.
+    private const int ManualReanchorConfirmFrames = 4;
 
     /// <summary>True while a manual scrolling-capture session is running (overlay hidden).</summary>
     public bool IsManualScrollActive => _manualScrollActive;
@@ -63,9 +70,14 @@ public partial class SnipWindowViewModel
 
         double scaling = VisualScaling <= 0 ? 1.0 : VisualScaling;
         int physH = (int)(SelectionRect.Height * scaling);
+        int physW = (int)(SelectionRect.Width * scaling);
         _manualMinOverlap = Math.Max(8, physH / 10);
-        _manualIgnoreRight = (int)(18 * scaling);
+        // Exclude the dynamic right-side region (Discord's hover reaction toolbar, "已讀 N"
+        // read-receipts, scrollbar) from matching, so the same content still matches while
+        // those overlays come and go — otherwise it fails to align and gets re-appended.
+        _manualIgnoreRight = Math.Clamp((int)(180 * scaling), (int)(24 * scaling), physW * 35 / 100);
         _manualMaxHeight = Math.Max(physH, physH * 40);
+        _manualReanchorCount = 0;
 
         try
         {
@@ -177,28 +189,44 @@ public partial class SnipWindowViewModel
                     ScrollStitcher.FrameAlignment align = ScrollStitcher.AlignFrameToStrip(
                         _manualAccumulated, frame, _manualMinOverlap, _manualIgnoreRight, ManualRowMismatchTolerance, height);
 
-                    if (!align.Found)
+                    if (align.Found)
                     {
-                        // The edge search failed. Only act once the view has settled (user stopped),
-                        // so a fast flick doesn't pile up garbage frames.
+                        _manualReanchorCount = 0;
+                    }
+                    else
+                    {
+                        // The edge search failed. Decide whether the view has settled (user stopped)
+                        // by comparing against the previous frame.
                         ScrollStitcher.VerticalShift settle = ScrollStitcher.FindVerticalShift(
                             _manualPrevFrame, frame, _manualMinOverlap, _manualIgnoreRight, ManualRowMismatchTolerance);
 
                         if (settle.Found && Math.Abs(settle.Rows) < ManualMinNewRows)
                         {
-                            // Search the whole strip — the frame may be deep inside (scrolled back
-                            // to the middle), which must NOT be re-appended.
+                            // Static. Search the whole strip — the frame may be deep inside
+                            // (scrolled back to the middle), which must NOT be re-appended.
                             align = ScrollStitcher.AlignFrameToStrip(
                                 _manualAccumulated, frame, _manualMinOverlap, _manualIgnoreRight, ManualRowMismatchTolerance);
 
-                            if (!align.Found)
+                            if (align.Found)
                             {
-                                // Genuinely new, disconnected content past a gap: re-anchor.
+                                _manualReanchorCount = 0;
+                            }
+                            else if (++_manualReanchorCount >= ManualReanchorConfirmFrames)
+                            {
+                                // Confirmed disconnected new content past a gap: re-anchor. Requiring
+                                // several consecutive static unmatched frames means a transient mismatch
+                                // never duplicates already-captured content.
                                 SKBitmap grown = ScrollStitcher.Append(_manualAccumulated, frame, 0); // overlap 0 => append whole frame
                                 _manualAccumulated.Dispose();
                                 _manualAccumulated = grown;
                                 grew = true;
+                                _manualReanchorCount = 0;
                             }
+                        }
+                        else
+                        {
+                            // Still moving (mid-flick): wait, don't count toward re-anchoring.
+                            _manualReanchorCount = 0;
                         }
                     }
 
