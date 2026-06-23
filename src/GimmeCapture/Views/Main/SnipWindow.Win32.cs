@@ -254,6 +254,14 @@ public partial class SnipWindow : Window
             var vm = _viewModel;
             if (vm == null) return;
 
+            // During manual scrolling capture, Esc must cancel the session — not reset the
+            // (hidden) selection — whichever path delivered the key.
+            if (vm.IsManualScrollActive)
+            {
+                vm.FinishManualScrollCapture(cancelled: true);
+                return;
+            }
+
             if (vm.IsEnteringText)
             {
                 vm.CancelTextEntryCommand.Execute(System.Reactive.Unit.Default).Subscribe();
@@ -392,7 +400,8 @@ public partial class SnipWindow : Window
                 return true;
             }
 
-            if (isKeyDown && IsMatch(_viewModel.CloseHotkey))
+            if (isKeyDown && (IsMatch(_viewModel.CloseHotkey)
+                || string.Equals(keyStr, "Escape", StringComparison.OrdinalIgnoreCase)))
             {
                 _viewModel.FinishManualScrollCapture(cancelled: true);
                 return true;
