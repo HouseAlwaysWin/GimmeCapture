@@ -254,6 +254,14 @@ public partial class SnipWindow : Window
             var vm = _viewModel;
             if (vm == null) return;
 
+            // During manual scrolling capture, Esc must cancel the session — not reset the
+            // (hidden) selection — whichever path delivered the key.
+            if (vm.IsManualScrollActive)
+            {
+                vm.FinishManualScrollCapture(cancelled: true);
+                return;
+            }
+
             if (vm.IsEnteringText)
             {
                 vm.CancelTextEntryCommand.Execute(System.Reactive.Unit.Default).Subscribe();
@@ -379,6 +387,28 @@ public partial class SnipWindow : Window
         bool shiftDown = (GetAsyncKeyState(0x10) & 0x8000) != 0;
         bool ctrlDown = (GetAsyncKeyState(0x11) & 0x8000) != 0;
         bool altDown = (GetAsyncKeyState(0x12) & 0x8000) != 0;
+
+        // Manual scrolling capture owns the keyboard and must be handled BEFORE the generic
+        // Escape/dismiss handler below — otherwise Esc would dismiss the (hidden) overlay
+        // instead of cancelling the scroll session. The Pin key (F6) finishes, Esc cancels,
+        // and every other key passes through so the user can keep scrolling.
+        if (_viewModel.IsManualScrollActive)
+        {
+            if (isKeyDown && IsMatch(_viewModel.ActiveActionHotkey))
+            {
+                _viewModel.FinishManualScrollCapture(cancelled: false);
+                return true;
+            }
+
+            if (isKeyDown && (IsMatch(_viewModel.CloseHotkey)
+                || string.Equals(keyStr, "Escape", StringComparison.OrdinalIgnoreCase)))
+            {
+                _viewModel.FinishManualScrollCapture(cancelled: true);
+                return true;
+            }
+
+            return false;
+        }
 
         // Escape is handled even when a text control is focused (cancel entry / dismiss selection / close).
         if (isKeyDown && string.Equals(keyStr, "Escape", StringComparison.OrdinalIgnoreCase))

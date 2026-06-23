@@ -29,6 +29,9 @@ namespace GimmeCapture.Views.Main;
 // (god class reduction) — no behavior change.
 public partial class SnipWindow : Window
 {
+    private ScrollingCaptureHintWindow? _scrollHintWindow;
+    private ScrollingCaptureRegionWindow? _scrollRegionWindow;
+
     protected override void OnDataContextChanged(EventArgs e)
     {
         base.OnDataContextChanged(e);
@@ -98,6 +101,54 @@ public partial class SnipWindow : Window
             
             _viewModel.HideAction = () => Hide();
             _viewModel.ShowAction = () => Show();
+
+            // Manual scrolling-capture chrome: a region outline + a hint, both capture-excluded,
+            // click-through / non-stealing so they show the region without entering the capture
+            // or blocking the user's scrolling.
+            _viewModel.ShowScrollingHintAction = () =>
+            {
+                double scaling = _viewModel.VisualScaling <= 0 ? 1.0 : _viewModel.VisualScaling;
+                var r = _viewModel.SelectionRect;
+                int px = (int)(r.X * scaling) + _viewModel.ScreenOffset.X;
+                int py = (int)(r.Y * scaling) + _viewModel.ScreenOffset.Y;
+                // Physical rectangle of the captured region — used to anchor the hint just outside it.
+                var anchor = new PixelRect(px, py, (int)(r.Width * scaling), (int)(r.Height * scaling));
+
+                if (_scrollRegionWindow == null)
+                {
+                    _scrollRegionWindow = new ScrollingCaptureRegionWindow(
+                        _viewModel.SelectionBorderThickness, _viewModel.SelectionBorderColor)
+                    {
+                        Position = new PixelPoint(px, py),
+                        Width = r.Width,
+                        Height = r.Height
+                    };
+                    _scrollRegionWindow.Show();
+                }
+
+                if (_scrollHintWindow == null)
+                {
+                    var hint = LocalizationService.Instance["ScrollingHintText"];
+                    var finishLabel = LocalizationService.Instance["ScrollingFinish"];
+                    var cancelLabel = LocalizationService.Instance["Cancel"];
+                    _scrollHintWindow = new ScrollingCaptureHintWindow(
+                        hint,
+                        finishLabel,
+                        cancelLabel,
+                        anchor,
+                        () => _viewModel.FinishManualScrollCapture(cancelled: false),
+                        () => _viewModel.FinishManualScrollCapture(cancelled: true));
+                    _scrollHintWindow.Show();
+                }
+            };
+            _viewModel.UpdateScrollingHintAction = rows => _scrollHintWindow?.UpdateHint(rows);
+            _viewModel.HideScrollingHintAction = () =>
+            {
+                _scrollHintWindow?.Close();
+                _scrollHintWindow = null;
+                _scrollRegionWindow?.Close();
+                _scrollRegionWindow = null;
+            };
 
             // Own the dialog to the snip overlay so it appears above the topmost overlay and the
             // overlay's hit-test region is disabled while modal (otherwise clicks are swallowed).
