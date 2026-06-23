@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -294,27 +295,37 @@ public class PaddleOCREngine : IOCREngine
         }
 
         float range = Math.Max(1f, max - min);
-        for (int y = 0; y < bitmap.Height; y++)
+        // Reuse a single pooled row buffer instead of allocating one per row.
+        int rowLength = bitmap.Width * 4;
+        byte[] scratch = ArrayPool<byte>.Shared.Rent(rowLength);
+        try
         {
-            var row = GetPixelRowSpan(bitmap, y);
-            Span<byte> writableRow = row.ToArray();
-            for (int x = 0; x < bitmap.Width; x++)
+            Span<byte> writableRow = scratch.AsSpan(0, rowLength);
+            for (int y = 0; y < bitmap.Height; y++)
             {
-                int offset = x * 4;
-                byte blue = writableRow[offset];
-                byte green = writableRow[offset + 1];
-                byte red = writableRow[offset + 2];
-                float luminance = (red * 0.2126f) + (green * 0.7152f) + (blue * 0.0722f);
-                float normalized = ((luminance - min) / range) * 255f;
-                byte value = (byte)Math.Clamp(MathF.Round(normalized), 0f, 255f);
+                GetPixelRowSpan(bitmap, y).CopyTo(writableRow);
+                for (int x = 0; x < bitmap.Width; x++)
+                {
+                    int offset = x * 4;
+                    byte blue = writableRow[offset];
+                    byte green = writableRow[offset + 1];
+                    byte red = writableRow[offset + 2];
+                    float luminance = (red * 0.2126f) + (green * 0.7152f) + (blue * 0.0722f);
+                    float normalized = ((luminance - min) / range) * 255f;
+                    byte value = (byte)Math.Clamp(MathF.Round(normalized), 0f, 255f);
 
-                writableRow[offset] = value;
-                writableRow[offset + 1] = value;
-                writableRow[offset + 2] = value;
-                writableRow[offset + 3] = 255;
+                    writableRow[offset] = value;
+                    writableRow[offset + 1] = value;
+                    writableRow[offset + 2] = value;
+                    writableRow[offset + 3] = 255;
+                }
+
+                WritePixelRow(bitmap, y, writableRow);
             }
-
-            WritePixelRow(bitmap, y, writableRow);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(scratch);
         }
     }
 

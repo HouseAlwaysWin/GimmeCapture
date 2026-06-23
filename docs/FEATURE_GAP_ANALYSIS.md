@@ -160,12 +160,19 @@ Translation/OCR 服務拆分、Snip 大型 ViewModel partial 拆檔、UI 解耦
 - 覆蓋率門檻僅 **25%**（`scripts/verify.ps1`）。
 - **建議**：在動大型重構前，先為上述服務補特性測試作為安全網（roadmap Phase 0）。
 
-**效能（`docs/Span ArrayPool Performance Plan.md`，目前 0% 實作）**：
+**效能（`docs/Span ArrayPool Performance Plan.md`）— 大部分已實作**（原報告誤判為 0%）：
 
-1. `AnnotationRenderService` 的 Mosaic/Blur 逐像素 GetPixel/SetPixel → 改用 `Span<T>` + 不安全像素緩衝（GC 影響最大，優先）。
-2. `FloatingVideoViewModel.Media` 每幀 `new byte[]` / `MemoryStream.ToArray()` → `ArrayPool<byte>`。
-3. `PaddleOCREngine` 張量前處理的 2D 陣列 / `ToArray()` → `Span<T>`。
-4. `FloatingBitmapConversionHelper` 每次轉換的 PNG encode/decode roundtrip → 移除或改用 pooled buffer。
+- ✅ `AnnotationRenderService`：像素操作已用 `Span<uint>`/unsafe row 存取；
+  `ConvertAvaloniaBitmapToSkBitmap` 用 `ArrayPool`。另已移除 `ApplyMosaic` 的整張
+  `target.Copy()`（改為就地取樣）。
+- ✅ `FloatingVideoViewModel.Media`：每幀緩衝已用 `ArrayPool`（`FrameStreamWriter`/`_latestFrameData`）。
+- ✅ `PaddleOCREngine`：tensor fill 已用 row span；`EnhanceBitmapForOcr` 每列 `ToArray()`
+  已改為池化緩衝。
+- ✅ `FloatingBitmapConversionHelper.TryCopyToSkBitmap` / `LibavPinAudioPcmDecoder` /
+  `BackgroundRemovalService.ProcessMask` 皆已池化。
+- ⏳ 仍待辦（高風險、無測試，待可執行驗證環境）：`ApplyBlur` 雙暫存 `SKBitmap`、
+  `PaddleOCREngine` 的 `probMap`/`visited` 2D→1D 池化、`FloatingBitmapConversionHelper`
+  AI mask 的 PNG encode/decode roundtrip 移除。
 
 ---
 

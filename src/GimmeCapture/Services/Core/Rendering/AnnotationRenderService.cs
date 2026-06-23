@@ -273,14 +273,16 @@ public sealed class AnnotationRenderService : IAnnotationRenderService
         int bottom = Math.Clamp((int)Math.Ceiling(rect.Bottom), top + 1, target.Height);
         int cellSize = Math.Max(2, (int)Math.Round(settings.MosaicCellSize * uniformScale));
 
-        using var sourceCopy = target.Copy();
+        // Each cell reads and writes its own disjoint region, and AverageCellColor reads
+        // the whole cell before Fill writes it back, so we can sample directly from the
+        // target without a full-bitmap working copy.
         for (int y = top; y < bottom; y += cellSize)
         {
             for (int x = left; x < right; x += cellSize)
             {
                 int cellRight = Math.Min(right, x + cellSize);
                 int cellBottom = Math.Min(bottom, y + cellSize);
-                uint sample = AverageCellColor(sourceCopy, x, y, cellRight, cellBottom);
+                uint sample = AverageCellColor(target, x, y, cellRight, cellBottom);
 
                 for (int yy = y; yy < cellBottom; yy++)
                 {

@@ -1,5 +1,12 @@
 # Span / ArrayPool 效能優化分析結論
 
+> **狀態（2026-06）**：本計畫**大部分已實作**。像素處理、frame buffer、OCR tensor fill、
+> bitmap 轉換、PCM 解碼、背景移除皆已採用 `Span`/unsafe row 存取/`ArrayPool`。
+> 最近再補：移除 `AnnotationRenderService.ApplyMosaic` 的整張 `target.Copy()`（就地取樣）、
+> 將 `PaddleOCREngine.EnhanceBitmapForOcr` 每列 `ToArray()` 改為池化緩衝。
+> **仍待辦（高風險、需可執行驗證）**：`ApplyBlur` 雙暫存 `SKBitmap`、OCR 的
+> `probMap`/`visited` 2D→1D 池化、AI mask 的 PNG encode/decode roundtrip 移除。
+
 ## Summary
 - 這個專案最值得用 `Span<T> / ArrayPool<T> / unsafe + Span 包裝` 的地方，不是 UI、ViewModel 或設定物件，而是三條真正的熱路徑：
   - 像素級影像處理
