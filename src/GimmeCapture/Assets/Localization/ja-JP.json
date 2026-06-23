@@ -56,7 +56,7 @@
   "StartCapture": "キャプチャ開始",
   "ScrollingCapture": "スクロールキャプチャ",
   "ScrollingCaptureTip": "スクロール可能なウィンドウ上で領域を選択し、手動でスクロールして長いスクリーンショットを連結します。",
-  "ScrollingHintText": "ウィンドウをスクロール · F6 で完了 · Esc で取消",
+  "ScrollingHintText": "赤枠内でスクロール · F6 完了 · Esc 取消",
   "StatusReady": "待機中",
   "StatusSnip": "キャプチャ中...",
   "StatusSaved": "保存しました！",

@@ -30,6 +30,7 @@ namespace GimmeCapture.Views.Main;
 public partial class SnipWindow : Window
 {
     private ScrollingCaptureHintWindow? _scrollHintWindow;
+    private ScrollingCaptureRegionWindow? _scrollRegionWindow;
 
     protected override void OnDataContextChanged(EventArgs e)
     {
@@ -101,19 +102,42 @@ public partial class SnipWindow : Window
             _viewModel.HideAction = () => Hide();
             _viewModel.ShowAction = () => Show();
 
-            // Manual scrolling-capture hint (capture-excluded, non-stealing).
+            // Manual scrolling-capture chrome: a region outline + a hint, both capture-excluded,
+            // click-through / non-stealing so they show the region without entering the capture
+            // or blocking the user's scrolling.
             _viewModel.ShowScrollingHintAction = () =>
             {
-                if (_scrollHintWindow != null) return;
-                var hint = LocalizationService.Instance["ScrollingHintText"];
-                _scrollHintWindow = new ScrollingCaptureHintWindow(hint);
-                _scrollHintWindow.Show();
+                if (_scrollRegionWindow == null)
+                {
+                    double scaling = _viewModel.VisualScaling <= 0 ? 1.0 : _viewModel.VisualScaling;
+                    var r = _viewModel.SelectionRect;
+                    int px = (int)(r.X * scaling) + _viewModel.ScreenOffset.X;
+                    int py = (int)(r.Y * scaling) + _viewModel.ScreenOffset.Y;
+
+                    _scrollRegionWindow = new ScrollingCaptureRegionWindow(
+                        _viewModel.SelectionBorderThickness, _viewModel.SelectionBorderColor)
+                    {
+                        Position = new PixelPoint(px, py),
+                        Width = r.Width,
+                        Height = r.Height
+                    };
+                    _scrollRegionWindow.Show();
+                }
+
+                if (_scrollHintWindow == null)
+                {
+                    var hint = LocalizationService.Instance["ScrollingHintText"];
+                    _scrollHintWindow = new ScrollingCaptureHintWindow(hint);
+                    _scrollHintWindow.Show();
+                }
             };
             _viewModel.UpdateScrollingHintAction = rows => _scrollHintWindow?.UpdateHint(rows);
             _viewModel.HideScrollingHintAction = () =>
             {
                 _scrollHintWindow?.Close();
                 _scrollHintWindow = null;
+                _scrollRegionWindow?.Close();
+                _scrollRegionWindow = null;
             };
 
             // Own the dialog to the snip overlay so it appears above the topmost overlay and the

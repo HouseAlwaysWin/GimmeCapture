@@ -56,7 +56,7 @@
   "StartCapture": "Start Capture (Snip)",
   "ScrollingCapture": "Scrolling Capture",
   "ScrollingCaptureTip": "Select a region over a scrollable window, then scroll by hand to stitch a long screenshot.",
-  "ScrollingHintText": "Scroll the window · F6 to finish · Esc to cancel",
+  "ScrollingHintText": "Scroll inside the red frame · F6 finish · Esc cancel",
   "StatusReady": "Ready",
   "RemoveBackground": "Remove Background",
   "AIDownloadTitle": "AI Modules Required",
