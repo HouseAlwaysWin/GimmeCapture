@@ -65,9 +65,9 @@ public sealed class AvaloniaToastService : IToastService
         int margin = (int)(16 * scale);
         int spacing = (int)(8 * scale);
 
-        // Stack upward from the bottom-right; newest (last added) sits lowest.
-        int y = wa.Bottom - margin;
-        for (int i = _toasts.Count - 1; i >= 0; i--)
+        // Stack downward from the top-center; oldest at the top.
+        int y = wa.Y + margin;
+        for (int i = 0; i < _toasts.Count; i++)
         {
             var toast = _toasts[i];
             if (toast.Bounds.Width <= 0 || toast.Bounds.Height <= 0)
@@ -77,10 +77,9 @@ public sealed class AvaloniaToastService : IToastService
 
             int w = (int)(toast.Bounds.Width * scale);
             int h = (int)(toast.Bounds.Height * scale);
-            int x = wa.Right - margin - w;
-            y -= h;
+            int x = wa.X + ((wa.Width - w) / 2);
             toast.Position = new PixelPoint(Math.Max(wa.X, x), Math.Max(wa.Y, y));
-            y -= spacing;
+            y += h + spacing;
         }
     }
 }
