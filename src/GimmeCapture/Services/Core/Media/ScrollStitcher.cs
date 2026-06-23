@@ -52,6 +52,24 @@ internal static class ScrollStitcher
     public readonly record struct VerticalShift(int Rows, bool Found);
 
     /// <summary>
+    /// Whether a detected shift is safe to stitch: it must be a confident match, move at
+    /// least <paramref name="minNewRows"/> rows, and move no more than
+    /// <paramref name="maxStepFraction"/> of the frame height. A step larger than that means
+    /// the two frames barely overlapped (the user scrolled too far between captures), so the
+    /// alignment is unreliable and the frame should be skipped rather than mis-stitched.
+    /// </summary>
+    public static bool IsAcceptableStep(VerticalShift shift, int height, double maxStepFraction, int minNewRows)
+    {
+        if (!shift.Found || height <= 0)
+        {
+            return false;
+        }
+
+        int rows = Math.Abs(shift.Rows);
+        return rows >= minNewRows && rows <= maxStepFraction * height;
+    }
+
+    /// <summary>
     /// Finds the signed vertical shift that best aligns <paramref name="next"/> onto
     /// <paramref name="previous"/>. Rows are matched by sampled pixels with a colour
     /// tolerance (not byte-exact hashing), and the globally best-scoring shift is chosen

@@ -212,4 +212,43 @@ public class ScrollStitcherTests
 
         Assert.Equal(20, result.Height);
     }
+
+    [Fact]
+    public void IsAcceptableStep_NotFound_IsRejected()
+    {
+        var shift = new ScrollStitcher.VerticalShift(0, Found: false);
+        Assert.False(ScrollStitcher.IsAcceptableStep(shift, height: 100, maxStepFraction: 0.55, minNewRows: 2));
+    }
+
+    [Fact]
+    public void IsAcceptableStep_BelowMinNewRows_IsRejected()
+    {
+        var shift = new ScrollStitcher.VerticalShift(1, Found: true);
+        Assert.False(ScrollStitcher.IsAcceptableStep(shift, height: 100, maxStepFraction: 0.55, minNewRows: 2));
+    }
+
+    [Fact]
+    public void IsAcceptableStep_AboveMaxFraction_IsRejected()
+    {
+        // 60 > 0.55 * 100 == 55 -> the user scrolled too far between frames.
+        var shift = new ScrollStitcher.VerticalShift(60, Found: true);
+        Assert.False(ScrollStitcher.IsAcceptableStep(shift, height: 100, maxStepFraction: 0.55, minNewRows: 2));
+    }
+
+    [Fact]
+    public void IsAcceptableStep_WithinBounds_IsAccepted()
+    {
+        var down = new ScrollStitcher.VerticalShift(30, Found: true);
+        var up = new ScrollStitcher.VerticalShift(-30, Found: true); // upward scroll also acceptable
+        Assert.True(ScrollStitcher.IsAcceptableStep(down, height: 100, maxStepFraction: 0.55, minNewRows: 2));
+        Assert.True(ScrollStitcher.IsAcceptableStep(up, height: 100, maxStepFraction: 0.55, minNewRows: 2));
+    }
+
+    [Fact]
+    public void IsAcceptableStep_ExactlyAtFractionBoundary_IsAccepted()
+    {
+        // 55 == 0.55 * 100 -> boundary is inclusive.
+        var shift = new ScrollStitcher.VerticalShift(55, Found: true);
+        Assert.True(ScrollStitcher.IsAcceptableStep(shift, height: 100, maxStepFraction: 0.55, minNewRows: 2));
+    }
 }

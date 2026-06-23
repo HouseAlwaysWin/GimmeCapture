@@ -1,5 +1,6 @@
 using System;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 using Avalonia.Threading;
 using GimmeCapture.Services.Core.Infrastructure;
@@ -8,16 +9,18 @@ using SkiaSharp;
 
 namespace GimmeCapture.ViewModels.Main;
 
-// Manual scrolling capture: after the region is selected the overlay hides, the user
-// scrolls the target window by hand, and the app captures the region on a timer and
-// stitches new content live. F6 finishes (opens the long pin); Esc cancels.
+// Manual scrolling capture: after the region is selected the overlay hides and the user
+// scrolls the target window by hand. To survive fast scrolling we capture the region like
+// a video — a background producer grabs frames back-to-back (~20-60fps) into a small
+// bounded queue while a background consumer stitches them. Because frames are captured
+// close together they always overlap, even during a fast flick. F6 finishes (opens the
+// long pin); Esc cancels.
 public partial class SnipWindowViewModel
 {
-    private DispatcherTimer? _manualScrollTimer;
     private SKBitmap? _manualAccumulated;
     private SKBitmap? _manualPrevFrame;
     private bool _manualScrollActive;
-    private int _manualTickRunning;
+    private bool _manualFinishing;
     private int _manualMaxHeight;
     private int _manualMinOverlap;
     private int _manualIgnoreRight;
@@ -27,12 +30,22 @@ public partial class SnipWindowViewModel
     // content neither duplicates nor scrambles the strip — only genuinely new extents grow it.
     private int _manualViewTop;
 
-    private const int ManualTickMs = 90;            // capture often so fast scrolls still overlap
+    private CancellationTokenSource? _manualCts;
+    private Task? _manualPipelineTask;
+    private Channel<SKBitmap>? _manualFrameChannel;
+
     private const int ManualMinNewRows = 2;
-    // Fraction of overlap rows allowed to differ. Higher now that rows are matched by
+    // Fraction of overlap rows allowed to differ. Higher because rows are matched by
     // pixel-similarity (not byte-exact), so a chat re-rendering a few rows per frame
     // (Discord, GPU-composited apps) still stitches.
     private const double ManualRowMismatchTolerance = 0.35;
+    // Bounded capture queue: a few frames of slack so a slow stitch (Append on a tall strip)
+    // doesn't stall capture, without unbounded memory growth.
+    private const int ManualQueueCapacity = 8;
+    // Reject any single step that moves more than this fraction of the frame height: such a
+    // jump means the frames barely overlapped (scrolled too far) and the alignment can't be
+    // trusted, so skip it rather than stitch at a wrong offset.
+    private const double ManualMaxStepFraction = 0.55;
 
     /// <summary>True while a manual scrolling-capture session is running (overlay hidden).</summary>
     public bool IsManualScrollActive => _manualScrollActive;
@@ -76,6 +89,7 @@ public partial class SnipWindowViewModel
 
         _manualPrevFrame = _manualAccumulated.Copy();
         _manualViewTop = 0;
+        _manualFinishing = false;
         _manualScrollActive = true;
 
         // Finish (F6) / cancel (Esc) are handled by the snip key hook (SnipWindow.Win32.cs),
@@ -84,97 +98,164 @@ public partial class SnipWindowViewModel
         ShowScrollingHintAction?.Invoke();
         UpdateScrollingHintAction?.Invoke(_manualAccumulated.Height);
 
-        _manualScrollTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(ManualTickMs) };
-        _manualScrollTimer.Tick += (_, _) => ManualScrollTick();
-        _manualScrollTimer.Start();
+        // Fields above are published on the UI thread before the background tasks start, so the
+        // consumer/producer observe initialised state. From here on the accumulated/prev/viewTop
+        // are owned solely by the consumer until FinishManualScrollCapture awaits the pipeline.
+        _manualCts = new CancellationTokenSource();
+        _manualFrameChannel = Channel.CreateBounded<SKBitmap>(new BoundedChannelOptions(ManualQueueCapacity)
+        {
+            FullMode = BoundedChannelFullMode.Wait,
+            SingleReader = true,
+            SingleWriter = true,
+        });
+
+        CancellationToken token = _manualCts.Token;
+        Task producer = Task.Run(() => ManualProducerLoopAsync(token));
+        Task consumer = Task.Run(() => ManualConsumerLoopAsync(token));
+        _manualPipelineTask = Task.WhenAll(producer, consumer);
     }
 
-    private async void ManualScrollTick()
+    // Grabs region frames back-to-back into the bounded channel. WriteAsync blocks (back-pressure)
+    // when the queue is full, so no frame is dropped — capture self-paces to the consumer.
+    private async Task ManualProducerLoopAsync(CancellationToken token)
     {
-        if (!_manualScrollActive)
-        {
-            return;
-        }
-
-        if (Interlocked.Exchange(ref _manualTickRunning, 1) == 1)
-        {
-            return;
-        }
-
         try
         {
-            SKBitmap next;
-            try
+            while (!token.IsCancellationRequested)
             {
-                next = await _captureService.CaptureScreenAsync(SelectionRect, ScreenOffset, VisualScaling, false);
-            }
-            catch (Exception ex)
-            {
-                AppLog.Warning("ManualScroll.Capture", ex);
-                return;
-            }
-
-            // Finish/cancel may have run during the capture await.
-            if (!_manualScrollActive || _manualPrevFrame == null || _manualAccumulated == null)
-            {
-                next.Dispose();
-                return;
-            }
-
-            // Stitch synchronously on the UI thread so it can't race FinishManualScrollCapture.
-            // The shift is signed: > 0 the user scrolled down (new content at bottom),
-            // < 0 they scrolled up (new content at top).
-            ScrollStitcher.VerticalShift shift = ScrollStitcher.FindVerticalShift(
-                _manualPrevFrame, next, _manualMinOverlap, _manualIgnoreRight, ManualRowMismatchTolerance);
-
-            if (!shift.Found || Math.Abs(shift.Rows) < ManualMinNewRows)
-            {
-                next.Dispose();
-                return;
-            }
-
-            int height = next.Height;
-            int newViewTop = _manualViewTop + shift.Rows;
-            bool grew = false;
-
-            if (newViewTop + height > _manualAccumulated.Height)
-            {
-                // Viewport moved past the bottom of what we've captured: append the new tail.
-                int extra = newViewTop + height - _manualAccumulated.Height;
-                SKBitmap grown = ScrollStitcher.Append(_manualAccumulated, next, height - extra);
-                _manualAccumulated.Dispose();
-                _manualAccumulated = grown;
-                grew = true;
-            }
-            else if (newViewTop < 0)
-            {
-                // Viewport moved above the top of what we've captured: prepend the new head.
-                int extra = -newViewTop;
-                SKBitmap grown = ScrollStitcher.Prepend(_manualAccumulated, next, extra);
-                _manualAccumulated.Dispose();
-                _manualAccumulated = grown;
-                newViewTop = 0; // after prepending, the strip origin shifts to the new top
-                grew = true;
-            }
-            // else: scrolled back over already-captured content — track position, add nothing.
-
-            _manualViewTop = Math.Clamp(newViewTop, 0, Math.Max(0, _manualAccumulated.Height - height));
-            _manualPrevFrame.Dispose();
-            _manualPrevFrame = next;
-
-            if (grew)
-            {
-                UpdateScrollingHintAction?.Invoke(_manualAccumulated.Height);
-
-                if (_manualAccumulated.Height >= _manualMaxHeight)
+                SKBitmap frame;
+                try
                 {
-                    FinishManualScrollCapture(cancelled: false);
+                    frame = await _captureService.CaptureScreenAsync(SelectionRect, ScreenOffset, VisualScaling, false);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    AppLog.Warning("ManualScroll.Capture", ex);
+                    continue;
+                }
+
+                try
+                {
+                    await _manualFrameChannel!.Writer.WriteAsync(frame, token);
+                }
+                catch (OperationCanceledException)
+                {
+                    frame.Dispose();
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    frame.Dispose();
+                    AppLog.Warning("ManualScroll.Enqueue", ex);
+                    break;
                 }
             }
         }
         finally
         {
-            Interlocked.Exchange(ref _manualTickRunning, 0);
+            _manualFrameChannel?.Writer.TryComplete();
+        }
+    }
+
+    // Stitches frames in order off the UI thread. Owns _manualAccumulated/_manualPrevFrame/
+    // _manualViewTop for the duration of the session.
+    private async Task ManualConsumerLoopAsync(CancellationToken token)
+    {
+        try
+        {
+            await foreach (SKBitmap frame in _manualFrameChannel!.Reader.ReadAllAsync(token))
+            {
+                try
+                {
+                    if (_manualPrevFrame == null || _manualAccumulated == null)
+                    {
+                        frame.Dispose();
+                        continue;
+                    }
+
+                    // Signed shift: > 0 the user scrolled down (new content at bottom),
+                    // < 0 they scrolled up (new content at top).
+                    ScrollStitcher.VerticalShift shift = ScrollStitcher.FindVerticalShift(
+                        _manualPrevFrame, frame, _manualMinOverlap, _manualIgnoreRight, ManualRowMismatchTolerance);
+
+                    // Reject no-match / too-small / too-large steps. A too-large step means the
+                    // frames barely overlapped: skip it and keep prev so the next (still
+                    // overlapping) frame stitches cleanly instead of corrupting the strip.
+                    if (!ScrollStitcher.IsAcceptableStep(shift, frame.Height, ManualMaxStepFraction, ManualMinNewRows))
+                    {
+                        frame.Dispose();
+                        continue;
+                    }
+
+                    int height = frame.Height;
+                    int newViewTop = _manualViewTop + shift.Rows;
+                    bool grew = false;
+
+                    if (newViewTop + height > _manualAccumulated.Height)
+                    {
+                        // Viewport moved past the bottom of what we've captured: append the new tail.
+                        int extra = newViewTop + height - _manualAccumulated.Height;
+                        SKBitmap grown = ScrollStitcher.Append(_manualAccumulated, frame, height - extra);
+                        _manualAccumulated.Dispose();
+                        _manualAccumulated = grown;
+                        grew = true;
+                    }
+                    else if (newViewTop < 0)
+                    {
+                        // Viewport moved above the top of what we've captured: prepend the new head.
+                        int extra = -newViewTop;
+                        SKBitmap grown = ScrollStitcher.Prepend(_manualAccumulated, frame, extra);
+                        _manualAccumulated.Dispose();
+                        _manualAccumulated = grown;
+                        newViewTop = 0; // after prepending, the strip origin shifts to the new top
+                        grew = true;
+                    }
+                    // else: scrolled back over already-captured content — track position, add nothing.
+
+                    _manualViewTop = Math.Clamp(newViewTop, 0, Math.Max(0, _manualAccumulated.Height - height));
+                    _manualPrevFrame.Dispose();
+                    _manualPrevFrame = frame; // ownership moved into prev; do not dispose below
+
+                    if (grew)
+                    {
+                        int newHeight = _manualAccumulated.Height;
+                        Dispatcher.UIThread.Post(() => UpdateScrollingHintAction?.Invoke(newHeight));
+
+                        if (newHeight >= _manualMaxHeight)
+                        {
+                            Dispatcher.UIThread.Post(() => FinishManualScrollCapture(cancelled: false));
+                            break;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    AppLog.Warning("ManualScroll.Stitch", ex);
+                    if (!ReferenceEquals(frame, _manualPrevFrame))
+                    {
+                        frame.Dispose();
+                    }
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected when the session is finished/cancelled.
+        }
+        finally
+        {
+            // Dispose any frames still queued (Finish drains again as a backstop).
+            if (_manualFrameChannel != null)
+            {
+                while (_manualFrameChannel.Reader.TryRead(out SKBitmap? leftover))
+                {
+                    leftover.Dispose();
+                }
+            }
         }
     }
 
@@ -186,38 +267,78 @@ public partial class SnipWindowViewModel
             return;
         }
 
-        if (!_manualScrollActive)
+        if (!_manualScrollActive || _manualFinishing)
         {
             return;
         }
 
+        _manualFinishing = true;
         _manualScrollActive = false;
+        _manualCts?.Cancel();
 
-        _manualScrollTimer?.Stop();
-        _manualScrollTimer = null;
+        // Fire the async core; it awaits the pipeline (the barrier) before touching the bitmaps.
+        _ = FinishManualScrollCaptureCoreAsync(cancelled);
+    }
 
-        HideScrollingHintAction?.Invoke();
-
-        SKBitmap? result = _manualAccumulated;
-        SKBitmap? prev = _manualPrevFrame;
-        _manualAccumulated = null;
-        _manualPrevFrame = null;
-
+    private async Task FinishManualScrollCaptureCoreAsync(bool cancelled)
+    {
         try
         {
-            if (!cancelled && result != null && result.Width > 0 && result.Height > 0)
+            // Wait for the producer and consumer to stop so the accumulated/prev bitmaps are
+            // no longer being mutated or disposed on the background thread.
+            try
             {
-                OpenStitchedPin(result);
+                await (_manualPipelineTask ?? Task.CompletedTask);
             }
-        }
-        catch (Exception ex)
-        {
-            AppLog.Error("ManualScroll.Finish", ex);
+            catch (OperationCanceledException)
+            {
+                // Normal on cancel.
+            }
+            catch (Exception ex)
+            {
+                AppLog.Warning("ManualScroll.Pipeline", ex);
+            }
+
+            HideScrollingHintAction?.Invoke();
+
+            // Backstop: dispose any frames produced after the consumer's own drain.
+            if (_manualFrameChannel != null)
+            {
+                while (_manualFrameChannel.Reader.TryRead(out SKBitmap? leftover))
+                {
+                    leftover.Dispose();
+                }
+            }
+
+            SKBitmap? result = _manualAccumulated;
+            SKBitmap? prev = _manualPrevFrame;
+            _manualAccumulated = null;
+            _manualPrevFrame = null;
+
+            try
+            {
+                if (!cancelled && result != null && result.Width > 0 && result.Height > 0)
+                {
+                    OpenStitchedPin(result);
+                }
+            }
+            catch (Exception ex)
+            {
+                AppLog.Error("ManualScroll.Finish", ex);
+            }
+            finally
+            {
+                result?.Dispose();
+                prev?.Dispose();
+            }
         }
         finally
         {
-            result?.Dispose();
-            prev?.Dispose();
+            _manualCts?.Dispose();
+            _manualCts = null;
+            _manualPipelineTask = null;
+            _manualFrameChannel = null;
+            _manualFinishing = false;
             CloseAction?.Invoke();
         }
     }
