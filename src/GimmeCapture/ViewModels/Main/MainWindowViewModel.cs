@@ -78,12 +78,66 @@ public partial class MainWindowViewModel : ViewModelBase
     private bool _isDataLoading = true;
     private Task? _loadTask;
     private string _currentStatusKey = "StatusReady";
+
+    // Transient UI-state properties that are NOT persisted; changes to these never trigger a save.
+    private static readonly HashSet<string> _nonPersistedPropertyNames = new(StringComparer.Ordinal)
+    {
+        nameof(StatusText), nameof(AIProgressText), nameof(IsModified), nameof(IsProcessing),
+        nameof(ProcessingText), nameof(ShowProcessingOverlay), nameof(ProgressValue), nameof(IsIndeterminate)
+    };
     private readonly CaptureLaunchCoordinator _captureLaunchCoordinator = new();
 
     public void SetStatus(string key)
     {
         _currentStatusKey = key;
         StatusText = LocalizationService.Instance[key];
+        MaybeShowToast(key, StatusText);
+    }
+
+    /// <summary>Severity of a toast notification, used for the accent colour.</summary>
+    public enum ToastSeverity { Info, Success, Error }
+
+    /// <summary>Shows a floating toast; wired to a capture-excluded ToastWindow by the view.</summary>
+    public Action<string, ToastSeverity>? ShowToastAction { get; set; }
+
+    // Status keys that are routine/idle noise and should NOT pop a toast.
+    private static readonly HashSet<string> _quietStatusKeys = new(StringComparer.Ordinal)
+    {
+        "StatusReady", "StatusModified", "StatusReset", "StatusSnip", "CheckingUpdate"
+    };
+
+    private void MaybeShowToast(string key, string message)
+    {
+        if (string.IsNullOrWhiteSpace(message) || _quietStatusKeys.Contains(key))
+        {
+            return;
+        }
+
+        ShowToastAction?.Invoke(message, ClassifyToastSeverity(key));
+    }
+
+    internal static ToastSeverity ClassifyToastSeverity(string key)
+    {
+        if (key.Contains("Failed", StringComparison.OrdinalIgnoreCase)
+            || key.Contains("Error", StringComparison.OrdinalIgnoreCase)
+            || key.Contains("NotReady", StringComparison.OrdinalIgnoreCase)
+            || key.Contains("Missing", StringComparison.OrdinalIgnoreCase)
+            || key.Contains("Unavailable", StringComparison.OrdinalIgnoreCase)
+            || key.Contains("NotFound", StringComparison.OrdinalIgnoreCase)
+            || key.Contains("NoText", StringComparison.OrdinalIgnoreCase)
+            || key.Contains("NoSelection", StringComparison.OrdinalIgnoreCase))
+        {
+            return ToastSeverity.Error;
+        }
+
+        if (key.Contains("Copied", StringComparison.OrdinalIgnoreCase)
+            || key.Contains("Saved", StringComparison.OrdinalIgnoreCase)
+            || key.Contains("Done", StringComparison.OrdinalIgnoreCase))
+        {
+            return ToastSeverity.Success;
+        }
+
+        return ToastSeverity.Info;
     }
 
     public Action<CaptureMode>? RequestCaptureAction { get; set; }
@@ -160,7 +214,6 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public ReactiveCommand<CaptureMode, Unit> StartCaptureCommand { get; } = null!;
     public ReactiveCommand<Unit, Unit> ScrollingCaptureCommand { get; } = null!;
-    public ReactiveCommand<Unit, Unit> SaveAndCloseCommand { get; } = null!;
     public ReactiveCommand<Unit, Unit> ResetToDefaultCommand { get; } = null!;
     public ReactiveCommand<Unit, Unit> IncreaseThicknessCommand { get; } = null!;
     public ReactiveCommand<Unit, Unit> DecreaseThicknessCommand { get; } = null!;
@@ -256,7 +309,6 @@ public partial class MainWindowViewModel : ViewModelBase
 
         StartCaptureCommand = ReactiveCommand.CreateFromTask<CaptureMode>(StartCapture);
         ScrollingCaptureCommand = ReactiveCommand.CreateFromTask(() => StartCapture(CaptureMode.ScrollingCapture));
-        SaveAndCloseCommand = ReactiveCommand.CreateFromTask(SaveAndClose);
         ResetToDefaultCommand = ReactiveCommand.CreateFromTask(ResetToDefault);
         IncreaseThicknessCommand = ReactiveCommand.Create(() => { if (BorderThickness < 9) BorderThickness += 1; });
         DecreaseThicknessCommand = ReactiveCommand.Create(() => { if (BorderThickness > 1) BorderThickness -= 1; });
@@ -350,27 +402,23 @@ public partial class MainWindowViewModel : ViewModelBase
             Avalonia.Threading.Dispatcher.UIThread.Post(() => RequestElevatedWindowPromptAction?.Invoke());
         };
 
+        // Settings auto-save: any settings property change persists immediately (debounced).
+        // Transient UI-state properties are excluded so they don't trigger save churn.
         this.PropertyChanged += (s, e) =>
         {
-            if (!_isDataLoading && e.PropertyName != nameof(StatusText) && e.PropertyName != nameof(IsModified))
+            if (_isDataLoading || e.PropertyName is null || _nonPersistedPropertyNames.Contains(e.PropertyName))
             {
-                if (!IsModified)
-                {
-                    IsModified = true;
-                    SetStatus("StatusModified");
-                }
+                return;
             }
+
+            QueueSettingsSave();
         };
 
         RecordingSettings.PropertyChanged += (s, e) =>
         {
             if (!_isDataLoading)
             {
-                if (!IsModified)
-                {
-                    IsModified = true;
-                    SetStatus("StatusModified");
-                }
+                QueueSettingsSave();
             }
         };
 

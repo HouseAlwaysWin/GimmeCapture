@@ -20,6 +20,11 @@ internal sealed class NoOpSnipWindowFactory : ISnipWindowFactory
     public object? GetActiveViewModel() => null;
 }
 
+internal sealed class NoOpToastService : IToastService
+{
+    public void Show(string message, GimmeCapture.ViewModels.Main.MainWindowViewModel.ToastSeverity severity) { }
+}
+
 internal sealed class NoOpScreenLayoutService : IScreenLayoutService
 {
     public IReadOnlyList<Rect> BuildRelativeScreenBounds(IReadOnlyList<PixelRect> screenBounds, PixelPoint windowPosition, double renderScaling) => [];

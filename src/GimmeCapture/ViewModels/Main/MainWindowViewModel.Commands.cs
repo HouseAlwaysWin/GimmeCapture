@@ -70,12 +70,6 @@ public partial class MainWindowViewModel
         return launchResult ?? CaptureLaunchResult.Cancelled;
     }
     
-    private async Task SaveAndClose()
-    {
-        await SaveSettingsAsync();
-        SetStatus("StatusSaved");
-    }
-
     private async Task ResetToDefault()
     {
         _isDataLoading = true;
