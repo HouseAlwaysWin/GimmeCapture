@@ -30,10 +30,10 @@ public class SelectionResizeMathTests
     // The direction is passed as a string (parsed below) because ResizeDirection is
     // internal and a public xUnit test method cannot expose it in its signature (CS0051).
     [Theory]
-    [InlineData("Top", 10, 20, 100, 50, 10, 30, 100, 30)]    // y+=dy, h-=dy
+    [InlineData("Top", 10, 20, 100, 50, 10, 40, 100, 30)]    // y+=dy, h-=dy
     [InlineData("Bottom", 10, 20, 100, 50, 10, 20, 100, 70)] // h+=dy
     [InlineData("Left", 10, 20, 100, 50, 30, 20, 80, 50)]    // x+=dx, w-=dx
-    [InlineData("Right", 10, 20, 100, 50, 10, 20, 130, 50)]  // w+=dx
+    [InlineData("Right", 10, 20, 100, 50, 10, 20, 120, 50)]  // w+=dx
     public void ApplyResizeDelta_Edges_MoveOnlyTheirComponent(
         string dir, double ox, double oy, double ow, double oh,
         double ex, double ey, double ew, double eh)
