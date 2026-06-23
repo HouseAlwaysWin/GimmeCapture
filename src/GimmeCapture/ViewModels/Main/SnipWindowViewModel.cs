@@ -42,6 +42,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         nameof(LineTooltip),
         nameof(PenTooltip),
         nameof(TextTooltip),
+        nameof(CalloutTooltip),
         nameof(MosaicTooltip),
         nameof(BlurTooltip),
         nameof(HighlighterTooltip),
@@ -176,6 +177,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     public string LineTooltip => $"{LocalizationService.Instance["TipLine"]} ({LineHotkey})";
     public string PenTooltip => $"{LocalizationService.Instance["TipPen"]} ({PenHotkey})";
     public string TextTooltip => $"{LocalizationService.Instance["TipText"]} ({TextHotkey})";
+    public string CalloutTooltip => LocalizationService.Instance["TipCallout"];
     public string MosaicTooltip => $"{LocalizationService.Instance["TipMosaic"]} ({MosaicHotkey})";
     public string BlurTooltip => $"{LocalizationService.Instance["TipBlur"]} ({BlurHotkey})";
     public string HighlighterTooltip => LocalizationService.Instance["TipHighlighter"];

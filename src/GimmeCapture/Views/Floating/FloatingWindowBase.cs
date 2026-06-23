@@ -351,7 +351,7 @@ public abstract class FloatingWindowBase : Window
 
             vm.ClearAnnotationSelection();
 
-            if (vm.CurrentAnnotationTool == AnnotationType.Text)
+            if (vm.CurrentAnnotationTool is AnnotationType.Text or AnnotationType.Callout)
             {
                 // Check if clicking existing text to edit/drag
                 for (int i = vm.Annotations.Count - 1; i >= 0; i--)
@@ -653,7 +653,7 @@ public abstract class FloatingWindowBase : Window
         Cursor = hit.IsHit
             ? CreateAnnotationCursor(hit.Zone)
             : new Cursor(contentBounds.Contains(point)
-                ? (vm.CurrentAnnotationTool == AnnotationType.Text
+                ? (vm.CurrentAnnotationTool is AnnotationType.Text or AnnotationType.Callout
                     ? StandardCursorType.Ibeam
                     : StandardCursorType.Cross)
                 : StandardCursorType.Arrow);

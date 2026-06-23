@@ -113,7 +113,9 @@ public partial class SnipWindow
         if (!_viewModel.IsDrawingMode || _viewModel.CurrentState != SnipState.Selected) return false;
         if (!_viewModel.SelectionRect.Contains(point)) return false;
 
-        if (_viewModel.CurrentAnnotationTool == AnnotationType.Text)
+        // Text and Callout both place a text label via the text-entry overlay; the
+        // Callout additionally gets a leader line (added in ConfirmTextEntryCommand).
+        if (_viewModel.CurrentAnnotationTool is AnnotationType.Text or AnnotationType.Callout)
         {
             BeginSelectionTextEntry(point, string.Empty);
             e.Handled = true;

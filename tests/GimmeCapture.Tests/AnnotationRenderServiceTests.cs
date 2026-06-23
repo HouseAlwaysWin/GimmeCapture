@@ -148,6 +148,81 @@ public class AnnotationRenderServiceTests
         }
     }
 
+    [Fact]
+    public void RenderAnnotationsToBitmap_CalloutDrawsLeaderTowardTargetAndLabelAtAnchor()
+    {
+        using var bitmap = new SKBitmap(64, 64, SKColorType.Bgra8888, SKAlphaType.Premul);
+        bitmap.Erase(SKColors.Transparent);
+
+        // StartPoint = target (leader tip), EndPoint = text-label anchor.
+        var callout = new Annotation
+        {
+            Type = AnnotationType.Callout,
+            StartPoint = new Point(8, 8),
+            EndPoint = new Point(40, 40),
+            Text = "Hi",
+            Color = Avalonia.Media.Colors.Red,
+            Thickness = 3,
+            FontSize = 18,
+            FontFamily = new Avalonia.Media.FontFamily("Arial")
+        };
+
+        AnnotationRenderService.Shared.RenderAnnotationsToBitmap(bitmap, new[] { callout }, 64, 64, 64, 64);
+
+        // The leader line runs diagonally from the anchor (40,40) to the target (8,8);
+        // its midpoint (24,24) should have painted pixels.
+        Assert.True(bitmap.GetPixel(24, 24).Alpha > 0, "Expected leader line pixels along the diagonal.");
+
+        // The arrow head lands on the target, so pixels near StartPoint should be painted.
+        Assert.True(bitmap.GetPixel(10, 10).Alpha > 0, "Expected arrow-head pixels near the target.");
+
+        // The label text is drawn at the anchor (EndPoint); scan the box region for ink.
+        Assert.True(HasOpaquePixelInRegion(bitmap, 40, 24, 24, 22), "Expected label text pixels in the box region.");
+
+        // A point far from both the leader and the label box should remain untouched.
+        Assert.Equal((byte)0, bitmap.GetPixel(2, 60).Alpha);
+    }
+
+    [Fact]
+    public void RenderAnnotationsToBitmap_CalloutWithoutTextStillDrawsLeader()
+    {
+        using var bitmap = new SKBitmap(48, 48, SKColorType.Bgra8888, SKAlphaType.Premul);
+        bitmap.Erase(SKColors.Transparent);
+
+        var callout = new Annotation
+        {
+            Type = AnnotationType.Callout,
+            StartPoint = new Point(6, 6),
+            EndPoint = new Point(36, 36),
+            Text = string.Empty,
+            Color = Avalonia.Media.Colors.Lime,
+            Thickness = 2,
+            FontSize = 16,
+            FontFamily = new Avalonia.Media.FontFamily("Arial")
+        };
+
+        AnnotationRenderService.Shared.RenderAnnotationsToBitmap(bitmap, new[] { callout }, 48, 48, 48, 48);
+
+        Assert.True(bitmap.GetPixel(21, 21).Alpha > 0, "Expected leader pixels even when the callout has no text.");
+    }
+
+    private static bool HasOpaquePixelInRegion(SKBitmap bitmap, int x, int y, int width, int height)
+    {
+        int right = Math.Min(bitmap.Width, x + width);
+        int bottom = Math.Min(bitmap.Height, y + height);
+        for (int yy = Math.Max(0, y); yy < bottom; yy++)
+        {
+            for (int xx = Math.Max(0, x); xx < right; xx++)
+            {
+                if (bitmap.GetPixel(xx, yy).Alpha > 0)
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     private static SKBitmap CreateGradientBitmap(int width, int height)
     {
         var bitmap = new SKBitmap(width, height, SKColorType.Bgra8888, SKAlphaType.Premul);

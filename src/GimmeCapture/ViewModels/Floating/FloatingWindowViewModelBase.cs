@@ -539,18 +539,44 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
         {
             if (!string.IsNullOrWhiteSpace(PendingText))
             {
-                AddAnnotation(new Annotation
+                if (CurrentAnnotationTool == AnnotationType.Callout)
                 {
-                    Type = AnnotationType.Text,
-                    StartPoint = TextInputPosition,
-                    EndPoint = TextInputPosition,
-                    Text = PendingText,
-                    Color = SelectedColor,
-                    FontSize = CurrentFontSize,
-                    FontFamily = CurrentFontFamily,
-                    IsBold = IsBold,
-                    IsItalic = IsItalic
-                });
+                    // Callout: TextInputPosition is the label anchor (EndPoint); the leader
+                    // tip (StartPoint) starts up-left of it and can be dragged onto the target.
+                    const double DefaultLeaderOffset = 48;
+                    var leaderTip = new Point(
+                        Math.Max(0, TextInputPosition.X - DefaultLeaderOffset),
+                        Math.Max(0, TextInputPosition.Y - DefaultLeaderOffset));
+
+                    AddAnnotation(new Annotation
+                    {
+                        Type = AnnotationType.Callout,
+                        StartPoint = leaderTip,
+                        EndPoint = TextInputPosition,
+                        Text = PendingText,
+                        Color = SelectedColor,
+                        Thickness = CurrentThickness,
+                        FontSize = CurrentFontSize,
+                        FontFamily = CurrentFontFamily,
+                        IsBold = IsBold,
+                        IsItalic = IsItalic
+                    });
+                }
+                else
+                {
+                    AddAnnotation(new Annotation
+                    {
+                        Type = AnnotationType.Text,
+                        StartPoint = TextInputPosition,
+                        EndPoint = TextInputPosition,
+                        Text = PendingText,
+                        Color = SelectedColor,
+                        FontSize = CurrentFontSize,
+                        FontFamily = CurrentFontFamily,
+                        IsBold = IsBold,
+                        IsItalic = IsItalic
+                    });
+                }
             }
             IsEnteringText = false;
             PendingText = string.Empty;

@@ -103,6 +103,7 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
     public string LineTooltip => $"{LocalizationService.Instance["TipLine"]} ({LineHotkey})";
     public string PenTooltip => $"{LocalizationService.Instance["TipPen"]} ({PenHotkey})";
     public string TextTooltip => $"{LocalizationService.Instance["TipText"]} ({TextHotkey})";
+    public string CalloutTooltip => LocalizationService.Instance["TipCallout"];
     public string MosaicTooltip => $"{LocalizationService.Instance["TipMosaic"]} ({MosaicHotkey})";
     public string BlurTooltip => $"{LocalizationService.Instance["TipBlur"]} ({BlurHotkey})";
     public string HighlighterTooltip => LocalizationService.Instance["TipHighlighter"];

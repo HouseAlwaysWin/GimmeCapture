@@ -163,7 +163,10 @@ public sealed class AnnotationRenderService : IAnnotationRenderService
                 DrawArrow(canvas, ScalePoint(ann.StartPoint, scaleX, scaleY), ScalePoint(ann.EndPoint, scaleX, scaleY), paint, uniformScale);
                 break;
             case AnnotationType.Text:
-                DrawText(canvas, ann, paint, scaleX, scaleY, uniformScale);
+                DrawText(canvas, ann, ann.StartPoint, paint, scaleX, scaleY, uniformScale);
+                break;
+            case AnnotationType.Callout:
+                DrawCallout(canvas, ann, paint, scaleX, scaleY, uniformScale);
                 break;
             case AnnotationType.Pen:
                 DrawPen(canvas, ann, paint, scaleX, scaleY);
@@ -193,7 +196,7 @@ public sealed class AnnotationRenderService : IAnnotationRenderService
         canvas.DrawPath(path, paint);
     }
 
-    private static void DrawText(SKCanvas canvas, Annotation ann, SKPaint paint, float scaleX, float scaleY, float uniformScale)
+    private static void DrawText(SKCanvas canvas, Annotation ann, Point textOrigin, SKPaint paint, float scaleX, float scaleY, float uniformScale)
     {
         paint.Style = SKPaintStyle.Fill;
 
@@ -203,8 +206,32 @@ public sealed class AnnotationRenderService : IAnnotationRenderService
         using var typeface = SKTypeface.FromFamilyName(ann.FontFamily.Name, style) ?? SKTypeface.Default;
         using var font = new SKFont(typeface, (float)(ann.FontSize * uniformScale));
 
-        var origin = new SKPoint((float)(ann.StartPoint.X * scaleX), (float)(ann.StartPoint.Y * scaleY));
+        var origin = new SKPoint((float)(textOrigin.X * scaleX), (float)(textOrigin.Y * scaleY));
         canvas.DrawText(ann.Text ?? string.Empty, origin, SKTextAlign.Left, font, paint);
+    }
+
+    // A Callout = a text label anchored at EndPoint plus a leader line (with a small
+    // arrow head) pointing from the label toward StartPoint (the annotated target).
+    // It reuses the existing arrow + text primitives rather than introducing new geometry.
+    private static void DrawCallout(SKCanvas canvas, Annotation ann, SKPaint paint, float scaleX, float scaleY, float uniformScale)
+    {
+        var target = ScalePoint(ann.StartPoint, scaleX, scaleY);
+        var label = ScalePoint(ann.EndPoint, scaleX, scaleY);
+
+        // Leader: stroke + arrow head land on the target (StartPoint).
+        using var leaderPaint = new SKPaint
+        {
+            Color = paint.Color,
+            StrokeWidth = paint.StrokeWidth,
+            IsAntialias = true,
+            Style = SKPaintStyle.Stroke,
+            StrokeCap = SKStrokeCap.Round,
+            StrokeJoin = SKStrokeJoin.Round
+        };
+        DrawArrow(canvas, label, target, leaderPaint, uniformScale);
+
+        // Label: render the text at the anchor (EndPoint), reusing the text primitive.
+        DrawText(canvas, ann, ann.EndPoint, paint, scaleX, scaleY, uniformScale);
     }
 
     private static void DrawArrow(SKCanvas canvas, SKPoint start, SKPoint end, SKPaint paint, float uniformScale)

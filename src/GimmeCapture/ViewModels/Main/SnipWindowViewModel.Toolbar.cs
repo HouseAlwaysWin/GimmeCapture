@@ -457,19 +457,46 @@ public partial class SnipWindowViewModel
             if (!string.IsNullOrWhiteSpace(PendingText))
             {
                 var relPoint = new Point(TextInputPosition.X - SelectionRect.X, TextInputPosition.Y - SelectionRect.Y);
-                
-                AddAnnotation(new Annotation
+
+                if (CurrentAnnotationTool == AnnotationType.Callout)
                 {
-                    Type = AnnotationType.Text,
-                    StartPoint = relPoint,
-                    EndPoint = relPoint,
-                    Text = PendingText,
-                    Color = SelectedColor,
-                    FontSize = CurrentFontSize,
-                    FontFamily = CurrentFontFamily,
-                    IsBold = IsBold,
-                    IsItalic = IsItalic
-                });
+                    // Callout: the clicked point is the text-label anchor (EndPoint); the
+                    // leader (StartPoint) starts at a default up-left offset and can be
+                    // dragged onto the annotated target via the line-edit handles.
+                    const double DefaultLeaderOffset = 48;
+                    var leaderTip = new Point(
+                        Math.Max(0, relPoint.X - DefaultLeaderOffset),
+                        Math.Max(0, relPoint.Y - DefaultLeaderOffset));
+
+                    AddAnnotation(new Annotation
+                    {
+                        Type = AnnotationType.Callout,
+                        StartPoint = leaderTip,
+                        EndPoint = relPoint,
+                        Text = PendingText,
+                        Color = SelectedColor,
+                        Thickness = CurrentThickness,
+                        FontSize = CurrentFontSize,
+                        FontFamily = CurrentFontFamily,
+                        IsBold = IsBold,
+                        IsItalic = IsItalic
+                    });
+                }
+                else
+                {
+                    AddAnnotation(new Annotation
+                    {
+                        Type = AnnotationType.Text,
+                        StartPoint = relPoint,
+                        EndPoint = relPoint,
+                        Text = PendingText,
+                        Color = SelectedColor,
+                        FontSize = CurrentFontSize,
+                        FontFamily = CurrentFontFamily,
+                        IsBold = IsBold,
+                        IsItalic = IsItalic
+                    });
+                }
             }
             IsEnteringText = false;
             PendingText = string.Empty;
