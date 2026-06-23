@@ -65,6 +65,7 @@ public partial class MainWindow
                     HotkeyIds.Copy => LocalizationService.Instance["TipCopy"] ?? "Copy",
                     HotkeyIds.Pin => LocalizationService.Instance["TipPin"] ?? "Pin",
                     HotkeyIds.TextCopy => LocalizationService.Instance["TextCopyHotkey"],
+                    HotkeyIds.ScrollingCapture => LocalizationService.Instance["ScrollingCaptureHotkey"],
                     _ => hotkey
                 };
 

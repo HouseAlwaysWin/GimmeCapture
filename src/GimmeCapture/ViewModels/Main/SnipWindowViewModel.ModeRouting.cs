@@ -400,6 +400,9 @@ public partial class SnipWindowViewModel
             case HotkeyRouterService.SnipGlobalHotkeyAction.TextCopyAutoAction:
                 AutoActionMode = SnipAutoAction.TextCopy;
                 break;
+            case HotkeyRouterService.SnipGlobalHotkeyAction.ScrollingCaptureAutoAction:
+                AutoActionMode = SnipAutoAction.ScrollingCapture;
+                break;
         }
     }
 

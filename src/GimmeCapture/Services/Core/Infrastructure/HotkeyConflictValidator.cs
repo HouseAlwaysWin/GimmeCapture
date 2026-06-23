@@ -47,7 +47,7 @@ public static class HotkeyConflictValidator
         }
 
         // 1. Global Group (Idle state triggers)
-        var globalGroup = new[] { "SnipHotkey", "RecordHotkey", "TranslateHotkey", "TextCopyHotkey", "PinHotkey", "CopyHotkey" };
+        var globalGroup = new[] { "SnipHotkey", "RecordHotkey", "TranslateHotkey", "TextCopyHotkey", "ScrollingCaptureHotkey", "PinHotkey", "CopyHotkey" };
 
         // 2. Snip Group (Local to Screenshot mode)
         var snipGroup = new[] {
@@ -83,6 +83,7 @@ public static class HotkeyConflictValidator
             if (targetTag != "RecordHotkey" && Cur("RecordHotkey") == hotkey) return "RecordHotkey";
             if (targetTag != "TranslateHotkey" && Cur("TranslateHotkey") == hotkey) return "TranslateHotkey";
             if (targetTag != "TextCopyHotkey" && Cur("TextCopyHotkey") == hotkey) return "TextCopyHotkey";
+            if (targetTag != "ScrollingCaptureHotkey" && Cur("ScrollingCaptureHotkey") == hotkey) return "ScrollingCaptureHotkey";
         }
         else if (snipGroup.Contains(targetTag))
         {

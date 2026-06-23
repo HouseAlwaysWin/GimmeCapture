@@ -93,6 +93,7 @@ public partial class MainWindowViewModel
         TranslateHotkey = defaultSettings.TranslateHotkey;
         RecordHotkey = defaultSettings.RecordHotkey;
         TextCopyHotkey = defaultSettings.TextCopyHotkey;
+        ScrollingCaptureHotkey = defaultSettings.ScrollingCaptureHotkey;
         RecordingSettings.RecordFormat = defaultSettings.RecordFormat;
         RecordingSettings.VideoCodec = defaultSettings.VideoCodec;
         

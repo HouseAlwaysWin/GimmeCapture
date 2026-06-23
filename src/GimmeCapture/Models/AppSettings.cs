@@ -153,6 +153,7 @@ public class AppSettings
     public string RecordHotkey { get; set; } = "Shift+F2";
     public string TranslateHotkey { get; set; } = "Shift+F3";
     public string TextCopyHotkey { get; set; } = "Shift+F4";
+    public string ScrollingCaptureHotkey { get; set; } = "Shift+F5";
 
     // Mode Specific Hotkeys (New Structured Way)
     public SnipHotkeys Snip { get; set; } = new();

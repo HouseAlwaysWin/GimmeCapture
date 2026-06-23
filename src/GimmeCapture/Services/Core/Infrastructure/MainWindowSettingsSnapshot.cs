@@ -47,6 +47,7 @@ public sealed class MainWindowSettingsSnapshot
     public required string RecordHotkey { get; init; }
     public required string TranslateHotkey { get; init; }
     public required string TextCopyHotkey { get; init; }
+    public required string ScrollingCaptureHotkey { get; init; }
     public required string AIResourcesDirectory { get; init; }
     public required bool EnableAI { get; init; }
     public required bool ShowAIScanBox { get; init; }
@@ -106,6 +107,7 @@ public sealed class MainWindowSettingsSnapshot
             RecordHotkey = settings.RecordHotkey,
             TranslateHotkey = settings.TranslateHotkey,
             TextCopyHotkey = settings.TextCopyHotkey,
+            ScrollingCaptureHotkey = settings.ScrollingCaptureHotkey,
             AIResourcesDirectory = settings.AIResourcesDirectory,
             EnableAI = settings.EnableAI,
             ShowAIScanBox = settings.ShowAIScanBox,
@@ -165,6 +167,7 @@ public sealed class MainWindowSettingsSnapshot
         settings.RecordHotkey = RecordHotkey;
         settings.TranslateHotkey = TranslateHotkey;
         settings.TextCopyHotkey = TextCopyHotkey;
+        settings.ScrollingCaptureHotkey = ScrollingCaptureHotkey;
         settings.AIResourcesDirectory = AIResourcesDirectory;
         settings.EnableAI = EnableAI;
         settings.ShowAIScanBox = ShowAIScanBox;

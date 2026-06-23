@@ -64,6 +64,7 @@ public class MainWindowSettingsPersistenceServiceTests
             RecordHotkey = "Shift+F8",
             TranslateHotkey = "Shift+F9",
             TextCopyHotkey = "Shift+F10",
+            ScrollingCaptureHotkey = "Shift+F11",
             AIResourcesDirectory = @"D:\captures\ai",
             EnableAI = false,
             ShowAIScanBox = false,
