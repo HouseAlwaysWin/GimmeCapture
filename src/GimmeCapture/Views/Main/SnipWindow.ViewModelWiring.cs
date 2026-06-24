@@ -394,8 +394,12 @@ public partial class SnipWindow : Window
                     {
                         double contentW = vm.DisplayWidth + padding.Left + padding.Right;
                         double contentH = vm.DisplayHeight + padding.Top + padding.Bottom;
-                        double fit = System.Math.Min((screenW * 0.95) / contentW, (screenH * 0.90) / contentH);
-                        if (double.IsFinite(fit) && fit > 0 && fit < 1.0)
+                        // Scale the displayed window down to fit the target screen (aspect
+                        // preserved). Only DisplayWidth/Height change — vm.Image stays full
+                        // resolution, so save/copy/export are unaffected. Pure math lives in
+                        // PinFitMath so it can be unit tested without a UI thread.
+                        double fit = PinFitMath.ComputeFitScale(contentW, contentH, screenW, screenH);
+                        if (fit < 1.0)
                         {
                             vm.DisplayWidth *= fit;
                             vm.DisplayHeight *= fit;
