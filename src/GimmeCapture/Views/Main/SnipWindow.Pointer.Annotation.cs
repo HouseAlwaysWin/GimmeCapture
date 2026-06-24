@@ -113,6 +113,9 @@ public partial class SnipWindow
         if (!_viewModel.IsDrawingMode || _viewModel.CurrentState != SnipState.Selected) return false;
         if (!_viewModel.SelectionRect.Contains(point)) return false;
 
+        // Text places a label directly via the text-entry overlay. Callout is drawn like a line:
+        // press on the target and drag out to the label position; the text box opens on release
+        // (handled in TryHandleAnnotationPointerReleased).
         if (_viewModel.CurrentAnnotationTool == AnnotationType.Text)
         {
             BeginSelectionTextEntry(point, string.Empty);
@@ -219,6 +222,15 @@ public partial class SnipWindow
 
         if (_currentAnnotation != null)
         {
+            if (_currentAnnotation.Type == AnnotationType.Callout)
+            {
+                // Leader drawn; keep it pending and collect the label text at the release point.
+                BeginCalloutLabelEntry(_currentAnnotation);
+                _currentAnnotation = null;
+                e.Pointer.Capture(null);
+                return true;
+            }
+
             _viewModel.CommitPendingAnnotation(_currentAnnotation);
             _currentAnnotation = null;
             e.Pointer.Capture(null);
@@ -226,5 +238,29 @@ public partial class SnipWindow
         }
 
         return false;
+    }
+
+    // After the Callout leader is dragged, open the text-entry overlay at the label anchor
+    // (EndPoint). A click with no real drag gets a default offset so the leader stays visible
+    // and valid. The pending leader is finalized by ConfirmTextEntryCommand.
+    private void BeginCalloutLabelEntry(Annotation leader)
+    {
+        if (_viewModel == null) return;
+
+        var dx = leader.EndPoint.X - leader.StartPoint.X;
+        var dy = leader.EndPoint.Y - leader.StartPoint.Y;
+        if (Math.Sqrt((dx * dx) + (dy * dy)) < AnnotationInteractionService.MinimumLineLength)
+        {
+            leader.EndPoint = new Point(
+                Math.Min(_viewModel.SelectionRect.Width, leader.StartPoint.X + 48),
+                Math.Min(_viewModel.SelectionRect.Height, leader.StartPoint.Y + 48));
+        }
+
+        _viewModel.BeginCalloutTextEntry(leader);
+
+        var anchorWindow = new Point(
+            leader.EndPoint.X + _viewModel.SelectionRect.X,
+            leader.EndPoint.Y + _viewModel.SelectionRect.Y);
+        BeginSelectionTextEntry(anchorWindow, leader.Text ?? string.Empty);
     }
 }

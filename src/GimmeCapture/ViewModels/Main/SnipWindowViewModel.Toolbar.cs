@@ -368,6 +368,12 @@ public partial class SnipWindowViewModel
 
     public void CancelPendingAnnotation(Annotation annotation) => _editorState.CancelPendingAnnotation(annotation);
 
+    // A Callout leader drawn by dragging, now pending in the annotation list and awaiting its
+    // label text from the text-entry overlay (drag-the-line-then-type flow).
+    private Annotation? _pendingTextLeader;
+
+    public void BeginCalloutTextEntry(Annotation leader) => _pendingTextLeader = leader;
+
     public void SelectAnnotation(Annotation? annotation) => _editorState.SelectAnnotation(annotation);
 
     public void ClearAnnotationSelection() => _editorState.ClearSelection();
@@ -452,12 +458,29 @@ public partial class SnipWindowViewModel
             x => x.CurrentMode,
             mode => mode != SnipMode.Translation);
 
-        ConfirmTextEntryCommand = ReactiveCommand.Create(() => 
+        ConfirmTextEntryCommand = ReactiveCommand.Create(() =>
         {
-            if (!string.IsNullOrWhiteSpace(PendingText))
+            if (_pendingTextLeader != null)
+            {
+                // Callout: the leader was already drawn by dragging and is pending in the list.
+                // Attach the typed label, sync the current style, and commit it.
+                var leader = _pendingTextLeader;
+                _pendingTextLeader = null;
+                leader.Text = PendingText ?? string.Empty;
+                leader.Color = SelectedColor;
+                leader.Thickness = CurrentThickness;
+                leader.FontSize = CurrentFontSize;
+                leader.FontFamily = CurrentFontFamily;
+                leader.IsBold = IsBold;
+                leader.IsItalic = IsItalic;
+                if (!CommitPendingAnnotation(leader))
+                {
+                    CancelPendingAnnotation(leader);
+                }
+            }
+            else if (!string.IsNullOrWhiteSpace(PendingText))
             {
                 var relPoint = new Point(TextInputPosition.X - SelectionRect.X, TextInputPosition.Y - SelectionRect.Y);
-                
                 AddAnnotation(new Annotation
                 {
                     Type = AnnotationType.Text,
@@ -476,8 +499,14 @@ public partial class SnipWindowViewModel
             FocusWindowAction?.Invoke();
         });
 
-        CancelTextEntryCommand = ReactiveCommand.Create(() => 
+        CancelTextEntryCommand = ReactiveCommand.Create(() =>
         {
+            if (_pendingTextLeader != null)
+            {
+                // Discard the drawn-but-unconfirmed Callout leader.
+                CancelPendingAnnotation(_pendingTextLeader);
+                _pendingTextLeader = null;
+            }
             IsEnteringText = false;
             PendingText = string.Empty;
             FocusWindowAction?.Invoke();

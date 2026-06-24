@@ -572,7 +572,7 @@ public sealed class AnnotationEditorState : ReactiveObject, IDisposable
         => tool is AnnotationType.Mosaic or AnnotationType.Blur;
 
     private static bool SupportsStrokeStyle(AnnotationType tool)
-        => tool is AnnotationType.Rectangle or AnnotationType.Ellipse or AnnotationType.Arrow or AnnotationType.Line or AnnotationType.Highlighter or AnnotationType.Step;
+        => tool is AnnotationType.Rectangle or AnnotationType.Ellipse or AnnotationType.Arrow or AnnotationType.Line or AnnotationType.Highlighter or AnnotationType.Step or AnnotationType.Callout;
 
     // Fill toggle only applies to outlined shapes; Highlighter/Step are always filled.
     public static bool SupportsFill(AnnotationType tool)

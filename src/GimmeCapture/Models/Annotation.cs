@@ -18,7 +18,8 @@ public enum AnnotationType
     Mosaic,
     Blur,
     Highlighter,
-    Step
+    Step,
+    Callout     // Text label with a leader line pointing at the annotated target
 }
 
 public class Annotation : ReactiveObject
@@ -149,7 +150,7 @@ public class Annotation : ReactiveObject
 
     [JsonIgnore]
     public bool ShowsLineSelection =>
-        IsSelected && Type is AnnotationType.Line or AnnotationType.Arrow;
+        IsSelected && Type is AnnotationType.Line or AnnotationType.Arrow or AnnotationType.Callout;
 
     public Avalonia.Points Points { get; } = new();
 

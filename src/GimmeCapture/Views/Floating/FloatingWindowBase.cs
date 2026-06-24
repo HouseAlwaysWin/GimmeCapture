@@ -562,6 +562,27 @@ public abstract class FloatingWindowBase : Window
         }
     }
 
+    // After the Callout leader is dragged, open the label text-entry overlay at the leader's end
+    // (label anchor). A click with no real drag gets a default offset so the leader stays visible
+    // and valid. The pending leader is finalized by the VM's ConfirmTextEntryCommand.
+    private void BeginCalloutLabelEntry(FloatingWindowViewModelBase vm, Annotation leader)
+    {
+        var dx = leader.EndPoint.X - leader.StartPoint.X;
+        var dy = leader.EndPoint.Y - leader.StartPoint.Y;
+        if (Math.Sqrt((dx * dx) + (dy * dy)) < AnnotationInteractionService.MinimumLineLength)
+        {
+            leader.EndPoint = new Point(leader.StartPoint.X + 48, leader.StartPoint.Y + 48);
+        }
+
+        vm.BeginCalloutTextEntry(leader);
+        vm.IsEnteringText = true;
+        vm.TextInputPosition = leader.EndPoint;
+        vm.PendingText = leader.Text ?? string.Empty;
+
+        var textBox = this.FindControl<TextBox>("TextInputOverlay");
+        Dispatcher.UIThread.Post(() => textBox?.Focus());
+    }
+
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         base.OnPointerReleased(e);
@@ -588,7 +609,14 @@ public abstract class FloatingWindowBase : Window
             _isDrawing = false;
             if (DataContext is FloatingWindowViewModelBase vm && _currentAnnotation != null)
             {
-                vm.CommitPendingAnnotation(_currentAnnotation);
+                if (_currentAnnotation.Type == AnnotationType.Callout)
+                {
+                    BeginCalloutLabelEntry(vm, _currentAnnotation);
+                }
+                else
+                {
+                    vm.CommitPendingAnnotation(_currentAnnotation);
+                }
             }
             _currentAnnotation = null;
         }

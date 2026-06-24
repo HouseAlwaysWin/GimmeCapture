@@ -83,6 +83,7 @@ public partial class SnipWindowViewModel
         nameof(LineTooltip),
         nameof(PenTooltip),
         nameof(TextTooltip),
+        nameof(CalloutTooltip),
         nameof(MosaicTooltip),
         nameof(BlurTooltip),
         nameof(HighlighterTooltip),

@@ -106,7 +106,31 @@
                    FontWeight="{Binding IsBold, Converter={StaticResource BoolToFontWeightConverter}}"
                    FontStyle="{Binding IsItalic, Converter={StaticResource BoolToFontStyleConverter}}"
                    IsVisible="{Binding Type, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Text}}"/>
-                   
+
+        <!-- Callout: leader (arrow head at StartPoint/target) + text label at EndPoint anchor.
+             Reuses the existing ArrowGeometryConverter and TextBlock primitives. -->
+        <Path Stroke="{Binding Color, Converter={StaticResource ColorToBrushConverter}}"
+              StrokeThickness="{Binding Thickness}"
+              Fill="{Binding Color, Converter={StaticResource ColorToBrushConverter}}"
+              IsVisible="{Binding Type, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Callout}}">
+            <Path.Data>
+                <MultiBinding Converter="{StaticResource ArrowGeometryConverter}">
+                    <Binding Path="EndPoint"/>
+                    <Binding Path="StartPoint"/>
+                    <Binding Path="Thickness"/>
+                </MultiBinding>
+            </Path.Data>
+        </Path>
+        <TextBlock Text="{Binding Text}"
+                   Canvas.Left="{Binding EndPoint.X}"
+                   Canvas.Top="{Binding EndPoint.Y}"
+                   Foreground="{Binding Color, Converter={StaticResource ColorToBrushConverter}}"
+                   FontSize="{Binding FontSize}"
+                   FontFamily="{Binding FontFamily}"
+                   FontWeight="{Binding IsBold, Converter={StaticResource BoolToFontWeightConverter}}"
+                   FontStyle="{Binding IsItalic, Converter={StaticResource BoolToFontStyleConverter}}"
+                   IsVisible="{Binding Type, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:AnnotationType.Callout}}"/>
+
         <Path Stroke="{Binding Color, Converter={StaticResource ColorToBrushConverter}}"
               StrokeThickness="{Binding Thickness}"
               StrokeLineCap="Round"

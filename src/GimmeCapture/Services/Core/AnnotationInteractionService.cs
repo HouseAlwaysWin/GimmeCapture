@@ -172,7 +172,7 @@ public static class AnnotationInteractionService
         type is AnnotationType.Rectangle or AnnotationType.Ellipse or AnnotationType.Mosaic or AnnotationType.Blur or AnnotationType.Highlighter or AnnotationType.Step;
 
     public static bool IsLine(AnnotationType type) =>
-        type is AnnotationType.Line or AnnotationType.Arrow;
+        type is AnnotationType.Line or AnnotationType.Arrow or AnnotationType.Callout;
 
     private static bool HitTestBody(Annotation annotation, Point point)
     {

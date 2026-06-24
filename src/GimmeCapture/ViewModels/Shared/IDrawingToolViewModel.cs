@@ -73,6 +73,7 @@ public interface IDrawingToolViewModel
     string LineTooltip { get; }
     string PenTooltip { get; }
     string TextTooltip { get; }
+    string CalloutTooltip { get; }
     string MosaicTooltip { get; }
     string BlurTooltip { get; }
     string HighlighterTooltip { get; }
