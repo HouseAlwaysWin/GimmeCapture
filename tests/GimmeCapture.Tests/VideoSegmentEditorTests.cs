@@ -111,6 +111,32 @@ public class VideoSegmentEditorTests
     }
 
     [Fact]
+    public void SplitAtSourceTime_SplitsContainingSegment()
+    {
+        var segs = new[] { new VideoEditSegment(0, 3), new VideoEditSegment(7, 10) };
+
+        // 8s source falls inside the second kept segment [7,10) -> split there.
+        var result = VideoSegmentEditor.SplitAtSourceTime(segs, 8.0);
+
+        Assert.Equal(3, result.Count);
+        Assert.Equal(7, result[1].SourceStart);
+        Assert.Equal(8, result[1].SourceEnd);
+        Assert.Equal(8, result[2].SourceStart);
+        Assert.Equal(10, result[2].SourceEnd);
+    }
+
+    [Fact]
+    public void SplitAtSourceTime_InsideCutGapIsNoOp()
+    {
+        var segs = new[] { new VideoEditSegment(0, 3), new VideoEditSegment(7, 10) };
+
+        // 5s source is in the removed gap [3,7) -> nothing to split.
+        var result = VideoSegmentEditor.SplitAtSourceTime(segs, 5.0);
+
+        Assert.Equal(2, result.Count);
+    }
+
+    [Fact]
     public void RemoveAt_RemovesSegment()
     {
         var segs = new[]

@@ -16,6 +16,7 @@ using SkiaSharp;
 using CliWrap;
 using CliWrap.Buffered;
 using GimmeCapture.Services.Core.Infrastructure;
+using GimmeCapture.Services.Core.Media;
 using GimmeCapture.Services.Core.Rendering;
 using System.Linq;
 
@@ -144,6 +145,12 @@ public partial class FloatingVideoViewModel
     {
         if (string.IsNullOrEmpty(VideoPath) || !File.Exists(VideoPath)) return null;
 
+        // Multi-segment cut: route crop through the compiler (concat -> crop, audio re-encoded).
+        if (UseMultiSegment)
+        {
+            return await ExportComposedAsync(targetExtension, new VideoEditCrop(crop.X, crop.Y, crop.Width, crop.Height));
+        }
+
         IsExporting = true;
         ExportProgress = 0;
         try
@@ -225,7 +232,7 @@ public partial class FloatingVideoViewModel
                 bool hasAnnotations = Annotations.AsValueEnumerable().Any();
                 bool needsTrim = IsTrimmingMode && (TrimStartSeconds > 0 || TrimEndSeconds < _totalDuration.TotalSeconds);
 
-                if (hasAnnotations || needsTrim)
+                if (hasAnnotations || needsTrim || UseMultiSegment)
                 {
                     var burntPath = await ExportBurntInVideoAsync();
                     if (!string.IsNullOrEmpty(burntPath) && System.IO.File.Exists(burntPath))
@@ -282,7 +289,7 @@ public partial class FloatingVideoViewModel
                 bool needsConversion = sourceExt != targetExt;
                 bool needsTrim = IsTrimmingMode && (TrimStartSeconds > 0 || TrimEndSeconds < _totalDuration.TotalSeconds);
 
-                if (hasAnnotations || needsConversion || needsTrim)
+                if (hasAnnotations || needsConversion || needsTrim || UseMultiSegment)
                 {
                     var processedPath = await ExportBurntInVideoAsync(targetExt);
                     if (!string.IsNullOrEmpty(processedPath) && System.IO.File.Exists(processedPath))
@@ -328,6 +335,12 @@ public partial class FloatingVideoViewModel
     private async Task<string?> ExportBurntInVideoAsync(string? targetExtension = null)
     {
         if (string.IsNullOrEmpty(VideoPath) || !System.IO.File.Exists(VideoPath)) return null;
+
+        // Multi-segment cut: route annotations/trim through the compiler (concat, audio re-encoded).
+        if (UseMultiSegment)
+        {
+            return await ExportComposedAsync(targetExtension, crop: null);
+        }
 
         // IsProcessing controlled by caller (CopyAsync/SaveAsync) to prevent flickering
         IsExporting = true;
@@ -450,6 +463,151 @@ public partial class FloatingVideoViewModel
         {
             IsExporting = false;
         }
+    }
+
+    /// <summary>
+    /// Multi-segment export: concatenates the kept segments via the pure <see cref="VideoEditFilterCompiler"/>,
+    /// then (for the annotation path) runs the proven redaction/overlay chain on the joined video via
+    /// <see cref="VideoAnnotationFilterBuilder"/>. Crop and annotations never mix, mirroring the
+    /// single-segment paths. Audio is re-encoded (aac) because atrim+concat cannot stream-copy.
+    /// </summary>
+    private async Task<string?> ExportComposedAsync(string? targetExtension, VideoEditCrop? crop)
+    {
+        if (string.IsNullOrEmpty(VideoPath) || !File.Exists(VideoPath)) return null;
+
+        IsExporting = true;
+        ExportProgress = 0;
+        try
+        {
+            string tempDir = Path.Combine(Path.GetTempPath(), "GimmeCapture_Export_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(tempDir);
+
+            string ext = targetExtension ?? Path.GetExtension(VideoPath);
+            if (!ext.StartsWith(".")) ext = "." + ext;
+            string outputPath = Path.Combine(tempDir, "output" + ext);
+            bool isOutputGif = ext.Equals(".gif", StringComparison.OrdinalIgnoreCase);
+
+            // Annotations are burnt in only when NOT cropping (crop & annotations never mix, like today).
+            bool burnAnnotations = crop is null && Annotations.AsValueEnumerable().Any();
+            string? overlayPath = null;
+            if (burnAnnotations)
+            {
+                overlayPath = Path.Combine(tempDir, "overlay.png");
+                RenderAnnotationOverlayPng(overlayPath);
+            }
+
+            bool hasAudio = await EnsureSourceHasAudioAsync() && !isOutputGif;
+
+            VideoEditProject project = BuildEditProject(crop);
+            VideoEditFilterCompiler.CompiledEdit compiled = VideoEditFilterCompiler.Compile(project, hasAudio);
+
+            string filterComplex;
+            string videoMap;
+            if (burnAnnotations)
+            {
+                string vIn = compiled.VideoMap.Trim('[', ']');
+                string tail = VideoAnnotationFilterBuilder.BuildFilter(
+                    Annotations,
+                    DisplayWidth,
+                    DisplayHeight,
+                    (int)OriginalWidth,
+                    (int)OriginalHeight,
+                    includeOverlayInput: true,
+                    isOutputGif: isOutputGif,
+                    inputVideoLabel: vIn);
+                filterComplex = compiled.FilterComplex + ";" + tail;
+                videoMap = "[outv]";
+            }
+            else if (isOutputGif)
+            {
+                string vIn = compiled.VideoMap.Trim('[', ']');
+                filterComplex = compiled.FilterComplex
+                    + $";[{vIn}]split[gsp0][gsp1];[gsp0]palettegen[gpal];[gsp1][gpal]paletteuse[outv]";
+                videoMap = "[outv]";
+            }
+            else
+            {
+                filterComplex = compiled.FilterComplex;
+                videoMap = compiled.VideoMap;
+            }
+
+            var ffmpegPath = FFmpegPath;
+            if (ffmpegPath.Contains("ffplay.exe")) ffmpegPath = ffmpegPath.Replace("ffplay.exe", "ffmpeg.exe");
+
+            var result = await Cli.Wrap(ffmpegPath)
+                .WithArguments(args =>
+                {
+                    args.Add("-y");
+                    args.Add("-i").Add(VideoPath);
+                    if (burnAnnotations)
+                    {
+                        args.Add("-loop").Add("1").Add("-i").Add(overlayPath!);
+                    }
+
+                    args.Add("-filter_complex").Add(filterComplex);
+                    args.Add("-map").Add(videoMap);
+                    if (compiled.AudioMap != null && !isOutputGif)
+                    {
+                        args.Add("-map").Add(compiled.AudioMap);
+                    }
+
+                    if (!isOutputGif)
+                    {
+                        args.Add("-c:v").Add("libx264")
+                            .Add("-preset").Add("ultrafast")
+                            .Add("-pix_fmt").Add("yuv420p")
+                            .Add("-crf").Add("23");
+                        if (compiled.AudioMap != null)
+                        {
+                            args.Add("-c:a").Add("aac");
+                        }
+                    }
+
+                    args.Add(outputPath);
+                })
+                .WithValidation(CommandResultValidation.None)
+                .ExecuteBufferedAsync();
+
+            if (File.Exists(outputPath) && new FileInfo(outputPath).Length > 0)
+            {
+                return outputPath;
+            }
+
+            System.Diagnostics.Debug.WriteLine($"[ExportComposed] FFmpeg failed. Code: {result.ExitCode}, Err: {result.StandardError}");
+            return null;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[ExportComposed] Failed: {ex}");
+            return null;
+        }
+        finally
+        {
+            IsExporting = false;
+        }
+    }
+
+    /// <summary>Renders the vector/text annotations (not redaction effects) to a transparent PNG.</summary>
+    private void RenderAnnotationOverlayPng(string overlayPath)
+    {
+        var overlayAnnotations = Annotations
+            .Where(a => a.Type is not AnnotationType.Mosaic and not AnnotationType.Blur)
+            .ToArray();
+
+        using var overlayBitmap = new SKBitmap((int)OriginalWidth, (int)OriginalHeight, SKColorType.Bgra8888, SKAlphaType.Premul);
+        overlayBitmap.Erase(SKColors.Transparent);
+        AnnotationRenderService.Shared.RenderAnnotationsToBitmap(
+            overlayBitmap,
+            overlayAnnotations,
+            DisplayWidth,
+            DisplayHeight,
+            overlayBitmap.Width,
+            overlayBitmap.Height);
+
+        using var image = SKImage.FromBitmap(overlayBitmap);
+        using var data = image.Encode(SKEncodedImageFormat.Png, 100);
+        using var stream = File.OpenWrite(overlayPath);
+        data.SaveTo(stream);
     }
 
 

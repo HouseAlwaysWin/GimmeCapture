@@ -382,6 +382,7 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
         // InitializeToolbarCommands(); // Handled by Base
         InitializeAnnotationCommands();
         InitializeTrimCommands();
+        InitializeSegmentCommands();
         InitializeMediaCommands(); // Media init last as it starts playback
     }
 

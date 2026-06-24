@@ -128,6 +128,36 @@ public static class VideoSegmentEditor
     }
 
     /// <summary>
+    /// Splits the segment containing <paramref name="sourceTime"/> (in SOURCE seconds) into two at
+    /// that point. Returns a new list; the original is unchanged. A split at/near a segment boundary,
+    /// or inside a cut gap, is a no-op and returns an equivalent copy. This is the natural operation
+    /// for a "split at playhead" action, because the player tracks the source position directly.
+    /// </summary>
+    public static IReadOnlyList<VideoEditSegment> SplitAtSourceTime(
+        IReadOnlyList<VideoEditSegment> segments,
+        double sourceTime)
+    {
+        ArgumentNullException.ThrowIfNull(segments);
+        var result = new List<VideoEditSegment>(segments.Count + 1);
+        bool split = false;
+        foreach (VideoEditSegment s in segments)
+        {
+            if (!split && sourceTime > s.SourceStart + Epsilon && sourceTime < s.SourceEnd - Epsilon)
+            {
+                result.Add(s with { SourceEnd = sourceTime });
+                result.Add(s with { SourceStart = sourceTime });
+                split = true;
+            }
+            else
+            {
+                result.Add(s);
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
     /// Removes the segment at <paramref name="index"/> (the gap it leaves is the cut). The last
     /// remaining segment is never removed (the edit must keep at least one segment); returns an
     /// equivalent copy in that case.
