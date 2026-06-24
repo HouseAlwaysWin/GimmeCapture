@@ -11,6 +11,7 @@ public enum TranslationEngine { LlamaSharp }
 public enum AIScanEngine { OCR, SAM2 }
 public enum CaptureDelay { Off = 0, OneSecond = 1, ThreeSeconds = 3, FiveSeconds = 5, TenSeconds = 10 }
 public enum OcrTextLayout { PreserveLines, SingleLine }
+public enum ScrollingCaptureDirection { Auto, Vertical, Horizontal }
 
 public class TranslatedBlock
 {
@@ -115,6 +116,8 @@ public class AppSettings
     public CaptureDelay CaptureDelay { get; set; } = CaptureDelay.Off;
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public OcrTextLayout OcrTextLayout { get; set; } = OcrTextLayout.PreserveLines;
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public ScrollingCaptureDirection ScrollingCaptureDirection { get; set; } = ScrollingCaptureDirection.Auto;
 
     public bool HideRecordPinDecoration { get; set; } = false;
     public bool HideRecordPinBorder { get; set; } = false;

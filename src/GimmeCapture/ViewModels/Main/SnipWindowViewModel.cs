@@ -296,6 +296,12 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         set { if (_mainVm != null) _mainVm.TargetLanguage = value; this.RaisePropertyChanged(); }
     }
 
+    public ScrollingCaptureDirection ScrollingCaptureDirection
+    {
+        get => _mainVm?.ScrollingCaptureDirection ?? ScrollingCaptureDirection.Auto;
+        set { if (_mainVm != null) _mainVm.ScrollingCaptureDirection = value; this.RaisePropertyChanged(); }
+    }
+
     public List<OCRLanguage> AvailableOCRLanguages => _mainVm?.AvailableOCRLanguages ?? Enum.GetValues<OCRLanguage>().AsValueEnumerable().ToList();
     public List<TranslationLanguage> AvailableTranslationLanguages => _mainVm?.AvailableTranslationLanguages ?? Enum.GetValues<TranslationLanguage>().AsValueEnumerable().ToList();
 

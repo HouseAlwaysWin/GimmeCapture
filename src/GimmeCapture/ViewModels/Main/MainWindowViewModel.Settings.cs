@@ -29,6 +29,7 @@ public partial class MainWindowViewModel
 
     public sealed record CaptureDelayOption(CaptureDelay Value, string DisplayName);
     public sealed record OcrTextLayoutOption(OcrTextLayout Value, string DisplayName);
+    public sealed record ScrollDirectionOption(ScrollingCaptureDirection Value, string DisplayName);
 
     public IReadOnlyList<CaptureDelayOption> AvailableCaptureDelays =>
     [
@@ -43,6 +44,13 @@ public partial class MainWindowViewModel
     [
         new(OcrTextLayout.PreserveLines, LocalizationService.Instance["OcrPreserveLines"]),
         new(OcrTextLayout.SingleLine, LocalizationService.Instance["OcrSingleLine"])
+    ];
+
+    public IReadOnlyList<ScrollDirectionOption> AvailableScrollDirections =>
+    [
+        new(ScrollingCaptureDirection.Auto, LocalizationService.Instance["ScrollDirectionAuto"]),
+        new(ScrollingCaptureDirection.Vertical, LocalizationService.Instance["ScrollDirectionVertical"]),
+        new(ScrollingCaptureDirection.Horizontal, LocalizationService.Instance["ScrollDirectionHorizontal"])
     ];
 
     public List<TranslationLanguage> AvailableTranslationLanguages =>
@@ -432,6 +440,22 @@ public partial class MainWindowViewModel
     {
         get => _ocrTextLayout;
         set => this.RaiseAndSetIfChanged(ref _ocrTextLayout, value);
+    }
+
+    private ScrollingCaptureDirection _scrollingCaptureDirection;
+    public ScrollingCaptureDirection ScrollingCaptureDirection
+    {
+        get => _scrollingCaptureDirection;
+        set
+        {
+            var changed = _scrollingCaptureDirection != value;
+            this.RaiseAndSetIfChanged(ref _scrollingCaptureDirection, value);
+            if (changed && !_isDataLoading)
+            {
+                _settingsService.Settings.ScrollingCaptureDirection = value;
+                MarkModifiedAndQueueSettingsSave();
+            }
+        }
     }
 
     private bool _hideRecordSelectionDecoration = false;

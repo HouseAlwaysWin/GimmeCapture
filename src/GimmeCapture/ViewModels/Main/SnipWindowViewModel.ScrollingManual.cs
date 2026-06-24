@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 using Avalonia.Threading;
+using GimmeCapture.Models;
 using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Core.Media;
 using SkiaSharp;
@@ -110,11 +111,36 @@ public partial class SnipWindowViewModel
         _manualIgnoreRightH = Math.Clamp((int)(32 * scaling), 8, Math.Max(8, physH / 8));
         _manualMaxHeightH = Math.Max(physW, physW * 40);
 
-        // Start undecided with the vertical set active (the zero-rotation default).
-        _manualHorizontal = null;
-        _manualMinOverlap = _manualMinOverlapV;
-        _manualIgnoreRight = _manualIgnoreRightV;
-        _manualMaxHeight = _manualMaxHeightV;
+        // Direction is read once here (before the background tasks start) from the user's persisted
+        // choice. Auto leaves _manualHorizontal undecided so DetectAxisAndGrow picks the axis from
+        // the first real scroll; Vertical/Horizontal lock the axis up front.
+        ScrollingCaptureDirection chosenDirection = _mainVm?.ScrollingCaptureDirection ?? ScrollingCaptureDirection.Auto;
+        switch (chosenDirection)
+        {
+            case ScrollingCaptureDirection.Vertical:
+                // Locked vertical: vertical param set active, accumulated stays in screen space.
+                _manualHorizontal = false;
+                _manualMinOverlap = _manualMinOverlapV;
+                _manualIgnoreRight = _manualIgnoreRightV;
+                _manualMaxHeight = _manualMaxHeightV;
+                break;
+            case ScrollingCaptureDirection.Horizontal:
+                // Locked horizontal: horizontal param set active. GrowAlongLockedAxis rotates each
+                // incoming frame CCW and expects the accumulated already in rotated stitch space, so
+                // the first accumulated is rotated below before _manualPrevFrame is taken.
+                _manualHorizontal = true;
+                _manualMinOverlap = _manualMinOverlapH;
+                _manualIgnoreRight = _manualIgnoreRightH;
+                _manualMaxHeight = _manualMaxHeightH;
+                break;
+            default:
+                // Auto: start undecided with the vertical set active (the zero-rotation default).
+                _manualHorizontal = null;
+                _manualMinOverlap = _manualMinOverlapV;
+                _manualIgnoreRight = _manualIgnoreRightV;
+                _manualMaxHeight = _manualMaxHeightV;
+                break;
+        }
 
         try
         {
@@ -125,6 +151,15 @@ public partial class SnipWindowViewModel
             AppLog.Error("ManualScroll.FirstFrame", ex);
             CloseAction?.Invoke();
             return;
+        }
+
+        if (_manualHorizontal == true)
+        {
+            // Move the first accumulated into rotated stitch space so the locked-horizontal consumer
+            // (and the CW rotate-back in the finish path) operate on consistently rotated data.
+            SKBitmap rotated = ScrollStitcher.RotateCcw90(_manualAccumulated);
+            _manualAccumulated.Dispose();
+            _manualAccumulated = rotated;
         }
 
         _manualPrevFrame = _manualAccumulated.Copy();

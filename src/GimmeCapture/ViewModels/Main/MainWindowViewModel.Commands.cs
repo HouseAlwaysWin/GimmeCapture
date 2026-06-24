@@ -121,6 +121,7 @@ public partial class MainWindowViewModel
         AutoPinScreenshotSelection = defaultSettings.AutoPinScreenshotSelection;
         CaptureDelay = defaultSettings.CaptureDelay;
         OcrTextLayout = defaultSettings.OcrTextLayout;
+        ScrollingCaptureDirection = defaultSettings.ScrollingCaptureDirection;
         HideRecordSelectionDecoration = false;
         HideRecordSelectionBorder = false;
         ShowSnipCursor = defaultSettings.ShowSnipCursor;
