@@ -43,8 +43,12 @@ public partial class FloatingVideoViewModel
     // The kept pieces = the output. Filtering happens here so the pure compiler stays Kept-agnostic.
     private VideoEditSegment[] KeptSegments() => EditSegments.Where(s => s.Kept).ToArray();
 
+    // Kept pieces with adjacent contiguous ones merged into single runs. Dropping only the head/tail
+    // leaves one continuous run → the fast single-trim export path; a real gap stays as 2+ runs → concat.
+    private VideoEditSegment[] KeptRuns() => VideoSegmentEditor.CoalesceContiguous(KeptSegments()).ToArray();
+
     /// <summary>True once the kept pieces form more than one run (route export through the concat compiler).</summary>
-    private bool UseMultiSegment => KeptSegments().Length > 1;
+    private bool UseMultiSegment => KeptRuns().Length > 1;
 
     /// <summary>True when ≥1 piece is dropped — the only thing that makes the output differ from the source.</summary>
     private bool AnyPieceDropped => EditSegments.Any(s => !s.Kept);
@@ -122,31 +126,31 @@ public partial class FloatingVideoViewModel
         ReplaceSegments(VideoSegmentEditor.FromTrim(0, total, total));
     }
 
-    // The single kept piece's source range (used by the fast single-piece export path); (0,total) otherwise.
+    // The single kept run's source range (used by the fast single-piece export path); (0,total) otherwise.
     private (double Start, double End) SingleSegmentSourceRange()
     {
-        VideoEditSegment[] kept = KeptSegments();
-        if (kept.Length == 1)
+        VideoEditSegment[] runs = KeptRuns();
+        if (runs.Length == 1)
         {
-            return (kept[0].SourceStart, kept[0].SourceEnd);
+            return (runs[0].SourceStart, runs[0].SourceEnd);
         }
 
         return (0, _totalDuration.TotalSeconds);
     }
 
-    // True when exactly one kept piece that is a sub-range of the clip (a plain trim → fast -ss/-to copy).
+    // True when the kept set is a single run that is a sub-range of the clip (a plain trim → fast -ss/-to copy).
     private bool SingleSegmentIsTrimmed
     {
         get
         {
-            VideoEditSegment[] kept = KeptSegments();
-            if (kept.Length != 1)
+            VideoEditSegment[] runs = KeptRuns();
+            if (runs.Length != 1)
             {
                 return false;
             }
 
             double total = _totalDuration.TotalSeconds;
-            return kept[0].SourceStart > 0.001 || (total > 0 && kept[0].SourceEnd < total - 0.001);
+            return runs[0].SourceStart > 0.001 || (total > 0 && runs[0].SourceEnd < total - 0.001);
         }
     }
 
@@ -234,9 +238,9 @@ public partial class FloatingVideoViewModel
     /// <summary>Builds the declarative edit from the KEPT pieces (Phase 1: cuts + optional crop).</summary>
     private VideoEditProject BuildEditProject(VideoEditCrop? crop)
     {
-        VideoEditSegment[] kept = KeptSegments();
-        IReadOnlyList<VideoEditSegment> segments = kept.Length > 0
-            ? kept
+        VideoEditSegment[] runs = KeptRuns();
+        IReadOnlyList<VideoEditSegment> segments = runs.Length > 0
+            ? runs
             : VideoSegmentEditor.FromTrim(0, _totalDuration.TotalSeconds, _totalDuration.TotalSeconds);
 
         return new VideoEditProject

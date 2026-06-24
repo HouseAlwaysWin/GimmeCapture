@@ -231,13 +231,23 @@ public partial class FloatingVideoViewModel
             {
                 ProcessingText = LocalizationService.Instance["StatusExportingVideo"] ?? "Exporting Video...";
                 bool hasAnnotations = Annotations.AsValueEnumerable().Any();
+                bool cutRequested = AnyPieceDropped;
 
-                if (hasAnnotations || AnyPieceDropped)
+                if (hasAnnotations || cutRequested)
                 {
                     var burntPath = await ExportBurntInVideoAsync();
                     if (!string.IsNullOrEmpty(burntPath) && System.IO.File.Exists(burntPath))
                     {
                         await _clipboardService.CopyFileAndImageAsync(burntPath, await GetFlattenedBitmapAsync() ?? VideoBitmap!);
+                        return;
+                    }
+
+                    // Don't fall back to copying the whole original when a cut was requested — that would
+                    // silently put the untrimmed clip on the clipboard. Surface the failure instead.
+                    if (cutRequested)
+                    {
+                        ProcessingText = LocalizationService.Instance["StatusExportFailed"] ?? "Export failed";
+                        await Task.Delay(2000);
                         return;
                     }
                 }
@@ -287,14 +297,25 @@ public partial class FloatingVideoViewModel
                 string sourceExt = Path.GetExtension(VideoPath).ToLowerInvariant();
                 string targetExt = Path.GetExtension(targetPath).ToLowerInvariant();
                 bool needsConversion = sourceExt != targetExt;
+                bool cutRequested = AnyPieceDropped;
 
-                if (hasAnnotations || needsConversion || AnyPieceDropped)
+                if (hasAnnotations || needsConversion || cutRequested)
                 {
                     var processedPath = await ExportBurntInVideoAsync(targetExt);
                     if (!string.IsNullOrEmpty(processedPath) && System.IO.File.Exists(processedPath))
                     {
                         System.IO.File.Copy(processedPath, targetPath, true);
                         FileLocationService.RevealInFileExplorer(targetPath);
+                        return;
+                    }
+
+                    // The user dropped pieces but the trim/concat export failed. Copying the original
+                    // whole clip here would silently produce the WRONG (untrimmed) video, which looks
+                    // exactly like "the cut did nothing". Surface the failure instead of masking it.
+                    if (cutRequested)
+                    {
+                        ProcessingText = LocalizationService.Instance["StatusExportFailed"] ?? "Export failed";
+                        await Task.Delay(2000);
                         return;
                     }
                 }

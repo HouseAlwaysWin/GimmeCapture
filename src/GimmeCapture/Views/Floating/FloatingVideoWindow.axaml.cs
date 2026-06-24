@@ -216,6 +216,11 @@ public partial class FloatingVideoWindow : FloatingWindowBase
         if (trackWidth <= 0 || total <= 0) return;
 
         vm.CurrentTimeSeconds = Math.Clamp(localX / trackWidth, 0, 1) * total;
+
+        // The CurrentTimeSeconds setter doesn't raise its own PropertyChanged (only the playback loop
+        // does), so WhenAnyValue(CurrentTimeSeconds) won't fire during a scrub. Refresh the playhead
+        // directly so the red bar tracks the finger live.
+        UpdateSegmentLayout();
     }
 
     private void UpdateSegmentLayout()

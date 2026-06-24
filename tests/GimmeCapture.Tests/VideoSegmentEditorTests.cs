@@ -221,4 +221,72 @@ public class VideoSegmentEditorTests
 
         Assert.Equal(2, result.Count);
     }
+
+    [Fact]
+    public void CoalesceContiguous_MergesAdjacentPiecesIntoOneRun()
+    {
+        // Dropping the head leaves two contiguous kept pieces (4-8 + 8-14) -> one run 4-14.
+        var segs = new[] { new VideoEditSegment(4, 8), new VideoEditSegment(8, 14) };
+
+        var runs = VideoSegmentEditor.CoalesceContiguous(segs);
+
+        Assert.Single(runs);
+        Assert.Equal(4, runs[0].SourceStart);
+        Assert.Equal(14, runs[0].SourceEnd);
+    }
+
+    [Fact]
+    public void CoalesceContiguous_KeepsGapAsSeparateRuns()
+    {
+        // A genuine cut (gap 4-8 removed) stays as two runs.
+        var segs = new[] { new VideoEditSegment(0, 4), new VideoEditSegment(8, 14) };
+
+        var runs = VideoSegmentEditor.CoalesceContiguous(segs);
+
+        Assert.Equal(2, runs.Count);
+        Assert.Equal(0, runs[0].SourceStart);
+        Assert.Equal(4, runs[0].SourceEnd);
+        Assert.Equal(8, runs[1].SourceStart);
+        Assert.Equal(14, runs[1].SourceEnd);
+    }
+
+    [Fact]
+    public void CoalesceContiguous_DoesNotMergeAcrossSpeedChange()
+    {
+        // Contiguous in source but different speeds -> the concat graph must keep them separate.
+        var segs = new[] { new VideoEditSegment(0, 4, 1.0), new VideoEditSegment(4, 8, 2.0) };
+
+        var runs = VideoSegmentEditor.CoalesceContiguous(segs);
+
+        Assert.Equal(2, runs.Count);
+    }
+
+    [Fact]
+    public void CoalesceContiguous_SinglePieceUnchanged()
+    {
+        var segs = new[] { new VideoEditSegment(2, 9) };
+
+        var runs = VideoSegmentEditor.CoalesceContiguous(segs);
+
+        Assert.Single(runs);
+        Assert.Equal(2, runs[0].SourceStart);
+        Assert.Equal(9, runs[0].SourceEnd);
+    }
+
+    [Fact]
+    public void CoalesceContiguous_MergesThreeInARow()
+    {
+        var segs = new[]
+        {
+            new VideoEditSegment(0, 4),
+            new VideoEditSegment(4, 8),
+            new VideoEditSegment(8, 14),
+        };
+
+        var runs = VideoSegmentEditor.CoalesceContiguous(segs);
+
+        Assert.Single(runs);
+        Assert.Equal(0, runs[0].SourceStart);
+        Assert.Equal(14, runs[0].SourceEnd);
+    }
 }

@@ -72,6 +72,7 @@
   "StatusProcessing": "正在處理...",
   "StatusTranslating": "正在翻譯...",
   "StatusSaving": "正在儲存...",
+  "StatusExportFailed": "匯出失敗",
   "SaveSettings": "保存",
   "ResetDefault": "重設預設",
   "UnsavedTitle": "尚未儲存變更",

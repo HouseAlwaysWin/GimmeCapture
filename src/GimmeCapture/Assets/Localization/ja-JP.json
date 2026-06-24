@@ -67,6 +67,7 @@
   "StatusProcessing": "処理中...",
   "StatusTranslating": "翻訳中...",
   "StatusSaving": "保存中...",
+  "StatusExportFailed": "エクスポートに失敗しました",
   "SaveSettings": "保存",
   "ResetDefault": "初期設定に戻す",
   "UnsavedTitle": "未保存の変更",

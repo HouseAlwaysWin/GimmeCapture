@@ -228,6 +228,40 @@ public static class VideoSegmentEditor
     }
 
     /// <summary>
+    /// Merges adjacent segments that are contiguous in source (the next starts where the previous ends)
+    /// and share the same speed into a single run. Used so a kept set that forms one continuous range
+    /// (e.g. dropping only the head or tail) collapses to ONE segment — letting the export take the fast,
+    /// lossless single-trim path instead of the heavier trim+concat graph. A genuine cut (a gap between
+    /// kept pieces) is preserved as separate runs. The input list is unchanged; <c>Kept</c> and other
+    /// fields are inherited from the first piece of each run.
+    /// </summary>
+    public static IReadOnlyList<VideoEditSegment> CoalesceContiguous(IReadOnlyList<VideoEditSegment> segments)
+    {
+        ArgumentNullException.ThrowIfNull(segments);
+        var result = new List<VideoEditSegment>(segments.Count);
+        foreach (VideoEditSegment s in segments)
+        {
+            if (result.Count > 0)
+            {
+                VideoEditSegment prev = result[^1];
+                bool contiguous = Math.Abs(s.SourceStart - prev.SourceEnd) <= Epsilon;
+                bool sameSpeed = Math.Abs(EffectiveSpeed(s) - EffectiveSpeed(prev)) <= Epsilon;
+                if (contiguous && sameSpeed)
+                {
+                    result[^1] = prev with { SourceEnd = s.SourceEnd };
+                    continue;
+                }
+            }
+
+            result.Add(s);
+        }
+
+        return result;
+    }
+
+    private static double EffectiveSpeed(VideoEditSegment s) => s.Speed > 0 ? s.Speed : 1.0;
+
+    /// <summary>
     /// Removes the segment at <paramref name="index"/> (the gap it leaves is the cut). The last
     /// remaining segment is never removed (the edit must keep at least one segment); returns an
     /// equivalent copy in that case.
