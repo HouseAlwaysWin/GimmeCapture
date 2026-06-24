@@ -86,10 +86,13 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
     public TimeSpan TotalDuration
     {
         get => _totalDuration;
-        set 
+        set
         {
             this.RaiseAndSetIfChanged(ref _totalDuration, value);
             this.RaisePropertyChanged(nameof(FormattedTime));
+            // Duration is probed on a background task; if the timeline was seeded before it was
+            // known, repair the degenerate full-clip segment now (on the UI thread).
+            Avalonia.Threading.Dispatcher.UIThread.Post(RepairFullClipSegmentForDuration);
         }
     }
 

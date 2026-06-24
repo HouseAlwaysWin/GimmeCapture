@@ -107,14 +107,47 @@ public partial class FloatingVideoViewModel
     /// <summary>Seeds the segment list from the current trim range (or the whole clip) once.</summary>
     private void SeedSegmentsFromTrim()
     {
-        if (EditSegments.Count > 0)
+        // Reseed when empty, or when the only segment is the degenerate one seeded before the
+        // duration was known (a single zero/negative-length block). Never wipe a real multi-cut edit.
+        if (EditSegments.Count > 0 && !IsSingleDegenerateSegment())
         {
             return;
         }
 
+        double total = _totalDuration.TotalSeconds;
         double start = IsTrimmingMode ? TrimStartSeconds : 0;
-        double end = IsTrimmingMode && TrimEndSeconds > 0 ? TrimEndSeconds : _totalDuration.TotalSeconds;
-        ReplaceSegments(VideoSegmentEditor.FromTrim(start, end, _totalDuration.TotalSeconds));
+        double end = IsTrimmingMode && TrimEndSeconds > 0 ? TrimEndSeconds : total;
+        ReplaceSegments(VideoSegmentEditor.FromTrim(start, end, total));
+    }
+
+    // True when the list holds exactly one block whose end is at/under its start, or runs past the
+    // (now-known) duration — i.e. it was auto-seeded before the real length arrived.
+    private bool IsSingleDegenerateSegment()
+    {
+        if (EditSegments.Count != 1)
+        {
+            return false;
+        }
+
+        VideoEditSegment only = EditSegments[0];
+        double total = _totalDuration.TotalSeconds;
+        return only.SourceEnd <= only.SourceStart + 0.001
+            || (total > 0 && only.SourceEnd > total + 0.001);
+    }
+
+    /// <summary>
+    /// Repairs the auto-seeded full-clip segment once the duration is known. Called from the
+    /// TotalDuration setter (marshaled to the UI thread). No-op unless the timeline holds a single
+    /// degenerate block, so genuine multi-segment cuts are never disturbed.
+    /// </summary>
+    private void RepairFullClipSegmentForDuration()
+    {
+        if (_isDisposed || _totalDuration.TotalSeconds <= 0 || !IsSingleDegenerateSegment())
+        {
+            return;
+        }
+
+        ReplaceSegments(VideoSegmentEditor.FromTrim(0, _totalDuration.TotalSeconds, _totalDuration.TotalSeconds));
     }
 
     private void ReplaceSegments(IReadOnlyList<VideoEditSegment> segments)
