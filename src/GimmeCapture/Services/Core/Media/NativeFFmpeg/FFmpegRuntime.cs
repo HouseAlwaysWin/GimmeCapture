@@ -19,6 +19,14 @@ public static class FFmpegRuntime
 
     public static bool IsInitialized => _initialized;
 
+    /// <summary>
+    /// Full path to the bundled <c>ffmpeg.exe</c> CLI under &lt;BaseDirectory&gt;/ffmpeg-lib. The pin video
+    /// export shells out to this via CliWrap (recording uses the in-process libav DLLs instead). The exe is
+    /// copied next to the DLLs by scripts/ensure-ffmpeg-libs.ps1 and linked against them at the same path.
+    /// </summary>
+    public static string CliExecutablePath =>
+        Path.Combine(AppContext.BaseDirectory, "ffmpeg-lib", "ffmpeg.exe");
+
     /// <summary>Returns false if ffmpeg-lib/*.dll missing or unloadable.</summary>
     public static bool TryInitialize(out string? errorMessage)
     {

@@ -28,22 +28,26 @@
       <CopyToPublishDirectory>Never</CopyToPublishDirectory>
       <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
     </None>
-    <!-- Native FFmpeg shared DLLs only: run scripts/ensure-ffmpeg-libs.ps1 -->
-    <Content Include="ffmpeg-lib\*.dll"
+    <!-- Native FFmpeg shared DLLs + the CLI exes (ffmpeg/ffprobe) the pin export shells out to:
+         run scripts/ensure-ffmpeg-libs.ps1 -->
+    <Content Include="ffmpeg-lib\*.dll;ffmpeg-lib\ffmpeg.exe;ffmpeg-lib\ffprobe.exe"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest"
              Link="ffmpeg-lib\%(Filename)%(Extension)" />
   </ItemGroup>
 
-  <!-- Guardrail: fail Release/Publish if ffmpeg-lib/*.dll are missing -->
+  <!-- Guardrail: fail Release/Publish if the bundled FFmpeg DLLs or the ffmpeg.exe CLI are missing -->
   <Target Name="FailIfBundledFfmpegMissing"
           BeforeTargets="Build;Publish"
           Condition="'$(Configuration)' == 'Release'">
     <ItemGroup>
       <_BundledFfmpegDlls Include="ffmpeg-lib\*.dll" />
+      <_BundledFfmpegExe Include="ffmpeg-lib\ffmpeg.exe" />
     </ItemGroup>
     <Error Condition="'@(_BundledFfmpegDlls)' == ''"
            Text="Bundled FFmpeg DLLs are missing under 'src/GimmeCapture/ffmpeg-lib/'. Run scripts/ensure-ffmpeg-libs.ps1 (see ffmpeg-lib/README.txt) before Release/Publish." />
+    <Error Condition="'@(_BundledFfmpegExe)' == ''"
+           Text="Bundled ffmpeg.exe is missing under 'src/GimmeCapture/ffmpeg-lib/'. Run scripts/ensure-ffmpeg-libs.ps1 (the pin video export shells out to it) before Release/Publish." />
   </Target>
 
   <ItemGroup>

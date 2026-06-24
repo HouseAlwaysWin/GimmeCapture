@@ -164,6 +164,12 @@ public partial class FloatingVideoViewModel
 
             var ffmpegPath = FFmpegPath;
             if (ffmpegPath.Contains("ffplay.exe")) ffmpegPath = ffmpegPath.Replace("ffplay.exe", "ffmpeg.exe");
+            if (!File.Exists(ffmpegPath))
+            {
+                AppLog.Error("FloatingVideo.ExportCrop", new FileNotFoundException(
+                    "Bundled ffmpeg.exe not found; run scripts/ensure-ffmpeg-libs.ps1.", ffmpegPath));
+                return null;
+            }
 
             (double trimStart, double trimEnd) = SingleSegmentSourceRange();
             bool applyTrim = SingleSegmentIsTrimmed;
@@ -204,12 +210,13 @@ public partial class FloatingVideoViewModel
                 return outputPath;
             }
 
-            System.Diagnostics.Debug.WriteLine($"[Crop] FFmpeg failed. Code: {result.ExitCode}, Err: {result.StandardError}");
+            AppLog.Error("FloatingVideo.ExportCrop", new Exception(
+                $"ffmpeg exit {result.ExitCode}: {Truncate(result.StandardError, 600)}"));
             return null;
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[Crop] Export failed: {ex}");
+            AppLog.Error("FloatingVideo.ExportCrop", ex);
             return null;
         }
         finally
@@ -403,7 +410,13 @@ public partial class FloatingVideoViewModel
             // 3. Run FFmpeg overlay with robust scaling and audio preservation
             var ffmpegPath = FFmpegPath;
             if (ffmpegPath.Contains("ffplay.exe")) ffmpegPath = ffmpegPath.Replace("ffplay.exe", "ffmpeg.exe");
-            
+            if (!File.Exists(ffmpegPath))
+            {
+                AppLog.Error("FloatingVideo.Export", new FileNotFoundException(
+                    "Bundled ffmpeg.exe not found; run scripts/ensure-ffmpeg-libs.ps1.", ffmpegPath));
+                return null;
+            }
+
             // Log for diagnostics
             System.Diagnostics.Debug.WriteLine($"[Export] Start: {VideoPath} -> {outputPath}");
 
@@ -433,11 +446,6 @@ public partial class FloatingVideoViewModel
 
                     args.Add("-i").Add(VideoPath);
 
-                    if (applyTrim)
-                    {
-                        args.Add("-to").Add((trimEnd - trimStart).ToString("F3"));
-                    }
-
                     args.Add("-loop").Add("1")
                         .Add("-i").Add(overlayPath)
                         .Add("-filter_complex").Add(filter)
@@ -452,7 +460,15 @@ public partial class FloatingVideoViewModel
                             .Add("-crf").Add("23")
                             .Add("-c:a").Add("copy");    // Preserve audio quality
                     }
-                    
+
+                    // Output-side duration limit. As an OUTPUT option this caps the kept range to
+                    // (trimEnd - trimStart) seconds after the input -ss seek; placing it between inputs
+                    // would (wrongly) attach it to the looped overlay PNG instead of the video.
+                    if (applyTrim)
+                    {
+                        args.Add("-t").Add((trimEnd - trimStart).ToString("F3"));
+                    }
+
                     args.Add(outputPath);
                 })
                 .WithValidation(CommandResultValidation.None)
@@ -463,19 +479,19 @@ public partial class FloatingVideoViewModel
                 System.Diagnostics.Debug.WriteLine($"[Export] Success: {outputPath}");
                 return outputPath; 
             }
-            else 
+            else
             {
-                System.Diagnostics.Debug.WriteLine($"[Export] FFmpeg failed. Code: {result.ExitCode}");
-                System.Diagnostics.Debug.WriteLine($"[Export] Errors: {result.StandardError}");
                 // Fallback for non-critical exit codes if file exists
                 if (File.Exists(outputPath) && new FileInfo(outputPath).Length > 0) return outputPath;
+                AppLog.Error("FloatingVideo.Export", new Exception(
+                    $"ffmpeg exit {result.ExitCode}: {Truncate(result.StandardError, 600)}"));
             }
-            
+
             return null;
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Export failed: {ex}");
+            AppLog.Error("FloatingVideo.Export", ex);
             return null;
         }
         finally
@@ -552,6 +568,12 @@ public partial class FloatingVideoViewModel
 
             var ffmpegPath = FFmpegPath;
             if (ffmpegPath.Contains("ffplay.exe")) ffmpegPath = ffmpegPath.Replace("ffplay.exe", "ffmpeg.exe");
+            if (!File.Exists(ffmpegPath))
+            {
+                AppLog.Error("FloatingVideo.ExportComposed", new FileNotFoundException(
+                    "Bundled ffmpeg.exe not found; run scripts/ensure-ffmpeg-libs.ps1.", ffmpegPath));
+                return null;
+            }
 
             var result = await Cli.Wrap(ffmpegPath)
                 .WithArguments(args =>
@@ -592,18 +614,27 @@ public partial class FloatingVideoViewModel
                 return outputPath;
             }
 
-            System.Diagnostics.Debug.WriteLine($"[ExportComposed] FFmpeg failed. Code: {result.ExitCode}, Err: {result.StandardError}");
+            AppLog.Error("FloatingVideo.ExportComposed", new Exception(
+                $"ffmpeg exit {result.ExitCode}: {Truncate(result.StandardError, 600)}"));
             return null;
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[ExportComposed] Failed: {ex}");
+            AppLog.Error("FloatingVideo.ExportComposed", ex);
             return null;
         }
         finally
         {
             IsExporting = false;
         }
+    }
+
+    // Trims ffmpeg stderr for the log so a multi-KB dump doesn't bloat the Serilog file.
+    private static string Truncate(string? text, int max)
+    {
+        if (string.IsNullOrEmpty(text)) return string.Empty;
+        text = text.Trim();
+        return text.Length <= max ? text : text[..max] + "…";
     }
 
     /// <summary>Renders the vector/text annotations (not redaction effects) to a transparent PNG.</summary>

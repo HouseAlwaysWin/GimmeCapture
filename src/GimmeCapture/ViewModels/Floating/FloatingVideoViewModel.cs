@@ -46,7 +46,10 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
 
     public string VideoPath { get; }
     private readonly string _ffmpegPath;
-    public string FFmpegPath => _ffmpegPath;
+    // Callers currently pass string.Empty; fall back to the bundled ffmpeg.exe so the CLI export works.
+    public string FFmpegPath => string.IsNullOrWhiteSpace(_ffmpegPath)
+        ? FFmpegRuntime.CliExecutablePath
+        : _ffmpegPath;
     public VideoCodec VideoCodec => _appSettingsService?.Settings.VideoCodec ?? VideoCodec.H264;
     private CancellationTokenSource? _playCts;
     private Task? _playbackTask;
