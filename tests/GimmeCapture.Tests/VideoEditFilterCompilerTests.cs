@@ -46,7 +46,8 @@ public class VideoEditFilterCompilerTests
         Assert.Contains("[0:v]trim=start=0:end=3,setpts=(PTS-STARTPTS)[v0];", c.FilterComplex);
         Assert.Contains("[0:v]trim=start=7:end=10,setpts=(PTS-STARTPTS)[v1];", c.FilterComplex);
         Assert.Contains("[v0][v1]concat=n=2:v=1:a=0[vcat];", c.FilterComplex);
-        Assert.Contains("[a0][a1]concat=n=2:v=0:a=1[acat];", c.FilterComplex);
+        // Audio concat is the last graph element, so the compiler strips its trailing ';'.
+        Assert.Contains("[a0][a1]concat=n=2:v=0:a=1[acat]", c.FilterComplex);
         Assert.Equal("[vcat]", c.VideoMap);
         Assert.Equal("[acat]", c.AudioMap);
     }

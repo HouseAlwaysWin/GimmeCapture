@@ -118,94 +118,132 @@ public partial class FloatingVideoWindow : FloatingWindowBase
                 newWin.Show();
             };
 
-            // 裁切拉桿初始化
-            InitializeTrimThumbs(vm);
+            // 時間軸（多段）初始化
+            InitializeSegmentStrip(vm);
         }
     }
 
-    // ── 裁切拉桿邏輯 ──
-    private Grid? _trimTrackGrid;
-    private Thumb? _trimStartThumb;
-    private Thumb? _trimEndThumb;
-    private IDisposable? _trimSubscription;
     private bool _disposeStarted;
 
-    private void InitializeTrimThumbs(FloatingVideoViewModel vm)
+    // ── 時間軸（多段）邏輯：依片段長度按比例排版 + 播放點 ──
+    private Grid? _segmentStripGrid;
+    private Avalonia.Controls.Shapes.Rectangle? _segmentPlayhead;
+    private IDisposable? _segmentSubscription;
+    private Action? _segmentLayoutHandler;
+    private FloatingVideoViewModel? _segmentVm;
+    private bool _scrubbingSegmentStrip;
+
+    private void InitializeSegmentStrip(FloatingVideoViewModel vm)
     {
-        _trimTrackGrid = this.FindControl<Grid>("TrimTrackGrid");
-        _trimStartThumb = this.FindControl<Thumb>("TrimStartThumb");
-        _trimEndThumb = this.FindControl<Thumb>("TrimEndThumb");
+        _segmentStripGrid = this.FindControl<Grid>("SegmentStripGrid");
+        _segmentPlayhead = this.FindControl<Avalonia.Controls.Shapes.Rectangle>("SegmentPlayhead");
+        if (_segmentStripGrid == null) return;
 
-        if (_trimStartThumb == null || _trimEndThumb == null || _trimTrackGrid == null) return;
+        _segmentVm = vm;
+        _segmentLayoutHandler = () => Dispatcher.UIThread.Post(UpdateSegmentLayout);
+        vm.SegmentLayoutChanged += _segmentLayoutHandler;
 
-        _trimStartThumb.DragDelta += OnTrimStartDragDelta;
-        _trimEndThumb.DragDelta += OnTrimEndDragDelta;
+        // Recompute on playhead move, mode toggle, or duration arriving.
+        _segmentSubscription = vm.WhenAnyValue(
+            x => x.CurrentTimeSeconds,
+            x => x.IsTimelineMode,
+            x => x.TotalDuration)
+            .Subscribe(_ => Dispatcher.UIThread.Post(UpdateSegmentLayout));
 
-        // 監聽屬性變更 → 更新 Thumb 位置
-        _trimSubscription = vm.WhenAnyValue(
-            x => x.TrimStartSeconds,
-            x => x.TrimEndSeconds,
-            x => x.TotalDuration,
-            x => x.IsTrimmingMode)
-            .Subscribe(_ => Dispatcher.UIThread.Post(UpdateTrimThumbPositions));
-
-        // 尺寸變更時也更新位置
-        _trimTrackGrid.PropertyChanged += (s, e) =>
+        // Recompute pixel widths when the strip is resized.
+        _segmentStripGrid.PropertyChanged += (s, e) =>
         {
             if (e.Property.Name == "Bounds")
-                Dispatcher.UIThread.Post(UpdateTrimThumbPositions);
+                Dispatcher.UIThread.Post(UpdateSegmentLayout);
         };
+
+        // The strip = the SOURCE timeline. DRAG scrubs (playhead follows the finger); a TAP (no real
+        // drag) toggles whether the piece under it is kept in the output.
+        _segmentStripGrid.PointerPressed += OnSegmentStripPointerPressed;
+        _segmentStripGrid.PointerMoved += OnSegmentStripPointerMoved;
+        _segmentStripGrid.PointerReleased += OnSegmentStripPointerReleased;
     }
 
-    private void OnTrimStartDragDelta(object? sender, VectorEventArgs e)
+    private double _segmentPressX;
+    private bool _segmentDidDrag;
+
+    private void OnSegmentStripPointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        if (DataContext is not FloatingVideoViewModel vm || _trimTrackGrid == null) return;
-
-        double trackWidth = _trimTrackGrid.Bounds.Width - 12; // 扣除 Thumb 寬度
-        double totalSec = vm.TotalDuration.TotalSeconds;
-        if (totalSec <= 0 || trackWidth <= 0) return;
-
-        double pixelsPerSecond = trackWidth / totalSec;
-        double deltaSec = e.Vector.X / pixelsPerSecond;
-        double newValue = vm.TrimStartSeconds + deltaSec;
-
-        // 約束：不超過 end - 0.1，不低於 0
-        newValue = Math.Max(0, Math.Min(newValue, vm.TrimEndSeconds - 0.1));
-        vm.TrimStartSeconds = newValue;
+        if (DataContext is not FloatingVideoViewModel vm || _segmentStripGrid == null) return;
+        _scrubbingSegmentStrip = true;
+        _segmentDidDrag = false;
+        _segmentPressX = e.GetPosition(_segmentStripGrid).X;
+        e.Pointer.Capture(_segmentStripGrid);
+        ScrubSegmentStripTo(vm, _segmentPressX);
     }
 
-    private void OnTrimEndDragDelta(object? sender, VectorEventArgs e)
+    private void OnSegmentStripPointerMoved(object? sender, PointerEventArgs e)
     {
-        if (DataContext is not FloatingVideoViewModel vm || _trimTrackGrid == null) return;
-
-        double trackWidth = _trimTrackGrid.Bounds.Width - 12;
-        double totalSec = vm.TotalDuration.TotalSeconds;
-        if (totalSec <= 0 || trackWidth <= 0) return;
-
-        double pixelsPerSecond = trackWidth / totalSec;
-        double deltaSec = e.Vector.X / pixelsPerSecond;
-        double newValue = vm.TrimEndSeconds + deltaSec;
-
-        // 約束：不低於 start + 0.1，不超過總時長
-        newValue = Math.Max(vm.TrimStartSeconds + 0.1, Math.Min(newValue, totalSec));
-        vm.TrimEndSeconds = newValue;
-    }
-
-    private void UpdateTrimThumbPositions()
-    {
+        if (!_scrubbingSegmentStrip || _segmentStripGrid == null) return;
         if (DataContext is not FloatingVideoViewModel vm) return;
-        if (_trimTrackGrid == null || _trimStartThumb == null || _trimEndThumb == null) return;
-        if (!vm.IsTrimmingMode) return;
+        double x = e.GetPosition(_segmentStripGrid).X;
+        if (Math.Abs(x - _segmentPressX) > 4) _segmentDidDrag = true; // past threshold = a scrub, not a tap
+        ScrubSegmentStripTo(vm, x);
+    }
 
-        double trackWidth = _trimTrackGrid.Bounds.Width - 12; // 可用滑動寬度
-        double totalSec = vm.TotalDuration.TotalSeconds;
-        if (totalSec <= 0 || trackWidth <= 0) return;
+    private void OnSegmentStripPointerReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        _scrubbingSegmentStrip = false;
+        e.Pointer.Capture(null);
 
-        double startX = (vm.TrimStartSeconds / totalSec) * trackWidth;
-        double endX = (vm.TrimEndSeconds / totalSec) * trackWidth;
+        // A tap (no real drag) toggles the kept/dropped state of the piece under the pointer.
+        if (!_segmentDidDrag && DataContext is FloatingVideoViewModel vm && _segmentStripGrid != null)
+        {
+            double trackWidth = _segmentStripGrid.Bounds.Width;
+            double total = vm.TotalOutputDuration;
+            if (trackWidth > 0 && total > 0)
+            {
+                double sourceTime = Math.Clamp(_segmentPressX / trackWidth, 0, 1) * total;
+                int index = GimmeCapture.Services.Core.Media.VideoSegmentEditor.IndexForSourceTime(
+                    vm.EditSegments, sourceTime);
+                vm.ToggleKept(index);
+            }
+        }
+    }
 
-        _trimStartThumb.RenderTransform = new Avalonia.Media.TranslateTransform(startX, 0);
-        _trimEndThumb.RenderTransform = new Avalonia.Media.TranslateTransform(endX, 0);
+    // Pieces are contiguous in source, so pixel X maps to source time directly. Seeking there pauses +
+    // debounce-seeks the player and moves the red playhead.
+    private void ScrubSegmentStripTo(FloatingVideoViewModel vm, double localX)
+    {
+        if (_segmentStripGrid == null) return;
+        double trackWidth = _segmentStripGrid.Bounds.Width;
+        double total = vm.TotalOutputDuration;
+        if (trackWidth <= 0 || total <= 0) return;
+
+        vm.CurrentTimeSeconds = Math.Clamp(localX / trackWidth, 0, 1) * total;
+
+        // The CurrentTimeSeconds setter doesn't raise its own PropertyChanged (only the playback loop
+        // does), so WhenAnyValue(CurrentTimeSeconds) won't fire during a scrub. Refresh the playhead
+        // directly so the red bar tracks the finger live.
+        UpdateSegmentLayout();
+    }
+
+    private void UpdateSegmentLayout()
+    {
+        if (DataContext is not FloatingVideoViewModel vm || _segmentStripGrid == null) return;
+        if (!vm.IsTimelineMode) return;
+
+        double trackWidth = _segmentStripGrid.Bounds.Width;
+        double total = vm.TotalOutputDuration;
+        if (trackWidth <= 0 || total <= 0) return;
+
+        const double gap = 2; // visual seam between adjacent blocks
+        foreach (SegmentBlockViewModel b in vm.SegmentBlocks)
+        {
+            b.PixelLeft = (b.OutputStart / total) * trackWidth;
+            b.PixelWidth = Math.Max(2, ((b.OutputDuration / total) * trackWidth) - gap);
+        }
+
+        if (_segmentPlayhead != null)
+        {
+            double x = Math.Clamp((vm.CurrentTimeSeconds / total) * trackWidth, 0, trackWidth);
+            _segmentPlayhead.RenderTransform = new Avalonia.Media.TranslateTransform(x, 0);
+        }
     }
 
     protected override void OnClosing(WindowClosingEventArgs e)
@@ -222,16 +260,14 @@ public partial class FloatingVideoWindow : FloatingWindowBase
         }
 
         _disposeStarted = true;
-        _trimSubscription?.Dispose();
-        _trimSubscription = null;
-        if (_trimStartThumb is not null)
+        _segmentSubscription?.Dispose();
+        _segmentSubscription = null;
+        if (_segmentVm is not null && _segmentLayoutHandler is not null)
         {
-            _trimStartThumb.DragDelta -= OnTrimStartDragDelta;
+            _segmentVm.SegmentLayoutChanged -= _segmentLayoutHandler;
         }
-        if (_trimEndThumb is not null)
-        {
-            _trimEndThumb.DragDelta -= OnTrimEndDragDelta;
-        }
+        _segmentVm = null;
+        _segmentLayoutHandler = null;
 
         if (DataContext is FloatingVideoViewModel vm)
         {

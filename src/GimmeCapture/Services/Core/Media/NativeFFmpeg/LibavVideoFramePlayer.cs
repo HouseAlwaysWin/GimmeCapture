@@ -51,6 +51,32 @@ internal sealed class LibavVideoFramePlayer : IDisposable
         }, ct).ConfigureAwait(false);
     }
 
+    /// <summary>True when the source file contains at least one decodable audio stream.</summary>
+    public async Task<bool> ProbeHasAudioAsync(string videoPath, CancellationToken ct = default)
+    {
+        return await Task.Run(() =>
+        {
+            FFmpegRuntime.EnsureInitialized();
+            unsafe
+            {
+                AVFormatContext* fmt = null;
+                try
+                {
+                    ThrowIfErr(ffmpeg.avformat_open_input(&fmt, videoPath, null, null), "open_input");
+                    ThrowIfErr(ffmpeg.avformat_find_stream_info(fmt, null), "find_stream_info");
+                    return ffmpeg.av_find_best_stream(fmt, AVMediaType.AVMEDIA_TYPE_AUDIO, -1, -1, null, 0) >= 0;
+                }
+                finally
+                {
+                    if (fmt != null)
+                    {
+                        ffmpeg.avformat_close_input(&fmt);
+                    }
+                }
+            }
+        }, ct).ConfigureAwait(false);
+    }
+
     public async Task PlayAsync(
         string videoPath,
         int outputWidth,

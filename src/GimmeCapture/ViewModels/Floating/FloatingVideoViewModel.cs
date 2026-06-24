@@ -46,6 +46,8 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
 
     public string VideoPath { get; }
     private readonly string _ffmpegPath;
+    // Legacy CLI export path (annotations/crop). Empty when no external ffmpeg.exe is supplied, in which
+    // case those legacy paths report a clear failure; trim/cut export runs fully in-process (LibavClipExporter).
     public string FFmpegPath => _ffmpegPath;
     public VideoCodec VideoCodec => _appSettingsService?.Settings.VideoCodec ?? VideoCodec.H264;
     private CancellationTokenSource? _playCts;
@@ -86,10 +88,13 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
     public TimeSpan TotalDuration
     {
         get => _totalDuration;
-        set 
+        set
         {
             this.RaiseAndSetIfChanged(ref _totalDuration, value);
             this.RaisePropertyChanged(nameof(FormattedTime));
+            // Duration is probed on a background task; if the timeline was seeded before it was
+            // known, repair the degenerate full-clip segment now (on the UI thread).
+            Avalonia.Threading.Dispatcher.UIThread.Post(RepairFullClipSegmentForDuration);
         }
     }
 
@@ -198,7 +203,7 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
             
             if (value != FloatingTool.None)
             {
-                IsTrimmingMode = false;
+                IsTimelineMode = false;
                 CurrentAnnotationTool = AnnotationType.None;
             }
 
@@ -217,7 +222,7 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
             
             if (value != AnnotationType.None)
             {
-                IsTrimmingMode = false;
+                IsTimelineMode = false;
                 CurrentTool = FloatingTool.None;
             }
 
@@ -230,12 +235,12 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
     }
     public bool ShowIconSettings => false;
 
-    // Esc exits trim mode before the generic tool/annotation cancel.
+    // Esc exits timeline mode before the generic tool/annotation cancel.
     protected override bool TryCancelModeSpecific()
     {
-        if (IsTrimmingMode)
+        if (IsTimelineMode)
         {
-            IsTrimmingMode = false;
+            IsTimelineMode = false;
             return true;
         }
 
@@ -310,9 +315,9 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
             double bottomPad = vPad;
             if (ShowToolbar) bottomPad += 78;
             
-            // 裁切面板額外空間：拉桿(28) + 時間輸入(28) + spacing + padding ≈ 75px
-            if (IsTrimmingMode) bottomPad += 75;
-            
+            // 時間軸段落列：分隔線 + 比例段落條(30) + 操作提示 + spacing ≈ 55px
+            if (IsTimelineMode) bottomPad += 55;
+
             return new Avalonia.Thickness(hPad, vPad, hPad, bottomPad);
         }
     }
@@ -336,6 +341,10 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
     // any floating video window can pin a sibling.
     // (path, pixelWidth, pixelHeight, originalWidth, originalHeight, borderColor, borderThickness, hideDecoration, hideBorder)
     public System.Action<string, int, int, double, double, Avalonia.Media.Color, double, bool, bool>? OpenPinnedVideoWindowAction { get; set; }
+
+    // Wired by the host: persists a copied/exported clip into History (managed copy + thumbnail) so it
+    // shows up in the history panel, mirroring image-copy behaviour. (clipPath, pixelWidth, pixelHeight)
+    public Func<string, int, int, Task>? AddClipToHistoryAsync { get; set; }
 
     // Annotation Proxies
     public bool CanUndo => HasUndo;
@@ -381,7 +390,7 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
         InitializeActionCommands();
         // InitializeToolbarCommands(); // Handled by Base
         InitializeAnnotationCommands();
-        InitializeTrimCommands();
+        InitializeSegmentCommands();
         InitializeMediaCommands(); // Media init last as it starts playback
     }
 
@@ -455,7 +464,7 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
         {
             _playSemaphore.Dispose();
         }
-        
+
         base.Dispose();
 
         WriteableBitmap? oldBitmap;

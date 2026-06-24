@@ -329,6 +329,33 @@ public partial class SnipWindow : Window
                     _clipboardService,
                     _viewModel.MainVm?.AppSettingsService);
 
+                // Copying a clip from the pin persists a managed copy into History (like image copy),
+                // so the copied/trimmed video shows up in the history panel.
+                var captureHistory = _viewModel.MainVm?.CaptureHistory;
+                vm.AddClipToHistoryAsync = async (clipPath, w, h) =>
+                {
+                    try
+                    {
+                        if (captureHistory == null
+                            || !(_viewModel.MainVm?.EnableHistory ?? false)
+                            || string.IsNullOrEmpty(clipPath)
+                            || !System.IO.File.Exists(clipPath))
+                        {
+                            return;
+                        }
+
+                        string ext = System.IO.Path.GetExtension(clipPath).TrimStart('.');
+                        if (string.IsNullOrEmpty(ext)) ext = "mp4";
+                        string managed = captureHistory.CreateManagedCapturePath(ext);
+                        System.IO.File.Copy(clipPath, managed, true);
+                        await captureHistory.AddVideoAsync(managed, w, h);
+                    }
+                    catch (Exception ex)
+                    {
+                        GimmeCapture.Services.Core.Infrastructure.AppLog.Warning("FloatingVideo.AddCopyToHistory", ex);
+                    }
+                };
+
                 var padding = vm.WindowPadding;
                 var window = new FloatingVideoWindow
                 {

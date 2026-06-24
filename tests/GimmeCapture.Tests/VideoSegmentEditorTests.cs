@@ -74,6 +74,55 @@ public class VideoSegmentEditorTests
     }
 
     [Fact]
+    public void TryMapSourceToOutput_IsInverseAcrossACutGap()
+    {
+        var segs = new[]
+        {
+            new VideoEditSegment(0, 3),   // source [0,3) -> output [0,3)
+            new VideoEditSegment(7, 10),  // source [7,10) -> output [3,6)
+        };
+
+        Assert.True(VideoSegmentEditor.TryMapSourceToOutput(segs, 2.0, out double o0));
+        Assert.Equal(2.0, o0, 3);
+
+        // source 8s is 1s into the second segment -> output 4s.
+        Assert.True(VideoSegmentEditor.TryMapSourceToOutput(segs, 8.0, out double o1));
+        Assert.Equal(4.0, o1, 3);
+
+        // source 5s is in the cut gap [3,7) -> snaps to the second segment's output start (3).
+        Assert.True(VideoSegmentEditor.TryMapSourceToOutput(segs, 5.0, out double oGap));
+        Assert.Equal(3.0, oGap, 3);
+
+        Assert.False(VideoSegmentEditor.TryMapSourceToOutput(System.Array.Empty<VideoEditSegment>(), 1, out _));
+    }
+
+    [Fact]
+    public void TryMapSourceToOutput_HonorsSpeed()
+    {
+        var segs = new[] { new VideoEditSegment(0, 10, Speed: 2.0) }; // source 10s -> output 5s
+
+        Assert.True(VideoSegmentEditor.TryMapSourceToOutput(segs, 4.0, out double outT));
+        Assert.Equal(2.0, outT, 3); // 4s source / 2x = 2s output
+    }
+
+    [Fact]
+    public void IndexForSourceTime_FindsContainingOrNextSegment()
+    {
+        var segs = new[]
+        {
+            new VideoEditSegment(0, 3),   // index 0
+            new VideoEditSegment(7, 10),  // index 1
+        };
+
+        Assert.Equal(0, VideoSegmentEditor.IndexForSourceTime(segs, 1.0));   // inside seg 0
+        Assert.Equal(1, VideoSegmentEditor.IndexForSourceTime(segs, 8.0));   // inside seg 1
+        Assert.Equal(1, VideoSegmentEditor.IndexForSourceTime(segs, 5.0));   // gap [3,7) -> next segment
+        Assert.Equal(0, VideoSegmentEditor.IndexForSourceTime(segs, -1.0));  // before everything -> first
+        Assert.Equal(1, VideoSegmentEditor.IndexForSourceTime(segs, 999));   // past end -> last
+        Assert.Equal(-1, VideoSegmentEditor.IndexForSourceTime(System.Array.Empty<VideoEditSegment>(), 1));
+    }
+
+    [Fact]
     public void SplitAtOutputTime_SplitsSegmentAtSourcePoint()
     {
         var segs = new[] { new VideoEditSegment(0, 10) };
@@ -106,6 +155,32 @@ public class VideoSegmentEditorTests
 
         // 3.0 is exactly the seam between the two segments -> nothing to split.
         var result = VideoSegmentEditor.SplitAtOutputTime(segs, 3.0);
+
+        Assert.Equal(2, result.Count);
+    }
+
+    [Fact]
+    public void SplitAtSourceTime_SplitsContainingSegment()
+    {
+        var segs = new[] { new VideoEditSegment(0, 3), new VideoEditSegment(7, 10) };
+
+        // 8s source falls inside the second kept segment [7,10) -> split there.
+        var result = VideoSegmentEditor.SplitAtSourceTime(segs, 8.0);
+
+        Assert.Equal(3, result.Count);
+        Assert.Equal(7, result[1].SourceStart);
+        Assert.Equal(8, result[1].SourceEnd);
+        Assert.Equal(8, result[2].SourceStart);
+        Assert.Equal(10, result[2].SourceEnd);
+    }
+
+    [Fact]
+    public void SplitAtSourceTime_InsideCutGapIsNoOp()
+    {
+        var segs = new[] { new VideoEditSegment(0, 3), new VideoEditSegment(7, 10) };
+
+        // 5s source is in the removed gap [3,7) -> nothing to split.
+        var result = VideoSegmentEditor.SplitAtSourceTime(segs, 5.0);
 
         Assert.Equal(2, result.Count);
     }
@@ -145,5 +220,73 @@ public class VideoSegmentEditorTests
         var result = VideoSegmentEditor.RemoveAt(segs, 5);
 
         Assert.Equal(2, result.Count);
+    }
+
+    [Fact]
+    public void CoalesceContiguous_MergesAdjacentPiecesIntoOneRun()
+    {
+        // Dropping the head leaves two contiguous kept pieces (4-8 + 8-14) -> one run 4-14.
+        var segs = new[] { new VideoEditSegment(4, 8), new VideoEditSegment(8, 14) };
+
+        var runs = VideoSegmentEditor.CoalesceContiguous(segs);
+
+        Assert.Single(runs);
+        Assert.Equal(4, runs[0].SourceStart);
+        Assert.Equal(14, runs[0].SourceEnd);
+    }
+
+    [Fact]
+    public void CoalesceContiguous_KeepsGapAsSeparateRuns()
+    {
+        // A genuine cut (gap 4-8 removed) stays as two runs.
+        var segs = new[] { new VideoEditSegment(0, 4), new VideoEditSegment(8, 14) };
+
+        var runs = VideoSegmentEditor.CoalesceContiguous(segs);
+
+        Assert.Equal(2, runs.Count);
+        Assert.Equal(0, runs[0].SourceStart);
+        Assert.Equal(4, runs[0].SourceEnd);
+        Assert.Equal(8, runs[1].SourceStart);
+        Assert.Equal(14, runs[1].SourceEnd);
+    }
+
+    [Fact]
+    public void CoalesceContiguous_DoesNotMergeAcrossSpeedChange()
+    {
+        // Contiguous in source but different speeds -> the concat graph must keep them separate.
+        var segs = new[] { new VideoEditSegment(0, 4, 1.0), new VideoEditSegment(4, 8, 2.0) };
+
+        var runs = VideoSegmentEditor.CoalesceContiguous(segs);
+
+        Assert.Equal(2, runs.Count);
+    }
+
+    [Fact]
+    public void CoalesceContiguous_SinglePieceUnchanged()
+    {
+        var segs = new[] { new VideoEditSegment(2, 9) };
+
+        var runs = VideoSegmentEditor.CoalesceContiguous(segs);
+
+        Assert.Single(runs);
+        Assert.Equal(2, runs[0].SourceStart);
+        Assert.Equal(9, runs[0].SourceEnd);
+    }
+
+    [Fact]
+    public void CoalesceContiguous_MergesThreeInARow()
+    {
+        var segs = new[]
+        {
+            new VideoEditSegment(0, 4),
+            new VideoEditSegment(4, 8),
+            new VideoEditSegment(8, 14),
+        };
+
+        var runs = VideoSegmentEditor.CoalesceContiguous(segs);
+
+        Assert.Single(runs);
+        Assert.Equal(0, runs[0].SourceStart);
+        Assert.Equal(14, runs[0].SourceEnd);
     }
 }

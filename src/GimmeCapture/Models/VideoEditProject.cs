@@ -12,6 +12,13 @@ public sealed record VideoEditSegment(double SourceStart, double SourceEnd, doub
     public double SourceDuration => Math.Max(0.0, SourceEnd - SourceStart);
 
     public double OutputDuration => Speed > 0 ? SourceDuration / Speed : SourceDuration;
+
+    /// <summary>
+    /// Whether this piece is kept in the output. The timeline shows all contiguous source pieces; the
+    /// user toggles which to keep. Export/preview use only kept pieces. The pure compiler/editor ignore
+    /// this flag (the VM filters before building the project); <c>with { }</c> preserves it across splits.
+    /// </summary>
+    public bool Kept { get; init; } = true;
 }
 
 /// <summary>Pixel crop rectangle applied to the whole output.</summary>
