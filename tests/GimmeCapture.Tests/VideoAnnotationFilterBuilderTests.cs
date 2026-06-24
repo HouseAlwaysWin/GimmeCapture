@@ -59,4 +59,46 @@ public class VideoAnnotationFilterBuilderTests
         Assert.Contains("palettegen", filter);
         Assert.Contains("paletteuse[outv]", filter);
     }
+
+    [Fact]
+    public void BuildFilter_CustomInputLabel_FeedsChainFromThatLabel()
+    {
+        var annotation = new Annotation
+        {
+            Type = AnnotationType.Blur,
+            StartPoint = new Point(10, 20),
+            EndPoint = new Point(110, 70)
+        };
+        annotation.EffectSettings.BlurRadius = 10f;
+
+        string filter = VideoAnnotationFilterBuilder.BuildFilter(
+            new[] { annotation },
+            referenceWidth: 200,
+            referenceHeight: 100,
+            targetWidth: 200,
+            targetHeight: 100,
+            includeOverlayInput: true,
+            isOutputGif: false,
+            inputVideoLabel: "vcat");
+
+        // The redaction chain must consume the compiler's concatenated video, not the raw 0:v.
+        Assert.StartsWith("[vcat]split", filter);
+        Assert.DoesNotContain("[0:v]", filter);
+    }
+
+    [Fact]
+    public void BuildFilter_CustomInputLabel_NoRedaction_OverlaysFromThatLabel()
+    {
+        string filter = VideoAnnotationFilterBuilder.BuildFilter(
+            System.Array.Empty<Annotation>(),
+            referenceWidth: 200,
+            referenceHeight: 100,
+            targetWidth: 200,
+            targetHeight: 100,
+            includeOverlayInput: true,
+            isOutputGif: false,
+            inputVideoLabel: "vcat");
+
+        Assert.Contains("[1:v][vcat]scale2ref", filter);
+    }
 }
