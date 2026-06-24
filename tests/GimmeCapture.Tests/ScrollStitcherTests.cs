@@ -12,13 +12,19 @@ public class ScrollStitcherTests
     private static SKColor ColorForRow(int absoluteRow) =>
         new((byte)((absoluteRow * 7) & 0xFF), (byte)((absoluteRow * 13) & 0xFF), (byte)((absoluteRow * 29) & 0xFF), 255);
 
-    // Like ColorForRow but unique (non-repeating) over a few thousand rows: a high-frequency channel
-    // gives adjacent rows a clear difference (> the matcher's colour tolerance) for distinctiveness,
-    // while the slow ramps make rows that are far apart in source space never alias to the same colour.
-    // ColorForRow repeats every 256 rows, which is fine for the short fixtures but would let a long
-    // strip's far edge spuriously match an unrelated frame within the search window.
+    // Globally collision-free under the matcher's colour tolerance over the whole length of the long
+    // simulations. The row index is encoded as three base-13 digits scaled by 19, so any two DISTINCT
+    // rows (0..13^3-1 = 0..2196) differ by at least 19 (> ColorTolerance 18) in at least one channel,
+    // and adjacent rows differ in the low digit so they are locally distinct too. A plain linear ramp
+    // (row*k) is NOT safe here: row and row+d alias whenever k*d wraps to within tolerance of a
+    // multiple of 256 (e.g. 29*9 = 261 ≡ 5), which let a strip's far edge match an unrelated distant
+    // frame and made the long simulations mis-stitch. ColorForRow (periodic every 256) has the same flaw.
     private static SKColor UniqueColorForRow(int absoluteRow) =>
-        new((byte)((absoluteRow * 29) & 0xFF), (byte)((absoluteRow / 8) & 0xFF), (byte)((absoluteRow / 2) & 0xFF), 255);
+        new(
+            (byte)((absoluteRow % 13) * 19),
+            (byte)(((absoluteRow / 13) % 13) * 19),
+            (byte)(((absoluteRow / 169) % 13) * 19),
+            255);
 
     private static SKBitmap MakeUniqueFrame(int width, int height, int sourceOffset)
     {
@@ -281,6 +287,70 @@ public class ScrollStitcherTests
         using var frame = MakeFrame(20, 20, sourceOffset: 200);  // content not in the strip
 
         var align = ScrollStitcher.AlignFrameToStrip(strip, frame);
+
+        Assert.False(align.Found);
+    }
+
+    // A wide strip that is uniform except a narrow vertical band of per-row detail: the shape a
+    // horizontal scroll of a low-texture region takes in stitch space (the matcher works in stitch
+    // space, so this is the analogue of the user-reported horizontal failure). The discriminative
+    // signal is sparse, so the runner-up offset scores only slightly worse than the exact overlap.
+    // This regressed when the strict ambiguity margin rejected the weak-but-clear winner outright,
+    // capturing nothing; the near-perfect relaxation must accept it.
+    private static SKBitmap MakeBandedFrame(int width, int height, int sourceOffset, int bandStart, int bandWidth)
+    {
+        var bmp = new SKBitmap(new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Premul));
+        var gray = new SKColor(120, 120, 120, 255);
+        for (int y = 0; y < height; y++)
+        {
+            SKColor detail = UniqueColorForRow(sourceOffset + y);
+            for (int x = 0; x < width; x++)
+            {
+                bmp.SetPixel(x, y, (x >= bandStart && x < bandStart + bandWidth) ? detail : gray);
+            }
+        }
+
+        return bmp;
+    }
+
+    [Fact]
+    public void AlignFrameToStrip_SparseHorizontalTexture_StillAligns()
+    {
+        using var strip = MakeBandedFrame(600, 100, sourceOffset: 0, bandStart: 300, bandWidth: 20);
+        using var frame = MakeBandedFrame(600, 100, sourceOffset: 5, bandStart: 300, bandWidth: 20);
+
+        var align = ScrollStitcher.AlignFrameToStrip(strip, frame, minOverlapRows: 8);
+
+        Assert.True(align.Found);
+        Assert.Equal(5, align.Offset); // exact overlap, 5 new rows at the bottom
+    }
+
+    [Fact]
+    public void AlignFrameToStrip_PeriodicContent_NotFound()
+    {
+        // Vertically periodic content aligns equally well at several offsets, so the runner-up scores
+        // as well as the winner (gap ~ 0). The relaxed near-perfect margin must NOT accept it — only a
+        // genuine, clearly-separated winner should stitch.
+        static SKBitmap MakePeriodic(int width, int height, int period, int sourceOffset)
+        {
+            var bmp = new SKBitmap(new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Premul));
+            for (int y = 0; y < height; y++)
+            {
+                byte v = (byte)(((sourceOffset + y) % period) * 50);
+                var c = new SKColor(v, v, v, 255);
+                for (int x = 0; x < width; x++)
+                {
+                    bmp.SetPixel(x, y, c);
+                }
+            }
+
+            return bmp;
+        }
+
+        using var strip = MakePeriodic(40, 60, period: 5, sourceOffset: 0);
+        using var frame = MakePeriodic(40, 60, period: 5, sourceOffset: 2);
+
+        var align = ScrollStitcher.AlignFrameToStrip(strip, frame, minOverlapRows: 8);
 
         Assert.False(align.Found);
     }

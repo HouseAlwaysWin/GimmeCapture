@@ -12,9 +12,16 @@ namespace GimmeCapture.Services.Core.Media;
 /// </summary>
 internal static class ScrollStitcher
 {
-    // Number of evenly-spaced columns sampled per row when building a row signature.
-    // Comparing a fixed subset keeps the O(height^2) shift search affordable on tall regions.
-    private const int SampleColumns = 32;
+    // Evenly-spaced columns sampled per row when building a row signature. The count adapts to the
+    // usable width: roughly one sample per SampleColumnStridePx, clamped to [Min, Max]. A FIXED 32
+    // was too sparse for wide strips — notably a horizontal scroll folded into stitch space, where the
+    // stitch width equals the (large) region height. One sample per ~17px there landed between the
+    // rows that carry horizontal texture, so every row's distinctiveness weight collapsed to ~0 and
+    // alignment failed outright (best score never set). Denser sampling restores that signal; the
+    // bounded matching window (see SnipWindowViewModel) keeps the extra cost affordable.
+    private const int MinSampleColumns = 32;
+    private const int MaxSampleColumns = 96;
+    private const int SampleColumnStridePx = 6;
 
     // Per-channel (B/G/R) absolute difference, below which two sampled pixels are "the same".
     // Absorbs subpixel anti-aliasing / GPU compositing jitter so a row re-rendered slightly
@@ -36,6 +43,16 @@ internal static class ScrollStitcher
     // similar candidates — when the winner is not clearly the best, skip the frame rather
     // than risk stitching it at the wrong offset (the cause of the Discord scrambling).
     private const double AmbiguityMargin = 0.035;
+
+    // A near-perfect best score (an essentially exact overlap) is trusted against a much smaller
+    // ambiguity margin. Horizontally-sparse content folded into stitch space — a horizontal scroll of a
+    // region with few vertical edges — carries little discriminative signal, so the runner-up offset
+    // scores only slightly worse even though the true offset matches exactly; the strict 0.035 margin
+    // would reject it and capture nothing. Genuinely periodic content instead makes the runner-up score
+    // *equally* well (gap ~ 0), so it is still rejected. Only matches at/under NearPerfectScore use the
+    // relaxed margin, so the normal (higher-score) path is unchanged.
+    private const double NearPerfectScore = 0.02;
+    private const double NearPerfectAmbiguityMargin = 0.006;
 
     // Competing alignments nearer than this to the winner are treated as the same minimum
     // (sub-pixel neighbours), not as a rival candidate.
@@ -408,7 +425,8 @@ internal static class ScrollStitcher
             ambiguityGapOut = rivalScore - bestScore;
         }
 
-        if (rivalScore != double.MaxValue && rivalScore - bestScore < AmbiguityMargin)
+        double ambiguityMargin = bestScore < NearPerfectScore ? NearPerfectAmbiguityMargin : AmbiguityMargin;
+        if (rivalScore != double.MaxValue && rivalScore - bestScore < ambiguityMargin)
         {
             return new FrameAlignment(0, false);
         }
@@ -757,7 +775,9 @@ internal static class ScrollStitcher
         int height = bitmap.Height;
         int usableColumns = Math.Max(0, width - Math.Max(0, ignoreRightColumns));
 
-        sampleCount = Math.Min(SampleColumns, usableColumns);
+        int maxSamples = Math.Min(MaxSampleColumns, usableColumns);
+        int minSamples = Math.Min(MinSampleColumns, usableColumns);
+        sampleCount = Math.Clamp(usableColumns / SampleColumnStridePx, minSamples, maxSamples);
         var signatures = new byte[height * Math.Max(1, sampleCount) * 4];
 
         int stride = bitmap.RowBytes;
