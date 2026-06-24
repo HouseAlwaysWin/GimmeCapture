@@ -213,6 +213,21 @@
                             Opacity="{Binding IsTrimmingMode, Converter={StaticResource BoolToOpacityConverter}}">
                         <PathIcon Data="M9.64,7.64C9.87,7.14 10,6.59 10,6A4,4 0 0,0 6,2A4,4 0 0,0 2,6A4,4 0 0,0 6,10C6.59,10 7.14,9.87 7.64,9.64L10,12L7.64,14.36C7.14,14.13 6.59,14 6,14A4,4 0 0,0 2,18A4,4 0 0,0 6,22A4,4 0 0,0 10,18C10,17.41 9.87,16.86 9.64,16.36L12,14L19,21H22V20L9.64,7.64M6,8A2,2 0 0,1 4,6A2,2 0 0,1 6,4A2,2 0 0,1 8,6A2,2 0 0,1 6,8M6,20A2,2 0 0,1 4,18A2,2 0 0,1 6,16A2,2 0 0,1 8,18A2,2 0 0,1 6,20M12,12.5A0.5,0.5 0 0,1 11.5,12A0.5,0.5 0 0,1 12,11.5A0.5,0.5 0 0,1 12.5,12A0.5,0.5 0 0,1 12,12.5M19,3L13,9L15,11L22,4V3H19Z" Width="14" Height="14"/>
                     </Button>
+                    <!-- Timeline (multi-segment cut) toggle -->
+                    <Button Theme="{StaticResource SnipButton}" Command="{Binding ToggleTimelineCommand}" ToolTip.Tip="{Binding TimelineTooltip}"
+                            Opacity="{Binding IsTimelineMode, Converter={StaticResource BoolToOpacityConverter}}">
+                        <PathIcon Data="M18,4L20,8H17L15,4H13L15,8H12L10,4H8L10,8H7L5,4H4A2,2 0 0,0 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V4H18Z" Width="14" Height="14"/>
+                    </Button>
+                    <!-- Split at playhead (timeline mode only) -->
+                    <Button Theme="{StaticResource SnipButton}" Command="{Binding SplitSegmentCommand}" ToolTip.Tip="{Binding SplitTooltip}"
+                            IsVisible="{Binding IsTimelineMode}">
+                        <PathIcon Data="M14,4L18,8L14,12V9H6V7H14V4M10,12L6,16L10,20V17H18V15H10V12Z" Width="14" Height="14"/>
+                    </Button>
+                    <!-- Delete selected segment (timeline mode only) -->
+                    <Button Theme="{StaticResource SnipButton}" Command="{Binding DeleteSegmentCommand}" ToolTip.Tip="{Binding DeleteSegmentTooltip}"
+                            IsVisible="{Binding IsTimelineMode}">
+                        <PathIcon Data="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z" Width="14" Height="14"/>
+                    </Button>
                     <Rectangle Fill="#444444" Width="1" Height="20" Margin="4,0" VerticalAlignment="Center"/>
                     <Button Theme="{StaticResource SnipButton}" Command="{Binding CopyCommand}" ToolTip.Tip="{Binding CopyTooltip}">
                         <PathIcon Data="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z" Width="14" Height="14"/>
@@ -335,6 +350,30 @@
                                                          DecreaseCommand="{Binding DecTrimEndSecCmd}"/>
                         </StackPanel>
                     </StackPanel>
+                </StackPanel>
+
+                <!-- Row 4: Timeline strip — kept segments; click to select, then Delete; Split cuts at the playhead -->
+                <StackPanel IsVisible="{Binding IsTimelineMode}" Orientation="Vertical" Spacing="4">
+                    <Rectangle Fill="#333333" Height="1" Margin="2,0" HorizontalAlignment="Stretch"/>
+                    <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                        <ItemsControl ItemsSource="{Binding SegmentBlocks}" Margin="4,0,4,2">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal" Spacing="3"/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="vm:SegmentBlockViewModel">
+                                    <Button Theme="{StaticResource SnipToolButton}"
+                                            Content="{Binding Label}"
+                                            FontSize="10" Padding="6,2" Height="24" MinWidth="52"
+                                            Command="{Binding $parent[Window].((vm:FloatingVideoViewModel)DataContext).SelectSegmentCommand}"
+                                            CommandParameter="{Binding Index}"
+                                            Opacity="{Binding IsSelected, Converter={StaticResource BoolToOpacityConverter}}"/>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
                 </StackPanel>
             </StackPanel>
         </Border>

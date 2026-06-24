@@ -199,6 +199,7 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
             if (value != FloatingTool.None)
             {
                 IsTrimmingMode = false;
+                IsTimelineMode = false;
                 CurrentAnnotationTool = AnnotationType.None;
             }
 
@@ -218,6 +219,7 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
             if (value != AnnotationType.None)
             {
                 IsTrimmingMode = false;
+                IsTimelineMode = false;
                 CurrentTool = FloatingTool.None;
             }
 
@@ -236,6 +238,12 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
         if (IsTrimmingMode)
         {
             IsTrimmingMode = false;
+            return true;
+        }
+
+        if (IsTimelineMode)
+        {
+            IsTimelineMode = false;
             return true;
         }
 
@@ -312,7 +320,10 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
             
             // 裁切面板額外空間：拉桿(28) + 時間輸入(28) + spacing + padding ≈ 75px
             if (IsTrimmingMode) bottomPad += 75;
-            
+
+            // 時間軸段落列：分隔線 + 段落 chip 列(24) + spacing ≈ 40px
+            if (IsTimelineMode) bottomPad += 40;
+
             return new Avalonia.Thickness(hPad, vPad, hPad, bottomPad);
         }
     }

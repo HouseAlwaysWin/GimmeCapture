@@ -97,6 +97,7 @@ public partial class FloatingVideoViewModel
             {
                 CurrentTool = FloatingTool.None;
                 CurrentAnnotationTool = Models.AnnotationType.None;
+                IsTimelineMode = false;
             }
 
             IsTrimmingMode = activateTrim;

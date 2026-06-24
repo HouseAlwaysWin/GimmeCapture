@@ -5,6 +5,7 @@ using System.Linq;
 using System.Reactive;
 using System.Threading.Tasks;
 using GimmeCapture.Models;
+using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Core.Media;
 using ReactiveUI;
 
@@ -32,8 +33,18 @@ public partial class FloatingVideoViewModel
     public int SelectedSegmentIndex
     {
         get => _selectedSegmentIndex;
-        set => this.RaiseAndSetIfChanged(ref _selectedSegmentIndex, value);
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _selectedSegmentIndex, value);
+            for (int i = 0; i < SegmentBlocks.Count; i++)
+            {
+                SegmentBlocks[i].IsSelected = i == value;
+            }
+        }
     }
+
+    /// <summary>Timeline strip blocks (one per kept segment), rebuilt whenever the segments change.</summary>
+    public ObservableCollection<SegmentBlockViewModel> SegmentBlocks { get; } = new();
 
     /// <summary>True once the user has cut the clip into more than one kept segment.</summary>
     private bool UseMultiSegment => IsTimelineMode && EditSegments.Count > 1;
@@ -41,9 +52,14 @@ public partial class FloatingVideoViewModel
     // Cached audio-stream presence (probed once); the compiler's audio chain needs to know.
     private bool? _sourceHasAudio;
 
+    public string TimelineTooltip => LocalizationService.Instance["TipTimeline"] ?? "Timeline (multi-segment cut)";
+    public string SplitTooltip => LocalizationService.Instance["TipSplitSegment"] ?? "Split at playhead";
+    public string DeleteSegmentTooltip => LocalizationService.Instance["TipDeleteSegment"] ?? "Delete selected segment";
+
     public ReactiveCommand<Unit, Unit> ToggleTimelineCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> SplitSegmentCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> DeleteSegmentCommand { get; private set; } = null!;
+    public ReactiveCommand<int, Unit> SelectSegmentCommand { get; private set; } = null!;
 
     private void InitializeSegmentCommands()
     {
@@ -84,6 +100,8 @@ public partial class FloatingVideoViewModel
             ReplaceSegments(VideoSegmentEditor.RemoveAt(EditSegments.ToArray(), removed));
             SelectedSegmentIndex = Math.Min(removed, EditSegments.Count - 1);
         });
+
+        SelectSegmentCommand = ReactiveCommand.Create<int>(index => SelectedSegmentIndex = index);
     }
 
     /// <summary>Seeds the segment list from the current trim range (or the whole clip) once.</summary>
@@ -106,6 +124,27 @@ public partial class FloatingVideoViewModel
         {
             EditSegments.Add(s);
         }
+
+        RebuildSegmentBlocks();
+    }
+
+    private void RebuildSegmentBlocks()
+    {
+        SegmentBlocks.Clear();
+        for (int i = 0; i < EditSegments.Count; i++)
+        {
+            VideoEditSegment s = EditSegments[i];
+            SegmentBlocks.Add(new SegmentBlockViewModel(i, $"{FormatClock(s.SourceStart)}–{FormatClock(s.SourceEnd)}")
+            {
+                IsSelected = i == _selectedSegmentIndex,
+            });
+        }
+    }
+
+    private static string FormatClock(double seconds)
+    {
+        var t = TimeSpan.FromSeconds(Math.Max(0, seconds));
+        return $"{(int)t.TotalMinutes}:{t.Seconds:00}";
     }
 
     /// <summary>Builds the declarative edit from the current segment list (Phase 1: cuts + optional crop).</summary>
