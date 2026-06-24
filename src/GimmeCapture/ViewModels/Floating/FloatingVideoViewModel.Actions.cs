@@ -231,9 +231,8 @@ public partial class FloatingVideoViewModel
             {
                 ProcessingText = LocalizationService.Instance["StatusExportingVideo"] ?? "Exporting Video...";
                 bool hasAnnotations = Annotations.AsValueEnumerable().Any();
-                bool needsTrim = SingleSegmentIsTrimmed;
 
-                if (hasAnnotations || needsTrim || UseMultiSegment)
+                if (hasAnnotations || AnyPieceDropped)
                 {
                     var burntPath = await ExportBurntInVideoAsync();
                     if (!string.IsNullOrEmpty(burntPath) && System.IO.File.Exists(burntPath))
@@ -288,9 +287,8 @@ public partial class FloatingVideoViewModel
                 string sourceExt = Path.GetExtension(VideoPath).ToLowerInvariant();
                 string targetExt = Path.GetExtension(targetPath).ToLowerInvariant();
                 bool needsConversion = sourceExt != targetExt;
-                bool needsTrim = SingleSegmentIsTrimmed;
 
-                if (hasAnnotations || needsConversion || needsTrim || UseMultiSegment)
+                if (hasAnnotations || needsConversion || AnyPieceDropped)
                 {
                     var processedPath = await ExportBurntInVideoAsync(targetExt);
                     if (!string.IsNullOrEmpty(processedPath) && System.IO.File.Exists(processedPath))

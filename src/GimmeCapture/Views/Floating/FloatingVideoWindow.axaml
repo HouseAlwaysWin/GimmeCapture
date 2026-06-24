@@ -213,15 +213,10 @@
                             Opacity="{Binding IsTimelineMode, Converter={StaticResource BoolToOpacityConverter}}">
                         <PathIcon Data="M18,4L20,8H17L15,4H13L15,8H12L10,4H8L10,8H7L5,4H4A2,2 0 0,0 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V4H18Z" Width="14" Height="14"/>
                     </Button>
-                    <!-- Split at playhead (timeline mode only) -->
+                    <!-- Split at playhead (timeline mode only); tap a piece on the strip to keep/drop it -->
                     <Button Theme="{StaticResource SnipButton}" Command="{Binding SplitSegmentCommand}" ToolTip.Tip="{Binding SplitTooltip}"
                             IsVisible="{Binding IsTimelineMode}">
                         <PathIcon Data="M14,4L18,8L14,12V9H6V7H14V4M10,12L6,16L10,20V17H18V15H10V12Z" Width="14" Height="14"/>
-                    </Button>
-                    <!-- Delete selected segment (timeline mode only) -->
-                    <Button Theme="{StaticResource SnipButton}" Command="{Binding DeleteSegmentCommand}" ToolTip.Tip="{Binding DeleteSegmentTooltip}"
-                            IsVisible="{Binding IsTimelineMode}">
-                        <PathIcon Data="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z" Width="14" Height="14"/>
                     </Button>
                     <Rectangle Fill="#444444" Width="1" Height="20" Margin="4,0" VerticalAlignment="Center"/>
                     <Button Theme="{StaticResource SnipButton}" Command="{Binding CopyCommand}" ToolTip.Tip="{Binding CopyTooltip}">
@@ -303,10 +298,11 @@
                             </ItemsControl.Styles>
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate DataType="vm:SegmentBlockViewModel">
-                                    <Panel Width="{Binding PixelWidth}" Height="30" IsHitTestVisible="False">
+                                    <!-- Kept piece: bright blue + green outline (in the output). Dropped: dimmed. -->
+                                    <Panel Width="{Binding PixelWidth}" Height="30" IsHitTestVisible="False"
+                                           Opacity="{Binding IsKept, Converter={StaticResource BoolToOpacityConverter}}">
                                         <Border Background="#3A6EA5" CornerRadius="3"/>
-                                        <!-- Selected-segment outline (segment under the playhead) -->
-                                        <Border IsVisible="{Binding IsSelected}" BorderBrush="#FFD400"
+                                        <Border IsVisible="{Binding IsKept}" BorderBrush="#5BD66B"
                                                 BorderThickness="2" CornerRadius="3"/>
                                         <TextBlock Text="{Binding Label}" FontSize="9" Foreground="#E8E8E8"
                                                    HorizontalAlignment="Center" VerticalAlignment="Center"/>

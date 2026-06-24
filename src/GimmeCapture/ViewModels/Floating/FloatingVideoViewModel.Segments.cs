@@ -13,9 +13,11 @@ namespace GimmeCapture.ViewModels.Floating;
 
 public partial class FloatingVideoViewModel
 {
-    // ── Multi-segment (timeline) edit state ──
-    // EditSegments is the source of truth ONLY in timeline mode. While empty (the default), the pin
-    // behaves exactly as before — the single-segment export/preview paths are untouched.
+    // ── Timeline edit state ──
+    // EditSegments holds the SOURCE timeline split into contiguous pieces (always covering [0,total]).
+    // Each piece carries a Kept flag; the OUTPUT is the kept pieces joined. The edit applies whenever a
+    // piece is dropped — INDEPENDENT of IsTimelineMode (which only shows/hides the strip), so cuts still
+    // export after the panel is collapsed.
     public ObservableCollection<VideoEditSegment> EditSegments { get; } = new();
 
     private bool _isTimelineMode;
@@ -29,42 +31,32 @@ public partial class FloatingVideoViewModel
         }
     }
 
-    private int _selectedSegmentIndex = -1;
-    public int SelectedSegmentIndex
-    {
-        get => _selectedSegmentIndex;
-        set
-        {
-            this.RaiseAndSetIfChanged(ref _selectedSegmentIndex, value);
-            for (int i = 0; i < SegmentBlocks.Count; i++)
-            {
-                SegmentBlocks[i].IsSelected = i == value;
-            }
-        }
-    }
-
-    /// <summary>Timeline strip blocks (one per kept segment), rebuilt whenever the segments change.</summary>
+    /// <summary>Timeline strip blocks (one per source piece), rebuilt whenever the pieces change.</summary>
     public ObservableCollection<SegmentBlockViewModel> SegmentBlocks { get; } = new();
 
     /// <summary>Raised after the strip blocks are rebuilt so the view can recompute proportional layout.</summary>
     public event Action? SegmentLayoutChanged;
 
-    public string TimelineHint => LocalizationService.Instance["TimelineHint"] ?? "Drag the playhead → Split → tap a block → Delete";
+    public string TimelineHint => LocalizationService.Instance["TimelineHint"]
+        ?? "Drag = scrub · Split · tap a piece to keep/drop";
 
-    /// <summary>True once the user has cut the clip into more than one kept segment.</summary>
-    private bool UseMultiSegment => IsTimelineMode && EditSegments.Count > 1;
+    // The kept pieces = the output. Filtering happens here so the pure compiler stays Kept-agnostic.
+    private VideoEditSegment[] KeptSegments() => EditSegments.Where(s => s.Kept).ToArray();
+
+    /// <summary>True once the kept pieces form more than one run (route export through the concat compiler).</summary>
+    private bool UseMultiSegment => KeptSegments().Length > 1;
+
+    /// <summary>True when ≥1 piece is dropped — the only thing that makes the output differ from the source.</summary>
+    private bool AnyPieceDropped => EditSegments.Any(s => !s.Kept);
 
     // Cached audio-stream presence (probed once); the compiler's audio chain needs to know.
     private bool? _sourceHasAudio;
 
-    public string TimelineTooltip => LocalizationService.Instance["TipTimeline"] ?? "Timeline (multi-segment cut)";
+    public string TimelineTooltip => LocalizationService.Instance["TipTimeline"] ?? "Timeline (cut)";
     public string SplitTooltip => LocalizationService.Instance["TipSplitSegment"] ?? "Split at playhead";
-    public string DeleteSegmentTooltip => LocalizationService.Instance["TipDeleteSegment"] ?? "Delete selected segment";
 
     public ReactiveCommand<Unit, Unit> ToggleTimelineCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> SplitSegmentCommand { get; private set; } = null!;
-    public ReactiveCommand<Unit, Unit> DeleteSegmentCommand { get; private set; } = null!;
-    public ReactiveCommand<int, Unit> SelectSegmentCommand { get; private set; } = null!;
 
     private void InitializeSegmentCommands()
     {
@@ -84,35 +76,43 @@ public partial class FloatingVideoViewModel
 
         SplitSegmentCommand = ReactiveCommand.Create(() =>
         {
-            if (!IsTimelineMode || EditSegments.Count == 0)
+            if (EditSegments.Count == 0)
             {
                 return;
             }
 
-            // The player tracks the SOURCE position, so split at the source time under the playhead.
+            // Split the piece under the playhead (source time); both halves inherit the Kept flag.
             ReplaceSegments(VideoSegmentEditor.SplitAtSourceTime(EditSegments.ToArray(), _currentTime.TotalSeconds));
         });
-
-        DeleteSegmentCommand = ReactiveCommand.Create(() =>
-        {
-            if (!IsTimelineMode || SelectedSegmentIndex < 0 || SelectedSegmentIndex >= EditSegments.Count)
-            {
-                return;
-            }
-
-            int removed = SelectedSegmentIndex;
-            ReplaceSegments(VideoSegmentEditor.RemoveAt(EditSegments.ToArray(), removed));
-            SelectedSegmentIndex = Math.Min(removed, EditSegments.Count - 1);
-        });
-
-        SelectSegmentCommand = ReactiveCommand.Create<int>(index => SelectedSegmentIndex = index);
     }
 
-    /// <summary>Seeds the segment list with the whole clip once (the timeline is the only editor now).</summary>
+    /// <summary>
+    /// Toggles whether the piece at <paramref name="index"/> is kept in the output (tap on the strip).
+    /// Always leaves at least one kept piece.
+    /// </summary>
+    public void ToggleKept(int index)
+    {
+        if (index < 0 || index >= EditSegments.Count)
+        {
+            return;
+        }
+
+        VideoEditSegment seg = EditSegments[index];
+        bool newKept = !seg.Kept;
+        if (!newKept && KeptSegments().Length <= 1)
+        {
+            return; // never drop the last kept piece
+        }
+
+        EditSegments[index] = seg with { Kept = newKept };
+        RebuildSegmentBlocks();
+    }
+
+    /// <summary>Seeds the strip with the whole clip once (one kept piece covering [0,total]).</summary>
     private void SeedSegmentsFromTrim()
     {
-        // Reseed when empty, or when the only segment is the degenerate one seeded before the
-        // duration was known (a single zero/negative-length block). Never wipe a real multi-cut edit.
+        // Reseed when empty, or when the only piece is the degenerate one seeded before the duration was
+        // known (a single zero/negative-length block). Never wipe a real edit.
         if (EditSegments.Count > 0 && !IsSingleDegenerateSegment())
         {
             return;
@@ -122,32 +122,31 @@ public partial class FloatingVideoViewModel
         ReplaceSegments(VideoSegmentEditor.FromTrim(0, total, total));
     }
 
-    // The single kept segment's source range (a plain head/tail trim); (0,total) when not in timeline
-    // mode or no segments. Used by the single-segment fast export path (input -ss/-to + stream copy).
+    // The single kept piece's source range (used by the fast single-piece export path); (0,total) otherwise.
     private (double Start, double End) SingleSegmentSourceRange()
     {
-        if (IsTimelineMode && EditSegments.Count >= 1)
+        VideoEditSegment[] kept = KeptSegments();
+        if (kept.Length == 1)
         {
-            VideoEditSegment s = EditSegments[0];
-            return (s.SourceStart, s.SourceEnd);
+            return (kept[0].SourceStart, kept[0].SourceEnd);
         }
 
         return (0, _totalDuration.TotalSeconds);
     }
 
-    // True when there is exactly one kept segment that is a sub-range of the clip (i.e. a plain trim).
+    // True when exactly one kept piece that is a sub-range of the clip (a plain trim → fast -ss/-to copy).
     private bool SingleSegmentIsTrimmed
     {
         get
         {
-            if (UseMultiSegment)
+            VideoEditSegment[] kept = KeptSegments();
+            if (kept.Length != 1)
             {
                 return false;
             }
 
-            (double st, double en) = SingleSegmentSourceRange();
             double total = _totalDuration.TotalSeconds;
-            return st > 0.001 || (total > 0 && en < total - 0.001);
+            return kept[0].SourceStart > 0.001 || (total > 0 && kept[0].SourceEnd < total - 0.001);
         }
     }
 
@@ -167,9 +166,8 @@ public partial class FloatingVideoViewModel
     }
 
     /// <summary>
-    /// Repairs the auto-seeded full-clip segment once the duration is known. Called from the
-    /// TotalDuration setter (marshaled to the UI thread). No-op unless the timeline holds a single
-    /// degenerate block, so genuine multi-segment cuts are never disturbed.
+    /// Repairs the auto-seeded full-clip piece once the duration is known. Called from the TotalDuration
+    /// setter (marshaled to the UI thread). No-op unless the strip holds a single degenerate block.
     /// </summary>
     private void RepairFullClipSegmentForDuration()
     {
@@ -195,26 +193,24 @@ public partial class FloatingVideoViewModel
     private void RebuildSegmentBlocks()
     {
         SegmentBlocks.Clear();
-        double cursor = 0;
         for (int i = 0; i < EditSegments.Count; i++)
         {
             VideoEditSegment s = EditSegments[i];
-            double outDur = s.OutputDuration;
+            // Pieces are contiguous in source, so SourceStart is the block's position on the strip.
             SegmentBlocks.Add(new SegmentBlockViewModel(
                 i,
                 $"{FormatClock(s.SourceStart)}–{FormatClock(s.SourceEnd)}",
-                cursor,
-                outDur)
+                s.SourceStart,
+                s.SourceDuration)
             {
-                IsSelected = i == _selectedSegmentIndex,
+                IsKept = s.Kept,
             });
-            cursor += outDur;
         }
 
         SegmentLayoutChanged?.Invoke();
     }
 
-    /// <summary>Total kept output duration across all segments (seconds); 0 when empty.</summary>
+    /// <summary>Total source duration across all pieces — the strip's full width basis.</summary>
     public double TotalOutputDuration
     {
         get
@@ -222,7 +218,7 @@ public partial class FloatingVideoViewModel
             double total = 0;
             foreach (VideoEditSegment s in EditSegments)
             {
-                total += s.OutputDuration;
+                total += s.SourceDuration;
             }
 
             return total;
@@ -235,11 +231,12 @@ public partial class FloatingVideoViewModel
         return $"{(int)t.TotalMinutes}:{t.Seconds:00}";
     }
 
-    /// <summary>Builds the declarative edit from the current segment list (Phase 1: cuts + optional crop).</summary>
+    /// <summary>Builds the declarative edit from the KEPT pieces (Phase 1: cuts + optional crop).</summary>
     private VideoEditProject BuildEditProject(VideoEditCrop? crop)
     {
-        IReadOnlyList<VideoEditSegment> segments = EditSegments.Count > 0
-            ? EditSegments.ToArray()
+        VideoEditSegment[] kept = KeptSegments();
+        IReadOnlyList<VideoEditSegment> segments = kept.Length > 0
+            ? kept
             : VideoSegmentEditor.FromTrim(0, _totalDuration.TotalSeconds, _totalDuration.TotalSeconds);
 
         return new VideoEditProject

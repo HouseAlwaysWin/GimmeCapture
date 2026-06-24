@@ -11,6 +11,7 @@ using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Diagnostics;
+using GimmeCapture.Models;
 using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Core.Media.NativeFFmpeg;
 using NAudio.Wave;
@@ -191,10 +192,11 @@ public partial class FloatingVideoViewModel
         CancelPlaybackInBackground();
         var generation = Interlocked.Increment(ref _playbackGeneration);
 
-        // Timeline edit: clamp the restart point to the first kept segment; otherwise the whole clip.
+        // Timeline edit: clamp the restart point to the first kept piece; otherwise the whole clip.
+        var keptForStart = KeptSegments();
         var effectiveEnd = TotalDuration;
-        var effectiveStart = IsTimelineMode && EditSegments.Count > 0
-            ? TimeSpan.FromSeconds(EditSegments[0].SourceStart)
+        var effectiveStart = keptForStart.Length > 0
+            ? TimeSpan.FromSeconds(keptForStart[0].SourceStart)
             : TimeSpan.Zero;
 
         if (_seekTargetSeconds >= 0)
@@ -225,9 +227,11 @@ public partial class FloatingVideoViewModel
                 _trimEndReached = false;
 
                 bool playSingleFrame = !_isPlaybackActive;
-                // Timeline mode: walk the kept segments (one or many), skipping any cut gaps. A single
-                // kept segment just plays its [start,end] range — that is how trimming works now.
-                bool multi = !playSingleFrame && IsTimelineMode && EditSegments.Count >= 1;
+                // Walk the KEPT pieces (one or many), skipping dropped ones. A single kept piece just
+                // plays its [start,end] range (= a trim). Independent of IsTimelineMode, so a collapsed
+                // panel still previews the edit.
+                VideoEditSegment[] kept = KeptSegments();
+                bool multi = !playSingleFrame && kept.Length >= 1;
 
                 double startSeconds = _currentTime.TotalSeconds;
                 double passEnd;
@@ -235,10 +239,10 @@ public partial class FloatingVideoViewModel
 
                 if (multi)
                 {
-                    segIndex = ResolveSegmentForPlayback(ref startSeconds);
+                    segIndex = ResolveSegmentForPlayback(kept, ref startSeconds);
                     if (segIndex < 0)
                     {
-                        // Past the last kept segment: behave like end of clip.
+                        // Past the last kept piece: behave like end of clip.
                         if (!IsLooping)
                         {
                             _isPlaybackActive = false;
@@ -248,11 +252,11 @@ public partial class FloatingVideoViewModel
                         }
 
                         segIndex = 0;
-                        startSeconds = EditSegments[0].SourceStart;
+                        startSeconds = kept[0].SourceStart;
                     }
 
                     _currentTime = TimeSpan.FromSeconds(startSeconds);
-                    passEnd = EditSegments[segIndex].SourceEnd;
+                    passEnd = kept[segIndex].SourceEnd;
                 }
                 else
                 {
@@ -315,10 +319,10 @@ public partial class FloatingVideoViewModel
 
                 if (multi)
                 {
-                    // Advance to the next kept segment (skipping the cut gap), or loop/stop at the end.
-                    if (segIndex + 1 < EditSegments.Count)
+                    // Advance to the next kept piece (skipping the dropped gap), or loop/stop at the end.
+                    if (segIndex + 1 < kept.Length)
                     {
-                        _currentTime = TimeSpan.FromSeconds(EditSegments[segIndex + 1].SourceStart);
+                        _currentTime = TimeSpan.FromSeconds(kept[segIndex + 1].SourceStart);
                         UpdateAudioStateFromPlayback();
                         RequestCurrentTimeUiRefresh(force: true);
                         continue;
@@ -332,7 +336,7 @@ public partial class FloatingVideoViewModel
                         break;
                     }
 
-                    _currentTime = TimeSpan.FromSeconds(EditSegments[0].SourceStart);
+                    _currentTime = TimeSpan.FromSeconds(kept[0].SourceStart);
                     UpdateAudioStateFromPlayback();
                     RequestCurrentTimeUiRefresh(force: true);
                     continue;
@@ -368,12 +372,12 @@ public partial class FloatingVideoViewModel
     /// a cut gap (or before the first segment) snaps forward to the next segment's start. Returns the
     /// segment index, or -1 when the time is past the last kept segment.
     /// </summary>
-    private int ResolveSegmentForPlayback(ref double sourceSeconds)
+    private static int ResolveSegmentForPlayback(VideoEditSegment[] kept, ref double sourceSeconds)
     {
         double s = sourceSeconds;
-        for (int i = 0; i < EditSegments.Count; i++)
+        for (int i = 0; i < kept.Length; i++)
         {
-            var seg = EditSegments[i];
+            VideoEditSegment seg = kept[i];
             if (s < seg.SourceEnd - 1e-3)
             {
                 sourceSeconds = Math.Max(s, seg.SourceStart);

@@ -171,7 +171,7 @@
   "TipTimeline": "Timeline (multi-segment cut)",
   "TipSplitSegment": "Split at playhead",
   "TipDeleteSegment": "Delete selected segment",
-  "TimelineHint": "Drag the playhead → Split → tap a block → Delete",
+  "TimelineHint": "Drag = scrub · Split · tap a piece to keep / drop",
   "MenuCopyImage": "Copy Image",
   "MenuCrop": "Crop",
   "MenuPinSelection": "Pin Selection",

@@ -151,7 +151,7 @@
   "TipTimeline": "タイムライン（マルチセグメント編集）",
   "TipSplitSegment": "再生位置で分割",
   "TipDeleteSegment": "選択したセグメントを削除",
-  "TimelineHint": "再生位置を移動 → 分割 → ブロックを選択 → 削除",
+  "TimelineHint": "ドラッグ=シーク · 分割 · タップで保持/除外を切替",
   "MenuCopyImage": "画像をコピー",
   "MenuCrop": "切り抜き",
   "MenuPinSelection": "選択範囲をピン留め",

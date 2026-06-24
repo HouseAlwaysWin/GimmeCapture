@@ -33,11 +33,12 @@ public sealed class SegmentBlockViewModel : ReactiveObject
         set => this.RaiseAndSetIfChanged(ref _label, value);
     }
 
-    private bool _isSelected;
-    public bool IsSelected
+    private bool _isKept = true;
+    /// <summary>Whether this piece is kept in the output (kept = highlighted; dropped = dimmed).</summary>
+    public bool IsKept
     {
-        get => _isSelected;
-        set => this.RaiseAndSetIfChanged(ref _isSelected, value);
+        get => _isKept;
+        set => this.RaiseAndSetIfChanged(ref _isKept, value);
     }
 
     // Pixel layout on the strip, computed by the view from the track width (mirrors the trim thumbs).
