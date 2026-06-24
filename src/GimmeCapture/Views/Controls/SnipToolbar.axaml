@@ -156,12 +156,18 @@
                          neither closes nor gives feedback). Each item sets the persisted direction. -->
                     <MenuFlyout Placement="Top">
                         <MenuItem Header="{Binding [ScrollDirectionAuto], Source={x:Static infra:LocalizationService.Instance}}"
+                                  ToggleType="Radio"
+                                  IsChecked="{Binding ScrollingCaptureDirection, Mode=OneWay, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:ScrollingCaptureDirection.Auto}}"
                                   Command="{Binding SetScrollDirectionCommand}"
                                   CommandParameter="{x:Static m:ScrollingCaptureDirection.Auto}"/>
                         <MenuItem Header="{Binding [ScrollDirectionVertical], Source={x:Static infra:LocalizationService.Instance}}"
+                                  ToggleType="Radio"
+                                  IsChecked="{Binding ScrollingCaptureDirection, Mode=OneWay, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:ScrollingCaptureDirection.Vertical}}"
                                   Command="{Binding SetScrollDirectionCommand}"
                                   CommandParameter="{x:Static m:ScrollingCaptureDirection.Vertical}"/>
                         <MenuItem Header="{Binding [ScrollDirectionHorizontal], Source={x:Static infra:LocalizationService.Instance}}"
+                                  ToggleType="Radio"
+                                  IsChecked="{Binding ScrollingCaptureDirection, Mode=OneWay, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:ScrollingCaptureDirection.Horizontal}}"
                                   Command="{Binding SetScrollDirectionCommand}"
                                   CommandParameter="{x:Static m:ScrollingCaptureDirection.Horizontal}"/>
                     </MenuFlyout>

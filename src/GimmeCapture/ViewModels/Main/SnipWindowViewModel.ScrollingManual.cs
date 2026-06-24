@@ -320,7 +320,9 @@ public partial class SnipWindowViewModel
         int height = stitchFrame.Height;
 
         ScrollStitcher.FrameAlignment align = ScrollStitcher.AlignFrameToStrip(
-            _manualAccumulated!, stitchFrame, _manualMinOverlap, _manualIgnoreRight, ManualRowMismatchTolerance, height);
+            _manualAccumulated!, stitchFrame,
+            out double diagBestScore, out double diagAmbiguityGap, out int diagSampleCount,
+            _manualMinOverlap, _manualIgnoreRight, ManualRowMismatchTolerance, height);
 
         if (align.Found)
         {
@@ -345,11 +347,15 @@ public partial class SnipWindowViewModel
             // else: frame lies fully inside the strip (scrolled back) — nothing new.
         }
 
-        // DIAGNOSTIC (temporary): per-frame alignment outcome, to pinpoint why horizontal often
-        // fails to grow (found? offset? did the dims/overlap allow a match?).
+        // DIAGNOSTIC (temporary): per-frame alignment outcome + WHY it was rejected.
+        // best=MAX => no offset scored (weight-starved / uniform frames); best>0.5 => frames don't
+        // overlap well; small ambGap (<0.035) => rejected as ambiguous.
+        string best = diagBestScore == double.MaxValue ? "MAX" : diagBestScore.ToString("F3");
+        string ambGap = diagAmbiguityGap == double.MaxValue ? "none" : diagAmbiguityGap.ToString("F3");
         AppLog.Information(
             $"ManualScroll.Align horiz={_manualHorizontal} strip={_manualAccumulated!.Width}x{_manualAccumulated.Height} " +
-            $"frame={stitchFrame.Width}x{stitchFrame.Height} found={align.Found} off={align.Offset} grew={grew}");
+            $"frame={stitchFrame.Width}x{stitchFrame.Height} found={align.Found} off={align.Offset} grew={grew} " +
+            $"best={best} ambGap={ambGap} samples={diagSampleCount}");
 
         _manualPrevFrame!.Dispose();
         _manualPrevFrame = stitchFrame; // anchor always advances; ownership moves into prev

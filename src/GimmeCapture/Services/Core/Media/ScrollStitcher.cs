@@ -255,7 +255,31 @@ internal static class ScrollStitcher
         int ignoreRightColumns = 0,
         double maxRowMismatchRatio = 0.0,
         int searchMargin = int.MaxValue)
+        => AlignFrameToStrip(strip, frame, out _, out _, out _, minOverlapRows, ignoreRightColumns, maxRowMismatchRatio, searchMargin);
+
+    /// <summary>
+    /// Diagnostic overload of <see cref="AlignFrameToStrip(SKBitmap,SKBitmap,int,int,double,int)"/> that
+    /// also reports why a match was (not) accepted: <paramref name="bestScoreOut"/> is the lowest
+    /// (best) weighted sample-diff ratio found (<c>double.MaxValue</c> when no offset scored at all —
+    /// e.g. weight-starved/uniform frames); <paramref name="ambiguityGapOut"/> is rival−best (small =
+    /// ambiguous; <c>double.MaxValue</c> when there is no rival); <paramref name="sampleCountOut"/> is
+    /// the per-row sample count.
+    /// </summary>
+    public static FrameAlignment AlignFrameToStrip(
+        SKBitmap strip,
+        SKBitmap frame,
+        out double bestScoreOut,
+        out double ambiguityGapOut,
+        out int sampleCountOut,
+        int minOverlapRows = 8,
+        int ignoreRightColumns = 0,
+        double maxRowMismatchRatio = 0.0,
+        int searchMargin = int.MaxValue)
     {
+        bestScoreOut = double.MaxValue;
+        ambiguityGapOut = double.MaxValue;
+        sampleCountOut = 0;
+
         ArgumentNullException.ThrowIfNull(strip);
         ArgumentNullException.ThrowIfNull(frame);
 
@@ -271,6 +295,7 @@ internal static class ScrollStitcher
 
         byte[] frameSig = ComputeRowSignatures(frame, ignoreRightColumns, out int sampleCount);
         byte[] stripSig = ComputeRowSignatures(strip, ignoreRightColumns, out _);
+        sampleCountOut = sampleCount;
         if (sampleCount == 0)
         {
             return new FrameAlignment(0, false);
@@ -354,6 +379,8 @@ internal static class ScrollStitcher
             }
         }
 
+        bestScoreOut = bestScore;
+
         if (!found || bestScore > MaxMatchSampleDiffRatio)
         {
             return new FrameAlignment(0, false);
@@ -373,6 +400,11 @@ internal static class ScrollStitcher
             {
                 rivalScore = scores[i];
             }
+        }
+
+        if (rivalScore != double.MaxValue)
+        {
+            ambiguityGapOut = rivalScore - bestScore;
         }
 
         if (rivalScore != double.MaxValue && rivalScore - bestScore < AmbiguityMargin)
