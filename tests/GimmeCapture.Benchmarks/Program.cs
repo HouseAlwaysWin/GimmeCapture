@@ -467,11 +467,20 @@ public class AnnotationRenderBenchmarks
 {
     private SKBitmap _bitmap = null!;
     private Annotation[] _annotations = null!;
+    private Annotation _blurAnnotation = null!;
 
     [GlobalSetup]
     public void Setup()
     {
         _bitmap = new SKBitmap(1280, 720, SKColorType.Bgra8888, SKAlphaType.Premul);
+        _blurAnnotation = new Annotation
+        {
+            Type = AnnotationType.Blur,
+            StartPoint = new Avalonia.Point(300, 200),
+            EndPoint = new Avalonia.Point(700, 480),
+            EffectSettings = new AnnotationEffectSettings { BlurRadius = 12f },
+            DrawingModeReferenceSize = new Avalonia.Size(1280, 720)
+        };
         _annotations =
         [
             new Annotation
@@ -518,6 +527,14 @@ public class AnnotationRenderBenchmarks
             720,
             1280,
             720);
+    }
+
+    // Live-preview path (runs on every pointer move during a blur drag): exercises the ROI-crop +
+    // single-allocation blur so the allocation/throughput win is measurable.
+    [Benchmark]
+    public void RenderBlurPreview()
+    {
+        using var preview = AnnotationRenderService.Shared.RenderAnnotationPreviewToSkBitmap(_bitmap, _blurAnnotation, 1280, 720);
     }
 }
 
