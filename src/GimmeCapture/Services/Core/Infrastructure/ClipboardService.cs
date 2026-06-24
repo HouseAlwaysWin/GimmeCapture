@@ -156,27 +156,34 @@ public class ClipboardService : IClipboardService
         {
             if (OperatingSystem.IsWindows())
             {
-                await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => 
+                await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
                 {
-                    try 
+                    try
                     {
-                        // 1. Prepare Image
-                        var pngBytes = FloatingBitmapConversionHelper.EncodeBitmapToPngBytes(bitmap);
-                        using var msForBitmap = new System.IO.MemoryStream(pngBytes);
-                        using var winBitmap = new System.Drawing.Bitmap(msForBitmap);
-                        
-                        // 2. Prepare File List
+                        // The FILE is the primary payload (e.g. a trimmed video clip) — set it first so
+                        // it always lands on the clipboard. The thumbnail bitmap is best-effort: if it
+                        // fails (e.g. a null/odd frame), we must NOT skip the file, or a stale prior
+                        // clipboard entry (the whole video) would survive and paste instead.
                         var fileList = new System.Collections.Specialized.StringCollection();
                         fileList.Add(Path.GetFullPath(filePath));
 
-                        // 3. Combine in DataObject
                         var data = new System.Windows.Forms.DataObject();
                         data.SetFileDropList(fileList);
-                        data.SetData(System.Windows.Forms.DataFormats.Bitmap, true, winBitmap);
-                        
-                        using var pngStream = new System.IO.MemoryStream(pngBytes);
-                        data.SetData("PNG", false, pngStream);
-                        
+
+                        try
+                        {
+                            var pngBytes = FloatingBitmapConversionHelper.EncodeBitmapToPngBytes(bitmap);
+                            using var msForBitmap = new System.IO.MemoryStream(pngBytes);
+                            using var winBitmap = new System.Drawing.Bitmap(msForBitmap);
+                            data.SetData(System.Windows.Forms.DataFormats.Bitmap, true, winBitmap);
+                            var pngStream = new System.IO.MemoryStream(pngBytes);
+                            data.SetData("PNG", false, pngStream);
+                        }
+                        catch (Exception imgEx)
+                        {
+                            AppLog.Warning("Clipboard.CopyFileAndImage.Thumbnail", imgEx);
+                        }
+
                         for (int i = 0; i < 5; i++)
                         {
                             try

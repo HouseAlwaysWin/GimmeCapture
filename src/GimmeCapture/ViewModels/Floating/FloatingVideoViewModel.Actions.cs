@@ -249,7 +249,19 @@ public partial class FloatingVideoViewModel
                     var trimmed = await ExportTrimmedInProcessAsync(copyExt);
                     if (!string.IsNullOrEmpty(trimmed) && System.IO.File.Exists(trimmed))
                     {
-                        await _clipboardService.CopyFileAndImageAsync(trimmed, await GetFlattenedBitmapAsync() ?? VideoBitmap!);
+                        // Put the trimmed clip on the clipboard. The thumbnail is optional — never let a
+                        // null/failed bitmap stop the file from being copied (a stale prior clipboard entry
+                        // would otherwise paste the whole video).
+                        var thumb = await GetFlattenedBitmapAsync() ?? VideoBitmap;
+                        if (thumb != null)
+                        {
+                            await _clipboardService.CopyFileAndImageAsync(trimmed, thumb);
+                        }
+                        else
+                        {
+                            await _clipboardService.CopyFileAsync(trimmed);
+                        }
+                        AppLog.Information($"FloatingVideo.Copy trimmed clip -> {Path.GetFileName(trimmed)} ({new FileInfo(trimmed).Length} bytes)");
                         return;
                     }
 
