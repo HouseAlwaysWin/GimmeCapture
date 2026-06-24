@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
@@ -19,20 +18,10 @@ namespace GimmeCapture.ViewModels.Main;
 // long pin); Esc cancels.
 public partial class SnipWindowViewModel
 {
-    // Pre-lock holder for the base (first) frame in stitch space. Used while the scroll axis is still
-    // being detected; once stitching starts it is moved into _manualSegments and this goes null.
     private SKBitmap? _manualAccumulated;
     private SKBitmap? _manualPrevFrame;
     private bool _manualScrollActive;
     private bool _manualFinishing;
-
-    // The accumulated long image, stored as ordered top-to-bottom pieces rather than one growing
-    // bitmap. Each confirmed grow inserts a small sliver (O(newRows) copy) at the front (prepend) or
-    // back (append); incoming frames are matched only against a bounded edge window derived from these
-    // segments, so per-frame stitching stays O(frame) instead of O(strip). The full image is composited
-    // once on finish. _manualTotalHeight is the running sum of segment heights (the strip length).
-    private readonly List<SKBitmap> _manualSegments = new();
-    private int _manualTotalHeight;
 
     // Active stitch-space parameters for the locked scroll axis. The strip is always stitched
     // along its vertical axis (its "height"); for a horizontal scroll each frame is rotated 90°
@@ -173,17 +162,6 @@ public partial class SnipWindowViewModel
             _manualAccumulated = rotated;
         }
 
-        // Start with an empty segment list; the base frame is moved into it lazily once stitching
-        // begins (EnsureManualSegmentsInitialized). Dispose any leftovers defensively in case a prior
-        // session didn't clean up.
-        foreach (SKBitmap leftover in _manualSegments)
-        {
-            leftover.Dispose();
-        }
-
-        _manualSegments.Clear();
-        _manualTotalHeight = 0;
-
         _manualPrevFrame = _manualAccumulated.Copy();
         _manualFinishing = false;
         _manualScrollActive = true;
@@ -278,10 +256,7 @@ public partial class SnipWindowViewModel
             {
                 try
                 {
-                    // Not yet initialised when both the pre-lock base holder and the segment list are
-                    // empty. After stitching starts _manualAccumulated goes null (its content moves into
-                    // _manualSegments), so a null accumulated alone is not an error.
-                    if (_manualPrevFrame == null || (_manualAccumulated == null && _manualSegments.Count == 0))
+                    if (_manualPrevFrame == null || _manualAccumulated == null)
                     {
                         frame.Dispose();
                         continue;
@@ -296,7 +271,7 @@ public partial class SnipWindowViewModel
 
                     if (grew)
                     {
-                        int newHeight = _manualTotalHeight;
+                        int newHeight = _manualAccumulated.Height;
                         Dispatcher.UIThread.Post(() => UpdateScrollingHintAction?.Invoke(newHeight));
 
                         if (newHeight >= _manualMaxHeight)
@@ -341,109 +316,50 @@ public partial class SnipWindowViewModel
     // frame's ownership always moves into _manualPrevFrame. Returns whether the strip grew.
     private bool ApplyStitchFrame(SKBitmap stitchFrame)
     {
-        EnsureManualSegmentsInitialized();
-
         bool grew = false;
-        int cap = stitchFrame.Height; // bounded matching-window height (one frame's worth)
+        int height = stitchFrame.Height;
 
-        // Match against the strip's TOP edge: a bounded window of at most `cap` rows built from the
-        // leading segments. O(cap), not O(strip), so the consumer keeps pace however long the capture
-        // grows — the fix for the "halfway then stuck" backpressure stall.
-        SKBitmap headWin = ScrollStitcher.EdgeWindow(_manualSegments, cap, top: true);
-        int headWinH = headWin.Height;
+        ScrollStitcher.FrameAlignment align = ScrollStitcher.AlignFrameToStrip(
+            _manualAccumulated!, stitchFrame,
+            out double diagBestScore, out double diagAmbiguityGap, out int diagSampleCount,
+            _manualMinOverlap, _manualIgnoreRight, ManualRowMismatchTolerance, height);
 
-        ScrollStitcher.FrameAlignment alignHead;
-        double diagBestScore;
-        double diagAmbiguityGap;
-        int diagSampleCount;
-        int prependRows = 0;
-        int appendRows = 0;
-        try
+        if (align.Found)
         {
-            alignHead = ScrollStitcher.AlignFrameToStrip(
-                headWin, stitchFrame,
-                out diagBestScore, out diagAmbiguityGap, out diagSampleCount,
-                _manualMinOverlap, _manualIgnoreRight, ManualRowMismatchTolerance, headWinH);
-
-            if (alignHead.Found && alignHead.Offset < 0)
+            int stripH = _manualAccumulated!.Height;
+            if (align.Offset < 0)
             {
-                prependRows = -alignHead.Offset; // frame overhangs the top: new head rows
-            }
-
-            if (_manualTotalHeight > cap)
-            {
-                // Strip is taller than one window: the top and bottom edges are distinct, so probe the
-                // bottom edge separately for an append. A frame can only overhang one edge of a strip
-                // taller than itself, so at most one of prepend/append fires.
-                SKBitmap tailWin = ScrollStitcher.EdgeWindow(_manualSegments, cap, top: false);
-                try
-                {
-                    ScrollStitcher.FrameAlignment alignTail = ScrollStitcher.AlignFrameToStrip(
-                        tailWin, stitchFrame, _manualMinOverlap, _manualIgnoreRight, ManualRowMismatchTolerance, tailWin.Height);
-                    if (alignTail.Found && alignTail.Offset + cap > tailWin.Height)
-                    {
-                        appendRows = alignTail.Offset + cap - tailWin.Height;
-                    }
-                }
-                finally
-                {
-                    tailWin.Dispose();
-                }
-            }
-            else if (prependRows == 0 && alignHead.Found && alignHead.Offset + cap > headWinH)
-            {
-                // Whole strip still fits in one window: the head window IS the strip, so the same
-                // alignment also reports a bottom overhang.
-                appendRows = alignHead.Offset + cap - headWinH;
-            }
-
-            if (prependRows > 0)
-            {
-                _manualSegments.Insert(0, ScrollStitcher.CropRows(stitchFrame, 0, prependRows));
-                _manualTotalHeight += prependRows;
+                // Frame overhangs the top: prepend the new head rows.
+                SKBitmap grown = ScrollStitcher.Prepend(_manualAccumulated, stitchFrame, -align.Offset);
+                _manualAccumulated.Dispose();
+                _manualAccumulated = grown;
                 grew = true;
             }
-            else if (appendRows > 0)
+            else if (align.Offset + height > stripH)
             {
-                _manualSegments.Add(ScrollStitcher.CropRows(stitchFrame, cap - appendRows, appendRows));
-                _manualTotalHeight += appendRows;
+                // Frame overhangs the bottom: append the new tail rows.
+                int overlap = stripH - align.Offset;
+                SKBitmap grown = ScrollStitcher.Append(_manualAccumulated, stitchFrame, overlap);
+                _manualAccumulated.Dispose();
+                _manualAccumulated = grown;
                 grew = true;
             }
             // else: frame lies fully inside the strip (scrolled back) — nothing new.
+        }
 
-            // DIAGNOSTIC (temporary): per-frame alignment outcome + WHY it was rejected.
-            // best=MAX => no offset scored (weight-starved / uniform frames); best>0.5 => frames don't
-            // overlap well; small ambGap (<0.035) => rejected as ambiguous.
-            string best = diagBestScore == double.MaxValue ? "MAX" : diagBestScore.ToString("F3");
-            string ambGap = diagAmbiguityGap == double.MaxValue ? "none" : diagAmbiguityGap.ToString("F3");
-            AppLog.Information(
-                $"ManualScroll.Align horiz={_manualHorizontal} total={_manualTotalHeight} window={headWinH} " +
-                $"frame={stitchFrame.Width}x{stitchFrame.Height} found={alignHead.Found} off={alignHead.Offset} " +
-                $"prepend={prependRows} append={appendRows} grew={grew} best={best} ambGap={ambGap} samples={diagSampleCount}");
-        }
-        finally
-        {
-            headWin.Dispose();
-        }
+        // DIAGNOSTIC (temporary): per-frame alignment outcome + WHY it was rejected.
+        // best=MAX => no offset scored (weight-starved / uniform frames); best>0.5 => frames don't
+        // overlap well; small ambGap (<0.035) => rejected as ambiguous.
+        string best = diagBestScore == double.MaxValue ? "MAX" : diagBestScore.ToString("F3");
+        string ambGap = diagAmbiguityGap == double.MaxValue ? "none" : diagAmbiguityGap.ToString("F3");
+        AppLog.Information(
+            $"ManualScroll.Align horiz={_manualHorizontal} strip={_manualAccumulated!.Width}x{_manualAccumulated.Height} " +
+            $"frame={stitchFrame.Width}x{stitchFrame.Height} found={align.Found} off={align.Offset} grew={grew} " +
+            $"best={best} ambGap={ambGap} samples={diagSampleCount}");
 
         _manualPrevFrame!.Dispose();
         _manualPrevFrame = stitchFrame; // anchor always advances; ownership moves into prev
         return grew;
-    }
-
-    // Moves the base (first) frame from the pre-lock holder into the segment list on the first stitch.
-    // From then on _manualSegments is the source of truth for the full strip and _manualAccumulated
-    // is null. No-op once initialised.
-    private void EnsureManualSegmentsInitialized()
-    {
-        if (_manualSegments.Count > 0 || _manualAccumulated == null)
-        {
-            return;
-        }
-
-        _manualSegments.Add(_manualAccumulated); // move ownership; do not dispose here
-        _manualTotalHeight = _manualAccumulated.Height;
-        _manualAccumulated = null;
     }
 
     // Scroll axis already locked: rotate the screen-space frame into stitch space when horizontal,
@@ -588,32 +504,14 @@ public partial class SnipWindowViewModel
                 }
             }
 
-            SKBitmap? window = _manualAccumulated;
+            SKBitmap? result = _manualAccumulated;
             SKBitmap? prev = _manualPrevFrame;
-            SKBitmap[] segments = _manualSegments.ToArray();
             _manualAccumulated = null;
             _manualPrevFrame = null;
-            _manualSegments.Clear();
-            _manualTotalHeight = 0;
 
-            // Materialise the long image from its pieces once (O(total)). If stitching never started
-            // (axis never locked / no frame consumed) the base frame is still in the pre-lock holder.
-            SKBitmap? result = null;
             try
             {
-                if (!cancelled)
-                {
-                    if (segments.Length > 0)
-                    {
-                        result = ScrollStitcher.Concatenate(segments);
-                    }
-                    else if (window != null)
-                    {
-                        result = window.Copy();
-                    }
-                }
-
-                if (result != null && result.Width > 0 && result.Height > 0)
+                if (!cancelled && result != null && result.Width > 0 && result.Height > 0)
                 {
                     if (_manualHorizontal == true)
                     {
@@ -634,12 +532,6 @@ public partial class SnipWindowViewModel
             finally
             {
                 result?.Dispose();
-                window?.Dispose();
-                foreach (SKBitmap seg in segments)
-                {
-                    seg.Dispose();
-                }
-
                 prev?.Dispose();
             }
         }

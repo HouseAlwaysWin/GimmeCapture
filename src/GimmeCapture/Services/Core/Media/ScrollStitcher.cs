@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using SkiaSharp;
 
 namespace GimmeCapture.Services.Core.Media;
@@ -12,16 +11,9 @@ namespace GimmeCapture.Services.Core.Media;
 /// </summary>
 internal static class ScrollStitcher
 {
-    // Evenly-spaced columns sampled per row when building a row signature. The count adapts to the
-    // usable width: roughly one sample per SampleColumnStridePx, clamped to [Min, Max]. A FIXED 32
-    // was too sparse for wide strips — notably a horizontal scroll folded into stitch space, where the
-    // stitch width equals the (large) region height. One sample per ~17px there landed between the
-    // rows that carry horizontal texture, so every row's distinctiveness weight collapsed to ~0 and
-    // alignment failed outright (best score never set). Denser sampling restores that signal; the
-    // bounded matching window (see SnipWindowViewModel) keeps the extra cost affordable.
-    private const int MinSampleColumns = 32;
-    private const int MaxSampleColumns = 96;
-    private const int SampleColumnStridePx = 6;
+    // Number of evenly-spaced columns sampled per row when building a row signature.
+    // Comparing a fixed subset keeps the O(height^2) shift search affordable on tall regions.
+    private const int SampleColumns = 32;
 
     // Per-channel (B/G/R) absolute difference, below which two sampled pixels are "the same".
     // Absorbs subpixel anti-aliasing / GPU compositing jitter so a row re-rendered slightly
@@ -546,131 +538,6 @@ internal static class ScrollStitcher
     }
 
     /// <summary>
-    /// Returns an independent copy of <paramref name="count"/> rows of <paramref name="src"/>
-    /// starting at <paramref name="startRow"/> (a horizontal sliver, full width). Used to peel the
-    /// newly-revealed rows off a frame so they can be stored as a segment without holding the whole
-    /// frame. The result owns its own pixels — disposing <paramref name="src"/> does not affect it.
-    /// </summary>
-    public static SKBitmap CropRows(SKBitmap src, int startRow, int count)
-    {
-        ArgumentNullException.ThrowIfNull(src);
-
-        startRow = Math.Clamp(startRow, 0, Math.Max(0, src.Height));
-        count = Math.Clamp(count, 0, src.Height - startRow);
-
-        var result = new SKBitmap(new SKImageInfo(src.Width, Math.Max(1, count), SKColorType.Bgra8888, SKAlphaType.Premul));
-        if (count <= 0 || src.Width <= 0)
-        {
-            return result;
-        }
-
-        using var canvas = new SKCanvas(result);
-        var srcRect = new SKRect(0, startRow, src.Width, startRow + count);
-        var dstRect = new SKRect(0, 0, src.Width, count);
-        canvas.DrawBitmap(src, srcRect, dstRect);
-        return result;
-    }
-
-    /// <summary>
-    /// Builds a bounded matching window from the leading (<paramref name="top"/> = true) or trailing
-    /// edge of the ordered <paramref name="segments"/> that make up the accumulated strip: at most
-    /// <paramref name="cap"/> rows, taken from whichever end new content attaches to. Only the few
-    /// segments touching the window are read, so the cost is O(cap) regardless of total strip length —
-    /// this is what keeps per-frame stitching independent of how long the capture has grown. The
-    /// returned bitmap can be aligned against an incoming frame exactly like a full strip.
-    /// </summary>
-    public static SKBitmap EdgeWindow(IReadOnlyList<SKBitmap> segments, int cap, bool top)
-    {
-        ArgumentNullException.ThrowIfNull(segments);
-
-        int total = 0;
-        int width = 0;
-        for (int i = 0; i < segments.Count; i++)
-        {
-            total += segments[i].Height;
-            if (width == 0)
-            {
-                width = segments[i].Width;
-            }
-        }
-
-        int windowH = Math.Min(Math.Max(1, cap), Math.Max(1, total));
-        var result = new SKBitmap(new SKImageInfo(Math.Max(1, width), windowH, SKColorType.Bgra8888, SKAlphaType.Premul));
-        if (segments.Count == 0 || width <= 0)
-        {
-            return result;
-        }
-
-        using var canvas = new SKCanvas(result);
-        if (top)
-        {
-            // Draw segments front-to-back from y = 0; the segment crossing the window's bottom edge is
-            // clipped by the canvas. Stop as soon as the window is filled.
-            int y = 0;
-            for (int i = 0; i < segments.Count && y < windowH; i++)
-            {
-                canvas.DrawBitmap(segments[i], 0, y);
-                y += segments[i].Height;
-            }
-        }
-        else
-        {
-            // Draw segments back-to-front so the strip's last row lands on the window's bottom; the
-            // topmost segment is clipped above y = 0. Stop once the window is filled.
-            int y = windowH;
-            for (int i = segments.Count - 1; i >= 0; i--)
-            {
-                y -= segments[i].Height;
-                canvas.DrawBitmap(segments[i], 0, y);
-                if (y <= 0)
-                {
-                    break;
-                }
-            }
-        }
-
-        return result;
-    }
-
-    /// <summary>
-    /// Stacks the ordered <paramref name="segments"/> top-to-bottom into a single bitmap (full width,
-    /// height = sum of segment heights). Called once at the end of a scrolling capture to materialise
-    /// the long image from the pieces accumulated during stitching. Returns a 1×1 bitmap if the list
-    /// is empty.
-    /// </summary>
-    public static SKBitmap Concatenate(IReadOnlyList<SKBitmap> segments)
-    {
-        ArgumentNullException.ThrowIfNull(segments);
-
-        int total = 0;
-        int width = 0;
-        for (int i = 0; i < segments.Count; i++)
-        {
-            total += segments[i].Height;
-            if (width == 0)
-            {
-                width = segments[i].Width;
-            }
-        }
-
-        if (segments.Count == 0 || width <= 0 || total <= 0)
-        {
-            return new SKBitmap(new SKImageInfo(1, 1, SKColorType.Bgra8888, SKAlphaType.Premul));
-        }
-
-        var result = new SKBitmap(new SKImageInfo(width, total, SKColorType.Bgra8888, SKAlphaType.Premul));
-        using var canvas = new SKCanvas(result);
-        int y = 0;
-        for (int i = 0; i < segments.Count; i++)
-        {
-            canvas.DrawBitmap(segments[i], 0, y);
-            y += segments[i].Height;
-        }
-
-        return result;
-    }
-
-    /// <summary>
     /// Returns <paramref name="src"/> rotated 90° clockwise (BGRA8888); the result has swapped
     /// dimensions (width = src.Height, height = src.Width). The source's top row maps to the
     /// result's right column. The exact inverse of <see cref="RotateCcw90"/>; used to restore screen
@@ -775,9 +642,7 @@ internal static class ScrollStitcher
         int height = bitmap.Height;
         int usableColumns = Math.Max(0, width - Math.Max(0, ignoreRightColumns));
 
-        int maxSamples = Math.Min(MaxSampleColumns, usableColumns);
-        int minSamples = Math.Min(MinSampleColumns, usableColumns);
-        sampleCount = Math.Clamp(usableColumns / SampleColumnStridePx, minSamples, maxSamples);
+        sampleCount = Math.Min(SampleColumns, usableColumns);
         var signatures = new byte[height * Math.Max(1, sampleCount) * 4];
 
         int stride = bitmap.RowBytes;
