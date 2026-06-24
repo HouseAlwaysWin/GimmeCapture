@@ -55,6 +55,12 @@ public partial class SnipWindowViewModel
     // doesn't stall capture, without unbounded memory growth.
     private const int ManualQueueCapacity = 8;
 
+    // Minimum overhang (physical px) the dominant axis must reach before the scroll direction is
+    // locked. Because the accumulated strip stays the first frame while undecided, the measured
+    // overhang grows as scrolling continues, so this is crossed within a few frames of real motion.
+    // Prevents locking on a 1px jitter (hover/reflow/wheel drift) before the real scroll begins.
+    private const int ManualAxisLockMinShift = 8;
+
     /// <summary>True while a manual scrolling-capture session is running (overlay hidden).</summary>
     public bool IsManualScrollActive => _manualScrollActive;
 
@@ -327,9 +333,16 @@ public partial class SnipWindowViewModel
             accRotated, frameRotated, _manualMinOverlapH, _manualIgnoreRightH, ManualRowMismatchTolerance, frameRotated.Height);
         int growH = OverhangRows(alignH, accRotated.Height, frameRotated.Height);
 
-        if (growV <= 0 && growH <= 0)
+        int dominant = Math.Max(growV, growH);
+        int other = Math.Min(growV, growH);
+
+        // Stay undecided until one axis shows a decisive, dominant movement: it must clear the
+        // jitter threshold AND beat the other axis by 2x. A 1px vertical wobble on a horizontal
+        // scroll (or vice-versa) must not lock the wrong axis — it would stitch garbage and pin
+        // the wrong orientation. The overhang grows against the (still first-frame) strip as the
+        // user keeps scrolling, so the real axis becomes unambiguous within a few frames.
+        if (dominant < ManualAxisLockMinShift || dominant < other * 2)
         {
-            // No movement yet — discard the rotated probes and keep waiting.
             accRotated.Dispose();
             frameRotated.Dispose();
             _manualPrevFrame!.Dispose();
