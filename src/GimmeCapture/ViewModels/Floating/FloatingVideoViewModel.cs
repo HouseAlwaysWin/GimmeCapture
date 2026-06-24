@@ -46,10 +46,9 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
 
     public string VideoPath { get; }
     private readonly string _ffmpegPath;
-    // Callers currently pass string.Empty; fall back to the bundled ffmpeg.exe so the CLI export works.
-    public string FFmpegPath => string.IsNullOrWhiteSpace(_ffmpegPath)
-        ? FFmpegRuntime.CliExecutablePath
-        : _ffmpegPath;
+    // Legacy CLI export path (annotations/crop). Empty when no external ffmpeg.exe is supplied, in which
+    // case those legacy paths report a clear failure; trim/cut export runs fully in-process (LibavClipExporter).
+    public string FFmpegPath => _ffmpegPath;
     public VideoCodec VideoCodec => _appSettingsService?.Settings.VideoCodec ?? VideoCodec.H264;
     private CancellationTokenSource? _playCts;
     private Task? _playbackTask;

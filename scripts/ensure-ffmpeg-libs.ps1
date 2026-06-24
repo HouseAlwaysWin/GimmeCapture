@@ -34,19 +34,6 @@ Get-ChildItem -Path $binDir.FullName -Filter "*.dll" | ForEach-Object {
     Write-Host "Copied $($_.Name)"
 }
 
-# Also bundle the small dynamically-linked CLI executables. The pin video export shells out to
-# ffmpeg.exe via CliWrap (recording uses the in-process libav DLLs above). ffmpeg.exe/ffprobe.exe in
-# the shared build link against the DLLs we just copied into the same folder, so they stay small.
-foreach ($exe in @("ffmpeg.exe", "ffprobe.exe")) {
-    $src = Join-Path $binDir.FullName $exe
-    if (Test-Path -LiteralPath $src) {
-        Copy-Item $src -Destination (Join-Path $dest $exe) -Force
-        Write-Host "Copied $exe"
-    } else {
-        Write-Warning "Expected $exe in the FFmpeg build but it was not found."
-    }
-}
-
 Remove-Item $zip -Force -ErrorAction SilentlyContinue
 Remove-Item $extract -Recurse -Force -ErrorAction SilentlyContinue
 Write-Host "Done. FFmpeg DLLs are in $dest"

@@ -17,6 +17,7 @@ using CliWrap;
 using CliWrap.Buffered;
 using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Core.Media;
+using GimmeCapture.Services.Core.Media.NativeFFmpeg;
 using GimmeCapture.Services.Core.Rendering;
 using System.Linq;
 
@@ -166,8 +167,8 @@ public partial class FloatingVideoViewModel
             if (ffmpegPath.Contains("ffplay.exe")) ffmpegPath = ffmpegPath.Replace("ffplay.exe", "ffmpeg.exe");
             if (!File.Exists(ffmpegPath))
             {
-                AppLog.Error("FloatingVideo.ExportCrop", new FileNotFoundException(
-                    "Bundled ffmpeg.exe not found; run scripts/ensure-ffmpeg-libs.ps1.", ffmpegPath));
+                AppLog.Error("FloatingVideo.ExportCrop", new InvalidOperationException(
+                    "No external ffmpeg.exe configured; crop/annotation export is not yet supported in-process."));
                 return null;
             }
 
@@ -240,6 +241,23 @@ public partial class FloatingVideoViewModel
                 bool hasAnnotations = Annotations.AsValueEnumerable().Any();
                 bool cutRequested = AnyPieceDropped;
 
+                // Trim/cut copy runs fully in-process (no ffmpeg.exe) for plain video sources.
+                string copyExt = Path.GetExtension(VideoPath).ToLowerInvariant();
+                if (LibavClipExporter.ContainerForExtension(copyExt) == null) copyExt = ".mp4";
+                if (cutRequested && CanExportTrimInProcess(hasAnnotations, copyExt))
+                {
+                    var trimmed = await ExportTrimmedInProcessAsync(copyExt);
+                    if (!string.IsNullOrEmpty(trimmed) && System.IO.File.Exists(trimmed))
+                    {
+                        await _clipboardService.CopyFileAndImageAsync(trimmed, await GetFlattenedBitmapAsync() ?? VideoBitmap!);
+                        return;
+                    }
+
+                    ProcessingText = LocalizationService.Instance["StatusExportFailed"] ?? "Export failed";
+                    await Task.Delay(2000);
+                    return;
+                }
+
                 if (hasAnnotations || cutRequested)
                 {
                     var burntPath = await ExportBurntInVideoAsync();
@@ -249,9 +267,9 @@ public partial class FloatingVideoViewModel
                         return;
                     }
 
-                    // Don't fall back to copying the whole original when a cut was requested — that would
+                    // Don't fall back to copying the whole original when an edit was requested — that would
                     // silently put the untrimmed clip on the clipboard. Surface the failure instead.
-                    if (cutRequested)
+                    if (cutRequested || hasAnnotations)
                     {
                         ProcessingText = LocalizationService.Instance["StatusExportFailed"] ?? "Export failed";
                         await Task.Delay(2000);
@@ -285,6 +303,53 @@ public partial class FloatingVideoViewModel
         await Task.CompletedTask;
     }
 
+    // Trim/cut export is supported in-process when there are no annotations to burn in and the target is
+    // a plain video container (mp4/mkv/mov). GIF/WebM and annotation/crop burn-in are not migrated yet.
+    private bool CanExportTrimInProcess(bool hasAnnotations, string targetExt)
+        => !hasAnnotations && LibavClipExporter.ContainerForExtension(targetExt) != null;
+
+    /// <summary>
+    /// Frame-accurate trim/concat of the kept runs into a temp file using the in-process libav exporter
+    /// (no ffmpeg.exe). Returns the temp output path, or null on failure (logged).
+    /// </summary>
+    private async Task<string?> ExportTrimmedInProcessAsync(string targetExtension)
+    {
+        var runs = KeptRuns();
+        if (runs.Length == 0) return null;
+
+        var ranges = runs
+            .Select(r => new LibavClipExporter.SourceRange(r.SourceStart, r.SourceEnd))
+            .ToList();
+
+        string ext = targetExtension.StartsWith('.') ? targetExtension : "." + targetExtension;
+        string tempDir = Path.Combine(Path.GetTempPath(), "GimmeCapture_Export_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        string outputPath = Path.Combine(tempDir, "output" + ext);
+        VideoQuality quality = _appSettingsService?.Settings.VideoQuality ?? VideoQuality.Medium;
+
+        IsExporting = true;
+        try
+        {
+            bool ok = await Task.Run(() => LibavClipExporter.TryExport(VideoPath, ranges, outputPath, quality));
+            if (ok)
+            {
+                return outputPath;
+            }
+
+            AppLog.Error("FloatingVideo.ExportTrim", new Exception("In-process clip export produced no output file."));
+            return null;
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error("FloatingVideo.ExportTrim", ex);
+            return null;
+        }
+        finally
+        {
+            IsExporting = false;
+        }
+    }
+
     private async Task SaveAsync()
     {
         if (PickSaveFileAction == null || IsProcessing) return;
@@ -306,6 +371,22 @@ public partial class FloatingVideoViewModel
                 bool needsConversion = sourceExt != targetExt;
                 bool cutRequested = AnyPieceDropped;
 
+                // Trim/cut export runs fully in-process (no ffmpeg.exe) for plain video targets.
+                if (cutRequested && CanExportTrimInProcess(hasAnnotations, targetExt))
+                {
+                    var trimmed = await ExportTrimmedInProcessAsync(targetExt);
+                    if (!string.IsNullOrEmpty(trimmed) && System.IO.File.Exists(trimmed))
+                    {
+                        System.IO.File.Copy(trimmed, targetPath, true);
+                        FileLocationService.RevealInFileExplorer(targetPath);
+                        return;
+                    }
+
+                    ProcessingText = LocalizationService.Instance["StatusExportFailed"] ?? "Export failed";
+                    await Task.Delay(2000);
+                    return;
+                }
+
                 if (hasAnnotations || needsConversion || cutRequested)
                 {
                     var processedPath = await ExportBurntInVideoAsync(targetExt);
@@ -316,10 +397,10 @@ public partial class FloatingVideoViewModel
                         return;
                     }
 
-                    // The user dropped pieces but the trim/concat export failed. Copying the original
-                    // whole clip here would silently produce the WRONG (untrimmed) video, which looks
-                    // exactly like "the cut did nothing". Surface the failure instead of masking it.
-                    if (cutRequested)
+                    // A cut/annotation export was requested but failed. Copying the original whole clip
+                    // here would silently produce the WRONG (untrimmed) video, which looks exactly like
+                    // "the edit did nothing". Surface the failure instead of masking it.
+                    if (cutRequested || hasAnnotations)
                     {
                         ProcessingText = LocalizationService.Instance["StatusExportFailed"] ?? "Export failed";
                         await Task.Delay(2000);
@@ -412,8 +493,8 @@ public partial class FloatingVideoViewModel
             if (ffmpegPath.Contains("ffplay.exe")) ffmpegPath = ffmpegPath.Replace("ffplay.exe", "ffmpeg.exe");
             if (!File.Exists(ffmpegPath))
             {
-                AppLog.Error("FloatingVideo.Export", new FileNotFoundException(
-                    "Bundled ffmpeg.exe not found; run scripts/ensure-ffmpeg-libs.ps1.", ffmpegPath));
+                AppLog.Error("FloatingVideo.Export", new InvalidOperationException(
+                    "No external ffmpeg.exe configured; annotation burn-in export is not yet supported in-process."));
                 return null;
             }
 
@@ -570,8 +651,8 @@ public partial class FloatingVideoViewModel
             if (ffmpegPath.Contains("ffplay.exe")) ffmpegPath = ffmpegPath.Replace("ffplay.exe", "ffmpeg.exe");
             if (!File.Exists(ffmpegPath))
             {
-                AppLog.Error("FloatingVideo.ExportComposed", new FileNotFoundException(
-                    "Bundled ffmpeg.exe not found; run scripts/ensure-ffmpeg-libs.ps1.", ffmpegPath));
+                AppLog.Error("FloatingVideo.ExportComposed", new InvalidOperationException(
+                    "No external ffmpeg.exe configured; annotation/multi-segment CLI export is not yet supported in-process."));
                 return null;
             }
 
