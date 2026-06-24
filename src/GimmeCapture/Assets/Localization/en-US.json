@@ -256,7 +256,7 @@
   "TipBlur": "Blur",
   "TipHighlighter": "Highlighter",
   "TipStep": "Step Number",
-  "TipCallout": "Callout (label with leader)",
+  "TipCallout": "Callout — drag a leader, then type the label",
   "TipFill": "Fill",
   "TipBringToFront": "Bring to Front",
   "TipSendToBack": "Send to Back",

@@ -535,56 +535,53 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
         var canRedo = this.WhenAnyValue(x => x.HasRedo, x => x.IsEnteringText, (r, t) => r && !t).ObserveOn(RxSchedulers.MainThreadScheduler);
         RedoCommand = ReactiveCommand.Create(Redo, canRedo);
 
-        ConfirmTextEntryCommand = ReactiveCommand.Create(() => 
+        ConfirmTextEntryCommand = ReactiveCommand.Create(() =>
         {
-            if (!string.IsNullOrWhiteSpace(PendingText))
+            if (_pendingTextLeader != null)
             {
-                if (CurrentAnnotationTool == AnnotationType.Callout)
+                // Callout: the leader was already drawn by dragging and is pending in the list.
+                // Attach the typed label, sync the current style, and commit it.
+                var leader = _pendingTextLeader;
+                _pendingTextLeader = null;
+                leader.Text = PendingText ?? string.Empty;
+                leader.Color = SelectedColor;
+                leader.Thickness = CurrentThickness;
+                leader.FontSize = CurrentFontSize;
+                leader.FontFamily = CurrentFontFamily;
+                leader.IsBold = IsBold;
+                leader.IsItalic = IsItalic;
+                if (!CommitPendingAnnotation(leader))
                 {
-                    // Callout: TextInputPosition is the label anchor (EndPoint); the leader
-                    // tip (StartPoint) starts up-left of it and can be dragged onto the target.
-                    const double DefaultLeaderOffset = 48;
-                    var leaderTip = new Point(
-                        Math.Max(0, TextInputPosition.X - DefaultLeaderOffset),
-                        Math.Max(0, TextInputPosition.Y - DefaultLeaderOffset));
-
-                    AddAnnotation(new Annotation
-                    {
-                        Type = AnnotationType.Callout,
-                        StartPoint = leaderTip,
-                        EndPoint = TextInputPosition,
-                        Text = PendingText,
-                        Color = SelectedColor,
-                        Thickness = CurrentThickness,
-                        FontSize = CurrentFontSize,
-                        FontFamily = CurrentFontFamily,
-                        IsBold = IsBold,
-                        IsItalic = IsItalic
-                    });
+                    CancelPendingAnnotation(leader);
                 }
-                else
+            }
+            else if (!string.IsNullOrWhiteSpace(PendingText))
+            {
+                AddAnnotation(new Annotation
                 {
-                    AddAnnotation(new Annotation
-                    {
-                        Type = AnnotationType.Text,
-                        StartPoint = TextInputPosition,
-                        EndPoint = TextInputPosition,
-                        Text = PendingText,
-                        Color = SelectedColor,
-                        FontSize = CurrentFontSize,
-                        FontFamily = CurrentFontFamily,
-                        IsBold = IsBold,
-                        IsItalic = IsItalic
-                    });
-                }
+                    Type = AnnotationType.Text,
+                    StartPoint = TextInputPosition,
+                    EndPoint = TextInputPosition,
+                    Text = PendingText,
+                    Color = SelectedColor,
+                    FontSize = CurrentFontSize,
+                    FontFamily = CurrentFontFamily,
+                    IsBold = IsBold,
+                    IsItalic = IsItalic
+                });
             }
             IsEnteringText = false;
             PendingText = string.Empty;
             FocusWindowAction?.Invoke();
         });
 
-        CancelTextEntryCommand = ReactiveCommand.Create(() => 
+        CancelTextEntryCommand = ReactiveCommand.Create(() =>
         {
+            if (_pendingTextLeader != null)
+            {
+                CancelPendingAnnotation(_pendingTextLeader);
+                _pendingTextLeader = null;
+            }
             IsEnteringText = false;
             PendingText = string.Empty;
             FocusWindowAction?.Invoke();
@@ -601,6 +598,11 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
     public bool CommitPendingAnnotation(Annotation annotation) => _editorState.CommitPendingAnnotation(annotation);
 
     public void CancelPendingAnnotation(Annotation annotation) => _editorState.CancelPendingAnnotation(annotation);
+
+    // A Callout leader drawn by dragging, pending in the list and awaiting its label text.
+    private Annotation? _pendingTextLeader;
+
+    public void BeginCalloutTextEntry(Annotation leader) => _pendingTextLeader = leader;
 
     public void RemoveAnnotation(Annotation annotation) => _editorState.RemoveAnnotation(annotation);
 
