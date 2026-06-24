@@ -342,10 +342,9 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
     // (path, pixelWidth, pixelHeight, originalWidth, originalHeight, borderColor, borderThickness, hideDecoration, hideBorder)
     public System.Action<string, int, int, double, double, Avalonia.Media.Color, double, bool, bool>? OpenPinnedVideoWindowAction { get; set; }
 
-    // Wired only for recording pins: on close with a pending cut, the VM produces a trimmed temp and this
-    // delegate replaces the original recording file in place + refreshes its History entry.
-    // (originalPath, trimmedTempPath, pixelWidth, pixelHeight)
-    public Func<string, string, int, int, Task>? CommitEditedRecordingAsync { get; set; }
+    // Wired by the host: persists a copied/exported clip into History (managed copy + thumbnail) so it
+    // shows up in the history panel, mirroring image-copy behaviour. (clipPath, pixelWidth, pixelHeight)
+    public Func<string, int, int, Task>? AddClipToHistoryAsync { get; set; }
 
     // Annotation Proxies
     public bool CanUndo => HasUndo;
@@ -461,11 +460,6 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
 
         StopAudioPlayback();
         _nativeFramePlayer.Dispose();
-
-        // The player has released its lock on VideoPath; if a pending cut exists, re-encode it and commit
-        // the trimmed result back onto the original recording file + its History entry (recording pins only).
-        await TryCommitEditedRecordingAsync();
-
         if (playbackCompleted)
         {
             _playSemaphore.Dispose();
@@ -488,37 +482,6 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
             }
             _latestFrameData = null;
             _latestFrameLength = 0;
-        }
-    }
-
-    // On pin close with a pending cut, re-encode the kept runs and hand the trimmed temp to the wiring
-    // layer to replace the original recording file + refresh History. No-op for non-recording pins
-    // (delegate unwired), no edit, or unsupported containers. Never throws (keeps the original on failure).
-    private async Task TryCommitEditedRecordingAsync()
-    {
-        var commit = CommitEditedRecordingAsync;
-        if (commit == null || !AnyPieceDropped || string.IsNullOrEmpty(VideoPath))
-        {
-            return;
-        }
-
-        string ext = System.IO.Path.GetExtension(VideoPath);
-        if (LibavClipExporter.ContainerForExtension(ext) == null)
-        {
-            return;
-        }
-
-        try
-        {
-            var trimmed = await ExportTrimmedInProcessAsync(ext);
-            if (!string.IsNullOrEmpty(trimmed) && System.IO.File.Exists(trimmed))
-            {
-                await commit(VideoPath, trimmed!, (int)OriginalWidth, (int)OriginalHeight);
-            }
-        }
-        catch (Exception ex)
-        {
-            AppLog.Error("FloatingVideo.CommitEdit", ex);
         }
     }
 

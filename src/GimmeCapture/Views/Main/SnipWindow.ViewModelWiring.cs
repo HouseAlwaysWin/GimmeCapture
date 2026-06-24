@@ -329,22 +329,30 @@ public partial class SnipWindow : Window
                     _clipboardService,
                     _viewModel.MainVm?.AppSettingsService);
 
-                // On close with a pending cut, replace the original recording file in place with the
-                // trimmed export and refresh its History thumbnail (so the saved file/history reflect the edit).
+                // Copying a clip from the pin persists a managed copy into History (like image copy),
+                // so the copied/trimmed video shows up in the history panel.
                 var captureHistory = _viewModel.MainVm?.CaptureHistory;
-                vm.CommitEditedRecordingAsync = async (originalPath, trimmedTemp, w, h) =>
+                vm.AddClipToHistoryAsync = async (clipPath, w, h) =>
                 {
                     try
                     {
-                        System.IO.File.Copy(trimmedTemp, originalPath, true);
-                        if (captureHistory != null)
+                        if (captureHistory == null
+                            || !(_viewModel.MainVm?.EnableHistory ?? false)
+                            || string.IsNullOrEmpty(clipPath)
+                            || !System.IO.File.Exists(clipPath))
                         {
-                            await captureHistory.RefreshVideoAsync(originalPath, w, h);
+                            return;
                         }
+
+                        string ext = System.IO.Path.GetExtension(clipPath).TrimStart('.');
+                        if (string.IsNullOrEmpty(ext)) ext = "mp4";
+                        string managed = captureHistory.CreateManagedCapturePath(ext);
+                        System.IO.File.Copy(clipPath, managed, true);
+                        await captureHistory.AddVideoAsync(managed, w, h);
                     }
                     catch (Exception ex)
                     {
-                        GimmeCapture.Services.Core.Infrastructure.AppLog.Warning("FloatingVideo.CommitEdit.Wiring", ex);
+                        GimmeCapture.Services.Core.Infrastructure.AppLog.Warning("FloatingVideo.AddCopyToHistory", ex);
                     }
                 };
 

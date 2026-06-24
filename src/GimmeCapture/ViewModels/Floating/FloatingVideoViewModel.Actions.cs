@@ -262,6 +262,12 @@ public partial class FloatingVideoViewModel
                             await _clipboardService.CopyFileAsync(trimmed);
                         }
                         AppLog.Information($"FloatingVideo.Copy trimmed clip -> {Path.GetFileName(trimmed)} ({new FileInfo(trimmed).Length} bytes)");
+
+                        // Also persist the copied clip into History (like image copy) so it shows up there.
+                        if (AddClipToHistoryAsync != null)
+                        {
+                            await AddClipToHistoryAsync(trimmed, (int)OriginalWidth, (int)OriginalHeight);
+                        }
                         return;
                     }
 
