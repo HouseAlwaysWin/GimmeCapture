@@ -9,6 +9,11 @@ namespace GimmeCapture.Services.Core.Rendering;
 
 public static class VideoAnnotationFilterBuilder
 {
+    /// <param name="inputVideoLabel">
+    /// Filtergraph label feeding the redaction/overlay chain. Defaults to the raw source video
+    /// (<c>0:v</c>); the multi-segment export passes the compiler's concatenated video label so the
+    /// proven annotation chain runs on the cut/joined result instead of the raw input.
+    /// </param>
     public static string BuildFilter(
         IEnumerable<Annotation> annotations,
         double referenceWidth,
@@ -16,14 +21,15 @@ public static class VideoAnnotationFilterBuilder
         int targetWidth,
         int targetHeight,
         bool includeOverlayInput,
-        bool isOutputGif)
+        bool isOutputGif,
+        string inputVideoLabel = "0:v")
     {
         var redactions = annotations
             .Where(a => a.Type is AnnotationType.Mosaic or AnnotationType.Blur)
             .ToArray();
 
         var filterParts = new List<string>();
-        string currentLabel = "0:v";
+        string currentLabel = inputVideoLabel;
         float scaleX = referenceWidth > 0 ? targetWidth / (float)referenceWidth : 1f;
         float scaleY = referenceHeight > 0 ? targetHeight / (float)referenceHeight : 1f;
         float uniformScale = Math.Min(scaleX, scaleY);

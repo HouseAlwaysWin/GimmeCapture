@@ -78,8 +78,9 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
     public override string RedoHotkey => _appSettingsService?.Settings.Snip.Redo ?? base.RedoHotkey;
     public override string ClearHotkey => _appSettingsService?.Settings.Snip.Clear ?? base.ClearHotkey;
     public override string SaveHotkey => _appSettingsService?.Settings.Snip.Save ?? base.SaveHotkey;
-    public override string CloseHotkey => _appSettingsService?.Settings.Snip.Close ?? base.CloseHotkey;
-    
+    // Close is a fixed window-local shortcut (Ctrl+W); the pin is not closed by the snip Close setting.
+    public override string CloseHotkey => base.CloseHotkey;
+
     public override string RectangleHotkey => _appSettingsService?.Settings.Snip.Rectangle ?? base.RectangleHotkey;
     public override string EllipseHotkey => _appSettingsService?.Settings.Snip.Ellipse ?? base.EllipseHotkey;
     public override string ArrowHotkey => _appSettingsService?.Settings.Snip.Arrow ?? base.ArrowHotkey;
@@ -255,6 +256,18 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
     }
 
     public override bool IsAnyToolActive => base.IsAnyToolActive || IsPointRemovalMode;
+
+    // Esc cancels the AI point-removal session before the generic tool/annotation cancel.
+    protected override bool TryCancelModeSpecific()
+    {
+        if (IsPointRemovalMode)
+        {
+            CancelInteractiveCommand.Execute().Subscribe();
+            return true;
+        }
+
+        return false;
+    }
 
     public FloatingImageViewModel(Bitmap image, double originalWidth, double originalHeight, Avalonia.Media.Color borderColor, double borderThickness, bool hideDecoration, bool hideBorder, IClipboardService clipboardService, AIResourceService aiResourceService, SAM2RuntimeService sam2RuntimeService, AppSettingsService appSettingsService, AIPathService pathService, IResourceQueueService resourceQueue, string? pinnedText = null, double inferredFontSize = 12.0)
     {

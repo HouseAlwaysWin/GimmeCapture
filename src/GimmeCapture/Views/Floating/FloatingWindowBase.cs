@@ -843,15 +843,10 @@ public abstract class FloatingWindowBase : Window
 
         if (e.Key == Key.Escape)
         {
-            if (vm.IsEnteringText)
-            {
-                vm.CancelTextEntryCommand.Execute(System.Reactive.Unit.Default).Subscribe();
-                e.Handled = true;
-            }
-            else
-            {
-                Close();
-            }
+            // Esc cancels the in-progress action (text entry / selection / tool / trim / point-removal);
+            // it no longer closes the window. Closing is Ctrl+W, the close button, or the context menu.
+            vm.TryCancelCurrentAction();
+            e.Handled = true;
         }
         else if (e.Key == Key.C && e.KeyModifiers.HasFlag(KeyModifiers.Control))
         {

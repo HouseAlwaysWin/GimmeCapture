@@ -51,7 +51,8 @@
         <!-- Core Actions -->
         <KeyBinding Gesture="Ctrl+S" Command="{Binding SaveCommand}" />
         <KeyBinding Gesture="Ctrl+C" Command="{Binding CopyCommand}" />
-        <KeyBinding Gesture="Escape" Command="{Binding CloseCommand}" />
+        <!-- Esc cancels the in-progress action (handled in code-behind); Ctrl+W closes the window. -->
+        <KeyBinding Gesture="Ctrl+W" Command="{Binding CloseCommand}" />
     </Window.KeyBindings>
 
     <Window.Styles>
