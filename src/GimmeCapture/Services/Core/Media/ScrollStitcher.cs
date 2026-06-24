@@ -36,6 +36,16 @@ internal static class ScrollStitcher
     // than risk stitching it at the wrong offset (the cause of the Discord scrambling).
     private const double AmbiguityMargin = 0.035;
 
+    // A near-perfect best score (an essentially exact overlap) is trusted against a much smaller
+    // ambiguity margin. Horizontally-sparse content folded into stitch space — a horizontal scroll of a
+    // region with few vertical edges — carries little discriminative signal, so the runner-up offset
+    // scores only slightly worse even though the true offset matches exactly; the strict 0.035 margin
+    // would reject it and capture nothing. Genuinely periodic content instead makes the runner-up score
+    // *equally* well (gap ~ 0), so it is still rejected. Only matches at/under NearPerfectScore use the
+    // relaxed margin, so the normal (higher-score) path is unchanged.
+    private const double NearPerfectScore = 0.02;
+    private const double NearPerfectAmbiguityMargin = 0.006;
+
     // Competing alignments nearer than this to the winner are treated as the same minimum
     // (sub-pixel neighbours), not as a rival candidate.
     private const int ShiftSeparationRows = 3;
@@ -255,7 +265,31 @@ internal static class ScrollStitcher
         int ignoreRightColumns = 0,
         double maxRowMismatchRatio = 0.0,
         int searchMargin = int.MaxValue)
+        => AlignFrameToStrip(strip, frame, out _, out _, out _, minOverlapRows, ignoreRightColumns, maxRowMismatchRatio, searchMargin);
+
+    /// <summary>
+    /// Diagnostic overload of <see cref="AlignFrameToStrip(SKBitmap,SKBitmap,int,int,double,int)"/> that
+    /// also reports why a match was (not) accepted: <paramref name="bestScoreOut"/> is the lowest
+    /// (best) weighted sample-diff ratio found (<c>double.MaxValue</c> when no offset scored at all —
+    /// e.g. weight-starved/uniform frames); <paramref name="ambiguityGapOut"/> is rival−best (small =
+    /// ambiguous; <c>double.MaxValue</c> when there is no rival); <paramref name="sampleCountOut"/> is
+    /// the per-row sample count.
+    /// </summary>
+    public static FrameAlignment AlignFrameToStrip(
+        SKBitmap strip,
+        SKBitmap frame,
+        out double bestScoreOut,
+        out double ambiguityGapOut,
+        out int sampleCountOut,
+        int minOverlapRows = 8,
+        int ignoreRightColumns = 0,
+        double maxRowMismatchRatio = 0.0,
+        int searchMargin = int.MaxValue)
     {
+        bestScoreOut = double.MaxValue;
+        ambiguityGapOut = double.MaxValue;
+        sampleCountOut = 0;
+
         ArgumentNullException.ThrowIfNull(strip);
         ArgumentNullException.ThrowIfNull(frame);
 
@@ -271,6 +305,7 @@ internal static class ScrollStitcher
 
         byte[] frameSig = ComputeRowSignatures(frame, ignoreRightColumns, out int sampleCount);
         byte[] stripSig = ComputeRowSignatures(strip, ignoreRightColumns, out _);
+        sampleCountOut = sampleCount;
         if (sampleCount == 0)
         {
             return new FrameAlignment(0, false);
@@ -354,6 +389,8 @@ internal static class ScrollStitcher
             }
         }
 
+        bestScoreOut = bestScore;
+
         if (!found || bestScore > MaxMatchSampleDiffRatio)
         {
             return new FrameAlignment(0, false);
@@ -375,7 +412,13 @@ internal static class ScrollStitcher
             }
         }
 
-        if (rivalScore != double.MaxValue && rivalScore - bestScore < AmbiguityMargin)
+        if (rivalScore != double.MaxValue)
+        {
+            ambiguityGapOut = rivalScore - bestScore;
+        }
+
+        double ambiguityMargin = bestScore < NearPerfectScore ? NearPerfectAmbiguityMargin : AmbiguityMargin;
+        if (rivalScore != double.MaxValue && rivalScore - bestScore < ambiguityMargin)
         {
             return new FrameAlignment(0, false);
         }
@@ -490,6 +533,99 @@ internal static class ScrollStitcher
         var dst = new SKRect(0, 0, next.Width, newRows);
         canvas.DrawBitmap(next, src, dst);
         canvas.DrawBitmap(accumulated, 0, newRows);
+
+        return result;
+    }
+
+    /// <summary>
+    /// Returns <paramref name="src"/> rotated 90° clockwise (BGRA8888); the result has swapped
+    /// dimensions (width = src.Height, height = src.Width). The source's top row maps to the
+    /// result's right column. The exact inverse of <see cref="RotateCcw90"/>; used to restore screen
+    /// orientation after a horizontal-scroll strip has been stitched in rotated space.
+    /// </summary>
+    public static SKBitmap RotateCw90(SKBitmap src)
+    {
+        ArgumentNullException.ThrowIfNull(src);
+
+        int w = src.Width;
+        int h = src.Height;
+        var result = new SKBitmap(new SKImageInfo(h, w, SKColorType.Bgra8888, SKAlphaType.Premul));
+        if (w <= 0 || h <= 0)
+        {
+            return result;
+        }
+
+        IntPtr srcPixels = src.GetPixels();
+        IntPtr dstPixels = result.GetPixels();
+        if (srcPixels == IntPtr.Zero || dstPixels == IntPtr.Zero)
+        {
+            return result;
+        }
+
+        int srcStride = src.RowBytes;
+        int dstStride = result.RowBytes;
+        unsafe
+        {
+            byte* srcBase = (byte*)srcPixels;
+            byte* dstBase = (byte*)dstPixels;
+            for (int r = 0; r < h; r++)
+            {
+                uint* srcRow = (uint*)(srcBase + ((long)r * srcStride));
+                int dstCol = h - 1 - r; // src(c, r) -> dst(col = h-1-r, row = c)
+                for (int c = 0; c < w; c++)
+                {
+                    *((uint*)(dstBase + ((long)c * dstStride)) + dstCol) = srcRow[c];
+                }
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Returns <paramref name="src"/> rotated 90° counter-clockwise (BGRA8888); the result has
+    /// swapped dimensions (width = src.Height, height = src.Width). The source's bottom row maps to
+    /// the result's right column. Used to fold a horizontal scroll into the vertical "stitch space"
+    /// so the exact same alignment/append/prepend logic applies — and so the cross-axis right-edge
+    /// exclusion (<c>ignoreRightColumns</c>) lands on a bottom horizontal scrollbar. The exact
+    /// inverse of <see cref="RotateCw90"/>.
+    /// </summary>
+    public static SKBitmap RotateCcw90(SKBitmap src)
+    {
+        ArgumentNullException.ThrowIfNull(src);
+
+        int w = src.Width;
+        int h = src.Height;
+        var result = new SKBitmap(new SKImageInfo(h, w, SKColorType.Bgra8888, SKAlphaType.Premul));
+        if (w <= 0 || h <= 0)
+        {
+            return result;
+        }
+
+        IntPtr srcPixels = src.GetPixels();
+        IntPtr dstPixels = result.GetPixels();
+        if (srcPixels == IntPtr.Zero || dstPixels == IntPtr.Zero)
+        {
+            return result;
+        }
+
+        int srcStride = src.RowBytes;
+        int dstStride = result.RowBytes;
+        unsafe
+        {
+            byte* srcBase = (byte*)srcPixels;
+            byte* dstBase = (byte*)dstPixels;
+            for (int r = 0; r < h; r++)
+            {
+                uint* srcRow = (uint*)(srcBase + ((long)r * srcStride));
+                int dstCol = r; // src(c, r) -> dst(col = r, row = w-1-c)
+                for (int c = 0; c < w; c++)
+                {
+                    int dstRow = w - 1 - c;
+                    *((uint*)(dstBase + ((long)dstRow * dstStride)) + dstCol) = srcRow[c];
+                }
+            }
+        }
 
         return result;
     }

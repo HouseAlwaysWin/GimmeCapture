@@ -10,6 +10,19 @@ public class ScrollStitcherTests
     private static SKColor ColorForRow(int absoluteRow) =>
         new((byte)((absoluteRow * 7) & 0xFF), (byte)((absoluteRow * 13) & 0xFF), (byte)((absoluteRow * 29) & 0xFF), 255);
 
+    // Per-row colour that is collision-free under the matcher's colour tolerance: the row index is
+    // encoded as three base-13 digits scaled by 19, so any two DISTINCT rows (0..13^3-1 = 0..2196)
+    // differ by at least 19 (> ColorTolerance 18) in at least one channel, and adjacent rows differ in
+    // the low digit so they are locally distinct too. Used by the sparse-horizontal-texture test where
+    // a plain linear ramp (row*k) would alias (row and row+d collide when k*d wraps to within tolerance
+    // of a multiple of 256, e.g. 29*9 = 261 ≡ 5) and break the alignment assertion.
+    private static SKColor UniqueColorForRow(int absoluteRow) =>
+        new(
+            (byte)((absoluteRow % 13) * 19),
+            (byte)(((absoluteRow / 13) % 13) * 19),
+            (byte)(((absoluteRow / 169) % 13) * 19),
+            255);
+
     private static SKBitmap MakeFrame(int width, int height, int sourceOffset)
     {
         var bmp = new SKBitmap(new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Premul));
@@ -260,4 +273,170 @@ public class ScrollStitcherTests
         Assert.False(align.Found);
     }
 
+    // A wide strip that is uniform except a narrow vertical band of per-row detail: the shape a
+    // horizontal scroll of a low-texture region takes in stitch space (the matcher works in stitch
+    // space, so this is the analogue of the user-reported horizontal failure). The discriminative
+    // signal is sparse, so the runner-up offset scores only slightly worse than the exact overlap.
+    // This regressed when the strict ambiguity margin rejected the weak-but-clear winner outright,
+    // capturing nothing; the near-perfect relaxation must accept it.
+    private static SKBitmap MakeBandedFrame(int width, int height, int sourceOffset, int bandStart, int bandWidth)
+    {
+        var bmp = new SKBitmap(new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Premul));
+        var gray = new SKColor(120, 120, 120, 255);
+        for (int y = 0; y < height; y++)
+        {
+            SKColor detail = UniqueColorForRow(sourceOffset + y);
+            for (int x = 0; x < width; x++)
+            {
+                bmp.SetPixel(x, y, (x >= bandStart && x < bandStart + bandWidth) ? detail : gray);
+            }
+        }
+
+        return bmp;
+    }
+
+    [Fact]
+    public void AlignFrameToStrip_SparseHorizontalTexture_StillAligns()
+    {
+        using var strip = MakeBandedFrame(600, 100, sourceOffset: 0, bandStart: 300, bandWidth: 20);
+        using var frame = MakeBandedFrame(600, 100, sourceOffset: 5, bandStart: 300, bandWidth: 20);
+
+        var align = ScrollStitcher.AlignFrameToStrip(strip, frame, minOverlapRows: 8);
+
+        Assert.True(align.Found);
+        Assert.Equal(5, align.Offset); // exact overlap, 5 new rows at the bottom
+    }
+
+    [Fact]
+    public void AlignFrameToStrip_PeriodicContent_NotFound()
+    {
+        // Vertically periodic content aligns equally well at several offsets, so the runner-up scores
+        // as well as the winner (gap ~ 0). The relaxed near-perfect margin must NOT accept it — only a
+        // genuine, clearly-separated winner should stitch.
+        static SKBitmap MakePeriodic(int width, int height, int period, int sourceOffset)
+        {
+            var bmp = new SKBitmap(new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Premul));
+            for (int y = 0; y < height; y++)
+            {
+                byte v = (byte)(((sourceOffset + y) % period) * 50);
+                var c = new SKColor(v, v, v, 255);
+                for (int x = 0; x < width; x++)
+                {
+                    bmp.SetPixel(x, y, c);
+                }
+            }
+
+            return bmp;
+        }
+
+        using var strip = MakePeriodic(40, 60, period: 5, sourceOffset: 0);
+        using var frame = MakePeriodic(40, 60, period: 5, sourceOffset: 2);
+
+        var align = ScrollStitcher.AlignFrameToStrip(strip, frame, minOverlapRows: 8);
+
+        Assert.False(align.Found);
+    }
+
+    // Each source column maps to a deterministic color (rows are uniform), so a horizontal scroll
+    // — the columns shifting — is the left/right analogue of MakeFrame's vertical case.
+    private static SKBitmap MakeColumnFrame(int width, int height, int sourceOffset)
+    {
+        var bmp = new SKBitmap(new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Premul));
+        for (int x = 0; x < width; x++)
+        {
+            var color = ColorForRow(sourceOffset + x);
+            for (int y = 0; y < height; y++)
+            {
+                bmp.SetPixel(x, y, color);
+            }
+        }
+
+        return bmp;
+    }
+
+    private static SKBitmap MakePattern(int width, int height)
+    {
+        var bmp = new SKBitmap(new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Premul));
+        for (int y = 0; y < height; y++)
+        {
+            for (int x = 0; x < width; x++)
+            {
+                bmp.SetPixel(x, y, new SKColor((byte)(x * 30), (byte)(y * 40), (byte)((x + y) * 20), 255));
+            }
+        }
+
+        return bmp;
+    }
+
+    [Fact]
+    public void RotateCw90_SwapsDimensionsAndMapsTopRowToRightColumn()
+    {
+        using var src = MakePattern(4, 3); // width 4, height 3
+        using var cw = ScrollStitcher.RotateCw90(src);
+
+        Assert.Equal(3, cw.Width);  // = src.Height
+        Assert.Equal(4, cw.Height); // = src.Width
+        // CW: source top-left (0,0) lands at the result's top-right (col = height-1 = 2, row 0).
+        Assert.Equal(src.GetPixel(0, 0), cw.GetPixel(2, 0));
+    }
+
+    [Fact]
+    public void RotateCcw90_MapsBottomRowToRightColumn()
+    {
+        using var src = MakePattern(4, 3); // width 4, height 3
+        using var ccw = ScrollStitcher.RotateCcw90(src);
+
+        Assert.Equal(3, ccw.Width);
+        Assert.Equal(4, ccw.Height);
+        // CCW: the source's bottom row (r = height-1 = 2) maps to the result's right column
+        // (col = height-1 = 2). Bottom-right (3,2) lands at the top of that column (2,0);
+        // bottom-left (0,2) lands at its bottom (2,3).
+        Assert.Equal(src.GetPixel(3, 2), ccw.GetPixel(2, 0));
+        Assert.Equal(src.GetPixel(0, 2), ccw.GetPixel(2, 3));
+    }
+
+    [Fact]
+    public void RotateCw90_ThenCcw90_RoundTripsToOriginal()
+    {
+        using var src = MakePattern(7, 5);
+        using var cw = ScrollStitcher.RotateCw90(src);
+        using var back = ScrollStitcher.RotateCcw90(cw);
+
+        Assert.Equal(src.Width, back.Width);
+        Assert.Equal(src.Height, back.Height);
+        for (int y = 0; y < src.Height; y++)
+        {
+            for (int x = 0; x < src.Width; x++)
+            {
+                Assert.Equal(src.GetPixel(x, y), back.GetPixel(x, y));
+            }
+        }
+    }
+
+    [Fact]
+    public void HorizontalScroll_StitchesViaRotation()
+    {
+        // Two frames of a horizontally-scrollable view: prev shows source columns 0..19, next is
+        // scrolled right by 5 (columns 5..24). Folding through CCW rotation lets the existing
+        // vertical alignment + grow logic stitch them; rotating back (CW) yields the wide strip.
+        using var prev = MakeColumnFrame(20, 10, sourceOffset: 0);
+        using var next = MakeColumnFrame(20, 10, sourceOffset: 5);
+
+        using var accRotated = ScrollStitcher.RotateCcw90(prev);
+        using var frameRotated = ScrollStitcher.RotateCcw90(next);
+
+        var align = ScrollStitcher.AlignFrameToStrip(accRotated, frameRotated, minOverlapRows: 4);
+        Assert.True(align.Found);
+
+        using SKBitmap grownRotated = align.Offset < 0
+            ? ScrollStitcher.Prepend(accRotated, frameRotated, -align.Offset)
+            : ScrollStitcher.Append(accRotated, frameRotated, accRotated.Height - align.Offset);
+        using SKBitmap result = ScrollStitcher.RotateCw90(grownRotated);
+
+        Assert.Equal(25, result.Width); // 20 + 5 new columns
+        Assert.Equal(10, result.Height);
+        Assert.Equal(ColorForRow(0), result.GetPixel(0, 0));    // original left edge (source col 0)
+        Assert.Equal(ColorForRow(24), result.GetPixel(24, 0));  // new right edge (source col 24)
+        Assert.Equal(ColorForRow(12), result.GetPixel(12, 5));  // interior column preserved
+    }
 }

@@ -328,6 +328,7 @@ public partial class SnipWindowViewModel
     public ReactiveCommand<Unit, Unit> SaveCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> PinCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> ScrollingCaptureCommand { get; set; } = null!;
+    public ReactiveCommand<ScrollingCaptureDirection, Unit> SetScrollDirectionCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> CloseCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> ToggleModeCommand { get; set; } = null!;
     public ReactiveCommand<bool, Unit> SetCaptureModeCommand { get; set; } = null!;
@@ -524,6 +525,11 @@ public partial class SnipWindowViewModel
         SaveCommand = CreateAsyncCommand(Save, nameof(SaveCommand), canExecuteHotkeys);
 
         ScrollingCaptureCommand = CreateAsyncCommand(ExecuteScrollingCapture, nameof(ScrollingCaptureCommand), canExecuteHotkeys);
+
+        SetScrollDirectionCommand = CreateCommand<ScrollingCaptureDirection>(
+            direction => ScrollingCaptureDirection = direction,
+            nameof(SetScrollDirectionCommand),
+            canExecuteHotkeys);
 
         CloseCommand = CreateCommand(Close, nameof(CloseCommand), canExecuteHotkeys);
 

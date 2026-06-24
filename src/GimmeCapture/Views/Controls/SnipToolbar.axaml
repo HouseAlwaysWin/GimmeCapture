@@ -141,10 +141,38 @@
                     IsVisible="{Binding !IsTranslationMode}">
                 <PathIcon Data="M16,12V4H17V2H7V4H8V12L6,14V16H11.2V22H12.8V16H18V14L16,12Z" Width="14" Height="14"/>
             </Button>
-            <!-- Scrolling (long) capture — screenshot mode only -->
+            <!-- Scrolling (long) capture — screenshot mode only. Split button: the main button
+                 captures using the current direction; the small caret opens the direction selector
+                 (Auto / Vertical / Horizontal) so a click-to-capture never pops the menu. -->
             <Button Theme="{StaticResource SnipButton}" FontSize="12" BorderThickness="1" Command="{Binding ScrollingCaptureCommand}" ToolTip.Tip="{Binding ScrollingCaptureTooltip}"
                     IsVisible="{Binding IsScreenshotMode}">
                 <PathIcon Data="M16.59,5.59L18,7L12,13L6,7L7.41,5.59L12,10.17L16.59,5.59M16.59,11.59L18,13L12,19L6,13L7.41,11.59L12,16.17L16.59,11.59Z" Width="14" Height="14"/>
+            </Button>
+            <Button Theme="{StaticResource SnipToolButton}" FontSize="12" BorderThickness="1"
+                    IsVisible="{Binding IsScreenshotMode}"
+                    ToolTip.Tip="{Binding [ScrollDirection], Source={x:Static infra:LocalizationService.Instance}}">
+                <Button.Flyout>
+                    <!-- MenuFlyout: items auto-close the menu on click (a plain Flyout of Buttons
+                         neither closes nor gives feedback). Each item sets the persisted direction. -->
+                    <MenuFlyout Placement="Top">
+                        <MenuItem Header="{Binding [ScrollDirectionAuto], Source={x:Static infra:LocalizationService.Instance}}"
+                                  ToggleType="Radio"
+                                  IsChecked="{Binding ScrollingCaptureDirection, Mode=OneWay, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:ScrollingCaptureDirection.Auto}}"
+                                  Command="{Binding SetScrollDirectionCommand}"
+                                  CommandParameter="{x:Static m:ScrollingCaptureDirection.Auto}"/>
+                        <MenuItem Header="{Binding [ScrollDirectionVertical], Source={x:Static infra:LocalizationService.Instance}}"
+                                  ToggleType="Radio"
+                                  IsChecked="{Binding ScrollingCaptureDirection, Mode=OneWay, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:ScrollingCaptureDirection.Vertical}}"
+                                  Command="{Binding SetScrollDirectionCommand}"
+                                  CommandParameter="{x:Static m:ScrollingCaptureDirection.Vertical}"/>
+                        <MenuItem Header="{Binding [ScrollDirectionHorizontal], Source={x:Static infra:LocalizationService.Instance}}"
+                                  ToggleType="Radio"
+                                  IsChecked="{Binding ScrollingCaptureDirection, Mode=OneWay, Converter={StaticResource EnumMatchConverter}, ConverterParameter={x:Static m:ScrollingCaptureDirection.Horizontal}}"
+                                  Command="{Binding SetScrollDirectionCommand}"
+                                  CommandParameter="{x:Static m:ScrollingCaptureDirection.Horizontal}"/>
+                    </MenuFlyout>
+                </Button.Flyout>
+                <PathIcon Data="M7,10L12,15L17,10H7Z" Width="10" Height="10"/>
             </Button>
 
             <!-- 5c. Translation Mode Actions (only visible in translation mode) -->
