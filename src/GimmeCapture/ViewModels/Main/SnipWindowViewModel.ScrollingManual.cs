@@ -166,6 +166,12 @@ public partial class SnipWindowViewModel
         _manualFinishing = false;
         _manualScrollActive = true;
 
+        // DIAGNOSTIC (temporary): records the resolved direction, region/strip dims and the active
+        // match params so a captured log can show whether forcing is applied and how alignment behaves.
+        AppLog.Information(
+            $"ManualScroll.Start dir={chosenDirection} horiz={_manualHorizontal} physW={physW} physH={physH} " +
+            $"strip={_manualAccumulated.Width}x{_manualAccumulated.Height} minOverlap={_manualMinOverlap} ignoreRight={_manualIgnoreRight}");
+
         // Register finish (Pin key) / cancel (Close key) as temporary GLOBAL hotkeys for the
         // session. RegisterHotKey delivers WM_HOTKEY to a hidden message window regardless of
         // focus — and even against elevated foreground windows — unlike the low-level keyboard
@@ -338,6 +344,12 @@ public partial class SnipWindowViewModel
             }
             // else: frame lies fully inside the strip (scrolled back) — nothing new.
         }
+
+        // DIAGNOSTIC (temporary): per-frame alignment outcome, to pinpoint why horizontal often
+        // fails to grow (found? offset? did the dims/overlap allow a match?).
+        AppLog.Information(
+            $"ManualScroll.Align horiz={_manualHorizontal} strip={_manualAccumulated!.Width}x{_manualAccumulated.Height} " +
+            $"frame={stitchFrame.Width}x{stitchFrame.Height} found={align.Found} off={align.Offset} grew={grew}");
 
         _manualPrevFrame!.Dispose();
         _manualPrevFrame = stitchFrame; // anchor always advances; ownership moves into prev
