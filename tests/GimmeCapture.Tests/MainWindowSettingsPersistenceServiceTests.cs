@@ -37,6 +37,7 @@ public class MainWindowSettingsPersistenceServiceTests
             AutoPinScreenshotSelection = true,
             CaptureDelay = CaptureDelay.FiveSeconds,
             OcrTextLayout = OcrTextLayout.SingleLine,
+            ScrollingCaptureDirection = ScrollingCaptureDirection.Horizontal,
             HideRecordPinDecoration = true,
             HideRecordPinBorder = false,
             HideRecordSelectionDecoration = true,
@@ -93,6 +94,7 @@ public class MainWindowSettingsPersistenceServiceTests
         Assert.Equal(snapshot.EnableHistory, persisted.EnableHistory);
         Assert.Equal(snapshot.CaptureDelay, persisted.CaptureDelay);
         Assert.Equal(snapshot.OcrTextLayout, persisted.OcrTextLayout);
+        Assert.Equal(snapshot.ScrollingCaptureDirection, persisted.ScrollingCaptureDirection);
         Assert.Equal(snapshot.TextCopyHotkey, persisted.TextCopyHotkey);
         Assert.Equal(snapshot.EnableAIScan, persisted.EnableAIScan);
         Assert.Equal(snapshot.AIResourcesDirectory, persisted.AIResourcesDirectory);
