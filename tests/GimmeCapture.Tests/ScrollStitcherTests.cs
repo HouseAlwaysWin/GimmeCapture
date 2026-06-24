@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using SkiaSharp;
 
 namespace GimmeCapture.Tests;
@@ -361,5 +363,257 @@ public class ScrollStitcherTests
         Assert.Equal(ColorForRow(0), result.GetPixel(0, 0));    // original left edge (source col 0)
         Assert.Equal(ColorForRow(24), result.GetPixel(24, 0));  // new right edge (source col 24)
         Assert.Equal(ColorForRow(12), result.GetPixel(12, 5));  // interior column preserved
+    }
+
+    [Fact]
+    public void CropRows_ExtractsRowsAndIsIndependentOfSource()
+    {
+        var src = MakeFrame(8, 30, sourceOffset: 0);
+        using var sliver = ScrollStitcher.CropRows(src, startRow: 10, count: 5);
+
+        Assert.Equal(8, sliver.Width);
+        Assert.Equal(5, sliver.Height);
+        Assert.Equal(ColorForRow(10), sliver.GetPixel(0, 0));
+        Assert.Equal(ColorForRow(14), sliver.GetPixel(0, 4));
+
+        // The sliver owns its pixels: disposing the source must not corrupt it.
+        src.Dispose();
+        Assert.Equal(ColorForRow(12), sliver.GetPixel(0, 2));
+    }
+
+    [Fact]
+    public void EdgeWindow_Top_BoundedToCapAndHoldsLeadingRows()
+    {
+        // Three stacked segments -> a 0..59 strip; the top window must be exactly `cap` rows of the head.
+        var segments = new List<SKBitmap>
+        {
+            MakeFrame(6, 20, sourceOffset: 0),
+            MakeFrame(6, 20, sourceOffset: 20),
+            MakeFrame(6, 20, sourceOffset: 40),
+        };
+
+        try
+        {
+            using var win = ScrollStitcher.EdgeWindow(segments, cap: 25, top: true);
+
+            Assert.Equal(25, win.Height); // bounded to cap, not the 60-row total
+            Assert.Equal(ColorForRow(0), win.GetPixel(0, 0));    // very top of the strip
+            Assert.Equal(ColorForRow(24), win.GetPixel(0, 24));  // straddles the 2nd segment, still correct
+        }
+        finally
+        {
+            foreach (SKBitmap s in segments)
+            {
+                s.Dispose();
+            }
+        }
+    }
+
+    [Fact]
+    public void EdgeWindow_Bottom_BoundedToCapAndHoldsTrailingRows()
+    {
+        var segments = new List<SKBitmap>
+        {
+            MakeFrame(6, 20, sourceOffset: 0),
+            MakeFrame(6, 20, sourceOffset: 20),
+            MakeFrame(6, 20, sourceOffset: 40),
+        };
+
+        try
+        {
+            using var win = ScrollStitcher.EdgeWindow(segments, cap: 25, top: false);
+
+            Assert.Equal(25, win.Height);
+            // Bottom 25 rows of a 0..59 strip == source rows 35..59.
+            Assert.Equal(ColorForRow(35), win.GetPixel(0, 0));
+            Assert.Equal(ColorForRow(59), win.GetPixel(0, 24));
+        }
+        finally
+        {
+            foreach (SKBitmap s in segments)
+            {
+                s.Dispose();
+            }
+        }
+    }
+
+    [Fact]
+    public void EdgeWindow_StripSmallerThanCap_ReturnsWholeStrip()
+    {
+        var segments = new List<SKBitmap> { MakeFrame(6, 12, sourceOffset: 0) };
+        try
+        {
+            using var win = ScrollStitcher.EdgeWindow(segments, cap: 40, top: true);
+
+            Assert.Equal(12, win.Height); // can't exceed the available content
+            Assert.Equal(ColorForRow(0), win.GetPixel(0, 0));
+            Assert.Equal(ColorForRow(11), win.GetPixel(0, 11));
+        }
+        finally
+        {
+            segments[0].Dispose();
+        }
+    }
+
+    [Fact]
+    public void Concatenate_StacksSegmentsTopToBottom()
+    {
+        var segments = new List<SKBitmap>
+        {
+            MakeFrame(6, 10, sourceOffset: 0),
+            MakeFrame(6, 5, sourceOffset: 10),
+            MakeFrame(6, 7, sourceOffset: 15),
+        };
+
+        try
+        {
+            using var whole = ScrollStitcher.Concatenate(segments);
+
+            Assert.Equal(6, whole.Width);
+            Assert.Equal(22, whole.Height); // 10 + 5 + 7
+            Assert.Equal(ColorForRow(0), whole.GetPixel(0, 0));
+            Assert.Equal(ColorForRow(10), whole.GetPixel(0, 10));
+            Assert.Equal(ColorForRow(21), whole.GetPixel(0, 21));
+        }
+        finally
+        {
+            foreach (SKBitmap s in segments)
+            {
+                s.Dispose();
+            }
+        }
+    }
+
+    // Replicates SnipWindowViewModel.ApplyStitchFrame's per-frame decision against bounded edge
+    // windows, growing the segment list. Returns the matching-window height used this frame so the
+    // test can assert it never scales with strip length. Disposes the incoming frame.
+    private static int SegmentStitchStep(List<SKBitmap> segments, ref int total, SKBitmap frame, int minOverlap)
+    {
+        int cap = frame.Height;
+        int windowH;
+        try
+        {
+            using SKBitmap headWin = ScrollStitcher.EdgeWindow(segments, cap, top: true);
+            windowH = headWin.Height;
+
+            ScrollStitcher.FrameAlignment alignHead = ScrollStitcher.AlignFrameToStrip(
+                headWin, frame, minOverlap, 0, 0.0, headWin.Height);
+            int prepend = (alignHead.Found && alignHead.Offset < 0) ? -alignHead.Offset : 0;
+            int append = 0;
+
+            if (total > cap)
+            {
+                using SKBitmap tailWin = ScrollStitcher.EdgeWindow(segments, cap, top: false);
+                ScrollStitcher.FrameAlignment alignTail = ScrollStitcher.AlignFrameToStrip(
+                    tailWin, frame, minOverlap, 0, 0.0, tailWin.Height);
+                if (alignTail.Found && alignTail.Offset + cap > tailWin.Height)
+                {
+                    append = alignTail.Offset + cap - tailWin.Height;
+                }
+            }
+            else if (prepend == 0 && alignHead.Found && alignHead.Offset + cap > headWin.Height)
+            {
+                append = alignHead.Offset + cap - headWin.Height;
+            }
+
+            if (prepend > 0)
+            {
+                segments.Insert(0, ScrollStitcher.CropRows(frame, 0, prepend));
+                total += prepend;
+            }
+            else if (append > 0)
+            {
+                segments.Add(ScrollStitcher.CropRows(frame, cap - append, append));
+                total += append;
+            }
+        }
+        finally
+        {
+            frame.Dispose();
+        }
+
+        return windowH;
+    }
+
+    [Fact]
+    public void SegmentStitch_LongDownwardScroll_ComposesFullStripWithBoundedWindows()
+    {
+        const int frameH = 40;
+        const int step = 5;
+        const int frames = 400; // far past where a per-frame O(strip) copy would stall capture
+        const int cap = frameH;
+
+        var segments = new List<SKBitmap> { MakeFrame(8, frameH, sourceOffset: 0) };
+        int total = frameH;
+        int maxWindow = 0;
+
+        for (int i = 1; i <= frames; i++)
+        {
+            int windowH = SegmentStitchStep(segments, ref total, MakeFrame(8, frameH, sourceOffset: i * step), minOverlap: 8);
+            maxWindow = Math.Max(maxWindow, windowH);
+        }
+
+        // Matching cost never grows with the strip: the window stays one frame tall throughout.
+        Assert.Equal(cap, maxWindow);
+
+        int expectedHeight = frameH + (frames * step); // base + one new sliver per frame
+        Assert.Equal(expectedHeight, total);
+
+        using SKBitmap whole = ScrollStitcher.Concatenate(segments);
+        try
+        {
+            Assert.Equal(expectedHeight, whole.Height);
+            Assert.Equal(ColorForRow(0), whole.GetPixel(0, 0));
+            Assert.Equal(ColorForRow(expectedHeight / 2), whole.GetPixel(0, expectedHeight / 2));
+            Assert.Equal(ColorForRow(expectedHeight - 1), whole.GetPixel(0, expectedHeight - 1));
+        }
+        finally
+        {
+            foreach (SKBitmap s in segments)
+            {
+                s.Dispose();
+            }
+        }
+    }
+
+    [Fact]
+    public void SegmentStitch_LongUpwardScroll_ComposesFullStripWithBoundedWindows()
+    {
+        const int frameH = 40;
+        const int step = 5;
+        const int frames = 400;
+        const int cap = frameH;
+        int topSource = frames * step; // base sits at the bottom; scrolling up reveals rows down to 0
+
+        var segments = new List<SKBitmap> { MakeFrame(8, frameH, sourceOffset: topSource) };
+        int total = frameH;
+        int maxWindow = 0;
+
+        for (int i = 1; i <= frames; i++)
+        {
+            int windowH = SegmentStitchStep(segments, ref total, MakeFrame(8, frameH, sourceOffset: topSource - (i * step)), minOverlap: 8);
+            maxWindow = Math.Max(maxWindow, windowH);
+        }
+
+        Assert.Equal(cap, maxWindow);
+
+        int expectedHeight = frameH + (frames * step);
+        Assert.Equal(expectedHeight, total);
+
+        using SKBitmap whole = ScrollStitcher.Concatenate(segments);
+        try
+        {
+            Assert.Equal(expectedHeight, whole.Height);
+            // Source rows 0..(expectedHeight-1) stacked top-to-bottom after stitching upward.
+            Assert.Equal(ColorForRow(0), whole.GetPixel(0, 0));
+            Assert.Equal(ColorForRow(expectedHeight - 1), whole.GetPixel(0, expectedHeight - 1));
+        }
+        finally
+        {
+            foreach (SKBitmap s in segments)
+            {
+                s.Dispose();
+            }
+        }
     }
 }
