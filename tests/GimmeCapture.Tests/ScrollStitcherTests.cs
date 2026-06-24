@@ -12,6 +12,29 @@ public class ScrollStitcherTests
     private static SKColor ColorForRow(int absoluteRow) =>
         new((byte)((absoluteRow * 7) & 0xFF), (byte)((absoluteRow * 13) & 0xFF), (byte)((absoluteRow * 29) & 0xFF), 255);
 
+    // Like ColorForRow but unique (non-repeating) over a few thousand rows: a high-frequency channel
+    // gives adjacent rows a clear difference (> the matcher's colour tolerance) for distinctiveness,
+    // while the slow ramps make rows that are far apart in source space never alias to the same colour.
+    // ColorForRow repeats every 256 rows, which is fine for the short fixtures but would let a long
+    // strip's far edge spuriously match an unrelated frame within the search window.
+    private static SKColor UniqueColorForRow(int absoluteRow) =>
+        new((byte)((absoluteRow * 29) & 0xFF), (byte)((absoluteRow / 8) & 0xFF), (byte)((absoluteRow / 2) & 0xFF), 255);
+
+    private static SKBitmap MakeUniqueFrame(int width, int height, int sourceOffset)
+    {
+        var bmp = new SKBitmap(new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Premul));
+        for (int y = 0; y < height; y++)
+        {
+            var color = UniqueColorForRow(sourceOffset + y);
+            for (int x = 0; x < width; x++)
+            {
+                bmp.SetPixel(x, y, color);
+            }
+        }
+
+        return bmp;
+    }
+
     private static SKBitmap MakeFrame(int width, int height, int sourceOffset)
     {
         var bmp = new SKBitmap(new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Premul));
@@ -543,13 +566,13 @@ public class ScrollStitcherTests
         const int frames = 400; // far past where a per-frame O(strip) copy would stall capture
         const int cap = frameH;
 
-        var segments = new List<SKBitmap> { MakeFrame(8, frameH, sourceOffset: 0) };
+        var segments = new List<SKBitmap> { MakeUniqueFrame(8, frameH, sourceOffset: 0) };
         int total = frameH;
         int maxWindow = 0;
 
         for (int i = 1; i <= frames; i++)
         {
-            int windowH = SegmentStitchStep(segments, ref total, MakeFrame(8, frameH, sourceOffset: i * step), minOverlap: 8);
+            int windowH = SegmentStitchStep(segments, ref total, MakeUniqueFrame(8, frameH, sourceOffset: i * step), minOverlap: 8);
             maxWindow = Math.Max(maxWindow, windowH);
         }
 
@@ -563,9 +586,9 @@ public class ScrollStitcherTests
         try
         {
             Assert.Equal(expectedHeight, whole.Height);
-            Assert.Equal(ColorForRow(0), whole.GetPixel(0, 0));
-            Assert.Equal(ColorForRow(expectedHeight / 2), whole.GetPixel(0, expectedHeight / 2));
-            Assert.Equal(ColorForRow(expectedHeight - 1), whole.GetPixel(0, expectedHeight - 1));
+            Assert.Equal(UniqueColorForRow(0), whole.GetPixel(0, 0));
+            Assert.Equal(UniqueColorForRow(expectedHeight / 2), whole.GetPixel(0, expectedHeight / 2));
+            Assert.Equal(UniqueColorForRow(expectedHeight - 1), whole.GetPixel(0, expectedHeight - 1));
         }
         finally
         {
@@ -585,13 +608,13 @@ public class ScrollStitcherTests
         const int cap = frameH;
         int topSource = frames * step; // base sits at the bottom; scrolling up reveals rows down to 0
 
-        var segments = new List<SKBitmap> { MakeFrame(8, frameH, sourceOffset: topSource) };
+        var segments = new List<SKBitmap> { MakeUniqueFrame(8, frameH, sourceOffset: topSource) };
         int total = frameH;
         int maxWindow = 0;
 
         for (int i = 1; i <= frames; i++)
         {
-            int windowH = SegmentStitchStep(segments, ref total, MakeFrame(8, frameH, sourceOffset: topSource - (i * step)), minOverlap: 8);
+            int windowH = SegmentStitchStep(segments, ref total, MakeUniqueFrame(8, frameH, sourceOffset: topSource - (i * step)), minOverlap: 8);
             maxWindow = Math.Max(maxWindow, windowH);
         }
 
@@ -605,8 +628,8 @@ public class ScrollStitcherTests
         {
             Assert.Equal(expectedHeight, whole.Height);
             // Source rows 0..(expectedHeight-1) stacked top-to-bottom after stitching upward.
-            Assert.Equal(ColorForRow(0), whole.GetPixel(0, 0));
-            Assert.Equal(ColorForRow(expectedHeight - 1), whole.GetPixel(0, expectedHeight - 1));
+            Assert.Equal(UniqueColorForRow(0), whole.GetPixel(0, 0));
+            Assert.Equal(UniqueColorForRow(expectedHeight - 1), whole.GetPixel(0, expectedHeight - 1));
         }
         finally
         {
