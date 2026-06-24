@@ -181,7 +181,7 @@
         </Border>
 
         <!-- Bottom Toolbar (Overlay positioned inside window padding) -->
-        <Border x:Name="ToolbarBorder" IsVisible="{Binding ShowToolbar}" 
+        <Border x:Name="ToolbarBorder" Classes="no-window-drag" IsVisible="{Binding ShowToolbar}"
                 Margin="{Binding ToolbarMargin}"
                 Background="#1A1A1A" BorderBrush="#333333" BorderThickness="1" 
                 CornerRadius="4" Padding="6,2"

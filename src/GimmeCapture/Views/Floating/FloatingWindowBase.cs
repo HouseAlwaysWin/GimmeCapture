@@ -288,6 +288,9 @@ public abstract class FloatingWindowBase : Window
         {
             if (vFallback is Button || vFallback is ToggleButton || vFallback is ICommandSource || vFallback is ContextMenu || vFallback is TextBox || vFallback is Slider || vFallback is Thumb || vFallback is SelectableTextBlock)
                 return;
+            // Regions opted out of window-move (e.g. the toolbar / timeline strip): don't drag the pin.
+            if (vFallback is Control vc && vc.Classes.Contains("no-window-drag"))
+                return;
             vFallback = vFallback.GetVisualParent();
         }
 
