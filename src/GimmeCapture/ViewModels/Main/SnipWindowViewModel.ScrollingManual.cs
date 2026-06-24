@@ -100,9 +100,14 @@ public partial class SnipWindowViewModel
 
         // Horizontal hypothesis (frames rotated 90° CCW into stitch space): scroll axis = width,
         // cross-axis = height. After CCW rotation the region's bottom edge — where a horizontal
-        // scrollbar sits — maps to the stitch-space right edge, so the same exclusion applies.
+        // scrollbar sits — maps to the stitch-space right edge. Unlike the vertical case (a wide
+        // dynamic right strip: scrollbar + hover toolbar + read-receipts), the only dynamic element
+        // along a horizontal scroll's bottom is the thin scrollbar, so exclude just a thin band.
+        // Excluding a large fraction here would discard most of each column's vertical profile —
+        // the exact signal the rotated matcher needs — and horizontal/text content already has
+        // weaker per-column distinctiveness than per-row.
         _manualMinOverlapH = Math.Max(8, physW / 10);
-        _manualIgnoreRightH = Math.Clamp(ignoreBand, ignoreMin, Math.Max(ignoreMin, physH * 35 / 100));
+        _manualIgnoreRightH = Math.Clamp((int)(32 * scaling), 8, Math.Max(8, physH / 8));
         _manualMaxHeightH = Math.Max(physW, physW * 40);
 
         // Start undecided with the vertical set active (the zero-rotation default).
