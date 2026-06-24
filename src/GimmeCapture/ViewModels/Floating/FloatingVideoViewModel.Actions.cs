@@ -276,6 +276,29 @@ public partial class FloatingVideoViewModel
                     return;
                 }
 
+                // Annotation/redaction burn-in copy runs in-process (Skia per frame), honoring any cut.
+                if (hasAnnotations && LibavClipExporter.ContainerForExtension(copyExt) != null)
+                {
+                    var burnt = await ExportAnnotatedInProcessAsync(copyExt);
+                    if (!string.IsNullOrEmpty(burnt) && System.IO.File.Exists(burnt))
+                    {
+                        var thumb = await GetFlattenedBitmapAsync() ?? VideoBitmap;
+                        if (thumb != null)
+                        {
+                            await _clipboardService.CopyFileAndImageAsync(burnt, thumb);
+                        }
+                        else
+                        {
+                            await _clipboardService.CopyFileAsync(burnt);
+                        }
+                        return;
+                    }
+
+                    ProcessingText = LocalizationService.Instance["StatusExportFailed"] ?? "Export failed";
+                    await Task.Delay(2000);
+                    return;
+                }
+
                 if (hasAnnotations || cutRequested)
                 {
                     var burntPath = await ExportBurntInVideoAsync();
@@ -368,6 +391,63 @@ public partial class FloatingVideoViewModel
         }
     }
 
+    /// <summary>
+    /// In-process export that burns the annotations/redactions into every frame via SkiaSharp (no
+    /// ffmpeg.exe), honoring any cut. Returns a temp output path, or null on failure.
+    /// </summary>
+    private async Task<string?> ExportAnnotatedInProcessAsync(string targetExtension)
+    {
+        string ext = targetExtension.StartsWith('.') ? targetExtension : "." + targetExtension;
+        if (LibavClipExporter.ContainerForExtension(ext) == null)
+        {
+            AppLog.Error("FloatingVideo.ExportAnnotated", new NotSupportedException(
+                $"Annotation burn-in to '{ext}' is not supported in-process yet."));
+            return null;
+        }
+
+        var runs = KeptRuns();
+        IReadOnlyList<VideoEditSegment> segs = runs.Length > 0
+            ? runs
+            : VideoSegmentEditor.FromTrim(0, _totalDuration.TotalSeconds, _totalDuration.TotalSeconds);
+        var ranges = segs
+            .Select(r => new LibavClipExporter.SourceRange(r.SourceStart, r.SourceEnd))
+            .ToList();
+
+        // Snapshot annotations + display coords so the per-frame callback (runs on a worker thread) is safe.
+        var annotationsSnapshot = Annotations.ToList();
+        double displayW = DisplayWidth;
+        double displayH = DisplayHeight;
+        Action<SkiaSharp.SKBitmap> composite = sk =>
+            AnnotationRenderService.Shared.RenderAnnotationsToBitmap(sk, annotationsSnapshot, displayW, displayH, sk.Width, sk.Height);
+
+        VideoQuality quality = _appSettingsService?.Settings.VideoQuality ?? VideoQuality.Medium;
+        string tempDir = Path.Combine(Path.GetTempPath(), "GimmeCapture_Export_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        string outputPath = Path.Combine(tempDir, "output" + ext);
+
+        IsExporting = true;
+        try
+        {
+            bool ok = await Task.Run(() => LibavClipExporter.TryExport(VideoPath, ranges, outputPath, quality, frameComposite: composite));
+            if (ok)
+            {
+                return outputPath;
+            }
+
+            AppLog.Error("FloatingVideo.ExportAnnotated", new Exception("In-process annotated export produced no output file."));
+            return null;
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error("FloatingVideo.ExportAnnotated", ex);
+            return null;
+        }
+        finally
+        {
+            IsExporting = false;
+        }
+    }
+
     private async Task SaveAsync()
     {
         if (PickSaveFileAction == null || IsProcessing) return;
@@ -396,6 +476,23 @@ public partial class FloatingVideoViewModel
                     if (!string.IsNullOrEmpty(trimmed) && System.IO.File.Exists(trimmed))
                     {
                         System.IO.File.Copy(trimmed, targetPath, true);
+                        FileLocationService.RevealInFileExplorer(targetPath);
+                        return;
+                    }
+
+                    ProcessingText = LocalizationService.Instance["StatusExportFailed"] ?? "Export failed";
+                    await Task.Delay(2000);
+                    return;
+                }
+
+                // Annotation/redaction burn-in runs in-process (Skia per frame) for plain video targets,
+                // honoring any cut at the same time.
+                if (hasAnnotations && LibavClipExporter.ContainerForExtension(targetExt) != null)
+                {
+                    var burnt = await ExportAnnotatedInProcessAsync(targetExt);
+                    if (!string.IsNullOrEmpty(burnt) && System.IO.File.Exists(burnt))
+                    {
+                        System.IO.File.Copy(burnt, targetPath, true);
                         FileLocationService.RevealInFileExplorer(targetPath);
                         return;
                     }

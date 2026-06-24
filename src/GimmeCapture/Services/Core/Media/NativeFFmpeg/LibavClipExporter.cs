@@ -5,13 +5,15 @@ using System.Threading;
 using FFmpeg.AutoGen;
 using GimmeCapture.Models;
 using NAudio.Wave;
+using SkiaSharp;
 
 namespace GimmeCapture.Services.Core.Media.NativeFFmpeg;
 
 /// <summary>
 /// In-process (libav, no ffmpeg.exe) frame-accurate trim/concat export for the floating video pin.
 /// Re-encodes the KEPT source ranges into one continuous H.264 clip (audio re-encoded to AAC and muxed),
-/// so cut points are exact regardless of keyframe spacing. Phase 1: cuts only — no annotations/crop/GIF.
+/// so cut points are exact regardless of keyframe spacing. An optional per-frame composite hook burns in
+/// annotations/redactions via SkiaSharp (decode → BGRA → draw → YUV → encode). GIF/WebM/crop are elsewhere.
 ///
 /// Video: seek to each range start, drop decoded frames before the start, re-encode frames within
 /// [start,end) with a continuous output PTS (CFR at the source frame rate). Audio: decode each range to
@@ -43,11 +45,16 @@ internal static class LibavClipExporter
     /// Exports the kept <paramref name="ranges"/> of <paramref name="inputPath"/> to
     /// <paramref name="outputPath"/>. Returns true on success; throws on a libav/IO failure.
     /// </summary>
+    /// <param name="frameComposite">
+    /// Optional per-frame hook: receives each decoded frame as a BGRA <see cref="SKBitmap"/> (source
+    /// resolution) to draw onto in place (annotation/redaction burn-in), before it is re-encoded.
+    /// </param>
     public static bool TryExport(
         string inputPath,
         IReadOnlyList<SourceRange> ranges,
         string outputPath,
         VideoQuality quality,
+        Action<SKBitmap>? frameComposite = null,
         CancellationToken cancellationToken = default)
     {
         FFmpegRuntime.EnsureInitialized();
@@ -72,7 +79,7 @@ internal static class LibavClipExporter
 
         try
         {
-            EncodeVideoRanges(inputPath, ranges, videoTemp, quality, cancellationToken);
+            EncodeVideoRanges(inputPath, ranges, videoTemp, quality, frameComposite, cancellationToken);
 
             bool hasAudio = TryBuildAudio(inputPath, ranges, tempDir, quality, cancellationToken, out string? audioTemp);
 
@@ -103,6 +110,7 @@ internal static class LibavClipExporter
         IReadOnlyList<SourceRange> ranges,
         string outputPath,
         VideoQuality quality,
+        Action<SKBitmap>? frameComposite,
         CancellationToken ct)
     {
         AVFormatContext* inFmt = null;
@@ -110,13 +118,16 @@ internal static class LibavClipExporter
         AVFormatContext* outFmt = null;
         AVCodecContext* encCtx = null;
         SwsContext* sws = null;
+        SwsContext* swsToBgra = null;
         AVPacket* inPkt = null;
         AVPacket* outPkt = null;
         AVFrame* decFrame = null;
         AVFrame* encFrame = null;
+        AVFrame* bgraFrame = null;
         AVDictionary* encOpts = null;
         AVStream* outStream = null;
         long frameIndex = 0;
+        bool annotate = frameComposite != null;
 
         try
         {
@@ -211,13 +222,37 @@ internal static class LibavClipExporter
             encFrame->height = encCtx->height;
             ThrowIfErr(ffmpeg.av_frame_get_buffer(encFrame, 32), "clip_frame_get_buffer");
 
-            sws = ffmpeg.sws_getContext(
-                decCtx->width, decCtx->height, decCtx->pix_fmt,
-                encCtx->width, encCtx->height, encCtx->pix_fmt,
-                (int)SwsFlags.SWS_BILINEAR, null, null, null);
-            if (sws == null)
+            if (annotate)
             {
-                throw new InvalidOperationException("Failed to create sws context for clip export.");
+                // Burn-in path: decode → BGRA (SKBitmap composite) → YUV420P. Two sws contexts + a BGRA frame.
+                swsToBgra = ffmpeg.sws_getContext(
+                    decCtx->width, decCtx->height, decCtx->pix_fmt,
+                    decCtx->width, decCtx->height, AVPixelFormat.AV_PIX_FMT_BGRA,
+                    (int)SwsFlags.SWS_BILINEAR, null, null, null);
+                sws = ffmpeg.sws_getContext(
+                    decCtx->width, decCtx->height, AVPixelFormat.AV_PIX_FMT_BGRA,
+                    encCtx->width, encCtx->height, encCtx->pix_fmt,
+                    (int)SwsFlags.SWS_BILINEAR, null, null, null);
+                bgraFrame = ffmpeg.av_frame_alloc();
+                if (swsToBgra == null || sws == null || bgraFrame == null)
+                {
+                    throw new InvalidOperationException("Failed to create BGRA composite contexts.");
+                }
+                bgraFrame->format = (int)AVPixelFormat.AV_PIX_FMT_BGRA;
+                bgraFrame->width = decCtx->width;
+                bgraFrame->height = decCtx->height;
+                ThrowIfErr(ffmpeg.av_frame_get_buffer(bgraFrame, 32), "clip_bgra_get_buffer");
+            }
+            else
+            {
+                sws = ffmpeg.sws_getContext(
+                    decCtx->width, decCtx->height, decCtx->pix_fmt,
+                    encCtx->width, encCtx->height, encCtx->pix_fmt,
+                    (int)SwsFlags.SWS_BILINEAR, null, null, null);
+                if (sws == null)
+                {
+                    throw new InvalidOperationException("Failed to create sws context for clip export.");
+                }
             }
 
             double tb = ffmpeg.av_q2d(inStream->time_base);
@@ -259,8 +294,8 @@ internal static class LibavClipExporter
                     ffmpeg.av_packet_unref(inPkt);
 
                     runDone = DrainDecodedFrames(
-                        decCtx, encCtx, sws, decFrame, encFrame, outFmt, outStream, outPkt,
-                        inStream->time_base, range, ref frameIndex);
+                        decCtx, encCtx, sws, swsToBgra, decFrame, encFrame, bgraFrame, frameComposite,
+                        outFmt, outStream, outPkt, inStream->time_base, range, ref frameIndex);
                 }
 
                 // Range reached the file end: flush the decoder so its buffered tail frames aren't lost.
@@ -268,8 +303,8 @@ internal static class LibavClipExporter
                 {
                     ffmpeg.avcodec_send_packet(decCtx, null);
                     DrainDecodedFrames(
-                        decCtx, encCtx, sws, decFrame, encFrame, outFmt, outStream, outPkt,
-                        inStream->time_base, range, ref frameIndex);
+                        decCtx, encCtx, sws, swsToBgra, decFrame, encFrame, bgraFrame, frameComposite,
+                        outFmt, outStream, outPkt, inStream->time_base, range, ref frameIndex);
                 }
 
                 // Reset the decoder before the next range's seek (and after the final flush above).
@@ -288,7 +323,9 @@ internal static class LibavClipExporter
             if (outPkt != null) ffmpeg.av_packet_free(&outPkt);
             if (decFrame != null) ffmpeg.av_frame_free(&decFrame);
             if (encFrame != null) ffmpeg.av_frame_free(&encFrame);
+            if (bgraFrame != null) ffmpeg.av_frame_free(&bgraFrame);
             if (sws != null) ffmpeg.sws_freeContext(sws);
+            if (swsToBgra != null) ffmpeg.sws_freeContext(swsToBgra);
             if (decCtx != null) ffmpeg.avcodec_free_context(&decCtx);
             if (encCtx != null) ffmpeg.avcodec_free_context(&encCtx);
             if (inFmt != null) ffmpeg.avformat_close_input(&inFmt);
@@ -310,8 +347,11 @@ internal static class LibavClipExporter
         AVCodecContext* decCtx,
         AVCodecContext* encCtx,
         SwsContext* sws,
+        SwsContext* swsToBgra,
         AVFrame* decFrame,
         AVFrame* encFrame,
+        AVFrame* bgraFrame,
+        Action<SKBitmap>? composite,
         AVFormatContext* outFmt,
         AVStream* outStream,
         AVPacket* outPkt,
@@ -345,8 +385,30 @@ internal static class LibavClipExporter
             }
 
             ThrowIfErr(ffmpeg.av_frame_make_writable(encFrame), "clip_make_writable");
-            ffmpeg.sws_scale(sws, decFrame->data, decFrame->linesize, 0, decFrame->height,
-                encFrame->data, encFrame->linesize);
+            if (composite != null && bgraFrame != null && swsToBgra != null)
+            {
+                // decode pix -> BGRA (our private buffer)
+                ffmpeg.sws_scale(swsToBgra, decFrame->data, decFrame->linesize, 0, decFrame->height,
+                    bgraFrame->data, bgraFrame->linesize);
+
+                // Draw annotations/redactions directly onto the BGRA pixels (no copy), then BGRA -> YUV.
+                var info = new SKImageInfo(bgraFrame->width, bgraFrame->height, SKColorType.Bgra8888, SKAlphaType.Premul);
+                using (var sk = new SKBitmap())
+                {
+                    if (sk.InstallPixels(info, (IntPtr)bgraFrame->data[0], bgraFrame->linesize[0]))
+                    {
+                        composite(sk);
+                    }
+                }
+
+                ffmpeg.sws_scale(sws, bgraFrame->data, bgraFrame->linesize, 0, bgraFrame->height,
+                    encFrame->data, encFrame->linesize);
+            }
+            else
+            {
+                ffmpeg.sws_scale(sws, decFrame->data, decFrame->linesize, 0, decFrame->height,
+                    encFrame->data, encFrame->linesize);
+            }
             encFrame->pts = frameIndex++;
             ffmpeg.av_frame_unref(decFrame);
 
