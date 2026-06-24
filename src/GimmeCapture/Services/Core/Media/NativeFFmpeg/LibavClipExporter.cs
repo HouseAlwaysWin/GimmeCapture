@@ -11,7 +11,8 @@ namespace GimmeCapture.Services.Core.Media.NativeFFmpeg;
 /// <summary>
 /// In-process (libav, no ffmpeg.exe) frame-accurate trim/concat export for the floating video pin.
 /// Re-encodes the KEPT source ranges into one continuous H.264 clip (audio re-encoded to AAC and muxed),
-/// so cut points are exact regardless of keyframe spacing. Phase 1: cuts only — no annotations/crop/GIF.
+/// so cut points are exact regardless of keyframe spacing. Supports an optional crop rect; annotations
+/// and GIF/WebM targets are handled elsewhere.
 ///
 /// Video: seek to each range start, drop decoded frames before the start, re-encode frames within
 /// [start,end) with a continuous output PTS (CFR at the source frame rate). Audio: decode each range to
@@ -48,6 +49,7 @@ internal static class LibavClipExporter
         IReadOnlyList<SourceRange> ranges,
         string outputPath,
         VideoQuality quality,
+        VideoEditCrop? crop = null,
         CancellationToken cancellationToken = default)
     {
         FFmpegRuntime.EnsureInitialized();
@@ -72,7 +74,7 @@ internal static class LibavClipExporter
 
         try
         {
-            EncodeVideoRanges(inputPath, ranges, videoTemp, quality, cancellationToken);
+            EncodeVideoRanges(inputPath, ranges, videoTemp, quality, crop, cancellationToken);
 
             bool hasAudio = TryBuildAudio(inputPath, ranges, tempDir, quality, cancellationToken, out string? audioTemp);
 
@@ -103,6 +105,7 @@ internal static class LibavClipExporter
         IReadOnlyList<SourceRange> ranges,
         string outputPath,
         VideoQuality quality,
+        VideoEditCrop? crop,
         CancellationToken ct)
     {
         AVFormatContext* inFmt = null;
@@ -157,11 +160,15 @@ internal static class LibavClipExporter
                 throw new InvalidOperationException("Failed to allocate clip output context.");
             }
 
+            // Output dimensions: the crop rect when cropping, else the full source frame.
+            int outW = crop is { } cw ? cw.Width : decCtx->width;
+            int outH = crop is { } ch ? ch.Height : decCtx->height;
+
             encCtx = ffmpeg.avcodec_alloc_context3(enc);
             encCtx->codec_type = AVMediaType.AVMEDIA_TYPE_VIDEO;
             encCtx->codec_id = enc->id;
-            encCtx->width = decCtx->width;
-            encCtx->height = decCtx->height;
+            encCtx->width = outW;
+            encCtx->height = outH;
             encCtx->pix_fmt = AVPixelFormat.AV_PIX_FMT_YUV420P;
             encCtx->time_base = new AVRational { num = 1, den = fps };
             encCtx->framerate = new AVRational { num = fps, den = 1 };
@@ -211,8 +218,10 @@ internal static class LibavClipExporter
             encFrame->height = encCtx->height;
             ThrowIfErr(ffmpeg.av_frame_get_buffer(encFrame, 32), "clip_frame_get_buffer");
 
+            // When cropping, each decoded frame is cropped (av_frame_apply_cropping) down to outW×outH
+            // before scaling, so the sws source dimensions are the crop size too.
             sws = ffmpeg.sws_getContext(
-                decCtx->width, decCtx->height, decCtx->pix_fmt,
+                outW, outH, decCtx->pix_fmt,
                 encCtx->width, encCtx->height, encCtx->pix_fmt,
                 (int)SwsFlags.SWS_BILINEAR, null, null, null);
             if (sws == null)
@@ -260,7 +269,7 @@ internal static class LibavClipExporter
 
                     runDone = DrainDecodedFrames(
                         decCtx, encCtx, sws, decFrame, encFrame, outFmt, outStream, outPkt,
-                        inStream->time_base, range, ref frameIndex);
+                        inStream->time_base, range, crop, ref frameIndex);
                 }
 
                 // Range reached the file end: flush the decoder so its buffered tail frames aren't lost.
@@ -269,7 +278,7 @@ internal static class LibavClipExporter
                     ffmpeg.avcodec_send_packet(decCtx, null);
                     DrainDecodedFrames(
                         decCtx, encCtx, sws, decFrame, encFrame, outFmt, outStream, outPkt,
-                        inStream->time_base, range, ref frameIndex);
+                        inStream->time_base, range, crop, ref frameIndex);
                 }
 
                 // Reset the decoder before the next range's seek (and after the final flush above).
@@ -317,6 +326,7 @@ internal static class LibavClipExporter
         AVPacket* outPkt,
         AVRational inTimeBase,
         SourceRange range,
+        VideoEditCrop? crop,
         ref long frameIndex)
     {
         while (true)
@@ -342,6 +352,17 @@ internal static class LibavClipExporter
             {
                 ffmpeg.av_frame_unref(decFrame);
                 return true; // reached the end of this run
+            }
+
+            // Crop the decoded frame in place (pointer offset, no copy) to the requested region before
+            // scaling. UNALIGNED tolerates odd x/y offsets (chroma is adjusted per plane).
+            if (crop is { } c)
+            {
+                decFrame->crop_left = (ulong)Math.Max(0, c.X);
+                decFrame->crop_top = (ulong)Math.Max(0, c.Y);
+                decFrame->crop_right = (ulong)Math.Max(0, decCtx->width - c.X - c.Width);
+                decFrame->crop_bottom = (ulong)Math.Max(0, decCtx->height - c.Y - c.Height);
+                ffmpeg.av_frame_apply_cropping(decFrame, (int)ffmpeg.AV_FRAME_CROP_UNALIGNED);
             }
 
             ThrowIfErr(ffmpeg.av_frame_make_writable(encFrame), "clip_make_writable");
