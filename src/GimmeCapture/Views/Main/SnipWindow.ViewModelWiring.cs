@@ -329,6 +329,25 @@ public partial class SnipWindow : Window
                     _clipboardService,
                     _viewModel.MainVm?.AppSettingsService);
 
+                // On close with a pending cut, replace the original recording file in place with the
+                // trimmed export and refresh its History thumbnail (so the saved file/history reflect the edit).
+                var captureHistory = _viewModel.MainVm?.CaptureHistory;
+                vm.CommitEditedRecordingAsync = async (originalPath, trimmedTemp, w, h) =>
+                {
+                    try
+                    {
+                        System.IO.File.Copy(trimmedTemp, originalPath, true);
+                        if (captureHistory != null)
+                        {
+                            await captureHistory.RefreshVideoAsync(originalPath, w, h);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        GimmeCapture.Services.Core.Infrastructure.AppLog.Warning("FloatingVideo.CommitEdit.Wiring", ex);
+                    }
+                };
+
                 var padding = vm.WindowPadding;
                 var window = new FloatingVideoWindow
                 {

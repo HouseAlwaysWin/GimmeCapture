@@ -144,6 +144,59 @@ public sealed class CaptureHistoryService
         Changed?.Invoke();
     }
 
+    /// <summary>
+    /// Re-points a video history entry at the now-edited file in place: regenerates its thumbnail (the
+    /// first frame changes after a head trim) and updates dimensions. Used after the pin commits a trim
+    /// back onto the original recording file. No-op when history is disabled or no entry matches the path.
+    /// </summary>
+    public async Task RefreshVideoAsync(string filePath, int pixelWidth, int pixelHeight, CancellationToken ct = default)
+    {
+        if (!IsEnabled || string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
+        {
+            return;
+        }
+
+        bool changed = false;
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            await EnsureLoadedAsync().ConfigureAwait(false);
+            var item = _items!
+                .Where(i => i.Kind == CaptureHistoryKind.Video
+                    && string.Equals(i.FilePath, filePath, StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(i => i.CapturedAtUtc)
+                .FirstOrDefault();
+            if (item == null)
+            {
+                return;
+            }
+
+            string? thumb = await GenerateVideoThumbnailAsync(filePath, item.Id, pixelWidth, pixelHeight, ct).ConfigureAwait(false);
+            if (!string.IsNullOrEmpty(thumb))
+            {
+                item.ThumbnailPath = thumb;
+            }
+            if (pixelWidth > 0) item.Width = pixelWidth;
+            if (pixelHeight > 0) item.Height = pixelHeight;
+
+            await SaveIndexLockedAsync().ConfigureAwait(false);
+            changed = true;
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warning("CaptureHistory.RefreshVideo", ex);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+
+        if (changed)
+        {
+            Changed?.Invoke();
+        }
+    }
+
     public async Task<IReadOnlyList<CaptureHistoryItem>> GetItemsAsync()
     {
         await _gate.WaitAsync().ConfigureAwait(false);
