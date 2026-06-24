@@ -229,7 +229,19 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
         }
     }
     public bool ShowIconSettings => false;
-    
+
+    // Esc exits trim mode before the generic tool/annotation cancel.
+    protected override bool TryCancelModeSpecific()
+    {
+        if (IsTrimmingMode)
+        {
+            IsTrimmingMode = false;
+            return true;
+        }
+
+        return false;
+    }
+
     // Hotkey Proxies
     public override string PinHotkey => _appSettingsService?.Settings.Snip.Pin ?? base.PinHotkey;
     public override string UndoHotkey => _appSettingsService?.Settings.Record.Undo ?? base.UndoHotkey;
@@ -237,7 +249,8 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
     public override string ClearHotkey => _appSettingsService?.Settings.Record.Clear ?? base.ClearHotkey;
     public override string SaveHotkey => _appSettingsService?.Settings.Record.Save ?? base.SaveHotkey;
     public override string CopyHotkey => _appSettingsService?.Settings.Record.Copy ?? base.CopyHotkey;
-    public override string CloseHotkey => _appSettingsService?.Settings.Record.Close ?? base.CloseHotkey;
+    // Close is a fixed window-local shortcut (Ctrl+W); the pin is not closed by the record Close setting.
+    public override string CloseHotkey => base.CloseHotkey;
     public string PlaybackHotkey => _appSettingsService?.Settings.Record.Playback ?? "Space"; // Specific to Video
     public string MuteHotkey => "Shift+M";
     

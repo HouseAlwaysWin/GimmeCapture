@@ -444,7 +444,7 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
     public virtual string RedoHotkey => "Ctrl+Y";
     public virtual string ClearHotkey => "Delete";
     public virtual string SaveHotkey => "Ctrl+S";
-    public virtual string CloseHotkey => "Escape";
+    public virtual string CloseHotkey => "Ctrl+W";
     
     public virtual string RectangleHotkey => "R";
     public virtual string EllipseHotkey => "E";
@@ -609,6 +609,53 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
     public void SelectAnnotation(Annotation? annotation) => _editorState.SelectAnnotation(annotation);
 
     public void ClearAnnotationSelection() => _editorState.ClearSelection();
+
+    /// <summary>
+    /// Esc handler for pin windows: cancels the in-progress action in priority order
+    /// (text entry → pending selection region → mode-specific (AI point-removal / video trim) →
+    /// active tool → selected annotation). Returns true if something was cancelled. NEVER closes the
+    /// window — closing is Ctrl+W / the close button / the context menu.
+    /// </summary>
+    public bool TryCancelCurrentAction()
+    {
+        if (IsEnteringText)
+        {
+            CancelTextEntryCommand.Execute().Subscribe();
+            return true;
+        }
+
+        if (IsSelectionActive)
+        {
+            SelectionRect = new Avalonia.Rect();
+            return true;
+        }
+
+        if (TryCancelModeSpecific())
+        {
+            return true;
+        }
+
+        if (IsAnyToolActive)
+        {
+            CurrentTool = FloatingTool.None;
+            CurrentAnnotationTool = AnnotationType.None;
+            return true;
+        }
+
+        if (SelectedAnnotation != null)
+        {
+            ClearAnnotationSelection();
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Subclass hook for cancelling a mode that isn't part of the generic chain above
+    /// (image AI point-removal, video trim). Return true if it handled the cancel.
+    /// </summary>
+    protected virtual bool TryCancelModeSpecific() => false;
 
     public AnnotationSnapshot BeginAnnotationEdit(Annotation annotation) => _editorState.BeginAnnotationEdit(annotation);
 
