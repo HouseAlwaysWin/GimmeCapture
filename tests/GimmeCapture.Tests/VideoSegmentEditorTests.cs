@@ -74,6 +74,38 @@ public class VideoSegmentEditorTests
     }
 
     [Fact]
+    public void TryMapSourceToOutput_IsInverseAcrossACutGap()
+    {
+        var segs = new[]
+        {
+            new VideoEditSegment(0, 3),   // source [0,3) -> output [0,3)
+            new VideoEditSegment(7, 10),  // source [7,10) -> output [3,6)
+        };
+
+        Assert.True(VideoSegmentEditor.TryMapSourceToOutput(segs, 2.0, out double o0));
+        Assert.Equal(2.0, o0, 3);
+
+        // source 8s is 1s into the second segment -> output 4s.
+        Assert.True(VideoSegmentEditor.TryMapSourceToOutput(segs, 8.0, out double o1));
+        Assert.Equal(4.0, o1, 3);
+
+        // source 5s is in the cut gap [3,7) -> snaps to the second segment's output start (3).
+        Assert.True(VideoSegmentEditor.TryMapSourceToOutput(segs, 5.0, out double oGap));
+        Assert.Equal(3.0, oGap, 3);
+
+        Assert.False(VideoSegmentEditor.TryMapSourceToOutput(System.Array.Empty<VideoEditSegment>(), 1, out _));
+    }
+
+    [Fact]
+    public void TryMapSourceToOutput_HonorsSpeed()
+    {
+        var segs = new[] { new VideoEditSegment(0, 10, Speed: 2.0) }; // source 10s -> output 5s
+
+        Assert.True(VideoSegmentEditor.TryMapSourceToOutput(segs, 4.0, out double outT));
+        Assert.Equal(2.0, outT, 3); // 4s source / 2x = 2s output
+    }
+
+    [Fact]
     public void SplitAtOutputTime_SplitsSegmentAtSourcePoint()
     {
         var segs = new[] { new VideoEditSegment(0, 10) };

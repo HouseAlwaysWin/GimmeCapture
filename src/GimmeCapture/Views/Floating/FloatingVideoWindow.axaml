@@ -352,28 +352,48 @@
                     </StackPanel>
                 </StackPanel>
 
-                <!-- Row 4: Timeline strip — kept segments; click to select, then Delete; Split cuts at the playhead -->
-                <StackPanel IsVisible="{Binding IsTimelineMode}" Orientation="Vertical" Spacing="4">
+                <!-- Row 4: Proportional timeline strip — blocks sized by length; click to select, then
+                     Delete; Split cuts at the playhead. Pixel layout + playhead are set in code-behind. -->
+                <StackPanel IsVisible="{Binding IsTimelineMode}" Orientation="Vertical" Spacing="3">
                     <Rectangle Fill="#333333" Height="1" Margin="2,0" HorizontalAlignment="Stretch"/>
-                    <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
-                        <ItemsControl ItemsSource="{Binding SegmentBlocks}" Margin="4,0,4,2">
+                    <Grid x:Name="SegmentStripGrid" Height="30" Margin="4,0">
+                        <!-- Track background -->
+                        <Border Background="#262626" CornerRadius="3"/>
+                        <!-- Kept-segment blocks, positioned proportionally on a canvas -->
+                        <ItemsControl ItemsSource="{Binding SegmentBlocks}">
                             <ItemsControl.ItemsPanel>
                                 <ItemsPanelTemplate>
-                                    <StackPanel Orientation="Horizontal" Spacing="3"/>
+                                    <Canvas/>
                                 </ItemsPanelTemplate>
                             </ItemsControl.ItemsPanel>
+                            <ItemsControl.Styles>
+                                <Style Selector="ContentPresenter" x:DataType="vm:SegmentBlockViewModel">
+                                    <Setter Property="Canvas.Left" Value="{Binding PixelLeft}"/>
+                                    <Setter Property="Canvas.Top" Value="0"/>
+                                </Style>
+                            </ItemsControl.Styles>
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate DataType="vm:SegmentBlockViewModel">
-                                    <Button Theme="{StaticResource SnipToolButton}"
-                                            Content="{Binding Label}"
-                                            FontSize="10" Padding="6,2" Height="24" MinWidth="52"
-                                            Command="{Binding $parent[Window].((vm:FloatingVideoViewModel)DataContext).SelectSegmentCommand}"
-                                            CommandParameter="{Binding Index}"
-                                            Opacity="{Binding IsSelected, Converter={StaticResource BoolToOpacityConverter}}"/>
+                                    <Panel Width="{Binding PixelWidth}" Height="30">
+                                        <Button Theme="{StaticResource SnipToolButton}"
+                                                Width="{Binding PixelWidth}" Height="30"
+                                                Padding="2,0" FontSize="9"
+                                                Content="{Binding Label}"
+                                                Command="{Binding $parent[Window].((vm:FloatingVideoViewModel)DataContext).SelectSegmentCommand}"
+                                                CommandParameter="{Binding Index}"/>
+                                        <!-- Selected-segment outline -->
+                                        <Border IsVisible="{Binding IsSelected}" BorderBrush="#FFD400"
+                                                BorderThickness="2" CornerRadius="3" IsHitTestVisible="False"/>
+                                    </Panel>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
-                    </ScrollViewer>
+                        <!-- Playhead (X set in code-behind via RenderTransform) -->
+                        <Rectangle x:Name="SegmentPlayhead" Width="2" Fill="#FF4444"
+                                   HorizontalAlignment="Left" VerticalAlignment="Stretch" IsHitTestVisible="False"/>
+                    </Grid>
+                    <TextBlock Text="{Binding TimelineHint}" Foreground="#999999" FontSize="9"
+                               HorizontalAlignment="Center" Margin="0,0,0,2"/>
                 </StackPanel>
             </StackPanel>
         </Border>

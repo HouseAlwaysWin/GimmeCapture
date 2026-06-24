@@ -46,6 +46,11 @@ public partial class FloatingVideoViewModel
     /// <summary>Timeline strip blocks (one per kept segment), rebuilt whenever the segments change.</summary>
     public ObservableCollection<SegmentBlockViewModel> SegmentBlocks { get; } = new();
 
+    /// <summary>Raised after the strip blocks are rebuilt so the view can recompute proportional layout.</summary>
+    public event Action? SegmentLayoutChanged;
+
+    public string TimelineHint => LocalizationService.Instance["TimelineHint"] ?? "Drag the playhead → Split → tap a block → Delete";
+
     /// <summary>True once the user has cut the clip into more than one kept segment.</summary>
     private bool UseMultiSegment => IsTimelineMode && EditSegments.Count > 1;
 
@@ -164,13 +169,37 @@ public partial class FloatingVideoViewModel
     private void RebuildSegmentBlocks()
     {
         SegmentBlocks.Clear();
+        double cursor = 0;
         for (int i = 0; i < EditSegments.Count; i++)
         {
             VideoEditSegment s = EditSegments[i];
-            SegmentBlocks.Add(new SegmentBlockViewModel(i, $"{FormatClock(s.SourceStart)}–{FormatClock(s.SourceEnd)}")
+            double outDur = s.OutputDuration;
+            SegmentBlocks.Add(new SegmentBlockViewModel(
+                i,
+                $"{FormatClock(s.SourceStart)}–{FormatClock(s.SourceEnd)}",
+                cursor,
+                outDur)
             {
                 IsSelected = i == _selectedSegmentIndex,
             });
+            cursor += outDur;
+        }
+
+        SegmentLayoutChanged?.Invoke();
+    }
+
+    /// <summary>Total kept output duration across all segments (seconds); 0 when empty.</summary>
+    public double TotalOutputDuration
+    {
+        get
+        {
+            double total = 0;
+            foreach (VideoEditSegment s in EditSegments)
+            {
+                total += s.OutputDuration;
+            }
+
+            return total;
         }
     }
 

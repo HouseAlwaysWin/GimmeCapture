@@ -163,6 +163,7 @@
   "TipTimeline": "時間軸（多段剪輯）",
   "TipSplitSegment": "在播放點切分",
   "TipDeleteSegment": "刪除選取的片段",
+  "TimelineHint": "拖曳播放點 → 切分 → 點片段 → 刪除",
   "MenuCopyImage": "複製圖片",
   "MenuCrop": "裁切",
   "MenuPinSelection": "釘選選取區域",

@@ -120,6 +120,8 @@ public partial class FloatingVideoWindow : FloatingWindowBase
 
             // 裁切拉桿初始化
             InitializeTrimThumbs(vm);
+            // 時間軸（多段）初始化
+            InitializeSegmentStrip(vm);
         }
     }
 
@@ -208,6 +210,68 @@ public partial class FloatingVideoWindow : FloatingWindowBase
         _trimEndThumb.RenderTransform = new Avalonia.Media.TranslateTransform(endX, 0);
     }
 
+    // ── 時間軸（多段）邏輯：依片段長度按比例排版 + 播放點 ──
+    private Grid? _segmentStripGrid;
+    private Avalonia.Controls.Shapes.Rectangle? _segmentPlayhead;
+    private IDisposable? _segmentSubscription;
+    private Action? _segmentLayoutHandler;
+    private FloatingVideoViewModel? _segmentVm;
+
+    private void InitializeSegmentStrip(FloatingVideoViewModel vm)
+    {
+        _segmentStripGrid = this.FindControl<Grid>("SegmentStripGrid");
+        _segmentPlayhead = this.FindControl<Avalonia.Controls.Shapes.Rectangle>("SegmentPlayhead");
+        if (_segmentStripGrid == null) return;
+
+        _segmentVm = vm;
+        _segmentLayoutHandler = () => Dispatcher.UIThread.Post(UpdateSegmentLayout);
+        vm.SegmentLayoutChanged += _segmentLayoutHandler;
+
+        // Recompute on playhead move, mode toggle, or duration arriving.
+        _segmentSubscription = vm.WhenAnyValue(
+            x => x.CurrentTimeSeconds,
+            x => x.IsTimelineMode,
+            x => x.TotalDuration)
+            .Subscribe(_ => Dispatcher.UIThread.Post(UpdateSegmentLayout));
+
+        // Recompute pixel widths when the strip is resized.
+        _segmentStripGrid.PropertyChanged += (s, e) =>
+        {
+            if (e.Property.Name == "Bounds")
+                Dispatcher.UIThread.Post(UpdateSegmentLayout);
+        };
+    }
+
+    private void UpdateSegmentLayout()
+    {
+        if (DataContext is not FloatingVideoViewModel vm || _segmentStripGrid == null) return;
+        if (!vm.IsTimelineMode) return;
+
+        double trackWidth = _segmentStripGrid.Bounds.Width;
+        double total = vm.TotalOutputDuration;
+        if (trackWidth <= 0 || total <= 0) return;
+
+        const double gap = 2; // visual seam between adjacent blocks
+        foreach (SegmentBlockViewModel b in vm.SegmentBlocks)
+        {
+            b.PixelLeft = (b.OutputStart / total) * trackWidth;
+            b.PixelWidth = Math.Max(2, ((b.OutputDuration / total) * trackWidth) - gap);
+        }
+
+        if (_segmentPlayhead != null)
+        {
+            double outSec = vm.CurrentTimeSeconds;
+            if (GimmeCapture.Services.Core.Media.VideoSegmentEditor.TryMapSourceToOutput(
+                    vm.EditSegments, vm.CurrentTimeSeconds, out double mapped))
+            {
+                outSec = mapped;
+            }
+
+            double x = Math.Clamp((outSec / total) * trackWidth, 0, trackWidth);
+            _segmentPlayhead.RenderTransform = new Avalonia.Media.TranslateTransform(x, 0);
+        }
+    }
+
     protected override void OnClosing(WindowClosingEventArgs e)
     {
         base.OnClosing(e);
@@ -224,6 +288,14 @@ public partial class FloatingVideoWindow : FloatingWindowBase
         _disposeStarted = true;
         _trimSubscription?.Dispose();
         _trimSubscription = null;
+        _segmentSubscription?.Dispose();
+        _segmentSubscription = null;
+        if (_segmentVm is not null && _segmentLayoutHandler is not null)
+        {
+            _segmentVm.SegmentLayoutChanged -= _segmentLayoutHandler;
+        }
+        _segmentVm = null;
+        _segmentLayoutHandler = null;
         if (_trimStartThumb is not null)
         {
             _trimStartThumb.DragDelta -= OnTrimStartDragDelta;

@@ -92,6 +92,51 @@ public static class VideoSegmentEditor
     }
 
     /// <summary>
+    /// Maps a SOURCE time to its position on the OUTPUT timeline (for placing the playhead on the
+    /// segment strip). A source time inside a kept segment maps within that segment; a source time in
+    /// a cut gap snaps to the nearest segment boundary; before/after everything clamps to 0 / total
+    /// output. Returns false when the list is empty.
+    /// </summary>
+    public static bool TryMapSourceToOutput(
+        IReadOnlyList<VideoEditSegment> segments,
+        double sourceTime,
+        out double outputTime)
+    {
+        ArgumentNullException.ThrowIfNull(segments);
+        outputTime = 0;
+        if (segments.Count == 0)
+        {
+            return false;
+        }
+
+        double cursor = 0;
+        for (int i = 0; i < segments.Count; i++)
+        {
+            VideoEditSegment s = segments[i];
+            double outDur = s.OutputDuration;
+            if (sourceTime < s.SourceStart)
+            {
+                // In the gap before this segment (or before the first) -> snap to its output start.
+                outputTime = cursor;
+                return true;
+            }
+
+            if (sourceTime <= s.SourceEnd)
+            {
+                double speed = s.Speed > 0 ? s.Speed : 1.0;
+                outputTime = cursor + ((sourceTime - s.SourceStart) / speed);
+                return true;
+            }
+
+            cursor += outDur;
+        }
+
+        // Past the last segment -> end of the output.
+        outputTime = cursor;
+        return true;
+    }
+
+    /// <summary>
     /// Splits the segment containing <paramref name="outputTime"/> into two at that point. Returns a
     /// new list; the original is unchanged. A split too close to a segment boundary (or outside the
     /// output) is a no-op and returns an equivalent copy.
