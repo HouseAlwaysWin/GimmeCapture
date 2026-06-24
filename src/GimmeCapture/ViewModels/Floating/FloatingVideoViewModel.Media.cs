@@ -224,19 +224,51 @@ public partial class FloatingVideoViewModel
         {
             while (!ct.IsCancellationRequested && !_isDisposed)
             {
-                // 每次迭代重新讀取裁切值，讓拉桿拖拽即時生效
-                var trimActive = IsTrimmingMode && _totalDuration.TotalSeconds > 0;
-                var trimStart = trimActive ? TrimStartSeconds : 0;
-                var trimEnd = trimActive ? TrimEndSeconds : double.MaxValue;
-
                 _trimEndReached = false;
 
+                bool playSingleFrame = !_isPlaybackActive;
+                // Timeline mode with real cuts: walk the kept segments, skipping the gaps.
+                bool multi = !playSingleFrame && IsTimelineMode && EditSegments.Count > 1;
+
                 double startSeconds = _currentTime.TotalSeconds;
+                double passEnd;
+                int segIndex = -1;
+
+                if (multi)
+                {
+                    segIndex = ResolveSegmentForPlayback(ref startSeconds);
+                    if (segIndex < 0)
+                    {
+                        // Past the last kept segment: behave like end of clip.
+                        if (!IsLooping)
+                        {
+                            _isPlaybackActive = false;
+                            StopAudioPlayback();
+                            Avalonia.Threading.Dispatcher.UIThread.Post(() => this.RaisePropertyChanged(nameof(IsPlaying)));
+                            break;
+                        }
+
+                        segIndex = 0;
+                        startSeconds = EditSegments[0].SourceStart;
+                    }
+
+                    _currentTime = TimeSpan.FromSeconds(startSeconds);
+                    passEnd = EditSegments[segIndex].SourceEnd;
+                }
+                else
+                {
+                    // 每次迭代重新讀取裁切值，讓拉桿拖拽即時生效
+                    var trimActive = IsTrimmingMode && _totalDuration.TotalSeconds > 0;
+                    passEnd = trimActive ? TrimEndSeconds : double.MaxValue;
+                }
+
+                // Actively stop the decode at the segment/trim end (not just freeze the frame) when
+                // playing a bounded range, so the next segment starts at once instead of decoding to EOF.
+                bool stopAtPassEnd = playSingleFrame || multi;
+                using var passCts = stopAtPassEnd ? CancellationTokenSource.CreateLinkedTokenSource(ct) : null;
 
                 // Keep looping control in this VM so audio/video restart together every cycle.
                 bool loopPlayback = false;
-                bool playSingleFrame = !_isPlaybackActive;
-                using var singleFrameCts = playSingleFrame ? CancellationTokenSource.CreateLinkedTokenSource(ct) : null;
 
                 try
                 {
@@ -251,10 +283,10 @@ public partial class FloatingVideoViewModel
                         (frameData, seconds) =>
                         {
                             if (_isDisposed || generation != Volatile.Read(ref _playbackGeneration)) return;
-                            if (seconds >= trimEnd)
+                            if (seconds >= passEnd)
                             {
                                 _trimEndReached = true;
-                                singleFrameCts?.Cancel();
+                                passCts?.Cancel();
                                 return;
                             }
 
@@ -264,33 +296,58 @@ public partial class FloatingVideoViewModel
 
                             if (playSingleFrame)
                             {
-                                singleFrameCts?.Cancel();
+                                passCts?.Cancel();
                             }
                         },
-                        playSingleFrame ? singleFrameCts!.Token : ct).ConfigureAwait(false);
+                        stopAtPassEnd ? passCts!.Token : ct).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException) when (playSingleFrame || _trimEndReached)
                 {
-                    // expected for one-frame seek or trim end
+                    // expected for one-frame seek, trim end, or segment end
                 }
 
                 if (ct.IsCancellationRequested)
                     break;
-                    
+
                 if (!_isPlaybackActive)
                 {
                     // Was just seeking a single frame while paused. Exit loop.
                     break;
                 }
 
-                if (!IsLooping) 
+                if (multi)
+                {
+                    // Advance to the next kept segment (skipping the cut gap), or loop/stop at the end.
+                    if (segIndex + 1 < EditSegments.Count)
+                    {
+                        _currentTime = TimeSpan.FromSeconds(EditSegments[segIndex + 1].SourceStart);
+                        UpdateAudioStateFromPlayback();
+                        RequestCurrentTimeUiRefresh(force: true);
+                        continue;
+                    }
+
+                    if (!IsLooping)
+                    {
+                        _isPlaybackActive = false;
+                        StopAudioPlayback();
+                        Avalonia.Threading.Dispatcher.UIThread.Post(() => this.RaisePropertyChanged(nameof(IsPlaying)));
+                        break;
+                    }
+
+                    _currentTime = TimeSpan.FromSeconds(EditSegments[0].SourceStart);
+                    UpdateAudioStateFromPlayback();
+                    RequestCurrentTimeUiRefresh(force: true);
+                    continue;
+                }
+
+                if (!IsLooping)
                 {
                     _isPlaybackActive = false;
                     StopAudioPlayback();
                     Avalonia.Threading.Dispatcher.UIThread.Post(() => this.RaisePropertyChanged(nameof(IsPlaying)));
                     break;
                 }
-                
+
                 // 循環播放：重新讀取最新的裁切起點
                 var loopStart = IsTrimmingMode ? TrimStartSeconds : 0;
                 _currentTime = TimeSpan.FromSeconds(loopStart);
@@ -307,6 +364,27 @@ public partial class FloatingVideoViewModel
         {
             _playSemaphore.Release();
         }
+    }
+
+    /// <summary>
+    /// Picks the kept segment to play for the given source time and snaps the time into it. A time in
+    /// a cut gap (or before the first segment) snaps forward to the next segment's start. Returns the
+    /// segment index, or -1 when the time is past the last kept segment.
+    /// </summary>
+    private int ResolveSegmentForPlayback(ref double sourceSeconds)
+    {
+        double s = sourceSeconds;
+        for (int i = 0; i < EditSegments.Count; i++)
+        {
+            var seg = EditSegments[i];
+            if (s < seg.SourceEnd - 1e-3)
+            {
+                sourceSeconds = Math.Max(s, seg.SourceStart);
+                return i;
+            }
+        }
+
+        return -1;
     }
 
     private void UpdateAudioStateFromPlayback()
