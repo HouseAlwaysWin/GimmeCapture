@@ -137,6 +137,31 @@ public static class VideoSegmentEditor
     }
 
     /// <summary>
+    /// The index of the kept segment "at" <paramref name="sourceTime"/> — the one containing it, or the
+    /// next kept segment when the time falls in a cut gap (clamped to the ends). Returns -1 for an empty
+    /// list. Used to auto-select the segment under the playhead so Delete removes the right one.
+    /// </summary>
+    public static int IndexForSourceTime(IReadOnlyList<VideoEditSegment> segments, double sourceTime)
+    {
+        ArgumentNullException.ThrowIfNull(segments);
+        if (segments.Count == 0)
+        {
+            return -1;
+        }
+
+        for (int i = 0; i < segments.Count; i++)
+        {
+            VideoEditSegment s = segments[i];
+            if (sourceTime < s.SourceStart || sourceTime <= s.SourceEnd)
+            {
+                return i;
+            }
+        }
+
+        return segments.Count - 1;
+    }
+
+    /// <summary>
     /// Splits the segment containing <paramref name="outputTime"/> into two at that point. Returns a
     /// new list; the original is unchanged. A split too close to a segment boundary (or outside the
     /// output) is a no-op and returns an equivalent copy.

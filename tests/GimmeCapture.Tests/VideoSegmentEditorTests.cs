@@ -106,6 +106,23 @@ public class VideoSegmentEditorTests
     }
 
     [Fact]
+    public void IndexForSourceTime_FindsContainingOrNextSegment()
+    {
+        var segs = new[]
+        {
+            new VideoEditSegment(0, 3),   // index 0
+            new VideoEditSegment(7, 10),  // index 1
+        };
+
+        Assert.Equal(0, VideoSegmentEditor.IndexForSourceTime(segs, 1.0));   // inside seg 0
+        Assert.Equal(1, VideoSegmentEditor.IndexForSourceTime(segs, 8.0));   // inside seg 1
+        Assert.Equal(1, VideoSegmentEditor.IndexForSourceTime(segs, 5.0));   // gap [3,7) -> next segment
+        Assert.Equal(0, VideoSegmentEditor.IndexForSourceTime(segs, -1.0));  // before everything -> first
+        Assert.Equal(1, VideoSegmentEditor.IndexForSourceTime(segs, 999));   // past end -> last
+        Assert.Equal(-1, VideoSegmentEditor.IndexForSourceTime(System.Array.Empty<VideoEditSegment>(), 1));
+    }
+
+    [Fact]
     public void SplitAtOutputTime_SplitsSegmentAtSourcePoint()
     {
         var segs = new[] { new VideoEditSegment(0, 10) };

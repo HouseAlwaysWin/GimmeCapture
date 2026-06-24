@@ -216,6 +216,7 @@ public partial class FloatingVideoWindow : FloatingWindowBase
     private IDisposable? _segmentSubscription;
     private Action? _segmentLayoutHandler;
     private FloatingVideoViewModel? _segmentVm;
+    private bool _scrubbingSegmentStrip;
 
     private void InitializeSegmentStrip(FloatingVideoViewModel vm)
     {
@@ -240,6 +241,51 @@ public partial class FloatingVideoWindow : FloatingWindowBase
             if (e.Property.Name == "Bounds")
                 Dispatcher.UIThread.Post(UpdateSegmentLayout);
         };
+
+        // Drag anywhere on the strip to move the playhead (scrub) — the red bar follows the finger.
+        _segmentStripGrid.PointerPressed += OnSegmentStripPointerPressed;
+        _segmentStripGrid.PointerMoved += OnSegmentStripPointerMoved;
+        _segmentStripGrid.PointerReleased += OnSegmentStripPointerReleased;
+    }
+
+    private void OnSegmentStripPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (DataContext is not FloatingVideoViewModel vm || _segmentStripGrid == null) return;
+        _scrubbingSegmentStrip = true;
+        e.Pointer.Capture(_segmentStripGrid);
+        ScrubSegmentStripTo(vm, e.GetPosition(_segmentStripGrid).X);
+    }
+
+    private void OnSegmentStripPointerMoved(object? sender, PointerEventArgs e)
+    {
+        if (!_scrubbingSegmentStrip || _segmentStripGrid == null) return;
+        if (DataContext is not FloatingVideoViewModel vm) return;
+        ScrubSegmentStripTo(vm, e.GetPosition(_segmentStripGrid).X);
+    }
+
+    private void OnSegmentStripPointerReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        _scrubbingSegmentStrip = false;
+        e.Pointer.Capture(null);
+    }
+
+    // Maps a pixel X on the strip to OUTPUT time -> SOURCE time, then seeks there (which pauses +
+    // debounce-seeks the player and moves the playhead) and selects the segment under it.
+    private void ScrubSegmentStripTo(FloatingVideoViewModel vm, double localX)
+    {
+        if (_segmentStripGrid == null) return;
+        double trackWidth = _segmentStripGrid.Bounds.Width;
+        double total = vm.TotalOutputDuration;
+        if (trackWidth <= 0 || total <= 0) return;
+
+        double outputTime = Math.Clamp(localX / trackWidth, 0, 1) * total;
+        if (GimmeCapture.Services.Core.Media.VideoSegmentEditor.TryMapOutputToSource(
+                vm.EditSegments, outputTime, out _, out double sourceTime))
+        {
+            vm.CurrentTimeSeconds = sourceTime;
+            vm.SelectedSegmentIndex = GimmeCapture.Services.Core.Media.VideoSegmentEditor.IndexForSourceTime(
+                vm.EditSegments, sourceTime);
+        }
     }
 
     private void UpdateSegmentLayout()
@@ -269,6 +315,15 @@ public partial class FloatingVideoWindow : FloatingWindowBase
 
             double x = Math.Clamp((outSec / total) * trackWidth, 0, trackWidth);
             _segmentPlayhead.RenderTransform = new Avalonia.Media.TranslateTransform(x, 0);
+        }
+
+        // Keep the highlighted (active) segment in sync with the playhead so Delete removes the
+        // segment the bar is over, even while playing.
+        int active = GimmeCapture.Services.Core.Media.VideoSegmentEditor.IndexForSourceTime(
+            vm.EditSegments, vm.CurrentTimeSeconds);
+        if (active >= 0 && active != vm.SelectedSegmentIndex)
+        {
+            vm.SelectedSegmentIndex = active;
         }
     }
 

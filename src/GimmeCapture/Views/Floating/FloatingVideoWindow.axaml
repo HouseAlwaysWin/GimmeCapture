@@ -360,7 +360,7 @@
                         <!-- Track background -->
                         <Border Background="#262626" CornerRadius="3"/>
                         <!-- Kept-segment blocks, positioned proportionally on a canvas -->
-                        <ItemsControl ItemsSource="{Binding SegmentBlocks}">
+                        <ItemsControl ItemsSource="{Binding SegmentBlocks}" IsHitTestVisible="False">
                             <ItemsControl.ItemsPanel>
                                 <ItemsPanelTemplate>
                                     <Canvas/>
@@ -374,16 +374,13 @@
                             </ItemsControl.Styles>
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate DataType="vm:SegmentBlockViewModel">
-                                    <Panel Width="{Binding PixelWidth}" Height="30">
-                                        <Button Theme="{StaticResource SnipToolButton}"
-                                                Width="{Binding PixelWidth}" Height="30"
-                                                Padding="2,0" FontSize="9"
-                                                Content="{Binding Label}"
-                                                Command="{Binding $parent[Window].((vm:FloatingVideoViewModel)DataContext).SelectSegmentCommand}"
-                                                CommandParameter="{Binding Index}"/>
-                                        <!-- Selected-segment outline -->
+                                    <Panel Width="{Binding PixelWidth}" Height="30" IsHitTestVisible="False">
+                                        <Border Background="#3A6EA5" CornerRadius="3"/>
+                                        <!-- Selected-segment outline (segment under the playhead) -->
                                         <Border IsVisible="{Binding IsSelected}" BorderBrush="#FFD400"
-                                                BorderThickness="2" CornerRadius="3" IsHitTestVisible="False"/>
+                                                BorderThickness="2" CornerRadius="3"/>
+                                        <TextBlock Text="{Binding Label}" FontSize="9" Foreground="#E8E8E8"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                     </Panel>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
