@@ -165,7 +165,8 @@ public partial class FloatingVideoViewModel
             var ffmpegPath = FFmpegPath;
             if (ffmpegPath.Contains("ffplay.exe")) ffmpegPath = ffmpegPath.Replace("ffplay.exe", "ffmpeg.exe");
 
-            bool applyTrim = IsTrimmingMode && (TrimStartSeconds > 0 || TrimEndSeconds < _totalDuration.TotalSeconds);
+            (double trimStart, double trimEnd) = SingleSegmentSourceRange();
+            bool applyTrim = SingleSegmentIsTrimmed;
             bool isOutputGif = ext.Equals(".gif", StringComparison.OrdinalIgnoreCase);
             string cropFilter = $"crop={crop.Width}:{crop.Height}:{crop.X}:{crop.Y}";
 
@@ -173,14 +174,14 @@ public partial class FloatingVideoViewModel
                 .WithArguments(args =>
                 {
                     args.Add("-y");
-                    if (applyTrim && TrimStartSeconds > 0)
+                    if (applyTrim && trimStart > 0)
                     {
-                        args.Add("-ss").Add(TrimStartSeconds.ToString("F3"));
+                        args.Add("-ss").Add(trimStart.ToString("F3"));
                     }
                     args.Add("-i").Add(VideoPath);
                     if (applyTrim)
                     {
-                        args.Add("-to").Add((TrimEndSeconds - TrimStartSeconds).ToString("F3"));
+                        args.Add("-to").Add((trimEnd - trimStart).ToString("F3"));
                     }
                     args.Add("-vf").Add(cropFilter);
                     if (!isOutputGif)
@@ -230,7 +231,7 @@ public partial class FloatingVideoViewModel
             {
                 ProcessingText = LocalizationService.Instance["StatusExportingVideo"] ?? "Exporting Video...";
                 bool hasAnnotations = Annotations.AsValueEnumerable().Any();
-                bool needsTrim = IsTrimmingMode && (TrimStartSeconds > 0 || TrimEndSeconds < _totalDuration.TotalSeconds);
+                bool needsTrim = SingleSegmentIsTrimmed;
 
                 if (hasAnnotations || needsTrim || UseMultiSegment)
                 {
@@ -287,7 +288,7 @@ public partial class FloatingVideoViewModel
                 string sourceExt = Path.GetExtension(VideoPath).ToLowerInvariant();
                 string targetExt = Path.GetExtension(targetPath).ToLowerInvariant();
                 bool needsConversion = sourceExt != targetExt;
-                bool needsTrim = IsTrimmingMode && (TrimStartSeconds > 0 || TrimEndSeconds < _totalDuration.TotalSeconds);
+                bool needsTrim = SingleSegmentIsTrimmed;
 
                 if (hasAnnotations || needsConversion || needsTrim || UseMultiSegment)
                 {
@@ -397,26 +398,25 @@ public partial class FloatingVideoViewModel
                 includeOverlayInput: true,
                 isOutputGif: isOutputGif);
             
-            // 裁切參數：僅在裁切模式下套用
-            bool applyTrim = IsTrimmingMode && (TrimStartSeconds > 0 || TrimEndSeconds < _totalDuration.TotalSeconds);
+            // Single-segment trim: fast input-level -ss/-to (the kept segment's source range).
+            (double trimStart, double trimEnd) = SingleSegmentSourceRange();
+            bool applyTrim = SingleSegmentIsTrimmed;
 
             var result = await Cli.Wrap(ffmpegPath)
-                .WithArguments(args => 
+                .WithArguments(args =>
                 {
                     args.Add("-y");
 
-                    // 加入裁切起始點
-                    if (applyTrim && TrimStartSeconds > 0)
+                    if (applyTrim && trimStart > 0)
                     {
-                        args.Add("-ss").Add(TrimStartSeconds.ToString("F3"));
+                        args.Add("-ss").Add(trimStart.ToString("F3"));
                     }
 
                     args.Add("-i").Add(VideoPath);
 
-                    // 加入裁切終點
                     if (applyTrim)
                     {
-                        args.Add("-to").Add((TrimEndSeconds - TrimStartSeconds).ToString("F3"));
+                        args.Add("-to").Add((trimEnd - trimStart).ToString("F3"));
                     }
 
                     args.Add("-loop").Add("1")

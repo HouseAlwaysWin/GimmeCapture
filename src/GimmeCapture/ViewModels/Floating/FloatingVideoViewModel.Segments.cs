@@ -73,10 +73,9 @@ public partial class FloatingVideoViewModel
             bool activate = !IsTimelineMode;
             if (activate)
             {
-                // Timeline is mutually exclusive with the simple tools/trim, like the trim toggle.
+                // Timeline is mutually exclusive with the simple drawing tools.
                 CurrentTool = FloatingTool.None;
                 CurrentAnnotationTool = AnnotationType.None;
-                IsTrimmingMode = false;
                 SeedSegmentsFromTrim();
             }
 
@@ -109,7 +108,7 @@ public partial class FloatingVideoViewModel
         SelectSegmentCommand = ReactiveCommand.Create<int>(index => SelectedSegmentIndex = index);
     }
 
-    /// <summary>Seeds the segment list from the current trim range (or the whole clip) once.</summary>
+    /// <summary>Seeds the segment list with the whole clip once (the timeline is the only editor now).</summary>
     private void SeedSegmentsFromTrim()
     {
         // Reseed when empty, or when the only segment is the degenerate one seeded before the
@@ -120,9 +119,36 @@ public partial class FloatingVideoViewModel
         }
 
         double total = _totalDuration.TotalSeconds;
-        double start = IsTrimmingMode ? TrimStartSeconds : 0;
-        double end = IsTrimmingMode && TrimEndSeconds > 0 ? TrimEndSeconds : total;
-        ReplaceSegments(VideoSegmentEditor.FromTrim(start, end, total));
+        ReplaceSegments(VideoSegmentEditor.FromTrim(0, total, total));
+    }
+
+    // The single kept segment's source range (a plain head/tail trim); (0,total) when not in timeline
+    // mode or no segments. Used by the single-segment fast export path (input -ss/-to + stream copy).
+    private (double Start, double End) SingleSegmentSourceRange()
+    {
+        if (IsTimelineMode && EditSegments.Count >= 1)
+        {
+            VideoEditSegment s = EditSegments[0];
+            return (s.SourceStart, s.SourceEnd);
+        }
+
+        return (0, _totalDuration.TotalSeconds);
+    }
+
+    // True when there is exactly one kept segment that is a sub-range of the clip (i.e. a plain trim).
+    private bool SingleSegmentIsTrimmed
+    {
+        get
+        {
+            if (UseMultiSegment)
+            {
+                return false;
+            }
+
+            (double st, double en) = SingleSegmentSourceRange();
+            double total = _totalDuration.TotalSeconds;
+            return st > 0.001 || (total > 0 && en < total - 0.001);
+        }
     }
 
     // True when the list holds exactly one block whose end is at/under its start, or runs past the
@@ -214,10 +240,7 @@ public partial class FloatingVideoViewModel
     {
         IReadOnlyList<VideoEditSegment> segments = EditSegments.Count > 0
             ? EditSegments.ToArray()
-            : VideoSegmentEditor.FromTrim(
-                IsTrimmingMode ? TrimStartSeconds : 0,
-                IsTrimmingMode && TrimEndSeconds > 0 ? TrimEndSeconds : _totalDuration.TotalSeconds,
-                _totalDuration.TotalSeconds);
+            : VideoSegmentEditor.FromTrim(0, _totalDuration.TotalSeconds, _totalDuration.TotalSeconds);
 
         return new VideoEditProject
         {

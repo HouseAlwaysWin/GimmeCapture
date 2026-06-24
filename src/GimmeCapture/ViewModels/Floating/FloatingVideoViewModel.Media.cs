@@ -191,12 +191,10 @@ public partial class FloatingVideoViewModel
         CancelPlaybackInBackground();
         var generation = Interlocked.Increment(ref _playbackGeneration);
 
-        // 裁切模式：判斷是否超過裁切終點或影片結尾
-        var effectiveEnd = IsTrimmingMode && TrimEndSeconds > 0 
-            ? TimeSpan.FromSeconds(TrimEndSeconds) 
-            : TotalDuration;
-        var effectiveStart = IsTrimmingMode && TrimStartSeconds > 0
-            ? TimeSpan.FromSeconds(TrimStartSeconds)
+        // Timeline edit: clamp the restart point to the first kept segment; otherwise the whole clip.
+        var effectiveEnd = TotalDuration;
+        var effectiveStart = IsTimelineMode && EditSegments.Count > 0
+            ? TimeSpan.FromSeconds(EditSegments[0].SourceStart)
             : TimeSpan.Zero;
 
         if (_seekTargetSeconds >= 0)
@@ -227,8 +225,9 @@ public partial class FloatingVideoViewModel
                 _trimEndReached = false;
 
                 bool playSingleFrame = !_isPlaybackActive;
-                // Timeline mode with real cuts: walk the kept segments, skipping the gaps.
-                bool multi = !playSingleFrame && IsTimelineMode && EditSegments.Count > 1;
+                // Timeline mode: walk the kept segments (one or many), skipping any cut gaps. A single
+                // kept segment just plays its [start,end] range — that is how trimming works now.
+                bool multi = !playSingleFrame && IsTimelineMode && EditSegments.Count >= 1;
 
                 double startSeconds = _currentTime.TotalSeconds;
                 double passEnd;
@@ -257,9 +256,8 @@ public partial class FloatingVideoViewModel
                 }
                 else
                 {
-                    // 每次迭代重新讀取裁切值，讓拉桿拖拽即時生效
-                    var trimActive = IsTrimmingMode && _totalDuration.TotalSeconds > 0;
-                    passEnd = trimActive ? TrimEndSeconds : double.MaxValue;
+                    // Not in timeline mode (or a single paused-seek frame): play the whole clip unbounded.
+                    passEnd = double.MaxValue;
                 }
 
                 // Actively stop the decode at the segment/trim end (not just freeze the frame) when
@@ -348,9 +346,8 @@ public partial class FloatingVideoViewModel
                     break;
                 }
 
-                // 循環播放：重新讀取最新的裁切起點
-                var loopStart = IsTrimmingMode ? TrimStartSeconds : 0;
-                _currentTime = TimeSpan.FromSeconds(loopStart);
+                // Whole-clip loop (not in timeline mode): restart from the beginning.
+                _currentTime = TimeSpan.Zero;
                 UpdateAudioStateFromPlayback();
                 RequestCurrentTimeUiRefresh(force: true);
             }

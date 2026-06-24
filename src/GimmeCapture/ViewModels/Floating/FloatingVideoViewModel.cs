@@ -201,7 +201,6 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
             
             if (value != FloatingTool.None)
             {
-                IsTrimmingMode = false;
                 IsTimelineMode = false;
                 CurrentAnnotationTool = AnnotationType.None;
             }
@@ -221,7 +220,6 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
             
             if (value != AnnotationType.None)
             {
-                IsTrimmingMode = false;
                 IsTimelineMode = false;
                 CurrentTool = FloatingTool.None;
             }
@@ -235,15 +233,9 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
     }
     public bool ShowIconSettings => false;
 
-    // Esc exits trim mode before the generic tool/annotation cancel.
+    // Esc exits timeline mode before the generic tool/annotation cancel.
     protected override bool TryCancelModeSpecific()
     {
-        if (IsTrimmingMode)
-        {
-            IsTrimmingMode = false;
-            return true;
-        }
-
         if (IsTimelineMode)
         {
             IsTimelineMode = false;
@@ -321,9 +313,6 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
             double bottomPad = vPad;
             if (ShowToolbar) bottomPad += 78;
             
-            // 裁切面板額外空間：拉桿(28) + 時間輸入(28) + spacing + padding ≈ 75px
-            if (IsTrimmingMode) bottomPad += 75;
-
             // 時間軸段落列：分隔線 + 比例段落條(30) + 操作提示 + spacing ≈ 55px
             if (IsTimelineMode) bottomPad += 55;
 
@@ -395,7 +384,6 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
         InitializeActionCommands();
         // InitializeToolbarCommands(); // Handled by Base
         InitializeAnnotationCommands();
-        InitializeTrimCommands();
         InitializeSegmentCommands();
         InitializeMediaCommands(); // Media init last as it starts playback
     }
