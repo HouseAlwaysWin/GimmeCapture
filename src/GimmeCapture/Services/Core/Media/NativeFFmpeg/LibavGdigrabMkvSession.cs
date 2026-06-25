@@ -21,6 +21,15 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
     public string? LastWarningMessage { get; private set; }
     public string? SelectedEncoderName { get; private set; }
 
+    /// <summary>Composite a webcam picture-in-picture into each frame.</summary>
+    public bool EnableWebcam { get; set; }
+
+    /// <summary>dshow device name of the webcam (as listed by ffmpeg -list_devices).</summary>
+    public string WebcamDeviceName { get; set; } = string.Empty;
+
+    /// <summary>PiP corner: 0 = top-left, 1 = top-right, 2 = bottom-left, 3 = bottom-right.</summary>
+    public int WebcamCorner { get; set; } = 3;
+
     /// <summary>Burn a cursor spotlight ring into each frame.</summary>
     public bool HighlightCursor { get; set; }
 
@@ -160,9 +169,30 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
         long packetCounter = 0;
         bool encFrameInitialized = false;
 
-        // Optional per-frame cursor / click overlay, burned in via a BGRA round-trip in the encode loop.
+        // Optional webcam picture-in-picture, composited per frame via a BGRA round-trip in the encode loop.
+        WebcamPipCompositor? webcam = null;
+        if (EnableWebcam && !string.IsNullOrWhiteSpace(WebcamDeviceName))
+        {
+            try
+            {
+                webcam = new WebcamPipCompositor(WebcamDeviceName, WebcamCorner);
+                webcam.Start();
+            }
+            catch (Exception ex)
+            {
+                LogNative($"Webcam PiP unavailable: {ex.Message}");
+                webcam = null;
+            }
+        }
+
+        // Optional per-frame cursor / click overlay, burned in via the same BGRA round-trip.
         CursorOverlayRenderer? overlay = (HighlightCursor || HighlightClicks)
             ? new CursorOverlayRenderer(offsetX, offsetY, HighlightCursor, HighlightClicks)
+            : null;
+
+        // One per-frame draw combining both: cursor/click overlay first, then the webcam PiP on top.
+        Action<SKBitmap>? composite = (overlay != null || webcam != null)
+            ? sk => { overlay?.Draw(sk); webcam?.Draw(sk); }
             : null;
 
         pkt = ffmpeg.av_packet_alloc();
@@ -281,11 +311,11 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
                 ThrowIfErr(ffmpeg.avcodec_send_packet(decCtx, pkt), "send_packet(dec)");
                 ffmpeg.av_packet_unref(pkt);
 
-                DecodeEncodeLoop(decCtx, encCtx, ref sws, ref swsToBgra, decFrame, encFrame, ref bgraFrame, ref encFrameInitialized, overlay, outputFmt, outStream, pkt, ref frameCounter, ref packetCounter, firstFrameTcs);
+                DecodeEncodeLoop(decCtx, encCtx, ref sws, ref swsToBgra, decFrame, encFrame, ref bgraFrame, ref encFrameInitialized, composite, outputFmt, outStream, pkt, ref frameCounter, ref packetCounter, firstFrameTcs);
             }
 
             ThrowIfErr(ffmpeg.avcodec_send_packet(decCtx, null), "flush_decoder");
-            DecodeEncodeLoop(decCtx, encCtx, ref sws, ref swsToBgra, decFrame, encFrame, ref bgraFrame, ref encFrameInitialized, overlay, outputFmt, outStream, pkt, ref frameCounter, ref packetCounter, firstFrameTcs);
+            DecodeEncodeLoop(decCtx, encCtx, ref sws, ref swsToBgra, decFrame, encFrame, ref bgraFrame, ref encFrameInitialized, composite, outputFmt, outStream, pkt, ref frameCounter, ref packetCounter, firstFrameTcs);
 
             ThrowIfErr(ffmpeg.avcodec_send_frame(encCtx, null), "flush_encoder");
             WriteEncodedPackets(encCtx, outputFmt, outStream, pkt, ref packetCounter);
@@ -314,6 +344,8 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
         }
         finally
         {
+            webcam?.Dispose();
+
             SafeFreePkt(&pkt);
             SafeFreeFrame(&decFrame);
             SafeFreeFrame(&encFrame);
@@ -375,7 +407,7 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
         AVFrame* encFrame,
         ref AVFrame* bgraFrame,
         ref bool encFrameInitialized,
-        CursorOverlayRenderer? overlay,
+        Action<SKBitmap>? composite,
         AVFormatContext* outputFmt,
         AVStream* outStream,
         AVPacket* pkt,
@@ -399,9 +431,9 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
 
             if (sws == null)
             {
-                if (overlay != null)
+                if (composite != null)
                 {
-                    // Burn-in path: decode → BGRA (overlay drawn here) → encoder pixel format.
+                    // Composite path: decode → BGRA (overlay + webcam PiP drawn here) → encoder pixel format.
                     swsToBgra = ffmpeg.sws_getContext(
                         srcW, srcH, srcFmt,
                         srcW, srcH, AVPixelFormat.AV_PIX_FMT_BGRA,
@@ -412,7 +444,7 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
                         (int)SwsFlags.SWS_FAST_BILINEAR, null, null, null);
                     if (swsToBgra == null || sws == null)
                     {
-                        throw new InvalidOperationException("sws_getContext failed for cursor-overlay BGRA path.");
+                        throw new InvalidOperationException("sws_getContext failed for BGRA composite path.");
                     }
 
                     bgraFrame = ffmpeg.av_frame_alloc();
@@ -445,18 +477,18 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
 
             ThrowIfErr(ffmpeg.av_frame_make_writable(encFrame), "frame_make_writable(enc)");
 
-            if (overlay != null && bgraFrame != null && swsToBgra != null)
+            if (composite != null && bgraFrame != null && swsToBgra != null)
             {
                 // decode → BGRA
                 ffmpeg.sws_scale(swsToBgra, decFrame->data, decFrame->linesize, 0, decFrame->height, bgraFrame->data, bgraFrame->linesize);
 
-                // Draw the cursor ring / click ripple onto the BGRA pixels in place.
+                // Draw the cursor ring / click ripple and/or webcam PiP onto the BGRA pixels in place.
                 var info = new SKImageInfo(bgraFrame->width, bgraFrame->height, SKColorType.Bgra8888, SKAlphaType.Premul);
                 using (var sk = new SKBitmap())
                 {
                     if (sk.InstallPixels(info, (IntPtr)bgraFrame->data[0], bgraFrame->linesize[0]))
                     {
-                        overlay.Draw(sk);
+                        composite(sk);
                     }
                 }
 

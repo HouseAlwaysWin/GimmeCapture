@@ -145,6 +145,37 @@
      IsChecked="{Binding HighlightClicks}" Margin="0,5,0,0"/>
                         <CheckBox Content="{Binding [RecordSystemAudio], Source={x:Static services:LocalizationService.Instance}}"
      IsChecked="{Binding RecordSystemAudio}" Margin="0,5,0,0"/>
+                        <CheckBox Content="{Binding [EnableWebcam], Source={x:Static services:LocalizationService.Instance}}"
+     IsChecked="{Binding EnableWebcam}" Margin="0,5,0,0"/>
+                        <StackPanel Margin="24,0,0,0" Spacing="6" IsVisible="{Binding EnableWebcam}">
+                            <DockPanel>
+                                <TextBlock Text="{Binding [WebcamDevice], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                <Button DockPanel.Dock="Right"
+                                        Command="{Binding RefreshWebcamDevicesCommand}"
+                                        Content="{Binding [WebcamRefresh], Source={x:Static services:LocalizationService.Instance}}"
+                                        Margin="6,0,0,0"/>
+                                <AutoCompleteBox ItemsSource="{Binding WebcamDevices}"
+                                                 Text="{Binding WebcamDeviceName, Mode=TwoWay}"
+                                                 FilterMode="Contains"
+                                                 MinimumPrefixLength="0"
+                                                 IsTextCompletionEnabled="False"
+                                                 Watermark="{Binding [WebcamDeviceWatermark], Source={x:Static services:LocalizationService.Instance}}"
+                                                 HorizontalAlignment="Stretch"/>
+                            </DockPanel>
+                            <DockPanel>
+                                <TextBlock Text="{Binding [WebcamCorner], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                <ComboBox ItemsSource="{Binding WebcamCornerOptions}"
+                                          SelectedValue="{Binding WebcamCorner}"
+                                          SelectedValueBinding="{Binding Value}"
+                                          HorizontalAlignment="Stretch">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate x:CompileBindings="False">
+                                            <TextBlock Text="{Binding Name}"/>
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                            </DockPanel>
+                        </StackPanel>
                         <CheckBox Content="{Binding [RecordMicrophone], Source={x:Static services:LocalizationService.Instance}}"
      IsChecked="{Binding RecordMicrophone}" Margin="0,5,0,0"/>
                         <StackPanel Margin="24,0,0,0" Spacing="6" IsVisible="{Binding RecordMicrophone}">

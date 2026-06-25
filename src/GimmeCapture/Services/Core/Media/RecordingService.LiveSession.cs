@@ -24,6 +24,9 @@ public partial class RecordingService
             _nativeRecorder?.Dispose();
             _nativeRecorder = new LibavGdigrabMkvSession
             {
+                EnableWebcam = _settingsService?.Settings.EnableWebcam ?? false,
+                WebcamDeviceName = _settingsService?.Settings.WebcamDeviceName ?? string.Empty,
+                WebcamCorner = _settingsService?.Settings.WebcamCorner ?? 3,
                 HighlightCursor = _settingsService?.Settings.HighlightCursor ?? false,
                 HighlightClicks = _settingsService?.Settings.HighlightClicks ?? false,
                 PreferHardwareEncoder = _settingsService?.Settings.VideoEncoderHint != VideoEncoderHint.SoftwareOnly

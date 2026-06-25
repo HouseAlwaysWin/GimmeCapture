@@ -59,6 +59,9 @@ public partial class MainWindowViewModel
             ShowSnipCursor = ShowSnipCursor,
             ShowRecordCursor = ShowRecordCursor,
             RecordSystemAudio = RecordSystemAudio,
+            EnableWebcam = EnableWebcam,
+            WebcamDeviceName = WebcamDeviceName,
+            WebcamCorner = WebcamCorner,
             RecordMicrophone = RecordMicrophone,
             SelectedMicDeviceId = SelectedMicDeviceId,
             MicVolume = MicVolume,
@@ -133,6 +136,9 @@ public partial class MainWindowViewModel
         ShowSnipCursor = snapshot.ShowSnipCursor;
         ShowRecordCursor = snapshot.ShowRecordCursor;
         RecordSystemAudio = snapshot.RecordSystemAudio;
+        EnableWebcam = snapshot.EnableWebcam;
+        WebcamDeviceName = snapshot.WebcamDeviceName;
+        WebcamCorner = snapshot.WebcamCorner;
         RecordMicrophone = snapshot.RecordMicrophone;
         SelectedMicDeviceId = snapshot.SelectedMicDeviceId;
         MicVolume = snapshot.MicVolume;

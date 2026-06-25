@@ -757,6 +757,7 @@ public partial class MainWindowViewModel
     }
 
     public ReactiveCommand<Unit, Unit> RefreshLlamaModelsCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> RefreshWebcamDevicesCommand { get; private set; } = null!;
     public bool HasDownloadedLlamaModels => AIResourceService.GetInstalledLlamaModelPresets().Count > 0 || AIResourceService.IsLlamaModelReady();
     public bool NoDownloadedLlamaModels => !HasDownloadedLlamaModels;
 
@@ -853,6 +854,76 @@ public partial class MainWindowViewModel
     {
         get => _recordSystemAudio;
         set => this.RaiseAndSetIfChanged(ref _recordSystemAudio, value);
+    }
+
+    private bool _enableWebcam = false;
+    public bool EnableWebcam
+    {
+        get => _enableWebcam;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _enableWebcam, value);
+            // Auto-list cameras the moment the feature is switched on, so the dropdown is ready.
+            if (value && WebcamDevices.Count == 0)
+            {
+                RefreshWebcamDevices();
+            }
+        }
+    }
+
+    private string _webcamDeviceName = string.Empty;
+    public string WebcamDeviceName
+    {
+        get => _webcamDeviceName;
+        set => this.RaiseAndSetIfChanged(ref _webcamDeviceName, value);
+    }
+
+    // Auto-detected webcam names (DirectShow). The settings combo is editable, so a hand-typed name
+    // still works if enumeration comes back empty (e.g. a virtual camera not exposed to dshow).
+    public ObservableCollection<string> WebcamDevices { get; } = new();
+
+    /// <summary>Re-enumerates connected webcams and, if nothing is selected yet, picks the first one.</summary>
+    public void RefreshWebcamDevices()
+    {
+        try
+        {
+            var found = Services.Core.Media.VideoInputDevices.Enumerate();
+            WebcamDevices.Clear();
+            foreach (var device in found)
+            {
+                WebcamDevices.Add(device.Name);
+            }
+
+            if (string.IsNullOrWhiteSpace(WebcamDeviceName) && WebcamDevices.Count > 0)
+            {
+                WebcamDeviceName = WebcamDevices[0];
+            }
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error("MainWindowViewModel.RefreshWebcamDevices", ex);
+        }
+    }
+
+    private int _webcamCorner = 3;
+    public int WebcamCorner
+    {
+        get => _webcamCorner;
+        set => this.RaiseAndSetIfChanged(ref _webcamCorner, value);
+    }
+
+    // Corner choices for the webcam PiP combo (value = corner index used by the encoder).
+    public IReadOnlyList<WebcamCornerOption> WebcamCornerOptions { get; } = new[]
+    {
+        new WebcamCornerOption(0, "WebcamCornerTopLeft"),
+        new WebcamCornerOption(1, "WebcamCornerTopRight"),
+        new WebcamCornerOption(2, "WebcamCornerBottomLeft"),
+        new WebcamCornerOption(3, "WebcamCornerBottomRight"),
+    };
+
+    public sealed record WebcamCornerOption(int Value, string LocalizationKey)
+    {
+        public string Name => LocalizationService.Instance[LocalizationKey];
     }
 
     private bool _recordMicrophone = false;
