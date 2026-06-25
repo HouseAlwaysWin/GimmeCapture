@@ -219,6 +219,7 @@
   "TipRedactClear": "清除所有遮蔽",
   "TipCatAnnotate": "標註（形狀、文字、馬賽克、模糊）",
   "TipCatEdit": "剪輯（剪裁、分割、變速、定格）",
+  "TipCatEditImage": "編輯（裁切、旋轉、翻轉、去背）",
   "TipCatRedact": "遮蔽物件（移動模糊／馬賽克／塗黑）",
   "TipCatOutput": "輸出（複製／儲存）",
   "TipMagicWand": "點擊去背",

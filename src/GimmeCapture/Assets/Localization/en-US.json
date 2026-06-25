@@ -227,6 +227,7 @@
   "TipRedactClear": "Clear all redaction",
   "TipCatAnnotate": "Annotate (shapes, text, mosaic, blur)",
   "TipCatEdit": "Edit (trim, split, speed, freeze)",
+  "TipCatEditImage": "Edit (crop, rotate, flip, remove)",
   "TipCatRedact": "Redact objects (moving blur / mosaic / black)",
   "TipCatOutput": "Output (copy / save)",
   "TipMagicWand": "Click to Remove Background",

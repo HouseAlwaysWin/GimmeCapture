@@ -213,6 +213,7 @@
   "TipRedactClear": "すべての墨消しをクリア",
   "TipCatAnnotate": "注釈（図形・文字・モザイク・ぼかし）",
   "TipCatEdit": "編集（トリム・分割・速度・静止画）",
+  "TipCatEditImage": "編集（切り抜き・回転・反転・除去）",
   "TipCatRedact": "オブジェクト墨消し（移動ぼかし／モザイク／黒塗り）",
   "TipCatOutput": "出力（コピー／保存）",
   "TipMagicWand": "クリックして背景削除",

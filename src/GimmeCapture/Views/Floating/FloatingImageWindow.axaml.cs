@@ -738,13 +738,4 @@ public partial class FloatingImageWindow : FloatingWindowBase
 
         return new Rect(x, y, w, h);
     }
-    
-    // Handlers specific to XAML events not covered by Base
-    private void OnAIToolSelected(object sender, Avalonia.Interactivity.RoutedEventArgs e)
-    {
-        Avalonia.Threading.Dispatcher.UIThread.Post(() => {
-            var aiToolsButton = this.FindControl<Button>("AIToolsButton");
-            aiToolsButton?.Flyout?.Hide();
-        });
-    }
 }
