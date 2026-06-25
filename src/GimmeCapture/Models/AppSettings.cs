@@ -140,6 +140,9 @@ public class AppSettings
     
     public bool ShowSnipCursor { get; set; } = false;
     public bool ShowRecordCursor { get; set; } = true;
+    // Burn a cursor spotlight ring / click ripple into recordings (tutorial highlighting).
+    public bool HighlightCursor { get; set; } = false;
+    public bool HighlightClicks { get; set; } = false;
     public bool RecordSystemAudio { get; set; } = true;
     public string VideoSaveDirectory { get; set; } = string.Empty;
     public string RecordFormat { get; set; } = "mp4";

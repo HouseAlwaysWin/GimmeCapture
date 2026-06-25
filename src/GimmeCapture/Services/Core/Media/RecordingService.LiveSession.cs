@@ -24,6 +24,8 @@ public partial class RecordingService
             _nativeRecorder?.Dispose();
             _nativeRecorder = new LibavGdigrabMkvSession
             {
+                HighlightCursor = _settingsService?.Settings.HighlightCursor ?? false,
+                HighlightClicks = _settingsService?.Settings.HighlightClicks ?? false,
                 PreferHardwareEncoder = _settingsService?.Settings.VideoEncoderHint != VideoEncoderHint.SoftwareOnly
             };
 
