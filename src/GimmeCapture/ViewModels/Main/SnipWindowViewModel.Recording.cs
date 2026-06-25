@@ -264,6 +264,7 @@ public partial class SnipWindowViewModel
         {
             _recordingCaptureLogicalRect = region;
             EnsureRecordingTimerStarted();
+            this.RaisePropertyChanged(nameof(IsMicrophoneEnabled)); // reveal the mic meter for this recording
             if (!string.IsNullOrWhiteSpace(_recordingService.LastStartWarning))
             {
                 _mainVm.SetStatus(_recordingService.LastStartWarning);

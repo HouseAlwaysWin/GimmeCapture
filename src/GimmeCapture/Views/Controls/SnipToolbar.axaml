@@ -303,6 +303,16 @@
                             <TextBlock Text="●" Foreground="#C0392B" FontSize="10" IsVisible="{Binding !IsOutputAudioActive}"/>
                             <TextBlock Text="{Binding OutputAudioStateText}" Foreground="#A0A0A0" FontSize="10" Width="32"/>
                         </StackPanel>
+                        <!-- Microphone level (only when the recording captures the mic) -->
+                        <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center" Margin="0,2,0,0"
+                                    IsVisible="{Binding IsMicrophoneEnabled}">
+                            <TextBlock Text="{Binding [RecordAudioInput], Source={x:Static infra:LocalizationService.Instance}}" Foreground="#CFCFCF" FontSize="10" Width="28"/>
+                            <ProgressBar Width="120" Height="8" Minimum="0" Maximum="1" Value="{Binding InputAudioLevel}" VerticalAlignment="Center"/>
+                            <TextBlock Text="{Binding InputAudioDbText}" Foreground="#A0A0A0" FontSize="10" Width="46" TextAlignment="Right"/>
+                            <TextBlock Text="●" Foreground="#2ECC71" FontSize="10" IsVisible="{Binding IsInputAudioActive}"/>
+                            <TextBlock Text="●" Foreground="#C0392B" FontSize="10" IsVisible="{Binding !IsInputAudioActive}"/>
+                            <TextBlock Text="{Binding InputAudioStateText}" Foreground="#A0A0A0" FontSize="10" Width="32"/>
+                        </StackPanel>
                     </StackPanel>
                 </StackPanel>
             </StackPanel>
