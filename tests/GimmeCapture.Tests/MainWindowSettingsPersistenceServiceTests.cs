@@ -51,6 +51,8 @@ public class MainWindowSettingsPersistenceServiceTests
             ShowSnipCursor = true,
             ShowRecordCursor = false,
             RecordSystemAudio = false,
+            HighlightCursor = true,
+            HighlightClicks = true,
             VideoSaveDirectory = @"D:\captures\video",
             RecordFormat = "webm",
             VideoCodec = VideoCodec.H265,
@@ -102,6 +104,8 @@ public class MainWindowSettingsPersistenceServiceTests
         Assert.Equal(snapshot.LlamaModelId, persisted.LlamaModelId);
         Assert.Equal(snapshot.LlamaGpuLayers, persisted.LlamaGpuLayers);
         Assert.Equal(snapshot.VideoEncoderHint, persisted.VideoEncoderHint);
+        Assert.Equal(snapshot.HighlightCursor, persisted.HighlightCursor);
+        Assert.Equal(snapshot.HighlightClicks, persisted.HighlightClicks);
         Assert.Contains("\"Language\": \"Japanese\"", savedJson);
         Assert.Contains($"\"ConfigVersion\": {AppSettingsService.CurrentConfigVersion}", savedJson);
         Assert.Contains("\"RecordHotkey\": \"Shift\\u002BF8\"", savedJson);

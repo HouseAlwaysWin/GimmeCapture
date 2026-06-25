@@ -146,6 +146,8 @@
   "HideRecordSelectionDecoration": "隱藏選取視窗裝飾 (錄影)",
   "HideRecordSelectionBorder": "隱藏選取視窗邊框 (錄影)",
   "ShowRecordCursor": "錄影時顯示游標",
+  "HighlightCursor": "游標高亮（聚光圈）",
+  "HighlightClicks": "點擊高亮（漣漪）",
   "RecordSystemAudio": "錄影時擷取系統音訊",
   "RecordAudioInput": "輸入",
   "RecordAudioOutput": "輸出",
