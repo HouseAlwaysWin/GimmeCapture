@@ -68,7 +68,8 @@ internal static class LibavClipExporter
     /// </summary>
     /// <param name="frameComposite">
     /// Optional per-frame hook: receives each decoded frame as a BGRA <see cref="SKBitmap"/> (source
-    /// resolution) to draw onto in place (annotation/redaction burn-in), before it is re-encoded.
+    /// resolution) plus that frame's source time in seconds, to draw onto in place (annotation/redaction
+    /// burn-in; the time lets time-varying composites position themselves), before it is re-encoded.
     /// </param>
     public static bool TryExport(
         string inputPath,
@@ -76,7 +77,7 @@ internal static class LibavClipExporter
         string outputPath,
         VideoQuality quality,
         VideoEditCrop? crop = null,
-        Action<SKBitmap>? frameComposite = null,
+        Action<SKBitmap, double>? frameComposite = null,
         CancellationToken cancellationToken = default)
     {
         FFmpegRuntime.EnsureInitialized();
@@ -133,7 +134,7 @@ internal static class LibavClipExporter
         string outputPath,
         VideoQuality quality,
         VideoEditCrop? crop,
-        Action<SKBitmap>? frameComposite,
+        Action<SKBitmap, double>? frameComposite,
         CancellationToken ct)
     {
         AVFormatContext* inFmt = null;
@@ -383,7 +384,7 @@ internal static class LibavClipExporter
         AVFrame* decFrame,
         AVFrame* encFrame,
         AVFrame* bgraFrame,
-        Action<SKBitmap>? composite,
+        Action<SKBitmap, double>? composite,
         AVFormatContext* outFmt,
         AVStream* outStream,
         AVPacket* outPkt,
@@ -443,7 +444,9 @@ internal static class LibavClipExporter
                 {
                     if (sk.InstallPixels(info, (IntPtr)bgraFrame->data[0], bgraFrame->linesize[0]))
                     {
-                        composite(sk);
+                        // t is this frame's source-time (seconds) — lets time-varying composites
+                        // (e.g. interpolated redaction boxes) position themselves per frame.
+                        composite(sk, t);
                     }
                 }
 

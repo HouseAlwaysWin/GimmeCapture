@@ -386,7 +386,7 @@ public partial class FloatingVideoViewModel
         var annotationsSnapshot = Annotations.ToList();
         double displayW = DisplayWidth;
         double displayH = DisplayHeight;
-        Action<SkiaSharp.SKBitmap> composite = sk =>
+        Action<SkiaSharp.SKBitmap, double> composite = (sk, _) =>
             AnnotationRenderService.Shared.RenderAnnotationsToBitmap(sk, annotationsSnapshot, displayW, displayH, sk.Width, sk.Height);
 
         VideoQuality annQuality = _appSettingsService?.Settings.VideoQuality ?? VideoQuality.Medium;
