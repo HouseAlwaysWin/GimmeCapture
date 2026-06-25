@@ -420,18 +420,18 @@ public partial class FloatingVideoViewModel
         Action<SkiaSharp.SKBitmap> composite = sk =>
             AnnotationRenderService.Shared.RenderAnnotationsToBitmap(sk, annotationsSnapshot, displayW, displayH, sk.Width, sk.Height);
 
-        VideoQuality quality = _appSettingsService?.Settings.VideoQuality ?? VideoQuality.Medium;
-        string tempDir = Path.Combine(Path.GetTempPath(), "GimmeCapture_Export_" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(tempDir);
-        string outputPath = Path.Combine(tempDir, "output" + ext);
+        VideoQuality annQuality = _appSettingsService?.Settings.VideoQuality ?? VideoQuality.Medium;
+        string annTempDir = Path.Combine(Path.GetTempPath(), "GimmeCapture_Export_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(annTempDir);
+        string annOutputPath = Path.Combine(annTempDir, "output" + ext);
 
         IsExporting = true;
         try
         {
-            bool ok = await Task.Run(() => LibavClipExporter.TryExport(VideoPath, ranges, outputPath, quality, frameComposite: composite));
+            bool ok = await Task.Run(() => LibavClipExporter.TryExport(VideoPath, ranges, annOutputPath, annQuality, frameComposite: composite));
             if (ok)
             {
-                return outputPath;
+                return annOutputPath;
             }
 
             AppLog.Error("FloatingVideo.ExportAnnotated", new Exception("In-process annotated export produced no output file."));
@@ -440,6 +440,95 @@ public partial class FloatingVideoViewModel
         catch (Exception ex)
         {
             AppLog.Error("FloatingVideo.ExportAnnotated", ex);
+            return null;
+        }
+        finally
+        {
+            IsExporting = false;
+        }
+    }
+
+    private static (int Fps, int MaxWidth) GifSettingsForQuality(VideoQuality q) => q switch
+    {
+        VideoQuality.High => (24, 0),
+        VideoQuality.Low => (10, 480),
+        _ => (15, 720),
+    };
+
+    /// <summary>
+    /// In-process GIF/WebM export: trims the kept runs to a temp mp4 (when a cut was made), then runs the
+    /// existing GIF/WebM transcoders on it (WebM re-muxes Opus audio when present). Returns a temp output
+    /// path, or null on failure. No ffmpeg.exe.
+    /// </summary>
+    private async Task<string?> ExportGifWebmInProcessAsync(string targetExt)
+    {
+        bool isGif = targetExt.Equals(".gif", StringComparison.OrdinalIgnoreCase);
+        VideoQuality quality = _appSettingsService?.Settings.VideoQuality ?? VideoQuality.Medium;
+        string tempDir = Path.Combine(Path.GetTempPath(), "GimmeCapture_Export_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+
+        IsExporting = true;
+        try
+        {
+            // The transcode source is a trimmed mp4 when a cut was made, else the original recording.
+            string source;
+            if (AnyPieceDropped)
+            {
+                var trimmed = await ExportTrimmedInProcessAsync(".mp4");
+                if (string.IsNullOrEmpty(trimmed) || !File.Exists(trimmed)) return null;
+                source = trimmed;
+            }
+            else
+            {
+                source = VideoPath;
+            }
+
+            string outputPath = Path.Combine(tempDir, "output" + targetExt);
+
+            if (isGif)
+            {
+                (int gifFps, int maxWidth) = GifSettingsForQuality(quality);
+                await Task.Run(() => LibavGifTranscoder.TranscodeToGif(source, outputPath, gifFps, maxWidth));
+                return File.Exists(outputPath) && new FileInfo(outputPath).Length > 0 ? outputPath : null;
+            }
+
+            // WebM: VP9 video (CFR at the source fps so duration/speed are preserved), then Opus mux.
+            int webmFps = Math.Clamp(LibavClipExporter.ProbeFps(source), 1, 60);
+            string videoOnly = Path.Combine(tempDir, "video.webm");
+            await Task.Run(() => LibavWebmTranscoder.TranscodeToWebm(source, videoOnly, webmFps, quality));
+            if (!File.Exists(videoOnly) || new FileInfo(videoOnly).Length == 0) return null;
+
+            if (await EnsureSourceHasAudioAsync())
+            {
+                try
+                {
+                    var pcm = LibavPinAudioPcmDecoder.Decode(source, 0);
+                    if (pcm.PcmBytes.Length > 0)
+                    {
+                        string wav = Path.Combine(tempDir, "audio.wav");
+                        using (var writer = new NAudio.Wave.WaveFileWriter(wav, pcm.WaveFormat))
+                        {
+                            writer.Write(pcm.PcmBytes, 0, pcm.PcmBytes.Length);
+                        }
+
+                        string opus = Path.Combine(tempDir, "audio.ogg");
+                        await Task.Run(() => LibavOpusTranscoder.EncodeWavToOpusOgg(wav, opus, quality));
+                        await Task.Run(() => LibavMuxer.MuxVideoAndAudio(videoOnly, opus, outputPath, "webm"));
+                        if (File.Exists(outputPath) && new FileInfo(outputPath).Length > 0) return outputPath;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    AppLog.Warning("FloatingVideo.ExportWebmAudio", ex); // fall back to video-only
+                }
+            }
+
+            File.Copy(videoOnly, outputPath, true);
+            return File.Exists(outputPath) && new FileInfo(outputPath).Length > 0 ? outputPath : null;
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error("FloatingVideo.ExportGifWebm", ex);
             return null;
         }
         finally
@@ -485,14 +574,30 @@ public partial class FloatingVideoViewModel
                     return;
                 }
 
-                // Annotation/redaction burn-in runs in-process (Skia per frame) for plain video targets,
-                // honoring any cut at the same time.
+                // Annotation/redaction burn-in runs in-process (Skia per frame), honoring any cut.
                 if (hasAnnotations && LibavClipExporter.ContainerForExtension(targetExt) != null)
                 {
                     var burnt = await ExportAnnotatedInProcessAsync(targetExt);
                     if (!string.IsNullOrEmpty(burnt) && System.IO.File.Exists(burnt))
                     {
                         System.IO.File.Copy(burnt, targetPath, true);
+                        FileLocationService.RevealInFileExplorer(targetPath);
+                        return;
+                    }
+
+                    ProcessingText = LocalizationService.Instance["StatusExportFailed"] ?? "Export failed";
+                    await Task.Delay(2000);
+                    return;
+                }
+
+                // GIF/WebM export also runs in-process (no ffmpeg.exe): trim to mp4 if a cut was made,
+                // then transcode with the existing GIF/WebM encoders. Annotations excluded (handled above).
+                if (!hasAnnotations && (targetExt == ".gif" || targetExt == ".webm"))
+                {
+                    var produced = await ExportGifWebmInProcessAsync(targetExt);
+                    if (!string.IsNullOrEmpty(produced) && System.IO.File.Exists(produced))
+                    {
+                        System.IO.File.Copy(produced, targetPath, true);
                         FileLocationService.RevealInFileExplorer(targetPath);
                         return;
                     }
