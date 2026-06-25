@@ -127,6 +127,8 @@ public partial class MainWindowViewModel
         ShowSnipCursor = defaultSettings.ShowSnipCursor;
         ShowRecordCursor = defaultSettings.ShowRecordCursor;
         RecordSystemAudio = defaultSettings.RecordSystemAudio;
+        HighlightCursor = defaultSettings.HighlightCursor;
+        HighlightClicks = defaultSettings.HighlightClicks;
         TempDirectory = defaultSettings.TempDirectory;
         
         if (Color.TryParse(defaultSettings.BorderColorHex, out var color))

@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using FFmpeg.AutoGen;
+using SkiaSharp;
 
 namespace GimmeCapture.Services.Core.Media.NativeFFmpeg;
 
@@ -19,6 +20,12 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
     public string? LastErrorMessage { get; private set; }
     public string? LastWarningMessage { get; private set; }
     public string? SelectedEncoderName { get; private set; }
+
+    /// <summary>Burn a cursor spotlight ring into each frame.</summary>
+    public bool HighlightCursor { get; set; }
+
+    /// <summary>Burn a click ripple into each frame.</summary>
+    public bool HighlightClicks { get; set; }
 
     public Task<bool> StartAsync(string outputPath, int offsetX, int offsetY, int width, int height, int fps, bool drawMouse, bool useH265)
     {
@@ -133,9 +140,11 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
         AVCodecContext* decCtx = null;
         AVCodecContext* encCtx = null;
         SwsContext* sws = null;
+        SwsContext* swsToBgra = null;
         AVPacket* pkt = null;
         AVFrame* decFrame = null;
         AVFrame* encFrame = null;
+        AVFrame* bgraFrame = null;
         AVDictionary* demuxOpts = null;
         AVDictionary* encOpts = null;
 
@@ -144,6 +153,11 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
         long frameCounter = 0;
         long packetCounter = 0;
         bool encFrameInitialized = false;
+
+        // Optional per-frame cursor / click overlay, burned in via a BGRA round-trip in the encode loop.
+        CursorOverlayRenderer? overlay = (HighlightCursor || HighlightClicks)
+            ? new CursorOverlayRenderer(offsetX, offsetY, HighlightCursor, HighlightClicks)
+            : null;
 
         pkt = ffmpeg.av_packet_alloc();
         decFrame = ffmpeg.av_frame_alloc();
@@ -260,11 +274,11 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
                 ThrowIfErr(ffmpeg.avcodec_send_packet(decCtx, pkt), "send_packet(dec)");
                 ffmpeg.av_packet_unref(pkt);
 
-                DecodeEncodeLoop(decCtx, encCtx, ref sws, decFrame, encFrame, ref encFrameInitialized, outputFmt, outStream, pkt, ref frameCounter, ref packetCounter, firstFrameTcs);
+                DecodeEncodeLoop(decCtx, encCtx, ref sws, ref swsToBgra, decFrame, encFrame, ref bgraFrame, ref encFrameInitialized, overlay, outputFmt, outStream, pkt, ref frameCounter, ref packetCounter, firstFrameTcs);
             }
 
             ThrowIfErr(ffmpeg.avcodec_send_packet(decCtx, null), "flush_decoder");
-            DecodeEncodeLoop(decCtx, encCtx, ref sws, decFrame, encFrame, ref encFrameInitialized, outputFmt, outStream, pkt, ref frameCounter, ref packetCounter, firstFrameTcs);
+            DecodeEncodeLoop(decCtx, encCtx, ref sws, ref swsToBgra, decFrame, encFrame, ref bgraFrame, ref encFrameInitialized, overlay, outputFmt, outStream, pkt, ref frameCounter, ref packetCounter, firstFrameTcs);
 
             ThrowIfErr(ffmpeg.avcodec_send_frame(encCtx, null), "flush_encoder");
             WriteEncodedPackets(encCtx, outputFmt, outStream, pkt, ref packetCounter);
@@ -296,10 +310,16 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
             SafeFreePkt(&pkt);
             SafeFreeFrame(&decFrame);
             SafeFreeFrame(&encFrame);
+            SafeFreeFrame(&bgraFrame);
 
             if (sws != null)
             {
                 ffmpeg.sws_freeContext(sws);
+            }
+
+            if (swsToBgra != null)
+            {
+                ffmpeg.sws_freeContext(swsToBgra);
             }
 
             if (decCtx != null)
@@ -343,9 +363,12 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
         AVCodecContext* decCtx,
         AVCodecContext* encCtx,
         ref SwsContext* sws,
+        ref SwsContext* swsToBgra,
         AVFrame* decFrame,
         AVFrame* encFrame,
+        ref AVFrame* bgraFrame,
         ref bool encFrameInitialized,
+        CursorOverlayRenderer? overlay,
         AVFormatContext* outputFmt,
         AVStream* outStream,
         AVPacket* pkt,
@@ -363,25 +386,44 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
             }
             ThrowIfErr(gr, "receive_frame(dec)");
 
+            var srcFmt = (AVPixelFormat)decFrame->format;
+            int srcW = decFrame->width > 0 ? decFrame->width : decCtx->width;
+            int srcH = decFrame->height > 0 ? decFrame->height : decCtx->height;
+
             if (sws == null)
             {
-                var srcFmt = (AVPixelFormat)decFrame->format;
-                int srcW = decFrame->width > 0 ? decFrame->width : decCtx->width;
-                int srcH = decFrame->height > 0 ? decFrame->height : decCtx->height;
-                sws = ffmpeg.sws_getContext(
-                    srcW,
-                    srcH,
-                    srcFmt,
-                    encCtx->width,
-                    encCtx->height,
-                    encCtx->pix_fmt,
-                    (int)SwsFlags.SWS_FAST_BILINEAR,
-                    null,
-                    null,
-                    null);
-                if (sws == null)
+                if (overlay != null)
                 {
-                    throw new InvalidOperationException($"sws_getContext failed for src={srcFmt} {srcW}x{srcH} -> dst={encCtx->pix_fmt} {encCtx->width}x{encCtx->height}");
+                    // Burn-in path: decode → BGRA (overlay drawn here) → encoder pixel format.
+                    swsToBgra = ffmpeg.sws_getContext(
+                        srcW, srcH, srcFmt,
+                        srcW, srcH, AVPixelFormat.AV_PIX_FMT_BGRA,
+                        (int)SwsFlags.SWS_FAST_BILINEAR, null, null, null);
+                    sws = ffmpeg.sws_getContext(
+                        srcW, srcH, AVPixelFormat.AV_PIX_FMT_BGRA,
+                        encCtx->width, encCtx->height, encCtx->pix_fmt,
+                        (int)SwsFlags.SWS_FAST_BILINEAR, null, null, null);
+                    if (swsToBgra == null || sws == null)
+                    {
+                        throw new InvalidOperationException("sws_getContext failed for cursor-overlay BGRA path.");
+                    }
+
+                    bgraFrame = ffmpeg.av_frame_alloc();
+                    bgraFrame->format = (int)AVPixelFormat.AV_PIX_FMT_BGRA;
+                    bgraFrame->width = srcW;
+                    bgraFrame->height = srcH;
+                    ThrowIfErr(ffmpeg.av_frame_get_buffer(bgraFrame, 32), "frame_get_buffer(bgra)");
+                }
+                else
+                {
+                    sws = ffmpeg.sws_getContext(
+                        srcW, srcH, srcFmt,
+                        encCtx->width, encCtx->height, encCtx->pix_fmt,
+                        (int)SwsFlags.SWS_FAST_BILINEAR, null, null, null);
+                    if (sws == null)
+                    {
+                        throw new InvalidOperationException($"sws_getContext failed for src={srcFmt} {srcW}x{srcH} -> dst={encCtx->pix_fmt} {encCtx->width}x{encCtx->height}");
+                    }
                 }
             }
 
@@ -395,7 +437,30 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
             }
 
             ThrowIfErr(ffmpeg.av_frame_make_writable(encFrame), "frame_make_writable(enc)");
-            ffmpeg.sws_scale(sws, decFrame->data, decFrame->linesize, 0, decFrame->height, encFrame->data, encFrame->linesize);
+
+            if (overlay != null && bgraFrame != null && swsToBgra != null)
+            {
+                // decode → BGRA
+                ffmpeg.sws_scale(swsToBgra, decFrame->data, decFrame->linesize, 0, decFrame->height, bgraFrame->data, bgraFrame->linesize);
+
+                // Draw the cursor ring / click ripple onto the BGRA pixels in place.
+                var info = new SKImageInfo(bgraFrame->width, bgraFrame->height, SKColorType.Bgra8888, SKAlphaType.Premul);
+                using (var sk = new SKBitmap())
+                {
+                    if (sk.InstallPixels(info, (IntPtr)bgraFrame->data[0], bgraFrame->linesize[0]))
+                    {
+                        overlay.Draw(sk);
+                    }
+                }
+
+                // BGRA → encoder pixel format
+                ffmpeg.sws_scale(sws, bgraFrame->data, bgraFrame->linesize, 0, bgraFrame->height, encFrame->data, encFrame->linesize);
+            }
+            else
+            {
+                ffmpeg.sws_scale(sws, decFrame->data, decFrame->linesize, 0, decFrame->height, encFrame->data, encFrame->linesize);
+            }
+
             encFrame->pts = frameCounter++;
             if (frameCounter == 1)
             {

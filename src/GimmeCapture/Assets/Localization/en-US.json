@@ -151,6 +151,8 @@
   "HideRecordSelectionDecoration": "Hide Selection Window Decorations (Record)",
   "HideRecordSelectionBorder": "Hide Selection Window Border (Record)",
   "ShowRecordCursor": "Show Cursor in Record",
+  "HighlightCursor": "Highlight cursor (spotlight ring)",
+  "HighlightClicks": "Highlight mouse clicks (ripple)",
   "RecordSystemAudio": "Capture system audio while recording",
   "RecordAudioInput": "In",
   "RecordAudioOutput": "Out",

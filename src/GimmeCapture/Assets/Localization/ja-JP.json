@@ -131,6 +131,8 @@
   "HideRecordSelectionDecoration": "選択ウィンドウの装飾を隠す (録画)",
   "HideRecordSelectionBorder": "選択ウィンドウの枠線を隠す (録画)",
   "ShowRecordCursor": "録画時にカーソルを表示",
+  "HighlightCursor": "カーソルを強調（スポットライト）",
+  "HighlightClicks": "クリックを強調（波紋）",
   "RecordSystemAudio": "録画時にシステム音声を含める",
   "RecordAudioInput": "入力",
   "RecordAudioOutput": "出力",
