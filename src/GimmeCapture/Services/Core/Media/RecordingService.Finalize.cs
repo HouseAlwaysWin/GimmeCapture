@@ -121,7 +121,10 @@ public partial class RecordingService
             micProvider = new VolumeSampleProvider(micProvider) { Volume = (float)micVolume };
         }
 
-        var mixer = new MixingSampleProvider(new[] { systemProvider, micProvider }) { ReadFully = true };
+        // ReadFully MUST be false here: with ReadFully=true the mixer keeps returning full buffers of
+        // silence after both inputs end, so WaveFileWriter.CreateWaveFile (which loops until Read returns 0)
+        // never terminates — the mix would hang/OOM and fall back to system-audio-only (mic lost).
+        var mixer = new MixingSampleProvider(new[] { systemProvider, micProvider }) { ReadFully = false };
         WaveFileWriter.CreateWaveFile16(mixedPath, mixer);
         return mixedPath;
     }
