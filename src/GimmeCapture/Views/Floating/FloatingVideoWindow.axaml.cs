@@ -103,7 +103,11 @@ public partial class FloatingVideoWindow : FloatingWindowBase
                     hideDecoration,
                     hideBorder,
                     vm.ClipboardService,
-                    vm.AppSettingsService);
+                    vm.AppSettingsService,
+                    vm.AIResourceService,
+                    vm.SAM2RuntimeService,
+                    vm.AIPathService,
+                    vm.ResourceQueue);
 
                 newVm.WingScale = vm.WingScale;
 

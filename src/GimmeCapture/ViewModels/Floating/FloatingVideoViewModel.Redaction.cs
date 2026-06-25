@@ -4,7 +4,9 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Reactive;
 using System.Reactive.Linq;
+using System.Threading.Tasks;
 using GimmeCapture.Models;
+using GimmeCapture.Services.Core.AI;
 using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Core.Rendering;
 using ReactiveUI;
@@ -48,6 +50,7 @@ public partial class FloatingVideoViewModel
     public ReactiveCommand<Unit, Unit> NewRedactionObjectCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> ClearRedactionCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> CycleRedactionEffectCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> TrackObjectCommand { get; private set; } = null!;
 
     private void InitializeRedactionCommands()
     {
@@ -56,6 +59,90 @@ public partial class FloatingVideoViewModel
         NewRedactionObjectCommand = ReactiveCommand.Create(() => { _activeRedactionTrack = null; });
         ClearRedactionCommand = ReactiveCommand.Create(ClearRedaction);
         CycleRedactionEffectCommand = ReactiveCommand.Create(CycleRedactionEffect);
+        TrackObjectCommand = ReactiveCommand.CreateFromTask(TrackObjectAsync, canAdd);
+    }
+
+    /// <summary>
+    /// Auto-tracks the object under the current selection box across the clip using SAM2 (greedy per-frame
+    /// re-segmentation seeded from the previous box). Builds a new redaction track from the sampled boxes;
+    /// the exporter/preview interpolation fills between samples. Requires SAM2 (and a drawn selection).
+    /// </summary>
+    private async Task TrackObjectAsync()
+    {
+        var runtime = _sam2RuntimeService;
+        double dw = DisplayWidth, dh = DisplayHeight;
+        if (!IsSelectionActive || string.IsNullOrEmpty(VideoPath) || dw <= 0 || dh <= 0)
+        {
+            return;
+        }
+
+        if (runtime == null || _appSettingsService == null)
+        {
+            ProcessingText = LocalizationService.Instance["StatusSAM2NotFound"] ?? "SAM2 not available";
+            return;
+        }
+
+        var r = SelectionRect;
+        double seedX = Math.Clamp((r.X + (r.Width / 2)) / dw, 0, 1);
+        double seedY = Math.Clamp((r.Y + (r.Height / 2)) / dh, 0, 1);
+        int fw = Math.Max(2, (int)Math.Round(OriginalWidth));
+        int fh = Math.Max(2, (int)Math.Round(OriginalHeight));
+        double start = Math.Max(0, CurrentTime.TotalSeconds);
+        double end = _totalDuration.TotalSeconds;
+        if (end <= start)
+        {
+            return;
+        }
+
+        IsProcessing = true;
+        ProcessingText = LocalizationService.Instance["StatusInitializingAI"] ?? "Tracking…";
+        string? leaseId = null;
+        SAM2Service? sam2 = null;
+        try
+        {
+            leaseId = runtime.AcquireLease();
+            sam2 = new SAM2Service(runtime, _appSettingsService);
+            await sam2.InitializeAsync();
+
+            string label = LocalizationService.Instance["StatusAIDetecting"] ?? "Tracking";
+            var progress = new Progress<double>(p => ProcessingText = $"{label} {p * 100:0}%");
+
+            SAM2Service sam2Local = sam2;
+            List<RedactionKeyframe> keyframes = await Task.Run(() => Sam2RedactionTracker.TrackAsync(
+                sam2Local, VideoPath, fw, fh, start, end, seedX, seedY, 0.3, progress, default));
+
+            if (keyframes.Count > 0)
+            {
+                var track = new RedactionTrack { Effect = SelectedRedactionEffect };
+                track.Keyframes.AddRange(keyframes);
+                RedactionTracks.Add(track);
+                _activeRedactionTrack = track;
+                AppLog.Information($"FloatingVideo.TrackObject added {keyframes.Count} keyframes start={start:0.##} end={end:0.##}");
+                RaiseRedactionChanged();
+                SelectionRect = new Avalonia.Rect(); // clear the seed box now that the track exists
+            }
+            else
+            {
+                ProcessingText = LocalizationService.Instance["StatusSAM2NotFound"] ?? "No object tracked";
+                await Task.Delay(1200);
+            }
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warning("FloatingVideo.TrackObject", ex);
+            ProcessingText = LocalizationService.Instance["StatusSAM2NotFound"] ?? "SAM2 not ready";
+            await Task.Delay(1500);
+        }
+        finally
+        {
+            sam2?.Dispose();
+            if (leaseId != null)
+            {
+                runtime.ReleaseLease(leaseId, true);
+            }
+
+            IsProcessing = false;
+        }
     }
 
     // Snaps the current selection box (display coords) as a keyframe at the playhead, normalized to

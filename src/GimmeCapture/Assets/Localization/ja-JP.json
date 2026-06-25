@@ -197,6 +197,7 @@
   "TipAITools": "AI 背景削除ツール",
   "TipOpacity": "不透明度（トレース／重ね合わせ用）",
   "TipRedactAddKeyframe": "墨消しキーフレームを追加（先にボックスを描画。ぼかし／モザイク／黒塗りが対象を追従）",
+  "TipRedactTrack": "枠で囲んだ対象をSAM2でクリップ全体に自動追跡",
   "TipRedactNewObject": "別のオブジェクトを墨消し（新しい追跡ボックスを開始）",
   "TipRedactClear": "すべての墨消しをクリア",
   "TipMagicWand": "クリックして背景削除",
