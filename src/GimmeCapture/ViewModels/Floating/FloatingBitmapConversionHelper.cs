@@ -66,6 +66,42 @@ internal static class FloatingBitmapConversionHelper
         return TryCopyToSkBitmap(avaloniaBitmap, out var skBitmap, out _) ? skBitmap : null;
     }
 
+    /// <summary>
+    /// Returns a new bitmap rotated by <paramref name="rotationDegrees"/> (0/90/180/270, clockwise) and/or
+    /// mirrored. Dimensions swap for 90°/270°. Returns null on conversion failure.
+    /// </summary>
+    public static Bitmap? TransformBitmap(Bitmap? source, int rotationDegrees, bool flipHorizontal, bool flipVertical)
+    {
+        if (source == null)
+        {
+            return null;
+        }
+
+        using SKBitmap? sk = ToSkBitmap(source);
+        if (sk == null)
+        {
+            return null;
+        }
+
+        bool swap = rotationDegrees == 90 || rotationDegrees == 270;
+        int dstW = swap ? sk.Height : sk.Width;
+        int dstH = swap ? sk.Width : sk.Height;
+
+        using var dst = new SKBitmap(dstW, dstH, sk.ColorType, sk.AlphaType);
+        using (var canvas = new SKCanvas(dst))
+        {
+            canvas.Clear(SKColors.Transparent);
+            // Rotate / flip about the centre, then draw the source centred.
+            canvas.Translate(dstW / 2f, dstH / 2f);
+            canvas.RotateDegrees(rotationDegrees);
+            canvas.Scale(flipHorizontal ? -1f : 1f, flipVertical ? -1f : 1f);
+            canvas.Translate(-sk.Width / 2f, -sk.Height / 2f);
+            canvas.DrawBitmap(sk, 0, 0);
+        }
+
+        return TryCreateDetachedBitmapFromSkBitmap(dst, out Bitmap? result, out _) ? result : null;
+    }
+
     public static bool TryCopyToSkBitmap(Bitmap? bitmap, out SKBitmap? skBitmap, out string? error)
     {
         skBitmap = null;

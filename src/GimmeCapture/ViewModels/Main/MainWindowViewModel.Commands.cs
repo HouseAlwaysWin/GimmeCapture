@@ -90,6 +90,8 @@ public partial class MainWindowViewModel
         ScrollingCaptureHotkey = defaultSettings.ScrollingCaptureHotkey;
         RecordingSettings.RecordFormat = defaultSettings.RecordFormat;
         RecordingSettings.VideoCodec = defaultSettings.VideoCodec;
+        RecordingSettings.VideoEncoderHint = defaultSettings.VideoEncoderHint;
+        RecordingSettings.SelectedVideoEncoderHintOption = RecordingSettings.VideoEncoderHintOptions.AsValueEnumerable().FirstOrDefault(x => x.Value == defaultSettings.VideoEncoderHint);
         
         // Refresh all hotkey properties (they access Settings directly now)
         var hotkeyProps = new[] {

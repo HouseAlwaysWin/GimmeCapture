@@ -64,6 +64,7 @@ public partial class MainWindowViewModel
             VideoSaveDirectory = RecordingSettings.VideoSaveDirectory,
             RecordFormat = RecordingSettings.RecordFormat,
             VideoCodec = RecordingSettings.VideoCodec,
+            VideoEncoderHint = RecordingSettings.VideoEncoderHint,
             VideoQuality = RecordingSettings.VideoQuality,
             RecordFps = RecordingSettings.RecordFPS,
             MaxRecordingSizeMb = RecordingSettings.MaxRecordingSizeMB,
@@ -109,6 +110,7 @@ public partial class MainWindowViewModel
         RecordingSettings.RecordFormat = snapshot.RecordFormat;
         RecordingSettings.VideoSaveDirectory = snapshot.VideoSaveDirectory;
         RecordingSettings.VideoCodec = snapshot.VideoCodec;
+        RecordingSettings.VideoEncoderHint = snapshot.VideoEncoderHint;
         RecordingSettings.VideoQuality = snapshot.VideoQuality;
         RecordingSettings.UseFixedRecordPath = snapshot.UseFixedRecordPath;
         HideSnipPinDecoration = snapshot.HideSnipPinDecoration;
@@ -152,6 +154,7 @@ public partial class MainWindowViewModel
         SelectedLanguageOption = AvailableLanguages.AsValueEnumerable().FirstOrDefault(x => x.Value == snapshot.Language) ?? AvailableLanguages[0];
         RecordingSettings.SelectedVideoCodecOption = RecordingSettings.VideoCodecOptions.AsValueEnumerable().FirstOrDefault(x => x.Value == snapshot.VideoCodec);
         RecordingSettings.SelectedVideoQualityOption = RecordingSettings.VideoQualityOptions.AsValueEnumerable().FirstOrDefault(x => x.Value == snapshot.VideoQuality);
+        RecordingSettings.SelectedVideoEncoderHintOption = RecordingSettings.VideoEncoderHintOptions.AsValueEnumerable().FirstOrDefault(x => x.Value == snapshot.VideoEncoderHint);
     }
 
     private void RaiseSettingsBackedPropertyNotifications()

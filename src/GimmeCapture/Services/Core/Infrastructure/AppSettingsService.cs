@@ -281,6 +281,7 @@ public class AppSettingsService
         dest.VideoSaveDirectory = source.VideoSaveDirectory;
         dest.RecordFormat = source.RecordFormat;
         dest.VideoCodec = source.VideoCodec;
+        dest.VideoEncoderHint = source.VideoEncoderHint;
         dest.RecordFPS = source.RecordFPS;
         dest.UseFixedRecordPath = source.UseFixedRecordPath;
         dest.TempDirectory = source.TempDirectory;
