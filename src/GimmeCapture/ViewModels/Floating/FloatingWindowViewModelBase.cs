@@ -110,6 +110,15 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
         set => this.RaiseAndSetIfChanged(ref _hidePinBorder, value);
     }
 
+    // Opacity of the pinned content (image/video), for tracing / overlay use.
+    // Clamped to [0.2, 1.0] so the pin never becomes fully invisible / unfindable.
+    private double _contentOpacity = 1.0;
+    public double ContentOpacity
+    {
+        get => _contentOpacity;
+        set => this.RaiseAndSetIfChanged(ref _contentOpacity, Math.Clamp(value, 0.2, 1.0));
+    }
+
     // Dimensions
     private double _originalWidth;
     public double OriginalWidth

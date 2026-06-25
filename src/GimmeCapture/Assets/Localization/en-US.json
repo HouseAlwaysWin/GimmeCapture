@@ -198,6 +198,7 @@
   "TipPin": "Pin to Desktop",
   "TipSelectionArea": "Selection Area",
   "TipAITools": "AI Removal Tools",
+  "TipOpacity": "Opacity (transparency for tracing / overlay)",
   "TipMagicWand": "Click to Remove Background",
   "TipConfirmRemoval": "Confirm Removal",
   "AddText": "Add Text",
