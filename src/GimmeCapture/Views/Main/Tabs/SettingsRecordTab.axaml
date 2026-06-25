@@ -52,6 +52,17 @@
                     </DockPanel>
 
                     <DockPanel Margin="0,0,0,10">
+                        <TextBlock Text="{Binding [VideoEncoder], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                        <ComboBox ItemsSource="{Binding RecordingSettings.VideoEncoderHintOptions}" SelectedItem="{Binding RecordingSettings.SelectedVideoEncoderHintOption}" HorizontalAlignment="Stretch">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="vm:RecordingSettingsViewModel+VideoEncoderHintOption">
+                                    <TextBlock Text="{Binding Name}"/>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                    </DockPanel>
+
+                    <DockPanel Margin="0,0,0,10">
                         <TextBlock Text="{Binding [VideoQuality], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,0,10,0"/>
                         <ComboBox ItemsSource="{Binding RecordingSettings.VideoQualityOptions}" SelectedItem="{Binding RecordingSettings.SelectedVideoQualityOption}" HorizontalAlignment="Stretch">
                             <ComboBox.ItemTemplate>
@@ -126,8 +137,12 @@
                             </StackPanel>
                         </StackPanel>
 
-                        <CheckBox Content="{Binding [ShowRecordCursor], Source={x:Static services:LocalizationService.Instance}}" 
+                        <CheckBox Content="{Binding [ShowRecordCursor], Source={x:Static services:LocalizationService.Instance}}"
      IsChecked="{Binding ShowRecordCursor}" Margin="0,5,0,0"/>
+                        <CheckBox Content="{Binding [HighlightCursor], Source={x:Static services:LocalizationService.Instance}}"
+     IsChecked="{Binding HighlightCursor}" Margin="0,5,0,0"/>
+                        <CheckBox Content="{Binding [HighlightClicks], Source={x:Static services:LocalizationService.Instance}}"
+     IsChecked="{Binding HighlightClicks}" Margin="0,5,0,0"/>
                         <CheckBox Content="{Binding [RecordSystemAudio], Source={x:Static services:LocalizationService.Instance}}"
      IsChecked="{Binding RecordSystemAudio}" Margin="0,5,0,0"/>
                         <CheckBox Content="{Binding [DefaultHideRecordToolbar], Source={x:Static services:LocalizationService.Instance}}" 

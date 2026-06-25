@@ -188,7 +188,7 @@ public partial class FloatingVideoViewModel
             ? runs
             : VideoSegmentEditor.FromTrim(0, _totalDuration.TotalSeconds, _totalDuration.TotalSeconds);
         var ranges = segs
-            .Select(r => new LibavClipExporter.SourceRange(r.SourceStart, r.SourceEnd))
+            .Select(r => new LibavClipExporter.SourceRange(r.SourceStart, r.SourceEnd, r.Speed))
             .ToList();
         var editCrop = new VideoEditCrop(crop.X, crop.Y, crop.Width, crop.Height);
         VideoQuality quality = _appSettingsService?.Settings.VideoQuality ?? VideoQuality.Medium;
@@ -233,7 +233,7 @@ public partial class FloatingVideoViewModel
             {
                 ProcessingText = LocalizationService.Instance["StatusExportingVideo"] ?? "Exporting Video...";
                 bool hasAnnotations = Annotations.AsValueEnumerable().Any();
-                bool cutRequested = AnyPieceDropped;
+                bool cutRequested = EditChangesOutput;
 
                 // Trim/cut copy runs fully in-process (no ffmpeg.exe) for plain video sources.
                 string copyExt = Path.GetExtension(VideoPath).ToLowerInvariant();
@@ -353,7 +353,7 @@ public partial class FloatingVideoViewModel
         if (runs.Length == 0) return null;
 
         var ranges = runs
-            .Select(r => new LibavClipExporter.SourceRange(r.SourceStart, r.SourceEnd))
+            .Select(r => new LibavClipExporter.SourceRange(r.SourceStart, r.SourceEnd, r.Speed))
             .ToList();
 
         string ext = targetExtension.StartsWith('.') ? targetExtension : "." + targetExtension;
@@ -404,7 +404,7 @@ public partial class FloatingVideoViewModel
             ? runs
             : VideoSegmentEditor.FromTrim(0, _totalDuration.TotalSeconds, _totalDuration.TotalSeconds);
         var ranges = segs
-            .Select(r => new LibavClipExporter.SourceRange(r.SourceStart, r.SourceEnd))
+            .Select(r => new LibavClipExporter.SourceRange(r.SourceStart, r.SourceEnd, r.Speed))
             .ToList();
 
         // Snapshot annotations + display coords so the per-frame callback (runs on a worker thread) is safe.
@@ -464,9 +464,10 @@ public partial class FloatingVideoViewModel
         IsExporting = true;
         try
         {
-            // The transcode source is a trimmed mp4 when a cut was made, else the original recording.
+            // The transcode source is a trimmed mp4 when the edit changes the output (cut or speed),
+            // else the original recording.
             string source;
-            if (AnyPieceDropped)
+            if (EditChangesOutput)
             {
                 var trimmed = await ExportTrimmedInProcessAsync(".mp4");
                 if (string.IsNullOrEmpty(trimmed) || !File.Exists(trimmed)) return null;
@@ -550,7 +551,7 @@ public partial class FloatingVideoViewModel
                 string sourceExt = Path.GetExtension(VideoPath).ToLowerInvariant();
                 string targetExt = Path.GetExtension(targetPath).ToLowerInvariant();
                 bool needsConversion = sourceExt != targetExt;
-                bool cutRequested = AnyPieceDropped;
+                bool cutRequested = EditChangesOutput;
 
                 // Trim/cut export runs fully in-process (no ffmpeg.exe) for plain video targets.
                 if (cutRequested && CanExportTrimInProcess(hasAnnotations, targetExt))

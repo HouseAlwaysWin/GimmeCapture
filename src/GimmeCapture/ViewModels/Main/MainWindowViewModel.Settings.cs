@@ -855,6 +855,20 @@ public partial class MainWindowViewModel
         set => this.RaiseAndSetIfChanged(ref _recordSystemAudio, value);
     }
 
+    private bool _highlightCursor = false;
+    public bool HighlightCursor
+    {
+        get => _highlightCursor;
+        set => this.RaiseAndSetIfChanged(ref _highlightCursor, value);
+    }
+
+    private bool _highlightClicks = false;
+    public bool HighlightClicks
+    {
+        get => _highlightClicks;
+        set => this.RaiseAndSetIfChanged(ref _highlightClicks, value);
+    }
+
     private int _playbackUiFps = 30;
     public int PlaybackUiFps
     {

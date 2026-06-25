@@ -276,9 +276,12 @@ public class AppSettingsService
         dest.ShowSnipCursor = source.ShowSnipCursor;
         dest.ShowRecordCursor = source.ShowRecordCursor;
         dest.RecordSystemAudio = source.RecordSystemAudio;
+        dest.HighlightCursor = source.HighlightCursor;
+        dest.HighlightClicks = source.HighlightClicks;
         dest.VideoSaveDirectory = source.VideoSaveDirectory;
         dest.RecordFormat = source.RecordFormat;
         dest.VideoCodec = source.VideoCodec;
+        dest.VideoEncoderHint = source.VideoEncoderHint;
         dest.RecordFPS = source.RecordFPS;
         dest.UseFixedRecordPath = source.UseFixedRecordPath;
         dest.TempDirectory = source.TempDirectory;

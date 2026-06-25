@@ -53,14 +53,22 @@ public partial class FloatingVideoViewModel
     /// <summary>True when ≥1 piece is dropped — the only thing that makes the output differ from the source.</summary>
     private bool AnyPieceDropped => EditSegments.Any(s => !s.Kept);
 
+    /// <summary>True when any kept piece has a non-1× speed, so the output must be re-encoded.</summary>
+    private bool AnySpeedChanged => KeptSegments().Any(s => Math.Abs(s.Speed - 1.0) > 0.001);
+
+    /// <summary>The edit changes the output (a cut or a speed change) → route through the in-process exporter.</summary>
+    private bool EditChangesOutput => AnyPieceDropped || AnySpeedChanged;
+
     // Cached audio-stream presence (probed once); the compiler's audio chain needs to know.
     private bool? _sourceHasAudio;
 
     public string TimelineTooltip => LocalizationService.Instance["TipTimeline"] ?? "Timeline (cut)";
     public string SplitTooltip => LocalizationService.Instance["TipSplitSegment"] ?? "Split at playhead";
+    public string PieceSpeedTooltip => LocalizationService.Instance["TipPieceSpeed"] ?? "Cycle speed of the piece at the playhead";
 
     public ReactiveCommand<Unit, Unit> ToggleTimelineCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> SplitSegmentCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> CyclePieceSpeedCommand { get; private set; } = null!;
 
     private void InitializeSegmentCommands()
     {
@@ -87,6 +95,33 @@ public partial class FloatingVideoViewModel
 
             // Split the piece under the playhead (source time); both halves inherit the Kept flag.
             ReplaceSegments(VideoSegmentEditor.SplitAtSourceTime(EditSegments.ToArray(), _currentTime.TotalSeconds));
+        });
+
+        // Cycle the speed (1 → 1.5 → 2 → 0.5 → 1) of the piece currently under the playhead.
+        CyclePieceSpeedCommand = ReactiveCommand.Create(() =>
+        {
+            if (EditSegments.Count == 0)
+            {
+                return;
+            }
+
+            int index = VideoSegmentEditor.IndexForSourceTime(EditSegments.ToArray(), _currentTime.TotalSeconds);
+            if (index < 0 || index >= EditSegments.Count)
+            {
+                return;
+            }
+
+            VideoEditSegment seg = EditSegments[index];
+            double next = seg.Speed switch
+            {
+                < 0.99 => 1.0,        // 0.5 → 1
+                < 1.49 => 1.5,        // 1   → 1.5
+                < 1.99 => 2.0,        // 1.5 → 2
+                _ => 0.5,             // 2   → 0.5
+            };
+
+            EditSegments[index] = seg with { Speed = next };
+            RebuildSegmentBlocks();
         });
     }
 
@@ -208,6 +243,7 @@ public partial class FloatingVideoViewModel
                 s.SourceDuration)
             {
                 IsKept = s.Kept,
+                Speed = s.Speed,
             });
         }
 
