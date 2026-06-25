@@ -125,6 +125,24 @@
                             </StackPanel>
                         </Border>
                         
+                        <!-- Selection Overlay (Over Video Area) — draws the dragged box; only hit-testable
+                             in selection mode so playback isn't blocked otherwise. -->
+                        <Canvas Name="SelectionCanvas"
+                                Background="Transparent"
+                                IsHitTestVisible="{Binding IsSelectionMode}"
+                                HorizontalAlignment="Stretch"
+                                VerticalAlignment="Stretch"
+                                Cursor="Cross">
+                            <Rectangle Canvas.Left="{Binding SelectionRect.X}"
+                                       Canvas.Top="{Binding SelectionRect.Y}"
+                                       Width="{Binding SelectionRect.Width}"
+                                       Height="{Binding SelectionRect.Height}"
+                                       Stroke="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}"
+                                       StrokeThickness="2"
+                                       Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}"
+                                       Opacity="0.3"/>
+                        </Canvas>
+
                         <!-- Annotation Layer -->
                         <ItemsControl ItemsSource="{Binding Annotations}" IsHitTestVisible="False">
                             <ItemsControl.ItemsPanel>
