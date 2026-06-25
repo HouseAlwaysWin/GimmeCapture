@@ -234,7 +234,7 @@
 
         <!-- Contextual sub-toolbar: floats at the top-center of the content; shows the open category's tools. -->
         <Border x:Name="SubToolbarBorder" Classes="no-window-drag" IsVisible="{Binding IsSubToolbarVisible}"
-                Margin="{Binding WindowPadding}"
+                Margin="{Binding SubToolbarMargin}"
                 Background="#1A1A1A" BorderBrush="#333333" BorderThickness="1"
                 CornerRadius="4" Padding="6,2"
                 HorizontalAlignment="Center"

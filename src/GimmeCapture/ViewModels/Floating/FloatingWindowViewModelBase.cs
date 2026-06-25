@@ -184,13 +184,20 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
             this.RaiseAndSetIfChanged(ref _showToolbar, value);
             this.RaisePropertyChanged(nameof(WindowPadding));
             this.RaisePropertyChanged(nameof(IsSubToolbarVisible));
+            this.RaisePropertyChanged(nameof(SubToolbarMargin));
             UpdateToolbarPosition();
         }
     }
 
-    // The contextual sub-toolbar floats at the top of the content; show it only when a category is open
-    // AND the toolbar itself is visible (so hiding the toolbar with F4 also hides the floating row).
+    // The contextual sub-toolbar floats above the content; show it only when a category is open AND the
+    // toolbar itself is visible (so hiding the toolbar with F4 also hides the floating row).
     public bool IsSubToolbarVisible => ShowToolbar && IsAnyCategoryOpen;
+
+    // While the sub-toolbar is visible the pins reserve this many extra px of top padding, opening a clean
+    // band above the content border. SubToolbarMargin then anchors the floating row inside that band so it
+    // sits ABOVE the frame (not overlapping the content).
+    protected const double SubToolbarReserve = 44;
+    public Thickness SubToolbarMargin => new Thickness(0, WindowPadding.Top - SubToolbarReserve, 0, 0);
 
     private double _toolbarTop;
     public double ToolbarTop
@@ -283,6 +290,8 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
             this.RaisePropertyChanged(nameof(IsOutputCategory));
             this.RaisePropertyChanged(nameof(IsAnyCategoryOpen));
             this.RaisePropertyChanged(nameof(IsSubToolbarVisible));
+            this.RaisePropertyChanged(nameof(WindowPadding));
+            this.RaisePropertyChanged(nameof(SubToolbarMargin));
         }
     }
 

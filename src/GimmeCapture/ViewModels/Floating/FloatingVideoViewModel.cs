@@ -317,16 +317,20 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
             // If they are visible, we need enough space for the wings (WingWidth) + border + buffer
             double hPad = HidePinDecoration ? 10 : (WingWidth + SelectionThickness + 10);
             double vPad = 28; // Increased from 25
-            
+
+            // Reserve a band above the content for the floating contextual sub-toolbar while it's open.
+            double topPad = vPad;
+            if (IsSubToolbarVisible) topPad += SubToolbarReserve;
+
             // RESERVE space for floating toolbar if visible
             // Two rows: Toolbar Height(32*2) + Spacing(4) + Bottom Margin(10) = 78px
             double bottomPad = vPad;
             if (ShowToolbar) bottomPad += 78;
-            
+
             // 時間軸段落列：分隔線 + 比例段落條(30) + 操作提示 + spacing ≈ 55px
             if (IsTimelineMode) bottomPad += 55;
 
-            return new Avalonia.Thickness(hPad, vPad, hPad, bottomPad);
+            return new Avalonia.Thickness(hPad, topPad, hPad, bottomPad);
         }
     }
 
