@@ -43,7 +43,10 @@ internal static class LibavClipExporter
         double effective = speed > 0.01 ? speed : 1.0;
         double before = accum;
         accum += 1.0 / effective;
-        return (int)Math.Floor(accum) - (int)Math.Floor(before);
+        // Nudge before flooring so accumulated FP drift (e.g. 90 × 1/1.5 = 59.999…) doesn't spuriously
+        // drop a frame at boundaries; the epsilon telescopes across calls and can't over-count exact values.
+        const double eps = 1e-9;
+        return (int)Math.Floor(accum + eps) - (int)Math.Floor(before + eps);
     }
 
     /// <summary>Maps an output file extension to the libav container name, or null if unsupported here.</summary>
