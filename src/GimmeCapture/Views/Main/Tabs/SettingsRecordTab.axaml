@@ -135,8 +135,17 @@
                         <StackPanel Margin="24,0,0,0" Spacing="6" IsVisible="{Binding EnableWebcam}">
                             <DockPanel>
                                 <TextBlock Text="{Binding [WebcamDevice], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                                <TextBox Text="{Binding WebcamDeviceName}"
-                                         PlaceholderText="{Binding [WebcamDeviceWatermark], Source={x:Static services:LocalizationService.Instance}}"/>
+                                <Button DockPanel.Dock="Right"
+                                        Command="{Binding RefreshWebcamDevicesCommand}"
+                                        Content="{Binding [WebcamRefresh], Source={x:Static services:LocalizationService.Instance}}"
+                                        Margin="6,0,0,0"/>
+                                <AutoCompleteBox ItemsSource="{Binding WebcamDevices}"
+                                                 Text="{Binding WebcamDeviceName, Mode=TwoWay}"
+                                                 FilterMode="Contains"
+                                                 MinimumPrefixLength="0"
+                                                 IsTextCompletionEnabled="False"
+                                                 Watermark="{Binding [WebcamDeviceWatermark], Source={x:Static services:LocalizationService.Instance}}"
+                                                 HorizontalAlignment="Stretch"/>
                             </DockPanel>
                             <DockPanel>
                                 <TextBlock Text="{Binding [WebcamCorner], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,0,10,0"/>
