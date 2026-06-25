@@ -18,7 +18,8 @@ namespace GimmeCapture.Services.Core.Media.NativeFFmpeg;
 ///
 /// Video: seek to each range start, drop decoded frames before the start, re-encode frames within
 /// [start,end) with a continuous output PTS (CFR at the source frame rate). Audio: decode each range to
-/// PCM (truncated to the range length), concatenate, encode to AAC, then mux with the video.
+/// PCM (truncated to the range length), pitch-preservingly retime any non-1× segment via
+/// <see cref="LibavAtempoFilter"/>, concatenate, encode to AAC, then mux with the video.
 /// </summary>
 internal static class LibavClipExporter
 {
@@ -537,16 +538,6 @@ internal static class LibavClipExporter
     {
         audioTemp = null;
 
-        // Retiming audio to match a non-1× video speed needs atempo-style resampling; until that lands,
-        // a speed-changed clip is exported video-only rather than risk audible A/V desync.
-        foreach (SourceRange r in ranges)
-        {
-            if (Math.Abs(r.EffectiveSpeed - 1.0) > 0.001)
-            {
-                return false;
-            }
-        }
-
         try
         {
             WaveFormat? format = null;
@@ -567,7 +558,20 @@ internal static class LibavClipExporter
                 long keep = (long)Math.Round(range.Duration * bytesPerSecond);
                 keep -= keep % (decoded.WaveFormat.Channels * 2); // align to a full sample frame
                 keep = Math.Clamp(keep, 0, decoded.PcmBytes.Length);
-                pcm.Write(decoded.PcmBytes, 0, (int)keep);
+
+                if (Math.Abs(range.EffectiveSpeed - 1.0) > 0.001)
+                {
+                    // Pitch-preserving retime so the audio matches this segment's video speed.
+                    byte[] slice = new byte[keep];
+                    Array.Copy(decoded.PcmBytes, slice, (int)keep);
+                    byte[] retimed = LibavAtempoFilter.Process(
+                        slice, decoded.WaveFormat.SampleRate, decoded.WaveFormat.Channels, range.EffectiveSpeed);
+                    pcm.Write(retimed, 0, retimed.Length);
+                }
+                else
+                {
+                    pcm.Write(decoded.PcmBytes, 0, (int)keep);
+                }
             }
 
             if (format == null || pcm.Length == 0)

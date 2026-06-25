@@ -53,4 +53,38 @@ public class LibavClipExporterSpeedTests
         Assert.Equal(1, LibavClipExporter.AdvanceFrameCursor(ref accum, 0));
         Assert.Equal(1, LibavClipExporter.AdvanceFrameCursor(ref accum, -3));
     }
+
+    [Fact]
+    public void FactorChain_WithinRange_IsSingleFactor()
+    {
+        Assert.Equal(new[] { 1.5 }, LibavAtempoFilter.FactorChain(1.5));
+        Assert.Equal(new[] { 0.5 }, LibavAtempoFilter.FactorChain(0.5));
+        Assert.Equal(new[] { 2.0 }, LibavAtempoFilter.FactorChain(2.0));
+    }
+
+    [Fact]
+    public void FactorChain_AboveTwo_ChainsToProductOfFactors()
+    {
+        double[] chain = System.Linq.Enumerable.ToArray(LibavAtempoFilter.FactorChain(4.0));
+        Assert.All(chain, f => Assert.InRange(f, 0.5, 2.0));
+        Assert.Equal(4.0, Product(chain), 6);
+    }
+
+    [Fact]
+    public void FactorChain_BelowHalf_ChainsToProductOfFactors()
+    {
+        double[] chain = System.Linq.Enumerable.ToArray(LibavAtempoFilter.FactorChain(0.25));
+        Assert.All(chain, f => Assert.InRange(f, 0.5, 2.0));
+        Assert.Equal(0.25, Product(chain), 6);
+    }
+
+    private static double Product(double[] values)
+    {
+        double p = 1.0;
+        foreach (double v in values)
+        {
+            p *= v;
+        }
+        return p;
+    }
 }
