@@ -396,6 +396,7 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
 
         InitializeBaseCommands();
         InitializeActionCommands();
+        InitializeRedactionCommands();
         // InitializeToolbarCommands(); // Handled by Base
         InitializeAnnotationCommands();
         InitializeSegmentCommands();
