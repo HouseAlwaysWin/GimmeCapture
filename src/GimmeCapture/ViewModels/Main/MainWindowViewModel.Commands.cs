@@ -129,6 +129,12 @@ public partial class MainWindowViewModel
         ShowSnipCursor = defaultSettings.ShowSnipCursor;
         ShowRecordCursor = defaultSettings.ShowRecordCursor;
         RecordSystemAudio = defaultSettings.RecordSystemAudio;
+        EnableWebcam = defaultSettings.EnableWebcam;
+        WebcamDeviceName = defaultSettings.WebcamDeviceName;
+        WebcamCorner = defaultSettings.WebcamCorner;
+        RecordMicrophone = defaultSettings.RecordMicrophone;
+        SelectedMicDeviceId = defaultSettings.SelectedMicDeviceId;
+        MicVolume = defaultSettings.MicVolume;
         HighlightCursor = defaultSettings.HighlightCursor;
         HighlightClicks = defaultSettings.HighlightClicks;
         TempDirectory = defaultSettings.TempDirectory;

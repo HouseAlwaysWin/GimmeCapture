@@ -37,23 +37,28 @@ public class RedactionInterpolatorTests
     }
 
     [Fact]
-    public void BeforeFirst_HoldsFirstBox()
+    public void BeforeFirst_MultiKeyframe_IsNull()
     {
         var track = new RedactionTrack();
         track.Keyframes.Add(Kf(2.0, 0.1, 0.1, 0.2, 0.2));
         track.Keyframes.Add(Kf(4.0, 0.5, 0.5, 0.2, 0.2));
 
-        AssertBox(0.1, 0.1, 0.2, 0.2, RedactionInterpolator.EvaluateAt(track, 0.0));
+        // Bounded to [2,4]: before the first keyframe there is no redaction.
+        Assert.Null(RedactionInterpolator.EvaluateAt(track, 0.0));
+        // …but exactly at the first keyframe the box is present.
+        AssertBox(0.1, 0.1, 0.2, 0.2, RedactionInterpolator.EvaluateAt(track, 2.0));
     }
 
     [Fact]
-    public void AfterLast_HoldsLastBox()
+    public void AfterLast_MultiKeyframe_IsNull()
     {
         var track = new RedactionTrack();
         track.Keyframes.Add(Kf(2.0, 0.1, 0.1, 0.2, 0.2));
         track.Keyframes.Add(Kf(4.0, 0.5, 0.5, 0.3, 0.3));
 
-        AssertBox(0.5, 0.5, 0.3, 0.3, RedactionInterpolator.EvaluateAt(track, 10.0));
+        // Bounded to [2,4]: after the last keyframe there is no redaction.
+        Assert.Null(RedactionInterpolator.EvaluateAt(track, 10.0));
+        AssertBox(0.5, 0.5, 0.3, 0.3, RedactionInterpolator.EvaluateAt(track, 4.0));
     }
 
     [Fact]

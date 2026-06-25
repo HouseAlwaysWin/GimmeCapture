@@ -96,6 +96,10 @@ public partial class FloatingVideoViewModel
 
         AppLog.Information($"FloatingVideo.RedactionKeyframe t={keyframe.TimeSeconds:0.###} effect={_activeRedactionTrack.Effect}");
         RaiseRedactionChanged();
+
+        // Clear the selection marquee so the semi-transparent box doesn't linger on screen (it looked like
+        // a stuck redaction); the red dashed preview now shows the keyframe. Re-draw for the next keyframe.
+        SelectionRect = new Avalonia.Rect();
     }
 
     private void ClearRedaction()
@@ -127,6 +131,33 @@ public partial class FloatingVideoViewModel
     {
         this.RaisePropertyChanged(nameof(HasRedaction));
         this.RaisePropertyChanged(nameof(RedactionStatus));
+        RefreshActiveRedactionBoxes();
+    }
+
+    /// <summary>
+    /// Display-space boxes for every track at the current playhead — the live-preview overlay binds to
+    /// this so a just-added keyframe is visible immediately (and the box moves as you scrub/play).
+    /// </summary>
+    public ObservableCollection<Avalonia.Rect> ActiveRedactionBoxes { get; } = new();
+
+    internal void RefreshActiveRedactionBoxes()
+    {
+        ActiveRedactionBoxes.Clear();
+        double dw = DisplayWidth, dh = DisplayHeight;
+        if (dw <= 0 || dh <= 0)
+        {
+            return;
+        }
+
+        double t = CurrentTime.TotalSeconds;
+        foreach (RedactionTrack track in RedactionTracks)
+        {
+            RedactionBox? box = RedactionInterpolator.EvaluateAt(track, t);
+            if (box is { } b)
+            {
+                ActiveRedactionBoxes.Add(new Avalonia.Rect(b.X * dw, b.Y * dh, b.Width * dw, b.Height * dh));
+            }
+        }
     }
 
     /// <summary>

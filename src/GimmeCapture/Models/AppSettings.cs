@@ -144,6 +144,16 @@ public class AppSettings
     public bool HighlightCursor { get; set; } = false;
     public bool HighlightClicks { get; set; } = false;
     public bool RecordSystemAudio { get; set; } = true;
+    // Webcam picture-in-picture composited into recordings.
+    public bool EnableWebcam { get; set; } = false;
+    public string WebcamDeviceName { get; set; } = string.Empty;
+    public int WebcamCorner { get; set; } = 3; // 0=TL, 1=TR, 2=BL, 3=BR
+    // Microphone capture, mixed with system audio at finalize.
+    public bool RecordMicrophone { get; set; } = false;
+    // WASAPI capture-endpoint device id (empty = default input device).
+    public string SelectedMicDeviceId { get; set; } = string.Empty;
+    // Linear gain applied to the mic stream when mixing (1.0 = unchanged).
+    public double MicVolume { get; set; } = 1.0;
     public string VideoSaveDirectory { get; set; } = string.Empty;
     public string RecordFormat { get; set; } = "mp4";
     public VideoCodec VideoCodec { get; set; } = VideoCodec.H264;

@@ -110,9 +110,9 @@
                                 Background="#AA000000" 
                                 CornerRadius="4">
                             <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="10">
-                                <TextBlock Text="Processing Export..." 
-                                           HorizontalAlignment="Center" 
-                                           Foreground="White" 
+                                <TextBlock Text="{Binding ProcessingText, FallbackValue='Processing...', TargetNullValue='Processing...'}"
+                                           HorizontalAlignment="Center"
+                                           Foreground="White"
                                            FontSize="14" FontWeight="Bold"/>
                                 <ProgressBar Value="{Binding ExportProgress}" 
                                              Minimum="0" Maximum="100" 
@@ -125,6 +125,46 @@
                             </StackPanel>
                         </Border>
                         
+                        <!-- Selection Overlay (Over Video Area) — draws the dragged box; only hit-testable
+                             in selection mode so playback isn't blocked otherwise. -->
+                        <Canvas Name="SelectionCanvas"
+                                Background="Transparent"
+                                IsHitTestVisible="{Binding IsSelectionMode}"
+                                HorizontalAlignment="Stretch"
+                                VerticalAlignment="Stretch"
+                                Cursor="Cross">
+                            <Rectangle Canvas.Left="{Binding SelectionRect.X}"
+                                       Canvas.Top="{Binding SelectionRect.Y}"
+                                       Width="{Binding SelectionRect.Width}"
+                                       Height="{Binding SelectionRect.Height}"
+                                       Stroke="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}"
+                                       StrokeThickness="2"
+                                       Fill="{Binding BorderColor, Converter={StaticResource ColorToBrushConverter}}"
+                                       Opacity="0.3"/>
+                        </Canvas>
+
+                        <!-- Redaction live preview: interpolated box(es) at the current playhead (no hit-test). -->
+                        <ItemsControl ItemsSource="{Binding ActiveRedactionBoxes}" IsHitTestVisible="False" x:CompileBindings="False">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <Canvas/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.Styles>
+                                <Style Selector="ContentPresenter">
+                                    <Setter Property="Canvas.Left" Value="{Binding X}"/>
+                                    <Setter Property="Canvas.Top" Value="{Binding Y}"/>
+                                </Style>
+                            </ItemsControl.Styles>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Rectangle Width="{Binding Width}" Height="{Binding Height}"
+                                               Stroke="#FFE53935" StrokeThickness="2" StrokeDashArray="4,2"
+                                               Fill="#33E53935"/>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
                         <!-- Annotation Layer -->
                         <ItemsControl ItemsSource="{Binding Annotations}" IsHitTestVisible="False">
                             <ItemsControl.ItemsPanel>

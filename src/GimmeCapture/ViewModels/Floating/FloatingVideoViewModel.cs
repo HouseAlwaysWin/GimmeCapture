@@ -106,6 +106,10 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
         {
             this.RaiseAndSetIfChanged(ref _currentTime, value);
             this.RaisePropertyChanged(nameof(FormattedTime));
+            if (RedactionTracks.Count > 0)
+            {
+                RefreshActiveRedactionBoxes(); // keep the live preview box following the playhead
+            }
         }
     }
 
@@ -161,6 +165,10 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
                 _isDraggingSlider = true;
                 _currentTime = TimeSpan.FromSeconds(value);
                 this.RaisePropertyChanged(nameof(FormattedTime));
+                if (RedactionTracks.Count > 0)
+                {
+                    RefreshActiveRedactionBoxes(); // scrubbing the slider bypasses the CurrentTime setter
+                }
                 
                 // Auto-pause immediately upon scrubbing
                 if (_isPlaybackActive)

@@ -51,6 +51,12 @@ public class MainWindowSettingsPersistenceServiceTests
             ShowSnipCursor = true,
             ShowRecordCursor = false,
             RecordSystemAudio = false,
+            EnableWebcam = true,
+            WebcamDeviceName = "USB Camera",
+            WebcamCorner = 1,
+            RecordMicrophone = true,
+            SelectedMicDeviceId = "mic-device-1",
+            MicVolume = 1.5,
             HighlightCursor = true,
             HighlightClicks = true,
             VideoSaveDirectory = @"D:\captures\video",
@@ -106,6 +112,12 @@ public class MainWindowSettingsPersistenceServiceTests
         Assert.Equal(snapshot.VideoEncoderHint, persisted.VideoEncoderHint);
         Assert.Equal(snapshot.HighlightCursor, persisted.HighlightCursor);
         Assert.Equal(snapshot.HighlightClicks, persisted.HighlightClicks);
+        Assert.Equal(snapshot.RecordMicrophone, persisted.RecordMicrophone);
+        Assert.Equal(snapshot.SelectedMicDeviceId, persisted.SelectedMicDeviceId);
+        Assert.Equal(snapshot.MicVolume, persisted.MicVolume);
+        Assert.Equal(snapshot.EnableWebcam, persisted.EnableWebcam);
+        Assert.Equal(snapshot.WebcamDeviceName, persisted.WebcamDeviceName);
+        Assert.Equal(snapshot.WebcamCorner, persisted.WebcamCorner);
         Assert.Contains("\"Language\": \"Japanese\"", savedJson);
         Assert.Contains($"\"ConfigVersion\": {AppSettingsService.CurrentConfigVersion}", savedJson);
         Assert.Contains("\"RecordHotkey\": \"Shift\\u002BF8\"", savedJson);

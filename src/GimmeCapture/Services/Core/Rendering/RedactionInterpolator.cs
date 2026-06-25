@@ -27,12 +27,25 @@ public static class RedactionInterpolator
             return null;
         }
 
+        // A lone keyframe is a static, whole-clip redaction (e.g. a fixed logo).
+        if (ordered.Count == 1)
+        {
+            return ToBox(ordered[0]);
+        }
+
+        // With multiple keyframes the redaction is BOUNDED to [first, last] — outside that span there is
+        // no box, so a span you drew doesn't bleed into the rest of the clip ("after I stop, no redaction").
+        RedactionKeyframe last = ordered[ordered.Count - 1];
+        if (timeSeconds < ordered[0].TimeSeconds - 1e-9 || timeSeconds > last.TimeSeconds + 1e-9)
+        {
+            return null;
+        }
+
         if (timeSeconds <= ordered[0].TimeSeconds)
         {
             return ToBox(ordered[0]);
         }
 
-        RedactionKeyframe last = ordered[ordered.Count - 1];
         if (timeSeconds >= last.TimeSeconds)
         {
             return ToBox(last);

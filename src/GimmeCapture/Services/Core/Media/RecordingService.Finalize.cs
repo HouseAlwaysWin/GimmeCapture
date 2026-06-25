@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Core.Media.NativeFFmpeg;
 using NAudio.Wave;
+using NAudio.Wave.SampleProviders;
 
 namespace GimmeCapture.Services.Core.Media;
 
@@ -20,7 +21,6 @@ public partial class RecordingService
         await Task.Delay(100);
 
         var validSegments = GetValidVideoSegments();
-        var validAudioSegments = GetValidAudioSegments();
 
         if (validSegments.Count == 0)
         {
@@ -35,7 +35,7 @@ public partial class RecordingService
             mergedMkv = await MergeVideoSegmentsAsync(validSegments, mergedMkv);
 
             FinalizationProgress = 30;
-            var mergedAudio = await MergeAudioSegmentsAsync(validAudioSegments);
+            var mergedAudio = await BuildFinalAudioAsync();
             await FinalizeByTargetFormatAsync(mergedMkv, mergedAudio, cropFilter: null);
         }
         catch (Exception ex)
@@ -54,6 +54,110 @@ public partial class RecordingService
 
     private List<string> GetValidAudioSegments() =>
         _audioSegments.AsValueEnumerable().Where(HasValidAudioData).ToList();
+
+    private List<string> GetValidMicSegments() =>
+        _micSegments.AsValueEnumerable().Where(HasValidAudioData).ToList();
+
+    // Merge the system-audio and microphone tracks separately, then mix them into a single
+    // WAV when both are present (applying the user's mic gain). Returns the system or mic
+    // track alone if only one was captured, or null if neither produced audio.
+    private async Task<string?> BuildFinalAudioAsync()
+    {
+        var system = await MergeAudioSegmentsAsync(GetValidAudioSegments(), "merged_system_audio.wav");
+        var mic = await MergeAudioSegmentsAsync(GetValidMicSegments(), "merged_mic_audio.wav");
+
+        if (mic == null)
+        {
+            return system;
+        }
+
+        if (system == null)
+        {
+            // Mic only: apply gain if the user changed it, otherwise pass through.
+            if (Math.Abs(_micVolume - 1.0) < 0.001)
+            {
+                return mic;
+            }
+
+            try
+            {
+                return await Task.Run(() => ApplyGainToWav(mic, _micVolume));
+            }
+            catch (Exception ex)
+            {
+                LogToFile($"[Finalize] Mic gain failed, using raw mic: {ex.Message}");
+                return mic;
+            }
+        }
+
+        try
+        {
+            string mixed = await Task.Run(() => MixWavFiles(system, mic, _micVolume));
+            LogToFile($"[Finalize] Mixed system + mic audio: {mixed}");
+            return mixed;
+        }
+        catch (Exception ex)
+        {
+            LogToFile($"[Finalize] Audio mix failed, using system audio only: {ex.Message}");
+            return system;
+        }
+    }
+
+    // Mixes two WAV files into one 16-bit WAV at 48 kHz stereo. Both inputs are resampled /
+    // channel-adapted to a common format (a hard requirement of MixingSampleProvider).
+    private string MixWavFiles(string systemPath, string micPath, double micVolume)
+    {
+        const int rate = 48000;
+        const int channels = 2;
+        string mixedPath = Path.Combine(_tempDir, "mixed_audio.wav");
+
+        using var systemReader = new AudioFileReader(systemPath);
+        using var micReader = new AudioFileReader(micPath);
+
+        ISampleProvider systemProvider = NormalizeSampleProvider(systemReader, rate, channels);
+        ISampleProvider micProvider = NormalizeSampleProvider(micReader, rate, channels);
+        if (Math.Abs(micVolume - 1.0) >= 0.001)
+        {
+            micProvider = new VolumeSampleProvider(micProvider) { Volume = (float)micVolume };
+        }
+
+        // ReadFully MUST be false here: with ReadFully=true the mixer keeps returning full buffers of
+        // silence after both inputs end, so WaveFileWriter.CreateWaveFile (which loops until Read returns 0)
+        // never terminates — the mix would hang/OOM and fall back to system-audio-only (mic lost).
+        var mixer = new MixingSampleProvider(new[] { systemProvider, micProvider }) { ReadFully = false };
+        WaveFileWriter.CreateWaveFile16(mixedPath, mixer);
+        return mixedPath;
+    }
+
+    private string ApplyGainToWav(string wavPath, double volume)
+    {
+        string outPath = Path.Combine(_tempDir, "mic_gain.wav");
+        using var reader = new AudioFileReader(wavPath);
+        var amplified = new VolumeSampleProvider(reader) { Volume = (float)volume };
+        WaveFileWriter.CreateWaveFile16(outPath, amplified);
+        return outPath;
+    }
+
+    private static ISampleProvider NormalizeSampleProvider(ISampleProvider source, int targetRate, int targetChannels)
+    {
+        ISampleProvider provider = source;
+
+        if (provider.WaveFormat.Channels == 1 && targetChannels == 2)
+        {
+            provider = new MonoToStereoSampleProvider(provider);
+        }
+        else if (provider.WaveFormat.Channels == 2 && targetChannels == 1)
+        {
+            provider = new StereoToMonoSampleProvider(provider);
+        }
+
+        if (provider.WaveFormat.SampleRate != targetRate)
+        {
+            provider = new WdlResamplingSampleProvider(provider, targetRate);
+        }
+
+        return provider;
+    }
 
     private async Task<string> MergeVideoSegmentsAsync(IReadOnlyList<string> validSegments, string mergedMkvPath)
     {
@@ -86,7 +190,7 @@ public partial class RecordingService
         return validSegments[0];
     }
 
-    private async Task<string?> MergeAudioSegmentsAsync(IReadOnlyList<string> validAudioSegments)
+    private async Task<string?> MergeAudioSegmentsAsync(IReadOnlyList<string> validAudioSegments, string mergedFileName = "merged_audio.wav")
     {
         if (validAudioSegments.Count == 0)
         {
@@ -99,7 +203,7 @@ public partial class RecordingService
         }
 
         // Minimal DLL-only path: merge WAV segments with NAudio.
-        var mergedPath = Path.Combine(_tempDir, "merged_audio.wav");
+        var mergedPath = Path.Combine(_tempDir, mergedFileName);
         try
         {
             using var firstReader = new WaveFileReader(validAudioSegments[0]);

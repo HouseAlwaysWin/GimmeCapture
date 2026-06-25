@@ -366,6 +366,7 @@ public partial class MainWindowViewModel : ViewModelBase
         InitializeHistoryCommands();
 
         RefreshLlamaModelsCommand = ReactiveCommand.Create(() => RefreshLlamaModelCatalog());
+        RefreshWebcamDevicesCommand = ReactiveCommand.Create(RefreshWebcamDevices);
         SelectLlamaModelCommand = ReactiveCommand.Create<string>(modelId =>
         {
             if (string.IsNullOrWhiteSpace(modelId))

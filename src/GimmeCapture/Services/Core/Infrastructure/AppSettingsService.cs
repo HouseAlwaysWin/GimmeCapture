@@ -276,6 +276,12 @@ public class AppSettingsService
         dest.ShowSnipCursor = source.ShowSnipCursor;
         dest.ShowRecordCursor = source.ShowRecordCursor;
         dest.RecordSystemAudio = source.RecordSystemAudio;
+        dest.EnableWebcam = source.EnableWebcam;
+        dest.WebcamDeviceName = source.WebcamDeviceName;
+        dest.WebcamCorner = source.WebcamCorner;
+        dest.RecordMicrophone = source.RecordMicrophone;
+        dest.SelectedMicDeviceId = source.SelectedMicDeviceId;
+        dest.MicVolume = source.MicVolume;
         dest.HighlightCursor = source.HighlightCursor;
         dest.HighlightClicks = source.HighlightClicks;
         dest.VideoSaveDirectory = source.VideoSaveDirectory;

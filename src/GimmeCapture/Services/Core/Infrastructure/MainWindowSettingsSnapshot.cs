@@ -34,6 +34,12 @@ public sealed class MainWindowSettingsSnapshot
     public required bool ShowSnipCursor { get; init; }
     public required bool ShowRecordCursor { get; init; }
     public required bool RecordSystemAudio { get; init; }
+    public required bool EnableWebcam { get; init; }
+    public required string WebcamDeviceName { get; init; }
+    public required int WebcamCorner { get; init; }
+    public required bool RecordMicrophone { get; init; }
+    public required string SelectedMicDeviceId { get; init; }
+    public required double MicVolume { get; init; }
     public required bool HighlightCursor { get; init; }
     public required bool HighlightClicks { get; init; }
     public required string VideoSaveDirectory { get; init; }
@@ -98,6 +104,12 @@ public sealed class MainWindowSettingsSnapshot
             ShowSnipCursor = settings.ShowSnipCursor,
             ShowRecordCursor = settings.ShowRecordCursor,
             RecordSystemAudio = settings.RecordSystemAudio,
+            EnableWebcam = settings.EnableWebcam,
+            WebcamDeviceName = settings.WebcamDeviceName,
+            WebcamCorner = settings.WebcamCorner,
+            RecordMicrophone = settings.RecordMicrophone,
+            SelectedMicDeviceId = settings.SelectedMicDeviceId,
+            MicVolume = settings.MicVolume,
             HighlightCursor = settings.HighlightCursor,
             HighlightClicks = settings.HighlightClicks,
             VideoSaveDirectory = settings.VideoSaveDirectory,
@@ -162,6 +174,12 @@ public sealed class MainWindowSettingsSnapshot
         settings.ShowSnipCursor = ShowSnipCursor;
         settings.ShowRecordCursor = ShowRecordCursor;
         settings.RecordSystemAudio = RecordSystemAudio;
+        settings.EnableWebcam = EnableWebcam;
+        settings.WebcamDeviceName = WebcamDeviceName;
+        settings.WebcamCorner = WebcamCorner;
+        settings.RecordMicrophone = RecordMicrophone;
+        settings.SelectedMicDeviceId = SelectedMicDeviceId;
+        settings.MicVolume = MicVolume;
         settings.HighlightCursor = HighlightCursor;
         settings.HighlightClicks = HighlightClicks;
         settings.VideoSaveDirectory = VideoSaveDirectory;
