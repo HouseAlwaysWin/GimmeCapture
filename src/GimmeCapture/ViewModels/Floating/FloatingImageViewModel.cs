@@ -242,6 +242,10 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
     public ReactiveCommand<Unit, Unit> CutCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> CropCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> PinSelectionCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> RotateLeftCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> RotateRightCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> FlipHorizontalCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> FlipVerticalCommand { get; private set; } = null!;
 
     // AI Interactive Mode
     public bool IsPointRemovalMode

@@ -353,6 +353,26 @@
 
                              <Rectangle Fill="#444444" Width="1" Height="16" Margin="2,0" VerticalAlignment="Center"/>
 
+                            <!-- Rotate / Flip -->
+                            <Button Theme="{StaticResource SnipButton}" Command="{Binding RotateLeftCommand}"
+                                    ToolTip.Tip="{Binding [TipRotateLeft], Source={x:Static services:LocalizationService.Instance}}">
+                                <PathIcon Data="M13,4.07V1L8.45,5.55L13,10V6.09C15.84,6.57 18,9.03 18,12C18,14.97 15.84,17.43 13,17.91V19.93C16.95,19.44 20,16.08 20,12C20,7.92 16.95,4.56 13,4.07M7.1,18.32C8.26,19.22 9.61,19.76 11,19.93V17.9C10.13,17.75 9.29,17.41 8.54,16.87L7.1,18.32M6.09,13H4.07C4.24,14.39 4.79,15.73 5.69,16.89L7.1,15.47C6.58,14.72 6.23,13.88 6.09,13M7.11,8.53L5.7,7.11C4.8,8.27 4.24,9.61 4.07,11H6.09C6.23,10.13 6.58,9.28 7.11,8.53Z" Width="14" Height="14"/>
+                            </Button>
+                            <Button Theme="{StaticResource SnipButton}" Command="{Binding RotateRightCommand}"
+                                    ToolTip.Tip="{Binding [TipRotateRight], Source={x:Static services:LocalizationService.Instance}}">
+                                <PathIcon Data="M16.89,15.5L18.31,16.89C19.21,15.73 19.76,14.39 19.93,13H17.91C17.77,13.87 17.43,14.72 16.89,15.5M13,17.9V19.92C14.39,19.75 15.74,19.21 16.9,18.31L15.46,16.87C14.71,17.41 13.87,17.76 13,17.9M19.93,11C19.76,9.61 19.21,8.27 18.31,7.11L16.89,8.53C17.43,9.28 17.77,10.13 17.91,11M15.55,5.55L11,1V4.07C7.06,4.56 4,7.92 4,12C4,16.08 7.05,19.44 11,19.93V17.91C8.16,17.43 6,14.97 6,12C6,9.03 8.16,6.57 11,6.09V10L15.55,5.55Z" Width="14" Height="14"/>
+                            </Button>
+                            <Button Theme="{StaticResource SnipButton}" Command="{Binding FlipHorizontalCommand}"
+                                    ToolTip.Tip="{Binding [TipFlipH], Source={x:Static services:LocalizationService.Instance}}">
+                                <PathIcon Data="M6.45,17.45L1,12L6.45,6.55L7.86,7.96L4.83,11H11V13H4.83L7.86,16.04L6.45,17.45M17.55,6.55L23,12L17.55,17.45L16.14,16.04L19.17,13H13V11H19.17L16.14,7.96L17.55,6.55Z" Width="14" Height="14"/>
+                            </Button>
+                            <Button Theme="{StaticResource SnipButton}" Command="{Binding FlipVerticalCommand}"
+                                    ToolTip.Tip="{Binding [TipFlipV], Source={x:Static services:LocalizationService.Instance}}">
+                                <PathIcon Data="M6.55,6.45L12,1L17.45,6.45L16.04,7.86L13,4.83V11H11V4.83L7.96,7.86L6.55,6.45M6.55,17.55L12,23L17.45,17.55L16.04,16.14L13,19.17V13H11V19.17L7.96,16.14L6.55,17.55Z" Width="14" Height="14"/>
+                            </Button>
+
+                            <Rectangle Fill="#444444" Width="1" Height="16" Margin="2,0" VerticalAlignment="Center"/>
+
                             <!-- 4. Core Actions -->
                             <Button Theme="{StaticResource SnipButton}" Command="{Binding CopyCommand}" ToolTip.Tip="{Binding CopyTooltip}">
                                 <PathIcon Data="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z" Width="14" Height="14"/>
