@@ -150,6 +150,7 @@
   "TipCrop": "選択範囲を切り抜き",
   "TipPinSelection": "選択範囲をピン留め",
   "TipTimeline": "タイムライン（マルチセグメント編集）",
+  "TipFreezeRemove": "このフレームを固定 → オブジェクト除去（画像ピン）",
   "TipSplitSegment": "再生位置で分割",
   "TipDeleteSegment": "選択したセグメントを削除",
   "TimelineHint": "ドラッグ=シーク · 分割 · タップで保持/除外を切替",

@@ -170,6 +170,7 @@
   "TipCrop": "Crop Selection",
   "TipPinSelection": "Pin Selection",
   "TipTimeline": "Timeline (multi-segment cut)",
+  "TipFreezeRemove": "Freeze frame → remove an object (image pin)",
   "TipSplitSegment": "Split at playhead",
   "TipDeleteSegment": "Delete selected segment",
   "TimelineHint": "Drag = scrub · Split · tap a piece to keep / drop",

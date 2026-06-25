@@ -40,6 +40,31 @@ public partial class FloatingVideoViewModel
 
         CopyCommand = ReactiveCommand.CreateFromTask(CopyAsync);
         SaveCommand = ReactiveCommand.CreateFromTask(SaveAsync);
+        FreezeFrameCommand = ReactiveCommand.CreateFromTask(FreezeFrameAsync);
+    }
+
+    /// <summary>
+    /// Pauses on the current frame and opens it as a new image pin (entering SAM2 point-removal), so the
+    /// user can cut an object out of that single frame. The result is a still image, not a video edit.
+    /// </summary>
+    private async Task FreezeFrameAsync()
+    {
+        if (FreezeFrameToImagePinAction == null) return;
+
+        // Pause so the displayed frame is stable while we snapshot it.
+        if (_isPlaybackActive)
+        {
+            _isPlaybackActive = false;
+            CancelPlaybackInBackground();
+            this.RaisePropertyChanged(nameof(IsPlaying));
+        }
+
+        // GetFlattenedBitmapAsync returns a fresh detached bitmap (a copy of the current frame with any
+        // annotations baked in), safe to hand to the image pin even as the player recycles its buffer.
+        var snapshot = await GetFlattenedBitmapAsync();
+        if (snapshot == null) return;
+
+        FreezeFrameToImagePinAction.Invoke(snapshot);
     }
 
     private Task CropAsync() => ExportAndPinSelectionAsync(closeSource: true);
