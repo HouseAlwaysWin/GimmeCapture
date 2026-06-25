@@ -59,7 +59,11 @@ public partial class FloatingVideoViewModel
         NewRedactionObjectCommand = ReactiveCommand.Create(() => { _activeRedactionTrack = null; });
         ClearRedactionCommand = ReactiveCommand.Create(ClearRedaction);
         CycleRedactionEffectCommand = ReactiveCommand.Create(CycleRedactionEffect);
-        TrackObjectCommand = ReactiveCommand.CreateFromTask(TrackObjectAsync, canAdd);
+        // Only trackable with a drawn box and while no other long op (export/track) is running.
+        var canTrack = this.WhenAnyValue(
+            x => x.IsSelectionActive, x => x.IsExporting,
+            (selection, exporting) => selection && !exporting);
+        TrackObjectCommand = ReactiveCommand.CreateFromTask(TrackObjectAsync, canTrack);
     }
 
     /// <summary>
@@ -69,6 +73,11 @@ public partial class FloatingVideoViewModel
     /// </summary>
     private async Task TrackObjectAsync()
     {
+        if (IsExporting || IsProcessing)
+        {
+            return; // a track/export is already running
+        }
+
         var runtime = _sam2RuntimeService;
         double dw = DisplayWidth, dh = DisplayHeight;
         if (!IsSelectionActive || string.IsNullOrEmpty(VideoPath) || dw <= 0 || dh <= 0)
@@ -78,10 +87,12 @@ public partial class FloatingVideoViewModel
 
         if (runtime == null || _appSettingsService == null)
         {
-            ProcessingText = LocalizationService.Instance["StatusSAM2NotFound"] ?? "SAM2 not available";
+            await ShowTrackMessageAsync(LocalizationService.Instance["StatusSAM2NotFound"] ?? "SAM2 not available");
             return;
         }
 
+        // Seed = centre of the drawn box, normalized to [0,1] (resolution-independent: the tracker maps it
+        // back to the extracted frame's pixels, which are at the source/original resolution).
         var r = SelectionRect;
         double seedX = Math.Clamp((r.X + (r.Width / 2)) / dw, 0, 1);
         double seedY = Math.Clamp((r.Y + (r.Height / 2)) / dh, 0, 1);
@@ -94,7 +105,9 @@ public partial class FloatingVideoViewModel
             return;
         }
 
-        IsProcessing = true;
+        // Reuse the export overlay so tracking shows a visible "processing" spinner + progress.
+        IsExporting = true;
+        ExportProgress = 0;
         ProcessingText = LocalizationService.Instance["StatusInitializingAI"] ?? "Tracking…";
         string? leaseId = null;
         SAM2Service? sam2 = null;
@@ -105,7 +118,11 @@ public partial class FloatingVideoViewModel
             await sam2.InitializeAsync();
 
             string label = LocalizationService.Instance["StatusAIDetecting"] ?? "Tracking";
-            var progress = new Progress<double>(p => ProcessingText = $"{label} {p * 100:0}%");
+            var progress = new Progress<double>(p => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                ExportProgress = p * 100;
+                ProcessingText = $"{label} {p * 100:0}%";
+            }));
 
             SAM2Service sam2Local = sam2;
             List<RedactionKeyframe> keyframes = await Task.Run(() => Sam2RedactionTracker.TrackAsync(
@@ -115,23 +132,21 @@ public partial class FloatingVideoViewModel
             {
                 var track = new RedactionTrack { Effect = SelectedRedactionEffect };
                 track.Keyframes.AddRange(keyframes);
+                SelectionRect = new Avalonia.Rect(); // clear the seed box before swapping the active track
                 RedactionTracks.Add(track);
                 _activeRedactionTrack = track;
                 AppLog.Information($"FloatingVideo.TrackObject added {keyframes.Count} keyframes start={start:0.##} end={end:0.##}");
                 RaiseRedactionChanged();
-                SelectionRect = new Avalonia.Rect(); // clear the seed box now that the track exists
             }
             else
             {
-                ProcessingText = LocalizationService.Instance["StatusSAM2NotFound"] ?? "No object tracked";
-                await Task.Delay(1200);
+                await ShowTrackMessageAsync(LocalizationService.Instance["StatusSAM2NotFound"] ?? "No object tracked");
             }
         }
         catch (Exception ex)
         {
             AppLog.Warning("FloatingVideo.TrackObject", ex);
-            ProcessingText = LocalizationService.Instance["StatusSAM2NotFound"] ?? "SAM2 not ready";
-            await Task.Delay(1500);
+            await ShowTrackMessageAsync(LocalizationService.Instance["StatusSAM2NotFound"] ?? "SAM2 not ready");
         }
         finally
         {
@@ -141,7 +156,21 @@ public partial class FloatingVideoViewModel
                 runtime.ReleaseLease(leaseId, true);
             }
 
-            IsProcessing = false;
+            IsExporting = false;
+            ExportProgress = 0;
+        }
+    }
+
+    // Briefly surfaces a message in the processing overlay (which is bound to IsExporting + ProcessingText).
+    private async Task ShowTrackMessageAsync(string message)
+    {
+        bool hadOverlay = IsExporting;
+        ProcessingText = message;
+        IsExporting = true;
+        await Task.Delay(1500);
+        if (!hadOverlay)
+        {
+            IsExporting = false;
         }
     }
 

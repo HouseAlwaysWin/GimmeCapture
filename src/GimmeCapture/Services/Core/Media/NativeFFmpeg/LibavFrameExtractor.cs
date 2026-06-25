@@ -71,6 +71,8 @@ internal static class LibavFrameExtractor
             outFrame->width = outputWidth;
             outFrame->height = outputHeight;
             ThrowIfErr(ffmpeg.av_frame_get_buffer(outFrame, 1), "out_frame_buffer");
+            // outFrame is exclusively owned and never shared with the decoder, so one make-writable suffices.
+            ThrowIfErr(ffmpeg.av_frame_make_writable(outFrame), "out_frame_writable");
 
             if (seconds > 0)
             {
@@ -140,7 +142,6 @@ internal static class LibavFrameExtractor
                     continue; // still before the target — keep decoding forward
                 }
 
-                ThrowIfErr(ffmpeg.av_frame_make_writable(outFrame), "out_frame_writable");
                 ffmpeg.sws_scale(sws, decFrame->data, decFrame->linesize, 0, decCtx->height, outFrame->data, outFrame->linesize);
                 ffmpeg.av_frame_unref(decFrame);
                 return CopyToSkBitmap(outFrame, outputWidth, outputHeight);
@@ -166,14 +167,17 @@ internal static class LibavFrameExtractor
     private static unsafe SKBitmap CopyToSkBitmap(AVFrame* bgra, int width, int height)
     {
         var bmp = new SKBitmap(new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Premul));
-        int rowBytes = width * 4;
         byte* dstBase = (byte*)bmp.GetPixels();
         int dstStride = bmp.RowBytes;
+        int srcStride = bgra->linesize[0];
+        // BGRA: source linesize is always >= width*4 (may be padded); copy only the real width, and bound
+        // the destination size by its actual stride so a padded/odd dst row can't be overrun.
+        int copyBytes = Math.Min(width * 4, Math.Min(srcStride, dstStride));
         for (int y = 0; y < height; y++)
         {
-            byte* src = bgra->data[0] + (y * bgra->linesize[0]);
+            byte* src = bgra->data[0] + (y * srcStride);
             byte* dst = dstBase + (y * dstStride);
-            Buffer.MemoryCopy(src, dst, rowBytes, rowBytes);
+            Buffer.MemoryCopy(src, dst, dstStride, copyBytes);
         }
 
         return bmp;
