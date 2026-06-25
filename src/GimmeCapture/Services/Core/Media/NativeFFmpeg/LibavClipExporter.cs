@@ -374,6 +374,33 @@ internal static class LibavClipExporter
         }
     }
 
+    /// <summary>Probes the source's video frame rate (rounded, clamped). Falls back to 30 on any failure.</summary>
+    public static int ProbeFps(string inputPath)
+    {
+        FFmpegRuntime.EnsureInitialized();
+        return ProbeFpsUnsafe(inputPath);
+    }
+
+    private static unsafe int ProbeFpsUnsafe(string inputPath)
+    {
+        AVFormatContext* fmt = null;
+        try
+        {
+            if (ffmpeg.avformat_open_input(&fmt, inputPath, null, null) < 0) return 30;
+            if (ffmpeg.avformat_find_stream_info(fmt, null) < 0) return 30;
+            int v = ffmpeg.av_find_best_stream(fmt, AVMediaType.AVMEDIA_TYPE_VIDEO, -1, -1, null, 0);
+            return v < 0 ? 30 : ResolveFps(fmt->streams[v]);
+        }
+        catch
+        {
+            return 30;
+        }
+        finally
+        {
+            if (fmt != null) ffmpeg.avformat_close_input(&fmt);
+        }
+    }
+
     private static unsafe int ResolveFps(AVStream* stream)
     {
         double fps = ffmpeg.av_q2d(stream->avg_frame_rate);
