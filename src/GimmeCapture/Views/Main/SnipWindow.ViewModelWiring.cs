@@ -327,11 +327,7 @@ public partial class SnipWindow : Window
                     hideDecoration,
                     hideBorder,
                     _clipboardService,
-                    _viewModel.MainVm?.AppSettingsService,
-                    _viewModel.MainVm?.AIResourceService,
-                    _viewModel.MainVm?.SAM2RuntimeService,
-                    _viewModel.MainVm?.AIPathService,
-                    _viewModel.MainVm?.ResourceQueue);
+                    _viewModel.MainVm?.AppSettingsService);
 
                 // Copying a clip from the pin persists a managed copy into History (like image copy),
                 // so the copied/trimmed video shows up in the history panel.

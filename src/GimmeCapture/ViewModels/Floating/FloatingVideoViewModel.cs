@@ -337,16 +337,6 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
     private readonly AppSettingsService? _appSettingsService;
     public AppSettingsService? AppSettingsService => _appSettingsService;
 
-    // AI services (optional) — supplied so the redaction tracker can run SAM2 on decoded frames.
-    private readonly GimmeCapture.Services.Core.AI.AIResourceService? _aiResourceService;
-    private readonly GimmeCapture.Services.Core.AI.SAM2RuntimeService? _sam2RuntimeService;
-    private readonly GimmeCapture.Services.Core.AI.AIPathService? _aiPathService;
-    private readonly GimmeCapture.Services.Abstractions.IResourceQueueService? _resourceQueue;
-    public GimmeCapture.Services.Core.AI.AIResourceService? AIResourceService => _aiResourceService;
-    public GimmeCapture.Services.Core.AI.SAM2RuntimeService? SAM2RuntimeService => _sam2RuntimeService;
-    public GimmeCapture.Services.Core.AI.AIPathService? AIPathService => _aiPathService;
-    public GimmeCapture.Services.Abstractions.IResourceQueueService? ResourceQueue => _resourceQueue;
-
     // Actions & Commands
     public System.Func<Task>? CopyAction { get; set; }
     public ReactiveCommand<Unit, Unit> CopyCommand { get; private set; } = null!;
@@ -389,11 +379,7 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
         return Math.Max(1, 1000 / safeFps);
     }
 
-    public FloatingVideoViewModel(string videoPath, string ffmpegPath, int width, int height, double originalWidth, double originalHeight, Avalonia.Media.Color borderColor, double borderThickness, bool hideDecoration, bool hideBorder, GimmeCapture.Services.Abstractions.IClipboardService clipboardService, AppSettingsService? appSettingsService,
-        GimmeCapture.Services.Core.AI.AIResourceService? aiResourceService = null,
-        GimmeCapture.Services.Core.AI.SAM2RuntimeService? sam2RuntimeService = null,
-        GimmeCapture.Services.Core.AI.AIPathService? aiPathService = null,
-        GimmeCapture.Services.Abstractions.IResourceQueueService? resourceQueue = null)
+    public FloatingVideoViewModel(string videoPath, string ffmpegPath, int width, int height, double originalWidth, double originalHeight, Avalonia.Media.Color borderColor, double borderThickness, bool hideDecoration, bool hideBorder, GimmeCapture.Services.Abstractions.IClipboardService clipboardService, AppSettingsService? appSettingsService)
     {
         VideoPath = videoPath;
         _ffmpegPath = ffmpegPath;
@@ -410,10 +396,6 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
         CurrentThickness = 4.0;
         _clipboardService = clipboardService;
         _appSettingsService = appSettingsService;
-        _aiResourceService = aiResourceService;
-        _sam2RuntimeService = sam2RuntimeService;
-        _aiPathService = aiPathService;
-        _resourceQueue = resourceQueue;
         _uiFrameUpdateIntervalMs = FpsToIntervalMs(_appSettingsService?.Settings.PlaybackUiFps ?? 30, 30);
         _uiTimeUpdateIntervalMs = FpsToIntervalMs(_appSettingsService?.Settings.PlaybackTimelineFps ?? 15, 15);
 

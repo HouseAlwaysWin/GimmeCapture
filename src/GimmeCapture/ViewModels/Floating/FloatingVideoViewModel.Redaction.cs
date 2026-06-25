@@ -4,9 +4,7 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Reactive;
 using System.Reactive.Linq;
-using System.Threading.Tasks;
 using GimmeCapture.Models;
-using GimmeCapture.Services.Core.AI;
 using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Core.Rendering;
 using ReactiveUI;
@@ -50,7 +48,6 @@ public partial class FloatingVideoViewModel
     public ReactiveCommand<Unit, Unit> NewRedactionObjectCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> ClearRedactionCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> CycleRedactionEffectCommand { get; private set; } = null!;
-    public ReactiveCommand<Unit, Unit> TrackObjectCommand { get; private set; } = null!;
 
     private void InitializeRedactionCommands()
     {
@@ -59,121 +56,6 @@ public partial class FloatingVideoViewModel
         NewRedactionObjectCommand = ReactiveCommand.Create(() => { _activeRedactionTrack = null; });
         ClearRedactionCommand = ReactiveCommand.Create(ClearRedaction);
         CycleRedactionEffectCommand = ReactiveCommand.Create(CycleRedactionEffect);
-        // Only trackable with a drawn box and while no other long op (export/track) is running.
-        var canTrack = this.WhenAnyValue(
-            x => x.IsSelectionActive, x => x.IsExporting,
-            (selection, exporting) => selection && !exporting);
-        TrackObjectCommand = ReactiveCommand.CreateFromTask(TrackObjectAsync, canTrack);
-    }
-
-    /// <summary>
-    /// Auto-tracks the object under the current selection box across the clip using SAM2 (greedy per-frame
-    /// re-segmentation seeded from the previous box). Builds a new redaction track from the sampled boxes;
-    /// the exporter/preview interpolation fills between samples. Requires SAM2 (and a drawn selection).
-    /// </summary>
-    private async Task TrackObjectAsync()
-    {
-        if (IsExporting || IsProcessing)
-        {
-            return; // a track/export is already running
-        }
-
-        var runtime = _sam2RuntimeService;
-        double dw = DisplayWidth, dh = DisplayHeight;
-        if (!IsSelectionActive || string.IsNullOrEmpty(VideoPath) || dw <= 0 || dh <= 0)
-        {
-            return;
-        }
-
-        if (runtime == null || _appSettingsService == null)
-        {
-            await ShowTrackMessageAsync(LocalizationService.Instance["StatusSAM2NotFound"] ?? "SAM2 not available");
-            return;
-        }
-
-        // Seed = centre of the drawn box, normalized to [0,1] (resolution-independent: the tracker maps it
-        // back to the extracted frame's pixels, which are at the source/original resolution).
-        var r = SelectionRect;
-        double seedX = Math.Clamp((r.X + (r.Width / 2)) / dw, 0, 1);
-        double seedY = Math.Clamp((r.Y + (r.Height / 2)) / dh, 0, 1);
-        double seedW = Math.Clamp(r.Width / dw, 0, 1);
-        double seedH = Math.Clamp(r.Height / dh, 0, 1);
-        int fw = Math.Max(2, (int)Math.Round(OriginalWidth));
-        int fh = Math.Max(2, (int)Math.Round(OriginalHeight));
-        double start = Math.Max(0, CurrentTime.TotalSeconds);
-        double end = _totalDuration.TotalSeconds;
-        if (end <= start)
-        {
-            return;
-        }
-
-        // Reuse the export overlay so tracking shows a visible "processing" spinner + progress.
-        IsExporting = true;
-        ExportProgress = 0;
-        ProcessingText = LocalizationService.Instance["StatusInitializingAI"] ?? "Tracking…";
-        string? leaseId = null;
-        SAM2Service? sam2 = null;
-        try
-        {
-            leaseId = runtime.AcquireLease();
-            sam2 = new SAM2Service(runtime, _appSettingsService);
-            await sam2.InitializeAsync();
-
-            string label = LocalizationService.Instance["StatusAIDetecting"] ?? "Tracking";
-            var progress = new Progress<double>(p => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-            {
-                ExportProgress = p * 100;
-                ProcessingText = $"{label} {p * 100:0}%";
-            }));
-
-            SAM2Service sam2Local = sam2;
-            List<RedactionKeyframe> keyframes = await Task.Run(() => Sam2RedactionTracker.TrackAsync(
-                sam2Local, VideoPath, fw, fh, start, end, seedX, seedY, seedW, seedH, 0.3, progress, default));
-
-            if (keyframes.Count > 0)
-            {
-                var track = new RedactionTrack { Effect = SelectedRedactionEffect };
-                track.Keyframes.AddRange(keyframes);
-                SelectionRect = new Avalonia.Rect(); // clear the seed box before swapping the active track
-                RedactionTracks.Add(track);
-                _activeRedactionTrack = track;
-                AppLog.Information($"FloatingVideo.TrackObject added {keyframes.Count} keyframes start={start:0.##} end={end:0.##}");
-                RaiseRedactionChanged();
-            }
-            else
-            {
-                await ShowTrackMessageAsync(LocalizationService.Instance["StatusSAM2NotFound"] ?? "No object tracked");
-            }
-        }
-        catch (Exception ex)
-        {
-            AppLog.Warning("FloatingVideo.TrackObject", ex);
-            await ShowTrackMessageAsync(LocalizationService.Instance["StatusSAM2NotFound"] ?? "SAM2 not ready");
-        }
-        finally
-        {
-            sam2?.Dispose();
-            if (leaseId != null)
-            {
-                runtime.ReleaseLease(leaseId, true);
-            }
-
-            IsExporting = false;
-            ExportProgress = 0;
-        }
-    }
-
-    // Briefly surfaces a message in the processing overlay (which is bound to IsExporting + ProcessingText).
-    private async Task ShowTrackMessageAsync(string message)
-    {
-        bool hadOverlay = IsExporting;
-        ProcessingText = message;
-        IsExporting = true;
-        await Task.Delay(1500);
-        if (!hadOverlay)
-        {
-            IsExporting = false;
-        }
     }
 
     // Snaps the current selection box (display coords) as a keyframe at the playhead, normalized to

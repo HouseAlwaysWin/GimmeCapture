@@ -211,7 +211,6 @@
   "TipAITools": "AI Removal Tools",
   "TipOpacity": "Opacity (transparency for tracing / overlay)",
   "TipRedactAddKeyframe": "Add redaction keyframe (draw a box first; blur/mosaic/black follows the object)",
-  "TipRedactTrack": "Auto-track the boxed object across the clip with SAM2",
   "TipRedactNewObject": "Redact another object (start a new tracked box)",
   "TipRedactClear": "Clear all redaction",
   "TipMagicWand": "Click to Remove Background",

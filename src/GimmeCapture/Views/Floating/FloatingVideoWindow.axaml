@@ -283,11 +283,6 @@
                             ToolTip.Tip="{Binding [TipRedactAddKeyframe], Source={x:Static services:LocalizationService.Instance}}">
                         <PathIcon Data="M17,13H13V17H11V13H7V11H11V7H13V11H17M19,3H5C3.89,3 3,3.89 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V5C21,3.89 20.1,3 19,3Z" Width="14" Height="14"/>
                     </Button>
-                    <!-- SAM2 auto-track: from the drawn box, follow the object across the clip (greedy per-frame). -->
-                    <Button Theme="{StaticResource SnipButton}" Command="{Binding TrackObjectCommand}"
-                            ToolTip.Tip="{Binding [TipRedactTrack], Source={x:Static services:LocalizationService.Instance}}">
-                        <PathIcon Data="M12,8A4,4 0 0,0 8,12A4,4 0 0,0 12,16A4,4 0 0,0 16,12A4,4 0 0,0 12,8M3.05,13H1V11H3.05C3.5,6.83 6.83,3.5 11,3.05V1H13V3.05C17.17,3.5 20.5,6.83 20.95,11H23V13H20.95C20.5,17.17 17.17,20.5 13,20.95V23H11V20.95C6.83,20.5 3.5,17.17 3.05,13M12,5A7,7 0 0,0 5,12A7,7 0 0,0 12,19A7,7 0 0,0 19,12A7,7 0 0,0 12,5Z" Width="14" Height="14"/>
-                    </Button>
                     <Button Theme="{StaticResource SnipButton}" Command="{Binding NewRedactionObjectCommand}"
                             ToolTip.Tip="{Binding [TipRedactNewObject], Source={x:Static services:LocalizationService.Instance}}">
                         <PathIcon Data="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4M11,7V11H7V13H11V17H13V13H17V11H13V7H11Z" Width="14" Height="14"/>
