@@ -106,6 +106,10 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
         {
             this.RaiseAndSetIfChanged(ref _currentTime, value);
             this.RaisePropertyChanged(nameof(FormattedTime));
+            if (RedactionTracks.Count > 0)
+            {
+                RefreshActiveRedactionBoxes(); // keep the live preview box following the playhead
+            }
         }
     }
 

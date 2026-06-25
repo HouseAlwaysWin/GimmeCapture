@@ -143,6 +143,28 @@
                                        Opacity="0.3"/>
                         </Canvas>
 
+                        <!-- Redaction live preview: interpolated box(es) at the current playhead (no hit-test). -->
+                        <ItemsControl ItemsSource="{Binding ActiveRedactionBoxes}" IsHitTestVisible="False" x:CompileBindings="False">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <Canvas/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.Styles>
+                                <Style Selector="ContentPresenter">
+                                    <Setter Property="Canvas.Left" Value="{Binding X}"/>
+                                    <Setter Property="Canvas.Top" Value="{Binding Y}"/>
+                                </Style>
+                            </ItemsControl.Styles>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Rectangle Width="{Binding Width}" Height="{Binding Height}"
+                                               Stroke="#FFE53935" StrokeThickness="2" StrokeDashArray="4,2"
+                                               Fill="#33E53935"/>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
                         <!-- Annotation Layer -->
                         <ItemsControl ItemsSource="{Binding Annotations}" IsHitTestVisible="False">
                             <ItemsControl.ItemsPanel>
