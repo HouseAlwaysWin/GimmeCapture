@@ -29,11 +29,18 @@ public partial class RecordingService : ReactiveObject
     private double _visualScaling = 1.0;
     private int _fps = 30;
     private bool _recordSystemAudio;
+    private bool _recordMicrophone;
+    private string _micDeviceId = string.Empty;
+    private double _micVolume = 1.0;
+    private readonly List<string> _micSegments = new();
     private bool _isFinalizing;
     private double _finalizationProgress;
     private string _tempDir = string.Empty;
     private WasapiLoopbackCapture? _audioCapture;
     private WaveFileWriter? _audioWriter;
+    private NAudio.CoreAudioApi.WasapiCapture? _micCapture;
+    private WaveFileWriter? _micWriter;
+    private NAudio.CoreAudioApi.MMDevice? _micDevice;
     private int _startInProgress;
     private string _lastSelectedVideoEncoderName = string.Empty;
 
@@ -61,6 +68,10 @@ public partial class RecordingService : ReactiveObject
                 if (File.Exists(file)) totalSize += new FileInfo(file).Length;
             }
             foreach (var file in _audioSegments)
+            {
+                if (File.Exists(file)) totalSize += new FileInfo(file).Length;
+            }
+            foreach (var file in _micSegments)
             {
                 if (File.Exists(file)) totalSize += new FileInfo(file).Length;
             }
@@ -114,7 +125,7 @@ public partial class RecordingService : ReactiveObject
     /// Start recording with specified target format for final output.
     /// Recording is done in MKV format internally for fast pause/resume.
     /// </summary>
-    public async Task<bool> StartAsync(Rect region, string outputFile, string targetFormat = "mp4", bool includeCursor = true, PixelPoint screenOffset = default, double visualScaling = 1.0, int fps = 30, bool recordSystemAudio = false)
+    public async Task<bool> StartAsync(Rect region, string outputFile, string targetFormat = "mp4", bool includeCursor = true, PixelPoint screenOffset = default, double visualScaling = 1.0, int fps = 30, bool recordSystemAudio = false, bool recordMicrophone = false, string micDeviceId = "", double micVolume = 1.0)
     {
         if (Interlocked.Exchange(ref _startInProgress, 1) == 1) return false;
         try
@@ -141,8 +152,12 @@ public partial class RecordingService : ReactiveObject
         _visualScaling = visualScaling;
         _fps = fps;
         _recordSystemAudio = RecordingAudioPolicy.ShouldRecordSystemAudio(recordSystemAudio, _targetFormat);
+        _recordMicrophone = RecordingAudioPolicy.ShouldRecordMicrophone(recordMicrophone, _targetFormat);
+        _micDeviceId = micDeviceId ?? string.Empty;
+        _micVolume = micVolume;
         _segments.Clear();
         _audioSegments.Clear();
+        _micSegments.Clear();
 
         // Use a unique temp directory for THIS session to avoid conflicts with zombie processes
         var baseDataDir = _settingsService?.BaseDataDirectory ?? AppDomain.CurrentDomain.BaseDirectory;
@@ -190,10 +205,25 @@ public partial class RecordingService : ReactiveObject
             }
         }
 
+        if (_recordMicrophone)
+        {
+            string micSegment = Path.Combine(_tempDir, $"mic_{_segments.Count - 1}.wav");
+            if (TryStartMicCapture(micSegment))
+            {
+                _micSegments.Add(micSegment);
+            }
+            else
+            {
+                Debug.WriteLine("Microphone capture unavailable, continuing without mic.");
+                _recordMicrophone = false;
+            }
+        }
+
         var started = await StartFfmpegSegmentAsync(segmentFile);
         if (!started)
         {
             StopAudioCapture();
+            StopMicCapture();
         }
 
         return started;

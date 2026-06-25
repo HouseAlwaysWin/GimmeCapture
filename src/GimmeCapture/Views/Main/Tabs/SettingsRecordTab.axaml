@@ -145,7 +145,27 @@
      IsChecked="{Binding HighlightClicks}" Margin="0,5,0,0"/>
                         <CheckBox Content="{Binding [RecordSystemAudio], Source={x:Static services:LocalizationService.Instance}}"
      IsChecked="{Binding RecordSystemAudio}" Margin="0,5,0,0"/>
-                        <CheckBox Content="{Binding [DefaultHideRecordToolbar], Source={x:Static services:LocalizationService.Instance}}" 
+                        <CheckBox Content="{Binding [RecordMicrophone], Source={x:Static services:LocalizationService.Instance}}"
+     IsChecked="{Binding RecordMicrophone}" Margin="0,5,0,0"/>
+                        <StackPanel Margin="24,0,0,0" Spacing="6" IsVisible="{Binding RecordMicrophone}">
+                            <DockPanel>
+                                <TextBlock Text="{Binding [MicDevice], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                <ComboBox ItemsSource="{Binding MicInputDevices}"
+                                          SelectedValue="{Binding SelectedMicDeviceId}"
+                                          SelectedValueBinding="{Binding Id}"
+                                          HorizontalAlignment="Stretch">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate x:CompileBindings="False">
+                                            <TextBlock Text="{Binding Name}"/>
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                            </DockPanel>
+                            <TextBlock Text="{Binding [MicVolume], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>
+                            <Slider Minimum="0" Maximum="2" Value="{Binding MicVolume}"
+                                    TickFrequency="0.1" SmallChange="0.1" LargeChange="0.5" IsSnapToTickEnabled="True"/>
+                        </StackPanel>
+                        <CheckBox Content="{Binding [DefaultHideRecordToolbar], Source={x:Static services:LocalizationService.Instance}}"
      IsChecked="{Binding DefaultHideRecordToolbar}" Margin="0,5,0,0"/>
                 </StackPanel>
             </StackPanel>
