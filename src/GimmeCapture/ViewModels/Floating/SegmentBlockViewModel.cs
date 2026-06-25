@@ -41,6 +41,24 @@ public sealed class SegmentBlockViewModel : ReactiveObject
         set => this.RaiseAndSetIfChanged(ref _isKept, value);
     }
 
+    private double _speed = 1.0;
+    /// <summary>Playback speed for this piece (1.0 = normal). Shown as a badge when ≠ 1.</summary>
+    public double Speed
+    {
+        get => _speed;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _speed, value);
+            this.RaisePropertyChanged(nameof(SpeedLabel));
+            this.RaisePropertyChanged(nameof(HasCustomSpeed));
+        }
+    }
+
+    /// <summary>Badge text like "2×" / "0.5×"; empty at normal speed.</summary>
+    public string SpeedLabel => System.Math.Abs(_speed - 1.0) < 0.001 ? string.Empty : $"{_speed:0.##}×";
+
+    public bool HasCustomSpeed => System.Math.Abs(_speed - 1.0) >= 0.001;
+
     // Pixel layout on the strip, computed by the view from the track width (mirrors the trim thumbs).
     private double _pixelLeft;
     public double PixelLeft

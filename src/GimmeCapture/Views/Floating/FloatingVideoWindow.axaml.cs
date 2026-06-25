@@ -73,12 +73,19 @@ public partial class FloatingVideoWindow : FloatingWindowBase
                 var file = await topLevel.StorageProvider.SaveFilePickerAsync(new Avalonia.Platform.Storage.FilePickerSaveOptions
                 {
                     Title = GimmeCapture.Services.Core.Infrastructure.LocalizationService.Instance["SaveVideo"],
-                    DefaultExtension = System.IO.Path.GetExtension(vm.VideoPath).TrimStart('.'),
+                    // Default to MP4 (most compatible); the chosen file-type below drives the actual extension.
+                    DefaultExtension = "mp4",
                     ShowOverwritePrompt = true,
                     SuggestedFileName = CaptureFileNameService.SuggestedBaseName(),
+                    // Separate types so the user can actually pick a format (a single combined filter forced
+                    // the source's extension, e.g. always .mkv for recordings).
                     FileTypeChoices = new[]
                     {
-                        new Avalonia.Platform.Storage.FilePickerFileType("Video Files") { Patterns = new[] { "*.mp4", "*.mkv", "*.gif", "*.webm", "*.mov" } },
+                        new Avalonia.Platform.Storage.FilePickerFileType("MP4 Video") { Patterns = new[] { "*.mp4" } },
+                        new Avalonia.Platform.Storage.FilePickerFileType("MKV Video") { Patterns = new[] { "*.mkv" } },
+                        new Avalonia.Platform.Storage.FilePickerFileType("MOV Video") { Patterns = new[] { "*.mov" } },
+                        new Avalonia.Platform.Storage.FilePickerFileType("GIF") { Patterns = new[] { "*.gif" } },
+                        new Avalonia.Platform.Storage.FilePickerFileType("WebM Video") { Patterns = new[] { "*.webm" } },
                         new Avalonia.Platform.Storage.FilePickerFileType("All Files") { Patterns = new[] { "*.*" } }
                     }
                 });

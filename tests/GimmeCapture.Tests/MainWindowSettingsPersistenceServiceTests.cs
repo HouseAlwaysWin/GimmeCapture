@@ -51,12 +51,18 @@ public class MainWindowSettingsPersistenceServiceTests
             ShowSnipCursor = true,
             ShowRecordCursor = false,
             RecordSystemAudio = false,
+            RecordMicrophone = true,
+            SelectedMicDeviceId = "mic-device-1",
+            MicVolume = 1.5,
+            HighlightCursor = true,
+            HighlightClicks = true,
             VideoSaveDirectory = @"D:\captures\video",
             RecordFormat = "webm",
             VideoCodec = VideoCodec.H265,
             VideoQuality = VideoQuality.High,
             RecordFps = 48,
             MaxRecordingSizeMb = 128.5,
+            VideoEncoderHint = VideoEncoderHint.SoftwareOnly,
             PlaybackUiFps = 45,
             PlaybackTimelineFps = 18,
             UseFixedRecordPath = true,
@@ -100,6 +106,12 @@ public class MainWindowSettingsPersistenceServiceTests
         Assert.Equal(snapshot.AIResourcesDirectory, persisted.AIResourcesDirectory);
         Assert.Equal(snapshot.LlamaModelId, persisted.LlamaModelId);
         Assert.Equal(snapshot.LlamaGpuLayers, persisted.LlamaGpuLayers);
+        Assert.Equal(snapshot.VideoEncoderHint, persisted.VideoEncoderHint);
+        Assert.Equal(snapshot.HighlightCursor, persisted.HighlightCursor);
+        Assert.Equal(snapshot.HighlightClicks, persisted.HighlightClicks);
+        Assert.Equal(snapshot.RecordMicrophone, persisted.RecordMicrophone);
+        Assert.Equal(snapshot.SelectedMicDeviceId, persisted.SelectedMicDeviceId);
+        Assert.Equal(snapshot.MicVolume, persisted.MicVolume);
         Assert.Contains("\"Language\": \"Japanese\"", savedJson);
         Assert.Contains($"\"ConfigVersion\": {AppSettingsService.CurrentConfigVersion}", savedJson);
         Assert.Contains("\"RecordHotkey\": \"Shift\\u002BF8\"", savedJson);

@@ -56,6 +56,58 @@ public partial class FloatingImageViewModel
         CutCommand = CreateAsyncCommand(CutAsync, canUseSelection, nameof(CutCommand));
         CropCommand = CreateAsyncCommand(CropAsync, canUseSelection, nameof(CropCommand));
         PinSelectionCommand = CreateAsyncCommand(PinSelectionAsync, canUseSelection, nameof(PinSelectionCommand));
+        RotateLeftCommand = CreateAsyncCommand(() => ApplyTransformAsync(270, false, false), null, nameof(RotateLeftCommand));
+        RotateRightCommand = CreateAsyncCommand(() => ApplyTransformAsync(90, false, false), null, nameof(RotateRightCommand));
+        FlipHorizontalCommand = CreateAsyncCommand(() => ApplyTransformAsync(0, true, false), null, nameof(FlipHorizontalCommand));
+        FlipVerticalCommand = CreateAsyncCommand(() => ApplyTransformAsync(0, false, true), null, nameof(FlipVerticalCommand));
+    }
+
+    /// <summary>
+    /// Rotates/flips the pinned image. Annotations are flattened in first (so they rotate with the picture),
+    /// the window is resized when the aspect flips (90°/270°), and the whole change is one undo step.
+    /// </summary>
+    private async Task ApplyTransformAsync(int rotationDegrees, bool flipH, bool flipV)
+    {
+        if (Image == null) return;
+
+        // Bake any annotations into the bitmap first so they transform together with the image.
+        Bitmap source = (Annotations.AsValueEnumerable().Any() ? await GetFlattenedBitmapAsync() : Image) ?? Image;
+
+        Bitmap? transformed = FloatingBitmapConversionHelper.TransformBitmap(source, rotationDegrees, flipH, flipV);
+        if (transformed == null) return;
+
+        var oldImage = Image;
+        var oldPos = ScreenPosition ?? new Avalonia.PixelPoint(0, 0);
+        var oldDisplayWidth = DisplayWidth;
+        var oldDisplayHeight = DisplayHeight;
+
+        bool swap = rotationDegrees == 90 || rotationDegrees == 270;
+        double newDisplayWidth = swap ? oldDisplayHeight : oldDisplayWidth;
+        double newDisplayHeight = swap ? oldDisplayWidth : oldDisplayHeight;
+
+        Image = transformed;
+        OriginalWidth = transformed.Size.Width;
+        OriginalHeight = transformed.Size.Height;
+        DisplayWidth = newDisplayWidth;
+        DisplayHeight = newDisplayHeight;
+        RequestSetWindowRect?.Invoke(oldPos, DisplayWidth, DisplayHeight, DisplayWidth, DisplayHeight);
+
+        // Annotations were baked into the bitmap; clear the live layer so they aren't drawn twice.
+        ClearAnnotations();
+
+        var bitmapAction = new BitmapHistoryAction(b => Image = b, oldImage, transformed, getCurrentBitmap: () => Image);
+        var transformAction = new WindowTransformHistoryAction(
+            (pos, w, h, cw, ch) =>
+            {
+                DisplayWidth = cw;
+                DisplayHeight = ch;
+                ScreenPosition = pos;
+                RequestSetWindowRect?.Invoke(pos, w, h, cw, ch);
+            },
+            oldPos, oldDisplayWidth, oldDisplayHeight, oldDisplayWidth, oldDisplayHeight,
+            oldPos, newDisplayWidth, newDisplayHeight, newDisplayWidth, newDisplayHeight);
+
+        PushUndoAction(new CompositeHistoryAction(new IHistoryAction[] { bitmapAction, transformAction }));
     }
 
     private async Task CopyAsync()

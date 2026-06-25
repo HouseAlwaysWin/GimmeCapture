@@ -48,6 +48,13 @@ public class RecordingSettingsViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _videoQuality, value);
     }
 
+    private VideoEncoderHint _videoEncoderHint = VideoEncoderHint.PreferHardware;
+    public VideoEncoderHint VideoEncoderHint
+    {
+        get => _videoEncoderHint;
+        set => this.RaiseAndSetIfChanged(ref _videoEncoderHint, value);
+    }
+
     public class VideoCodecOption
     {
         public VideoCodec Value { get; set; }
@@ -60,6 +67,12 @@ public class RecordingSettingsViewModel : ViewModelBase
         public string Name => LocalizationService.Instance[$"VideoQuality{Value}"];
     }
 
+    public class VideoEncoderHintOption
+    {
+        public VideoEncoderHint Value { get; set; }
+        public string Name => LocalizationService.Instance[$"VideoEncoderHint{Value}"];
+    }
+
     public VideoCodecOption[] VideoCodecOptions { get; } = {
         new VideoCodecOption { Value = VideoCodec.H264 },
         new VideoCodecOption { Value = VideoCodec.H265 }
@@ -69,6 +82,11 @@ public class RecordingSettingsViewModel : ViewModelBase
         new VideoQualityOption { Value = VideoQuality.Low },
         new VideoQualityOption { Value = VideoQuality.Medium },
         new VideoQualityOption { Value = VideoQuality.High }
+    };
+
+    public VideoEncoderHintOption[] VideoEncoderHintOptions { get; } = {
+        new VideoEncoderHintOption { Value = VideoEncoderHint.PreferHardware },
+        new VideoEncoderHintOption { Value = VideoEncoderHint.SoftwareOnly }
     };
 
     private VideoCodecOption? _selectedVideoCodecOption;
@@ -90,6 +108,17 @@ public class RecordingSettingsViewModel : ViewModelBase
         {
             this.RaiseAndSetIfChanged(ref _selectedVideoQualityOption, value);
             if (value != null) VideoQuality = value.Value;
+        }
+    }
+
+    private VideoEncoderHintOption? _selectedVideoEncoderHintOption;
+    public VideoEncoderHintOption? SelectedVideoEncoderHintOption
+    {
+        get => _selectedVideoEncoderHintOption;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _selectedVideoEncoderHintOption, value);
+            if (value != null) VideoEncoderHint = value.Value;
         }
     }
 

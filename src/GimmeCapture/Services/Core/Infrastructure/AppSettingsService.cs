@@ -279,9 +279,12 @@ public class AppSettingsService
         dest.RecordMicrophone = source.RecordMicrophone;
         dest.SelectedMicDeviceId = source.SelectedMicDeviceId;
         dest.MicVolume = source.MicVolume;
+        dest.HighlightCursor = source.HighlightCursor;
+        dest.HighlightClicks = source.HighlightClicks;
         dest.VideoSaveDirectory = source.VideoSaveDirectory;
         dest.RecordFormat = source.RecordFormat;
         dest.VideoCodec = source.VideoCodec;
+        dest.VideoEncoderHint = source.VideoEncoderHint;
         dest.RecordFPS = source.RecordFPS;
         dest.UseFixedRecordPath = source.UseFixedRecordPath;
         dest.TempDirectory = source.TempDirectory;

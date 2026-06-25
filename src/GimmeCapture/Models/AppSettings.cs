@@ -5,6 +5,8 @@ namespace GimmeCapture.Models;
 
 public enum VideoCodec { H264, H265 }
 public enum VideoQuality { Low, Medium, High }
+// Whether to try GPU/Media-Foundation encoders (NVENC/QSV/AMF) before software libx264/265.
+public enum VideoEncoderHint { PreferHardware, SoftwareOnly }
 public enum TranslationLanguage { TraditionalChinese, SimplifiedChinese, English, Japanese, Korean }
 public enum OCRLanguage { Auto, English, TraditionalChinese, SimplifiedChinese, Japanese, Korean }
 public enum TranslationEngine { LlamaSharp }
@@ -138,6 +140,9 @@ public class AppSettings
     
     public bool ShowSnipCursor { get; set; } = false;
     public bool ShowRecordCursor { get; set; } = true;
+    // Burn a cursor spotlight ring / click ripple into recordings (tutorial highlighting).
+    public bool HighlightCursor { get; set; } = false;
+    public bool HighlightClicks { get; set; } = false;
     public bool RecordSystemAudio { get; set; } = true;
     // Microphone capture, mixed with system audio at finalize.
     public bool RecordMicrophone { get; set; } = false;
@@ -148,6 +153,7 @@ public class AppSettings
     public string VideoSaveDirectory { get; set; } = string.Empty;
     public string RecordFormat { get; set; } = "mp4";
     public VideoCodec VideoCodec { get; set; } = VideoCodec.H264;
+    public VideoEncoderHint VideoEncoderHint { get; set; } = VideoEncoderHint.PreferHardware;
     public VideoQuality VideoQuality { get; set; } = VideoQuality.Medium;
     public int RecordFPS { get; set; } = 30;
     public double MaxRecordingSizeMB { get; set; } = 0;

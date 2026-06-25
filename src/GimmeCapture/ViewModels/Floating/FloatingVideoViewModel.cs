@@ -106,6 +106,10 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
         {
             this.RaiseAndSetIfChanged(ref _currentTime, value);
             this.RaisePropertyChanged(nameof(FormattedTime));
+            if (RedactionTracks.Count > 0)
+            {
+                RefreshActiveRedactionBoxes(); // keep the live preview box following the playhead
+            }
         }
     }
 
@@ -161,6 +165,10 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
                 _isDraggingSlider = true;
                 _currentTime = TimeSpan.FromSeconds(value);
                 this.RaisePropertyChanged(nameof(FormattedTime));
+                if (RedactionTracks.Count > 0)
+                {
+                    RefreshActiveRedactionBoxes(); // scrubbing the slider bypasses the CurrentTime setter
+                }
                 
                 // Auto-pause immediately upon scrubbing
                 if (_isPlaybackActive)
@@ -334,7 +342,15 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
     public ReactiveCommand<Unit, Unit> CopyCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> CropCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> PinSelectionCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> FreezeFrameCommand { get; private set; } = null!;
     public System.Func<Task<string?>>? PickSaveFileAction { get; set; }
+
+    // Freezes the current video frame into a new IMAGE pin that immediately enters SAM2 point-removal,
+    // so an object can be cut out of that frame (single-frame scope; the still becomes an image pin).
+    // Wired by the host where the AI services live. (frameBitmap)
+    public System.Action<Avalonia.Media.Imaging.Bitmap>? FreezeFrameToImagePinAction { get; set; }
+
+    public string FreezeFrameTooltip => LocalizationService.Instance["TipFreezeRemove"] ?? "Freeze frame → remove object (image pin)";
 
     // Spawns a new pinned video window (cropped selection). Signature mirrors
     // SnipWindowViewModel.OpenPinnedVideoWindowAction; self-wired by the view so
@@ -388,6 +404,7 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
 
         InitializeBaseCommands();
         InitializeActionCommands();
+        InitializeRedactionCommands();
         // InitializeToolbarCommands(); // Handled by Base
         InitializeAnnotationCommands();
         InitializeSegmentCommands();
