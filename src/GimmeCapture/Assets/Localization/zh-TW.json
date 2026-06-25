@@ -166,6 +166,7 @@
   "TipPinSelection": "釘選選取區域",
   "TipTimeline": "時間軸（多段剪輯）",
   "TipSplitSegment": "在播放點切分",
+  "TipPieceSpeed": "切換播放點片段的速度（慢動作／快轉）",
   "TipDeleteSegment": "刪除選取的片段",
   "TimelineHint": "拖曳=定位 · Split 切分 · 點片段切換保留/捨棄",
   "MenuCopyImage": "複製圖片",
