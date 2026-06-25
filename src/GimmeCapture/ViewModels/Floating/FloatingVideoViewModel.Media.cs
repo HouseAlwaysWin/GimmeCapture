@@ -604,6 +604,10 @@ public partial class FloatingVideoViewModel
             {
                 if (_isDisposed) return;
                 this.RaisePropertyChanged(nameof(CurrentTimeSeconds));
+                if (RedactionTracks.Count > 0)
+                {
+                    RefreshActiveRedactionBoxes(); // keep the redaction preview in sync during playback/seek
+                }
                 Interlocked.Exchange(ref _lastTimeUiPostTimestampMs, Environment.TickCount64);
             }
             finally
