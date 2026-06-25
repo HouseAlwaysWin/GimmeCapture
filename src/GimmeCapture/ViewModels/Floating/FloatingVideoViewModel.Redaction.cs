@@ -96,6 +96,10 @@ public partial class FloatingVideoViewModel
 
         AppLog.Information($"FloatingVideo.RedactionKeyframe t={keyframe.TimeSeconds:0.###} effect={_activeRedactionTrack.Effect}");
         RaiseRedactionChanged();
+
+        // Clear the selection marquee so the semi-transparent box doesn't linger on screen (it looked like
+        // a stuck redaction); the red dashed preview now shows the keyframe. Re-draw for the next keyframe.
+        SelectionRect = new Avalonia.Rect();
     }
 
     private void ClearRedaction()
