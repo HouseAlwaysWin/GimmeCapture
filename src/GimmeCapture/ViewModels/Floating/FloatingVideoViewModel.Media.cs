@@ -409,11 +409,15 @@ public partial class FloatingVideoViewModel
         if (_isDisposed || IsMuted || !_isPlaybackActive) return;
 
         var startSeconds = Math.Max(0, _currentTime.TotalSeconds);
+        // Preview audio must honor the per-segment speed too (the timeline blocks' 1.5×/0.5×/2×),
+        // not just the global playback-speed button — otherwise a sped-up segment's video runs fast
+        // while its audio stays at the global rate. Mirrors the video's effectivePlaybackSpeed.
+        var effSpeed = EffectiveAudioSpeed();
         try
         {
-            if (ShouldUseDecodedAudioPlayback())
+            if (ShouldUseDecodedAudioPlayback(effSpeed))
             {
-                StartDecodedAudioPlayback(startSeconds, _playbackSpeed);
+                StartDecodedAudioPlayback(startSeconds, effSpeed);
                 return;
             }
 
@@ -441,7 +445,7 @@ public partial class FloatingVideoViewModel
 
             try
             {
-                StartDecodedAudioPlayback(startSeconds, _playbackSpeed);
+                StartDecodedAudioPlayback(startSeconds, effSpeed);
             }
             catch (Exception fallbackEx)
             {
@@ -451,10 +455,34 @@ public partial class FloatingVideoViewModel
         }
     }
 
-    private bool ShouldUseDecodedAudioPlayback()
+    private bool ShouldUseDecodedAudioPlayback(double effectiveSpeed)
     {
+        // The MediaFoundationReader path plays at native (1×) speed only; any non-1× effective speed
+        // (global button and/or per-segment) must go through the decoded path, which retimes audio.
         return string.Equals(Path.GetExtension(VideoPath), ".webm", StringComparison.OrdinalIgnoreCase)
-            || Math.Abs(_playbackSpeed - 1.0) > 0.01;
+            || Math.Abs(effectiveSpeed - 1.0) > 0.01;
+    }
+
+    /// <summary>
+    /// Effective preview audio speed = global playback-speed button × the speed of the kept segment
+    /// currently under the playhead (1× when not in a timeline segment). Matches the video's
+    /// effectivePlaybackSpeed so audio and video stay in sync across per-segment speed changes.
+    /// </summary>
+    private double EffectiveAudioSpeed()
+    {
+        double pieceSpeed = 1.0;
+        VideoEditSegment[] kept = KeptSegments();
+        if (_isPlaybackActive && kept.Length >= 1)
+        {
+            double s = Math.Max(0, _currentTime.TotalSeconds);
+            int idx = ResolveSegmentForPlayback(kept, ref s);
+            if (idx >= 0 && kept[idx].Speed > 0)
+            {
+                pieceSpeed = kept[idx].Speed;
+            }
+        }
+
+        return _playbackSpeed * pieceSpeed;
     }
 
     private void StartDecodedAudioPlayback(double startSeconds, double playbackSpeed)
