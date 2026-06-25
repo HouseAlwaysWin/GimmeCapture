@@ -56,8 +56,8 @@ public partial class FloatingVideoViewModel
     /// <summary>True when any kept piece has a non-1× speed, so the output must be re-encoded.</summary>
     private bool AnySpeedChanged => KeptSegments().Any(s => Math.Abs(s.Speed - 1.0) > 0.001);
 
-    /// <summary>The edit changes the output (a cut or a speed change) → route through the in-process exporter.</summary>
-    private bool EditChangesOutput => AnyPieceDropped || AnySpeedChanged;
+    /// <summary>The edit changes the output (a cut, speed change, or redaction) → route through the in-process exporter.</summary>
+    private bool EditChangesOutput => AnyPieceDropped || AnySpeedChanged || HasRedaction;
 
     // Cached audio-stream presence (probed once); the compiler's audio chain needs to know.
     private bool? _sourceHasAudio;

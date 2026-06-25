@@ -349,12 +349,17 @@ public partial class FloatingVideoViewModel
     /// </summary>
     private async Task<string?> ExportTrimmedInProcessAsync(string targetExtension)
     {
+        // Redaction alone (no cut/speed) still needs re-encoding the whole clip, so fall back to a
+        // full-clip range when there are no kept runs but there is something to burn in.
         var runs = KeptRuns();
-        if (runs.Length == 0) return null;
-
-        var ranges = runs
+        var redactionComposite = BuildRedactionComposite();
+        IReadOnlyList<VideoEditSegment> segs = runs.Length > 0
+            ? runs
+            : VideoSegmentEditor.FromTrim(0, _totalDuration.TotalSeconds, _totalDuration.TotalSeconds);
+        var ranges = segs
             .Select(r => new LibavClipExporter.SourceRange(r.SourceStart, r.SourceEnd, r.Speed))
             .ToList();
+        if (ranges.Count == 0) return null;
 
         string ext = targetExtension.StartsWith('.') ? targetExtension : "." + targetExtension;
         string tempDir = Path.Combine(Path.GetTempPath(), "GimmeCapture_Export_" + Guid.NewGuid().ToString("N"));
@@ -365,7 +370,7 @@ public partial class FloatingVideoViewModel
         IsExporting = true;
         try
         {
-            bool ok = await Task.Run(() => LibavClipExporter.TryExport(VideoPath, ranges, outputPath, quality));
+            bool ok = await Task.Run(() => LibavClipExporter.TryExport(VideoPath, ranges, outputPath, quality, frameComposite: redactionComposite));
             if (ok)
             {
                 return outputPath;
@@ -411,8 +416,12 @@ public partial class FloatingVideoViewModel
         var annotationsSnapshot = Annotations.ToList();
         double displayW = DisplayWidth;
         double displayH = DisplayHeight;
-        Action<SkiaSharp.SKBitmap> composite = sk =>
+        var redactionComposite = BuildRedactionComposite();
+        Action<SkiaSharp.SKBitmap, double> composite = (sk, t) =>
+        {
             AnnotationRenderService.Shared.RenderAnnotationsToBitmap(sk, annotationsSnapshot, displayW, displayH, sk.Width, sk.Height);
+            redactionComposite?.Invoke(sk, t);
+        };
 
         VideoQuality annQuality = _appSettingsService?.Settings.VideoQuality ?? VideoQuality.Medium;
         string annTempDir = Path.Combine(Path.GetTempPath(), "GimmeCapture_Export_" + Guid.NewGuid().ToString("N"));
