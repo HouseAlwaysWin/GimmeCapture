@@ -232,6 +232,114 @@
             </Border>
         </Border>
 
+        <!-- Contextual sub-toolbar: floats at the top-center of the content; shows the open category's tools. -->
+        <Border x:Name="SubToolbarBorder" Classes="no-window-drag" IsVisible="{Binding IsSubToolbarVisible}"
+                Margin="{Binding WindowPadding}"
+                Background="#1A1A1A" BorderBrush="#333333" BorderThickness="1"
+                CornerRadius="4" Padding="6,2"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Top"
+                BoxShadow="0 4 15 0 #D0000000"
+                ZIndex="20">
+            <StackPanel Orientation="Horizontal" Spacing="4" HorizontalAlignment="Center">
+                <!-- Annotate: drawing tools (shapes / text / mosaic / blur / color) + clear annotations -->
+                <StackPanel Orientation="Horizontal" Spacing="4" IsVisible="{Binding IsAnnotateCategory}">
+                    <ctl:DrawingToolbar DataContext="{Binding}"/>
+                    <Button Theme="{StaticResource SnipButton}" Command="{Binding ClearAnnotationsCommand}" ToolTip.Tip="{Binding ClearTooltip}">
+                        <PathIcon Data="M19,4h-3.5l-1-1h-5l-1,1H5v2h14V4z M6,19c0,1.1,0.9,2,2,2h8c1.1,0,2-0.9,2-2V7H6V19z" Width="14" Height="14"/>
+                    </Button>
+                </StackPanel>
+
+                <!-- Edit: selection / crop / pin, rotate / flip, and AI removal (magic wand + background). -->
+                <StackPanel Orientation="Horizontal" Spacing="4" IsVisible="{Binding IsEditCategory}">
+                    <!-- Normal edit tools (hidden while a SAM2 point-removal session is active) -->
+                    <StackPanel Orientation="Horizontal" Spacing="4" IsVisible="{Binding IsPointRemovalMode, Converter={StaticResource BoolInvertConverter}}">
+                        <!-- Selection (for crop / pin) -->
+                        <ToggleButton Theme="{StaticResource SnipToggleButton}"
+                                      IsChecked="{Binding IsSelectionMode, Mode=TwoWay}"
+                                      ToolTip.Tip="{Binding SelectionTooltip}">
+                            <PathIcon Data="M2,4H4V2H2A2,2 0 0,0 0,4V6H2V4M22,2H20V4H22V6H24V4A2,2 0 0,0 22,2M2,22V20H0V22A2,2 0 0,0 2,24H4V22H2M22,24A2,2 0 0,0 24,22V20H22V22H20V24H22M2,10H0V14H2V10M2,18H0V19A1,1 0 0,0 1,20H2V18M14,2H10V4H14V2M18,2H17A1,1 0 0,0 16,3V4H18V2M1,4V3A1,1 0 0,0 0,2H1V4M24,10H22V14H24V10M24,18H22V20H23A1,1 0 0,0 24,19V18M14,22H10V24H14V22M18,22V24H19A1,1 0 0,0 20,23V22H18M4,2H3A1,1 0 0,0 2,1V2H4Z" Width="12" Height="12"/>
+                        </ToggleButton>
+                        <Button Theme="{StaticResource SnipButton}" Command="{Binding CropCommand}"
+                                IsVisible="{Binding IsSelectionActive}" ToolTip.Tip="{Binding CropTooltip}">
+                            <PathIcon Data="M7,17V1H5V5H1V7H5V15A2,2 0 0,0 7,17H15V21H17V17H21V15H7V17M17,15H19V7C19,5.89 18.1,5 17,5H9V7H17V15Z" Width="14" Height="14"/>
+                        </Button>
+                        <Button Theme="{StaticResource SnipButton}" Command="{Binding PinSelectionCommand}"
+                                IsVisible="{Binding IsSelectionActive}" ToolTip.Tip="{Binding PinSelectionTooltip}">
+                            <PathIcon Data="M16,12V4H17V2H7V4H8V12L6,14V16H11V22H13V16H18V14L16,12M14,14H10V4H14V14Z" Width="14" Height="14"/>
+                        </Button>
+
+                        <Rectangle Fill="#444444" Width="1" Height="16" Margin="2,0" VerticalAlignment="Center"/>
+
+                        <!-- Rotate / Flip -->
+                        <Button Theme="{StaticResource SnipButton}" Command="{Binding RotateLeftCommand}"
+                                ToolTip.Tip="{Binding [TipRotateLeft], Source={x:Static services:LocalizationService.Instance}}">
+                            <PathIcon Data="M13,4.07V1L8.45,5.55L13,10V6.09C15.84,6.57 18,9.03 18,12C18,14.97 15.84,17.43 13,17.91V19.93C16.95,19.44 20,16.08 20,12C20,7.92 16.95,4.56 13,4.07M7.1,18.32C8.26,19.22 9.61,19.76 11,19.93V17.9C10.13,17.75 9.29,17.41 8.54,16.87L7.1,18.32M6.09,13H4.07C4.24,14.39 4.79,15.73 5.69,16.89L7.1,15.47C6.58,14.72 6.23,13.88 6.09,13M7.11,8.53L5.7,7.11C4.8,8.27 4.24,9.61 4.07,11H6.09C6.23,10.13 6.58,9.28 7.11,8.53Z" Width="14" Height="14"/>
+                        </Button>
+                        <Button Theme="{StaticResource SnipButton}" Command="{Binding RotateRightCommand}"
+                                ToolTip.Tip="{Binding [TipRotateRight], Source={x:Static services:LocalizationService.Instance}}">
+                            <PathIcon Data="M16.89,15.5L18.31,16.89C19.21,15.73 19.76,14.39 19.93,13H17.91C17.77,13.87 17.43,14.72 16.89,15.5M13,17.9V19.92C14.39,19.75 15.74,19.21 16.9,18.31L15.46,16.87C14.71,17.41 13.87,17.76 13,17.9M19.93,11C19.76,9.61 19.21,8.27 18.31,7.11L16.89,8.53C17.43,9.28 17.77,10.13 17.91,11M15.55,5.55L11,1V4.07C7.06,4.56 4,7.92 4,12C4,16.08 7.05,19.44 11,19.93V17.91C8.16,17.43 6,14.97 6,12C6,9.03 8.16,6.57 11,6.09V10L15.55,5.55Z" Width="14" Height="14"/>
+                        </Button>
+                        <Button Theme="{StaticResource SnipButton}" Command="{Binding FlipHorizontalCommand}"
+                                ToolTip.Tip="{Binding [TipFlipH], Source={x:Static services:LocalizationService.Instance}}">
+                            <PathIcon Data="M6.45,17.45L1,12L6.45,6.55L7.86,7.96L4.83,11H11V13H4.83L7.86,16.04L6.45,17.45M17.55,6.55L23,12L17.55,17.45L16.14,16.04L19.17,13H13V11H19.17L16.14,7.96L17.55,6.55Z" Width="14" Height="14"/>
+                        </Button>
+                        <Button Theme="{StaticResource SnipButton}" Command="{Binding FlipVerticalCommand}"
+                                ToolTip.Tip="{Binding [TipFlipV], Source={x:Static services:LocalizationService.Instance}}">
+                            <PathIcon Data="M6.55,6.45L12,1L17.45,6.45L16.04,7.86L13,4.83V11H11V4.83L7.96,7.86L6.55,6.45M6.55,17.55L12,23L17.45,17.55L16.04,16.14L13,19.17V13H11V19.17L7.96,16.14L6.55,17.55Z" Width="14" Height="14"/>
+                        </Button>
+
+                        <!-- AI removal (magic wand + auto background); hidden when AI models aren't installed -->
+                        <Rectangle Fill="#444444" Width="1" Height="16" Margin="2,0" VerticalAlignment="Center"
+                                   IsVisible="{Binding CanRemoveBackground}"/>
+                        <ToggleButton Theme="{StaticResource SnipToggleButton}"
+                                      IsChecked="{Binding IsPointRemovalMode, Mode=TwoWay}"
+                                      IsVisible="{Binding CanRemoveBackground}"
+                                      ToolTip.Tip="{Binding MagicWandTooltip}">
+                            <PathIcon Data="M12,2C6.47,2 2,6.47 2,12C2,17.53 6.47,22 12,22C17.53,22 22,17.53 22,12C22,6.47 17.53,2 12,2M12,20C7.58,20 4,16.42 4,12C4,7.58 7.58,4 12,4C16.42,4 20,7.58 20,12C20,16.42 16.42,20 12,20M12,7C9.24,7 7,9.24 7,12C7,14.76 9.24,17 12,17C14.76,17 17,14.76 17,12C17,9.24 14.76,7 12,7Z" Width="14" Height="14"/>
+                        </ToggleButton>
+                        <Button Theme="{StaticResource SnipButton}" Command="{Binding RemoveBackgroundCommand}"
+                                IsVisible="{Binding CanRemoveBackground}"
+                                ToolTip.Tip="{Binding RemoveBackgroundTooltip}">
+                            <PathIcon Data="M7.5,5.6L5,7L6.4,4.5L5,2L7.5,3.4L10,2L8.6,4.5L10,7L7.5,5.6M19.5,15.4L22,14L20.6,16.5L22,19L19.5,17.6L17,19L18.4,16.5L17,14L19.5,15.4M22,2L20.6,4.5L22,7L19.5,5.6L17,7L18.4,4.5L17,2L19.5,3.4L22,2M13.34,12.78L15.78,10.34L13.66,8.22L11.22,10.66L13.34,12.78M14.37,7.29L16.71,9.63C17.1,10 17.1,10.65 16.71,11.04L5.04,22.71C4.65,23.1 4,23.1 3.63,22.71L1.29,20.37C0.9,20 0.9,19.35 1.29,18.96L12.96,7.29C13.35,6.9 14,6.9 14.37,7.29Z" Width="14" Height="14"/>
+                        </Button>
+                    </StackPanel>
+
+                    <!-- SAM2 point-removal session controls (replace the edit tools while active) -->
+                    <StackPanel Orientation="Horizontal" Spacing="4" IsVisible="{Binding IsPointRemovalMode}">
+                        <Button Theme="{StaticResource SnipButton}"
+                                Command="{Binding UndoInteractivePointCommand}"
+                                ToolTip.Tip="{Binding UndoTooltip}"
+                                IsEnabled="{Binding CanUndoInteractivePoint}">
+                            <PathIcon Data="M12.5,8C8.36,8 5,11.36 5,15.5C5,19.64 8.36,23 12.5,23C16.64,23 20,19.64 20,15.5H18C18,18.54 15.54,21 12.5,21C9.46,21 7,18.54 7,15.5C7,12.46 9.46,10 12.5,10C14.01,10 15.37,10.61 16.37,11.59L13,15H21V7L17.79,10.21C16.43,8.84 14.56,8 12.5,8Z" Width="14" Height="14"/>
+                        </Button>
+                        <Button Theme="{StaticResource SnipButton}"
+                                Command="{Binding ConfirmInteractiveCommand}"
+                                ToolTip.Tip="{Binding ConfirmRemovalTooltip}" Foreground="#4CAF50"
+                                IsEnabled="{Binding !IsProcessing}">
+                            <PathIcon Data="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z" Width="14" Height="14"/>
+                        </Button>
+                        <Button Theme="{StaticResource SnipButton}"
+                                Command="{Binding CancelInteractiveCommand}"
+                                ToolTip.Tip="{Binding CancelRemovalTooltip}" Foreground="#F44336"
+                                IsEnabled="{Binding !IsProcessing}">
+                            <PathIcon Data="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z" Width="14" Height="14"/>
+                        </Button>
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- Output: copy / save -->
+                <StackPanel Orientation="Horizontal" Spacing="4" IsVisible="{Binding IsOutputCategory}">
+                    <Button Theme="{StaticResource SnipButton}" Command="{Binding CopyCommand}" ToolTip.Tip="{Binding CopyTooltip}">
+                        <PathIcon Data="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z" Width="14" Height="14"/>
+                    </Button>
+                    <Button Theme="{StaticResource SnipButton}" Command="{Binding SaveCommand}" ToolTip.Tip="{Binding SaveTooltip}">
+                        <PathIcon Data="M15,9H5V5H15M12,19A3,3 0 0,1 9,16A3,3 0 0,1 12,13A3,3 0 0,1 15,16A3,3 0 0,1 12,19M17,3H5C3.89,3 3,3.9 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V7L17,3Z" Width="14" Height="14"/>
+                    </Button>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
         <!-- Bottom Toolbar (Overlay positioned inside window padding) -->
         <Border x:Name="ToolbarBorder" Classes="no-window-drag" IsVisible="{Binding ShowToolbar}"
                 Margin="{Binding ToolbarMargin}"
@@ -254,110 +362,7 @@
             </Border.Styles>
 
             <StackPanel Orientation="Vertical" Spacing="4" HorizontalAlignment="Stretch">
-                <!-- Contextual sub-toolbar: the tools for whichever category is open, shown above the category bar. -->
-                <StackPanel Orientation="Horizontal" Spacing="4" HorizontalAlignment="Center"
-                            IsVisible="{Binding IsAnyCategoryOpen}">
-                    <!-- Annotate: drawing tools (shapes / text / mosaic / blur / color) + clear annotations -->
-                    <StackPanel Orientation="Horizontal" Spacing="4" IsVisible="{Binding IsAnnotateCategory}">
-                        <ctl:DrawingToolbar DataContext="{Binding}"/>
-                        <Button Theme="{StaticResource SnipButton}" Command="{Binding ClearAnnotationsCommand}" ToolTip.Tip="{Binding ClearTooltip}">
-                            <PathIcon Data="M19,4h-3.5l-1-1h-5l-1,1H5v2h14V4z M6,19c0,1.1,0.9,2,2,2h8c1.1,0,2-0.9,2-2V7H6V19z" Width="14" Height="14"/>
-                        </Button>
-                    </StackPanel>
-
-                    <!-- Edit: selection / crop / pin, rotate / flip, and AI removal (magic wand + background). -->
-                    <StackPanel Orientation="Horizontal" Spacing="4" IsVisible="{Binding IsEditCategory}">
-                        <!-- Normal edit tools (hidden while a SAM2 point-removal session is active) -->
-                        <StackPanel Orientation="Horizontal" Spacing="4" IsVisible="{Binding IsPointRemovalMode, Converter={StaticResource BoolInvertConverter}}">
-                            <!-- Selection (for crop / pin) -->
-                            <ToggleButton Theme="{StaticResource SnipToggleButton}"
-                                          IsChecked="{Binding IsSelectionMode, Mode=TwoWay}"
-                                          ToolTip.Tip="{Binding SelectionTooltip}">
-                                <PathIcon Data="M2,4H4V2H2A2,2 0 0,0 0,4V6H2V4M22,2H20V4H22V6H24V4A2,2 0 0,0 22,2M2,22V20H0V22A2,2 0 0,0 2,24H4V22H2M22,24A2,2 0 0,0 24,22V20H22V22H20V24H22M2,10H0V14H2V10M2,18H0V19A1,1 0 0,0 1,20H2V18M14,2H10V4H14V2M18,2H17A1,1 0 0,0 16,3V4H18V2M1,4V3A1,1 0 0,0 0,2H1V4M24,10H22V14H24V10M24,18H22V20H23A1,1 0 0,0 24,19V18M14,22H10V24H14V22M18,22V24H19A1,1 0 0,0 20,23V22H18M4,2H3A1,1 0 0,0 2,1V2H4Z" Width="12" Height="12"/>
-                            </ToggleButton>
-                            <Button Theme="{StaticResource SnipButton}" Command="{Binding CropCommand}"
-                                    IsVisible="{Binding IsSelectionActive}" ToolTip.Tip="{Binding CropTooltip}">
-                                <PathIcon Data="M7,17V1H5V5H1V7H5V15A2,2 0 0,0 7,17H15V21H17V17H21V15H7V17M17,15H19V7C19,5.89 18.1,5 17,5H9V7H17V15Z" Width="14" Height="14"/>
-                            </Button>
-                            <Button Theme="{StaticResource SnipButton}" Command="{Binding PinSelectionCommand}"
-                                    IsVisible="{Binding IsSelectionActive}" ToolTip.Tip="{Binding PinSelectionTooltip}">
-                                <PathIcon Data="M16,12V4H17V2H7V4H8V12L6,14V16H11V22H13V16H18V14L16,12M14,14H10V4H14V14Z" Width="14" Height="14"/>
-                            </Button>
-
-                            <Rectangle Fill="#444444" Width="1" Height="16" Margin="2,0" VerticalAlignment="Center"/>
-
-                            <!-- Rotate / Flip -->
-                            <Button Theme="{StaticResource SnipButton}" Command="{Binding RotateLeftCommand}"
-                                    ToolTip.Tip="{Binding [TipRotateLeft], Source={x:Static services:LocalizationService.Instance}}">
-                                <PathIcon Data="M13,4.07V1L8.45,5.55L13,10V6.09C15.84,6.57 18,9.03 18,12C18,14.97 15.84,17.43 13,17.91V19.93C16.95,19.44 20,16.08 20,12C20,7.92 16.95,4.56 13,4.07M7.1,18.32C8.26,19.22 9.61,19.76 11,19.93V17.9C10.13,17.75 9.29,17.41 8.54,16.87L7.1,18.32M6.09,13H4.07C4.24,14.39 4.79,15.73 5.69,16.89L7.1,15.47C6.58,14.72 6.23,13.88 6.09,13M7.11,8.53L5.7,7.11C4.8,8.27 4.24,9.61 4.07,11H6.09C6.23,10.13 6.58,9.28 7.11,8.53Z" Width="14" Height="14"/>
-                            </Button>
-                            <Button Theme="{StaticResource SnipButton}" Command="{Binding RotateRightCommand}"
-                                    ToolTip.Tip="{Binding [TipRotateRight], Source={x:Static services:LocalizationService.Instance}}">
-                                <PathIcon Data="M16.89,15.5L18.31,16.89C19.21,15.73 19.76,14.39 19.93,13H17.91C17.77,13.87 17.43,14.72 16.89,15.5M13,17.9V19.92C14.39,19.75 15.74,19.21 16.9,18.31L15.46,16.87C14.71,17.41 13.87,17.76 13,17.9M19.93,11C19.76,9.61 19.21,8.27 18.31,7.11L16.89,8.53C17.43,9.28 17.77,10.13 17.91,11M15.55,5.55L11,1V4.07C7.06,4.56 4,7.92 4,12C4,16.08 7.05,19.44 11,19.93V17.91C8.16,17.43 6,14.97 6,12C6,9.03 8.16,6.57 11,6.09V10L15.55,5.55Z" Width="14" Height="14"/>
-                            </Button>
-                            <Button Theme="{StaticResource SnipButton}" Command="{Binding FlipHorizontalCommand}"
-                                    ToolTip.Tip="{Binding [TipFlipH], Source={x:Static services:LocalizationService.Instance}}">
-                                <PathIcon Data="M6.45,17.45L1,12L6.45,6.55L7.86,7.96L4.83,11H11V13H4.83L7.86,16.04L6.45,17.45M17.55,6.55L23,12L17.55,17.45L16.14,16.04L19.17,13H13V11H19.17L16.14,7.96L17.55,6.55Z" Width="14" Height="14"/>
-                            </Button>
-                            <Button Theme="{StaticResource SnipButton}" Command="{Binding FlipVerticalCommand}"
-                                    ToolTip.Tip="{Binding [TipFlipV], Source={x:Static services:LocalizationService.Instance}}">
-                                <PathIcon Data="M6.55,6.45L12,1L17.45,6.45L16.04,7.86L13,4.83V11H11V4.83L7.96,7.86L6.55,6.45M6.55,17.55L12,23L17.45,17.55L16.04,16.14L13,19.17V13H11V19.17L7.96,16.14L6.55,17.55Z" Width="14" Height="14"/>
-                            </Button>
-
-                            <!-- AI removal (magic wand + auto background); hidden when AI models aren't installed -->
-                            <Rectangle Fill="#444444" Width="1" Height="16" Margin="2,0" VerticalAlignment="Center"
-                                       IsVisible="{Binding CanRemoveBackground}"/>
-                            <ToggleButton Theme="{StaticResource SnipToggleButton}"
-                                          IsChecked="{Binding IsPointRemovalMode, Mode=TwoWay}"
-                                          IsVisible="{Binding CanRemoveBackground}"
-                                          ToolTip.Tip="{Binding MagicWandTooltip}">
-                                <PathIcon Data="M12,2C6.47,2 2,6.47 2,12C2,17.53 6.47,22 12,22C17.53,22 22,17.53 22,12C22,6.47 17.53,2 12,2M12,20C7.58,20 4,16.42 4,12C4,7.58 7.58,4 12,4C16.42,4 20,7.58 20,12C20,16.42 16.42,20 12,20M12,7C9.24,7 7,9.24 7,12C7,14.76 9.24,17 12,17C14.76,17 17,14.76 17,12C17,9.24 14.76,7 12,7Z" Width="14" Height="14"/>
-                            </ToggleButton>
-                            <Button Theme="{StaticResource SnipButton}" Command="{Binding RemoveBackgroundCommand}"
-                                    IsVisible="{Binding CanRemoveBackground}"
-                                    ToolTip.Tip="{Binding RemoveBackgroundTooltip}">
-                                <PathIcon Data="M7.5,5.6L5,7L6.4,4.5L5,2L7.5,3.4L10,2L8.6,4.5L10,7L7.5,5.6M19.5,15.4L22,14L20.6,16.5L22,19L19.5,17.6L17,19L18.4,16.5L17,14L19.5,15.4M22,2L20.6,4.5L22,7L19.5,5.6L17,7L18.4,4.5L17,2L19.5,3.4L22,2M13.34,12.78L15.78,10.34L13.66,8.22L11.22,10.66L13.34,12.78M14.37,7.29L16.71,9.63C17.1,10 17.1,10.65 16.71,11.04L5.04,22.71C4.65,23.1 4,23.1 3.63,22.71L1.29,20.37C0.9,20 0.9,19.35 1.29,18.96L12.96,7.29C13.35,6.9 14,6.9 14.37,7.29Z" Width="14" Height="14"/>
-                            </Button>
-                        </StackPanel>
-
-                        <!-- SAM2 point-removal session controls (replace the edit tools while active) -->
-                        <StackPanel Orientation="Horizontal" Spacing="4" IsVisible="{Binding IsPointRemovalMode}">
-                            <Button Theme="{StaticResource SnipButton}"
-                                    Command="{Binding UndoInteractivePointCommand}"
-                                    ToolTip.Tip="{Binding UndoTooltip}"
-                                    IsEnabled="{Binding CanUndoInteractivePoint}">
-                                <PathIcon Data="M12.5,8C8.36,8 5,11.36 5,15.5C5,19.64 8.36,23 12.5,23C16.64,23 20,19.64 20,15.5H18C18,18.54 15.54,21 12.5,21C9.46,21 7,18.54 7,15.5C7,12.46 9.46,10 12.5,10C14.01,10 15.37,10.61 16.37,11.59L13,15H21V7L17.79,10.21C16.43,8.84 14.56,8 12.5,8Z" Width="14" Height="14"/>
-                            </Button>
-                            <Button Theme="{StaticResource SnipButton}"
-                                    Command="{Binding ConfirmInteractiveCommand}"
-                                    ToolTip.Tip="{Binding ConfirmRemovalTooltip}" Foreground="#4CAF50"
-                                    IsEnabled="{Binding !IsProcessing}">
-                                <PathIcon Data="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z" Width="14" Height="14"/>
-                            </Button>
-                            <Button Theme="{StaticResource SnipButton}"
-                                    Command="{Binding CancelInteractiveCommand}"
-                                    ToolTip.Tip="{Binding CancelRemovalTooltip}" Foreground="#F44336"
-                                    IsEnabled="{Binding !IsProcessing}">
-                                <PathIcon Data="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z" Width="14" Height="14"/>
-                            </Button>
-                        </StackPanel>
-                    </StackPanel>
-
-                    <!-- Output: copy / save -->
-                    <StackPanel Orientation="Horizontal" Spacing="4" IsVisible="{Binding IsOutputCategory}">
-                        <Button Theme="{StaticResource SnipButton}" Command="{Binding CopyCommand}" ToolTip.Tip="{Binding CopyTooltip}">
-                            <PathIcon Data="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z" Width="14" Height="14"/>
-                        </Button>
-                        <Button Theme="{StaticResource SnipButton}" Command="{Binding SaveCommand}" ToolTip.Tip="{Binding SaveTooltip}">
-                            <PathIcon Data="M15,9H5V5H15M12,19A3,3 0 0,1 9,16A3,3 0 0,1 12,13A3,3 0 0,1 15,16A3,3 0 0,1 12,19M17,3H5C3.89,3 3,3.9 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V7L17,3Z" Width="14" Height="14"/>
-                        </Button>
-                    </StackPanel>
-                </StackPanel>
-
-                <Rectangle Fill="#333333" Height="1" Margin="2,0" HorizontalAlignment="Stretch"
-                           IsVisible="{Binding IsAnyCategoryOpen}"/>
-
-                <!-- Category bar: pick a category to reveal its tools above. Opacity + close are always present. -->
+                <!-- Category bar: pick a category to reveal its tools at the top. Opacity + close are always present. -->
                 <StackPanel Orientation="Horizontal" Spacing="4" HorizontalAlignment="Center">
                     <Button Theme="{StaticResource SnipButton}" Command="{Binding SelectToolbarCategoryCommand}" CommandParameter="{x:Static m:ToolbarCategory.Annotate}"
                             ToolTip.Tip="{Binding [TipCatAnnotate], Source={x:Static services:LocalizationService.Instance}}"

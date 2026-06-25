@@ -179,13 +179,18 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
     public bool ShowToolbar
     {
         get => _showToolbar;
-        set 
+        set
         {
             this.RaiseAndSetIfChanged(ref _showToolbar, value);
             this.RaisePropertyChanged(nameof(WindowPadding));
+            this.RaisePropertyChanged(nameof(IsSubToolbarVisible));
             UpdateToolbarPosition();
         }
     }
+
+    // The contextual sub-toolbar floats at the top of the content; show it only when a category is open
+    // AND the toolbar itself is visible (so hiding the toolbar with F4 also hides the floating row).
+    public bool IsSubToolbarVisible => ShowToolbar && IsAnyCategoryOpen;
 
     private double _toolbarTop;
     public double ToolbarTop
@@ -277,6 +282,7 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
             this.RaisePropertyChanged(nameof(IsRedactCategory));
             this.RaisePropertyChanged(nameof(IsOutputCategory));
             this.RaisePropertyChanged(nameof(IsAnyCategoryOpen));
+            this.RaisePropertyChanged(nameof(IsSubToolbarVisible));
         }
     }
 
