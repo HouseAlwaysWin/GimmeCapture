@@ -263,7 +263,31 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
         set => CurrentTool = value ? FloatingTool.Selection : (CurrentTool == FloatingTool.Selection ? FloatingTool.None : CurrentTool);
     }
     public virtual bool IsAnyToolActive => CurrentTool != FloatingTool.None || CurrentAnnotationTool != AnnotationType.None;
-    
+
+    // Which top-level toolbar category is expanded (its contextual sub-toolbar is shown above the content).
+    private ToolbarCategory _activeToolbarCategory = ToolbarCategory.None;
+    public ToolbarCategory ActiveToolbarCategory
+    {
+        get => _activeToolbarCategory;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _activeToolbarCategory, value);
+            this.RaisePropertyChanged(nameof(IsAnnotateCategory));
+            this.RaisePropertyChanged(nameof(IsEditCategory));
+            this.RaisePropertyChanged(nameof(IsRedactCategory));
+            this.RaisePropertyChanged(nameof(IsOutputCategory));
+            this.RaisePropertyChanged(nameof(IsAnyCategoryOpen));
+        }
+    }
+
+    public bool IsAnnotateCategory => _activeToolbarCategory == ToolbarCategory.Annotate;
+    public bool IsEditCategory => _activeToolbarCategory == ToolbarCategory.Edit;
+    public bool IsRedactCategory => _activeToolbarCategory == ToolbarCategory.Redact;
+    public bool IsOutputCategory => _activeToolbarCategory == ToolbarCategory.Output;
+    public bool IsAnyCategoryOpen => _activeToolbarCategory != ToolbarCategory.None;
+
+    public ReactiveCommand<ToolbarCategory, Unit> SelectToolbarCategoryCommand { get; protected set; } = null!;
+
     public bool IsShapeToolActive => _editorState.IsShapeToolActive;
     public bool IsPenToolActive => _editorState.IsPenToolActive;
     public bool IsTextToolActive => _editorState.IsTextToolActive;
@@ -489,10 +513,16 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
 
         ToggleToolbarCommand = ReactiveCommand.Create(() => { ShowToolbar = !ShowToolbar; }, notEnteringText);
 
-        SelectionCommand = ReactiveCommand.Create(() => 
+        SelectionCommand = ReactiveCommand.Create(() =>
         {
             CurrentTool = CurrentTool == FloatingTool.Selection ? FloatingTool.None : FloatingTool.Selection;
         }, notEnteringText);
+
+        // Toggle a top-level toolbar category open/closed (clicking the active one collapses it).
+        SelectToolbarCategoryCommand = ReactiveCommand.Create<ToolbarCategory>(category =>
+        {
+            ActiveToolbarCategory = ActiveToolbarCategory == category ? ToolbarCategory.None : category;
+        });
 
         SelectToolCommand = ReactiveCommand.Create<AnnotationType>(tool => 
         {

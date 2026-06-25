@@ -201,62 +201,91 @@
             </Border.Styles>
 
             <StackPanel Orientation="Vertical" Spacing="4" HorizontalAlignment="Stretch">
-                <!-- Row 1: Drawing Tools -->
+                <!-- Contextual sub-toolbar: the tools for whichever category is open, shown above the category bar. -->
+                <StackPanel Orientation="Horizontal" Spacing="4" HorizontalAlignment="Center"
+                            IsVisible="{Binding IsAnyCategoryOpen}">
+                    <!-- Annotate: drawing tools (shapes / text / mosaic / blur / color) + clear annotations -->
+                    <StackPanel Orientation="Horizontal" Spacing="4" IsVisible="{Binding IsAnnotateCategory}">
+                        <controls:DrawingToolbar DataContext="{Binding}"/>
+                        <Button Theme="{StaticResource SnipButton}" Command="{Binding ClearAnnotationsCommand}" ToolTip.Tip="{Binding ClearTooltip}">
+                            <PathIcon Data="M19,4h-3.5l-1-1h-5l-1,1H5v2h14V4z M6,19c0,1.1,0.9,2,2,2h8c1.1,0,2-0.9,2-2V7H6V19z" Width="14" Height="14"/>
+                        </Button>
+                    </StackPanel>
+                    <!-- Edit: trim/cut timeline, split, per-piece speed, freeze-to-image -->
+                    <StackPanel Orientation="Horizontal" Spacing="4" IsVisible="{Binding IsEditCategory}">
+                        <Button Theme="{StaticResource SnipButton}" Command="{Binding ToggleTimelineCommand}" ToolTip.Tip="{Binding TimelineTooltip}"
+                                Opacity="{Binding IsTimelineMode, Converter={StaticResource BoolToOpacityConverter}}">
+                            <PathIcon Data="M18,4L20,8H17L15,4H13L15,8H12L10,4H8L10,8H7L5,4H4A2,2 0 0,0 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V4H18Z" Width="14" Height="14"/>
+                        </Button>
+                        <Button Theme="{StaticResource SnipButton}" Command="{Binding SplitSegmentCommand}" ToolTip.Tip="{Binding SplitTooltip}"
+                                IsVisible="{Binding IsTimelineMode}">
+                            <PathIcon Data="M14,4L18,8L14,12V9H6V7H14V4M10,12L6,16L10,20V17H18V15H10V12Z" Width="14" Height="14"/>
+                        </Button>
+                        <Button Theme="{StaticResource SnipButton}" Command="{Binding CyclePieceSpeedCommand}" ToolTip.Tip="{Binding PieceSpeedTooltip}"
+                                IsVisible="{Binding IsTimelineMode}">
+                            <PathIcon Data="M13,2.05V4.05C17.39,4.59 20.5,8.58 19.96,12.97C19.5,16.61 16.64,19.5 13,19.93V21.93C18.5,21.38 22.5,16.5 21.95,11C21.5,6.25 17.73,2.5 13,2.05M11,2.06C9.05,2.25 7.19,3 5.67,4.26L7.1,5.74C8.22,4.84 9.57,4.26 11,4.06V2.06M4.26,5.67C3,7.19 2.25,9.04 2.05,11H4.05C4.24,9.58 4.8,8.23 5.69,7.1L4.26,5.67M2.06,13C2.26,14.96 3.03,16.81 4.27,18.33L5.69,16.9C4.81,15.77 4.24,14.42 4.06,13H2.06M7.1,18.37L5.67,19.74C7.18,21 9.04,21.79 11,22V20C9.58,19.82 8.23,19.25 7.1,18.37M10,16.5L16,12L10,7.5V16.5Z" Width="14" Height="14"/>
+                        </Button>
+                        <Button Theme="{StaticResource SnipButton}" Command="{Binding FreezeFrameCommand}" ToolTip.Tip="{Binding FreezeFrameTooltip}">
+                            <PathIcon Data="M12,2C6.47,2 2,6.47 2,12C2,17.53 6.47,22 12,22C17.53,22 22,17.53 22,12C22,6.47 17.53,2 12,2M12,20C7.58,20 4,16.42 4,12C4,7.58 7.58,4 12,4C16.42,4 20,7.58 20,12C20,16.42 16.42,20 12,20M12,7C9.24,7 7,9.24 7,12C7,14.76 9.24,17 12,17C14.76,17 17,14.76 17,12C17,9.24 14.76,7 12,7Z" Width="14" Height="14"/>
+                        </Button>
+                    </StackPanel>
+                    <!-- Redact: draw a box (selection), pick effect, add/clear keyframes -->
+                    <StackPanel Orientation="Horizontal" Spacing="4" IsVisible="{Binding IsRedactCategory}">
+                        <Button Theme="{StaticResource SnipButton}" Command="{Binding SelectionCommand}" ToolTip.Tip="{Binding SelectionTooltip}"
+                                Opacity="{Binding IsSelectionMode, Converter={StaticResource BoolToOpacityConverter}}">
+                            <PathIcon Data="M3,5H5V3C3.9,3 3,3.9 3,5M5,21V19H3C3,20.1 3.9,21 5,21M3,17H5V15H3V17M9,21H11V19H9V21M3,13H5V11H3V13M3,9H5V7H3V9M19,3C20.1,3 21,3.9 21,5H19V3M19,19V21C20.1,21 21,20.1 21,19H19M7,3V5H9V3H7M11,3V5H13V3H11M15,3V5H17V3H15M7,19V21H9V19H7M19,7H21V9H19V7M15,19V21H17V19H15M19,11H21V13H19V11M19,15H21V17H19V15Z" Width="14" Height="14"/>
+                        </Button>
+                        <Button Theme="{StaticResource SnipButton}" Command="{Binding CycleRedactionEffectCommand}" ToolTip.Tip="{Binding RedactionStatus}">
+                            <PathIcon Data="M11.83,9L15,12.16C15,12.11 15,12.05 15,12A3,3 0 0,0 12,9C11.94,9 11.89,9 11.83,9M7.53,9.8L9.08,11.35C9.03,11.56 9,11.77 9,12A3,3 0 0,0 12,15C12.22,15 12.44,14.97 12.65,14.92L14.2,16.47C13.53,16.8 12.79,17 12,17A5,5 0 0,1 7,12C7,11.21 7.2,10.47 7.53,9.8M2,4.27L4.28,6.55L4.73,7C3.08,8.3 1.78,10 1,12C2.73,16.39 7,19.5 12,19.5C13.55,19.5 15.03,19.2 16.38,18.66L16.81,19.08L19.73,22L21,20.73L3.27,3M12,7A5,5 0 0,1 17,12C17,12.64 16.87,13.26 16.64,13.82L19.57,16.75C21.07,15.5 22.27,13.86 23,12C21.27,7.61 17,4.5 12,4.5C10.6,4.5 9.26,4.75 8,5.2L10.17,7.35C10.74,7.13 11.35,7 12,7Z" Width="14" Height="14"/>
+                        </Button>
+                        <Button Theme="{StaticResource SnipButton}" Command="{Binding AddRedactionKeyframeCommand}"
+                                ToolTip.Tip="{Binding [TipRedactAddKeyframe], Source={x:Static services:LocalizationService.Instance}}">
+                            <PathIcon Data="M17,13H13V17H11V13H7V11H11V7H13V11H17M19,3H5C3.89,3 3,3.89 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V5C21,3.89 20.1,3 19,3Z" Width="14" Height="14"/>
+                        </Button>
+                        <Button Theme="{StaticResource SnipButton}" Command="{Binding NewRedactionObjectCommand}"
+                                ToolTip.Tip="{Binding [TipRedactNewObject], Source={x:Static services:LocalizationService.Instance}}">
+                            <PathIcon Data="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4M11,7V11H7V13H11V17H13V13H17V11H13V7H11Z" Width="14" Height="14"/>
+                        </Button>
+                        <Button Theme="{StaticResource SnipButton}" Command="{Binding ClearRedactionCommand}"
+                                ToolTip.Tip="{Binding [TipRedactClear], Source={x:Static services:LocalizationService.Instance}}">
+                            <PathIcon Data="M9,3V4H4V6H5V19A2,2 0 0,0 7,21H17A2,2 0 0,0 19,19V6H20V4H15V3H9M7,6H17V19H7V6M9,8V17H11V8H9M13,8V17H15V8H13Z" Width="14" Height="14"/>
+                        </Button>
+                    </StackPanel>
+                    <!-- Output: copy / save -->
+                    <StackPanel Orientation="Horizontal" Spacing="4" IsVisible="{Binding IsOutputCategory}">
+                        <Button Theme="{StaticResource SnipButton}" Command="{Binding CopyCommand}" ToolTip.Tip="{Binding CopyTooltip}">
+                            <PathIcon Data="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z" Width="14" Height="14"/>
+                        </Button>
+                        <Button Theme="{StaticResource SnipButton}" Command="{Binding SaveCommand}" ToolTip.Tip="{Binding SaveTooltip}">
+                            <PathIcon Data="M15,9H5V5H15M12,19A3,3 0 0,1 9,16A3,3 0 0,1 12,13A3,3 0 0,1 15,16A3,3 0 0,1 12,19M17,3H5C3.89,3 3,3.89 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V7L17,3Z" Width="14" Height="14"/>
+                        </Button>
+                    </StackPanel>
+                </StackPanel>
+
+                <Rectangle Fill="#333333" Height="1" Margin="2,0" HorizontalAlignment="Stretch"
+                           IsVisible="{Binding IsAnyCategoryOpen}"/>
+
+                <!-- Category bar: pick a category to reveal its tools above. Opacity + close are always present. -->
                 <StackPanel Orientation="Horizontal" Spacing="4" HorizontalAlignment="Center">
-                    <controls:DrawingToolbar DataContext="{Binding}"/>
-                    <Rectangle Fill="#444444" Width="1" Height="20" Margin="4,0" VerticalAlignment="Center"/>
-                    <Button Theme="{StaticResource SnipButton}" Command="{Binding ClearAnnotationsCommand}" ToolTip.Tip="{Binding ClearTooltip}">
-                        <PathIcon Data="M19,4h-3.5l-1-1h-5l-1,1H5v2h14V4z M6,19c0,1.1,0.9,2,2,2h8c1.1,0,2-0.9,2-2V7H6V19z" Width="14" Height="14"/>
+                    <Button Theme="{StaticResource SnipButton}" Command="{Binding SelectToolbarCategoryCommand}" CommandParameter="{x:Static models:ToolbarCategory.Annotate}"
+                            ToolTip.Tip="{Binding [TipCatAnnotate], Source={x:Static services:LocalizationService.Instance}}"
+                            Opacity="{Binding IsAnnotateCategory, Converter={StaticResource BoolToOpacityConverter}}">
+                        <PathIcon Data="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z" Width="14" Height="14"/>
                     </Button>
-                    <Rectangle Fill="#444444" Width="1" Height="20" Margin="4,0" VerticalAlignment="Center"/>
-                    <!-- Timeline (trim + multi-segment cut) toggle -->
-                    <Button Theme="{StaticResource SnipButton}" Command="{Binding ToggleTimelineCommand}" ToolTip.Tip="{Binding TimelineTooltip}"
-                            Opacity="{Binding IsTimelineMode, Converter={StaticResource BoolToOpacityConverter}}">
-                        <PathIcon Data="M18,4L20,8H17L15,4H13L15,8H12L10,4H8L10,8H7L5,4H4A2,2 0 0,0 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V4H18Z" Width="14" Height="14"/>
+                    <Button Theme="{StaticResource SnipButton}" Command="{Binding SelectToolbarCategoryCommand}" CommandParameter="{x:Static models:ToolbarCategory.Edit}"
+                            ToolTip.Tip="{Binding [TipCatEdit], Source={x:Static services:LocalizationService.Instance}}"
+                            Opacity="{Binding IsEditCategory, Converter={StaticResource BoolToOpacityConverter}}">
+                        <PathIcon Data="M9.64,7.64C9.87,7.14 10,6.59 10,6A4,4 0 0,0 6,2A4,4 0 0,0 2,6A4,4 0 0,0 6,10C6.59,10 7.14,9.87 7.64,9.64L10,12L7.64,14.36C7.14,14.13 6.59,14 6,14A4,4 0 0,0 2,18A4,4 0 0,0 6,22A4,4 0 0,0 10,18C10,17.41 9.87,16.86 9.64,16.36L12,14L19,21H22V20L9.64,7.64M6,8A2,2 0 0,1 4,6A2,2 0 0,1 6,4A2,2 0 0,1 8,6A2,2 0 0,1 6,8M6,20A2,2 0 0,1 4,18A2,2 0 0,1 6,16A2,2 0 0,1 8,18A2,2 0 0,1 6,20M19,3L13,9L15,11L21,5V3Z" Width="14" Height="14"/>
                     </Button>
-                    <!-- Split at playhead (timeline mode only); tap a piece on the strip to keep/drop it -->
-                    <Button Theme="{StaticResource SnipButton}" Command="{Binding SplitSegmentCommand}" ToolTip.Tip="{Binding SplitTooltip}"
-                            IsVisible="{Binding IsTimelineMode}">
-                        <PathIcon Data="M14,4L18,8L14,12V9H6V7H14V4M10,12L6,16L10,20V17H18V15H10V12Z" Width="14" Height="14"/>
-                    </Button>
-                    <!-- Freeze the current frame to an image pin and remove an object with SAM2 -->
-                    <Button Theme="{StaticResource SnipButton}" Command="{Binding FreezeFrameCommand}" ToolTip.Tip="{Binding FreezeFrameTooltip}">
-                        <PathIcon Data="M12,2C6.47,2 2,6.47 2,12C2,17.53 6.47,22 12,22C17.53,22 22,17.53 22,12C22,6.47 17.53,2 12,2M12,20C7.58,20 4,16.42 4,12C4,7.58 7.58,4 12,4C16.42,4 20,7.58 20,12C20,16.42 16.42,20 12,20M12,7C9.24,7 7,9.24 7,12C7,14.76 9.24,17 12,17C14.76,17 17,14.76 17,12C17,9.24 14.76,7 12,7Z" Width="14" Height="14"/>
-                    </Button>
-                    <!-- Cycle the speed of the piece under the playhead (slow-mo / fast-mo, burned into export) -->
-                    <Button Theme="{StaticResource SnipButton}" Command="{Binding CyclePieceSpeedCommand}" ToolTip.Tip="{Binding PieceSpeedTooltip}"
-                            IsVisible="{Binding IsTimelineMode}">
-                        <PathIcon Data="M13,2.05V4.05C17.39,4.59 20.5,8.58 19.96,12.97C19.5,16.61 16.64,19.5 13,19.93V21.93C18.5,21.38 22.5,16.5 21.95,11C21.5,6.25 17.73,2.5 13,2.05M11,2.06C9.05,2.25 7.19,3 5.67,4.26L7.1,5.74C8.22,4.84 9.57,4.26 11,4.06V2.06M4.26,5.67C3,7.19 2.25,9.04 2.05,11H4.05C4.24,9.58 4.8,8.23 5.69,7.1L4.26,5.67M2.06,13C2.26,14.96 3.03,16.81 4.27,18.33L5.69,16.9C4.81,15.77 4.24,14.42 4.06,13H2.06M7.1,18.37L5.67,19.74C7.18,21 9.04,21.79 11,22V20C9.58,19.82 8.23,19.25 7.1,18.37M10,16.5L16,12L10,7.5V16.5Z" Width="14" Height="14"/>
-                    </Button>
-                    <Rectangle Fill="#444444" Width="1" Height="20" Margin="4,0" VerticalAlignment="Center"/>
-                    <!-- Object redaction: blur/mosaic/black a box that follows an object across the clip
-                         (draw a box, Add keyframe at a few playhead positions; interpolated + burned into export). -->
-                    <!-- Enter selection mode so a box can be drawn (lights up while active); same as the S hotkey. -->
-                    <Button Theme="{StaticResource SnipButton}" Command="{Binding SelectionCommand}" ToolTip.Tip="{Binding SelectionTooltip}"
-                            Opacity="{Binding IsSelectionMode, Converter={StaticResource BoolToOpacityConverter}}">
-                        <PathIcon Data="M3,5H5V3C3.9,3 3,3.9 3,5M5,21V19H3C3,20.1 3.9,21 5,21M3,17H5V15H3V17M9,21H11V19H9V21M3,13H5V11H3V13M3,9H5V7H3V9M19,3C20.1,3 21,3.9 21,5H19V3M19,19V21C20.1,21 21,20.1 21,19H19M7,3V5H9V3H7M11,3V5H13V3H11M15,3V5H17V3H15M7,19V21H9V19H7M19,7H21V9H19V7M15,19V21H17V19H15M19,11H21V13H19V11M19,15H21V17H19V15Z" Width="14" Height="14"/>
-                    </Button>
-                    <Button Theme="{StaticResource SnipButton}" Command="{Binding CycleRedactionEffectCommand}" ToolTip.Tip="{Binding RedactionStatus}">
+                    <Button Theme="{StaticResource SnipButton}" Command="{Binding SelectToolbarCategoryCommand}" CommandParameter="{x:Static models:ToolbarCategory.Redact}"
+                            ToolTip.Tip="{Binding [TipCatRedact], Source={x:Static services:LocalizationService.Instance}}"
+                            Opacity="{Binding IsRedactCategory, Converter={StaticResource BoolToOpacityConverter}}">
                         <PathIcon Data="M11.83,9L15,12.16C15,12.11 15,12.05 15,12A3,3 0 0,0 12,9C11.94,9 11.89,9 11.83,9M7.53,9.8L9.08,11.35C9.03,11.56 9,11.77 9,12A3,3 0 0,0 12,15C12.22,15 12.44,14.97 12.65,14.92L14.2,16.47C13.53,16.8 12.79,17 12,17A5,5 0 0,1 7,12C7,11.21 7.2,10.47 7.53,9.8M2,4.27L4.28,6.55L4.73,7C3.08,8.3 1.78,10 1,12C2.73,16.39 7,19.5 12,19.5C13.55,19.5 15.03,19.2 16.38,18.66L16.81,19.08L19.73,22L21,20.73L3.27,3M12,7A5,5 0 0,1 17,12C17,12.64 16.87,13.26 16.64,13.82L19.57,16.75C21.07,15.5 22.27,13.86 23,12C21.27,7.61 17,4.5 12,4.5C10.6,4.5 9.26,4.75 8,5.2L10.17,7.35C10.74,7.13 11.35,7 12,7Z" Width="14" Height="14"/>
                     </Button>
-                    <Button Theme="{StaticResource SnipButton}" Command="{Binding AddRedactionKeyframeCommand}"
-                            ToolTip.Tip="{Binding [TipRedactAddKeyframe], Source={x:Static services:LocalizationService.Instance}}">
-                        <PathIcon Data="M17,13H13V17H11V13H7V11H11V7H13V11H17M19,3H5C3.89,3 3,3.89 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V5C21,3.89 20.1,3 19,3Z" Width="14" Height="14"/>
-                    </Button>
-                    <Button Theme="{StaticResource SnipButton}" Command="{Binding NewRedactionObjectCommand}"
-                            ToolTip.Tip="{Binding [TipRedactNewObject], Source={x:Static services:LocalizationService.Instance}}">
-                        <PathIcon Data="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4M11,7V11H7V13H11V17H13V13H17V11H13V7H11Z" Width="14" Height="14"/>
-                    </Button>
-                    <Button Theme="{StaticResource SnipButton}" Command="{Binding ClearRedactionCommand}"
-                            ToolTip.Tip="{Binding [TipRedactClear], Source={x:Static services:LocalizationService.Instance}}">
-                        <PathIcon Data="M9,3V4H4V6H5V19A2,2 0 0,0 7,21H17A2,2 0 0,0 19,19V6H20V4H15V3H9M7,6H17V19H7V6M9,8V17H11V8H9M13,8V17H15V8H13Z" Width="14" Height="14"/>
-                    </Button>
-                    <Rectangle Fill="#444444" Width="1" Height="20" Margin="4,0" VerticalAlignment="Center"/>
-                    <Button Theme="{StaticResource SnipButton}" Command="{Binding CopyCommand}" ToolTip.Tip="{Binding CopyTooltip}">
-                        <PathIcon Data="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z" Width="14" Height="14"/>
-                    </Button>
-                    <Button Theme="{StaticResource SnipButton}" Command="{Binding SaveCommand}" ToolTip.Tip="{Binding SaveTooltip}">
-                        <PathIcon Data="M15,9H5V5H15M12,19A3,3 0 0,1 9,16A3,3 0 0,1 12,13A3,3 0 0,1 15,16A3,3 0 0,1 12,19M17,3H5C3.89,3 3,3.89 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V7L17,3Z" Width="14" Height="14"/>
+                    <Button Theme="{StaticResource SnipButton}" Command="{Binding SelectToolbarCategoryCommand}" CommandParameter="{x:Static models:ToolbarCategory.Output}"
+                            ToolTip.Tip="{Binding [TipCatOutput], Source={x:Static services:LocalizationService.Instance}}"
+                            Opacity="{Binding IsOutputCategory, Converter={StaticResource BoolToOpacityConverter}}">
+                        <PathIcon Data="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z" Width="14" Height="14"/>
                     </Button>
                     <Rectangle Fill="#444444" Width="1" Height="20" Margin="4,0" VerticalAlignment="Center"/>
                     <!-- Opacity slider (trace / overlay use) -->
