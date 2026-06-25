@@ -362,7 +362,8 @@ internal static class LibavClipExporter
                 decFrame->crop_top = (ulong)Math.Max(0, c.Y);
                 decFrame->crop_right = (ulong)Math.Max(0, decCtx->width - c.X - c.Width);
                 decFrame->crop_bottom = (ulong)Math.Max(0, decCtx->height - c.Y - c.Height);
-                ffmpeg.av_frame_apply_cropping(decFrame, (int)ffmpeg.AV_FRAME_CROP_UNALIGNED);
+                // AV_FRAME_CROP_UNALIGNED = (1 << 0); the named constant isn't exposed by this AutoGen binding.
+                ffmpeg.av_frame_apply_cropping(decFrame, 1);
             }
 
             ThrowIfErr(ffmpeg.av_frame_make_writable(encFrame), "clip_make_writable");
