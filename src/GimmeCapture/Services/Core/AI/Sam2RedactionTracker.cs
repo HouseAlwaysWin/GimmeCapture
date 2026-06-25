@@ -31,6 +31,8 @@ public static class Sam2RedactionTracker
         double endSeconds,
         double seedNormX,
         double seedNormY,
+        double seedNormWidth,
+        double seedNormHeight,
         double intervalSeconds,
         IProgress<double>? progress,
         CancellationToken ct)
@@ -44,6 +46,10 @@ public static class Sam2RedactionTracker
 
         double cx = Math.Clamp(seedNormX, 0, 1);
         double cy = Math.Clamp(seedNormY, 0, 1);
+        // The user's drawn box is a size hint: reject masks far larger than it (a single click on a
+        // textured field can otherwise grab the whole background). Generous multiplier so it can grow.
+        double seedArea = Math.Max(1e-4, Math.Clamp(seedNormWidth, 0, 1) * Math.Clamp(seedNormHeight, 0, 1));
+        double maxArea = Math.Min(0.6, seedArea * 6.0);
         int total = Math.Max(1, (int)Math.Ceiling((endSeconds - startSeconds) / intervalSeconds) + 1);
         int done = 0;
 
@@ -72,11 +78,16 @@ public static class Sam2RedactionTracker
                 double ny = (double)b.Top / frameHeight;
                 double nw = (double)b.Width / frameWidth;
                 double nh = (double)b.Height / frameHeight;
-                keyframes.Add(new RedactionKeyframe { TimeSeconds = t, X = nx, Y = ny, Width = nw, Height = nh });
 
-                // Greedy propagation: the next frame is seeded from this box's centre.
-                cx = Math.Clamp(nx + (nw / 2), 0, 1);
-                cy = Math.Clamp(ny + (nh / 2), 0, 1);
+                // Plausibility gate: drop runaway masks (whole-frame grabs) instead of letting them
+                // poison the greedy seed; interpolation bridges the skipped sample.
+                bool plausible = (nw * nh) <= maxArea && nw <= 0.9 && nh <= 0.9;
+                if (plausible)
+                {
+                    keyframes.Add(new RedactionKeyframe { TimeSeconds = t, X = nx, Y = ny, Width = nw, Height = nh });
+                    cx = Math.Clamp(nx + (nw / 2), 0, 1); // greedy: next seed = this box's centre
+                    cy = Math.Clamp(ny + (nh / 2), 0, 1);
+                }
             }
 
             done++;

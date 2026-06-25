@@ -585,6 +585,7 @@ internal static class LibavClipExporter
 
             if (format == null || pcm.Length == 0)
             {
+                AppLog.Information($"LibavClipExporter.TryBuildAudio no-audio (format={(format == null ? "null" : "set")} pcmBytes={pcm.Length})");
                 return false; // no audio stream, or nothing decoded
             }
 
@@ -597,15 +598,19 @@ internal static class LibavClipExporter
 
             audioTemp = Path.Combine(tempDir, "audio.m4a");
             LibavAacTranscoder.EncodeWavToM4a(wavTemp, audioTemp, quality);
-            return File.Exists(audioTemp) && new FileInfo(audioTemp).Length > 0;
+            bool ok = File.Exists(audioTemp) && new FileInfo(audioTemp).Length > 0;
+            AppLog.Information($"LibavClipExporter.TryBuildAudio built={ok} pcmBytes={pcmBytes.Length}");
+            return ok;
         }
         catch (OperationCanceledException)
         {
             throw;
         }
-        catch
+        catch (Exception ex)
         {
-            // No usable audio (e.g. silent recording) — export video only rather than failing.
+            // No usable audio (e.g. silent recording) — export video only rather than failing. Log so a
+            // genuine audio-pipeline failure isn't silently swallowed into a soundless export.
+            AppLog.Warning("LibavClipExporter.TryBuildAudio", ex);
             audioTemp = null;
             return false;
         }

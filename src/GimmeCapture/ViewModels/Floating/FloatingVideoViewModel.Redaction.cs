@@ -96,6 +96,8 @@ public partial class FloatingVideoViewModel
         var r = SelectionRect;
         double seedX = Math.Clamp((r.X + (r.Width / 2)) / dw, 0, 1);
         double seedY = Math.Clamp((r.Y + (r.Height / 2)) / dh, 0, 1);
+        double seedW = Math.Clamp(r.Width / dw, 0, 1);
+        double seedH = Math.Clamp(r.Height / dh, 0, 1);
         int fw = Math.Max(2, (int)Math.Round(OriginalWidth));
         int fh = Math.Max(2, (int)Math.Round(OriginalHeight));
         double start = Math.Max(0, CurrentTime.TotalSeconds);
@@ -126,7 +128,7 @@ public partial class FloatingVideoViewModel
 
             SAM2Service sam2Local = sam2;
             List<RedactionKeyframe> keyframes = await Task.Run(() => Sam2RedactionTracker.TrackAsync(
-                sam2Local, VideoPath, fw, fh, start, end, seedX, seedY, 0.3, progress, default));
+                sam2Local, VideoPath, fw, fh, start, end, seedX, seedY, seedW, seedH, 0.3, progress, default));
 
             if (keyframes.Count > 0)
             {
