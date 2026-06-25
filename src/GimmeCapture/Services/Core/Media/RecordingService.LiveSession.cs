@@ -22,7 +22,12 @@ public partial class RecordingService
         try
         {
             _nativeRecorder?.Dispose();
-            _nativeRecorder = new LibavGdigrabMkvSession();
+            _nativeRecorder = new LibavGdigrabMkvSession
+            {
+                EnableWebcam = _settingsService?.Settings.EnableWebcam ?? false,
+                WebcamDeviceName = _settingsService?.Settings.WebcamDeviceName ?? string.Empty,
+                WebcamCorner = _settingsService?.Settings.WebcamCorner ?? 3,
+            };
 
             int x = (int)(_region.X * _visualScaling) + _screenOffset.X;
             int y = (int)(_region.Y * _visualScaling) + _screenOffset.Y;

@@ -127,6 +127,9 @@ public partial class MainWindowViewModel
         ShowSnipCursor = defaultSettings.ShowSnipCursor;
         ShowRecordCursor = defaultSettings.ShowRecordCursor;
         RecordSystemAudio = defaultSettings.RecordSystemAudio;
+        EnableWebcam = defaultSettings.EnableWebcam;
+        WebcamDeviceName = defaultSettings.WebcamDeviceName;
+        WebcamCorner = defaultSettings.WebcamCorner;
         TempDirectory = defaultSettings.TempDirectory;
         
         if (Color.TryParse(defaultSettings.BorderColorHex, out var color))

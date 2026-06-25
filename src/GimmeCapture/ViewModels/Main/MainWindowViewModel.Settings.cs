@@ -855,6 +855,41 @@ public partial class MainWindowViewModel
         set => this.RaiseAndSetIfChanged(ref _recordSystemAudio, value);
     }
 
+    private bool _enableWebcam = false;
+    public bool EnableWebcam
+    {
+        get => _enableWebcam;
+        set => this.RaiseAndSetIfChanged(ref _enableWebcam, value);
+    }
+
+    private string _webcamDeviceName = string.Empty;
+    public string WebcamDeviceName
+    {
+        get => _webcamDeviceName;
+        set => this.RaiseAndSetIfChanged(ref _webcamDeviceName, value);
+    }
+
+    private int _webcamCorner = 3;
+    public int WebcamCorner
+    {
+        get => _webcamCorner;
+        set => this.RaiseAndSetIfChanged(ref _webcamCorner, value);
+    }
+
+    // Corner choices for the webcam PiP combo (value = corner index used by the encoder).
+    public IReadOnlyList<WebcamCornerOption> WebcamCornerOptions { get; } = new[]
+    {
+        new WebcamCornerOption(0, "WebcamCornerTopLeft"),
+        new WebcamCornerOption(1, "WebcamCornerTopRight"),
+        new WebcamCornerOption(2, "WebcamCornerBottomLeft"),
+        new WebcamCornerOption(3, "WebcamCornerBottomRight"),
+    };
+
+    public sealed record WebcamCornerOption(int Value, string LocalizationKey)
+    {
+        public string Name => LocalizationService.Instance[LocalizationKey];
+    }
+
     private int _playbackUiFps = 30;
     public int PlaybackUiFps
     {

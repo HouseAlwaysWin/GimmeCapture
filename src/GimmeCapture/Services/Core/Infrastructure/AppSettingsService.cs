@@ -276,6 +276,9 @@ public class AppSettingsService
         dest.ShowSnipCursor = source.ShowSnipCursor;
         dest.ShowRecordCursor = source.ShowRecordCursor;
         dest.RecordSystemAudio = source.RecordSystemAudio;
+        dest.EnableWebcam = source.EnableWebcam;
+        dest.WebcamDeviceName = source.WebcamDeviceName;
+        dest.WebcamCorner = source.WebcamCorner;
         dest.VideoSaveDirectory = source.VideoSaveDirectory;
         dest.RecordFormat = source.RecordFormat;
         dest.VideoCodec = source.VideoCodec;

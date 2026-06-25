@@ -59,6 +59,9 @@ public partial class MainWindowViewModel
             ShowSnipCursor = ShowSnipCursor,
             ShowRecordCursor = ShowRecordCursor,
             RecordSystemAudio = RecordSystemAudio,
+            EnableWebcam = EnableWebcam,
+            WebcamDeviceName = WebcamDeviceName,
+            WebcamCorner = WebcamCorner,
             VideoSaveDirectory = RecordingSettings.VideoSaveDirectory,
             RecordFormat = RecordingSettings.RecordFormat,
             VideoCodec = RecordingSettings.VideoCodec,
@@ -126,6 +129,9 @@ public partial class MainWindowViewModel
         ShowSnipCursor = snapshot.ShowSnipCursor;
         ShowRecordCursor = snapshot.ShowRecordCursor;
         RecordSystemAudio = snapshot.RecordSystemAudio;
+        EnableWebcam = snapshot.EnableWebcam;
+        WebcamDeviceName = snapshot.WebcamDeviceName;
+        WebcamCorner = snapshot.WebcamCorner;
         PlaybackUiFps = snapshot.PlaybackUiFps;
         PlaybackTimelineFps = snapshot.PlaybackTimelineFps;
         TempDirectory = snapshot.TempDirectory;
