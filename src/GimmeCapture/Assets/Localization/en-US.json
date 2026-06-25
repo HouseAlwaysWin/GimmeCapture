@@ -171,6 +171,7 @@
   "TipPinSelection": "Pin Selection",
   "TipTimeline": "Timeline (multi-segment cut)",
   "TipSplitSegment": "Split at playhead",
+  "TipPieceSpeed": "Cycle speed of the piece at the playhead (slow-mo / fast-mo)",
   "TipDeleteSegment": "Delete selected segment",
   "TimelineHint": "Drag = scrub · Split · tap a piece to keep / drop",
   "MenuCopyImage": "Copy Image",

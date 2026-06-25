@@ -22,12 +22,27 @@ namespace GimmeCapture.Services.Core.Media.NativeFFmpeg;
 /// </summary>
 internal static class LibavClipExporter
 {
-    internal readonly record struct SourceRange(double StartSeconds, double EndSeconds)
+    // Speed > 1 = faster (fewer output frames), < 1 = slow motion (duplicated frames). 1.0 = unchanged.
+    internal readonly record struct SourceRange(double StartSeconds, double EndSeconds, double Speed = 1.0)
     {
         public double Duration => Math.Max(0, EndSeconds - StartSeconds);
+        public double EffectiveSpeed => Speed > 0.01 ? Speed : 1.0;
     }
 
     private const double TimeEpsilon = 1e-4;
+
+    /// <summary>
+    /// Advances the fractional output-frame cursor by one source frame at the given speed and returns how
+    /// many output frames to emit for it. Faster-than-1× drops frames (can return 0); slower duplicates
+    /// (can return ≥2); 1× always returns 1. Pure so the retiming math can be unit-tested.
+    /// </summary>
+    internal static int AdvanceFrameCursor(ref double accum, double speed)
+    {
+        double effective = speed > 0.01 ? speed : 1.0;
+        double before = accum;
+        accum += 1.0 / effective;
+        return (int)Math.Floor(accum) - (int)Math.Floor(before);
+    }
 
     /// <summary>Maps an output file extension to the libav container name, or null if unsupported here.</summary>
     public static string? ContainerForExtension(string extension)
@@ -130,6 +145,9 @@ internal static class LibavClipExporter
         AVDictionary* encOpts = null;
         AVStream* outStream = null;
         long frameIndex = 0;
+        // Fractional output-frame cursor for per-segment speed: each source frame advances it by
+        // 1/speed output frames, and we emit floor(after)-floor(before) frames (drop when >1×, dup when <1×).
+        double frameAccum = 0;
         bool annotate = frameComposite != null;
 
         try
@@ -304,7 +322,7 @@ internal static class LibavClipExporter
 
                     runDone = DrainDecodedFrames(
                         decCtx, encCtx, sws, swsToBgra, decFrame, encFrame, bgraFrame, frameComposite,
-                        outFmt, outStream, outPkt, inStream->time_base, range, crop, ref frameIndex);
+                        outFmt, outStream, outPkt, inStream->time_base, range, crop, ref frameIndex, ref frameAccum);
                 }
 
                 // Range reached the file end: flush the decoder so its buffered tail frames aren't lost.
@@ -313,7 +331,7 @@ internal static class LibavClipExporter
                     ffmpeg.avcodec_send_packet(decCtx, null);
                     DrainDecodedFrames(
                         decCtx, encCtx, sws, swsToBgra, decFrame, encFrame, bgraFrame, frameComposite,
-                        outFmt, outStream, outPkt, inStream->time_base, range, crop, ref frameIndex);
+                        outFmt, outStream, outPkt, inStream->time_base, range, crop, ref frameIndex, ref frameAccum);
                 }
 
                 // Reset the decoder before the next range's seek (and after the final flush above).
@@ -367,7 +385,8 @@ internal static class LibavClipExporter
         AVRational inTimeBase,
         SourceRange range,
         VideoEditCrop? crop,
-        ref long frameIndex)
+        ref long frameIndex,
+        ref double frameAccum)
     {
         while (true)
         {
@@ -431,11 +450,19 @@ internal static class LibavClipExporter
                 ffmpeg.sws_scale(sws, decFrame->data, decFrame->linesize, 0, decFrame->height,
                     encFrame->data, encFrame->linesize);
             }
-            encFrame->pts = frameIndex++;
-            ffmpeg.av_frame_unref(decFrame);
+            // Per-segment speed: this source frame spans 1/speed output frames on a CFR (source-fps)
+            // timeline. We emit drop/dup counts so faster (>1×) drops frames and slower (<1×) duplicates;
+            // at 1× it is exactly one frame, identical to before.
+            int emitCount = AdvanceFrameCursor(ref frameAccum, range.EffectiveSpeed);
 
-            ThrowIfErr(ffmpeg.avcodec_send_frame(encCtx, encFrame), "clip_send_frame");
-            WriteEncoded(encCtx, outFmt, outStream, outPkt);
+            for (int e = 0; e < emitCount; e++)
+            {
+                encFrame->pts = frameIndex++;
+                ThrowIfErr(ffmpeg.avcodec_send_frame(encCtx, encFrame), "clip_send_frame");
+                WriteEncoded(encCtx, outFmt, outStream, outPkt);
+            }
+
+            ffmpeg.av_frame_unref(decFrame);
         }
     }
 
@@ -509,6 +536,17 @@ internal static class LibavClipExporter
         out string? audioTemp)
     {
         audioTemp = null;
+
+        // Retiming audio to match a non-1× video speed needs atempo-style resampling; until that lands,
+        // a speed-changed clip is exported video-only rather than risk audible A/V desync.
+        foreach (SourceRange r in ranges)
+        {
+            if (Math.Abs(r.EffectiveSpeed - 1.0) > 0.001)
+            {
+                return false;
+            }
+        }
+
         try
         {
             WaveFormat? format = null;

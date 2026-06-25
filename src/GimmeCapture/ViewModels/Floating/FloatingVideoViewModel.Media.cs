@@ -269,6 +269,10 @@ public partial class FloatingVideoViewModel
                 bool stopAtPassEnd = playSingleFrame || multi;
                 using var passCts = stopAtPassEnd ? CancellationTokenSource.CreateLinkedTokenSource(ct) : null;
 
+                // Honor the per-piece speed during preview (on top of the global playback-speed control).
+                double pieceSpeed = (multi && segIndex >= 0 && kept[segIndex].Speed > 0) ? kept[segIndex].Speed : 1.0;
+                double effectivePlaybackSpeed = _playbackSpeed * pieceSpeed;
+
                 // Keep looping control in this VM so audio/video restart together every cycle.
                 bool loopPlayback = false;
 
@@ -280,7 +284,7 @@ public partial class FloatingVideoViewModel
                         _width,
                         _height,
                         startSeconds,
-                        _playbackSpeed,
+                        effectivePlaybackSpeed,
                         loopPlayback,
                         (frameData, seconds) =>
                         {
