@@ -5,6 +5,8 @@ namespace GimmeCapture.Models;
 
 public enum VideoCodec { H264, H265 }
 public enum VideoQuality { Low, Medium, High }
+// Whether to try GPU/Media-Foundation encoders (NVENC/QSV/AMF) before software libx264/265.
+public enum VideoEncoderHint { PreferHardware, SoftwareOnly }
 public enum TranslationLanguage { TraditionalChinese, SimplifiedChinese, English, Japanese, Korean }
 public enum OCRLanguage { Auto, English, TraditionalChinese, SimplifiedChinese, Japanese, Korean }
 public enum TranslationEngine { LlamaSharp }
@@ -138,14 +140,24 @@ public class AppSettings
     
     public bool ShowSnipCursor { get; set; } = false;
     public bool ShowRecordCursor { get; set; } = true;
+    // Burn a cursor spotlight ring / click ripple into recordings (tutorial highlighting).
+    public bool HighlightCursor { get; set; } = false;
+    public bool HighlightClicks { get; set; } = false;
     public bool RecordSystemAudio { get; set; } = true;
     // Webcam picture-in-picture composited into recordings.
     public bool EnableWebcam { get; set; } = false;
     public string WebcamDeviceName { get; set; } = string.Empty;
     public int WebcamCorner { get; set; } = 3; // 0=TL, 1=TR, 2=BL, 3=BR
+    // Microphone capture, mixed with system audio at finalize.
+    public bool RecordMicrophone { get; set; } = false;
+    // WASAPI capture-endpoint device id (empty = default input device).
+    public string SelectedMicDeviceId { get; set; } = string.Empty;
+    // Linear gain applied to the mic stream when mixing (1.0 = unchanged).
+    public double MicVolume { get; set; } = 1.0;
     public string VideoSaveDirectory { get; set; } = string.Empty;
     public string RecordFormat { get; set; } = "mp4";
     public VideoCodec VideoCodec { get; set; } = VideoCodec.H264;
+    public VideoEncoderHint VideoEncoderHint { get; set; } = VideoEncoderHint.PreferHardware;
     public VideoQuality VideoQuality { get; set; } = VideoQuality.Medium;
     public int RecordFPS { get; set; } = 30;
     public double MaxRecordingSizeMB { get; set; } = 0;

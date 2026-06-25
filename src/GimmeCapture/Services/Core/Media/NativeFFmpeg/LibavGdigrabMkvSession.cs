@@ -30,6 +30,18 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
     /// <summary>PiP corner: 0 = top-left, 1 = top-right, 2 = bottom-left, 3 = bottom-right.</summary>
     public int WebcamCorner { get; set; } = 3;
 
+    /// <summary>Burn a cursor spotlight ring into each frame.</summary>
+    public bool HighlightCursor { get; set; }
+
+    /// <summary>Burn a click ripple into each frame.</summary>
+    public bool HighlightClicks { get; set; }
+
+    /// <summary>
+    /// When true (default) GPU / Media-Foundation encoders (NVENC/QSV/AMF/MF) are tried before the
+    /// software libx264/265 fallback. Set false to force software encoding.
+    /// </summary>
+    public bool PreferHardwareEncoder { get; set; } = true;
+
     public Task<bool> StartAsync(string outputPath, int offsetX, int offsetY, int width, int height, int fps, bool drawMouse, bool useH265)
     {
         FFmpegRuntime.EnsureInitialized();
@@ -172,7 +184,16 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
                 webcam = null;
             }
         }
-        Action<SKBitmap>? composite = webcam != null ? webcam.Draw : null;
+
+        // Optional per-frame cursor / click overlay, burned in via the same BGRA round-trip.
+        CursorOverlayRenderer? overlay = (HighlightCursor || HighlightClicks)
+            ? new CursorOverlayRenderer(offsetX, offsetY, HighlightCursor, HighlightClicks)
+            : null;
+
+        // One per-frame draw combining both: cursor/click overlay first, then the webcam PiP on top.
+        Action<SKBitmap>? composite = (overlay != null || webcam != null)
+            ? sk => { overlay?.Draw(sk); webcam?.Draw(sk); }
+            : null;
 
         pkt = ffmpeg.av_packet_alloc();
         decFrame = ffmpeg.av_frame_alloc();
@@ -220,6 +241,7 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
 
             encCtx = OpenRecordingEncoderContext(
                 useH265,
+                PreferHardwareEncoder,
                 width,
                 height,
                 fps,
@@ -411,7 +433,7 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
             {
                 if (composite != null)
                 {
-                    // Composite path: decode → BGRA (webcam PiP drawn here) → encoder pixel format.
+                    // Composite path: decode → BGRA (overlay + webcam PiP drawn here) → encoder pixel format.
                     swsToBgra = ffmpeg.sws_getContext(
                         srcW, srcH, srcFmt,
                         srcW, srcH, AVPixelFormat.AV_PIX_FMT_BGRA,
@@ -422,7 +444,7 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
                         (int)SwsFlags.SWS_FAST_BILINEAR, null, null, null);
                     if (swsToBgra == null || sws == null)
                     {
-                        throw new InvalidOperationException("sws_getContext failed for webcam-composite BGRA path.");
+                        throw new InvalidOperationException("sws_getContext failed for BGRA composite path.");
                     }
 
                     bgraFrame = ffmpeg.av_frame_alloc();
@@ -457,8 +479,10 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
 
             if (composite != null && bgraFrame != null && swsToBgra != null)
             {
+                // decode → BGRA
                 ffmpeg.sws_scale(swsToBgra, decFrame->data, decFrame->linesize, 0, decFrame->height, bgraFrame->data, bgraFrame->linesize);
 
+                // Draw the cursor ring / click ripple and/or webcam PiP onto the BGRA pixels in place.
                 var info = new SKImageInfo(bgraFrame->width, bgraFrame->height, SKColorType.Bgra8888, SKAlphaType.Premul);
                 using (var sk = new SKBitmap())
                 {
@@ -468,6 +492,7 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
                     }
                 }
 
+                // BGRA → encoder pixel format
                 ffmpeg.sws_scale(sws, bgraFrame->data, bgraFrame->linesize, 0, bgraFrame->height, encFrame->data, encFrame->linesize);
             }
             else
@@ -528,6 +553,7 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
 
     private static unsafe AVCodecContext* OpenRecordingEncoderContext(
         bool preferH265,
+        bool preferHardware,
         int width,
         int height,
         int fps,
@@ -535,9 +561,21 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
         out string selectedEncoderName,
         out string? warningMessage)
     {
-        string[] preferredNames = preferH265
-            ? ["libx265", "hevc_mf", "libx264", "libopenh264", "mpeg4", "h264_mf"]
-            : ["libx264", "libopenh264", "mpeg4", "h264_mf"];
+        // Hardware / Media-Foundation encoders are tried first (when enabled) so the recording
+        // is GPU-accelerated where available; each is test-opened and we fall back to the next,
+        // ending with the always-available software libx264/265.
+        string[] hwH265 = ["hevc_nvenc", "hevc_qsv", "hevc_amf", "hevc_mf"];
+        string[] hwH264 = ["h264_nvenc", "h264_qsv", "h264_amf", "h264_mf"];
+        string[] swH265 = ["libx265", "libx264", "libopenh264", "mpeg4"];
+        string[] swH264 = ["libx264", "libopenh264", "mpeg4"];
+
+        string[] preferredNames = (preferH265, preferHardware) switch
+        {
+            (true, true) => [.. hwH265, .. swH265],
+            (true, false) => swH265,
+            (false, true) => [.. hwH264, .. swH264],
+            (false, false) => swH264,
+        };
 
         selectedEncoderName = preferH265 ? "libx265" : "libx264";
         warningMessage = null;

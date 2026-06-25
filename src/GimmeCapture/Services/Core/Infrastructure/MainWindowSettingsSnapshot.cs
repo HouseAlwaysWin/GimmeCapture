@@ -37,9 +37,15 @@ public sealed class MainWindowSettingsSnapshot
     public required bool EnableWebcam { get; init; }
     public required string WebcamDeviceName { get; init; }
     public required int WebcamCorner { get; init; }
+    public required bool RecordMicrophone { get; init; }
+    public required string SelectedMicDeviceId { get; init; }
+    public required double MicVolume { get; init; }
+    public required bool HighlightCursor { get; init; }
+    public required bool HighlightClicks { get; init; }
     public required string VideoSaveDirectory { get; init; }
     public required string RecordFormat { get; init; }
     public required VideoCodec VideoCodec { get; init; }
+    public required VideoEncoderHint VideoEncoderHint { get; init; }
     public required VideoQuality VideoQuality { get; init; }
     public required int RecordFps { get; init; }
     public required double MaxRecordingSizeMb { get; init; }
@@ -101,9 +107,15 @@ public sealed class MainWindowSettingsSnapshot
             EnableWebcam = settings.EnableWebcam,
             WebcamDeviceName = settings.WebcamDeviceName,
             WebcamCorner = settings.WebcamCorner,
+            RecordMicrophone = settings.RecordMicrophone,
+            SelectedMicDeviceId = settings.SelectedMicDeviceId,
+            MicVolume = settings.MicVolume,
+            HighlightCursor = settings.HighlightCursor,
+            HighlightClicks = settings.HighlightClicks,
             VideoSaveDirectory = settings.VideoSaveDirectory,
             RecordFormat = settings.RecordFormat,
             VideoCodec = settings.VideoCodec,
+            VideoEncoderHint = settings.VideoEncoderHint,
             VideoQuality = settings.VideoQuality,
             RecordFps = settings.RecordFPS,
             MaxRecordingSizeMb = settings.MaxRecordingSizeMB,
@@ -165,9 +177,15 @@ public sealed class MainWindowSettingsSnapshot
         settings.EnableWebcam = EnableWebcam;
         settings.WebcamDeviceName = WebcamDeviceName;
         settings.WebcamCorner = WebcamCorner;
+        settings.RecordMicrophone = RecordMicrophone;
+        settings.SelectedMicDeviceId = SelectedMicDeviceId;
+        settings.MicVolume = MicVolume;
+        settings.HighlightCursor = HighlightCursor;
+        settings.HighlightClicks = HighlightClicks;
         settings.VideoSaveDirectory = VideoSaveDirectory;
         settings.RecordFormat = RecordFormat;
         settings.VideoCodec = VideoCodec;
+        settings.VideoEncoderHint = VideoEncoderHint;
         settings.VideoQuality = VideoQuality;
         settings.RecordFPS = RecordFps;
         settings.MaxRecordingSizeMB = MaxRecordingSizeMb;

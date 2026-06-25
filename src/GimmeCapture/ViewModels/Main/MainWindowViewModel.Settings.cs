@@ -926,6 +926,45 @@ public partial class MainWindowViewModel
         public string Name => LocalizationService.Instance[LocalizationKey];
     }
 
+    private bool _recordMicrophone = false;
+    public bool RecordMicrophone
+    {
+        get => _recordMicrophone;
+        set => this.RaiseAndSetIfChanged(ref _recordMicrophone, value);
+    }
+
+    private string _selectedMicDeviceId = string.Empty;
+    public string SelectedMicDeviceId
+    {
+        get => _selectedMicDeviceId;
+        set => this.RaiseAndSetIfChanged(ref _selectedMicDeviceId, value);
+    }
+
+    private double _micVolume = 1.0;
+    public double MicVolume
+    {
+        get => _micVolume;
+        set => this.RaiseAndSetIfChanged(ref _micVolume, Math.Clamp(value, 0.0, 2.0));
+    }
+
+    // Available microphone / capture devices (first entry = system default, empty id).
+    public System.Collections.Generic.IReadOnlyList<GimmeCapture.Services.Core.Media.AudioInputDevice> MicInputDevices { get; } =
+        GimmeCapture.Services.Core.Media.AudioInputDevices.Enumerate();
+
+    private bool _highlightCursor = false;
+    public bool HighlightCursor
+    {
+        get => _highlightCursor;
+        set => this.RaiseAndSetIfChanged(ref _highlightCursor, value);
+    }
+
+    private bool _highlightClicks = false;
+    public bool HighlightClicks
+    {
+        get => _highlightClicks;
+        set => this.RaiseAndSetIfChanged(ref _highlightClicks, value);
+    }
+
     private int _playbackUiFps = 30;
     public int PlaybackUiFps
     {

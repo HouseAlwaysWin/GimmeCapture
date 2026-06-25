@@ -4,6 +4,7 @@ using System.IO;
 using System.Threading;
 using FFmpeg.AutoGen;
 using GimmeCapture.Models;
+using GimmeCapture.Services.Core.Infrastructure;
 using NAudio.Wave;
 using SkiaSharp;
 
@@ -18,16 +19,35 @@ namespace GimmeCapture.Services.Core.Media.NativeFFmpeg;
 ///
 /// Video: seek to each range start, drop decoded frames before the start, re-encode frames within
 /// [start,end) with a continuous output PTS (CFR at the source frame rate). Audio: decode each range to
-/// PCM (truncated to the range length), concatenate, encode to AAC, then mux with the video.
+/// PCM (truncated to the range length), pitch-preservingly retime any non-1× segment via
+/// <see cref="LibavAtempoFilter"/>, concatenate, encode to AAC, then mux with the video.
 /// </summary>
 internal static class LibavClipExporter
 {
-    internal readonly record struct SourceRange(double StartSeconds, double EndSeconds)
+    // Speed > 1 = faster (fewer output frames), < 1 = slow motion (duplicated frames). 1.0 = unchanged.
+    internal readonly record struct SourceRange(double StartSeconds, double EndSeconds, double Speed = 1.0)
     {
         public double Duration => Math.Max(0, EndSeconds - StartSeconds);
+        public double EffectiveSpeed => Speed > 0.01 ? Speed : 1.0;
     }
 
     private const double TimeEpsilon = 1e-4;
+
+    /// <summary>
+    /// Advances the fractional output-frame cursor by one source frame at the given speed and returns how
+    /// many output frames to emit for it. Faster-than-1× drops frames (can return 0); slower duplicates
+    /// (can return ≥2); 1× always returns 1. Pure so the retiming math can be unit-tested.
+    /// </summary>
+    internal static int AdvanceFrameCursor(ref double accum, double speed)
+    {
+        double effective = speed > 0.01 ? speed : 1.0;
+        double before = accum;
+        accum += 1.0 / effective;
+        // Nudge before flooring so accumulated FP drift (e.g. 90 × 1/1.5 = 59.999…) doesn't spuriously
+        // drop a frame at boundaries; the epsilon telescopes across calls and can't over-count exact values.
+        const double eps = 1e-9;
+        return (int)Math.Floor(accum + eps) - (int)Math.Floor(before + eps);
+    }
 
     /// <summary>Maps an output file extension to the libav container name, or null if unsupported here.</summary>
     public static string? ContainerForExtension(string extension)
@@ -48,7 +68,8 @@ internal static class LibavClipExporter
     /// </summary>
     /// <param name="frameComposite">
     /// Optional per-frame hook: receives each decoded frame as a BGRA <see cref="SKBitmap"/> (source
-    /// resolution) to draw onto in place (annotation/redaction burn-in), before it is re-encoded.
+    /// resolution) plus that frame's source time in seconds, to draw onto in place (annotation/redaction
+    /// burn-in; the time lets time-varying composites position themselves), before it is re-encoded.
     /// </param>
     public static bool TryExport(
         string inputPath,
@@ -56,7 +77,7 @@ internal static class LibavClipExporter
         string outputPath,
         VideoQuality quality,
         VideoEditCrop? crop = null,
-        Action<SKBitmap>? frameComposite = null,
+        Action<SKBitmap, double>? frameComposite = null,
         CancellationToken cancellationToken = default)
     {
         FFmpegRuntime.EnsureInitialized();
@@ -113,7 +134,7 @@ internal static class LibavClipExporter
         string outputPath,
         VideoQuality quality,
         VideoEditCrop? crop,
-        Action<SKBitmap>? frameComposite,
+        Action<SKBitmap, double>? frameComposite,
         CancellationToken ct)
     {
         AVFormatContext* inFmt = null;
@@ -130,6 +151,9 @@ internal static class LibavClipExporter
         AVDictionary* encOpts = null;
         AVStream* outStream = null;
         long frameIndex = 0;
+        // Fractional output-frame cursor for per-segment speed: each source frame advances it by
+        // 1/speed output frames, and we emit floor(after)-floor(before) frames (drop when >1×, dup when <1×).
+        double frameAccum = 0;
         bool annotate = frameComposite != null;
 
         try
@@ -304,7 +328,7 @@ internal static class LibavClipExporter
 
                     runDone = DrainDecodedFrames(
                         decCtx, encCtx, sws, swsToBgra, decFrame, encFrame, bgraFrame, frameComposite,
-                        outFmt, outStream, outPkt, inStream->time_base, range, crop, ref frameIndex);
+                        outFmt, outStream, outPkt, inStream->time_base, range, crop, ref frameIndex, ref frameAccum);
                 }
 
                 // Range reached the file end: flush the decoder so its buffered tail frames aren't lost.
@@ -313,7 +337,7 @@ internal static class LibavClipExporter
                     ffmpeg.avcodec_send_packet(decCtx, null);
                     DrainDecodedFrames(
                         decCtx, encCtx, sws, swsToBgra, decFrame, encFrame, bgraFrame, frameComposite,
-                        outFmt, outStream, outPkt, inStream->time_base, range, crop, ref frameIndex);
+                        outFmt, outStream, outPkt, inStream->time_base, range, crop, ref frameIndex, ref frameAccum);
                 }
 
                 // Reset the decoder before the next range's seek (and after the final flush above).
@@ -360,14 +384,15 @@ internal static class LibavClipExporter
         AVFrame* decFrame,
         AVFrame* encFrame,
         AVFrame* bgraFrame,
-        Action<SKBitmap>? composite,
+        Action<SKBitmap, double>? composite,
         AVFormatContext* outFmt,
         AVStream* outStream,
         AVPacket* outPkt,
         AVRational inTimeBase,
         SourceRange range,
         VideoEditCrop? crop,
-        ref long frameIndex)
+        ref long frameIndex,
+        ref double frameAccum)
     {
         while (true)
         {
@@ -419,7 +444,9 @@ internal static class LibavClipExporter
                 {
                     if (sk.InstallPixels(info, (IntPtr)bgraFrame->data[0], bgraFrame->linesize[0]))
                     {
-                        composite(sk);
+                        // t is this frame's source-time (seconds) — lets time-varying composites
+                        // (e.g. interpolated redaction boxes) position themselves per frame.
+                        composite(sk, t);
                     }
                 }
 
@@ -431,11 +458,19 @@ internal static class LibavClipExporter
                 ffmpeg.sws_scale(sws, decFrame->data, decFrame->linesize, 0, decFrame->height,
                     encFrame->data, encFrame->linesize);
             }
-            encFrame->pts = frameIndex++;
-            ffmpeg.av_frame_unref(decFrame);
+            // Per-segment speed: this source frame spans 1/speed output frames on a CFR (source-fps)
+            // timeline. We emit drop/dup counts so faster (>1×) drops frames and slower (<1×) duplicates;
+            // at 1× it is exactly one frame, identical to before.
+            int emitCount = AdvanceFrameCursor(ref frameAccum, range.EffectiveSpeed);
 
-            ThrowIfErr(ffmpeg.avcodec_send_frame(encCtx, encFrame), "clip_send_frame");
-            WriteEncoded(encCtx, outFmt, outStream, outPkt);
+            for (int e = 0; e < emitCount; e++)
+            {
+                encFrame->pts = frameIndex++;
+                ThrowIfErr(ffmpeg.avcodec_send_frame(encCtx, encFrame), "clip_send_frame");
+                WriteEncoded(encCtx, outFmt, outStream, outPkt);
+            }
+
+            ffmpeg.av_frame_unref(decFrame);
         }
     }
 
@@ -509,6 +544,7 @@ internal static class LibavClipExporter
         out string? audioTemp)
     {
         audioTemp = null;
+
         try
         {
             WaveFormat? format = null;
@@ -529,11 +565,27 @@ internal static class LibavClipExporter
                 long keep = (long)Math.Round(range.Duration * bytesPerSecond);
                 keep -= keep % (decoded.WaveFormat.Channels * 2); // align to a full sample frame
                 keep = Math.Clamp(keep, 0, decoded.PcmBytes.Length);
-                pcm.Write(decoded.PcmBytes, 0, (int)keep);
+
+                if (Math.Abs(range.EffectiveSpeed - 1.0) > 0.001)
+                {
+                    // Pitch-preserving retime so the audio matches this segment's video speed.
+                    byte[] slice = new byte[keep];
+                    Array.Copy(decoded.PcmBytes, slice, (int)keep);
+                    byte[] retimed = LibavAtempoFilter.Process(
+                        slice, decoded.WaveFormat.SampleRate, decoded.WaveFormat.Channels, range.EffectiveSpeed);
+                    AppLog.Information(
+                        $"LibavClipExporter.AudioRetime speed={range.EffectiveSpeed:0.###} in={slice.Length} out={retimed.Length}");
+                    pcm.Write(retimed, 0, retimed.Length);
+                }
+                else
+                {
+                    pcm.Write(decoded.PcmBytes, 0, (int)keep);
+                }
             }
 
             if (format == null || pcm.Length == 0)
             {
+                AppLog.Information($"LibavClipExporter.TryBuildAudio no-audio (format={(format == null ? "null" : "set")} pcmBytes={pcm.Length})");
                 return false; // no audio stream, or nothing decoded
             }
 
@@ -546,15 +598,19 @@ internal static class LibavClipExporter
 
             audioTemp = Path.Combine(tempDir, "audio.m4a");
             LibavAacTranscoder.EncodeWavToM4a(wavTemp, audioTemp, quality);
-            return File.Exists(audioTemp) && new FileInfo(audioTemp).Length > 0;
+            bool ok = File.Exists(audioTemp) && new FileInfo(audioTemp).Length > 0;
+            AppLog.Information($"LibavClipExporter.TryBuildAudio built={ok} pcmBytes={pcmBytes.Length}");
+            return ok;
         }
         catch (OperationCanceledException)
         {
             throw;
         }
-        catch
+        catch (Exception ex)
         {
-            // No usable audio (e.g. silent recording) — export video only rather than failing.
+            // No usable audio (e.g. silent recording) — export video only rather than failing. Log so a
+            // genuine audio-pipeline failure isn't silently swallowed into a soundless export.
+            AppLog.Warning("LibavClipExporter.TryBuildAudio", ex);
             audioTemp = null;
             return false;
         }

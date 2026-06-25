@@ -62,9 +62,15 @@ public partial class MainWindowViewModel
             EnableWebcam = EnableWebcam,
             WebcamDeviceName = WebcamDeviceName,
             WebcamCorner = WebcamCorner,
+            RecordMicrophone = RecordMicrophone,
+            SelectedMicDeviceId = SelectedMicDeviceId,
+            MicVolume = MicVolume,
+            HighlightCursor = HighlightCursor,
+            HighlightClicks = HighlightClicks,
             VideoSaveDirectory = RecordingSettings.VideoSaveDirectory,
             RecordFormat = RecordingSettings.RecordFormat,
             VideoCodec = RecordingSettings.VideoCodec,
+            VideoEncoderHint = RecordingSettings.VideoEncoderHint,
             VideoQuality = RecordingSettings.VideoQuality,
             RecordFps = RecordingSettings.RecordFPS,
             MaxRecordingSizeMb = RecordingSettings.MaxRecordingSizeMB,
@@ -110,6 +116,7 @@ public partial class MainWindowViewModel
         RecordingSettings.RecordFormat = snapshot.RecordFormat;
         RecordingSettings.VideoSaveDirectory = snapshot.VideoSaveDirectory;
         RecordingSettings.VideoCodec = snapshot.VideoCodec;
+        RecordingSettings.VideoEncoderHint = snapshot.VideoEncoderHint;
         RecordingSettings.VideoQuality = snapshot.VideoQuality;
         RecordingSettings.UseFixedRecordPath = snapshot.UseFixedRecordPath;
         HideSnipPinDecoration = snapshot.HideSnipPinDecoration;
@@ -132,6 +139,11 @@ public partial class MainWindowViewModel
         EnableWebcam = snapshot.EnableWebcam;
         WebcamDeviceName = snapshot.WebcamDeviceName;
         WebcamCorner = snapshot.WebcamCorner;
+        RecordMicrophone = snapshot.RecordMicrophone;
+        SelectedMicDeviceId = snapshot.SelectedMicDeviceId;
+        MicVolume = snapshot.MicVolume;
+        HighlightCursor = snapshot.HighlightCursor;
+        HighlightClicks = snapshot.HighlightClicks;
         PlaybackUiFps = snapshot.PlaybackUiFps;
         PlaybackTimelineFps = snapshot.PlaybackTimelineFps;
         TempDirectory = snapshot.TempDirectory;
@@ -154,6 +166,7 @@ public partial class MainWindowViewModel
         SelectedLanguageOption = AvailableLanguages.AsValueEnumerable().FirstOrDefault(x => x.Value == snapshot.Language) ?? AvailableLanguages[0];
         RecordingSettings.SelectedVideoCodecOption = RecordingSettings.VideoCodecOptions.AsValueEnumerable().FirstOrDefault(x => x.Value == snapshot.VideoCodec);
         RecordingSettings.SelectedVideoQualityOption = RecordingSettings.VideoQualityOptions.AsValueEnumerable().FirstOrDefault(x => x.Value == snapshot.VideoQuality);
+        RecordingSettings.SelectedVideoEncoderHintOption = RecordingSettings.VideoEncoderHintOptions.AsValueEnumerable().FirstOrDefault(x => x.Value == snapshot.VideoEncoderHint);
     }
 
     private void RaiseSettingsBackedPropertyNotifications()

@@ -625,6 +625,8 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     public string OutputAudioDbText => $"{ToDecibel(OutputAudioLevel):F1} dB";
     public bool IsInputAudioActive => InputAudioLevel >= 0.01;
     public bool IsOutputAudioActive => OutputAudioLevel >= 0.01;
+    // Whether the recording captures the mic — drives the mic level meter's visibility in the toolbar.
+    public bool IsMicrophoneEnabled => _mainVm?.RecordMicrophone ?? false;
     public string InputAudioStateText => IsInputAudioActive
         ? (LocalizationService.Instance["RecordAudioActive"] ?? "Active")
         : (LocalizationService.Instance["RecordAudioIdle"] ?? "Idle");
@@ -641,6 +643,8 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
             return;
         }
 
+        // Meter the mic the recording will actually use (not just the system default input).
+        _audioLevelMonitor.MicDeviceId = _mainVm?.SelectedMicDeviceId;
         if (_audioLevelMonitor.TryRefresh())
         {
             InputAudioLevel = QuantizeAudioLevel(_audioLevelMonitor.InputPeak);
