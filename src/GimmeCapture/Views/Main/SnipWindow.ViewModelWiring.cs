@@ -356,6 +356,22 @@ public partial class SnipWindow : Window
                     }
                 };
 
+                // Freeze the current video frame into an image pin that enters SAM2 point-removal, so an
+                // object can be cut out of that single frame (reuses the image pin's interactive flow).
+                vm.FreezeFrameToImagePinAction = bitmap =>
+                {
+                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                        _viewModel.OpenPinWindowAction?.Invoke(
+                            bitmap,
+                            new Rect(0, 0, bitmap.Size.Width, bitmap.Size.Height),
+                            vm.BorderColor,
+                            vm.BorderThickness,
+                            false, // runAI (auto background removal)
+                            true,  // initialInteractive → enter SAM2 point-removal
+                            null,  // pinnedText
+                            0.0)); // inferredFontSize
+                };
+
                 var padding = vm.WindowPadding;
                 var window = new FloatingVideoWindow
                 {

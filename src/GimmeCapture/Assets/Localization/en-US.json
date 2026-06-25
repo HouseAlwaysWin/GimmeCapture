@@ -179,6 +179,7 @@
   "TipFlipH": "Flip horizontal",
   "TipFlipV": "Flip vertical",
   "TipTimeline": "Timeline (multi-segment cut)",
+  "TipFreezeRemove": "Freeze frame → remove an object (image pin)",
   "TipSplitSegment": "Split at playhead",
   "TipPieceSpeed": "Cycle speed of the piece at the playhead (slow-mo / fast-mo)",
   "TipDeleteSegment": "Delete selected segment",

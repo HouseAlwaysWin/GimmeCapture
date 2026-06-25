@@ -159,6 +159,7 @@
   "TipFlipH": "左右反転",
   "TipFlipV": "上下反転",
   "TipTimeline": "タイムライン（マルチセグメント編集）",
+  "TipFreezeRemove": "このフレームを固定 → オブジェクト除去（画像ピン）",
   "TipSplitSegment": "再生位置で分割",
   "TipPieceSpeed": "再生位置のセグメント速度を切り替え（スロー／早送り）",
   "TipDeleteSegment": "選択したセグメントを削除",

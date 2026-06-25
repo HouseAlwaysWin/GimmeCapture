@@ -171,6 +171,7 @@
   "TipFlipH": "水平翻轉",
   "TipFlipV": "垂直翻轉",
   "TipTimeline": "時間軸（多段剪輯）",
+  "TipFreezeRemove": "凍結此幀 → 移除物件（轉圖片釘選）",
   "TipSplitSegment": "在播放點切分",
   "TipPieceSpeed": "切換播放點片段的速度（慢動作／快轉）",
   "TipDeleteSegment": "刪除選取的片段",
