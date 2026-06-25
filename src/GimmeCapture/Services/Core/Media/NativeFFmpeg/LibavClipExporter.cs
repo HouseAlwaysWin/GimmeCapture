@@ -4,6 +4,7 @@ using System.IO;
 using System.Threading;
 using FFmpeg.AutoGen;
 using GimmeCapture.Models;
+using GimmeCapture.Services.Core.Infrastructure;
 using NAudio.Wave;
 using SkiaSharp;
 
@@ -566,6 +567,8 @@ internal static class LibavClipExporter
                     Array.Copy(decoded.PcmBytes, slice, (int)keep);
                     byte[] retimed = LibavAtempoFilter.Process(
                         slice, decoded.WaveFormat.SampleRate, decoded.WaveFormat.Channels, range.EffectiveSpeed);
+                    AppLog.Information(
+                        $"LibavClipExporter.AudioRetime speed={range.EffectiveSpeed:0.###} in={slice.Length} out={retimed.Length}");
                     pcm.Write(retimed, 0, retimed.Length);
                 }
                 else
