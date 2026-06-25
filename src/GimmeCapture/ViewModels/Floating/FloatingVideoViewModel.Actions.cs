@@ -146,73 +146,42 @@ public partial class FloatingVideoViewModel
     {
         if (string.IsNullOrEmpty(VideoPath) || !File.Exists(VideoPath)) return null;
 
-        // Multi-segment cut: route crop through the compiler (concat -> crop, audio re-encoded).
-        if (UseMultiSegment)
+        string ext = targetExtension ?? Path.GetExtension(VideoPath);
+        if (!ext.StartsWith(".")) ext = "." + ext;
+
+        // In-process crop + trim (no ffmpeg.exe) for plain video containers (mp4/mkv/mov).
+        if (LibavClipExporter.ContainerForExtension(ext) == null)
         {
-            return await ExportComposedAsync(targetExtension, new VideoEditCrop(crop.X, crop.Y, crop.Width, crop.Height));
+            AppLog.Error("FloatingVideo.ExportCrop", new NotSupportedException(
+                $"Crop export to '{ext}' is not supported in-process yet."));
+            return null;
         }
 
+        // Kept runs (or the whole clip when no cut), plus the pixel crop rect.
+        var runs = KeptRuns();
+        IReadOnlyList<VideoEditSegment> segs = runs.Length > 0
+            ? runs
+            : VideoSegmentEditor.FromTrim(0, _totalDuration.TotalSeconds, _totalDuration.TotalSeconds);
+        var ranges = segs
+            .Select(r => new LibavClipExporter.SourceRange(r.SourceStart, r.SourceEnd))
+            .ToList();
+        var editCrop = new VideoEditCrop(crop.X, crop.Y, crop.Width, crop.Height);
+        VideoQuality quality = _appSettingsService?.Settings.VideoQuality ?? VideoQuality.Medium;
+
+        string tempDir = Path.Combine(Path.GetTempPath(), "GimmeCapture_Export_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        string outputPath = Path.Combine(tempDir, "output" + ext);
+
         IsExporting = true;
-        ExportProgress = 0;
         try
         {
-            string tempDir = Path.Combine(Path.GetTempPath(), "GimmeCapture_Export_" + Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(tempDir);
-
-            string ext = targetExtension ?? Path.GetExtension(VideoPath);
-            if (!ext.StartsWith(".")) ext = "." + ext;
-            string outputPath = Path.Combine(tempDir, "output" + ext);
-
-            var ffmpegPath = FFmpegPath;
-            if (ffmpegPath.Contains("ffplay.exe")) ffmpegPath = ffmpegPath.Replace("ffplay.exe", "ffmpeg.exe");
-            if (!File.Exists(ffmpegPath))
-            {
-                AppLog.Error("FloatingVideo.ExportCrop", new InvalidOperationException(
-                    "No external ffmpeg.exe configured; crop/annotation export is not yet supported in-process."));
-                return null;
-            }
-
-            (double trimStart, double trimEnd) = SingleSegmentSourceRange();
-            bool applyTrim = SingleSegmentIsTrimmed;
-            bool isOutputGif = ext.Equals(".gif", StringComparison.OrdinalIgnoreCase);
-            string cropFilter = $"crop={crop.Width}:{crop.Height}:{crop.X}:{crop.Y}";
-
-            var result = await Cli.Wrap(ffmpegPath)
-                .WithArguments(args =>
-                {
-                    args.Add("-y");
-                    if (applyTrim && trimStart > 0)
-                    {
-                        args.Add("-ss").Add(trimStart.ToString("F3"));
-                    }
-                    args.Add("-i").Add(VideoPath);
-                    if (applyTrim)
-                    {
-                        args.Add("-to").Add((trimEnd - trimStart).ToString("F3"));
-                    }
-                    args.Add("-vf").Add(cropFilter);
-                    if (!isOutputGif)
-                    {
-                        args.Add("-map").Add("0:v:0")
-                            .Add("-map").Add("0:a?")
-                            .Add("-c:v").Add("libx264")
-                            .Add("-preset").Add("ultrafast")
-                            .Add("-pix_fmt").Add("yuv420p")
-                            .Add("-crf").Add("23")
-                            .Add("-c:a").Add("copy");
-                    }
-                    args.Add(outputPath);
-                })
-                .WithValidation(CommandResultValidation.None)
-                .ExecuteBufferedAsync();
-
-            if (File.Exists(outputPath) && new FileInfo(outputPath).Length > 0)
+            bool ok = await Task.Run(() => LibavClipExporter.TryExport(VideoPath, ranges, outputPath, quality, editCrop));
+            if (ok)
             {
                 return outputPath;
             }
 
-            AppLog.Error("FloatingVideo.ExportCrop", new Exception(
-                $"ffmpeg exit {result.ExitCode}: {Truncate(result.StandardError, 600)}"));
+            AppLog.Error("FloatingVideo.ExportCrop", new Exception("In-process crop export produced no output file."));
             return null;
         }
         catch (Exception ex)
