@@ -127,6 +127,9 @@ public partial class MainWindowViewModel
         ShowSnipCursor = defaultSettings.ShowSnipCursor;
         ShowRecordCursor = defaultSettings.ShowRecordCursor;
         RecordSystemAudio = defaultSettings.RecordSystemAudio;
+        RecordMicrophone = defaultSettings.RecordMicrophone;
+        SelectedMicDeviceId = defaultSettings.SelectedMicDeviceId;
+        MicVolume = defaultSettings.MicVolume;
         TempDirectory = defaultSettings.TempDirectory;
         
         if (Color.TryParse(defaultSettings.BorderColorHex, out var color))

@@ -276,6 +276,9 @@ public class AppSettingsService
         dest.ShowSnipCursor = source.ShowSnipCursor;
         dest.ShowRecordCursor = source.ShowRecordCursor;
         dest.RecordSystemAudio = source.RecordSystemAudio;
+        dest.RecordMicrophone = source.RecordMicrophone;
+        dest.SelectedMicDeviceId = source.SelectedMicDeviceId;
+        dest.MicVolume = source.MicVolume;
         dest.VideoSaveDirectory = source.VideoSaveDirectory;
         dest.RecordFormat = source.RecordFormat;
         dest.VideoCodec = source.VideoCodec;

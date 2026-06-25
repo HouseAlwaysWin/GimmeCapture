@@ -59,6 +59,9 @@ public partial class MainWindowViewModel
             ShowSnipCursor = ShowSnipCursor,
             ShowRecordCursor = ShowRecordCursor,
             RecordSystemAudio = RecordSystemAudio,
+            RecordMicrophone = RecordMicrophone,
+            SelectedMicDeviceId = SelectedMicDeviceId,
+            MicVolume = MicVolume,
             VideoSaveDirectory = RecordingSettings.VideoSaveDirectory,
             RecordFormat = RecordingSettings.RecordFormat,
             VideoCodec = RecordingSettings.VideoCodec,
@@ -126,6 +129,9 @@ public partial class MainWindowViewModel
         ShowSnipCursor = snapshot.ShowSnipCursor;
         ShowRecordCursor = snapshot.ShowRecordCursor;
         RecordSystemAudio = snapshot.RecordSystemAudio;
+        RecordMicrophone = snapshot.RecordMicrophone;
+        SelectedMicDeviceId = snapshot.SelectedMicDeviceId;
+        MicVolume = snapshot.MicVolume;
         PlaybackUiFps = snapshot.PlaybackUiFps;
         PlaybackTimelineFps = snapshot.PlaybackTimelineFps;
         TempDirectory = snapshot.TempDirectory;

@@ -139,6 +139,12 @@ public class AppSettings
     public bool ShowSnipCursor { get; set; } = false;
     public bool ShowRecordCursor { get; set; } = true;
     public bool RecordSystemAudio { get; set; } = true;
+    // Microphone capture, mixed with system audio at finalize.
+    public bool RecordMicrophone { get; set; } = false;
+    // WASAPI capture-endpoint device id (empty = default input device).
+    public string SelectedMicDeviceId { get; set; } = string.Empty;
+    // Linear gain applied to the mic stream when mixing (1.0 = unchanged).
+    public double MicVolume { get; set; } = 1.0;
     public string VideoSaveDirectory { get; set; } = string.Empty;
     public string RecordFormat { get; set; } = "mp4";
     public VideoCodec VideoCodec { get; set; } = VideoCodec.H264;

@@ -64,6 +64,7 @@ public partial class RecordingService
         if (_nativeRecorder == null)
         {
             StopAudioCapture();
+            StopMicCapture();
             return;
         }
 
@@ -80,6 +81,7 @@ public partial class RecordingService
             _nativeRecorder.Dispose();
             _nativeRecorder = null;
             StopAudioCapture();
+            StopMicCapture();
         }
     }
 }
