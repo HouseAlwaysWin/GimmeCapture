@@ -502,15 +502,30 @@ public partial class SnipWindow : Window
                 return true;
             }
 
-            bool isOverlayEditingState =
-                _viewModel.CurrentState == SnipState.Selected
-                || _viewModel.IsDrawingMode
-                || _viewModel.RecState != RecordingState.Idle;
-
-            if (!isOverlayEditingState)
+            // Pause/stop must still work globally while recording (e.g. F9/Space from another app).
+            if (_viewModel.CurrentMode == SnipMode.Recording && _viewModel.RecState != RecordingState.Idle)
             {
-                return false;
+                if (IsMatch(_viewModel.ActivePlaybackHotkey))
+                {
+                    _viewModel.PauseRecordingCommand?.Execute().Subscribe();
+                    return true;
+                }
+
+                if (IsMatch(_viewModel.ActiveStopHotkey))
+                {
+                    _viewModel.StopRecordingCommand?.Execute().Subscribe();
+                    return true;
+                }
             }
+
+            // In Snip/Record mode the LL hook is only ever reached on the UNFOCUSED path: when the overlay
+            // owns focus, HandleGlobalKeyboardEvent has already returned above and Avalonia's window
+            // KeyBindings handle keys. So past the narrow capture-flow hotkeys (handled just above), the
+            // overlay must stay completely hands-off and must NOT swallow the user's typing in another app —
+            // in particular the single-letter drawing-tool hotkeys (R/E/A/L/P/T/M/B) and Clear, which used to
+            // be eaten here while recording. Copy/Save/Undo/Redo stay available while the overlay is focused
+            // (window KeyBindings); annotation/editing lives in the pin windows, which have their own hotkeys.
+            return false;
         }
 
         // 1. General Window Hotkeys
