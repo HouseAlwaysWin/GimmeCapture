@@ -45,10 +45,18 @@ strided BGRA) is the one Step 3 should reuse to feed the encoder.**
 > free-threaded frame pool. Note: `IsBorderRequired` is NOT in the 19041 SDK
 > projection, so it is not referenced; revisit if the border needs hiding.
 
-## Status: ALL THREE STEPS DONE ✅
-Step 3 shipped: recording a picked window now goes through Windows Graphics Capture
-and follows the window (move/resize/occlusion/minimize) instead of grabbing a fixed
-desktop rectangle. Pieces:
+## Status: ALL THREE STEPS DONE ✅ + multi-window (composite & separate)
+Single-window WGC recording (steps 1–3) shipped, AND multi-window recording was added
+on top: pick several windows in the picker and either **composite** them into one tiled
+video or record each to a **separate** file (toggle in the picker). See
+`CompositeGridLayout`, `LibavWgcCompositeMkvSession`, the `VideoTrack`/separate path in
+`RecordingService.*`, and `MultiWindowMode`. Both modes verified end-to-end (composite →
+one 2560×1440 grid; separate → N native-resolution files, shared synced audio).
+
+Step 3 (single window) pieces:
+- `Services/Platforms/Windows/WgcInterop.cs` — shared WGC/D3D interop.
+- `Services/Platforms/Windows/WgcWindowCaptureSource.cs` — continuous BGRA source
+  (latest-frame-under-lock; recreates pool on resize).
 - `Services/Platforms/Windows/WgcInterop.cs` — shared WGC/D3D interop.
 - `Services/Platforms/Windows/WgcWindowCaptureSource.cs` — continuous BGRA source
   (latest-frame-under-lock; recreates pool on resize).
