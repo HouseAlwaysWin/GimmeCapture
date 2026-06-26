@@ -20,20 +20,36 @@ the same tech Win10/11's built-in recorder and OBS "Window Capture" use.
   is on this dedicated branch.
 
 ## Current state of THIS branch (`claude/record-window-wgc`)
-**Step 1 of 3 is done and committed:** the Windows target platform version was
-bumped so WinRT projections are available:
-- `src/GimmeCapture/GimmeCapture.csproj`, `tests/GimmeCapture.Tests/*.csproj`,
-  `tests/GimmeCapture.Benchmarks/*.csproj`: `net10.0-windows` →
-  `net10.0-windows10.0.19041.0`.
-- **`packages.lock.json` for all three projects must be regenerated** on Windows:
-  `dotnet restore GimmeCapture.slnx --runtime win-x64`, then commit the updated
-  lock files. (The cloud Linux session could not regenerate them.)
+**Steps 1 and 2 of 3 are done and committed.**
 
-**First thing to do locally:** restore + build + run the app and confirm the TFM
-bump didn't break anything (no WGC code yet). Commit the regenerated lock files.
+**Step 1 (TFM bump + lock files) — DONE.** Windows target platform bumped to
+`net10.0-windows10.0.19041.0` for all three projects so WinRT projections are
+available. The three `packages.lock.json` files were regenerated on Windows
+(`dotnet restore ... --runtime win-x64`) and committed. The test
+`FakeWindowDetectionService` got the missing `GetRecordableWindows` member so the
+test project compiles. Verified: build green, 457 tests pass, app launches cleanly.
+
+**Step 2 (WGC probe) — DONE and proven on a real machine.** See
+`Services/Platforms/Windows/WgcWindowCaptureProbe.cs` (+ `IWgcWindowCaptureProbe`).
+It captures one frame of an HWND via WGC and saves a PNG. Picking a **window** in
+the record capture-scope picker fires the probe (temporary trigger) and writes
+`wgc-probe.png` next to the app data dir, toasting the path. Confirmed: capturing a
+Brave (Chromium/GPU-composited) window produced a fully-rendered, non-black image —
+the exact case gdigrab returned black for. **The BGRA readback path
+(`SoftwareBitmap.CreateCopyFromSurfaceAsync` → `IMemoryBufferByteAccess` → tightly
+strided BGRA) is the one Step 3 should reuse to feed the encoder.**
+
+> Reusable interop bits already written in `WgcWindowCaptureProbe.cs`: D3D11 device
+> creation + WinRT `IDirect3DDevice` wrapping (`CreateDirect3DDevice`),
+> `IGraphicsCaptureItemInterop.CreateForWindow` (`CreateCaptureItemForWindow`),
+> free-threaded frame pool. Note: `IsBorderRequired` is NOT in the 19041 SDK
+> projection, so it is not referenced; revisit if the border needs hiding.
 
 ## Plan — remaining steps
-### Step 2 — WGC probe (de-risk the interop FIRST)
+> **Step 3 is the only remaining step.** Steps 1–2 are done (see above). Step 2's
+> original instructions are kept below for reference on how the probe was built.
+
+### Step 2 — WGC probe (de-risk the interop FIRST) — ✅ DONE
 Write a minimal `WgcWindowCaptureSource` (or `WgcProbe`) that captures **one
 frame** of a given top-level window (HWND) and saves it as a PNG, to prove WGC
 works on the user's machine and produces a non-black image. Suggested flow:
