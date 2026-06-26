@@ -1,14 +1,21 @@
 using System;
 using System.Diagnostics;
+using System.IO;
 using System.Threading.Tasks;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Core.Media.NativeFFmpeg;
+using GimmeCapture.Services.Platforms.Windows;
 
 namespace GimmeCapture.Services.Core.Media;
 
 public partial class RecordingService
 {
     private LibavGdigrabMkvSession? _nativeRecorder;
+    private LibavWgcMkvSession? _nativeWgcRecorder;
+    private LibavWgcCompositeMkvSession? _nativeWgcCompositeRecorder;
+
+    private bool WgcAvailable =>
+        OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041) && WgcWindowCaptureSource.IsSupported;
 
     private async Task<bool> StartFfmpegSegmentAsync(string segmentFile)
     {
@@ -19,6 +26,175 @@ public partial class RecordingService
             return false;
         }
 
+        // Multiple windows: composite → one tiled video; separate → one WGC session per window.
+        if (_windowHandles.Count >= 2 && WgcAvailable)
+        {
+            if (_multiWindowMode == MultiWindowMode.Separate && _tracks.Count > 0)
+            {
+                if (await StartSeparateSegmentsAsync().ConfigureAwait(false))
+                {
+                    return true;
+                }
+
+                Debug.WriteLine($"[RecordingService] Separate WGC capture failed; falling back to region. {LastStartError}");
+                LastStartWarning = "Multi-window capture unavailable — recording the screen region instead.";
+                return await StartGdigrabSegmentAsync(segmentFile).ConfigureAwait(false);
+            }
+
+            if (await StartCompositeSegmentAsync(segmentFile).ConfigureAwait(false))
+            {
+                return true;
+            }
+
+            Debug.WriteLine($"[RecordingService] Composite WGC capture failed; falling back to region. {LastStartError}");
+            LastStartWarning = "Multi-window capture unavailable — recording the screen region instead.";
+            return await StartGdigrabSegmentAsync(segmentFile).ConfigureAwait(false);
+        }
+
+        // A single picked window records via Windows Graphics Capture so the output follows the window. If
+        // WGC can't start (no support / window gone), fall back to the gdigrab region so recording works.
+        if (_windowHandle != IntPtr.Zero && WgcAvailable)
+        {
+            if (await StartWgcSegmentAsync(segmentFile).ConfigureAwait(false))
+            {
+                return true;
+            }
+
+            Debug.WriteLine($"[RecordingService] WGC window capture failed; falling back to region. {LastStartError}");
+            LastStartWarning = "Window capture unavailable — recording the window's current screen region instead.";
+        }
+
+        return await StartGdigrabSegmentAsync(segmentFile).ConfigureAwait(false);
+    }
+
+    private async Task<bool> StartCompositeSegmentAsync(string segmentFile)
+    {
+        try
+        {
+            _nativeWgcCompositeRecorder?.Dispose();
+            _nativeWgcCompositeRecorder = new LibavWgcCompositeMkvSession
+            {
+                PreferHardwareEncoder = _settingsService?.Settings.VideoEncoderHint != VideoEncoderHint.SoftwareOnly
+            };
+
+            bool useH265 = _settingsService?.Settings.VideoCodec == VideoCodec.H265;
+
+            var ok = await _nativeWgcCompositeRecorder.StartAsync(segmentFile, _windowHandles, _fps, _includeCursor, useH265)
+                .ConfigureAwait(false);
+            if (!ok)
+            {
+                LastStartError = _nativeWgcCompositeRecorder.LastErrorMessage ?? "Composite WGC session reported failure.";
+                _nativeWgcCompositeRecorder.Dispose();
+                _nativeWgcCompositeRecorder = null;
+                return false;
+            }
+
+            LastStartWarning = _nativeWgcCompositeRecorder.LastWarningMessage ?? string.Empty;
+            _lastSelectedVideoEncoderName = _nativeWgcCompositeRecorder.SelectedEncoderName ?? string.Empty;
+            State = RecordingState.Recording;
+            return true;
+        }
+        catch (Exception ex)
+        {
+            LastStartError = ex.Message;
+            Debug.WriteLine($"[RecordingService] Composite recorder start failed: {ex.Message}");
+            _nativeWgcCompositeRecorder?.Dispose();
+            _nativeWgcCompositeRecorder = null;
+            return false;
+        }
+    }
+
+    private async Task<bool> StartWgcSegmentAsync(string segmentFile)
+    {
+        try
+        {
+            _nativeWgcRecorder?.Dispose();
+            _nativeWgcRecorder = new LibavWgcMkvSession
+            {
+                PreferHardwareEncoder = _settingsService?.Settings.VideoEncoderHint != VideoEncoderHint.SoftwareOnly
+            };
+
+            bool useH265 = _settingsService?.Settings.VideoCodec == VideoCodec.H265;
+
+            var ok = await _nativeWgcRecorder.StartAsync(segmentFile, _windowHandle, _fps, _includeCursor, useH265)
+                .ConfigureAwait(false);
+            if (!ok)
+            {
+                LastStartError = _nativeWgcRecorder.LastErrorMessage ?? "WGC window session reported failure.";
+                _nativeWgcRecorder.Dispose();
+                _nativeWgcRecorder = null;
+                return false;
+            }
+
+            LastStartWarning = _nativeWgcRecorder.LastWarningMessage ?? string.Empty;
+            _lastSelectedVideoEncoderName = _nativeWgcRecorder.SelectedEncoderName ?? string.Empty;
+            State = RecordingState.Recording;
+            return true;
+        }
+        catch (Exception ex)
+        {
+            LastStartError = ex.Message;
+            Debug.WriteLine($"[RecordingService] WGC recorder start failed: {ex.Message}");
+            _nativeWgcRecorder?.Dispose();
+            _nativeWgcRecorder = null;
+            return false;
+        }
+    }
+
+    private async Task<bool> StartSeparateSegmentsAsync()
+    {
+        bool useH265 = _settingsService?.Settings.VideoCodec == VideoCodec.H265;
+        bool preferHw = _settingsService?.Settings.VideoEncoderHint != VideoEncoderHint.SoftwareOnly;
+        int segIndex = Math.Max(0, _segments.Count - 1);
+        int started = 0;
+
+        for (int i = 0; i < _tracks.Count; i++)
+        {
+            var track = _tracks[i];
+            track.Session?.Dispose();
+            track.Session = null;
+
+            string segPath = Path.Combine(_tempDir, $"track{i}_segment_{segIndex}.mkv");
+            try
+            {
+                var session = new LibavWgcMkvSession { PreferHardwareEncoder = preferHw };
+                bool ok = await session.StartAsync(segPath, track.Hwnd, _fps, _includeCursor, useH265).ConfigureAwait(false);
+                if (ok)
+                {
+                    track.Session = session;
+                    track.Segments.Add(segPath);
+                    _lastSelectedVideoEncoderName = session.SelectedEncoderName ?? _lastSelectedVideoEncoderName;
+                    started++;
+                }
+                else
+                {
+                    Debug.WriteLine($"[RecordingService] Track {i} (hwnd {track.Hwnd}) failed to start: {session.LastErrorMessage}");
+                    session.Dispose();
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[RecordingService] Track {i} start threw: {ex.Message}");
+            }
+        }
+
+        if (started == 0)
+        {
+            LastStartError = "None of the selected windows could be captured.";
+            return false;
+        }
+
+        if (started < _tracks.Count)
+        {
+            LastStartWarning = $"{_tracks.Count - started} window(s) could not be captured and were skipped.";
+        }
+
+        State = RecordingState.Recording;
+        return true;
+    }
+
+    private async Task<bool> StartGdigrabSegmentAsync(string segmentFile)
+    {
         try
         {
             _nativeRecorder?.Dispose();
@@ -41,7 +217,9 @@ public partial class RecordingService
 
             var ok = await _nativeRecorder.StartAsync(segmentFile, x, y, w, h, _fps, _includeCursor, useH265)
                 .ConfigureAwait(false);
-            LastStartWarning = _nativeRecorder.LastWarningMessage ?? string.Empty;
+            LastStartWarning = string.IsNullOrEmpty(LastStartWarning)
+                ? _nativeRecorder.LastWarningMessage ?? string.Empty
+                : LastStartWarning;
             _lastSelectedVideoEncoderName = _nativeRecorder.SelectedEncoderName ?? string.Empty;
             if (!ok)
             {
@@ -69,7 +247,8 @@ public partial class RecordingService
 
     private async Task StopCurrentSegmentAsync()
     {
-        if (_nativeRecorder == null)
+        bool anyTrackSession = _tracks.AsValueEnumerable().Any(t => t.Session != null);
+        if (_nativeRecorder == null && _nativeWgcRecorder == null && _nativeWgcCompositeRecorder == null && !anyTrackSession)
         {
             StopAudioCapture();
             StopMicCapture();
@@ -78,7 +257,28 @@ public partial class RecordingService
 
         try
         {
-            await _nativeRecorder.StopAsync().ConfigureAwait(false);
+            if (_nativeWgcCompositeRecorder != null)
+            {
+                await _nativeWgcCompositeRecorder.StopAsync().ConfigureAwait(false);
+            }
+
+            if (_nativeWgcRecorder != null)
+            {
+                await _nativeWgcRecorder.StopAsync().ConfigureAwait(false);
+            }
+
+            foreach (var track in _tracks)
+            {
+                if (track.Session != null)
+                {
+                    await track.Session.StopAsync().ConfigureAwait(false);
+                }
+            }
+
+            if (_nativeRecorder != null)
+            {
+                await _nativeRecorder.StopAsync().ConfigureAwait(false);
+            }
         }
         catch (Exception ex)
         {
@@ -86,7 +286,16 @@ public partial class RecordingService
         }
         finally
         {
-            _nativeRecorder.Dispose();
+            _nativeWgcCompositeRecorder?.Dispose();
+            _nativeWgcCompositeRecorder = null;
+            _nativeWgcRecorder?.Dispose();
+            _nativeWgcRecorder = null;
+            foreach (var track in _tracks)
+            {
+                track.Session?.Dispose();
+                track.Session = null;
+            }
+            _nativeRecorder?.Dispose();
             _nativeRecorder = null;
             StopAudioCapture();
             StopMicCapture();

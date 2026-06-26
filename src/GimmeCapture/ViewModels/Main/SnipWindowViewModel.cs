@@ -369,6 +369,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         InitializeActionCommands();
         InitializeToolbarCommands();
         InitializeSelectionCommands();
+        InitializeCaptureScopeCommands();
         InitializeMainViewModelBindingsIfNeeded();
         _editorState.Changed.Subscribe(_ =>
         {

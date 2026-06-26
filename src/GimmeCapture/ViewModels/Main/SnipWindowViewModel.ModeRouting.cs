@@ -166,6 +166,13 @@ public partial class SnipWindowViewModel
 
         _selectionStateController.HandleModeTransition(oldMode, value, CurrentState);
         TranslationResultLayerManager.RefreshWindowState();
+
+        // Recording mode keeps its toolbar fixed at the top-center (like Translation) so the capture-scope
+        // picker is reachable without drawing a selection first, and picking a target doesn't move it.
+        if (value == SnipMode.Recording)
+        {
+            PositionFixedTopCenterToolbar();
+        }
     }
     
     private bool _isGlobalAutoDetectEnabled;
@@ -196,13 +203,16 @@ public partial class SnipWindowViewModel
     /// </summary>
     public bool IsToolbarVisible =>
         CurrentMode == SnipMode.Translation
+        || (CurrentMode == SnipMode.Recording && !IsRecordingFinalizing)
         || (CurrentState == SnipState.Selected && !IsRecordingFinalizing);
 
     /// <summary>
     /// 使用者是否「看得到」工具列（未停到螢幕外）；Win32 命中與 Canvas 互動以此為準。
     /// </summary>
     public bool IsToolbarShownOnScreen =>
-        ShowToolbar && (CurrentMode == SnipMode.Translation || (CurrentState == SnipState.Selected && !IsRecordingFinalizing));
+        ShowToolbar && (CurrentMode == SnipMode.Translation
+            || (CurrentMode == SnipMode.Recording && !IsRecordingFinalizing)
+            || (CurrentState == SnipState.Selected && !IsRecordingFinalizing));
 
     public string ModeDisplayName => CurrentMode switch
     {

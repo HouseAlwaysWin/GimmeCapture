@@ -27,6 +27,34 @@
                     <Setter Property="Margin" Value="1,2"/>
                 </Style>
                 </WrapPanel.Styles>
+            <!-- Drag handle (screenshot / recording modes; translation has its own strip): grab to move the
+                 fixed top-center toolbar. -->
+            <Border x:Name="ToolbarDragHandle"
+                    IsVisible="{Binding !IsTranslationMode}"
+                    Width="20" Height="26" Margin="1,2,3,2"
+                    CornerRadius="3" Background="#101010" BorderBrush="#2A2A2A" BorderThickness="1"
+                    Cursor="SizeAll"
+                    VerticalAlignment="Center">
+                <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="2" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Ellipse Grid.Row="0" Width="3" Height="3" Fill="#777777"/>
+                    <Ellipse Grid.Row="1" Width="3" Height="3" Fill="#777777"/>
+                    <Ellipse Grid.Row="2" Width="3" Height="3" Fill="#777777"/>
+                </Grid>
+            </Border>
+            <!-- Translation drag handle: same leftmost position/style as the snip/record handle above. -->
+            <Border x:Name="TranslationToolbarDragStrip"
+                    IsVisible="{Binding IsTranslationMode}"
+                    Width="20" Height="26" Margin="1,2,3,2"
+                    CornerRadius="3" Background="#101010" BorderBrush="#2A2A2A" BorderThickness="1"
+                    Cursor="SizeAll"
+                    VerticalAlignment="Center"
+                    ToolTip.Tip="{Binding ToggleToolbarTooltip}">
+                <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="2" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Ellipse Grid.Row="0" Width="3" Height="3" Fill="#777777"/>
+                    <Ellipse Grid.Row="1" Width="3" Height="3" Fill="#777777"/>
+                    <Ellipse Grid.Row="2" Width="3" Height="3" Fill="#777777"/>
+                </Grid>
+            </Border>
             <!-- 1. Mode Selection Buttons (三個模式同時顯示) -->
             <Button Theme="{StaticResource SnipToolButton}" Classes.active="{Binding IsScreenshotMode}"
                     Command="{Binding SetCaptureModeCommand}" CommandParameter="{x:False}"
@@ -49,6 +77,43 @@
                     IsVisible="{Binding !IsTranslationMode}"
                     ToolTip.Tip="{Binding FullscreenSelectTooltip}">
                 <PathIcon Data="M5,5H10V3H3V10H5V5M19,5V10H21V3H14V5H19M19,19H14V21H21V14H19V19M5,14H3V21H10V19H5V14Z" Width="14" Height="14"/>
+            </Button>
+
+            <!-- Capture-scope picker (record mode): pick a monitor or window to set the recording region. -->
+            <Button x:Name="CaptureScopeButton" Theme="{StaticResource SnipToolButton}" FontSize="12" BorderThickness="1"
+                    IsVisible="{Binding IsRecordingMode}"
+                    ToolTip.Tip="{Binding [CaptureScopeTooltip], Source={x:Static infra:LocalizationService.Instance}}">
+                <Button.Flyout>
+                    <Flyout Placement="Top">
+                        <Border Background="#1A1A1A" BorderBrush="#333333" BorderThickness="1" Padding="2" CornerRadius="4" MaxHeight="320" MinWidth="180">
+                            <StackPanel Orientation="Vertical" Spacing="2">
+                                <TextBlock Text="{Binding [CaptureScopeMultiHint], Source={x:Static infra:LocalizationService.Instance}}"
+                                           Foreground="#999999" FontSize="11" Margin="6,3,6,1" TextWrapping="Wrap" MaxWidth="260"/>
+                                <CheckBox Content="{Binding [RecordSeparateFilesToggle], Source={x:Static infra:LocalizationService.Instance}}"
+                                          IsChecked="{Binding RecordSeparateFiles}" Margin="6,0,6,2" FontSize="11"/>
+                                <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                                    <ItemsControl ItemsSource="{Binding CaptureTargets}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:CaptureTargetItem">
+                                                <Button Theme="{StaticResource SnipButton}" HorizontalAlignment="Stretch"
+                                                        HorizontalContentAlignment="Left" Margin="0,1" Padding="6,3"
+                                                        Click="OnCaptureTargetSelected">
+                                                    <Grid ColumnDefinitions="*,Auto">
+                                                        <TextBlock Grid.Column="0" Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" MaxWidth="240" VerticalAlignment="Center"/>
+                                                        <PathIcon Grid.Column="1" Width="12" Height="12" Margin="8,0,0,0" Foreground="#E53935"
+                                                                  IsVisible="{Binding IsSelected}"
+                                                                  Data="M9,16.17L4.83,12L3.41,13.41L9,19L21,7L19.59,5.59L9,16.17Z"/>
+                                                    </Grid>
+                                                </Button>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </ScrollViewer>
+                            </StackPanel>
+                        </Border>
+                    </Flyout>
+                </Button.Flyout>
+                <PathIcon Data="M21,16H3V4H21M21,2H3C1.89,2 1,2.89 1,4V16A2,2 0 0,0 3,18H10V20H8V22H16V20H14V18H21A2,2 0 0,0 23,16V4C23,2.89 22.1,2 21,2Z" Width="14" Height="14"/>
             </Button>
 
             <!-- Annotation/drawing tools are intentionally NOT shown here: the selection isn't pinned yet,
@@ -167,24 +232,6 @@
 
             <!-- 5c. Translation Mode Actions (only visible in translation mode) -->
             <Rectangle Fill="#444444" Width="1" Height="16" Margin="4,0" VerticalAlignment="Center" IsVisible="{Binding IsTranslationMode}"/>
-            
-            <Border x:Name="TranslationToolbarDragStrip"
-                    IsVisible="{Binding IsTranslationMode}"
-                    Width="28"
-                    Height="26"
-                    Margin="2,0,4,0"
-                    CornerRadius="3"
-                    Background="#101010"
-                    BorderBrush="#2A2A2A"
-                    BorderThickness="1"
-                    Cursor="SizeAll"
-                    ToolTip.Tip="{Binding ToggleToolbarTooltip}">
-                <Grid ColumnDefinitions="Auto,Auto,Auto" ColumnSpacing="3" HorizontalAlignment="Center" VerticalAlignment="Center">
-                    <Ellipse Grid.Column="0" Width="3" Height="3" Fill="#777777"/>
-                    <Ellipse Grid.Column="1" Width="3" Height="3" Fill="#777777"/>
-                    <Ellipse Grid.Column="2" Width="3" Height="3" Fill="#777777"/>
-                </Grid>
-            </Border>
 
             <!-- Translation: hold Ctrl then left-drag for every selection rect (full hit while Ctrl is down) -->
             

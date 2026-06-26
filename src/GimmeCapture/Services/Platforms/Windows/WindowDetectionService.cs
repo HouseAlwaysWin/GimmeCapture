@@ -658,6 +658,35 @@ public class WindowDetectionService : IWindowDetectionService
         return result == 0 ? dwmRect.ToAvaloniaRect() : winRectNoDwm(hWnd);
     }
 
+    public IReadOnlyList<RecordableWindow> GetRecordableWindows(IntPtr? excludeHWnd = null)
+    {
+        // Reuse the visible-window enumeration (z-ordered, occlusion-filtered, self-excluded), keep only
+        // top-level windows with a non-empty title and a usable size, and attach each window's title.
+        var result = new List<RecordableWindow>();
+        foreach (var candidate in GetVisibleWindowCandidates(excludeHWnd))
+        {
+            if (candidate.Kind != WindowCandidateKind.TopLevel)
+            {
+                continue;
+            }
+
+            if (candidate.Bounds.Width < 80 || candidate.Bounds.Height < 60)
+            {
+                continue;
+            }
+
+            string title = GetWindowTitle(candidate.Hwnd).Trim();
+            if (string.IsNullOrEmpty(title))
+            {
+                continue;
+            }
+
+            result.Add(new RecordableWindow(title, candidate.Bounds, candidate.Hwnd));
+        }
+
+        return result;
+    }
+
     private static string GetWindowTitle(IntPtr hWnd)
     {
         var buffer = new System.Text.StringBuilder(256);

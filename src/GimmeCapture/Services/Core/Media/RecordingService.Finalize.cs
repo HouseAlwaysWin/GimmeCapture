@@ -49,6 +49,63 @@ public partial class RecordingService
         }
     }
 
+    // Separate-files mode: build the shared audio once, then finalize each window's track to its own output
+    // file (muxing the same audio into every file). Finalize runs sequentially, so we retarget _outputFile
+    // per track and reuse the existing single-output finalize path.
+    private async Task FinalizeSeparateRecordingsAsync()
+    {
+        if (_tracks.Count == 0)
+        {
+            return;
+        }
+
+        await Task.Delay(100);
+
+        string? mergedAudio = await BuildFinalAudioAsync();
+
+        try
+        {
+            int total = _tracks.Count;
+            for (int i = 0; i < _tracks.Count; i++)
+            {
+                var track = _tracks[i];
+                var validSegments = track.Segments
+                    .AsValueEnumerable()
+                    .Where(s => File.Exists(s) && new FileInfo(s).Length > 0)
+                    .ToList();
+
+                if (validSegments.Count == 0)
+                {
+                    Debug.WriteLine($"[Finalize] Track {i} has no valid segments; skipping.");
+                    track.OutputFile = string.Empty;
+                    continue;
+                }
+
+                try
+                {
+                    string trackMerged = Path.Combine(_tempDir, $"track{i}_merged.mkv");
+                    trackMerged = await MergeVideoSegmentsAsync(validSegments, trackMerged);
+
+                    // Retarget the single-output finalize path at this track's file (sequential, so safe).
+                    _outputFile = track.OutputFile;
+                    await FinalizeByTargetFormatAsync(trackMerged, mergedAudio, cropFilter: null);
+                    track.OutputFile = _outputFile; // EnsureOutputExtension may have changed the extension
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[Finalize] Track {i} finalize failed: {ex.Message}");
+                    track.OutputFile = string.Empty;
+                }
+
+                FinalizationProgress = 100.0 * (i + 1) / total;
+            }
+        }
+        finally
+        {
+            CleanupTempDirectory();
+        }
+    }
+
     private List<string> GetValidVideoSegments() =>
         _segments.AsValueEnumerable().Where(s => File.Exists(s) && new FileInfo(s).Length > 0).ToList();
 

@@ -27,6 +27,33 @@ public partial class RecordingService : ReactiveObject
     private bool _includeCursor = true;
     private PixelPoint _screenOffset;
     private double _visualScaling = 1.0;
+    // HWND of the window to record via Windows Graphics Capture; IntPtr.Zero means desktop-region (gdigrab)
+    // or multi-window. _windowHandles is the source of truth: 0 = region/monitor, 1 = single window,
+    // 2+ = multi-window (composite or separate per _multiWindowMode).
+    private IntPtr _windowHandle;
+    private readonly List<IntPtr> _windowHandles = new();
+    private MultiWindowMode _multiWindowMode = MultiWindowMode.Composite;
+
+    // Separate-files mode: one track per window, each with its own segment list + output file, all sharing
+    // the single audio capture. Empty unless recording multiple windows in Separate mode.
+    private sealed class VideoTrack
+    {
+        public IntPtr Hwnd;
+        public string OutputFile = string.Empty;
+        public readonly List<string> Segments = new();
+        public NativeFFmpeg.LibavWgcMkvSession? Session;
+    }
+    private readonly List<VideoTrack> _tracks = new();
+
+    /// <summary>Final output files produced in separate-files mode (one per window). Empty otherwise.</summary>
+    public IReadOnlyList<string> SeparateOutputFiles =>
+        _tracks.AsValueEnumerable()
+            .Select(t => t.OutputFile)
+            .Where(p => !string.IsNullOrEmpty(p) && File.Exists(p))
+            .ToList();
+
+    private bool IsSeparateMultiWindow =>
+        _windowHandles.Count >= 2 && _multiWindowMode == MultiWindowMode.Separate;
     private int _fps = 30;
     private bool _recordSystemAudio;
     private bool _recordMicrophone;
@@ -81,6 +108,13 @@ public partial class RecordingService : ReactiveObject
             {
                 if (File.Exists(file)) totalSize += new FileInfo(file).Length;
             }
+            foreach (var track in _tracks)
+            {
+                foreach (var file in track.Segments)
+                {
+                    if (File.Exists(file)) totalSize += new FileInfo(file).Length;
+                }
+            }
         }
         catch (Exception ex)
         {
@@ -131,7 +165,7 @@ public partial class RecordingService : ReactiveObject
     /// Start recording with specified target format for final output.
     /// Recording is done in MKV format internally for fast pause/resume.
     /// </summary>
-    public async Task<bool> StartAsync(Rect region, string outputFile, string targetFormat = "mp4", bool includeCursor = true, PixelPoint screenOffset = default, double visualScaling = 1.0, int fps = 30, bool recordSystemAudio = false, bool recordMicrophone = false, string micDeviceId = "", double micVolume = 1.0)
+    public async Task<bool> StartAsync(Rect region, string outputFile, string targetFormat = "mp4", bool includeCursor = true, PixelPoint screenOffset = default, double visualScaling = 1.0, int fps = 30, bool recordSystemAudio = false, bool recordMicrophone = false, string micDeviceId = "", double micVolume = 1.0, IntPtr windowHandle = default, IReadOnlyList<IntPtr>? windowHandles = null, MultiWindowMode multiWindowMode = MultiWindowMode.Composite, IReadOnlyList<string>? separateOutputFiles = null)
     {
         if (Interlocked.Exchange(ref _startInProgress, 1) == 1) return false;
         try
@@ -158,6 +192,34 @@ public partial class RecordingService : ReactiveObject
         _includeCursor = includeCursor;
         _screenOffset = screenOffset;
         _visualScaling = visualScaling;
+
+        // Build the window-handle list (source of truth). Multi-list wins; otherwise fall back to the
+        // single handle. _windowHandle stays set only for the single-window WGC path.
+        _windowHandles.Clear();
+        if (windowHandles is { Count: > 0 })
+        {
+            _windowHandles.AddRange(windowHandles);
+        }
+        else if (windowHandle != IntPtr.Zero)
+        {
+            _windowHandles.Add(windowHandle);
+        }
+        _multiWindowMode = multiWindowMode;
+        _windowHandle = _windowHandles.Count == 1 ? _windowHandles[0] : IntPtr.Zero;
+
+        // Separate-files mode: set up one output track per window. The caller supplies one output path per
+        // window (parallel to windowHandles); missing entries get a numbered fallback next to outputFile.
+        _tracks.Clear();
+        if (_windowHandles.Count >= 2 && multiWindowMode == MultiWindowMode.Separate)
+        {
+            for (int i = 0; i < _windowHandles.Count; i++)
+            {
+                string trackOut = separateOutputFiles is not null && i < separateOutputFiles.Count
+                    ? separateOutputFiles[i]
+                    : BuildNumberedOutputPath(outputFile, i + 1);
+                _tracks.Add(new VideoTrack { Hwnd = _windowHandles[i], OutputFile = trackOut });
+            }
+        }
         _fps = fps;
         _recordSystemAudio = RecordingAudioPolicy.ShouldRecordSystemAudio(recordSystemAudio, _targetFormat);
         _recordMicrophone = RecordingAudioPolicy.ShouldRecordMicrophone(recordMicrophone, _targetFormat);
@@ -265,7 +327,14 @@ public partial class RecordingService : ReactiveObject
         FinalizationProgress = 0;
         try
         {
-            await FinalizeRecordingAsync();
+            if (_tracks.Count > 0)
+            {
+                await FinalizeSeparateRecordingsAsync();
+            }
+            else
+            {
+                await FinalizeRecordingAsync();
+            }
         }
         finally
         {
@@ -273,6 +342,15 @@ public partial class RecordingService : ReactiveObject
             FinalizationProgress = 100;
             State = RecordingState.Idle;
         }
+    }
+
+    // Inserts "_N" before the extension, e.g. clip.mp4 -> clip_2.mp4 (used as a per-window fallback name).
+    private static string BuildNumberedOutputPath(string outputFile, int index)
+    {
+        string dir = Path.GetDirectoryName(outputFile) ?? string.Empty;
+        string name = Path.GetFileNameWithoutExtension(outputFile);
+        string ext = Path.GetExtension(outputFile);
+        return Path.Combine(dir, $"{name}_{index}{ext}");
     }
 
 }

@@ -241,8 +241,15 @@ public partial class SnipWindowViewModel
     public Rect SelectionRect
     {
         get => _selectionRect;
-        set 
+        set
         {
+            // Any genuine selection change (manual redraw, fullscreen, monitor pick) drops a previously-
+            // picked recording window so we don't capture the wrong target. The multi-select builder sets
+            // _suppressRecordHandleClear while assigning the bounding-union rect so it isn't wiped.
+            if (!_suppressRecordHandleClear)
+            {
+                ClearRecordWindowSelection();
+            }
             this.RaiseAndSetIfChanged(ref _selectionRect, value);
             RefreshInteractionRegion();
             UpdateToolbarPosition();
@@ -526,9 +533,10 @@ public partial class SnipWindowViewModel
             }
 
             this.RaiseAndSetIfChanged(ref _toolbarWidth, value);
-            if (CurrentMode == SnipMode.Translation && !IsToolbarManuallyPositioned)
+            // Re-center the fixed top-center toolbar (all modes) when its measured width changes.
+            if (!IsToolbarManuallyPositioned)
             {
-                InitializeTranslationToolbarPosition();
+                PositionFixedTopCenterToolbar();
             }
         }
     }
@@ -684,14 +692,31 @@ public partial class SnipWindowViewModel
     {
         // ????輯撒???舀??秋???∪????????祗?????插???????鞈????秋撒?仿?潸??
         // ?選?謆?????湔??????????????∪????????∟??
-        if (IsToolbarManuallyPositioned && CurrentMode == SnipMode.Translation && ShowToolbar)
+        // All selection modes (Translation / Recording / Screenshot) use the fixed top-center toolbar.
+
+        if (IsToolbarManuallyPositioned && ShowToolbar)
         {
             return;
         }
 
-        if (!ShowToolbar && CurrentMode == SnipMode.Translation)
+        if (!ShowToolbar)
         {
-            ParkSnipToolbarOffscreen();
+            if (CurrentMode == SnipMode.Translation)
+            {
+                ParkSnipToolbarOffscreen();
+            }
+            else
+            {
+                if (ToolbarLeft > -10000 && ToolbarWidth > 1 && ToolbarHeight > 1)
+                {
+                    _savedParkToolbarLeft = ToolbarLeft;
+                    _savedParkToolbarTop = ToolbarTop;
+                    _toolbarParkedOffscreenSaved = true;
+                }
+
+                ToolbarLeft = -50000;
+                ToolbarTop = 0;
+            }
             return;
         }
 
@@ -721,81 +746,16 @@ public partial class SnipWindowViewModel
         ToolbarTop = TranslationToolbarTop;
     }
 
+    /// <summary>Pins the toolbar to the top-center of the active screen (Translation and Recording modes).</summary>
+    private void PositionFixedTopCenterToolbar() => InitializeTranslationToolbarPosition();
+
     private void UpdateToolbarPosition()
     {
         // ?折???????璆????選????InitializeTranslationToolbarPosition ???
         if (CurrentMode == SnipMode.Translation) return;
 
-        // Default viewport fallback
-        double vh = ViewportSize.Height > 0 ? ViewportSize.Height : 1080;
-        double vw = ViewportSize.Width > 0 ? ViewportSize.Width : 1920;
-
-        // Use live measured bounds. Add buffer for shadow/border.
-        double tw = ToolbarWidth > 0 ? (ToolbarWidth + 20) : 600;
-        double th = ToolbarHeight > 0 ? ToolbarHeight : 45;
-
-        // Position below by default
-        double top = SelectionRect.Bottom + 12; 
-        double left = SelectionRect.Left;
-
-        // Multi-monitor clamping: Find which monitor the selection is mostly on
-        var targetMonitor = AllScreenBounds?.AsValueEnumerable().FirstOrDefault(s => 
-            new Rect(s.X, s.Y, s.W, s.H).Intersects(SelectionRect)) 
-            ?? new ScreenBoundsViewModel { X = 0, Y = 0, W = vw, H = vh };
-
-        double monitorLeft = targetMonitor.X;
-        double monitorTop = targetMonitor.Y;
-        double monitorRight = targetMonitor.X + targetMonitor.W;
-        double monitorBottom = targetMonitor.Y + targetMonitor.H;
-
-        // If bottom overflows monitor, position above selection
-        if (top + th > monitorBottom - 10)
-        {
-            top = SelectionRect.Top - th - 12;
-        }
-
-        // Horizontal Clamping to monitor bounds
-        if (left + tw > monitorRight - 20)
-        {
-            left = monitorRight - tw - 20;
-        }
-        if (left < monitorLeft + 20)
-        {
-            left = monitorLeft + 20;
-        }
-
-        // Vertical Clamping to monitor bounds
-        if (top < monitorTop + 10)
-        {
-            top = monitorTop + 10;
-        }
-        if (top + th > monitorBottom - 10)
-        {
-            top = monitorBottom - th - 10;
-        }
-
-        if (!ShowToolbar && CurrentState == SnipState.Selected && !IsRecordingFinalizing)
-        {
-            _savedParkToolbarLeft = left;
-            _savedParkToolbarTop = top;
-            _toolbarParkedOffscreenSaved = true;
-            ToolbarLeft = -50000;
-            ToolbarTop = 0;
-        }
-        else
-        {
-            ToolbarTop = top;
-            ToolbarLeft = left;
-        }
-        
-        // Ensure MaxWidth allows full toolbar on smaller monitors
+        // Recording and Screenshot both keep a fixed top-center toolbar (does not follow the selection).
+        PositionFixedTopCenterToolbar();
         this.RaisePropertyChanged(nameof(ToolbarMaxWidth));
-       
-        // Default to positioning translation below the toolbar
-        if (!IsTranslationOverlayManuallyPositioned)
-        {
-            TranslationOverlayTop = top + th + 8;
-            TranslationOverlayLeft = left;
-        }
     }
 }

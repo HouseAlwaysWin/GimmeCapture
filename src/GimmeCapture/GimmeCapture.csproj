@@ -1,7 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net10.0-windows</TargetFramework>
+    <!-- Windows 10 2004 (10.0.19041) SDK projection enables WinRT Windows.Graphics.Capture (WGC)
+         for true per-window recording (GPU/DWM-composited windows, follows the window). -->
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
     <UseWindowsForms>true</UseWindowsForms>
     <Nullable>enable</Nullable>
     <ApplicationManifest Condition="'$(Configuration)' == 'Release'">app.admin.manifest</ApplicationManifest>

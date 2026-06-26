@@ -24,6 +24,9 @@ public partial class SnipWindowViewModel
     private bool _recordStartInFlight;
     private DateTime _lastRecordStartAttemptUtc = DateTime.MinValue;
 
+    // Folder holding the per-window files when recording multiple windows to separate files; null otherwise.
+    private string? _separateRecordingFolder;
+
     public bool RecordingUsesWindowsExcludeFromCapture => _recordingUsesWindowsExcludeFromCapture;
 
     /// <summary>
@@ -182,6 +185,16 @@ public partial class SnipWindowViewModel
                 return;
             }
 
+            // The record toolbar is always visible in record mode (fixed top-center), so guard against
+            // starting with nothing chosen: need picked window(s) or a non-empty drawn/monitor region.
+            bool hasTarget = _recordWindowHandles.Count > 0
+                || (SelectionRect.Width >= 2 && SelectionRect.Height >= 2);
+            if (!hasTarget)
+            {
+                _mainVm.SetStatus("RecordSelectTargetFirst");
+                return;
+            }
+
             // Validate before showing the countdown so the user does not wait
             // only to discover that recording cannot start.
             if (!_mainVm.FfmpegDownloader.IsFFmpegAvailable())
@@ -260,7 +273,20 @@ public partial class SnipWindowViewModel
         ResetRecordingDurationTracking();
         bool enableSystemAudio = _mainVm.RecordSystemAudio;
 
-        if (await _recordingService.StartAsync(region, _currentRecordingPath, format, _mainVm.ShowRecordCursor, ScreenOffset, VisualScaling, _mainVm.RecordingSettings.RecordFPS, enableSystemAudio, _mainVm.RecordMicrophone, _mainVm.SelectedMicDeviceId, _mainVm.MicVolume))
+        // Windows picked from the capture-scope picker record via WGC (follows the windows): 1 window =
+        // single capture, 2+ = composite/separate per RecordMultiWindowMode. Region/monitor pass an empty
+        // list and stay on the gdigrab desktop-region path.
+        var windowHandles = new System.Collections.Generic.List<IntPtr>(_recordWindowHandles);
+
+        // Separate mode: build one output path per window in a timestamped folder we can reveal afterwards.
+        _separateRecordingFolder = null;
+        System.Collections.Generic.List<string>? separateOutputFiles = null;
+        if (windowHandles.Count >= 2 && RecordMultiWindowMode == MultiWindowMode.Separate)
+        {
+            separateOutputFiles = BuildSeparateOutputPaths(windowHandles, format);
+        }
+
+        if (await _recordingService.StartAsync(region, _currentRecordingPath, format, _mainVm.ShowRecordCursor, ScreenOffset, VisualScaling, _mainVm.RecordingSettings.RecordFPS, enableSystemAudio, _mainVm.RecordMicrophone, _mainVm.SelectedMicDeviceId, _mainVm.MicVolume, windowHandle: default, windowHandles: windowHandles, multiWindowMode: RecordMultiWindowMode, separateOutputFiles: separateOutputFiles))
         {
             _recordingCaptureLogicalRect = region;
             EnsureRecordingTimerStarted();
@@ -297,6 +323,13 @@ public partial class SnipWindowViewModel
 
         _recordTimer?.Stop();
         await _recordingService.StopAsync();
+
+        // Separate multi-window recording produced N files; save them all and skip the single-file flow.
+        if (TryHandleSeparateOutputs(pin: false))
+        {
+            CloseAction?.Invoke();
+            return;
+        }
 
         // Use the actual output path from RecordingService (may have been modified during finalization)
         string? actualOutputPath = await ResolveRecordingFilePathAsync(_recordingService.OutputFilePath ?? _currentRecordingPath);
@@ -363,6 +396,140 @@ public partial class SnipWindowViewModel
         CloseAction?.Invoke();
     }
 
+    /// <summary>
+    /// If the just-stopped recording produced multiple per-window files (separate mode), handles them all
+    /// and returns true so the single-file finish flow is skipped. When <paramref name="pin"/> is set each
+    /// file is opened as its own floating pin window; otherwise the files are added to history and their
+    /// folder is revealed. (Every file is always added to history.)
+    /// </summary>
+    private bool TryHandleSeparateOutputs(bool pin)
+    {
+        if (_recordingService == null)
+        {
+            return false;
+        }
+
+        var outputs = _recordingService.SeparateOutputFiles;
+        if (outputs.Count == 0)
+        {
+            return false;
+        }
+
+        bool hideDecoration = _mainVm?.HideRecordPinDecoration ?? false;
+        bool hideBorder = _mainVm?.HideRecordPinBorder ?? false;
+
+        for (int i = 0; i < outputs.Count; i++)
+        {
+            string file = outputs[i];
+            if (string.IsNullOrEmpty(file) || !System.IO.File.Exists(file))
+            {
+                continue;
+            }
+
+            var bounds = SeparateOutputBoundsForIndex(i);
+            double ow = Math.Max(2.0, bounds.Width > 1 ? bounds.Width : 640.0);
+            double oh = Math.Max(2.0, bounds.Height > 1 ? bounds.Height : 360.0);
+            int pw = Math.Max(2, (int)Math.Round(ow));
+            int ph = Math.Max(2, (int)Math.Round(oh));
+
+            if (pin && OpenPinnedVideoWindowAction != null)
+            {
+                try
+                {
+                    OpenPinnedVideoWindowAction(file, pw, ph, ow, oh, SelectionBorderColor, SelectionBorderThickness, hideDecoration, hideBorder);
+                }
+                catch
+                {
+                    FileLocationService.RevealInFileExplorer(file);
+                }
+            }
+
+            _mainVm?.CaptureHistory.AddVideoAsync(file, pw, ph).Forget("CaptureHistory.AddVideo");
+        }
+
+        if (!pin && (_mainVm?.RevealAfterSave ?? true) && !string.IsNullOrEmpty(_separateRecordingFolder))
+        {
+            FileLocationService.RevealInFileExplorer(_separateRecordingFolder!);
+        }
+
+        _recordingService.ClearLastRecording();
+        return true;
+    }
+
+    /// <summary>Best-effort logical bounds for the i-th separate output (the picked window's bounds, else the selection).</summary>
+    private Rect SeparateOutputBoundsForIndex(int index)
+    {
+        if (index >= 0 && index < _recordWindowHandles.Count)
+        {
+            IntPtr hwnd = _recordWindowHandles[index];
+            foreach (var target in CaptureTargets)
+            {
+                if (!target.IsMonitor && target.Hwnd == hwnd)
+                {
+                    return target.LogicalBounds;
+                }
+            }
+        }
+
+        return _recordingCaptureLogicalRect ?? SelectionRect;
+    }
+
+    private System.Collections.Generic.List<string> BuildSeparateOutputPaths(System.Collections.Generic.List<IntPtr> handles, string format)
+    {
+        string baseDir = _mainVm != null && !string.IsNullOrEmpty(_mainVm.RecordingSettings.VideoSaveDirectory)
+            ? _mainVm.RecordingSettings.VideoSaveDirectory
+            : System.IO.Path.Combine(_mainVm?.AppSettingsService.BaseDataDirectory ?? AppContext.BaseDirectory, "Recordings");
+
+        string folder = System.IO.Path.Combine(baseDir, $"GimmeCapture_Windows_{DateTime.Now:yyyyMMdd_HHmmss}");
+        FileLocationService.EnsureDirectory(folder, "SnipRecording.EnsureSeparateDir");
+        _separateRecordingFolder = folder;
+
+        var paths = new System.Collections.Generic.List<string>(handles.Count);
+        for (int i = 0; i < handles.Count; i++)
+        {
+            string safe = SanitizeForFileName(WindowTitleForHandle(handles[i]));
+            if (safe.Length > 40)
+            {
+                safe = safe.Substring(0, 40).TrimEnd();
+            }
+
+            paths.Add(System.IO.Path.Combine(folder, $"{i + 1:D2}_{safe}.{format}"));
+        }
+
+        return paths;
+    }
+
+    private string WindowTitleForHandle(IntPtr hwnd)
+    {
+        foreach (var target in CaptureTargets)
+        {
+            if (!target.IsMonitor && target.Hwnd == hwnd)
+            {
+                return target.DisplayName;
+            }
+        }
+
+        return "window";
+    }
+
+    private static string SanitizeForFileName(string raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return "window";
+        }
+
+        var invalid = System.IO.Path.GetInvalidFileNameChars();
+        var sb = new System.Text.StringBuilder(raw.Length);
+        foreach (char ch in raw)
+        {
+            sb.Append(Array.IndexOf(invalid, ch) >= 0 ? '_' : ch);
+        }
+
+        string sanitized = sb.ToString().Trim();
+        return sanitized.Length == 0 ? "window" : sanitized;
+    }
+
     private async Task ExecuteCopyRecordingAsync()
     {
         if (_isProcessingRecording || _recordingService == null || _mainVm == null) return;
@@ -372,6 +539,13 @@ public partial class SnipWindowViewModel
         {
             _recordTimer?.Stop();
             await _recordingService.StopAsync();
+
+            // Separate mode has N files; copying N to the clipboard isn't meaningful, so save + reveal them.
+            if (TryHandleSeparateOutputs(pin: false))
+            {
+                CloseAction?.Invoke();
+                return;
+            }
 
             string? actualOutputPath = await ResolveRecordingFilePathAsync(_recordingService.OutputFilePath ?? _currentRecordingPath);
 
@@ -422,6 +596,13 @@ public partial class SnipWindowViewModel
         {
             _recordTimer?.Stop();
             await _recordingService.StopAsync();
+
+            // Separate mode: pin each window's file as its own floating window.
+            if (TryHandleSeparateOutputs(pin: true))
+            {
+                CloseAction?.Invoke();
+                return;
+            }
 
             if (hasRecordingContext)
             {

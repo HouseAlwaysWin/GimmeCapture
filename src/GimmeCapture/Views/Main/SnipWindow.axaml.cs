@@ -101,6 +101,28 @@ public partial class SnipWindow : Window
         // Close on Escape
         KeyDown += OnKeyDown;
         KeyUp += OnKeyUp;
+
+        // Keep the measured toolbar width current for ALL modes so the fixed top-center positioning
+        // re-centers correctly (translation used to be the only mode that measured it).
+        Toolbar.GetObservable(Visual.BoundsProperty).Subscribe(OnToolbarBoundsChanged);
+    }
+
+    private void OnToolbarBoundsChanged(Rect bounds)
+    {
+        if (_viewModel == null)
+        {
+            return;
+        }
+
+        if (bounds.Width > 1)
+        {
+            _viewModel.ToolbarWidth = bounds.Width;
+        }
+
+        if (bounds.Height > 1)
+        {
+            _viewModel.ToolbarHeight = bounds.Height;
+        }
     }
     
     private IReadOnlyList<Window> _hiddenTopmostWindows = [];
