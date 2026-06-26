@@ -234,7 +234,7 @@ public abstract class FloatingWindowBase : Window
         {
             const double minTopMargin = 8;
             const double subToolbarHeight = 40;
-            var topOverlapPhysical = Math.Max(0, screen.WorkingArea.Top - Position.Y);
+            var topOverlapPhysical = Math.Max(0, screen.WorkingArea.Y - Position.Y);
             var topOverlapLogical = topOverlapPhysical / Math.Max(0.1, scaling);
             var restingTop = Math.Max(minTopMargin, vm.SubToolbarRestingTop);
             var maximumTopMargin = Math.Max(restingTop, Bounds.Height - subToolbarHeight - minTopMargin);
