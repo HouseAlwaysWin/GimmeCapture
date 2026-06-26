@@ -142,16 +142,24 @@ public partial class RecordingService
             {
                 int sampleCount = bytesRecorded / 4;
                 byte[] pcm16 = new byte[sampleCount * 2];
-                int outIndex = 0;
-                for (int i = 0; i < sampleCount; i++)
+                // Muted: leave pcm16 as zeros (silence) so the WAV stays the same length and A/V stays in sync.
+                if (!MuteMicrophone)
                 {
-                    float sample = BitConverter.ToSingle(buffer, i * 4);
-                    sample = Math.Clamp(sample, -1f, 1f);
-                    short s16 = (short)Math.Round(sample * short.MaxValue);
-                    pcm16[outIndex++] = (byte)(s16 & 0xFF);
-                    pcm16[outIndex++] = (byte)((s16 >> 8) & 0xFF);
+                    int outIndex = 0;
+                    for (int i = 0; i < sampleCount; i++)
+                    {
+                        float sample = BitConverter.ToSingle(buffer, i * 4);
+                        sample = Math.Clamp(sample, -1f, 1f);
+                        short s16 = (short)Math.Round(sample * short.MaxValue);
+                        pcm16[outIndex++] = (byte)(s16 & 0xFF);
+                        pcm16[outIndex++] = (byte)((s16 >> 8) & 0xFF);
+                    }
                 }
                 _micWriter.Write(pcm16, 0, pcm16.Length);
+            }
+            else if (MuteMicrophone)
+            {
+                _micWriter.Write(new byte[bytesRecorded], 0, bytesRecorded);
             }
             else
             {
@@ -212,16 +220,24 @@ public partial class RecordingService
             {
                 int sampleCount = bytesRecorded / 4;
                 byte[] pcm16 = new byte[sampleCount * 2];
-                int outIndex = 0;
-                for (int i = 0; i < sampleCount; i++)
+                // Muted: leave pcm16 as zeros (silence) so the WAV stays the same length and A/V stays in sync.
+                if (!MuteSystemAudio)
                 {
-                    float sample = BitConverter.ToSingle(buffer, i * 4);
-                    sample = Math.Clamp(sample, -1f, 1f);
-                    short s16 = (short)Math.Round(sample * short.MaxValue);
-                    pcm16[outIndex++] = (byte)(s16 & 0xFF);
-                    pcm16[outIndex++] = (byte)((s16 >> 8) & 0xFF);
+                    int outIndex = 0;
+                    for (int i = 0; i < sampleCount; i++)
+                    {
+                        float sample = BitConverter.ToSingle(buffer, i * 4);
+                        sample = Math.Clamp(sample, -1f, 1f);
+                        short s16 = (short)Math.Round(sample * short.MaxValue);
+                        pcm16[outIndex++] = (byte)(s16 & 0xFF);
+                        pcm16[outIndex++] = (byte)((s16 >> 8) & 0xFF);
+                    }
                 }
                 _audioWriter.Write(pcm16, 0, pcm16.Length);
+            }
+            else if (MuteSystemAudio)
+            {
+                _audioWriter.Write(new byte[bytesRecorded], 0, bytesRecorded);
             }
             else
             {

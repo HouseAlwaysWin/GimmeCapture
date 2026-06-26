@@ -122,6 +122,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     public string ActiveActionHotkey => CurrentMode == SnipMode.Translation ? (_mainVm?.Translate_Action ?? "F8") : (CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Action ?? "F6") : (_mainVm?.Snip_Pin ?? "F6"));
     public string ActiveToolbarHotkey => CurrentMode == SnipMode.Translation ? (_mainVm?.Translate_Toolbar ?? "F4") : (CurrentMode == SnipMode.Recording ? (_mainVm?.Record_Toolbar ?? "F4") : (_mainVm?.Snip_Toolbar ?? "F4"));
     public string ActivePlaybackHotkey => _mainVm?.Record_Playback ?? "Space";
+    public string ActiveStopHotkey => _mainVm?.Record_Stop ?? "F9";
     public string RemoveBackgroundHotkey => _mainVm?.Snip_RemoveBackground ?? "Shift+R";
     public string MagicWandHotkey => _mainVm?.Snip_MagicWand ?? "W";
     public string SnipSelectionModeHotkey => _mainVm?.Snip_SelectionMode ?? "S";
@@ -627,6 +628,34 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     public bool IsOutputAudioActive => OutputAudioLevel >= 0.01;
     // Whether the recording captures the mic — drives the mic level meter's visibility in the toolbar.
     public bool IsMicrophoneEnabled => _mainVm?.RecordMicrophone ?? false;
+
+    // Live mute toggles for the active recording (session-only; reset to unmuted on each Start). When muted
+    // the capture writes silence so the audio timeline stays in sync — see RecordingService.Audio.cs.
+    public bool IsSystemAudioMuted
+    {
+        get => _recordingService?.MuteSystemAudio ?? false;
+        set
+        {
+            if (_recordingService != null && _recordingService.MuteSystemAudio != value)
+            {
+                _recordingService.MuteSystemAudio = value;
+                this.RaisePropertyChanged();
+            }
+        }
+    }
+
+    public bool IsMicMuted
+    {
+        get => _recordingService?.MuteMicrophone ?? false;
+        set
+        {
+            if (_recordingService != null && _recordingService.MuteMicrophone != value)
+            {
+                _recordingService.MuteMicrophone = value;
+                this.RaisePropertyChanged();
+            }
+        }
+    }
     public string InputAudioStateText => IsInputAudioActive
         ? (LocalizationService.Instance["RecordAudioActive"] ?? "Active")
         : (LocalizationService.Instance["RecordAudioIdle"] ?? "Idle");

@@ -17,7 +17,7 @@ public partial class MainWindowViewModel
         nameof(Record_Rectangle), nameof(Record_Ellipse), nameof(Record_Arrow), nameof(Record_Line), nameof(Record_Pen),
         nameof(Record_Text), nameof(Record_Mosaic), nameof(Record_Blur), nameof(Record_Undo), nameof(Record_Redo),
         nameof(Record_Clear), nameof(Record_Save), nameof(Record_Copy), nameof(Record_Close), nameof(Record_Toolbar),
-        nameof(Record_Action), nameof(Record_Playback), nameof(Record_FullscreenSelect),
+        nameof(Record_Action), nameof(Record_Playback), nameof(Record_Stop), nameof(Record_FullscreenSelect),
         nameof(Record_SwitchToSnip), nameof(Record_SwitchToTranslate),
         nameof(Translate_Action), nameof(Translate_Pin), nameof(Translate_Toolbar), nameof(Translate_Close),
         nameof(Translate_TranslateAll), nameof(Translate_ScanAll), nameof(Translate_ClearAll),

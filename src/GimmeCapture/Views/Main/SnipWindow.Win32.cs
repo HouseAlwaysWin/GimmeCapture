@@ -564,6 +564,14 @@ public partial class SnipWindow : Window
             return true;
         }
 
+        // Stop hotkey ends the active recording from anywhere (global LL-hook path, like pause above).
+        if (_viewModel.CurrentMode == SnipMode.Recording && _viewModel.RecState != RecordingState.Idle
+            && IsMatch(_viewModel.ActiveStopHotkey))
+        {
+            _viewModel.StopRecordingCommand?.Execute().Subscribe();
+            return true;
+        }
+
         if ((_viewModel.CurrentMode == SnipMode.Screenshot || _viewModel.CurrentMode == SnipMode.Recording) &&
             IsMatch(_viewModel.FullscreenSelectHotkey))
         {

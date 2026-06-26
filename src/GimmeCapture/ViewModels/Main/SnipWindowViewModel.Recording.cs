@@ -265,6 +265,9 @@ public partial class SnipWindowViewModel
             _recordingCaptureLogicalRect = region;
             EnsureRecordingTimerStarted();
             this.RaisePropertyChanged(nameof(IsMicrophoneEnabled)); // reveal the mic meter for this recording
+            // StartAsync resets the mute flags on the service; reflect that on the toolbar toggles for the new session.
+            this.RaisePropertyChanged(nameof(IsSystemAudioMuted));
+            this.RaisePropertyChanged(nameof(IsMicMuted));
             if (!string.IsNullOrWhiteSpace(_recordingService.LastStartWarning))
             {
                 _mainVm.SetStatus(_recordingService.LastStartWarning);

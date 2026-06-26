@@ -270,6 +270,7 @@
   "SwitchToTranslate": "切換到翻譯模式",
   "ActionCopy": "複製 (Copy)",
   "ActionStart": "開始錄影 (Start)",
+  "ActionStopRecording": "停止錄影 (Stop)",
   "ActionStopPin": "停止並釘選 (Stop & Pin)",
   "ActionCopyVideo": "複製錄影 (Stop & Copy)",
   "HotkeyDrawingGroup": "繪圖工具快捷鍵",
