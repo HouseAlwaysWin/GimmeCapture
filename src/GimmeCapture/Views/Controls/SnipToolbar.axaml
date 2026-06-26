@@ -41,6 +41,20 @@
                     <Ellipse Grid.Row="2" Width="3" Height="3" Fill="#777777"/>
                 </Grid>
             </Border>
+            <!-- Translation drag handle: same leftmost position/style as the snip/record handle above. -->
+            <Border x:Name="TranslationToolbarDragStrip"
+                    IsVisible="{Binding IsTranslationMode}"
+                    Width="20" Height="26" Margin="1,2,3,2"
+                    CornerRadius="3" Background="#101010" BorderBrush="#2A2A2A" BorderThickness="1"
+                    Cursor="SizeAll"
+                    VerticalAlignment="Center"
+                    ToolTip.Tip="{Binding ToggleToolbarTooltip}">
+                <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="2" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Ellipse Grid.Row="0" Width="3" Height="3" Fill="#777777"/>
+                    <Ellipse Grid.Row="1" Width="3" Height="3" Fill="#777777"/>
+                    <Ellipse Grid.Row="2" Width="3" Height="3" Fill="#777777"/>
+                </Grid>
+            </Border>
             <!-- 1. Mode Selection Buttons (三個模式同時顯示) -->
             <Button Theme="{StaticResource SnipToolButton}" Classes.active="{Binding IsScreenshotMode}"
                     Command="{Binding SetCaptureModeCommand}" CommandParameter="{x:False}"
@@ -218,24 +232,6 @@
 
             <!-- 5c. Translation Mode Actions (only visible in translation mode) -->
             <Rectangle Fill="#444444" Width="1" Height="16" Margin="4,0" VerticalAlignment="Center" IsVisible="{Binding IsTranslationMode}"/>
-            
-            <Border x:Name="TranslationToolbarDragStrip"
-                    IsVisible="{Binding IsTranslationMode}"
-                    Width="28"
-                    Height="26"
-                    Margin="2,0,4,0"
-                    CornerRadius="3"
-                    Background="#101010"
-                    BorderBrush="#2A2A2A"
-                    BorderThickness="1"
-                    Cursor="SizeAll"
-                    ToolTip.Tip="{Binding ToggleToolbarTooltip}">
-                <Grid ColumnDefinitions="Auto,Auto,Auto" ColumnSpacing="3" HorizontalAlignment="Center" VerticalAlignment="Center">
-                    <Ellipse Grid.Column="0" Width="3" Height="3" Fill="#777777"/>
-                    <Ellipse Grid.Column="1" Width="3" Height="3" Fill="#777777"/>
-                    <Ellipse Grid.Column="2" Width="3" Height="3" Fill="#777777"/>
-                </Grid>
-            </Border>
 
             <!-- Translation: hold Ctrl then left-drag for every selection rect (full hit while Ctrl is down) -->
             
