@@ -48,6 +48,12 @@ internal sealed class LibavWgcCompositeMkvSession : IDisposable
     public string? SelectedEncoderName { get; private set; }
     public bool PreferHardwareEncoder { get; set; } = true;
 
+    /// <summary>Software-encoder CRF override (1-51); 0 keeps the default 23.</summary>
+    public int VideoCrf { get; set; }
+
+    /// <summary>Hardware-encoder target bitrate in bits/sec; 0 uses the automatic clamp.</summary>
+    public long VideoBitrate { get; set; }
+
     /// <summary>True when no captured window delivered a first frame — the "no frames" repro. See
     /// <see cref="LibavWgcMkvSession.TimedOutWaitingForFrame"/>.</summary>
     public bool TimedOutWaitingForFrame { get; private set; }
@@ -250,7 +256,7 @@ internal sealed class LibavWgcCompositeMkvSession : IDisposable
             encFrame = ffmpeg.av_frame_alloc();
 
             encCtx = LibavRecordingEncoder.OpenRecordingEncoderContext(
-                useH265, PreferHardwareEncoder, canvasW, canvasH, fps, &encOpts,
+                useH265, PreferHardwareEncoder, canvasW, canvasH, fps, VideoCrf, VideoBitrate, &encOpts,
                 out string encName, out string? warningMessage);
             if (encCtx == null)
             {

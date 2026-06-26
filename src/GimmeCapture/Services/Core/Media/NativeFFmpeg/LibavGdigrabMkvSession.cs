@@ -68,6 +68,12 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
     /// </summary>
     public bool UseWallClockPts { get; set; }
 
+    /// <summary>Software-encoder CRF override (1-51); 0 keeps the default 23.</summary>
+    public int VideoCrf { get; set; }
+
+    /// <summary>Hardware-encoder target bitrate in bits/sec; 0 uses the automatic clamp.</summary>
+    public long VideoBitrate { get; set; }
+
     public Task<bool> StartAsync(string outputPath, int offsetX, int offsetY, int width, int height, int fps, bool drawMouse, bool useH265)
     {
         FFmpegRuntime.EnsureInitialized();
@@ -274,6 +280,8 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
                 width,
                 height,
                 fps,
+                VideoCrf,
+                VideoBitrate,
                 &encOpts,
                 out string encName,
                 out string? warningMessage);

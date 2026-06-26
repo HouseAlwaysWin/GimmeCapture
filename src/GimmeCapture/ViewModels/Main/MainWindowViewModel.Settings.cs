@@ -948,6 +948,21 @@ public partial class MainWindowViewModel
         set => this.RaiseAndSetIfChanged(ref _webcamCircular, value);
     }
 
+    // Advanced encode overrides for recording (0 = auto): software CRF (1-51) / hardware bitrate (kbps).
+    private int _customVideoCrf = 0;
+    public int CustomVideoCrf
+    {
+        get => _customVideoCrf;
+        set => this.RaiseAndSetIfChanged(ref _customVideoCrf, value);
+    }
+
+    private int _customVideoBitrateKbps = 0;
+    public int CustomVideoBitrateKbps
+    {
+        get => _customVideoBitrateKbps;
+        set => this.RaiseAndSetIfChanged(ref _customVideoBitrateKbps, value);
+    }
+
     private bool _recordMicrophone = false;
     public bool RecordMicrophone
     {

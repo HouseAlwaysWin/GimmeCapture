@@ -76,6 +76,8 @@ public partial class MainWindowViewModel
             VideoCodec = RecordingSettings.VideoCodec,
             VideoEncoderHint = RecordingSettings.VideoEncoderHint,
             VideoQuality = RecordingSettings.VideoQuality,
+            CustomVideoCrf = CustomVideoCrf,
+            CustomVideoBitrateKbps = CustomVideoBitrateKbps,
             RecordFps = RecordingSettings.RecordFPS,
             MaxRecordingSizeMb = RecordingSettings.MaxRecordingSizeMB,
             PlaybackUiFps = PlaybackUiFps,
@@ -160,6 +162,8 @@ public partial class MainWindowViewModel
         WingScale = snapshot.WingScale;
         RecordingSettings.RecordFPS = snapshot.RecordFps;
         RecordingSettings.MaxRecordingSizeMB = snapshot.MaxRecordingSizeMb;
+        CustomVideoCrf = snapshot.CustomVideoCrf;
+        CustomVideoBitrateKbps = snapshot.CustomVideoBitrateKbps;
         EnableAIScan = snapshot.EnableAIScan;
         AIResourcesDirectory = snapshot.AIResourcesDirectory;
         SelectedTranslationEngine = snapshot.SelectedTranslationEngine;

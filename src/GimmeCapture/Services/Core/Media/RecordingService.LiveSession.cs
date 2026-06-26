@@ -23,6 +23,15 @@ public partial class RecordingService
     private LibavWgcMkvSession? _nativeWgcRecorder;
     private LibavWgcCompositeMkvSession? _nativeWgcCompositeRecorder;
 
+    /// <summary>Software-encoder CRF override (1-51; 0 = default 23) from settings, applied to every session.</summary>
+    private int CustomVideoCrf => _settingsService?.Settings.CustomVideoCrf ?? 0;
+
+    /// <summary>Hardware-encoder bitrate override in bits/sec (0 = auto clamp); settings store it as kbps.</summary>
+    private long CustomVideoBitrateBps =>
+        (_settingsService?.Settings.CustomVideoBitrateKbps ?? 0) > 0
+            ? _settingsService!.Settings.CustomVideoBitrateKbps * 1000L
+            : 0L;
+
     // Set once WGC is observed to bring up but deliver no frames (the dual-monitor "no frames" repro). After
     // that we skip WGC for the rest of the process and go straight to gdigrab, so the user stops paying the
     // ~1.5 s first-frame timeout on every recording. Reset only by restarting the app.
@@ -124,7 +133,9 @@ public partial class RecordingService
             _nativeWgcCompositeRecorder?.Dispose();
             _nativeWgcCompositeRecorder = new LibavWgcCompositeMkvSession
             {
-                PreferHardwareEncoder = _settingsService?.Settings.VideoEncoderHint != VideoEncoderHint.SoftwareOnly
+                PreferHardwareEncoder = _settingsService?.Settings.VideoEncoderHint != VideoEncoderHint.SoftwareOnly,
+                VideoCrf = CustomVideoCrf,
+                VideoBitrate = CustomVideoBitrateBps
             };
 
             bool useH265 = _settingsService?.Settings.VideoCodec == VideoCodec.H265;
@@ -173,7 +184,9 @@ public partial class RecordingService
             _nativeWgcRecorder?.Dispose();
             _nativeWgcRecorder = new LibavWgcMkvSession
             {
-                PreferHardwareEncoder = _settingsService?.Settings.VideoEncoderHint != VideoEncoderHint.SoftwareOnly
+                PreferHardwareEncoder = _settingsService?.Settings.VideoEncoderHint != VideoEncoderHint.SoftwareOnly,
+                VideoCrf = CustomVideoCrf,
+                VideoBitrate = CustomVideoBitrateBps
             };
 
             bool useH265 = _settingsService?.Settings.VideoCodec == VideoCodec.H265;
@@ -231,7 +244,12 @@ public partial class RecordingService
             track.Session = null;
 
             string segPath = Path.Combine(_tempDir, $"track{i}_segment_{segIndex}.mkv");
-            var session = new LibavWgcMkvSession { PreferHardwareEncoder = preferHw };
+            var session = new LibavWgcMkvSession
+            {
+                PreferHardwareEncoder = preferHw,
+                VideoCrf = CustomVideoCrf,
+                VideoBitrate = CustomVideoBitrateBps
+            };
             pending.Add((i, track, segPath, session, session.StartAsync(segPath, track.Hwnd, _fps, _includeCursor, useH265)));
         }
 
@@ -315,6 +333,8 @@ public partial class RecordingService
                 HighlightClicks = _settingsService?.Settings.HighlightClicks ?? false,
                 ShowKeystrokes = _settingsService?.Settings.ShowKeystrokes ?? false,
                 PreferHardwareEncoder = preferHw,
+                VideoCrf = CustomVideoCrf,
+                VideoBitrate = CustomVideoBitrateBps,
                 // Pace output by wall-clock: N large window regions captured concurrently make gdigrab fall behind
                 // the target fps, which with counter-based PTS produces a sped-up video. Wall-clock PTS keeps the
                 // duration correct. (This also forces the single-threaded encode loop.)
@@ -439,6 +459,8 @@ public partial class RecordingService
                     _ => 0.25f
                 },
                 WebcamCircular = _settingsService?.Settings.WebcamCircular ?? false,
+                VideoCrf = CustomVideoCrf,
+                VideoBitrate = CustomVideoBitrateBps,
                 HighlightCursor = _settingsService?.Settings.HighlightCursor ?? false,
                 HighlightClicks = _settingsService?.Settings.HighlightClicks ?? false,
                 ShowKeystrokes = _settingsService?.Settings.ShowKeystrokes ?? false,

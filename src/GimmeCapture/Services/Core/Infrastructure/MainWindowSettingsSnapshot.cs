@@ -37,6 +37,8 @@ public sealed class MainWindowSettingsSnapshot
     public required bool EnableWebcam { get; init; }
     public required string WebcamDeviceName { get; init; }
     public required int WebcamCorner { get; init; }
+    public int WebcamSize { get; init; } = 1;
+    public bool WebcamCircular { get; init; }
     public required bool RecordMicrophone { get; init; }
     public required string SelectedMicDeviceId { get; init; }
     public required double MicVolume { get; init; }
@@ -49,6 +51,8 @@ public sealed class MainWindowSettingsSnapshot
     public required VideoCodec VideoCodec { get; init; }
     public required VideoEncoderHint VideoEncoderHint { get; init; }
     public required VideoQuality VideoQuality { get; init; }
+    public int CustomVideoCrf { get; init; }
+    public int CustomVideoBitrateKbps { get; init; }
     public required int RecordFps { get; init; }
     public required double MaxRecordingSizeMb { get; init; }
     public required int PlaybackUiFps { get; init; }
@@ -109,6 +113,8 @@ public sealed class MainWindowSettingsSnapshot
             EnableWebcam = settings.EnableWebcam,
             WebcamDeviceName = settings.WebcamDeviceName,
             WebcamCorner = settings.WebcamCorner,
+            WebcamSize = settings.WebcamSize,
+            WebcamCircular = settings.WebcamCircular,
             RecordMicrophone = settings.RecordMicrophone,
             SelectedMicDeviceId = settings.SelectedMicDeviceId,
             MicVolume = settings.MicVolume,
@@ -121,6 +127,8 @@ public sealed class MainWindowSettingsSnapshot
             VideoCodec = settings.VideoCodec,
             VideoEncoderHint = settings.VideoEncoderHint,
             VideoQuality = settings.VideoQuality,
+            CustomVideoCrf = settings.CustomVideoCrf,
+            CustomVideoBitrateKbps = settings.CustomVideoBitrateKbps,
             RecordFps = settings.RecordFPS,
             MaxRecordingSizeMb = settings.MaxRecordingSizeMB,
             PlaybackUiFps = settings.PlaybackUiFps,
@@ -181,6 +189,8 @@ public sealed class MainWindowSettingsSnapshot
         settings.EnableWebcam = EnableWebcam;
         settings.WebcamDeviceName = WebcamDeviceName;
         settings.WebcamCorner = WebcamCorner;
+        settings.WebcamSize = WebcamSize;
+        settings.WebcamCircular = WebcamCircular;
         settings.RecordMicrophone = RecordMicrophone;
         settings.SelectedMicDeviceId = SelectedMicDeviceId;
         settings.MicVolume = MicVolume;
@@ -193,6 +203,8 @@ public sealed class MainWindowSettingsSnapshot
         settings.VideoCodec = VideoCodec;
         settings.VideoEncoderHint = VideoEncoderHint;
         settings.VideoQuality = VideoQuality;
+        settings.CustomVideoCrf = CustomVideoCrf;
+        settings.CustomVideoBitrateKbps = CustomVideoBitrateKbps;
         settings.RecordFPS = RecordFps;
         settings.MaxRecordingSizeMB = MaxRecordingSizeMb;
         settings.PlaybackUiFps = PlaybackUiFps;

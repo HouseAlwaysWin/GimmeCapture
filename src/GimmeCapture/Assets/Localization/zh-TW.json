@@ -166,6 +166,8 @@
   "WebcamSizeMedium": "中",
   "WebcamSizeLarge": "大",
   "WebcamCircular": "圓形（圓框攝影機）",
+  "CustomVideoCrf": "自訂 CRF（0=自動，軟體編碼；越低越清晰）",
+  "CustomVideoBitrateKbps": "自訂位元率（kbps，0=自動，硬體編碼）",
   "RecordMicrophone": "錄影時擷取麥克風",
   "MicDevice": "麥克風",
   "MicVolume": "麥克風音量",

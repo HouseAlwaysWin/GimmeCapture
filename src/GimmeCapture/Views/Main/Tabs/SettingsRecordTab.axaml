@@ -73,6 +73,25 @@
                         </ComboBox>
                     </DockPanel>
 
+                    <!-- Advanced encode overrides (0 = auto): software CRF / hardware bitrate. -->
+                    <StackPanel Spacing="5" Margin="0,5,0,0">
+                        <TextBlock Text="{Binding [CustomVideoCrf], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <Slider Minimum="0" Maximum="51" Value="{Binding CustomVideoCrf}"
+                                    TickFrequency="1" IsSnapToTickEnabled="True" HorizontalAlignment="Stretch" Width="250"/>
+                            <TextBlock Text="{Binding CustomVideoCrf}" VerticalAlignment="Center" Width="40"/>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <StackPanel Spacing="5" Margin="0,5,0,0">
+                        <TextBlock Text="{Binding [CustomVideoBitrateKbps], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <Slider Minimum="0" Maximum="50000" Value="{Binding CustomVideoBitrateKbps}"
+                                    TickFrequency="500" IsSnapToTickEnabled="True" HorizontalAlignment="Stretch" Width="250"/>
+                            <TextBlock Text="{Binding CustomVideoBitrateKbps}" VerticalAlignment="Center" Width="60"/>
+                        </StackPanel>
+                    </StackPanel>
+
 
                     <CheckBox Content="{Binding [HideRecordPinDecoration], Source={x:Static services:LocalizationService.Instance}}" IsChecked="{Binding HideRecordPinDecoration}" Margin="0,5,0,0"/>
                     <CheckBox Content="{Binding [HideRecordPinBorder], Source={x:Static services:LocalizationService.Instance}}" IsChecked="{Binding HideRecordPinBorder}" Margin="0,5,0,0"/>

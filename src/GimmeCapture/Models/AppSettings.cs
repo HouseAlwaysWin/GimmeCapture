@@ -165,6 +165,9 @@ public class AppSettings
     public VideoCodec VideoCodec { get; set; } = VideoCodec.H264;
     public VideoEncoderHint VideoEncoderHint { get; set; } = VideoEncoderHint.PreferHardware;
     public VideoQuality VideoQuality { get; set; } = VideoQuality.Medium;
+    // Advanced encode overrides for recording (0 = auto): software CRF (1-51) / hardware bitrate (kbps).
+    public int CustomVideoCrf { get; set; } = 0;
+    public int CustomVideoBitrateKbps { get; set; } = 0;
     public int RecordFPS { get; set; } = 30;
     public double MaxRecordingSizeMB { get; set; } = 0;
     // Pinned video playback UI throttling (higher FPS = smoother, more UI load)

@@ -23,6 +23,8 @@ internal static unsafe class LibavRecordingEncoder
         int width,
         int height,
         int fps,
+        int crf,
+        long bitrateOverride,
         AVDictionary** encOpts,
         out string selectedEncoderName,
         out string? warningMessage)
@@ -70,7 +72,7 @@ internal static unsafe class LibavRecordingEncoder
             AVDictionary* candidateOpts = null;
             try
             {
-                ConfigureEncoderContext(candidateCtx, candidate, candidateName, width, height, fps, &candidateOpts);
+                ConfigureEncoderContext(candidateCtx, candidate, candidateName, width, height, fps, crf, bitrateOverride, &candidateOpts);
                 int openResult = ffmpeg.avcodec_open2(candidateCtx, candidate, &candidateOpts);
                 if (openResult >= 0)
                 {
@@ -123,6 +125,8 @@ internal static unsafe class LibavRecordingEncoder
         int width,
         int height,
         int fps,
+        int crf,
+        long bitrateOverride,
         AVDictionary** encOpts)
     {
         encCtx->codec_id = enc->id;
@@ -140,11 +144,16 @@ internal static unsafe class LibavRecordingEncoder
         {
             ffmpeg.av_dict_set(encOpts, "preset", "ultrafast", 0);
             ffmpeg.av_dict_set(encOpts, "tune", "zerolatency", 0);
-            ffmpeg.av_dict_set(encOpts, "crf", "23", 0);
+            // Software path is CRF-driven. Honor a user CRF override (1-51); 0 keeps the default 23.
+            int effectiveCrf = crf is >= 1 and <= 51 ? crf : 23;
+            ffmpeg.av_dict_set(encOpts, "crf", effectiveCrf.ToString(), 0);
             return;
         }
 
-        long targetBitrate = Math.Clamp((long)width * height * Math.Max(fps, 1) / 8, 800_000L, 16_000_000L);
+        // Hardware path is bitrate-driven. Honor a user bitrate override; 0 uses the automatic clamp.
+        long targetBitrate = bitrateOverride > 0
+            ? bitrateOverride
+            : Math.Clamp((long)width * height * Math.Max(fps, 1) / 8, 800_000L, 16_000_000L);
         encCtx->bit_rate = targetBitrate;
     }
 
