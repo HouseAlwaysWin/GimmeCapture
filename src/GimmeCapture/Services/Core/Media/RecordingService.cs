@@ -27,6 +27,8 @@ public partial class RecordingService : ReactiveObject
     private bool _includeCursor = true;
     private PixelPoint _screenOffset;
     private double _visualScaling = 1.0;
+    // HWND of the window to record via Windows Graphics Capture; IntPtr.Zero means desktop-region (gdigrab).
+    private IntPtr _windowHandle;
     private int _fps = 30;
     private bool _recordSystemAudio;
     private bool _recordMicrophone;
@@ -131,7 +133,7 @@ public partial class RecordingService : ReactiveObject
     /// Start recording with specified target format for final output.
     /// Recording is done in MKV format internally for fast pause/resume.
     /// </summary>
-    public async Task<bool> StartAsync(Rect region, string outputFile, string targetFormat = "mp4", bool includeCursor = true, PixelPoint screenOffset = default, double visualScaling = 1.0, int fps = 30, bool recordSystemAudio = false, bool recordMicrophone = false, string micDeviceId = "", double micVolume = 1.0)
+    public async Task<bool> StartAsync(Rect region, string outputFile, string targetFormat = "mp4", bool includeCursor = true, PixelPoint screenOffset = default, double visualScaling = 1.0, int fps = 30, bool recordSystemAudio = false, bool recordMicrophone = false, string micDeviceId = "", double micVolume = 1.0, IntPtr windowHandle = default)
     {
         if (Interlocked.Exchange(ref _startInProgress, 1) == 1) return false;
         try
@@ -158,6 +160,7 @@ public partial class RecordingService : ReactiveObject
         _includeCursor = includeCursor;
         _screenOffset = screenOffset;
         _visualScaling = visualScaling;
+        _windowHandle = windowHandle;
         _fps = fps;
         _recordSystemAudio = RecordingAudioPolicy.ShouldRecordSystemAudio(recordSystemAudio, _targetFormat);
         _recordMicrophone = RecordingAudioPolicy.ShouldRecordMicrophone(recordMicrophone, _targetFormat);

@@ -1,11 +1,8 @@
 using System;
 using System.Collections.ObjectModel;
-using System.IO;
 using System.Reactive;
 using Avalonia;
-using Avalonia.Threading;
 using GimmeCapture.Models;
-using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core.Infrastructure;
 using ReactiveUI;
 
@@ -17,8 +14,16 @@ public partial class SnipWindowViewModel
     // window picker (otherwise the transparent full-screen capture overlay would appear in the list).
     private IntPtr? _selfWindowHandle;
 
-    // Step 2 WGC probe: null in design/test contexts and on unsupported OSes.
-    private readonly IWgcWindowCaptureProbe? _wgcProbe;
+    // HWND of the window picked for recording, captured in SelectCaptureTarget. Routes recording to the
+    // WGC window-capture path (true per-window recording that follows the window). Cleared by the
+    // SelectionRect setter whenever the selection changes to anything else (redraw / monitor / fullscreen).
+    private IntPtr _recordWindowHandle;
+
+    /// <summary>HWND of the picked recording-target window, or <see cref="IntPtr.Zero"/> for region/monitor capture.</summary>
+    internal IntPtr RecordWindowHandle => _recordWindowHandle;
+
+    /// <summary>Clears the picked recording window so capture falls back to the region/gdigrab path.</summary>
+    internal void ClearRecordWindowHandle() => _recordWindowHandle = IntPtr.Zero;
 
     /// <summary>
     /// Targets shown in the record-mode capture-scope picker: each monitor and each visible top-level
@@ -84,53 +89,15 @@ public partial class SnipWindowViewModel
         // Mirror SelectFullscreenCommand: drop any in-progress drawing, set the selection to the target
         // bounds, and move to the Selected state so the record toolbar appears over it.
         DeactivateDrawingInteraction();
-        SelectionRect = target.LogicalBounds;
+        SelectionRect = target.LogicalBounds;   // setter clears _recordWindowHandle first
         CurrentState = SnipState.Selected;
 
-        // Step 2 WGC probe (temporary): when a real window is picked, grab one frame via Windows Graphics
-        // Capture and save it as a PNG to confirm the interop works (not all-black) before Step 3 wires
-        // WGC into the encoder. Fire-and-forget; never blocks or breaks the picker.
+        // For a real window, remember its HWND so recording uses the WGC window-capture path (follows the
+        // window). Monitors keep _recordWindowHandle cleared, so they record a fixed region via gdigrab.
         if (!target.IsMonitor && target.Hwnd != IntPtr.Zero)
         {
-            TriggerWgcProbe(target.Hwnd, target.DisplayName);
+            _recordWindowHandle = target.Hwnd;
         }
-    }
-
-    private void TriggerWgcProbe(IntPtr hwnd, string title)
-    {
-        var probe = _wgcProbe;
-        if (probe == null)
-        {
-            return;
-        }
-
-        string baseDir = _mainVm?.AppSettingsService?.BaseDataDirectory ?? AppContext.BaseDirectory;
-        string outputPath = Path.Combine(baseDir, "wgc-probe.png");
-
-        _ = System.Threading.Tasks.Task.Run(async () =>
-        {
-            bool ok;
-            try
-            {
-                ok = await probe.CaptureWindowToPngAsync(hwnd, outputPath);
-            }
-            catch (Exception ex)
-            {
-                AppLog.Error("SnipRecording.WgcProbe", ex);
-                ok = false;
-            }
-
-            Dispatcher.UIThread.Post(() =>
-            {
-                string message = ok
-                    ? $"WGC probe saved: {outputPath}"
-                    : $"WGC probe failed for \"{title}\" — see log.";
-                AppLog.Information($"SnipRecording.WgcProbe: {message}");
-                _mainVm?.ShowToastAction?.Invoke(
-                    message,
-                    ok ? MainWindowViewModel.ToastSeverity.Success : MainWindowViewModel.ToastSeverity.Error);
-            });
-        });
     }
 }
 

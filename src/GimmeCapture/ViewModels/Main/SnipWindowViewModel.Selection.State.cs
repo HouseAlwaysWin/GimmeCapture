@@ -241,8 +241,11 @@ public partial class SnipWindowViewModel
     public Rect SelectionRect
     {
         get => _selectionRect;
-        set 
+        set
         {
+            // Any selection change (manual redraw, fullscreen, monitor pick) drops a previously-picked
+            // recording window so we don't capture the wrong target. SelectCaptureTarget re-sets it after.
+            _recordWindowHandle = IntPtr.Zero;
             this.RaiseAndSetIfChanged(ref _selectionRect, value);
             RefreshInteractionRegion();
             UpdateToolbarPosition();

@@ -260,7 +260,11 @@ public partial class SnipWindowViewModel
         ResetRecordingDurationTracking();
         bool enableSystemAudio = _mainVm.RecordSystemAudio;
 
-        if (await _recordingService.StartAsync(region, _currentRecordingPath, format, _mainVm.ShowRecordCursor, ScreenOffset, VisualScaling, _mainVm.RecordingSettings.RecordFPS, enableSystemAudio, _mainVm.RecordMicrophone, _mainVm.SelectedMicDeviceId, _mainVm.MicVolume))
+        // A window picked from the capture-scope picker records via WGC (follows the window); region/monitor
+        // captures pass IntPtr.Zero and stay on the gdigrab desktop-region path.
+        IntPtr windowHandle = _recordWindowHandle;
+
+        if (await _recordingService.StartAsync(region, _currentRecordingPath, format, _mainVm.ShowRecordCursor, ScreenOffset, VisualScaling, _mainVm.RecordingSettings.RecordFPS, enableSystemAudio, _mainVm.RecordMicrophone, _mainVm.SelectedMicDeviceId, _mainVm.MicVolume, windowHandle))
         {
             _recordingCaptureLogicalRect = region;
             EnsureRecordingTimerStarted();

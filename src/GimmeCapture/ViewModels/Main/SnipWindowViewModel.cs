@@ -326,12 +326,10 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         ITranslationSelectionMonitor? translationSelectionMonitor = null,
         IAIScanSessionService? aiScanSessionService = null,
         IQuickOcrService? quickOcrService = null,
-        ICaptureVisibilityCoordinator? captureVisibilityCoordinator = null,
-        IWgcWindowCaptureProbe? wgcProbe = null)
+        ICaptureVisibilityCoordinator? captureVisibilityCoordinator = null)
     {
         _captureService = captureService ?? throw new ArgumentNullException(nameof(captureService));
         _detectionService = detectionService ?? CreateDesignWindowDetectionService();
-        _wgcProbe = wgcProbe;
         _translationSession = translationSession;
         _translationSelectionMonitor = translationSelectionMonitor;
         _aiScanSessionService = aiScanSessionService;
