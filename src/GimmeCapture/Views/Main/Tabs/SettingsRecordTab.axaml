@@ -145,6 +145,8 @@
      IsChecked="{Binding HighlightClicks}" Margin="0,5,0,0"/>
                         <CheckBox Content="{Binding [ShowKeystrokes], Source={x:Static services:LocalizationService.Instance}}"
      IsChecked="{Binding ShowKeystrokes}" Margin="0,5,0,0"/>
+                        <CheckBox Content="{Binding [PipelinedEncoding], Source={x:Static services:LocalizationService.Instance}}"
+     IsChecked="{Binding PipelinedEncoding}" Margin="0,5,0,0"/>
                         <CheckBox Content="{Binding [RecordSystemAudio], Source={x:Static services:LocalizationService.Instance}}"
      IsChecked="{Binding RecordSystemAudio}" Margin="0,5,0,0"/>
                         <CheckBox Content="{Binding [EnableWebcam], Source={x:Static services:LocalizationService.Instance}}"

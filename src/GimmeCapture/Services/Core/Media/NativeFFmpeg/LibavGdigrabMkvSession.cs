@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -44,6 +45,13 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
     /// software libx264/265 fallback. Set false to force software encoding.
     /// </summary>
     public bool PreferHardwareEncoder { get; set; } = true;
+
+    /// <summary>
+    /// Experimental: run capture/composite and encoding on separate threads (producer/consumer) so they
+    /// overlap, reducing dropped frames at high resolution/fps with overlays. Default false keeps the
+    /// proven single-threaded loop. Drops frames under sustained back-pressure rather than stalling capture.
+    /// </summary>
+    public bool PipelinedEncoding { get; set; }
 
     public Task<bool> StartAsync(string outputPath, int offsetX, int offsetY, int width, int height, int fps, bool drawMouse, bool useH265)
     {
@@ -292,39 +300,46 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
 
             ThrowIfErr(ffmpeg.avformat_write_header(outputFmt, null), "write_header");
 
-            while (!ct.IsCancellationRequested)
+            if (PipelinedEncoding)
             {
-                int rr = ffmpeg.av_read_frame(inputFmt, pkt);
-                if (rr == ffmpeg.AVERROR_EOF)
-                {
-                    break;
-                }
-                if (rr == ffmpeg.AVERROR(11))
-                {
-                    // Live input can temporarily have no packet ready yet.
-                    Thread.Sleep(1);
-                    continue;
-                }
-
-                ThrowIfErr(rr, "av_read_frame");
-
-                if (pkt->stream_index != videoIn)
-                {
-                    ffmpeg.av_packet_unref(pkt);
-                    continue;
-                }
-
-                ThrowIfErr(ffmpeg.avcodec_send_packet(decCtx, pkt), "send_packet(dec)");
-                ffmpeg.av_packet_unref(pkt);
-
-                DecodeEncodeLoop(decCtx, encCtx, ref sws, ref swsToBgra, decFrame, encFrame, ref bgraFrame, ref encFrameInitialized, composite, outputFmt, outStream, pkt, ref frameCounter, ref packetCounter, firstFrameTcs);
+                RunPipelinedEncode(inputFmt, videoIn, pkt, decCtx, encCtx, ref sws, ref swsToBgra, decFrame, ref bgraFrame, composite, outputFmt, outStream, ref frameCounter, ref packetCounter, firstFrameTcs, ct);
             }
+            else
+            {
+                while (!ct.IsCancellationRequested)
+                {
+                    int rr = ffmpeg.av_read_frame(inputFmt, pkt);
+                    if (rr == ffmpeg.AVERROR_EOF)
+                    {
+                        break;
+                    }
+                    if (rr == ffmpeg.AVERROR(11))
+                    {
+                        // Live input can temporarily have no packet ready yet.
+                        Thread.Sleep(1);
+                        continue;
+                    }
 
-            ThrowIfErr(ffmpeg.avcodec_send_packet(decCtx, null), "flush_decoder");
-            DecodeEncodeLoop(decCtx, encCtx, ref sws, ref swsToBgra, decFrame, encFrame, ref bgraFrame, ref encFrameInitialized, composite, outputFmt, outStream, pkt, ref frameCounter, ref packetCounter, firstFrameTcs);
+                    ThrowIfErr(rr, "av_read_frame");
 
-            ThrowIfErr(ffmpeg.avcodec_send_frame(encCtx, null), "flush_encoder");
-            LibavRecordingEncoder.WriteEncodedPackets(encCtx, outputFmt, outStream, pkt, ref packetCounter);
+                    if (pkt->stream_index != videoIn)
+                    {
+                        ffmpeg.av_packet_unref(pkt);
+                        continue;
+                    }
+
+                    ThrowIfErr(ffmpeg.avcodec_send_packet(decCtx, pkt), "send_packet(dec)");
+                    ffmpeg.av_packet_unref(pkt);
+
+                    DecodeEncodeLoop(decCtx, encCtx, ref sws, ref swsToBgra, decFrame, encFrame, ref bgraFrame, ref encFrameInitialized, composite, outputFmt, outStream, pkt, ref frameCounter, ref packetCounter, firstFrameTcs);
+                }
+
+                ThrowIfErr(ffmpeg.avcodec_send_packet(decCtx, null), "flush_decoder");
+                DecodeEncodeLoop(decCtx, encCtx, ref sws, ref swsToBgra, decFrame, encFrame, ref bgraFrame, ref encFrameInitialized, composite, outputFmt, outStream, pkt, ref frameCounter, ref packetCounter, firstFrameTcs);
+
+                ThrowIfErr(ffmpeg.avcodec_send_frame(encCtx, null), "flush_encoder");
+                LibavRecordingEncoder.WriteEncodedPackets(encCtx, outputFmt, outStream, pkt, ref packetCounter);
+            }
 
             ffmpeg.av_write_trailer(outputFmt);
 
@@ -514,6 +529,226 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
 
             ThrowIfErr(ffmpeg.avcodec_send_frame(encCtx, encFrame), "send_frame(enc)");
             LibavRecordingEncoder.WriteEncodedPackets(encCtx, outputFmt, outStream, pkt, ref packetCounter);
+        }
+    }
+
+    // Producer/consumer variant of the encode loop. This (the worker) thread reads + decodes + composites
+    // each frame into a fresh encoder-format frame and hands it to a bounded queue; a dedicated encoder
+    // thread drains the queue and muxes. Capture/composite and the (CPU-heavy) software encode overlap.
+    // The encoder + muxer are touched only by the consumer thread; under sustained back-pressure full-queue
+    // frames are dropped rather than stalling capture. Each queued frame is owned by exactly one side
+    // (consumer after encode, producer on drop), so there is no double-free.
+    private unsafe void RunPipelinedEncode(
+        AVFormatContext* inputFmt,
+        int videoIn,
+        AVPacket* readPkt,
+        AVCodecContext* decCtx,
+        AVCodecContext* encCtx,
+        ref SwsContext* sws,
+        ref SwsContext* swsToBgra,
+        AVFrame* decFrame,
+        ref AVFrame* bgraFrame,
+        Action<SKBitmap>? composite,
+        AVFormatContext* outputFmt,
+        AVStream* outStream,
+        ref long frameCounter,
+        ref long packetCounter,
+        TaskCompletionSource<bool> firstFrameTcs,
+        CancellationToken ct)
+    {
+        using var queue = new BlockingCollection<IntPtr>(boundedCapacity: 8);
+        Exception? consumerEx = null;
+        long localPacketCounter = 0;
+
+        // Pointers can't be captured by a lambda — pass them through as IntPtr and cast back inside.
+        IntPtr encCtxPtr = (IntPtr)encCtx;
+        IntPtr outFmtPtr = (IntPtr)outputFmt;
+        IntPtr outStreamPtr = (IntPtr)outStream;
+
+        var consumer = new Thread(() =>
+        {
+            AVCodecContext* enc = (AVCodecContext*)encCtxPtr;
+            AVFormatContext* ofmt = (AVFormatContext*)outFmtPtr;
+            AVStream* ost = (AVStream*)outStreamPtr;
+            AVPacket* outPkt = ffmpeg.av_packet_alloc();
+            try
+            {
+                foreach (IntPtr p in queue.GetConsumingEnumerable())
+                {
+                    AVFrame* f = (AVFrame*)p;
+                    int sr = ffmpeg.avcodec_send_frame(enc, f);
+                    var ff = f;
+                    ffmpeg.av_frame_free(&ff);
+                    ThrowIfErr(sr, "send_frame(enc,pipe)");
+                    LibavRecordingEncoder.WriteEncodedPackets(enc, ofmt, ost, outPkt, ref localPacketCounter);
+                }
+
+                // Flush the encoder on the thread that owns it.
+                ThrowIfErr(ffmpeg.avcodec_send_frame(enc, null), "flush_encoder(pipe)");
+                LibavRecordingEncoder.WriteEncodedPackets(enc, ofmt, ost, outPkt, ref localPacketCounter);
+            }
+            catch (Exception ex)
+            {
+                consumerEx = ex;
+            }
+            finally
+            {
+                if (outPkt != null) { var pp = outPkt; ffmpeg.av_packet_free(&pp); }
+            }
+        })
+        { IsBackground = true, Name = "RecordEncode" };
+        consumer.Start();
+
+        try
+        {
+            while (!ct.IsCancellationRequested && consumerEx == null)
+            {
+                int rr = ffmpeg.av_read_frame(inputFmt, readPkt);
+                if (rr == ffmpeg.AVERROR_EOF)
+                {
+                    break;
+                }
+                if (rr == ffmpeg.AVERROR(11))
+                {
+                    Thread.Sleep(1);
+                    continue;
+                }
+                ThrowIfErr(rr, "av_read_frame(pipe)");
+
+                if (readPkt->stream_index != videoIn)
+                {
+                    ffmpeg.av_packet_unref(readPkt);
+                    continue;
+                }
+
+                ThrowIfErr(ffmpeg.avcodec_send_packet(decCtx, readPkt), "send_packet(dec,pipe)");
+                ffmpeg.av_packet_unref(readPkt);
+                DecodeComposeEnqueue(decCtx, encCtx, ref sws, ref swsToBgra, decFrame, ref bgraFrame, composite, queue, ref frameCounter, firstFrameTcs);
+            }
+
+            ffmpeg.avcodec_send_packet(decCtx, null);
+            DecodeComposeEnqueue(decCtx, encCtx, ref sws, ref swsToBgra, decFrame, ref bgraFrame, composite, queue, ref frameCounter, firstFrameTcs);
+        }
+        finally
+        {
+            queue.CompleteAdding();
+            consumer.Join();
+
+            // Free any frames the consumer didn't drain (e.g. it faulted early).
+            while (queue.TryTake(out IntPtr leftover))
+            {
+                var lf = (AVFrame*)leftover;
+                ffmpeg.av_frame_free(&lf);
+            }
+        }
+
+        packetCounter += localPacketCounter;
+        if (consumerEx != null)
+        {
+            throw consumerEx;
+        }
+    }
+
+    // Producer half of the pipeline: drain the decoder, composite, scale into a fresh encoder-format frame,
+    // and enqueue it (dropping it if the queue is full). Mirrors DecodeEncodeLoop's lazy sws/composite setup.
+    private static unsafe void DecodeComposeEnqueue(
+        AVCodecContext* decCtx,
+        AVCodecContext* encCtx,
+        ref SwsContext* sws,
+        ref SwsContext* swsToBgra,
+        AVFrame* decFrame,
+        ref AVFrame* bgraFrame,
+        Action<SKBitmap>? composite,
+        BlockingCollection<IntPtr> queue,
+        ref long frameCounter,
+        TaskCompletionSource<bool> firstFrameTcs)
+    {
+        while (true)
+        {
+            ffmpeg.av_frame_unref(decFrame);
+            int gr = ffmpeg.avcodec_receive_frame(decCtx, decFrame);
+            if (gr == ffmpeg.AVERROR_EOF || gr == ffmpeg.AVERROR(11))
+            {
+                break;
+            }
+            ThrowIfErr(gr, "receive_frame(dec,pipe)");
+
+            var srcFmt = (AVPixelFormat)decFrame->format;
+            int srcW = decFrame->width > 0 ? decFrame->width : decCtx->width;
+            int srcH = decFrame->height > 0 ? decFrame->height : decCtx->height;
+
+            if (sws == null)
+            {
+                if (composite != null)
+                {
+                    swsToBgra = ffmpeg.sws_getContext(
+                        srcW, srcH, srcFmt,
+                        srcW, srcH, AVPixelFormat.AV_PIX_FMT_BGRA,
+                        (int)SwsFlags.SWS_FAST_BILINEAR, null, null, null);
+                    sws = ffmpeg.sws_getContext(
+                        srcW, srcH, AVPixelFormat.AV_PIX_FMT_BGRA,
+                        encCtx->width, encCtx->height, encCtx->pix_fmt,
+                        (int)SwsFlags.SWS_FAST_BILINEAR, null, null, null);
+                    if (swsToBgra == null || sws == null)
+                    {
+                        throw new InvalidOperationException("sws_getContext failed for BGRA composite path (pipe).");
+                    }
+
+                    bgraFrame = ffmpeg.av_frame_alloc();
+                    bgraFrame->format = (int)AVPixelFormat.AV_PIX_FMT_BGRA;
+                    bgraFrame->width = srcW;
+                    bgraFrame->height = srcH;
+                    ThrowIfErr(ffmpeg.av_frame_get_buffer(bgraFrame, 32), "frame_get_buffer(bgra,pipe)");
+                }
+                else
+                {
+                    sws = ffmpeg.sws_getContext(
+                        srcW, srcH, srcFmt,
+                        encCtx->width, encCtx->height, encCtx->pix_fmt,
+                        (int)SwsFlags.SWS_FAST_BILINEAR, null, null, null);
+                    if (sws == null)
+                    {
+                        throw new InvalidOperationException("sws_getContext failed (pipe).");
+                    }
+                }
+            }
+
+            AVFrame* encFrame = ffmpeg.av_frame_alloc();
+            encFrame->format = (int)encCtx->pix_fmt;
+            encFrame->width = encCtx->width;
+            encFrame->height = encCtx->height;
+            ThrowIfErr(ffmpeg.av_frame_get_buffer(encFrame, 32), "frame_get_buffer(enc,pipe)");
+
+            if (composite != null && bgraFrame != null && swsToBgra != null)
+            {
+                ffmpeg.sws_scale(swsToBgra, decFrame->data, decFrame->linesize, 0, decFrame->height, bgraFrame->data, bgraFrame->linesize);
+                var info = new SKImageInfo(bgraFrame->width, bgraFrame->height, SKColorType.Bgra8888, SKAlphaType.Premul);
+                using (var sk = new SKBitmap())
+                {
+                    if (sk.InstallPixels(info, (IntPtr)bgraFrame->data[0], bgraFrame->linesize[0]))
+                    {
+                        composite(sk);
+                    }
+                }
+                ffmpeg.sws_scale(sws, bgraFrame->data, bgraFrame->linesize, 0, bgraFrame->height, encFrame->data, encFrame->linesize);
+            }
+            else
+            {
+                ffmpeg.sws_scale(sws, decFrame->data, decFrame->linesize, 0, decFrame->height, encFrame->data, encFrame->linesize);
+            }
+
+            encFrame->pts = frameCounter++;
+            if (frameCounter == 1)
+            {
+                firstFrameTcs.TrySetResult(true);
+            }
+
+            if (!queue.TryAdd((IntPtr)encFrame))
+            {
+                // Queue full — drop this frame rather than stall capture.
+                var f = encFrame;
+                ffmpeg.av_frame_free(&f);
+            }
         }
     }
 

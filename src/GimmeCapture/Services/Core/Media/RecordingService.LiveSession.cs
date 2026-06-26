@@ -206,6 +206,7 @@ public partial class RecordingService
                 HighlightCursor = _settingsService?.Settings.HighlightCursor ?? false,
                 HighlightClicks = _settingsService?.Settings.HighlightClicks ?? false,
                 ShowKeystrokes = _settingsService?.Settings.ShowKeystrokes ?? false,
+                PipelinedEncoding = _settingsService?.Settings.PipelinedEncoding ?? false,
                 PreferHardwareEncoder = _settingsService?.Settings.VideoEncoderHint != VideoEncoderHint.SoftwareOnly
             };
 

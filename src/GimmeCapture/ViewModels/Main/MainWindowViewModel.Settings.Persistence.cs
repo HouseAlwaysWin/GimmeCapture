@@ -68,6 +68,7 @@ public partial class MainWindowViewModel
             HighlightCursor = HighlightCursor,
             HighlightClicks = HighlightClicks,
             ShowKeystrokes = ShowKeystrokes,
+            PipelinedEncoding = PipelinedEncoding,
             VideoSaveDirectory = RecordingSettings.VideoSaveDirectory,
             RecordFormat = RecordingSettings.RecordFormat,
             VideoCodec = RecordingSettings.VideoCodec,
@@ -146,6 +147,7 @@ public partial class MainWindowViewModel
         HighlightCursor = snapshot.HighlightCursor;
         HighlightClicks = snapshot.HighlightClicks;
         ShowKeystrokes = snapshot.ShowKeystrokes;
+        PipelinedEncoding = snapshot.PipelinedEncoding;
         PlaybackUiFps = snapshot.PlaybackUiFps;
         PlaybackTimelineFps = snapshot.PlaybackTimelineFps;
         TempDirectory = snapshot.TempDirectory;

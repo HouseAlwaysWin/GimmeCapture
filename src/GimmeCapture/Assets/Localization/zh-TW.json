@@ -150,6 +150,7 @@
   "HighlightCursor": "游標高亮（聚光圈）",
   "HighlightClicks": "點擊高亮（漣漪）",
   "ShowKeystrokes": "顯示按下的按鍵（鍵盤浮層）",
+  "PipelinedEncoding": "管線化編碼（實驗性 — 高幀率較少掉幀）",
   "RecordSystemAudio": "錄影時擷取系統音訊",
   "EnableWebcam": "Webcam 子母畫面",
   "WebcamDevice": "Webcam",

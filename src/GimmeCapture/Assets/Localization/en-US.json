@@ -158,6 +158,7 @@
   "HighlightCursor": "Highlight cursor (spotlight ring)",
   "HighlightClicks": "Highlight mouse clicks (ripple)",
   "ShowKeystrokes": "Show pressed keys (keystroke overlay)",
+  "PipelinedEncoding": "Pipelined encoding (experimental — fewer drops at high fps)",
   "RecordSystemAudio": "Capture system audio while recording",
   "EnableWebcam": "Webcam overlay (picture-in-picture)",
   "WebcamDevice": "Webcam",

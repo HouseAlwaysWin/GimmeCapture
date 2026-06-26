@@ -43,6 +43,7 @@ public sealed class MainWindowSettingsSnapshot
     public required bool HighlightCursor { get; init; }
     public required bool HighlightClicks { get; init; }
     public bool ShowKeystrokes { get; init; }
+    public bool PipelinedEncoding { get; init; }
     public required string VideoSaveDirectory { get; init; }
     public required string RecordFormat { get; init; }
     public required VideoCodec VideoCodec { get; init; }
@@ -114,6 +115,7 @@ public sealed class MainWindowSettingsSnapshot
             HighlightCursor = settings.HighlightCursor,
             HighlightClicks = settings.HighlightClicks,
             ShowKeystrokes = settings.ShowKeystrokes,
+            PipelinedEncoding = settings.PipelinedEncoding,
             VideoSaveDirectory = settings.VideoSaveDirectory,
             RecordFormat = settings.RecordFormat,
             VideoCodec = settings.VideoCodec,
@@ -185,6 +187,7 @@ public sealed class MainWindowSettingsSnapshot
         settings.HighlightCursor = HighlightCursor;
         settings.HighlightClicks = HighlightClicks;
         settings.ShowKeystrokes = ShowKeystrokes;
+        settings.PipelinedEncoding = PipelinedEncoding;
         settings.VideoSaveDirectory = VideoSaveDirectory;
         settings.RecordFormat = RecordFormat;
         settings.VideoCodec = VideoCodec;
