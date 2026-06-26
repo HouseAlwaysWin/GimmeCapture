@@ -972,6 +972,13 @@ public partial class MainWindowViewModel
         set => this.RaiseAndSetIfChanged(ref _showKeystrokes, value);
     }
 
+    private bool _pipelinedEncoding = false;
+    public bool PipelinedEncoding
+    {
+        get => _pipelinedEncoding;
+        set => this.RaiseAndSetIfChanged(ref _pipelinedEncoding, value);
+    }
+
     private int _playbackUiFps = 30;
     public int PlaybackUiFps
     {

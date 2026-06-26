@@ -138,6 +138,7 @@
   "HighlightCursor": "カーソルを強調（スポットライト）",
   "HighlightClicks": "クリックを強調（波紋）",
   "ShowKeystrokes": "押されたキーを表示（キーストローク表示）",
+  "PipelinedEncoding": "パイプライン エンコード（実験的 — 高 fps でのドロップ低減）",
   "RecordSystemAudio": "録画時にシステム音声を含める",
   "EnableWebcam": "ウェブカメラ オーバーレイ（ワイプ）",
   "WebcamDevice": "ウェブカメラ",

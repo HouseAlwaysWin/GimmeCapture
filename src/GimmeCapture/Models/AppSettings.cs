@@ -145,6 +145,8 @@ public class AppSettings
     public bool HighlightCursor { get; set; } = false;
     public bool HighlightClicks { get; set; } = false;
     public bool ShowKeystrokes { get; set; } = false; // burn pressed-key chords into recordings
+    // Experimental: pipeline capture/composite and encoding on separate threads (region/monitor recording).
+    public bool PipelinedEncoding { get; set; } = false;
     public bool RecordSystemAudio { get; set; } = true;
     // Webcam picture-in-picture composited into recordings.
     public bool EnableWebcam { get; set; } = false;

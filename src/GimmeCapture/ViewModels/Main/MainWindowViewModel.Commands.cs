@@ -138,6 +138,7 @@ public partial class MainWindowViewModel
         HighlightCursor = defaultSettings.HighlightCursor;
         HighlightClicks = defaultSettings.HighlightClicks;
         ShowKeystrokes = defaultSettings.ShowKeystrokes;
+        PipelinedEncoding = defaultSettings.PipelinedEncoding;
         TempDirectory = defaultSettings.TempDirectory;
         
         if (Color.TryParse(defaultSettings.BorderColorHex, out var color))
