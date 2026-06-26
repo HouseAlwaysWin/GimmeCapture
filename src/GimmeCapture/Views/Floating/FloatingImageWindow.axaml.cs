@@ -55,6 +55,7 @@ public partial class FloatingImageWindow : FloatingWindowBase
 
     private bool _isAIPointing;
     private IDisposable? _toolbarBoundsSubscription;
+    private IDisposable? _subToolbarBoundsSubscription;
     private IDisposable? _mainBorderBoundsSubscription;
     private IDisposable? _windowBoundsSubscription;
     private FloatingImageViewModel? _boundViewModel;
@@ -94,6 +95,15 @@ public partial class FloatingImageWindow : FloatingWindowBase
 
                 RefreshWindowRegion();
             });
+        }
+
+        // The floating sub-toolbar lives outside the content frame; keep the window's opaque region in sync
+        // as it appears / changes category (width) so it isn't clipped by the OS region.
+        var subToolbar = this.FindControl<Border>("SubToolbarBorder");
+        if (subToolbar != null)
+        {
+            _subToolbarBoundsSubscription = subToolbar.GetObservable(Visual.BoundsProperty)
+                .Subscribe(_ => RefreshWindowRegion());
         }
 
         var mainBorder = this.FindControl<Border>("MainBorder");
@@ -210,6 +220,8 @@ public partial class FloatingImageWindow : FloatingWindowBase
     {
         _toolbarBoundsSubscription?.Dispose();
         _toolbarBoundsSubscription = null;
+        _subToolbarBoundsSubscription?.Dispose();
+        _subToolbarBoundsSubscription = null;
         _mainBorderBoundsSubscription?.Dispose();
         _mainBorderBoundsSubscription = null;
         _windowBoundsSubscription?.Dispose();
@@ -253,6 +265,7 @@ public partial class FloatingImageWindow : FloatingWindowBase
         AddSubtreeOpaqueRect("PinnedTextOverlay", 2, opaqueRects, includeInHitTest: true);
         AddSubtreeOpaqueRect("SelectionCanvas", 2, opaqueRects, includeInHitTest: true);
         AddSubtreeOpaqueRect("ToolbarBorder", 4, opaqueRects, includeInHitTest: true);
+        AddSubtreeOpaqueRect("SubToolbarBorder", 4, opaqueRects, includeInHitTest: true);
 
         if (opaqueRects.Count == 0)
         {
