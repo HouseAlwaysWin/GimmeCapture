@@ -71,6 +71,7 @@ public class RecordHotkeys
     public string Toolbar { get; set; } = "F4";
     public string Action { get; set; } = "F6";
     public string Playback { get; set; } = "Space";
+    public string Stop { get; set; } = "F9";
     public string FullscreenSelect { get; set; } = "F";
     public string SwitchToSnip { get; set; } = "F1";
     public string SwitchToTranslate { get; set; } = "F3";

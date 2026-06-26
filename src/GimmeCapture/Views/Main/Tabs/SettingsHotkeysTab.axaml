@@ -114,7 +114,7 @@
                             <TextBlock Grid.Row="5" Grid.Column="0" Text="{Binding [TipText], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" FontSize="12"/>
                             <TextBox Grid.Row="5" Grid.Column="2" Text="{Binding Record_Text, Mode=OneWay}" Tag="{x:Static services:HotkeyTagNames.Record_Text}" IsReadOnly="True" KeyDown="HotkeyTextBox_KeyDown" GotFocus="HotkeyTextBox_GotFocus" LostFocus="HotkeyTextBox_LostFocus" Margin="0,2"/>
                         </Grid>
-                        <Grid ColumnDefinitions="Auto, 5, *" RowDefinitions="Auto, Auto, Auto, Auto, Auto, Auto, Auto, Auto, Auto, Auto" Margin="5,0,0,0">
+                        <Grid ColumnDefinitions="Auto, 5, *" RowDefinitions="Auto, Auto, Auto, Auto, Auto, Auto, Auto, Auto, Auto, Auto, Auto" Margin="5,0,0,0">
                             <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding [ActionStartPin], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" FontSize="12"/>
                             <TextBox Grid.Row="0" Grid.Column="2" Text="{Binding Record_Action, Mode=OneWay}" Tag="{x:Static services:HotkeyTagNames.Record_Action}" IsReadOnly="True" KeyDown="HotkeyTextBox_KeyDown" GotFocus="HotkeyTextBox_GotFocus" LostFocus="HotkeyTextBox_LostFocus" Margin="0,2"/>
                             <TextBlock Grid.Row="1" Grid.Column="0" Text="{Binding [ActionToolbar], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" FontSize="12"/>
@@ -135,6 +135,8 @@
                             <TextBox Grid.Row="8" Grid.Column="2" Text="{Binding Record_SwitchToSnip, Mode=OneWay}" Tag="{x:Static services:HotkeyTagNames.Record_SwitchToSnip}" IsReadOnly="True" KeyDown="HotkeyTextBox_KeyDown" GotFocus="HotkeyTextBox_GotFocus" LostFocus="HotkeyTextBox_LostFocus" Margin="0,2"/>
                             <TextBlock Grid.Row="9" Grid.Column="0" Text="{Binding [SwitchToTranslate], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" FontSize="12"/>
                             <TextBox Grid.Row="9" Grid.Column="2" Text="{Binding Record_SwitchToTranslate, Mode=OneWay}" Tag="{x:Static services:HotkeyTagNames.Record_SwitchToTranslate}" IsReadOnly="True" KeyDown="HotkeyTextBox_KeyDown" GotFocus="HotkeyTextBox_GotFocus" LostFocus="HotkeyTextBox_LostFocus" Margin="0,2"/>
+                            <TextBlock Grid.Row="10" Grid.Column="0" Text="{Binding [ActionStopRecording], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" FontSize="12"/>
+                            <TextBox Grid.Row="10" Grid.Column="2" Text="{Binding Record_Stop, Mode=OneWay}" Tag="{x:Static services:HotkeyTagNames.Record_Stop}" IsReadOnly="True" KeyDown="HotkeyTextBox_KeyDown" GotFocus="HotkeyTextBox_GotFocus" LostFocus="HotkeyTextBox_LostFocus" Margin="0,2"/>
                         </Grid>
                     </UniformGrid>
                 </StackPanel>

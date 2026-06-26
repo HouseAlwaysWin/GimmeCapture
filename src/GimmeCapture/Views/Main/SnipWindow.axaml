@@ -47,6 +47,7 @@
 
         <!-- Recording Specific -->
         <KeyBinding Gesture="{Binding ActivePlaybackHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding PauseRecordingCommand}" />
+        <KeyBinding Gesture="{Binding ActiveStopHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding StopRecordingCommand}" />
 
         <!-- Snip Specific -->
         <KeyBinding Gesture="{Binding SnipSelectionModeHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding ToggleSelectionModeCommand}" />

@@ -44,6 +44,12 @@ public partial class RecordingService : ReactiveObject
     private int _startInProgress;
     private string _lastSelectedVideoEncoderName = string.Empty;
 
+    // Live mute toggles for the active recording. When set, the corresponding audio capture writes silence
+    // (zeros) instead of real samples, so the recorded WAV stays the same length and A/V stays in sync.
+    // Reset to false at the start of each recording.
+    public bool MuteSystemAudio { get; set; }
+    public bool MuteMicrophone { get; set; }
+
     public RecordingState State
     {
         get => _state;
@@ -133,6 +139,8 @@ public partial class RecordingService : ReactiveObject
         LastStartError = string.Empty;
         LastStartWarning = string.Empty;
         _lastSelectedVideoEncoderName = string.Empty;
+        MuteSystemAudio = false;
+        MuteMicrophone = false;
         if (State != RecordingState.Idle) return false;
         if (!FFmpegRuntime.IsInitialized)
         {

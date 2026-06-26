@@ -85,6 +85,7 @@ public partial class MainWindowViewModel
     public string Record_Toolbar { get => _settingsService.Settings.Record.Toolbar; set { if (_settingsService.Settings.Record.Toolbar != value) { this.RaisePropertyChanging(); _settingsService.Settings.Record.Toolbar = value; this.RaisePropertyChanged(); } } }
     public string Record_Action { get => _settingsService.Settings.Record.Action; set => SetUnifiedPinHotkeys(value); }
     public string Record_Playback { get => _settingsService.Settings.Record.Playback; set { if (_settingsService.Settings.Record.Playback != value) { this.RaisePropertyChanging(); _settingsService.Settings.Record.Playback = value; this.RaisePropertyChanged(); } } }
+    public string Record_Stop { get => _settingsService.Settings.Record.Stop; set { if (_settingsService.Settings.Record.Stop != value) { this.RaisePropertyChanging(); _settingsService.Settings.Record.Stop = value; this.RaisePropertyChanged(); } } }
     public string Record_FullscreenSelect { get => _settingsService.Settings.Record.FullscreenSelect; set { if (_settingsService.Settings.Record.FullscreenSelect != value) { this.RaisePropertyChanging(); _settingsService.Settings.Record.FullscreenSelect = value; this.RaisePropertyChanged(); } } }
     public string Record_SwitchToSnip { get => _settingsService.Settings.Record.SwitchToSnip; set { if (_settingsService.Settings.Record.SwitchToSnip != value) { this.RaisePropertyChanging(); _settingsService.Settings.Record.SwitchToSnip = value; this.RaisePropertyChanged(); } } }
     public string Record_SwitchToTranslate { get => _settingsService.Settings.Record.SwitchToTranslate; set { if (_settingsService.Settings.Record.SwitchToTranslate != value) { this.RaisePropertyChanging(); _settingsService.Settings.Record.SwitchToTranslate = value; this.RaisePropertyChanged(); } } }
@@ -162,6 +163,7 @@ public partial class MainWindowViewModel
             ["Record_Toolbar"] = Record_Toolbar,
             ["Record_Action"] = Record_Action,
             ["Record_Playback"] = Record_Playback,
+            ["Record_Stop"] = Record_Stop,
             ["Record_FullscreenSelect"] = Record_FullscreenSelect,
             ["Record_SwitchToSnip"] = Record_SwitchToSnip,
             ["Record_SwitchToTranslate"] = Record_SwitchToTranslate,

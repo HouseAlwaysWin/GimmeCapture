@@ -40,6 +40,7 @@ public static class HotkeyTagNames
     public const string Record_Action = nameof(Record_Action);
     public const string Record_Toolbar = nameof(Record_Toolbar);
     public const string Record_Playback = nameof(Record_Playback);
+    public const string Record_Stop = nameof(Record_Stop);
     public const string Record_FullscreenSelect = nameof(Record_FullscreenSelect);
     public const string Record_Close = nameof(Record_Close);
     public const string Record_Undo = nameof(Record_Undo);

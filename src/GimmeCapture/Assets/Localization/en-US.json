@@ -278,6 +278,7 @@
   "SwitchToTranslate": "Switch to Translation",
   "ActionCopy": "Copy Image",
   "ActionStart": "Start Recording",
+  "ActionStopRecording": "Stop Recording",
   "ActionStopPin": "Stop & Pin Video",
   "ActionCopyVideo": "Stop & Copy Video",
   "HotkeyDrawingGroup": "Drawing Tool Hotkeys",
