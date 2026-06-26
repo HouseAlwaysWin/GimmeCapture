@@ -1,8 +1,11 @@
 using System;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Reactive;
 using Avalonia;
+using Avalonia.Threading;
 using GimmeCapture.Models;
+using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core.Infrastructure;
 using ReactiveUI;
 
@@ -13,6 +16,9 @@ public partial class SnipWindowViewModel
     // The overlay's own window handle, captured in RefreshWindowRects, so it is excluded from the
     // window picker (otherwise the transparent full-screen capture overlay would appear in the list).
     private IntPtr? _selfWindowHandle;
+
+    // Step 2 WGC probe: null in design/test contexts and on unsupported OSes.
+    private readonly IWgcWindowCaptureProbe? _wgcProbe;
 
     /// <summary>
     /// Targets shown in the record-mode capture-scope picker: each monitor and each visible top-level
@@ -64,7 +70,7 @@ public partial class SnipWindowViewModel
                 continue;
             }
 
-            CaptureTargets.Add(new CaptureTargetItem(win.Title, logical, isMonitor: false));
+            CaptureTargets.Add(new CaptureTargetItem(win.Title, logical, isMonitor: false, win.Hwnd));
         }
     }
 
@@ -80,6 +86,51 @@ public partial class SnipWindowViewModel
         DeactivateDrawingInteraction();
         SelectionRect = target.LogicalBounds;
         CurrentState = SnipState.Selected;
+
+        // Step 2 WGC probe (temporary): when a real window is picked, grab one frame via Windows Graphics
+        // Capture and save it as a PNG to confirm the interop works (not all-black) before Step 3 wires
+        // WGC into the encoder. Fire-and-forget; never blocks or breaks the picker.
+        if (!target.IsMonitor && target.Hwnd != IntPtr.Zero)
+        {
+            TriggerWgcProbe(target.Hwnd, target.DisplayName);
+        }
+    }
+
+    private void TriggerWgcProbe(IntPtr hwnd, string title)
+    {
+        var probe = _wgcProbe;
+        if (probe == null)
+        {
+            return;
+        }
+
+        string baseDir = _mainVm?.AppSettingsService?.BaseDataDirectory ?? AppContext.BaseDirectory;
+        string outputPath = Path.Combine(baseDir, "wgc-probe.png");
+
+        _ = System.Threading.Tasks.Task.Run(async () =>
+        {
+            bool ok;
+            try
+            {
+                ok = await probe.CaptureWindowToPngAsync(hwnd, outputPath);
+            }
+            catch (Exception ex)
+            {
+                AppLog.Error("SnipRecording.WgcProbe", ex);
+                ok = false;
+            }
+
+            Dispatcher.UIThread.Post(() =>
+            {
+                string message = ok
+                    ? $"WGC probe saved: {outputPath}"
+                    : $"WGC probe failed for \"{title}\" — see log.";
+                AppLog.Information($"SnipRecording.WgcProbe: {message}");
+                _mainVm?.ShowToastAction?.Invoke(
+                    message,
+                    ok ? MainWindowViewModel.ToastSeverity.Success : MainWindowViewModel.ToastSeverity.Error);
+            });
+        });
     }
 }
 
@@ -104,14 +155,18 @@ public static class CaptureScopeGeometry
 /// <summary>One entry in the capture-scope picker: a monitor or a window, with its logical bounds.</summary>
 public sealed class CaptureTargetItem
 {
-    public CaptureTargetItem(string displayName, Rect logicalBounds, bool isMonitor)
+    public CaptureTargetItem(string displayName, Rect logicalBounds, bool isMonitor, IntPtr hwnd = default)
     {
         DisplayName = displayName;
         LogicalBounds = logicalBounds;
         IsMonitor = isMonitor;
+        Hwnd = hwnd;
     }
 
     public string DisplayName { get; }
     public Rect LogicalBounds { get; }
     public bool IsMonitor { get; }
+
+    /// <summary>The window handle for window targets (used by WGC capture); <see cref="IntPtr.Zero"/> for monitors.</summary>
+    public IntPtr Hwnd { get; }
 }

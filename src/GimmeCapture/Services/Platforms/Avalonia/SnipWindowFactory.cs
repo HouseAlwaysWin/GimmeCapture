@@ -88,7 +88,8 @@ public sealed class SnipWindowFactory : ISnipWindowFactory
             translationSelectionMonitor,
             aiScanSessionService,
             quickOcrService,
-            new AvaloniaCaptureVisibilityCoordinator());
+            new AvaloniaCaptureVisibilityCoordinator(),
+            CreateWgcProbe());
 
         snipVm.LockSelectedScreenshotSelection = mode == CaptureMode.Normal && vm.AutoPinScreenshotSelection;
         snipVm.AutoActionMode = SnipWindowViewModel.ResolveAutoActionMode(mode, vm.AutoPinScreenshotSelection);
@@ -110,6 +111,12 @@ public sealed class SnipWindowFactory : ISnipWindowFactory
     {
         return _windowManager.FindWindowOfType<SnipWindow>()?.DataContext;
     }
+
+    // The WGC probe needs the 19041 SDK projection; guard so older Windows builds just get no probe.
+    private static IWgcWindowCaptureProbe? CreateWgcProbe()
+        => OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041)
+            ? new GimmeCapture.Services.Platforms.Windows.WgcWindowCaptureProbe()
+            : null;
 
     private void ConfigureWindowBounds(Window snip)
     {
