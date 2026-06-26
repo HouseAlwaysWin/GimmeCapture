@@ -3,6 +3,78 @@
 > Read this first if you are a fresh Claude Code session picking up the
 > `claude/record-window-wgc` branch on a local Windows machine.
 
+---
+
+## ⚠️ ACTIVE ISSUE (2026-06): dual-monitor WGC produces no frames → hang
+
+> This is the current task for branch `claude/record-wgc-multimonitor`. Do this on a
+> **local Windows machine with the multi-monitor setup that reproduces it** — it
+> cannot be reproduced or verified on Linux/CI.
+
+### Symptom (reported)
+On a **two-monitor** desktop (single GPU), recording a window via WGC:
+- recording takes **several seconds to actually start** (it hits the 5 s
+  `StartupGateAsync` timeout and reports "started" with no real frame),
+- then **hangs on stop / pin** — the app becomes unclosable,
+- **no error** is logged anywhere.
+
+On a **single-display laptop (Win11, hybrid GPU)** the *same build* works fine. So this
+is **environment-specific, NOT a code regression** — verified by checking out the
+known-good pre-merge WGC branch tip and reproducing the hang there too. The WGC code in
+`main` is byte-identical to the version that was tested working.
+
+### Root cause (confirmed by code; exact trigger TBD on hardware)
+WGC reports success at every step but the frame pool never raises `FrameArrived`, so the
+encode worker's prime loop (`LibavWgcMkvSession.RunTranscode`, the
+`while (!ct.IsCancellationRequested)` wait for the first `TryCopyLatest`) blocks forever;
+`StopAsync` then awaits that worker and the UI thread hangs on the pinning `await`.
+
+The capture device is created on the **default GPU adapter**, ignoring which monitor /
+adapter actually renders the target window:
+- `WgcInterop.CreateDirect3DDevice()` (`WgcInterop.cs:58`) passes
+  `pAdapter = IntPtr.Zero` + `D3D_DRIVER_TYPE_HARDWARE`.
+- `WgcWindowCaptureSource.Start()` (`WgcWindowCaptureSource.cs:57`) →
+  `Direct3D11CaptureFramePool.CreateFreeThreaded` → `OnFrameArrived` (line 109).
+
+Note: the first multi-GPU theory was **wrong** — the failing machine has a *single* GPU
+with two monitors, while the working laptop has *dual* GPUs. So the differentiating
+variable is the **display configuration (2 monitors vs 1)** — likely per-monitor DPI/scale,
+window-on-secondary-monitor, or the GPU driver's WGC multi-monitor handling. Pin it down
+with the diagnostics in Fix A before attempting Fix B.
+
+### Fix A — symptom-agnostic, do this first (low risk)
+Whatever the exact trigger, the failure mode is always "WGC started but no first frame".
+Make that recoverable instead of a hang:
+1. **First-frame timeout → fall back to gdigrab.** In the WGC session
+   (`LibavWgcMkvSession` / `LibavWgcCompositeMkvSession`), if no first frame arrives within
+   **~1.5–2 s**, treat the start as **failed** (return `false`) so the existing fallback
+   chain in `RecordingService.LiveSession.StartFfmpegSegmentAsync()` drops to **gdigrab
+   region capture** (GPU-agnostic, already works on this machine). Today the gate reports
+   `started=true` on timeout, so the fallback never fires — that's the gap.
+2. **Stop timeout** so the app can never hang unclosably: wrap the WGC `StopAsync` awaits in
+   `RecordingService.LiveSession.StopCurrentSegmentAsync()` with
+   `Task.WhenAny(stopTask, Task.Delay(~6 s))`.
+3. **Diagnostics to a file (not `Debug.WriteLine`)** via `AppLog.Information` /
+   `AppLog.Error` (Serilog file sink under `%LOCALAPPDATA%\GimmeCapture\...\logs`): log the
+   selected adapter description, the window's monitor (`MonitorFromWindow`), whether a first
+   frame arrived and how long it took, and the frame count at stop. Run once on the failing
+   machine → the log identifies the exact trigger.
+
+### Fix B — root fix, later (higher risk, needs local DXGI testing)
+Create the D3D device on the adapter that drives the window's monitor:
+`MonitorFromWindow(hwnd)` → match to the `IDXGIOutput`/`IDXGIAdapter` via
+`IDXGIFactory.EnumAdapters` + `adapter.EnumOutputs` → call `D3D11CreateDevice` with that
+`IDXGIAdapter` and `D3D_DRIVER_TYPE_UNKNOWN`. This is the "correct" multi-adapter handling
+but requires DXGI enumeration interop; build and verify it on the real two-monitor machine.
+
+### Not affected / out of scope here
+- The **gdigrab 60 fps "sped up" fix** is independent and lives on branch
+  `claude/record-fps-timing` (real wall-clock PTS, gdigrab only — `WallClockPtsClock`).
+- Branches `claude/record-audio-mix-fix` and `claude/record-webcam-audio-polish` are still
+  awaiting Windows verification.
+
+---
+
 ## Goal
 Add **true "record a specific window"** to GimmeCapture's recording mode: the
 output follows the window as it moves, works for GPU/DWM-composited windows
