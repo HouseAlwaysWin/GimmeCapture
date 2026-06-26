@@ -45,11 +45,43 @@ strided BGRA) is the one Step 3 should reuse to feed the encoder.**
 > free-threaded frame pool. Note: `IsBorderRequired` is NOT in the 19041 SDK
 > projection, so it is not referenced; revisit if the border needs hiding.
 
-## Plan — remaining steps
-> **Step 3 is the only remaining step.** Steps 1–2 are done (see above). Step 2's
-> original instructions are kept below for reference on how the probe was built.
+## Status: ALL THREE STEPS DONE ✅
+Step 3 shipped: recording a picked window now goes through Windows Graphics Capture
+and follows the window (move/resize/occlusion/minimize) instead of grabbing a fixed
+desktop rectangle. Pieces:
+- `Services/Platforms/Windows/WgcInterop.cs` — shared WGC/D3D interop.
+- `Services/Platforms/Windows/WgcWindowCaptureSource.cs` — continuous BGRA source
+  (latest-frame-under-lock; recreates pool on resize).
+- `Services/Core/Media/NativeFFmpeg/LibavWgcMkvSession.cs` — stopwatch-paced encode
+  loop (BGRA → encoder pixfmt → Matroska), reuses `LibavRecordingEncoder`.
+- `Services/Core/Media/NativeFFmpeg/LibavRecordingEncoder.cs` — encoder ladder +
+  packet drain shared with the gdigrab session.
+- `RecordingService.StartAsync(... IntPtr windowHandle)` + `StartFfmpegSegmentAsync`
+  routes window targets to WGC (gdigrab-region fallback w/ warning if WGC fails).
+- `SnipWindowViewModel` stores the picked HWND (`_recordWindowHandle`, cleared by the
+  `SelectionRect` setter) and passes it to `StartAsync`.
+- The temporary Step 2 probe was removed (superseded by the source).
 
-### Step 2 — WGC probe (de-risk the interop FIRST) — ✅ DONE
+Verified end-to-end via the public `RecordingService` path: recorded a Brave window
+→ valid 1920×1020 H.264 Matroska (hardware `h264_amf`); a decoded frame shows the
+real window content. Build green, 457 tests pass.
+
+### Known v1 limitations / follow-ups
+- Cursor/click highlight overlays and webcam PiP are **not** composited in WGC window
+  mode yet (gdigrab region mode still has them). WGC frames are already BGRA, so it's
+  the natural place to add them — but the cursor/click overlay needs the cursor mapped
+  into window-local coords. The real OS cursor is included via
+  `GraphicsCaptureSession.IsCursorCaptureEnabled` (set from `drawMouse`).
+- On window resize the output is scaled to the **initial** window size (fixed encoder
+  dimensions); content isn't re-cropped, just stretched. Fine for v1.
+- Audio mux wasn't exercised in the automated test (recorded video-only), but the
+  audio path in `RecordingService.*` is unchanged — WGC only swaps the video session.
+
+---
+
+## Plan — original steps (for reference)
+
+### Step 2 — WGC probe (de-risk the interop FIRST) — ✅ DONE (probe later removed)
 Write a minimal `WgcWindowCaptureSource` (or `WgcProbe`) that captures **one
 frame** of a given top-level window (HWND) and saves it as a PNG, to prove WGC
 works on the user's machine and produces a non-black image. Suggested flow:
