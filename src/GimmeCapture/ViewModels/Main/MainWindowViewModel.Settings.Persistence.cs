@@ -67,6 +67,7 @@ public partial class MainWindowViewModel
             MicVolume = MicVolume,
             HighlightCursor = HighlightCursor,
             HighlightClicks = HighlightClicks,
+            ShowKeystrokes = ShowKeystrokes,
             VideoSaveDirectory = RecordingSettings.VideoSaveDirectory,
             RecordFormat = RecordingSettings.RecordFormat,
             VideoCodec = RecordingSettings.VideoCodec,
@@ -144,6 +145,7 @@ public partial class MainWindowViewModel
         MicVolume = snapshot.MicVolume;
         HighlightCursor = snapshot.HighlightCursor;
         HighlightClicks = snapshot.HighlightClicks;
+        ShowKeystrokes = snapshot.ShowKeystrokes;
         PlaybackUiFps = snapshot.PlaybackUiFps;
         PlaybackTimelineFps = snapshot.PlaybackTimelineFps;
         TempDirectory = snapshot.TempDirectory;

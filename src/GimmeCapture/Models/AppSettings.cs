@@ -144,6 +144,7 @@ public class AppSettings
     // Burn a cursor spotlight ring / click ripple into recordings (tutorial highlighting).
     public bool HighlightCursor { get; set; } = false;
     public bool HighlightClicks { get; set; } = false;
+    public bool ShowKeystrokes { get; set; } = false; // burn pressed-key chords into recordings
     public bool RecordSystemAudio { get; set; } = true;
     // Webcam picture-in-picture composited into recordings.
     public bool EnableWebcam { get; set; } = false;

@@ -36,6 +36,9 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
     /// <summary>Burn a click ripple into each frame.</summary>
     public bool HighlightClicks { get; set; }
 
+    /// <summary>Burn recently pressed keys (as chord pills) into each frame.</summary>
+    public bool ShowKeystrokes { get; set; }
+
     /// <summary>
     /// When true (default) GPU / Media-Foundation encoders (NVENC/QSV/AMF/MF) are tried before the
     /// software libx264/265 fallback. Set false to force software encoding.
@@ -190,9 +193,12 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
             ? new CursorOverlayRenderer(offsetX, offsetY, HighlightCursor, HighlightClicks)
             : null;
 
-        // One per-frame draw combining both: cursor/click overlay first, then the webcam PiP on top.
-        Action<SKBitmap>? composite = (overlay != null || webcam != null)
-            ? sk => { overlay?.Draw(sk); webcam?.Draw(sk); }
+        // Optional keystroke overlay (recent keys as fading pills along the bottom).
+        KeystrokeOverlayRenderer? keystrokes = ShowKeystrokes ? new KeystrokeOverlayRenderer() : null;
+
+        // One per-frame draw combining all overlays: cursor/click first, webcam PiP, then keystrokes on top.
+        Action<SKBitmap>? composite = (overlay != null || webcam != null || keystrokes != null)
+            ? sk => { overlay?.Draw(sk); webcam?.Draw(sk); keystrokes?.Draw(sk); }
             : null;
 
         pkt = ffmpeg.av_packet_alloc();

@@ -157,6 +157,7 @@
   "ShowRecordCursor": "Show Cursor in Record",
   "HighlightCursor": "Highlight cursor (spotlight ring)",
   "HighlightClicks": "Highlight mouse clicks (ripple)",
+  "ShowKeystrokes": "Show pressed keys (keystroke overlay)",
   "RecordSystemAudio": "Capture system audio while recording",
   "EnableWebcam": "Webcam overlay (picture-in-picture)",
   "WebcamDevice": "Webcam",
