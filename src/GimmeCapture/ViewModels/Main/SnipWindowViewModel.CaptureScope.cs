@@ -14,6 +14,33 @@ public partial class SnipWindowViewModel
     // window picker (otherwise the transparent full-screen capture overlay would appear in the list).
     private IntPtr? _selfWindowHandle;
 
+    // When the user picks a window target, remember its title + the selection rect we set for it. The
+    // title is only honored at record start while SelectionRect still matches — so redrawing a region or
+    // picking a monitor/fullscreen automatically reverts to region capture without extra bookkeeping.
+    private string? _captureWindowTitle;
+    private Rect _captureWindowRect;
+
+    /// <summary>
+    /// The window title to record via gdigrab title=, or "" for region/monitor capture. Returned only
+    /// while the current selection still matches the window the user picked.
+    /// </summary>
+    public string GetActiveCaptureWindowTitle()
+    {
+        if (string.IsNullOrEmpty(_captureWindowTitle))
+        {
+            return string.Empty;
+        }
+
+        var r = SelectionRect;
+        bool stillOnWindow =
+            Math.Abs(r.X - _captureWindowRect.X) < 1.0 &&
+            Math.Abs(r.Y - _captureWindowRect.Y) < 1.0 &&
+            Math.Abs(r.Width - _captureWindowRect.Width) < 1.0 &&
+            Math.Abs(r.Height - _captureWindowRect.Height) < 1.0;
+
+        return stillOnWindow ? _captureWindowTitle! : string.Empty;
+    }
+
     /// <summary>
     /// Targets shown in the record-mode capture-scope picker: each monitor and each visible top-level
     /// window. Picking one sets the recording selection to its bounds — the same path fullscreen-select
@@ -64,7 +91,7 @@ public partial class SnipWindowViewModel
                 continue;
             }
 
-            CaptureTargets.Add(new CaptureTargetItem(win.Title, logical, isMonitor: false));
+            CaptureTargets.Add(new CaptureTargetItem(win.Title, logical, isMonitor: false, windowTitle: win.Title));
         }
     }
 
@@ -80,6 +107,17 @@ public partial class SnipWindowViewModel
         DeactivateDrawingInteraction();
         SelectionRect = target.LogicalBounds;
         CurrentState = SnipState.Selected;
+
+        // Window targets record via gdigrab title= (follows the window); monitors record their region.
+        if (target.WindowTitle is { Length: > 0 })
+        {
+            _captureWindowTitle = target.WindowTitle;
+            _captureWindowRect = target.LogicalBounds;
+        }
+        else
+        {
+            _captureWindowTitle = null;
+        }
     }
 }
 
@@ -104,14 +142,18 @@ public static class CaptureScopeGeometry
 /// <summary>One entry in the capture-scope picker: a monitor or a window, with its logical bounds.</summary>
 public sealed class CaptureTargetItem
 {
-    public CaptureTargetItem(string displayName, Rect logicalBounds, bool isMonitor)
+    public CaptureTargetItem(string displayName, Rect logicalBounds, bool isMonitor, string? windowTitle = null)
     {
         DisplayName = displayName;
         LogicalBounds = logicalBounds;
         IsMonitor = isMonitor;
+        WindowTitle = windowTitle;
     }
 
     public string DisplayName { get; }
     public Rect LogicalBounds { get; }
     public bool IsMonitor { get; }
+
+    /// <summary>Exact window title for gdigrab title= capture, or null for a monitor target.</summary>
+    public string? WindowTitle { get; }
 }
