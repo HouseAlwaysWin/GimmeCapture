@@ -157,6 +157,7 @@
   "CaptureScopeTooltip": "モニターまたはウィンドウを録画",
   "CaptureScopeMonitor": "モニター {0}",
   "CaptureScopeMultiHint": "モニターを選ぶか、ウィンドウをクリックして複数選択できます。",
+  "RecordSeparateFilesToggle": "各ウィンドウを個別ファイルで保存",
   "RecordUnmute": "ミュート解除",
   "ShowAIScanBox": "AI 検出枠を表示",
   "EnableAIScan": "OCR 選択検出を有効化",

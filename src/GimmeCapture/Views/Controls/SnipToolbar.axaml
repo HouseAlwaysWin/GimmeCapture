@@ -61,6 +61,8 @@
                             <StackPanel Orientation="Vertical" Spacing="2">
                                 <TextBlock Text="{Binding [CaptureScopeMultiHint], Source={x:Static infra:LocalizationService.Instance}}"
                                            Foreground="#999999" FontSize="11" Margin="6,3,6,1" TextWrapping="Wrap" MaxWidth="260"/>
+                                <CheckBox Content="{Binding [RecordSeparateFilesToggle], Source={x:Static infra:LocalizationService.Instance}}"
+                                          IsChecked="{Binding RecordSeparateFiles}" Margin="6,0,6,2" FontSize="11"/>
                                 <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
                                     <ItemsControl ItemsSource="{Binding CaptureTargets}">
                                         <ItemsControl.ItemTemplate>
