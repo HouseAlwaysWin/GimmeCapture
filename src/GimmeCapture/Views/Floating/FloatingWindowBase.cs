@@ -226,6 +226,24 @@ public abstract class FloatingWindowBase : Window
         {
             vm.ToolbarMargin = new Thickness(0, 0, 0, targetBottomMargin);
         }
+
+        // Top contextual sub-toolbar: mirror the bottom logic against the screen's TOP edge. It normally
+        // rests snug above the content border (SubToolbarRestingTop); when the pin sits above the work-area
+        // top, push the floating row DOWN by the overlap so it stays fully on-screen instead of being clipped.
+        if (vm.IsSubToolbarVisible)
+        {
+            const double minTopMargin = 8;
+            const double subToolbarHeight = 40;
+            var topOverlapPhysical = Math.Max(0, screen.WorkingArea.Y - Position.Y);
+            var topOverlapLogical = topOverlapPhysical / Math.Max(0.1, scaling);
+            var restingTop = Math.Max(minTopMargin, vm.SubToolbarRestingTop);
+            var maximumTopMargin = Math.Max(restingTop, Bounds.Height - subToolbarHeight - minTopMargin);
+            var targetTopMargin = Math.Clamp(restingTop + topOverlapLogical, restingTop, maximumTopMargin);
+            if (Math.Abs(vm.SubToolbarMargin.Top - targetTopMargin) > 0.5)
+            {
+                vm.SubToolbarMargin = new Thickness(0, targetTopMargin, 0, 0);
+            }
+        }
     }
 
     protected virtual void OnTapped(object? sender, TappedEventArgs e)

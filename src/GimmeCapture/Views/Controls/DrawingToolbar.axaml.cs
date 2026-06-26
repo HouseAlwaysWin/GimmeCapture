@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
@@ -8,6 +9,19 @@ namespace GimmeCapture.Views.Controls;
 
 public partial class DrawingToolbar : UserControl
 {
+    /// <summary>
+    /// Whether the built-in Undo/Redo buttons are shown. The floating pins surface those on their main
+    /// toolbar instead, so they set this false to avoid duplication; the Snip toolbar keeps the default.
+    /// </summary>
+    public static readonly StyledProperty<bool> ShowHistoryProperty =
+        AvaloniaProperty.Register<DrawingToolbar, bool>(nameof(ShowHistory), defaultValue: true);
+
+    public bool ShowHistory
+    {
+        get => GetValue(ShowHistoryProperty);
+        set => SetValue(ShowHistoryProperty, value);
+    }
+
     public DrawingToolbar()
     {
         InitializeComponent();
