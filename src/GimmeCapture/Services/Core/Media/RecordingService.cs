@@ -139,6 +139,30 @@ public partial class RecordingService : ReactiveObject
         return totalSize;
     }
 
+    /// <summary>
+    /// Free space (bytes) on the drive holding the active recording's temp directory. Returns
+    /// <see cref="long.MaxValue"/> on any error so the disk-space guard never stops a recording spuriously.
+    /// </summary>
+    public long GetTempDriveAvailableBytes()
+    {
+        try
+        {
+            string dir = string.IsNullOrEmpty(_tempDir) ? BaseTempDir : _tempDir;
+            string? root = Path.GetPathRoot(Path.GetFullPath(dir));
+            if (string.IsNullOrEmpty(root))
+            {
+                return long.MaxValue;
+            }
+
+            return new DriveInfo(root).AvailableFreeSpace;
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Disk space check failed: {ex.Message}");
+            return long.MaxValue;
+        }
+    }
+
     public FFmpegDownloaderService Downloader => _downloader;
 
     public bool IsFinalizing
