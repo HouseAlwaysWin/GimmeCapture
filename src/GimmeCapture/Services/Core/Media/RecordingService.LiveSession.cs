@@ -432,6 +432,13 @@ public partial class RecordingService
                 EnableWebcam = _settingsService?.Settings.EnableWebcam ?? false,
                 WebcamDeviceName = _settingsService?.Settings.WebcamDeviceName ?? string.Empty,
                 WebcamCorner = _settingsService?.Settings.WebcamCorner ?? 3,
+                WebcamWidthFraction = (_settingsService?.Settings.WebcamSize ?? 1) switch
+                {
+                    0 => 0.18f,
+                    2 => 0.33f,
+                    _ => 0.25f
+                },
+                WebcamCircular = _settingsService?.Settings.WebcamCircular ?? false,
                 HighlightCursor = _settingsService?.Settings.HighlightCursor ?? false,
                 HighlightClicks = _settingsService?.Settings.HighlightClicks ?? false,
                 ShowKeystrokes = _settingsService?.Settings.ShowKeystrokes ?? false,

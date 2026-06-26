@@ -132,6 +132,8 @@ public partial class MainWindowViewModel
         EnableWebcam = defaultSettings.EnableWebcam;
         WebcamDeviceName = defaultSettings.WebcamDeviceName;
         WebcamCorner = defaultSettings.WebcamCorner;
+        WebcamSize = defaultSettings.WebcamSize;
+        WebcamCircular = defaultSettings.WebcamCircular;
         RecordMicrophone = defaultSettings.RecordMicrophone;
         SelectedMicDeviceId = defaultSettings.SelectedMicDeviceId;
         MicVolume = defaultSettings.MicVolume;

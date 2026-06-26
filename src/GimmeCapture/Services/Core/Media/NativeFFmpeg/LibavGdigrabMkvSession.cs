@@ -31,6 +31,12 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
     /// <summary>PiP corner: 0 = top-left, 1 = top-right, 2 = bottom-left, 3 = bottom-right.</summary>
     public int WebcamCorner { get; set; } = 3;
 
+    /// <summary>PiP width as a fraction of the frame width (e.g. 0.18 / 0.25 / 0.33).</summary>
+    public float WebcamWidthFraction { get; set; } = 0.25f;
+
+    /// <summary>Clip the webcam PiP to a circle with a ring border instead of a rectangle.</summary>
+    public bool WebcamCircular { get; set; }
+
     /// <summary>Burn a cursor spotlight ring into each frame.</summary>
     public bool HighlightCursor { get; set; }
 
@@ -195,7 +201,7 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
         {
             try
             {
-                webcam = new WebcamPipCompositor(WebcamDeviceName, WebcamCorner);
+                webcam = new WebcamPipCompositor(WebcamDeviceName, WebcamCorner, WebcamWidthFraction, WebcamCircular);
                 webcam.Start();
             }
             catch (Exception ex)

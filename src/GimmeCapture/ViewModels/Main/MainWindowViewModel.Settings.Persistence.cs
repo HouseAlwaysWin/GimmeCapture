@@ -62,6 +62,8 @@ public partial class MainWindowViewModel
             EnableWebcam = EnableWebcam,
             WebcamDeviceName = WebcamDeviceName,
             WebcamCorner = WebcamCorner,
+            WebcamSize = WebcamSize,
+            WebcamCircular = WebcamCircular,
             RecordMicrophone = RecordMicrophone,
             SelectedMicDeviceId = SelectedMicDeviceId,
             MicVolume = MicVolume,
@@ -141,6 +143,8 @@ public partial class MainWindowViewModel
         EnableWebcam = snapshot.EnableWebcam;
         WebcamDeviceName = snapshot.WebcamDeviceName;
         WebcamCorner = snapshot.WebcamCorner;
+        WebcamSize = snapshot.WebcamSize;
+        WebcamCircular = snapshot.WebcamCircular;
         RecordMicrophone = snapshot.RecordMicrophone;
         SelectedMicDeviceId = snapshot.SelectedMicDeviceId;
         MicVolume = snapshot.MicVolume;

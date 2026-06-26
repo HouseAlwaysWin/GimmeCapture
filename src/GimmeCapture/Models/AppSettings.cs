@@ -152,6 +152,8 @@ public class AppSettings
     public bool EnableWebcam { get; set; } = false;
     public string WebcamDeviceName { get; set; } = string.Empty;
     public int WebcamCorner { get; set; } = 3; // 0=TL, 1=TR, 2=BL, 3=BR
+    public int WebcamSize { get; set; } = 1;   // 0=Small, 1=Medium, 2=Large (PiP width as a % of frame)
+    public bool WebcamCircular { get; set; } = false; // clip the PiP to a circle with a ring border
     // Microphone capture, mixed with system audio at finalize.
     public bool RecordMicrophone { get; set; } = false;
     // WASAPI capture-endpoint device id (empty = default input device).

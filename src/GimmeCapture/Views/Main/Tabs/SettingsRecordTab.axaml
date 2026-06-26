@@ -179,6 +179,21 @@
                                     </ComboBox.ItemTemplate>
                                 </ComboBox>
                             </DockPanel>
+                            <DockPanel>
+                                <TextBlock Text="{Binding [WebcamSize], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                <ComboBox ItemsSource="{Binding WebcamSizeOptions}"
+                                          SelectedValue="{Binding WebcamSize}"
+                                          SelectedValueBinding="{Binding Value}"
+                                          HorizontalAlignment="Stretch">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate x:CompileBindings="False">
+                                            <TextBlock Text="{Binding Name}"/>
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                            </DockPanel>
+                            <CheckBox Content="{Binding [WebcamCircular], Source={x:Static services:LocalizationService.Instance}}"
+                                      IsChecked="{Binding WebcamCircular}"/>
                         </StackPanel>
                         <CheckBox Content="{Binding [RecordMicrophone], Source={x:Static services:LocalizationService.Instance}}"
      IsChecked="{Binding RecordMicrophone}" Margin="0,5,0,0"/>

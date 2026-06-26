@@ -17,12 +17,16 @@ internal sealed class WebcamPipCompositor : IDisposable
     // corner: 0 = top-left, 1 = top-right, 2 = bottom-left, 3 = bottom-right
     private readonly WebcamCaptureSource _source;
     private readonly int _corner;
+    private readonly float _widthFraction;
+    private readonly bool _circular;
     private byte[]? _buffer;
 
-    public WebcamPipCompositor(string deviceName, int corner)
+    public WebcamPipCompositor(string deviceName, int corner, float widthFraction = 0.25f, bool circular = false)
     {
         _source = new WebcamCaptureSource(deviceName);
         _corner = corner;
+        _widthFraction = widthFraction > 0 ? widthFraction : 0.25f;
+        _circular = circular;
     }
 
     public void Start() => _source.Start();
@@ -44,7 +48,7 @@ internal sealed class WebcamPipCompositor : IDisposable
                 return;
             }
 
-            float pipW = target.Width * 0.25f;
+            float pipW = target.Width * _widthFraction;
             float pipH = pipW * h / w;
             float margin = target.Width * 0.02f;
             float x = (_corner == 1 || _corner == 3) ? target.Width - pipW - margin : margin;
@@ -52,7 +56,6 @@ internal sealed class WebcamPipCompositor : IDisposable
             var dest = new SKRect(x, y, x + pipW, y + pipH);
 
             using var canvas = new SKCanvas(target);
-            canvas.DrawBitmap(cam, dest);
             using var border = new SKPaint
             {
                 Color = new SKColor(255, 255, 255, 200),
@@ -60,7 +63,34 @@ internal sealed class WebcamPipCompositor : IDisposable
                 StrokeWidth = 2,
                 IsAntialias = true,
             };
-            canvas.DrawRect(dest, border);
+
+            if (_circular)
+            {
+                // Clip to a centered circle (diameter = the shorter PiP side) so the webcam shows as a
+                // round bubble, then stroke a matching ring. Save/restore so the clip doesn't leak.
+                float diameter = Math.Min(pipW, pipH);
+                float cx = x + pipW / 2f;
+                float cy = y + pipH / 2f;
+                float radius = diameter / 2f;
+
+                int save = canvas.Save();
+                using (var clip = new SKPath())
+                {
+                    clip.AddCircle(cx, cy, radius);
+                    canvas.ClipPath(clip, SKClipOperation.Intersect, antialias: true);
+                    // Draw the camera so its shorter side fills the circle (cover, centered).
+                    float coverW = diameter * (w >= h ? (float)w / h : 1f);
+                    float coverH = diameter * (h > w ? (float)h / w : 1f);
+                    canvas.DrawBitmap(cam, new SKRect(cx - coverW / 2f, cy - coverH / 2f, cx + coverW / 2f, cy + coverH / 2f));
+                }
+                canvas.RestoreToCount(save);
+                canvas.DrawCircle(cx, cy, radius, border);
+            }
+            else
+            {
+                canvas.DrawBitmap(cam, dest);
+                canvas.DrawRect(dest, border);
+            }
         }
         finally
         {
