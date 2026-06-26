@@ -85,6 +85,7 @@ internal sealed class WebcamCaptureSource : IDisposable
 
     private readonly object _lock = new();
     private byte[]? _latest;     // BGRA, tightly packed (stride == width*4)
+    private byte[]? _spare;      // recycled back-buffer, swapped with _latest to avoid a per-frame alloc
     private int _width;
     private int _height;
 
@@ -238,9 +239,25 @@ internal sealed class WebcamCaptureSource : IDisposable
                         ffmpeg.sws_scale(sws, frame->data, frame->linesize, 0, h, bgra->data, bgra->linesize);
 
                         // Copy row by row into a tightly-packed managed buffer (sws stride may be padded).
+                        // Reuse a recycled back-buffer instead of allocating every frame: take the spare,
+                        // fill it, then swap it in and recycle the previously published buffer. Only
+                        // (re)allocate when no spare is free or the frame size changed (e.g. resolution switch),
+                        // which keeps the invariant that _latest.Length == _width*_height*4 for TryCopyLatest.
                         int stride = bgra->linesize[0];
                         int rowBytes = w * 4;
-                        var managed = new byte[rowBytes * h];
+                        int needed = rowBytes * h;
+
+                        byte[]? managed;
+                        lock (_lock)
+                        {
+                            managed = _spare;
+                            _spare = null;
+                        }
+                        if (managed == null || managed.Length != needed)
+                        {
+                            managed = new byte[needed];
+                        }
+
                         byte* srcBase = bgra->data[0];
                         for (int row = 0; row < h; row++)
                         {
@@ -249,6 +266,7 @@ internal sealed class WebcamCaptureSource : IDisposable
 
                         lock (_lock)
                         {
+                            _spare = _latest;   // recycle the previously published buffer for the next frame
                             _latest = managed;
                             _width = w;
                             _height = h;
