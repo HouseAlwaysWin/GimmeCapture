@@ -287,5 +287,7 @@ public class SnipWindowViewModelTests
 
         public WindowCandidate? GetCandidateAtPoint(Point point, IReadOnlyList<WindowCandidate> candidates, WindowCandidate? previousCandidate = null)
             => _service.GetCandidateAtPoint(point, candidates, previousCandidate);
+
+        public IReadOnlyList<RecordableWindow> GetRecordableWindows(IntPtr? excludeHWnd = null) => [];
     }
 }
