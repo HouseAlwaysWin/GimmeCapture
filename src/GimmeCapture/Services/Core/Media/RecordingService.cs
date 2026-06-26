@@ -27,8 +27,12 @@ public partial class RecordingService : ReactiveObject
     private bool _includeCursor = true;
     private PixelPoint _screenOffset;
     private double _visualScaling = 1.0;
-    // HWND of the window to record via Windows Graphics Capture; IntPtr.Zero means desktop-region (gdigrab).
+    // HWND of the window to record via Windows Graphics Capture; IntPtr.Zero means desktop-region (gdigrab)
+    // or multi-window. _windowHandles is the source of truth: 0 = region/monitor, 1 = single window,
+    // 2+ = multi-window (composite or separate per _multiWindowMode).
     private IntPtr _windowHandle;
+    private readonly List<IntPtr> _windowHandles = new();
+    private MultiWindowMode _multiWindowMode = MultiWindowMode.Composite;
     private int _fps = 30;
     private bool _recordSystemAudio;
     private bool _recordMicrophone;
@@ -133,7 +137,7 @@ public partial class RecordingService : ReactiveObject
     /// Start recording with specified target format for final output.
     /// Recording is done in MKV format internally for fast pause/resume.
     /// </summary>
-    public async Task<bool> StartAsync(Rect region, string outputFile, string targetFormat = "mp4", bool includeCursor = true, PixelPoint screenOffset = default, double visualScaling = 1.0, int fps = 30, bool recordSystemAudio = false, bool recordMicrophone = false, string micDeviceId = "", double micVolume = 1.0, IntPtr windowHandle = default)
+    public async Task<bool> StartAsync(Rect region, string outputFile, string targetFormat = "mp4", bool includeCursor = true, PixelPoint screenOffset = default, double visualScaling = 1.0, int fps = 30, bool recordSystemAudio = false, bool recordMicrophone = false, string micDeviceId = "", double micVolume = 1.0, IntPtr windowHandle = default, IReadOnlyList<IntPtr>? windowHandles = null, MultiWindowMode multiWindowMode = MultiWindowMode.Composite)
     {
         if (Interlocked.Exchange(ref _startInProgress, 1) == 1) return false;
         try
@@ -160,7 +164,20 @@ public partial class RecordingService : ReactiveObject
         _includeCursor = includeCursor;
         _screenOffset = screenOffset;
         _visualScaling = visualScaling;
-        _windowHandle = windowHandle;
+
+        // Build the window-handle list (source of truth). Multi-list wins; otherwise fall back to the
+        // single handle. _windowHandle stays set only for the single-window WGC path.
+        _windowHandles.Clear();
+        if (windowHandles is { Count: > 0 })
+        {
+            _windowHandles.AddRange(windowHandles);
+        }
+        else if (windowHandle != IntPtr.Zero)
+        {
+            _windowHandles.Add(windowHandle);
+        }
+        _multiWindowMode = multiWindowMode;
+        _windowHandle = _windowHandles.Count == 1 ? _windowHandles[0] : IntPtr.Zero;
         _fps = fps;
         _recordSystemAudio = RecordingAudioPolicy.ShouldRecordSystemAudio(recordSystemAudio, _targetFormat);
         _recordMicrophone = RecordingAudioPolicy.ShouldRecordMicrophone(recordMicrophone, _targetFormat);

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Reactive;
 using Avalonia;
@@ -14,21 +15,35 @@ public partial class SnipWindowViewModel
     // window picker (otherwise the transparent full-screen capture overlay would appear in the list).
     private IntPtr? _selfWindowHandle;
 
-    // HWND of the window picked for recording, captured in SelectCaptureTarget. Routes recording to the
-    // WGC window-capture path (true per-window recording that follows the window). Cleared by the
-    // SelectionRect setter whenever the selection changes to anything else (redraw / monitor / fullscreen).
-    private IntPtr _recordWindowHandle;
+    // HWNDs of the windows picked for recording. 1 = single-window WGC (follows the window); 2+ = multi
+    // window (composite/separate per RecordMultiWindowMode). Empty = region/monitor (gdigrab). Cleared by
+    // the SelectionRect setter whenever the selection changes to anything else (redraw / monitor / region).
+    private readonly List<IntPtr> _recordWindowHandles = new();
 
-    /// <summary>HWND of the picked recording-target window, or <see cref="IntPtr.Zero"/> for region/monitor capture.</summary>
-    internal IntPtr RecordWindowHandle => _recordWindowHandle;
+    // Set true while SelectCaptureTarget assigns the bounding-union rect, so the SelectionRect setter
+    // does not wipe the multi-selection it is building.
+    private bool _suppressRecordHandleClear;
 
-    /// <summary>Clears the picked recording window so capture falls back to the region/gdigrab path.</summary>
-    internal void ClearRecordWindowHandle() => _recordWindowHandle = IntPtr.Zero;
+    private bool _recordSeparateFiles;
+
+    /// <summary>HWNDs of the picked recording-target windows (empty for region/monitor capture).</summary>
+    internal IReadOnlyList<IntPtr> RecordWindowHandles => _recordWindowHandles;
+
+    /// <summary>When multiple windows are picked, whether to record each to its own file (vs. one composite video).</summary>
+    public bool RecordSeparateFiles
+    {
+        get => _recordSeparateFiles;
+        set => this.RaiseAndSetIfChanged(ref _recordSeparateFiles, value);
+    }
+
+    /// <summary>Multi-window output mode derived from <see cref="RecordSeparateFiles"/>.</summary>
+    internal MultiWindowMode RecordMultiWindowMode =>
+        _recordSeparateFiles ? MultiWindowMode.Separate : MultiWindowMode.Composite;
 
     /// <summary>
     /// Targets shown in the record-mode capture-scope picker: each monitor and each visible top-level
-    /// window. Picking one sets the recording selection to its bounds — the same path fullscreen-select
-    /// uses — so capture flows through the existing gdigrab offset+size path unchanged.
+    /// window. Picking a monitor sets the recording selection to its bounds (gdigrab path). Picking one or
+    /// more windows records them via Windows Graphics Capture (follows the windows).
     /// </summary>
     public ObservableCollection<CaptureTargetItem> CaptureTargets { get; } = new();
 
@@ -75,7 +90,9 @@ public partial class SnipWindowViewModel
                 continue;
             }
 
-            CaptureTargets.Add(new CaptureTargetItem(win.Title, logical, isMonitor: false, win.Hwnd));
+            // Re-mark windows that are still in the current multi-selection (so reopening the flyout keeps state).
+            bool selected = _recordWindowHandles.Contains(win.Hwnd);
+            CaptureTargets.Add(new CaptureTargetItem(win.Title, logical, isMonitor: false, win.Hwnd) { IsSelected = selected });
         }
     }
 
@@ -86,17 +103,60 @@ public partial class SnipWindowViewModel
             return;
         }
 
-        // Mirror SelectFullscreenCommand: drop any in-progress drawing, set the selection to the target
-        // bounds, and move to the Selected state so the record toolbar appears over it.
         DeactivateDrawingInteraction();
-        SelectionRect = target.LogicalBounds;   // setter clears _recordWindowHandle first
-        CurrentState = SnipState.Selected;
 
-        // For a real window, remember its HWND so recording uses the WGC window-capture path (follows the
-        // window). Monitors keep _recordWindowHandle cleared, so they record a fixed region via gdigrab.
-        if (!target.IsMonitor && target.Hwnd != IntPtr.Zero)
+        if (target.IsMonitor || target.Hwnd == IntPtr.Zero)
         {
-            _recordWindowHandle = target.Hwnd;
+            // Monitor / region: single-select. The setter clears the window multi-selection.
+            SelectionRect = target.LogicalBounds;
+            CurrentState = SnipState.Selected;
+            return;
+        }
+
+        // Window: toggle it in/out of the multi-selection and recompute the bounding union.
+        target.IsSelected = !target.IsSelected;
+        RebuildRecordWindowSelection();
+
+        if (_recordWindowHandles.Count > 0)
+        {
+            CurrentState = SnipState.Selected;
+        }
+    }
+
+    /// <summary>Rebuilds <see cref="_recordWindowHandles"/> from the selected window items and sets the selection to their union.</summary>
+    private void RebuildRecordWindowSelection()
+    {
+        _recordWindowHandles.Clear();
+        Rect? union = null;
+        foreach (var t in CaptureTargets)
+        {
+            if (t.IsMonitor || !t.IsSelected || t.Hwnd == IntPtr.Zero)
+            {
+                continue;
+            }
+
+            _recordWindowHandles.Add(t.Hwnd);
+            union = union is { } u ? u.Union(t.LogicalBounds) : t.LogicalBounds;
+        }
+
+        if (union is { } rect)
+        {
+            _suppressRecordHandleClear = true;
+            SelectionRect = rect;
+            _suppressRecordHandleClear = false;
+        }
+    }
+
+    /// <summary>Drops the picked recording windows (called by the SelectionRect setter on a real selection change).</summary>
+    private void ClearRecordWindowSelection()
+    {
+        _recordWindowHandles.Clear();
+        foreach (var t in CaptureTargets)
+        {
+            if (t.IsSelected)
+            {
+                t.IsSelected = false;
+            }
         }
     }
 }
@@ -120,8 +180,10 @@ public static class CaptureScopeGeometry
 }
 
 /// <summary>One entry in the capture-scope picker: a monitor or a window, with its logical bounds.</summary>
-public sealed class CaptureTargetItem
+public sealed class CaptureTargetItem : ReactiveObject
 {
+    private bool _isSelected;
+
     public CaptureTargetItem(string displayName, Rect logicalBounds, bool isMonitor, IntPtr hwnd = default)
     {
         DisplayName = displayName;
@@ -136,4 +198,11 @@ public sealed class CaptureTargetItem
 
     /// <summary>The window handle for window targets (used by WGC capture); <see cref="IntPtr.Zero"/> for monitors.</summary>
     public IntPtr Hwnd { get; }
+
+    /// <summary>Whether this window is part of the current multi-window selection (shown as a check in the picker).</summary>
+    public bool IsSelected
+    {
+        get => _isSelected;
+        set => this.RaiseAndSetIfChanged(ref _isSelected, value);
+    }
 }

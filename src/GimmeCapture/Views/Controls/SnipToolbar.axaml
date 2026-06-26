@@ -57,20 +57,29 @@
                     ToolTip.Tip="{Binding [CaptureScopeTooltip], Source={x:Static infra:LocalizationService.Instance}}">
                 <Button.Flyout>
                     <Flyout Placement="Top">
-                        <Border Background="#1A1A1A" BorderBrush="#333333" BorderThickness="1" Padding="2" CornerRadius="4" MaxHeight="320" MinWidth="160">
-                            <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
-                                <ItemsControl ItemsSource="{Binding CaptureTargets}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate x:DataType="vm:CaptureTargetItem">
-                                            <Button Theme="{StaticResource SnipButton}" HorizontalAlignment="Stretch"
-                                                    HorizontalContentAlignment="Left" Margin="0,1" Padding="6,3"
-                                                    Click="OnCaptureTargetSelected">
-                                                <TextBlock Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" MaxWidth="240" VerticalAlignment="Center"/>
-                                            </Button>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </ScrollViewer>
+                        <Border Background="#1A1A1A" BorderBrush="#333333" BorderThickness="1" Padding="2" CornerRadius="4" MaxHeight="320" MinWidth="180">
+                            <StackPanel Orientation="Vertical" Spacing="2">
+                                <TextBlock Text="{Binding [CaptureScopeMultiHint], Source={x:Static infra:LocalizationService.Instance}}"
+                                           Foreground="#999999" FontSize="11" Margin="6,3,6,1" TextWrapping="Wrap" MaxWidth="260"/>
+                                <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                                    <ItemsControl ItemsSource="{Binding CaptureTargets}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:CaptureTargetItem">
+                                                <Button Theme="{StaticResource SnipButton}" HorizontalAlignment="Stretch"
+                                                        HorizontalContentAlignment="Left" Margin="0,1" Padding="6,3"
+                                                        Click="OnCaptureTargetSelected">
+                                                    <Grid ColumnDefinitions="*,Auto">
+                                                        <TextBlock Grid.Column="0" Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" MaxWidth="240" VerticalAlignment="Center"/>
+                                                        <PathIcon Grid.Column="1" Width="12" Height="12" Margin="8,0,0,0" Foreground="#E53935"
+                                                                  IsVisible="{Binding IsSelected}"
+                                                                  Data="M9,16.17L4.83,12L3.41,13.41L9,19L21,7L19.59,5.59L9,16.17Z"/>
+                                                    </Grid>
+                                                </Button>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </ScrollViewer>
+                            </StackPanel>
                         </Border>
                     </Flyout>
                 </Button.Flyout>

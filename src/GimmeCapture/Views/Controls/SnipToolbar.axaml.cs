@@ -33,17 +33,23 @@ public partial class SnipToolbar : UserControl
 
     private void OnCaptureTargetSelected(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
-        if ((sender as Control)?.DataContext is CaptureTargetItem target
-            && DataContext is SnipWindowViewModel vm)
+        if ((sender as Control)?.DataContext is not CaptureTargetItem target
+            || DataContext is not SnipWindowViewModel vm)
         {
-            vm.SelectCaptureTargetCommand.Execute(target).Subscribe();
+            return;
         }
 
-        // Close the picker after a target is chosen (let the command run first).
-        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        vm.SelectCaptureTargetCommand.Execute(target).Subscribe();
+
+        // Monitors/regions are single-select → close the picker. Windows are multi-select → keep the
+        // flyout open so the user can toggle several before starting the recording.
+        if (target.IsMonitor)
         {
-            this.FindControl<Button>("CaptureScopeButton")?.Flyout?.Hide();
-        });
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                this.FindControl<Button>("CaptureScopeButton")?.Flyout?.Hide();
+            });
+        }
     }
 
     private void OnColorSelected(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
