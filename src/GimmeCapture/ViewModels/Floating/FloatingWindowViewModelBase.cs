@@ -184,7 +184,7 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
             this.RaiseAndSetIfChanged(ref _showToolbar, value);
             this.RaisePropertyChanged(nameof(WindowPadding));
             this.RaisePropertyChanged(nameof(IsSubToolbarVisible));
-            this.RaisePropertyChanged(nameof(SubToolbarMargin));
+            this.RaisePropertyChanged(nameof(SubToolbarRestingTop));
             UpdateToolbarPosition();
         }
     }
@@ -194,10 +194,22 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
     public bool IsSubToolbarVisible => ShowToolbar && IsAnyCategoryOpen;
 
     // While the sub-toolbar is visible the pins reserve this many extra px of top padding, opening a clean
-    // band above the content border. SubToolbarMargin then anchors the floating row inside that band so it
-    // sits ABOVE the frame (not overlapping the content).
-    protected const double SubToolbarReserve = 44;
-    public Thickness SubToolbarMargin => new Thickness(0, WindowPadding.Top - SubToolbarReserve, 0, 0);
+    // band above the content border for the floating row to sit in.
+    protected const double SubToolbarReserve = 48;
+
+    // Ideal resting top offset: the row sits snug just above the content border, inside the reserved band.
+    // The view's edge-placement logic uses this as the baseline and pushes the row DOWN when the pin nears
+    // the screen's top edge (mirroring how the bottom toolbar is nudged up at the bottom edge).
+    public double SubToolbarRestingTop => Math.Max(8, WindowPadding.Top - SubToolbarReserve);
+
+    // Live top margin of the floating sub-toolbar; set by the view's UpdateToolbarEdgePlacement so it stays
+    // on-screen. Starts near the top; the edge logic corrects it to SubToolbarRestingTop (or lower at edges).
+    private Thickness _subToolbarMargin = new Thickness(0, 8, 0, 0);
+    public Thickness SubToolbarMargin
+    {
+        get => _subToolbarMargin;
+        set => this.RaiseAndSetIfChanged(ref _subToolbarMargin, value);
+    }
 
     private double _toolbarTop;
     public double ToolbarTop
@@ -291,7 +303,7 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
             this.RaisePropertyChanged(nameof(IsAnyCategoryOpen));
             this.RaisePropertyChanged(nameof(IsSubToolbarVisible));
             this.RaisePropertyChanged(nameof(WindowPadding));
-            this.RaisePropertyChanged(nameof(SubToolbarMargin));
+            this.RaisePropertyChanged(nameof(SubToolbarRestingTop));
         }
     }
 
