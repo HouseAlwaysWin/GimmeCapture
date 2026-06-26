@@ -446,6 +446,12 @@ public partial class SnipWindowViewModel
 
     public void RefreshWindowRects(IntPtr? excludeHWnd = null)
     {
+        // Remember the overlay's own handle so the record capture-scope picker can exclude it.
+        if (excludeHWnd is { } self && self != IntPtr.Zero)
+        {
+            _selfWindowHandle = self;
+        }
+
         if (CurrentMode == SnipMode.Translation)
         {
             return;

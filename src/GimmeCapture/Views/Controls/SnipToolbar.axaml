@@ -51,6 +51,32 @@
                 <PathIcon Data="M5,5H10V3H3V10H5V5M19,5V10H21V3H14V5H19M19,19H14V21H21V14H19V19M5,14H3V21H10V19H5V14Z" Width="14" Height="14"/>
             </Button>
 
+            <!-- Capture-scope picker (record mode): pick a monitor or window to set the recording region. -->
+            <Button x:Name="CaptureScopeButton" Theme="{StaticResource SnipToolButton}" FontSize="12" BorderThickness="1"
+                    IsVisible="{Binding IsRecordingMode}"
+                    ToolTip.Tip="{Binding [CaptureScopeTooltip], Source={x:Static infra:LocalizationService.Instance}}">
+                <Button.Flyout>
+                    <Flyout Placement="Top">
+                        <Border Background="#1A1A1A" BorderBrush="#333333" BorderThickness="1" Padding="2" CornerRadius="4" MaxHeight="320" MinWidth="160">
+                            <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                                <ItemsControl ItemsSource="{Binding CaptureTargets}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:CaptureTargetItem">
+                                            <Button Theme="{StaticResource SnipButton}" HorizontalAlignment="Stretch"
+                                                    HorizontalContentAlignment="Left" Margin="0,1" Padding="6,3"
+                                                    Click="OnCaptureTargetSelected">
+                                                <TextBlock Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" MaxWidth="240" VerticalAlignment="Center"/>
+                                            </Button>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </Border>
+                    </Flyout>
+                </Button.Flyout>
+                <PathIcon Data="M21,16H3V4H21M21,2H3C1.89,2 1,2.89 1,4V16A2,2 0 0,0 3,18H10V20H8V22H16V20H14V18H21A2,2 0 0,0 23,16V4C23,2.89 22.1,2 21,2Z" Width="14" Height="14"/>
+            </Button>
+
             <!-- Annotation/drawing tools are intentionally NOT shown here: the selection isn't pinned yet,
                  so editing (draw / shapes / mosaic) happens after pinning, in the pin's Annotate category. -->
 

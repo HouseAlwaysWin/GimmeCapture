@@ -154,6 +154,8 @@
   "RecordAudioActive": "有効",
   "RecordAudioIdle": "無信号",
   "RecordMute": "ミュート",
+  "CaptureScopeTooltip": "モニターまたはウィンドウを録画",
+  "CaptureScopeMonitor": "モニター {0}",
   "RecordUnmute": "ミュート解除",
   "ShowAIScanBox": "AI 検出枠を表示",
   "EnableAIScan": "OCR 選択検出を有効化",
