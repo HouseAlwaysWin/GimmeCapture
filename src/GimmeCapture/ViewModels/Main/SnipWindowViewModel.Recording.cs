@@ -185,6 +185,16 @@ public partial class SnipWindowViewModel
                 return;
             }
 
+            // The record toolbar is always visible in record mode (fixed top-center), so guard against
+            // starting with nothing chosen: need picked window(s) or a non-empty drawn/monitor region.
+            bool hasTarget = _recordWindowHandles.Count > 0
+                || (SelectionRect.Width >= 2 && SelectionRect.Height >= 2);
+            if (!hasTarget)
+            {
+                _mainVm.SetStatus("RecordSelectTargetFirst");
+                return;
+            }
+
             // Validate before showing the countdown so the user does not wait
             // only to discover that recording cannot start.
             if (!_mainVm.FfmpegDownloader.IsFFmpegAvailable())

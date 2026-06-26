@@ -27,6 +27,20 @@
                     <Setter Property="Margin" Value="1,2"/>
                 </Style>
                 </WrapPanel.Styles>
+            <!-- Drag handle (screenshot / recording modes; translation has its own strip): grab to move the
+                 fixed top-center toolbar. -->
+            <Border x:Name="ToolbarDragHandle"
+                    IsVisible="{Binding !IsTranslationMode}"
+                    Width="20" Height="26" Margin="1,2,3,2"
+                    CornerRadius="3" Background="#101010" BorderBrush="#2A2A2A" BorderThickness="1"
+                    Cursor="SizeAll"
+                    VerticalAlignment="Center">
+                <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="2" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Ellipse Grid.Row="0" Width="3" Height="3" Fill="#777777"/>
+                    <Ellipse Grid.Row="1" Width="3" Height="3" Fill="#777777"/>
+                    <Ellipse Grid.Row="2" Width="3" Height="3" Fill="#777777"/>
+                </Grid>
+            </Border>
             <!-- 1. Mode Selection Buttons (三個模式同時顯示) -->
             <Button Theme="{StaticResource SnipToolButton}" Classes.active="{Binding IsScreenshotMode}"
                     Command="{Binding SetCaptureModeCommand}" CommandParameter="{x:False}"

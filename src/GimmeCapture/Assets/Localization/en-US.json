@@ -178,6 +178,7 @@
   "CaptureScopeMonitor": "Monitor {0}",
   "CaptureScopeMultiHint": "Pick a monitor, or click windows to select one or more.",
   "RecordSeparateFilesToggle": "Save each window as a separate file",
+  "RecordSelectTargetFirst": "Select a window, monitor, or region to record first.",
   "RecordUnmute": "Unmute",
   "ShowAIScanBox": "Show AI Scan Box",
   "EnableAIScan": "Enable OCR Selection Detection",

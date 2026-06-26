@@ -212,19 +212,14 @@ public partial class SnipWindow : Window
 
             if (toolbarAncestor is Views.Controls.SnipToolbar toolbar)
             {
-                // Normal screenshot/recording toolbars are anchored to SelectionRect.
-                // Only translation mode exposes an explicit drag strip.
-                if (!_viewModel.IsTranslationMode)
-                {
-                    return;
-                }
-
+                // All modes now use a fixed top-center toolbar that can be dragged by its grip handle
+                // (translation's strip or the screenshot/recording handle). Buttons stay clickable.
                 if (IsInteractiveToolbarControl(sourceControl))
                 {
                     return;
                 }
 
-                if (!IsTranslationToolbarDragStripHit(sourceControl))
+                if (!IsToolbarDragHandleHit(sourceControl))
                 {
                     return;
                 }
@@ -641,11 +636,12 @@ public partial class SnipWindow : Window
         }
     }
 
-    private static bool IsTranslationToolbarDragStripHit(Control? sourceControl)
+    private static bool IsToolbarDragHandleHit(Control? sourceControl)
     {
         for (Control? current = sourceControl; current != null; current = current.GetVisualParent() as Control)
         {
-            if (string.Equals(current.Name, "TranslationToolbarDragStrip", StringComparison.Ordinal))
+            if (string.Equals(current.Name, "TranslationToolbarDragStrip", StringComparison.Ordinal)
+                || string.Equals(current.Name, "ToolbarDragHandle", StringComparison.Ordinal))
             {
                 return true;
             }
