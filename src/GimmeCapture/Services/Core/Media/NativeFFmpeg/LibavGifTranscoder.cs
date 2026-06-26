@@ -14,12 +14,13 @@ internal static class LibavGifTranscoder
         string inputPath,
         string outputPath,
         int targetFps,
-        int maxWidth)
+        int maxWidth,
+        string paletteuseArgs = "dither=sierra2_4a")
     {
         FFmpegRuntime.EnsureInitialized();
         try
         {
-            TranscodeToGifWithPalette(inputPath, outputPath, targetFps, maxWidth);
+            TranscodeToGifWithPalette(inputPath, outputPath, targetFps, maxWidth, paletteuseArgs);
         }
         catch (Exception ex)
         {
@@ -239,7 +240,8 @@ internal static class LibavGifTranscoder
         string inputPath,
         string outputPath,
         int targetFps,
-        int maxWidth)
+        int maxWidth,
+        string paletteuseArgs)
     {
         AVFormatContext* inFmt = null;
         AVCodecContext* decCtx = null;
@@ -333,7 +335,7 @@ internal static class LibavGifTranscoder
             ThrowIfErr(ffmpeg.avfilter_graph_create_filter(&srcCtx, bufferF, "in", srcArgs, null, graph), "gifp_src");
             ThrowIfErr(ffmpeg.avfilter_graph_create_filter(&splitCtx, splitF, "split", null, null, graph), "gifp_split");
             ThrowIfErr(ffmpeg.avfilter_graph_create_filter(&pgCtx, palettegenF, "pg", "stats_mode=full", null, graph), "gifp_pg");
-            ThrowIfErr(ffmpeg.avfilter_graph_create_filter(&puCtx, paletteuseF, "pu", "dither=sierra2_4a", null, graph), "gifp_pu");
+            ThrowIfErr(ffmpeg.avfilter_graph_create_filter(&puCtx, paletteuseF, "pu", paletteuseArgs, null, graph), "gifp_pu");
             ThrowIfErr(ffmpeg.avfilter_graph_create_filter(&sinkCtx, sinkF, "out", null, null, graph), "gifp_sink");
 
             ThrowIfErr(ffmpeg.avfilter_link(srcCtx, 0, splitCtx, 0), "gifp_link_src_split");
