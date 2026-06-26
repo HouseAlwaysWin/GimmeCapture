@@ -233,7 +233,7 @@
             <StackPanel Orientation="Horizontal" Spacing="4" HorizontalAlignment="Center">
                 <!-- Annotate: drawing tools (shapes / text / mosaic / blur / color) + clear annotations -->
                 <StackPanel Orientation="Horizontal" Spacing="4" IsVisible="{Binding IsAnnotateCategory}">
-                    <controls:DrawingToolbar DataContext="{Binding}"/>
+                    <controls:DrawingToolbar DataContext="{Binding}" ShowHistory="False"/>
                     <Button Theme="{StaticResource SnipButton}" Command="{Binding ClearAnnotationsCommand}" ToolTip.Tip="{Binding ClearTooltip}">
                         <PathIcon Data="M19,4h-3.5l-1-1h-5l-1,1H5v2h14V4z M6,19c0,1.1,0.9,2,2,2h8c1.1,0,2-0.9,2-2V7H6V19z" Width="14" Height="14"/>
                     </Button>
@@ -278,15 +278,6 @@
                         <PathIcon Data="M9,3V4H4V6H5V19A2,2 0 0,0 7,21H17A2,2 0 0,0 19,19V6H20V4H15V3H9M7,6H17V19H7V6M9,8V17H11V8H9M13,8V17H15V8H13Z" Width="14" Height="14"/>
                     </Button>
                 </StackPanel>
-                <!-- Output: copy / save -->
-                <StackPanel Orientation="Horizontal" Spacing="4" IsVisible="{Binding IsOutputCategory}">
-                    <Button Theme="{StaticResource SnipButton}" Command="{Binding CopyCommand}" ToolTip.Tip="{Binding CopyTooltip}">
-                        <PathIcon Data="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z" Width="14" Height="14"/>
-                    </Button>
-                    <Button Theme="{StaticResource SnipButton}" Command="{Binding SaveCommand}" ToolTip.Tip="{Binding SaveTooltip}">
-                        <PathIcon Data="M15,9H5V5H15M12,19A3,3 0 0,1 9,16A3,3 0 0,1 12,13A3,3 0 0,1 15,16A3,3 0 0,1 12,19M17,3H5C3.89,3 3,3.89 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V7L17,3Z" Width="14" Height="14"/>
-                    </Button>
-                </StackPanel>
             </StackPanel>
         </Border>
 
@@ -310,8 +301,17 @@
             </Border.Styles>
 
             <StackPanel Orientation="Vertical" Spacing="4" HorizontalAlignment="Stretch">
-                <!-- Category bar: pick a category to reveal its tools at the top. Opacity + close are always present. -->
+                <!-- Category bar: Undo/Redo + categories + Copy/Save always live here; opacity + close too. -->
                 <StackPanel Orientation="Horizontal" Spacing="4" HorizontalAlignment="Center">
+                    <!-- Basic actions: undo / redo (always available, not behind a category) -->
+                    <Button Theme="{StaticResource SnipButton}" Command="{Binding UndoCommand}" ToolTip.Tip="{Binding UndoTooltip}">
+                        <PathIcon Data="M12.5,8c-2.65,0-5.05,0.99-6.9,2.6L2,7v9h9l-3.62-3.62c1.39-1.16,3.16-1.88,5.12-1.88c3.54,0,6.55,2.31,7.6,5.5l2.37-0.78C21.08,11.03,17.15,8,12.5,8z" Width="14" Height="14"/>
+                    </Button>
+                    <Button Theme="{StaticResource SnipButton}" Command="{Binding RedoCommand}" ToolTip.Tip="{Binding RedoTooltip}">
+                        <PathIcon Data="M18.4,10.6C16.55,9,14.15,8,11.5,8c-4.65,0-8.58,3.03-9.96,7.22L3.9,16c1.05-3.19,4.05-5.5,7.6-5.5c1.95,0,3.73,0.72,5.12,1.88L13,16h9V7L18.4,10.6z" Width="14" Height="14"/>
+                    </Button>
+                    <Rectangle Fill="#444444" Width="1" Height="20" Margin="4,0" VerticalAlignment="Center"/>
+
                     <Button Theme="{StaticResource SnipButton}" Command="{Binding SelectToolbarCategoryCommand}" CommandParameter="{x:Static models:ToolbarCategory.Annotate}"
                             ToolTip.Tip="{Binding [TipCatAnnotate], Source={x:Static services:LocalizationService.Instance}}"
                             Opacity="{Binding IsAnnotateCategory, Converter={StaticResource BoolToOpacityConverter}}">
@@ -327,11 +327,16 @@
                             Opacity="{Binding IsRedactCategory, Converter={StaticResource BoolToOpacityConverter}}">
                         <PathIcon Data="M11.83,9L15,12.16C15,12.11 15,12.05 15,12A3,3 0 0,0 12,9C11.94,9 11.89,9 11.83,9M7.53,9.8L9.08,11.35C9.03,11.56 9,11.77 9,12A3,3 0 0,0 12,15C12.22,15 12.44,14.97 12.65,14.92L14.2,16.47C13.53,16.8 12.79,17 12,17A5,5 0 0,1 7,12C7,11.21 7.2,10.47 7.53,9.8M2,4.27L4.28,6.55L4.73,7C3.08,8.3 1.78,10 1,12C2.73,16.39 7,19.5 12,19.5C13.55,19.5 15.03,19.2 16.38,18.66L16.81,19.08L19.73,22L21,20.73L3.27,3M12,7A5,5 0 0,1 17,12C17,12.64 16.87,13.26 16.64,13.82L19.57,16.75C21.07,15.5 22.27,13.86 23,12C21.27,7.61 17,4.5 12,4.5C10.6,4.5 9.26,4.75 8,5.2L10.17,7.35C10.74,7.13 11.35,7 12,7Z" Width="14" Height="14"/>
                     </Button>
-                    <Button Theme="{StaticResource SnipButton}" Command="{Binding SelectToolbarCategoryCommand}" CommandParameter="{x:Static models:ToolbarCategory.Output}"
-                            ToolTip.Tip="{Binding [TipCatOutput], Source={x:Static services:LocalizationService.Instance}}"
-                            Opacity="{Binding IsOutputCategory, Converter={StaticResource BoolToOpacityConverter}}">
-                        <PathIcon Data="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z" Width="14" Height="14"/>
+
+                    <Rectangle Fill="#444444" Width="1" Height="20" Margin="4,0" VerticalAlignment="Center"/>
+                    <!-- Basic actions: copy / save (always available, not behind a category) -->
+                    <Button Theme="{StaticResource SnipButton}" Command="{Binding CopyCommand}" ToolTip.Tip="{Binding CopyTooltip}">
+                        <PathIcon Data="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z" Width="14" Height="14"/>
                     </Button>
+                    <Button Theme="{StaticResource SnipButton}" Command="{Binding SaveCommand}" ToolTip.Tip="{Binding SaveTooltip}">
+                        <PathIcon Data="M15,9H5V5H15M12,19A3,3 0 0,1 9,16A3,3 0 0,1 12,13A3,3 0 0,1 15,16A3,3 0 0,1 12,19M17,3H5C3.89,3 3,3.89 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V7L17,3Z" Width="14" Height="14"/>
+                    </Button>
+
                     <Rectangle Fill="#444444" Width="1" Height="20" Margin="4,0" VerticalAlignment="Center"/>
                     <!-- Opacity slider (trace / overlay use) -->
                     <StackPanel Orientation="Horizontal" Spacing="3" VerticalAlignment="Center"
