@@ -314,8 +314,8 @@ public partial class SnipWindowViewModel
         _recordTimer?.Stop();
         await _recordingService.StopAsync();
 
-        // Separate multi-window recording produced N files; surface them all and skip the single-file flow.
-        if (TryHandleSeparateOutputs())
+        // Separate multi-window recording produced N files; save them all and skip the single-file flow.
+        if (TryHandleSeparateOutputs(pin: false))
         {
             CloseAction?.Invoke();
             return;
@@ -387,10 +387,12 @@ public partial class SnipWindowViewModel
     }
 
     /// <summary>
-    /// If the just-stopped recording produced multiple per-window files (separate mode), adds them all to
-    /// history and reveals their folder, then returns true so the single-file finish flow is skipped.
+    /// If the just-stopped recording produced multiple per-window files (separate mode), handles them all
+    /// and returns true so the single-file finish flow is skipped. When <paramref name="pin"/> is set each
+    /// file is opened as its own floating pin window; otherwise the files are added to history and their
+    /// folder is revealed. (Every file is always added to history.)
     /// </summary>
-    private bool TryHandleSeparateOutputs()
+    private bool TryHandleSeparateOutputs(bool pin)
     {
         if (_recordingService == null)
         {
@@ -403,24 +405,63 @@ public partial class SnipWindowViewModel
             return false;
         }
 
-        var baseRect = _recordingCaptureLogicalRect ?? SelectionRect;
-        int pw = Math.Max(2, (int)Math.Round(baseRect.Width > 1 ? baseRect.Width : 640.0));
-        int ph = Math.Max(2, (int)Math.Round(baseRect.Height > 1 ? baseRect.Height : 360.0));
+        bool hideDecoration = _mainVm?.HideRecordPinDecoration ?? false;
+        bool hideBorder = _mainVm?.HideRecordPinBorder ?? false;
 
-        foreach (var file in outputs)
+        for (int i = 0; i < outputs.Count; i++)
         {
-            if (!string.IsNullOrEmpty(file) && System.IO.File.Exists(file))
+            string file = outputs[i];
+            if (string.IsNullOrEmpty(file) || !System.IO.File.Exists(file))
             {
-                _mainVm?.CaptureHistory.AddVideoAsync(file, pw, ph).Forget("CaptureHistory.AddVideo");
+                continue;
             }
+
+            var bounds = SeparateOutputBoundsForIndex(i);
+            double ow = Math.Max(2.0, bounds.Width > 1 ? bounds.Width : 640.0);
+            double oh = Math.Max(2.0, bounds.Height > 1 ? bounds.Height : 360.0);
+            int pw = Math.Max(2, (int)Math.Round(ow));
+            int ph = Math.Max(2, (int)Math.Round(oh));
+
+            if (pin && OpenPinnedVideoWindowAction != null)
+            {
+                try
+                {
+                    OpenPinnedVideoWindowAction(file, pw, ph, ow, oh, SelectionBorderColor, SelectionBorderThickness, hideDecoration, hideBorder);
+                }
+                catch
+                {
+                    FileLocationService.RevealInFileExplorer(file);
+                }
+            }
+
+            _mainVm?.CaptureHistory.AddVideoAsync(file, pw, ph).Forget("CaptureHistory.AddVideo");
         }
 
-        if ((_mainVm?.RevealAfterSave ?? true) && !string.IsNullOrEmpty(_separateRecordingFolder))
+        if (!pin && (_mainVm?.RevealAfterSave ?? true) && !string.IsNullOrEmpty(_separateRecordingFolder))
         {
             FileLocationService.RevealInFileExplorer(_separateRecordingFolder!);
         }
 
+        _recordingService.ClearLastRecording();
         return true;
+    }
+
+    /// <summary>Best-effort logical bounds for the i-th separate output (the picked window's bounds, else the selection).</summary>
+    private Rect SeparateOutputBoundsForIndex(int index)
+    {
+        if (index >= 0 && index < _recordWindowHandles.Count)
+        {
+            IntPtr hwnd = _recordWindowHandles[index];
+            foreach (var target in CaptureTargets)
+            {
+                if (!target.IsMonitor && target.Hwnd == hwnd)
+                {
+                    return target.LogicalBounds;
+                }
+            }
+        }
+
+        return _recordingCaptureLogicalRect ?? SelectionRect;
     }
 
     private System.Collections.Generic.List<string> BuildSeparateOutputPaths(System.Collections.Generic.List<IntPtr> handles, string format)
@@ -489,7 +530,8 @@ public partial class SnipWindowViewModel
             _recordTimer?.Stop();
             await _recordingService.StopAsync();
 
-            if (TryHandleSeparateOutputs())
+            // Separate mode has N files; copying N to the clipboard isn't meaningful, so save + reveal them.
+            if (TryHandleSeparateOutputs(pin: false))
             {
                 CloseAction?.Invoke();
                 return;
@@ -545,7 +587,8 @@ public partial class SnipWindowViewModel
             _recordTimer?.Stop();
             await _recordingService.StopAsync();
 
-            if (TryHandleSeparateOutputs())
+            // Separate mode: pin each window's file as its own floating window.
+            if (TryHandleSeparateOutputs(pin: true))
             {
                 CloseAction?.Invoke();
                 return;
