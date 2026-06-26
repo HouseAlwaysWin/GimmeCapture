@@ -96,6 +96,7 @@
   "CopyDiagnostics": "Copy Diagnostics",
   "DiagnosticsCopied": "Diagnostics copied to clipboard.",
   "FFmpegNotReady": "Bundled FFmpeg components are missing or failed to initialize. Please reinstall GimmeCapture.",
+  "RecordLowDiskSpace": "Low disk space — recording stopped and saved.",
   "AIDownloadConfirm": "Interactive AI Selection requires additional modules (approx. 100MB). Download now?",
   "TabModules": "Modules",
   "ModuleAICoreDescription": "Base AI runtime and common utilities required for vision tasks.",

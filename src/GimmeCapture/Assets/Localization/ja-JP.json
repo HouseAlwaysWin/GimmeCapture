@@ -91,6 +91,7 @@
   "CopyDiagnostics": "診断情報をコピー",
   "DiagnosticsCopied": "診断情報をクリップボードにコピーしました。",
   "FFmpegNotReady": "内蔵 FFmpeg コンポーネントが見つからないか初期化に失敗しました。GimmeCapture を再インストールしてください。",
+  "RecordLowDiskSpace": "ディスク空き容量が不足 — 録画を停止して保存しました。",
   "AIDownloadConfirm": "インタラクティブ選択機能には AI モジュール (約 100MB) のダウンロードが必要です。今すぐダウンロードしますか？",
   "TabModules": "モジュール管理",
   "ModuleAIDescription": "背景削除とオブジェクト選択用の AI 模型 (U2Net/SAM2)。",

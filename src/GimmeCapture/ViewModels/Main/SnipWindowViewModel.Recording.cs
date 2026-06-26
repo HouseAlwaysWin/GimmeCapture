@@ -22,6 +22,10 @@ public partial class SnipWindowViewModel
     /// </summary>
     private bool _recordingUsesWindowsExcludeFromCapture;
     private bool _recordStartInFlight;
+    // Set once when the disk-space guard auto-stops a recording, so the 200ms poll doesn't re-trigger.
+    private bool _lowDiskStopTriggered;
+    // Stop the recording if free space on the temp drive drops below this (leaves headroom for finalize).
+    private const long MinFreeDiskBytes = 500L * 1024 * 1024;
     private DateTime _lastRecordStartAttemptUtc = DateTime.MinValue;
 
     // Folder holding the per-window files when recording multiple windows to separate files; null otherwise.
@@ -66,6 +70,7 @@ public partial class SnipWindowViewModel
         _recordingAccumulatedDuration = TimeSpan.Zero;
         _recordingActiveStartUtc = DateTime.UtcNow;
         _lastRecordingState = RecordingState.Idle;
+        _lowDiskStopTriggered = false;
         RecordingDuration = TimeSpan.Zero;
     }
 
@@ -144,13 +149,23 @@ public partial class SnipWindowViewModel
                 double maxMb = _mainVm.RecordingSettings.MaxRecordingSizeMB;
                 if (maxMb > 0)
                 {
-                    long currentBytes = _recordingService.GetCurrentRecordingSizeBytes();  
+                    long currentBytes = _recordingService.GetCurrentRecordingSizeBytes();
                     if (currentBytes > maxMb * 1024 * 1024)
                     {
                         System.Diagnostics.Debug.WriteLine($"Recording size limit reached: {currentBytes / 1024.0 / 1024.0:F2} MB > {maxMb} MB. Pinning...");
                         Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                             ExecutePinRecordingAsync().Forget("Recording.ExecutePin"));
                     }
+                }
+
+                // Disk-space guard: stop and keep what's captured before the drive fills up mid-write.
+                if (!_lowDiskStopTriggered && _recordingService.GetTempDriveAvailableBytes() < MinFreeDiskBytes)
+                {
+                    _lowDiskStopTriggered = true;
+                    System.Diagnostics.Debug.WriteLine("Low disk space — stopping recording to preserve the capture.");
+                    _mainVm.SetStatus("RecordLowDiskSpace");
+                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                        ExecutePinRecordingAsync().Forget("Recording.LowDiskStop"));
                 }
             }
         }
