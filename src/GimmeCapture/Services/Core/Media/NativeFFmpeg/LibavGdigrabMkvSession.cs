@@ -42,14 +42,6 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
     /// </summary>
     public bool PreferHardwareEncoder { get; set; } = true;
 
-    /// <summary>
-    /// When non-empty, capture a specific top-level window by its exact title via gdigrab
-    /// <c>title=…</c> (the capture follows the window as it moves and grabs its content even if
-    /// occluded) instead of the desktop region. Falls back to the desktop region if the title open
-    /// fails. The capture size is fixed at the window's size when recording starts.
-    /// </summary>
-    public string CaptureWindowTitle { get; set; } = string.Empty;
-
     public Task<bool> StartAsync(string outputPath, int offsetX, int offsetY, int width, int height, int fps, bool drawMouse, bool useH265)
     {
         FFmpegRuntime.EnsureInitialized();
@@ -146,23 +138,6 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
         }
     }
 
-    // Populates the gdigrab demuxer options. Window mode omits offset/video_size (gdigrab takes the whole
-    // titled window); desktop mode sets the capture region.
-    private static unsafe void SetGdigrabDemuxOptions(
-        AVDictionary** demuxOpts, int fps, bool drawMouse, bool windowMode, int offsetX, int offsetY, int width, int height)
-    {
-        ffmpeg.av_dict_set(demuxOpts, "framerate", fps.ToString(), 0);
-        ffmpeg.av_dict_set(demuxOpts, "draw_mouse", drawMouse ? "1" : "0", 0);
-        ffmpeg.av_dict_set(demuxOpts, "probesize", "32768", 0);
-        ffmpeg.av_dict_set(demuxOpts, "analyzeduration", "0", 0);
-        if (!windowMode)
-        {
-            ffmpeg.av_dict_set(demuxOpts, "offset_x", offsetX.ToString(), 0);
-            ffmpeg.av_dict_set(demuxOpts, "offset_y", offsetY.ToString(), 0);
-            ffmpeg.av_dict_set(demuxOpts, "video_size", $"{width}x{height}", 0);
-        }
-    }
-
     private unsafe void RunTranscode(
         string outputPath,
         int offsetX,
@@ -232,24 +207,17 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
                 throw new InvalidOperationException("gdigrab demuxer missing (need avdevice DLL).");
             }
 
-            // Window mode (title=) captures a specific window and follows it; desktop mode uses the
-            // offset+size region. gdigrab consumes the demux dict, so it is rebuilt for the fallback.
-            bool windowMode = !string.IsNullOrWhiteSpace(CaptureWindowTitle);
-            SetGdigrabDemuxOptions(&demuxOpts, fps, drawMouse, windowMode, offsetX, offsetY, width, height);
+            ffmpeg.av_dict_set(&demuxOpts, "framerate", fps.ToString(), 0);
+            ffmpeg.av_dict_set(&demuxOpts, "offset_x", offsetX.ToString(), 0);
+            ffmpeg.av_dict_set(&demuxOpts, "offset_y", offsetY.ToString(), 0);
+            ffmpeg.av_dict_set(&demuxOpts, "video_size", $"{width}x{height}", 0);
+            ffmpeg.av_dict_set(&demuxOpts, "draw_mouse", drawMouse ? "1" : "0", 0);
+            ffmpeg.av_dict_set(&demuxOpts, "probesize", "32768", 0);
+            ffmpeg.av_dict_set(&demuxOpts, "analyzeduration", "0", 0);
 
-            string inputUrl = windowMode ? $"title={CaptureWindowTitle}" : "desktop";
-            int openRc = ffmpeg.avformat_open_input(&inputFmt, inputUrl, ifmt, &demuxOpts);
-            if (openRc < 0 && windowMode)
-            {
-                LogNative($"gdigrab title open failed ({openRc}) for '{CaptureWindowTitle}'; falling back to desktop region.");
-                if (inputFmt != null) { ffmpeg.avformat_close_input(&inputFmt); inputFmt = null; }
-                if (demuxOpts != null) { ffmpeg.av_dict_free(&demuxOpts); demuxOpts = null; }
-                windowMode = false;
-                SetGdigrabDemuxOptions(&demuxOpts, fps, drawMouse, windowMode, offsetX, offsetY, width, height);
-                openRc = ffmpeg.avformat_open_input(&inputFmt, "desktop", ifmt, &demuxOpts);
-            }
-
-            ThrowIfErr(openRc, "avformat_open_input");
+            ThrowIfErr(
+                ffmpeg.avformat_open_input(&inputFmt, "desktop", ifmt, &demuxOpts),
+                "avformat_open_input");
 
             // Skip avformat_find_stream_info for gdigrab live input.
             // On some Windows systems it repeatedly logs probe warnings and delays startup.
@@ -271,22 +239,11 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
             ThrowIfErr(ffmpeg.avcodec_parameters_to_context(decCtx, inPar), "parameters_to_context(dec)");
             ThrowIfErr(ffmpeg.avcodec_open2(decCtx, dec, null), "avcodec_open2(dec)");
 
-            // In window mode the capture size is whatever gdigrab reported for the window; use that for the
-            // encoder (rounded to even) rather than the caller's region size. Desktop mode keeps width/height.
-            int encWidth = width;
-            int encHeight = height;
-            if (windowMode && decCtx->width > 1 && decCtx->height > 1)
-            {
-                encWidth = decCtx->width & ~1;
-                encHeight = decCtx->height & ~1;
-                LogNative($"Window capture size from gdigrab: {decCtx->width}x{decCtx->height} -> enc {encWidth}x{encHeight}");
-            }
-
             encCtx = OpenRecordingEncoderContext(
                 useH265,
                 PreferHardwareEncoder,
-                encWidth,
-                encHeight,
+                width,
+                height,
                 fps,
                 &encOpts,
                 out string encName,

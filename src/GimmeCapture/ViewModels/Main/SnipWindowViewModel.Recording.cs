@@ -260,7 +260,7 @@ public partial class SnipWindowViewModel
         ResetRecordingDurationTracking();
         bool enableSystemAudio = _mainVm.RecordSystemAudio;
 
-        if (await _recordingService.StartAsync(region, _currentRecordingPath, format, _mainVm.ShowRecordCursor, ScreenOffset, VisualScaling, _mainVm.RecordingSettings.RecordFPS, enableSystemAudio, _mainVm.RecordMicrophone, _mainVm.SelectedMicDeviceId, _mainVm.MicVolume, GetActiveCaptureWindowTitle()))
+        if (await _recordingService.StartAsync(region, _currentRecordingPath, format, _mainVm.ShowRecordCursor, ScreenOffset, VisualScaling, _mainVm.RecordingSettings.RecordFPS, enableSystemAudio, _mainVm.RecordMicrophone, _mainVm.SelectedMicDeviceId, _mainVm.MicVolume))
         {
             _recordingCaptureLogicalRect = region;
             EnsureRecordingTimerStarted();

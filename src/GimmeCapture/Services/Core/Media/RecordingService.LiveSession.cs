@@ -29,8 +29,7 @@ public partial class RecordingService
                 WebcamCorner = _settingsService?.Settings.WebcamCorner ?? 3,
                 HighlightCursor = _settingsService?.Settings.HighlightCursor ?? false,
                 HighlightClicks = _settingsService?.Settings.HighlightClicks ?? false,
-                PreferHardwareEncoder = _settingsService?.Settings.VideoEncoderHint != VideoEncoderHint.SoftwareOnly,
-                CaptureWindowTitle = _captureWindowTitle
+                PreferHardwareEncoder = _settingsService?.Settings.VideoEncoderHint != VideoEncoderHint.SoftwareOnly
             };
 
             int x = (int)(_region.X * _visualScaling) + _screenOffset.X;

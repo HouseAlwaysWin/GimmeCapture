@@ -32,7 +32,6 @@ public partial class RecordingService : ReactiveObject
     private bool _recordMicrophone;
     private string _micDeviceId = string.Empty;
     private double _micVolume = 1.0;
-    private string _captureWindowTitle = string.Empty;
     private readonly List<string> _micSegments = new();
     private bool _isFinalizing;
     private double _finalizationProgress;
@@ -132,7 +131,7 @@ public partial class RecordingService : ReactiveObject
     /// Start recording with specified target format for final output.
     /// Recording is done in MKV format internally for fast pause/resume.
     /// </summary>
-    public async Task<bool> StartAsync(Rect region, string outputFile, string targetFormat = "mp4", bool includeCursor = true, PixelPoint screenOffset = default, double visualScaling = 1.0, int fps = 30, bool recordSystemAudio = false, bool recordMicrophone = false, string micDeviceId = "", double micVolume = 1.0, string captureWindowTitle = "")
+    public async Task<bool> StartAsync(Rect region, string outputFile, string targetFormat = "mp4", bool includeCursor = true, PixelPoint screenOffset = default, double visualScaling = 1.0, int fps = 30, bool recordSystemAudio = false, bool recordMicrophone = false, string micDeviceId = "", double micVolume = 1.0)
     {
         if (Interlocked.Exchange(ref _startInProgress, 1) == 1) return false;
         try
@@ -164,7 +163,6 @@ public partial class RecordingService : ReactiveObject
         _recordMicrophone = RecordingAudioPolicy.ShouldRecordMicrophone(recordMicrophone, _targetFormat);
         _micDeviceId = micDeviceId ?? string.Empty;
         _micVolume = micVolume;
-        _captureWindowTitle = captureWindowTitle ?? string.Empty;
         _segments.Clear();
         _audioSegments.Clear();
         _micSegments.Clear();
