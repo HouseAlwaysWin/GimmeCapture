@@ -205,6 +205,7 @@ public partial class RecordingService
                 WebcamCorner = _settingsService?.Settings.WebcamCorner ?? 3,
                 HighlightCursor = _settingsService?.Settings.HighlightCursor ?? false,
                 HighlightClicks = _settingsService?.Settings.HighlightClicks ?? false,
+                ShowKeystrokes = _settingsService?.Settings.ShowKeystrokes ?? false,
                 PreferHardwareEncoder = _settingsService?.Settings.VideoEncoderHint != VideoEncoderHint.SoftwareOnly
             };
 

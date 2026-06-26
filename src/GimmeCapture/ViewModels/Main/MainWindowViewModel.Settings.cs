@@ -965,6 +965,13 @@ public partial class MainWindowViewModel
         set => this.RaiseAndSetIfChanged(ref _highlightClicks, value);
     }
 
+    private bool _showKeystrokes = false;
+    public bool ShowKeystrokes
+    {
+        get => _showKeystrokes;
+        set => this.RaiseAndSetIfChanged(ref _showKeystrokes, value);
+    }
+
     private int _playbackUiFps = 30;
     public int PlaybackUiFps
     {

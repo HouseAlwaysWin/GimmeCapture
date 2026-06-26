@@ -149,6 +149,7 @@
   "ShowRecordCursor": "錄影時顯示游標",
   "HighlightCursor": "游標高亮（聚光圈）",
   "HighlightClicks": "點擊高亮（漣漪）",
+  "ShowKeystrokes": "顯示按下的按鍵（鍵盤浮層）",
   "RecordSystemAudio": "錄影時擷取系統音訊",
   "EnableWebcam": "Webcam 子母畫面",
   "WebcamDevice": "Webcam",

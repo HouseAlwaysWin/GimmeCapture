@@ -240,6 +240,13 @@ public partial class SnipWindow : Window
             && HotkeyParsingHelper.IsSafeSingleKeyHotkey(hotkey.AsSpan());
     }
 
+    // A modifier combo (e.g. "Ctrl+C") carries a '+'. Used to allow Copy/Save globally on the unfocused
+    // capture path without risking a single-letter binding swallowing the user's plain typing.
+    private static bool IsModifierCombo(string? hotkey)
+    {
+        return !string.IsNullOrWhiteSpace(hotkey) && hotkey.IndexOf('+') >= 0;
+    }
+
     private static bool MatchesUnfocusedCaptureHotkey(string hotkey, Func<string, bool> isMatch)
     {
         return !string.IsNullOrWhiteSpace(hotkey)
@@ -502,15 +509,54 @@ public partial class SnipWindow : Window
                 return true;
             }
 
-            bool isOverlayEditingState =
+            // Pause/stop must still work globally while recording (e.g. F9/Space from another app).
+            if (_viewModel.CurrentMode == SnipMode.Recording && _viewModel.RecState != RecordingState.Idle)
+            {
+                if (IsMatch(_viewModel.ActivePlaybackHotkey))
+                {
+                    _viewModel.PauseRecordingCommand?.Execute().Subscribe();
+                    return true;
+                }
+
+                if (IsMatch(_viewModel.ActiveStopHotkey))
+                {
+                    _viewModel.StopRecordingCommand?.Execute().Subscribe();
+                    return true;
+                }
+            }
+
+            // Copy/Save stay available globally (even when the overlay isn't focused) while there is a
+            // capture to act on, so the user can grab/save it without clicking into the overlay first. These
+            // are restricted to modifier combos (e.g. Ctrl+C / Ctrl+S) so — unlike the single-letter drawing
+            // hotkeys — they can never swallow plain typing in another app.
+            bool hasCaptureContent =
                 _viewModel.CurrentState == SnipState.Selected
                 || _viewModel.IsDrawingMode
                 || _viewModel.RecState != RecordingState.Idle;
 
-            if (!isOverlayEditingState)
+            if (hasCaptureContent)
             {
-                return false;
+                if (IsModifierCombo(_viewModel.CopyHotkey) && IsMatch(_viewModel.CopyHotkey))
+                {
+                    _viewModel.CopyCommand?.Execute().Subscribe();
+                    return true;
+                }
+
+                if (IsModifierCombo(_viewModel.SaveHotkey) && IsMatch(_viewModel.SaveHotkey))
+                {
+                    _viewModel.SaveCommand?.Execute().Subscribe();
+                    return true;
+                }
             }
+
+            // Past here the LL hook is only ever reached on the UNFOCUSED path in Snip/Record mode (when the
+            // overlay owns focus, HandleGlobalKeyboardEvent has already returned above and Avalonia's window
+            // KeyBindings handle keys). So beyond the narrow capture-flow + Copy/Save hotkeys above, the overlay
+            // must stay completely hands-off and must NOT swallow the user's typing in another app — in
+            // particular the single-letter drawing-tool hotkeys (R/E/A/L/P/T/M/B) and Clear, which used to be
+            // eaten here while recording. Undo/Redo stay available while the overlay is focused (window
+            // KeyBindings); annotation/editing lives in the pin windows, which have their own hotkeys.
+            return false;
         }
 
         // 1. General Window Hotkeys

@@ -137,6 +137,7 @@ public partial class MainWindowViewModel
         MicVolume = defaultSettings.MicVolume;
         HighlightCursor = defaultSettings.HighlightCursor;
         HighlightClicks = defaultSettings.HighlightClicks;
+        ShowKeystrokes = defaultSettings.ShowKeystrokes;
         TempDirectory = defaultSettings.TempDirectory;
         
         if (Color.TryParse(defaultSettings.BorderColorHex, out var color))
