@@ -161,7 +161,9 @@ public partial class RecordingService
     }
 
     // Mixes two WAV files into one 16-bit WAV at 48 kHz stereo. Both inputs are resampled /
-    // channel-adapted to a common format (a hard requirement of MixingSampleProvider).
+    // channel-adapted to the common format, then summed deterministically (mic gain folded into the
+    // mixer) so the result length is exactly the longer source and writer termination does not depend
+    // on NAudio's post-EOF silence behavior — see DeterministicMixSampleProvider.
     private string MixWavFiles(string systemPath, string micPath, double micVolume)
     {
         const int rate = 48000;
@@ -173,15 +175,8 @@ public partial class RecordingService
 
         ISampleProvider systemProvider = NormalizeSampleProvider(systemReader, rate, channels);
         ISampleProvider micProvider = NormalizeSampleProvider(micReader, rate, channels);
-        if (Math.Abs(micVolume - 1.0) >= 0.001)
-        {
-            micProvider = new VolumeSampleProvider(micProvider) { Volume = (float)micVolume };
-        }
 
-        // ReadFully MUST be false here: with ReadFully=true the mixer keeps returning full buffers of
-        // silence after both inputs end, so WaveFileWriter.CreateWaveFile (which loops until Read returns 0)
-        // never terminates — the mix would hang/OOM and fall back to system-audio-only (mic lost).
-        var mixer = new MixingSampleProvider(new[] { systemProvider, micProvider }) { ReadFully = false };
+        var mixer = new DeterministicMixSampleProvider(systemProvider, micProvider, (float)micVolume);
         WaveFileWriter.CreateWaveFile16(mixedPath, mixer);
         return mixedPath;
     }
@@ -272,12 +267,18 @@ public partial class RecordingService
             for (int i = 1; i < validAudioSegments.Count; i++)
             {
                 using var reader = new WaveFileReader(validAudioSegments[i]);
-                if (!reader.WaveFormat.Equals(waveFormat))
+                if (reader.WaveFormat.Equals(waveFormat))
                 {
-                    Debug.WriteLine($"[Finalize] Skip audio segment with mismatched format: {validAudioSegments[i]}");
-                    continue;
+                    await AppendWaveFileAsync(reader, writer);
                 }
-                await AppendWaveFileAsync(reader, writer);
+                else
+                {
+                    // A pause/resume boundary can yield a segment at a different sample-rate or channel
+                    // count (device format change). Resample it to the first segment's format and append
+                    // instead of dropping it, so audio stays continuous across the pause.
+                    LogToFile($"[Finalize] Resampling mismatched audio segment '{validAudioSegments[i]}' ({reader.WaveFormat}) -> {waveFormat}");
+                    AppendResampledSegment(reader, waveFormat, writer);
+                }
             }
             return mergedPath;
         }
@@ -465,6 +466,22 @@ public partial class RecordingService
         while ((read = await reader.ReadAsync(buffer, 0, buffer.Length)) > 0)
         {
             await writer.WriteAsync(buffer, 0, read);
+        }
+    }
+
+    // Resamples / channel-adapts a segment whose format differs from the merged track and appends it as
+    // 16-bit PCM matching the writer's format. Captured segments are always 16-bit PCM (see
+    // RecordingService.Audio.cs), so targetFormat is 16-bit and SampleToWaveProvider16 output is compatible.
+    private static void AppendResampledSegment(WaveFileReader reader, WaveFormat targetFormat, WaveFileWriter writer)
+    {
+        ISampleProvider normalized = NormalizeSampleProvider(reader.ToSampleProvider(), targetFormat.SampleRate, targetFormat.Channels);
+        var pcm16 = new SampleToWaveProvider16(normalized);
+
+        byte[] buffer = new byte[81920];
+        int read;
+        while ((read = pcm16.Read(buffer, 0, buffer.Length)) > 0)
+        {
+            writer.Write(buffer, 0, read);
         }
     }
 
