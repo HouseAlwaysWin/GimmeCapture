@@ -244,9 +244,13 @@ public partial class SnipWindow : Window
 
 
         // If clicking OUTSIDE or in Idle/Detecting, start NEW selection
-        // Check if the click is within the toolbar bounds (coordinate-based check)
+        // Check if the click is within the toolbar bounds (coordinate-based check).
+        // Skip this CRUDE coordinate guard during the OCR candidate scan (Detecting): the toolbar sits top-center
+        // and its rect-expanded-by-(+200,+250) dead-zone otherwise swallows clicks on OCR candidates in the top
+        // strip, so candidate-snap does nothing. The precise visual-tree check below still protects real toolbar /
+        // popup clicks (incl. during Detecting), so the toolbar stays usable AND candidate clicks commit.
         var toolbarControl = this.FindControl<SnipToolbar>("Toolbar");
-        if (toolbarControl != null && toolbarControl.IsVisible)
+        if (toolbarControl != null && toolbarControl.IsVisible && _viewModel.CurrentState != SnipState.Detecting)
         {
             // Get toolbar bounds in window coordinates
             var toolbarBounds = toolbarControl.Bounds;

@@ -202,8 +202,10 @@ public partial class SnipWindowViewModel
     /// SnipToolbar 是否留在視覺樹中。翻譯模式或截圖/錄影已選取時固定為 true，以便「隱藏」時停到螢幕外仍能量測寬高。
     /// </summary>
     // The toolbar is shown immediately on entry in every mode — Translation, Recording AND Snip — including
-    // before any selection exists, so the user no longer has to drag a box first to reveal it. Only hidden
-    // while a recording is finalizing.
+    // before any selection exists AND during the OCR candidate scan (Detecting), so the user never has to drag a
+    // box first to reveal it. Only hidden while a recording is finalizing. (The OCR candidate click is kept
+    // working during Detecting by skipping the press-handler's coordinate toolbar-guard there — see
+    // SnipWindow.Pointer.cs OnPointerPressed — not by hiding the toolbar.)
     public bool IsToolbarVisible =>
         !IsRecordingFinalizing
         && (CurrentMode == SnipMode.Translation
