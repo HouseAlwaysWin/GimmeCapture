@@ -517,8 +517,13 @@ public partial class SnipWindow : Window
                 {
                     SetCursorShape(StandardCursorType.Cross);
                 }
-                else if (!_viewModel.IsTranslationMode && (_viewModel.CurrentState == SnipState.Selecting || _viewModel.CurrentState == SnipState.Detecting))
+                else if (!_viewModel.IsTranslationMode
+                    && (_viewModel.CurrentState == SnipState.Idle
+                        || _viewModel.CurrentState == SnipState.Selecting
+                        || _viewModel.CurrentState == SnipState.Detecting))
                 {
+                    // Show the crosshair immediately on entry (Idle), not only once a drag begins, so it's clear
+                    // you can draw a selection right away — matching the toolbar now being visible on entry.
                     SetCursorShape(StandardCursorType.Cross);
                 }
                 else

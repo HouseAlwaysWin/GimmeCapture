@@ -48,12 +48,22 @@ internal static class WgcInterop
         }
     }
 
-    public static IDirect3DDevice CreateDirect3DDevice()
+    public static IDirect3DDevice CreateDirect3DDevice() => CreateDirect3DDevice(out _);
+
+    /// <summary>
+    /// Creates the WGC <see cref="IDirect3DDevice"/> on the default hardware adapter (WARP fallback if there
+    /// is no GPU) and reports the DXGI description of the adapter that backs it. The description is purely
+    /// diagnostic — on a multi-monitor box it lets the log show which GPU WGC actually bound, which is the
+    /// first thing to check when the frame pool never raises FrameArrived.
+    /// </summary>
+    public static IDirect3DDevice CreateDirect3DDevice(out string adapterDescription)
     {
         const uint D3D11_SDK_VERSION = 7;
         const uint D3D11_CREATE_DEVICE_BGRA_SUPPORT = 0x20;
         const uint D3D_DRIVER_TYPE_HARDWARE = 1;
         const uint D3D_DRIVER_TYPE_WARP = 5;
+
+        adapterDescription = "(unknown)";
 
         int hr = D3D11CreateDevice(
             IntPtr.Zero, D3D_DRIVER_TYPE_HARDWARE, IntPtr.Zero, D3D11_CREATE_DEVICE_BGRA_SUPPORT,
@@ -73,6 +83,7 @@ internal static class WgcInterop
             Marshal.ThrowExceptionForHR(Marshal.QueryInterface(d3dDevice, in iidDxgiDevice, out IntPtr dxgiDevice));
             try
             {
+                adapterDescription = TryGetAdapterDescription(dxgiDevice);
                 Marshal.ThrowExceptionForHR(CreateDirect3D11DeviceFromDXGIDevice(dxgiDevice, out IntPtr inspectable));
                 try
                 {
@@ -96,6 +107,79 @@ internal static class WgcInterop
             }
 
             Marshal.Release(d3dDevice);
+        }
+    }
+
+    /// <summary>Reads the DXGI adapter description backing a D3D device (best effort; "(unknown)" on failure).</summary>
+    private static string TryGetAdapterDescription(IntPtr dxgiDevice)
+    {
+        try
+        {
+            var dev = (IDXGIDevice)Marshal.GetObjectForIUnknown(dxgiDevice);
+            try
+            {
+                dev.GetAdapter(out IntPtr adapterPtr);
+                if (adapterPtr == IntPtr.Zero)
+                {
+                    return "(unknown)";
+                }
+
+                try
+                {
+                    var adapter = (IDXGIAdapter)Marshal.GetObjectForIUnknown(adapterPtr);
+                    try
+                    {
+                        adapter.GetDesc(out DxgiAdapterDesc desc);
+                        string name = desc.Description?.Trim() ?? string.Empty;
+                        return string.IsNullOrEmpty(name) ? "(unnamed)" : name;
+                    }
+                    finally
+                    {
+                        Marshal.ReleaseComObject(adapter);
+                    }
+                }
+                finally
+                {
+                    Marshal.Release(adapterPtr);
+                }
+            }
+            finally
+            {
+                Marshal.ReleaseComObject(dev);
+            }
+        }
+        catch
+        {
+            return "(unknown)";
+        }
+    }
+
+    /// <summary>
+    /// Returns a compact, single-line description of the monitor that owns a window
+    /// (e.g. <c>mon=0x10001 rect=2560x1440@(2560,0) primary=False dev=\\.\DISPLAY2</c>) for diagnostics.
+    /// Never throws — returns a "(failed)" marker if the Win32 calls fail.
+    /// </summary>
+    public static string DescribeWindowMonitor(IntPtr hwnd)
+    {
+        try
+        {
+            const uint MONITOR_DEFAULTTONEAREST = 2;
+            IntPtr mon = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+            var info = new MonitorInfoEx { cbSize = Marshal.SizeOf<MonitorInfoEx>() };
+            if (!GetMonitorInfo(mon, ref info))
+            {
+                return $"mon=0x{mon.ToInt64():X} (GetMonitorInfo failed)";
+            }
+
+            int w = info.rcMonitor.Right - info.rcMonitor.Left;
+            int h = info.rcMonitor.Bottom - info.rcMonitor.Top;
+            bool primary = (info.dwFlags & 1) != 0; // MONITORINFOF_PRIMARY
+            return $"mon=0x{mon.ToInt64():X} rect={w}x{h}@({info.rcMonitor.Left},{info.rcMonitor.Top}) " +
+                   $"primary={primary} dev={info.szDevice}";
+        }
+        catch
+        {
+            return "(monitor lookup failed)";
         }
     }
 
@@ -144,6 +228,80 @@ internal static class WgcInterop
 
     [DllImport("d3d11.dll", ExactSpelling = true)]
     private static extern int CreateDirect3D11DeviceFromDXGIDevice(IntPtr dxgiDevice, out IntPtr graphicsDevice);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint dwFlags);
+
+    [DllImport("user32.dll", CharSet = CharSet.Auto)]
+    private static extern bool GetMonitorInfo(IntPtr hMonitor, ref MonitorInfoEx lpmi);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct Rect
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
+    private struct MonitorInfoEx
+    {
+        public int cbSize;
+        public Rect rcMonitor;
+        public Rect rcWork;
+        public uint dwFlags;
+
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
+        public string szDevice;
+    }
+
+    // Minimal DXGI projections — only the vtable slots up to the method we call are declared, in order.
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct DxgiAdapterDesc
+    {
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)]
+        public string Description;
+        public uint VendorId;
+        public uint DeviceId;
+        public uint SubSysId;
+        public uint Revision;
+        public nuint DedicatedVideoMemory;
+        public nuint DedicatedSystemMemory;
+        public nuint SharedSystemMemory;
+        public long AdapterLuid;
+    }
+
+    [ComImport]
+    [Guid("54ec77fa-1377-44e6-8c32-88fd5f44c84c")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IDXGIDevice
+    {
+        // IDXGIObject
+        void SetPrivateData(ref Guid name, uint dataSize, IntPtr data);
+        void SetPrivateDataInterface(ref Guid name, IntPtr unknown);
+        void GetPrivateData(ref Guid name, ref uint dataSize, IntPtr data);
+        void GetParent(ref Guid riid, out IntPtr parent);
+
+        // IDXGIDevice
+        void GetAdapter(out IntPtr adapter);
+    }
+
+    [ComImport]
+    [Guid("2411e7e1-12ac-4ccf-bd14-9798e8534dc0")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IDXGIAdapter
+    {
+        // IDXGIObject
+        void SetPrivateData(ref Guid name, uint dataSize, IntPtr data);
+        void SetPrivateDataInterface(ref Guid name, IntPtr unknown);
+        void GetPrivateData(ref Guid name, ref uint dataSize, IntPtr data);
+        void GetParent(ref Guid riid, out IntPtr parent);
+
+        // IDXGIAdapter
+        void EnumOutputs(uint index, out IntPtr output);
+        void GetDesc(out DxgiAdapterDesc desc);
+    }
 
     [ComImport]
     [Guid("3628E81B-3CAC-4C60-B7F4-23CE0E0C3356")]

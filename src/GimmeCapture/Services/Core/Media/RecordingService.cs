@@ -42,6 +42,11 @@ public partial class RecordingService : ReactiveObject
         public string OutputFile = string.Empty;
         public readonly List<string> Segments = new();
         public NativeFFmpeg.LibavWgcMkvSession? Session;
+
+        // Set instead of <see cref="Session"/> when WGC produced no frames and the track fell back to capturing
+        // the window's screen rectangle via gdigrab (separate-files mode). Finalize is session-agnostic (it works
+        // off <see cref="Segments"/>), so only start/stop/dispose need to handle both kinds.
+        public NativeFFmpeg.LibavGdigrabMkvSession? GdigrabSession;
     }
     private readonly List<VideoTrack> _tracks = new();
 

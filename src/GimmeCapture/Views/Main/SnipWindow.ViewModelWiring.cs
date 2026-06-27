@@ -94,11 +94,69 @@ public partial class SnipWindow : Window
             ApplyRecordingScreenCaptureAffinity(vm);
 
             _viewModel.IsMagnifierEnabled = true;
-            _viewModel.CloseAction = () => 
+            _viewModel.CloseAction = () =>
             {
+                AppLog.Information($"SnipWindow.CloseAction → Close() (IsVisible={IsVisible})");
                 Close();
             };
-            
+
+            _viewModel.ForceClearSelectionRegionAction = () =>
+            {
+                try
+                {
+                    // Collapse the selection-border region to the 1×1 click-through stub immediately (not the
+                    // throttled binding), and force a repaint so no stale yellow ring remains on screen.
+                    UpdateWindowRegion(default, SnipState.Idle, isDrawingMode: false);
+                    this.InvalidateVisual();
+                    AppLog.Information("SnipWindow.ForceClearSelectionRegion applied");
+                }
+                catch (Exception ex)
+                {
+                    AppLog.Warning("SnipWindow.ForceClearSelectionRegion", ex);
+                }
+            };
+
+            _viewModel.CloseStaleOverlayWindowsAction = () =>
+            {
+                try
+                {
+                    if (Avalonia.Application.Current?.ApplicationLifetime
+                        is not Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
+                    {
+                        return;
+                    }
+
+                    // Snapshot first — Close() mutates desktop.Windows. Log every window's managed .NET type (the
+                    // Win32 class GUID is per-instance and useless), then close any VISIBLE overlay that isn't the
+                    // main window, a floating pin, or this one — that catches the leftover selection-frame overlay
+                    // (yellow) and the countdown/toast outline (red) regardless of their exact type.
+                    var windows = new System.Collections.Generic.List<Window>(desktop.Windows);
+                    foreach (var w in windows)
+                    {
+                        var hwnd = w.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
+
+                        // Log full geometry so the leftover frame can be identified (a bare base Window could be the
+                        // off-screen tray/hotkey host — which must NEVER be closed).
+                        AppLog.Information($"SnipWindow.OverlayScan hwnd=0x{hwnd.ToInt64():X} type={w.GetType().Name} vis={w.IsVisible} pos=({w.Position.X},{w.Position.Y}) size={w.Width}x{w.Height} title='{w.Title}'");
+
+                        // SAFE close: only the known transient capture/recording outline overlays (yellow region
+                        // outline, red countdown/hint). Never base Window (tray host), SnipWindow, main, or pins.
+                        if (w is ScrollingCaptureRegionWindow
+                            || w is ScrollingCaptureHintWindow
+                            || w is CaptureCountdownWindow
+                            || w is ToastWindow)
+                        {
+                            AppLog.Information($"SnipWindow.CloseStaleOverlay closing {w.GetType().Name} hwnd=0x{hwnd.ToInt64():X}");
+                            try { w.Close(); } catch { /* best effort */ }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    AppLog.Warning("SnipWindow.CloseStaleOverlay", ex);
+                }
+            };
+
             _viewModel.HideAction = () => Hide();
             _viewModel.ShowAction = () => Show();
 
@@ -168,6 +226,18 @@ public partial class SnipWindow : Window
                     WindowStartupLocation = WindowStartupLocation.CenterScreen
                 };
                 _progressWindow.Show();
+
+                // Recording is finished by the time finalize starts, so drop the capture-exclusion
+                // (WDA_EXCLUDEFROMCAPTURE) BEFORE hiding. Hiding a still-excluded, regioned overlay leaves a DWM
+                // ghost of the yellow selection frame on screen (it survives the hide and even the window close).
+                // See docs/WGC_HANDOFF.md.
+                var snipHwnd = this.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
+                if (snipHwnd != IntPtr.Zero && OperatingSystem.IsWindows())
+                {
+                    Win32Helpers.SetWindowCaptureVisibility(snipHwnd, visible: true);
+                    Win32Helpers.ClearWindowRegion(snipHwnd);
+                }
+
                 Hide(); // Hide main window to allow user interaction
             };
 

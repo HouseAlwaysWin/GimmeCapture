@@ -53,6 +53,15 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
     /// </summary>
     public bool PipelinedEncoding { get; set; }
 
+    /// <summary>
+    /// Timestamp output frames by wall-clock arrival time instead of a frame counter. Needed when gdigrab can't
+    /// keep up with the target fps (e.g. several large window regions captured concurrently): a frame counter at
+    /// 1/fps spacing then yields a sped-up video (5 s captured → ~1 s playback). Wall-clock PTS keeps the output
+    /// duration equal to real time (lower effective fps, but correct speed). Off by default so the proven
+    /// single-region path is unchanged. Forces the single-threaded encode loop.
+    /// </summary>
+    public bool UseWallClockPts { get; set; }
+
     public Task<bool> StartAsync(string outputPath, int offsetX, int offsetY, int width, int height, int fps, bool drawMouse, bool useH265)
     {
         FFmpegRuntime.EnsureInitialized();
@@ -300,12 +309,17 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
 
             ThrowIfErr(ffmpeg.avformat_write_header(outputFmt, null), "write_header");
 
-            if (PipelinedEncoding)
+            if (PipelinedEncoding && !UseWallClockPts)
             {
                 RunPipelinedEncode(inputFmt, videoIn, pkt, decCtx, encCtx, ref sws, ref swsToBgra, decFrame, ref bgraFrame, composite, outputFmt, outStream, ref frameCounter, ref packetCounter, firstFrameTcs, ct);
             }
             else
             {
+                // Wall-clock PTS clock (only consulted when UseWallClockPts). Started lazily on the first encoded
+                // frame so that frame lands at pts 0 regardless of capture-startup latency.
+                var encodeClock = new System.Diagnostics.Stopwatch();
+                long lastEncPts = -1;
+
                 while (!ct.IsCancellationRequested)
                 {
                     int rr = ffmpeg.av_read_frame(inputFmt, pkt);
@@ -331,11 +345,11 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
                     ThrowIfErr(ffmpeg.avcodec_send_packet(decCtx, pkt), "send_packet(dec)");
                     ffmpeg.av_packet_unref(pkt);
 
-                    DecodeEncodeLoop(decCtx, encCtx, ref sws, ref swsToBgra, decFrame, encFrame, ref bgraFrame, ref encFrameInitialized, composite, outputFmt, outStream, pkt, ref frameCounter, ref packetCounter, firstFrameTcs);
+                    DecodeEncodeLoop(decCtx, encCtx, ref sws, ref swsToBgra, decFrame, encFrame, ref bgraFrame, ref encFrameInitialized, composite, outputFmt, outStream, pkt, ref frameCounter, ref packetCounter, firstFrameTcs, UseWallClockPts, encodeClock, ref lastEncPts);
                 }
 
                 ThrowIfErr(ffmpeg.avcodec_send_packet(decCtx, null), "flush_decoder");
-                DecodeEncodeLoop(decCtx, encCtx, ref sws, ref swsToBgra, decFrame, encFrame, ref bgraFrame, ref encFrameInitialized, composite, outputFmt, outStream, pkt, ref frameCounter, ref packetCounter, firstFrameTcs);
+                DecodeEncodeLoop(decCtx, encCtx, ref sws, ref swsToBgra, decFrame, encFrame, ref bgraFrame, ref encFrameInitialized, composite, outputFmt, outStream, pkt, ref frameCounter, ref packetCounter, firstFrameTcs, UseWallClockPts, encodeClock, ref lastEncPts);
 
                 ThrowIfErr(ffmpeg.avcodec_send_frame(encCtx, null), "flush_encoder");
                 LibavRecordingEncoder.WriteEncodedPackets(encCtx, outputFmt, outStream, pkt, ref packetCounter);
@@ -434,7 +448,10 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
         AVPacket* pkt,
         ref long frameCounter,
         ref long packetCounter,
-        TaskCompletionSource<bool> firstFrameTcs)
+        TaskCompletionSource<bool> firstFrameTcs,
+        bool useWallClockPts,
+        System.Diagnostics.Stopwatch encodeClock,
+        ref long lastEncPts)
     {
         while (true)
         {
@@ -521,7 +538,34 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
                 ffmpeg.sws_scale(sws, decFrame->data, decFrame->linesize, 0, decFrame->height, encFrame->data, encFrame->linesize);
             }
 
-            encFrame->pts = frameCounter++;
+            if (useWallClockPts)
+            {
+                // Pace output PTS by real elapsed time so a slow/behind gdigrab capture stays the correct speed.
+                // time_base is 1/fps, so pts (in time_base units) == elapsed_seconds * fps. Started lazily here so
+                // the first frame is pts 0. Bumped to stay strictly monotonic if two frames land in the same tick.
+                if (!encodeClock.IsRunning)
+                {
+                    encodeClock.Start();
+                }
+
+                double fps = encCtx->time_base.num != 0
+                    ? encCtx->time_base.den / (double)encCtx->time_base.num
+                    : 30.0;
+                long pts = (long)(encodeClock.Elapsed.TotalSeconds * fps);
+                if (pts <= lastEncPts)
+                {
+                    pts = lastEncPts + 1;
+                }
+
+                lastEncPts = pts;
+                encFrame->pts = pts;
+            }
+            else
+            {
+                encFrame->pts = frameCounter;
+            }
+
+            frameCounter++;
             if (frameCounter == 1)
             {
                 firstFrameTcs.TrySetResult(true);

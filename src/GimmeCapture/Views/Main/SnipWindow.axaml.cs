@@ -173,21 +173,25 @@ public partial class SnipWindow : Window
                 // 翻譯模式不使用 SAM2 掃描
                 
                 // 翻譯模式：在 ViewportSize 和 AllScreenBounds 就緒後重新初始化工具列位置
+                // Position the fixed top-center toolbar now that AllScreenBounds + ActiveScreenBounds (seeded from
+                // the cursor above) are ready, then re-center after layout so it lands on the CURSOR'S screen with
+                // the correct measured width. Applies to every mode (Translation / Recording / Screenshot) — this
+                // is what puts the toolbar on the monitor the mouse is on, not always the primary.
+                _viewModel.InitializeTranslationToolbarPosition();
+                // Re-center after SnipToolbar finishes layout (MaxWidth / WrapPanel need a real measure pass).
+                await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    var measuredWidth = Toolbar.Bounds.Width;
+                    if (measuredWidth > 1)
+                    {
+                        _viewModel.ToolbarWidth = measuredWidth;
+                    }
+                    _viewModel.InitializeTranslationToolbarPosition();
+                }, Avalonia.Threading.DispatcherPriority.Loaded);
+
                 if (_viewModel.IsTranslationMode)
                 {
-                    _viewModel.InitializeTranslationToolbarPosition();
-                    // Re-center after SnipToolbar finishes layout (MaxWidth / WrapPanel need a real measure pass).
-                    await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
-                    {
-                        var measuredWidth = Toolbar.Bounds.Width;
-                        if (measuredWidth > 1)
-                        {
-                            _viewModel.ToolbarWidth = measuredWidth;
-                        }
-                        _viewModel.InitializeTranslationToolbarPosition();
-                    }, Avalonia.Threading.DispatcherPriority.Loaded);
-                    
-                    // NEW: Exclude from capture specifically for Translation Mode to prevent flickering during background OCR updates.
+                    // Exclude from capture specifically for Translation Mode to prevent flickering during background OCR updates.
                     var hwnd = this.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
                     if (hwnd != IntPtr.Zero && OperatingSystem.IsWindows())
                     {
@@ -301,6 +305,7 @@ public partial class SnipWindow : Window
 
     protected override void OnClosing(WindowClosingEventArgs e)
     {
+        AppLog.Information($"SnipWindow.OnClosing (RecState={_viewModel?.RecState}, Cancel={e.Cancel})");
         PersistTranslatedSelectionsForClosingIfNeeded();
         base.OnClosing(e);
         

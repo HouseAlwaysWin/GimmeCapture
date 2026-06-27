@@ -1,8 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
 using GimmeCapture.Models;
+using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Core.Media.NativeFFmpeg;
 using GimmeCapture.Services.Platforms.Windows;
 
@@ -10,12 +12,36 @@ namespace GimmeCapture.Services.Core.Media;
 
 public partial class RecordingService
 {
+    /// <summary>
+    /// Hard cap on awaiting a WGC session's <c>StopAsync</c> so stop/pin can never hang the UI thread if the
+    /// frame pool wedged (the dual-monitor "no frames" repro). On timeout we abandon the await and let
+    /// Dispose tear the session down best-effort. See docs/WGC_HANDOFF.md "Fix A".
+    /// </summary>
+    private const int WgcStopTimeoutMs = 6000;
+
     private LibavGdigrabMkvSession? _nativeRecorder;
     private LibavWgcMkvSession? _nativeWgcRecorder;
     private LibavWgcCompositeMkvSession? _nativeWgcCompositeRecorder;
 
+    // Set once WGC is observed to bring up but deliver no frames (the dual-monitor "no frames" repro). After
+    // that we skip WGC for the rest of the process and go straight to gdigrab, so the user stops paying the
+    // ~1.5 s first-frame timeout on every recording. Reset only by restarting the app.
+    private static bool _wgcNoFramesThisSession;
+
     private bool WgcAvailable =>
-        OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041) && WgcWindowCaptureSource.IsSupported;
+        !_wgcNoFramesThisSession
+        && OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041) && WgcWindowCaptureSource.IsSupported;
+
+    private static void MarkWgcUnusableThisSession()
+    {
+        if (_wgcNoFramesThisSession)
+        {
+            return;
+        }
+
+        _wgcNoFramesThisSession = true;
+        AppLog.Information("Wgc.Disabled (session): WGC produced no frames; skipping WGC and using gdigrab region capture for the rest of this run.");
+    }
 
     private async Task<bool> StartFfmpegSegmentAsync(string segmentFile)
     {
@@ -26,34 +52,58 @@ public partial class RecordingService
             return false;
         }
 
-        // Multiple windows: composite → one tiled video; separate → one WGC session per window.
-        if (_windowHandles.Count >= 2 && WgcAvailable)
+        // Whether to *attempt* WGC at all. Once WGC has been seen to deliver no frames this run, WgcAvailable is
+        // false and we skip straight to the gdigrab fallbacks (no per-recording first-frame timeout, no warning).
+        bool tryWgc = WgcAvailable;
+
+        // Multiple windows: composite → one tiled video; separate → one file per window.
+        if (_windowHandles.Count >= 2)
         {
             if (_multiWindowMode == MultiWindowMode.Separate && _tracks.Count > 0)
             {
-                if (await StartSeparateSegmentsAsync().ConfigureAwait(false))
+                if (tryWgc)
+                {
+                    if (await StartSeparateSegmentsAsync().ConfigureAwait(false))
+                    {
+                        return true;
+                    }
+
+                    // WGC produced no frames (e.g. dual-monitor repro) — warn once; subsequent recordings skip WGC.
+                    Debug.WriteLine($"[RecordingService] Separate WGC failed; per-window region capture. {LastStartError}");
+                    LastStartWarning = "Window capture unavailable — recording each window's screen region instead.";
+                }
+
+                // Keep the per-window separate-files behaviour by capturing each window's screen rectangle.
+                if (await StartSeparateGdigrabSegmentsAsync().ConfigureAwait(false))
                 {
                     return true;
                 }
 
-                Debug.WriteLine($"[RecordingService] Separate WGC capture failed; falling back to region. {LastStartError}");
+                // Even per-window region capture failed: drop separate-files mode and record one region that will
+                // finalize (clearing _tracks routes stop to the single-file finalize path).
+                Debug.WriteLine($"[RecordingService] Per-window region fallback failed; single region. {LastStartError}");
+                _tracks.Clear();
                 LastStartWarning = "Multi-window capture unavailable — recording the screen region instead.";
                 return await StartGdigrabSegmentAsync(segmentFile).ConfigureAwait(false);
             }
 
-            if (await StartCompositeSegmentAsync(segmentFile).ConfigureAwait(false))
+            if (tryWgc)
             {
-                return true;
+                if (await StartCompositeSegmentAsync(segmentFile).ConfigureAwait(false))
+                {
+                    return true;
+                }
+
+                Debug.WriteLine($"[RecordingService] Composite WGC capture failed; region. {LastStartError}");
+                LastStartWarning = "Multi-window capture unavailable — recording the screen region instead.";
             }
 
-            Debug.WriteLine($"[RecordingService] Composite WGC capture failed; falling back to region. {LastStartError}");
-            LastStartWarning = "Multi-window capture unavailable — recording the screen region instead.";
             return await StartGdigrabSegmentAsync(segmentFile).ConfigureAwait(false);
         }
 
         // A single picked window records via Windows Graphics Capture so the output follows the window. If
-        // WGC can't start (no support / window gone), fall back to the gdigrab region so recording works.
-        if (_windowHandle != IntPtr.Zero && WgcAvailable)
+        // WGC can't start (no support / window gone / no frames this run), fall back to the gdigrab region.
+        if (_windowHandle != IntPtr.Zero && tryWgc)
         {
             if (await StartWgcSegmentAsync(segmentFile).ConfigureAwait(false))
             {
@@ -83,6 +133,11 @@ public partial class RecordingService
                 .ConfigureAwait(false);
             if (!ok)
             {
+                if (_nativeWgcCompositeRecorder.TimedOutWaitingForFrame)
+                {
+                    MarkWgcUnusableThisSession();
+                }
+
                 LastStartError = _nativeWgcCompositeRecorder.LastErrorMessage ?? "Composite WGC session reported failure.";
                 _nativeWgcCompositeRecorder.Dispose();
                 _nativeWgcCompositeRecorder = null;
@@ -96,6 +151,13 @@ public partial class RecordingService
         }
         catch (Exception ex)
         {
+            // The first-frame/bring-up timeout surfaces here as a thrown task (the gate re-throws the faulted
+            // firstFrame), so the no-frames cache must also be checked on this path — not just the !ok branch.
+            if (_nativeWgcCompositeRecorder?.TimedOutWaitingForFrame == true)
+            {
+                MarkWgcUnusableThisSession();
+            }
+
             LastStartError = ex.Message;
             Debug.WriteLine($"[RecordingService] Composite recorder start failed: {ex.Message}");
             _nativeWgcCompositeRecorder?.Dispose();
@@ -120,6 +182,11 @@ public partial class RecordingService
                 .ConfigureAwait(false);
             if (!ok)
             {
+                if (_nativeWgcRecorder.TimedOutWaitingForFrame)
+                {
+                    MarkWgcUnusableThisSession();
+                }
+
                 LastStartError = _nativeWgcRecorder.LastErrorMessage ?? "WGC window session reported failure.";
                 _nativeWgcRecorder.Dispose();
                 _nativeWgcRecorder = null;
@@ -133,6 +200,13 @@ public partial class RecordingService
         }
         catch (Exception ex)
         {
+            // First-frame/bring-up timeout surfaces as a thrown task here; check the no-frames cache on this path
+            // too (the !ok branch is only reached on the rarer worker-completes-false race).
+            if (_nativeWgcRecorder?.TimedOutWaitingForFrame == true)
+            {
+                MarkWgcUnusableThisSession();
+            }
+
             LastStartError = ex.Message;
             Debug.WriteLine($"[RecordingService] WGC recorder start failed: {ex.Message}");
             _nativeWgcRecorder?.Dispose();
@@ -146,8 +220,10 @@ public partial class RecordingService
         bool useH265 = _settingsService?.Settings.VideoCodec == VideoCodec.H265;
         bool preferHw = _settingsService?.Settings.VideoEncoderHint != VideoEncoderHint.SoftwareOnly;
         int segIndex = Math.Max(0, _segments.Count - 1);
-        int started = 0;
 
+        // Launch every window's WGC session CONCURRENTLY so their bring-up/first-frame timeouts overlap instead of
+        // stacking sequentially — N windows would otherwise add N×~2s on the dual-monitor repro. See Fix A.
+        var pending = new List<(int Index, VideoTrack Track, string SegPath, LibavWgcMkvSession Session, Task<bool> Task)>();
         for (int i = 0; i < _tracks.Count; i++)
         {
             var track = _tracks[i];
@@ -155,26 +231,40 @@ public partial class RecordingService
             track.Session = null;
 
             string segPath = Path.Combine(_tempDir, $"track{i}_segment_{segIndex}.mkv");
+            var session = new LibavWgcMkvSession { PreferHardwareEncoder = preferHw };
+            pending.Add((i, track, segPath, session, session.StartAsync(segPath, track.Hwnd, _fps, _includeCursor, useH265)));
+        }
+
+        int started = 0;
+        foreach (var p in pending)
+        {
+            bool ok;
             try
             {
-                var session = new LibavWgcMkvSession { PreferHardwareEncoder = preferHw };
-                bool ok = await session.StartAsync(segPath, track.Hwnd, _fps, _includeCursor, useH265).ConfigureAwait(false);
-                if (ok)
-                {
-                    track.Session = session;
-                    track.Segments.Add(segPath);
-                    _lastSelectedVideoEncoderName = session.SelectedEncoderName ?? _lastSelectedVideoEncoderName;
-                    started++;
-                }
-                else
-                {
-                    Debug.WriteLine($"[RecordingService] Track {i} (hwnd {track.Hwnd}) failed to start: {session.LastErrorMessage}");
-                    session.Dispose();
-                }
+                ok = await p.Task.ConfigureAwait(false);
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[RecordingService] Track {i} start threw: {ex.Message}");
+                Debug.WriteLine($"[RecordingService] Track {p.Index} start threw: {ex.Message}");
+                ok = false;
+            }
+
+            if (ok)
+            {
+                p.Track.Session = p.Session;
+                p.Track.Segments.Add(p.SegPath);
+                _lastSelectedVideoEncoderName = p.Session.SelectedEncoderName ?? _lastSelectedVideoEncoderName;
+                started++;
+            }
+            else
+            {
+                if (p.Session.TimedOutWaitingForFrame)
+                {
+                    MarkWgcUnusableThisSession();
+                }
+
+                Debug.WriteLine($"[RecordingService] Track {p.Index} (hwnd {p.Track.Hwnd}) failed to start: {p.Session.LastErrorMessage}");
+                p.Session.Dispose();
             }
         }
 
@@ -193,6 +283,145 @@ public partial class RecordingService
         return true;
     }
 
+    /// <summary>
+    /// Separate-files fallback when WGC delivers no frames: capture each window's current screen rectangle (via
+    /// gdigrab) into its own track file, so "every window to its own file" still works. Unlike WGC this does not
+    /// follow the window if it moves and records whatever is on top, but it is GPU-agnostic and reliable. Sessions
+    /// start concurrently. See docs/WGC_HANDOFF.md.
+    /// </summary>
+    private async Task<bool> StartSeparateGdigrabSegmentsAsync()
+    {
+        bool useH265 = _settingsService?.Settings.VideoCodec == VideoCodec.H265;
+        bool preferHw = _settingsService?.Settings.VideoEncoderHint != VideoEncoderHint.SoftwareOnly;
+        int segIndex = Math.Max(0, _segments.Count - 1);
+
+        var pending = new List<(int Index, VideoTrack Track, string SegPath, LibavGdigrabMkvSession Session, Task<bool> Task)>();
+        for (int i = 0; i < _tracks.Count; i++)
+        {
+            var track = _tracks[i];
+            track.GdigrabSession?.Dispose();
+            track.GdigrabSession = null;
+
+            if (!TryGetWindowCaptureRect(track.Hwnd, out int x, out int y, out int w, out int h))
+            {
+                Debug.WriteLine($"[RecordingService] Track {i} (hwnd {track.Hwnd}) window rect unavailable; skipping.");
+                continue;
+            }
+
+            string segPath = Path.Combine(_tempDir, $"track{i}_gdigrab_{segIndex}.mkv");
+            var session = new LibavGdigrabMkvSession
+            {
+                HighlightCursor = _settingsService?.Settings.HighlightCursor ?? false,
+                HighlightClicks = _settingsService?.Settings.HighlightClicks ?? false,
+                ShowKeystrokes = _settingsService?.Settings.ShowKeystrokes ?? false,
+                PreferHardwareEncoder = preferHw,
+                // Pace output by wall-clock: N large window regions captured concurrently make gdigrab fall behind
+                // the target fps, which with counter-based PTS produces a sped-up video. Wall-clock PTS keeps the
+                // duration correct. (This also forces the single-threaded encode loop.)
+                UseWallClockPts = true,
+                // No webcam PiP here: a dshow webcam can't be opened by N concurrent sessions, and duplicating it
+                // into every window file is undesirable.
+            };
+            AppLog.Information($"Wgc.SeparateFallback.Region track={i} hwnd=0x{track.Hwnd.ToInt64():X} rect={w}x{h}@({x},{y})");
+            pending.Add((i, track, segPath, session, session.StartAsync(segPath, x, y, w, h, _fps, _includeCursor, useH265)));
+        }
+
+        int started = 0;
+        foreach (var p in pending)
+        {
+            bool ok;
+            try
+            {
+                ok = await p.Task.ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[RecordingService] Track {p.Index} gdigrab start threw: {ex.Message}");
+                ok = false;
+            }
+
+            if (ok)
+            {
+                p.Track.GdigrabSession = p.Session;
+                p.Track.Segments.Add(p.SegPath);
+                _lastSelectedVideoEncoderName = p.Session.SelectedEncoderName ?? _lastSelectedVideoEncoderName;
+                started++;
+            }
+            else
+            {
+                Debug.WriteLine($"[RecordingService] Track {p.Index} gdigrab failed: {p.Session.LastErrorMessage}");
+                p.Session.Dispose();
+            }
+        }
+
+        if (started == 0)
+        {
+            LastStartError = "None of the selected windows could be captured.";
+            return false;
+        }
+
+        if (started < _tracks.Count)
+        {
+            LastStartWarning = $"{_tracks.Count - started} window(s) could not be captured and were skipped.";
+        }
+
+        State = RecordingState.Recording;
+        return true;
+    }
+
+    /// <summary>
+    /// Physical-pixel screen rectangle of a window, clamped to the virtual desktop and with even dimensions —
+    /// suitable as gdigrab offset_x/offset_y/video_size. False if the window is gone or fully off-screen.
+    /// The clamp is essential: gdigrab returns an I/O error if the capture rect extends past the desktop bounds,
+    /// which happens for maximized windows whose borders sit a few px outside the monitor (verified on the
+    /// dual-monitor repro: unclamped (-2056,-88) failed; clamped to the virtual desktop captured fine).
+    /// </summary>
+    private static bool TryGetWindowCaptureRect(IntPtr hwnd, out int x, out int y, out int width, out int height)
+    {
+        x = y = width = height = 0;
+        if (hwnd == IntPtr.Zero || !GetWindowRect(hwnd, out RECT r))
+        {
+            return false;
+        }
+
+        int vx = GetSystemMetrics(SM_XVIRTUALSCREEN);
+        int vy = GetSystemMetrics(SM_YVIRTUALSCREEN);
+        int vRight = vx + GetSystemMetrics(SM_CXVIRTUALSCREEN);
+        int vBottom = vy + GetSystemMetrics(SM_CYVIRTUALSCREEN);
+
+        int left = Math.Max(r.Left, vx);
+        int top = Math.Max(r.Top, vy);
+        int right = Math.Min(r.Right, vRight);
+        int bottom = Math.Min(r.Bottom, vBottom);
+
+        x = left;
+        y = top;
+        width = ((right - left) / 2) * 2;   // gdigrab/H.264 want even dimensions
+        height = ((bottom - top) / 2) * 2;
+        return width >= 2 && height >= 2;
+    }
+
+    private const int SM_XVIRTUALSCREEN = 76;
+    private const int SM_YVIRTUALSCREEN = 77;
+    private const int SM_CXVIRTUALSCREEN = 78;
+    private const int SM_CYVIRTUALSCREEN = 79;
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern int GetSystemMetrics(int nIndex);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+    private static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct RECT
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
+
     private async Task<bool> StartGdigrabSegmentAsync(string segmentFile)
     {
         try
@@ -207,7 +436,11 @@ public partial class RecordingService
                 HighlightClicks = _settingsService?.Settings.HighlightClicks ?? false,
                 ShowKeystrokes = _settingsService?.Settings.ShowKeystrokes ?? false,
                 PipelinedEncoding = _settingsService?.Settings.PipelinedEncoding ?? false,
-                PreferHardwareEncoder = _settingsService?.Settings.VideoEncoderHint != VideoEncoderHint.SoftwareOnly
+                PreferHardwareEncoder = _settingsService?.Settings.VideoEncoderHint != VideoEncoderHint.SoftwareOnly,
+                // Window/composite fallbacks capture a large region (a window, or the union bounding box of windows
+                // that can span both monitors); gdigrab falls behind the target fps there, so pace by wall-clock to
+                // keep the speed correct. Normal drawn-region recording (no windows) keeps the proven counter PTS.
+                UseWallClockPts = _windowHandles.Count > 0
             };
 
             int x = (int)(_region.X * _visualScaling) + _screenOffset.X;
@@ -249,7 +482,7 @@ public partial class RecordingService
 
     private async Task StopCurrentSegmentAsync()
     {
-        bool anyTrackSession = _tracks.AsValueEnumerable().Any(t => t.Session != null);
+        bool anyTrackSession = _tracks.AsValueEnumerable().Any(t => t.Session != null || t.GdigrabSession != null);
         if (_nativeRecorder == null && _nativeWgcRecorder == null && _nativeWgcCompositeRecorder == null && !anyTrackSession)
         {
             StopAudioCapture();
@@ -261,19 +494,25 @@ public partial class RecordingService
         {
             if (_nativeWgcCompositeRecorder != null)
             {
-                await _nativeWgcCompositeRecorder.StopAsync().ConfigureAwait(false);
+                await StopWithTimeoutAsync(_nativeWgcCompositeRecorder.StopAsync(), "wgc-composite").ConfigureAwait(false);
             }
 
             if (_nativeWgcRecorder != null)
             {
-                await _nativeWgcRecorder.StopAsync().ConfigureAwait(false);
+                await StopWithTimeoutAsync(_nativeWgcRecorder.StopAsync(), "wgc-window").ConfigureAwait(false);
             }
 
             foreach (var track in _tracks)
             {
                 if (track.Session != null)
                 {
-                    await track.Session.StopAsync().ConfigureAwait(false);
+                    await StopWithTimeoutAsync(track.Session.StopAsync(), "wgc-track").ConfigureAwait(false);
+                }
+
+                if (track.GdigrabSession != null)
+                {
+                    // gdigrab stop doesn't wedge, but keep the timeout guard for symmetry/safety.
+                    await StopWithTimeoutAsync(track.GdigrabSession.StopAsync(), "gdigrab-track").ConfigureAwait(false);
                 }
             }
 
@@ -296,11 +535,30 @@ public partial class RecordingService
             {
                 track.Session?.Dispose();
                 track.Session = null;
+                track.GdigrabSession?.Dispose();
+                track.GdigrabSession = null;
             }
             _nativeRecorder?.Dispose();
             _nativeRecorder = null;
             StopAudioCapture();
             StopMicCapture();
         }
+    }
+
+    /// <summary>
+    /// Awaits a session stop with a hard timeout. If the stop doesn't complete in time we abandon the await
+    /// (the caller's finally still Disposes the session) so the app can never hang unclosably; exceptions from
+    /// a completed-but-faulted stop are still observed/propagated.
+    /// </summary>
+    private static async Task StopWithTimeoutAsync(Task stopTask, string label)
+    {
+        var finished = await Task.WhenAny(stopTask, Task.Delay(WgcStopTimeoutMs)).ConfigureAwait(false);
+        if (finished != stopTask)
+        {
+            AppLog.Information($"Wgc.Stop.Timeout {label} did not stop within {WgcStopTimeoutMs}ms; abandoning to Dispose.");
+            return;
+        }
+
+        await stopTask.ConfigureAwait(false);
     }
 }

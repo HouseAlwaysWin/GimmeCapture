@@ -31,6 +31,11 @@ public partial class SnipWindowViewModel
     // Folder holding the per-window files when recording multiple windows to separate files; null otherwise.
     private string? _separateRecordingFolder;
 
+    // Per-output logical bounds for separate-window recording, captured at START (index-aligned with the output
+    // files). Snapshotted because the pin path runs after ClearRecordingSelectionVisuals() empties
+    // _recordWindowHandles (via SelectionRect=default), so SeparateOutputBoundsForIndex can no longer look them up.
+    private System.Collections.Generic.List<Rect>? _separateOutputLogicalBounds;
+
     public bool RecordingUsesWindowsExcludeFromCapture => _recordingUsesWindowsExcludeFromCapture;
 
     /// <summary>
@@ -93,6 +98,11 @@ public partial class SnipWindowViewModel
 
     private void HandleRecordingStateChanged(RecordingState newState)
     {
+        // The selection border/decoration are hidden while recording (HideFrameBorder/HideSelectionDecoration
+        // gate on RecState) to avoid the un-clearable capture-excluded DWM ghost — re-evaluate them on every change.
+        this.RaisePropertyChanged(nameof(HideFrameBorder));
+        this.RaisePropertyChanged(nameof(HideSelectionDecoration));
+
         if (newState == RecordingState.Idle)
         {
             if (_recordingUsesWindowsExcludeFromCapture)
@@ -295,10 +305,30 @@ public partial class SnipWindowViewModel
 
         // Separate mode: build one output path per window in a timestamped folder we can reveal afterwards.
         _separateRecordingFolder = null;
+        _separateOutputLogicalBounds = null;
         System.Collections.Generic.List<string>? separateOutputFiles = null;
         if (windowHandles.Count >= 2 && RecordMultiWindowMode == MultiWindowMode.Separate)
         {
             separateOutputFiles = BuildSeparateOutputPaths(windowHandles, format);
+
+            // Snapshot each window's logical bounds now, index-aligned with windowHandles/the output files. The
+            // pin path needs these to size each pinned window correctly, but by then _recordWindowHandles is
+            // cleared, so we can't look them up there — capture them here while the selection is still valid.
+            var boundsSnapshot = new System.Collections.Generic.List<Rect>(windowHandles.Count);
+            foreach (var hwnd in windowHandles)
+            {
+                Rect b = SelectionRect;
+                foreach (var target in CaptureTargets)
+                {
+                    if (!target.IsMonitor && target.Hwnd == hwnd)
+                    {
+                        b = target.LogicalBounds;
+                        break;
+                    }
+                }
+                boundsSnapshot.Add(b);
+            }
+            _separateOutputLogicalBounds = boundsSnapshot;
         }
 
         if (await _recordingService.StartAsync(region, _currentRecordingPath, format, _mainVm.ShowRecordCursor, ScreenOffset, VisualScaling, _mainVm.RecordingSettings.RecordFPS, enableSystemAudio, _mainVm.RecordMicrophone, _mainVm.SelectedMicDeviceId, _mainVm.MicVolume, windowHandle: default, windowHandles: windowHandles, multiWindowMode: RecordMultiWindowMode, separateOutputFiles: separateOutputFiles))
@@ -309,9 +339,12 @@ public partial class SnipWindowViewModel
             // StartAsync resets the mute flags on the service; reflect that on the toolbar toggles for the new session.
             this.RaisePropertyChanged(nameof(IsSystemAudioMuted));
             this.RaisePropertyChanged(nameof(IsMicMuted));
+            // Suppressed: on a machine where WGC can't deliver frames the region fallback IS the normal path, so
+            // surfacing "… capture unavailable, recording the region instead" on every recording is just noise.
+            // (The fallback still works; the limitation is logged.) Real start *failures* are still shown below.
             if (!string.IsNullOrWhiteSpace(_recordingService.LastStartWarning))
             {
-                _mainVm.SetStatus(_recordingService.LastStartWarning);
+                AppLog.Information($"Recording.StartWarning (suppressed in UI): {_recordingService.LastStartWarning}");
             }
         }
         else
@@ -332,11 +365,64 @@ public partial class SnipWindowViewModel
         else if (RecState == RecordingState.Paused) await _recordingService.ResumeAsync();
     }
 
+    /// <summary>
+    /// Clears the on-screen selection visuals left by a recording: the yellow selection-border window region
+    /// (drawn while <c>CurrentState == Selected</c> with a non-empty <see cref="SelectionRect"/>) and the
+    /// window snap-candidate / AI-scan outlines. Without this the yellow frame stays drawn over the recorded
+    /// window after stop/pin if the overlay isn't torn down promptly (dual-monitor repro). Emptying
+    /// <see cref="SelectionRect"/> makes the region subscription re-run <c>UpdateWindowRegion</c>, which drops
+    /// the border ring. Safe because pin/save sizing uses <c>_recordingCaptureLogicalRect</c>, captured at
+    /// record start, not <see cref="SelectionRect"/>. See docs/WGC_HANDOFF.md.
+    /// </summary>
+    private void ClearRecordingSelectionVisuals()
+    {
+        AppLog.Information($"Recording.ClearVisuals v2 called: selBefore={SelectionRect} state={CurrentState} recState={RecState}");
+
+        if (WindowRects.Count > 0)
+        {
+            WindowRects.Clear();
+        }
+
+        if (AIScanRects.Count > 0)
+        {
+            AIScanRects.Clear();
+        }
+
+        // Empty the selection AND drop out of the Selected/Selecting state. The yellow selection border is a Grid
+        // sized to SelectionRect and shown by StateToBoolConverter(CurrentState in {Selecting,Selected}); clearing
+        // both guarantees it disappears even if the overlay isn't torn down and even if SelectionRect is re-set.
+        SelectionRect = default;
+        CurrentState = SnipState.Idle;
+
+        // Belt-and-suspenders: directly collapse the Win32 border region now (the binding that does this is
+        // throttled and may be disposed by an immediate Close), so the yellow ring can't linger as a stale frame.
+        ForceClearSelectionRegionAction?.Invoke();
+
+        // The yellow frame after recording was a SEPARATE leftover overlay window (a stale snip overlay or a
+        // scrolling-capture region outline), not this window's own border — close any such leftovers now.
+        CloseStaleOverlayWindowsAction?.Invoke();
+
+        AppLog.Information($"Recording.ClearVisuals v2 done: selAfter={SelectionRect} state={CurrentState}");
+
+        // DIAGNOSTIC: 2s after stop (overlay has closed by then), dump this process's top-level windows so we can
+        // see what — if anything — still draws the lingering yellow recording frame (a real window vs a DWM ghost).
+        System.Threading.Tasks.Task.Run(async () =>
+        {
+            await System.Threading.Tasks.Task.Delay(2000).ConfigureAwait(false);
+            GimmeCapture.Services.Interop.Win32Helpers.LogTopLevelWindowsOfCurrentProcess("2s-after-stop");
+            // Re-run the overlay scan/close on the UI thread now that any late-appearing leftover frame is present.
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => CloseStaleOverlayWindowsAction?.Invoke());
+        }).Forget("Recording.WinDiag");
+    }
+
     private async Task ExecuteStopRecordingAsync()
     {
         if (_recordingService == null || _mainVm == null) return;
 
         _recordTimer?.Stop();
+        // Clear the selection border BEFORE StopAsync: finalize hides the capture-excluded overlay, and hiding it
+        // while the yellow border is still drawn leaves that border as a DWM ghost. Clearing it first prevents that.
+        ClearRecordingSelectionVisuals();
         await _recordingService.StopAsync();
 
         // Separate multi-window recording produced N files; save them all and skip the single-file flow.
@@ -474,6 +560,14 @@ public partial class SnipWindowViewModel
     /// <summary>Best-effort logical bounds for the i-th separate output (the picked window's bounds, else the selection).</summary>
     private Rect SeparateOutputBoundsForIndex(int index)
     {
+        // Prefer the start-time snapshot: by pin time _recordWindowHandles has been cleared (SelectionRect=default
+        // in ClearRecordingSelectionVisuals), so the live lookup below would always fall through to the full
+        // multi-window bounding box and size every pin to the whole virtual desktop.
+        if (_separateOutputLogicalBounds != null && index >= 0 && index < _separateOutputLogicalBounds.Count)
+        {
+            return _separateOutputLogicalBounds[index];
+        }
+
         if (index >= 0 && index < _recordWindowHandles.Count)
         {
             IntPtr hwnd = _recordWindowHandles[index];
@@ -553,6 +647,7 @@ public partial class SnipWindowViewModel
         try
         {
             _recordTimer?.Stop();
+            ClearRecordingSelectionVisuals(); // before StopAsync — see ExecuteStopRecordingAsync (prevents border ghost).
             await _recordingService.StopAsync();
 
             // Separate mode has N files; copying N to the clipboard isn't meaningful, so save + reveal them.
@@ -610,6 +705,7 @@ public partial class SnipWindowViewModel
         try
         {
             _recordTimer?.Stop();
+            ClearRecordingSelectionVisuals(); // before StopAsync — see ExecuteStopRecordingAsync (prevents border ghost).
             await _recordingService.StopAsync();
 
             // Separate mode: pin each window's file as its own floating window.
@@ -635,6 +731,9 @@ public partial class SnipWindowViewModel
                 if (string.IsNullOrEmpty(recordingPath) || !System.IO.File.Exists(recordingPath))
                 {
                     System.Diagnostics.Debug.WriteLine($"找不到錄影檔案: {recordingPath}");
+                    // Still close the snip overlay — otherwise a failed pin leaves the selection on screen with
+                    // no way to dismiss it (reported on the dual-monitor repro). See docs/WGC_HANDOFF.md.
+                    CloseAction?.Invoke();
                     return;
                 }
 
