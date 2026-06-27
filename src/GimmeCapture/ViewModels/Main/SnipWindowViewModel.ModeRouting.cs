@@ -167,9 +167,9 @@ public partial class SnipWindowViewModel
         _selectionStateController.HandleModeTransition(oldMode, value, CurrentState);
         TranslationResultLayerManager.RefreshWindowState();
 
-        // Recording mode keeps its toolbar fixed at the top-center (like Translation) so the capture-scope
-        // picker is reachable without drawing a selection first, and picking a target doesn't move it.
-        if (value == SnipMode.Recording)
+        // Recording AND Screenshot both keep the toolbar fixed top-center (like Translation) so it's reachable
+        // immediately on entry — before drawing a selection — instead of only appearing after a box is dragged.
+        if (value == SnipMode.Recording || value == SnipMode.Screenshot)
         {
             PositionFixedTopCenterToolbar();
         }
@@ -201,18 +201,23 @@ public partial class SnipWindowViewModel
     /// <summary>
     /// SnipToolbar 是否留在視覺樹中。翻譯模式或截圖/錄影已選取時固定為 true，以便「隱藏」時停到螢幕外仍能量測寬高。
     /// </summary>
+    // The toolbar is shown immediately on entry in every mode — Translation, Recording AND Snip — including
+    // before any selection exists, so the user no longer has to drag a box first to reveal it. Only hidden
+    // while a recording is finalizing.
     public bool IsToolbarVisible =>
-        CurrentMode == SnipMode.Translation
-        || (CurrentMode == SnipMode.Recording && !IsRecordingFinalizing)
-        || (CurrentState == SnipState.Selected && !IsRecordingFinalizing);
+        !IsRecordingFinalizing
+        && (CurrentMode == SnipMode.Translation
+            || CurrentMode == SnipMode.Recording
+            || CurrentMode == SnipMode.Screenshot);
 
     /// <summary>
     /// 使用者是否「看得到」工具列（未停到螢幕外）；Win32 命中與 Canvas 互動以此為準。
     /// </summary>
     public bool IsToolbarShownOnScreen =>
-        ShowToolbar && (CurrentMode == SnipMode.Translation
-            || (CurrentMode == SnipMode.Recording && !IsRecordingFinalizing)
-            || (CurrentState == SnipState.Selected && !IsRecordingFinalizing));
+        ShowToolbar && !IsRecordingFinalizing
+        && (CurrentMode == SnipMode.Translation
+            || CurrentMode == SnipMode.Recording
+            || CurrentMode == SnipMode.Screenshot);
 
     public string ModeDisplayName => CurrentMode switch
     {

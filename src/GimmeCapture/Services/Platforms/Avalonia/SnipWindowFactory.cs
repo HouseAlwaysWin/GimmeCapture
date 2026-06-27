@@ -101,6 +101,13 @@ public sealed class SnipWindowFactory : ISnipWindowFactory
             snipVm.CurrentMode = SnipMode.Translation;
             snipVm.InitializeTranslationToolbarPosition();
         }
+        else
+        {
+            // Screenshot/Snip: CurrentMode is already the default (Screenshot), so its setter never fires — position
+            // the fixed top-center toolbar here so it's visible immediately on entry, before any selection is drawn
+            // (matching Recording/Translation).
+            snipVm.InitializeTranslationToolbarPosition();
+        }
 
         snip.DataContext = snipVm;
         snip.Show();

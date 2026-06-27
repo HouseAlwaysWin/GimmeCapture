@@ -463,17 +463,13 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
 
     private void InitializeToolbarReactivity()
     {
-        // Reactive toolbar positioning for translation mode
+        // Keep the fixed top-center toolbar on whichever screen the cursor is on — re-center whenever the active
+        // screen (or viewport / measured toolbar width) changes, so it follows the mouse across monitors. Applies
+        // to every mode now (not just Translation); InitializeTranslationToolbarPosition respects a manual drag.
         this.WhenAnyValue(x => x.ViewportSize, x => x.ToolbarWidth, x => x.CurrentMode, x => x.ActiveScreenBounds)
             .DistinctUntilChanged()
             .Throttle(TimeSpan.FromMilliseconds(50), RxSchedulers.MainThreadScheduler)
-            .Subscribe(_ =>
-            {
-                if (CurrentMode == SnipMode.Translation)
-                {
-                    InitializeTranslationToolbarPosition();
-                }
-            })
+            .Subscribe(_ => InitializeTranslationToolbarPosition())
             .DisposeWith(_disposables);
     }
 
