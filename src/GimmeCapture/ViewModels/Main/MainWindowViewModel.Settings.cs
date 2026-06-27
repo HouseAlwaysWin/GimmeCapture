@@ -926,6 +926,43 @@ public partial class MainWindowViewModel
         public string Name => LocalizationService.Instance[LocalizationKey];
     }
 
+    private int _webcamSize = 1;
+    public int WebcamSize
+    {
+        get => _webcamSize;
+        set => this.RaiseAndSetIfChanged(ref _webcamSize, value);
+    }
+
+    // PiP size choices (value = size index used by the encoder: 0=Small, 1=Medium, 2=Large).
+    public IReadOnlyList<WebcamCornerOption> WebcamSizeOptions { get; } = new[]
+    {
+        new WebcamCornerOption(0, "WebcamSizeSmall"),
+        new WebcamCornerOption(1, "WebcamSizeMedium"),
+        new WebcamCornerOption(2, "WebcamSizeLarge"),
+    };
+
+    private bool _webcamCircular = false;
+    public bool WebcamCircular
+    {
+        get => _webcamCircular;
+        set => this.RaiseAndSetIfChanged(ref _webcamCircular, value);
+    }
+
+    // Advanced encode overrides for recording (0 = auto): software CRF (1-51) / hardware bitrate (kbps).
+    private int _customVideoCrf = 0;
+    public int CustomVideoCrf
+    {
+        get => _customVideoCrf;
+        set => this.RaiseAndSetIfChanged(ref _customVideoCrf, value);
+    }
+
+    private int _customVideoBitrateKbps = 0;
+    public int CustomVideoBitrateKbps
+    {
+        get => _customVideoBitrateKbps;
+        set => this.RaiseAndSetIfChanged(ref _customVideoBitrateKbps, value);
+    }
+
     private bool _recordMicrophone = false;
     public bool RecordMicrophone
     {

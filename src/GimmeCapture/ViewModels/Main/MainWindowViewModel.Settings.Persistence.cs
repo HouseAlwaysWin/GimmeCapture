@@ -62,6 +62,8 @@ public partial class MainWindowViewModel
             EnableWebcam = EnableWebcam,
             WebcamDeviceName = WebcamDeviceName,
             WebcamCorner = WebcamCorner,
+            WebcamSize = WebcamSize,
+            WebcamCircular = WebcamCircular,
             RecordMicrophone = RecordMicrophone,
             SelectedMicDeviceId = SelectedMicDeviceId,
             MicVolume = MicVolume,
@@ -74,6 +76,8 @@ public partial class MainWindowViewModel
             VideoCodec = RecordingSettings.VideoCodec,
             VideoEncoderHint = RecordingSettings.VideoEncoderHint,
             VideoQuality = RecordingSettings.VideoQuality,
+            CustomVideoCrf = CustomVideoCrf,
+            CustomVideoBitrateKbps = CustomVideoBitrateKbps,
             RecordFps = RecordingSettings.RecordFPS,
             MaxRecordingSizeMb = RecordingSettings.MaxRecordingSizeMB,
             PlaybackUiFps = PlaybackUiFps,
@@ -141,6 +145,8 @@ public partial class MainWindowViewModel
         EnableWebcam = snapshot.EnableWebcam;
         WebcamDeviceName = snapshot.WebcamDeviceName;
         WebcamCorner = snapshot.WebcamCorner;
+        WebcamSize = snapshot.WebcamSize;
+        WebcamCircular = snapshot.WebcamCircular;
         RecordMicrophone = snapshot.RecordMicrophone;
         SelectedMicDeviceId = snapshot.SelectedMicDeviceId;
         MicVolume = snapshot.MicVolume;
@@ -156,6 +162,8 @@ public partial class MainWindowViewModel
         WingScale = snapshot.WingScale;
         RecordingSettings.RecordFPS = snapshot.RecordFps;
         RecordingSettings.MaxRecordingSizeMB = snapshot.MaxRecordingSizeMb;
+        CustomVideoCrf = snapshot.CustomVideoCrf;
+        CustomVideoBitrateKbps = snapshot.CustomVideoBitrateKbps;
         EnableAIScan = snapshot.EnableAIScan;
         AIResourcesDirectory = snapshot.AIResourcesDirectory;
         SelectedTranslationEngine = snapshot.SelectedTranslationEngine;

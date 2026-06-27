@@ -31,6 +31,12 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
     /// <summary>PiP corner: 0 = top-left, 1 = top-right, 2 = bottom-left, 3 = bottom-right.</summary>
     public int WebcamCorner { get; set; } = 3;
 
+    /// <summary>PiP width as a fraction of the frame width (e.g. 0.18 / 0.25 / 0.33).</summary>
+    public float WebcamWidthFraction { get; set; } = 0.25f;
+
+    /// <summary>Clip the webcam PiP to a circle with a ring border instead of a rectangle.</summary>
+    public bool WebcamCircular { get; set; }
+
     /// <summary>Burn a cursor spotlight ring into each frame.</summary>
     public bool HighlightCursor { get; set; }
 
@@ -61,6 +67,12 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
     /// single-region path is unchanged. Forces the single-threaded encode loop.
     /// </summary>
     public bool UseWallClockPts { get; set; }
+
+    /// <summary>Software-encoder CRF override (1-51); 0 keeps the default 23.</summary>
+    public int VideoCrf { get; set; }
+
+    /// <summary>Hardware-encoder target bitrate in bits/sec; 0 uses the automatic clamp.</summary>
+    public long VideoBitrate { get; set; }
 
     public Task<bool> StartAsync(string outputPath, int offsetX, int offsetY, int width, int height, int fps, bool drawMouse, bool useH265)
     {
@@ -195,7 +207,7 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
         {
             try
             {
-                webcam = new WebcamPipCompositor(WebcamDeviceName, WebcamCorner);
+                webcam = new WebcamPipCompositor(WebcamDeviceName, WebcamCorner, WebcamWidthFraction, WebcamCircular);
                 webcam.Start();
             }
             catch (Exception ex)
@@ -268,6 +280,8 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
                 width,
                 height,
                 fps,
+                VideoCrf,
+                VideoBitrate,
                 &encOpts,
                 out string encName,
                 out string? warningMessage);

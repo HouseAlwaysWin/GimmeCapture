@@ -60,6 +60,12 @@ internal sealed class LibavWgcMkvSession : IDisposable
     /// </summary>
     public bool PreferHardwareEncoder { get; set; } = true;
 
+    /// <summary>Software-encoder CRF override (1-51); 0 keeps the default 23.</summary>
+    public int VideoCrf { get; set; }
+
+    /// <summary>Hardware-encoder target bitrate in bits/sec; 0 uses the automatic clamp.</summary>
+    public long VideoBitrate { get; set; }
+
     public Task<bool> StartAsync(string outputPath, IntPtr hwnd, int fps, bool drawMouse, bool useH265)
     {
         FFmpegRuntime.EnsureInitialized();
@@ -254,7 +260,7 @@ internal sealed class LibavWgcMkvSession : IDisposable
         try
         {
             encCtx = LibavRecordingEncoder.OpenRecordingEncoderContext(
-                useH265, PreferHardwareEncoder, encWidth, encHeight, fps, &encOpts,
+                useH265, PreferHardwareEncoder, encWidth, encHeight, fps, VideoCrf, VideoBitrate, &encOpts,
                 out string encName, out string? warningMessage);
             if (encCtx == null)
             {
