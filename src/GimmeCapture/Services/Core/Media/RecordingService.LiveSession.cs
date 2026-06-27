@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
 using GimmeCapture.Models;
+using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Core.Media.NativeFFmpeg;
 using GimmeCapture.Services.Platforms.Windows;
 
@@ -10,6 +11,13 @@ namespace GimmeCapture.Services.Core.Media;
 
 public partial class RecordingService
 {
+    /// <summary>
+    /// Hard cap on awaiting a WGC session's <c>StopAsync</c> so stop/pin can never hang the UI thread if the
+    /// frame pool wedged (the dual-monitor "no frames" repro). On timeout we abandon the await and let
+    /// Dispose tear the session down best-effort. See docs/WGC_HANDOFF.md "Fix A".
+    /// </summary>
+    private const int WgcStopTimeoutMs = 6000;
+
     private LibavGdigrabMkvSession? _nativeRecorder;
     private LibavWgcMkvSession? _nativeWgcRecorder;
     private LibavWgcCompositeMkvSession? _nativeWgcCompositeRecorder;
@@ -261,19 +269,19 @@ public partial class RecordingService
         {
             if (_nativeWgcCompositeRecorder != null)
             {
-                await _nativeWgcCompositeRecorder.StopAsync().ConfigureAwait(false);
+                await StopWithTimeoutAsync(_nativeWgcCompositeRecorder.StopAsync(), "wgc-composite").ConfigureAwait(false);
             }
 
             if (_nativeWgcRecorder != null)
             {
-                await _nativeWgcRecorder.StopAsync().ConfigureAwait(false);
+                await StopWithTimeoutAsync(_nativeWgcRecorder.StopAsync(), "wgc-window").ConfigureAwait(false);
             }
 
             foreach (var track in _tracks)
             {
                 if (track.Session != null)
                 {
-                    await track.Session.StopAsync().ConfigureAwait(false);
+                    await StopWithTimeoutAsync(track.Session.StopAsync(), "wgc-track").ConfigureAwait(false);
                 }
             }
 
@@ -302,5 +310,22 @@ public partial class RecordingService
             StopAudioCapture();
             StopMicCapture();
         }
+    }
+
+    /// <summary>
+    /// Awaits a session stop with a hard timeout. If the stop doesn't complete in time we abandon the await
+    /// (the caller's finally still Disposes the session) so the app can never hang unclosably; exceptions from
+    /// a completed-but-faulted stop are still observed/propagated.
+    /// </summary>
+    private static async Task StopWithTimeoutAsync(Task stopTask, string label)
+    {
+        var finished = await Task.WhenAny(stopTask, Task.Delay(WgcStopTimeoutMs)).ConfigureAwait(false);
+        if (finished != stopTask)
+        {
+            AppLog.Information($"Wgc.Stop.Timeout {label} did not stop within {WgcStopTimeoutMs}ms; abandoning to Dispose.");
+            return;
+        }
+
+        await stopTask.ConfigureAwait(false);
     }
 }

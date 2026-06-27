@@ -6,6 +6,7 @@ using System.Runtime.Versioning;
 using System.Threading;
 using System.Threading.Tasks;
 using FFmpeg.AutoGen;
+using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Core.Media;
 using GimmeCapture.Services.Platforms.Windows;
 using SkiaSharp;
@@ -23,6 +24,12 @@ namespace GimmeCapture.Services.Core.Media.NativeFFmpeg;
 [SupportedOSPlatform("windows10.0.19041.0")]
 internal sealed class LibavWgcCompositeMkvSession : IDisposable
 {
+    /// <summary>
+    /// If no captured window has delivered a frame within this window, the start is treated as failed so the
+    /// caller can fall back to gdigrab region capture rather than hang. See docs/WGC_HANDOFF.md "Fix A".
+    /// </summary>
+    private const int FirstFrameTimeoutMs = 2000;
+
     private CancellationTokenSource? _cts;
     private Task<bool>? _worker;
 
@@ -89,7 +96,7 @@ internal sealed class LibavWgcCompositeMkvSession : IDisposable
 
     private static async Task<bool> StartupGateAsync(Task<bool> worker, Task<bool> firstFrame)
     {
-        var timeout = Task.Delay(5000);
+        var timeout = Task.Delay(FirstFrameTimeoutMs + 2000);
         var done = await Task.WhenAny(firstFrame, worker, timeout).ConfigureAwait(false);
         if (done == firstFrame)
         {
@@ -101,7 +108,10 @@ internal sealed class LibavWgcCompositeMkvSession : IDisposable
             return await worker.ConfigureAwait(false);
         }
 
-        return true;
+        // Report a FAILED start (not started=true) so the caller falls back to gdigrab and the worker can't
+        // hang frameless on stop. See docs/WGC_HANDOFF.md Fix A.
+        AppLog.Information("Wgc.Composite.StartupGate timeout → started=false (fallback to gdigrab)");
+        return false;
     }
 
     public async Task StopAsync()
@@ -168,6 +178,8 @@ internal sealed class LibavWgcCompositeMkvSession : IDisposable
                     sources.Add(src);
                     buffers.Add(null);
                     sizes.Add((src.InitialWidth, src.InitialHeight));
+                    AppLog.Information($"Wgc.Composite.Start hwnd=0x{hwnd.ToInt64():X} size={src.InitialWidth}x{src.InitialHeight} adapter='{src.AdapterDescription}'");
+                    AppLog.Information($"Wgc.Composite.Start hwnd=0x{hwnd.ToInt64():X} {WgcInterop.DescribeWindowMonitor(hwnd)}");
                 }
                 else
                 {
@@ -246,7 +258,9 @@ internal sealed class LibavWgcCompositeMkvSession : IDisposable
                 throw new InvalidOperationException("sws_getContext failed for composite canvas.");
             }
 
-            // Prime: wait until at least one source has delivered a frame.
+            // Prime: wait until at least one source has delivered a frame. Bail out fast if none ever do (the
+            // dual-monitor failure mode) so the caller can fall back to gdigrab instead of hanging.
+            var primeClock = Stopwatch.StartNew();
             while (!ct.IsCancellationRequested)
             {
                 bool any = false;
@@ -262,7 +276,14 @@ internal sealed class LibavWgcCompositeMkvSession : IDisposable
 
                 if (any)
                 {
+                    AppLog.Information($"Wgc.Composite.FirstFrame arrivedMs={primeClock.ElapsedMilliseconds} windows={sources.Count}");
                     break;
+                }
+
+                if (primeClock.ElapsedMilliseconds >= FirstFrameTimeoutMs)
+                {
+                    AppLog.Information($"Wgc.Composite.FirstFrame.Timeout waitedMs={primeClock.ElapsedMilliseconds} windows={sources.Count} → fallback");
+                    throw new TimeoutException($"Composite WGC produced no first frame within {FirstFrameTimeoutMs}ms.");
                 }
 
                 Thread.Sleep(5);
@@ -331,6 +352,7 @@ internal sealed class LibavWgcCompositeMkvSession : IDisposable
                 throw new InvalidOperationException("Composite WGC pipeline produced zero frames.");
             }
 
+            AppLog.Information($"Wgc.Composite.Stop windows={sources.Count} frames={frameCounter} packets={packetCounter}");
             Debug.WriteLine($"[LibavWgcComposite] segment done: frames={frameCounter}, packets={packetCounter}, output='{outputPath}'");
         }
         finally

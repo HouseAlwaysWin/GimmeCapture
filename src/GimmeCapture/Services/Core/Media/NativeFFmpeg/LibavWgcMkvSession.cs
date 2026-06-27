@@ -4,6 +4,7 @@ using System.Runtime.Versioning;
 using System.Threading;
 using System.Threading.Tasks;
 using FFmpeg.AutoGen;
+using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Platforms.Windows;
 
 namespace GimmeCapture.Services.Core.Media.NativeFFmpeg;
@@ -21,6 +22,13 @@ namespace GimmeCapture.Services.Core.Media.NativeFFmpeg;
 [SupportedOSPlatform("windows10.0.19041.0")]
 internal sealed class LibavWgcMkvSession : IDisposable
 {
+    /// <summary>
+    /// If WGC delivers no first frame within this window, the start is treated as failed so
+    /// <see cref="GimmeCapture.Services.Core.Media.RecordingService"/> can fall back to gdigrab region capture
+    /// instead of hanging. Tuned per docs/WGC_HANDOFF.md "Fix A" (dual-monitor "no frames" repro).
+    /// </summary>
+    private const int FirstFrameTimeoutMs = 2000;
+
     private CancellationTokenSource? _cts;
     private Task<bool>? _worker;
 
@@ -92,7 +100,9 @@ internal sealed class LibavWgcMkvSession : IDisposable
 
     private static async Task<bool> StartupGateAsync(Task<bool> worker, Task<bool> firstFrame)
     {
-        var timeout = Task.Delay(5000);
+        // Backstop above FirstFrameTimeoutMs: the worker's prime loop normally fails fast on its own, but if
+        // WGC start/dispose blocks somewhere we never reached, still report failure so the caller falls back.
+        var timeout = Task.Delay(FirstFrameTimeoutMs + 2000);
         var done = await Task.WhenAny(firstFrame, worker, timeout).ConfigureAwait(false);
         if (done == firstFrame)
         {
@@ -106,8 +116,11 @@ internal sealed class LibavWgcMkvSession : IDisposable
             return await worker.ConfigureAwait(false);
         }
 
-        LogNative("StartupGate: timeout, return started=true.");
-        return true;
+        // Treat the timeout as a FAILED start (was incorrectly reporting started=true, which suppressed the
+        // gdigrab fallback and left a frameless WGC worker to hang on stop). See docs/WGC_HANDOFF.md Fix A.
+        AppLog.Information("Wgc.StartupGate timeout → started=false (fallback to gdigrab)");
+        LogNative("StartupGate: timeout, return started=false (fallback).");
+        return false;
     }
 
     public async Task StopAsync()
@@ -158,6 +171,11 @@ internal sealed class LibavWgcMkvSession : IDisposable
         {
             throw new InvalidOperationException("Windows Graphics Capture could not start for the selected window.");
         }
+
+        // Diagnostics (file log): which GPU WGC bound and which monitor owns the window. On the dual-monitor
+        // repro this is the first thing to inspect when no frame arrives. See docs/WGC_HANDOFF.md Fix A.
+        AppLog.Information($"Wgc.Start hwnd=0x{hwnd.ToInt64():X} size={source.InitialWidth}x{source.InitialHeight} adapter='{source.AdapterDescription}'");
+        AppLog.Information($"Wgc.Start hwnd=0x{hwnd.ToInt64():X} {WgcInterop.DescribeWindowMonitor(hwnd)}");
 
         int encWidth = MakeEven(source.InitialWidth);
         int encHeight = MakeEven(source.InitialHeight);
@@ -214,12 +232,22 @@ internal sealed class LibavWgcMkvSession : IDisposable
 
             byte[]? buf = null;
 
-            // Prime: wait for the first captured frame so the encoder sees real content from pts 0.
+            // Prime: wait for the first captured frame so the encoder sees real content from pts 0. If WGC
+            // never delivers a frame (the dual-monitor failure mode) bail out fast so the start is reported as
+            // failed and the caller falls back to gdigrab, instead of blocking here forever.
+            var primeClock = Stopwatch.StartNew();
             while (!ct.IsCancellationRequested)
             {
                 if (source.TryCopyLatest(ref buf, out _, out _) && buf != null)
                 {
+                    AppLog.Information($"Wgc.FirstFrame hwnd=0x{hwnd.ToInt64():X} arrivedMs={primeClock.ElapsedMilliseconds} size={source.InitialWidth}x{source.InitialHeight}");
                     break;
+                }
+
+                if (primeClock.ElapsedMilliseconds >= FirstFrameTimeoutMs)
+                {
+                    AppLog.Information($"Wgc.FirstFrame.Timeout hwnd=0x{hwnd.ToInt64():X} waitedMs={primeClock.ElapsedMilliseconds} adapter='{source.AdapterDescription}' → fallback");
+                    throw new TimeoutException($"WGC produced no first frame within {FirstFrameTimeoutMs}ms.");
                 }
 
                 Thread.Sleep(5);
@@ -312,6 +340,7 @@ internal sealed class LibavWgcMkvSession : IDisposable
                 throw new InvalidOperationException("WGC recording pipeline produced zero frames.");
             }
 
+            AppLog.Information($"Wgc.Stop hwnd=0x{hwnd.ToInt64():X} frames={frameCounter} packets={packetCounter}");
             Debug.WriteLine($"[LibavWgc] segment done: frames={frameCounter}, packets={packetCounter}, output='{outputPath}'");
         }
         finally

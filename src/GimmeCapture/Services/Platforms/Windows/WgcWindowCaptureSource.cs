@@ -53,6 +53,9 @@ internal sealed class WgcWindowCaptureSource : IDisposable
     public int InitialWidth { get; private set; }
     public int InitialHeight { get; private set; }
 
+    /// <summary>DXGI description of the GPU adapter WGC bound to (diagnostic; "(unknown)" until <see cref="Start"/>).</summary>
+    public string AdapterDescription { get; private set; } = "(unknown)";
+
     /// <summary>Creates the device/item/pool/session and begins capturing. False if WGC is unavailable or the window is gone.</summary>
     public bool Start()
     {
@@ -71,7 +74,8 @@ internal sealed class WgcWindowCaptureSource : IDisposable
         InitialWidth = size.Width;
         InitialHeight = size.Height;
 
-        _device = WgcInterop.CreateDirect3DDevice();
+        _device = WgcInterop.CreateDirect3DDevice(out string adapterDescription);
+        AdapterDescription = adapterDescription;
         _poolSize = size;
         _framePool = Direct3D11CaptureFramePool.CreateFreeThreaded(_device, PixelFormat, FramePoolBuffers, size);
         _session = _framePool.CreateCaptureSession(_item);
