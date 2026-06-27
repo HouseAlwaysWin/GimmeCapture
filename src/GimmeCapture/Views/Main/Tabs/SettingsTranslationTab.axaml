@@ -3,18 +3,18 @@
              xmlns:vm="using:GimmeCapture.ViewModels.Main"
              xmlns:services="using:GimmeCapture.Services.Core.Infrastructure"
              xmlns:converters="using:GimmeCapture.Converters"
+             xmlns:behaviors="using:GimmeCapture.Behaviors"
              x:Name="Root"
              x:Class="GimmeCapture.Views.Main.Tabs.SettingsTranslationTab"
              x:DataType="vm:MainWindowViewModel">
     <ScrollViewer>
         <Grid ColumnDefinitions="*, Auto" Margin="10">
-            <StackPanel Grid.Column="0" Spacing="15" Margin="0,0,20,0">
-                <Border Background="#1A1A1A" Padding="15" CornerRadius="4" BorderBrush="#333333" BorderThickness="1" Margin="10,10,0,10">
-                    <StackPanel Spacing="10">
-                        <TextBlock Text="{Binding [TranslationSettings], Source={x:Static services:LocalizationService.Instance}}"
-                                   FontWeight="SemiBold"
-                                   Foreground="{DynamicResource ThemeAccentBrush}"/>
+            <StackPanel Grid.Column="0" Margin="0,0,20,0" behaviors:AccordionGroup.IsContainer="True">
 
+                <!-- Engine & languages -->
+                <Expander Theme="{StaticResource GothicExpander}" IsExpanded="True"
+                          Header="{Binding [TranslationSettings], Source={x:Static services:LocalizationService.Instance}}">
+                    <StackPanel Spacing="10">
                         <DockPanel>
                             <TextBlock Text="{Binding [TranslationEngine], Source={x:Static services:LocalizationService.Instance}}"
                                        VerticalAlignment="Center"
@@ -59,94 +59,93 @@
                                 </ComboBox.ItemTemplate>
                             </ComboBox>
                         </DockPanel>
-
-                        <StackPanel IsVisible="{Binding IsLlamaVisible}" Spacing="10" Margin="0,5,0,0">
-                            <Separator Background="#333333" Height="1" Margin="0,5"/>
-                            <TextBlock Text="LlamaSharp (GGUF)"
-                                       FontWeight="SemiBold"
-                                       Foreground="{DynamicResource ThemeAccentBrush}"/>
-
-                            <StackPanel Spacing="5">
-                                <TextBlock Text="{Binding [LlamaModel], Source={x:Static services:LocalizationService.Instance}}"
-                                           FontSize="12"/>
-
-                                <Grid ColumnDefinitions="*, Auto">
-                                    <Button x:Name="LlamaModelPickerButton"
-                                            Grid.Column="0"
-                                            HorizontalAlignment="Stretch"
-                                            HorizontalContentAlignment="Stretch"
-                                            Margin="0,0,10,0"
-                                            Background="#1E1E1E"
-                                            BorderBrush="#333333"
-                                            BorderThickness="1"
-                                            Padding="10,5"
-                                            Click="OnLlamaModelPickerButtonClick">
-                                        <Grid ColumnDefinitions="*,Auto">
-                                            <TextBlock Text="{Binding SelectedLlamaModelDisplayName}"
-                                                       VerticalAlignment="Center"/>
-                                            <Path Grid.Column="1"
-                                                  Data="M 0 0 L 4 4 L 8 0"
-                                                  Stroke="White"
-                                                  StrokeThickness="1"
-                                                  VerticalAlignment="Center"
-                                                  Margin="8,0,0,0"/>
-                                        </Grid>
-                                    </Button>
-
-                                    <Button Grid.Column="1"
-                                            Content="Refresh"
-                                            Command="{Binding RefreshLlamaModelsCommand}"
-                                            ToolTip.Tip="Refresh Downloaded Models"
-                                            Theme="{StaticResource SmallGothicMetalButton}"/>
-                                </Grid>
-
-                                <Border Background="#121212"
-                                        BorderBrush="{DynamicResource ThemeAccentBrush}"
-                                        BorderThickness="1"
-                                        Margin="0,4,54,0"
-                                        IsVisible="{Binding IsLlamaModelPickerOpen}">
-                                    <ItemsControl ItemsSource="{Binding AvailableLlamaModels}">
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate>
-                                                <Button HorizontalAlignment="Stretch"
-                                                        HorizontalContentAlignment="Left"
-                                                        Padding="10,6"
-                                                        Background="Transparent"
-                                                        BorderThickness="0"
-                                                        Foreground="White"
-                                                        Click="OnLlamaModelOptionClicked"
-                                                        Tag="{Binding Id}">
-                                                    <TextBlock Text="{Binding DisplayName}"/>
-                                                </Button>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                </Border>
-
-                                <TextBlock Text="{Binding [StatusLlamaModelNotReady], Source={x:Static services:LocalizationService.Instance}}"
-                                           Foreground="#D46A6A"
-                                           IsVisible="{Binding NoDownloadedLlamaModels}"
-                                           TextWrapping="Wrap"/>
-
-                                <TextBlock Text="{Binding [LlamaCustomModelPath], Source={x:Static services:LocalizationService.Instance}}"
-                                           FontSize="12"
-                                           Margin="0,5,0,0"/>
-                                <TextBox Text="{Binding LlamaCustomModelPath}"
-                                         PlaceholderText="C:\Models\my-model.gguf or folder path"/>
-
-                                <TextBlock Text="{Binding [LlamaContextSize], Source={x:Static services:LocalizationService.Instance}}"
-                                           FontSize="12"
-                                           Margin="0,5,0,0"/>
-                                <TextBox Text="{Binding LlamaContextSize}"/>
-
-                                <TextBlock Text="{Binding [LlamaGpuLayers], Source={x:Static services:LocalizationService.Instance}}"
-                                           FontSize="12"
-                                           Margin="0,5,0,0"/>
-                                <TextBox Text="{Binding LlamaGpuLayers}"/>
-                            </StackPanel>
-                        </StackPanel>
                     </StackPanel>
-                </Border>
+                </Expander>
+
+                <!-- Local model (GGUF) — only for the LlamaSharp engine -->
+                <Expander Theme="{StaticResource GothicExpander}"
+                          IsVisible="{Binding IsLlamaVisible}"
+                          Header="{Binding [TranslationLlamaGroup], Source={x:Static services:LocalizationService.Instance}}">
+                    <StackPanel Spacing="5">
+                        <TextBlock Text="{Binding [LlamaModel], Source={x:Static services:LocalizationService.Instance}}"
+                                   FontSize="12"/>
+
+                        <Grid ColumnDefinitions="*, Auto">
+                            <Button x:Name="LlamaModelPickerButton"
+                                    Grid.Column="0"
+                                    HorizontalAlignment="Stretch"
+                                    HorizontalContentAlignment="Stretch"
+                                    Margin="0,0,10,0"
+                                    Background="#1E1E1E"
+                                    BorderBrush="#333333"
+                                    BorderThickness="1"
+                                    Padding="10,5"
+                                    Click="OnLlamaModelPickerButtonClick">
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <TextBlock Text="{Binding SelectedLlamaModelDisplayName}"
+                                               VerticalAlignment="Center"/>
+                                    <Path Grid.Column="1"
+                                          Data="M 0 0 L 4 4 L 8 0"
+                                          Stroke="White"
+                                          StrokeThickness="1"
+                                          VerticalAlignment="Center"
+                                          Margin="8,0,0,0"/>
+                                </Grid>
+                            </Button>
+
+                            <Button Grid.Column="1"
+                                    Content="Refresh"
+                                    Command="{Binding RefreshLlamaModelsCommand}"
+                                    ToolTip.Tip="Refresh Downloaded Models"
+                                    Theme="{StaticResource SmallGothicMetalButton}"/>
+                        </Grid>
+
+                        <Border Background="#121212"
+                                BorderBrush="{DynamicResource ThemeAccentBrush}"
+                                BorderThickness="1"
+                                Margin="0,4,54,0"
+                                IsVisible="{Binding IsLlamaModelPickerOpen}">
+                            <ItemsControl ItemsSource="{Binding AvailableLlamaModels}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Button HorizontalAlignment="Stretch"
+                                                HorizontalContentAlignment="Left"
+                                                Padding="10,6"
+                                                Background="Transparent"
+                                                BorderThickness="0"
+                                                Foreground="White"
+                                                Click="OnLlamaModelOptionClicked"
+                                                Tag="{Binding Id}">
+                                            <TextBlock Text="{Binding DisplayName}"/>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Border>
+
+                        <TextBlock Text="{Binding [StatusLlamaModelNotReady], Source={x:Static services:LocalizationService.Instance}}"
+                                   Foreground="#D46A6A"
+                                   IsVisible="{Binding NoDownloadedLlamaModels}"
+                                   TextWrapping="Wrap"/>
+
+                        <TextBlock Text="{Binding [LlamaCustomModelPath], Source={x:Static services:LocalizationService.Instance}}"
+                                   FontSize="12"
+                                   Margin="0,5,0,0"/>
+                        <TextBox Text="{Binding LlamaCustomModelPath}"
+                                 PlaceholderText="C:\Models\my-model.gguf or folder path"/>
+
+                        <TextBlock Text="{Binding [LlamaContextSize], Source={x:Static services:LocalizationService.Instance}}"
+                                   FontSize="12"
+                                   Margin="0,5,0,0"/>
+                        <TextBox Text="{Binding LlamaContextSize}"/>
+
+                        <TextBlock Text="{Binding [LlamaGpuLayers], Source={x:Static services:LocalizationService.Instance}}"
+                                   FontSize="12"
+                                   Margin="0,5,0,0"/>
+                        <TextBox Text="{Binding LlamaGpuLayers}"/>
+                    </StackPanel>
+                </Expander>
+
             </StackPanel>
         </Grid>
     </ScrollViewer>

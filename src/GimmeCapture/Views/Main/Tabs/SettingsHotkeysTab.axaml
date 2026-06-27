@@ -3,16 +3,18 @@
              xmlns:vm="using:GimmeCapture.ViewModels.Main"
              xmlns:services="using:GimmeCapture.Services.Core.Infrastructure"
              xmlns:converters="using:GimmeCapture.Converters"
+             xmlns:behaviors="using:GimmeCapture.Behaviors"
              x:Class="GimmeCapture.Views.Main.Tabs.SettingsHotkeysTab"
              x:DataType="vm:MainWindowViewModel">
     <ScrollViewer>
         <StackPanel Spacing="10" Margin="10">
             <TextBlock Text="{Binding [GlobalHotkeys], Source={x:Static services:LocalizationService.Instance}}" FontWeight="Bold" Margin="0,0,0,10"/>
-            
-            <!-- 1. 全域啟動 (Global Launch) -->
-            <Border Background="#1A1A1A" Padding="15" CornerRadius="4" BorderBrush="#333333" BorderThickness="1" Margin="0,0,0,10">
-                <StackPanel Spacing="10">
-                    <TextBlock Text="{Binding [HotkeyStartupGroup], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold" Foreground="{Binding ThemeColor, Converter={StaticResource ColorToBrushConverter}}"/>
+
+            <StackPanel behaviors:AccordionGroup.IsContainer="True">
+
+                <!-- 1. 全域啟動 (Global Launch) -->
+                <Expander Theme="{StaticResource GothicExpander}" IsExpanded="True"
+                          Header="{Binding [HotkeyStartupGroup], Source={x:Static services:LocalizationService.Instance}}">
                     <Grid ColumnDefinitions="Auto, 10, *, 20, Auto, 10, *" RowDefinitions="Auto, Auto, Auto, Auto, Auto">
                         <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding [SnipHotkey], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center"/>
                         <TextBox Grid.Row="0" Grid.Column="2" Text="{Binding SnipHotkey, Mode=OneWay}" Tag="{x:Static services:HotkeyTagNames.SnipHotkey}" IsReadOnly="True" KeyDown="HotkeyTextBox_KeyDown" GotFocus="HotkeyTextBox_GotFocus" LostFocus="HotkeyTextBox_LostFocus"/>
@@ -35,13 +37,11 @@
                         <TextBlock Grid.Row="1" Grid.Column="4" VerticalAlignment="Center" Margin="0,10,0,0"/>
                         <TextBox Grid.Row="1" Grid.Column="6" IsVisible="False"/>
                     </Grid>
-                </StackPanel>
-            </Border>
+                </Expander>
 
-            <!-- 2. 截圖模式 (Snip Mode) -->
-            <Border Background="#1A1A1A" Padding="15" CornerRadius="4" BorderBrush="#333333" BorderThickness="1" Margin="0,0,0,10">
-                <StackPanel Spacing="10">
-                    <TextBlock Text="{Binding [HotkeySnipGroup], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold" Foreground="{Binding ThemeColor, Converter={StaticResource ColorToBrushConverter}}"/>
+                <!-- 2. 截圖模式 (Snip Mode) -->
+                <Expander Theme="{StaticResource GothicExpander}"
+                          Header="{Binding [HotkeySnipGroup], Source={x:Static services:LocalizationService.Instance}}">
                     <UniformGrid Columns="2">
                         <Grid ColumnDefinitions="Auto, 5, *" RowDefinitions="Auto, Auto, Auto, Auto, Auto, Auto, Auto, Auto, Auto" Margin="0,0,10,0">
                             <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding [TipRectangle], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" FontSize="12"/>
@@ -92,13 +92,11 @@
                             <TextBox Grid.Row="11" Grid.Column="2" Text="{Binding Snip_SwitchToRecord, Mode=OneWay}" Tag="{x:Static services:HotkeyTagNames.Snip_SwitchToRecord}" IsReadOnly="True" KeyDown="HotkeyTextBox_KeyDown" GotFocus="HotkeyTextBox_GotFocus" LostFocus="HotkeyTextBox_LostFocus" Margin="0,2"/>
                         </Grid>
                     </UniformGrid>
-                </StackPanel>
-            </Border>
+                </Expander>
 
-            <!-- 3. 錄影模式 (Record Mode) -->
-            <Border Background="#1A1A1A" Padding="15" CornerRadius="4" BorderBrush="#333333" BorderThickness="1" Margin="0,0,0,10">
-                <StackPanel Spacing="10">
-                    <TextBlock Text="{Binding [HotkeyRecordGroup], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold" Foreground="{Binding ThemeColor, Converter={StaticResource ColorToBrushConverter}}"/>
+                <!-- 3. 錄影模式 (Record Mode) -->
+                <Expander Theme="{StaticResource GothicExpander}"
+                          Header="{Binding [HotkeyRecordGroup], Source={x:Static services:LocalizationService.Instance}}">
                     <UniformGrid Columns="2">
                         <Grid ColumnDefinitions="Auto, 5, *" RowDefinitions="Auto, Auto, Auto, Auto, Auto, Auto" Margin="0,0,10,0">
                             <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding [TipRectangle], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" FontSize="12"/>
@@ -139,13 +137,11 @@
                             <TextBox Grid.Row="10" Grid.Column="2" Text="{Binding Record_Stop, Mode=OneWay}" Tag="{x:Static services:HotkeyTagNames.Record_Stop}" IsReadOnly="True" KeyDown="HotkeyTextBox_KeyDown" GotFocus="HotkeyTextBox_GotFocus" LostFocus="HotkeyTextBox_LostFocus" Margin="0,2"/>
                         </Grid>
                     </UniformGrid>
-                </StackPanel>
-            </Border>
+                </Expander>
 
-            <!-- 4. 翻譯模式 (Translate Mode) -->
-            <Border Background="#1A1A1A" Padding="15" CornerRadius="4" BorderBrush="#333333" BorderThickness="1" Margin="0,0,0,10">
-                <StackPanel Spacing="10">
-                    <TextBlock Text="{Binding [HotkeyTranslateGroup], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold" Foreground="{Binding ThemeColor, Converter={StaticResource ColorToBrushConverter}}"/>
+                <!-- 4. 翻譯模式 (Translate Mode) -->
+                <Expander Theme="{StaticResource GothicExpander}"
+                          Header="{Binding [HotkeyTranslateGroup], Source={x:Static services:LocalizationService.Instance}}">
                     <UniformGrid Columns="2">
                         <Grid ColumnDefinitions="Auto, 5, *" RowDefinitions="Auto, Auto, Auto" Margin="0,0,10,0">
                             <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding [ActionTranslateAll], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" FontSize="12"/>
@@ -158,7 +154,7 @@
                         <Grid ColumnDefinitions="Auto, 5, *" RowDefinitions="Auto, Auto, Auto, Auto, Auto, Auto, Auto" Margin="5,0,0,0">
                             <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding [ActionSelectionHoldModifier], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" FontSize="12"/>
                             <ComboBox Grid.Row="0" Grid.Column="2" SelectedItem="{Binding Translate_SelectionHoldModifier, Mode=TwoWay}" ItemsSource="{Binding ModifierOptions}" Margin="0,2" HorizontalAlignment="Stretch"/>
-                            
+
                             <TextBlock Grid.Row="1" Grid.Column="0" Text="{Binding [ActionHideTranslate], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" FontSize="12"/>
                             <TextBox Grid.Row="1" Grid.Column="2" Text="{Binding Translate_Action, Mode=OneWay}" Tag="{x:Static services:HotkeyTagNames.Translate_Action}" IsReadOnly="True" KeyDown="HotkeyTextBox_KeyDown" GotFocus="HotkeyTextBox_GotFocus" LostFocus="HotkeyTextBox_LostFocus" Margin="0,2"/>
                             <TextBlock Grid.Row="2" Grid.Column="0" Text="{Binding [MenuPinTranslation], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" FontSize="12"/>
@@ -173,9 +169,10 @@
                             <TextBox Grid.Row="6" Grid.Column="2" Text="{Binding Translate_SwitchToRecord, Mode=OneWay}" Tag="{x:Static services:HotkeyTagNames.Translate_SwitchToRecord}" IsReadOnly="True" KeyDown="HotkeyTextBox_KeyDown" GotFocus="HotkeyTextBox_GotFocus" LostFocus="HotkeyTextBox_LostFocus" Margin="0,2"/>
                         </Grid>
                     </UniformGrid>
-                </StackPanel>
-            </Border>
-            
+                </Expander>
+
+            </StackPanel>
+
             <TextBlock Text="{Binding [HotkeysActive], Source={x:Static services:LocalizationService.Instance}}" Foreground="{Binding ThemeColor, Converter={StaticResource ColorToBrushConverter}}" FontStyle="Italic" FontSize="11"/>
         </StackPanel>
     </ScrollViewer>
