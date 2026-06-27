@@ -112,7 +112,30 @@ public partial class SnipWindow : Window
         base.OnClosed(e);
         UninstallLLKeyboardHook();
         TranslationResultLayerManager.RefreshWindowState();
+
+        // Safety net: force the whole desktop to repaint so any lingering DWM ghost of this (capture-excluded,
+        // regioned) overlay — the yellow recording selection frame — is cleared even if the hide-time cleanup
+        // didn't catch it. See docs/WGC_HANDOFF.md.
+        if (OperatingSystem.IsWindows())
+        {
+            try
+            {
+                RedrawWindow(IntPtr.Zero, IntPtr.Zero, IntPtr.Zero,
+                    RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_UPDATENOW);
+            }
+            catch
+            {
+                // best effort
+            }
+        }
     }
+
+    [DllImport("user32.dll")]
+    private static extern bool RedrawWindow(IntPtr hWnd, IntPtr lprcUpdate, IntPtr hrgnUpdate, uint flags);
+    private const uint RDW_INVALIDATE = 0x0001;
+    private const uint RDW_ERASE = 0x0004;
+    private const uint RDW_ALLCHILDREN = 0x0080;
+    private const uint RDW_UPDATENOW = 0x0100;
 
     [DllImport("user32.dll")]
     private static extern short GetAsyncKeyState(int vKey);

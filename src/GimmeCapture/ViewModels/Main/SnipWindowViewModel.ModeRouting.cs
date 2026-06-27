@@ -258,11 +258,13 @@ public partial class SnipWindowViewModel
     }
 
     // Action Helpers
-    public bool HideSelectionDecoration 
+    public bool HideSelectionDecoration
     {
         get
         {
-            if (IsRecordingFinalizing)
+            // Hide all yellow selection chrome while a recording is active OR finalizing: the capture-excluded
+            // overlay leaves an un-clearable DWM ghost of it, so simply never draw it during recording.
+            if (IsRecordingFinalizing || RecState == RecordingState.Recording || RecState == RecordingState.Paused)
             {
                 return true;
             }
@@ -272,11 +274,13 @@ public partial class SnipWindowViewModel
         }
     }
 
-    public bool HideFrameBorder 
+    public bool HideFrameBorder
     {
         get
         {
-            if (IsRecordingFinalizing)
+            // Hide the selection border while a recording is active OR finalizing (see HideSelectionDecoration):
+            // the capture-excluded overlay leaves an un-clearable DWM ghost of the yellow frame, so don't draw it.
+            if (IsRecordingFinalizing || RecState == RecordingState.Recording || RecState == RecordingState.Paused)
             {
                 return true;
             }

@@ -264,6 +264,12 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
 
     // Actions
     public Action? CloseAction { get; set; }
+    /// <summary>Assigned by SnipWindow: forcibly collapses the Win32 selection-border window region to a 1×1 stub
+    /// and repaints, so the yellow selection ring can't linger on screen if the overlay isn't torn down.</summary>
+    public Action? ForceClearSelectionRegionAction { get; set; }
+    /// <summary>Assigned by SnipWindow: closes any leftover overlay windows (other SnipWindow instances and the
+    /// scrolling-capture region/hint outlines) so no stale yellow selection frame survives after a recording.</summary>
+    public Action? CloseStaleOverlayWindowsAction { get; set; }
     /// <summary>
     /// Assigned by SnipWindow: applies <see cref="GimmeCapture.Services.Interop.Win32Helpers.SetWindowDisplayAffinity"/> so FFmpeg/gdigrab can exclude chrome while keeping full SelectionRect size (Windows 10 2004+).
     /// </summary>

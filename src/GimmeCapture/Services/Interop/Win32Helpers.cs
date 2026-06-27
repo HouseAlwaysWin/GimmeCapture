@@ -1,6 +1,8 @@
 using System;
 using System.Runtime.InteropServices;
+using System.Text;
 using Avalonia;
+using GimmeCapture.Services.Core.Infrastructure;
 
 namespace GimmeCapture.Services.Interop;
 
@@ -389,5 +391,74 @@ public static class Win32Helpers
         
         uint affinity = visible ? WDA_NONE : WDA_EXCLUDEFROMCAPTURE;
         SetWindowDisplayAffinity(hwnd, affinity);
+    }
+
+    // ---- Diagnostics: enumerate this process's top-level windows (to find what draws a lingering frame) ----
+
+    [DllImport("user32.dll")]
+    private static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
+    private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+    [DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+    [DllImport("user32.dll")]
+    private static extern bool IsWindowVisible(IntPtr hWnd);
+    [DllImport("user32.dll")]
+    private static extern bool GetWindowRect(IntPtr hWnd, out DiagRect lpRect);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern int GetWindowTextW(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
+    [DllImport("user32.dll")]
+    private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
+    [DllImport("user32.dll")]
+    private static extern int GetWindowRgn(IntPtr hWnd, IntPtr hRgn);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct DiagRect { public int Left, Top, Right, Bottom; }
+
+    /// <summary>
+    /// Logs every top-level window owned by the current process (handle, visibility, class, title, rect, extended
+    /// style, region type) via <see cref="AppLog"/>. Diagnostic aid for locating a window that draws a lingering
+    /// on-screen frame after recording. Safe/no-op off Windows.
+    /// </summary>
+    public static void LogTopLevelWindowsOfCurrentProcess(string context)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        try
+        {
+            uint self = (uint)System.Environment.ProcessId;
+            int count = 0;
+            EnumWindows((h, _) =>
+            {
+                GetWindowThreadProcessId(h, out uint wp);
+                if (wp != self)
+                {
+                    return true;
+                }
+
+                var cn = new StringBuilder(256);
+                GetClassName(h, cn, cn.Capacity);
+                var tt = new StringBuilder(256);
+                GetWindowTextW(h, tt, tt.Capacity);
+                GetWindowRect(h, out DiagRect r);
+                int ex = GetWindowLong(h, -20); // GWL_EXSTYLE
+                int rgn = GetWindowRgn(h, IntPtr.Zero); // 1=NULLREGION,2=SIMPLE,3=COMPLEX,0=ERROR
+                bool vis = IsWindowVisible(h);
+                AppLog.Information(
+                    $"WinDiag[{context}] hwnd=0x{h.ToInt64():X} vis={vis} class='{cn}' title='{tt}' " +
+                    $"rect=({r.Left},{r.Top})-({r.Right},{r.Bottom}) exStyle=0x{ex:X} rgnType={rgn}");
+                count++;
+                return true;
+            }, IntPtr.Zero);
+            AppLog.Information($"WinDiag[{context}] total top-level windows for this process: {count}");
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error("Win32Helpers.LogTopLevelWindowsOfCurrentProcess", ex);
+        }
     }
 }

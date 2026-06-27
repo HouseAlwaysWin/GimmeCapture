@@ -26,8 +26,18 @@ internal sealed class LibavWgcMkvSession : IDisposable
     /// If WGC delivers no first frame within this window, the start is treated as failed so
     /// <see cref="GimmeCapture.Services.Core.Media.RecordingService"/> can fall back to gdigrab region capture
     /// instead of hanging. Tuned per docs/WGC_HANDOFF.md "Fix A" (dual-monitor "no frames" repro).
+    /// 4000ms: the first GPU→CPU readback on a cold D3D/MediaFoundation pipeline (NVIDIA) can take &gt;1.5s; the
+    /// off-thread readback (WgcWindowCaptureSource) needs headroom or a working pipeline is failed prematurely.
     /// </summary>
-    private const int FirstFrameTimeoutMs = 2000;
+    private const int FirstFrameTimeoutMs = 4000;
+
+    /// <summary>
+    /// Hard cap on the WGC/D3D bring-up (<see cref="WgcWindowCaptureSource.Start"/>) itself. On the dual-monitor
+    /// repro <c>D3D11CreateDevice</c> / frame-pool creation can block for many seconds, and the first-frame
+    /// timeout cannot cover that because it only starts measuring AFTER Start() returns. If bring-up doesn't
+    /// finish in time we abandon it (detached) and fail the start so the caller falls back to gdigrab.
+    /// </summary>
+    private const int BringupTimeoutMs = 1500;
 
     private CancellationTokenSource? _cts;
     private Task<bool>? _worker;
@@ -38,6 +48,13 @@ internal sealed class LibavWgcMkvSession : IDisposable
     public string? SelectedEncoderName { get; private set; }
 
     /// <summary>
+    /// True when WGC brought the capture pipeline up but never delivered a first frame (or the bring-up itself
+    /// timed out) — the dual-monitor "no frames" repro. Lets the caller stop attempting WGC for the rest of the
+    /// session and skip straight to the gdigrab fallback (avoids paying the first-frame timeout every recording).
+    /// </summary>
+    public bool TimedOutWaitingForFrame { get; private set; }
+
+    /// <summary>
     /// When true (default) GPU / Media-Foundation encoders (NVENC/QSV/AMF/MF) are tried before the
     /// software libx264/265 fallback.
     /// </summary>
@@ -46,6 +63,7 @@ internal sealed class LibavWgcMkvSession : IDisposable
     public Task<bool> StartAsync(string outputPath, IntPtr hwnd, int fps, bool drawMouse, bool useH265)
     {
         FFmpegRuntime.EnsureInitialized();
+        AppLog.Information($"Wgc.Build sessionType=window bringupTimeoutMs={BringupTimeoutMs} firstFrameTimeoutMs={FirstFrameTimeoutMs}");
         LogNative($"StartAsync requested: out={outputPath}, hwnd={hwnd}, fps={fps}, drawMouse={drawMouse}, useH265={useH265}");
         LastErrorMessage = null;
         LastWarningMessage = null;
@@ -100,10 +118,16 @@ internal sealed class LibavWgcMkvSession : IDisposable
 
     private static async Task<bool> StartupGateAsync(Task<bool> worker, Task<bool> firstFrame)
     {
-        // Backstop above FirstFrameTimeoutMs: the worker's prime loop normally fails fast on its own, but if
-        // WGC start/dispose blocks somewhere we never reached, still report failure so the caller falls back.
-        var timeout = Task.Delay(FirstFrameTimeoutMs + 2000);
+        // Backstop above bring-up + first-frame: the worker's prime loop / bring-up guard normally fail fast on
+        // their own, but if WGC start/dispose blocks somewhere we never reached, still report failure so the
+        // caller falls back. Sized to exceed the worker's own worst-case self-termination.
+        var timeout = Task.Delay(BringupTimeoutMs + FirstFrameTimeoutMs + 2000);
         var done = await Task.WhenAny(firstFrame, worker, timeout).ConfigureAwait(false);
+
+        // firstFrame faults (TrySetException) when the worker bails before a real frame. On the worker/timeout
+        // fallback paths below we don't await it, so observe its exception to avoid UnobservedTaskException noise.
+        ObserveFaultedTask(firstFrame);
+
         if (done == firstFrame)
         {
             LogNative("StartupGate: first frame observed.");
@@ -122,6 +146,14 @@ internal sealed class LibavWgcMkvSession : IDisposable
         LogNative("StartupGate: timeout, return started=false (fallback).");
         return false;
     }
+
+    /// <summary>Reads a faulted task's exception so it isn't surfaced as an UnobservedTaskException ([ERR] noise).</summary>
+    private static void ObserveFaultedTask(Task t) =>
+        t.ContinueWith(
+            static x => { _ = x.Exception; },
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
 
     public async Task StopAsync()
     {
@@ -166,10 +198,42 @@ internal sealed class LibavWgcMkvSession : IDisposable
         int lastSrcW = 0;
         int lastSrcH = 0;
 
-        using var source = new WgcWindowCaptureSource(hwnd, drawMouse);
-        if (!source.Start())
+        // NOT a `using`: WGC teardown can wedge on the dual-monitor "no frames" repro, so the source is disposed
+        // on a detached background thread (see the outer finally) — that keeps THIS worker completing promptly so
+        // the startup gate / stop / gdigrab fallback never block on a wedged teardown.
+        var source = new WgcWindowCaptureSource(hwnd, drawMouse);
+        bool sourceAbandoned = false;
+        try
         {
-            throw new InvalidOperationException("Windows Graphics Capture could not start for the selected window.");
+        // Bring up WGC/D3D with a hard timeout. On the dual-monitor repro the bring-up itself (D3D11CreateDevice /
+        // frame-pool creation) can block for many seconds — which the first-frame timeout cannot cover because it
+        // only starts AFTER Start() returns. Run Start() on a throwaway task; if it doesn't finish in time, abandon
+        // it (detached) and fail so the caller falls back to gdigrab. See docs/WGC_HANDOFF.md Fix A.
+        var bringupClock = Stopwatch.StartNew();
+        var bringup = Task.Run(() => source.Start());
+        bool finishedInTime;
+        try
+        {
+            finishedInTime = bringup.Wait(BringupTimeoutMs, ct);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch
+        {
+            finishedInTime = bringup.IsCompleted; // Start() threw within the window
+        }
+
+        if (!finishedInTime || !bringup.IsCompletedSuccessfully || !bringup.Result)
+        {
+            AppLog.Information($"Wgc.Start.Timeout hwnd=0x{hwnd.ToInt64():X} bringupMs={bringupClock.ElapsedMilliseconds} finishedInTime={finishedInTime} → fallback (abandon)");
+            // Only a genuine bring-up *wedge* signals "WGC broken on this box"; a fast Start() returning false is
+            // usually a transient (window gone) and must NOT disable WGC for the whole session.
+            TimedOutWaitingForFrame = !finishedInTime;
+            sourceAbandoned = true;
+            WgcWindowCaptureSource.DisposeDetachedAfter(bringup, source, $"hwnd=0x{hwnd.ToInt64():X} (bringup-abandon)");
+            throw new InvalidOperationException("Windows Graphics Capture could not start in time for the selected window.");
         }
 
         // Diagnostics (file log): which GPU WGC bound and which monitor owns the window. On the dual-monitor
@@ -247,6 +311,7 @@ internal sealed class LibavWgcMkvSession : IDisposable
                 if (primeClock.ElapsedMilliseconds >= FirstFrameTimeoutMs)
                 {
                     AppLog.Information($"Wgc.FirstFrame.Timeout hwnd=0x{hwnd.ToInt64():X} waitedMs={primeClock.ElapsedMilliseconds} adapter='{source.AdapterDescription}' → fallback");
+                    TimedOutWaitingForFrame = true;
                     throw new TimeoutException($"WGC produced no first frame within {FirstFrameTimeoutMs}ms.");
                 }
 
@@ -374,6 +439,17 @@ internal sealed class LibavWgcMkvSession : IDisposable
                 ffmpeg.av_dict_free(&encOpts);
             }
         }
+        }
+        finally
+        {
+            // Detach so a wedged WGC teardown can't keep this worker alive (which would block stop / fallback).
+            // Skip when the bring-up was abandoned: that path already handed the source to DisposeDetachedAfter
+            // (a still-running Start() owns it), so disposing again here would race its field writes.
+            if (!sourceAbandoned)
+            {
+                WgcWindowCaptureSource.DisposeDetached(source, $"hwnd=0x{hwnd.ToInt64():X}");
+            }
+        }
     }
 
     /// <summary>Copies a tightly-packed BGRA buffer into a libav BGRA frame, respecting its padded stride.</summary>
@@ -422,7 +498,10 @@ internal sealed class LibavWgcMkvSession : IDisposable
         try
         {
             _cts?.Cancel();
-            _worker?.Wait(TimeSpan.FromSeconds(8));
+            // The worker now self-terminates promptly (bring-up is timeout-guarded, teardown is detached), so this
+            // short wait normally returns at once; it just lets a finishing worker close its output file before the
+            // caller falls back to gdigrab on the same path. Never blocks the app on a wedged native teardown.
+            _worker?.Wait(TimeSpan.FromSeconds(3));
         }
         catch
         {

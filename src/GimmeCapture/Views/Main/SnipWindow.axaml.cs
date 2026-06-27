@@ -301,6 +301,7 @@ public partial class SnipWindow : Window
 
     protected override void OnClosing(WindowClosingEventArgs e)
     {
+        AppLog.Information($"SnipWindow.OnClosing (RecState={_viewModel?.RecState}, Cancel={e.Cancel})");
         PersistTranslatedSelectionsForClosingIfNeeded();
         base.OnClosing(e);
         
