@@ -49,6 +49,24 @@ internal static class LibavClipExporter
         return (int)Math.Floor(accum + eps) - (int)Math.Floor(before + eps);
     }
 
+    /// <summary>
+    /// Downscales (width,height) so the height is at most <paramref name="maxHeight"/>, preserving aspect
+    /// and snapping to even dimensions (required by YUV420P). Returns the dims unchanged when
+    /// <paramref name="maxHeight"/> is 0 or the source is already short enough, so existing callers that
+    /// don't downscale are byte-for-byte unaffected. Pure, so the math is unit-testable.
+    /// </summary>
+    internal static (int Width, int Height) ScaleToMaxHeight(int width, int height, int maxHeight)
+    {
+        if (maxHeight <= 0 || width <= 0 || height <= 0 || height <= maxHeight)
+        {
+            return (width, height);
+        }
+
+        double scale = (double)maxHeight / height;
+        int w = (int)Math.Round(width * scale);
+        return (Math.Max(2, w - (w & 1)), Math.Max(2, maxHeight - (maxHeight & 1)));
+    }
+
     /// <summary>Maps an output file extension to the libav container name, or null if unsupported here.</summary>
     public static string? ContainerForExtension(string extension)
     {
@@ -71,10 +89,9 @@ internal static class LibavClipExporter
     /// resolution) plus that frame's source time in seconds, to draw onto in place (annotation/redaction
     /// burn-in; the time lets time-varying composites position themselves), before it is re-encoded.
     /// </param>
-    /// <param name="codec">Output video codec. Defaults to H.264; H.265 falls back to H.264 if unavailable.</param>
-    /// <param name="targetVideoBitrateKbps">
-    /// When &gt; 0, encodes at this average video bitrate (single-pass ABR) instead of the quality CRF
-    /// ladder — used by "compress to a target size". 0 keeps the CRF-by-quality behaviour.
+    /// <param name="options">
+    /// Optional encode knobs (codec, target bitrate, CRF, preset, downscale, drop-audio). Null reproduces
+    /// the original behaviour, so existing callers are unaffected.
     /// </param>
     public static bool TryExport(
         string inputPath,
@@ -84,10 +101,10 @@ internal static class LibavClipExporter
         VideoEditCrop? crop = null,
         Action<SKBitmap, double>? frameComposite = null,
         CancellationToken cancellationToken = default,
-        VideoCodec codec = VideoCodec.H264,
-        int targetVideoBitrateKbps = 0)
+        LibavExportOptions? options = null)
     {
         FFmpegRuntime.EnsureInitialized();
+        var opt = options ?? new LibavExportOptions();
 
         if (string.IsNullOrEmpty(inputPath) || !File.Exists(inputPath))
         {
@@ -109,9 +126,11 @@ internal static class LibavClipExporter
 
         try
         {
-            EncodeVideoRanges(inputPath, ranges, videoTemp, quality, crop, frameComposite, cancellationToken, codec, targetVideoBitrateKbps);
+            EncodeVideoRanges(inputPath, ranges, videoTemp, quality, crop, frameComposite, cancellationToken, opt);
 
-            bool hasAudio = TryBuildAudio(inputPath, ranges, tempDir, quality, cancellationToken, out string? audioTemp);
+            string? audioTemp = null;
+            bool hasAudio = !opt.DropAudio
+                && TryBuildAudio(inputPath, ranges, tempDir, quality, cancellationToken, out audioTemp);
 
             if (hasAudio && audioTemp != null)
             {
@@ -143,9 +162,10 @@ internal static class LibavClipExporter
         VideoEditCrop? crop,
         Action<SKBitmap, double>? frameComposite,
         CancellationToken ct,
-        VideoCodec codec = VideoCodec.H264,
-        int targetVideoBitrateKbps = 0)
+        LibavExportOptions opt)
     {
+        VideoCodec codec = opt.Codec;
+        int targetVideoBitrateKbps = opt.TargetVideoBitrateKbps;
         AVFormatContext* inFmt = null;
         AVCodecContext* decCtx = null;
         AVFormatContext* outFmt = null;
@@ -218,15 +238,18 @@ internal static class LibavClipExporter
                 throw new InvalidOperationException("Failed to allocate clip output context.");
             }
 
-            // Output dimensions: the crop rect when cropping, else the full source frame.
+            // sws source: the crop rect when cropping, else the full source frame.
             int outW = crop is { } cw ? cw.Width : decCtx->width;
             int outH = crop is { } ch ? ch.Height : decCtx->height;
+
+            // Optional downscale: shrink the encoded frame to opt.MaxHeight (sws scales src→enc dims).
+            (int encW, int encH) = ScaleToMaxHeight(outW, outH, opt.MaxHeight);
 
             encCtx = ffmpeg.avcodec_alloc_context3(enc);
             encCtx->codec_type = AVMediaType.AVMEDIA_TYPE_VIDEO;
             encCtx->codec_id = enc->id;
-            encCtx->width = outW;
-            encCtx->height = outH;
+            encCtx->width = encW;
+            encCtx->height = encH;
             encCtx->pix_fmt = AVPixelFormat.AV_PIX_FMT_YUV420P;
             encCtx->time_base = new AVRational { num = 1, den = fps };
             encCtx->framerate = new AVRational { num = fps, den = 1 };
@@ -237,7 +260,7 @@ internal static class LibavClipExporter
                 encCtx->flags |= ffmpeg.AV_CODEC_FLAG_GLOBAL_HEADER;
             }
 
-            ffmpeg.av_dict_set(&encOpts, "preset", "veryfast", 0);
+            ffmpeg.av_dict_set(&encOpts, "preset", string.IsNullOrWhiteSpace(opt.Preset) ? "veryfast" : opt.Preset, 0);
             if (targetVideoBitrateKbps > 0)
             {
                 // Average-bitrate mode for "compress to a target size": single-pass ABR with a peak
@@ -256,12 +279,14 @@ internal static class LibavClipExporter
             }
             else
             {
-                string crf = quality switch
-                {
-                    VideoQuality.High => "20",
-                    VideoQuality.Low => "28",
-                    _ => "23",
-                };
+                string crf = opt.CrfOverride > 0
+                    ? opt.CrfOverride.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                    : quality switch
+                    {
+                        VideoQuality.High => "20",
+                        VideoQuality.Low => "28",
+                        _ => "23",
+                    };
                 ffmpeg.av_dict_set(&encOpts, "crf", crf, 0);
             }
             ThrowIfErr(ffmpeg.avcodec_open2(encCtx, enc, &encOpts), "clip_open_encoder");

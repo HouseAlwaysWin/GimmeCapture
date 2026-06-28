@@ -11,9 +11,8 @@ using ReactiveUI;
 
 namespace GimmeCapture.ViewModels.Main;
 
-// "Compress Video" tab: import any video file from disk and re-encode it smaller through the
-// existing in-process LibavClipExporter pipeline (H.264, VideoQuality -> CRF ladder 20/23/28).
-// This is UI plumbing over machinery that already exists — no new encoding code.
+// "Compress Video" tab: import any video file from disk and re-encode it smaller through the in-process
+// LibavClipExporter pipeline. Exposes codec, CRF/target-size, preset, downscale and drop-audio knobs.
 public partial class MainWindowViewModel
 {
     /// <summary>Set by the view: opens a file picker and returns the chosen video path (or null).</summary>
@@ -47,19 +46,54 @@ public partial class MainWindowViewModel
         set => this.RaiseAndSetIfChanged(ref _compressStatusText, value);
     }
 
-    // Quality picker reuses the same option type/localized strings (VideoQualityLow/Medium/High) as the Record tab.
-    public RecordingSettingsViewModel.VideoQualityOption[] CompressQualityOptions { get; } =
+    // Quality is controlled by a CRF slider (lower = better quality / larger file). 18-28 is the useful
+    // range; 23 is a sensible default. Ignored in target-size mode (bitrate drives quality there).
+    private int _compressCrf = 23;
+    public int CompressCrf
+    {
+        get => _compressCrf;
+        set => this.RaiseAndSetIfChanged(ref _compressCrf, value);
+    }
+
+    // Optional downscale. MaxHeight 0 = keep source resolution.
+    public sealed class CompressResolutionOption
+    {
+        public int MaxHeight { get; init; }
+        public string Label => MaxHeight <= 0
+            ? LocalizationService.Instance["CompressResolutionOriginal"]
+            : $"{MaxHeight}p";
+    }
+
+    public CompressResolutionOption[] CompressResolutionOptions { get; } =
     [
-        new RecordingSettingsViewModel.VideoQualityOption { Value = VideoQuality.Low },
-        new RecordingSettingsViewModel.VideoQualityOption { Value = VideoQuality.Medium },
-        new RecordingSettingsViewModel.VideoQualityOption { Value = VideoQuality.High }
+        new CompressResolutionOption { MaxHeight = 0 },
+        new CompressResolutionOption { MaxHeight = 1080 },
+        new CompressResolutionOption { MaxHeight = 720 },
+        new CompressResolutionOption { MaxHeight = 480 }
     ];
 
-    private RecordingSettingsViewModel.VideoQualityOption? _selectedCompressQualityOption;
-    public RecordingSettingsViewModel.VideoQualityOption? SelectedCompressQualityOption
+    private CompressResolutionOption? _selectedCompressResolution;
+    public CompressResolutionOption? SelectedCompressResolution
     {
-        get => _selectedCompressQualityOption;
-        set => this.RaiseAndSetIfChanged(ref _selectedCompressQualityOption, value);
+        get => _selectedCompressResolution;
+        set => this.RaiseAndSetIfChanged(ref _selectedCompressResolution, value);
+    }
+
+    // Encoder speed/efficiency preset (slower = smaller for the same quality).
+    public string[] CompressPresetOptions { get; } = ["ultrafast", "veryfast", "fast", "medium", "slow"];
+
+    private string _selectedCompressPreset = "veryfast";
+    public string SelectedCompressPreset
+    {
+        get => _selectedCompressPreset;
+        set => this.RaiseAndSetIfChanged(ref _selectedCompressPreset, value);
+    }
+
+    private bool _compressDropAudio;
+    public bool CompressDropAudio
+    {
+        get => _compressDropAudio;
+        set => this.RaiseAndSetIfChanged(ref _compressDropAudio, value);
     }
 
     // Codec picker (H.264 / H.265) reuses the same option type/localized strings as the Record tab.
@@ -107,10 +141,7 @@ public partial class MainWindowViewModel
 
     private void InitializeVideoCompress()
     {
-        // Default the quality to whatever the recording settings currently use, for a sensible starting point.
-        VideoQuality initial = RecordingSettings.VideoQuality;
-        _selectedCompressQualityOption = Array.Find(CompressQualityOptions, o => o.Value == initial)
-            ?? Array.Find(CompressQualityOptions, o => o.Value == VideoQuality.Medium);
+        _selectedCompressResolution = CompressResolutionOptions[0]; // Original
 
         VideoCodec initialCodec = RecordingSettings.VideoCodec;
         _selectedCompressCodecOption = Array.Find(CompressCodecOptions, o => o.Value == initialCodec)
@@ -185,8 +216,11 @@ public partial class MainWindowViewModel
         string ext = "." + SelectedCompressFormat.ToLowerInvariant();
         string outputPath = BuildCompressOutputPath(CompressInputPath, ext);
 
-        VideoQuality quality = SelectedCompressQualityOption?.Value ?? VideoQuality.Medium;
         VideoCodec codec = SelectedCompressCodecOption?.Value ?? VideoCodec.H264;
+        int crf = Math.Clamp(CompressCrf, 1, 51);
+        int maxHeight = SelectedCompressResolution?.MaxHeight ?? 0;
+        string preset = SelectedCompressPreset;
+        bool dropAudio = CompressDropAudio;
         string input = CompressInputPath;
 
         double probedDuration = 0;
@@ -232,9 +266,17 @@ public partial class MainWindowViewModel
             async Task<string?> EncodeAttemptAsync(int bitrateKbps, int attempt)
             {
                 string attemptOut = Path.Combine(tempDir, $"attempt{attempt}{outExt}");
+                var options = new LibavExportOptions
+                {
+                    Codec = codec,
+                    TargetVideoBitrateKbps = bitrateKbps,
+                    CrfOverride = crf,
+                    Preset = preset,
+                    MaxHeight = maxHeight,
+                    DropAudio = dropAudio
+                };
                 bool encoded = await Task.Run(() =>
-                    LibavClipExporter.TryExport(input, ranges, attemptOut, quality,
-                        codec: codec, targetVideoBitrateKbps: bitrateKbps));
+                    LibavClipExporter.TryExport(input, ranges, attemptOut, VideoQuality.Medium, options: options));
                 return encoded && File.Exists(attemptOut) && new FileInfo(attemptOut).Length > 0
                     ? attemptOut
                     : null;
