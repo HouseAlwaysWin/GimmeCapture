@@ -269,15 +269,15 @@ public partial class SnipWindowViewModel
     {
         get
         {
-            // Hide all yellow selection chrome while a recording is active OR finalizing: the capture-excluded
-            // overlay leaves an un-clearable DWM ghost of it, so simply never draw it during recording.
-            if (IsRecordingFinalizing || RecState == RecordingState.Recording || RecState == RecordingState.Paused)
+            // "Hide selection decoration (record)" applies DURING recording only: when checked, the chrome is
+            // hidden while recording / paused / finalizing; while still selecting the region it is always shown
+            // so the user can see what will be captured. Snip mode keeps its own setting (applied to selection).
+            if (CurrentMode == SnipMode.Recording)
             {
-                return true;
+                bool recordingActive = IsRecordingFinalizing || RecState == RecordingState.Recording || RecState == RecordingState.Paused;
+                return recordingActive && (_mainVm?.HideRecordSelectionDecoration ?? false);
             }
-            bool hide = CurrentMode == SnipMode.Recording ? (_mainVm?.HideRecordSelectionDecoration ?? false) : (_mainVm?.HideSnipSelectionDecoration ?? false);
-            System.Diagnostics.Debug.WriteLine($"[SnipWindow] HideSelectionDecoration queried: {hide} (CurrentMode: {CurrentMode}, RecState: {RecState})");
-            return hide;
+            return _mainVm?.HideSnipSelectionDecoration ?? false;
         }
     }
 
@@ -285,15 +285,15 @@ public partial class SnipWindowViewModel
     {
         get
         {
-            // Hide the selection border while a recording is active OR finalizing (see HideSelectionDecoration):
-            // the capture-excluded overlay leaves an un-clearable DWM ghost of the yellow frame, so don't draw it.
-            if (IsRecordingFinalizing || RecState == RecordingState.Recording || RecState == RecordingState.Paused)
+            // "Hide selection border (record)" applies DURING recording only (see HideSelectionDecoration):
+            // when checked, the border is hidden while recording / paused / finalizing; while selecting the
+            // region it is always shown. Snip mode keeps its own setting (applied to selection).
+            if (CurrentMode == SnipMode.Recording)
             {
-                return true;
+                bool recordingActive = IsRecordingFinalizing || RecState == RecordingState.Recording || RecState == RecordingState.Paused;
+                return recordingActive && (_mainVm?.HideRecordSelectionBorder ?? false);
             }
-            bool hide = CurrentMode == SnipMode.Recording ? (_mainVm?.HideRecordSelectionBorder ?? false) : (_mainVm?.HideSnipSelectionBorder ?? false);
-            System.Diagnostics.Debug.WriteLine($"[SnipWindow] HideFrameBorder queried: {hide} (CurrentMode: {CurrentMode}, RecState: {RecState})");
-            return hide;
+            return _mainVm?.HideSnipSelectionBorder ?? false;
         }
     }
 
