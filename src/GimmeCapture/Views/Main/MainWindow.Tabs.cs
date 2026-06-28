@@ -43,7 +43,7 @@ public partial class MainWindow
 
         Show();
         Activate();
-        tabControl.SelectedIndex = 5;
+        tabControl.SelectedIndex = 6;
     }
 
     private void EnsureLazyTabContent(int selectedIndex)
@@ -54,7 +54,8 @@ public partial class MainWindow
                 _recordTabHost ??= this.FindControl<ContentControl>("RecordTabHost");
                 _recordTabHost!.Content ??= new SettingsRecordTab();
                 break;
-            case 3:
+            // index 3 = Compress tab (SettingsCompressTab) — non-lazy, declared inline in MainWindow.axaml.
+            case 4:
                 if (DataContext is MainWindowViewModel translationVm)
                 {
                     translationVm.RefreshLlamaModelCatalog();
@@ -63,7 +64,7 @@ public partial class MainWindow
                 _translationTabHost ??= this.FindControl<ContentControl>("TranslationTabHost");
                 _translationTabHost!.Content ??= new SettingsTranslationTab();
                 break;
-            case 5:
+            case 6:
                 if (DataContext is MainWindowViewModel vm)
                 {
                     vm.EnsureModulesInitialized();
@@ -72,7 +73,7 @@ public partial class MainWindow
                 _modulesTabHost ??= this.FindControl<ContentControl>("ModulesTabHost");
                 _modulesTabHost!.Content ??= new SettingsModulesTab();
                 break;
-            case 7:
+            case 8:
                 if (DataContext is MainWindowViewModel aboutVm)
                 {
                     aboutVm.LoadAvailableReleasesAsync().Forget("About.LoadAvailableReleases");

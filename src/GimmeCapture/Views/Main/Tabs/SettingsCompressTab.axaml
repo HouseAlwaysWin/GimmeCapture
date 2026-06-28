@@ -1,0 +1,80 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:GimmeCapture.ViewModels.Main"
+             xmlns:services="using:GimmeCapture.Services.Core.Infrastructure"
+             x:Class="GimmeCapture.Views.Main.Tabs.SettingsCompressTab"
+             x:DataType="vm:MainWindowViewModel">
+    <ScrollViewer>
+        <Grid ColumnDefinitions="*, Auto" Margin="10">
+            <StackPanel Grid.Column="0" Margin="0,0,20,0" Spacing="12">
+
+                <TextBlock Text="{Binding [CompressHint], Source={x:Static services:LocalizationService.Instance}}"
+                           Foreground="#9A9A9A"
+                           TextWrapping="Wrap"
+                           FontSize="12"/>
+
+                <!-- Input file -->
+                <StackPanel Spacing="5">
+                    <TextBlock Text="{Binding [CompressInputLabel], Source={x:Static services:LocalizationService.Instance}}"
+                               FontSize="12"/>
+                    <DockPanel>
+                        <Button Content="{Binding [CompressSelectFile], Source={x:Static services:LocalizationService.Instance}}"
+                                DockPanel.Dock="Right"
+                                Theme="{StaticResource SmallGothicMetalButton}"
+                                Command="{Binding PickCompressInputCommand}"
+                                Margin="10,0,0,0"/>
+                        <TextBox Text="{Binding CompressInputPath}"
+                                 IsReadOnly="True"
+                                 Watermark="{Binding [CompressNoFileSelected], Source={x:Static services:LocalizationService.Instance}}"/>
+                    </DockPanel>
+                    <TextBlock Text="{Binding CompressInputInfo}"
+                               Foreground="{DynamicResource ThemeAccentBrush}"
+                               FontSize="12"
+                               Margin="0,2,0,0"/>
+                </StackPanel>
+
+                <!-- Quality -->
+                <DockPanel>
+                    <TextBlock Text="{Binding [CompressQualityLabel], Source={x:Static services:LocalizationService.Instance}}"
+                               VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <ComboBox ItemsSource="{Binding CompressQualityOptions}"
+                              SelectedItem="{Binding SelectedCompressQualityOption}"
+                              HorizontalAlignment="Stretch">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate x:DataType="vm:RecordingSettingsViewModel+VideoQualityOption">
+                                <TextBlock Text="{Binding Name}"/>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                </DockPanel>
+
+                <!-- Output format -->
+                <DockPanel>
+                    <TextBlock Text="{Binding [CompressOutputFormatLabel], Source={x:Static services:LocalizationService.Instance}}"
+                               VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <ComboBox ItemsSource="{Binding CompressOutputFormats}"
+                              SelectedItem="{Binding SelectedCompressFormat}"
+                              HorizontalAlignment="Stretch"/>
+                </DockPanel>
+
+                <!-- Action -->
+                <Button Content="{Binding [CompressStart], Source={x:Static services:LocalizationService.Instance}}"
+                        Theme="{StaticResource GothicMetalButton}"
+                        HorizontalAlignment="Left"
+                        Command="{Binding CompressCommand}"/>
+
+                <!-- Status -->
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <ProgressBar IsIndeterminate="True"
+                                 IsVisible="{Binding IsCompressing}"
+                                 Width="120" Height="4"
+                                 VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding CompressStatusText}"
+                               VerticalAlignment="Center"
+                               FontSize="12"/>
+                </StackPanel>
+
+            </StackPanel>
+        </Grid>
+    </ScrollViewer>
+</UserControl>
