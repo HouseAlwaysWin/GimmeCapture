@@ -19,9 +19,6 @@ public partial class MainWindowViewModel
     /// <summary>Set by the view: opens a file picker and returns the chosen video path (or null).</summary>
     public Func<Task<string?>>? PickCompressInputAction { get; set; }
 
-    /// <summary>Set by the view: opens a save picker (arg = suggested file name) and returns the target path (or null).</summary>
-    public Func<string, Task<string?>>? PickCompressOutputAction { get; set; }
-
     private string _compressInputPath = string.Empty;
     public string CompressInputPath
     {
@@ -183,26 +180,10 @@ public partial class MainWindowViewModel
             return;
         }
 
-        if (PickCompressOutputAction == null)
-        {
-            return;
-        }
-
+        // Auto-derive the output path next to the source ("<name>_compressed.<ext>", de-duplicated) so a
+        // single "Compress" click just runs — no second file dialog once the source is already chosen.
         string ext = "." + SelectedCompressFormat.ToLowerInvariant();
-        string suggested = Path.GetFileNameWithoutExtension(CompressInputPath) + "_compressed" + ext;
-
-        string? outputPath = await PickCompressOutputAction(suggested);
-        if (string.IsNullOrEmpty(outputPath))
-        {
-            return;
-        }
-
-        if (LibavClipExporter.ContainerForExtension(Path.GetExtension(outputPath)) == null)
-        {
-            CompressStatusText = LocalizationService.Instance["StatusCompressFailed"];
-            ShowToastAction?.Invoke(CompressStatusText, ToastSeverity.Error);
-            return;
-        }
+        string outputPath = BuildCompressOutputPath(CompressInputPath, ext);
 
         VideoQuality quality = SelectedCompressQualityOption?.Value ?? VideoQuality.Medium;
         VideoCodec codec = SelectedCompressCodecOption?.Value ?? VideoCodec.H264;
@@ -367,6 +348,24 @@ public partial class MainWindowViewModel
 
         double refined = attemptedVideoKbps * (targetVideoBytes / actualVideoBytes) * safety;
         return (int)Math.Max(50, Math.Floor(refined));
+    }
+
+    /// <summary>
+    /// Builds the output path next to the source as "&lt;name&gt;_compressed&lt;ext&gt;", appending " (n)" until
+    /// the name is free so it never overwrites the source or a previous compress.
+    /// </summary>
+    private static string BuildCompressOutputPath(string inputPath, string ext)
+    {
+        string dir = Path.GetDirectoryName(inputPath) ?? Path.GetTempPath();
+        string baseName = Path.GetFileNameWithoutExtension(inputPath) + "_compressed";
+
+        string candidate = Path.Combine(dir, baseName + ext);
+        for (int n = 1; File.Exists(candidate); n++)
+        {
+            candidate = Path.Combine(dir, $"{baseName} ({n}){ext}");
+        }
+
+        return candidate;
     }
 
     private static string FormatFileSize(long bytes)
