@@ -12,7 +12,7 @@ namespace GimmeCapture.Services.Core.Media.NativeFFmpeg;
 
 /// <summary>
 /// In-process (libav, no ffmpeg.exe) frame-accurate trim/concat export for the floating video pin.
-/// Re-encodes the KEPT source ranges into one continuous H.264 clip (audio re-encoded to AAC and muxed),
+/// Re-encodes the KEPT source ranges into one continuous H.264/H.265 clip (audio re-encoded to AAC and muxed),
 /// so cut points are exact regardless of keyframe spacing. Supports an optional crop rect and an optional
 /// per-frame SkiaSharp composite hook (annotation/redaction burn-in: decode → BGRA → draw → YUV → encode).
 /// GIF/WebM targets are handled elsewhere.
@@ -71,6 +71,11 @@ internal static class LibavClipExporter
     /// resolution) plus that frame's source time in seconds, to draw onto in place (annotation/redaction
     /// burn-in; the time lets time-varying composites position themselves), before it is re-encoded.
     /// </param>
+    /// <param name="codec">Output video codec. Defaults to H.264; H.265 falls back to H.264 if unavailable.</param>
+    /// <param name="targetVideoBitrateKbps">
+    /// When &gt; 0, encodes at this average video bitrate (single-pass ABR) instead of the quality CRF
+    /// ladder — used by "compress to a target size". 0 keeps the CRF-by-quality behaviour.
+    /// </param>
     public static bool TryExport(
         string inputPath,
         IReadOnlyList<SourceRange> ranges,
@@ -78,7 +83,9 @@ internal static class LibavClipExporter
         VideoQuality quality,
         VideoEditCrop? crop = null,
         Action<SKBitmap, double>? frameComposite = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        VideoCodec codec = VideoCodec.H264,
+        int targetVideoBitrateKbps = 0)
     {
         FFmpegRuntime.EnsureInitialized();
 
@@ -102,7 +109,7 @@ internal static class LibavClipExporter
 
         try
         {
-            EncodeVideoRanges(inputPath, ranges, videoTemp, quality, crop, frameComposite, cancellationToken);
+            EncodeVideoRanges(inputPath, ranges, videoTemp, quality, crop, frameComposite, cancellationToken, codec, targetVideoBitrateKbps);
 
             bool hasAudio = TryBuildAudio(inputPath, ranges, tempDir, quality, cancellationToken, out string? audioTemp);
 
@@ -127,7 +134,7 @@ internal static class LibavClipExporter
         }
     }
 
-    // ── Video: decode the kept ranges and re-encode them into one continuous H.264 file ──
+    // ── Video: decode the kept ranges and re-encode them into one continuous H.264/H.265 file ──
     private static unsafe void EncodeVideoRanges(
         string inputPath,
         IReadOnlyList<SourceRange> ranges,
@@ -135,7 +142,9 @@ internal static class LibavClipExporter
         VideoQuality quality,
         VideoEditCrop? crop,
         Action<SKBitmap, double>? frameComposite,
-        CancellationToken ct)
+        CancellationToken ct,
+        VideoCodec codec = VideoCodec.H264,
+        int targetVideoBitrateKbps = 0)
     {
         AVFormatContext* inFmt = null;
         AVCodecContext* decCtx = null;
@@ -179,14 +188,28 @@ internal static class LibavClipExporter
 
             int fps = ResolveFps(inStream);
 
-            AVCodec* enc = ffmpeg.avcodec_find_encoder_by_name("libx264");
+            // H.265 when requested and available; otherwise fall back to H.264 (libx265 may be absent
+            // from the bundled build). Existing callers default to H.264 so their output is unchanged.
+            AVCodec* enc = null;
+            if (codec == VideoCodec.H265)
+            {
+                enc = ffmpeg.avcodec_find_encoder_by_name("libx265");
+                if (enc == null)
+                {
+                    enc = ffmpeg.avcodec_find_encoder(AVCodecID.AV_CODEC_ID_HEVC);
+                }
+            }
+            if (enc == null)
+            {
+                enc = ffmpeg.avcodec_find_encoder_by_name("libx264");
+            }
             if (enc == null)
             {
                 enc = ffmpeg.avcodec_find_encoder(AVCodecID.AV_CODEC_ID_H264);
             }
             if (enc == null)
             {
-                throw new InvalidOperationException("H.264 encoder unavailable.");
+                throw new InvalidOperationException("No H.264/H.265 encoder available.");
             }
 
             ThrowIfErr(ffmpeg.avformat_alloc_output_context2(&outFmt, null, "mp4", outputPath), "clip_alloc_output");
@@ -214,14 +237,33 @@ internal static class LibavClipExporter
                 encCtx->flags |= ffmpeg.AV_CODEC_FLAG_GLOBAL_HEADER;
             }
 
-            string crf = quality switch
-            {
-                VideoQuality.High => "20",
-                VideoQuality.Low => "28",
-                _ => "23",
-            };
             ffmpeg.av_dict_set(&encOpts, "preset", "veryfast", 0);
-            ffmpeg.av_dict_set(&encOpts, "crf", crf, 0);
+            if (targetVideoBitrateKbps > 0)
+            {
+                // Average-bitrate mode for "compress to a target size": single-pass ABR with a peak
+                // cap so the output lands near the requested size (still approximate — no two-pass).
+                long bps = (long)targetVideoBitrateKbps * 1000;
+                encCtx->bit_rate = bps;
+                encCtx->rc_max_rate = bps;                                  // VBV peak cap
+                encCtx->rc_buffer_size = (int)Math.Min(int.MaxValue, bps * 2);
+                // libx265 reads rate control from x265-params, not the AVCodecContext bitrate fields.
+                if (enc->id == AVCodecID.AV_CODEC_ID_HEVC)
+                {
+                    long kbps = targetVideoBitrateKbps;
+                    ffmpeg.av_dict_set(&encOpts, "x265-params",
+                        $"bitrate={kbps}:vbv-maxrate={kbps}:vbv-bufsize={kbps * 2}", 0);
+                }
+            }
+            else
+            {
+                string crf = quality switch
+                {
+                    VideoQuality.High => "20",
+                    VideoQuality.Low => "28",
+                    _ => "23",
+                };
+                ffmpeg.av_dict_set(&encOpts, "crf", crf, 0);
+            }
             ThrowIfErr(ffmpeg.avcodec_open2(encCtx, enc, &encOpts), "clip_open_encoder");
 
             outStream = ffmpeg.avformat_new_stream(outFmt, null);

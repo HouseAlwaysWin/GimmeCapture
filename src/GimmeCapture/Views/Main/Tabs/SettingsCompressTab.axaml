@@ -33,15 +33,15 @@
                                Margin="0,2,0,0"/>
                 </StackPanel>
 
-                <!-- Quality -->
+                <!-- Codec -->
                 <DockPanel>
-                    <TextBlock Text="{Binding [CompressQualityLabel], Source={x:Static services:LocalizationService.Instance}}"
+                    <TextBlock Text="{Binding [CompressCodecLabel], Source={x:Static services:LocalizationService.Instance}}"
                                VerticalAlignment="Center" Margin="0,0,10,0"/>
-                    <ComboBox ItemsSource="{Binding CompressQualityOptions}"
-                              SelectedItem="{Binding SelectedCompressQualityOption}"
+                    <ComboBox ItemsSource="{Binding CompressCodecOptions}"
+                              SelectedItem="{Binding SelectedCompressCodecOption}"
                               HorizontalAlignment="Stretch">
                         <ComboBox.ItemTemplate>
-                            <DataTemplate x:DataType="vm:RecordingSettingsViewModel+VideoQualityOption">
+                            <DataTemplate x:DataType="vm:RecordingSettingsViewModel+VideoCodecOption">
                                 <TextBlock Text="{Binding Name}"/>
                             </DataTemplate>
                         </ComboBox.ItemTemplate>
@@ -55,6 +55,35 @@
                     <ComboBox ItemsSource="{Binding CompressOutputFormats}"
                               SelectedItem="{Binding SelectedCompressFormat}"
                               HorizontalAlignment="Stretch"/>
+                </DockPanel>
+
+                <!-- Target size vs quality -->
+                <CheckBox IsChecked="{Binding CompressUseTargetSize}"
+                          Content="{Binding [CompressTargetSizeToggle], Source={x:Static services:LocalizationService.Instance}}"/>
+
+                <!-- Quality (used unless target-size mode is on) -->
+                <DockPanel IsEnabled="{Binding CompressUseTargetSize, Converter={StaticResource BoolInvertConverter}}">
+                    <TextBlock Text="{Binding [CompressQualityLabel], Source={x:Static services:LocalizationService.Instance}}"
+                               VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <ComboBox ItemsSource="{Binding CompressQualityOptions}"
+                              SelectedItem="{Binding SelectedCompressQualityOption}"
+                              HorizontalAlignment="Stretch">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate x:DataType="vm:RecordingSettingsViewModel+VideoQualityOption">
+                                <TextBlock Text="{Binding Name}"/>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                </DockPanel>
+
+                <!-- Target size (MB) — only in target-size mode -->
+                <DockPanel IsVisible="{Binding CompressUseTargetSize}">
+                    <TextBlock Text="{Binding [CompressTargetSizeUnit], Source={x:Static services:LocalizationService.Instance}}"
+                               VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <NumericUpDown Value="{Binding CompressTargetSizeMB}"
+                                   Minimum="1" Maximum="100000" Increment="5"
+                                   FormatString="0"
+                                   HorizontalAlignment="Stretch"/>
                 </DockPanel>
 
                 <!-- Action -->

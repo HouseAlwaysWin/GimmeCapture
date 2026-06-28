@@ -65,6 +65,36 @@ public partial class MainWindowViewModel
         set => this.RaiseAndSetIfChanged(ref _selectedCompressQualityOption, value);
     }
 
+    // Codec picker (H.264 / H.265) reuses the same option type/localized strings as the Record tab.
+    public RecordingSettingsViewModel.VideoCodecOption[] CompressCodecOptions { get; } =
+    [
+        new RecordingSettingsViewModel.VideoCodecOption { Value = VideoCodec.H264 },
+        new RecordingSettingsViewModel.VideoCodecOption { Value = VideoCodec.H265 }
+    ];
+
+    private RecordingSettingsViewModel.VideoCodecOption? _selectedCompressCodecOption;
+    public RecordingSettingsViewModel.VideoCodecOption? SelectedCompressCodecOption
+    {
+        get => _selectedCompressCodecOption;
+        set => this.RaiseAndSetIfChanged(ref _selectedCompressCodecOption, value);
+    }
+
+    // Target-size mode: encode at a computed average bitrate so the output lands near a chosen file size.
+    private bool _compressUseTargetSize;
+    public bool CompressUseTargetSize
+    {
+        get => _compressUseTargetSize;
+        set => this.RaiseAndSetIfChanged(ref _compressUseTargetSize, value);
+    }
+
+    // decimal to bind 1:1 with NumericUpDown.Value (decimal?); converted to double for the bitrate math.
+    private decimal _compressTargetSizeMB = 25m;
+    public decimal CompressTargetSizeMB
+    {
+        get => _compressTargetSizeMB;
+        set => this.RaiseAndSetIfChanged(ref _compressTargetSizeMB, value);
+    }
+
     // Output container — only what LibavClipExporter.ContainerForExtension supports.
     public string[] CompressOutputFormats { get; } = ["MP4", "MKV", "MOV"];
 
@@ -84,6 +114,10 @@ public partial class MainWindowViewModel
         VideoQuality initial = RecordingSettings.VideoQuality;
         _selectedCompressQualityOption = Array.Find(CompressQualityOptions, o => o.Value == initial)
             ?? Array.Find(CompressQualityOptions, o => o.Value == VideoQuality.Medium);
+
+        VideoCodec initialCodec = RecordingSettings.VideoCodec;
+        _selectedCompressCodecOption = Array.Find(CompressCodecOptions, o => o.Value == initialCodec)
+            ?? Array.Find(CompressCodecOptions, o => o.Value == VideoCodec.H264);
 
         CompressStatusText = LocalizationService.Instance["CompressStatusReady"];
 
@@ -171,7 +205,33 @@ public partial class MainWindowViewModel
         }
 
         VideoQuality quality = SelectedCompressQualityOption?.Value ?? VideoQuality.Medium;
+        VideoCodec codec = SelectedCompressCodecOption?.Value ?? VideoCodec.H264;
         string input = CompressInputPath;
+
+        double probedDuration = 0;
+        try
+        {
+            using var durationProbe = new LibavVideoFramePlayer();
+            probedDuration = await durationProbe.ProbeDurationSecondsAsync(input) ?? 0;
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error("Compress.ProbeDuration", ex);
+        }
+
+        // Target-size mode needs a known duration to turn a file size into an average bitrate.
+        int targetBitrateKbps = 0;
+        if (CompressUseTargetSize)
+        {
+            if (probedDuration <= 0)
+            {
+                CompressStatusText = LocalizationService.Instance["CompressTargetNeedsDuration"];
+                ShowToastAction?.Invoke(CompressStatusText, ToastSeverity.Error);
+                return;
+            }
+
+            targetBitrateKbps = ComputeTargetVideoBitrateKbps((double)CompressTargetSizeMB, probedDuration);
+        }
 
         IsCompressing = true;
         CompressStatusText = LocalizationService.Instance["StatusCompressing"];
@@ -179,27 +239,17 @@ public partial class MainWindowViewModel
         string tempDir = Path.Combine(Path.GetTempPath(), "GimmeCapture_Compress_" + Guid.NewGuid().ToString("N"));
         try
         {
-            double duration = 0;
-            try
-            {
-                using var probe = new LibavVideoFramePlayer();
-                duration = await probe.ProbeDurationSecondsAsync(input) ?? 0;
-            }
-            catch (Exception ex)
-            {
-                AppLog.Error("Compress.ProbeDuration", ex);
-            }
-
             // 0 duration (unreadable) falls back to a large-but-sane end (24h) so the whole file is
             // exported without risking an oversized duration-derived buffer inside the exporter.
-            double end = duration > 0 ? duration : 24 * 60 * 60;
+            double end = probedDuration > 0 ? probedDuration : 24 * 60 * 60;
             var ranges = new[] { new LibavClipExporter.SourceRange(0, end) };
 
             Directory.CreateDirectory(tempDir);
             string tempOut = Path.Combine(tempDir, "compressed" + Path.GetExtension(outputPath));
 
             bool ok = await Task.Run(() =>
-                LibavClipExporter.TryExport(input, ranges, tempOut, quality));
+                LibavClipExporter.TryExport(input, ranges, tempOut, quality,
+                    codec: codec, targetVideoBitrateKbps: targetBitrateKbps));
 
             if (ok && File.Exists(tempOut) && new FileInfo(tempOut).Length > 0)
             {
@@ -239,6 +289,28 @@ public partial class MainWindowViewModel
                 AppLog.Error("Compress.Cleanup", ex);
             }
         }
+    }
+
+    /// <summary>
+    /// Turns a desired output size (MB) and a duration (seconds) into an average video bitrate (kbps),
+    /// reserving a fixed audio allowance and a small safety margin. Single-pass ABR is approximate, so
+    /// the real file lands near (usually a touch under) the target.
+    /// </summary>
+    internal static int ComputeTargetVideoBitrateKbps(double targetSizeMB, double durationSeconds)
+    {
+        if (targetSizeMB <= 0 || durationSeconds <= 0)
+        {
+            return 0;
+        }
+
+        const double audioKbps = 128;   // reserve for the AAC track the exporter muxes in
+        const double safety = 0.97;     // headroom for container overhead / ABR overshoot
+
+        double totalKbps = targetSizeMB * 1024.0 * 1024.0 * 8.0 / 1000.0 / durationSeconds;
+        double videoKbps = (totalKbps - audioKbps) * safety;
+
+        // Never go below a usable floor (very large files at long durations can compute tiny bitrates).
+        return (int)Math.Max(50, Math.Floor(videoKbps));
     }
 
     private static string FormatFileSize(long bytes)
