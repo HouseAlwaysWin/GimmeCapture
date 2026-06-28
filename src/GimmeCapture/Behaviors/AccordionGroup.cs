@@ -38,12 +38,10 @@ public static class AccordionGroup
 
             if (e.GetNewValue<bool>())
             {
+                // IsContainer is set in XAML before the panel is attached, so wiring happens on the
+                // AttachedToVisualTree event (which also re-fires when a TabControl re-shows the tab).
                 container.AttachedToVisualTree += OnAttached;
                 container.DetachedFromVisualTree += OnDetached;
-                if (container.GetVisualRoot() != null)
-                {
-                    Wire(container);
-                }
             }
             else
             {
