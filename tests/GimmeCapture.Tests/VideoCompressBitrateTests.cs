@@ -42,4 +42,38 @@ public class VideoCompressBitrateTests
         int kbps = MainWindowViewModel.ComputeTargetVideoBitrateKbps(1, 100000);
         Assert.True(kbps >= 50);
     }
+
+    [Fact]
+    public void Refine_AfterOvershoot_LowersBitrate()
+    {
+        // First pass aimed at 25 MB / 60 s but produced 30 MB -> refined bitrate must drop.
+        int attempted = MainWindowViewModel.ComputeTargetVideoBitrateKbps(25, 60);
+        double targetBytes = 25.0 * 1024 * 1024;
+        double actualBytes = 30.0 * 1024 * 1024;
+
+        int refined = MainWindowViewModel.RefineTargetVideoBitrateKbps(attempted, actualBytes, targetBytes, 60);
+        Assert.True(refined < attempted, $"{refined} should be < {attempted}");
+        Assert.True(refined >= 50);
+    }
+
+    [Fact]
+    public void Refine_BiggerOvershoot_LowersMore()
+    {
+        int attempted = MainWindowViewModel.ComputeTargetVideoBitrateKbps(25, 60);
+        double targetBytes = 25.0 * 1024 * 1024;
+
+        int small = MainWindowViewModel.RefineTargetVideoBitrateKbps(attempted, 28.0 * 1024 * 1024, targetBytes, 60);
+        int big = MainWindowViewModel.RefineTargetVideoBitrateKbps(attempted, 40.0 * 1024 * 1024, targetBytes, 60);
+        Assert.True(big < small);
+    }
+
+    [Theory]
+    [InlineData(0, 1000, 800, 60)]
+    [InlineData(2000, 0, 800, 60)]
+    [InlineData(2000, 1000, 0, 60)]
+    [InlineData(2000, 1000, 800, 0)]
+    public void Refine_InvalidInputs_ReturnAttempted(int attempted, double actual, double target, double duration)
+    {
+        Assert.Equal(attempted, MainWindowViewModel.RefineTargetVideoBitrateKbps(attempted, actual, target, duration));
+    }
 }

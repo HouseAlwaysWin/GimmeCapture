@@ -40,6 +40,7 @@
   "CompressStart": "Compress",
   "CompressStatusReady": "Pick a video to compress.",
   "StatusCompressing": "Compressing…",
+  "StatusCompressRefining": "Adjusting bitrate to hit the target size…",
   "StatusCompressDone": "Compressed",
   "StatusCompressFailed": "Compression failed",
   "CompressCodecLabel": "Codec",

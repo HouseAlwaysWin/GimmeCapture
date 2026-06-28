@@ -236,6 +236,7 @@ public partial class MainWindowViewModel
         IsCompressing = true;
         CompressStatusText = LocalizationService.Instance["StatusCompressing"];
 
+        string outExt = Path.GetExtension(outputPath);
         string tempDir = Path.Combine(Path.GetTempPath(), "GimmeCapture_Compress_" + Guid.NewGuid().ToString("N"));
         try
         {
@@ -245,15 +246,46 @@ public partial class MainWindowViewModel
             var ranges = new[] { new LibavClipExporter.SourceRange(0, end) };
 
             Directory.CreateDirectory(tempDir);
-            string tempOut = Path.Combine(tempDir, "compressed" + Path.GetExtension(outputPath));
 
-            bool ok = await Task.Run(() =>
-                LibavClipExporter.TryExport(input, ranges, tempOut, quality,
-                    codec: codec, targetVideoBitrateKbps: targetBitrateKbps));
-
-            if (ok && File.Exists(tempOut) && new FileInfo(tempOut).Length > 0)
+            // Encodes at a given bitrate (0 = quality CRF) into a uniquely-named temp; returns its path or null.
+            async Task<string?> EncodeAttemptAsync(int bitrateKbps, int attempt)
             {
-                File.Copy(tempOut, outputPath, true);
+                string attemptOut = Path.Combine(tempDir, $"attempt{attempt}{outExt}");
+                bool encoded = await Task.Run(() =>
+                    LibavClipExporter.TryExport(input, ranges, attemptOut, quality,
+                        codec: codec, targetVideoBitrateKbps: bitrateKbps));
+                return encoded && File.Exists(attemptOut) && new FileInfo(attemptOut).Length > 0
+                    ? attemptOut
+                    : null;
+            }
+
+            string? finalTemp = await EncodeAttemptAsync(targetBitrateKbps, 1);
+
+            // Target-size accuracy: single-pass ABR can overshoot, so if the first attempt exceeds the
+            // requested size, re-encode once at a proportionally lower bitrate (audio held constant).
+            if (finalTemp != null && CompressUseTargetSize)
+            {
+                double targetBytes = (double)CompressTargetSizeMB * 1024 * 1024;
+                long actualBytes = new FileInfo(finalTemp).Length;
+                if (actualBytes > targetBytes)
+                {
+                    int refined = RefineTargetVideoBitrateKbps(targetBitrateKbps, actualBytes, targetBytes, probedDuration);
+                    if (refined > 0 && refined < targetBitrateKbps)
+                    {
+                        CompressStatusText = LocalizationService.Instance["StatusCompressRefining"];
+                        string? secondTemp = await EncodeAttemptAsync(refined, 2);
+                        // Keep the corrective pass only if it actually came in smaller (and still valid).
+                        if (secondTemp != null && new FileInfo(secondTemp).Length < actualBytes)
+                        {
+                            finalTemp = secondTemp;
+                        }
+                    }
+                }
+            }
+
+            if (finalTemp != null)
+            {
+                File.Copy(finalTemp, outputPath, true);
 
                 long before = new FileInfo(input).Length;
                 long after = new FileInfo(outputPath).Length;
@@ -311,6 +343,30 @@ public partial class MainWindowViewModel
 
         // Never go below a usable floor (very large files at long durations can compute tiny bitrates).
         return (int)Math.Max(50, Math.Floor(videoKbps));
+    }
+
+    /// <summary>
+    /// After a first ABR pass overshot the target, scales the video bitrate by the measured
+    /// video-bytes ratio (audio held at a fixed allowance) so a single corrective re-encode lands at or
+    /// under the requested size. Returns the new kbps, floored, or the original if inputs are unusable.
+    /// </summary>
+    internal static int RefineTargetVideoBitrateKbps(
+        int attemptedVideoKbps, double actualTotalBytes, double targetTotalBytes, double durationSeconds)
+    {
+        if (attemptedVideoKbps <= 0 || actualTotalBytes <= 0 || targetTotalBytes <= 0 || durationSeconds <= 0)
+        {
+            return attemptedVideoKbps;
+        }
+
+        const double audioKbps = 128;   // matches the reservation in ComputeTargetVideoBitrateKbps
+        const double safety = 0.98;     // small extra headroom so the corrective pass stays under target
+
+        double audioBytes = audioKbps * 1000.0 / 8.0 * durationSeconds;
+        double actualVideoBytes = Math.Max(1, actualTotalBytes - audioBytes);
+        double targetVideoBytes = Math.Max(1, targetTotalBytes - audioBytes);
+
+        double refined = attemptedVideoKbps * (targetVideoBytes / actualVideoBytes) * safety;
+        return (int)Math.Max(50, Math.Floor(refined));
     }
 
     private static string FormatFileSize(long bytes)
