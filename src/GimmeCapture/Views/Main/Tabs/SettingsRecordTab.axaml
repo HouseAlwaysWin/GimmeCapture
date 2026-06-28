@@ -3,34 +3,43 @@
              xmlns:vm="using:GimmeCapture.ViewModels.Main"
              xmlns:services="using:GimmeCapture.Services.Core.Infrastructure"
              xmlns:c="using:GimmeCapture.Views.Controls"
+             xmlns:behaviors="using:GimmeCapture.Behaviors"
              x:Class="GimmeCapture.Views.Main.Tabs.SettingsRecordTab"
              x:DataType="vm:MainWindowViewModel">
     <ScrollViewer>
-        <StackPanel Spacing="15" Margin="10">
-            <StackPanel Spacing="10">
-                <TextBlock Text="{Binding [TabOutput], Source={x:Static services:LocalizationService.Instance}}" FontWeight="SemiBold"/>
+        <StackPanel Margin="10" behaviors:AccordionGroup.IsContainer="True">
+
+            <!-- Output & paths -->
+            <Expander Theme="{StaticResource GothicExpander}" IsExpanded="True"
+                      Header="{Binding [TabOutput], Source={x:Static services:LocalizationService.Instance}}">
                 <StackPanel Spacing="5">
                     <CheckBox IsChecked="{Binding RecordingSettings.UseFixedRecordPath}" Content="{Binding [UseFixedRecordPath], Source={x:Static services:LocalizationService.Instance}}"/>
                     <DockPanel Margin="24,0,0,5">
-                        <Button Content="{Binding [SelectPath], Source={x:Static services:LocalizationService.Instance}}" 
-                                DockPanel.Dock="Right" 
+                        <Button Content="{Binding [SelectPath], Source={x:Static services:LocalizationService.Instance}}"
+                                DockPanel.Dock="Right"
                                 Theme="{StaticResource SmallGothicMetalButton}"
-                                Command="{Binding SelectVideoPath}" 
+                                Command="{Binding SelectVideoPath}"
                                 Margin="10,0,0,0"/>
                         <TextBox Text="{Binding RecordingSettings.VideoSaveDirectory}" Margin="0,0,10,0"/>
                     </DockPanel>
 
                     <TextBlock Text="{Binding [TempPath], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,10,0,0"/>
                     <DockPanel Margin="24,0,0,5">
-                        <Button Content="{Binding [SelectPath], Source={x:Static services:LocalizationService.Instance}}" 
-                                DockPanel.Dock="Right" 
+                        <Button Content="{Binding [SelectPath], Source={x:Static services:LocalizationService.Instance}}"
+                                DockPanel.Dock="Right"
                                 Theme="{StaticResource SmallGothicMetalButton}"
-                                Command="{Binding SelectTempPath}" 
+                                Command="{Binding SelectTempPath}"
                                 Margin="10,0,0,0"/>
                         <TextBox Text="{Binding TempDirectory}" Margin="0,0,10,0" PlaceholderText="{Binding [TempDirectoryWatermark], Source={x:Static services:LocalizationService.Instance}}"/>
                     </DockPanel>
+                </StackPanel>
+            </Expander>
 
-                    <DockPanel Margin="0,10,0,0">
+            <!-- Format & codec -->
+            <Expander Theme="{StaticResource GothicExpander}"
+                      Header="{Binding [RecordFormatGroup], Source={x:Static services:LocalizationService.Instance}}">
+                <StackPanel Spacing="10">
+                    <DockPanel>
                         <TextBlock Text="{Binding [VideoFormat], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,0,10,0"/>
                         <ComboBox ItemsSource="{Binding AvailableRecordFormats}" SelectedItem="{Binding RecordingSettings.RecordFormat}" HorizontalAlignment="Stretch"/>
                         <TextBlock Text="{Binding GifUnavailableReason}"
@@ -40,7 +49,7 @@
                                    TextWrapping="Wrap"/>
                     </DockPanel>
 
-                    <DockPanel Margin="0,10,0,10">
+                    <DockPanel>
                         <TextBlock Text="{Binding [VideoCodec], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,0,10,0"/>
                         <ComboBox ItemsSource="{Binding RecordingSettings.VideoCodecOptions}" SelectedItem="{Binding RecordingSettings.SelectedVideoCodecOption}" HorizontalAlignment="Stretch">
                             <ComboBox.ItemTemplate>
@@ -51,7 +60,7 @@
                         </ComboBox>
                     </DockPanel>
 
-                    <DockPanel Margin="0,0,0,10">
+                    <DockPanel>
                         <TextBlock Text="{Binding [VideoEncoder], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,0,10,0"/>
                         <ComboBox ItemsSource="{Binding RecordingSettings.VideoEncoderHintOptions}" SelectedItem="{Binding RecordingSettings.SelectedVideoEncoderHintOption}" HorizontalAlignment="Stretch">
                             <ComboBox.ItemTemplate>
@@ -62,7 +71,7 @@
                         </ComboBox>
                     </DockPanel>
 
-                    <DockPanel Margin="0,0,0,10">
+                    <DockPanel>
                         <TextBlock Text="{Binding [VideoQuality], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,0,10,0"/>
                         <ComboBox ItemsSource="{Binding RecordingSettings.VideoQualityOptions}" SelectedItem="{Binding RecordingSettings.SelectedVideoQualityOption}" HorizontalAlignment="Stretch">
                             <ComboBox.ItemTemplate>
@@ -91,153 +100,180 @@
                             <TextBlock Text="{Binding CustomVideoBitrateKbps}" VerticalAlignment="Center" Width="60"/>
                         </StackPanel>
                     </StackPanel>
+                </StackPanel>
+            </Expander>
 
+            <!-- Windows & toolbar visibility -->
+            <Expander Theme="{StaticResource GothicExpander}"
+                      Header="{Binding [RecordVisualsGroup], Source={x:Static services:LocalizationService.Instance}}">
+                <StackPanel Spacing="5">
+                    <CheckBox Content="{Binding [HideRecordPinDecoration], Source={x:Static services:LocalizationService.Instance}}" IsChecked="{Binding HideRecordPinDecoration}"/>
+                    <CheckBox Content="{Binding [HideRecordPinBorder], Source={x:Static services:LocalizationService.Instance}}" IsChecked="{Binding HideRecordPinBorder}"/>
+                    <CheckBox Content="{Binding [HideRecordSelectionDecoration], Source={x:Static services:LocalizationService.Instance}}" IsChecked="{Binding HideRecordSelectionDecoration}"/>
+                    <CheckBox Content="{Binding [HideRecordSelectionBorder], Source={x:Static services:LocalizationService.Instance}}" IsChecked="{Binding HideRecordSelectionBorder}"/>
+                    <CheckBox Content="{Binding [DefaultHideRecordToolbar], Source={x:Static services:LocalizationService.Instance}}" IsChecked="{Binding DefaultHideRecordToolbar}"/>
+                </StackPanel>
+            </Expander>
 
-                    <CheckBox Content="{Binding [HideRecordPinDecoration], Source={x:Static services:LocalizationService.Instance}}" IsChecked="{Binding HideRecordPinDecoration}" Margin="0,5,0,0"/>
-                    <CheckBox Content="{Binding [HideRecordPinBorder], Source={x:Static services:LocalizationService.Instance}}" IsChecked="{Binding HideRecordPinBorder}" Margin="0,5,0,0"/>
-                    <CheckBox Content="{Binding [HideRecordSelectionDecoration], Source={x:Static services:LocalizationService.Instance}}" IsChecked="{Binding HideRecordSelectionDecoration}" Margin="0,5,0,0"/>
-                    <CheckBox Content="{Binding [HideRecordSelectionBorder], Source={x:Static services:LocalizationService.Instance}}" IsChecked="{Binding HideRecordSelectionBorder}" Margin="0,5,0,0"/>
-                        <Grid ColumnDefinitions="Auto,*" Margin="0,6,0,0">
-                            <TextBlock Text="{Binding [CaptureDelay], Source={x:Static services:LocalizationService.Instance}}"
-                                       VerticalAlignment="Center"
-                                       Margin="0,0,12,0"/>
-                            <ComboBox Grid.Column="1"
-                                      ItemsSource="{Binding AvailableCaptureDelays}"
-                                      SelectedValue="{Binding CaptureDelay}"
-                                      SelectedValueBinding="{Binding Value}">
+            <!-- Frame rate & encoding -->
+            <Expander Theme="{StaticResource GothicExpander}"
+                      Header="{Binding [RecordFrameRateGroup], Source={x:Static services:LocalizationService.Instance}}">
+                <StackPanel Spacing="5">
+                    <Grid ColumnDefinitions="Auto,*">
+                        <TextBlock Text="{Binding [CaptureDelay], Source={x:Static services:LocalizationService.Instance}}"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,12,0"/>
+                        <ComboBox Grid.Column="1"
+                                  ItemsSource="{Binding AvailableCaptureDelays}"
+                                  SelectedValue="{Binding CaptureDelay}"
+                                  SelectedValueBinding="{Binding Value}">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:CompileBindings="False">
+                                    <TextBlock Text="{Binding DisplayName}"/>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                    </Grid>
+
+                    <StackPanel Spacing="5" Margin="0,5,0,0">
+                        <TextBlock Text="{Binding [RecordFPS], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <Slider Minimum="5" Maximum="60" Value="{Binding RecordingSettings.RecordFPS}"
+                                    TickFrequency="5" IsSnapToTickEnabled="True" HorizontalAlignment="Stretch" Width="250"/>
+                            <c:CompactNumericStep Value="{Binding RecordingSettings.RecordFPS}"
+                                                   IncreaseCommand="{Binding IncreaseRecordFPSCommand}"
+                                                   DecreaseCommand="{Binding DecreaseRecordFPSCommand}"/>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <StackPanel Spacing="5" Margin="0,5,0,0">
+                        <TextBlock Text="{Binding [MaxRecordingSizeMB], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <Slider Minimum="0" Maximum="500" Value="{Binding RecordingSettings.MaxRecordingSizeMB}"
+                                    TickFrequency="0.1" SmallChange="0.1" LargeChange="1.0" IsSnapToTickEnabled="True" HorizontalAlignment="Stretch" Width="250"/>
+                            <c:CompactNumericStep Value="{Binding RecordingSettings.MaxRecordingSizeMB}"
+                                                   IncreaseCommand="{Binding IncreaseMaxRecordingSizeMBCommand}"
+                                                   DecreaseCommand="{Binding DecreaseMaxRecordingSizeMBCommand}"/>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <StackPanel Spacing="5" Margin="0,5,0,0">
+                        <TextBlock Text="{Binding [PlaybackUiFps], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <Slider Minimum="1" Maximum="120" Value="{Binding PlaybackUiFps}"
+                                    TickFrequency="5" IsSnapToTickEnabled="True" HorizontalAlignment="Stretch" Width="250"/>
+                            <c:CompactNumericStep Value="{Binding PlaybackUiFps}"
+                                                   IncreaseCommand="{Binding IncreasePlaybackUiFpsCommand}"
+                                                   DecreaseCommand="{Binding DecreasePlaybackUiFpsCommand}"/>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <StackPanel Spacing="5" Margin="0,5,0,0">
+                        <TextBlock Text="{Binding [PlaybackTimelineFps], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <Slider Minimum="1" Maximum="120" Value="{Binding PlaybackTimelineFps}"
+                                    TickFrequency="5" IsSnapToTickEnabled="True" HorizontalAlignment="Stretch" Width="250"/>
+                            <c:CompactNumericStep Value="{Binding PlaybackTimelineFps}"
+                                                   IncreaseCommand="{Binding IncreasePlaybackTimelineFpsCommand}"
+                                                   DecreaseCommand="{Binding DecreasePlaybackTimelineFpsCommand}"/>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <CheckBox Content="{Binding [PipelinedEncoding], Source={x:Static services:LocalizationService.Instance}}"
+                              IsChecked="{Binding PipelinedEncoding}" Margin="0,5,0,0"/>
+                </StackPanel>
+            </Expander>
+
+            <!-- Cursor & clicks -->
+            <Expander Theme="{StaticResource GothicExpander}"
+                      Header="{Binding [RecordCursorGroup], Source={x:Static services:LocalizationService.Instance}}">
+                <StackPanel Spacing="5">
+                    <CheckBox Content="{Binding [ShowRecordCursor], Source={x:Static services:LocalizationService.Instance}}" IsChecked="{Binding ShowRecordCursor}"/>
+                    <CheckBox Content="{Binding [HighlightCursor], Source={x:Static services:LocalizationService.Instance}}" IsChecked="{Binding HighlightCursor}"/>
+                    <CheckBox Content="{Binding [HighlightClicks], Source={x:Static services:LocalizationService.Instance}}" IsChecked="{Binding HighlightClicks}"/>
+                    <CheckBox Content="{Binding [ShowKeystrokes], Source={x:Static services:LocalizationService.Instance}}" IsChecked="{Binding ShowKeystrokes}"/>
+                </StackPanel>
+            </Expander>
+
+            <!-- Audio (system + microphone) -->
+            <Expander Theme="{StaticResource GothicExpander}"
+                      Header="{Binding [RecordAudioGroup], Source={x:Static services:LocalizationService.Instance}}">
+                <StackPanel Spacing="5">
+                    <CheckBox Content="{Binding [RecordSystemAudio], Source={x:Static services:LocalizationService.Instance}}" IsChecked="{Binding RecordSystemAudio}"/>
+                    <CheckBox Content="{Binding [RecordMicrophone], Source={x:Static services:LocalizationService.Instance}}" IsChecked="{Binding RecordMicrophone}"/>
+                    <StackPanel Margin="24,0,0,0" Spacing="6" IsVisible="{Binding RecordMicrophone}">
+                        <DockPanel>
+                            <TextBlock Text="{Binding [MicDevice], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                            <ComboBox ItemsSource="{Binding MicInputDevices}"
+                                      SelectedValue="{Binding SelectedMicDeviceId}"
+                                      SelectedValueBinding="{Binding Id}"
+                                      HorizontalAlignment="Stretch">
                                 <ComboBox.ItemTemplate>
                                     <DataTemplate x:CompileBindings="False">
-                                        <TextBlock Text="{Binding DisplayName}"/>
+                                        <TextBlock Text="{Binding Name}"/>
                                     </DataTemplate>
                                 </ComboBox.ItemTemplate>
                             </ComboBox>
-                        </Grid>
-                        <StackPanel Spacing="5" Margin="0,5,0,0">
-                            <TextBlock Text="{Binding [RecordFPS], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>
-                            <StackPanel Orientation="Horizontal" Spacing="10">
-                                <Slider Minimum="5" Maximum="60" Value="{Binding RecordingSettings.RecordFPS}" 
-                                        TickFrequency="5" IsSnapToTickEnabled="True" HorizontalAlignment="Stretch" Width="250"/>
-                                <c:CompactNumericStep Value="{Binding RecordingSettings.RecordFPS}"
-                                                       IncreaseCommand="{Binding IncreaseRecordFPSCommand}"
-                                                       DecreaseCommand="{Binding DecreaseRecordFPSCommand}"/>
-                            </StackPanel>
-                        </StackPanel>
-
-                        <StackPanel Spacing="5" Margin="0,5,0,0">
-                            <TextBlock Text="{Binding [MaxRecordingSizeMB], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>
-                            <StackPanel Orientation="Horizontal" Spacing="10">
-                                <Slider Minimum="0" Maximum="500" Value="{Binding RecordingSettings.MaxRecordingSizeMB}" 
-                                        TickFrequency="0.1" SmallChange="0.1" LargeChange="1.0" IsSnapToTickEnabled="True" HorizontalAlignment="Stretch" Width="250"/>
-                                <c:CompactNumericStep Value="{Binding RecordingSettings.MaxRecordingSizeMB}"
-                                                       IncreaseCommand="{Binding IncreaseMaxRecordingSizeMBCommand}"
-                                                       DecreaseCommand="{Binding DecreaseMaxRecordingSizeMBCommand}"/>
-                            </StackPanel>
-                        </StackPanel>
-
-                        <StackPanel Spacing="5" Margin="0,5,0,0">
-                            <TextBlock Text="{Binding [PlaybackUiFps], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>
-                            <StackPanel Orientation="Horizontal" Spacing="10">
-                                <Slider Minimum="1" Maximum="120" Value="{Binding PlaybackUiFps}"
-                                        TickFrequency="5" IsSnapToTickEnabled="True" HorizontalAlignment="Stretch" Width="250"/>
-                                <c:CompactNumericStep Value="{Binding PlaybackUiFps}"
-                                                       IncreaseCommand="{Binding IncreasePlaybackUiFpsCommand}"
-                                                       DecreaseCommand="{Binding DecreasePlaybackUiFpsCommand}"/>
-                            </StackPanel>
-                        </StackPanel>
-
-                        <StackPanel Spacing="5" Margin="0,5,0,0">
-                            <TextBlock Text="{Binding [PlaybackTimelineFps], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>
-                            <StackPanel Orientation="Horizontal" Spacing="10">
-                                <Slider Minimum="1" Maximum="120" Value="{Binding PlaybackTimelineFps}"
-                                        TickFrequency="5" IsSnapToTickEnabled="True" HorizontalAlignment="Stretch" Width="250"/>
-                                <c:CompactNumericStep Value="{Binding PlaybackTimelineFps}"
-                                                       IncreaseCommand="{Binding IncreasePlaybackTimelineFpsCommand}"
-                                                       DecreaseCommand="{Binding DecreasePlaybackTimelineFpsCommand}"/>
-                            </StackPanel>
-                        </StackPanel>
-
-                        <CheckBox Content="{Binding [ShowRecordCursor], Source={x:Static services:LocalizationService.Instance}}"
-     IsChecked="{Binding ShowRecordCursor}" Margin="0,5,0,0"/>
-                        <CheckBox Content="{Binding [HighlightCursor], Source={x:Static services:LocalizationService.Instance}}"
-     IsChecked="{Binding HighlightCursor}" Margin="0,5,0,0"/>
-                        <CheckBox Content="{Binding [HighlightClicks], Source={x:Static services:LocalizationService.Instance}}"
-     IsChecked="{Binding HighlightClicks}" Margin="0,5,0,0"/>
-                        <CheckBox Content="{Binding [ShowKeystrokes], Source={x:Static services:LocalizationService.Instance}}"
-     IsChecked="{Binding ShowKeystrokes}" Margin="0,5,0,0"/>
-                        <CheckBox Content="{Binding [PipelinedEncoding], Source={x:Static services:LocalizationService.Instance}}"
-     IsChecked="{Binding PipelinedEncoding}" Margin="0,5,0,0"/>
-                        <CheckBox Content="{Binding [RecordSystemAudio], Source={x:Static services:LocalizationService.Instance}}"
-     IsChecked="{Binding RecordSystemAudio}" Margin="0,5,0,0"/>
-                        <CheckBox Content="{Binding [EnableWebcam], Source={x:Static services:LocalizationService.Instance}}"
-     IsChecked="{Binding EnableWebcam}" Margin="0,5,0,0"/>
-                        <StackPanel Margin="24,0,0,0" Spacing="6" IsVisible="{Binding EnableWebcam}">
-                            <DockPanel>
-                                <TextBlock Text="{Binding [WebcamDevice], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                                <Button DockPanel.Dock="Right"
-                                        Command="{Binding RefreshWebcamDevicesCommand}"
-                                        Content="{Binding [WebcamRefresh], Source={x:Static services:LocalizationService.Instance}}"
-                                        Margin="6,0,0,0"/>
-                                <AutoCompleteBox ItemsSource="{Binding WebcamDevices}"
-                                                 Text="{Binding WebcamDeviceName, Mode=TwoWay}"
-                                                 FilterMode="Contains"
-                                                 MinimumPrefixLength="0"
-                                                 IsTextCompletionEnabled="False"
-                                                 Watermark="{Binding [WebcamDeviceWatermark], Source={x:Static services:LocalizationService.Instance}}"
-                                                 HorizontalAlignment="Stretch"/>
-                            </DockPanel>
-                            <DockPanel>
-                                <TextBlock Text="{Binding [WebcamCorner], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                                <ComboBox ItemsSource="{Binding WebcamCornerOptions}"
-                                          SelectedValue="{Binding WebcamCorner}"
-                                          SelectedValueBinding="{Binding Value}"
-                                          HorizontalAlignment="Stretch">
-                                    <ComboBox.ItemTemplate>
-                                        <DataTemplate x:CompileBindings="False">
-                                            <TextBlock Text="{Binding Name}"/>
-                                        </DataTemplate>
-                                    </ComboBox.ItemTemplate>
-                                </ComboBox>
-                            </DockPanel>
-                            <DockPanel>
-                                <TextBlock Text="{Binding [WebcamSize], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                                <ComboBox ItemsSource="{Binding WebcamSizeOptions}"
-                                          SelectedValue="{Binding WebcamSize}"
-                                          SelectedValueBinding="{Binding Value}"
-                                          HorizontalAlignment="Stretch">
-                                    <ComboBox.ItemTemplate>
-                                        <DataTemplate x:CompileBindings="False">
-                                            <TextBlock Text="{Binding Name}"/>
-                                        </DataTemplate>
-                                    </ComboBox.ItemTemplate>
-                                </ComboBox>
-                            </DockPanel>
-                            <CheckBox Content="{Binding [WebcamCircular], Source={x:Static services:LocalizationService.Instance}}"
-                                      IsChecked="{Binding WebcamCircular}"/>
-                        </StackPanel>
-                        <CheckBox Content="{Binding [RecordMicrophone], Source={x:Static services:LocalizationService.Instance}}"
-     IsChecked="{Binding RecordMicrophone}" Margin="0,5,0,0"/>
-                        <StackPanel Margin="24,0,0,0" Spacing="6" IsVisible="{Binding RecordMicrophone}">
-                            <DockPanel>
-                                <TextBlock Text="{Binding [MicDevice], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                                <ComboBox ItemsSource="{Binding MicInputDevices}"
-                                          SelectedValue="{Binding SelectedMicDeviceId}"
-                                          SelectedValueBinding="{Binding Id}"
-                                          HorizontalAlignment="Stretch">
-                                    <ComboBox.ItemTemplate>
-                                        <DataTemplate x:CompileBindings="False">
-                                            <TextBlock Text="{Binding Name}"/>
-                                        </DataTemplate>
-                                    </ComboBox.ItemTemplate>
-                                </ComboBox>
-                            </DockPanel>
-                            <TextBlock Text="{Binding [MicVolume], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>
-                            <Slider Minimum="0" Maximum="2" Value="{Binding MicVolume}"
-                                    TickFrequency="0.1" SmallChange="0.1" LargeChange="0.5" IsSnapToTickEnabled="True"/>
-                        </StackPanel>
-                        <CheckBox Content="{Binding [DefaultHideRecordToolbar], Source={x:Static services:LocalizationService.Instance}}"
-     IsChecked="{Binding DefaultHideRecordToolbar}" Margin="0,5,0,0"/>
+                        </DockPanel>
+                        <TextBlock Text="{Binding [MicVolume], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>
+                        <Slider Minimum="0" Maximum="2" Value="{Binding MicVolume}"
+                                TickFrequency="0.1" SmallChange="0.1" LargeChange="0.5" IsSnapToTickEnabled="True"/>
+                    </StackPanel>
                 </StackPanel>
-            </StackPanel>
+            </Expander>
+
+            <!-- Webcam overlay (picture-in-picture) -->
+            <Expander Theme="{StaticResource GothicExpander}"
+                      Header="{Binding [RecordWebcamGroup], Source={x:Static services:LocalizationService.Instance}}">
+                <StackPanel Spacing="5">
+                    <CheckBox Content="{Binding [EnableWebcam], Source={x:Static services:LocalizationService.Instance}}" IsChecked="{Binding EnableWebcam}"/>
+                    <StackPanel Margin="24,0,0,0" Spacing="6" IsVisible="{Binding EnableWebcam}">
+                        <DockPanel>
+                            <TextBlock Text="{Binding [WebcamDevice], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                            <Button DockPanel.Dock="Right"
+                                    Command="{Binding RefreshWebcamDevicesCommand}"
+                                    Content="{Binding [WebcamRefresh], Source={x:Static services:LocalizationService.Instance}}"
+                                    Margin="6,0,0,0"/>
+                            <AutoCompleteBox ItemsSource="{Binding WebcamDevices}"
+                                             Text="{Binding WebcamDeviceName, Mode=TwoWay}"
+                                             FilterMode="Contains"
+                                             MinimumPrefixLength="0"
+                                             IsTextCompletionEnabled="False"
+                                             Watermark="{Binding [WebcamDeviceWatermark], Source={x:Static services:LocalizationService.Instance}}"
+                                             HorizontalAlignment="Stretch"/>
+                        </DockPanel>
+                        <DockPanel>
+                            <TextBlock Text="{Binding [WebcamCorner], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                            <ComboBox ItemsSource="{Binding WebcamCornerOptions}"
+                                      SelectedValue="{Binding WebcamCorner}"
+                                      SelectedValueBinding="{Binding Value}"
+                                      HorizontalAlignment="Stretch">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:CompileBindings="False">
+                                        <TextBlock Text="{Binding Name}"/>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </DockPanel>
+                        <DockPanel>
+                            <TextBlock Text="{Binding [WebcamSize], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                            <ComboBox ItemsSource="{Binding WebcamSizeOptions}"
+                                      SelectedValue="{Binding WebcamSize}"
+                                      SelectedValueBinding="{Binding Value}"
+                                      HorizontalAlignment="Stretch">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:CompileBindings="False">
+                                        <TextBlock Text="{Binding Name}"/>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </DockPanel>
+                        <CheckBox Content="{Binding [WebcamCircular], Source={x:Static services:LocalizationService.Instance}}"
+                                  IsChecked="{Binding WebcamCircular}"/>
+                    </StackPanel>
+                </StackPanel>
+            </Expander>
+
         </StackPanel>
     </ScrollViewer>
 </UserControl>

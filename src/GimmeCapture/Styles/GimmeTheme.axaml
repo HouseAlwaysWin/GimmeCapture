@@ -19,6 +19,25 @@
             <SolidColorBrush x:Key="MetallicSilverBrush" Color="{StaticResource MetallicSilver}"/>
             <SolidColorBrush x:Key="PanelGrayBrush" Color="{StaticResource PanelGray}"/>
 
+            <!-- Accordion section header for settings tabs. Reskins the default Expander to the dark
+                 section look (#1A1A1A panel, #333333 border) with a SemiBold accent header. Functionality
+                 (toggle / expand-collapse / chevron) is inherited from the built-in Fluent Expander theme. -->
+            <ControlTheme x:Key="GothicExpander" TargetType="Expander" BasedOn="{StaticResource {x:Type Expander}}">
+                <Setter Property="Background" Value="#1A1A1A"/>
+                <Setter Property="BorderBrush" Value="#333333"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="CornerRadius" Value="4"/>
+                <Setter Property="Padding" Value="15"/>
+                <Setter Property="Margin" Value="0,0,0,8"/>
+                <Setter Property="HorizontalAlignment" Value="Stretch"/>
+                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                <Setter Property="HeaderTemplate">
+                    <DataTemplate x:CompileBindings="False">
+                        <TextBlock Text="{Binding}" FontWeight="SemiBold" Foreground="{DynamicResource ThemeAccentBrush}"/>
+                    </DataTemplate>
+                </Setter>
+            </ControlTheme>
+
             <!-- Official Style Gothic Metal Button (Octagonal/Clipped Corners) -->
 
             <ControlTheme x:Key="GothicMetalButton" TargetType="Button">
