@@ -428,13 +428,20 @@ public partial class SnipWindowViewModel
 
     public void RefreshInteractionRegion()
     {
-        if (!Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
+        // Bump the revision synchronously so its value is correct immediately — callers (and unit tests) don't
+        // have to wait on the dispatcher. Only the change notification is marshalled to the UI thread, because
+        // the observer recomputes the native interaction region and must run there. (Previously the whole
+        // method deferred via Post, so off the UI thread — e.g. in tests with no message loop — the bump was
+        // dropped, making SelectionChanges_RefreshInteractionRegionWithoutScreenMask flaky.)
+        _interactionRegionRevision++;
+        if (Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
         {
-            Avalonia.Threading.Dispatcher.UIThread.Post(RefreshInteractionRegion);
-            return;
+            this.RaisePropertyChanged(nameof(InteractionRegionRevision));
         }
-
-        InteractionRegionRevision++;
+        else
+        {
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => this.RaisePropertyChanged(nameof(InteractionRegionRevision)));
+        }
     }
 
     private Color _selectionBorderColor = Colors.Transparent;
