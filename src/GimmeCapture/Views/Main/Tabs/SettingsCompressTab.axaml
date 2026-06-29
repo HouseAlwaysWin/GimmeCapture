@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:GimmeCapture.ViewModels.Main"
              xmlns:services="using:GimmeCapture.Services.Core.Infrastructure"
+             xmlns:models="using:GimmeCapture.Models"
              x:Class="GimmeCapture.Views.Main.Tabs.SettingsCompressTab"
              x:DataType="vm:MainWindowViewModel">
     <ScrollViewer>
@@ -12,6 +13,42 @@
                            Foreground="#9A9A9A"
                            TextWrapping="Wrap"
                            FontSize="12"/>
+
+                <!-- Saved presets (named setting bundles; distinct from the encoder speed preset) -->
+                <StackPanel Spacing="5">
+                    <TextBlock Text="{Binding [CompressPresetsLabel], Source={x:Static services:LocalizationService.Instance}}"
+                               FontSize="12"/>
+                    <DockPanel>
+                        <Button Content="{Binding [CompressPresetLoad], Source={x:Static services:LocalizationService.Instance}}"
+                                DockPanel.Dock="Right"
+                                Theme="{StaticResource SmallGothicMetalButton}"
+                                Command="{Binding LoadCompressPresetCommand}"
+                                Margin="10,0,0,0"/>
+                        <Button Content="{Binding [CompressPresetDelete], Source={x:Static services:LocalizationService.Instance}}"
+                                DockPanel.Dock="Right"
+                                Theme="{StaticResource SmallGothicMetalButton}"
+                                Command="{Binding DeleteCompressPresetCommand}"
+                                Margin="10,0,0,0"/>
+                        <ComboBox ItemsSource="{Binding CompressPresets}"
+                                  SelectedItem="{Binding SelectedSavedPreset}"
+                                  HorizontalAlignment="Stretch">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="models:CompressPreset">
+                                    <TextBlock Text="{Binding Name}"/>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                    </DockPanel>
+                    <DockPanel>
+                        <Button Content="{Binding [CompressPresetSave], Source={x:Static services:LocalizationService.Instance}}"
+                                DockPanel.Dock="Right"
+                                Theme="{StaticResource SmallGothicMetalButton}"
+                                Command="{Binding SaveCompressPresetCommand}"
+                                Margin="10,0,0,0"/>
+                        <TextBox Text="{Binding CompressPresetName}"
+                                 Watermark="{Binding [CompressPresetNameWatermark], Source={x:Static services:LocalizationService.Instance}}"/>
+                    </DockPanel>
+                </StackPanel>
 
                 <!-- Input file -->
                 <StackPanel Spacing="5">

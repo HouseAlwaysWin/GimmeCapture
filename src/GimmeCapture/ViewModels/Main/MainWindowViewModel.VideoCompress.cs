@@ -1,5 +1,7 @@
 using System;
+using System.Collections.ObjectModel;
 using System.IO;
+using System.Linq;
 using System.Reactive;
 using System.Reactive.Linq;
 using System.Threading;
@@ -276,6 +278,27 @@ public partial class MainWindowViewModel
     public ReactiveCommand<Unit, Unit> PauseCompressCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> ResumeCompressCommand { get; private set; } = null!;
 
+    // Saved setting bundles (persisted JSON). Distinct from SelectedCompressPreset (the encoder speed preset).
+    public ObservableCollection<CompressPreset> CompressPresets { get; } = new();
+
+    private CompressPreset? _selectedSavedPreset;
+    public CompressPreset? SelectedSavedPreset
+    {
+        get => _selectedSavedPreset;
+        set => this.RaiseAndSetIfChanged(ref _selectedSavedPreset, value);
+    }
+
+    private string _compressPresetName = string.Empty;
+    public string CompressPresetName
+    {
+        get => _compressPresetName;
+        set => this.RaiseAndSetIfChanged(ref _compressPresetName, value);
+    }
+
+    public ReactiveCommand<Unit, Unit> SaveCompressPresetCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> LoadCompressPresetCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> DeleteCompressPresetCommand { get; private set; } = null!;
+
     private void InitializeVideoCompress()
     {
         _selectedCompressResolution = CompressResolutionOptions[0]; // Original
@@ -318,6 +341,25 @@ public partial class MainWindowViewModel
             ResumeCompress,
             this.WhenAnyValue(x => x.IsCompressing, x => x.IsPaused, (busy, paused) => busy && paused));
 
+        // Presets: save needs a non-blank name; load/delete need a selection. None while encoding.
+        SaveCompressPresetCommand = ReactiveCommand.Create(
+            SaveCompressPreset,
+            this.WhenAnyValue(x => x.CompressPresetName, x => x.IsCompressing,
+                (name, busy) => !string.IsNullOrWhiteSpace(name) && !busy));
+        LoadCompressPresetCommand = ReactiveCommand.Create(
+            LoadCompressPreset,
+            this.WhenAnyValue(x => x.SelectedSavedPreset, x => x.IsCompressing,
+                (sel, busy) => sel != null && !busy));
+        DeleteCompressPresetCommand = ReactiveCommand.Create(
+            DeleteCompressPreset,
+            this.WhenAnyValue(x => x.SelectedSavedPreset, x => x.IsCompressing,
+                (sel, busy) => sel != null && !busy));
+
+        foreach (CompressPreset preset in CompressPresetService.Load())
+        {
+            CompressPresets.Add(preset);
+        }
+
         // Recompute the live size estimate whenever a relevant knob changes (source change calls it directly).
         this.WhenAnyValue(
                 x => x.SelectedCompressCodecOption,
@@ -346,6 +388,89 @@ public partial class MainWindowViewModel
         CancelCompressCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.Cancel", ex));
         PauseCompressCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.Pause", ex));
         ResumeCompressCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.Resume", ex));
+        SaveCompressPresetCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.PresetSave", ex));
+        LoadCompressPresetCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.PresetLoad", ex));
+        DeleteCompressPresetCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.PresetDelete", ex));
+    }
+
+    // Snapshots the current Compress-tab settings into a named preset.
+    private CompressPreset CaptureCurrentPreset(string name) => new()
+    {
+        Name = name,
+        Codec = SelectedCompressCodecOption?.Value ?? VideoCodec.H264,
+        MaxHeight = SelectedCompressResolution?.MaxHeight ?? 0,
+        MaxFps = SelectedCompressFps?.Fps ?? 0,
+        Preset = SelectedCompressPreset,
+        Format = SelectedCompressFormat,
+        Crf = CompressCrf,
+        UseTargetSize = CompressUseTargetSize,
+        TargetSizeMB = CompressTargetSizeMB,
+        DropAudio = CompressDropAudio,
+        AudioBitrateKbps = SelectedCompressAudioBitrate?.Kbps ?? 0,
+        AudioChannels = SelectedCompressAudioChannels?.Channels ?? 2
+    };
+
+    private void SaveCompressPreset()
+    {
+        string name = (CompressPresetName ?? string.Empty).Trim();
+        if (name.Length == 0)
+        {
+            return;
+        }
+
+        CompressPreset preset = CaptureCurrentPreset(name);
+        // Overwrite a same-named preset (case-insensitive) rather than duplicating it.
+        CompressPreset? existing = CompressPresets.FirstOrDefault(
+            p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase));
+        if (existing != null)
+        {
+            CompressPresets.Remove(existing);
+        }
+
+        CompressPresets.Add(preset);
+        CompressPresetService.Save(CompressPresets);
+        SelectedSavedPreset = preset;
+        ShowToastAction?.Invoke(LocalizationService.Instance["CompressPresetSaved"], ToastSeverity.Success);
+    }
+
+    private void LoadCompressPreset()
+    {
+        CompressPreset? p = SelectedSavedPreset;
+        if (p == null)
+        {
+            return;
+        }
+
+        SelectedCompressCodecOption = Array.Find(CompressCodecOptions, o => o.Value == p.Codec)
+            ?? Array.Find(CompressCodecOptions, o => o.Value == VideoCodec.H264);
+        SelectedCompressResolution = Array.Find(CompressResolutionOptions, o => o.MaxHeight == p.MaxHeight)
+            ?? CompressResolutionOptions[0];
+        SelectedCompressFps = Array.Find(CompressFpsOptions, o => o.Fps == p.MaxFps) ?? CompressFpsOptions[0];
+        SelectedCompressPreset = CompressPresetOptions.Contains(p.Preset) ? p.Preset : "veryfast";
+        SelectedCompressFormat = CompressOutputFormats.Contains(p.Format) ? p.Format : "MP4";
+        CompressCrf = Math.Clamp(p.Crf, 14, 40);
+        CompressUseTargetSize = p.UseTargetSize;
+        CompressTargetSizeMB = p.TargetSizeMB > 0 ? p.TargetSizeMB : 25m;
+        CompressDropAudio = p.DropAudio;
+        SelectedCompressAudioBitrate = Array.Find(CompressAudioBitrateOptions, o => o.Kbps == p.AudioBitrateKbps)
+            ?? CompressAudioBitrateOptions[0];
+        SelectedCompressAudioChannels = Array.Find(CompressAudioChannelsOptions, o => o.Channels == p.AudioChannels)
+            ?? CompressAudioChannelsOptions[0];
+        CompressPresetName = p.Name; // so a follow-up Save updates this preset
+        // UpdateEstimate fires via the WhenAnyValue subscriptions as the properties above change.
+    }
+
+    private void DeleteCompressPreset()
+    {
+        CompressPreset? p = SelectedSavedPreset;
+        if (p == null)
+        {
+            return;
+        }
+
+        CompressPresets.Remove(p);
+        CompressPresetService.Save(CompressPresets);
+        SelectedSavedPreset = null;
     }
 
     private void CancelCompress()
