@@ -129,16 +129,32 @@
                 <Expander Theme="{StaticResource GothicExpander}" IsExpanded="True"
                           Header="{Binding [CompressEditGroup], Source={x:Static services:LocalizationService.Instance}}">
                     <StackPanel Spacing="10">
-                        <ComboBox ItemsSource="{Binding CompressQueue}"
-                                  SelectedItem="{Binding SelectedQueueItem}"
-                                  HorizontalAlignment="Stretch"
-                                  PlaceholderText="{Binding [CompressSelectFile], Source={x:Static services:LocalizationService.Instance}}">
-                            <ComboBox.ItemTemplate>
+                        <ListBox ItemsSource="{Binding CompressQueue}"
+                                 SelectedItem="{Binding SelectedQueueItem}"
+                                 HorizontalAlignment="Stretch"
+                                 MaxHeight="220"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                            <ListBox.ItemTemplate>
                                 <DataTemplate x:DataType="vm:MainWindowViewModel+CompressQueueItem">
-                                    <TextBlock Text="{Binding FileName}"/>
+                                    <Grid ColumnDefinitions="Auto,*" Margin="0,2">
+                                        <!-- first-frame thumbnail -->
+                                        <Border Grid.Column="0" Width="64" Height="40"
+                                                Background="#101010" CornerRadius="3" Margin="0,0,10,0">
+                                            <Image Source="{Binding Thumbnail}" Stretch="Uniform"/>
+                                        </Border>
+                                        <!-- name + size + date -->
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                                            <TextBlock Text="{Binding FileName}" FontSize="12"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                <TextBlock Text="{Binding FileSizeText}" FontSize="10" Foreground="#9A9A9A"/>
+                                                <TextBlock Text="{Binding DateText}" FontSize="10" Foreground="#9A9A9A"/>
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Grid>
                                 </DataTemplate>
-                            </ComboBox.ItemTemplate>
-                        </ComboBox>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
 
                         <TextBlock Text="{Binding [CompressEditSelectHint], Source={x:Static services:LocalizationService.Instance}}"
                                    IsVisible="{Binding SelectedQueueItem, Converter={x:Static conv:ObjectConverters.IsNull}}"
@@ -152,8 +168,11 @@
                             <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Center">
                                 <TextBlock Text="{Binding [CompressRotationLabel], Source={x:Static services:LocalizationService.Instance}}"
                                            VerticalAlignment="Center" FontSize="12"/>
+                                <!-- Bounds widened to -90/360 so the up/down spinner WRAPS: ApplyRotation snaps the
+                                     overshoot back with % 360 (270 → up → 0, 0 → down → 270). With 0/270 bounds the
+                                     value was clamped before reaching the setter, so it couldn't loop. -->
                                 <NumericUpDown Value="{Binding SelectedRotation}"
-                                               Minimum="0" Maximum="270" Increment="90"
+                                               Minimum="-90" Maximum="360" Increment="90"
                                                FormatString="0"
                                                Width="120"
                                                VerticalAlignment="Center"/>
