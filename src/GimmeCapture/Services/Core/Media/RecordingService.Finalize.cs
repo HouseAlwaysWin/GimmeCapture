@@ -336,68 +336,79 @@ public partial class RecordingService
             return;
         }
 
-        string effectiveFormat = GetEffectiveTargetFormat();
-        EnsureOutputExtension(GetTargetExtension(effectiveFormat));
         var sourceVideo = File.Exists(mergedMkv) ? mergedMkv : _segments[0];
 
-        var targetAudio = await PrepareAudioForTargetContainerAsync(mergedAudio, effectiveFormat);
-        if (!string.IsNullOrWhiteSpace(targetAudio) && File.Exists(targetAudio))
-        {
-            try
-            {
-                try
-                {
-                    using var wav = new AudioFileReader(targetAudio);
-                    LogToFile($"[Finalize] Mux input audio: path={targetAudio}, bytes={new FileInfo(targetAudio).Length}, duration={wav.TotalTime}");
-                }
-                catch (Exception ex)
-                {
-                    LogToFile($"[Finalize] Audio probe failed: {ex.Message}");
-                }
+        // Honor the user's requested container. Hardware-encoded streams occasionally fail to mux into
+        // MP4/MOV, so for those encoders we fall back to MKV (always reliable) ONLY if the requested
+        // format actually fails — we no longer force MKV up front, so "MP4" really produces MP4 when it can.
+        string requested = _targetFormat is ("mp4" or "mov") ? _targetFormat : "mkv";
+        bool allowMkvFallback = requested != "mkv" && RequiresMatroskaFinalization(_lastSelectedVideoEncoderName);
 
-                var muxedPath = Path.Combine(_tempDir, $"muxed_with_audio.{GetTargetExtension(effectiveFormat)}");
-                var muxStats = LibavMuxer.MuxVideoAndAudio(sourceVideo, targetAudio, muxedPath, GetMuxerFormatName(effectiveFormat));
-                LogToFile($"[Finalize] Native mux success: {muxedPath}, bytes={(File.Exists(muxedPath) ? new FileInfo(muxedPath).Length : 0)}, videoPackets={muxStats.VideoPackets}, audioPackets={muxStats.AudioPackets}");
-                await TryMoveWithRetryAsync(muxedPath, _outputFile);
-                FinalizationProgress = 100;
-                return;
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"[Finalize] Native audio mux failed, fallback to video-only: {ex.Message}");
-                LogToFile($"[Finalize] Native audio mux failed: {ex}");
-            }
+        if (await TryFinalizeAsContainerAsync(requested, sourceVideo, mergedAudio, throwOnFailure: !allowMkvFallback))
+        {
+            FinalizationProgress = 100;
+            return;
         }
 
-        if (string.Equals(effectiveFormat, "mkv", StringComparison.OrdinalIgnoreCase))
-        {
-            await TryMoveWithRetryAsync(sourceVideo, _outputFile);
-        }
-        else
-        {
-            string remuxedPath = Path.Combine(_tempDir, $"remuxed_video_only.{GetTargetExtension(effectiveFormat)}");
-            var remuxStats = LibavMuxer.RemuxVideo(sourceVideo, remuxedPath, GetMuxerFormatName(effectiveFormat));
-            LogToFile($"[Finalize] Native video-only remux success: {remuxedPath}, bytes={(File.Exists(remuxedPath) ? new FileInfo(remuxedPath).Length : 0)}, videoPackets={remuxStats.VideoPackets}");
-            await TryMoveWithRetryAsync(remuxedPath, _outputFile);
-        }
-
+        LogToFile($"[Finalize] '{requested}' finalize failed for encoder '{_lastSelectedVideoEncoderName}'; falling back to MKV.");
+        await TryFinalizeAsContainerAsync("mkv", sourceVideo, mergedAudio, throwOnFailure: true);
         FinalizationProgress = 100;
     }
 
-    private string GetEffectiveTargetFormat()
+    // Finalizes the merged video (+ optional audio) into one container. Returns true on success. An audio
+    // mux failure degrades to a video-only output in the SAME container; only a video remux/move failure
+    // marks the container unusable (so the caller can fall back to MKV). Throws instead of returning false
+    // when throwOnFailure is set.
+    private async Task<bool> TryFinalizeAsContainerAsync(string format, string sourceVideo, string? mergedAudio, bool throwOnFailure)
     {
-        if (_targetFormat is not ("mp4" or "mov"))
+        EnsureOutputExtension(GetTargetExtension(format));
+        try
         {
-            return _targetFormat;
-        }
+            var targetAudio = await PrepareAudioForTargetContainerAsync(mergedAudio, format);
+            if (!string.IsNullOrWhiteSpace(targetAudio) && File.Exists(targetAudio))
+            {
+                try
+                {
+                    var muxedPath = Path.Combine(_tempDir, $"muxed_with_audio.{GetTargetExtension(format)}");
+                    var muxStats = LibavMuxer.MuxVideoAndAudio(sourceVideo, targetAudio, muxedPath, GetMuxerFormatName(format));
+                    LogToFile($"[Finalize] Native mux ({format}) success: {muxedPath}, bytes={(File.Exists(muxedPath) ? new FileInfo(muxedPath).Length : 0)}, videoPackets={muxStats.VideoPackets}, audioPackets={muxStats.AudioPackets}");
+                    await TryMoveWithRetryAsync(muxedPath, _outputFile);
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    // Audio mux failed — keep the video by writing a video-only file in the same container.
+                    Debug.WriteLine($"[Finalize] Audio mux ({format}) failed, video-only fallback: {ex.Message}");
+                    LogToFile($"[Finalize] Audio mux ({format}) failed, video-only fallback: {ex}");
+                }
+            }
 
-        if (RequiresMatroskaFinalization(_lastSelectedVideoEncoderName))
+            if (string.Equals(format, "mkv", StringComparison.OrdinalIgnoreCase))
+            {
+                await TryMoveWithRetryAsync(sourceVideo, _outputFile);
+            }
+            else
+            {
+                string remuxedPath = Path.Combine(_tempDir, $"remuxed_video_only.{GetTargetExtension(format)}");
+                var remuxStats = LibavMuxer.RemuxVideo(sourceVideo, remuxedPath, GetMuxerFormatName(format));
+                LogToFile($"[Finalize] Native video-only remux ({format}) success: {remuxedPath}, bytes={(File.Exists(remuxedPath) ? new FileInfo(remuxedPath).Length : 0)}, videoPackets={remuxStats.VideoPackets}");
+                await TryMoveWithRetryAsync(remuxedPath, _outputFile);
+            }
+
+            return true;
+        }
+        catch (Exception ex)
         {
-            LogToFile($"[Finalize] Encoder '{_lastSelectedVideoEncoderName}' is being finalized as MKV for compatibility.");
-            return "mkv";
-        }
+            // Video remux/move itself failed -> this container is not usable for the captured stream.
+            LogToFile($"[Finalize] Finalize as '{format}' failed: {ex}");
+            Debug.WriteLine($"[Finalize] Finalize as '{format}' failed: {ex.Message}");
+            if (throwOnFailure)
+            {
+                throw;
+            }
 
-        return _targetFormat;
+            return false;
+        }
     }
 
     internal static bool RequiresMatroskaFinalization(string encoderName)
@@ -435,16 +446,14 @@ public partial class RecordingService
 
     private async Task<string?> PrepareAudioForTargetContainerAsync(string? mergedAudio, string effectiveFormat)
     {
+        _ = effectiveFormat;
         if (string.IsNullOrWhiteSpace(mergedAudio) || !File.Exists(mergedAudio))
         {
             return null;
         }
 
-        if (effectiveFormat is not ("mp4" or "mov"))
-        {
-            return mergedAudio;
-        }
-
+        // Transcode the captured PCM/WAV to AAC for every muxed container (mp4/mov/mkv). AAC muxes cleanly
+        // into Matroska too; copying raw PCM straight into MKV was producing files with no usable audio.
         try
         {
             string aacPath = Path.Combine(_tempDir, "merged_audio.m4a");
@@ -454,7 +463,7 @@ public partial class RecordingService
         }
         catch (Exception ex)
         {
-            LogToFile($"[Finalize] AAC transcode failed; using video-only MP4 fallback: {ex.Message}");
+            LogToFile($"[Finalize] AAC transcode failed; using video-only fallback: {ex.Message}");
             return null;
         }
     }

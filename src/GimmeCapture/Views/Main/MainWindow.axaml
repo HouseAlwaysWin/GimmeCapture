@@ -76,6 +76,11 @@
                 <ContentControl x:Name="RecordTabHost"/>
             </TabItem>
 
+            <!-- 壓縮 (Compress) -->
+            <TabItem Header="{Binding [TabCompress], Source={x:Static services:LocalizationService.Instance}}">
+                <tabs:SettingsCompressTab/>
+            </TabItem>
+
             <!-- 翻譯設定 (Translation) -->
             <TabItem Header="{Binding [TabTranslation], Source={x:Static services:LocalizationService.Instance}}">
                 <ContentControl x:Name="TranslationTabHost"/>

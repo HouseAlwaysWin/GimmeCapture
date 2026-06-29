@@ -12,7 +12,7 @@ namespace GimmeCapture.Services.Core.Media.NativeFFmpeg;
 
 /// <summary>
 /// In-process (libav, no ffmpeg.exe) frame-accurate trim/concat export for the floating video pin.
-/// Re-encodes the KEPT source ranges into one continuous H.264 clip (audio re-encoded to AAC and muxed),
+/// Re-encodes the KEPT source ranges into one continuous H.264/H.265 clip (audio re-encoded to AAC and muxed),
 /// so cut points are exact regardless of keyframe spacing. Supports an optional crop rect and an optional
 /// per-frame SkiaSharp composite hook (annotation/redaction burn-in: decode → BGRA → draw → YUV → encode).
 /// GIF/WebM targets are handled elsewhere.
@@ -49,6 +49,24 @@ internal static class LibavClipExporter
         return (int)Math.Floor(accum + eps) - (int)Math.Floor(before + eps);
     }
 
+    /// <summary>
+    /// Downscales (width,height) so the height is at most <paramref name="maxHeight"/>, preserving aspect
+    /// and snapping to even dimensions (required by YUV420P). Returns the dims unchanged when
+    /// <paramref name="maxHeight"/> is 0 or the source is already short enough, so existing callers that
+    /// don't downscale are byte-for-byte unaffected. Pure, so the math is unit-testable.
+    /// </summary>
+    internal static (int Width, int Height) ScaleToMaxHeight(int width, int height, int maxHeight)
+    {
+        if (maxHeight <= 0 || width <= 0 || height <= 0 || height <= maxHeight)
+        {
+            return (width, height);
+        }
+
+        double scale = (double)maxHeight / height;
+        int w = (int)Math.Round(width * scale);
+        return (Math.Max(2, w - (w & 1)), Math.Max(2, maxHeight - (maxHeight & 1)));
+    }
+
     /// <summary>Maps an output file extension to the libav container name, or null if unsupported here.</summary>
     public static string? ContainerForExtension(string extension)
     {
@@ -71,6 +89,18 @@ internal static class LibavClipExporter
     /// resolution) plus that frame's source time in seconds, to draw onto in place (annotation/redaction
     /// burn-in; the time lets time-varying composites position themselves), before it is re-encoded.
     /// </param>
+    /// <param name="options">
+    /// Optional encode knobs (codec, target bitrate, CRF, preset, downscale, drop-audio). Null reproduces
+    /// the original behaviour, so existing callers are unaffected.
+    /// </param>
+    /// <param name="progress">
+    /// Optional progress sink reporting the video-encode fraction (0..1) by source time consumed. The audio
+    /// decode/encode + mux tail isn't tracked, so the bar may sit near 1.0 briefly at the end. Null = silent.
+    /// </param>
+    /// <param name="pauseGate">
+    /// Optional pause control: when reset (non-signaled), the video-encode loop blocks between frames until it
+    /// is set again (or cancellation fires). Null or always-set = no pausing. Must start signaled.
+    /// </param>
     public static bool TryExport(
         string inputPath,
         IReadOnlyList<SourceRange> ranges,
@@ -78,9 +108,13 @@ internal static class LibavClipExporter
         VideoQuality quality,
         VideoEditCrop? crop = null,
         Action<SKBitmap, double>? frameComposite = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        LibavExportOptions? options = null,
+        IProgress<double>? progress = null,
+        ManualResetEventSlim? pauseGate = null)
     {
         FFmpegRuntime.EnsureInitialized();
+        var opt = options ?? new LibavExportOptions();
 
         if (string.IsNullOrEmpty(inputPath) || !File.Exists(inputPath))
         {
@@ -102,9 +136,27 @@ internal static class LibavClipExporter
 
         try
         {
-            EncodeVideoRanges(inputPath, ranges, videoTemp, quality, crop, frameComposite, cancellationToken);
+            // True two-pass (libx264 target-size only): pass 1 writes stats to a temp log, pass 2 reads them.
+            // H.265 / CRF fall through to the single encode. Progress spans both passes (0..0.5, 0.5..1).
+            bool realTwoPass = opt.TwoPass && opt.TargetVideoBitrateKbps > 0 && opt.Codec == VideoCodec.H264;
+            if (realTwoPass)
+            {
+                string statsFile = Path.Combine(tempDir, "x264_2pass.log");
+                string pass1Temp = Path.Combine(tempDir, "pass1.mp4");
+                EncodeVideoRanges(inputPath, ranges, pass1Temp, quality, crop, frameComposite, cancellationToken,
+                    opt, progress == null ? null : new ScaledProgress(progress, 0.0, 0.5), pauseGate, 1, statsFile);
+                EncodeVideoRanges(inputPath, ranges, videoTemp, quality, crop, frameComposite, cancellationToken,
+                    opt, progress == null ? null : new ScaledProgress(progress, 0.5, 0.5), pauseGate, 2, statsFile);
+            }
+            else
+            {
+                EncodeVideoRanges(inputPath, ranges, videoTemp, quality, crop, frameComposite, cancellationToken,
+                    opt, progress, pauseGate);
+            }
 
-            bool hasAudio = TryBuildAudio(inputPath, ranges, tempDir, quality, cancellationToken, out string? audioTemp);
+            string? audioTemp = null;
+            bool hasAudio = !opt.DropAudio
+                && TryBuildAudio(inputPath, ranges, tempDir, quality, opt, cancellationToken, out audioTemp);
 
             if (hasAudio && audioTemp != null)
             {
@@ -127,7 +179,7 @@ internal static class LibavClipExporter
         }
     }
 
-    // ── Video: decode the kept ranges and re-encode them into one continuous H.264 file ──
+    // ── Video: decode the kept ranges and re-encode them into one continuous H.264/H.265 file ──
     private static unsafe void EncodeVideoRanges(
         string inputPath,
         IReadOnlyList<SourceRange> ranges,
@@ -135,8 +187,15 @@ internal static class LibavClipExporter
         VideoQuality quality,
         VideoEditCrop? crop,
         Action<SKBitmap, double>? frameComposite,
-        CancellationToken ct)
+        CancellationToken ct,
+        LibavExportOptions opt,
+        IProgress<double>? progress = null,
+        ManualResetEventSlim? pauseGate = null,
+        int passNumber = 0,
+        string? statsFile = null)
     {
+        VideoCodec codec = opt.Codec;
+        int targetVideoBitrateKbps = opt.TargetVideoBitrateKbps;
         AVFormatContext* inFmt = null;
         AVCodecContext* decCtx = null;
         AVFormatContext* outFmt = null;
@@ -155,6 +214,14 @@ internal static class LibavClipExporter
         // 1/speed output frames, and we emit floor(after)-floor(before) frames (drop when >1×, dup when <1×).
         double frameAccum = 0;
         bool annotate = frameComposite != null;
+
+        // Progress is reported by source-time consumed across all kept ranges (0..1). Throttled to whole
+        // percent changes so a long encode doesn't flood the IProgress sink / UI thread.
+        double totalSrcDuration = 0;
+        foreach (SourceRange r in ranges) totalSrcDuration += r.Duration;
+        if (totalSrcDuration <= 0) totalSrcDuration = 1; // guard div-by-zero (unreadable/zero-length)
+        double elapsedBeforeRange = 0;
+        int lastPercent = -1;
 
         try
         {
@@ -177,16 +244,36 @@ internal static class LibavClipExporter
             ThrowIfErr(ffmpeg.avcodec_parameters_to_context(decCtx, inStream->codecpar), "clip_par_to_ctx");
             ThrowIfErr(ffmpeg.avcodec_open2(decCtx, dec, null), "clip_open_decoder");
 
-            int fps = ResolveFps(inStream);
+            int srcFps = ResolveFps(inStream);
+            // FPS cap: when a cap below the source rate is requested, the encoder runs at the cap and we
+            // decimate source frames into it (output stays CFR). 0 or ≥ source fps keeps the source rate.
+            int fps = (opt.MaxFps > 0 && opt.MaxFps < srcFps) ? opt.MaxFps : srcFps;
+            // Per-source-frame cursor scaling that realises the decimation: emit ≈ fps/srcFps output frames
+            // per source frame. 1.0 when not capping, so the speed-only path is byte-for-byte unchanged.
+            double fpsCursorScale = (double)srcFps / fps;
 
-            AVCodec* enc = ffmpeg.avcodec_find_encoder_by_name("libx264");
+            // H.265 when requested and available; otherwise fall back to H.264 (libx265 may be absent
+            // from the bundled build). Existing callers default to H.264 so their output is unchanged.
+            AVCodec* enc = null;
+            if (codec == VideoCodec.H265)
+            {
+                enc = ffmpeg.avcodec_find_encoder_by_name("libx265");
+                if (enc == null)
+                {
+                    enc = ffmpeg.avcodec_find_encoder(AVCodecID.AV_CODEC_ID_HEVC);
+                }
+            }
+            if (enc == null)
+            {
+                enc = ffmpeg.avcodec_find_encoder_by_name("libx264");
+            }
             if (enc == null)
             {
                 enc = ffmpeg.avcodec_find_encoder(AVCodecID.AV_CODEC_ID_H264);
             }
             if (enc == null)
             {
-                throw new InvalidOperationException("H.264 encoder unavailable.");
+                throw new InvalidOperationException("No H.264/H.265 encoder available.");
             }
 
             ThrowIfErr(ffmpeg.avformat_alloc_output_context2(&outFmt, null, "mp4", outputPath), "clip_alloc_output");
@@ -195,15 +282,18 @@ internal static class LibavClipExporter
                 throw new InvalidOperationException("Failed to allocate clip output context.");
             }
 
-            // Output dimensions: the crop rect when cropping, else the full source frame.
+            // sws source: the crop rect when cropping, else the full source frame.
             int outW = crop is { } cw ? cw.Width : decCtx->width;
             int outH = crop is { } ch ? ch.Height : decCtx->height;
+
+            // Optional downscale: shrink the encoded frame to opt.MaxHeight (sws scales src→enc dims).
+            (int encW, int encH) = ScaleToMaxHeight(outW, outH, opt.MaxHeight);
 
             encCtx = ffmpeg.avcodec_alloc_context3(enc);
             encCtx->codec_type = AVMediaType.AVMEDIA_TYPE_VIDEO;
             encCtx->codec_id = enc->id;
-            encCtx->width = outW;
-            encCtx->height = outH;
+            encCtx->width = encW;
+            encCtx->height = encH;
             encCtx->pix_fmt = AVPixelFormat.AV_PIX_FMT_YUV420P;
             encCtx->time_base = new AVRational { num = 1, den = fps };
             encCtx->framerate = new AVRational { num = fps, den = 1 };
@@ -214,14 +304,47 @@ internal static class LibavClipExporter
                 encCtx->flags |= ffmpeg.AV_CODEC_FLAG_GLOBAL_HEADER;
             }
 
-            string crf = quality switch
+            ffmpeg.av_dict_set(&encOpts, "preset", string.IsNullOrWhiteSpace(opt.Preset) ? "veryfast" : opt.Preset, 0);
+            if (targetVideoBitrateKbps > 0)
             {
-                VideoQuality.High => "20",
-                VideoQuality.Low => "28",
-                _ => "23",
-            };
-            ffmpeg.av_dict_set(&encOpts, "preset", "veryfast", 0);
-            ffmpeg.av_dict_set(&encOpts, "crf", crf, 0);
+                // Average-bitrate mode for "compress to a target size".
+                long bps = (long)targetVideoBitrateKbps * 1000;
+                encCtx->bit_rate = bps;
+                bool twoPass = passNumber > 0;
+                if (!twoPass)
+                {
+                    // Single-pass ABR with a VBV peak cap so the output lands near the requested size
+                    // (approximate). Two-pass omits the cap and lets x264 distribute bits from pass-1 stats.
+                    encCtx->rc_max_rate = bps;
+                    encCtx->rc_buffer_size = (int)Math.Min(int.MaxValue, bps * 2);
+                }
+                // libx265 reads rate control from x265-params, not the AVCodecContext bitrate fields.
+                if (enc->id == AVCodecID.AV_CODEC_ID_HEVC)
+                {
+                    long kbps = targetVideoBitrateKbps;
+                    ffmpeg.av_dict_set(&encOpts, "x265-params",
+                        $"bitrate={kbps}:vbv-maxrate={kbps}:vbv-bufsize={kbps * 2}", 0);
+                }
+                else if (twoPass && statsFile != null)
+                {
+                    // True two-pass for libx264: pass 1 writes stats, pass 2 reads them. The "stats" AVOption
+                    // takes a full path (unlike x265-params' colon-delimited string), so Windows paths work.
+                    encCtx->flags |= passNumber == 1 ? ffmpeg.AV_CODEC_FLAG_PASS1 : ffmpeg.AV_CODEC_FLAG_PASS2;
+                    ffmpeg.av_dict_set(&encOpts, "stats", statsFile, 0);
+                }
+            }
+            else
+            {
+                string crf = opt.CrfOverride > 0
+                    ? opt.CrfOverride.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                    : quality switch
+                    {
+                        VideoQuality.High => "20",
+                        VideoQuality.Low => "28",
+                        _ => "23",
+                    };
+                ffmpeg.av_dict_set(&encOpts, "crf", crf, 0);
+            }
             ThrowIfErr(ffmpeg.avcodec_open2(encCtx, enc, &encOpts), "clip_open_encoder");
 
             outStream = ffmpeg.avformat_new_stream(outFmt, null);
@@ -305,6 +428,8 @@ internal static class LibavClipExporter
                 while (!runDone && !eof)
                 {
                     ct.ThrowIfCancellationRequested();
+                    // Block here (between frames) while paused; wakes on resume or throws on cancel.
+                    pauseGate?.Wait(ct);
                     int rr = ffmpeg.av_read_frame(inFmt, inPkt);
                     if (rr == ffmpeg.AVERROR_EOF)
                     {
@@ -328,7 +453,8 @@ internal static class LibavClipExporter
 
                     runDone = DrainDecodedFrames(
                         decCtx, encCtx, sws, swsToBgra, decFrame, encFrame, bgraFrame, frameComposite,
-                        outFmt, outStream, outPkt, inStream->time_base, range, crop, ref frameIndex, ref frameAccum);
+                        outFmt, outStream, outPkt, inStream->time_base, range, crop, ref frameIndex, ref frameAccum,
+                        fpsCursorScale, progress, totalSrcDuration, elapsedBeforeRange, ref lastPercent);
                 }
 
                 // Range reached the file end: flush the decoder so its buffered tail frames aren't lost.
@@ -337,11 +463,13 @@ internal static class LibavClipExporter
                     ffmpeg.avcodec_send_packet(decCtx, null);
                     DrainDecodedFrames(
                         decCtx, encCtx, sws, swsToBgra, decFrame, encFrame, bgraFrame, frameComposite,
-                        outFmt, outStream, outPkt, inStream->time_base, range, crop, ref frameIndex, ref frameAccum);
+                        outFmt, outStream, outPkt, inStream->time_base, range, crop, ref frameIndex, ref frameAccum,
+                        fpsCursorScale, progress, totalSrcDuration, elapsedBeforeRange, ref lastPercent);
                 }
 
                 // Reset the decoder before the next range's seek (and after the final flush above).
                 ffmpeg.avcodec_flush_buffers(decCtx);
+                elapsedBeforeRange += range.Duration;
             }
 
             // Flush the encoder to drain any buffered output packets.
@@ -392,7 +520,12 @@ internal static class LibavClipExporter
         SourceRange range,
         VideoEditCrop? crop,
         ref long frameIndex,
-        ref double frameAccum)
+        ref double frameAccum,
+        double fpsCursorScale,
+        IProgress<double>? progress,
+        double totalSrcDuration,
+        double elapsedBeforeRange,
+        ref int lastPercent)
     {
         while (true)
         {
@@ -458,10 +591,23 @@ internal static class LibavClipExporter
                 ffmpeg.sws_scale(sws, decFrame->data, decFrame->linesize, 0, decFrame->height,
                     encFrame->data, encFrame->linesize);
             }
-            // Per-segment speed: this source frame spans 1/speed output frames on a CFR (source-fps)
-            // timeline. We emit drop/dup counts so faster (>1×) drops frames and slower (<1×) duplicates;
-            // at 1× it is exactly one frame, identical to before.
-            int emitCount = AdvanceFrameCursor(ref frameAccum, range.EffectiveSpeed);
+            // Report encode progress by source-time consumed (this frame's offset within the kept ranges),
+            // throttled to whole-percent changes.
+            if (progress != null)
+            {
+                double done = elapsedBeforeRange + Math.Clamp(t - range.StartSeconds, 0, range.Duration);
+                int pct = (int)(done / totalSrcDuration * 100.0);
+                if (pct != lastPercent)
+                {
+                    lastPercent = pct;
+                    progress.Report(Math.Clamp(done / totalSrcDuration, 0, 1));
+                }
+            }
+
+            // Per-segment speed AND fps cap fold into one cursor advance: each source frame spans
+            // 1/(speed × fpsScale) output frames. fpsScale = srcFps/outFps decimates to the capped rate
+            // (≥1 drops frames); both are 1.0 in the default path, so behaviour there is unchanged.
+            int emitCount = AdvanceFrameCursor(ref frameAccum, range.EffectiveSpeed * fpsCursorScale);
 
             for (int e = 0; e < emitCount; e++)
             {
@@ -540,6 +686,7 @@ internal static class LibavClipExporter
         IReadOnlyList<SourceRange> ranges,
         string tempDir,
         VideoQuality quality,
+        LibavExportOptions opt,
         CancellationToken ct,
         out string? audioTemp)
     {
@@ -597,7 +744,7 @@ internal static class LibavClipExporter
             }
 
             audioTemp = Path.Combine(tempDir, "audio.m4a");
-            LibavAacTranscoder.EncodeWavToM4a(wavTemp, audioTemp, quality);
+            LibavAacTranscoder.EncodeWavToM4a(wavTemp, audioTemp, quality, opt.AudioBitrateKbps, opt.AudioChannels);
             bool ok = File.Exists(audioTemp) && new FileInfo(audioTemp).Length > 0;
             AppLog.Information($"LibavClipExporter.TryBuildAudio built={ok} pcmBytes={pcmBytes.Length}");
             return ok;
@@ -622,5 +769,22 @@ internal static class LibavClipExporter
         {
             throw FFmpegErrors.ToException(err, ctx);
         }
+    }
+
+    /// <summary>Maps an inner 0..1 progress fraction onto [offset, offset+scale] (for multi-pass encodes).</summary>
+    private sealed class ScaledProgress : IProgress<double>
+    {
+        private readonly IProgress<double> _inner;
+        private readonly double _offset;
+        private readonly double _scale;
+
+        public ScaledProgress(IProgress<double> inner, double offset, double scale)
+        {
+            _inner = inner;
+            _offset = offset;
+            _scale = scale;
+        }
+
+        public void Report(double value) => _inner.Report(_offset + (_scale * value));
     }
 }

@@ -364,6 +364,7 @@ public partial class MainWindowViewModel : ViewModelBase
         });
 
         InitializeHistoryCommands();
+        InitializeVideoCompress();
 
         RefreshLlamaModelsCommand = ReactiveCommand.Create(() => RefreshLlamaModelCatalog());
         RefreshWebcamDevicesCommand = ReactiveCommand.Create(RefreshWebcamDevices);
