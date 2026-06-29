@@ -360,6 +360,8 @@ public partial class MainWindowViewModel
             CompressPresets.Add(preset);
         }
 
+        InitializeCompressBatch();
+
         // Recompute the live size estimate whenever a relevant knob changes (source change calls it directly).
         this.WhenAnyValue(
                 x => x.SelectedCompressCodecOption,
@@ -654,6 +656,134 @@ public partial class MainWindowViewModel
         return (long)(videoBytes + audioBytes);
     }
 
+    // Immutable snapshot of the encode knobs so a run reads stable values (a run reads these off the UI thread).
+    private readonly record struct CompressSettingsSnapshot(
+        VideoCodec Codec, int Crf, int MaxHeight, int MaxFps, string Preset,
+        bool DropAudio, int AudioBitrateKbps, int AudioChannels,
+        bool UseTargetSize, decimal TargetSizeMB, bool UseTwoPass);
+
+    private CompressSettingsSnapshot BuildSettingsSnapshot()
+    {
+        VideoCodec codec = SelectedCompressCodecOption?.Value ?? VideoCodec.H264;
+        return new CompressSettingsSnapshot(
+            codec,
+            Math.Clamp(CompressCrf, 1, 51),
+            SelectedCompressResolution?.MaxHeight ?? 0,
+            SelectedCompressFps?.Fps ?? 0,
+            SelectedCompressPreset,
+            CompressDropAudio,
+            SelectedCompressAudioBitrate?.Kbps ?? 0,
+            SelectedCompressAudioChannels?.Channels ?? 0,
+            CompressUseTargetSize,
+            CompressTargetSizeMB,
+            // True two-pass replaces the corrective pass for H.264 target-size; H.265 keeps single-pass + correct.
+            CompressUseTargetSize && codec == VideoCodec.H264);
+    }
+
+    private static async Task<double> ProbeInputDurationAsync(string input)
+    {
+        try
+        {
+            using var probe = new LibavVideoFramePlayer();
+            return await probe.ProbeDurationSecondsAsync(input) ?? 0;
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error("Compress.ProbeDuration", ex);
+            return 0;
+        }
+    }
+
+    /// <summary>
+    /// Encodes one input to outputPath with the snapshot settings (incl. the H.265 single-pass corrective
+    /// re-encode). Returns true on success; throws <see cref="OperationCanceledException"/> if cancelled.
+    /// Manages its own temp dir and sets no shared UI state, so single + batch runs share one code path.
+    /// </summary>
+    private async Task<bool> EncodeOneFileAsync(
+        string input, string outputPath, CompressSettingsSnapshot s, int targetBitrateKbps,
+        double durationSeconds, IProgress<double> progress, CancellationToken token, ManualResetEventSlim? pauseGate)
+    {
+        string outExt = Path.GetExtension(outputPath);
+        string tempDir = Path.Combine(Path.GetTempPath(), "GimmeCapture_Compress_" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            // 0 duration (unreadable) falls back to a large-but-sane end so the whole file is exported.
+            double end = durationSeconds > 0 ? durationSeconds : 24 * 60 * 60;
+            var ranges = new[] { new LibavClipExporter.SourceRange(0, end) };
+            Directory.CreateDirectory(tempDir);
+
+            async Task<string?> EncodeAttemptAsync(int bitrateKbps, int attempt)
+            {
+                string attemptOut = Path.Combine(tempDir, $"attempt{attempt}{outExt}");
+                var options = new LibavExportOptions
+                {
+                    Codec = s.Codec,
+                    TargetVideoBitrateKbps = bitrateKbps,
+                    CrfOverride = s.Crf,
+                    Preset = s.Preset,
+                    MaxHeight = s.MaxHeight,
+                    MaxFps = s.MaxFps,
+                    DropAudio = s.DropAudio,
+                    AudioBitrateKbps = s.AudioBitrateKbps,
+                    AudioChannels = s.AudioChannels,
+                    TwoPass = s.UseTwoPass
+                };
+                if (attempt > 1)
+                {
+                    progress.Report(0); // corrective pass restarts the bar
+                }
+                bool encoded = await Task.Run(() =>
+                    LibavClipExporter.TryExport(
+                        input, ranges, attemptOut, VideoQuality.Medium,
+                        cancellationToken: token, options: options, progress: progress, pauseGate: pauseGate), token);
+                return encoded && File.Exists(attemptOut) && new FileInfo(attemptOut).Length > 0 ? attemptOut : null;
+            }
+
+            string? finalTemp = await EncodeAttemptAsync(targetBitrateKbps, 1);
+
+            // H.265 single-pass corrective re-encode if the first attempt overshot the target.
+            if (finalTemp != null && s.UseTargetSize && !s.UseTwoPass)
+            {
+                double targetBytes = (double)s.TargetSizeMB * 1024 * 1024;
+                long actualBytes = new FileInfo(finalTemp).Length;
+                if (actualBytes > targetBytes)
+                {
+                    int refined = RefineTargetVideoBitrateKbps(targetBitrateKbps, actualBytes, targetBytes, durationSeconds);
+                    if (refined > 0 && refined < targetBitrateKbps)
+                    {
+                        string? secondTemp = await EncodeAttemptAsync(refined, 2);
+                        if (secondTemp != null && new FileInfo(secondTemp).Length < actualBytes)
+                        {
+                            finalTemp = secondTemp;
+                        }
+                    }
+                }
+            }
+
+            if (finalTemp == null)
+            {
+                return false;
+            }
+
+            File.Copy(finalTemp, outputPath, true);
+            return true;
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(tempDir))
+                {
+                    Directory.Delete(tempDir, true);
+                }
+            }
+            catch (Exception ex)
+            {
+                AppLog.Error("Compress.Cleanup", ex);
+            }
+        }
+    }
+
     private async Task CompressAsync()
     {
         if (IsCompressing || string.IsNullOrEmpty(CompressInputPath) || !File.Exists(CompressInputPath))
@@ -661,63 +791,33 @@ public partial class MainWindowViewModel
             return;
         }
 
-        // Output path: a custom path (from the Save dialog) wins; otherwise auto-derive next to the source
-        // ("<name>_compressed.<ext>", de-duplicated) so a single "Compress" click just runs.
+        string input = CompressInputPath;
+
+        // Output path: a custom path (from the Save dialog) wins; otherwise auto-derive next to the source.
         string outputPath;
         if (!string.IsNullOrWhiteSpace(CompressOutputPath))
         {
             outputPath = CompressOutputPath;
             // Guard against overwriting the source itself with a same-path custom selection.
-            if (string.Equals(Path.GetFullPath(outputPath), Path.GetFullPath(CompressInputPath),
-                    StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(Path.GetFullPath(outputPath), Path.GetFullPath(input), StringComparison.OrdinalIgnoreCase))
             {
                 CompressStatusText = LocalizationService.Instance["StatusCompressFailed"];
                 ShowToastAction?.Invoke(CompressStatusText, ToastSeverity.Error);
                 return;
             }
-            try
-            {
-                Directory.CreateDirectory(Path.GetDirectoryName(outputPath) ?? ".");
-            }
-            catch (Exception ex)
-            {
-                AppLog.Error("Compress.PrepareOutputDir", ex);
-            }
+            try { Directory.CreateDirectory(Path.GetDirectoryName(outputPath) ?? "."); }
+            catch (Exception ex) { AppLog.Error("Compress.PrepareOutputDir", ex); }
         }
         else
         {
-            string ext = "." + SelectedCompressFormat.ToLowerInvariant();
-            outputPath = BuildCompressOutputPath(CompressInputPath, ext);
+            outputPath = BuildCompressOutputPath(input, "." + SelectedCompressFormat.ToLowerInvariant());
         }
 
-        VideoCodec codec = SelectedCompressCodecOption?.Value ?? VideoCodec.H264;
-        int crf = Math.Clamp(CompressCrf, 1, 51);
-        int maxHeight = SelectedCompressResolution?.MaxHeight ?? 0;
-        int maxFps = SelectedCompressFps?.Fps ?? 0;
-        string preset = SelectedCompressPreset;
-        bool dropAudio = CompressDropAudio;
-        int audioBitrateKbps = SelectedCompressAudioBitrate?.Kbps ?? 0;
-        int audioChannels = SelectedCompressAudioChannels?.Channels ?? 0;
-        string input = CompressInputPath;
+        CompressSettingsSnapshot snap = BuildSettingsSnapshot();
+        double probedDuration = await ProbeInputDurationAsync(input);
 
-        // True two-pass replaces the adaptive corrective pass for H.264 target-size (more accurate, better
-        // quality distribution). H.265 target-size keeps single-pass ABR + the corrective re-encode below.
-        bool useTwoPass = CompressUseTargetSize && codec == VideoCodec.H264;
-
-        double probedDuration = 0;
-        try
-        {
-            using var durationProbe = new LibavVideoFramePlayer();
-            probedDuration = await durationProbe.ProbeDurationSecondsAsync(input) ?? 0;
-        }
-        catch (Exception ex)
-        {
-            AppLog.Error("Compress.ProbeDuration", ex);
-        }
-
-        // Target-size mode needs a known duration to turn a file size into an average bitrate.
         int targetBitrateKbps = 0;
-        if (CompressUseTargetSize)
+        if (snap.UseTargetSize)
         {
             if (probedDuration <= 0)
             {
@@ -725,8 +825,7 @@ public partial class MainWindowViewModel
                 ShowToastAction?.Invoke(CompressStatusText, ToastSeverity.Error);
                 return;
             }
-
-            targetBitrateKbps = ComputeTargetVideoBitrateKbps((double)CompressTargetSizeMB, probedDuration);
+            targetBitrateKbps = ComputeTargetVideoBitrateKbps((double)snap.TargetSizeMB, probedDuration);
         }
 
         IsCompressing = true;
@@ -736,86 +835,18 @@ public partial class MainWindowViewModel
         _compressCts?.Dispose();
         _compressCts = new CancellationTokenSource();
         CancellationToken token = _compressCts.Token;
-
         _compressPauseGate?.Dispose();
-        _compressPauseGate = new ManualResetEventSlim(true); // starts signaled = running
+        _compressPauseGate = new ManualResetEventSlim(true);
         IsPaused = false;
 
-        // Marshals exporter progress back to the UI thread (Progress<T> captures this sync context).
         var encodeProgress = new Progress<double>(p => CompressProgress = p);
 
-        string outExt = Path.GetExtension(outputPath);
-        string tempDir = Path.Combine(Path.GetTempPath(), "GimmeCapture_Compress_" + Guid.NewGuid().ToString("N"));
         try
         {
-            // 0 duration (unreadable) falls back to a large-but-sane end (24h) so the whole file is
-            // exported without risking an oversized duration-derived buffer inside the exporter.
-            double end = probedDuration > 0 ? probedDuration : 24 * 60 * 60;
-            var ranges = new[] { new LibavClipExporter.SourceRange(0, end) };
-
-            Directory.CreateDirectory(tempDir);
-
-            // Encodes at a given bitrate (0 = quality CRF) into a uniquely-named temp; returns its path or null.
-            async Task<string?> EncodeAttemptAsync(int bitrateKbps, int attempt)
+            bool ok = await EncodeOneFileAsync(
+                input, outputPath, snap, targetBitrateKbps, probedDuration, encodeProgress, token, _compressPauseGate);
+            if (ok)
             {
-                string attemptOut = Path.Combine(tempDir, $"attempt{attempt}{outExt}");
-                var options = new LibavExportOptions
-                {
-                    Codec = codec,
-                    TargetVideoBitrateKbps = bitrateKbps,
-                    CrfOverride = crf,
-                    Preset = preset,
-                    MaxHeight = maxHeight,
-                    MaxFps = maxFps,
-                    DropAudio = dropAudio,
-                    AudioBitrateKbps = audioBitrateKbps,
-                    AudioChannels = audioChannels,
-                    TwoPass = useTwoPass
-                };
-                // A corrective second pass restarts progress from 0 (status text signals the refine phase).
-                if (attempt > 1)
-                {
-                    CompressProgress = 0;
-                }
-                bool encoded = await Task.Run(() =>
-                    LibavClipExporter.TryExport(
-                        input, ranges, attemptOut, VideoQuality.Medium,
-                        cancellationToken: token, options: options, progress: encodeProgress,
-                        pauseGate: _compressPauseGate), token);
-                return encoded && File.Exists(attemptOut) && new FileInfo(attemptOut).Length > 0
-                    ? attemptOut
-                    : null;
-            }
-
-            string? finalTemp = await EncodeAttemptAsync(targetBitrateKbps, 1);
-
-            // Target-size accuracy for the SINGLE-PASS path (H.265): single-pass ABR can overshoot, so if the
-            // first attempt exceeds the requested size, re-encode once at a proportionally lower bitrate
-            // (audio held constant). H.264 uses true two-pass above and needs no corrective re-encode.
-            if (finalTemp != null && CompressUseTargetSize && !useTwoPass)
-            {
-                double targetBytes = (double)CompressTargetSizeMB * 1024 * 1024;
-                long actualBytes = new FileInfo(finalTemp).Length;
-                if (actualBytes > targetBytes)
-                {
-                    int refined = RefineTargetVideoBitrateKbps(targetBitrateKbps, actualBytes, targetBytes, probedDuration);
-                    if (refined > 0 && refined < targetBitrateKbps)
-                    {
-                        CompressStatusText = LocalizationService.Instance["StatusCompressRefining"];
-                        string? secondTemp = await EncodeAttemptAsync(refined, 2);
-                        // Keep the corrective pass only if it actually came in smaller (and still valid).
-                        if (secondTemp != null && new FileInfo(secondTemp).Length < actualBytes)
-                        {
-                            finalTemp = secondTemp;
-                        }
-                    }
-                }
-            }
-
-            if (finalTemp != null)
-            {
-                File.Copy(finalTemp, outputPath, true);
-
                 long before = new FileInfo(input).Length;
                 long after = new FileInfo(outputPath).Length;
                 CompressStatusText =
@@ -831,8 +862,6 @@ public partial class MainWindowViewModel
         }
         catch (OperationCanceledException)
         {
-            // User cancelled: leave no partial output (the temp dir is wiped in finally; outputPath was
-            // never written because the copy only runs on a completed encode).
             CompressStatusText = LocalizationService.Instance["StatusCompressCancelled"];
             ShowToastAction?.Invoke(CompressStatusText, ToastSeverity.Info);
         }
@@ -850,17 +879,6 @@ public partial class MainWindowViewModel
             _compressCts = null;
             _compressPauseGate?.Dispose();
             _compressPauseGate = null;
-            try
-            {
-                if (Directory.Exists(tempDir))
-                {
-                    Directory.Delete(tempDir, true);
-                }
-            }
-            catch (Exception ex)
-            {
-                AppLog.Error("Compress.Cleanup", ex);
-            }
         }
     }
 

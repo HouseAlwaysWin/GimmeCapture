@@ -256,6 +256,51 @@
                     </StackPanel>
                 </StackPanel>
 
+                <!-- Batch queue: add / drop multiple files (or a folder) and compress them all -->
+                <StackPanel Spacing="6" Margin="0,8,0,0">
+                    <TextBlock Text="{Binding [CompressQueueLabel], Source={x:Static services:LocalizationService.Instance}}"
+                               FontSize="12"/>
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <Button Content="{Binding [CompressQueueAddFiles], Source={x:Static services:LocalizationService.Instance}}"
+                                Theme="{StaticResource SmallGothicMetalButton}"
+                                Command="{Binding AddCompressFilesCommand}"/>
+                        <Button Content="{Binding [CompressQueueAddFolder], Source={x:Static services:LocalizationService.Instance}}"
+                                Theme="{StaticResource SmallGothicMetalButton}"
+                                Command="{Binding AddCompressFolderCommand}"/>
+                        <Button Content="{Binding [CompressQueueClear], Source={x:Static services:LocalizationService.Instance}}"
+                                Theme="{StaticResource SmallGothicMetalButton}"
+                                Command="{Binding ClearCompressQueueCommand}"/>
+                        <Button Content="{Binding [CompressQueueStart], Source={x:Static services:LocalizationService.Instance}}"
+                                Theme="{StaticResource GothicMetalButton}"
+                                Command="{Binding CompressQueueCommand}"/>
+                    </StackPanel>
+                    <Border BorderBrush="#3A3A3A" BorderThickness="1" CornerRadius="4"
+                            MinHeight="48" Padding="6">
+                        <ScrollViewer MaxHeight="160" VerticalScrollBarVisibility="Auto">
+                            <ItemsControl ItemsSource="{Binding CompressQueue}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:MainWindowViewModel+CompressQueueItem">
+                                        <DockPanel Margin="0,2">
+                                            <TextBlock Text="{Binding StatusText}"
+                                                       DockPanel.Dock="Right"
+                                                       Foreground="{DynamicResource ThemeAccentBrush}"
+                                                       FontSize="11"
+                                                       VerticalAlignment="Center"
+                                                       Margin="10,0,0,0"/>
+                                            <TextBlock Text="{Binding FileName}"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       FontSize="12"
+                                                       VerticalAlignment="Center"/>
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </Border>
+                    <TextBlock Text="{Binding [CompressQueueHint], Source={x:Static services:LocalizationService.Instance}}"
+                               FontSize="11" Foreground="#9A9A9A" TextWrapping="Wrap"/>
+                </StackPanel>
+
             </StackPanel>
         </Grid>
     </ScrollViewer>
