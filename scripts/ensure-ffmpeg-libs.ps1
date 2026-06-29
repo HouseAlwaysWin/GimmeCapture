@@ -1,13 +1,18 @@
 # Downloads BtbN FFmpeg Windows x64 GPL *shared* build and extracts native DLLs into src/GimmeCapture/ffmpeg-lib/
 # Run from repo root: powershell -ExecutionPolicy Bypass -File scripts/ensure-ffmpeg-libs.ps1
+#
+# Pinned to BtbN's non-pruned "latest" tag, n8.1 asset (FFmpeg 8.1 → avcodec-62/avformat-62/avutil-60,
+# the ABI FFmpeg.AutoGen 8.0.0.1 binds to). The "latest" URL is stable (dated autobuild-* releases get
+# pruned and 404), but BtbN rebuilds this asset on 8.1.x point releases — if the hash/size check below
+# fails, refresh $expectedSha256/$expectedSize from the new asset.
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 $dest = Join-Path $root "src\GimmeCapture\ffmpeg-lib"
 New-Item -ItemType Directory -Force -Path $dest | Out-Null
 
-$url = "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-06-14-13-33/ffmpeg-N-125019-g6698195dc4-win64-gpl-shared.zip"
-$expectedSha256 = "6ca2179b68ffb2658cc33ea2cb82292ab89f413d957cd44ef19b1fa5e64f3e70"
-$expectedSize = 97774950
+$url = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n8.1-latest-win64-gpl-shared-8.1.zip"
+$expectedSha256 = "f91ffa113f52dbb7c38b1196dff1660dd7257f85f4368e7e2773f9e4bce3b1e8"
+$expectedSize = 79235767
 $zip = Join-Path $env:TEMP ("ffmpeg-shared-" + [Guid]::NewGuid().ToString("n") + ".zip")
 
 Write-Host "Downloading $url ..."
