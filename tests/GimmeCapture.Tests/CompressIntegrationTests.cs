@@ -80,6 +80,16 @@ public class CompressIntegrationTests
         // H.265 + downscale.
         await AssertHeight(await Run("h265_720", new LibavExportOptions { Codec = VideoCodec.H265, MaxHeight = 720 }), 720);
 
+        // FPS cap: the output frame rate should drop to the requested cap (here, half the source rate).
+        int srcFps = LibavClipExporter.ProbeFps(source);
+        if (srcFps > 2)
+        {
+            int cap = Math.Max(1, srcFps / 2);
+            string capped = await Run($"fps{cap}", new LibavExportOptions { MaxFps = cap });
+            int outFps = LibavClipExporter.ProbeFps(capped);
+            Assert.True(Math.Abs(outFps - cap) <= 1, $"fps cap: expected ~{cap}, got {outFps} (src {srcFps})");
+        }
+
         // Drop audio -> no audio track.
         string noAudio = await Run("noaudio", new LibavExportOptions { DropAudio = true });
         Assert.False(await player.ProbeHasAudioAsync(noAudio), "drop-audio output still has audio");

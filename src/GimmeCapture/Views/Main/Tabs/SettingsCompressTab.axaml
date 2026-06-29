@@ -79,6 +79,21 @@
                     </ComboBox>
                 </DockPanel>
 
+                <!-- Frame-rate cap (drops frames to the chosen fps; Original keeps the source rate) -->
+                <DockPanel>
+                    <TextBlock Text="{Binding [CompressFpsLabel], Source={x:Static services:LocalizationService.Instance}}"
+                               VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <ComboBox ItemsSource="{Binding CompressFpsOptions}"
+                              SelectedItem="{Binding SelectedCompressFps}"
+                              HorizontalAlignment="Stretch">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate x:DataType="vm:MainWindowViewModel+CompressFpsOption">
+                                <TextBlock Text="{Binding Label}"/>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                </DockPanel>
+
                 <!-- Encoder preset (slower = smaller for the same quality) -->
                 <DockPanel>
                     <TextBlock Text="{Binding [CompressPresetLabel], Source={x:Static services:LocalizationService.Instance}}"

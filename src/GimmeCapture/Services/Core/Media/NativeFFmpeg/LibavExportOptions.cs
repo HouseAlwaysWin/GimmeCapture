@@ -24,6 +24,12 @@ internal sealed class LibavExportOptions
     /// <summary>Downscale so the output height ≤ this many pixels (keeping aspect, even dims). 0 = keep source.</summary>
     public int MaxHeight { get; init; }
 
+    /// <summary>
+    /// Cap the output frame rate to this many fps by dropping source frames (the output is CFR at the cap).
+    /// 0 or ≥ source fps = keep the source rate.
+    /// </summary>
+    public int MaxFps { get; init; }
+
     /// <summary>Drop the audio track entirely (smallest output, e.g. silent screen clips).</summary>
     public bool DropAudio { get; init; }
 }

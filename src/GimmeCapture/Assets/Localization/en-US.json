@@ -49,6 +49,8 @@
   "CompressTargetNeedsDuration": "Cannot read the video length, so target-size mode is unavailable for this file.",
   "CompressResolutionLabel": "Resolution",
   "CompressResolutionOriginal": "Original",
+  "CompressFpsLabel": "Frame rate",
+  "CompressFpsOriginal": "Original",
   "CompressPresetLabel": "Encoder preset",
   "CompressCrfHint": "Lower CRF = better quality and a bigger file. 18–23 is visually high quality; 28+ is small.",
   "CompressDropAudio": "Remove audio track",

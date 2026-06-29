@@ -226,7 +226,13 @@ internal static class LibavClipExporter
             ThrowIfErr(ffmpeg.avcodec_parameters_to_context(decCtx, inStream->codecpar), "clip_par_to_ctx");
             ThrowIfErr(ffmpeg.avcodec_open2(decCtx, dec, null), "clip_open_decoder");
 
-            int fps = ResolveFps(inStream);
+            int srcFps = ResolveFps(inStream);
+            // FPS cap: when a cap below the source rate is requested, the encoder runs at the cap and we
+            // decimate source frames into it (output stays CFR). 0 or ≥ source fps keeps the source rate.
+            int fps = (opt.MaxFps > 0 && opt.MaxFps < srcFps) ? opt.MaxFps : srcFps;
+            // Per-source-frame cursor scaling that realises the decimation: emit ≈ fps/srcFps output frames
+            // per source frame. 1.0 when not capping, so the speed-only path is byte-for-byte unchanged.
+            double fpsCursorScale = (double)srcFps / fps;
 
             // H.265 when requested and available; otherwise fall back to H.264 (libx265 may be absent
             // from the bundled build). Existing callers default to H.264 so their output is unchanged.
@@ -418,7 +424,7 @@ internal static class LibavClipExporter
                     runDone = DrainDecodedFrames(
                         decCtx, encCtx, sws, swsToBgra, decFrame, encFrame, bgraFrame, frameComposite,
                         outFmt, outStream, outPkt, inStream->time_base, range, crop, ref frameIndex, ref frameAccum,
-                        progress, totalSrcDuration, elapsedBeforeRange, ref lastPercent);
+                        fpsCursorScale, progress, totalSrcDuration, elapsedBeforeRange, ref lastPercent);
                 }
 
                 // Range reached the file end: flush the decoder so its buffered tail frames aren't lost.
@@ -428,7 +434,7 @@ internal static class LibavClipExporter
                     DrainDecodedFrames(
                         decCtx, encCtx, sws, swsToBgra, decFrame, encFrame, bgraFrame, frameComposite,
                         outFmt, outStream, outPkt, inStream->time_base, range, crop, ref frameIndex, ref frameAccum,
-                        progress, totalSrcDuration, elapsedBeforeRange, ref lastPercent);
+                        fpsCursorScale, progress, totalSrcDuration, elapsedBeforeRange, ref lastPercent);
                 }
 
                 // Reset the decoder before the next range's seek (and after the final flush above).
@@ -485,6 +491,7 @@ internal static class LibavClipExporter
         VideoEditCrop? crop,
         ref long frameIndex,
         ref double frameAccum,
+        double fpsCursorScale,
         IProgress<double>? progress,
         double totalSrcDuration,
         double elapsedBeforeRange,
@@ -567,10 +574,10 @@ internal static class LibavClipExporter
                 }
             }
 
-            // Per-segment speed: this source frame spans 1/speed output frames on a CFR (source-fps)
-            // timeline. We emit drop/dup counts so faster (>1×) drops frames and slower (<1×) duplicates;
-            // at 1× it is exactly one frame, identical to before.
-            int emitCount = AdvanceFrameCursor(ref frameAccum, range.EffectiveSpeed);
+            // Per-segment speed AND fps cap fold into one cursor advance: each source frame spans
+            // 1/(speed × fpsScale) output frames. fpsScale = srcFps/outFps decimates to the capped rate
+            // (≥1 drops frames); both are 1.0 in the default path, so behaviour there is unchanged.
+            int emitCount = AdvanceFrameCursor(ref frameAccum, range.EffectiveSpeed * fpsCursorScale);
 
             for (int e = 0; e < emitCount; e++)
             {

@@ -126,6 +126,31 @@ public partial class MainWindowViewModel
         set => this.RaiseAndSetIfChanged(ref _selectedCompressResolution, value);
     }
 
+    // Optional frame-rate cap. Fps 0 = keep the source rate.
+    public sealed class CompressFpsOption
+    {
+        public int Fps { get; init; }
+        public string Label => Fps <= 0
+            ? LocalizationService.Instance["CompressFpsOriginal"]
+            : $"{Fps} fps";
+    }
+
+    public CompressFpsOption[] CompressFpsOptions { get; } =
+    [
+        new CompressFpsOption { Fps = 0 },
+        new CompressFpsOption { Fps = 60 },
+        new CompressFpsOption { Fps = 30 },
+        new CompressFpsOption { Fps = 24 },
+        new CompressFpsOption { Fps = 15 }
+    ];
+
+    private CompressFpsOption? _selectedCompressFps;
+    public CompressFpsOption? SelectedCompressFps
+    {
+        get => _selectedCompressFps;
+        set => this.RaiseAndSetIfChanged(ref _selectedCompressFps, value);
+    }
+
     // Encoder speed/efficiency preset (slower = smaller for the same quality).
     public string[] CompressPresetOptions { get; } = ["ultrafast", "veryfast", "fast", "medium", "slow"];
 
@@ -193,6 +218,7 @@ public partial class MainWindowViewModel
     private void InitializeVideoCompress()
     {
         _selectedCompressResolution = CompressResolutionOptions[0]; // Original
+        _selectedCompressFps = CompressFpsOptions[0]; // source rate
 
         VideoCodec initialCodec = RecordingSettings.VideoCodec;
         _selectedCompressCodecOption = Array.Find(CompressCodecOptions, o => o.Value == initialCodec)
@@ -388,6 +414,7 @@ public partial class MainWindowViewModel
         VideoCodec codec = SelectedCompressCodecOption?.Value ?? VideoCodec.H264;
         int crf = Math.Clamp(CompressCrf, 1, 51);
         int maxHeight = SelectedCompressResolution?.MaxHeight ?? 0;
+        int maxFps = SelectedCompressFps?.Fps ?? 0;
         string preset = SelectedCompressPreset;
         bool dropAudio = CompressDropAudio;
         string input = CompressInputPath;
@@ -454,6 +481,7 @@ public partial class MainWindowViewModel
                     CrfOverride = crf,
                     Preset = preset,
                     MaxHeight = maxHeight,
+                    MaxFps = maxFps,
                     DropAudio = dropAudio
                 };
                 // A corrective second pass restarts progress from 0 (status text signals the refine phase).
