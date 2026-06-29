@@ -42,6 +42,7 @@ public partial class MainWindowViewModel
         {
             Path = path;
             FileName = System.IO.Path.GetFileName(path);
+            (FileSizeText, DateText) = ReadFileMeta(path);
             _outputName = System.IO.Path.GetFileNameWithoutExtension(path); // editable; may include \subfolder\
             StartCommand = ReactiveCommand.Create(() => StartRequested?.Invoke(this), this.WhenAnyValue(x => x.CanStart));
             PauseCommand = ReactiveCommand.Create(Pause, this.WhenAnyValue(x => x.ShowPause));
@@ -55,6 +56,38 @@ public partial class MainWindowViewModel
 
         public string Path { get; }
         public string FileName { get; }
+
+        /// <summary>Formatted source file size (e.g. "12.3 MB"), shown in the picker row.</summary>
+        public string FileSizeText { get; }
+
+        /// <summary>Formatted source file last-write date, shown in the picker row.</summary>
+        public string DateText { get; }
+
+        private Bitmap? _thumbnail;
+        /// <summary>First-frame thumbnail for the picker row; decoded lazily after the file is queued.</summary>
+        public Bitmap? Thumbnail
+        {
+            get => _thumbnail;
+            internal set => this.RaiseAndSetIfChanged(ref _thumbnail, value);
+        }
+
+        private static (string Size, string Date) ReadFileMeta(string path)
+        {
+            try
+            {
+                var fi = new System.IO.FileInfo(path);
+                if (fi.Exists)
+                {
+                    return (FormatFileSize(fi.Length), fi.LastWriteTime.ToString("yyyy-MM-dd HH:mm"));
+                }
+            }
+            catch
+            {
+                // best effort — a missing/locked file just shows no size/date
+            }
+
+            return (string.Empty, string.Empty);
+        }
 
         // User-editable output name. May carry a relative subfolder path (e.g. "\sub\clip"); the date stamp
         // and extension are added when the path is composed. Blank falls back to the source name.
@@ -519,6 +552,64 @@ public partial class MainWindowViewModel
         }
 
         item.EstimatedText = BuildItemEstimate(item);
+
+        // First-frame thumbnail for the picker row (small; reuses the preview decode at a row-sized scale).
+        if (item.Thumbnail == null && item.ProbedWidth > 0 && item.ProbedHeight > 0)
+        {
+            double scale = Math.Min(1.0, 96.0 / Math.Max(item.ProbedWidth, item.ProbedHeight));
+            int tw = Math.Max(2, (int)(item.ProbedWidth * scale)); tw -= tw & 1;
+            int th = Math.Max(2, (int)(item.ProbedHeight * scale)); th -= th & 1;
+            Bitmap? thumb = await DecodeFirstFrameAsync(item.Path, tw, th);
+            if (thumb != null)
+            {
+                item.Thumbnail = thumb;
+            }
+        }
+    }
+
+    // Decodes a video's first frame into an Avalonia Bitmap at the given (even) dimensions, cancelling right after
+    // the first frame so it doesn't decode the whole clip. Returns null if there is no frame or the file is unreadable.
+    private static async Task<Bitmap?> DecodeFirstFrameAsync(string path, int width, int height)
+    {
+        using var cts = new CancellationTokenSource();
+        byte[]? frame = null;
+        try
+        {
+            using var player = new LibavVideoFramePlayer();
+            await player.PlayAsync(path, width, height, 0, 1.0, false, (data, _) =>
+            {
+                if (frame == null)
+                {
+                    frame = (byte[])data.Clone();
+                    cts.Cancel();
+                }
+            }, cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            // expected — we cancel right after the first frame
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error("Compress.ThumbDecode", ex);
+        }
+
+        if (frame == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            using var sk = new SKBitmap(new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Premul));
+            Marshal.Copy(frame, 0, sk.GetPixels(), Math.Min(frame.Length, width * height * 4));
+            return FloatingBitmapConversionHelper.TryCreateDetachedBitmapFromSkBitmap(sk, out Bitmap? bmp, out _) ? bmp : null;
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error("Compress.ThumbBuild", ex);
+            return null;
+        }
     }
 
     private static IEnumerable<string> ExpandToVideoFiles(string path)
