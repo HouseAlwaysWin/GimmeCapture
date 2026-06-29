@@ -4,11 +4,15 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Reactive;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia.Media.Imaging;
 using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Core.Media.NativeFFmpeg;
+using GimmeCapture.ViewModels.Floating;
 using ReactiveUI;
+using SkiaSharp;
 
 namespace GimmeCapture.ViewModels.Main;
 
@@ -43,6 +47,9 @@ public partial class MainWindowViewModel
             PauseCommand = ReactiveCommand.Create(Pause, this.WhenAnyValue(x => x.ShowPause));
             ResumeCommand = ReactiveCommand.Create(Resume, this.WhenAnyValue(x => x.ShowResume));
             CancelCommand = ReactiveCommand.Create(Cancel, this.WhenAnyValue(x => x.CanCancel));
+            EstimateCommand = ReactiveCommand.Create(
+                () => EstimateRequested?.Invoke(this),
+                this.WhenAnyValue(x => x.IsEstimating, x => x.Status, (est, st) => !est && st != CompressQueueStatus.Running));
             UpdateStatusText();
         }
 
@@ -58,8 +65,17 @@ public partial class MainWindowViewModel
             set => this.RaiseAndSetIfChanged(ref _outputName, value);
         }
 
-        // Set by the view model so the per-item Start button can ask it to dispatch a worker.
+        // Set by the view model so the per-item Start / Estimate buttons can call back into it.
         internal Action<CompressQueueItem>? StartRequested;
+        internal Action<CompressQueueItem>? EstimateRequested;
+
+        // True while a sample-encode accurate estimate is running for this item.
+        private bool _isEstimating;
+        public bool IsEstimating
+        {
+            get => _isEstimating;
+            internal set => this.RaiseAndSetIfChanged(ref _isEstimating, value);
+        }
 
         // Per-item cancellation (created at start, linked to the batch token) + pause gate (created at encode).
         internal CancellationTokenSource? Cts;
@@ -109,6 +125,14 @@ public partial class MainWindowViewModel
             internal set => this.RaiseAndSetIfChanged(ref _estimatedText, value);
         }
 
+        // Per-file output rotation, baked into the pixels at encode time (0/90/180/270 clockwise).
+        private int _rotation;
+        public int Rotation
+        {
+            get => _rotation;
+            set => this.RaiseAndSetIfChanged(ref _rotation, value);
+        }
+
         private bool _isPaused;
         public bool IsPaused
         {
@@ -134,6 +158,7 @@ public partial class MainWindowViewModel
         public ReactiveCommand<Unit, Unit> PauseCommand { get; }
         public ReactiveCommand<Unit, Unit> ResumeCommand { get; }
         public ReactiveCommand<Unit, Unit> CancelCommand { get; }
+        public ReactiveCommand<Unit, Unit> EstimateCommand { get; }
 
         // Prepares the item just before a worker is launched (caller has ensured a batch context exists).
         internal void PrepareForStart(CancellationToken batchToken)
@@ -229,11 +254,31 @@ public partial class MainWindowViewModel
     private SemaphoreSlim? _batchSemaphore;
     private int _inFlight;
 
+    // The queue item shown in the "Edit" accordion (first-frame preview + rotation).
+    private CompressQueueItem? _selectedQueueItem;
+    public CompressQueueItem? SelectedQueueItem
+    {
+        get => _selectedQueueItem;
+        set => this.RaiseAndSetIfChanged(ref _selectedQueueItem, value);
+    }
+
+    // The selected file's first frame, rotated to the chosen angle, for the preview Image.
+    private Bitmap? _previewBitmap;
+    public Bitmap? PreviewBitmap
+    {
+        get => _previewBitmap;
+        private set => this.RaiseAndSetIfChanged(ref _previewBitmap, value);
+    }
+
+    private Bitmap? _rawPreview;            // the un-rotated decoded first frame
+    private CancellationTokenSource? _previewCts;
+
     public ReactiveCommand<Unit, Unit> AddCompressFilesCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> AddCompressFolderCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> ClearCompressQueueCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> CompressQueueCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> CancelAllCompressQueueCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> EstimateAllCompressQueueCommand { get; private set; } = null!;
 
     private void InitializeCompressBatch()
     {
@@ -248,12 +293,142 @@ public partial class MainWindowViewModel
         CompressQueueCommand = ReactiveCommand.Create(StartAllCompress, canStartAll);
         CancelAllCompressQueueCommand = ReactiveCommand.Create(
             CancelAllCompressQueue, this.WhenAnyValue(x => x.IsBatchRunning));
+        // Estimate-all: sample-encode every file; not while a real batch is running (avoids CPU contention).
+        EstimateAllCompressQueueCommand = ReactiveCommand.CreateFromTask(
+            EstimateAllAsync,
+            this.WhenAnyValue(x => x.CompressQueueCount, x => x.IsBatchRunning, (count, busy) => count > 0 && !busy));
+
+        // Load the first-frame preview when the selected file changes (and refresh the editable angle).
+        this.WhenAnyValue(x => x.SelectedQueueItem).Subscribe(item =>
+        {
+            this.RaisePropertyChanged(nameof(SelectedRotation));
+            _ = LoadPreviewAsync(item);
+        });
 
         AddCompressFilesCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.QueueAddFiles", ex));
         AddCompressFolderCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.QueueAddFolder", ex));
         ClearCompressQueueCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.QueueClear", ex));
         CompressQueueCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.QueueRun", ex));
         CancelAllCompressQueueCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.QueueCancelAll", ex));
+        EstimateAllCompressQueueCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.QueueEstimateAll", ex));
+    }
+
+    // The selected file's rotation, editable as a number (snaps to 0/90/180/270). Nullable so a transient
+    // empty field can't crash the binding; the NumericUpDownFix behavior restores a value on empty.
+    public decimal? SelectedRotation
+    {
+        get => SelectedQueueItem?.Rotation ?? 0;
+        set
+        {
+            if (value.HasValue)
+            {
+                ApplyRotation((int)value.Value);
+            }
+        }
+    }
+
+    // Snaps any angle to the nearest 90° (0/90/180/270), applies it to the selected file, and re-rotates the preview.
+    private void ApplyRotation(int degrees)
+    {
+        CompressQueueItem? item = SelectedQueueItem;
+        if (item == null)
+        {
+            return;
+        }
+
+        int snapped = ((int)Math.Round(degrees / 90.0, MidpointRounding.AwayFromZero) * 90 % 360 + 360) % 360;
+        item.Rotation = snapped;
+        PreviewBitmap = FloatingBitmapConversionHelper.TransformBitmap(_rawPreview, snapped, false, false);
+        this.RaisePropertyChanged(nameof(SelectedRotation));
+    }
+
+    // Decodes the selected file's first frame into _rawPreview and shows it rotated to the file's angle.
+    private async Task LoadPreviewAsync(CompressQueueItem? item)
+    {
+        _previewCts?.Cancel();
+        _previewCts?.Dispose();
+        _previewCts = null;
+        _rawPreview = null;
+        PreviewBitmap = null;
+
+        if (item == null)
+        {
+            return;
+        }
+
+        var cts = new CancellationTokenSource();
+        _previewCts = cts;
+
+        // Make sure we know the source dims (probe now if the add-time probe hasn't finished yet).
+        if (item.ProbedWidth <= 0 || item.ProbedHeight <= 0)
+        {
+            try
+            {
+                using var sizeProbe = new LibavVideoFramePlayer();
+                var size = await sizeProbe.ProbeVideoSizeAsync(item.Path, cts.Token);
+                if (size is { } s)
+                {
+                    item.ProbedWidth = s.Width;
+                    item.ProbedHeight = s.Height;
+                }
+            }
+            catch (Exception ex)
+            {
+                AppLog.Error("Compress.PreviewProbe", ex);
+            }
+        }
+
+        if (cts != _previewCts || item.ProbedWidth <= 0 || item.ProbedHeight <= 0)
+        {
+            return; // a newer selection superseded us, or the file is unreadable
+        }
+
+        // Thumbnail dims: fit the source into ~360px, even (encoder/sws friendly).
+        double scale = Math.Min(1.0, 360.0 / Math.Max(item.ProbedWidth, item.ProbedHeight));
+        int tw = Math.Max(2, (int)(item.ProbedWidth * scale)); tw -= tw & 1;
+        int th = Math.Max(2, (int)(item.ProbedHeight * scale)); th -= th & 1;
+
+        byte[]? frame = null;
+        try
+        {
+            using var player = new LibavVideoFramePlayer();
+            await player.PlayAsync(item.Path, tw, th, 0, 1.0, false, (data, _) =>
+            {
+                if (frame == null)
+                {
+                    frame = (byte[])data.Clone(); // grab just the first frame, then stop
+                    cts.Cancel();
+                }
+            }, cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            // expected — we cancel right after the first frame
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error("Compress.PreviewDecode", ex);
+        }
+
+        if (frame == null || cts != _previewCts) // null = no frame, or a newer selection superseded us
+        {
+            return;
+        }
+
+        try
+        {
+            using var sk = new SKBitmap(new SKImageInfo(tw, th, SKColorType.Bgra8888, SKAlphaType.Premul));
+            Marshal.Copy(frame, 0, sk.GetPixels(), Math.Min(frame.Length, tw * th * 4));
+            if (FloatingBitmapConversionHelper.TryCreateDetachedBitmapFromSkBitmap(sk, out Bitmap? raw, out _))
+            {
+                _rawPreview = raw;
+                PreviewBitmap = FloatingBitmapConversionHelper.TransformBitmap(raw, item.Rotation, false, false);
+            }
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error("Compress.PreviewBuild", ex);
+        }
     }
 
     private async Task AddCompressFilesAsync()
@@ -303,7 +478,11 @@ public partial class MainWindowViewModel
             {
                 if (existing.Add(file))
                 {
-                    var item = new CompressQueueItem(file) { StartRequested = StartCompressItem };
+                    var item = new CompressQueueItem(file)
+                    {
+                        StartRequested = StartCompressItem,
+                        EstimateRequested = EstimateQueueItem
+                    };
                     CompressQueue.Add(item);
                     added.Add(item);
                 }
@@ -382,6 +561,50 @@ public partial class MainWindowViewModel
     }
 
     private void CancelAllCompressQueue() => _batchCts?.Cancel();
+
+    private void EstimateQueueItem(CompressQueueItem item) => _ = EstimateItemSampleAsync(item);
+
+    // Accurate per-item estimate: sample-encode a few seconds at the current settings and extrapolate.
+    private async Task EstimateItemSampleAsync(CompressQueueItem item)
+    {
+        if (item.IsEstimating || item.Status == CompressQueueStatus.Running || item.ProbedDuration <= 0)
+        {
+            return;
+        }
+
+        CompressSettingsSnapshot snap = BuildSettingsSnapshot();
+        string prefix = LocalizationService.Instance["CompressEstimateLabel"];
+
+        // Target-size mode is already exact (the requested size) — no sample encode needed.
+        if (snap.UseTargetSize)
+        {
+            item.EstimatedText = BuildItemEstimate(item);
+            return;
+        }
+
+        item.IsEstimating = true;
+        item.EstimatedText = $"{prefix}: {LocalizationService.Instance["CompressEstimating"]}";
+        try
+        {
+            long bytes = await EstimateBySampleAsync(item.Path, snap, item.ProbedDuration);
+            item.EstimatedText = bytes >= 0
+                ? $"{prefix}: ≈ {FormatFileSize(bytes)} ({LocalizationService.Instance["CompressEstimateMeasured"]})"
+                : BuildItemEstimate(item); // sample failed → fall back to the formula
+        }
+        finally
+        {
+            item.IsEstimating = false;
+        }
+    }
+
+    private async Task EstimateAllAsync()
+    {
+        // Sequential so many files don't spike the CPU with concurrent sample encodes.
+        foreach (CompressQueueItem item in CompressQueue.ToList())
+        {
+            await EstimateItemSampleAsync(item);
+        }
+    }
 
     // Dispatches one item: ensures the shared batch context, snapshots settings on the UI thread, and launches
     // a worker (fire-and-forget; tracked via _inFlight). The concurrency cap is enforced by _batchSemaphore.
@@ -468,7 +691,7 @@ public partial class MainWindowViewModel
                 }
 
                 bool ok = await EncodeOneFileAsync(
-                    item.Path, outputPath, snap, targetKbps, duration, progress, token, item.Gate);
+                    item.Path, outputPath, snap, targetKbps, duration, progress, token, item.Gate, item.Rotation);
                 item.Status = ok ? CompressQueueStatus.Done : CompressQueueStatus.Failed;
             }
             catch (OperationCanceledException)

@@ -37,6 +37,12 @@ internal sealed class LibavExportOptions
     /// </summary>
     public int MaxFps { get; init; }
 
+    /// <summary>
+    /// Output rotation baked into the pixels: 0 / 90 / 180 / 270 degrees clockwise. 90/270 transpose the
+    /// output dimensions. 0 = no rotation (the original behaviour), so existing callers are unaffected.
+    /// </summary>
+    public int RotationDegrees { get; init; }
+
     /// <summary>Drop the audio track entirely (smallest output, e.g. silent screen clips).</summary>
     public bool DropAudio { get; init; }
 

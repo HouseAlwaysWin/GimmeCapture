@@ -90,6 +90,16 @@ public class CompressIntegrationTests
             Assert.True(Math.Abs(outFps - cap) <= 1, $"fps cap: expected ~{cap}, got {outFps} (src {srcFps})");
         }
 
+        // Rotation: 90° transposes the output dimensions; 180° keeps them.
+        var rot90 = await player.ProbeVideoSizeAsync(await Run("rot90", new LibavExportOptions { RotationDegrees = 90 }));
+        Assert.NotNull(rot90);
+        Assert.Equal(srcSize!.Value.Width, rot90!.Value.Height);
+        Assert.Equal(srcSize.Value.Height, rot90.Value.Width);
+        var rot180 = await player.ProbeVideoSizeAsync(await Run("rot180", new LibavExportOptions { RotationDegrees = 180 }));
+        Assert.NotNull(rot180);
+        Assert.Equal(srcSize.Value.Width, rot180!.Value.Width);
+        Assert.Equal(srcSize.Value.Height, rot180.Value.Height);
+
         // Drop audio -> no audio track.
         string noAudio = await Run("noaudio", new LibavExportOptions { DropAudio = true });
         Assert.False(await player.ProbeHasAudioAsync(noAudio), "drop-audio output still has audio");
