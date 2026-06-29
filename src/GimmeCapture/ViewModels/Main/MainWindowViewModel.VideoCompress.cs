@@ -49,6 +49,20 @@ public partial class MainWindowViewModel
         set => this.RaiseAndSetIfChanged(ref _compressInputInfo, value);
     }
 
+    // Probed source metadata (set when a file is picked) used by the live size estimate.
+    private int _sourceWidth;
+    private int _sourceHeight;
+    private int _sourceFps;
+    private double _sourceDurationSeconds;
+
+    // Live "estimated output size" text, recomputed as settings change. Empty when no source is loaded.
+    private string _compressEstimateText = string.Empty;
+    public string CompressEstimateText
+    {
+        get => _compressEstimateText;
+        private set => this.RaiseAndSetIfChanged(ref _compressEstimateText, value);
+    }
+
     private bool _isCompressing;
     public bool IsCompressing
     {
@@ -304,6 +318,19 @@ public partial class MainWindowViewModel
             ResumeCompress,
             this.WhenAnyValue(x => x.IsCompressing, x => x.IsPaused, (busy, paused) => busy && paused));
 
+        // Recompute the live size estimate whenever a relevant knob changes (source change calls it directly).
+        this.WhenAnyValue(
+                x => x.SelectedCompressCodecOption,
+                x => x.SelectedCompressResolution,
+                x => x.SelectedCompressFps,
+                x => x.CompressCrf,
+                x => x.CompressUseTargetSize,
+                x => x.CompressTargetSizeMB,
+                x => x.CompressDropAudio,
+                x => x.SelectedCompressAudioBitrate,
+                (a, b, c, d, e, f, g, h) => Unit.Default)
+            .Subscribe(_ => UpdateEstimate());
+
         // Keep a custom output path's extension in sync if the user later changes the output format.
         this.WhenAnyValue(x => x.SelectedCompressFormat).Subscribe(fmt =>
         {
@@ -397,31 +424,109 @@ public partial class MainWindowViewModel
 
         CompressInputPath = path;
         CompressOutputPath = string.Empty; // a path tied to the previous source is stale; revert to auto
-        CompressInputInfo = await BuildInputInfoAsync(path);
+        await ProbeSourceAsync(path);
+        CompressInputInfo = BuildInputInfo(path);
         CompressStatusText = LocalizationService.Instance["CompressStatusReady"];
+        UpdateEstimate();
     }
 
-    private static async Task<string> BuildInputInfoAsync(string path)
+    // Probes the source's resolution / fps / duration into the _source* fields for the size estimate.
+    private async Task ProbeSourceAsync(string path)
     {
-        string name = Path.GetFileName(path);
-        string size = FormatFileSize(new FileInfo(path).Length);
-
-        string duration = "--:--";
+        _sourceWidth = 0;
+        _sourceHeight = 0;
+        _sourceFps = 0;
+        _sourceDurationSeconds = 0;
         try
         {
             using var probe = new LibavVideoFramePlayer();
-            double? seconds = await probe.ProbeDurationSecondsAsync(path);
-            if (seconds is > 0)
+            _sourceDurationSeconds = await probe.ProbeDurationSecondsAsync(path) ?? 0;
+            var size = await probe.ProbeVideoSizeAsync(path);
+            if (size is { } s)
             {
-                duration = TimeSpan.FromSeconds(seconds.Value).ToString(@"hh\:mm\:ss");
+                _sourceWidth = s.Width;
+                _sourceHeight = s.Height;
             }
         }
         catch (Exception ex)
         {
-            AppLog.Error("Compress.Probe", ex);
+            AppLog.Error("Compress.ProbeSource", ex);
         }
 
+        try
+        {
+            _sourceFps = await Task.Run(() => LibavClipExporter.ProbeFps(path));
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error("Compress.ProbeFps", ex);
+        }
+    }
+
+    private string BuildInputInfo(string path)
+    {
+        string name = Path.GetFileName(path);
+        string size = FormatFileSize(new FileInfo(path).Length);
+        string duration = _sourceDurationSeconds > 0
+            ? TimeSpan.FromSeconds(_sourceDurationSeconds).ToString(@"hh\:mm\:ss")
+            : "--:--";
         return $"{name}  ·  {duration}  ·  {size}";
+    }
+
+    // Recomputes the live "estimated output size" text from the current settings + probed source metadata.
+    private void UpdateEstimate()
+    {
+        if (_sourceDurationSeconds <= 0 || _sourceWidth <= 0 || _sourceHeight <= 0)
+        {
+            CompressEstimateText = string.Empty;
+            return;
+        }
+
+        string prefix = LocalizationService.Instance["CompressEstimateLabel"];
+
+        if (CompressUseTargetSize)
+        {
+            // Target-size mode encodes to (approximately) the requested size by design.
+            CompressEstimateText = $"{prefix}: ≈ {FormatFileSize((long)((double)CompressTargetSizeMB * 1024 * 1024))}";
+            return;
+        }
+
+        VideoCodec codec = SelectedCompressCodecOption?.Value ?? VideoCodec.H264;
+        int maxHeight = SelectedCompressResolution?.MaxHeight ?? 0;
+        int maxFps = SelectedCompressFps?.Fps ?? 0;
+        int crf = Math.Clamp(CompressCrf, 1, 51);
+        int audioKbps = CompressDropAudio
+            ? 0
+            : (SelectedCompressAudioBitrate?.Kbps > 0 ? SelectedCompressAudioBitrate.Kbps : 128);
+
+        long est = EstimateOutputSizeBytes(
+            _sourceWidth, _sourceHeight, _sourceFps, _sourceDurationSeconds, maxHeight, maxFps, codec, crf, audioKbps);
+        CompressEstimateText = $"{prefix}: ≈ {FormatFileSize(est)}";
+    }
+
+    /// <summary>
+    /// Rough output-size estimate (bytes) for CRF mode from source geometry/duration and the chosen knobs.
+    /// Uses a bits-per-pixel model (≈ halves every +6 CRF; H.265 ≈ 0.6× H.264) so it is approximate and
+    /// content-agnostic — directionally correct for comparing settings, not a guarantee. Pure/testable.
+    /// </summary>
+    internal static long EstimateOutputSizeBytes(
+        int srcWidth, int srcHeight, int srcFps, double durationSeconds,
+        int maxHeight, int maxFps, VideoCodec codec, int crf, int audioKbps)
+    {
+        if (durationSeconds <= 0 || srcWidth <= 0 || srcHeight <= 0)
+        {
+            return 0;
+        }
+
+        (int w, int h) = LibavClipExporter.ScaleToMaxHeight(srcWidth, srcHeight, maxHeight);
+        int baseFps = srcFps > 0 ? srcFps : 30;
+        int fps = (maxFps > 0 && maxFps < baseFps) ? maxFps : baseFps;
+
+        double bppRef = codec == VideoCodec.H265 ? 0.050 : 0.085; // bits/pixel at CRF 23
+        double bpp = bppRef * Math.Pow(2.0, -(crf - 23) / 6.0);
+        double videoBytes = (double)w * h * fps * bpp * durationSeconds / 8.0;
+        double audioBytes = audioKbps > 0 ? audioKbps * 1000.0 / 8.0 * durationSeconds : 0;
+        return (long)(videoBytes + audioBytes);
     }
 
     private async Task CompressAsync()

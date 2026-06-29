@@ -51,6 +51,7 @@
   "CompressResolutionOriginal": "原始",
   "CompressFpsLabel": "影格率上限",
   "CompressFpsOriginal": "原始",
+  "CompressEstimateLabel": "預估大小",
   "CompressPresetLabel": "編碼預設",
   "CompressCrfHint": "CRF 越低畫質越好、檔案越大。18–23 為視覺高畫質；28 以上較小。",
   "CompressDropAudio": "移除音軌",

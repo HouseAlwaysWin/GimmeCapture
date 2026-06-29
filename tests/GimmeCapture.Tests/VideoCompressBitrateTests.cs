@@ -1,3 +1,4 @@
+using GimmeCapture.Models;
 using GimmeCapture.ViewModels.Main;
 using Xunit;
 
@@ -5,6 +6,49 @@ namespace GimmeCapture.Tests;
 
 public class VideoCompressBitrateTests
 {
+    [Fact]
+    public void Estimate_HigherCrf_IsSmaller()
+    {
+        long crf18 = MainWindowViewModel.EstimateOutputSizeBytes(1920, 1080, 30, 60, 0, 0, VideoCodec.H264, 18, 128);
+        long crf30 = MainWindowViewModel.EstimateOutputSizeBytes(1920, 1080, 30, 60, 0, 0, VideoCodec.H264, 30, 128);
+        Assert.True(crf30 < crf18, $"crf30 estimate ({crf30}) should be < crf18 ({crf18})");
+    }
+
+    [Fact]
+    public void Estimate_H265_SmallerThanH264_AtSameCrf()
+    {
+        long h264 = MainWindowViewModel.EstimateOutputSizeBytes(1920, 1080, 30, 60, 0, 0, VideoCodec.H264, 23, 128);
+        long h265 = MainWindowViewModel.EstimateOutputSizeBytes(1920, 1080, 30, 60, 0, 0, VideoCodec.H265, 23, 128);
+        Assert.True(h265 < h264);
+    }
+
+    [Fact]
+    public void Estimate_Downscale_AndFpsCap_Shrink()
+    {
+        long full = MainWindowViewModel.EstimateOutputSizeBytes(1920, 1080, 60, 60, 0, 0, VideoCodec.H264, 23, 128);
+        long scaled = MainWindowViewModel.EstimateOutputSizeBytes(1920, 1080, 60, 60, 720, 0, VideoCodec.H264, 23, 128);
+        long capped = MainWindowViewModel.EstimateOutputSizeBytes(1920, 1080, 60, 60, 0, 30, VideoCodec.H264, 23, 128);
+        Assert.True(scaled < full, "downscale should reduce the estimate");
+        Assert.True(capped < full, "fps cap should reduce the estimate");
+    }
+
+    [Fact]
+    public void Estimate_DropAudio_IsSmaller()
+    {
+        long withAudio = MainWindowViewModel.EstimateOutputSizeBytes(1280, 720, 30, 60, 0, 0, VideoCodec.H264, 23, 128);
+        long noAudio = MainWindowViewModel.EstimateOutputSizeBytes(1280, 720, 30, 60, 0, 0, VideoCodec.H264, 23, 0);
+        Assert.True(noAudio < withAudio);
+    }
+
+    [Theory]
+    [InlineData(0, 1080, 60)]
+    [InlineData(1920, 0, 60)]
+    [InlineData(1920, 1080, 0)]
+    public void Estimate_InvalidInputs_ReturnZero(int w, int h, double duration)
+    {
+        Assert.Equal(0, MainWindowViewModel.EstimateOutputSizeBytes(w, h, 30, duration, 0, 0, VideoCodec.H264, 23, 128));
+    }
+
     [Fact]
     public void TargetBitrate_HitsRequestedSize_WithinMargin()
     {

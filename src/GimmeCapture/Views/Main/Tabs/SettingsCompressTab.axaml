@@ -173,6 +173,11 @@
                 <CheckBox IsChecked="{Binding CompressDropAudio}"
                           Content="{Binding [CompressDropAudio], Source={x:Static services:LocalizationService.Instance}}"/>
 
+                <!-- Live estimated output size (approximate; blank until a source is loaded) -->
+                <TextBlock Text="{Binding CompressEstimateText}"
+                           Foreground="{DynamicResource ThemeAccentBrush}"
+                           FontSize="12"/>
+
                 <!-- Action -->
                 <StackPanel Orientation="Horizontal" Spacing="10">
                     <Button Content="{Binding [CompressStart], Source={x:Static services:LocalizationService.Instance}}"

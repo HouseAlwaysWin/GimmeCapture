@@ -51,6 +51,7 @@
   "CompressResolutionOriginal": "Original",
   "CompressFpsLabel": "Max frame rate",
   "CompressFpsOriginal": "Original",
+  "CompressEstimateLabel": "Estimated size",
   "CompressPresetLabel": "Encoder preset",
   "CompressCrfHint": "Lower CRF = better quality and a bigger file. 18–23 is visually high quality; 28+ is small.",
   "CompressDropAudio": "Remove audio track",
