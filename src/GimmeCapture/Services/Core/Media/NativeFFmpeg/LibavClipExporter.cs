@@ -140,7 +140,7 @@ internal static class LibavClipExporter
 
             string? audioTemp = null;
             bool hasAudio = !opt.DropAudio
-                && TryBuildAudio(inputPath, ranges, tempDir, quality, cancellationToken, out audioTemp);
+                && TryBuildAudio(inputPath, ranges, tempDir, quality, opt, cancellationToken, out audioTemp);
 
             if (hasAudio && audioTemp != null)
             {
@@ -656,6 +656,7 @@ internal static class LibavClipExporter
         IReadOnlyList<SourceRange> ranges,
         string tempDir,
         VideoQuality quality,
+        LibavExportOptions opt,
         CancellationToken ct,
         out string? audioTemp)
     {
@@ -713,7 +714,7 @@ internal static class LibavClipExporter
             }
 
             audioTemp = Path.Combine(tempDir, "audio.m4a");
-            LibavAacTranscoder.EncodeWavToM4a(wavTemp, audioTemp, quality);
+            LibavAacTranscoder.EncodeWavToM4a(wavTemp, audioTemp, quality, opt.AudioBitrateKbps, opt.AudioChannels);
             bool ok = File.Exists(audioTemp) && new FileInfo(audioTemp).Length > 0;
             AppLog.Information($"LibavClipExporter.TryBuildAudio built={ok} pcmBytes={pcmBytes.Length}");
             return ok;

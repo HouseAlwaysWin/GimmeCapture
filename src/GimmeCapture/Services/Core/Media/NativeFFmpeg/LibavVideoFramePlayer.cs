@@ -110,6 +110,33 @@ internal sealed class LibavVideoFramePlayer : IDisposable
         }, ct).ConfigureAwait(false);
     }
 
+    /// <summary>Channel count of the best audio stream, or 0 if there is none.</summary>
+    public async Task<int> ProbeAudioChannelsAsync(string videoPath, CancellationToken ct = default)
+    {
+        return await Task.Run(() =>
+        {
+            FFmpegRuntime.EnsureInitialized();
+            unsafe
+            {
+                AVFormatContext* fmt = null;
+                try
+                {
+                    ThrowIfErr(ffmpeg.avformat_open_input(&fmt, videoPath, null, null), "open_input");
+                    ThrowIfErr(ffmpeg.avformat_find_stream_info(fmt, null), "find_stream_info");
+                    int a = ffmpeg.av_find_best_stream(fmt, AVMediaType.AVMEDIA_TYPE_AUDIO, -1, -1, null, 0);
+                    return a < 0 ? 0 : fmt->streams[a]->codecpar->ch_layout.nb_channels;
+                }
+                finally
+                {
+                    if (fmt != null)
+                    {
+                        ffmpeg.avformat_close_input(&fmt);
+                    }
+                }
+            }
+        }, ct).ConfigureAwait(false);
+    }
+
     public async Task PlayAsync(
         string videoPath,
         int outputWidth,

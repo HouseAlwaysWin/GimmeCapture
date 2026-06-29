@@ -140,6 +140,35 @@
                                    HorizontalAlignment="Stretch"/>
                 </DockPanel>
 
+                <!-- Audio bitrate + channels (disabled when the audio track is dropped) -->
+                <DockPanel IsEnabled="{Binding CompressDropAudio, Converter={StaticResource BoolInvertConverter}}">
+                    <TextBlock Text="{Binding [CompressAudioBitrateLabel], Source={x:Static services:LocalizationService.Instance}}"
+                               VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <ComboBox ItemsSource="{Binding CompressAudioBitrateOptions}"
+                              SelectedItem="{Binding SelectedCompressAudioBitrate}"
+                              HorizontalAlignment="Stretch">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate x:DataType="vm:MainWindowViewModel+CompressAudioBitrateOption">
+                                <TextBlock Text="{Binding Label}"/>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                </DockPanel>
+
+                <DockPanel IsEnabled="{Binding CompressDropAudio, Converter={StaticResource BoolInvertConverter}}">
+                    <TextBlock Text="{Binding [CompressAudioChannelsLabel], Source={x:Static services:LocalizationService.Instance}}"
+                               VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <ComboBox ItemsSource="{Binding CompressAudioChannelsOptions}"
+                              SelectedItem="{Binding SelectedCompressAudioChannels}"
+                              HorizontalAlignment="Stretch">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate x:DataType="vm:MainWindowViewModel+CompressAudioChannelsOption">
+                                <TextBlock Text="{Binding Label}"/>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                </DockPanel>
+
                 <!-- Drop the audio track entirely (smallest output) -->
                 <CheckBox IsChecked="{Binding CompressDropAudio}"
                           Content="{Binding [CompressDropAudio], Source={x:Static services:LocalizationService.Instance}}"/>

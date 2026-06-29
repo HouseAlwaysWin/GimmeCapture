@@ -168,6 +168,53 @@ public partial class MainWindowViewModel
         set => this.RaiseAndSetIfChanged(ref _compressDropAudio, value);
     }
 
+    // Audio bitrate. Kbps 0 = Auto (derive from quality). Ignored when audio is dropped.
+    public sealed class CompressAudioBitrateOption
+    {
+        public int Kbps { get; init; }
+        public string Label => Kbps <= 0
+            ? LocalizationService.Instance["CompressAudioBitrateAuto"]
+            : $"{Kbps} kbps";
+    }
+
+    public CompressAudioBitrateOption[] CompressAudioBitrateOptions { get; } =
+    [
+        new CompressAudioBitrateOption { Kbps = 0 },
+        new CompressAudioBitrateOption { Kbps = 192 },
+        new CompressAudioBitrateOption { Kbps = 128 },
+        new CompressAudioBitrateOption { Kbps = 96 },
+        new CompressAudioBitrateOption { Kbps = 64 }
+    ];
+
+    private CompressAudioBitrateOption? _selectedCompressAudioBitrate;
+    public CompressAudioBitrateOption? SelectedCompressAudioBitrate
+    {
+        get => _selectedCompressAudioBitrate;
+        set => this.RaiseAndSetIfChanged(ref _selectedCompressAudioBitrate, value);
+    }
+
+    // Audio channels: stereo (2) or mono mixdown (1). Ignored when audio is dropped.
+    public sealed class CompressAudioChannelsOption
+    {
+        public int Channels { get; init; }
+        public string Label => Channels == 1
+            ? LocalizationService.Instance["CompressAudioMono"]
+            : LocalizationService.Instance["CompressAudioStereo"];
+    }
+
+    public CompressAudioChannelsOption[] CompressAudioChannelsOptions { get; } =
+    [
+        new CompressAudioChannelsOption { Channels = 2 },
+        new CompressAudioChannelsOption { Channels = 1 }
+    ];
+
+    private CompressAudioChannelsOption? _selectedCompressAudioChannels;
+    public CompressAudioChannelsOption? SelectedCompressAudioChannels
+    {
+        get => _selectedCompressAudioChannels;
+        set => this.RaiseAndSetIfChanged(ref _selectedCompressAudioChannels, value);
+    }
+
     // Codec picker (H.264 / H.265) reuses the same option type/localized strings as the Record tab.
     public RecordingSettingsViewModel.VideoCodecOption[] CompressCodecOptions { get; } =
     [
@@ -219,6 +266,8 @@ public partial class MainWindowViewModel
     {
         _selectedCompressResolution = CompressResolutionOptions[0]; // Original
         _selectedCompressFps = CompressFpsOptions[0]; // source rate
+        _selectedCompressAudioBitrate = CompressAudioBitrateOptions[0]; // Auto
+        _selectedCompressAudioChannels = CompressAudioChannelsOptions[0]; // Stereo
 
         VideoCodec initialCodec = RecordingSettings.VideoCodec;
         _selectedCompressCodecOption = Array.Find(CompressCodecOptions, o => o.Value == initialCodec)
@@ -417,6 +466,8 @@ public partial class MainWindowViewModel
         int maxFps = SelectedCompressFps?.Fps ?? 0;
         string preset = SelectedCompressPreset;
         bool dropAudio = CompressDropAudio;
+        int audioBitrateKbps = SelectedCompressAudioBitrate?.Kbps ?? 0;
+        int audioChannels = SelectedCompressAudioChannels?.Channels ?? 0;
         string input = CompressInputPath;
 
         double probedDuration = 0;
@@ -482,7 +533,9 @@ public partial class MainWindowViewModel
                     Preset = preset,
                     MaxHeight = maxHeight,
                     MaxFps = maxFps,
-                    DropAudio = dropAudio
+                    DropAudio = dropAudio,
+                    AudioBitrateKbps = audioBitrateKbps,
+                    AudioChannels = audioChannels
                 };
                 // A corrective second pass restarts progress from 0 (status text signals the refine phase).
                 if (attempt > 1)

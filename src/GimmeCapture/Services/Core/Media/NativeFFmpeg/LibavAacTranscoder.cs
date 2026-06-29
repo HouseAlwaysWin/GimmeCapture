@@ -11,19 +11,22 @@ namespace GimmeCapture.Services.Core.Media.NativeFFmpeg;
 /// </summary>
 internal static class LibavAacTranscoder
 {
-    public static unsafe void EncodeWavToM4a(string wavPath, string m4aPath, VideoQuality quality)
+    public static unsafe void EncodeWavToM4a(
+        string wavPath, string m4aPath, VideoQuality quality, int bitrateKbps = 0, int targetChannels = 0)
     {
         FFmpegRuntime.EnsureInitialized();
 
+        int channels = targetChannels == 1 ? 1 : 2; // 0/2 = stereo (original behaviour), 1 = mono mixdown
+
         using var wavReader = new WaveFileReader(wavPath);
-        ISampleProvider provider = CreateNormalizedSampleProvider(wavReader);
+        ISampleProvider provider = CreateNormalizedSampleProvider(wavReader, channels);
 
         AVFormatContext* outFmt = null;
         AVCodecContext* encCtx = null;
         AVPacket* outPkt = null;
         AVStream* outStream = null;
-        AVChannelLayout stereoLayout = default;
-        ffmpeg.av_channel_layout_default(&stereoLayout, 2);
+        AVChannelLayout outLayout = default;
+        ffmpeg.av_channel_layout_default(&outLayout, channels);
 
         try
         {
@@ -52,14 +55,16 @@ internal static class LibavAacTranscoder
 
             encCtx->sample_rate = provider.WaveFormat.SampleRate;
             encCtx->time_base = new AVRational { num = 1, den = encCtx->sample_rate };
-            ThrowIfErr(ffmpeg.av_channel_layout_copy(&encCtx->ch_layout, &stereoLayout), "aac_enc_layout");
+            ThrowIfErr(ffmpeg.av_channel_layout_copy(&encCtx->ch_layout, &outLayout), "aac_enc_layout");
             encCtx->sample_fmt = ChooseSampleFormat(enc);
-            encCtx->bit_rate = quality switch
-            {
-                VideoQuality.High => 192_000,
-                VideoQuality.Low => 96_000,
-                _ => 128_000,
-            };
+            encCtx->bit_rate = bitrateKbps > 0
+                ? (long)bitrateKbps * 1000
+                : quality switch
+                {
+                    VideoQuality.High => 192_000,
+                    VideoQuality.Low => 96_000,
+                    _ => 128_000,
+                };
 
             if ((outFmt->oformat->flags & ffmpeg.AVFMT_GLOBALHEADER) != 0)
             {
@@ -91,7 +96,7 @@ internal static class LibavAacTranscoder
                 throw new OutOfMemoryException("aac_alloc_pkt");
             }
 
-            int channels = provider.WaveFormat.Channels;
+            // provider was normalised to `channels` (mono or stereo) by CreateNormalizedSampleProvider.
             int frameSamples = encCtx->frame_size > 0 ? encCtx->frame_size : 1024;
             float[] sampleBuffer = new float[frameSamples * channels];
             long ptsSamples = 0;
@@ -115,7 +120,7 @@ internal static class LibavAacTranscoder
                     Array.Clear(sampleBuffer, floatsRead, sampleBuffer.Length - floatsRead);
                 }
 
-                AVFrame* frame = CreateAudioFrame(encCtx, &stereoLayout, frameSamples);
+                AVFrame* frame = CreateAudioFrame(encCtx, &outLayout, frameSamples);
                 try
                 {
                     WriteSamplesToFrame(frame, encCtx->sample_fmt, sampleBuffer, frameSamples, channels);
@@ -160,21 +165,23 @@ internal static class LibavAacTranscoder
                 ffmpeg.avformat_free_context(outFmt);
             }
 
-            ffmpeg.av_channel_layout_uninit(&stereoLayout);
+            ffmpeg.av_channel_layout_uninit(&outLayout);
         }
     }
 
-    private static ISampleProvider CreateNormalizedSampleProvider(WaveFileReader reader)
+    private static ISampleProvider CreateNormalizedSampleProvider(WaveFileReader reader, int targetChannels)
     {
         ISampleProvider provider = reader.ToSampleProvider();
 
-        provider = provider.WaveFormat.Channels switch
-        {
-            1 => provider.ToStereo(1f, 1f),
-            2 => provider,
-            > 2 => DownmixToStereo(provider),
-            _ => throw new InvalidOperationException($"Unsupported channel count: {provider.WaveFormat.Channels}")
-        };
+        provider = targetChannels == 1
+            ? ToMono(provider)
+            : provider.WaveFormat.Channels switch
+            {
+                1 => provider.ToStereo(1f, 1f),
+                2 => provider,
+                > 2 => DownmixToStereo(provider),
+                _ => throw new InvalidOperationException($"Unsupported channel count: {provider.WaveFormat.Channels}")
+            };
 
         if (provider.WaveFormat.SampleRate != 48_000)
         {
@@ -182,6 +189,22 @@ internal static class LibavAacTranscoder
         }
 
         return provider;
+    }
+
+    // Mixes any input down to a single channel (stereo→mono averages L/R; >2 is first folded to stereo).
+    private static ISampleProvider ToMono(ISampleProvider provider)
+    {
+        if (provider.WaveFormat.Channels == 1)
+        {
+            return provider;
+        }
+
+        if (provider.WaveFormat.Channels > 2)
+        {
+            provider = DownmixToStereo(provider);
+        }
+
+        return new StereoToMonoSampleProvider(provider) { LeftVolume = 0.5f, RightVolume = 0.5f };
     }
 
     private static ISampleProvider DownmixToStereo(ISampleProvider provider)

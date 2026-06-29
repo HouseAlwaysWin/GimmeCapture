@@ -32,4 +32,10 @@ internal sealed class LibavExportOptions
 
     /// <summary>Drop the audio track entirely (smallest output, e.g. silent screen clips).</summary>
     public bool DropAudio { get; init; }
+
+    /// <summary>AAC audio bitrate (kbps). 0 = derive from <see cref="VideoQuality"/> (the original behaviour).</summary>
+    public int AudioBitrateKbps { get; init; }
+
+    /// <summary>Output audio channels: 1 = mono mixdown, 2 = stereo. 0 = stereo (the original behaviour).</summary>
+    public int AudioChannels { get; init; }
 }

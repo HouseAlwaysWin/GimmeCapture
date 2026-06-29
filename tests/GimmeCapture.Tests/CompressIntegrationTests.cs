@@ -98,6 +98,16 @@ public class CompressIntegrationTests
         string mkv = await Run("with_audio", new LibavExportOptions(), ".mkv");
         Assert.True(await player.ProbeHasAudioAsync(mkv), "mkv output has no audio");
 
+        // Audio channels: default keeps stereo; mono mixdown collapses to a single channel.
+        Assert.Equal(2, await player.ProbeAudioChannelsAsync(baseline));
+        string mono = await Run("mono", new LibavExportOptions { AudioChannels = 1 });
+        Assert.Equal(1, await player.ProbeAudioChannelsAsync(mono));
+
+        // Audio bitrate: a lower AAC bitrate must shrink the file (video stream is identical to baseline).
+        long baselineLen = new FileInfo(baseline).Length;
+        long lowAudioLen = new FileInfo(await Run("audio64", new LibavExportOptions { AudioBitrateKbps = 64 })).Length;
+        Assert.True(lowAudioLen < baselineLen, $"audio64 ({lowAudioLen}) should be smaller than baseline ({baselineLen})");
+
         // Target ~5 MB: output should land at or under target (+20% tolerance for ABR + container overhead).
         int kbps = MainWindowViewModel.ComputeTargetVideoBitrateKbps(5, duration);
         long target = new FileInfo(await Run("target5mb", new LibavExportOptions { TargetVideoBitrateKbps = kbps })).Length;
