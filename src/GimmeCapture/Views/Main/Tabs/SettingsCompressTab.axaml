@@ -3,7 +3,7 @@
              xmlns:vm="using:GimmeCapture.ViewModels.Main"
              xmlns:services="using:GimmeCapture.Services.Core.Infrastructure"
              xmlns:models="using:GimmeCapture.Models"
-             xmlns:behaviors="using:GimmeCapture.Behaviors"
+             xmlns:conv="using:Avalonia.Data.Converters"
              x:Class="GimmeCapture.Views.Main.Tabs.SettingsCompressTab"
              x:DataType="vm:MainWindowViewModel">
     <ScrollViewer>
@@ -14,9 +14,155 @@
                        TextWrapping="Wrap"
                        FontSize="12"/>
 
-            <StackPanel behaviors:AccordionGroup.IsContainer="True">
+            <!-- Independent accordions (all expandable; not single-open). -->
+            <StackPanel>
 
-                <!-- ① Output settings -->
+                <!-- ① Batch queue: add files / a folder and compress them in parallel -->
+                <Expander Theme="{StaticResource GothicExpander}" IsExpanded="True"
+                          Header="{Binding [CompressQueueLabel], Source={x:Static services:LocalizationService.Instance}}">
+                    <StackPanel Spacing="6">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <Button Content="{Binding [CompressQueueAddFiles], Source={x:Static services:LocalizationService.Instance}}"
+                                    Theme="{StaticResource SmallGothicMetalButton}"
+                                    Command="{Binding AddCompressFilesCommand}"/>
+                            <Button Content="{Binding [CompressQueueAddFolder], Source={x:Static services:LocalizationService.Instance}}"
+                                    Theme="{StaticResource SmallGothicMetalButton}"
+                                    Command="{Binding AddCompressFolderCommand}"/>
+                            <Button Content="{Binding [CompressQueueClear], Source={x:Static services:LocalizationService.Instance}}"
+                                    Theme="{StaticResource SmallGothicMetalButton}"
+                                    Command="{Binding ClearCompressQueueCommand}"/>
+                            <Button Content="{Binding [CompressQueueStart], Source={x:Static services:LocalizationService.Instance}}"
+                                    Theme="{StaticResource GothicMetalButton}"
+                                    Command="{Binding CompressQueueCommand}"/>
+                            <Button Content="{Binding [CompressEstimateAll], Source={x:Static services:LocalizationService.Instance}}"
+                                    Theme="{StaticResource SmallGothicMetalButton}"
+                                    Command="{Binding EstimateAllCompressQueueCommand}"/>
+                            <Button Content="{Binding [CompressQueueCancelAll], Source={x:Static services:LocalizationService.Instance}}"
+                                    Theme="{StaticResource SmallGothicMetalButton}"
+                                    IsVisible="{Binding IsBatchRunning}"
+                                    Command="{Binding CancelAllCompressQueueCommand}"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock Text="{Binding [CompressQueueParallel], Source={x:Static services:LocalizationService.Instance}}"
+                                       VerticalAlignment="Center" FontSize="12"/>
+                            <ComboBox ItemsSource="{Binding CompressParallelOptions}"
+                                      SelectedItem="{Binding CompressParallelCount}"
+                                      IsEnabled="{Binding IsBatchRunning, Converter={StaticResource BoolInvertConverter}}"
+                                      MinWidth="70"/>
+                        </StackPanel>
+                        <Border BorderBrush="#3A3A3A" BorderThickness="1" CornerRadius="4"
+                                MinHeight="48" Padding="6">
+                            <ListBox ItemsSource="{Binding CompressQueue}"
+                                     SelectedItem="{Binding SelectedQueueItem}"
+                                     MaxHeight="240"
+                                     Background="Transparent"
+                                     BorderThickness="0">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:MainWindowViewModel+CompressQueueItem">
+                                        <Grid ColumnDefinitions="*,Auto" Margin="0,3">
+                                            <StackPanel Grid.Column="0" Spacing="2">
+                                                <TextBlock Text="{Binding FileName}"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           FontSize="12"/>
+                                                <TextBox Text="{Binding OutputName}"
+                                                         Watermark="{Binding [CompressOutputNameWatermark], Source={x:Static services:LocalizationService.Instance}}"
+                                                         IsEnabled="{Binding IsActive, Converter={StaticResource BoolInvertConverter}}"
+                                                         FontSize="11"
+                                                         Margin="0,1,0,1"/>
+                                                <TextBlock Text="{Binding EstimatedText}"
+                                                           Foreground="#9A9A9A"
+                                                           FontSize="10"/>
+                                                <ProgressBar Minimum="0" Maximum="1"
+                                                             Value="{Binding Progress}"
+                                                             IsVisible="{Binding IsActive}"
+                                                             Height="4"
+                                                             HorizontalAlignment="Stretch"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"
+                                                        VerticalAlignment="Center" Margin="10,0,0,0">
+                                                <TextBlock Text="{Binding StatusText}"
+                                                           Foreground="{DynamicResource ThemeAccentBrush}"
+                                                           FontSize="11"
+                                                           VerticalAlignment="Center"/>
+                                                <Button Content="{Binding [CompressEstimateItem], Source={x:Static services:LocalizationService.Instance}}"
+                                                        Theme="{StaticResource SmallGothicMetalButton}"
+                                                        FontSize="10"
+                                                        IsVisible="{Binding IsActive, Converter={StaticResource BoolInvertConverter}}"
+                                                        Command="{Binding EstimateCommand}"/>
+                                                <Button Content="{Binding [CompressQueueStartItem], Source={x:Static services:LocalizationService.Instance}}"
+                                                        Theme="{StaticResource SmallGothicMetalButton}"
+                                                        FontSize="10"
+                                                        IsVisible="{Binding CanStart}"
+                                                        Command="{Binding StartCommand}"/>
+                                                <Button Content="{Binding [CompressPause], Source={x:Static services:LocalizationService.Instance}}"
+                                                        Theme="{StaticResource SmallGothicMetalButton}"
+                                                        FontSize="10"
+                                                        IsVisible="{Binding ShowPause}"
+                                                        Command="{Binding PauseCommand}"/>
+                                                <Button Content="{Binding [CompressResume], Source={x:Static services:LocalizationService.Instance}}"
+                                                        Theme="{StaticResource SmallGothicMetalButton}"
+                                                        FontSize="10"
+                                                        IsVisible="{Binding ShowResume}"
+                                                        Command="{Binding ResumeCommand}"/>
+                                                <Button Content="{Binding [CompressCancel], Source={x:Static services:LocalizationService.Instance}}"
+                                                        Theme="{StaticResource SmallGothicMetalButton}"
+                                                        FontSize="10"
+                                                        IsVisible="{Binding CanCancel}"
+                                                        Command="{Binding CancelCommand}"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </Border>
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <TextBlock Text="{Binding CompressStatusText}"
+                                       VerticalAlignment="Center"
+                                       FontSize="12"/>
+                        </StackPanel>
+                        <TextBlock Text="{Binding [CompressQueueHint], Source={x:Static services:LocalizationService.Instance}}"
+                                   FontSize="11" Foreground="#9A9A9A" TextWrapping="Wrap"/>
+                    </StackPanel>
+                </Expander>
+
+                <!-- ② Edit: pick a queued file, preview its first frame, rotate it -->
+                <Expander Theme="{StaticResource GothicExpander}" IsExpanded="True"
+                          Header="{Binding [CompressEditGroup], Source={x:Static services:LocalizationService.Instance}}">
+                    <StackPanel Spacing="10">
+                        <ComboBox ItemsSource="{Binding CompressQueue}"
+                                  SelectedItem="{Binding SelectedQueueItem}"
+                                  HorizontalAlignment="Stretch"
+                                  PlaceholderText="{Binding [CompressSelectFile], Source={x:Static services:LocalizationService.Instance}}">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="vm:MainWindowViewModel+CompressQueueItem">
+                                    <TextBlock Text="{Binding FileName}"/>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+
+                        <TextBlock Text="{Binding [CompressEditSelectHint], Source={x:Static services:LocalizationService.Instance}}"
+                                   IsVisible="{Binding SelectedQueueItem, Converter={x:Static conv:ObjectConverters.IsNull}}"
+                                   Foreground="#9A9A9A" FontSize="12" TextWrapping="Wrap"/>
+
+                        <StackPanel Spacing="10"
+                                    IsVisible="{Binding SelectedQueueItem, Converter={x:Static conv:ObjectConverters.IsNotNull}}">
+                            <Border Background="#101010" CornerRadius="4" Padding="6" HorizontalAlignment="Center">
+                                <Image Source="{Binding PreviewBitmap}" Stretch="Uniform" MaxHeight="220" MaxWidth="380"/>
+                            </Border>
+                            <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Center">
+                                <TextBlock Text="{Binding [CompressRotationLabel], Source={x:Static services:LocalizationService.Instance}}"
+                                           VerticalAlignment="Center" FontSize="12"/>
+                                <NumericUpDown Value="{Binding SelectedRotation}"
+                                               Minimum="0" Maximum="270" Increment="90"
+                                               FormatString="0"
+                                               Width="120"
+                                               VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </StackPanel>
+                </Expander>
+
+                <!-- ③ Output settings -->
                 <Expander Theme="{StaticResource GothicExpander}" IsExpanded="True"
                           Header="{Binding [CompressSettingsGroup], Source={x:Static services:LocalizationService.Instance}}">
                     <StackPanel Spacing="12">
@@ -206,104 +352,6 @@
                         <CheckBox IsChecked="{Binding CompressAppendDate}"
                                   Content="{Binding [CompressAppendDate], Source={x:Static services:LocalizationService.Instance}}"/>
 
-                    </StackPanel>
-                </Expander>
-
-                <!-- ② Batch queue: add files / a folder and compress them in parallel -->
-                <Expander Theme="{StaticResource GothicExpander}" IsExpanded="True"
-                          Header="{Binding [CompressQueueLabel], Source={x:Static services:LocalizationService.Instance}}">
-                    <StackPanel Spacing="6">
-                        <StackPanel Orientation="Horizontal" Spacing="10">
-                            <Button Content="{Binding [CompressQueueAddFiles], Source={x:Static services:LocalizationService.Instance}}"
-                                    Theme="{StaticResource SmallGothicMetalButton}"
-                                    Command="{Binding AddCompressFilesCommand}"/>
-                            <Button Content="{Binding [CompressQueueAddFolder], Source={x:Static services:LocalizationService.Instance}}"
-                                    Theme="{StaticResource SmallGothicMetalButton}"
-                                    Command="{Binding AddCompressFolderCommand}"/>
-                            <Button Content="{Binding [CompressQueueClear], Source={x:Static services:LocalizationService.Instance}}"
-                                    Theme="{StaticResource SmallGothicMetalButton}"
-                                    Command="{Binding ClearCompressQueueCommand}"/>
-                            <Button Content="{Binding [CompressQueueStart], Source={x:Static services:LocalizationService.Instance}}"
-                                    Theme="{StaticResource GothicMetalButton}"
-                                    Command="{Binding CompressQueueCommand}"/>
-                            <Button Content="{Binding [CompressQueueCancelAll], Source={x:Static services:LocalizationService.Instance}}"
-                                    Theme="{StaticResource SmallGothicMetalButton}"
-                                    IsVisible="{Binding IsBatchRunning}"
-                                    Command="{Binding CancelAllCompressQueueCommand}"/>
-                        </StackPanel>
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <TextBlock Text="{Binding [CompressQueueParallel], Source={x:Static services:LocalizationService.Instance}}"
-                                       VerticalAlignment="Center" FontSize="12"/>
-                            <ComboBox ItemsSource="{Binding CompressParallelOptions}"
-                                      SelectedItem="{Binding CompressParallelCount}"
-                                      IsEnabled="{Binding IsBatchRunning, Converter={StaticResource BoolInvertConverter}}"
-                                      MinWidth="70"/>
-                        </StackPanel>
-                        <Border BorderBrush="#3A3A3A" BorderThickness="1" CornerRadius="4"
-                                MinHeight="48" Padding="6">
-                            <ScrollViewer MaxHeight="240" VerticalScrollBarVisibility="Auto">
-                                <ItemsControl ItemsSource="{Binding CompressQueue}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate x:DataType="vm:MainWindowViewModel+CompressQueueItem">
-                                            <Grid ColumnDefinitions="*,Auto" Margin="0,3">
-                                                <StackPanel Grid.Column="0" Spacing="2">
-                                                    <TextBlock Text="{Binding FileName}"
-                                                               TextTrimming="CharacterEllipsis"
-                                                               FontSize="12"/>
-                                                    <TextBox Text="{Binding OutputName}"
-                                                             Watermark="{Binding [CompressOutputNameWatermark], Source={x:Static services:LocalizationService.Instance}}"
-                                                             IsEnabled="{Binding IsActive, Converter={StaticResource BoolInvertConverter}}"
-                                                             FontSize="11"
-                                                             Margin="0,1,0,1"/>
-                                                    <TextBlock Text="{Binding EstimatedText}"
-                                                               Foreground="#9A9A9A"
-                                                               FontSize="10"/>
-                                                    <ProgressBar Minimum="0" Maximum="1"
-                                                                 Value="{Binding Progress}"
-                                                                 IsVisible="{Binding IsActive}"
-                                                                 Height="4"
-                                                                 HorizontalAlignment="Stretch"/>
-                                                </StackPanel>
-                                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"
-                                                            VerticalAlignment="Center" Margin="10,0,0,0">
-                                                    <TextBlock Text="{Binding StatusText}"
-                                                               Foreground="{DynamicResource ThemeAccentBrush}"
-                                                               FontSize="11"
-                                                               VerticalAlignment="Center"/>
-                                                    <Button Content="{Binding [CompressQueueStartItem], Source={x:Static services:LocalizationService.Instance}}"
-                                                            Theme="{StaticResource SmallGothicMetalButton}"
-                                                            FontSize="10"
-                                                            IsVisible="{Binding CanStart}"
-                                                            Command="{Binding StartCommand}"/>
-                                                    <Button Content="{Binding [CompressPause], Source={x:Static services:LocalizationService.Instance}}"
-                                                            Theme="{StaticResource SmallGothicMetalButton}"
-                                                            FontSize="10"
-                                                            IsVisible="{Binding ShowPause}"
-                                                            Command="{Binding PauseCommand}"/>
-                                                    <Button Content="{Binding [CompressResume], Source={x:Static services:LocalizationService.Instance}}"
-                                                            Theme="{StaticResource SmallGothicMetalButton}"
-                                                            FontSize="10"
-                                                            IsVisible="{Binding ShowResume}"
-                                                            Command="{Binding ResumeCommand}"/>
-                                                    <Button Content="{Binding [CompressCancel], Source={x:Static services:LocalizationService.Instance}}"
-                                                            Theme="{StaticResource SmallGothicMetalButton}"
-                                                            FontSize="10"
-                                                            IsVisible="{Binding CanCancel}"
-                                                            Command="{Binding CancelCommand}"/>
-                                                </StackPanel>
-                                            </Grid>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </ScrollViewer>
-                        </Border>
-                        <StackPanel Orientation="Horizontal" Spacing="10">
-                            <TextBlock Text="{Binding CompressStatusText}"
-                                       VerticalAlignment="Center"
-                                       FontSize="12"/>
-                        </StackPanel>
-                        <TextBlock Text="{Binding [CompressQueueHint], Source={x:Static services:LocalizationService.Instance}}"
-                                   FontSize="11" Foreground="#9A9A9A" TextWrapping="Wrap"/>
                     </StackPanel>
                 </Expander>
 

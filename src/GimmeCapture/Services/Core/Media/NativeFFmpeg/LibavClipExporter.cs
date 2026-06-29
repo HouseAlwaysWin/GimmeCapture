@@ -67,6 +67,13 @@ internal static class LibavClipExporter
         return (Math.Max(2, w - (w & 1)), Math.Max(2, maxHeight - (maxHeight & 1)));
     }
 
+    /// <summary>Snaps a rotation to 0/90/180/270 (clockwise); anything else falls back to 0.</summary>
+    internal static int NormalizeRotation(int degrees)
+    {
+        int r = ((degrees % 360) + 360) % 360;
+        return r is 90 or 180 or 270 ? r : 0;
+    }
+
     /// <summary>Maps an output file extension to the libav container name, or null if unsupported here.</summary>
     public static string? ContainerForExtension(string extension)
     {
@@ -215,6 +222,12 @@ internal static class LibavClipExporter
         double frameAccum = 0;
         bool annotate = frameComposite != null;
 
+        // Output rotation (0/90/180/270 clockwise), baked into the pixels via a SkiaSharp BGRA round-trip.
+        int rotation = NormalizeRotation(opt.RotationDegrees);
+        bool rotate = rotation != 0;
+        SKBitmap? rotateDst = null; // managed rotation target (rotated dims), reused per frame
+        bool needBgra = annotate || rotate;
+
         // Progress is reported by source-time consumed across all kept ranges (0..1). Throttled to whole
         // percent changes so a long encode doesn't flood the IProgress sink / UI thread.
         double totalSrcDuration = 0;
@@ -286,8 +299,11 @@ internal static class LibavClipExporter
             int outW = crop is { } cw ? cw.Width : decCtx->width;
             int outH = crop is { } ch ? ch.Height : decCtx->height;
 
-            // Optional downscale: shrink the encoded frame to opt.MaxHeight (sws scales src→enc dims).
-            (int encW, int encH) = ScaleToMaxHeight(outW, outH, opt.MaxHeight);
+            // After rotation, 90/270 transpose the frame; downscale is applied to the post-rotation dims.
+            bool swap = rotation == 90 || rotation == 270;
+            int rotW = swap ? outH : outW;
+            int rotH = swap ? outW : outH;
+            (int encW, int encH) = ScaleToMaxHeight(rotW, rotH, opt.MaxHeight);
 
             encCtx = ffmpeg.avcodec_alloc_context3(enc);
             encCtx->codec_type = AVMediaType.AVMEDIA_TYPE_VIDEO;
@@ -376,15 +392,18 @@ internal static class LibavClipExporter
             encFrame->height = encCtx->height;
             ThrowIfErr(ffmpeg.av_frame_get_buffer(encFrame, 32), "clip_frame_get_buffer");
 
-            if (annotate)
+            if (needBgra)
             {
-                // Burn-in path: decode → BGRA (SKBitmap composite) → YUV420P. Two sws contexts + a BGRA frame.
+                // BGRA round-trip: decode → BGRA (optional SKBitmap composite, optional rotate) → YUV420P.
+                // The final sws source is the rotated dims when rotating, else the full decode dims.
+                int finalSrcW = rotate ? rotW : decCtx->width;
+                int finalSrcH = rotate ? rotH : decCtx->height;
                 swsToBgra = ffmpeg.sws_getContext(
                     decCtx->width, decCtx->height, decCtx->pix_fmt,
                     decCtx->width, decCtx->height, AVPixelFormat.AV_PIX_FMT_BGRA,
                     (int)SwsFlags.SWS_BILINEAR, null, null, null);
                 sws = ffmpeg.sws_getContext(
-                    decCtx->width, decCtx->height, AVPixelFormat.AV_PIX_FMT_BGRA,
+                    finalSrcW, finalSrcH, AVPixelFormat.AV_PIX_FMT_BGRA,
                     encCtx->width, encCtx->height, encCtx->pix_fmt,
                     (int)SwsFlags.SWS_BILINEAR, null, null, null);
                 bgraFrame = ffmpeg.av_frame_alloc();
@@ -396,6 +415,11 @@ internal static class LibavClipExporter
                 bgraFrame->width = decCtx->width;
                 bgraFrame->height = decCtx->height;
                 ThrowIfErr(ffmpeg.av_frame_get_buffer(bgraFrame, 32), "clip_bgra_get_buffer");
+
+                if (rotate)
+                {
+                    rotateDst = new SKBitmap(rotW, rotH, SKColorType.Bgra8888, SKAlphaType.Premul);
+                }
             }
             else
             {
@@ -453,6 +477,7 @@ internal static class LibavClipExporter
 
                     runDone = DrainDecodedFrames(
                         decCtx, encCtx, sws, swsToBgra, decFrame, encFrame, bgraFrame, frameComposite,
+                        rotation, rotateDst,
                         outFmt, outStream, outPkt, inStream->time_base, range, crop, ref frameIndex, ref frameAccum,
                         fpsCursorScale, progress, totalSrcDuration, elapsedBeforeRange, ref lastPercent);
                 }
@@ -463,6 +488,7 @@ internal static class LibavClipExporter
                     ffmpeg.avcodec_send_packet(decCtx, null);
                     DrainDecodedFrames(
                         decCtx, encCtx, sws, swsToBgra, decFrame, encFrame, bgraFrame, frameComposite,
+                        rotation, rotateDst,
                         outFmt, outStream, outPkt, inStream->time_base, range, crop, ref frameIndex, ref frameAccum,
                         fpsCursorScale, progress, totalSrcDuration, elapsedBeforeRange, ref lastPercent);
                 }
@@ -487,6 +513,7 @@ internal static class LibavClipExporter
             if (bgraFrame != null) ffmpeg.av_frame_free(&bgraFrame);
             if (sws != null) ffmpeg.sws_freeContext(sws);
             if (swsToBgra != null) ffmpeg.sws_freeContext(swsToBgra);
+            rotateDst?.Dispose();
             if (decCtx != null) ffmpeg.avcodec_free_context(&decCtx);
             if (encCtx != null) ffmpeg.avcodec_free_context(&encCtx);
             if (inFmt != null) ffmpeg.avformat_close_input(&inFmt);
@@ -513,6 +540,8 @@ internal static class LibavClipExporter
         AVFrame* encFrame,
         AVFrame* bgraFrame,
         Action<SKBitmap, double>? composite,
+        int rotation,
+        SKBitmap? rotateDst,
         AVFormatContext* outFmt,
         AVStream* outStream,
         AVPacket* outPkt,
@@ -565,26 +594,51 @@ internal static class LibavClipExporter
             }
 
             ThrowIfErr(ffmpeg.av_frame_make_writable(encFrame), "clip_make_writable");
-            if (composite != null && bgraFrame != null && swsToBgra != null)
+            if (bgraFrame != null && swsToBgra != null)
             {
-                // decode pix -> BGRA (our private buffer)
+                // decode pix -> BGRA (our private buffer, full decode dims)
                 ffmpeg.sws_scale(swsToBgra, decFrame->data, decFrame->linesize, 0, decFrame->height,
                     bgraFrame->data, bgraFrame->linesize);
 
-                // Draw annotations/redactions directly onto the BGRA pixels (no copy), then BGRA -> YUV.
-                var info = new SKImageInfo(bgraFrame->width, bgraFrame->height, SKColorType.Bgra8888, SKAlphaType.Premul);
-                using (var sk = new SKBitmap())
+                if (composite != null)
                 {
+                    // Draw annotations/redactions directly onto the BGRA pixels (no copy). t is this frame's
+                    // source-time so time-varying composites (e.g. interpolated redaction boxes) can position.
+                    var info = new SKImageInfo(bgraFrame->width, bgraFrame->height, SKColorType.Bgra8888, SKAlphaType.Premul);
+                    using var sk = new SKBitmap();
                     if (sk.InstallPixels(info, (IntPtr)bgraFrame->data[0], bgraFrame->linesize[0]))
                     {
-                        // t is this frame's source-time (seconds) — lets time-varying composites
-                        // (e.g. interpolated redaction boxes) position themselves per frame.
                         composite(sk, t);
                     }
                 }
 
-                ffmpeg.sws_scale(sws, bgraFrame->data, bgraFrame->linesize, 0, bgraFrame->height,
-                    encFrame->data, encFrame->linesize);
+                if (rotation != 0 && rotateDst != null)
+                {
+                    // Rotate the BGRA frame into rotateDst (rotated dims) with Skia, then scale BGRA -> YUV.
+                    var srcInfo = new SKImageInfo(bgraFrame->width, bgraFrame->height, SKColorType.Bgra8888, SKAlphaType.Premul);
+                    using (var src = new SKBitmap())
+                    {
+                        if (src.InstallPixels(srcInfo, (IntPtr)bgraFrame->data[0], bgraFrame->linesize[0]))
+                        {
+                            using var canvas = new SKCanvas(rotateDst);
+                            canvas.Clear();
+                            canvas.Translate(rotateDst.Width / 2f, rotateDst.Height / 2f);
+                            canvas.RotateDegrees(rotation);
+                            canvas.Translate(-src.Width / 2f, -src.Height / 2f);
+                            canvas.DrawBitmap(src, 0, 0);
+                            canvas.Flush();
+                        }
+                    }
+
+                    byte*[] rotData = { (byte*)rotateDst.GetPixels().ToPointer(), null, null, null };
+                    int[] rotLine = { rotateDst.RowBytes, 0, 0, 0 };
+                    ffmpeg.sws_scale(sws, rotData, rotLine, 0, rotateDst.Height, encFrame->data, encFrame->linesize);
+                }
+                else
+                {
+                    ffmpeg.sws_scale(sws, bgraFrame->data, bgraFrame->linesize, 0, bgraFrame->height,
+                        encFrame->data, encFrame->linesize);
+                }
             }
             else
             {

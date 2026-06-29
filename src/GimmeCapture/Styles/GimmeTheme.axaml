@@ -1,5 +1,13 @@
 <Styles xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:behaviors="using:GimmeCapture.Behaviors">
+
+    <!-- App-wide fix for Avalonia NumericUpDown: clearing the field no longer crashes a non-nullable binding,
+         and Enter commits + blurs the field. See Behaviors/NumericUpDownFix.cs. -->
+    <Style Selector="NumericUpDown">
+        <Setter Property="behaviors:NumericUpDownFix.Enable" Value="True"/>
+    </Style>
+
     <Styles.Resources>
         <ResourceDictionary>
             <!-- Theme Color Palette -->

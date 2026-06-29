@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
@@ -187,9 +188,9 @@ public partial class MainWindowViewModel
         set => this.RaiseAndSetIfChanged(ref _compressUseTargetSize, value);
     }
 
-    // decimal to bind 1:1 with NumericUpDown.Value (decimal?); converted to double for the bitrate math.
-    private decimal _compressTargetSizeMB = 25m;
-    public decimal CompressTargetSizeMB
+    // Nullable so clearing the NumericUpDown (which yields null) can't crash the binding; reads coalesce to 25.
+    private decimal? _compressTargetSizeMB = 25m;
+    public decimal? CompressTargetSizeMB
     {
         get => _compressTargetSizeMB;
         set => this.RaiseAndSetIfChanged(ref _compressTargetSizeMB, value);
@@ -318,7 +319,7 @@ public partial class MainWindowViewModel
         Format = SelectedCompressFormat,
         Crf = CompressCrf,
         UseTargetSize = CompressUseTargetSize,
-        TargetSizeMB = CompressTargetSizeMB,
+        TargetSizeMB = CompressTargetSizeMB ?? 25m,
         DropAudio = CompressDropAudio,
         AudioBitrateKbps = SelectedCompressAudioBitrate?.Kbps ?? 0,
         AudioChannels = SelectedCompressAudioChannels?.Channels ?? 2
@@ -408,7 +409,7 @@ public partial class MainWindowViewModel
         if (CompressUseTargetSize)
         {
             // Target-size mode encodes to (approximately) the requested size by design.
-            return $"{prefix}: ≈ {FormatFileSize((long)((double)CompressTargetSizeMB * 1024 * 1024))}";
+            return $"{prefix}: ≈ {FormatFileSize((long)((double)(CompressTargetSizeMB ?? 25m) * 1024 * 1024))}";
         }
 
         VideoCodec codec = SelectedCompressCodecOption?.Value ?? VideoCodec.H264;
@@ -449,6 +450,100 @@ public partial class MainWindowViewModel
         return (long)(videoBytes + audioBytes);
     }
 
+    /// <summary>
+    /// Accurate output-size estimate (bytes) for CRF mode: encodes a few short windows of the source at the
+    /// snapshot settings, measures the real bytes, and extrapolates to the full duration. Returns -1 on
+    /// failure. Far better than the formula because it sees the actual footage. Runs the encode off-thread.
+    /// </summary>
+    private async Task<long> EstimateBySampleAsync(string sourcePath, CompressSettingsSnapshot snap, double duration)
+    {
+        if (duration <= 0)
+        {
+            return -1;
+        }
+
+        string tempDir = Path.Combine(Path.GetTempPath(), "GimmeCapture_Estimate_" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(tempDir);
+            string sampleOut = Path.Combine(tempDir, "sample.mp4");
+            LibavClipExporter.SourceRange[] ranges = BuildSampleRanges(duration, out double sampleDuration);
+            if (sampleDuration <= 0)
+            {
+                return -1;
+            }
+
+            // CRF sample (no target bitrate / two-pass): same knobs that drive the real per-file size.
+            var options = new LibavExportOptions
+            {
+                Codec = snap.Codec,
+                CrfOverride = snap.Crf,
+                Preset = snap.Preset,
+                MaxHeight = snap.MaxHeight,
+                MaxFps = snap.MaxFps,
+                DropAudio = snap.DropAudio,
+                AudioBitrateKbps = snap.AudioBitrateKbps,
+                AudioChannels = snap.AudioChannels
+            };
+
+            bool ok = await Task.Run(() =>
+                LibavClipExporter.TryExport(sourcePath, ranges, sampleOut, VideoQuality.Medium, options: options));
+            if (!ok || !File.Exists(sampleOut))
+            {
+                return -1;
+            }
+
+            long sampleBytes = new FileInfo(sampleOut).Length;
+            return (long)(sampleBytes * (duration / sampleDuration));
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error("Compress.EstimateSample", ex);
+            return -1;
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(tempDir))
+                {
+                    Directory.Delete(tempDir, true);
+                }
+            }
+            catch (Exception ex)
+            {
+                AppLog.Error("Compress.EstimateCleanup", ex);
+            }
+        }
+    }
+
+    // Short clips (<= 8s) sample whole (so the estimate is exact). Longer ones take three 2s windows at
+    // 20/50/80% so the measured bitrate reflects content variation across the file.
+    private static LibavClipExporter.SourceRange[] BuildSampleRanges(double duration, out double sampleDuration)
+    {
+        if (duration <= 8)
+        {
+            sampleDuration = duration;
+            return new[] { new LibavClipExporter.SourceRange(0, duration) };
+        }
+
+        const double window = 2.0;
+        var ranges = new List<LibavClipExporter.SourceRange>();
+        double total = 0;
+        foreach (double start in new[] { duration * 0.2, duration * 0.5, duration * 0.8 })
+        {
+            double end = Math.Min(duration, start + window);
+            if (end > start)
+            {
+                ranges.Add(new LibavClipExporter.SourceRange(start, end));
+                total += end - start;
+            }
+        }
+
+        sampleDuration = total;
+        return ranges.ToArray();
+    }
+
     // Immutable snapshot of the encode knobs so a run reads stable values (a run reads these off the UI thread).
     private readonly record struct CompressSettingsSnapshot(
         VideoCodec Codec, int Crf, int MaxHeight, int MaxFps, string Preset,
@@ -468,7 +563,7 @@ public partial class MainWindowViewModel
             SelectedCompressAudioBitrate?.Kbps ?? 0,
             SelectedCompressAudioChannels?.Channels ?? 0,
             CompressUseTargetSize,
-            CompressTargetSizeMB,
+            CompressTargetSizeMB ?? 25m,
             // True two-pass replaces the corrective pass for H.264 target-size; H.265 keeps single-pass + correct.
             CompressUseTargetSize && codec == VideoCodec.H264);
     }
@@ -494,7 +589,8 @@ public partial class MainWindowViewModel
     /// </summary>
     private async Task<bool> EncodeOneFileAsync(
         string input, string outputPath, CompressSettingsSnapshot s, int targetBitrateKbps,
-        double durationSeconds, IProgress<double> progress, CancellationToken token, ManualResetEventSlim? pauseGate)
+        double durationSeconds, IProgress<double> progress, CancellationToken token, ManualResetEventSlim? pauseGate,
+        int rotationDegrees = 0)
     {
         string outExt = Path.GetExtension(outputPath);
         string tempDir = Path.Combine(Path.GetTempPath(), "GimmeCapture_Compress_" + Guid.NewGuid().ToString("N"));
@@ -519,7 +615,8 @@ public partial class MainWindowViewModel
                     DropAudio = s.DropAudio,
                     AudioBitrateKbps = s.AudioBitrateKbps,
                     AudioChannels = s.AudioChannels,
-                    TwoPass = s.UseTwoPass
+                    TwoPass = s.UseTwoPass,
+                    RotationDegrees = rotationDegrees
                 };
                 if (attempt > 1)
                 {
