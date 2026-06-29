@@ -11,14 +11,20 @@ using ReactiveUI;
 
 namespace GimmeCapture.ViewModels.Main;
 
-// Batch queue for the Compress tab: drop / add multiple files (or a folder) and compress them all with the
-// current settings, each output auto-saved next to its source. Shares the encode core + cancel/pause/progress
-// state with the single-file path (see MainWindowViewModel.VideoCompress.cs).
+// Batch queue for the Compress tab. Each file can be started / paused / cancelled individually; a shared
+// concurrency cap (CompressParallelCount) bounds how many encode at once, whether started one-by-one or via
+// "Compress all". The per-file encode core (EncodeOneFileAsync) is shared with the single-file path.
+//
+// Threading: every worker is launched from the UI thread and never uses ConfigureAwait(false), so all item
+// state mutations + the shared _inFlight/_batchCts/_batchSemaphore bookkeeping run on the UI thread (no locks
+// needed). The CPU-heavy encode itself runs on a Task.Run thread inside EncodeOneFileAsync, so parallelism is
+// real while the queue plumbing stays single-threaded.
 public partial class MainWindowViewModel
 {
     public enum CompressQueueStatus
     {
-        Queued,
+        Queued,    // added, not started
+        Waiting,   // started, waiting for a concurrency slot
         Running,
         Done,
         Failed,
@@ -31,37 +37,161 @@ public partial class MainWindowViewModel
         {
             Path = path;
             FileName = System.IO.Path.GetFileName(path);
+            StartCommand = ReactiveCommand.Create(() => StartRequested?.Invoke(this), this.WhenAnyValue(x => x.CanStart));
+            PauseCommand = ReactiveCommand.Create(Pause, this.WhenAnyValue(x => x.ShowPause));
+            ResumeCommand = ReactiveCommand.Create(Resume, this.WhenAnyValue(x => x.ShowResume));
+            CancelCommand = ReactiveCommand.Create(Cancel, this.WhenAnyValue(x => x.CanCancel));
+            UpdateStatusText();
         }
 
         public string Path { get; }
         public string FileName { get; }
 
+        // Set by the view model so the per-item Start button can ask it to dispatch a worker.
+        internal Action<CompressQueueItem>? StartRequested;
+
+        // Per-item cancellation (created at start, linked to the batch token) + pause gate (created at encode).
+        internal CancellationTokenSource? Cts;
+        internal ManualResetEventSlim? Gate;
+
         private CompressQueueStatus _status = CompressQueueStatus.Queued;
         public CompressQueueStatus Status
         {
             get => _status;
-            set => this.RaiseAndSetIfChanged(ref _status, value);
+            set
+            {
+                this.RaiseAndSetIfChanged(ref _status, value);
+                UpdateStatusText();
+                this.RaisePropertyChanged(nameof(ShowPause));
+                this.RaisePropertyChanged(nameof(ShowResume));
+                this.RaisePropertyChanged(nameof(CanCancel));
+                this.RaisePropertyChanged(nameof(CanStart));
+                this.RaisePropertyChanged(nameof(IsActive));
+            }
         }
 
         private string _statusText = string.Empty;
         public string StatusText
         {
             get => _statusText;
-            set => this.RaiseAndSetIfChanged(ref _statusText, value);
+            private set => this.RaiseAndSetIfChanged(ref _statusText, value);
+        }
+
+        private double _progress;
+        public double Progress
+        {
+            get => _progress;
+            set => this.RaiseAndSetIfChanged(ref _progress, value);
+        }
+
+        private bool _isPaused;
+        public bool IsPaused
+        {
+            get => _isPaused;
+            private set
+            {
+                this.RaiseAndSetIfChanged(ref _isPaused, value);
+                this.RaisePropertyChanged(nameof(ShowPause));
+                this.RaisePropertyChanged(nameof(ShowResume));
+            }
+        }
+
+        // Start when idle/terminal; cancel when queued/waiting/running; pause/resume only while running.
+        public bool CanStart => Status is CompressQueueStatus.Queued or CompressQueueStatus.Done
+            or CompressQueueStatus.Failed or CompressQueueStatus.Cancelled;
+        public bool CanCancel => Status is CompressQueueStatus.Queued or CompressQueueStatus.Waiting
+            or CompressQueueStatus.Running;
+        public bool ShowPause => Status == CompressQueueStatus.Running && !IsPaused;
+        public bool ShowResume => Status == CompressQueueStatus.Running && IsPaused;
+        public bool IsActive => Status == CompressQueueStatus.Running;
+
+        public ReactiveCommand<Unit, Unit> StartCommand { get; }
+        public ReactiveCommand<Unit, Unit> PauseCommand { get; }
+        public ReactiveCommand<Unit, Unit> ResumeCommand { get; }
+        public ReactiveCommand<Unit, Unit> CancelCommand { get; }
+
+        // Prepares the item just before a worker is launched (caller has ensured a batch context exists).
+        internal void PrepareForStart(CancellationToken batchToken)
+        {
+            Cts?.Dispose();
+            Cts = CancellationTokenSource.CreateLinkedTokenSource(batchToken);
+            IsPaused = false;
+            Progress = 0;
+            Status = CompressQueueStatus.Waiting;
+        }
+
+        private void Pause()
+        {
+            Gate?.Reset();
+            IsPaused = true;
+        }
+
+        private void Resume()
+        {
+            Gate?.Set();
+            IsPaused = false;
+        }
+
+        private void Cancel()
+        {
+            Gate?.Set(); // release a paused encode so it can observe cancellation
+            IsPaused = false;
+            if (Cts != null)
+            {
+                Cts.Cancel(); // waiting or running
+            }
+            else if (Status == CompressQueueStatus.Queued)
+            {
+                Status = CompressQueueStatus.Cancelled; // never dispatched
+            }
+        }
+
+        private void UpdateStatusText()
+        {
+            StatusText = LocalizationService.Instance[Status switch
+            {
+                CompressQueueStatus.Waiting => "CompressQueueWaiting",
+                CompressQueueStatus.Running => "CompressQueueRunning",
+                CompressQueueStatus.Done => "CompressQueueDone",
+                CompressQueueStatus.Failed => "CompressQueueFailed",
+                CompressQueueStatus.Cancelled => "CompressQueueCancelled",
+                _ => "CompressQueueQueued"
+            }];
         }
     }
 
-    // Source containers the batch will accept (mirrors the single-file picker filter).
     private static readonly string[] CompressVideoExtensions =
         [".mp4", ".mkv", ".mov", ".avi", ".webm", ".m4v", ".wmv", ".flv"];
 
     public ObservableCollection<CompressQueueItem> CompressQueue { get; } = new();
 
-    // View-set pickers (multi-file + folder), mirroring PickCompressInputAction.
     public Func<Task<IReadOnlyList<string>>>? PickCompressFilesAction { get; set; }
     public Func<Task<string?>>? PickCompressFolderAction { get; set; }
 
-    // Mirrors CompressQueue.Count for command CanExecute (ObservableCollection.Count isn't directly observable).
+    // True while any queue item is waiting/running. IsBusy = single-file OR batch, so the two never overlap.
+    private bool _isBatchRunning;
+    public bool IsBatchRunning
+    {
+        get => _isBatchRunning;
+        private set
+        {
+            this.RaiseAndSetIfChanged(ref _isBatchRunning, value);
+            this.RaisePropertyChanged(nameof(IsBusy));
+        }
+    }
+
+    public bool IsBusy => IsCompressing || IsBatchRunning;
+
+    // Max items encoding at once. Each encode is already multi-threaded, so a small cap avoids thrashing.
+    public int[] CompressParallelOptions { get; } = [1, 2, 3, 4];
+
+    private int _compressParallelCount = 2;
+    public int CompressParallelCount
+    {
+        get => _compressParallelCount;
+        set => this.RaiseAndSetIfChanged(ref _compressParallelCount, Math.Clamp(value, 1, 8));
+    }
+
     private int _compressQueueCount;
     public int CompressQueueCount
     {
@@ -69,26 +199,38 @@ public partial class MainWindowViewModel
         private set => this.RaiseAndSetIfChanged(ref _compressQueueCount, value);
     }
 
+    // Shared batch context, alive only while at least one worker is in flight (created lazily on first start).
+    private CancellationTokenSource? _batchCts;
+    private SemaphoreSlim? _batchSemaphore;
+    private int _inFlight;
+
     public ReactiveCommand<Unit, Unit> AddCompressFilesCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> AddCompressFolderCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> ClearCompressQueueCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> CompressQueueCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> CancelAllCompressQueueCommand { get; private set; } = null!;
 
     private void InitializeCompressBatch()
     {
-        var notBusy = this.WhenAnyValue(x => x.IsCompressing, busy => !busy);
-        var canRunQueue = this.WhenAnyValue(
-            x => x.CompressQueueCount, x => x.IsCompressing, (count, busy) => count > 0 && !busy);
+        // Add: not while a single-file compress runs (adding mid-batch is fine). Clear: only when fully idle.
+        var notSingle = this.WhenAnyValue(x => x.IsCompressing, single => !single);
+        var canStartAll = this.WhenAnyValue(
+            x => x.CompressQueueCount, x => x.IsCompressing, (count, single) => count > 0 && !single);
+        var canClear = this.WhenAnyValue(
+            x => x.CompressQueueCount, x => x.IsBusy, (count, busy) => count > 0 && !busy);
 
-        AddCompressFilesCommand = ReactiveCommand.CreateFromTask(AddCompressFilesAsync, notBusy);
-        AddCompressFolderCommand = ReactiveCommand.CreateFromTask(AddCompressFolderAsync, notBusy);
-        ClearCompressQueueCommand = ReactiveCommand.Create(ClearCompressQueue, canRunQueue);
-        CompressQueueCommand = ReactiveCommand.CreateFromTask(CompressQueueAsync, canRunQueue);
+        AddCompressFilesCommand = ReactiveCommand.CreateFromTask(AddCompressFilesAsync, notSingle);
+        AddCompressFolderCommand = ReactiveCommand.CreateFromTask(AddCompressFolderAsync, notSingle);
+        ClearCompressQueueCommand = ReactiveCommand.Create(ClearCompressQueue, canClear);
+        CompressQueueCommand = ReactiveCommand.Create(StartAllCompress, canStartAll);
+        CancelAllCompressQueueCommand = ReactiveCommand.Create(
+            CancelAllCompressQueue, this.WhenAnyValue(x => x.IsBatchRunning));
 
         AddCompressFilesCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.QueueAddFiles", ex));
         AddCompressFolderCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.QueueAddFolder", ex));
         ClearCompressQueueCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.QueueClear", ex));
         CompressQueueCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.QueueRun", ex));
+        CancelAllCompressQueueCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.QueueCancelAll", ex));
     }
 
     private async Task AddCompressFilesAsync()
@@ -98,8 +240,7 @@ public partial class MainWindowViewModel
             return;
         }
 
-        IReadOnlyList<string> files = await PickCompressFilesAction();
-        AddPathsToQueue(files);
+        AddPathsToQueue(await PickCompressFilesAction());
     }
 
     private async Task AddCompressFolderAsync()
@@ -116,10 +257,7 @@ public partial class MainWindowViewModel
         }
     }
 
-    /// <summary>
-    /// Adds files (and the videos inside any folders) to the queue, skipping non-video and duplicate paths.
-    /// Called by the pickers and by the view's drag-drop handler.
-    /// </summary>
+    /// <summary>Adds files (and the videos inside any folders) to the queue, skipping non-video and dupes.</summary>
     public void AddPathsToQueue(IEnumerable<string>? paths)
     {
         if (paths == null)
@@ -141,9 +279,7 @@ public partial class MainWindowViewModel
             {
                 if (existing.Add(file))
                 {
-                    var item = new CompressQueueItem(file);
-                    SetItemStatus(item, CompressQueueStatus.Queued);
-                    CompressQueue.Add(item);
+                    CompressQueue.Add(new CompressQueueItem(file) { StartRequested = StartCompressItem });
                 }
             }
         }
@@ -182,66 +318,69 @@ public partial class MainWindowViewModel
         CompressQueueCount = 0;
     }
 
-    private void SetItemStatus(CompressQueueItem item, CompressQueueStatus status)
+    private void StartAllCompress()
     {
-        item.Status = status;
-        item.StatusText = LocalizationService.Instance[status switch
+        foreach (CompressQueueItem item in CompressQueue.Where(i => i.CanStart).ToList())
         {
-            CompressQueueStatus.Running => "CompressQueueRunning",
-            CompressQueueStatus.Done => "CompressQueueDone",
-            CompressQueueStatus.Failed => "CompressQueueFailed",
-            CompressQueueStatus.Cancelled => "CompressQueueCancelled",
-            _ => "CompressQueueQueued"
-        }];
+            StartCompressItem(item);
+        }
     }
 
-    private async Task CompressQueueAsync()
+    private void CancelAllCompressQueue() => _batchCts?.Cancel();
+
+    // Dispatches one item: ensures the shared batch context, snapshots settings on the UI thread, and launches
+    // a worker (fire-and-forget; tracked via _inFlight). The concurrency cap is enforced by _batchSemaphore.
+    private void StartCompressItem(CompressQueueItem item)
     {
-        if (IsCompressing)
+        if (item.Status is CompressQueueStatus.Waiting or CompressQueueStatus.Running || IsCompressing)
         {
             return;
         }
 
-        // Re-run anything not already done (Queued or previously Failed); leave completed items alone.
-        var pending = CompressQueue
-            .Where(i => i.Status is CompressQueueStatus.Queued or CompressQueueStatus.Failed or CompressQueueStatus.Cancelled)
-            .ToList();
-        if (pending.Count == 0)
+        if (_batchCts == null || _batchSemaphore == null)
         {
-            return;
+            _batchCts = new CancellationTokenSource();
+            _batchSemaphore = new SemaphoreSlim(Math.Clamp(CompressParallelCount, 1, 8));
         }
 
         CompressSettingsSnapshot snap = BuildSettingsSnapshot();
         string ext = "." + SelectedCompressFormat.ToLowerInvariant();
+        item.PrepareForStart(_batchCts.Token);
+        var progress = new Progress<double>(p => item.Progress = p); // UI thread → callbacks marshal back
 
-        IsCompressing = true;
-        CompressProgress = 0;
-        IsPaused = false;
-        _compressCts?.Dispose();
-        _compressCts = new CancellationTokenSource();
-        CancellationToken token = _compressCts.Token;
-        _compressPauseGate?.Dispose();
-        _compressPauseGate = new ManualResetEventSlim(true);
+        _inFlight++;
+        IsBatchRunning = true;
+        _ = RunQueueItemAsync(item, snap, ext, progress);
+    }
 
-        var encodeProgress = new Progress<double>(p => CompressProgress = p);
-        int done = 0;
-
+    private async Task RunQueueItemAsync(
+        CompressQueueItem item, CompressSettingsSnapshot snap, string ext, IProgress<double> progress)
+    {
+        SemaphoreSlim semaphore = _batchSemaphore!;
+        CancellationToken token = item.Cts!.Token;
         try
         {
-            for (int i = 0; i < pending.Count; i++)
+            try
+            {
+                await semaphore.WaitAsync(token);
+            }
+            catch (OperationCanceledException)
+            {
+                item.Status = CompressQueueStatus.Cancelled;
+                return;
+            }
+
+            try
             {
                 token.ThrowIfCancellationRequested();
-                CompressQueueItem item = pending[i];
-
-                CompressProgress = 0;
-                CompressStatusText = $"({i + 1}/{pending.Count})  {item.FileName}";
-                SetItemStatus(item, CompressQueueStatus.Running);
-
                 if (!File.Exists(item.Path))
                 {
-                    SetItemStatus(item, CompressQueueStatus.Failed);
-                    continue;
+                    item.Status = CompressQueueStatus.Failed;
+                    return;
                 }
+
+                item.Gate = new ManualResetEventSlim(true);
+                item.Status = CompressQueueStatus.Running;
 
                 double duration = await ProbeInputDurationAsync(item.Path);
                 int targetKbps = 0;
@@ -249,59 +388,58 @@ public partial class MainWindowViewModel
                 {
                     if (duration <= 0)
                     {
-                        SetItemStatus(item, CompressQueueStatus.Failed); // can't hit a target size without a length
-                        continue;
+                        item.Status = CompressQueueStatus.Failed;
+                        return;
                     }
                     targetKbps = ComputeTargetVideoBitrateKbps((double)snap.TargetSizeMB, duration);
                 }
 
                 string outputPath = BuildCompressOutputPath(item.Path, ext);
-                try
-                {
-                    bool ok = await EncodeOneFileAsync(
-                        item.Path, outputPath, snap, targetKbps, duration, encodeProgress, token, _compressPauseGate);
-                    SetItemStatus(item, ok ? CompressQueueStatus.Done : CompressQueueStatus.Failed);
-                    if (ok)
-                    {
-                        done++;
-                    }
-                }
-                catch (OperationCanceledException)
-                {
-                    SetItemStatus(item, CompressQueueStatus.Cancelled);
-                    throw;
-                }
+                bool ok = await EncodeOneFileAsync(
+                    item.Path, outputPath, snap, targetKbps, duration, progress, token, item.Gate);
+                item.Status = ok ? CompressQueueStatus.Done : CompressQueueStatus.Failed;
             }
-
-            CompressStatusText = $"{LocalizationService.Instance["CompressQueueComplete"]}  ({done}/{pending.Count})";
-            ShowToastAction?.Invoke(CompressStatusText, ToastSeverity.Success);
-        }
-        catch (OperationCanceledException)
-        {
-            foreach (CompressQueueItem item in pending)
+            catch (OperationCanceledException)
             {
-                if (item.Status is CompressQueueStatus.Running or CompressQueueStatus.Queued)
-                {
-                    SetItemStatus(item, CompressQueueStatus.Cancelled);
-                }
+                item.Status = CompressQueueStatus.Cancelled;
             }
-            CompressStatusText = LocalizationService.Instance["StatusCompressCancelled"];
-            ShowToastAction?.Invoke(CompressStatusText, ToastSeverity.Info);
-        }
-        catch (Exception ex)
-        {
-            AppLog.Error("Compress.QueueRun", ex);
-            CompressStatusText = LocalizationService.Instance["StatusCompressFailed"];
-            ShowToastAction?.Invoke(CompressStatusText, ToastSeverity.Error);
+            catch (Exception ex)
+            {
+                AppLog.Error("Compress.QueueItem", ex);
+                item.Status = CompressQueueStatus.Failed;
+            }
+            finally
+            {
+                item.Gate?.Dispose();
+                item.Gate = null;
+                semaphore.Release();
+            }
         }
         finally
         {
-            IsCompressing = false;
-            IsPaused = false;
-            _compressCts?.Dispose();
-            _compressCts = null;
-            _compressPauseGate?.Dispose();
-            _compressPauseGate = null;
+            item.Cts?.Dispose();
+            item.Cts = null;
+            OnWorkerDone();
         }
+    }
+
+    // Runs on the UI thread (worker continuation). When the last worker finishes, tears down the batch context.
+    private void OnWorkerDone()
+    {
+        _inFlight--;
+        if (_inFlight > 0)
+        {
+            return;
+        }
+
+        _inFlight = 0;
+        _batchSemaphore?.Dispose();
+        _batchSemaphore = null;
+        _batchCts?.Dispose();
+        _batchCts = null;
+        IsBatchRunning = false;
+
+        int done = CompressQueue.Count(i => i.Status == CompressQueueStatus.Done);
+        CompressStatusText = $"{LocalizationService.Instance["CompressQueueComplete"]}  ({done}/{CompressQueue.Count})";
     }
 }

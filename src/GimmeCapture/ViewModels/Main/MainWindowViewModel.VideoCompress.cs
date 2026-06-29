@@ -74,6 +74,7 @@ public partial class MainWindowViewModel
             this.RaiseAndSetIfChanged(ref _isCompressing, value);
             this.RaisePropertyChanged(nameof(ShowPause));
             this.RaisePropertyChanged(nameof(ShowResume));
+            this.RaisePropertyChanged(nameof(IsBusy));
         }
     }
 
@@ -312,21 +313,21 @@ public partial class MainWindowViewModel
 
         CompressStatusText = LocalizationService.Instance["CompressStatusReady"];
 
-        var notBusy = this.WhenAnyValue(x => x.IsCompressing, busy => !busy);
+        var notBusy = this.WhenAnyValue(x => x.IsBusy, busy => !busy);
 
         PickCompressInputCommand = ReactiveCommand.CreateFromTask(PickCompressInputAsync, notBusy);
 
-        // Output picker needs a source chosen (to seed the suggested name) and no encode in flight.
+        // Output picker needs a source chosen (to seed the suggested name) and nothing else running.
         PickCompressOutputCommand = ReactiveCommand.CreateFromTask(
             PickCompressOutputAsync,
             this.WhenAnyValue(
                 x => x.CompressInputPath,
-                x => x.IsCompressing,
+                x => x.IsBusy,
                 (path, busy) => !string.IsNullOrEmpty(path) && !busy));
 
         var canCompress = this.WhenAnyValue(
             x => x.CompressInputPath,
-            x => x.IsCompressing,
+            x => x.IsBusy,
             (path, busy) => !string.IsNullOrEmpty(path) && !busy);
         CompressCommand = ReactiveCommand.CreateFromTask(CompressAsync, canCompress);
 
@@ -341,18 +342,18 @@ public partial class MainWindowViewModel
             ResumeCompress,
             this.WhenAnyValue(x => x.IsCompressing, x => x.IsPaused, (busy, paused) => busy && paused));
 
-        // Presets: save needs a non-blank name; load/delete need a selection. None while encoding.
+        // Presets: save needs a non-blank name; load/delete need a selection. None while busy.
         SaveCompressPresetCommand = ReactiveCommand.Create(
             SaveCompressPreset,
-            this.WhenAnyValue(x => x.CompressPresetName, x => x.IsCompressing,
+            this.WhenAnyValue(x => x.CompressPresetName, x => x.IsBusy,
                 (name, busy) => !string.IsNullOrWhiteSpace(name) && !busy));
         LoadCompressPresetCommand = ReactiveCommand.Create(
             LoadCompressPreset,
-            this.WhenAnyValue(x => x.SelectedSavedPreset, x => x.IsCompressing,
+            this.WhenAnyValue(x => x.SelectedSavedPreset, x => x.IsBusy,
                 (sel, busy) => sel != null && !busy));
         DeleteCompressPresetCommand = ReactiveCommand.Create(
             DeleteCompressPreset,
-            this.WhenAnyValue(x => x.SelectedSavedPreset, x => x.IsCompressing,
+            this.WhenAnyValue(x => x.SelectedSavedPreset, x => x.IsBusy,
                 (sel, busy) => sel != null && !busy));
 
         foreach (CompressPreset preset in CompressPresetService.Load())
