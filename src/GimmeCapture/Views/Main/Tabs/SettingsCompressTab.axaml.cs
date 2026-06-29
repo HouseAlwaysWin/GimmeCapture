@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using Avalonia.Controls;
 using Avalonia.Platform.Storage;
 using GimmeCapture.Services.Core.Infrastructure;
@@ -45,6 +46,44 @@ public partial class SettingsCompressTab : UserControl
             });
 
             return files.Count > 0 ? files[0].Path.LocalPath : null;
+        };
+
+        vm.PickCompressOutputAction = async suggested =>
+        {
+            var topLevel = TopLevel.GetTopLevel(this);
+            if (topLevel == null)
+            {
+                return null;
+            }
+
+            string suggestedName = string.IsNullOrEmpty(suggested) ? "compressed.mp4" : Path.GetFileName(suggested);
+            string suggestedExt = Path.GetExtension(suggestedName).TrimStart('.');
+
+            // Offer a save type matching the suggested container plus the other supported ones.
+            var types = new[]
+            {
+                new FilePickerFileType("MP4 Video") { Patterns = new[] { "*.mp4" } },
+                new FilePickerFileType("Matroska Video") { Patterns = new[] { "*.mkv" } },
+                new FilePickerFileType("QuickTime Video") { Patterns = new[] { "*.mov" } }
+            };
+
+            IStorageFolder? startFolder = null;
+            string? suggestedDir = string.IsNullOrEmpty(suggested) ? null : Path.GetDirectoryName(suggested);
+            if (!string.IsNullOrEmpty(suggestedDir))
+            {
+                startFolder = await topLevel.StorageProvider.TryGetFolderFromPathAsync(suggestedDir);
+            }
+
+            var file = await topLevel.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+            {
+                Title = LocalizationService.Instance["CompressChooseOutput"],
+                SuggestedFileName = suggestedName,
+                DefaultExtension = suggestedExt,
+                FileTypeChoices = types,
+                SuggestedStartLocation = startFolder
+            });
+
+            return file?.Path.LocalPath;
         };
     }
 }

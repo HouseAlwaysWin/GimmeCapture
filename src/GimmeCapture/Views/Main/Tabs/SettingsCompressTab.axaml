@@ -33,6 +33,22 @@
                                Margin="0,2,0,0"/>
                 </StackPanel>
 
+                <!-- Output location (custom path; empty = auto, next to the source) -->
+                <StackPanel Spacing="5">
+                    <TextBlock Text="{Binding [CompressOutputLabel], Source={x:Static services:LocalizationService.Instance}}"
+                               FontSize="12"/>
+                    <DockPanel>
+                        <Button Content="{Binding [CompressChooseOutput], Source={x:Static services:LocalizationService.Instance}}"
+                                DockPanel.Dock="Right"
+                                Theme="{StaticResource SmallGothicMetalButton}"
+                                Command="{Binding PickCompressOutputCommand}"
+                                Margin="10,0,0,0"/>
+                        <TextBox Text="{Binding CompressOutputPath}"
+                                 IsReadOnly="True"
+                                 Watermark="{Binding [CompressOutputAuto], Source={x:Static services:LocalizationService.Instance}}"/>
+                    </DockPanel>
+                </StackPanel>
+
                 <!-- Codec -->
                 <DockPanel>
                     <TextBlock Text="{Binding [CompressCodecLabel], Source={x:Static services:LocalizationService.Instance}}"
@@ -114,20 +130,44 @@
                           Content="{Binding [CompressDropAudio], Source={x:Static services:LocalizationService.Instance}}"/>
 
                 <!-- Action -->
-                <Button Content="{Binding [CompressStart], Source={x:Static services:LocalizationService.Instance}}"
-                        Theme="{StaticResource GothicMetalButton}"
-                        HorizontalAlignment="Left"
-                        Command="{Binding CompressCommand}"/>
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <Button Content="{Binding [CompressStart], Source={x:Static services:LocalizationService.Instance}}"
+                            Theme="{StaticResource GothicMetalButton}"
+                            Command="{Binding CompressCommand}"/>
+                    <Button Content="{Binding [CompressPause], Source={x:Static services:LocalizationService.Instance}}"
+                            Theme="{StaticResource SmallGothicMetalButton}"
+                            IsVisible="{Binding ShowPause}"
+                            Command="{Binding PauseCompressCommand}"
+                            VerticalAlignment="Center"/>
+                    <Button Content="{Binding [CompressResume], Source={x:Static services:LocalizationService.Instance}}"
+                            Theme="{StaticResource SmallGothicMetalButton}"
+                            IsVisible="{Binding ShowResume}"
+                            Command="{Binding ResumeCompressCommand}"
+                            VerticalAlignment="Center"/>
+                    <Button Content="{Binding [CompressCancel], Source={x:Static services:LocalizationService.Instance}}"
+                            Theme="{StaticResource SmallGothicMetalButton}"
+                            IsVisible="{Binding IsCompressing}"
+                            Command="{Binding CancelCompressCommand}"
+                            VerticalAlignment="Center"/>
+                </StackPanel>
 
                 <!-- Status -->
-                <StackPanel Orientation="Horizontal" Spacing="10">
-                    <ProgressBar IsIndeterminate="True"
+                <StackPanel Spacing="6">
+                    <ProgressBar Minimum="0" Maximum="1"
+                                 Value="{Binding CompressProgress}"
                                  IsVisible="{Binding IsCompressing}"
-                                 Width="120" Height="4"
-                                 VerticalAlignment="Center"/>
-                    <TextBlock Text="{Binding CompressStatusText}"
-                               VerticalAlignment="Center"
-                               FontSize="12"/>
+                                 Height="6"
+                                 HorizontalAlignment="Stretch"/>
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <TextBlock Text="{Binding CompressStatusText}"
+                                   VerticalAlignment="Center"
+                                   FontSize="12"/>
+                        <TextBlock Text="{Binding CompressProgress, StringFormat={}{0:P0}}"
+                                   IsVisible="{Binding IsCompressing}"
+                                   Foreground="{DynamicResource ThemeAccentBrush}"
+                                   VerticalAlignment="Center"
+                                   FontSize="12"/>
+                    </StackPanel>
                 </StackPanel>
 
             </StackPanel>

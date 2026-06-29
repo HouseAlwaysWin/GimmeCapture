@@ -18,6 +18,23 @@ public partial class MainWindowViewModel
     /// <summary>Set by the view: opens a file picker and returns the chosen video path (or null).</summary>
     public Func<Task<string?>>? PickCompressInputAction { get; set; }
 
+    /// <summary>Set by the view: opens a Save dialog seeded with the suggested path; returns the chosen path (or null).</summary>
+    public Func<string, Task<string?>>? PickCompressOutputAction { get; set; }
+
+    // Custom output path. Empty = auto-derive next to the source ("<name>_compressed.<ext>").
+    private string _compressOutputPath = string.Empty;
+    public string CompressOutputPath
+    {
+        get => _compressOutputPath;
+        set => this.RaiseAndSetIfChanged(ref _compressOutputPath, value);
+    }
+
+    // Cancels the in-flight encode (passed as the export CancellationToken).
+    private CancellationTokenSource? _compressCts;
+
+    // Pauses the in-flight encode: signaled = running, reset = the encode loop blocks between frames.
+    private ManualResetEventSlim? _compressPauseGate;
+
     private string _compressInputPath = string.Empty;
     public string CompressInputPath
     {
@@ -36,7 +53,37 @@ public partial class MainWindowViewModel
     public bool IsCompressing
     {
         get => _isCompressing;
-        private set => this.RaiseAndSetIfChanged(ref _isCompressing, value);
+        private set
+        {
+            this.RaiseAndSetIfChanged(ref _isCompressing, value);
+            this.RaisePropertyChanged(nameof(ShowPause));
+            this.RaisePropertyChanged(nameof(ShowResume));
+        }
+    }
+
+    // True while a running encode is paused. Drives the Pause/Resume button swap.
+    private bool _isPaused;
+    public bool IsPaused
+    {
+        get => _isPaused;
+        private set
+        {
+            this.RaiseAndSetIfChanged(ref _isPaused, value);
+            this.RaisePropertyChanged(nameof(ShowPause));
+            this.RaisePropertyChanged(nameof(ShowResume));
+        }
+    }
+
+    // Show Pause while running and not paused; show Resume while running and paused.
+    public bool ShowPause => IsCompressing && !IsPaused;
+    public bool ShowResume => IsCompressing && IsPaused;
+
+    // Video-encode progress (0..1) reported by the exporter; drives the determinate compress progress bar.
+    private double _compressProgress;
+    public double CompressProgress
+    {
+        get => _compressProgress;
+        private set => this.RaiseAndSetIfChanged(ref _compressProgress, value);
     }
 
     private string _compressStatusText = string.Empty;
@@ -137,7 +184,11 @@ public partial class MainWindowViewModel
     }
 
     public ReactiveCommand<Unit, Unit> PickCompressInputCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> PickCompressOutputCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> CompressCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> CancelCompressCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> PauseCompressCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> ResumeCompressCommand { get; private set; } = null!;
 
     private void InitializeVideoCompress()
     {
@@ -149,9 +200,17 @@ public partial class MainWindowViewModel
 
         CompressStatusText = LocalizationService.Instance["CompressStatusReady"];
 
-        PickCompressInputCommand = ReactiveCommand.CreateFromTask(
-            PickCompressInputAsync,
-            this.WhenAnyValue(x => x.IsCompressing, busy => !busy));
+        var notBusy = this.WhenAnyValue(x => x.IsCompressing, busy => !busy);
+
+        PickCompressInputCommand = ReactiveCommand.CreateFromTask(PickCompressInputAsync, notBusy);
+
+        // Output picker needs a source chosen (to seed the suggested name) and no encode in flight.
+        PickCompressOutputCommand = ReactiveCommand.CreateFromTask(
+            PickCompressOutputAsync,
+            this.WhenAnyValue(
+                x => x.CompressInputPath,
+                x => x.IsCompressing,
+                (path, busy) => !string.IsNullOrEmpty(path) && !busy));
 
         var canCompress = this.WhenAnyValue(
             x => x.CompressInputPath,
@@ -159,8 +218,93 @@ public partial class MainWindowViewModel
             (path, busy) => !string.IsNullOrEmpty(path) && !busy);
         CompressCommand = ReactiveCommand.CreateFromTask(CompressAsync, canCompress);
 
+        // Cancel is only meaningful while an encode is running.
+        CancelCompressCommand = ReactiveCommand.Create(CancelCompress, this.WhenAnyValue(x => x.IsCompressing));
+
+        // Pause only while running and not already paused; Resume only while running and paused.
+        PauseCompressCommand = ReactiveCommand.Create(
+            PauseCompress,
+            this.WhenAnyValue(x => x.IsCompressing, x => x.IsPaused, (busy, paused) => busy && !paused));
+        ResumeCompressCommand = ReactiveCommand.Create(
+            ResumeCompress,
+            this.WhenAnyValue(x => x.IsCompressing, x => x.IsPaused, (busy, paused) => busy && paused));
+
+        // Keep a custom output path's extension in sync if the user later changes the output format.
+        this.WhenAnyValue(x => x.SelectedCompressFormat).Subscribe(fmt =>
+        {
+            if (!string.IsNullOrWhiteSpace(CompressOutputPath) && !string.IsNullOrWhiteSpace(fmt))
+            {
+                CompressOutputPath = Path.ChangeExtension(CompressOutputPath, "." + fmt.ToLowerInvariant());
+            }
+        });
+
         PickCompressInputCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.Pick", ex));
+        PickCompressOutputCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.PickOutput", ex));
         CompressCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.Run", ex));
+        CancelCompressCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.Cancel", ex));
+        PauseCompressCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.Pause", ex));
+        ResumeCompressCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.Resume", ex));
+    }
+
+    private void CancelCompress()
+    {
+        if (_compressCts is { IsCancellationRequested: false })
+        {
+            CompressStatusText = LocalizationService.Instance["StatusCompressCancelling"];
+            // Release the pause gate first so a paused encode wakes and then observes cancellation.
+            _compressPauseGate?.Set();
+            IsPaused = false;
+            _compressCts.Cancel();
+        }
+    }
+
+    private void PauseCompress()
+    {
+        if (IsCompressing && !IsPaused && _compressPauseGate != null)
+        {
+            _compressPauseGate.Reset(); // encode loop blocks at the next frame boundary
+            IsPaused = true;
+            CompressStatusText = LocalizationService.Instance["StatusCompressPaused"];
+        }
+    }
+
+    private void ResumeCompress()
+    {
+        if (IsCompressing && IsPaused && _compressPauseGate != null)
+        {
+            _compressPauseGate.Set(); // unblock the encode loop
+            IsPaused = false;
+            CompressStatusText = LocalizationService.Instance["StatusCompressing"];
+        }
+    }
+
+    private async Task PickCompressOutputAsync()
+    {
+        if (PickCompressOutputAction == null || string.IsNullOrEmpty(CompressInputPath))
+        {
+            return;
+        }
+
+        string ext = "." + SelectedCompressFormat.ToLowerInvariant();
+        string suggested = string.IsNullOrWhiteSpace(CompressOutputPath)
+            ? BuildCompressOutputPath(CompressInputPath, ext)
+            : CompressOutputPath;
+
+        string? chosen = await PickCompressOutputAction(suggested);
+        if (string.IsNullOrEmpty(chosen))
+        {
+            return;
+        }
+
+        CompressOutputPath = chosen;
+
+        // Mirror the chosen extension back into the format combo when it maps to a supported container.
+        string chosenExt = Path.GetExtension(chosen).TrimStart('.');
+        string? match = Array.Find(CompressOutputFormats, f => f.Equals(chosenExt, StringComparison.OrdinalIgnoreCase));
+        if (match != null)
+        {
+            SelectedCompressFormat = match;
+        }
     }
 
     private async Task PickCompressInputAsync()
@@ -177,6 +321,7 @@ public partial class MainWindowViewModel
         }
 
         CompressInputPath = path;
+        CompressOutputPath = string.Empty; // a path tied to the previous source is stale; revert to auto
         CompressInputInfo = await BuildInputInfoAsync(path);
         CompressStatusText = LocalizationService.Instance["CompressStatusReady"];
     }
@@ -211,10 +356,34 @@ public partial class MainWindowViewModel
             return;
         }
 
-        // Auto-derive the output path next to the source ("<name>_compressed.<ext>", de-duplicated) so a
-        // single "Compress" click just runs — no second file dialog once the source is already chosen.
-        string ext = "." + SelectedCompressFormat.ToLowerInvariant();
-        string outputPath = BuildCompressOutputPath(CompressInputPath, ext);
+        // Output path: a custom path (from the Save dialog) wins; otherwise auto-derive next to the source
+        // ("<name>_compressed.<ext>", de-duplicated) so a single "Compress" click just runs.
+        string outputPath;
+        if (!string.IsNullOrWhiteSpace(CompressOutputPath))
+        {
+            outputPath = CompressOutputPath;
+            // Guard against overwriting the source itself with a same-path custom selection.
+            if (string.Equals(Path.GetFullPath(outputPath), Path.GetFullPath(CompressInputPath),
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                CompressStatusText = LocalizationService.Instance["StatusCompressFailed"];
+                ShowToastAction?.Invoke(CompressStatusText, ToastSeverity.Error);
+                return;
+            }
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(outputPath) ?? ".");
+            }
+            catch (Exception ex)
+            {
+                AppLog.Error("Compress.PrepareOutputDir", ex);
+            }
+        }
+        else
+        {
+            string ext = "." + SelectedCompressFormat.ToLowerInvariant();
+            outputPath = BuildCompressOutputPath(CompressInputPath, ext);
+        }
 
         VideoCodec codec = SelectedCompressCodecOption?.Value ?? VideoCodec.H264;
         int crf = Math.Clamp(CompressCrf, 1, 51);
@@ -249,7 +418,19 @@ public partial class MainWindowViewModel
         }
 
         IsCompressing = true;
+        CompressProgress = 0;
         CompressStatusText = LocalizationService.Instance["StatusCompressing"];
+
+        _compressCts?.Dispose();
+        _compressCts = new CancellationTokenSource();
+        CancellationToken token = _compressCts.Token;
+
+        _compressPauseGate?.Dispose();
+        _compressPauseGate = new ManualResetEventSlim(true); // starts signaled = running
+        IsPaused = false;
+
+        // Marshals exporter progress back to the UI thread (Progress<T> captures this sync context).
+        var encodeProgress = new Progress<double>(p => CompressProgress = p);
 
         string outExt = Path.GetExtension(outputPath);
         string tempDir = Path.Combine(Path.GetTempPath(), "GimmeCapture_Compress_" + Guid.NewGuid().ToString("N"));
@@ -275,8 +456,16 @@ public partial class MainWindowViewModel
                     MaxHeight = maxHeight,
                     DropAudio = dropAudio
                 };
+                // A corrective second pass restarts progress from 0 (status text signals the refine phase).
+                if (attempt > 1)
+                {
+                    CompressProgress = 0;
+                }
                 bool encoded = await Task.Run(() =>
-                    LibavClipExporter.TryExport(input, ranges, attemptOut, VideoQuality.Medium, options: options));
+                    LibavClipExporter.TryExport(
+                        input, ranges, attemptOut, VideoQuality.Medium,
+                        cancellationToken: token, options: options, progress: encodeProgress,
+                        pauseGate: _compressPauseGate), token);
                 return encoded && File.Exists(attemptOut) && new FileInfo(attemptOut).Length > 0
                     ? attemptOut
                     : null;
@@ -323,6 +512,13 @@ public partial class MainWindowViewModel
                 ShowToastAction?.Invoke(CompressStatusText, ToastSeverity.Error);
             }
         }
+        catch (OperationCanceledException)
+        {
+            // User cancelled: leave no partial output (the temp dir is wiped in finally; outputPath was
+            // never written because the copy only runs on a completed encode).
+            CompressStatusText = LocalizationService.Instance["StatusCompressCancelled"];
+            ShowToastAction?.Invoke(CompressStatusText, ToastSeverity.Info);
+        }
         catch (Exception ex)
         {
             AppLog.Error("Compress.Export", ex);
@@ -332,6 +528,11 @@ public partial class MainWindowViewModel
         finally
         {
             IsCompressing = false;
+            IsPaused = false;
+            _compressCts?.Dispose();
+            _compressCts = null;
+            _compressPauseGate?.Dispose();
+            _compressPauseGate = null;
             try
             {
                 if (Directory.Exists(tempDir))

@@ -93,6 +93,14 @@ internal static class LibavClipExporter
     /// Optional encode knobs (codec, target bitrate, CRF, preset, downscale, drop-audio). Null reproduces
     /// the original behaviour, so existing callers are unaffected.
     /// </param>
+    /// <param name="progress">
+    /// Optional progress sink reporting the video-encode fraction (0..1) by source time consumed. The audio
+    /// decode/encode + mux tail isn't tracked, so the bar may sit near 1.0 briefly at the end. Null = silent.
+    /// </param>
+    /// <param name="pauseGate">
+    /// Optional pause control: when reset (non-signaled), the video-encode loop blocks between frames until it
+    /// is set again (or cancellation fires). Null or always-set = no pausing. Must start signaled.
+    /// </param>
     public static bool TryExport(
         string inputPath,
         IReadOnlyList<SourceRange> ranges,
@@ -101,7 +109,9 @@ internal static class LibavClipExporter
         VideoEditCrop? crop = null,
         Action<SKBitmap, double>? frameComposite = null,
         CancellationToken cancellationToken = default,
-        LibavExportOptions? options = null)
+        LibavExportOptions? options = null,
+        IProgress<double>? progress = null,
+        ManualResetEventSlim? pauseGate = null)
     {
         FFmpegRuntime.EnsureInitialized();
         var opt = options ?? new LibavExportOptions();
@@ -126,7 +136,7 @@ internal static class LibavClipExporter
 
         try
         {
-            EncodeVideoRanges(inputPath, ranges, videoTemp, quality, crop, frameComposite, cancellationToken, opt);
+            EncodeVideoRanges(inputPath, ranges, videoTemp, quality, crop, frameComposite, cancellationToken, opt, progress, pauseGate);
 
             string? audioTemp = null;
             bool hasAudio = !opt.DropAudio
@@ -162,7 +172,9 @@ internal static class LibavClipExporter
         VideoEditCrop? crop,
         Action<SKBitmap, double>? frameComposite,
         CancellationToken ct,
-        LibavExportOptions opt)
+        LibavExportOptions opt,
+        IProgress<double>? progress = null,
+        ManualResetEventSlim? pauseGate = null)
     {
         VideoCodec codec = opt.Codec;
         int targetVideoBitrateKbps = opt.TargetVideoBitrateKbps;
@@ -184,6 +196,14 @@ internal static class LibavClipExporter
         // 1/speed output frames, and we emit floor(after)-floor(before) frames (drop when >1×, dup when <1×).
         double frameAccum = 0;
         bool annotate = frameComposite != null;
+
+        // Progress is reported by source-time consumed across all kept ranges (0..1). Throttled to whole
+        // percent changes so a long encode doesn't flood the IProgress sink / UI thread.
+        double totalSrcDuration = 0;
+        foreach (SourceRange r in ranges) totalSrcDuration += r.Duration;
+        if (totalSrcDuration <= 0) totalSrcDuration = 1; // guard div-by-zero (unreadable/zero-length)
+        double elapsedBeforeRange = 0;
+        int lastPercent = -1;
 
         try
         {
@@ -372,6 +392,8 @@ internal static class LibavClipExporter
                 while (!runDone && !eof)
                 {
                     ct.ThrowIfCancellationRequested();
+                    // Block here (between frames) while paused; wakes on resume or throws on cancel.
+                    pauseGate?.Wait(ct);
                     int rr = ffmpeg.av_read_frame(inFmt, inPkt);
                     if (rr == ffmpeg.AVERROR_EOF)
                     {
@@ -395,7 +417,8 @@ internal static class LibavClipExporter
 
                     runDone = DrainDecodedFrames(
                         decCtx, encCtx, sws, swsToBgra, decFrame, encFrame, bgraFrame, frameComposite,
-                        outFmt, outStream, outPkt, inStream->time_base, range, crop, ref frameIndex, ref frameAccum);
+                        outFmt, outStream, outPkt, inStream->time_base, range, crop, ref frameIndex, ref frameAccum,
+                        progress, totalSrcDuration, elapsedBeforeRange, ref lastPercent);
                 }
 
                 // Range reached the file end: flush the decoder so its buffered tail frames aren't lost.
@@ -404,11 +427,13 @@ internal static class LibavClipExporter
                     ffmpeg.avcodec_send_packet(decCtx, null);
                     DrainDecodedFrames(
                         decCtx, encCtx, sws, swsToBgra, decFrame, encFrame, bgraFrame, frameComposite,
-                        outFmt, outStream, outPkt, inStream->time_base, range, crop, ref frameIndex, ref frameAccum);
+                        outFmt, outStream, outPkt, inStream->time_base, range, crop, ref frameIndex, ref frameAccum,
+                        progress, totalSrcDuration, elapsedBeforeRange, ref lastPercent);
                 }
 
                 // Reset the decoder before the next range's seek (and after the final flush above).
                 ffmpeg.avcodec_flush_buffers(decCtx);
+                elapsedBeforeRange += range.Duration;
             }
 
             // Flush the encoder to drain any buffered output packets.
@@ -459,7 +484,11 @@ internal static class LibavClipExporter
         SourceRange range,
         VideoEditCrop? crop,
         ref long frameIndex,
-        ref double frameAccum)
+        ref double frameAccum,
+        IProgress<double>? progress,
+        double totalSrcDuration,
+        double elapsedBeforeRange,
+        ref int lastPercent)
     {
         while (true)
         {
@@ -525,6 +554,19 @@ internal static class LibavClipExporter
                 ffmpeg.sws_scale(sws, decFrame->data, decFrame->linesize, 0, decFrame->height,
                     encFrame->data, encFrame->linesize);
             }
+            // Report encode progress by source-time consumed (this frame's offset within the kept ranges),
+            // throttled to whole-percent changes.
+            if (progress != null)
+            {
+                double done = elapsedBeforeRange + Math.Clamp(t - range.StartSeconds, 0, range.Duration);
+                int pct = (int)(done / totalSrcDuration * 100.0);
+                if (pct != lastPercent)
+                {
+                    lastPercent = pct;
+                    progress.Report(Math.Clamp(done / totalSrcDuration, 0, 1));
+                }
+            }
+
             // Per-segment speed: this source frame spans 1/speed output frames on a CFR (source-fps)
             // timeline. We emit drop/dup counts so faster (>1×) drops frames and slower (<1×) duplicates;
             // at 1× it is exactly one frame, identical to before.
