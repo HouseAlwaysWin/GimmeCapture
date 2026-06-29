@@ -112,5 +112,10 @@ public class CompressIntegrationTests
         int kbps = MainWindowViewModel.ComputeTargetVideoBitrateKbps(5, duration);
         long target = new FileInfo(await Run("target5mb", new LibavExportOptions { TargetVideoBitrateKbps = kbps })).Length;
         Assert.True(target <= 5L * 1024 * 1024 * 12 / 10, $"target5mb={target} exceeds 5 MB + 20%");
+
+        // True two-pass (H.264) should hit the target at least as tightly — assert within +10%.
+        long twoPass = new FileInfo(await Run("target5mb_2pass",
+            new LibavExportOptions { TargetVideoBitrateKbps = kbps, TwoPass = true })).Length;
+        Assert.True(twoPass <= 5L * 1024 * 1024 * 11 / 10, $"target5mb_2pass={twoPass} exceeds 5 MB + 10%");
     }
 }

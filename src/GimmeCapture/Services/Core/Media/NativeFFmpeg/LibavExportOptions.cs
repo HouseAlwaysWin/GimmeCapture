@@ -15,6 +15,13 @@ internal sealed class LibavExportOptions
     /// <summary>Average video bitrate (kbps) for ABR/target-size mode. 0 = use the quality CRF ladder.</summary>
     public int TargetVideoBitrateKbps { get; init; }
 
+    /// <summary>
+    /// Use true two-pass encoding for the target bitrate (more accurate size + better quality distribution
+    /// than single-pass ABR). Only honoured for H.264 with <see cref="TargetVideoBitrateKbps"/> &gt; 0; H.265
+    /// and CRF modes ignore it. Default false = single-pass.
+    /// </summary>
+    public bool TwoPass { get; init; }
+
     /// <summary>Explicit CRF (0-51) overriding the quality ladder. 0 = derive from <see cref="VideoQuality"/>.</summary>
     public int CrfOverride { get; init; }
 

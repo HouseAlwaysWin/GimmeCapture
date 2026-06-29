@@ -136,7 +136,23 @@ internal static class LibavClipExporter
 
         try
         {
-            EncodeVideoRanges(inputPath, ranges, videoTemp, quality, crop, frameComposite, cancellationToken, opt, progress, pauseGate);
+            // True two-pass (libx264 target-size only): pass 1 writes stats to a temp log, pass 2 reads them.
+            // H.265 / CRF fall through to the single encode. Progress spans both passes (0..0.5, 0.5..1).
+            bool realTwoPass = opt.TwoPass && opt.TargetVideoBitrateKbps > 0 && opt.Codec == VideoCodec.H264;
+            if (realTwoPass)
+            {
+                string statsFile = Path.Combine(tempDir, "x264_2pass.log");
+                string pass1Temp = Path.Combine(tempDir, "pass1.mp4");
+                EncodeVideoRanges(inputPath, ranges, pass1Temp, quality, crop, frameComposite, cancellationToken,
+                    opt, progress == null ? null : new ScaledProgress(progress, 0.0, 0.5), pauseGate, 1, statsFile);
+                EncodeVideoRanges(inputPath, ranges, videoTemp, quality, crop, frameComposite, cancellationToken,
+                    opt, progress == null ? null : new ScaledProgress(progress, 0.5, 0.5), pauseGate, 2, statsFile);
+            }
+            else
+            {
+                EncodeVideoRanges(inputPath, ranges, videoTemp, quality, crop, frameComposite, cancellationToken,
+                    opt, progress, pauseGate);
+            }
 
             string? audioTemp = null;
             bool hasAudio = !opt.DropAudio
@@ -174,7 +190,9 @@ internal static class LibavClipExporter
         CancellationToken ct,
         LibavExportOptions opt,
         IProgress<double>? progress = null,
-        ManualResetEventSlim? pauseGate = null)
+        ManualResetEventSlim? pauseGate = null,
+        int passNumber = 0,
+        string? statsFile = null)
     {
         VideoCodec codec = opt.Codec;
         int targetVideoBitrateKbps = opt.TargetVideoBitrateKbps;
@@ -289,18 +307,30 @@ internal static class LibavClipExporter
             ffmpeg.av_dict_set(&encOpts, "preset", string.IsNullOrWhiteSpace(opt.Preset) ? "veryfast" : opt.Preset, 0);
             if (targetVideoBitrateKbps > 0)
             {
-                // Average-bitrate mode for "compress to a target size": single-pass ABR with a peak
-                // cap so the output lands near the requested size (still approximate — no two-pass).
+                // Average-bitrate mode for "compress to a target size".
                 long bps = (long)targetVideoBitrateKbps * 1000;
                 encCtx->bit_rate = bps;
-                encCtx->rc_max_rate = bps;                                  // VBV peak cap
-                encCtx->rc_buffer_size = (int)Math.Min(int.MaxValue, bps * 2);
+                bool twoPass = passNumber > 0;
+                if (!twoPass)
+                {
+                    // Single-pass ABR with a VBV peak cap so the output lands near the requested size
+                    // (approximate). Two-pass omits the cap and lets x264 distribute bits from pass-1 stats.
+                    encCtx->rc_max_rate = bps;
+                    encCtx->rc_buffer_size = (int)Math.Min(int.MaxValue, bps * 2);
+                }
                 // libx265 reads rate control from x265-params, not the AVCodecContext bitrate fields.
                 if (enc->id == AVCodecID.AV_CODEC_ID_HEVC)
                 {
                     long kbps = targetVideoBitrateKbps;
                     ffmpeg.av_dict_set(&encOpts, "x265-params",
                         $"bitrate={kbps}:vbv-maxrate={kbps}:vbv-bufsize={kbps * 2}", 0);
+                }
+                else if (twoPass && statsFile != null)
+                {
+                    // True two-pass for libx264: pass 1 writes stats, pass 2 reads them. The "stats" AVOption
+                    // takes a full path (unlike x265-params' colon-delimited string), so Windows paths work.
+                    encCtx->flags |= passNumber == 1 ? ffmpeg.AV_CODEC_FLAG_PASS1 : ffmpeg.AV_CODEC_FLAG_PASS2;
+                    ffmpeg.av_dict_set(&encOpts, "stats", statsFile, 0);
                 }
             }
             else
@@ -739,5 +769,22 @@ internal static class LibavClipExporter
         {
             throw FFmpegErrors.ToException(err, ctx);
         }
+    }
+
+    /// <summary>Maps an inner 0..1 progress fraction onto [offset, offset+scale] (for multi-pass encodes).</summary>
+    private sealed class ScaledProgress : IProgress<double>
+    {
+        private readonly IProgress<double> _inner;
+        private readonly double _offset;
+        private readonly double _scale;
+
+        public ScaledProgress(IProgress<double> inner, double offset, double scale)
+        {
+            _inner = inner;
+            _offset = offset;
+            _scale = scale;
+        }
+
+        public void Report(double value) => _inner.Report(_offset + (_scale * value));
     }
 }

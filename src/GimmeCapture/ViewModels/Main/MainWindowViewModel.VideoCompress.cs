@@ -470,6 +470,10 @@ public partial class MainWindowViewModel
         int audioChannels = SelectedCompressAudioChannels?.Channels ?? 0;
         string input = CompressInputPath;
 
+        // True two-pass replaces the adaptive corrective pass for H.264 target-size (more accurate, better
+        // quality distribution). H.265 target-size keeps single-pass ABR + the corrective re-encode below.
+        bool useTwoPass = CompressUseTargetSize && codec == VideoCodec.H264;
+
         double probedDuration = 0;
         try
         {
@@ -535,7 +539,8 @@ public partial class MainWindowViewModel
                     MaxFps = maxFps,
                     DropAudio = dropAudio,
                     AudioBitrateKbps = audioBitrateKbps,
-                    AudioChannels = audioChannels
+                    AudioChannels = audioChannels,
+                    TwoPass = useTwoPass
                 };
                 // A corrective second pass restarts progress from 0 (status text signals the refine phase).
                 if (attempt > 1)
@@ -554,9 +559,10 @@ public partial class MainWindowViewModel
 
             string? finalTemp = await EncodeAttemptAsync(targetBitrateKbps, 1);
 
-            // Target-size accuracy: single-pass ABR can overshoot, so if the first attempt exceeds the
-            // requested size, re-encode once at a proportionally lower bitrate (audio held constant).
-            if (finalTemp != null && CompressUseTargetSize)
+            // Target-size accuracy for the SINGLE-PASS path (H.265): single-pass ABR can overshoot, so if the
+            // first attempt exceeds the requested size, re-encode once at a proportionally lower bitrate
+            // (audio held constant). H.264 uses true two-pass above and needs no corrective re-encode.
+            if (finalTemp != null && CompressUseTargetSize && !useTwoPass)
             {
                 double targetBytes = (double)CompressTargetSizeMB * 1024 * 1024;
                 long actualBytes = new FileInfo(finalTemp).Length;
