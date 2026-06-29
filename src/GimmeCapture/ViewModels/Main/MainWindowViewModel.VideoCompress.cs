@@ -17,90 +17,23 @@ namespace GimmeCapture.ViewModels.Main;
 // LibavClipExporter pipeline. Exposes codec, CRF/target-size, preset, downscale and drop-audio knobs.
 public partial class MainWindowViewModel
 {
-    /// <summary>Set by the view: opens a file picker and returns the chosen video path (or null).</summary>
-    public Func<Task<string?>>? PickCompressInputAction { get; set; }
+    /// <summary>Set by the view: opens a folder picker for the batch output folder; returns the chosen dir (or null).</summary>
+    public Func<Task<string?>>? PickCompressOutputFolderAction { get; set; }
 
-    /// <summary>Set by the view: opens a Save dialog seeded with the suggested path; returns the chosen path (or null).</summary>
-    public Func<string, Task<string?>>? PickCompressOutputAction { get; set; }
-
-    // Custom output path. Empty = auto-derive next to the source ("<name>_compressed.<ext>").
-    private string _compressOutputPath = string.Empty;
-    public string CompressOutputPath
+    // Optional batch output folder. Empty = auto-save each output next to its source.
+    private string _compressOutputFolder = string.Empty;
+    public string CompressOutputFolder
     {
-        get => _compressOutputPath;
-        set => this.RaiseAndSetIfChanged(ref _compressOutputPath, value);
+        get => _compressOutputFolder;
+        set => this.RaiseAndSetIfChanged(ref _compressOutputFolder, value);
     }
 
-    // Cancels the in-flight encode (passed as the export CancellationToken).
-    private CancellationTokenSource? _compressCts;
-
-    // Pauses the in-flight encode: signaled = running, reset = the encode loop blocks between frames.
-    private ManualResetEventSlim? _compressPauseGate;
-
-    private string _compressInputPath = string.Empty;
-    public string CompressInputPath
+    // Append a "_yyyyMMdd_HHmmss" timestamp to each output file name.
+    private bool _compressAppendDate = true;
+    public bool CompressAppendDate
     {
-        get => _compressInputPath;
-        set => this.RaiseAndSetIfChanged(ref _compressInputPath, value);
-    }
-
-    private string _compressInputInfo = string.Empty;
-    public string CompressInputInfo
-    {
-        get => _compressInputInfo;
-        set => this.RaiseAndSetIfChanged(ref _compressInputInfo, value);
-    }
-
-    // Probed source metadata (set when a file is picked) used by the live size estimate.
-    private int _sourceWidth;
-    private int _sourceHeight;
-    private int _sourceFps;
-    private double _sourceDurationSeconds;
-
-    // Live "estimated output size" text, recomputed as settings change. Empty when no source is loaded.
-    private string _compressEstimateText = string.Empty;
-    public string CompressEstimateText
-    {
-        get => _compressEstimateText;
-        private set => this.RaiseAndSetIfChanged(ref _compressEstimateText, value);
-    }
-
-    private bool _isCompressing;
-    public bool IsCompressing
-    {
-        get => _isCompressing;
-        private set
-        {
-            this.RaiseAndSetIfChanged(ref _isCompressing, value);
-            this.RaisePropertyChanged(nameof(ShowPause));
-            this.RaisePropertyChanged(nameof(ShowResume));
-            this.RaisePropertyChanged(nameof(IsBusy));
-        }
-    }
-
-    // True while a running encode is paused. Drives the Pause/Resume button swap.
-    private bool _isPaused;
-    public bool IsPaused
-    {
-        get => _isPaused;
-        private set
-        {
-            this.RaiseAndSetIfChanged(ref _isPaused, value);
-            this.RaisePropertyChanged(nameof(ShowPause));
-            this.RaisePropertyChanged(nameof(ShowResume));
-        }
-    }
-
-    // Show Pause while running and not paused; show Resume while running and paused.
-    public bool ShowPause => IsCompressing && !IsPaused;
-    public bool ShowResume => IsCompressing && IsPaused;
-
-    // Video-encode progress (0..1) reported by the exporter; drives the determinate compress progress bar.
-    private double _compressProgress;
-    public double CompressProgress
-    {
-        get => _compressProgress;
-        private set => this.RaiseAndSetIfChanged(ref _compressProgress, value);
+        get => _compressAppendDate;
+        set => this.RaiseAndSetIfChanged(ref _compressAppendDate, value);
     }
 
     private string _compressStatusText = string.Empty;
@@ -272,12 +205,8 @@ public partial class MainWindowViewModel
         set => this.RaiseAndSetIfChanged(ref _selectedCompressFormat, value);
     }
 
-    public ReactiveCommand<Unit, Unit> PickCompressInputCommand { get; private set; } = null!;
-    public ReactiveCommand<Unit, Unit> PickCompressOutputCommand { get; private set; } = null!;
-    public ReactiveCommand<Unit, Unit> CompressCommand { get; private set; } = null!;
-    public ReactiveCommand<Unit, Unit> CancelCompressCommand { get; private set; } = null!;
-    public ReactiveCommand<Unit, Unit> PauseCompressCommand { get; private set; } = null!;
-    public ReactiveCommand<Unit, Unit> ResumeCompressCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> PickCompressOutputFolderCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> ClearCompressOutputFolderCommand { get; private set; } = null!;
 
     // Saved setting bundles (persisted JSON). Distinct from SelectedCompressPreset (the encoder speed preset).
     public ObservableCollection<CompressPreset> CompressPresets { get; } = new();
@@ -315,32 +244,13 @@ public partial class MainWindowViewModel
 
         var notBusy = this.WhenAnyValue(x => x.IsBusy, busy => !busy);
 
-        PickCompressInputCommand = ReactiveCommand.CreateFromTask(PickCompressInputAsync, notBusy);
-
-        // Output picker needs a source chosen (to seed the suggested name) and nothing else running.
-        PickCompressOutputCommand = ReactiveCommand.CreateFromTask(
-            PickCompressOutputAsync,
-            this.WhenAnyValue(
-                x => x.CompressInputPath,
-                x => x.IsBusy,
-                (path, busy) => !string.IsNullOrEmpty(path) && !busy));
-
-        var canCompress = this.WhenAnyValue(
-            x => x.CompressInputPath,
-            x => x.IsBusy,
-            (path, busy) => !string.IsNullOrEmpty(path) && !busy);
-        CompressCommand = ReactiveCommand.CreateFromTask(CompressAsync, canCompress);
-
-        // Cancel is only meaningful while an encode is running.
-        CancelCompressCommand = ReactiveCommand.Create(CancelCompress, this.WhenAnyValue(x => x.IsCompressing));
-
-        // Pause only while running and not already paused; Resume only while running and paused.
-        PauseCompressCommand = ReactiveCommand.Create(
-            PauseCompress,
-            this.WhenAnyValue(x => x.IsCompressing, x => x.IsPaused, (busy, paused) => busy && !paused));
-        ResumeCompressCommand = ReactiveCommand.Create(
-            ResumeCompress,
-            this.WhenAnyValue(x => x.IsCompressing, x => x.IsPaused, (busy, paused) => busy && paused));
+        // Output folder: an optional batch destination. Pickable when nothing is running; clear to revert
+        // to auto-save-next-to-source.
+        PickCompressOutputFolderCommand = ReactiveCommand.CreateFromTask(PickCompressOutputFolderAsync, notBusy);
+        ClearCompressOutputFolderCommand = ReactiveCommand.Create(
+            () => { CompressOutputFolder = string.Empty; },
+            this.WhenAnyValue(x => x.CompressOutputFolder, x => x.IsBusy,
+                (folder, busy) => !string.IsNullOrEmpty(folder) && !busy));
 
         // Presets: save needs a non-blank name; load/delete need a selection. None while busy.
         SaveCompressPresetCommand = ReactiveCommand.Create(
@@ -363,7 +273,7 @@ public partial class MainWindowViewModel
 
         InitializeCompressBatch();
 
-        // Recompute the live size estimate whenever a relevant knob changes (source change calls it directly).
+        // Recompute every queued file's size estimate whenever a relevant output setting changes.
         this.WhenAnyValue(
                 x => x.SelectedCompressCodecOption,
                 x => x.SelectedCompressResolution,
@@ -374,26 +284,27 @@ public partial class MainWindowViewModel
                 x => x.CompressDropAudio,
                 x => x.SelectedCompressAudioBitrate,
                 (a, b, c, d, e, f, g, h) => Unit.Default)
-            .Subscribe(_ => UpdateEstimate());
+            .Subscribe(_ => RecomputeQueueEstimates());
 
-        // Keep a custom output path's extension in sync if the user later changes the output format.
-        this.WhenAnyValue(x => x.SelectedCompressFormat).Subscribe(fmt =>
-        {
-            if (!string.IsNullOrWhiteSpace(CompressOutputPath) && !string.IsNullOrWhiteSpace(fmt))
-            {
-                CompressOutputPath = Path.ChangeExtension(CompressOutputPath, "." + fmt.ToLowerInvariant());
-            }
-        });
-
-        PickCompressInputCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.Pick", ex));
-        PickCompressOutputCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.PickOutput", ex));
-        CompressCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.Run", ex));
-        CancelCompressCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.Cancel", ex));
-        PauseCompressCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.Pause", ex));
-        ResumeCompressCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.Resume", ex));
+        PickCompressOutputFolderCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.PickOutputFolder", ex));
+        ClearCompressOutputFolderCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.ClearOutputFolder", ex));
         SaveCompressPresetCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.PresetSave", ex));
         LoadCompressPresetCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.PresetLoad", ex));
         DeleteCompressPresetCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.PresetDelete", ex));
+    }
+
+    private async Task PickCompressOutputFolderAsync()
+    {
+        if (PickCompressOutputFolderAction == null)
+        {
+            return;
+        }
+
+        string? folder = await PickCompressOutputFolderAction();
+        if (!string.IsNullOrEmpty(folder))
+        {
+            CompressOutputFolder = folder;
+        }
     }
 
     // Snapshots the current Compress-tab settings into a named preset.
@@ -460,7 +371,7 @@ public partial class MainWindowViewModel
         SelectedCompressAudioChannels = Array.Find(CompressAudioChannelsOptions, o => o.Channels == p.AudioChannels)
             ?? CompressAudioChannelsOptions[0];
         CompressPresetName = p.Name; // so a follow-up Save updates this preset
-        // UpdateEstimate fires via the WhenAnyValue subscriptions as the properties above change.
+        // RecomputeQueueEstimates fires via the WhenAnyValue subscriptions as the properties above change.
     }
 
     private void DeleteCompressPreset()
@@ -476,138 +387,20 @@ public partial class MainWindowViewModel
         SelectedSavedPreset = null;
     }
 
-    private void CancelCompress()
+    // Recomputes every queued file's "≈ size" estimate from its probed metadata + the current settings.
+    private void RecomputeQueueEstimates()
     {
-        if (_compressCts is { IsCancellationRequested: false })
+        foreach (CompressQueueItem item in CompressQueue)
         {
-            CompressStatusText = LocalizationService.Instance["StatusCompressCancelling"];
-            // Release the pause gate first so a paused encode wakes and then observes cancellation.
-            _compressPauseGate?.Set();
-            IsPaused = false;
-            _compressCts.Cancel();
+            item.EstimatedText = BuildItemEstimate(item);
         }
     }
 
-    private void PauseCompress()
+    private string BuildItemEstimate(CompressQueueItem item)
     {
-        if (IsCompressing && !IsPaused && _compressPauseGate != null)
+        if (item.ProbedDuration <= 0 || item.ProbedWidth <= 0 || item.ProbedHeight <= 0)
         {
-            _compressPauseGate.Reset(); // encode loop blocks at the next frame boundary
-            IsPaused = true;
-            CompressStatusText = LocalizationService.Instance["StatusCompressPaused"];
-        }
-    }
-
-    private void ResumeCompress()
-    {
-        if (IsCompressing && IsPaused && _compressPauseGate != null)
-        {
-            _compressPauseGate.Set(); // unblock the encode loop
-            IsPaused = false;
-            CompressStatusText = LocalizationService.Instance["StatusCompressing"];
-        }
-    }
-
-    private async Task PickCompressOutputAsync()
-    {
-        if (PickCompressOutputAction == null || string.IsNullOrEmpty(CompressInputPath))
-        {
-            return;
-        }
-
-        string ext = "." + SelectedCompressFormat.ToLowerInvariant();
-        string suggested = string.IsNullOrWhiteSpace(CompressOutputPath)
-            ? BuildCompressOutputPath(CompressInputPath, ext)
-            : CompressOutputPath;
-
-        string? chosen = await PickCompressOutputAction(suggested);
-        if (string.IsNullOrEmpty(chosen))
-        {
-            return;
-        }
-
-        CompressOutputPath = chosen;
-
-        // Mirror the chosen extension back into the format combo when it maps to a supported container.
-        string chosenExt = Path.GetExtension(chosen).TrimStart('.');
-        string? match = Array.Find(CompressOutputFormats, f => f.Equals(chosenExt, StringComparison.OrdinalIgnoreCase));
-        if (match != null)
-        {
-            SelectedCompressFormat = match;
-        }
-    }
-
-    private async Task PickCompressInputAsync()
-    {
-        if (PickCompressInputAction == null)
-        {
-            return;
-        }
-
-        string? path = await PickCompressInputAction();
-        if (string.IsNullOrEmpty(path) || !File.Exists(path))
-        {
-            return;
-        }
-
-        CompressInputPath = path;
-        CompressOutputPath = string.Empty; // a path tied to the previous source is stale; revert to auto
-        await ProbeSourceAsync(path);
-        CompressInputInfo = BuildInputInfo(path);
-        CompressStatusText = LocalizationService.Instance["CompressStatusReady"];
-        UpdateEstimate();
-    }
-
-    // Probes the source's resolution / fps / duration into the _source* fields for the size estimate.
-    private async Task ProbeSourceAsync(string path)
-    {
-        _sourceWidth = 0;
-        _sourceHeight = 0;
-        _sourceFps = 0;
-        _sourceDurationSeconds = 0;
-        try
-        {
-            using var probe = new LibavVideoFramePlayer();
-            _sourceDurationSeconds = await probe.ProbeDurationSecondsAsync(path) ?? 0;
-            var size = await probe.ProbeVideoSizeAsync(path);
-            if (size is { } s)
-            {
-                _sourceWidth = s.Width;
-                _sourceHeight = s.Height;
-            }
-        }
-        catch (Exception ex)
-        {
-            AppLog.Error("Compress.ProbeSource", ex);
-        }
-
-        try
-        {
-            _sourceFps = await Task.Run(() => LibavClipExporter.ProbeFps(path));
-        }
-        catch (Exception ex)
-        {
-            AppLog.Error("Compress.ProbeFps", ex);
-        }
-    }
-
-    private string BuildInputInfo(string path)
-    {
-        string name = Path.GetFileName(path);
-        string size = FormatFileSize(new FileInfo(path).Length);
-        string duration = _sourceDurationSeconds > 0
-            ? TimeSpan.FromSeconds(_sourceDurationSeconds).ToString(@"hh\:mm\:ss")
-            : "--:--";
-        return $"{name}  ·  {duration}  ·  {size}";
-    }
-
-    // Recomputes the live "estimated output size" text from the current settings + probed source metadata.
-    private void UpdateEstimate()
-    {
-        if (_sourceDurationSeconds <= 0 || _sourceWidth <= 0 || _sourceHeight <= 0)
-        {
-            CompressEstimateText = string.Empty;
-            return;
+            return string.Empty; // not probed yet (or unreadable)
         }
 
         string prefix = LocalizationService.Instance["CompressEstimateLabel"];
@@ -615,8 +408,7 @@ public partial class MainWindowViewModel
         if (CompressUseTargetSize)
         {
             // Target-size mode encodes to (approximately) the requested size by design.
-            CompressEstimateText = $"{prefix}: ≈ {FormatFileSize((long)((double)CompressTargetSizeMB * 1024 * 1024))}";
-            return;
+            return $"{prefix}: ≈ {FormatFileSize((long)((double)CompressTargetSizeMB * 1024 * 1024))}";
         }
 
         VideoCodec codec = SelectedCompressCodecOption?.Value ?? VideoCodec.H264;
@@ -628,8 +420,8 @@ public partial class MainWindowViewModel
             : (SelectedCompressAudioBitrate?.Kbps > 0 ? SelectedCompressAudioBitrate.Kbps : 128);
 
         long est = EstimateOutputSizeBytes(
-            _sourceWidth, _sourceHeight, _sourceFps, _sourceDurationSeconds, maxHeight, maxFps, codec, crf, audioKbps);
-        CompressEstimateText = $"{prefix}: ≈ {FormatFileSize(est)}";
+            item.ProbedWidth, item.ProbedHeight, item.ProbedFps, item.ProbedDuration, maxHeight, maxFps, codec, crf, audioKbps);
+        return $"{prefix}: ≈ {FormatFileSize(est)}";
     }
 
     /// <summary>
@@ -785,104 +577,6 @@ public partial class MainWindowViewModel
         }
     }
 
-    private async Task CompressAsync()
-    {
-        if (IsCompressing || string.IsNullOrEmpty(CompressInputPath) || !File.Exists(CompressInputPath))
-        {
-            return;
-        }
-
-        string input = CompressInputPath;
-
-        // Output path: a custom path (from the Save dialog) wins; otherwise auto-derive next to the source.
-        string outputPath;
-        if (!string.IsNullOrWhiteSpace(CompressOutputPath))
-        {
-            outputPath = CompressOutputPath;
-            // Guard against overwriting the source itself with a same-path custom selection.
-            if (string.Equals(Path.GetFullPath(outputPath), Path.GetFullPath(input), StringComparison.OrdinalIgnoreCase))
-            {
-                CompressStatusText = LocalizationService.Instance["StatusCompressFailed"];
-                ShowToastAction?.Invoke(CompressStatusText, ToastSeverity.Error);
-                return;
-            }
-            try { Directory.CreateDirectory(Path.GetDirectoryName(outputPath) ?? "."); }
-            catch (Exception ex) { AppLog.Error("Compress.PrepareOutputDir", ex); }
-        }
-        else
-        {
-            outputPath = BuildCompressOutputPath(input, "." + SelectedCompressFormat.ToLowerInvariant());
-        }
-
-        CompressSettingsSnapshot snap = BuildSettingsSnapshot();
-        double probedDuration = await ProbeInputDurationAsync(input);
-
-        int targetBitrateKbps = 0;
-        if (snap.UseTargetSize)
-        {
-            if (probedDuration <= 0)
-            {
-                CompressStatusText = LocalizationService.Instance["CompressTargetNeedsDuration"];
-                ShowToastAction?.Invoke(CompressStatusText, ToastSeverity.Error);
-                return;
-            }
-            targetBitrateKbps = ComputeTargetVideoBitrateKbps((double)snap.TargetSizeMB, probedDuration);
-        }
-
-        IsCompressing = true;
-        CompressProgress = 0;
-        CompressStatusText = LocalizationService.Instance["StatusCompressing"];
-
-        _compressCts?.Dispose();
-        _compressCts = new CancellationTokenSource();
-        CancellationToken token = _compressCts.Token;
-        _compressPauseGate?.Dispose();
-        _compressPauseGate = new ManualResetEventSlim(true);
-        IsPaused = false;
-
-        var encodeProgress = new Progress<double>(p => CompressProgress = p);
-
-        try
-        {
-            bool ok = await EncodeOneFileAsync(
-                input, outputPath, snap, targetBitrateKbps, probedDuration, encodeProgress, token, _compressPauseGate);
-            if (ok)
-            {
-                long before = new FileInfo(input).Length;
-                long after = new FileInfo(outputPath).Length;
-                CompressStatusText =
-                    $"{LocalizationService.Instance["StatusCompressDone"]}  ({FormatFileSize(before)} → {FormatFileSize(after)})";
-                ShowToastAction?.Invoke(CompressStatusText, ToastSeverity.Success);
-                FileLocationService.RevealInFileExplorer(outputPath);
-            }
-            else
-            {
-                CompressStatusText = LocalizationService.Instance["StatusCompressFailed"];
-                ShowToastAction?.Invoke(CompressStatusText, ToastSeverity.Error);
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            CompressStatusText = LocalizationService.Instance["StatusCompressCancelled"];
-            ShowToastAction?.Invoke(CompressStatusText, ToastSeverity.Info);
-        }
-        catch (Exception ex)
-        {
-            AppLog.Error("Compress.Export", ex);
-            CompressStatusText = LocalizationService.Instance["StatusCompressFailed"];
-            ShowToastAction?.Invoke(CompressStatusText, ToastSeverity.Error);
-        }
-        finally
-        {
-            IsCompressing = false;
-            IsPaused = false;
-            _compressCts?.Dispose();
-            _compressCts = null;
-            _compressPauseGate?.Dispose();
-            _compressPauseGate = null;
-        }
-    }
-
     /// <summary>
     /// Turns a desired output size (MB) and a duration (seconds) into an average video bitrate (kbps),
     /// reserving a fixed audio allowance and a small safety margin. Single-pass ABR is approximate, so
@@ -930,21 +624,83 @@ public partial class MainWindowViewModel
     }
 
     /// <summary>
-    /// Builds the output path next to the source as "&lt;name&gt;_compressed&lt;ext&gt;", appending " (n)" until
-    /// the name is free so it never overwrites the source or a previous compress.
+    /// Composes a batch output path: base = <paramref name="rootFolder"/> when set, else the source's own
+    /// folder. The per-item <paramref name="outputName"/> may carry a relative subfolder path plus a file name
+    /// (e.g. <c>\sub\clip</c>); it is sanitized so it can't escape the base (no drive, no <c>..</c>). The name
+    /// falls back to the source name when blank, a <c>_yyyyMMdd_HHmmss</c> stamp is appended when
+    /// <paramref name="appendDate"/> is set, and " (n)" is added until the name is free.
     /// </summary>
-    private static string BuildCompressOutputPath(string inputPath, string ext)
+    internal static string BuildBatchOutputPath(
+        string sourcePath, string? outputName, string? rootFolder, string ext, bool appendDate, DateTime timestamp)
     {
-        string dir = Path.GetDirectoryName(inputPath) ?? Path.GetTempPath();
-        string baseName = Path.GetFileNameWithoutExtension(inputPath) + "_compressed";
+        string baseDir = !string.IsNullOrWhiteSpace(rootFolder)
+            ? rootFolder!
+            : (Path.GetDirectoryName(sourcePath) ?? Path.GetTempPath());
 
-        string candidate = Path.Combine(dir, baseName + ext);
+        string relDir = string.Empty;
+        string namePart = string.Empty;
+        string raw = (outputName ?? string.Empty).Trim();
+        if (raw.Length > 0)
+        {
+            string normalized = raw.Replace('/', Path.DirectorySeparatorChar);
+            relDir = SanitizeRelativeDir(Path.GetDirectoryName(normalized));
+            namePart = SanitizeFileName(Path.GetFileNameWithoutExtension(normalized));
+        }
+        if (namePart.Length == 0)
+        {
+            namePart = SanitizeFileName(Path.GetFileNameWithoutExtension(sourcePath));
+        }
+        if (namePart.Length == 0)
+        {
+            namePart = "output";
+        }
+
+        string targetDir = relDir.Length > 0 ? Path.Combine(baseDir, relDir) : baseDir;
+        string fileBase = appendDate ? $"{namePart}_{timestamp:yyyyMMdd_HHmmss}" : namePart;
+
+        string candidate = Path.Combine(targetDir, fileBase + ext);
         for (int n = 1; File.Exists(candidate); n++)
         {
-            candidate = Path.Combine(dir, $"{baseName} ({n}){ext}");
+            candidate = Path.Combine(targetDir, $"{fileBase} ({n}){ext}");
         }
 
         return candidate;
+    }
+
+    // Strips path-invalid characters (and trailing dots) from a single file-name segment.
+    private static string SanitizeFileName(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return string.Empty;
+        }
+
+        foreach (char c in Path.GetInvalidFileNameChars())
+        {
+            name = name.Replace(c, '_');
+        }
+
+        return name.Trim().Trim('.');
+    }
+
+    // Turns a user-typed relative path into safe folder segments: drops ".."/"."/empties + any drive or
+    // invalid characters, so the result can never escape the base directory.
+    private static string SanitizeRelativeDir(string? dir)
+    {
+        if (string.IsNullOrWhiteSpace(dir))
+        {
+            return string.Empty;
+        }
+
+        string[] safe = dir
+            .Split(new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(p => p.Trim())
+            .Where(p => p != "." && p != "..")
+            .Select(SanitizeFileName)
+            .Where(p => p.Length > 0)
+            .ToArray();
+
+        return safe.Length > 0 ? Path.Combine(safe) : string.Empty;
     }
 
     private static string FormatFileSize(long bytes)
