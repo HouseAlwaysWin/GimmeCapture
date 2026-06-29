@@ -49,7 +49,7 @@
   "CompressTargetNeedsDuration": "動画の長さを取得できないため、このファイルでは指定サイズモードを使用できません。",
   "CompressResolutionLabel": "解像度",
   "CompressResolutionOriginal": "元のまま",
-  "CompressFpsLabel": "フレームレート",
+  "CompressFpsLabel": "最大フレームレート",
   "CompressFpsOriginal": "元のまま",
   "CompressPresetLabel": "エンコードプリセット",
   "CompressCrfHint": "CRF が低いほど高画質・大容量。18〜23 は視覚的に高品質、28 以上は小さめ。",

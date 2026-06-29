@@ -49,7 +49,7 @@
   "CompressTargetNeedsDuration": "無法讀取影片長度，此檔案無法使用指定大小模式。",
   "CompressResolutionLabel": "解析度",
   "CompressResolutionOriginal": "原始",
-  "CompressFpsLabel": "影格率",
+  "CompressFpsLabel": "影格率上限",
   "CompressFpsOriginal": "原始",
   "CompressPresetLabel": "編碼預設",
   "CompressCrfHint": "CRF 越低畫質越好、檔案越大。18–23 為視覺高畫質；28 以上較小。",
