@@ -7,6 +7,7 @@ using System.Reactive;
 using System.Threading;
 using System.Threading.Tasks;
 using GimmeCapture.Services.Core.Infrastructure;
+using GimmeCapture.Services.Core.Media.NativeFFmpeg;
 using ReactiveUI;
 
 namespace GimmeCapture.ViewModels.Main;
@@ -37,6 +38,7 @@ public partial class MainWindowViewModel
         {
             Path = path;
             FileName = System.IO.Path.GetFileName(path);
+            _outputName = System.IO.Path.GetFileNameWithoutExtension(path); // editable; may include \subfolder\
             StartCommand = ReactiveCommand.Create(() => StartRequested?.Invoke(this), this.WhenAnyValue(x => x.CanStart));
             PauseCommand = ReactiveCommand.Create(Pause, this.WhenAnyValue(x => x.ShowPause));
             ResumeCommand = ReactiveCommand.Create(Resume, this.WhenAnyValue(x => x.ShowResume));
@@ -46,6 +48,15 @@ public partial class MainWindowViewModel
 
         public string Path { get; }
         public string FileName { get; }
+
+        // User-editable output name. May carry a relative subfolder path (e.g. "\sub\clip"); the date stamp
+        // and extension are added when the path is composed. Blank falls back to the source name.
+        private string _outputName = string.Empty;
+        public string OutputName
+        {
+            get => _outputName;
+            set => this.RaiseAndSetIfChanged(ref _outputName, value);
+        }
 
         // Set by the view model so the per-item Start button can ask it to dispatch a worker.
         internal Action<CompressQueueItem>? StartRequested;
@@ -82,6 +93,20 @@ public partial class MainWindowViewModel
         {
             get => _progress;
             set => this.RaiseAndSetIfChanged(ref _progress, value);
+        }
+
+        // Probed source metadata (filled asynchronously after the item is added) for the per-row size estimate.
+        public int ProbedWidth { get; internal set; }
+        public int ProbedHeight { get; internal set; }
+        public int ProbedFps { get; internal set; }
+        public double ProbedDuration { get; internal set; }
+
+        // "≈ X MB" estimate for this file under the current output settings (recomputed by the view model).
+        private string _estimatedText = string.Empty;
+        public string EstimatedText
+        {
+            get => _estimatedText;
+            internal set => this.RaiseAndSetIfChanged(ref _estimatedText, value);
         }
 
         private bool _isPaused;
@@ -168,7 +193,7 @@ public partial class MainWindowViewModel
     public Func<Task<IReadOnlyList<string>>>? PickCompressFilesAction { get; set; }
     public Func<Task<string?>>? PickCompressFolderAction { get; set; }
 
-    // True while any queue item is waiting/running. IsBusy = single-file OR batch, so the two never overlap.
+    // True while any queue item is waiting/running. IsBusy gates the settings controls during a run.
     private bool _isBatchRunning;
     public bool IsBatchRunning
     {
@@ -180,7 +205,7 @@ public partial class MainWindowViewModel
         }
     }
 
-    public bool IsBusy => IsCompressing || IsBatchRunning;
+    public bool IsBusy => IsBatchRunning;
 
     // Max items encoding at once. Each encode is already multi-threaded, so a small cap avoids thrashing.
     public int[] CompressParallelOptions { get; } = [1, 2, 3, 4];
@@ -212,15 +237,13 @@ public partial class MainWindowViewModel
 
     private void InitializeCompressBatch()
     {
-        // Add: not while a single-file compress runs (adding mid-batch is fine). Clear: only when fully idle.
-        var notSingle = this.WhenAnyValue(x => x.IsCompressing, single => !single);
-        var canStartAll = this.WhenAnyValue(
-            x => x.CompressQueueCount, x => x.IsCompressing, (count, single) => count > 0 && !single);
+        // Add anytime (even mid-batch). Compress-all whenever there are startable items. Clear only when idle.
+        var canStartAll = this.WhenAnyValue(x => x.CompressQueueCount, count => count > 0);
         var canClear = this.WhenAnyValue(
             x => x.CompressQueueCount, x => x.IsBusy, (count, busy) => count > 0 && !busy);
 
-        AddCompressFilesCommand = ReactiveCommand.CreateFromTask(AddCompressFilesAsync, notSingle);
-        AddCompressFolderCommand = ReactiveCommand.CreateFromTask(AddCompressFolderAsync, notSingle);
+        AddCompressFilesCommand = ReactiveCommand.CreateFromTask(AddCompressFilesAsync);
+        AddCompressFolderCommand = ReactiveCommand.CreateFromTask(AddCompressFolderAsync);
         ClearCompressQueueCommand = ReactiveCommand.Create(ClearCompressQueue, canClear);
         CompressQueueCommand = ReactiveCommand.Create(StartAllCompress, canStartAll);
         CancelAllCompressQueueCommand = ReactiveCommand.Create(
@@ -267,6 +290,7 @@ public partial class MainWindowViewModel
 
         var existing = new HashSet<string>(
             CompressQueue.Select(i => i.Path), StringComparer.OrdinalIgnoreCase);
+        var added = new List<CompressQueueItem>();
 
         foreach (string path in paths)
         {
@@ -279,12 +303,43 @@ public partial class MainWindowViewModel
             {
                 if (existing.Add(file))
                 {
-                    CompressQueue.Add(new CompressQueueItem(file) { StartRequested = StartCompressItem });
+                    var item = new CompressQueueItem(file) { StartRequested = StartCompressItem };
+                    CompressQueue.Add(item);
+                    added.Add(item);
                 }
             }
         }
 
         CompressQueueCount = CompressQueue.Count;
+
+        // Probe each new file (off the UI thread) so its per-row size estimate can be shown.
+        foreach (CompressQueueItem item in added)
+        {
+            _ = ProbeQueueItemAsync(item);
+        }
+    }
+
+    // Probes a queued file's resolution / fps / duration, then refreshes its "≈ size" estimate.
+    private async Task ProbeQueueItemAsync(CompressQueueItem item)
+    {
+        try
+        {
+            using var probe = new LibavVideoFramePlayer();
+            item.ProbedDuration = await probe.ProbeDurationSecondsAsync(item.Path) ?? 0;
+            var size = await probe.ProbeVideoSizeAsync(item.Path);
+            if (size is { } s)
+            {
+                item.ProbedWidth = s.Width;
+                item.ProbedHeight = s.Height;
+            }
+            item.ProbedFps = await Task.Run(() => LibavClipExporter.ProbeFps(item.Path));
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error("Compress.ProbeQueueItem", ex);
+        }
+
+        item.EstimatedText = BuildItemEstimate(item);
     }
 
     private static IEnumerable<string> ExpandToVideoFiles(string path)
@@ -332,7 +387,7 @@ public partial class MainWindowViewModel
     // a worker (fire-and-forget; tracked via _inFlight). The concurrency cap is enforced by _batchSemaphore.
     private void StartCompressItem(CompressQueueItem item)
     {
-        if (item.Status is CompressQueueStatus.Waiting or CompressQueueStatus.Running || IsCompressing)
+        if (item.Status is CompressQueueStatus.Waiting or CompressQueueStatus.Running)
         {
             return;
         }
@@ -345,16 +400,19 @@ public partial class MainWindowViewModel
 
         CompressSettingsSnapshot snap = BuildSettingsSnapshot();
         string ext = "." + SelectedCompressFormat.ToLowerInvariant();
+        string outputFolder = CompressOutputFolder; // captured on the UI thread; empty = next to source
+        bool appendDate = CompressAppendDate;
         item.PrepareForStart(_batchCts.Token);
         var progress = new Progress<double>(p => item.Progress = p); // UI thread → callbacks marshal back
 
         _inFlight++;
         IsBatchRunning = true;
-        _ = RunQueueItemAsync(item, snap, ext, progress);
+        _ = RunQueueItemAsync(item, snap, ext, outputFolder, appendDate, progress);
     }
 
     private async Task RunQueueItemAsync(
-        CompressQueueItem item, CompressSettingsSnapshot snap, string ext, IProgress<double> progress)
+        CompressQueueItem item, CompressSettingsSnapshot snap, string ext, string outputFolder, bool appendDate,
+        IProgress<double> progress)
     {
         SemaphoreSlim semaphore = _batchSemaphore!;
         CancellationToken token = item.Cts!.Token;
@@ -394,7 +452,21 @@ public partial class MainWindowViewModel
                     targetKbps = ComputeTargetVideoBitrateKbps((double)snap.TargetSizeMB, duration);
                 }
 
-                string outputPath = BuildCompressOutputPath(item.Path, ext);
+                string outputPath = BuildBatchOutputPath(
+                    item.Path, item.OutputName, outputFolder, ext, appendDate, DateTime.Now);
+                try
+                {
+                    string? finalDir = Path.GetDirectoryName(outputPath);
+                    if (!string.IsNullOrEmpty(finalDir))
+                    {
+                        Directory.CreateDirectory(finalDir); // includes any user-typed subfolder
+                    }
+                }
+                catch (Exception ex)
+                {
+                    AppLog.Error("Compress.QueueOutDir", ex);
+                }
+
                 bool ok = await EncodeOneFileAsync(
                     item.Path, outputPath, snap, targetKbps, duration, progress, token, item.Gate);
                 item.Status = ok ? CompressQueueStatus.Done : CompressQueueStatus.Failed;

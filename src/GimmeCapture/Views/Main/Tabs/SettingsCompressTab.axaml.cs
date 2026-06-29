@@ -1,5 +1,4 @@
 using System;
-using System.IO;
 using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Platform.Storage;
@@ -25,7 +24,8 @@ public partial class SettingsCompressTab : UserControl
             return;
         }
 
-        vm.PickCompressInputAction = async () =>
+        // Batch queue: output-folder picker (empty = save each output next to its source).
+        vm.PickCompressOutputFolderAction = async () =>
         {
             var topLevel = TopLevel.GetTopLevel(this);
             if (topLevel == null)
@@ -33,58 +33,13 @@ public partial class SettingsCompressTab : UserControl
                 return null;
             }
 
-            var videoTypes = new FilePickerFileType("Video Files")
+            var folders = await topLevel.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
             {
-                Patterns = new[] { "*.mp4", "*.mkv", "*.mov", "*.avi", "*.webm", "*.m4v", "*.wmv", "*.flv" }
-            };
-            var allFiles = new FilePickerFileType("All Files") { Patterns = new[] { "*.*" } };
-
-            var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
-            {
-                Title = LocalizationService.Instance["CompressSelectFile"],
-                AllowMultiple = false,
-                FileTypeFilter = new[] { videoTypes, allFiles }
+                Title = LocalizationService.Instance["CompressOutputFolderChoose"],
+                AllowMultiple = false
             });
 
-            return files.Count > 0 ? files[0].Path.LocalPath : null;
-        };
-
-        vm.PickCompressOutputAction = async suggested =>
-        {
-            var topLevel = TopLevel.GetTopLevel(this);
-            if (topLevel == null)
-            {
-                return null;
-            }
-
-            string suggestedName = string.IsNullOrEmpty(suggested) ? "compressed.mp4" : Path.GetFileName(suggested);
-            string suggestedExt = Path.GetExtension(suggestedName).TrimStart('.');
-
-            // Offer a save type matching the suggested container plus the other supported ones.
-            var types = new[]
-            {
-                new FilePickerFileType("MP4 Video") { Patterns = new[] { "*.mp4" } },
-                new FilePickerFileType("Matroska Video") { Patterns = new[] { "*.mkv" } },
-                new FilePickerFileType("QuickTime Video") { Patterns = new[] { "*.mov" } }
-            };
-
-            IStorageFolder? startFolder = null;
-            string? suggestedDir = string.IsNullOrEmpty(suggested) ? null : Path.GetDirectoryName(suggested);
-            if (!string.IsNullOrEmpty(suggestedDir))
-            {
-                startFolder = await topLevel.StorageProvider.TryGetFolderFromPathAsync(suggestedDir);
-            }
-
-            var file = await topLevel.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
-            {
-                Title = LocalizationService.Instance["CompressChooseOutput"],
-                SuggestedFileName = suggestedName,
-                DefaultExtension = suggestedExt,
-                FileTypeChoices = types,
-                SuggestedStartLocation = startFolder
-            });
-
-            return file?.Path.LocalPath;
+            return folders.Count > 0 ? folders[0].Path.LocalPath : null;
         };
 
         // Batch queue: multi-file picker.
