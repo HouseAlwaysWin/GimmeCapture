@@ -248,6 +248,9 @@ public partial class MainWindowViewModel
 
     public ObservableCollection<CompressQueueItem> CompressQueue { get; } = new();
 
+    // Persisted batch "working directories" (source folders). Their videos auto-load into the queue on startup.
+    public ObservableCollection<string> CompressWorkingDirectories { get; } = new();
+
     public Func<Task<IReadOnlyList<string>>>? PickCompressFilesAction { get; set; }
     public Func<Task<string?>>? PickCompressFolderAction { get; set; }
 
@@ -307,11 +310,21 @@ public partial class MainWindowViewModel
     private CancellationTokenSource? _previewCts;
 
     public ReactiveCommand<Unit, Unit> AddCompressFilesCommand { get; private set; } = null!;
-    public ReactiveCommand<Unit, Unit> AddCompressFolderCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> ClearCompressQueueCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> CompressQueueCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> CancelAllCompressQueueCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> EstimateAllCompressQueueCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> AddCompressWorkingDirCommand { get; private set; } = null!;
+    public ReactiveCommand<string, Unit> SwitchCompressWorkingDirCommand { get; private set; } = null!;
+    public ReactiveCommand<string, Unit> RemoveCompressWorkingDirCommand { get; private set; } = null!;
+
+    private string? _activeWorkingDir;
+    // The working directory whose videos are currently loaded in the queue (auto-loaded again next launch).
+    public string? ActiveWorkingDir
+    {
+        get => _activeWorkingDir;
+        private set => this.RaiseAndSetIfChanged(ref _activeWorkingDir, value);
+    }
 
     private void InitializeCompressBatch()
     {
@@ -321,7 +334,6 @@ public partial class MainWindowViewModel
             x => x.CompressQueueCount, x => x.IsBusy, (count, busy) => count > 0 && !busy);
 
         AddCompressFilesCommand = ReactiveCommand.CreateFromTask(AddCompressFilesAsync);
-        AddCompressFolderCommand = ReactiveCommand.CreateFromTask(AddCompressFolderAsync);
         ClearCompressQueueCommand = ReactiveCommand.Create(ClearCompressQueue, canClear);
         CompressQueueCommand = ReactiveCommand.Create(StartAllCompress, canStartAll);
         CancelAllCompressQueueCommand = ReactiveCommand.Create(
@@ -339,12 +351,91 @@ public partial class MainWindowViewModel
         });
 
         AddCompressFilesCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.QueueAddFiles", ex));
-        AddCompressFolderCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.QueueAddFolder", ex));
         ClearCompressQueueCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.QueueClear", ex));
         CompressQueueCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.QueueRun", ex));
         CancelAllCompressQueueCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.QueueCancelAll", ex));
         EstimateAllCompressQueueCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.QueueEstimateAll", ex));
+
+        // Working directories: add (folder picker + switch to it), switch (replace queue), remove. All persist.
+        // Switching/adding rewrites the queue, so it's disabled while a batch is running.
+        var canSwitchDir = this.WhenAnyValue(x => x.IsBatchRunning, running => !running);
+        AddCompressWorkingDirCommand = ReactiveCommand.CreateFromTask(AddCompressWorkingDirAsync, canSwitchDir);
+        SwitchCompressWorkingDirCommand = ReactiveCommand.Create<string>(SwitchToWorkingDir, canSwitchDir);
+        RemoveCompressWorkingDirCommand = ReactiveCommand.Create<string>(RemoveCompressWorkingDir);
+        AddCompressWorkingDirCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.AddWorkingDir", ex));
+        SwitchCompressWorkingDirCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.SwitchWorkingDir", ex));
+        RemoveCompressWorkingDirCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.RemoveWorkingDir", ex));
+
+        // Restore saved working directories; auto-switch to the active one (loads its videos into the queue).
+        CompressWorkingDirsState dirState = CompressWorkingDirsService.Load();
+        foreach (string dir in dirState.Directories)
+        {
+            CompressWorkingDirectories.Add(dir);
+        }
+        string? startupDir = dirState.Directories
+            .FirstOrDefault(d => string.Equals(d, dirState.Active, StringComparison.OrdinalIgnoreCase))
+            ?? dirState.Directories.FirstOrDefault();
+        if (startupDir != null)
+        {
+            SwitchToWorkingDir(startupDir);
+        }
     }
+
+    private async Task AddCompressWorkingDirAsync()
+    {
+        if (PickCompressFolderAction == null)
+        {
+            return;
+        }
+
+        string? dir = await PickCompressFolderAction();
+        if (string.IsNullOrEmpty(dir))
+        {
+            return;
+        }
+
+        if (!CompressWorkingDirectories.Any(d => string.Equals(d, dir, StringComparison.OrdinalIgnoreCase)))
+        {
+            CompressWorkingDirectories.Add(dir);
+        }
+
+        SwitchToWorkingDir(dir); // make it active + load its videos (also persists)
+    }
+
+    // Switch the active working directory: replace the queue with that folder's videos.
+    private void SwitchToWorkingDir(string? dir)
+    {
+        if (string.IsNullOrEmpty(dir))
+        {
+            return;
+        }
+
+        ActiveWorkingDir = dir;
+        ClearCompressQueue();
+        AddPathsToQueue(new[] { dir });
+        PersistWorkingDirs();
+    }
+
+    private void RemoveCompressWorkingDir(string dir)
+    {
+        if (!CompressWorkingDirectories.Remove(dir))
+        {
+            return;
+        }
+
+        if (string.Equals(dir, _activeWorkingDir, StringComparison.OrdinalIgnoreCase))
+        {
+            ActiveWorkingDir = null; // active folder removed; leave the queue until another is picked
+        }
+
+        PersistWorkingDirs();
+    }
+
+    private void PersistWorkingDirs() => CompressWorkingDirsService.Save(new CompressWorkingDirsState
+    {
+        Directories = CompressWorkingDirectories.ToList(),
+        Active = _activeWorkingDir
+    });
 
     // The selected file's rotation, editable as a number (snaps to 0/90/180/270). Nullable so a transient
     // empty field can't crash the binding; the NumericUpDownFix behavior restores a value on empty.
@@ -471,20 +562,14 @@ public partial class MainWindowViewModel
             return;
         }
 
+        int before = CompressQueue.Count;
         AddPathsToQueue(await PickCompressFilesAction());
-    }
 
-    private async Task AddCompressFolderAsync()
-    {
-        if (PickCompressFolderAction == null)
+        // Nothing new added (e.g. the file is already loaded from the active working dir) — say so,
+        // so the button never feels dead.
+        if (CompressQueue.Count == before)
         {
-            return;
-        }
-
-        string? folder = await PickCompressFolderAction();
-        if (!string.IsNullOrEmpty(folder))
-        {
-            AddPathsToQueue(new[] { folder });
+            CompressStatusText = LocalizationService.Instance["CompressNoNewFiles"];
         }
     }
 
