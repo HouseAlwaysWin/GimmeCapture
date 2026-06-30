@@ -24,6 +24,7 @@ public sealed class HistoryItemViewModel : ViewModelBase, IDisposable
         Id = item.Id;
         FilePath = item.FilePath;
         FileName = item.FileName;
+        Source = item.Source;
         IsVideo = item.Kind == CaptureHistoryKind.Video;
         IsImage = !IsVideo;
         CapturedAtLocal = item.CapturedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss");
@@ -44,6 +45,7 @@ public sealed class HistoryItemViewModel : ViewModelBase, IDisposable
     public string Id { get; }
     public string FilePath { get; }
     public string FileName { get; }
+    public CaptureHistorySource Source { get; }
     public bool IsVideo { get; }
     public bool IsImage { get; }
     public string CapturedAtLocal { get; }

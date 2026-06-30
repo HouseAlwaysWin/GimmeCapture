@@ -4,7 +4,7 @@
              xmlns:services="using:GimmeCapture.Services.Core.Infrastructure"
              x:Class="GimmeCapture.Views.Main.Tabs.SettingsHistoryTab"
              x:DataType="vm:MainWindowViewModel">
-    <Grid RowDefinitions="Auto,*" Margin="10">
+    <Grid RowDefinitions="Auto,Auto,*" Margin="10">
 
         <!-- Toolbar: enable toggle + search + refresh + clear -->
         <StackPanel Grid.Row="0" Spacing="8">
@@ -25,14 +25,24 @@
             </Grid>
         </StackPanel>
 
+        <!-- Category tabs: output copy vs plain copy -->
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="18" Margin="0,10,0,0">
+            <RadioButton GroupName="HistoryCategory"
+                         IsChecked="{Binding IsHistoryOutputTab}"
+                         Content="{Binding [HistoryTabOutput], Source={x:Static services:LocalizationService.Instance}}"/>
+            <RadioButton GroupName="HistoryCategory"
+                         IsChecked="{Binding IsHistoryCopyTab}"
+                         Content="{Binding [HistoryTabCopy], Source={x:Static services:LocalizationService.Instance}}"/>
+        </StackPanel>
+
         <!-- Empty state -->
-        <TextBlock Grid.Row="1"
+        <TextBlock Grid.Row="2"
                    Text="{Binding [HistoryEmpty], Source={x:Static services:LocalizationService.Instance}}"
                    IsVisible="{Binding IsHistoryEmpty}"
                    Opacity="0.55" HorizontalAlignment="Center" VerticalAlignment="Center"/>
 
         <!-- Thumbnail grid -->
-        <ScrollViewer Grid.Row="1" Margin="0,8,0,0" IsVisible="{Binding !IsHistoryEmpty}">
+        <ScrollViewer Grid.Row="2" Margin="0,8,0,0" IsVisible="{Binding !IsHistoryEmpty}">
             <ItemsControl ItemsSource="{Binding HistoryItems}">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>

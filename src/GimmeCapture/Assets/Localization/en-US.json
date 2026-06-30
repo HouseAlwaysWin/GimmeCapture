@@ -135,6 +135,8 @@
   "HistoryClearTitle": "Clear history",
   "HistoryClearConfirm": "Clear all history and delete the saved files from disk? This cannot be undone.",
   "HistoryEmpty": "No history yet. Saved screenshots and recordings will appear here.",
+  "HistoryTabOutput": "Output copy",
+  "HistoryTabCopy": "Plain copy",
   "HistoryOpen": "Open",
   "HistoryCopy": "Copy",
   "HistoryReveal": "Show in folder",

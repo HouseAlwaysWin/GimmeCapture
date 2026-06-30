@@ -6,6 +6,7 @@ using System.Linq;
 using System.Reactive;
 using System.Threading.Tasks;
 using Avalonia.Media.Imaging;
+using GimmeCapture.Models;
 using GimmeCapture.Services.Core.Infrastructure;
 using ReactiveUI;
 
@@ -39,6 +40,37 @@ public partial class MainWindowViewModel
     {
         get => _isHistoryEmpty;
         private set => this.RaiseAndSetIfChanged(ref _isHistoryEmpty, value);
+    }
+
+    // History category tabs: "output copy" (saved/exported) vs "plain copy" (clipboard copies).
+    private CaptureHistorySource _historySourceFilter = CaptureHistorySource.OutputExport;
+    public CaptureHistorySource HistorySourceFilter
+    {
+        get => _historySourceFilter;
+        set
+        {
+            if (_historySourceFilter != value)
+            {
+                this.RaiseAndSetIfChanged(ref _historySourceFilter, value);
+                this.RaisePropertyChanged(nameof(IsHistoryOutputTab));
+                this.RaisePropertyChanged(nameof(IsHistoryCopyTab));
+                ApplyHistoryFilter();
+            }
+        }
+    }
+
+    /// <summary>Two-way bound to the "output copy" tab toggle.</summary>
+    public bool IsHistoryOutputTab
+    {
+        get => HistorySourceFilter == CaptureHistorySource.OutputExport;
+        set { if (value) HistorySourceFilter = CaptureHistorySource.OutputExport; }
+    }
+
+    /// <summary>Two-way bound to the "plain copy" tab toggle.</summary>
+    public bool IsHistoryCopyTab
+    {
+        get => HistorySourceFilter == CaptureHistorySource.PlainCopy;
+        set { if (value) HistorySourceFilter = CaptureHistorySource.PlainCopy; }
     }
 
     public ReactiveCommand<Unit, Unit> RefreshHistoryCommand { get; private set; } = null!;
@@ -104,7 +136,7 @@ public partial class MainWindowViewModel
     private void ApplyHistoryFilter()
     {
         HistoryItems.Clear();
-        IEnumerable<HistoryItemViewModel> query = _allHistoryItems;
+        IEnumerable<HistoryItemViewModel> query = _allHistoryItems.Where(i => i.Source == HistorySourceFilter);
         if (!string.IsNullOrWhiteSpace(HistorySearchText))
         {
             var term = HistorySearchText.Trim();

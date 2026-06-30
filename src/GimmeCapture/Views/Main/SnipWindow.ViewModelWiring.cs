@@ -418,7 +418,7 @@ public partial class SnipWindow : Window
                         if (string.IsNullOrEmpty(ext)) ext = "mp4";
                         string managed = captureHistory.CreateManagedCapturePath(ext);
                         System.IO.File.Copy(clipPath, managed, true);
-                        await captureHistory.AddVideoAsync(managed, w, h);
+                        await captureHistory.AddVideoAsync(managed, w, h, GimmeCapture.Models.CaptureHistorySource.PlainCopy);
                     }
                     catch (Exception ex)
                     {

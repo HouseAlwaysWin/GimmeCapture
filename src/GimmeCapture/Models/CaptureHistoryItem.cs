@@ -10,6 +10,19 @@ public enum CaptureHistoryKind
 }
 
 /// <summary>
+/// How a history entry was produced. Default (0) is <see cref="OutputExport"/> so entries written before
+/// this field existed deserialize into the "output copy" category.
+/// </summary>
+public enum CaptureHistorySource
+{
+    /// <summary>Saved/exported to a file — saved screenshots and finalized recordings.</summary>
+    OutputExport,
+
+    /// <summary>Simply copied to the clipboard — a managed copy is kept so it appears in history.</summary>
+    PlainCopy
+}
+
+/// <summary>
 /// One entry in the capture history index. Only captures that were persisted to disk
 /// (auto/manual-saved screenshots and finalized recordings) are recorded.
 /// </summary>
@@ -25,6 +38,10 @@ public sealed class CaptureHistoryItem
 
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public CaptureHistoryKind Kind { get; set; }
+
+    /// <summary>Whether this entry was an output/export or a plain clipboard copy.</summary>
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public CaptureHistorySource Source { get; set; }
 
     public DateTime CapturedAtUtc { get; set; }
 
