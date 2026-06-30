@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Reactive;
+using System.Reactive.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -127,6 +128,10 @@ public partial class MainWindowViewModel
                 this.RaisePropertyChanged(nameof(CanCancel));
                 this.RaisePropertyChanged(nameof(CanStart));
                 this.RaisePropertyChanged(nameof(IsActive));
+                this.RaisePropertyChanged(nameof(ShowProgress));
+                this.RaisePropertyChanged(nameof(ShowStart));
+                this.RaisePropertyChanged(nameof(ShowColdResume));
+                this.RaisePropertyChanged(nameof(ShowResumeHint));
             }
         }
 
@@ -166,6 +171,53 @@ public partial class MainWindowViewModel
             set => this.RaiseAndSetIfChanged(ref _rotation, value);
         }
 
+        // True for a file restored from a previous run where it was paused: shown as paused at its last
+        // progress until the user resumes (which re-encodes the whole file from the start).
+        private bool _wasPaused;
+        public bool WasPaused
+        {
+            get => _wasPaused;
+            set
+            {
+                this.RaiseAndSetIfChanged(ref _wasPaused, value);
+                UpdateStatusText();
+                this.RaisePropertyChanged(nameof(ShowProgress));
+                this.RaisePropertyChanged(nameof(ShowStart));
+                this.RaisePropertyChanged(nameof(ShowColdResume));
+            }
+        }
+
+        // Whether this run can resume after a restart (CRF mode with a known duration → segmented encode).
+        private bool _supportsResume;
+        public bool SupportsResume
+        {
+            get => _supportsResume;
+            internal set
+            {
+                this.RaiseAndSetIfChanged(ref _supportsResume, value);
+                this.RaisePropertyChanged(nameof(ShowResumeHint));
+            }
+        }
+
+        // Last safe resume checkpoint (0-1): pausing now re-does only the part past this point. CRF only.
+        private double _resumePoint;
+        public double ResumePoint
+        {
+            get => _resumePoint;
+            internal set
+            {
+                this.RaiseAndSetIfChanged(ref _resumePoint, value);
+                this.RaisePropertyChanged(nameof(ResumePointText));
+            }
+        }
+
+        public bool ShowResumeHint => SupportsResume && Status == CompressQueueStatus.Running;
+        public string ResumePointText =>
+            $"{LocalizationService.Instance["CompressResumePoint"]} {_resumePoint:P0}";
+
+        // Invoked when the user pauses an item that can't be resumed after a restart (non-CRF mode).
+        public Action? PauseWarningRequested { get; set; }
+
         private bool _isPaused;
         public bool IsPaused
         {
@@ -186,6 +238,11 @@ public partial class MainWindowViewModel
         public bool ShowPause => Status == CompressQueueStatus.Running && !IsPaused;
         public bool ShowResume => Status == CompressQueueStatus.Running && IsPaused;
         public bool IsActive => Status == CompressQueueStatus.Running;
+        // Progress bar shows while encoding or when restored as cold-paused.
+        public bool ShowProgress => Status == CompressQueueStatus.Running || WasPaused;
+        // A cold-paused file shows a "繼續" button (re-encodes from 0) instead of the normal "啟動".
+        public bool ShowStart => CanStart && !WasPaused;
+        public bool ShowColdResume => CanStart && WasPaused;
 
         public ReactiveCommand<Unit, Unit> StartCommand { get; }
         public ReactiveCommand<Unit, Unit> PauseCommand { get; }
@@ -199,12 +256,17 @@ public partial class MainWindowViewModel
             Cts?.Dispose();
             Cts = CancellationTokenSource.CreateLinkedTokenSource(batchToken);
             IsPaused = false;
+            WasPaused = false; // a fresh start clears the restored-paused marker
             Progress = 0;
             Status = CompressQueueStatus.Waiting;
         }
 
         private void Pause()
         {
+            if (!SupportsResume)
+            {
+                PauseWarningRequested?.Invoke(); // non-CRF: closing now will restart this file from the start
+            }
             Gate?.Reset();
             IsPaused = true;
         }
@@ -231,15 +293,17 @@ public partial class MainWindowViewModel
 
         private void UpdateStatusText()
         {
-            StatusText = LocalizationService.Instance[Status switch
-            {
-                CompressQueueStatus.Waiting => "CompressQueueWaiting",
-                CompressQueueStatus.Running => "CompressQueueRunning",
-                CompressQueueStatus.Done => "CompressQueueDone",
-                CompressQueueStatus.Failed => "CompressQueueFailed",
-                CompressQueueStatus.Cancelled => "CompressQueueCancelled",
-                _ => "CompressQueueQueued"
-            }];
+            StatusText = LocalizationService.Instance[WasPaused && Status == CompressQueueStatus.Queued
+                ? "CompressQueuePaused"
+                : Status switch
+                {
+                    CompressQueueStatus.Waiting => "CompressQueueWaiting",
+                    CompressQueueStatus.Running => "CompressQueueRunning",
+                    CompressQueueStatus.Done => "CompressQueueDone",
+                    CompressQueueStatus.Failed => "CompressQueueFailed",
+                    CompressQueueStatus.Cancelled => "CompressQueueCancelled",
+                    _ => "CompressQueueQueued"
+                }];
         }
     }
 
@@ -326,6 +390,9 @@ public partial class MainWindowViewModel
         private set => this.RaiseAndSetIfChanged(ref _activeWorkingDir, value);
     }
 
+    // Per-file edit/progress state (rotation, output name, done), persisted across restarts; keyed by source path.
+    private Dictionary<string, CompressItemState> _itemStates = new(StringComparer.OrdinalIgnoreCase);
+
     private void InitializeCompressBatch()
     {
         // Add anytime (even mid-batch). Compress-all whenever there are startable items. Clear only when idle.
@@ -365,6 +432,10 @@ public partial class MainWindowViewModel
         AddCompressWorkingDirCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.AddWorkingDir", ex));
         SwitchCompressWorkingDirCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.SwitchWorkingDir", ex));
         RemoveCompressWorkingDirCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.RemoveWorkingDir", ex));
+
+        // Restore the persisted per-file edit/done state BEFORE any queue items are created below.
+        _itemStates = CompressItemStateService.Load();
+        CompressSegmentStore.PruneOrphans(); // drop abandoned resume chunks from crashed/old sessions
 
         // Restore saved working directories; auto-switch to the active one (loads its videos into the queue).
         CompressWorkingDirsState dirState = CompressWorkingDirsService.Load();
@@ -462,8 +533,48 @@ public partial class MainWindowViewModel
 
         int snapped = ((int)Math.Round(degrees / 90.0, MidpointRounding.AwayFromZero) * 90 % 360 + 360) % 360;
         item.Rotation = snapped;
+        PersistItemState(item);
         PreviewBitmap = FloatingBitmapConversionHelper.TransformBitmap(_rawPreview, snapped, false, false);
         this.RaisePropertyChanged(nameof(SelectedRotation));
+    }
+
+    // Applies any persisted rotation / output name / done-state to a freshly created queue item.
+    private void ApplySavedItemState(CompressQueueItem item)
+    {
+        if (!_itemStates.TryGetValue(item.Path, out CompressItemState? st) || st == null)
+        {
+            return;
+        }
+
+        item.Rotation = st.Rotation;
+        if (!string.IsNullOrEmpty(st.OutputName))
+        {
+            item.OutputName = st.OutputName;
+        }
+        if (st.Done)
+        {
+            item.Status = CompressQueueStatus.Done;
+        }
+        else if (st.Paused)
+        {
+            // Show it as paused at its last progress; the user's "繼續" re-encodes from the start.
+            item.Progress = st.Progress;
+            item.WasPaused = true;
+        }
+    }
+
+    // Persists a queue item's edit/progress state (rotation, output name, completion, pause) keyed by its path.
+    private void PersistItemState(CompressQueueItem item)
+    {
+        _itemStates[item.Path] = new CompressItemState
+        {
+            Rotation = item.Rotation,
+            OutputName = item.OutputName,
+            Done = item.Status == CompressQueueStatus.Done,
+            Paused = item.IsPaused || item.WasPaused,
+            Progress = item.Progress
+        };
+        CompressItemStateService.Save(_itemStates);
     }
 
     // Decodes the selected file's first frame into _rawPreview and shows it rotated to the file's angle.
@@ -599,8 +710,18 @@ public partial class MainWindowViewModel
                     var item = new CompressQueueItem(file)
                     {
                         StartRequested = StartCompressItem,
-                        EstimateRequested = EstimateQueueItem
+                        EstimateRequested = EstimateQueueItem,
+                        PauseWarningRequested = ShowPauseNoResumeWarning
                     };
+                    ApplySavedItemState(item);
+                    // Persist on output-name edits and on pause/resume (fires on the UI thread; survives a
+                    // close even without completing). Skip(1) ignores the value emitted on subscribe.
+                    item.WhenAnyValue(x => x.OutputName)
+                        .Skip(1)
+                        .Subscribe(_ => PersistItemState(item));
+                    item.WhenAnyValue(x => x.IsPaused)
+                        .Skip(1)
+                        .Subscribe(_ => PersistItemState(item));
                     CompressQueue.Add(item);
                     added.Add(item);
                 }
@@ -730,7 +851,9 @@ public partial class MainWindowViewModel
 
     private void StartAllCompress()
     {
-        foreach (CompressQueueItem item in CompressQueue.Where(i => i.CanStart).ToList())
+        // Skip already-completed files so a resumed batch doesn't recompress them (use per-item 啟動 to redo one).
+        foreach (CompressQueueItem item in CompressQueue
+                     .Where(i => i.CanStart && i.Status != CompressQueueStatus.Done).ToList())
         {
             StartCompressItem(item);
         }
@@ -803,15 +926,17 @@ public partial class MainWindowViewModel
         bool appendDate = CompressAppendDate;
         item.PrepareForStart(_batchCts.Token);
         var progress = new Progress<double>(p => item.Progress = p); // UI thread → callbacks marshal back
+        var resumeProgress = new Progress<double>(p => item.ResumePoint = p); // last safe pause checkpoint
+        item.ResumePoint = 0;
 
         _inFlight++;
         IsBatchRunning = true;
-        _ = RunQueueItemAsync(item, snap, ext, outputFolder, appendDate, progress);
+        _ = RunQueueItemAsync(item, snap, ext, outputFolder, appendDate, progress, resumeProgress);
     }
 
     private async Task RunQueueItemAsync(
         CompressQueueItem item, CompressSettingsSnapshot snap, string ext, string outputFolder, bool appendDate,
-        IProgress<double> progress)
+        IProgress<double> progress, IProgress<double> resumeProgress)
     {
         SemaphoreSlim semaphore = _batchSemaphore!;
         CancellationToken token = item.Cts!.Token;
@@ -824,6 +949,7 @@ public partial class MainWindowViewModel
             catch (OperationCanceledException)
             {
                 item.Status = CompressQueueStatus.Cancelled;
+                CompressSegmentStore.Clear(item.Path); // cancelled: discard any resume chunks
                 return;
             }
 
@@ -838,8 +964,10 @@ public partial class MainWindowViewModel
 
                 item.Gate = new ManualResetEventSlim(true);
                 item.Status = CompressQueueStatus.Running;
+                PersistItemState(item); // clear any stale "paused" marker now that it's actually encoding
 
                 double duration = await ProbeInputDurationAsync(item.Path);
+                item.SupportsResume = !snap.UseTargetSize && duration > 0; // CRF + known duration = segmented/resumable
                 int targetKbps = 0;
                 if (snap.UseTargetSize)
                 {
@@ -867,12 +995,18 @@ public partial class MainWindowViewModel
                 }
 
                 bool ok = await EncodeOneFileAsync(
-                    item.Path, outputPath, snap, targetKbps, duration, progress, token, item.Gate, item.Rotation);
+                    item.Path, outputPath, snap, targetKbps, duration, progress, token, item.Gate, item.Rotation,
+                    resumeProgress);
                 item.Status = ok ? CompressQueueStatus.Done : CompressQueueStatus.Failed;
+                if (ok)
+                {
+                    PersistItemState(item); // remember completion so a resumed batch skips this file
+                }
             }
             catch (OperationCanceledException)
             {
                 item.Status = CompressQueueStatus.Cancelled;
+                CompressSegmentStore.Clear(item.Path); // cancelled: discard any resume chunks
             }
             catch (Exception ex)
             {

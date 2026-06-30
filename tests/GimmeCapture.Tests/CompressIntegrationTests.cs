@@ -128,4 +128,59 @@ public class CompressIntegrationTests
             new LibavExportOptions { TargetVideoBitrateKbps = kbps, TwoPass = true })).Length;
         Assert.True(twoPass <= 5L * 1024 * 1024 * 11 / 10, $"target5mb_2pass={twoPass} exceeds 5 MB + 10%");
     }
+
+    // Mirrors the CRF segment-resume pipeline: encode the clip as two video-only chunks, concat them, then
+    // mux audio built once for the whole clip. Validates that the stitched output spans the full duration,
+    // keeps the source dimensions, and carries audio (no per-chunk audio, no re-encode at concat).
+    [Fact]
+    public async Task SegmentResume_ConcatAndMux_ProducesContinuousOutput()
+    {
+        if (!Enabled)
+        {
+            return;
+        }
+
+        string source = Source!;
+        string outDir = OutDir!;
+        Directory.CreateDirectory(outDir);
+
+        var player = new LibavVideoFramePlayer();
+        double duration = await player.ProbeDurationSecondsAsync(source) ?? 0;
+        Assert.True(duration > 4, "segment test needs a clip longer than ~4s");
+        var srcSize = await player.ProbeVideoSizeAsync(source);
+        Assert.NotNull(srcSize);
+
+        string segDir = Path.Combine(outDir, "segtest");
+        if (Directory.Exists(segDir)) Directory.Delete(segDir, true);
+        Directory.CreateDirectory(segDir);
+
+        double mid = duration / 2;
+        string chunk0 = Path.Combine(segDir, "chunk_0.mp4");
+        string chunk1 = Path.Combine(segDir, "chunk_1.mp4");
+        var chunkOpt = new LibavExportOptions { CrfOverride = 23, DropAudio = true };
+
+        Assert.True(await Task.Run(() => LibavClipExporter.TryExport(
+            source, new[] { new LibavClipExporter.SourceRange(0, mid) }, chunk0, VideoQuality.Medium, options: chunkOpt)),
+            "chunk 0 failed");
+        Assert.True(await Task.Run(() => LibavClipExporter.TryExport(
+            source, new[] { new LibavClipExporter.SourceRange(mid, duration) }, chunk1, VideoQuality.Medium, options: chunkOpt)),
+            "chunk 1 failed");
+
+        string merged = Path.Combine(segDir, "merged.mkv");
+        await Task.Run(() => LibavMuxer.ConcatVideoSegments(new[] { chunk0, chunk1 }, merged, "matroska"));
+        Assert.True(File.Exists(merged) && new FileInfo(merged).Length > 0, "concat produced no merged video");
+
+        string outPath = Path.Combine(outDir, "segment_resume.mp4");
+        bool ok = await Task.Run(() => LibavClipExporter.TryMuxAudioForRanges(
+            source, new[] { new LibavClipExporter.SourceRange(0, duration) }, merged, outPath,
+            VideoQuality.Medium, new LibavExportOptions(), default));
+        Assert.True(ok && File.Exists(outPath) && new FileInfo(outPath).Length > 0, "segment finalize produced no output");
+
+        double outDuration = await player.ProbeDurationSecondsAsync(outPath) ?? 0;
+        Assert.True(Math.Abs(outDuration - duration) < 1.0, $"stitched duration {outDuration:F2} != source {duration:F2}");
+        var outSize = await player.ProbeVideoSizeAsync(outPath);
+        Assert.NotNull(outSize);
+        Assert.Equal(srcSize!.Value.Height, outSize!.Value.Height);
+        Assert.True(await player.ProbeHasAudioAsync(outPath), "stitched output lost audio");
+    }
 }

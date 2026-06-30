@@ -272,6 +272,9 @@ public partial class MainWindowViewModel
             CompressPresets.Add(preset);
         }
 
+        // Restore last-used settings before the queue is populated, so estimates use them from the start.
+        RestoreCompressSession();
+
         InitializeCompressBatch();
 
         // Recompute every queued file's size estimate whenever a relevant output setting changes.
@@ -286,6 +289,21 @@ public partial class MainWindowViewModel
                 x => x.SelectedCompressAudioBitrate,
                 (a, b, c, d, e, f, g, h) => Unit.Default)
             .Subscribe(_ => RecomputeQueueEstimates());
+
+        // Persist settings on any change so they (and a resumed batch) survive a restart (no-op during restore).
+        this.WhenAnyValue(
+                x => x.SelectedCompressCodecOption, x => x.SelectedCompressResolution, x => x.SelectedCompressFps,
+                x => x.SelectedCompressPreset, x => x.SelectedCompressFormat, x => x.CompressCrf,
+                x => x.CompressUseTargetSize, x => x.CompressTargetSizeMB, x => x.CompressDropAudio,
+                x => x.SelectedCompressAudioBitrate, x => x.SelectedCompressAudioChannels,
+                (a, b, c, d, e, f, g, h, i, j, k) => Unit.Default)
+            .Skip(1)
+            .Subscribe(_ => SaveCompressSession());
+        this.WhenAnyValue(
+                x => x.CompressOutputFolder, x => x.CompressAppendDate, x => x.CompressParallelCount,
+                (a, b, c) => Unit.Default)
+            .Skip(1)
+            .Subscribe(_ => SaveCompressSession());
 
         PickCompressOutputFolderCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.PickOutputFolder", ex));
         ClearCompressOutputFolderCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.ClearOutputFolder", ex));
@@ -356,6 +374,14 @@ public partial class MainWindowViewModel
             return;
         }
 
+        ApplyCompressPreset(p);
+        CompressPresetName = p.Name; // so a follow-up Save updates this preset
+        // RecomputeQueueEstimates fires via the WhenAnyValue subscriptions as the properties above change.
+    }
+
+    // Applies a preset's encode settings to the Compress-tab controls (shared by load-preset and session restore).
+    private void ApplyCompressPreset(CompressPreset p)
+    {
         SelectedCompressCodecOption = Array.Find(CompressCodecOptions, o => o.Value == p.Codec)
             ?? Array.Find(CompressCodecOptions, o => o.Value == VideoCodec.H264);
         SelectedCompressResolution = Array.Find(CompressResolutionOptions, o => o.MaxHeight == p.MaxHeight)
@@ -371,8 +397,45 @@ public partial class MainWindowViewModel
             ?? CompressAudioBitrateOptions[0];
         SelectedCompressAudioChannels = Array.Find(CompressAudioChannelsOptions, o => o.Channels == p.AudioChannels)
             ?? CompressAudioChannelsOptions[0];
-        CompressPresetName = p.Name; // so a follow-up Save updates this preset
-        // RecomputeQueueEstimates fires via the WhenAnyValue subscriptions as the properties above change.
+    }
+
+    private bool _restoringSession;
+
+    // Restores the last-used Compress settings (encode + batch options) saved from a previous run.
+    private void RestoreCompressSession()
+    {
+        CompressSessionState session = CompressSessionService.Load();
+        _restoringSession = true;
+        try
+        {
+            ApplyCompressPreset(session.Settings);
+            CompressOutputFolder = session.OutputFolder ?? string.Empty;
+            CompressAppendDate = session.AppendDate;
+            CompressParallelCount = CompressParallelOptions.Contains(session.ParallelCount)
+                ? session.ParallelCount
+                : CompressParallelCount;
+        }
+        finally
+        {
+            _restoringSession = false;
+        }
+    }
+
+    // Persists the current Compress settings so they survive a restart (no-op during restore).
+    private void SaveCompressSession()
+    {
+        if (_restoringSession)
+        {
+            return;
+        }
+
+        CompressSessionService.Save(new CompressSessionState
+        {
+            Settings = CaptureCurrentPreset(string.Empty),
+            OutputFolder = CompressOutputFolder,
+            AppendDate = CompressAppendDate,
+            ParallelCount = CompressParallelCount
+        });
     }
 
     private void DeleteCompressPreset()
@@ -590,8 +653,16 @@ public partial class MainWindowViewModel
     private async Task<bool> EncodeOneFileAsync(
         string input, string outputPath, CompressSettingsSnapshot s, int targetBitrateKbps,
         double durationSeconds, IProgress<double> progress, CancellationToken token, ManualResetEventSlim? pauseGate,
-        int rotationDegrees = 0)
+        int rotationDegrees = 0, IProgress<double>? resumeProgress = null)
     {
+        // CRF mode with a known duration uses the resumable segmented path; target-size / 2-pass and the
+        // unknown-duration fallback keep the whole-file path below (their size budget needs the whole file).
+        if (!s.UseTargetSize && durationSeconds > 0)
+        {
+            return await EncodeOneFileSegmentedAsync(
+                input, outputPath, s, durationSeconds, progress, token, pauseGate, rotationDegrees, resumeProgress);
+        }
+
         string outExt = Path.GetExtension(outputPath);
         string tempDir = Path.Combine(Path.GetTempPath(), "GimmeCapture_Compress_" + Guid.NewGuid().ToString("N"));
         try
@@ -673,6 +744,152 @@ public partial class MainWindowViewModel
             }
         }
     }
+
+    // ~30s chunks: small enough that an interruption loses little, large enough to keep keyframe/file overhead low.
+    private const double CompressChunkSeconds = 30.0;
+
+    /// <summary>
+    /// CRF-mode encode that resumes across restarts: encodes the source in <see cref="CompressChunkSeconds"/>
+    /// video-only chunks, persisting which are done, then concatenates them and muxes audio once. On resume it
+    /// reuses chunks already on disk, so 繼續 continues near the interruption instead of restarting from 0%.
+    /// The pause gate / cancellation are honored inside each chunk; partial chunks are kept for resume (the
+    /// caller cleans them up only on cancel/success).
+    /// </summary>
+    private async Task<bool> EncodeOneFileSegmentedAsync(
+        string input, string outputPath, CompressSettingsSnapshot s, double durationSeconds,
+        IProgress<double> progress, CancellationToken token, ManualResetEventSlim? pauseGate, int rotationDegrees,
+        IProgress<double>? resumeProgress = null)
+    {
+        int chunkCount = Math.Max(1, (int)Math.Ceiling(durationSeconds / CompressChunkSeconds));
+        string settingsKey = BuildSegmentSettingsKey(s, rotationDegrees);
+
+        // Load prior resume state; reset it only if the settings / duration no longer match the chunks. The
+        // output path is NOT a validity key — it carries a per-run date stamp, so it legitimately differs each
+        // session; the chunks are keyed by input + settings and stay reusable regardless of the output name.
+        CompressSegmentState? state = CompressSegmentStore.Load(input);
+        if (state == null
+            || state.SettingsKey != settingsKey
+            || Math.Abs(state.TotalDuration - durationSeconds) > 0.5
+            || state.ChunkCount != chunkCount)
+        {
+            CompressSegmentStore.Clear(input);
+            state = new CompressSegmentState
+            {
+                InputPath = input,
+                OutputPath = outputPath,
+                SettingsKey = settingsKey,
+                TotalDuration = durationSeconds,
+                ChunkSeconds = CompressChunkSeconds,
+                ChunkCount = chunkCount,
+                CompletedChunks = new List<int>()
+            };
+            CompressSegmentStore.Save(state);
+        }
+
+        var completed = new HashSet<int>(state.CompletedChunks);
+        resumeProgress?.Report((double)completed.Count / chunkCount); // current safe resume checkpoint
+
+        var chunkOptions = new LibavExportOptions
+        {
+            Codec = s.Codec,
+            TargetVideoBitrateKbps = 0,   // CRF
+            CrfOverride = s.Crf,
+            Preset = s.Preset,
+            MaxHeight = s.MaxHeight,
+            MaxFps = s.MaxFps,
+            DropAudio = true,             // video-only chunks; audio is built once at finalize
+            TwoPass = false,
+            RotationDegrees = rotationDegrees
+        };
+
+        for (int i = 0; i < chunkCount; i++)
+        {
+            token.ThrowIfCancellationRequested();
+            string chunkPath = CompressSegmentStore.ChunkPath(input, i);
+            if (completed.Contains(i) && File.Exists(chunkPath) && new FileInfo(chunkPath).Length > 0)
+            {
+                progress.Report((double)(i + 1) / chunkCount); // already done — advance the bar
+                continue;
+            }
+
+            double startSec = i * CompressChunkSeconds;
+            double endSec = Math.Min((i + 1) * CompressChunkSeconds, durationSeconds);
+            var ranges = new[] { new LibavClipExporter.SourceRange(startSec, endSec) };
+            int index = i;
+            var chunkProgress = new Progress<double>(p => progress.Report((index + Math.Clamp(p, 0, 1)) / chunkCount));
+
+            bool ok = await Task.Run(() => LibavClipExporter.TryExport(
+                input, ranges, chunkPath, VideoQuality.Medium,
+                cancellationToken: token, options: chunkOptions, progress: chunkProgress, pauseGate: pauseGate), token);
+            if (!ok || !File.Exists(chunkPath) || new FileInfo(chunkPath).Length == 0)
+            {
+                return false;
+            }
+
+            completed.Add(i);
+            state.CompletedChunks = completed.OrderBy(x => x).ToList();
+            CompressSegmentStore.Save(state);
+            resumeProgress?.Report((double)completed.Count / chunkCount); // advance the safe checkpoint
+        }
+
+        // Finalize: concat the video chunks (lossless), build audio once for the whole file, mux to output.
+        token.ThrowIfCancellationRequested();
+        string finalizeDir = Path.Combine(Path.GetTempPath(), "GimmeCapture_Compress_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(finalizeDir);
+        try
+        {
+            var chunkPaths = Enumerable.Range(0, chunkCount)
+                .Select(i => CompressSegmentStore.ChunkPath(input, i)).ToList();
+            if (chunkPaths.Any(p => !File.Exists(p) || new FileInfo(p).Length == 0))
+            {
+                return false;
+            }
+
+            string mergedVideo = Path.Combine(finalizeDir, "merged.mkv");
+            bool merged = await Task.Run(() =>
+            {
+                LibavMuxer.ConcatVideoSegments(chunkPaths, mergedVideo, "matroska");
+                return File.Exists(mergedVideo) && new FileInfo(mergedVideo).Length > 0;
+            }, token);
+            if (!merged)
+            {
+                return false;
+            }
+
+            var audioRanges = new[] { new LibavClipExporter.SourceRange(0, durationSeconds) };
+            var muxOptions = new LibavExportOptions
+            {
+                Codec = s.Codec,
+                DropAudio = s.DropAudio,
+                AudioBitrateKbps = s.AudioBitrateKbps,
+                AudioChannels = s.AudioChannels
+            };
+            bool finalized = await Task.Run(() => LibavClipExporter.TryMuxAudioForRanges(
+                input, audioRanges, mergedVideo, outputPath, VideoQuality.Medium, muxOptions, token), token);
+            if (!finalized)
+            {
+                return false;
+            }
+
+            progress.Report(1.0);
+            CompressSegmentStore.Clear(input); // success — drop the chunks + state
+            return true;
+        }
+        finally
+        {
+            try { Directory.Delete(finalizeDir, true); }
+            catch (Exception ex) { AppLog.Error("Compress.Cleanup", ex); }
+        }
+    }
+
+    // Settings the chunks were encoded with; a change invalidates persisted chunks (different pixels/bitstream).
+    private static string BuildSegmentSettingsKey(CompressSettingsSnapshot s, int rotationDegrees) =>
+        string.Join('|', s.Codec, s.Crf, s.Preset, s.MaxHeight, s.MaxFps,
+            s.DropAudio, s.AudioBitrateKbps, s.AudioChannels, rotationDegrees);
+
+    // Toast shown when the user pauses a non-CRF file: only CRF mode can resume mid-encode after a restart.
+    private void ShowPauseNoResumeWarning() =>
+        ShowToastAction?.Invoke(LocalizationService.Instance["CompressPauseNoResume"], ToastSeverity.Info);
 
     /// <summary>
     /// Turns a desired output size (MB) and a duration (seconds) into an average video bitrate (kbps),

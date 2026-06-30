@@ -186,6 +186,56 @@ internal static class LibavClipExporter
         }
     }
 
+    /// <summary>
+    /// Adds audio — decoded from <paramref name="audioSource"/> over <paramref name="ranges"/> — onto an
+    /// already-encoded, video-only file and writes the final container. Used by segment-based resume, which
+    /// encodes/concatenates the video separately and builds audio once at the end. No video re-encode here.
+    /// Returns true when a non-empty output is produced.
+    /// </summary>
+    public static bool TryMuxAudioForRanges(
+        string audioSource,
+        IReadOnlyList<SourceRange> ranges,
+        string videoPath,
+        string outputPath,
+        VideoQuality quality,
+        LibavExportOptions options,
+        CancellationToken cancellationToken)
+    {
+        FFmpegRuntime.EnsureInitialized();
+
+        string ext = Path.GetExtension(outputPath);
+        string container = ContainerForExtension(ext)
+            ?? throw new NotSupportedException($"In-process clip export does not support '{ext}' yet.");
+
+        string tempDir = Path.Combine(Path.GetTempPath(), "GimmeCapture_ClipAudio_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            string? audioTemp = null;
+            bool hasAudio = !options.DropAudio
+                && TryBuildAudio(audioSource, ranges, tempDir, quality, options, cancellationToken, out audioTemp);
+
+            if (hasAudio && audioTemp != null)
+            {
+                LibavMuxer.MuxVideoAndAudio(videoPath, audioTemp, outputPath, container);
+            }
+            else if (container == "mp4")
+            {
+                File.Copy(videoPath, outputPath, true);
+            }
+            else
+            {
+                LibavMuxer.RemuxVideo(videoPath, outputPath, container);
+            }
+
+            return File.Exists(outputPath) && new FileInfo(outputPath).Length > 0;
+        }
+        finally
+        {
+            try { Directory.Delete(tempDir, true); } catch { /* best effort */ }
+        }
+    }
+
     // ── Video: decode the kept ranges and re-encode them into one continuous H.264/H.265 file ──
     private static unsafe void EncodeVideoRanges(
         string inputPath,
