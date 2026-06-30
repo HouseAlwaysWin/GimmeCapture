@@ -13,6 +13,10 @@ public sealed class CompressSessionState
     public string OutputFolder { get; set; } = string.Empty;
     public bool AppendDate { get; set; } = true;
     public int ParallelCount { get; set; } = 2;
+
+    /// <summary>Defaults schema version; a value below the app's current version triggers a one-time upgrade
+    /// to the new code defaults on load (so changing the built-in defaults reaches existing users once).</summary>
+    public int Version { get; set; }
 }
 
 /// <summary>

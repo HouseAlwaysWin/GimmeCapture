@@ -21,6 +21,11 @@ public partial class MainWindowViewModel
     /// <summary>Set by the view: opens a folder picker for the batch output folder; returns the chosen dir (or null).</summary>
     public Func<Task<string?>>? PickCompressOutputFolderAction { get; set; }
 
+    /// <summary>Set by the view: opens the side-by-side quality-compare window for a prepared view model.</summary>
+    internal Action<CompareViewModel>? OpenCompareAction { get; set; }
+
+    public ReactiveCommand<Unit, Unit> CompareQualityCommand { get; private set; } = null!;
+
     // Optional batch output folder. Empty = auto-save each output next to its source.
     private string _compressOutputFolder = string.Empty;
     public string CompressOutputFolder
@@ -46,7 +51,7 @@ public partial class MainWindowViewModel
 
     // Quality is controlled by a CRF slider (lower = better quality / larger file). 18-28 is the useful
     // range; 23 is a sensible default. Ignored in target-size mode (bitrate drives quality there).
-    private int _compressCrf = 23;
+    private int _compressCrf = 22;
     public int CompressCrf
     {
         get => _compressCrf;
@@ -105,7 +110,7 @@ public partial class MainWindowViewModel
     // Encoder speed/efficiency preset (slower = smaller for the same quality).
     public string[] CompressPresetOptions { get; } = ["ultrafast", "veryfast", "fast", "medium", "slow"];
 
-    private string _selectedCompressPreset = "veryfast";
+    private string _selectedCompressPreset = "medium";
     public string SelectedCompressPreset
     {
         get => _selectedCompressPreset;
@@ -237,8 +242,8 @@ public partial class MainWindowViewModel
         _selectedCompressAudioBitrate = CompressAudioBitrateOptions[0]; // Auto
         _selectedCompressAudioChannels = CompressAudioChannelsOptions[0]; // Stereo
 
-        VideoCodec initialCodec = RecordingSettings.VideoCodec;
-        _selectedCompressCodecOption = Array.Find(CompressCodecOptions, o => o.Value == initialCodec)
+        // Default to the HandBrake "shrink ~80%, near-lossless" recipe: H.265 (with CRF 22 / medium above).
+        _selectedCompressCodecOption = Array.Find(CompressCodecOptions, o => o.Value == VideoCodec.H265)
             ?? Array.Find(CompressCodecOptions, o => o.Value == VideoCodec.H264);
 
         CompressStatusText = LocalizationService.Instance["CompressStatusReady"];
@@ -252,6 +257,13 @@ public partial class MainWindowViewModel
             () => { CompressOutputFolder = string.Empty; },
             this.WhenAnyValue(x => x.CompressOutputFolder, x => x.IsBusy,
                 (folder, busy) => !string.IsNullOrEmpty(folder) && !busy));
+
+        // Quality compare: needs a selected file and an idle queue (it encodes a short sample).
+        CompareQualityCommand = ReactiveCommand.Create(
+            OpenCompare,
+            this.WhenAnyValue(x => x.SelectedQueueItem, x => x.IsBusy,
+                (CompressQueueItem? sel, bool busy) => sel != null && !busy));
+        CompareQualityCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.OpenCompare", ex));
 
         // Presets: save needs a non-blank name; load/delete need a selection. None while busy.
         SaveCompressPresetCommand = ReactiveCommand.Create(
@@ -402,13 +414,22 @@ public partial class MainWindowViewModel
     private bool _restoringSession;
 
     // Restores the last-used Compress settings (encode + batch options) saved from a previous run.
+    // Bump when the built-in default encode settings change and existing users should be upgraded once.
+    private const int CompressDefaultsVersion = 1;
+
     private void RestoreCompressSession()
     {
         CompressSessionState session = CompressSessionService.Load();
+        // One-time upgrade: a session from before the current defaults keeps the new code defaults (skip
+        // applying its saved encode settings); batch options are still restored.
+        bool upgrade = session.Version < CompressDefaultsVersion;
         _restoringSession = true;
         try
         {
-            ApplyCompressPreset(session.Settings);
+            if (!upgrade)
+            {
+                ApplyCompressPreset(session.Settings);
+            }
             CompressOutputFolder = session.OutputFolder ?? string.Empty;
             CompressAppendDate = session.AppendDate;
             CompressParallelCount = CompressParallelOptions.Contains(session.ParallelCount)
@@ -418,6 +439,11 @@ public partial class MainWindowViewModel
         finally
         {
             _restoringSession = false;
+        }
+
+        if (upgrade)
+        {
+            SaveCompressSession(); // persist the new defaults + version so the upgrade happens only once
         }
     }
 
@@ -434,7 +460,8 @@ public partial class MainWindowViewModel
             Settings = CaptureCurrentPreset(string.Empty),
             OutputFolder = CompressOutputFolder,
             AppendDate = CompressAppendDate,
-            ParallelCount = CompressParallelCount
+            ParallelCount = CompressParallelCount,
+            Version = CompressDefaultsVersion
         });
     }
 
@@ -890,6 +917,39 @@ public partial class MainWindowViewModel
     // Toast shown when the user pauses a non-CRF file: only CRF mode can resume mid-encode after a restart.
     private void ShowPauseNoResumeWarning() =>
         ShowToastAction?.Invoke(LocalizationService.Instance["CompressPauseNoResume"], ToastSeverity.Info);
+
+    // Builds a CompareViewModel for the selected file with the current encode settings and hands it to the view.
+    private void OpenCompare()
+    {
+        CompressQueueItem? item = SelectedQueueItem;
+        if (item == null || OpenCompareAction == null)
+        {
+            return;
+        }
+
+        CompressSettingsSnapshot snap = BuildSettingsSnapshot();
+        int targetKbps = snap.UseTargetSize && item.ProbedDuration > 0
+            ? ComputeTargetVideoBitrateKbps((double)snap.TargetSizeMB, item.ProbedDuration)
+            : 0;
+
+        var options = new LibavExportOptions
+        {
+            Codec = snap.Codec,
+            TargetVideoBitrateKbps = targetKbps,
+            CrfOverride = snap.Crf,
+            Preset = snap.Preset,
+            MaxHeight = snap.MaxHeight,
+            MaxFps = snap.MaxFps,
+            DropAudio = snap.DropAudio,
+            AudioBitrateKbps = snap.AudioBitrateKbps,
+            AudioChannels = snap.AudioChannels,
+            RotationDegrees = 0 // rotation is applied at display time to BOTH frames, not baked into the sample
+        };
+
+        var vm = new CompareViewModel(
+            item.Path, item.ProbedDuration, item.ProbedFps, item.ProbedWidth, item.ProbedHeight, options, item.Rotation);
+        OpenCompareAction(vm);
+    }
 
     /// <summary>
     /// Turns a desired output size (MB) and a duration (seconds) into an average video bitrate (kbps),

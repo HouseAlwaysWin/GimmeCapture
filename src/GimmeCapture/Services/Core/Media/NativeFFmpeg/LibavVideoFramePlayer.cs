@@ -137,6 +137,33 @@ internal sealed class LibavVideoFramePlayer : IDisposable
         }, ct).ConfigureAwait(false);
     }
 
+    // Decodes a single frame at (or just before) the given timestamp as BGRA bytes scaled to width×height.
+    // Returns null if no frame is produced or it is cancelled. Used for paused frame-step / seek in compare.
+    public static async Task<byte[]?> DecodeFrameAtAsync(
+        string videoPath, double seconds, int width, int height, CancellationToken ct = default)
+    {
+        byte[]? frame = null;
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        try
+        {
+            using var player = new LibavVideoFramePlayer();
+            await player.PlayAsync(videoPath, width, height, Math.Max(0, seconds), 1.0, false, (data, _) =>
+            {
+                if (frame == null)
+                {
+                    frame = (byte[])data.Clone(); // first frame at/after the seek point
+                    stop.Cancel();
+                }
+            }, stop.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            // expected — we cancel right after grabbing the first frame
+        }
+
+        return frame;
+    }
+
     public async Task PlayAsync(
         string videoPath,
         int outputWidth,

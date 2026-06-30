@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Platform.Storage;
 using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.ViewModels.Main;
+using GimmeCapture.Views.Main;
 
 namespace GimmeCapture.Views.Main.Tabs;
 
@@ -82,6 +83,13 @@ public partial class SettingsCompressTab : UserControl
             });
 
             return folders.Count > 0 ? folders[0].Path.LocalPath : null;
+        };
+
+        // Quality compare: open a standalone side-by-side window for the prepared view model.
+        vm.OpenCompareAction = compareVm =>
+        {
+            var window = new CompareWindow { DataContext = compareVm };
+            window.Show();
         };
     }
 }

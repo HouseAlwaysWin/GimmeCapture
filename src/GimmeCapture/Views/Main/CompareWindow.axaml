@@ -1,0 +1,90 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:GimmeCapture.ViewModels.Main"
+        xmlns:services="using:GimmeCapture.Services.Core.Infrastructure"
+        x:Class="GimmeCapture.Views.Main.CompareWindow"
+        x:DataType="vm:CompareViewModel"
+        Title="{Binding Title}"
+        Width="1100" Height="640"
+        MinWidth="640" MinHeight="420"
+        Background="#101010"
+        FontFamily="{Binding CurrentFontFamily, Source={x:Static services:LocalizationService.Instance}}">
+    <Window.Styles>
+        <!-- Make the scrubber's unfilled track clearly visible full-width on the near-black window. -->
+        <Style Selector="Slider#PositionSlider /template/ Border#TrackBackground">
+            <Setter Property="Height" Value="4"/>
+            <Setter Property="Background" Value="#5A5A5A"/>
+            <Setter Property="CornerRadius" Value="2"/>
+        </Style>
+    </Window.Styles>
+    <Grid RowDefinitions="*,Auto" Margin="12">
+
+        <!-- Side-by-side video panels (original | compressed) -->
+        <Grid Grid.Row="0" ColumnDefinitions="*,*">
+            <Border Grid.Column="0" Margin="0,0,5,0" Background="Black" CornerRadius="4" ClipToBounds="True">
+                <Grid>
+                    <Image Source="{Binding SourceFrame}" Stretch="Uniform"/>
+                    <Border VerticalAlignment="Top" HorizontalAlignment="Left" Margin="8"
+                            Background="#A0000000" CornerRadius="3" Padding="8,3">
+                        <TextBlock Text="{Binding [CompressCompareSource], Source={x:Static services:LocalizationService.Instance}}"
+                                   Foreground="White" FontSize="12"/>
+                    </Border>
+                </Grid>
+            </Border>
+            <Border Grid.Column="1" Margin="5,0,0,0" Background="Black" CornerRadius="4" ClipToBounds="True">
+                <Grid>
+                    <Image Source="{Binding SampleFrame}" Stretch="Uniform"/>
+                    <Border VerticalAlignment="Top" HorizontalAlignment="Left" Margin="8"
+                            Background="#A0000000" CornerRadius="3" Padding="8,3">
+                        <TextBlock Text="{Binding [CompressCompareCompressed], Source={x:Static services:LocalizationService.Instance}}"
+                                   Foreground="{DynamicResource ThemeAccentBrush}" FontSize="12"/>
+                    </Border>
+                </Grid>
+            </Border>
+
+            <!-- "Preparing sample" overlay while the compressed clip encodes -->
+            <Border Grid.ColumnSpan="2" IsVisible="{Binding IsPreparing}" Background="#C8101010">
+                <TextBlock Text="{Binding StatusText}" Foreground="White" FontSize="14"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+        </Grid>
+
+        <!-- Transport: scrubber + time on top, then 5s-skip / frame-step / play-pause centered below -->
+        <StackPanel Grid.Row="1" Spacing="6" Margin="0,12,0,0">
+            <Slider x:Name="PositionSlider" Minimum="0" Maximum="{Binding WindowLength}"
+                    Value="{Binding PositionSeconds}"
+                    IsEnabled="{Binding IsPreparing, Converter={StaticResource BoolInvertConverter}}"/>
+            <TextBlock Text="{Binding TimeText}" HorizontalAlignment="Center"
+                       Foreground="#C8C8C8" FontSize="12"/>
+            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center"
+                        IsEnabled="{Binding IsPreparing, Converter={StaticResource BoolInvertConverter}}">
+                <Button Content="{Binding [CompressCompareBack5], Source={x:Static services:LocalizationService.Instance}}"
+                        Theme="{StaticResource SmallGothicMetalButton}"
+                        Command="{Binding SkipBackCommand}"/>
+                <Button Content="{Binding [CompressCompareStepBack], Source={x:Static services:LocalizationService.Instance}}"
+                        Theme="{StaticResource SmallGothicMetalButton}"
+                        Command="{Binding StepBackCommand}"/>
+                <Button Theme="{StaticResource GothicMetalButton}" MinWidth="56"
+                        Command="{Binding PlayPauseCommand}">
+                    <Panel Width="16" Height="16">
+                        <!-- play: white triangle -->
+                        <Path Data="M 2,1 L 2,15 L 14,8 Z" Fill="White" IsVisible="{Binding !IsPlaying}"/>
+                        <!-- pause: two white bars -->
+                        <StackPanel Orientation="Horizontal" Spacing="3"
+                                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                                    IsVisible="{Binding IsPlaying}">
+                            <Rectangle Width="4" Height="14" Fill="White"/>
+                            <Rectangle Width="4" Height="14" Fill="White"/>
+                        </StackPanel>
+                    </Panel>
+                </Button>
+                <Button Content="{Binding [CompressCompareStepFwd], Source={x:Static services:LocalizationService.Instance}}"
+                        Theme="{StaticResource SmallGothicMetalButton}"
+                        Command="{Binding StepForwardCommand}"/>
+                <Button Content="{Binding [CompressCompareFwd5], Source={x:Static services:LocalizationService.Instance}}"
+                        Theme="{StaticResource SmallGothicMetalButton}"
+                        Command="{Binding SkipForwardCommand}"/>
+            </StackPanel>
+        </StackPanel>
+    </Grid>
+</Window>

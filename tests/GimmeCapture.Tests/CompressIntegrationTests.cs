@@ -183,4 +183,24 @@ public class CompressIntegrationTests
         Assert.Equal(srcSize!.Value.Height, outSize!.Value.Height);
         Assert.True(await player.ProbeHasAudioAsync(outPath), "stitched output lost audio");
     }
+
+    // The compare window's frame-step relies on DecodeFrameAtAsync returning a BGRA frame at a timestamp.
+    [Fact]
+    public async Task DecodeFrameAt_ReturnsBgraFrame_OfRequestedSize()
+    {
+        if (!Enabled)
+        {
+            return;
+        }
+
+        string source = Source!;
+        var player = new LibavVideoFramePlayer();
+        double duration = await player.ProbeDurationSecondsAsync(source) ?? 0;
+
+        const int w = 320, h = 180;
+        byte[]? frame = await LibavVideoFramePlayer.DecodeFrameAtAsync(source, Math.Min(1.0, duration / 2), w, h, default);
+
+        Assert.NotNull(frame);
+        Assert.True(frame!.Length >= w * h * 4, $"frame {frame.Length} bytes < {w * h * 4}");
+    }
 }

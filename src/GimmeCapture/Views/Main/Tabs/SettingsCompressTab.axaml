@@ -257,6 +257,11 @@
                                                Width="120"
                                                VerticalAlignment="Center"/>
                             </StackPanel>
+                            <Button Content="{Binding [CompressCompareButton], Source={x:Static services:LocalizationService.Instance}}"
+                                    Theme="{StaticResource SmallGothicMetalButton}"
+                                    HorizontalAlignment="Center"
+                                    Command="{Binding CompareQualityCommand}"
+                                    Margin="0,4,0,0"/>
                         </StackPanel>
                     </StackPanel>
                 </ScrollViewer>
