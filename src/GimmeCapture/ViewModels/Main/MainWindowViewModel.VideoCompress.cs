@@ -26,10 +26,10 @@ public partial class MainWindowViewModel
 
     public ReactiveCommand<Unit, Unit> CompareQualityCommand { get; private set; } = null!;
 
-    /// <summary>Set by the view: opens the standalone visual clip-trim window for a prepared view model.</summary>
-    internal Action<TrimViewModel>? OpenTrimAction { get; set; }
+    /// <summary>Set by the view: opens the standalone 進階影片編輯 window for a prepared view model.</summary>
+    internal Action<VideoEditViewModel>? OpenEditorAction { get; set; }
 
-    public ReactiveCommand<Unit, Unit> OpenTrimCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> OpenEditorCommand { get; private set; } = null!;
 
     // Optional batch output folder. Empty = auto-save each output next to its source.
     private string _compressOutputFolder = string.Empty;
@@ -332,12 +332,12 @@ public partial class MainWindowViewModel
                 (CompressQueueItem? sel, bool busy) => sel != null && !busy));
         CompareQualityCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.OpenCompare", ex));
 
-        // Visual clip-trim: needs a selected file and an idle queue.
-        OpenTrimCommand = ReactiveCommand.Create(
-            OpenTrim,
+        // Advanced video editing: needs a selected file and an idle queue.
+        OpenEditorCommand = ReactiveCommand.Create(
+            OpenEditor,
             this.WhenAnyValue(x => x.SelectedQueueItem, x => x.IsBusy,
                 (CompressQueueItem? sel, bool busy) => sel != null && !busy));
-        OpenTrimCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.OpenTrim", ex));
+        OpenEditorCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.OpenEditor", ex));
 
         // Presets: save needs a non-blank name; load/delete need a selection. None while busy.
         SaveCompressPresetCommand = ReactiveCommand.Create(
@@ -563,7 +563,7 @@ public partial class MainWindowViewModel
 
     private string BuildItemEstimate(CompressQueueItem item)
     {
-        double dur = item.EffectiveDuration; // the trimmed span (whole file when untrimmed)
+        double dur = item.EffectiveOutputDuration; // speed-adjusted output span (whole file when untrimmed)
         if (dur <= 0 || item.ProbedWidth <= 0 || item.ProbedHeight <= 0)
         {
             return string.Empty; // not probed yet (or unreadable)
@@ -621,7 +621,8 @@ public partial class MainWindowViewModel
     /// failure. Far better than the formula because it sees the actual footage. Runs the encode off-thread.
     /// </summary>
     private async Task<long> EstimateBySampleAsync(
-        string sourcePath, CompressSettingsSnapshot snap, IReadOnlyList<(double Start, double End)> keptRuns)
+        string sourcePath, CompressSettingsSnapshot snap,
+        IReadOnlyList<(double Start, double End, double Speed)> keptRuns, VideoEditCrop? crop = null)
     {
         double duration = keptRuns.Sum(r => Math.Max(0, r.End - r.Start));
         if (duration <= 0)
@@ -654,7 +655,7 @@ public partial class MainWindowViewModel
             };
 
             bool ok = await Task.Run(() =>
-                LibavClipExporter.TryExport(sourcePath, ranges, sampleOut, VideoQuality.Medium, options: options));
+                LibavClipExporter.TryExport(sourcePath, ranges, sampleOut, VideoQuality.Medium, crop: crop, options: options));
             if (!ok || !File.Exists(sampleOut))
             {
                 return -1;
@@ -687,7 +688,7 @@ public partial class MainWindowViewModel
     // Short kept sets (<= 8s total) sample whole (exact). Longer ones take three 2s windows at 20/50/80% of the
     // concatenated kept timeline, mapped back to source times within the kept runs.
     private static LibavClipExporter.SourceRange[] BuildSampleRanges(
-        IReadOnlyList<(double Start, double End)> runs, out double sampleDuration)
+        IReadOnlyList<(double Start, double End, double Speed)> runs, out double sampleDuration)
     {
         double total = runs.Sum(r => Math.Max(0, r.End - r.Start));
         if (total <= 0)
@@ -699,7 +700,7 @@ public partial class MainWindowViewModel
         if (total <= 8)
         {
             sampleDuration = total;
-            return runs.Select(r => new LibavClipExporter.SourceRange(r.Start, r.End)).ToArray();
+            return runs.Select(r => new LibavClipExporter.SourceRange(r.Start, r.End, r.Speed)).ToArray();
         }
 
         const double window = 2.0;
@@ -709,7 +710,7 @@ public partial class MainWindowViewModel
         {
             double target = total * frac; // concatenated-timeline position
             double cursor = 0;
-            foreach ((double start, double end) in runs)
+            foreach ((double start, double end, double speed) in runs)
             {
                 double len = end - start;
                 if (target <= cursor + len)
@@ -718,7 +719,7 @@ public partial class MainWindowViewModel
                     double srcEnd = Math.Min(end, srcStart + window);
                     if (srcEnd > srcStart)
                     {
-                        ranges.Add(new LibavClipExporter.SourceRange(srcStart, srcEnd));
+                        ranges.Add(new LibavClipExporter.SourceRange(srcStart, srcEnd, speed));
                         sampled += srcEnd - srcStart;
                     }
                     break;
@@ -778,22 +779,24 @@ public partial class MainWindowViewModel
         string input, string outputPath, CompressSettingsSnapshot s, int targetBitrateKbps,
         double durationSeconds, IProgress<double> progress, CancellationToken token, ManualResetEventSlim? pauseGate,
         int rotationDegrees = 0, IProgress<double>? resumeProgress = null,
-        IReadOnlyList<(double Start, double End)>? keptRuns = null)
+        IReadOnlyList<(double Start, double End, double Speed)>? keptRuns = null, VideoEditCrop? crop = null)
     {
         // Kept runs to concatenate (whole file when none). TryExport joins multiple ranges into one output.
-        var runs = (keptRuns ?? Array.Empty<(double Start, double End)>())
+        var runs = (keptRuns ?? Array.Empty<(double Start, double End, double Speed)>())
             .Where(r => r.End > r.Start + 0.001)
             .ToList();
         if (runs.Count == 0)
         {
-            runs.Add((0, durationSeconds > 0 ? durationSeconds : 24 * 60 * 60));
+            runs.Add((0, durationSeconds > 0 ? durationSeconds : 24 * 60 * 60, 1.0));
         }
-        double effectiveDuration = runs.Sum(r => r.End - r.Start);
-        var ranges = runs.Select(r => new LibavClipExporter.SourceRange(r.Start, r.End)).ToArray();
+        // Output span honors per-run speed; used by the H.265 target-size corrective re-encode below.
+        double effectiveDuration = runs.Sum(r => (r.End - r.Start) / (r.Speed > 0 ? r.Speed : 1.0));
+        var ranges = runs.Select(r => new LibavClipExporter.SourceRange(r.Start, r.End, r.Speed)).ToArray();
+        bool hasSpeed = runs.Any(r => Math.Abs(r.Speed - 1.0) > 0.001);
 
-        // CRF + known duration + a single contiguous run → resumable segmented path; target-size / 2-pass /
-        // unknown-duration / multi-segment keep the whole-file concat path below.
-        if (!s.UseTargetSize && durationSeconds > 0 && runs.Count == 1)
+        // CRF + known duration + a single contiguous, full-speed, un-cropped run → resumable segmented path;
+        // target-size / 2-pass / unknown-duration / multi-segment / speed / crop keep the whole-file concat path.
+        if (!s.UseTargetSize && durationSeconds > 0 && runs.Count == 1 && !hasSpeed && crop == null)
         {
             return await EncodeOneFileSegmentedAsync(
                 input, outputPath, s, durationSeconds, progress, token, pauseGate, rotationDegrees, resumeProgress,
@@ -829,7 +832,7 @@ public partial class MainWindowViewModel
                 }
                 bool encoded = await Task.Run(() =>
                     LibavClipExporter.TryExport(
-                        input, ranges, attemptOut, VideoQuality.Medium,
+                        input, ranges, attemptOut, VideoQuality.Medium, crop: crop,
                         cancellationToken: token, options: options, progress: progress, pauseGate: pauseGate), token);
                 return encoded && File.Exists(attemptOut) && new FileInfo(attemptOut).Length > 0 ? attemptOut : null;
             }
@@ -1063,29 +1066,32 @@ public partial class MainWindowViewModel
         OpenCompareAction(vm);
     }
 
-    // Opens the visual multi-segment clip-trim window for the selected file; on Apply writes the kept runs back
-    // to the item (the property set triggers the existing persist + re-estimate + range-summary refresh).
-    private void OpenTrim()
+    // Opens the 進階影片編輯 window for the selected file; on Apply writes the whole edit (kept runs with speed,
+    // crop, rotation) back to the item (the property sets trigger the existing persist + re-estimate + summary).
+    private void OpenEditor()
     {
         CompressQueueItem? item = SelectedQueueItem;
-        if (item == null || OpenTrimAction == null || item.ProbedDuration <= 0)
+        if (item == null || OpenEditorAction == null || item.ProbedDuration <= 0)
         {
             return;
         }
 
         var initial = item.EffectiveKeptRuns()
-            .Select(r => new VideoEditSegment(r.Start, r.End))
+            .Select(r => new VideoEditSegment(r.Start, r.End, r.Speed))
             .ToList();
 
-        var vm = new TrimViewModel(
+        var vm = new VideoEditViewModel(
             item.Path, item.ProbedDuration, item.ProbedFps, item.ProbedWidth, item.ProbedHeight, item.Rotation,
-            initial,
-            keptRuns =>
+            initial, item.Crop,
+            (keptRuns, crop, rotation) =>
             {
                 item.TrimEnabled = true;
                 item.KeptSegments = keptRuns;
+                item.Crop = crop;
+                item.Rotation = rotation;
+                RefreshSelectedPreview(item);
             });
-        OpenTrimAction(vm);
+        OpenEditorAction(vm);
     }
 
     /// <summary>

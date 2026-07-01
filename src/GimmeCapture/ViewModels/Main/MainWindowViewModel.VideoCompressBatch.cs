@@ -169,11 +169,27 @@ public partial class MainWindowViewModel
         public int Rotation
         {
             get => _rotation;
-            set => this.RaiseAndSetIfChanged(ref _rotation, value);
+            set
+            {
+                this.RaiseAndSetIfChanged(ref _rotation, value);
+                RaiseEditSummary();
+            }
         }
 
-        // Optional per-file trim: the kept runs (source [start,end] pieces) concatenated at encode. Empty/off =
-        // whole clip. Edited in the visual 剪輯 window (Pin-style split + keep/drop); persisted per file.
+        // Optional per-file crop (source pixels), applied before rotation at encode. null = no crop.
+        private VideoEditCrop? _crop;
+        public VideoEditCrop? Crop
+        {
+            get => _crop;
+            set
+            {
+                this.RaiseAndSetIfChanged(ref _crop, value);
+                RaiseEditSummary();
+            }
+        }
+
+        // Optional per-file edit: the kept runs (source [start,end] pieces, each optionally time-scaled)
+        // concatenated at encode. Empty/off = whole clip. Edited in the 進階影片編輯 window; persisted per file.
         private bool _trimEnabled;
         public bool TrimEnabled
         {
@@ -181,57 +197,105 @@ public partial class MainWindowViewModel
             set
             {
                 this.RaiseAndSetIfChanged(ref _trimEnabled, value);
-                this.RaisePropertyChanged(nameof(TrimRangeText));
+                RaiseEditSummary();
             }
         }
 
         private IReadOnlyList<VideoEditSegment>? _keptSegments;
-        /// <summary>The kept runs (source ranges) to concatenate; null/empty = whole clip. Set by the 剪輯 window.</summary>
+        /// <summary>The kept runs (source ranges, each with Speed) to concatenate; null/empty = whole clip.</summary>
         public IReadOnlyList<VideoEditSegment>? KeptSegments
         {
             get => _keptSegments;
             set
             {
                 this.RaiseAndSetIfChanged(ref _keptSegments, value);
-                this.RaisePropertyChanged(nameof(TrimRangeText));
+                RaiseEditSummary();
             }
         }
 
-        /// <summary>The kept runs clamped to the probed duration (whole clip when trim off/empty). Encode + estimate use these.</summary>
-        public IReadOnlyList<(double Start, double End)> EffectiveKeptRuns()
+        /// <summary>The kept runs (Start, End, Speed) clamped to the probed duration (whole clip when off/empty).</summary>
+        public IReadOnlyList<(double Start, double End, double Speed)> EffectiveKeptRuns()
         {
             double full = ProbedDuration > 0 ? ProbedDuration : 0;
             if (!TrimEnabled || _keptSegments is not { Count: > 0 } || full <= 0)
             {
-                return full > 0 ? new[] { (0.0, full) } : Array.Empty<(double, double)>();
+                return full > 0
+                    ? new[] { (0.0, full, 1.0) }
+                    : Array.Empty<(double, double, double)>();
             }
 
             var runs = _keptSegments
-                .Select(s => (Start: Math.Clamp(s.SourceStart, 0, full), End: Math.Clamp(s.SourceEnd, 0, full)))
+                .Select(s => (Start: Math.Clamp(s.SourceStart, 0, full), End: Math.Clamp(s.SourceEnd, 0, full),
+                    Speed: s.Speed > 0 ? s.Speed : 1.0))
                 .Where(r => r.End > r.Start + 0.001)
                 .OrderBy(r => r.Start)
                 .ToList();
-            return runs.Count > 0 ? runs : new List<(double Start, double End)> { (0.0, full) };
+            return runs.Count > 0 ? runs : new List<(double Start, double End, double Speed)> { (0.0, full, 1.0) };
         }
 
-        /// <summary>Encoded span (seconds) = sum of the kept runs; used for estimates/bitrate.</summary>
+        /// <summary>Encoded source span (seconds) = sum of the kept runs; used where source time matters.</summary>
         public double EffectiveDuration => EffectiveKeptRuns().Sum(r => Math.Max(0, r.End - r.Start));
 
-        /// <summary>"N 段 · 長度 m:ss" summary of the kept runs, shown on the 編輯 tab.</summary>
-        public string TrimRangeText
+        /// <summary>Output span (seconds) = Σ each kept run's source length ÷ its speed. Drives bitrate/estimate.</summary>
+        public double EffectiveOutputDuration =>
+            EffectiveKeptRuns().Sum(r => Math.Max(0, r.End - r.Start) / (r.Speed > 0 ? r.Speed : 1.0));
+
+        private bool RunsAreTrimmed(IReadOnlyList<(double Start, double End, double Speed)> runs) =>
+            runs.Count > 1
+            || (runs.Count == 1 && (runs[0].Start > 0.05 || (ProbedDuration > 0 && runs[0].End < ProbedDuration - 0.05)));
+
+        /// <summary>True when the clip carries any edit (trim, speed, crop, or rotation).</summary>
+        public bool HasEdits
         {
             get
             {
-                IReadOnlyList<(double Start, double End)> runs = EffectiveKeptRuns();
-                double total = runs.Sum(r => Math.Max(0, r.End - r.Start));
-                static string F(double sec) => TimeSpan.FromSeconds(Math.Max(0, sec)).ToString(@"m\:ss");
-                LocalizationService loc = LocalizationService.Instance;
-                return $"{runs.Count} {loc["CompressTrimSegments"]}    {loc["CompressTrimLength"]} {F(total)}";
+                IReadOnlyList<(double Start, double End, double Speed)> runs = EffectiveKeptRuns();
+                bool retimed = runs.Any(r => Math.Abs(r.Speed - 1.0) > 0.001);
+                return RunsAreTrimmed(runs) || retimed || Crop != null || Rotation != 0;
             }
         }
 
-        // Re-raise the trim summary when the probed duration lands (it feeds EffectiveKeptRuns → TrimRangeText).
-        internal void RefreshTrimSummary() => this.RaisePropertyChanged(nameof(TrimRangeText));
+        /// <summary>Human summary of the applied edits ("3 段 (0:12) · 變速 · 裁切 · 旋轉 90°"), shown on the 編輯 tab.</summary>
+        public string EditSummaryText
+        {
+            get
+            {
+                LocalizationService loc = LocalizationService.Instance;
+                IReadOnlyList<(double Start, double End, double Speed)> runs = EffectiveKeptRuns();
+                if (!HasEdits)
+                {
+                    return loc["CompressEditNone"];
+                }
+
+                static string F(double sec) => TimeSpan.FromSeconds(Math.Max(0, sec)).ToString(@"m\:ss");
+                var parts = new List<string>();
+                if (RunsAreTrimmed(runs))
+                {
+                    double outLen = runs.Sum(r => Math.Max(0, r.End - r.Start) / (r.Speed > 0 ? r.Speed : 1.0));
+                    parts.Add($"{runs.Count} {loc["CompressTrimSegments"]} ({F(outLen)})");
+                }
+                if (runs.Any(r => Math.Abs(r.Speed - 1.0) > 0.001))
+                {
+                    parts.Add(loc["CompressEditSpeed"]);
+                }
+                if (Crop != null)
+                {
+                    parts.Add(loc["CompressEditCrop"]);
+                }
+                if (Rotation != 0)
+                {
+                    parts.Add($"{loc["CompressEditRotate"]} {Rotation}°");
+                }
+                return string.Join(" · ", parts);
+            }
+        }
+
+        // Re-raise the edit summary + edited flag (probed duration landed, or an edit was applied).
+        internal void RaiseEditSummary()
+        {
+            this.RaisePropertyChanged(nameof(EditSummaryText));
+            this.RaisePropertyChanged(nameof(HasEdits));
+        }
 
         // True for a file restored from a previous run where it was paused: shown as paused at its last
         // progress until the user resumes (which re-encodes the whole file from the start).
@@ -472,12 +536,8 @@ public partial class MainWindowViewModel
             EstimateAllAsync,
             this.WhenAnyValue(x => x.CompressQueueCount, x => x.IsBatchRunning, (count, busy) => count > 0 && !busy));
 
-        // Load the first-frame preview when the selected file changes (and refresh the editable angle).
-        this.WhenAnyValue(x => x.SelectedQueueItem).Subscribe(item =>
-        {
-            this.RaisePropertyChanged(nameof(SelectedRotation));
-            _ = LoadPreviewAsync(item);
-        });
+        // Load the first-frame preview when the selected file changes.
+        this.WhenAnyValue(x => x.SelectedQueueItem).Subscribe(item => _ = LoadPreviewAsync(item));
 
         AddCompressFilesCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.QueueAddFiles", ex));
         ClearCompressQueueCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.QueueClear", ex));
@@ -570,34 +630,13 @@ public partial class MainWindowViewModel
         Active = _activeWorkingDir
     });
 
-    // The selected file's rotation, editable as a number (snaps to 0/90/180/270). Nullable so a transient
-    // empty field can't crash the binding; the NumericUpDownFix behavior restores a value on empty.
-    public decimal? SelectedRotation
+    // Re-rotate the tab preview to match an edit just applied to the selected item (from the 進階影片編輯 window).
+    internal void RefreshSelectedPreview(CompressQueueItem item)
     {
-        get => SelectedQueueItem?.Rotation ?? 0;
-        set
+        if (ReferenceEquals(item, SelectedQueueItem))
         {
-            if (value.HasValue)
-            {
-                ApplyRotation((int)value.Value);
-            }
+            PreviewBitmap = FloatingBitmapConversionHelper.TransformBitmap(_rawPreview, item.Rotation, false, false);
         }
-    }
-
-    // Snaps any angle to the nearest 90° (0/90/180/270), applies it to the selected file, and re-rotates the preview.
-    private void ApplyRotation(int degrees)
-    {
-        CompressQueueItem? item = SelectedQueueItem;
-        if (item == null)
-        {
-            return;
-        }
-
-        int snapped = ((int)Math.Round(degrees / 90.0, MidpointRounding.AwayFromZero) * 90 % 360 + 360) % 360;
-        item.Rotation = snapped;
-        PersistItemState(item);
-        PreviewBitmap = FloatingBitmapConversionHelper.TransformBitmap(_rawPreview, snapped, false, false);
-        this.RaisePropertyChanged(nameof(SelectedRotation));
     }
 
     // Applies any persisted rotation / output name / done-state to a freshly created queue item.
@@ -616,7 +655,10 @@ public partial class MainWindowViewModel
         item.TrimEnabled = st.TrimEnabled;
         // CompressItemStateService.Load migrates the legacy single TrimStart/End into Segments, so read Segments here.
         item.KeptSegments = st.Segments is { Count: > 0 }
-            ? st.Segments.Select(g => new VideoEditSegment((double)g.Start, (double)g.End)).ToList()
+            ? st.Segments.Select(g => new VideoEditSegment((double)g.Start, (double)g.End, (double)g.Speed)).ToList()
+            : null;
+        item.Crop = st.CropWidth > 0 && st.CropHeight > 0
+            ? new VideoEditCrop(st.CropX, st.CropY, st.CropWidth, st.CropHeight)
             : null;
         if (st.Done)
         {
@@ -642,8 +684,12 @@ public partial class MainWindowViewModel
             Progress = item.Progress,
             TrimEnabled = item.TrimEnabled,
             Segments = item.KeptSegments?
-                .Select(s => new TrimSegment { Start = (decimal)s.SourceStart, End = (decimal)s.SourceEnd })
-                .ToList()
+                .Select(s => new TrimSegment { Start = (decimal)s.SourceStart, End = (decimal)s.SourceEnd, Speed = (decimal)s.Speed })
+                .ToList(),
+            CropX = item.Crop?.X ?? 0,
+            CropY = item.Crop?.Y ?? 0,
+            CropWidth = item.Crop?.Width ?? 0,
+            CropHeight = item.Crop?.Height ?? 0
         };
         CompressItemStateService.Save(_itemStates);
     }
@@ -793,8 +839,8 @@ public partial class MainWindowViewModel
                     item.WhenAnyValue(x => x.IsPaused)
                         .Skip(1)
                         .Subscribe(_ => PersistItemState(item));
-                    // Trim edits persist and re-estimate (the kept-runs total changes the estimated output size).
-                    item.WhenAnyValue(x => x.TrimEnabled, x => x.KeptSegments)
+                    // Edits persist and re-estimate (trim/speed/crop/rotation all change the estimated output size).
+                    item.WhenAnyValue(x => x.TrimEnabled, x => x.KeptSegments, x => x.Crop, x => x.Rotation)
                         .Skip(1)
                         .Subscribe(_ =>
                         {
@@ -836,7 +882,7 @@ public partial class MainWindowViewModel
             AppLog.Error("Compress.ProbeQueueItem", ex);
         }
 
-        item.RefreshTrimSummary(); // ProbedDuration now known → the kept-runs summary reflects the real length
+        item.RaiseEditSummary(); // ProbedDuration now known → the edit summary reflects the real length
 
         item.EstimatedText = BuildItemEstimate(item);
 
@@ -972,7 +1018,7 @@ public partial class MainWindowViewModel
         item.EstimatedText = $"{prefix}: {LocalizationService.Instance["CompressEstimating"]}";
         try
         {
-            long bytes = await EstimateBySampleAsync(item.Path, snap, item.EffectiveKeptRuns());
+            long bytes = await EstimateBySampleAsync(item.Path, snap, item.EffectiveKeptRuns(), item.Crop);
             item.EstimatedText = bytes >= 0
                 ? $"{prefix}: ≈ {FormatFileSize(bytes)} ({LocalizationService.Instance["CompressEstimateMeasured"]})"
                 : BuildItemEstimate(item); // sample failed → fall back to the formula
@@ -1020,7 +1066,7 @@ public partial class MainWindowViewModel
         string outputFolder = CompressOutputFolder; // captured on the UI thread; empty = next to source
         bool appendDate = CompressAppendDate;
         // Per-file kept runs captured on the UI thread (whole clip when trim off); re-clamped against the fresh probe.
-        IReadOnlyList<(double Start, double End)> keptRuns = item.EffectiveKeptRuns();
+        IReadOnlyList<(double Start, double End, double Speed)> keptRuns = item.EffectiveKeptRuns();
         item.PrepareForStart(_batchCts.Token);
         var progress = new Progress<double>(p => item.Progress = p); // UI thread → callbacks marshal back
         var resumeProgress = new Progress<double>(p => item.ResumePoint = p); // last safe pause checkpoint
@@ -1033,7 +1079,7 @@ public partial class MainWindowViewModel
 
     private async Task RunQueueItemAsync(
         CompressQueueItem item, CompressSettingsSnapshot snap, string ext, string outputFolder, bool appendDate,
-        IProgress<double> progress, IProgress<double> resumeProgress, IReadOnlyList<(double Start, double End)> keptRuns)
+        IProgress<double> progress, IProgress<double> resumeProgress, IReadOnlyList<(double Start, double End, double Speed)> keptRuns)
     {
         SemaphoreSlim semaphore = _batchSemaphore!;
         CancellationToken token = item.Cts!.Token;
@@ -1067,28 +1113,33 @@ public partial class MainWindowViewModel
 
                 // Re-clamp the captured kept runs against the freshly probed duration (whole file when empty).
                 var runs = keptRuns
-                    .Select(r => (Start: Math.Clamp(r.Start, 0, duration), End: Math.Clamp(r.End, 0, duration)))
+                    .Select(r => (Start: Math.Clamp(r.Start, 0, duration), End: Math.Clamp(r.End, 0, duration),
+                        Speed: r.Speed > 0 ? r.Speed : 1.0))
                     .Where(r => r.End > r.Start + 0.001)
                     .OrderBy(r => r.Start)
                     .ToList();
                 if (runs.Count == 0 && duration > 0)
                 {
-                    runs.Add((0, duration));
+                    runs.Add((0, duration, 1.0));
                 }
-                double encodeDuration = runs.Sum(r => r.End - r.Start);
+                // Output span honors per-run speed (a 2× run is half as long); drives the target-size bitrate.
+                double outputDuration = runs.Sum(r => (r.End - r.Start) / (r.Speed > 0 ? r.Speed : 1.0));
                 bool multiSegment = runs.Count > 1;
+                bool hasSpeed = runs.Any(r => Math.Abs(r.Speed - 1.0) > 0.001);
+                VideoEditCrop? crop = item.Crop;
 
-                // Resumable segmented CRF only handles one contiguous span; multi-segment uses the whole-file concat path.
-                item.SupportsResume = !snap.UseTargetSize && duration > 0 && !multiSegment;
+                // Resumable segmented CRF only handles one contiguous, full-speed, un-cropped span; anything else
+                // (target-size / multi-segment / speed / crop) uses the whole-file concat path below.
+                item.SupportsResume = !snap.UseTargetSize && duration > 0 && !multiSegment && !hasSpeed && crop == null;
                 int targetKbps = 0;
                 if (snap.UseTargetSize)
                 {
-                    if (duration <= 0 || encodeDuration <= 0)
+                    if (duration <= 0 || outputDuration <= 0)
                     {
                         item.Status = CompressQueueStatus.Failed;
                         return;
                     }
-                    targetKbps = ComputeTargetVideoBitrateKbps((double)snap.TargetSizeMB, encodeDuration);
+                    targetKbps = ComputeTargetVideoBitrateKbps((double)snap.TargetSizeMB, outputDuration);
                 }
 
                 string outputPath = BuildBatchOutputPath(
@@ -1108,7 +1159,7 @@ public partial class MainWindowViewModel
 
                 bool ok = await EncodeOneFileAsync(
                     item.Path, outputPath, snap, targetKbps, duration, progress, token, item.Gate, item.Rotation,
-                    resumeProgress, runs);
+                    resumeProgress, runs, crop);
                 item.Status = ok ? CompressQueueStatus.Done : CompressQueueStatus.Failed;
                 if (ok)
                 {

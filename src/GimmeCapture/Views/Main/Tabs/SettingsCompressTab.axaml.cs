@@ -92,10 +92,10 @@ public partial class SettingsCompressTab : UserControl
             window.Show();
         };
 
-        // Visual clip-trim: open a standalone trim window for the prepared view model.
-        vm.OpenTrimAction = trimVm =>
+        // Advanced video editing: open a standalone editor window for the prepared view model.
+        vm.OpenEditorAction = editVm =>
         {
-            var window = new TrimWindow { DataContext = trimVm };
+            var window = new VideoEditWindow { DataContext = editVm };
             window.Show();
         };
     }

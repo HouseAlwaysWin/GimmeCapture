@@ -1,5 +1,7 @@
 using System;
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Shapes;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
@@ -11,7 +13,7 @@ using ReactiveUI;
 
 namespace GimmeCapture.Views.Main;
 
-public partial class TrimWindow : Window
+public partial class VideoEditWindow : Window
 {
     private IDisposable? _positionSub;
     private Action? _layoutHandler;
@@ -19,7 +21,10 @@ public partial class TrimWindow : Window
     private bool _stripDidDrag;
     private bool _stripScrubbing;
 
-    public TrimWindow()
+    private bool _cropDragging;
+    private Point _cropStart;
+
+    public VideoEditWindow()
     {
         InitializeComponent();
 
@@ -38,14 +43,19 @@ public partial class TrimWindow : Window
                 Dispatcher.UIThread.Post(UpdateSegmentLayout);
             }
         };
+
+        // Crop overlay: drag a rectangle over the (un-rotated) preview to set the crop.
+        CropOverlay.PointerPressed += OnCropPressed;
+        CropOverlay.PointerMoved += OnCropMoved;
+        CropOverlay.PointerReleased += OnCropReleased;
     }
 
     private void OnScrubPressed(object? sender, PointerPressedEventArgs e)
-        => (DataContext as TrimViewModel)?.BeginScrub();
+        => (DataContext as VideoEditViewModel)?.BeginScrub();
 
     private void OnScrubReleased(object? sender, PointerReleasedEventArgs e)
     {
-        if (DataContext is TrimViewModel vm)
+        if (DataContext is VideoEditViewModel vm)
         {
             _ = vm.SeekAsync(PositionSlider.Value);
         }
@@ -54,7 +64,7 @@ public partial class TrimWindow : Window
     protected override void OnOpened(EventArgs e)
     {
         base.OnOpened(e);
-        if (DataContext is TrimViewModel vm)
+        if (DataContext is VideoEditViewModel vm)
         {
             vm.RequestClose = Close;
             _layoutHandler = () => Dispatcher.UIThread.Post(UpdateSegmentLayout);
@@ -70,7 +80,7 @@ public partial class TrimWindow : Window
     {
         base.OnClosed(e);
         _positionSub?.Dispose();
-        if (DataContext is TrimViewModel vm)
+        if (DataContext is VideoEditViewModel vm)
         {
             if (_layoutHandler != null)
             {
@@ -84,7 +94,7 @@ public partial class TrimWindow : Window
 
     private void OnStripPressed(object? sender, PointerPressedEventArgs e)
     {
-        if (DataContext is not TrimViewModel vm)
+        if (DataContext is not VideoEditViewModel vm)
         {
             return;
         }
@@ -98,7 +108,7 @@ public partial class TrimWindow : Window
 
     private void OnStripMoved(object? sender, PointerEventArgs e)
     {
-        if (!_stripScrubbing || DataContext is not TrimViewModel vm)
+        if (!_stripScrubbing || DataContext is not VideoEditViewModel vm)
         {
             return;
         }
@@ -114,7 +124,7 @@ public partial class TrimWindow : Window
     {
         _stripScrubbing = false;
         e.Pointer.Capture(null);
-        if (DataContext is not TrimViewModel vm)
+        if (DataContext is not VideoEditViewModel vm)
         {
             return;
         }
@@ -137,7 +147,7 @@ public partial class TrimWindow : Window
     }
 
     // Pieces are contiguous in source, so pixel X maps to source time directly; move the red playhead.
-    private void ScrubStripTo(TrimViewModel vm, double localX)
+    private void ScrubStripTo(VideoEditViewModel vm, double localX)
     {
         double w = SegmentStripGrid.Bounds.Width;
         double total = vm.TotalSourceDuration;
@@ -151,7 +161,7 @@ public partial class TrimWindow : Window
 
     private void UpdateSegmentLayout()
     {
-        if (DataContext is not TrimViewModel vm)
+        if (DataContext is not VideoEditViewModel vm)
         {
             return;
         }
@@ -171,5 +181,82 @@ public partial class TrimWindow : Window
 
         double x = Math.Clamp((vm.PositionSeconds / total) * w, 0, w);
         SegmentPlayhead.RenderTransform = new TranslateTransform(x, 0);
+    }
+
+    // ── Crop overlay: drag a rectangle; on release map it into the letterboxed video content rect → source crop ──
+
+    private void OnCropPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (DataContext is not VideoEditViewModel vm || !vm.IsCropMode)
+        {
+            return;
+        }
+        _cropDragging = true;
+        _cropStart = e.GetPosition(CropOverlay);
+        Canvas.SetLeft(CropRect, _cropStart.X);
+        Canvas.SetTop(CropRect, _cropStart.Y);
+        CropRect.Width = 0;
+        CropRect.Height = 0;
+        CropRect.IsVisible = true;
+        e.Pointer.Capture(CropOverlay);
+    }
+
+    private void OnCropMoved(object? sender, PointerEventArgs e)
+    {
+        if (!_cropDragging)
+        {
+            return;
+        }
+        Point p = e.GetPosition(CropOverlay);
+        Canvas.SetLeft(CropRect, Math.Min(p.X, _cropStart.X));
+        Canvas.SetTop(CropRect, Math.Min(p.Y, _cropStart.Y));
+        CropRect.Width = Math.Abs(p.X - _cropStart.X);
+        CropRect.Height = Math.Abs(p.Y - _cropStart.Y);
+    }
+
+    private void OnCropReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        if (!_cropDragging)
+        {
+            return;
+        }
+        _cropDragging = false;
+        e.Pointer.Capture(null);
+        CropRect.IsVisible = false;
+        if (DataContext is not VideoEditViewModel vm)
+        {
+            return;
+        }
+
+        double selX = Canvas.GetLeft(CropRect);
+        double selY = Canvas.GetTop(CropRect);
+        double selW = CropRect.Width;
+        double selH = CropRect.Height;
+        if (selW < 4 || selH < 4)
+        {
+            return;
+        }
+
+        // The overlay fills the Image cell; the video is letterboxed inside (Uniform). Find that content rect.
+        double bw = PreviewImage.Bounds.Width, bh = PreviewImage.Bounds.Height;
+        if (bw <= 0 || bh <= 0 || vm.SourceWidth <= 0 || vm.SourceHeight <= 0)
+        {
+            return;
+        }
+        double srcAspect = vm.SourceWidth / (double)vm.SourceHeight;
+        double contentW, contentH;
+        if (bw / bh > srcAspect) { contentH = bh; contentW = bh * srcAspect; }
+        else { contentW = bw; contentH = bw / srcAspect; }
+        double offX = (bw - contentW) / 2, offY = (bh - contentH) / 2;
+
+        double relX = Math.Clamp(selX - offX, 0, contentW);
+        double relY = Math.Clamp(selY - offY, 0, contentH);
+        double relRight = Math.Clamp(selX + selW - offX, 0, contentW);
+        double relBottom = Math.Clamp(selY + selH - offY, 0, contentH);
+        double relW = relRight - relX, relH = relBottom - relY;
+        if (relW >= 4 && relH >= 4)
+        {
+            vm.SetCropFromSelection(relX, relY, relW, relH, contentW, contentH);
+        }
     }
 }

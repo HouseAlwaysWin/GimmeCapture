@@ -242,42 +242,22 @@
                                 <TextBox Text="{Binding SelectedQueueItem.OutputName}"
                                          Watermark="{Binding [CompressOutputNameWatermark], Source={x:Static services:LocalizationService.Instance}}"/>
                             </StackPanel>
-                            <!-- Optional trim: encode only a sub-section of this clip; pick it in the visual 剪輯 window -->
-                            <StackPanel Spacing="6">
-                                <CheckBox IsChecked="{Binding SelectedQueueItem.TrimEnabled}"
-                                          Content="{Binding [CompressTrimLabel], Source={x:Static services:LocalizationService.Instance}}"/>
-                                <StackPanel IsVisible="{Binding SelectedQueueItem.TrimEnabled}" Margin="24,0,0,0" Spacing="6">
-                                    <StackPanel Orientation="Horizontal" Spacing="10">
-                                        <Button Content="{Binding [CompressTrimButton], Source={x:Static services:LocalizationService.Instance}}"
-                                                Theme="{StaticResource SmallGothicMetalButton}"
-                                                Command="{Binding OpenTrimCommand}"/>
-                                        <TextBlock Text="{Binding SelectedQueueItem.TrimRangeText}"
-                                                   VerticalAlignment="Center" Foreground="#C8A24B" FontSize="12"/>
-                                    </StackPanel>
-                                    <TextBlock Text="{Binding [CompressTrimHint], Source={x:Static services:LocalizationService.Instance}}"
-                                               FontSize="11" Foreground="#9A9A9A" TextWrapping="Wrap"/>
-                                </StackPanel>
-                            </StackPanel>
+                            <!-- Preview of the selected clip (reflects the applied rotation). -->
                             <Border Background="#101010" CornerRadius="4" Padding="6" HorizontalAlignment="Center">
                                 <Image Source="{Binding PreviewBitmap}" Stretch="Uniform" MaxHeight="220" MaxWidth="380"/>
                             </Border>
+                            <!-- Editor + quality-compare buttons side by side; the edit summary sits on its own line below. -->
                             <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Center">
-                                <TextBlock Text="{Binding [CompressRotationLabel], Source={x:Static services:LocalizationService.Instance}}"
-                                           VerticalAlignment="Center" FontSize="12"/>
-                                <!-- Bounds widened to -90/360 so the up/down spinner WRAPS: ApplyRotation snaps the
-                                     overshoot back with % 360 (270 → up → 0, 0 → down → 270). With 0/270 bounds the
-                                     value was clamped before reaching the setter, so it couldn't loop. -->
-                                <NumericUpDown Value="{Binding SelectedRotation}"
-                                               Minimum="-90" Maximum="360" Increment="90"
-                                               FormatString="0"
-                                               Width="120"
-                                               VerticalAlignment="Center"/>
+                                <Button Content="{Binding [CompressEditButton], Source={x:Static services:LocalizationService.Instance}}"
+                                        Theme="{StaticResource GothicMetalButton}"
+                                        Command="{Binding OpenEditorCommand}"/>
+                                <Button Content="{Binding [CompressCompareButton], Source={x:Static services:LocalizationService.Instance}}"
+                                        Theme="{StaticResource SmallGothicMetalButton}"
+                                        Command="{Binding CompareQualityCommand}"/>
                             </StackPanel>
-                            <Button Content="{Binding [CompressCompareButton], Source={x:Static services:LocalizationService.Instance}}"
-                                    Theme="{StaticResource SmallGothicMetalButton}"
-                                    HorizontalAlignment="Center"
-                                    Command="{Binding CompareQualityCommand}"
-                                    Margin="0,4,0,0"/>
+                            <TextBlock Text="{Binding SelectedQueueItem.EditSummaryText}"
+                                       HorizontalAlignment="Center" Foreground="#C8A24B" FontSize="12"
+                                       TextWrapping="Wrap" Margin="0,2,0,0"/>
                         </StackPanel>
                     </StackPanel>
                 </ScrollViewer>

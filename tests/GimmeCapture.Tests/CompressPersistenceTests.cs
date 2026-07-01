@@ -146,4 +146,27 @@ public class CompressPersistenceTests
         Assert.Equal(11, round.ChunkCount);
         Assert.Equal(new List<int> { 0, 1, 2, 3 }, round.CompletedChunks);
     }
+
+    [Fact]
+    public void ItemState_RoundTrips_SegmentSpeed_AndCrop()
+    {
+        var original = new CompressItemState
+        {
+            TrimEnabled = true,
+            Segments = new List<TrimSegment> { new() { Start = 0m, End = 10m, Speed = 2m } },
+            CropX = 4,
+            CropY = 8,
+            CropWidth = 640,
+            CropHeight = 480
+        };
+
+        string json = JsonSerializer.Serialize(original);
+        CompressItemState? round = JsonSerializer.Deserialize<CompressItemState>(json);
+
+        Assert.NotNull(round);
+        Assert.Equal(2m, round!.Segments![0].Speed);
+        Assert.Equal(4, round.CropX);
+        Assert.Equal(640, round.CropWidth);
+        Assert.Equal(480, round.CropHeight);
+    }
 }
