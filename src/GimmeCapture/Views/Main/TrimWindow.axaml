@@ -1,0 +1,109 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:GimmeCapture.ViewModels.Main"
+        xmlns:vmf="using:GimmeCapture.ViewModels.Floating"
+        xmlns:services="using:GimmeCapture.Services.Core.Infrastructure"
+        x:Class="GimmeCapture.Views.Main.TrimWindow"
+        x:DataType="vm:TrimViewModel"
+        Title="{Binding [CompressTrimWindowTitle], Source={x:Static services:LocalizationService.Instance}}"
+        Width="860" Height="640"
+        MinWidth="560" MinHeight="480"
+        Background="#101010"
+        FontFamily="{Binding CurrentFontFamily, Source={x:Static services:LocalizationService.Instance}}">
+    <Window.Styles>
+        <!-- Make the playback scrubber's unfilled track clearly visible on the near-black window. -->
+        <Style Selector="Slider#PositionSlider /template/ Border#TrackBackground">
+            <Setter Property="Height" Value="4"/>
+            <Setter Property="Background" Value="#5A5A5A"/>
+            <Setter Property="CornerRadius" Value="2"/>
+        </Style>
+    </Window.Styles>
+    <Grid RowDefinitions="*,Auto" Margin="12">
+
+        <!-- Video preview (rotation applied in the view model) -->
+        <Border Grid.Row="0" Background="Black" CornerRadius="4" ClipToBounds="True">
+            <Image Source="{Binding Frame}" Stretch="Uniform"/>
+        </Border>
+
+        <!-- Transport + multi-segment strip -->
+        <StackPanel Grid.Row="1" Spacing="6" Margin="0,12,0,0">
+            <Slider x:Name="PositionSlider" Minimum="0" Maximum="{Binding TotalSourceDuration}"
+                    Value="{Binding PositionSeconds}"
+                    IsEnabled="{Binding IsPreparing, Converter={StaticResource BoolInvertConverter}}"/>
+
+            <!-- Segment strip: proportional pieces; drag = scrub, tap = keep/drop. Layout set in code-behind. -->
+            <Grid x:Name="SegmentStripGrid" Height="34">
+                <Border Background="#262626" CornerRadius="3"/>
+                <ItemsControl ItemsSource="{Binding SegmentBlocks}" IsHitTestVisible="False">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <Canvas/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.Styles>
+                        <Style Selector="ContentPresenter" x:DataType="vmf:SegmentBlockViewModel">
+                            <Setter Property="Canvas.Left" Value="{Binding PixelLeft}"/>
+                            <Setter Property="Canvas.Top" Value="0"/>
+                        </Style>
+                    </ItemsControl.Styles>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="vmf:SegmentBlockViewModel">
+                            <!-- Kept piece: blue + green outline (in the output). Dropped: dimmed. -->
+                            <Panel Width="{Binding PixelWidth}" Height="34" IsHitTestVisible="False"
+                                   Opacity="{Binding IsKept, Converter={StaticResource BoolToOpacityConverter}}">
+                                <Border Background="#3A6EA5" CornerRadius="3"/>
+                                <Border IsVisible="{Binding IsKept}" BorderBrush="#5BD66B"
+                                        BorderThickness="2" CornerRadius="3"/>
+                                <TextBlock Text="{Binding Label}" FontSize="9" Foreground="#E8E8E8"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Panel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <!-- Playhead (X set in code-behind via RenderTransform) -->
+                <Rectangle x:Name="SegmentPlayhead" Width="2" Fill="#FF4444"
+                           HorizontalAlignment="Left" VerticalAlignment="Stretch" IsHitTestVisible="False"/>
+            </Grid>
+
+            <TextBlock Text="{Binding TimeText}" HorizontalAlignment="Center" Foreground="#C8C8C8" FontSize="12"/>
+
+            <!-- 5s-skip / frame-step / play-pause / Split -->
+            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center"
+                        IsEnabled="{Binding IsPreparing, Converter={StaticResource BoolInvertConverter}}">
+                <Button Content="{Binding [CompressCompareBack5], Source={x:Static services:LocalizationService.Instance}}"
+                        Theme="{StaticResource SmallGothicMetalButton}" Command="{Binding SkipBackCommand}"/>
+                <Button Content="{Binding [CompressCompareStepBack], Source={x:Static services:LocalizationService.Instance}}"
+                        Theme="{StaticResource SmallGothicMetalButton}" Command="{Binding StepBackCommand}"/>
+                <Button Theme="{StaticResource GothicMetalButton}" MinWidth="56" Command="{Binding PlayPauseCommand}">
+                    <Panel Width="16" Height="16">
+                        <Path Data="M 2,1 L 2,15 L 14,8 Z" Fill="White" IsVisible="{Binding !IsPlaying}"/>
+                        <StackPanel Orientation="Horizontal" Spacing="3"
+                                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                                    IsVisible="{Binding IsPlaying}">
+                            <Rectangle Width="4" Height="14" Fill="White"/>
+                            <Rectangle Width="4" Height="14" Fill="White"/>
+                        </StackPanel>
+                    </Panel>
+                </Button>
+                <Button Content="{Binding [CompressCompareStepFwd], Source={x:Static services:LocalizationService.Instance}}"
+                        Theme="{StaticResource SmallGothicMetalButton}" Command="{Binding StepForwardCommand}"/>
+                <Button Content="{Binding [CompressCompareFwd5], Source={x:Static services:LocalizationService.Instance}}"
+                        Theme="{StaticResource SmallGothicMetalButton}" Command="{Binding SkipForwardCommand}"/>
+                <Button Content="{Binding [CompressTrimSplit], Source={x:Static services:LocalizationService.Instance}}"
+                        Theme="{StaticResource GothicMetalButton}" Command="{Binding SplitCommand}" Margin="10,0,0,0"/>
+            </StackPanel>
+
+            <TextBlock Text="{Binding RangeText}" HorizontalAlignment="Center" Foreground="#C8A24B" FontSize="12"/>
+            <TextBlock Text="{Binding [CompressTrimEditHint], Source={x:Static services:LocalizationService.Instance}}"
+                       HorizontalAlignment="Center" Foreground="#9A9A9A" FontSize="11"/>
+
+            <!-- Cancel / Apply -->
+            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center" Margin="0,4,0,0">
+                <Button Content="{Binding [CompressCancel], Source={x:Static services:LocalizationService.Instance}}"
+                        Theme="{StaticResource SmallGothicMetalButton}" Command="{Binding CancelCommand}"/>
+                <Button Content="{Binding [CompressTrimApply], Source={x:Static services:LocalizationService.Instance}}"
+                        Theme="{StaticResource GothicMetalButton}" Command="{Binding ApplyCommand}"/>
+            </StackPanel>
+        </StackPanel>
+    </Grid>
+</Window>

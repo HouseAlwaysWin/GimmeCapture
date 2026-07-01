@@ -9,6 +9,7 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Media.Imaging;
+using GimmeCapture.Models;
 using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Core.Media.NativeFFmpeg;
 using GimmeCapture.ViewModels.Floating;
@@ -170,6 +171,67 @@ public partial class MainWindowViewModel
             get => _rotation;
             set => this.RaiseAndSetIfChanged(ref _rotation, value);
         }
+
+        // Optional per-file trim: the kept runs (source [start,end] pieces) concatenated at encode. Empty/off =
+        // whole clip. Edited in the visual 剪輯 window (Pin-style split + keep/drop); persisted per file.
+        private bool _trimEnabled;
+        public bool TrimEnabled
+        {
+            get => _trimEnabled;
+            set
+            {
+                this.RaiseAndSetIfChanged(ref _trimEnabled, value);
+                this.RaisePropertyChanged(nameof(TrimRangeText));
+            }
+        }
+
+        private IReadOnlyList<VideoEditSegment>? _keptSegments;
+        /// <summary>The kept runs (source ranges) to concatenate; null/empty = whole clip. Set by the 剪輯 window.</summary>
+        public IReadOnlyList<VideoEditSegment>? KeptSegments
+        {
+            get => _keptSegments;
+            set
+            {
+                this.RaiseAndSetIfChanged(ref _keptSegments, value);
+                this.RaisePropertyChanged(nameof(TrimRangeText));
+            }
+        }
+
+        /// <summary>The kept runs clamped to the probed duration (whole clip when trim off/empty). Encode + estimate use these.</summary>
+        public IReadOnlyList<(double Start, double End)> EffectiveKeptRuns()
+        {
+            double full = ProbedDuration > 0 ? ProbedDuration : 0;
+            if (!TrimEnabled || _keptSegments is not { Count: > 0 } || full <= 0)
+            {
+                return full > 0 ? new[] { (0.0, full) } : Array.Empty<(double, double)>();
+            }
+
+            var runs = _keptSegments
+                .Select(s => (Start: Math.Clamp(s.SourceStart, 0, full), End: Math.Clamp(s.SourceEnd, 0, full)))
+                .Where(r => r.End > r.Start + 0.001)
+                .OrderBy(r => r.Start)
+                .ToList();
+            return runs.Count > 0 ? runs : new List<(double Start, double End)> { (0.0, full) };
+        }
+
+        /// <summary>Encoded span (seconds) = sum of the kept runs; used for estimates/bitrate.</summary>
+        public double EffectiveDuration => EffectiveKeptRuns().Sum(r => Math.Max(0, r.End - r.Start));
+
+        /// <summary>"N 段 · 長度 m:ss" summary of the kept runs, shown on the 編輯 tab.</summary>
+        public string TrimRangeText
+        {
+            get
+            {
+                IReadOnlyList<(double Start, double End)> runs = EffectiveKeptRuns();
+                double total = runs.Sum(r => Math.Max(0, r.End - r.Start));
+                static string F(double sec) => TimeSpan.FromSeconds(Math.Max(0, sec)).ToString(@"m\:ss");
+                LocalizationService loc = LocalizationService.Instance;
+                return $"{runs.Count} {loc["CompressTrimSegments"]}    {loc["CompressTrimLength"]} {F(total)}";
+            }
+        }
+
+        // Re-raise the trim summary when the probed duration lands (it feeds EffectiveKeptRuns → TrimRangeText).
+        internal void RefreshTrimSummary() => this.RaisePropertyChanged(nameof(TrimRangeText));
 
         // True for a file restored from a previous run where it was paused: shown as paused at its last
         // progress until the user resumes (which re-encodes the whole file from the start).
@@ -551,6 +613,11 @@ public partial class MainWindowViewModel
         {
             item.OutputName = st.OutputName;
         }
+        item.TrimEnabled = st.TrimEnabled;
+        // CompressItemStateService.Load migrates the legacy single TrimStart/End into Segments, so read Segments here.
+        item.KeptSegments = st.Segments is { Count: > 0 }
+            ? st.Segments.Select(g => new VideoEditSegment((double)g.Start, (double)g.End)).ToList()
+            : null;
         if (st.Done)
         {
             item.Status = CompressQueueStatus.Done;
@@ -572,7 +639,11 @@ public partial class MainWindowViewModel
             OutputName = item.OutputName,
             Done = item.Status == CompressQueueStatus.Done,
             Paused = item.IsPaused || item.WasPaused,
-            Progress = item.Progress
+            Progress = item.Progress,
+            TrimEnabled = item.TrimEnabled,
+            Segments = item.KeptSegments?
+                .Select(s => new TrimSegment { Start = (decimal)s.SourceStart, End = (decimal)s.SourceEnd })
+                .ToList()
         };
         CompressItemStateService.Save(_itemStates);
     }
@@ -722,6 +793,14 @@ public partial class MainWindowViewModel
                     item.WhenAnyValue(x => x.IsPaused)
                         .Skip(1)
                         .Subscribe(_ => PersistItemState(item));
+                    // Trim edits persist and re-estimate (the kept-runs total changes the estimated output size).
+                    item.WhenAnyValue(x => x.TrimEnabled, x => x.KeptSegments)
+                        .Skip(1)
+                        .Subscribe(_ =>
+                        {
+                            PersistItemState(item);
+                            item.EstimatedText = BuildItemEstimate(item);
+                        });
                     CompressQueue.Add(item);
                     added.Add(item);
                 }
@@ -756,6 +835,8 @@ public partial class MainWindowViewModel
         {
             AppLog.Error("Compress.ProbeQueueItem", ex);
         }
+
+        item.RefreshTrimSummary(); // ProbedDuration now known → the kept-runs summary reflects the real length
 
         item.EstimatedText = BuildItemEstimate(item);
 
@@ -861,12 +942,12 @@ public partial class MainWindowViewModel
 
     private void CancelAllCompressQueue() => _batchCts?.Cancel();
 
-    private void EstimateQueueItem(CompressQueueItem item) => _ = EstimateItemSampleAsync(item);
+    private void EstimateQueueItem(CompressQueueItem item) => _ = EstimateItemSampleAsync(item, notifyTargetSize: true);
 
     // Accurate per-item estimate: sample-encode a few seconds at the current settings and extrapolate.
-    private async Task EstimateItemSampleAsync(CompressQueueItem item)
+    private async Task EstimateItemSampleAsync(CompressQueueItem item, bool notifyTargetSize = false)
     {
-        if (item.IsEstimating || item.Status == CompressQueueStatus.Running || item.ProbedDuration <= 0)
+        if (item.IsEstimating || item.Status == CompressQueueStatus.Running || item.EffectiveDuration <= 0)
         {
             return;
         }
@@ -874,10 +955,16 @@ public partial class MainWindowViewModel
         CompressSettingsSnapshot snap = BuildSettingsSnapshot();
         string prefix = LocalizationService.Instance["CompressEstimateLabel"];
 
-        // Target-size mode is already exact (the requested size) — no sample encode needed.
+        // Target-size mode is already exact (the requested size) — no sample encode needed. Warn on a direct
+        // 精算 click so the button doesn't feel dead.
         if (snap.UseTargetSize)
         {
             item.EstimatedText = BuildItemEstimate(item);
+            if (notifyTargetSize)
+            {
+                ShowToastAction?.Invoke(
+                    LocalizationService.Instance["CompressEstimateTargetSizeWarning"], ToastSeverity.Info);
+            }
             return;
         }
 
@@ -885,7 +972,7 @@ public partial class MainWindowViewModel
         item.EstimatedText = $"{prefix}: {LocalizationService.Instance["CompressEstimating"]}";
         try
         {
-            long bytes = await EstimateBySampleAsync(item.Path, snap, item.ProbedDuration);
+            long bytes = await EstimateBySampleAsync(item.Path, snap, item.EffectiveKeptRuns());
             item.EstimatedText = bytes >= 0
                 ? $"{prefix}: ≈ {FormatFileSize(bytes)} ({LocalizationService.Instance["CompressEstimateMeasured"]})"
                 : BuildItemEstimate(item); // sample failed → fall back to the formula
@@ -898,6 +985,14 @@ public partial class MainWindowViewModel
 
     private async Task EstimateAllAsync()
     {
+        // In target-size mode a sample estimate is a no-op (output = the target); warn once instead of per item.
+        if (BuildSettingsSnapshot().UseTargetSize)
+        {
+            ShowToastAction?.Invoke(
+                LocalizationService.Instance["CompressEstimateTargetSizeWarning"], ToastSeverity.Info);
+            return;
+        }
+
         // Sequential so many files don't spike the CPU with concurrent sample encodes.
         foreach (CompressQueueItem item in CompressQueue.ToList())
         {
@@ -924,6 +1019,8 @@ public partial class MainWindowViewModel
         string ext = "." + SelectedCompressFormat.ToLowerInvariant();
         string outputFolder = CompressOutputFolder; // captured on the UI thread; empty = next to source
         bool appendDate = CompressAppendDate;
+        // Per-file kept runs captured on the UI thread (whole clip when trim off); re-clamped against the fresh probe.
+        IReadOnlyList<(double Start, double End)> keptRuns = item.EffectiveKeptRuns();
         item.PrepareForStart(_batchCts.Token);
         var progress = new Progress<double>(p => item.Progress = p); // UI thread → callbacks marshal back
         var resumeProgress = new Progress<double>(p => item.ResumePoint = p); // last safe pause checkpoint
@@ -931,12 +1028,12 @@ public partial class MainWindowViewModel
 
         _inFlight++;
         IsBatchRunning = true;
-        _ = RunQueueItemAsync(item, snap, ext, outputFolder, appendDate, progress, resumeProgress);
+        _ = RunQueueItemAsync(item, snap, ext, outputFolder, appendDate, progress, resumeProgress, keptRuns);
     }
 
     private async Task RunQueueItemAsync(
         CompressQueueItem item, CompressSettingsSnapshot snap, string ext, string outputFolder, bool appendDate,
-        IProgress<double> progress, IProgress<double> resumeProgress)
+        IProgress<double> progress, IProgress<double> resumeProgress, IReadOnlyList<(double Start, double End)> keptRuns)
     {
         SemaphoreSlim semaphore = _batchSemaphore!;
         CancellationToken token = item.Cts!.Token;
@@ -967,16 +1064,31 @@ public partial class MainWindowViewModel
                 PersistItemState(item); // clear any stale "paused" marker now that it's actually encoding
 
                 double duration = await ProbeInputDurationAsync(item.Path);
-                item.SupportsResume = !snap.UseTargetSize && duration > 0; // CRF + known duration = segmented/resumable
+
+                // Re-clamp the captured kept runs against the freshly probed duration (whole file when empty).
+                var runs = keptRuns
+                    .Select(r => (Start: Math.Clamp(r.Start, 0, duration), End: Math.Clamp(r.End, 0, duration)))
+                    .Where(r => r.End > r.Start + 0.001)
+                    .OrderBy(r => r.Start)
+                    .ToList();
+                if (runs.Count == 0 && duration > 0)
+                {
+                    runs.Add((0, duration));
+                }
+                double encodeDuration = runs.Sum(r => r.End - r.Start);
+                bool multiSegment = runs.Count > 1;
+
+                // Resumable segmented CRF only handles one contiguous span; multi-segment uses the whole-file concat path.
+                item.SupportsResume = !snap.UseTargetSize && duration > 0 && !multiSegment;
                 int targetKbps = 0;
                 if (snap.UseTargetSize)
                 {
-                    if (duration <= 0)
+                    if (duration <= 0 || encodeDuration <= 0)
                     {
                         item.Status = CompressQueueStatus.Failed;
                         return;
                     }
-                    targetKbps = ComputeTargetVideoBitrateKbps((double)snap.TargetSizeMB, duration);
+                    targetKbps = ComputeTargetVideoBitrateKbps((double)snap.TargetSizeMB, encodeDuration);
                 }
 
                 string outputPath = BuildBatchOutputPath(
@@ -996,7 +1108,7 @@ public partial class MainWindowViewModel
 
                 bool ok = await EncodeOneFileAsync(
                     item.Path, outputPath, snap, targetKbps, duration, progress, token, item.Gate, item.Rotation,
-                    resumeProgress);
+                    resumeProgress, runs);
                 item.Status = ok ? CompressQueueStatus.Done : CompressQueueStatus.Failed;
                 if (ok)
                 {

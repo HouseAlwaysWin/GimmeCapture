@@ -91,5 +91,12 @@ public partial class SettingsCompressTab : UserControl
             var window = new CompareWindow { DataContext = compareVm };
             window.Show();
         };
+
+        // Visual clip-trim: open a standalone trim window for the prepared view model.
+        vm.OpenTrimAction = trimVm =>
+        {
+            var window = new TrimWindow { DataContext = trimVm };
+            window.Show();
+        };
     }
 }
