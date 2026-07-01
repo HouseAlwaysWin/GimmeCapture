@@ -64,10 +64,12 @@ public partial class FloatingVideoViewModel
 
     public string TimelineTooltip => LocalizationService.Instance["TipTimeline"] ?? "Timeline (cut)";
     public string SplitTooltip => LocalizationService.Instance["TipSplitSegment"] ?? "Split at playhead";
+    public string MergeSegmentTooltip => LocalizationService.Instance["TipMergeSegment"] ?? "Merge at playhead (undo split)";
     public string PieceSpeedTooltip => LocalizationService.Instance["TipPieceSpeed"] ?? "Cycle speed of the piece at the playhead";
 
     public ReactiveCommand<Unit, Unit> ToggleTimelineCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> SplitSegmentCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> MergeSegmentCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> CyclePieceSpeedCommand { get; private set; } = null!;
 
     private void InitializeSegmentCommands()
@@ -95,6 +97,29 @@ public partial class FloatingVideoViewModel
 
             // Split the piece under the playhead (source time); both halves inherit the Kept flag.
             ReplaceSegments(VideoSegmentEditor.SplitAtSourceTime(EditSegments.ToArray(), _currentTime.TotalSeconds));
+        });
+
+        // Remove the split boundary nearest the playhead, merging the two pieces back into one (inverse of split).
+        MergeSegmentCommand = ReactiveCommand.Create(() =>
+        {
+            if (EditSegments.Count < 2)
+            {
+                return;
+            }
+
+            int boundary = VideoSegmentEditor.NearestBoundaryIndex(EditSegments.ToArray(), _currentTime.TotalSeconds);
+            if (boundary < 0)
+            {
+                return;
+            }
+
+            // Don't merge across a genuine speed seam — that would silently discard one piece's speed.
+            if (Math.Abs(EditSegments[boundary].Speed - EditSegments[boundary + 1].Speed) > 0.001)
+            {
+                return;
+            }
+
+            ReplaceSegments(VideoSegmentEditor.MergeAt(EditSegments.ToArray(), boundary));
         });
 
         // Cycle the speed (1 → 1.5 → 2 → 0.5 → 1) of the piece currently under the playhead.

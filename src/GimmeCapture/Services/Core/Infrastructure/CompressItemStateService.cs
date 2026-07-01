@@ -13,6 +13,12 @@ public sealed class CompressItemState
     public string OutputName { get; set; } = string.Empty;
     public bool Done { get; set; }
 
+    // Optional per-file crop (source pixels). A zero-size rect means "no crop". Applied before rotation at encode.
+    public int CropX { get; set; }
+    public int CropY { get; set; }
+    public int CropWidth { get; set; }
+    public int CropHeight { get; set; }
+
     /// <summary>The file was paused when the app closed; on reload it shows as paused at <see cref="Progress"/>.</summary>
     public bool Paused { get; set; }
 
@@ -30,11 +36,14 @@ public sealed class CompressItemState
     public decimal TrimEnd { get; set; }
 }
 
-/// <summary>One kept run (source [Start, End] seconds) of a multi-segment trim.</summary>
+/// <summary>One kept run (source [Start, End] seconds) of a multi-segment edit, optionally time-scaled.</summary>
 public sealed class TrimSegment
 {
     public decimal Start { get; set; }
     public decimal End { get; set; }
+
+    /// <summary>Playback speed for this run (1 = normal); &gt;1 faster, &lt;1 slow-motion.</summary>
+    public decimal Speed { get; set; } = 1m;
 }
 
 /// <summary>

@@ -18,7 +18,7 @@ public class CompressTrimTests
         MainWindowViewModel.CompressQueueItem item = Item(100);
 
         Assert.False(item.TrimEnabled);
-        IReadOnlyList<(double Start, double End)> runs = item.EffectiveKeptRuns();
+        var runs = item.EffectiveKeptRuns();
         Assert.Single(runs);
         Assert.Equal(0d, runs[0].Start);
         Assert.Equal(100d, runs[0].End);
@@ -32,7 +32,7 @@ public class CompressTrimTests
         item.TrimEnabled = true;
         item.KeptSegments = new[] { new VideoEditSegment(10, 30), new VideoEditSegment(50, 120) };
 
-        IReadOnlyList<(double Start, double End)> runs = item.EffectiveKeptRuns();
+        var runs = item.EffectiveKeptRuns();
         Assert.Equal(2, runs.Count);
         Assert.Equal(10d, runs[0].Start);
         Assert.Equal(30d, runs[0].End);
@@ -61,5 +61,33 @@ public class CompressTrimTests
 
         Assert.Empty(item.EffectiveKeptRuns());
         Assert.Equal(0d, item.EffectiveDuration);
+    }
+
+    [Fact]
+    public void Speed_PreservedInRuns_AndShortensOutputDuration()
+    {
+        MainWindowViewModel.CompressQueueItem item = Item(100);
+        item.TrimEnabled = true;
+        item.KeptSegments = new[] { new VideoEditSegment(0, 100, 2.0) };
+
+        var runs = item.EffectiveKeptRuns();
+        Assert.Single(runs);
+        Assert.Equal(2.0, runs[0].Speed, 3);
+        Assert.Equal(100d, item.EffectiveDuration);          // source span unchanged
+        Assert.Equal(50d, item.EffectiveOutputDuration, 3);  // 100s at 2× = 50s output
+    }
+
+    [Fact]
+    public void HasEdits_FalseForPlainClip_TrueWithCropOrRotation()
+    {
+        MainWindowViewModel.CompressQueueItem item = Item(100);
+        Assert.False(item.HasEdits);
+
+        item.Rotation = 90;
+        Assert.True(item.HasEdits);
+        item.Rotation = 0;
+
+        item.Crop = new VideoEditCrop(0, 0, 640, 480);
+        Assert.True(item.HasEdits);
     }
 }

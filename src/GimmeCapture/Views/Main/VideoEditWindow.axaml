@@ -3,11 +3,11 @@
         xmlns:vm="using:GimmeCapture.ViewModels.Main"
         xmlns:vmf="using:GimmeCapture.ViewModels.Floating"
         xmlns:services="using:GimmeCapture.Services.Core.Infrastructure"
-        x:Class="GimmeCapture.Views.Main.TrimWindow"
-        x:DataType="vm:TrimViewModel"
-        Title="{Binding [CompressTrimWindowTitle], Source={x:Static services:LocalizationService.Instance}}"
-        Width="860" Height="640"
-        MinWidth="560" MinHeight="480"
+        x:Class="GimmeCapture.Views.Main.VideoEditWindow"
+        x:DataType="vm:VideoEditViewModel"
+        Title="{Binding [CompressEditWindowTitle], Source={x:Static services:LocalizationService.Instance}}"
+        Width="880" Height="680"
+        MinWidth="600" MinHeight="520"
         Background="#101010"
         FontFamily="{Binding CurrentFontFamily, Source={x:Static services:LocalizationService.Instance}}">
     <Window.Styles>
@@ -20,12 +20,25 @@
     </Window.Styles>
     <Grid RowDefinitions="*,Auto" Margin="12">
 
-        <!-- Video preview (rotation applied in the view model) -->
+        <!-- Video preview (rotation applied in the view model). Crop overlay draws on top when in crop mode. -->
         <Border Grid.Row="0" Background="Black" CornerRadius="4" ClipToBounds="True">
-            <Image Source="{Binding Frame}" Stretch="Uniform"/>
+            <Grid>
+                <Image x:Name="PreviewImage" Source="{Binding Frame}" Stretch="Uniform"/>
+                <Canvas x:Name="CropOverlay" Background="#01000000"
+                        IsVisible="{Binding IsCropMode}" IsHitTestVisible="{Binding IsCropMode}">
+                    <Rectangle x:Name="CropRect" Stroke="#FF4444" StrokeThickness="2"
+                               Fill="#22FF4444" IsVisible="False"/>
+                </Canvas>
+                <!-- Crop-mode hint pinned to the top of the preview. -->
+                <Border Background="#AA000000" CornerRadius="3" Padding="8,3" Margin="6" IsHitTestVisible="False"
+                        HorizontalAlignment="Center" VerticalAlignment="Top" IsVisible="{Binding IsCropMode}">
+                    <TextBlock Text="{Binding [CompressEditCropHint], Source={x:Static services:LocalizationService.Instance}}"
+                               Foreground="#FFE0E0" FontSize="11"/>
+                </Border>
+            </Grid>
         </Border>
 
-        <!-- Transport + multi-segment strip -->
+        <!-- Transport + multi-segment strip + edit tools -->
         <StackPanel Grid.Row="1" Spacing="6" Margin="0,12,0,0">
             <Slider x:Name="PositionSlider" Minimum="0" Maximum="{Binding TotalSourceDuration}"
                     Value="{Binding PositionSeconds}"
@@ -48,7 +61,7 @@
                     </ItemsControl.Styles>
                     <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="vmf:SegmentBlockViewModel">
-                            <!-- Kept piece: blue + green outline (in the output). Dropped: dimmed. -->
+                            <!-- Kept piece: blue + green outline (in the output). Dropped: dimmed. Speed badge top-right. -->
                             <Panel Width="{Binding PixelWidth}" Height="34" IsHitTestVisible="False"
                                    Opacity="{Binding IsKept, Converter={StaticResource BoolToOpacityConverter}}">
                                 <Border Background="#3A6EA5" CornerRadius="3"/>
@@ -56,6 +69,10 @@
                                         BorderThickness="2" CornerRadius="3"/>
                                 <TextBlock Text="{Binding Label}" FontSize="9" Foreground="#E8E8E8"
                                            HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                <Border IsVisible="{Binding HasCustomSpeed}" Background="#E60012" CornerRadius="2"
+                                        Padding="3,0" Margin="2" HorizontalAlignment="Right" VerticalAlignment="Top">
+                                    <TextBlock Text="{Binding SpeedLabel}" FontSize="8" Foreground="White"/>
+                                </Border>
                             </Panel>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
@@ -67,7 +84,7 @@
 
             <TextBlock Text="{Binding TimeText}" HorizontalAlignment="Center" Foreground="#C8C8C8" FontSize="12"/>
 
-            <!-- 5s-skip / frame-step / play-pause / Split -->
+            <!-- Transport: 5s-skip / frame-step / play-pause -->
             <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center"
                         IsEnabled="{Binding IsPreparing, Converter={StaticResource BoolInvertConverter}}">
                 <Button Content="{Binding [CompressCompareBack5], Source={x:Static services:LocalizationService.Instance}}"
@@ -89,15 +106,37 @@
                         Theme="{StaticResource SmallGothicMetalButton}" Command="{Binding StepForwardCommand}"/>
                 <Button Content="{Binding [CompressCompareFwd5], Source={x:Static services:LocalizationService.Instance}}"
                         Theme="{StaticResource SmallGothicMetalButton}" Command="{Binding SkipForwardCommand}"/>
+            </StackPanel>
+
+            <!-- Edit tools: split / merge / speed · rotate · crop -->
+            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center"
+                        IsEnabled="{Binding IsPreparing, Converter={StaticResource BoolInvertConverter}}">
                 <Button Content="{Binding [CompressTrimSplit], Source={x:Static services:LocalizationService.Instance}}"
-                        Theme="{StaticResource GothicMetalButton}" Command="{Binding SplitCommand}" Margin="10,0,0,0"/>
+                        Theme="{StaticResource GothicMetalButton}" Command="{Binding SplitCommand}"/>
                 <Button Content="{Binding [CompressTrimMerge], Source={x:Static services:LocalizationService.Instance}}"
                         Theme="{StaticResource GothicMetalButton}" Command="{Binding MergeCommand}"
-                        IsEnabled="{Binding CanMerge}" Margin="6,0,0,0"/>
+                        IsEnabled="{Binding CanMerge}"/>
+                <Button Content="{Binding [CompressEditSpeed], Source={x:Static services:LocalizationService.Instance}}"
+                        Theme="{StaticResource GothicMetalButton}" Command="{Binding CycleSpeedCommand}"/>
+                <Border Width="1" Background="#3A3A3A" Margin="4,2"/>
+                <Button Theme="{StaticResource GothicMetalButton}" Command="{Binding RotateCommand}">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <TextBlock Text="{Binding [CompressEditRotate], Source={x:Static services:LocalizationService.Instance}}"/>
+                        <TextBlock Text="{Binding RotationText}" Foreground="#C8A24B"/>
+                    </StackPanel>
+                </Button>
+                <Border Width="1" Background="#3A3A3A" Margin="4,2"/>
+                <Button Content="{Binding [CompressEditCrop], Source={x:Static services:LocalizationService.Instance}}"
+                        Theme="{StaticResource GothicMetalButton}" Command="{Binding ToggleCropCommand}"/>
+                <Button Content="{Binding [CompressEditCropClear], Source={x:Static services:LocalizationService.Instance}}"
+                        Theme="{StaticResource SmallGothicMetalButton}" Command="{Binding ClearCropCommand}"
+                        IsVisible="{Binding HasCrop}"/>
+                <TextBlock Text="{Binding CropText}" Foreground="#C8A24B" FontSize="12"
+                           VerticalAlignment="Center" IsVisible="{Binding HasCrop}"/>
             </StackPanel>
 
             <TextBlock Text="{Binding RangeText}" HorizontalAlignment="Center" Foreground="#C8A24B" FontSize="12"/>
-            <TextBlock Text="{Binding [CompressTrimEditHint], Source={x:Static services:LocalizationService.Instance}}"
+            <TextBlock Text="{Binding [CompressEditHint], Source={x:Static services:LocalizationService.Instance}}"
                        HorizontalAlignment="Center" Foreground="#9A9A9A" FontSize="11"/>
 
             <!-- Cancel / Apply -->
