@@ -91,6 +91,9 @@
                         Theme="{StaticResource SmallGothicMetalButton}" Command="{Binding SkipForwardCommand}"/>
                 <Button Content="{Binding [CompressTrimSplit], Source={x:Static services:LocalizationService.Instance}}"
                         Theme="{StaticResource GothicMetalButton}" Command="{Binding SplitCommand}" Margin="10,0,0,0"/>
+                <Button Content="{Binding [CompressTrimMerge], Source={x:Static services:LocalizationService.Instance}}"
+                        Theme="{StaticResource GothicMetalButton}" Command="{Binding MergeCommand}"
+                        IsEnabled="{Binding CanMerge}" Margin="6,0,0,0"/>
             </StackPanel>
 
             <TextBlock Text="{Binding RangeText}" HorizontalAlignment="Center" Foreground="#C8A24B" FontSize="12"/>

@@ -54,6 +54,7 @@ public partial class MainWindowViewModel
                 this.RaiseAndSetIfChanged(ref _historySourceFilter, value);
                 this.RaisePropertyChanged(nameof(IsHistoryOutputTab));
                 this.RaisePropertyChanged(nameof(IsHistoryCopyTab));
+                this.RaisePropertyChanged(nameof(HistoryCategoryIndex));
                 ApplyHistoryFilter();
             }
         }
@@ -71,6 +72,13 @@ public partial class MainWindowViewModel
     {
         get => HistorySourceFilter == CaptureHistorySource.PlainCopy;
         set { if (value) HistorySourceFilter = CaptureHistorySource.PlainCopy; }
+    }
+
+    /// <summary>Two-way bound to the history category TabStrip (0 = output copy, 1 = plain copy).</summary>
+    public int HistoryCategoryIndex
+    {
+        get => HistorySourceFilter == CaptureHistorySource.PlainCopy ? 1 : 0;
+        set => HistorySourceFilter = value == 1 ? CaptureHistorySource.PlainCopy : CaptureHistorySource.OutputExport;
     }
 
     public ReactiveCommand<Unit, Unit> RefreshHistoryCommand { get; private set; } = null!;

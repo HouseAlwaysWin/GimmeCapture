@@ -63,6 +63,7 @@ internal sealed class TrimViewModel : ViewModelBase, IDisposable
         SkipBackCommand = ReactiveCommand.CreateFromTask(() => SeekAsync(PositionSeconds - 5));
         SkipForwardCommand = ReactiveCommand.CreateFromTask(() => SeekAsync(PositionSeconds + 5));
         SplitCommand = ReactiveCommand.Create(Split);
+        MergeCommand = ReactiveCommand.Create(Merge);
         ApplyCommand = ReactiveCommand.Create(Apply);
         CancelCommand = ReactiveCommand.Create(() => RequestClose?.Invoke());
         PlayPauseCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.TrimPlayPause", ex));
@@ -71,6 +72,7 @@ internal sealed class TrimViewModel : ViewModelBase, IDisposable
         SkipBackCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.TrimSkipBack", ex));
         SkipForwardCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.TrimSkipFwd", ex));
         SplitCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.TrimSplit", ex));
+        MergeCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.TrimMerge", ex));
 
         ReplaceSegments(BuildEditSegments(initialKeptRuns, _duration));
     }
@@ -83,6 +85,9 @@ internal sealed class TrimViewModel : ViewModelBase, IDisposable
     // Timeline strip state (mirrors FloatingVideoViewModel.Segments): the source split into contiguous pieces.
     public ObservableCollection<VideoEditSegment> EditSegments { get; } = new();
     public ObservableCollection<SegmentBlockViewModel> SegmentBlocks { get; } = new();
+
+    /// <summary>True when there is a split boundary to remove (more than one piece) — gates the Merge button.</summary>
+    public bool CanMerge => EditSegments.Count > 1;
 
     /// <summary>Raised after the strip blocks are rebuilt so the window can recompute proportional layout.</summary>
     public event Action? SegmentLayoutChanged;
@@ -141,6 +146,7 @@ internal sealed class TrimViewModel : ViewModelBase, IDisposable
     public ReactiveCommand<Unit, Unit> SkipBackCommand { get; }
     public ReactiveCommand<Unit, Unit> SkipForwardCommand { get; }
     public ReactiveCommand<Unit, Unit> SplitCommand { get; }
+    public ReactiveCommand<Unit, Unit> MergeCommand { get; }
     public ReactiveCommand<Unit, Unit> ApplyCommand { get; }
     public ReactiveCommand<Unit, Unit> CancelCommand { get; }
 
@@ -169,6 +175,26 @@ internal sealed class TrimViewModel : ViewModelBase, IDisposable
 
         // Split the piece under the playhead (source time); both halves inherit the Kept flag.
         ReplaceSegments(VideoSegmentEditor.SplitAtSourceTime(EditSegments.ToArray(), PositionSeconds));
+    }
+
+    /// <summary>
+    /// Remove the split boundary nearest the playhead, merging the two pieces back into one (the inverse
+    /// of Split). The merged piece is kept if either side was — so this "un-cuts" a dropped piece.
+    /// </summary>
+    public void Merge()
+    {
+        if (EditSegments.Count < 2)
+        {
+            return;
+        }
+
+        int boundary = VideoSegmentEditor.NearestBoundaryIndex(EditSegments.ToArray(), PositionSeconds);
+        if (boundary < 0)
+        {
+            return;
+        }
+
+        ReplaceSegments(VideoSegmentEditor.MergeAt(EditSegments.ToArray(), boundary));
     }
 
     /// <summary>Toggle keep/drop of the piece at index (from a strip tap). Never drops the last kept piece.</summary>
@@ -217,6 +243,7 @@ internal sealed class TrimViewModel : ViewModelBase, IDisposable
         }
 
         this.RaisePropertyChanged(nameof(RangeText));
+        this.RaisePropertyChanged(nameof(CanMerge));
         SegmentLayoutChanged?.Invoke();
     }
 

@@ -4,6 +4,20 @@
              xmlns:services="using:GimmeCapture.Services.Core.Infrastructure"
              x:Class="GimmeCapture.Views.Main.Tabs.SettingsHistoryTab"
              x:DataType="vm:MainWindowViewModel">
+    <UserControl.Styles>
+        <!-- Category tabs: match the Compress sub-tabs (compact, padded headers). -->
+        <Style Selector="TabItem">
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Padding" Value="12,4"/>
+        </Style>
+        <!-- Both categories share the thumbnail grid below, so drop the tab's own content area. -->
+        <Style Selector="TabControl#HistoryCategoryTabs">
+            <Setter Property="Padding" Value="0"/>
+        </Style>
+        <Style Selector="TabControl#HistoryCategoryTabs /template/ ContentPresenter#PART_SelectedContentHost">
+            <Setter Property="IsVisible" Value="False"/>
+        </Style>
+    </UserControl.Styles>
     <Grid RowDefinitions="Auto,Auto,*" Margin="10">
 
         <!-- Toolbar: enable toggle + search + refresh + clear -->
@@ -25,15 +39,12 @@
             </Grid>
         </StackPanel>
 
-        <!-- Category tabs: output copy vs plain copy -->
-        <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="18" Margin="0,10,0,0">
-            <RadioButton GroupName="HistoryCategory"
-                         IsChecked="{Binding IsHistoryOutputTab}"
-                         Content="{Binding [HistoryTabOutput], Source={x:Static services:LocalizationService.Instance}}"/>
-            <RadioButton GroupName="HistoryCategory"
-                         IsChecked="{Binding IsHistoryCopyTab}"
-                         Content="{Binding [HistoryTabCopy], Source={x:Static services:LocalizationService.Instance}}"/>
-        </StackPanel>
+        <!-- Category tabs: output copy vs plain copy (TabControl headers; the thumbnail grid below is shared) -->
+        <TabControl x:Name="HistoryCategoryTabs" Grid.Row="1"
+                    SelectedIndex="{Binding HistoryCategoryIndex, Mode=TwoWay}" Margin="0,8,0,0">
+            <TabItem Header="{Binding [HistoryTabOutput], Source={x:Static services:LocalizationService.Instance}}"/>
+            <TabItem Header="{Binding [HistoryTabCopy], Source={x:Static services:LocalizationService.Instance}}"/>
+        </TabControl>
 
         <!-- Empty state -->
         <TextBlock Grid.Row="2"

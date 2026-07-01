@@ -289,4 +289,88 @@ public class VideoSegmentEditorTests
         Assert.Equal(0, runs[0].SourceStart);
         Assert.Equal(14, runs[0].SourceEnd);
     }
+
+    [Fact]
+    public void NearestBoundaryIndex_FindsClosestSeam()
+    {
+        var segs = new[]
+        {
+            new VideoEditSegment(0, 30),    // seam at 30 -> boundary 0
+            new VideoEditSegment(30, 90),   // seam at 90 -> boundary 1
+            new VideoEditSegment(90, 120),
+        };
+
+        Assert.Equal(0, VideoSegmentEditor.NearestBoundaryIndex(segs, 28));  // closest to seam 30
+        Assert.Equal(1, VideoSegmentEditor.NearestBoundaryIndex(segs, 88));  // closest to seam 90
+        Assert.Equal(1, VideoSegmentEditor.NearestBoundaryIndex(segs, 200)); // past end -> last seam
+    }
+
+    [Fact]
+    public void NearestBoundaryIndex_SinglePieceHasNoBoundary()
+    {
+        var segs = new[] { new VideoEditSegment(0, 10) };
+
+        Assert.Equal(-1, VideoSegmentEditor.NearestBoundaryIndex(segs, 5));
+    }
+
+    [Fact]
+    public void MergeAt_JoinsAdjacentPieces()
+    {
+        var segs = new[]
+        {
+            new VideoEditSegment(0, 30),
+            new VideoEditSegment(30, 90),
+            new VideoEditSegment(90, 120),
+        };
+
+        var result = VideoSegmentEditor.MergeAt(segs, 1); // remove the seam at 90
+
+        Assert.Equal(2, result.Count);
+        Assert.Equal(0, result[0].SourceStart);
+        Assert.Equal(30, result[0].SourceEnd);
+        Assert.Equal(30, result[1].SourceStart);
+        Assert.Equal(120, result[1].SourceEnd); // 30-90 + 90-120 merged into one
+    }
+
+    [Fact]
+    public void MergeAt_IsKeptWhenEitherSideKept()
+    {
+        var segs = new[]
+        {
+            new VideoEditSegment(0, 30) { Kept = true },
+            new VideoEditSegment(30, 60) { Kept = false }, // a cut
+        };
+
+        var result = VideoSegmentEditor.MergeAt(segs, 0);
+
+        Assert.Single(result);
+        Assert.True(result[0].Kept); // merging a kept piece with a dropped one restores the content
+        Assert.Equal(0, result[0].SourceStart);
+        Assert.Equal(60, result[0].SourceEnd);
+    }
+
+    [Fact]
+    public void MergeAt_TwoDroppedPiecesStayDropped()
+    {
+        var segs = new[]
+        {
+            new VideoEditSegment(0, 30) { Kept = false },
+            new VideoEditSegment(30, 60) { Kept = false },
+        };
+
+        var result = VideoSegmentEditor.MergeAt(segs, 0);
+
+        Assert.Single(result);
+        Assert.False(result[0].Kept);
+    }
+
+    [Fact]
+    public void MergeAt_OutOfRangeOrLastBoundaryIsCopy()
+    {
+        var segs = new[] { new VideoEditSegment(0, 30), new VideoEditSegment(30, 60) };
+
+        Assert.Equal(2, VideoSegmentEditor.MergeAt(segs, 5).Count);   // out of range
+        Assert.Equal(2, VideoSegmentEditor.MergeAt(segs, 1).Count);   // last piece has no right neighbor
+        Assert.Single(VideoSegmentEditor.MergeAt(new[] { new VideoEditSegment(0, 30) }, 0)); // single piece
+    }
 }

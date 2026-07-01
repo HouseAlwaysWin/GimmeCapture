@@ -120,4 +120,71 @@ public class TrimViewModelTests
 
         Assert.False(vm.IsPlaying);
     }
+
+    [Fact]
+    public void Merge_RemovesSplit_BackToOnePiece()
+    {
+        using var vm = Make(100);
+        vm.PositionSeconds = 40;
+        vm.Split(); // [0,40] [40,100]
+        Assert.Equal(2, vm.EditSegments.Count);
+        Assert.True(vm.CanMerge);
+
+        vm.PositionSeconds = 40;
+        vm.Merge();
+
+        Assert.Single(vm.EditSegments);
+        Assert.Equal(0d, vm.EditSegments[0].SourceStart);
+        Assert.Equal(100d, vm.EditSegments[0].SourceEnd);
+        Assert.False(vm.CanMerge);
+    }
+
+    [Fact]
+    public void Merge_AfterDrop_RestoresCutContent()
+    {
+        using var vm = Make(100);
+        vm.PositionSeconds = 40;
+        vm.Split();
+        vm.ToggleKept(0); // drop [0,40] -> keep only [40,100]
+        Assert.Equal(40d, vm.KeptRuns()[0].SourceStart);
+
+        vm.PositionSeconds = 40;
+        vm.Merge(); // un-cut: the dropped head comes back
+
+        Assert.Single(vm.EditSegments);
+        Assert.True(vm.EditSegments[0].Kept);
+        Assert.Single(vm.KeptRuns());
+        Assert.Equal(0d, vm.KeptRuns()[0].SourceStart);
+        Assert.Equal(100d, vm.KeptRuns()[0].SourceEnd);
+    }
+
+    [Fact]
+    public void Merge_PicksBoundaryNearestPlayhead()
+    {
+        using var vm = Make(120);
+        vm.PositionSeconds = 30;
+        vm.Split(); // [0,30] [30,120]
+        vm.PositionSeconds = 90;
+        vm.Split(); // [0,30] [30,90] [90,120]
+        Assert.Equal(3, vm.EditSegments.Count);
+
+        vm.PositionSeconds = 88; // nearest boundary is the seam at 90
+        vm.Merge();
+
+        Assert.Equal(2, vm.EditSegments.Count);
+        Assert.Equal(30d, vm.EditSegments[0].SourceEnd);
+        Assert.Equal(30d, vm.EditSegments[1].SourceStart);
+        Assert.Equal(120d, vm.EditSegments[1].SourceEnd);
+    }
+
+    [Fact]
+    public void Merge_OnWholeClip_IsNoOp()
+    {
+        using var vm = Make(100);
+
+        Assert.False(vm.CanMerge);
+        vm.Merge();
+
+        Assert.Single(vm.EditSegments);
+    }
 }
