@@ -18,6 +18,23 @@ public sealed class CompressItemState
 
     /// <summary>Last progress (0–1) reached before pausing, shown when the file is restored as paused.</summary>
     public double Progress { get; set; }
+
+    /// <summary>Per-file trim on/off. When on, <see cref="Segments"/> holds the kept runs concatenated on encode.</summary>
+    public bool TrimEnabled { get; set; }
+
+    /// <summary>The kept runs (source ranges) to concatenate; null = whole clip. Multi-segment shape.</summary>
+    public List<TrimSegment>? Segments { get; set; }
+
+    // Legacy single-range trim (pre-multi-segment). Kept so old state files still load; migrated into Segments.
+    public decimal TrimStart { get; set; }
+    public decimal TrimEnd { get; set; }
+}
+
+/// <summary>One kept run (source [Start, End] seconds) of a multi-segment trim.</summary>
+public sealed class TrimSegment
+{
+    public decimal Start { get; set; }
+    public decimal End { get; set; }
 }
 
 /// <summary>
@@ -51,6 +68,7 @@ internal static class CompressItemStateService
                 {
                     if (kv.Value != null && File.Exists(kv.Key))
                     {
+                        MigrateLegacyTrim(kv.Value);
                         map[kv.Key] = kv.Value;
                     }
                 }
@@ -62,6 +80,19 @@ internal static class CompressItemStateService
         {
             AppLog.Error("CompressItemState.Load", ex);
             return new Dictionary<string, CompressItemState>(StringComparer.OrdinalIgnoreCase);
+        }
+    }
+
+    // Migrate the legacy single [TrimStart,TrimEnd] into a one-run Segments list (only when Segments is unset).
+    private static void MigrateLegacyTrim(CompressItemState st)
+    {
+        if (st.Segments is { Count: > 0 })
+        {
+            return;
+        }
+        if (st.TrimEnabled && st.TrimEnd > st.TrimStart)
+        {
+            st.Segments = new List<TrimSegment> { new() { Start = st.TrimStart, End = st.TrimEnd } };
         }
     }
 

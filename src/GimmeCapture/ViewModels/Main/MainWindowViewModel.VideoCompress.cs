@@ -26,6 +26,11 @@ public partial class MainWindowViewModel
 
     public ReactiveCommand<Unit, Unit> CompareQualityCommand { get; private set; } = null!;
 
+    /// <summary>Set by the view: opens the standalone visual clip-trim window for a prepared view model.</summary>
+    internal Action<TrimViewModel>? OpenTrimAction { get; set; }
+
+    public ReactiveCommand<Unit, Unit> OpenTrimCommand { get; private set; } = null!;
+
     // Optional batch output folder. Empty = auto-save each output next to its source.
     private string _compressOutputFolder = string.Empty;
     public string CompressOutputFolder
@@ -235,6 +240,66 @@ public partial class MainWindowViewModel
     public ReactiveCommand<Unit, Unit> LoadCompressPresetCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> DeleteCompressPresetCommand { get; private set; } = null!;
 
+    // A built-in "quick recipe": applies a bundle of the global encode knobs in one pick. Distinct from the
+    // user-savable CompressPreset (those persist); these are fixed. IsCustom is a no-op "leave as-is" entry.
+    public sealed class CompressQuickProfile
+    {
+        public string Key { get; init; } = string.Empty;
+        public bool IsCustom { get; init; }
+        public VideoCodec Codec { get; init; }
+        public int Crf { get; init; }
+        public int MaxHeight { get; init; }             // 0 = keep source resolution
+        public string Preset { get; init; } = "medium";
+        public bool UseTargetSize { get; init; }
+        public decimal TargetSizeMB { get; init; }
+        public string Format { get; init; } = "MP4";
+        public bool DropAudio { get; init; }
+        public string Name => LocalizationService.Instance[Key];
+    }
+
+    // Built-in quick recipes. Static so tests can assert the table without constructing the view model.
+    internal static CompressQuickProfile[] BuildCompressQuickProfiles() =>
+    [
+        new CompressQuickProfile { Key = "CompressQuickCustom", IsCustom = true },
+        new CompressQuickProfile { Key = "CompressQuickDiscord", Codec = VideoCodec.H264, Crf = 23, MaxHeight = 720, Preset = "fast", UseTargetSize = true, TargetSizeMB = 25m, Format = "MP4" },
+        new CompressQuickProfile { Key = "CompressQuickWeb1080", Codec = VideoCodec.H264, Crf = 23, MaxHeight = 1080, Preset = "medium", Format = "MP4" },
+        new CompressQuickProfile { Key = "CompressQuickSmallest", Codec = VideoCodec.H265, Crf = 30, MaxHeight = 480, Preset = "medium", Format = "MP4" },
+        new CompressQuickProfile { Key = "CompressQuickHighQuality", Codec = VideoCodec.H265, Crf = 18, MaxHeight = 0, Preset = "slow", Format = "MP4" },
+    ];
+
+    public CompressQuickProfile[] CompressQuickProfiles { get; } = BuildCompressQuickProfiles();
+
+    private CompressQuickProfile? _selectedQuickProfile;
+    // Picking a non-Custom recipe applies its knobs to the controls below; Custom is a no-op placeholder.
+    public CompressQuickProfile? SelectedQuickProfile
+    {
+        get => _selectedQuickProfile;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _selectedQuickProfile, value);
+            if (value is { IsCustom: false })
+            {
+                ApplyQuickProfile(value);
+            }
+        }
+    }
+
+    // Applies a quick recipe through the public setters, so the estimate recompute + session-save subscriptions
+    // fire automatically (same path as loading a saved preset). Values are guarded against the fixed option lists.
+    private void ApplyQuickProfile(CompressQuickProfile p)
+    {
+        SelectedCompressCodecOption =
+            Array.Find(CompressCodecOptions, o => o.Value == p.Codec) ?? SelectedCompressCodecOption;
+        if (p.Crf > 0) CompressCrf = Math.Clamp(p.Crf, 14, 40);
+        SelectedCompressResolution =
+            Array.Find(CompressResolutionOptions, o => o.MaxHeight == p.MaxHeight) ?? SelectedCompressResolution;
+        if (CompressPresetOptions.Contains(p.Preset)) SelectedCompressPreset = p.Preset;
+        CompressUseTargetSize = p.UseTargetSize;
+        if (p.UseTargetSize) CompressTargetSizeMB = p.TargetSizeMB;
+        SelectedCompressFormat = CompressOutputFormats.Contains(p.Format) ? p.Format : SelectedCompressFormat;
+        CompressDropAudio = p.DropAudio;
+    }
+
     private void InitializeVideoCompress()
     {
         _selectedCompressResolution = CompressResolutionOptions[0]; // Original
@@ -245,6 +310,8 @@ public partial class MainWindowViewModel
         // Default to the HandBrake "shrink ~80%, near-lossless" recipe: H.265 (with CRF 22 / medium above).
         _selectedCompressCodecOption = Array.Find(CompressCodecOptions, o => o.Value == VideoCodec.H265)
             ?? Array.Find(CompressCodecOptions, o => o.Value == VideoCodec.H264);
+
+        _selectedQuickProfile = CompressQuickProfiles[0]; // seed to Custom via the field (no auto-apply)
 
         CompressStatusText = LocalizationService.Instance["CompressStatusReady"];
 
@@ -264,6 +331,13 @@ public partial class MainWindowViewModel
             this.WhenAnyValue(x => x.SelectedQueueItem, x => x.IsBusy,
                 (CompressQueueItem? sel, bool busy) => sel != null && !busy));
         CompareQualityCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.OpenCompare", ex));
+
+        // Visual clip-trim: needs a selected file and an idle queue.
+        OpenTrimCommand = ReactiveCommand.Create(
+            OpenTrim,
+            this.WhenAnyValue(x => x.SelectedQueueItem, x => x.IsBusy,
+                (CompressQueueItem? sel, bool busy) => sel != null && !busy));
+        OpenTrimCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.OpenTrim", ex));
 
         // Presets: save needs a non-blank name; load/delete need a selection. None while busy.
         SaveCompressPresetCommand = ReactiveCommand.Create(
@@ -489,7 +563,8 @@ public partial class MainWindowViewModel
 
     private string BuildItemEstimate(CompressQueueItem item)
     {
-        if (item.ProbedDuration <= 0 || item.ProbedWidth <= 0 || item.ProbedHeight <= 0)
+        double dur = item.EffectiveDuration; // the trimmed span (whole file when untrimmed)
+        if (dur <= 0 || item.ProbedWidth <= 0 || item.ProbedHeight <= 0)
         {
             return string.Empty; // not probed yet (or unreadable)
         }
@@ -511,7 +586,7 @@ public partial class MainWindowViewModel
             : (SelectedCompressAudioBitrate?.Kbps > 0 ? SelectedCompressAudioBitrate.Kbps : 128);
 
         long est = EstimateOutputSizeBytes(
-            item.ProbedWidth, item.ProbedHeight, item.ProbedFps, item.ProbedDuration, maxHeight, maxFps, codec, crf, audioKbps);
+            item.ProbedWidth, item.ProbedHeight, item.ProbedFps, dur, maxHeight, maxFps, codec, crf, audioKbps);
         return $"{prefix}: ≈ {FormatFileSize(est)}";
     }
 
@@ -545,8 +620,10 @@ public partial class MainWindowViewModel
     /// snapshot settings, measures the real bytes, and extrapolates to the full duration. Returns -1 on
     /// failure. Far better than the formula because it sees the actual footage. Runs the encode off-thread.
     /// </summary>
-    private async Task<long> EstimateBySampleAsync(string sourcePath, CompressSettingsSnapshot snap, double duration)
+    private async Task<long> EstimateBySampleAsync(
+        string sourcePath, CompressSettingsSnapshot snap, IReadOnlyList<(double Start, double End)> keptRuns)
     {
+        double duration = keptRuns.Sum(r => Math.Max(0, r.End - r.Start));
         if (duration <= 0)
         {
             return -1;
@@ -557,7 +634,7 @@ public partial class MainWindowViewModel
         {
             Directory.CreateDirectory(tempDir);
             string sampleOut = Path.Combine(tempDir, "sample.mp4");
-            LibavClipExporter.SourceRange[] ranges = BuildSampleRanges(duration, out double sampleDuration);
+            LibavClipExporter.SourceRange[] ranges = BuildSampleRanges(keptRuns, out double sampleDuration);
             if (sampleDuration <= 0)
             {
                 return -1;
@@ -607,30 +684,50 @@ public partial class MainWindowViewModel
         }
     }
 
-    // Short clips (<= 8s) sample whole (so the estimate is exact). Longer ones take three 2s windows at
-    // 20/50/80% so the measured bitrate reflects content variation across the file.
-    private static LibavClipExporter.SourceRange[] BuildSampleRanges(double duration, out double sampleDuration)
+    // Short kept sets (<= 8s total) sample whole (exact). Longer ones take three 2s windows at 20/50/80% of the
+    // concatenated kept timeline, mapped back to source times within the kept runs.
+    private static LibavClipExporter.SourceRange[] BuildSampleRanges(
+        IReadOnlyList<(double Start, double End)> runs, out double sampleDuration)
     {
-        if (duration <= 8)
+        double total = runs.Sum(r => Math.Max(0, r.End - r.Start));
+        if (total <= 0)
         {
-            sampleDuration = duration;
-            return new[] { new LibavClipExporter.SourceRange(0, duration) };
+            sampleDuration = 0;
+            return Array.Empty<LibavClipExporter.SourceRange>();
+        }
+
+        if (total <= 8)
+        {
+            sampleDuration = total;
+            return runs.Select(r => new LibavClipExporter.SourceRange(r.Start, r.End)).ToArray();
         }
 
         const double window = 2.0;
         var ranges = new List<LibavClipExporter.SourceRange>();
-        double total = 0;
-        foreach (double start in new[] { duration * 0.2, duration * 0.5, duration * 0.8 })
+        double sampled = 0;
+        foreach (double frac in new[] { 0.2, 0.5, 0.8 })
         {
-            double end = Math.Min(duration, start + window);
-            if (end > start)
+            double target = total * frac; // concatenated-timeline position
+            double cursor = 0;
+            foreach ((double start, double end) in runs)
             {
-                ranges.Add(new LibavClipExporter.SourceRange(start, end));
-                total += end - start;
+                double len = end - start;
+                if (target <= cursor + len)
+                {
+                    double srcStart = start + (target - cursor);
+                    double srcEnd = Math.Min(end, srcStart + window);
+                    if (srcEnd > srcStart)
+                    {
+                        ranges.Add(new LibavClipExporter.SourceRange(srcStart, srcEnd));
+                        sampled += srcEnd - srcStart;
+                    }
+                    break;
+                }
+                cursor += len;
             }
         }
 
-        sampleDuration = total;
+        sampleDuration = sampled;
         return ranges.ToArray();
     }
 
@@ -680,23 +777,33 @@ public partial class MainWindowViewModel
     private async Task<bool> EncodeOneFileAsync(
         string input, string outputPath, CompressSettingsSnapshot s, int targetBitrateKbps,
         double durationSeconds, IProgress<double> progress, CancellationToken token, ManualResetEventSlim? pauseGate,
-        int rotationDegrees = 0, IProgress<double>? resumeProgress = null)
+        int rotationDegrees = 0, IProgress<double>? resumeProgress = null,
+        IReadOnlyList<(double Start, double End)>? keptRuns = null)
     {
-        // CRF mode with a known duration uses the resumable segmented path; target-size / 2-pass and the
-        // unknown-duration fallback keep the whole-file path below (their size budget needs the whole file).
-        if (!s.UseTargetSize && durationSeconds > 0)
+        // Kept runs to concatenate (whole file when none). TryExport joins multiple ranges into one output.
+        var runs = (keptRuns ?? Array.Empty<(double Start, double End)>())
+            .Where(r => r.End > r.Start + 0.001)
+            .ToList();
+        if (runs.Count == 0)
+        {
+            runs.Add((0, durationSeconds > 0 ? durationSeconds : 24 * 60 * 60));
+        }
+        double effectiveDuration = runs.Sum(r => r.End - r.Start);
+        var ranges = runs.Select(r => new LibavClipExporter.SourceRange(r.Start, r.End)).ToArray();
+
+        // CRF + known duration + a single contiguous run → resumable segmented path; target-size / 2-pass /
+        // unknown-duration / multi-segment keep the whole-file concat path below.
+        if (!s.UseTargetSize && durationSeconds > 0 && runs.Count == 1)
         {
             return await EncodeOneFileSegmentedAsync(
-                input, outputPath, s, durationSeconds, progress, token, pauseGate, rotationDegrees, resumeProgress);
+                input, outputPath, s, durationSeconds, progress, token, pauseGate, rotationDegrees, resumeProgress,
+                runs[0].Start, runs[0].End);
         }
 
         string outExt = Path.GetExtension(outputPath);
         string tempDir = Path.Combine(Path.GetTempPath(), "GimmeCapture_Compress_" + Guid.NewGuid().ToString("N"));
         try
         {
-            // 0 duration (unreadable) falls back to a large-but-sane end so the whole file is exported.
-            double end = durationSeconds > 0 ? durationSeconds : 24 * 60 * 60;
-            var ranges = new[] { new LibavClipExporter.SourceRange(0, end) };
             Directory.CreateDirectory(tempDir);
 
             async Task<string?> EncodeAttemptAsync(int bitrateKbps, int attempt)
@@ -736,7 +843,7 @@ public partial class MainWindowViewModel
                 long actualBytes = new FileInfo(finalTemp).Length;
                 if (actualBytes > targetBytes)
                 {
-                    int refined = RefineTargetVideoBitrateKbps(targetBitrateKbps, actualBytes, targetBytes, durationSeconds);
+                    int refined = RefineTargetVideoBitrateKbps(targetBitrateKbps, actualBytes, targetBytes, effectiveDuration);
                     if (refined > 0 && refined < targetBitrateKbps)
                     {
                         string? secondTemp = await EncodeAttemptAsync(refined, 2);
@@ -785,10 +892,14 @@ public partial class MainWindowViewModel
     private async Task<bool> EncodeOneFileSegmentedAsync(
         string input, string outputPath, CompressSettingsSnapshot s, double durationSeconds,
         IProgress<double> progress, CancellationToken token, ManualResetEventSlim? pauseGate, int rotationDegrees,
-        IProgress<double>? resumeProgress = null)
+        IProgress<double>? resumeProgress = null, double trimStart = 0, double trimEnd = 0)
     {
-        int chunkCount = Math.Max(1, (int)Math.Ceiling(durationSeconds / CompressChunkSeconds));
-        string settingsKey = BuildSegmentSettingsKey(s, rotationDegrees);
+        // Encode only the trimmed span (whole file when untrimmed); the chunk grid + audio are offset by spanStart.
+        double spanStart = trimStart;
+        double spanEnd = trimEnd > trimStart ? trimEnd : durationSeconds;
+        double spanDuration = spanEnd - spanStart;
+        int chunkCount = Math.Max(1, (int)Math.Ceiling(spanDuration / CompressChunkSeconds));
+        string settingsKey = BuildSegmentSettingsKey(s, rotationDegrees, spanStart, spanEnd);
 
         // Load prior resume state; reset it only if the settings / duration no longer match the chunks. The
         // output path is NOT a validity key — it carries a per-run date stamp, so it legitimately differs each
@@ -796,7 +907,7 @@ public partial class MainWindowViewModel
         CompressSegmentState? state = CompressSegmentStore.Load(input);
         if (state == null
             || state.SettingsKey != settingsKey
-            || Math.Abs(state.TotalDuration - durationSeconds) > 0.5
+            || Math.Abs(state.TotalDuration - spanDuration) > 0.5
             || state.ChunkCount != chunkCount)
         {
             CompressSegmentStore.Clear(input);
@@ -805,7 +916,7 @@ public partial class MainWindowViewModel
                 InputPath = input,
                 OutputPath = outputPath,
                 SettingsKey = settingsKey,
-                TotalDuration = durationSeconds,
+                TotalDuration = spanDuration,
                 ChunkSeconds = CompressChunkSeconds,
                 ChunkCount = chunkCount,
                 CompletedChunks = new List<int>()
@@ -839,8 +950,8 @@ public partial class MainWindowViewModel
                 continue;
             }
 
-            double startSec = i * CompressChunkSeconds;
-            double endSec = Math.Min((i + 1) * CompressChunkSeconds, durationSeconds);
+            double startSec = spanStart + i * CompressChunkSeconds;
+            double endSec = Math.Min(spanStart + (i + 1) * CompressChunkSeconds, spanEnd);
             var ranges = new[] { new LibavClipExporter.SourceRange(startSec, endSec) };
             int index = i;
             var chunkProgress = new Progress<double>(p => progress.Report((index + Math.Clamp(p, 0, 1)) / chunkCount));
@@ -883,7 +994,7 @@ public partial class MainWindowViewModel
                 return false;
             }
 
-            var audioRanges = new[] { new LibavClipExporter.SourceRange(0, durationSeconds) };
+            var audioRanges = new[] { new LibavClipExporter.SourceRange(spanStart, spanEnd) };
             var muxOptions = new LibavExportOptions
             {
                 Codec = s.Codec,
@@ -910,9 +1021,10 @@ public partial class MainWindowViewModel
     }
 
     // Settings the chunks were encoded with; a change invalidates persisted chunks (different pixels/bitstream).
-    private static string BuildSegmentSettingsKey(CompressSettingsSnapshot s, int rotationDegrees) =>
+    private static string BuildSegmentSettingsKey(CompressSettingsSnapshot s, int rotationDegrees, double trimStart, double trimEnd) =>
         string.Join('|', s.Codec, s.Crf, s.Preset, s.MaxHeight, s.MaxFps,
-            s.DropAudio, s.AudioBitrateKbps, s.AudioChannels, rotationDegrees);
+            s.DropAudio, s.AudioBitrateKbps, s.AudioChannels, rotationDegrees,
+            Math.Round(trimStart, 2), Math.Round(trimEnd, 2));
 
     // Toast shown when the user pauses a non-CRF file: only CRF mode can resume mid-encode after a restart.
     private void ShowPauseNoResumeWarning() =>
@@ -949,6 +1061,31 @@ public partial class MainWindowViewModel
         var vm = new CompareViewModel(
             item.Path, item.ProbedDuration, item.ProbedFps, item.ProbedWidth, item.ProbedHeight, options, item.Rotation);
         OpenCompareAction(vm);
+    }
+
+    // Opens the visual multi-segment clip-trim window for the selected file; on Apply writes the kept runs back
+    // to the item (the property set triggers the existing persist + re-estimate + range-summary refresh).
+    private void OpenTrim()
+    {
+        CompressQueueItem? item = SelectedQueueItem;
+        if (item == null || OpenTrimAction == null || item.ProbedDuration <= 0)
+        {
+            return;
+        }
+
+        var initial = item.EffectiveKeptRuns()
+            .Select(r => new VideoEditSegment(r.Start, r.End))
+            .ToList();
+
+        var vm = new TrimViewModel(
+            item.Path, item.ProbedDuration, item.ProbedFps, item.ProbedWidth, item.ProbedHeight, item.Rotation,
+            initial,
+            keptRuns =>
+            {
+                item.TrimEnabled = true;
+                item.KeptSegments = keptRuns;
+            });
+        OpenTrimAction(vm);
     }
 
     /// <summary>

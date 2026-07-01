@@ -69,6 +69,17 @@ public sealed class PendingUpdateState
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
 
+/// <summary>
+/// Persisted record of a completed update download so it survives app restarts. Lets the user pick
+/// "Later" and still install directly afterwards without re-downloading.
+/// </summary>
+public sealed class CachedDownloadState
+{
+    public string TargetVersion { get; set; } = string.Empty;
+    public string ZipPath { get; set; } = string.Empty;
+    public DateTimeOffset CachedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
 public sealed class UpdateVerificationResult
 {
     public bool HasPendingUpdate { get; init; }
@@ -128,6 +139,29 @@ public sealed class UpdateService : ReactiveObject
         _currentVersion = currentVersion.TrimStart('v');
         _httpClient = httpClient ?? SharedHttpClient.Instance;
         _artifactDownloader = artifactDownloader ?? new ArtifactDownloader(_httpClient);
+        LoadCachedDownload();
+    }
+
+    // Restore a previously completed download (persisted to disk) so "Later" → install needs no re-download,
+    // even after the app has been closed and reopened. Ignored if the file is gone or already superseded.
+    private void LoadCachedDownload()
+    {
+        try
+        {
+            var state = ReadCachedDownloadState(GetCurrentAppDirectory());
+            if (state != null
+                && !string.IsNullOrEmpty(state.ZipPath)
+                && File.Exists(state.ZipPath)
+                && IsNewerVersion(state.TargetVersion, _currentVersion))
+            {
+                DownloadedZipPath = state.ZipPath;
+                DownloadedVersion = state.TargetVersion;
+            }
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warning("Update.LoadCachedDownload", ex);
+        }
     }
 
     public async Task<ReleaseInfo?> CheckForUpdateAsync()
@@ -219,6 +253,7 @@ public sealed class UpdateService : ReactiveObject
             DownloadedZipPath = zipPath;
             DownloadedVersion = targetVersion;
             downloadSucceeded = true;
+            PersistCachedDownload(targetVersion, zipPath);
             return zipPath;
         }
         catch (Exception ex)
@@ -362,6 +397,7 @@ public sealed class UpdateService : ReactiveObject
         }
 
         ClearPendingUpdateState(currentAppDirectory);
+        ClearCachedDownloadState(currentAppDirectory);
         return UpdateVerificationResult.Success(state);
     }
 
@@ -547,6 +583,86 @@ exit /b 1
         var directory = Path.GetDirectoryName(path)!;
         Directory.CreateDirectory(directory);
         return path;
+    }
+
+    private static string GetCurrentAppDirectory()
+    {
+        var exe = RuntimePathProvider.GetExecutablePath();
+        return Path.GetDirectoryName(exe) ?? RuntimePathProvider.GetExecutableDirectory();
+    }
+
+    // Stored next to the pending-update state so it shares the per-install storage location.
+    private static string GetCachedDownloadStatePath(string appDirectory)
+    {
+        var directory = Path.GetDirectoryName(GetPendingUpdateStatePath(appDirectory))!;
+        return Path.Combine(directory, "cached-download.json");
+    }
+
+    private void PersistCachedDownload(string targetVersion, string zipPath)
+    {
+        try
+        {
+            WriteCachedDownloadState(GetCurrentAppDirectory(), new CachedDownloadState
+            {
+                TargetVersion = targetVersion,
+                ZipPath = zipPath
+            });
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warning("Update.PersistCachedDownload", ex);
+        }
+    }
+
+    private static void WriteCachedDownloadState(string appDirectory, CachedDownloadState state)
+    {
+        File.WriteAllText(GetCachedDownloadStatePath(appDirectory), JsonSerializer.Serialize(state, PendingStateSerializerOptions));
+    }
+
+    private static CachedDownloadState? ReadCachedDownloadState(string appDirectory)
+    {
+        try
+        {
+            var path = GetCachedDownloadStatePath(appDirectory);
+            return File.Exists(path)
+                ? JsonSerializer.Deserialize<CachedDownloadState>(File.ReadAllText(path), PendingStateSerializerOptions)
+                : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static void ClearCachedDownloadState(string appDirectory)
+    {
+        try
+        {
+            var path = GetCachedDownloadStatePath(appDirectory);
+            if (!File.Exists(path))
+            {
+                return;
+            }
+
+            // Best-effort: also remove the cached installer's temp directory.
+            try
+            {
+                var state = JsonSerializer.Deserialize<CachedDownloadState>(File.ReadAllText(path), PendingStateSerializerOptions);
+                var zipDir = string.IsNullOrEmpty(state?.ZipPath) ? null : Path.GetDirectoryName(state!.ZipPath);
+                if (!string.IsNullOrEmpty(zipDir) && Directory.Exists(zipDir))
+                {
+                    Directory.Delete(zipDir, recursive: true);
+                }
+            }
+            catch
+            {
+            }
+
+            File.Delete(path);
+        }
+        catch
+        {
+        }
     }
 
     private static void WritePendingUpdateState(PendingUpdateState state)

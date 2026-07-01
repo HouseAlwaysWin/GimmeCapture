@@ -242,6 +242,22 @@
                                 <TextBox Text="{Binding SelectedQueueItem.OutputName}"
                                          Watermark="{Binding [CompressOutputNameWatermark], Source={x:Static services:LocalizationService.Instance}}"/>
                             </StackPanel>
+                            <!-- Optional trim: encode only a sub-section of this clip; pick it in the visual 剪輯 window -->
+                            <StackPanel Spacing="6">
+                                <CheckBox IsChecked="{Binding SelectedQueueItem.TrimEnabled}"
+                                          Content="{Binding [CompressTrimLabel], Source={x:Static services:LocalizationService.Instance}}"/>
+                                <StackPanel IsVisible="{Binding SelectedQueueItem.TrimEnabled}" Margin="24,0,0,0" Spacing="6">
+                                    <StackPanel Orientation="Horizontal" Spacing="10">
+                                        <Button Content="{Binding [CompressTrimButton], Source={x:Static services:LocalizationService.Instance}}"
+                                                Theme="{StaticResource SmallGothicMetalButton}"
+                                                Command="{Binding OpenTrimCommand}"/>
+                                        <TextBlock Text="{Binding SelectedQueueItem.TrimRangeText}"
+                                                   VerticalAlignment="Center" Foreground="#C8A24B" FontSize="12"/>
+                                    </StackPanel>
+                                    <TextBlock Text="{Binding [CompressTrimHint], Source={x:Static services:LocalizationService.Instance}}"
+                                               FontSize="11" Foreground="#9A9A9A" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </StackPanel>
                             <Border Background="#101010" CornerRadius="4" Padding="6" HorizontalAlignment="Center">
                                 <Image Source="{Binding PreviewBitmap}" Stretch="Uniform" MaxHeight="220" MaxWidth="380"/>
                             </Border>
@@ -271,6 +287,22 @@
             <TabItem Header="{Binding [CompressSettingsGroup], Source={x:Static services:LocalizationService.Instance}}">
                 <ScrollViewer Padding="0,0,16,0">
                     <StackPanel Spacing="12" Margin="0,8,0,0">
+
+                        <!-- Quick presets: a built-in recipe applies a bundle of the knobs below in one pick -->
+                        <DockPanel>
+                            <TextBlock Text="{Binding [CompressQuickLabel], Source={x:Static services:LocalizationService.Instance}}"
+                                       VerticalAlignment="Center" Margin="0,0,10,0"/>
+                            <ComboBox ItemsSource="{Binding CompressQuickProfiles}"
+                                      SelectedItem="{Binding SelectedQuickProfile}"
+                                      IsEnabled="{Binding IsBatchRunning, Converter={StaticResource BoolInvertConverter}}"
+                                      HorizontalAlignment="Stretch">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:MainWindowViewModel+CompressQuickProfile">
+                                        <TextBlock Text="{Binding Name}"/>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </DockPanel>
 
                         <!-- Saved presets (named setting bundles; distinct from the encoder speed preset) -->
                         <StackPanel Spacing="5">

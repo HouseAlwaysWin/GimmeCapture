@@ -142,7 +142,7 @@ public partial class SnipWindowViewModel
             {
                 var copyPath = _mainVm.CaptureHistory.CreateManagedCapturePath("png");
                 await _captureService.SaveToFileAsync(bitmap, copyPath);
-                _mainVm.CaptureHistory.AddImageAsync(copyPath).Forget("CaptureHistory.AddCopy");
+                _mainVm.CaptureHistory.AddImageAsync(copyPath, GimmeCapture.Models.CaptureHistorySource.PlainCopy).Forget("CaptureHistory.AddCopy");
             }
         }
         finally

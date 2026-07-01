@@ -67,7 +67,7 @@ public sealed class CaptureHistoryService
     private bool IsManaged(string path) =>
         !string.IsNullOrEmpty(path) && path.StartsWith(_capturesDir, StringComparison.OrdinalIgnoreCase);
 
-    public async Task AddImageAsync(string filePath, CancellationToken ct = default)
+    public async Task AddImageAsync(string filePath, CaptureHistorySource source = CaptureHistorySource.OutputExport, CancellationToken ct = default)
     {
         if (!IsEnabled || string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
         {
@@ -88,6 +88,7 @@ public sealed class CaptureHistoryService
                 FilePath = filePath,
                 ThumbnailPath = thumbPath,
                 Kind = CaptureHistoryKind.Image,
+                Source = source,
                 CapturedAtUtc = DateTime.UtcNow,
                 Width = width,
                 Height = height
@@ -106,7 +107,7 @@ public sealed class CaptureHistoryService
         Changed?.Invoke();
     }
 
-    public async Task AddVideoAsync(string filePath, int pixelWidth, int pixelHeight, CancellationToken ct = default)
+    public async Task AddVideoAsync(string filePath, int pixelWidth, int pixelHeight, CaptureHistorySource source = CaptureHistorySource.OutputExport, CancellationToken ct = default)
     {
         if (!IsEnabled || string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
         {
@@ -126,6 +127,7 @@ public sealed class CaptureHistoryService
                 FilePath = filePath,
                 ThumbnailPath = thumbPath,
                 Kind = CaptureHistoryKind.Video,
+                Source = source,
                 CapturedAtUtc = DateTime.UtcNow,
                 Width = pixelWidth,
                 Height = pixelHeight

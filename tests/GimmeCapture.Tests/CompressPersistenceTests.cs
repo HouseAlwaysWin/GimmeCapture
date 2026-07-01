@@ -25,6 +25,53 @@ public class CompressPersistenceTests
     }
 
     [Fact]
+    public void ItemState_RoundTrips_TrimFields()
+    {
+        var original = new CompressItemState
+        {
+            Rotation = 90,
+            OutputName = "clip",
+            TrimEnabled = true,
+            TrimStart = 5m,
+            TrimEnd = 42m
+        };
+
+        string json = JsonSerializer.Serialize(original);
+        CompressItemState? round = JsonSerializer.Deserialize<CompressItemState>(json);
+
+        Assert.NotNull(round);
+        Assert.True(round!.TrimEnabled);
+        Assert.Equal(5m, round.TrimStart);
+        Assert.Equal(42m, round.TrimEnd);
+    }
+
+    [Fact]
+    public void ItemState_RoundTrips_Segments()
+    {
+        var original = new CompressItemState
+        {
+            Rotation = 90,
+            OutputName = "clip",
+            TrimEnabled = true,
+            Segments = new List<TrimSegment>
+            {
+                new() { Start = 5m, End = 15m },
+                new() { Start = 30m, End = 45m }
+            }
+        };
+
+        string json = JsonSerializer.Serialize(original);
+        CompressItemState? round = JsonSerializer.Deserialize<CompressItemState>(json);
+
+        Assert.NotNull(round);
+        Assert.True(round!.TrimEnabled);
+        Assert.NotNull(round.Segments);
+        Assert.Equal(2, round.Segments!.Count);
+        Assert.Equal(5m, round.Segments[0].Start);
+        Assert.Equal(45m, round.Segments[1].End);
+    }
+
+    [Fact]
     public void ItemStateMap_RoundTrips_KeyedByPath()
     {
         var map = new Dictionary<string, CompressItemState>
