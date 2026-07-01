@@ -488,7 +488,15 @@ internal sealed class VideoEditViewModel : ViewModelBase, IDisposable
                                 return;
                             }
                             Bitmap? bmp = BytesToBitmap(data);
-                            Dispatcher.UIThread.Post(() => { Frame = bmp; PositionSeconds = Math.Min(ts, _duration); });
+                            Dispatcher.UIThread.Post(() =>
+                            {
+                                if (gen != _playGeneration)
+                                {
+                                    return; // a superseded/cancelled loop must not overwrite the current frame/playhead
+                                }
+                                Frame = bmp;
+                                PositionSeconds = Math.Min(ts, _duration);
+                            });
                         }, runCts.Token);
                     }
                     catch (OperationCanceledException) { /* run end or paused */ }
