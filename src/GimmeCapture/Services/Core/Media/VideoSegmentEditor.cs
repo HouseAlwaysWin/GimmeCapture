@@ -228,6 +228,67 @@ public static class VideoSegmentEditor
     }
 
     /// <summary>
+    /// The index of the internal split boundary nearest <paramref name="sourceTime"/> — the boundary
+    /// between segment[i] and segment[i+1] (i.e. segment[i].SourceEnd). Returns -1 when there is no
+    /// internal boundary (fewer than two segments). Used to pick which split point a "merge at the
+    /// playhead" removes — the inverse of a split.
+    /// </summary>
+    public static int NearestBoundaryIndex(IReadOnlyList<VideoEditSegment> segments, double sourceTime)
+    {
+        ArgumentNullException.ThrowIfNull(segments);
+        if (segments.Count < 2)
+        {
+            return -1;
+        }
+
+        int best = 0;
+        double bestDist = double.MaxValue;
+        for (int i = 0; i < segments.Count - 1; i++)
+        {
+            double dist = Math.Abs(segments[i].SourceEnd - sourceTime);
+            if (dist < bestDist)
+            {
+                bestDist = dist;
+                best = i;
+            }
+        }
+
+        return best;
+    }
+
+    /// <summary>
+    /// Removes the split boundary after segment <paramref name="leftIndex"/>, merging it with the next
+    /// segment into one piece spanning both. The merged piece is kept when EITHER side was kept, so
+    /// undoing a cut (a kept piece next to a dropped one) restores the dropped content. Returns a new
+    /// list; the original is unchanged. An out-of-range boundary, or a single-segment list, is a no-op.
+    /// </summary>
+    public static IReadOnlyList<VideoEditSegment> MergeAt(IReadOnlyList<VideoEditSegment> segments, int leftIndex)
+    {
+        ArgumentNullException.ThrowIfNull(segments);
+        if (leftIndex < 0 || leftIndex >= segments.Count - 1)
+        {
+            return new List<VideoEditSegment>(segments);
+        }
+
+        var result = new List<VideoEditSegment>(segments.Count - 1);
+        for (int i = 0; i < segments.Count; i++)
+        {
+            if (i == leftIndex)
+            {
+                VideoEditSegment a = segments[i];
+                VideoEditSegment b = segments[i + 1];
+                result.Add(a with { SourceEnd = b.SourceEnd, Kept = a.Kept || b.Kept });
+            }
+            else if (i != leftIndex + 1)
+            {
+                result.Add(segments[i]);
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
     /// Merges adjacent segments that are contiguous in source (the next starts where the previous ends)
     /// and share the same speed into a single run. Used so a kept set that forms one continuous range
     /// (e.g. dropping only the head or tail) collapses to ONE segment — letting the export take the fast,
