@@ -188,6 +188,40 @@ public partial class MainWindowViewModel
             }
         }
 
+        // Optional burn-in layers from the 進階影片編輯 editor: annotations (drawn in the editor's surface
+        // space — the cropped+rotated preview-frame pixel size recorded below) and redaction tracks
+        // (normalized [0,1]). Burned into the frames post-transform at encode.
+        private IReadOnlyList<Annotation>? _annotations;
+        public IReadOnlyList<Annotation>? Annotations
+        {
+            get => _annotations;
+            set
+            {
+                this.RaiseAndSetIfChanged(ref _annotations, value);
+                RaiseEditSummary();
+            }
+        }
+
+        /// <summary>The surface (reference) size the annotations were drawn against.</summary>
+        public double AnnotationSurfaceWidth { get; set; }
+        public double AnnotationSurfaceHeight { get; set; }
+
+        private IReadOnlyList<RedactionTrack>? _redactionTracks;
+        public IReadOnlyList<RedactionTrack>? RedactionTracks
+        {
+            get => _redactionTracks;
+            set
+            {
+                this.RaiseAndSetIfChanged(ref _redactionTracks, value);
+                RaiseEditSummary();
+            }
+        }
+
+        /// <summary>True when annotations/redaction must be burned per frame (forces the whole-file path).</summary>
+        public bool HasBurnInEdits =>
+            (_annotations?.Count ?? 0) > 0
+            || (_redactionTracks?.Any(t => t.Keyframes.Count > 0) ?? false);
+
         // Optional per-file edit: the kept runs (source [start,end] pieces, each optionally time-scaled)
         // concatenated at encode. Empty/off = whole clip. Edited in the 進階影片編輯 window; persisted per file.
         private bool _trimEnabled;
@@ -244,14 +278,14 @@ public partial class MainWindowViewModel
             runs.Count > 1
             || (runs.Count == 1 && (runs[0].Start > 0.05 || (ProbedDuration > 0 && runs[0].End < ProbedDuration - 0.05)));
 
-        /// <summary>True when the clip carries any edit (trim, speed, crop, or rotation).</summary>
+        /// <summary>True when the clip carries any edit (trim, speed, crop, rotation, or burn-in layers).</summary>
         public bool HasEdits
         {
             get
             {
                 IReadOnlyList<(double Start, double End, double Speed)> runs = EffectiveKeptRuns();
                 bool retimed = runs.Any(r => Math.Abs(r.Speed - 1.0) > 0.001);
-                return RunsAreTrimmed(runs) || retimed || Crop != null || Rotation != 0;
+                return RunsAreTrimmed(runs) || retimed || Crop != null || Rotation != 0 || HasBurnInEdits;
             }
         }
 
@@ -285,6 +319,14 @@ public partial class MainWindowViewModel
                 if (Rotation != 0)
                 {
                     parts.Add($"{loc["CompressEditRotate"]} {Rotation}°");
+                }
+                if ((_annotations?.Count ?? 0) > 0)
+                {
+                    parts.Add(loc["CompressEditAnnotated"]);
+                }
+                if (_redactionTracks?.Any(t => t.Keyframes.Count > 0) ?? false)
+                {
+                    parts.Add(loc["CompressEditRedacted"]);
                 }
                 return string.Join(" · ", parts);
             }

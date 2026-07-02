@@ -1076,19 +1076,28 @@ public partial class MainWindowViewModel
             return;
         }
 
-        var initial = item.EffectiveKeptRuns()
-            .Select(r => new VideoEditSegment(r.Start, r.End, r.Speed))
-            .ToList();
+        var initial = new VideoEditResult(
+            item.EffectiveKeptRuns().Select(r => new VideoEditSegment(r.Start, r.End, r.Speed)).ToList(),
+            item.Crop,
+            item.Rotation,
+            item.Annotations ?? Array.Empty<Annotation>(),
+            item.AnnotationSurfaceWidth,
+            item.AnnotationSurfaceHeight,
+            item.RedactionTracks ?? Array.Empty<RedactionTrack>());
 
         var vm = new VideoEditViewModel(
-            item.Path, item.ProbedDuration, item.ProbedFps, item.ProbedWidth, item.ProbedHeight, item.Rotation,
-            initial, item.Crop,
-            (keptRuns, crop, rotation) =>
+            item.Path, item.ProbedDuration, item.ProbedFps, item.ProbedWidth, item.ProbedHeight,
+            initial,
+            result =>
             {
                 item.TrimEnabled = true;
-                item.KeptSegments = keptRuns;
-                item.Crop = crop;
-                item.Rotation = rotation;
+                item.KeptSegments = result.KeptRuns;
+                item.Crop = result.Crop;
+                item.Rotation = result.RotationDegrees;
+                item.Annotations = result.Annotations.Count > 0 ? result.Annotations : null;
+                item.AnnotationSurfaceWidth = result.AnnotationSurfaceWidth;
+                item.AnnotationSurfaceHeight = result.AnnotationSurfaceHeight;
+                item.RedactionTracks = result.RedactionTracks.Count > 0 ? result.RedactionTracks : null;
                 RefreshSelectedPreview(item);
             });
         OpenEditorAction(vm);
