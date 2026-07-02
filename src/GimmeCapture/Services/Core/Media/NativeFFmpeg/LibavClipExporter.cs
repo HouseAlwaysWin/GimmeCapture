@@ -118,7 +118,8 @@ internal static class LibavClipExporter
         CancellationToken cancellationToken = default,
         LibavExportOptions? options = null,
         IProgress<double>? progress = null,
-        ManualResetEventSlim? pauseGate = null)
+        ManualResetEventSlim? pauseGate = null,
+        Action<SKBitmap, double>? frameCompositeAfterTransform = null)
     {
         FFmpegRuntime.EnsureInitialized();
         var opt = options ?? new LibavExportOptions();
@@ -151,14 +152,16 @@ internal static class LibavClipExporter
                 string statsFile = Path.Combine(tempDir, "x264_2pass.log");
                 string pass1Temp = Path.Combine(tempDir, "pass1.mp4");
                 EncodeVideoRanges(inputPath, ranges, pass1Temp, quality, crop, frameComposite, cancellationToken,
-                    opt, progress == null ? null : new ScaledProgress(progress, 0.0, 0.5), pauseGate, 1, statsFile);
+                    opt, progress == null ? null : new ScaledProgress(progress, 0.0, 0.5), pauseGate, 1, statsFile,
+                    frameCompositeAfterTransform);
                 EncodeVideoRanges(inputPath, ranges, videoTemp, quality, crop, frameComposite, cancellationToken,
-                    opt, progress == null ? null : new ScaledProgress(progress, 0.5, 0.5), pauseGate, 2, statsFile);
+                    opt, progress == null ? null : new ScaledProgress(progress, 0.5, 0.5), pauseGate, 2, statsFile,
+                    frameCompositeAfterTransform);
             }
             else
             {
                 EncodeVideoRanges(inputPath, ranges, videoTemp, quality, crop, frameComposite, cancellationToken,
-                    opt, progress, pauseGate);
+                    opt, progress, pauseGate, frameCompositeAfterTransform: frameCompositeAfterTransform);
             }
 
             string? audioTemp = null;
@@ -249,7 +252,8 @@ internal static class LibavClipExporter
         IProgress<double>? progress = null,
         ManualResetEventSlim? pauseGate = null,
         int passNumber = 0,
-        string? statsFile = null)
+        string? statsFile = null,
+        Action<SKBitmap, double>? frameCompositeAfterTransform = null)
     {
         VideoCodec codec = opt.Codec;
         int targetVideoBitrateKbps = opt.TargetVideoBitrateKbps;
@@ -270,7 +274,7 @@ internal static class LibavClipExporter
         // Fractional output-frame cursor for per-segment speed: each source frame advances it by
         // 1/speed output frames, and we emit floor(after)-floor(before) frames (drop when >1×, dup when <1×).
         double frameAccum = 0;
-        bool annotate = frameComposite != null;
+        bool annotate = frameComposite != null || frameCompositeAfterTransform != null;
 
         // Output rotation (0/90/180/270 clockwise), baked into the pixels via a SkiaSharp BGRA round-trip.
         int rotation = NormalizeRotation(opt.RotationDegrees);
@@ -444,13 +448,15 @@ internal static class LibavClipExporter
 
             if (needBgra)
             {
-                // BGRA round-trip: decode → BGRA (optional SKBitmap composite, optional rotate) → YUV420P.
-                // The final sws source is the rotated dims when rotating, else the full decode dims.
-                int finalSrcW = rotate ? rotW : decCtx->width;
-                int finalSrcH = rotate ? rotH : decCtx->height;
+                // BGRA round-trip: decode(+crop) → BGRA (optional composite, optional rotate, optional
+                // post-transform composite) → YUV420P. The decoded frame is cropped IN PLACE before this
+                // conversion, so the BGRA stage runs at the post-crop dims (outW×outH = decode dims when
+                // not cropping) and the final sws source is the rotated dims when rotating.
+                int finalSrcW = rotate ? rotW : outW;
+                int finalSrcH = rotate ? rotH : outH;
                 swsToBgra = ffmpeg.sws_getContext(
-                    decCtx->width, decCtx->height, decCtx->pix_fmt,
-                    decCtx->width, decCtx->height, AVPixelFormat.AV_PIX_FMT_BGRA,
+                    outW, outH, decCtx->pix_fmt,
+                    outW, outH, AVPixelFormat.AV_PIX_FMT_BGRA,
                     (int)SwsFlags.SWS_BILINEAR, null, null, null);
                 sws = ffmpeg.sws_getContext(
                     finalSrcW, finalSrcH, AVPixelFormat.AV_PIX_FMT_BGRA,
@@ -462,8 +468,8 @@ internal static class LibavClipExporter
                     throw new InvalidOperationException("Failed to create BGRA composite contexts.");
                 }
                 bgraFrame->format = (int)AVPixelFormat.AV_PIX_FMT_BGRA;
-                bgraFrame->width = decCtx->width;
-                bgraFrame->height = decCtx->height;
+                bgraFrame->width = outW;
+                bgraFrame->height = outH;
                 ThrowIfErr(ffmpeg.av_frame_get_buffer(bgraFrame, 32), "clip_bgra_get_buffer");
 
                 if (rotate)
@@ -527,7 +533,7 @@ internal static class LibavClipExporter
 
                     runDone = DrainDecodedFrames(
                         decCtx, encCtx, sws, swsToBgra, decFrame, encFrame, bgraFrame, frameComposite,
-                        rotation, rotateDst,
+                        rotation, rotateDst, frameCompositeAfterTransform,
                         outFmt, outStream, outPkt, inStream->time_base, range, crop, ref frameIndex, ref frameAccum,
                         fpsCursorScale, progress, totalSrcDuration, elapsedBeforeRange, ref lastPercent);
                 }
@@ -538,7 +544,7 @@ internal static class LibavClipExporter
                     ffmpeg.avcodec_send_packet(decCtx, null);
                     DrainDecodedFrames(
                         decCtx, encCtx, sws, swsToBgra, decFrame, encFrame, bgraFrame, frameComposite,
-                        rotation, rotateDst,
+                        rotation, rotateDst, frameCompositeAfterTransform,
                         outFmt, outStream, outPkt, inStream->time_base, range, crop, ref frameIndex, ref frameAccum,
                         fpsCursorScale, progress, totalSrcDuration, elapsedBeforeRange, ref lastPercent);
                 }
@@ -592,6 +598,7 @@ internal static class LibavClipExporter
         Action<SKBitmap, double>? composite,
         int rotation,
         SKBitmap? rotateDst,
+        Action<SKBitmap, double>? compositeAfterTransform,
         AVFormatContext* outFmt,
         AVStream* outStream,
         AVPacket* outPkt,
@@ -654,6 +661,7 @@ internal static class LibavClipExporter
                 {
                     // Draw annotations/redactions directly onto the BGRA pixels (no copy). t is this frame's
                     // source-time so time-varying composites (e.g. interpolated redaction boxes) can position.
+                    // Runs at the post-crop dims (= full source dims when not cropping), before rotation.
                     var info = new SKImageInfo(bgraFrame->width, bgraFrame->height, SKColorType.Bgra8888, SKAlphaType.Premul);
                     using var sk = new SKBitmap();
                     if (sk.InstallPixels(info, (IntPtr)bgraFrame->data[0], bgraFrame->linesize[0]))
@@ -680,12 +688,27 @@ internal static class LibavClipExporter
                         }
                     }
 
+                    // Post-transform composite: drawn on the CROPPED+ROTATED frame (what the editor preview
+                    // shows), so surface-space annotations land exactly where the user drew them.
+                    compositeAfterTransform?.Invoke(rotateDst, t);
+
                     byte*[] rotData = { (byte*)rotateDst.GetPixels().ToPointer(), null, null, null };
                     int[] rotLine = { rotateDst.RowBytes, 0, 0, 0 };
                     ffmpeg.sws_scale(sws, rotData, rotLine, 0, rotateDst.Height, encFrame->data, encFrame->linesize);
                 }
                 else
                 {
+                    if (compositeAfterTransform != null)
+                    {
+                        // No rotation: the post-transform frame IS the (possibly cropped) BGRA frame.
+                        var postInfo = new SKImageInfo(bgraFrame->width, bgraFrame->height, SKColorType.Bgra8888, SKAlphaType.Premul);
+                        using var skPost = new SKBitmap();
+                        if (skPost.InstallPixels(postInfo, (IntPtr)bgraFrame->data[0], bgraFrame->linesize[0]))
+                        {
+                            compositeAfterTransform(skPost, t);
+                        }
+                    }
+
                     ffmpeg.sws_scale(sws, bgraFrame->data, bgraFrame->linesize, 0, bgraFrame->height,
                         encFrame->data, encFrame->linesize);
                 }
