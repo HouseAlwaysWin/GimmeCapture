@@ -6,9 +6,12 @@ using Avalonia.Headless;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
+using Avalonia.Controls.Primitives;
+using Avalonia.LogicalTree;
 using Avalonia.Platform;
 using Avalonia.Styling;
 using Avalonia.Threading;
+using GimmeCapture.Views.Controls;
 using Xunit;
 
 namespace GimmeCapture.Tests;
@@ -82,6 +85,23 @@ public class VolumeFlyoutRenderTests
         var rtb = new RenderTargetBitmap(new PixelSize(W, H), new Vector(96, 96));
         rtb.Render(window);
         rtb.Save(Path.Combine(OutDir, "volume_popup_production.png"));
+
+        // Also render the REAL VolumeFlyoutButton's popup (not the reproduction above) to be certain.
+        var vfb = new VolumeFlyoutButton { Volume = 0.5 };
+        var host = new Window { Content = vfb, Width = 200, Height = 260, Background = new SolidColorBrush(Color.Parse("#101010")) };
+        host.Show();
+        Dispatcher.UIThread.RunJobs();
+        Popup? popup = vfb.GetLogicalDescendants().OfType<Popup>().FirstOrDefault();
+        if (popup?.Child is Control popupChild)
+        {
+            popup.IsOpen = true;
+            Dispatcher.UIThread.RunJobs();
+            int pw = Math.Max(1, (int)Math.Ceiling(popupChild.Bounds.Width));
+            int ph = Math.Max(1, (int)Math.Ceiling(popupChild.Bounds.Height));
+            var actual = new RenderTargetBitmap(new PixelSize(pw, ph), new Vector(96, 96));
+            actual.Render(popupChild);
+            actual.Save(Path.Combine(OutDir, "volume_popup_actual_control.png"));
+        }
 
         // Find the accent-coloured (red) thumb/track pixels and assert their horizontal centre ≈ image centre.
         int minX = int.MaxValue, maxX = int.MinValue;
