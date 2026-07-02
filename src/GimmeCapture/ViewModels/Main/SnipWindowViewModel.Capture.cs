@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using System.Threading;
 using GimmeCapture.Services.Abstractions;
 using SkiaSharp;
+using GimmeCapture.Services.Platforms.Avalonia;
 
 namespace GimmeCapture.ViewModels.Main;
 

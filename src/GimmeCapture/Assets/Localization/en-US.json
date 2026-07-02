@@ -41,6 +41,8 @@
   "CompressStatusReady": "Pick a video to compress.",
   "StatusCompressing": "Compressing…",
   "StatusCompressRefining": "Adjusting bitrate to hit the target size…",
+  "SaveVideo": "Save Video",
+  "StatusExportingVideo": "Exporting video…",
   "StatusCompressDone": "Compressed",
   "StatusCompressFailed": "Compression failed",
   "CompressCodecLabel": "Codec",

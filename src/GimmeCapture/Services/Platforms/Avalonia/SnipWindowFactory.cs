@@ -63,19 +63,20 @@ public sealed class SnipWindowFactory : ISnipWindowFactory
         var translationSelectionMonitor = new TranslationSelectionMonitor(
             _screenCaptureService,
             translationSession);
+        var ocrEngineFactory = new PaddleOcrEngineFactory();
         var aiScanSessionService = new AIScanSessionService(
             _screenCaptureService,
             vm.AIResourceService,
             vm.SAM2RuntimeService,
             vm.OcrRuntimeService,
             vm.AppSettingsService,
-            new PaddleOcrEngineFactory());
+            ocrEngineFactory);
         var quickOcrService = new QuickOcrService(
             new QuickOcrEngineProvider(
                 vm.AIResourceService,
                 vm.AppSettingsService,
                 vm.OcrRuntimeService,
-                new PaddleOcrEngineFactory()));
+                ocrEngineFactory));
 
         var snipVm = new SnipWindowViewModel(
             vm.BorderColor,
@@ -88,7 +89,8 @@ public sealed class SnipWindowFactory : ISnipWindowFactory
             translationSelectionMonitor,
             aiScanSessionService,
             quickOcrService,
-            new AvaloniaCaptureVisibilityCoordinator());
+            new AvaloniaCaptureVisibilityCoordinator(),
+            ocrEngineFactory);
 
         snipVm.LockSelectedScreenshotSelection = mode == CaptureMode.Normal && vm.AutoPinScreenshotSelection;
         snipVm.AutoActionMode = SnipWindowViewModel.ResolveAutoActionMode(mode, vm.AutoPinScreenshotSelection);

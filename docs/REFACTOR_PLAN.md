@@ -28,11 +28,18 @@ Improve maintainability and reduce regressions by splitting large responsibiliti
 5. ✅ `IDownloadWindowService` / `AvaloniaDownloadWindowService` — download window lifecycle
 
 ## Remaining `Application.Current` Usage
-Only in platform service implementations (correct location):
-- `AvaloniaWindowManager.cs`
-- `AvaloniaWindowLayerService.cs`
-- `AvaloniaThemeResourceService.cs`
-- `ClipboardService.cs`
+In sanctioned locations (platform impls / composition root / view code-behind):
+- `Services/Platforms/Avalonia/AvaloniaWindowManager.cs`
+- `Services/Platforms/Avalonia/AvaloniaWindowLayerService.cs`
+- `Services/Platforms/Avalonia/AvaloniaThemeResourceService.cs`
+- `Services/Core/Infrastructure/ClipboardService.cs`
+- `Composition/AppBootstrapper.cs` (composition root — acceptable)
+- `Views/Main/SnipWindow.ViewModelWiring.cs` (view code-behind — acceptable)
+
+- `Services/Platforms/Avalonia/TranslationResultLayerManager.cs` — relocated here from
+  Core/Infrastructure (it creates/queries Avalonia windows, so the platform layer is its honest
+  home). Follow-up: convert the static class to an injected service behind an abstraction so
+  ViewModels stop calling it directly.
 
 ## Risk Controls
 - Keep behavior identical per step

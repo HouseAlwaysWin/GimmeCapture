@@ -73,28 +73,8 @@ public partial class FloatingVideoWindow : FloatingWindowBase
                 // Default the dialog to the pinned clip's own format so e.g. a recorded GIF saves as a GIF
                 // (not silently transcoded to mp4). The user can still pick any other type from the dropdown;
                 // SaveAsync converts when the chosen extension differs from the source.
-                var types = new Dictionary<string, Avalonia.Platform.Storage.FilePickerFileType>
-                {
-                    ["mp4"] = new Avalonia.Platform.Storage.FilePickerFileType("MP4 Video") { Patterns = new[] { "*.mp4" } },
-                    ["mkv"] = new Avalonia.Platform.Storage.FilePickerFileType("MKV Video") { Patterns = new[] { "*.mkv" } },
-                    ["mov"] = new Avalonia.Platform.Storage.FilePickerFileType("MOV Video") { Patterns = new[] { "*.mov" } },
-                    ["gif"] = new Avalonia.Platform.Storage.FilePickerFileType("GIF") { Patterns = new[] { "*.gif" } },
-                    ["webm"] = new Avalonia.Platform.Storage.FilePickerFileType("WebM Video") { Patterns = new[] { "*.webm" } },
-                };
-                var allFiles = new Avalonia.Platform.Storage.FilePickerFileType("All Files") { Patterns = new[] { "*.*" } };
-
-                string sourceExt = Path.GetExtension(vm.VideoPath).TrimStart('.').ToLowerInvariant();
-                bool knownSource = types.ContainsKey(sourceExt);
-                string defaultExt = knownSource ? sourceExt : "mp4";
-
-                // First entry is the dialog's default selected filter — put the source format first.
-                var choices = new List<Avalonia.Platform.Storage.FilePickerFileType>();
-                if (knownSource) choices.Add(types[sourceExt]);
-                foreach (var kv in types)
-                {
-                    if (kv.Key != sourceExt) choices.Add(kv.Value);
-                }
-                choices.Add(allFiles);
+                var (choices, defaultExt) = GimmeCapture.Views.Shared.VideoFilePickerTypes
+                    .SaveChoicesPreferring(Path.GetExtension(vm.VideoPath));
 
                 var file = await topLevel.StorageProvider.SaveFilePickerAsync(new Avalonia.Platform.Storage.FilePickerSaveOptions
                 {

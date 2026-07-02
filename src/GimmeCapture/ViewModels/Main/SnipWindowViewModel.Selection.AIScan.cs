@@ -14,6 +14,7 @@ using GimmeCapture.Services.Core;
 using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Core.Interaction;
 using GimmeCapture.Services.OCR;
+using GimmeCapture.Services.Platforms.Avalonia;
 
 namespace GimmeCapture.ViewModels.Main;
 
@@ -210,7 +211,7 @@ public partial class SnipWindowViewModel
             var detectionBitmap = resizedBitmap ?? bitmap;
             LogTranslationMemoryState("translation-ocr-search-capture", bitmap: detectionBitmap);
 
-            using var ocrEngine = new PaddleOCREngine(_mainVm.AIResourceService, _mainVm.AppSettingsService, _mainVm.OcrRuntimeService);
+            using var ocrEngine = _ocrEngineFactory.Create(_mainVm.AIResourceService, _mainVm.AppSettingsService, _mainVm.OcrRuntimeService);
             await ocrEngine.EnsureLoadedAsync(_mainVm.AppSettingsService.Settings.SourceLanguage);
             var textBoxes = await Task.Run(() => ocrEngine.DetectText(detectionBitmap));
 

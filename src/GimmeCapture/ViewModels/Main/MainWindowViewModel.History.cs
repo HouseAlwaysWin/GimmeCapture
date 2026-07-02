@@ -7,6 +7,7 @@ using System.Reactive;
 using System.Threading.Tasks;
 using Avalonia.Media.Imaging;
 using GimmeCapture.Models;
+using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core.Infrastructure;
 using ReactiveUI;
 
@@ -14,7 +15,7 @@ namespace GimmeCapture.ViewModels.Main;
 
 public partial class MainWindowViewModel
 {
-    private readonly ClipboardService _historyClipboardService = new();
+    private readonly IClipboardService _clipboardService = new ClipboardService();
     private IReadOnlyList<HistoryItemViewModel> _allHistoryItems = [];
     private bool _historyViewActive;
 
@@ -205,7 +206,7 @@ public partial class MainWindowViewModel
         try
         {
             using var bitmap = new Bitmap(item.FilePath);
-            await _historyClipboardService.CopyImageAsync(bitmap);
+            await _clipboardService.CopyImageAsync(bitmap);
             SetStatus("StatusCopied");
         }
         catch (Exception ex)

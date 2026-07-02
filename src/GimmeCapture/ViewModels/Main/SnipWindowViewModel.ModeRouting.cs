@@ -11,6 +11,7 @@ using GimmeCapture.Services.Core;
 using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.ViewModels.Shared;
+using GimmeCapture.Services.Platforms.Avalonia;
 
 namespace GimmeCapture.ViewModels.Main;
 

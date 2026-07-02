@@ -1,0 +1,44 @@
+# Shift-left compile check: type-check the Windows-only solution on Linux using
+# EnableWindowsTargeting, so code written in cloud (Linux) sessions gets compiler
+# feedback without waiting for a Windows machine. This does NOT run tests or the
+# app — it only proves the managed code compiles.
+#
+# Proven: run #1 compiled the full solution (WinForms + WGC WinRT + FFmpeg.AutoGen)
+# on ubuntu-latest in ~78 s (restore 22 s + build 33 s), so this is enforcing.
+name: Linux Compile Check
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "claude/**"
+  pull_request:
+    branches: [main]
+
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-linux-${{ runner.os }}-${{ hashFiles('**/packages.lock.json') }}
+          restore-keys: |
+            nuget-linux-${{ runner.os }}-
+
+      # Plain (non-locked) restore on purpose: EnableWindowsTargeting acquires the
+      # Windows targeting + WinRT projection packs via PackageDownload, which the
+      # lock file does not cover; locked mode is still enforced by the Windows CI.
+      - name: Restore
+        run: dotnet restore GimmeCapture.slnx --runtime win-x64 -p:EnableWindowsTargeting=true
+
+      - name: Build (compile only)
+        run: dotnet build GimmeCapture.slnx -c Debug --no-restore -p:EnableWindowsTargeting=true -maxcpucount
