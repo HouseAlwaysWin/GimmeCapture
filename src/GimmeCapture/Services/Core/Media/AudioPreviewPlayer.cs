@@ -181,12 +181,22 @@ internal sealed class AudioPreviewPlayer : IDisposable
         return new WaveFormat(adjustedSampleRate, sourceFormat.BitsPerSample, sourceFormat.Channels);
     }
 
+    /// <summary>
+    /// Builds the playback pipeline that scales volume by multiplying samples in-stream. Returns the
+    /// <see cref="VolumeSampleProvider"/> (so its <c>Volume</c> can be adjusted live) and the wave provider
+    /// to feed the output device. Setting <see cref="IWavePlayer.Volume"/> instead would move this app's
+    /// level in the Windows volume mixer (the whole app, not just the preview). Kept testable (no device).
+    /// </summary>
+    internal static (VolumeSampleProvider Volume, IWaveProvider Output) BuildVolumePipeline(WaveStream stream, float volume)
+    {
+        var volumeProvider = new VolumeSampleProvider(stream.ToSampleProvider()) { Volume = volume };
+        return (volumeProvider, new SampleToWaveProvider(volumeProvider));
+    }
+
     private IWavePlayer CreateOutput(WaveStream stream)
     {
-        // Scale volume by multiplying samples in the pipeline. Setting IWavePlayer.Volume instead would
-        // move this app's level in the Windows volume mixer (the whole app, not just the preview).
-        _volumeProvider = new VolumeSampleProvider(stream.ToSampleProvider()) { Volume = _volume };
-        IWaveProvider output = new SampleToWaveProvider(_volumeProvider);
+        (VolumeSampleProvider volumeProvider, IWaveProvider output) = BuildVolumePipeline(stream, _volume);
+        _volumeProvider = volumeProvider;
 
         var wasapi = new WasapiOut();
         try

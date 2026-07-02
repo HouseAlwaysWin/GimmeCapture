@@ -286,7 +286,7 @@
                     <PathIcon Data="M17,17H7V14L3,18L7,22V19H19V13H17V17M7,7H17V10L21,6L17,2V5H5V11H7V7Z" Width="12" Height="12"
                               Opacity="{Binding IsLooping, Converter={StaticResource BoolToOpacityConverter}}"/>
                 </Button>
-                <controls:VolumeFlyoutButton Volume="{Binding PreviewVolume}" IsMuted="{Binding IsMuted}"
+                <controls:VolumeFlyoutButton Volume="{Binding PreviewVolume, Mode=TwoWay}" IsMuted="{Binding IsMuted}"
                                              ToggleMuteCommand="{Binding ToggleMuteCommand}"
                                              MuteTooltip="{Binding [TipMute], Source={x:Static services:LocalizationService.Instance}}"/>
                 <Button Theme="{StaticResource SmallGothicMetalButton}" Content="{Binding PlaybackSpeedText}"

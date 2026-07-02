@@ -1,5 +1,8 @@
+using System;
+using System.IO;
 using GimmeCapture.Services.Core.Media;
 using NAudio.Wave;
+using NAudio.Wave.SampleProviders;
 using Xunit;
 
 namespace GimmeCapture.Tests;
@@ -48,6 +51,51 @@ public class AudioPreviewPlayerTests
 
         Assert.Equal(24, result.BitsPerSample);
         Assert.Equal(1, result.Channels);
+    }
+
+    // A constant 16-bit PCM signal of 16384 → 0.5 in float (16384/32768). Mono, 48 kHz.
+    private static WaveStream MakeConstantPcm()
+    {
+        var bytes = new byte[200 * 2];
+        for (int i = 0; i < 200; i++)
+        {
+            bytes[i * 2] = 0x00;     // 16384 = 0x4000, little-endian
+            bytes[i * 2 + 1] = 0x40;
+        }
+
+        return new RawSourceWaveStream(new MemoryStream(bytes), new WaveFormat(48_000, 16, 1));
+    }
+
+    private static float ReadFirstSample(IWaveProvider provider)
+    {
+        var buffer = new byte[16];
+        int read = provider.Read(buffer, 0, buffer.Length);
+        Assert.True(read >= 4);
+        return BitConverter.ToSingle(buffer, 0); // SampleToWaveProvider emits 32-bit IEEE float
+    }
+
+    [Theory]
+    [InlineData(1.0f, 0.5f)]    // full volume → unchanged (0.5)
+    [InlineData(0.5f, 0.25f)]   // half volume → 0.25
+    [InlineData(0.0f, 0.0f)]    // muted → silence
+    public void BuildVolumePipeline_ScalesSamplesByVolume(float volume, float expected)
+    {
+        (VolumeSampleProvider _, IWaveProvider output) = AudioPreviewPlayer.BuildVolumePipeline(MakeConstantPcm(), volume);
+
+        float sample = ReadFirstSample(output);
+
+        Assert.InRange(sample, expected - 0.01f, expected + 0.01f);
+    }
+
+    [Fact]
+    public void BuildVolumePipeline_VolumeChangeAppliesLive()
+    {
+        // The provider reference is what AudioPreviewPlayer.Volume mutates while audio is playing.
+        (VolumeSampleProvider vol, IWaveProvider output) = AudioPreviewPlayer.BuildVolumePipeline(MakeConstantPcm(), 1.0f);
+
+        vol.Volume = 0.25f; // e.g. user drags the slider mid-playback
+
+        Assert.InRange(ReadFirstSample(output), 0.115f, 0.135f); // 0.5 * 0.25 = 0.125
     }
 
     [Fact]
