@@ -498,19 +498,8 @@ public partial class RecordingService
     {
         _ = cropFilter;
         var quality = _settingsService?.Settings.VideoQuality ?? VideoQuality.Medium;
-        int gifFps = quality switch
-        {
-            VideoQuality.High => Math.Min(24, _fps),
-            VideoQuality.Low => Math.Min(10, _fps),
-            _ => Math.Min(15, _fps)
-        };
-
-        int maxWidth = quality switch
-        {
-            VideoQuality.High => 0,
-            VideoQuality.Low => 480,
-            _ => 720
-        };
+        var (ladderFps, maxWidth) = LibavGifTranscoder.QualityLadder(quality);
+        int gifFps = Math.Min(ladderFps, _fps);
 
         // Trade color smoothness for file size via the dither: error-diffusion (sierra2_4a) looks best but
         // its high-frequency noise compresses poorly (largest files); ordered bayer is far more compressible;

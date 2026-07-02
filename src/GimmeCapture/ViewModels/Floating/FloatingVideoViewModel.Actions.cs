@@ -452,13 +452,6 @@ public partial class FloatingVideoViewModel
         }
     }
 
-    private static (int Fps, int MaxWidth) GifSettingsForQuality(VideoQuality q) => q switch
-    {
-        VideoQuality.High => (24, 0),
-        VideoQuality.Low => (10, 480),
-        _ => (15, 720),
-    };
-
     /// <summary>
     /// In-process GIF/WebM export: trims the kept runs to a temp mp4 (when a cut was made), then runs the
     /// existing GIF/WebM transcoders on it (WebM re-muxes Opus audio when present). Returns a temp output
@@ -492,7 +485,7 @@ public partial class FloatingVideoViewModel
 
             if (isGif)
             {
-                (int gifFps, int maxWidth) = GifSettingsForQuality(quality);
+                (int gifFps, int maxWidth) = LibavGifTranscoder.QualityLadder(quality);
                 await Task.Run(() => LibavGifTranscoder.TranscodeToGif(source, outputPath, gifFps, maxWidth));
                 return File.Exists(outputPath) && new FileInfo(outputPath).Length > 0 ? outputPath : null;
             }

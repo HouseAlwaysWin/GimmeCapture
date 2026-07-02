@@ -1,10 +1,23 @@
 using System;
 using FFmpeg.AutoGen;
 
+using GimmeCapture.Models;
+
 namespace GimmeCapture.Services.Core.Media.NativeFFmpeg;
 
 internal static class LibavGifTranscoder
 {
+    /// <summary>
+    /// Quality → (fps, max output width; 0 = source width) ladder, the single home for the numbers that
+    /// were previously duplicated by the recording finalize and the pinned-video GIF export.
+    /// </summary>
+    public static (int Fps, int MaxWidth) QualityLadder(VideoQuality quality) => quality switch
+    {
+        VideoQuality.High => (24, 0),
+        VideoQuality.Low => (10, 480),
+        _ => (15, 720),
+    };
+
     /// <summary>
     /// Transcodes to GIF. Tries a two-pass optimal-palette filtergraph (palettegen → paletteuse) for
     /// much better color, and falls back to the single-pass RGB8 path if the filtergraph is unavailable
