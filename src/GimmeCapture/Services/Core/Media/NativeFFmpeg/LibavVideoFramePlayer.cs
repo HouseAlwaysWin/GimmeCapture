@@ -10,6 +10,8 @@ namespace GimmeCapture.Services.Core.Media.NativeFFmpeg;
 
 internal sealed class LibavVideoFramePlayer : IDisposable
 {
+    internal readonly record struct MediaInfo(double Duration, int Width, int Height, int Fps, bool HasAudio, int AudioChannels);
+
     public async Task<double?> ProbeDurationSecondsAsync(string videoPath, CancellationToken ct = default)
     {
         return await Task.Run(() =>
@@ -135,6 +137,72 @@ internal sealed class LibavVideoFramePlayer : IDisposable
                 }
             }
         }, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Single-pass probe: one <c>avformat_open_input</c> + <c>find_stream_info</c> returning duration/size/fps
+    /// /audio, instead of the separate <c>Probe*</c> methods each re-opening and re-scanning the file (costly
+    /// on large files). fps logic mirrors <c>LibavClipExporter.ResolveFps</c>.
+    /// </summary>
+    public async Task<MediaInfo> ProbeAsync(string videoPath, CancellationToken ct = default)
+    {
+        return await Task.Run(() =>
+        {
+            FFmpegRuntime.EnsureInitialized();
+            unsafe
+            {
+                AVFormatContext* fmt = null;
+                try
+                {
+                    ThrowIfErr(ffmpeg.avformat_open_input(&fmt, videoPath, null, null), "open_input");
+                    ThrowIfErr(ffmpeg.avformat_find_stream_info(fmt, null), "find_stream_info");
+
+                    double duration = fmt->duration > 0 ? fmt->duration / (double)ffmpeg.AV_TIME_BASE : 0;
+
+                    int width = 0, height = 0, fps = 30;
+                    int v = ffmpeg.av_find_best_stream(fmt, AVMediaType.AVMEDIA_TYPE_VIDEO, -1, -1, null, 0);
+                    if (v >= 0)
+                    {
+                        AVStream* vst = fmt->streams[v];
+                        width = vst->codecpar->width;
+                        height = vst->codecpar->height;
+                        fps = ResolveFps(vst);
+                        if (duration <= 0 && vst->duration > 0)
+                        {
+                            duration = vst->duration * ffmpeg.av_q2d(vst->time_base);
+                        }
+                    }
+
+                    int a = ffmpeg.av_find_best_stream(fmt, AVMediaType.AVMEDIA_TYPE_AUDIO, -1, -1, null, 0);
+                    bool hasAudio = a >= 0;
+                    int channels = hasAudio ? fmt->streams[a]->codecpar->ch_layout.nb_channels : 0;
+
+                    return new MediaInfo(duration, width, height, fps, hasAudio, channels);
+                }
+                finally
+                {
+                    if (fmt != null)
+                    {
+                        ffmpeg.avformat_close_input(&fmt);
+                    }
+                }
+            }
+        }, ct).ConfigureAwait(false);
+    }
+
+    // Rounded, clamped frame rate — mirrors LibavClipExporter.ResolveFps so ProbedFps matches encode-time fps.
+    private static unsafe int ResolveFps(AVStream* stream)
+    {
+        double fps = ffmpeg.av_q2d(stream->avg_frame_rate);
+        if (fps <= 0 || double.IsNaN(fps))
+        {
+            fps = ffmpeg.av_q2d(stream->r_frame_rate);
+        }
+        if (fps <= 0 || double.IsNaN(fps))
+        {
+            fps = 30;
+        }
+        return Math.Clamp((int)Math.Round(fps), 1, 120);
     }
 
     // Decodes a single frame at (or just before) the given timestamp as BGRA bytes scaled to width×height.

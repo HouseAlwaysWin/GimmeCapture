@@ -775,12 +775,11 @@ public partial class MainWindowViewModel
             try
             {
                 using var sizeProbe = new LibavVideoFramePlayer();
-                var size = await sizeProbe.ProbeVideoSizeAsync(item.Path, cts.Token);
-                if (size is { } s)
-                {
-                    item.ProbedWidth = s.Width;
-                    item.ProbedHeight = s.Height;
-                }
+                var info = await sizeProbe.ProbeAsync(item.Path, cts.Token); // single open fills dims (+ duration/fps)
+                item.ProbedWidth = info.Width;
+                item.ProbedHeight = info.Height;
+                if (item.ProbedDuration <= 0) item.ProbedDuration = info.Duration;
+                if (item.ProbedFps <= 0) item.ProbedFps = info.Fps;
             }
             catch (Exception ex)
             {
@@ -930,14 +929,11 @@ public partial class MainWindowViewModel
         try
         {
             using var probe = new LibavVideoFramePlayer();
-            item.ProbedDuration = await probe.ProbeDurationSecondsAsync(item.Path) ?? 0;
-            var size = await probe.ProbeVideoSizeAsync(item.Path);
-            if (size is { } s)
-            {
-                item.ProbedWidth = s.Width;
-                item.ProbedHeight = s.Height;
-            }
-            item.ProbedFps = await Task.Run(() => LibavClipExporter.ProbeFps(item.Path));
+            var info = await probe.ProbeAsync(item.Path); // one open+scan for duration/size/fps (was 3)
+            item.ProbedDuration = info.Duration;
+            item.ProbedWidth = info.Width;
+            item.ProbedHeight = info.Height;
+            item.ProbedFps = info.Fps;
         }
         catch (Exception ex)
         {
