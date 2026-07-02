@@ -387,7 +387,6 @@ public partial class SnipWindow : Window
             {
                 var vm = new FloatingVideoViewModel(
                     recordingPath,
-                    string.Empty,
                     pixelWidth,
                     pixelHeight,
                     originalWidth,

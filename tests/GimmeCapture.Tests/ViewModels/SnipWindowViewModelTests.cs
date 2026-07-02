@@ -101,9 +101,11 @@ public class SnipWindowViewModelTests
     }
 
     [Fact]
-    public void EnteringSelectedState_AppliesDefaultHideSnipToolbarSetting()
+    public async Task EnteringSelectedState_AppliesDefaultHideSnipToolbarSetting()
     {
-        var mainVm = new MainWindowViewModel { DefaultHideSnipToolbar = true };
+        var mainVm = new MainWindowViewModel();
+        await mainVm.InitialSettingsLoadTask; // let the async settings load settle before setting the flag
+        mainVm.DefaultHideSnipToolbar = true;
         using var vm = new SnipWindowViewModel(Colors.Red, 2.0, recService: null, mainVm);
 
         Assert.True(vm.ShowToolbar);
@@ -118,9 +120,11 @@ public class SnipWindowViewModelTests
     }
 
     [Fact]
-    public void EnteringSelectedRecordingState_AppliesDefaultHideRecordToolbarSetting()
+    public async Task EnteringSelectedRecordingState_AppliesDefaultHideRecordToolbarSetting()
     {
-        var mainVm = new MainWindowViewModel { DefaultHideRecordToolbar = true };
+        var mainVm = new MainWindowViewModel();
+        await mainVm.InitialSettingsLoadTask; // let the async settings load settle before setting the flag
+        mainVm.DefaultHideRecordToolbar = true;
         using var vm = new SnipWindowViewModel(Colors.Red, 2.0, recService: null, mainVm);
 
         vm.CurrentMode = SnipMode.Recording;
@@ -134,9 +138,11 @@ public class SnipWindowViewModelTests
     }
 
     [Fact]
-    public void ShowingDefaultHiddenToolbar_RestoresOnScreenInteraction()
+    public async Task ShowingDefaultHiddenToolbar_RestoresOnScreenInteraction()
     {
-        var mainVm = new MainWindowViewModel { DefaultHideSnipToolbar = true };
+        var mainVm = new MainWindowViewModel();
+        await mainVm.InitialSettingsLoadTask; // let the async settings load settle before setting the flag
+        mainVm.DefaultHideSnipToolbar = true;
         using var vm = new SnipWindowViewModel(Colors.Red, 2.0, recService: null, mainVm);
         vm.SelectionRect = new Rect(10, 10, 120, 80);
         vm.ToolbarWidth = 300;

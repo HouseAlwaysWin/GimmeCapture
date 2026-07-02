@@ -47,9 +47,6 @@ public partial class FloatingVideoViewModel
     // leaves one continuous run → the fast single-trim export path; a real gap stays as 2+ runs → concat.
     private VideoEditSegment[] KeptRuns() => VideoSegmentEditor.CoalesceContiguous(KeptSegments()).ToArray();
 
-    /// <summary>True once the kept pieces form more than one run (route export through the concat compiler).</summary>
-    private bool UseMultiSegment => KeptRuns().Length > 1;
-
     /// <summary>True when ≥1 piece is dropped — the only thing that makes the output differ from the source.</summary>
     private bool AnyPieceDropped => EditSegments.Any(s => !s.Kept);
 
@@ -148,6 +145,18 @@ public partial class FloatingVideoViewModel
             EditSegments[index] = seg with { Speed = next };
             RebuildSegmentBlocks();
         });
+
+        // Closing the Edit category (collapsing it or switching to another category) must exit timeline
+        // mode too, otherwise the strip — and its reserved bottom padding (WindowPadding keys off
+        // IsTimelineMode) — linger after the trim editor is closed. Mirrors the tool/annotation/Esc resets.
+        this.WhenAnyValue(x => x.IsEditCategory)
+            .Subscribe(isEditCategory =>
+            {
+                if (!isEditCategory && IsTimelineMode)
+                {
+                    IsTimelineMode = false;
+                }
+            });
     }
 
     /// <summary>
@@ -184,34 +193,6 @@ public partial class FloatingVideoViewModel
 
         double total = _totalDuration.TotalSeconds;
         ReplaceSegments(VideoSegmentEditor.FromTrim(0, total, total));
-    }
-
-    // The single kept run's source range (used by the fast single-piece export path); (0,total) otherwise.
-    private (double Start, double End) SingleSegmentSourceRange()
-    {
-        VideoEditSegment[] runs = KeptRuns();
-        if (runs.Length == 1)
-        {
-            return (runs[0].SourceStart, runs[0].SourceEnd);
-        }
-
-        return (0, _totalDuration.TotalSeconds);
-    }
-
-    // True when the kept set is a single run that is a sub-range of the clip (a plain trim → fast -ss/-to copy).
-    private bool SingleSegmentIsTrimmed
-    {
-        get
-        {
-            VideoEditSegment[] runs = KeptRuns();
-            if (runs.Length != 1)
-            {
-                return false;
-            }
-
-            double total = _totalDuration.TotalSeconds;
-            return runs[0].SourceStart > 0.001 || (total > 0 && runs[0].SourceEnd < total - 0.001);
-        }
     }
 
     // True when the list holds exactly one block whose end is at/under its start, or runs past the
@@ -294,22 +275,6 @@ public partial class FloatingVideoViewModel
     {
         var t = TimeSpan.FromSeconds(Math.Max(0, seconds));
         return $"{(int)t.TotalMinutes}:{t.Seconds:00}";
-    }
-
-    /// <summary>Builds the declarative edit from the KEPT pieces (Phase 1: cuts + optional crop).</summary>
-    private VideoEditProject BuildEditProject(VideoEditCrop? crop)
-    {
-        VideoEditSegment[] runs = KeptRuns();
-        IReadOnlyList<VideoEditSegment> segments = runs.Length > 0
-            ? runs
-            : VideoSegmentEditor.FromTrim(0, _totalDuration.TotalSeconds, _totalDuration.TotalSeconds);
-
-        return new VideoEditProject
-        {
-            Segments = segments,
-            Crop = crop,
-            TotalSourceDuration = _totalDuration.TotalSeconds,
-        };
     }
 
     private async Task<bool> EnsureSourceHasAudioAsync()

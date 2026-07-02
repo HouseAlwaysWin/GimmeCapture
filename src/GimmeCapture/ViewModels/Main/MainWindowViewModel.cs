@@ -77,6 +77,14 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private bool _isDataLoading = true;
     private Task? _loadTask;
+
+    /// <summary>
+    /// The initial asynchronous settings load started in the constructor. Exposed for tests so they can
+    /// await it before setting settings-backed properties — otherwise the async ApplySettingsSnapshot can
+    /// clobber a value the test just set (a timing race that only surfaces under parallel test runs).
+    /// </summary>
+    internal Task InitialSettingsLoadTask => _loadTask ?? Task.CompletedTask;
+
     private string _currentStatusKey = "StatusReady";
 
     // Transient UI-state properties that are NOT persisted; changes to these never trigger a save.

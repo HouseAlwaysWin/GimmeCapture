@@ -528,12 +528,10 @@ public partial class RecordingService
 
         if (!string.IsNullOrWhiteSpace(mergedAudio) && File.Exists(mergedAudio))
         {
-            string opusPath = Path.Combine(_tempDir, "audio_opus.ogg");
             try
             {
-                await Task.Run(() => LibavOpusTranscoder.EncodeWavToOpusOgg(mergedAudio, opusPath, quality));
                 var muxStats = await Task.Run(() =>
-                    LibavMuxer.MuxVideoAndAudio(videoOnlyPath, opusPath, _outputFile, "webm"));
+                    LibavWebmTranscoder.MuxWebmWithOpus(videoOnlyPath, mergedAudio!, _outputFile, quality));
                 LogToFile($"[Finalize] WebM native mux: {_outputFile}, videoPkts={muxStats.VideoPackets}, audioPkts={muxStats.AudioPackets}");
             }
             catch (Exception muxEx)
@@ -544,7 +542,6 @@ public partial class RecordingService
             finally
             {
                 TryDeleteQuiet(videoOnlyPath);
-                TryDeleteQuiet(opusPath);
             }
         }
         else

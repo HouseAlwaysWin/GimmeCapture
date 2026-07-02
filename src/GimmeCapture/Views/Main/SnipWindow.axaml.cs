@@ -134,10 +134,13 @@ public partial class SnipWindow : Window
 
         // Position logic ...
         
-        // Defer Z-Order logic to ensure window is fully initialized
+        // Defer Z-Order logic to ensure window is fully initialized. This is a fire-and-forget
+        // async lambda (Post takes an Action), so guard the whole body: an unobserved throw here
+        // would otherwise be swallowed silently. Log it via AppLog instead.
         Avalonia.Threading.Dispatcher.UIThread.Post(async () =>
         {
-            
+          try
+          {
             if (_viewModel != null)
             {
                 _viewModel.VisualScaling = this.RenderScaling;
@@ -278,6 +281,11 @@ public partial class SnipWindow : Window
             this.AddHandler(InputElement.GotFocusEvent, OnTreeKeyboardFocusChanged, RoutingStrategies.Bubble);
             this.AddHandler(InputElement.LostFocusEvent, OnTreeKeyboardFocusChanged, RoutingStrategies.Bubble);
             RefreshKeyboardInteractionFocusFlag();
+          }
+          catch (Exception ex)
+          {
+              AppLog.Error("SnipWindow.OnOpenedInit", ex);
+          }
         }, Avalonia.Threading.DispatcherPriority.Input);
     }
 

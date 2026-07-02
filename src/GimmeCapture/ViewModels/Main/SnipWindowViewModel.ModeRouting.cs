@@ -316,11 +316,11 @@ public partial class SnipWindowViewModel
     {
         if (AutoActionMode == SnipAutoAction.Copy)
         {
-            Avalonia.Threading.Dispatcher.UIThread.Post(async () => await Copy());
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => Copy().Forget("SnipAutoAction.Copy"));
         }
         else if (AutoActionMode == SnipAutoAction.Pin)
         {
-            Avalonia.Threading.Dispatcher.UIThread.Post(async () => await Pin());
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => Pin().Forget("SnipAutoAction.Pin"));
         }
         else if (AutoActionMode == SnipAutoAction.EnterRecordMode)
         {
@@ -334,7 +334,7 @@ public partial class SnipWindowViewModel
         }
         else if (AutoActionMode == SnipAutoAction.ScrollingCapture)
         {
-            Avalonia.Threading.Dispatcher.UIThread.Post(async () => await ExecuteScrollingCapture());
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => ExecuteScrollingCapture().Forget("SnipAutoAction.ScrollingCapture"));
         }
     }
 

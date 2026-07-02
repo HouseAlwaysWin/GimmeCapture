@@ -201,7 +201,7 @@ public partial class SnipWindowViewModel
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Capture failed: {ex}");
+                AppLog.Error("SnipWindow.DrawingSnapshot", ex);
                 if (lockSnapshot)
                 {
                     IsSelectionSnapshotLocked = false;

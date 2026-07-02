@@ -110,10 +110,8 @@ public partial class MainWindow : Window
         if (DataContext is MainWindowViewModel vm && vm.IsModified)
         {
             // Use Post to ensure we don't block the visual tree teardown (prevents PopupRoot/PlatformImpl null errors)
-            Avalonia.Threading.Dispatcher.UIThread.Post(async () =>
-            {
-                await vm.SaveSettingsAsync();
-            });
+            Avalonia.Threading.Dispatcher.UIThread.Post(
+                () => vm.SaveSettingsAsync().Forget("Settings.SaveOnClosing"));
         }
     }
 
