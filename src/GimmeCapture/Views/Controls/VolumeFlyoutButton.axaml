@@ -23,19 +23,24 @@
                 <StackPanel Orientation="Vertical" Spacing="6" HorizontalAlignment="Center">
                     <TextBlock Text="{Binding Volume, ElementName=Root, StringFormat='{}{0:0%}'}"
                                Foreground="#E0E0E0" FontSize="10" HorizontalAlignment="Center"/>
-                    <!-- A horizontal Slider rotated -90° gives a reliably CENTRED vertical bar: the horizontal
-                         template's track spans the full width (centred), unlike the native vertical template
-                         whose track sits in a fixed left-of-centre column. Rotating up = towards Maximum. -->
-                    <LayoutTransformControl HorizontalAlignment="Center">
-                        <LayoutTransformControl.LayoutTransform>
-                            <RotateTransform Angle="-90"/>
-                        </LayoutTransformControl.LayoutTransform>
-                        <!-- OneWay for display; the drag is pushed back to Volume in code-behind. A chained
-                             TwoWay-through-a-StyledProperty binding does not reliably propagate to the VM
-                             (mirrors the CompactNumericStep pattern). -->
-                        <Slider x:Name="VolumeSlider" Width="120" Minimum="0" Maximum="1"
-                                Value="{Binding Volume, ElementName=Root, Mode=OneWay}"/>
-                    </LayoutTransformControl>
+                    <!-- Native vertical slider (up = louder). OneWay for display; the drag is pushed back to
+                         Volume in code-behind (a chained TwoWay-through-StyledProperty binding doesn't reliably
+                         reach the VM). The track-fix style MUST be inline on the Slider: this Popup is a
+                         separate visual tree that UserControl/App-level styles don't reach, and the app's
+                         global Slider style assumes a HORIZONTAL 2px track — so re-orient it to a centred
+                         vertical bar here. -->
+                    <Slider x:Name="VolumeSlider" Orientation="Vertical" Height="120" Width="30"
+                            Minimum="0" Maximum="1" HorizontalAlignment="Center"
+                            Value="{Binding Volume, ElementName=Root, Mode=OneWay}">
+                        <Slider.Styles>
+                            <Style Selector="Slider /template/ Border#TrackBackground">
+                                <Setter Property="Width" Value="3"/>
+                                <Setter Property="Height" Value="NaN"/>
+                                <Setter Property="HorizontalAlignment" Value="Center"/>
+                                <Setter Property="VerticalAlignment" Value="Stretch"/>
+                            </Style>
+                        </Slider.Styles>
+                    </Slider>
                 </StackPanel>
             </Border>
         </Popup>

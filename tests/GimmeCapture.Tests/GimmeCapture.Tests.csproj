@@ -11,6 +11,8 @@
     <Compile Remove="bin\**\*.cs;obj\**\*.cs;.tmp-build-verify\**\*.cs" />
     <EmbeddedResource Remove="bin\**;obj\**;.tmp-build-verify\**" />
     <None Remove="bin\**;obj\**;.tmp-build-verify\**" />
+    <PackageReference Include="Avalonia.Headless" Version="12.0.4" />
+    <PackageReference Include="Avalonia.Skia" Version="12.0.4" />
     <PackageReference Include="coverlet.collector" Version="6.0.4" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="Moq" Version="4.20.72" />
