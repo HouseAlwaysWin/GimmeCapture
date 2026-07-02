@@ -432,6 +432,17 @@ public partial class MainWindowViewModel : ViewModelBase
             }
         };
 
+        Snip.PropertyChanged += (s, e) =>
+        {
+            // Forwarded Snip properties share MainWindowViewModel's names — re-raise so this VM's own
+            // bindings refresh, and the global PropertyChanged handler above queues the save (which it
+            // skips while _isDataLoading). Preserves the pre-split save-on-change / load-refresh behaviour.
+            if (e.PropertyName != null)
+            {
+                this.RaisePropertyChanged(e.PropertyName);
+            }
+        };
+
         _loadTask = LoadSettingsAsync();
     }
 

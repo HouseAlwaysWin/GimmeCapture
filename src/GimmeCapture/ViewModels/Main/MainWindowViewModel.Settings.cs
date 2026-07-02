@@ -255,32 +255,28 @@ public partial class MainWindowViewModel
     public Color ThemeDeepColor => ThemeColorPalette.GetDeepColor(ThemeColor);
 
     // Output Settings
-    private bool _autoSave;
     public bool AutoSave
     {
-        get => _autoSave;
-        set => this.RaiseAndSetIfChanged(ref _autoSave, value);
+        get => Snip.AutoSave;
+        set => Snip.AutoSave = value;
     }
 
-    private bool _enableHistory = true;
     public bool EnableHistory
     {
-        get => _enableHistory;
-        set => this.RaiseAndSetIfChanged(ref _enableHistory, value);
+        get => Snip.EnableHistory;
+        set => Snip.EnableHistory = value;
     }
 
-    private bool _revealAfterSave = true;
     public bool RevealAfterSave
     {
-        get => _revealAfterSave;
-        set => this.RaiseAndSetIfChanged(ref _revealAfterSave, value);
+        get => Snip.RevealAfterSave;
+        set => Snip.RevealAfterSave = value;
     }
 
-    private string _saveDirectory = string.Empty;
     public string SaveDirectory
     {
-        get => _saveDirectory;
-        set => this.RaiseAndSetIfChanged(ref _saveDirectory, value);
+        get => Snip.SaveDirectory;
+        set => Snip.SaveDirectory = value;
     }
     
     // Control Settings
@@ -365,25 +361,25 @@ public partial class MainWindowViewModel
 
     public RecordingSettingsViewModel RecordingSettings { get; } = new();
 
-    private bool _hideSnipPinDecoration = false;
+    /// <summary>Snip-mode settings (Tier-4 split); MainWindowViewModel exposes same-named forwarders.</summary>
+    public SnipSettingsViewModel Snip { get; } = new();
+
     public bool HideSnipPinDecoration
     {
-        get => _hideSnipPinDecoration;
-        set => this.RaiseAndSetIfChanged(ref _hideSnipPinDecoration, value);
+        get => Snip.HideSnipPinDecoration;
+        set => Snip.HideSnipPinDecoration = value;
     }
 
-    private bool _hideSnipPinBorder = false;
     public bool HideSnipPinBorder
     {
-        get => _hideSnipPinBorder;
-        set => this.RaiseAndSetIfChanged(ref _hideSnipPinBorder, value);
+        get => Snip.HideSnipPinBorder;
+        set => Snip.HideSnipPinBorder = value;
     }
     
-    private bool _defaultHideSnipToolbar = false;
     public bool DefaultHideSnipToolbar
     {
-        get => _defaultHideSnipToolbar;
-        set => this.RaiseAndSetIfChanged(ref _defaultHideSnipToolbar, value);
+        get => Snip.DefaultHideSnipToolbar;
+        set => Snip.DefaultHideSnipToolbar = value;
     }
 
     private bool _defaultHideRecordToolbar = false;
@@ -407,39 +403,34 @@ public partial class MainWindowViewModel
         set => this.RaiseAndSetIfChanged(ref _hideRecordPinBorder, value);
     }
 
-    private bool _hideSnipSelectionDecoration = false;
     public bool HideSnipSelectionDecoration
     {
-        get => _hideSnipSelectionDecoration;
-        set => this.RaiseAndSetIfChanged(ref _hideSnipSelectionDecoration, value);
+        get => Snip.HideSnipSelectionDecoration;
+        set => Snip.HideSnipSelectionDecoration = value;
     }
 
-    private bool _hideSnipSelectionBorder = false;
     public bool HideSnipSelectionBorder
     {
-        get => _hideSnipSelectionBorder;
-        set => this.RaiseAndSetIfChanged(ref _hideSnipSelectionBorder, value);
+        get => Snip.HideSnipSelectionBorder;
+        set => Snip.HideSnipSelectionBorder = value;
     }
 
-    private bool _autoPinScreenshotSelection = false;
     public bool AutoPinScreenshotSelection
     {
-        get => _autoPinScreenshotSelection;
-        set => this.RaiseAndSetIfChanged(ref _autoPinScreenshotSelection, value);
+        get => Snip.AutoPinScreenshotSelection;
+        set => Snip.AutoPinScreenshotSelection = value;
     }
 
-    private CaptureDelay _captureDelay;
     public CaptureDelay CaptureDelay
     {
-        get => _captureDelay;
-        set => this.RaiseAndSetIfChanged(ref _captureDelay, value);
+        get => Snip.CaptureDelay;
+        set => Snip.CaptureDelay = value;
     }
 
-    private OcrTextLayout _ocrTextLayout;
     public OcrTextLayout OcrTextLayout
     {
-        get => _ocrTextLayout;
-        set => this.RaiseAndSetIfChanged(ref _ocrTextLayout, value);
+        get => Snip.OcrTextLayout;
+        set => Snip.OcrTextLayout = value;
     }
 
     private ScrollingCaptureDirection _scrollingCaptureDirection;
@@ -479,11 +470,10 @@ public partial class MainWindowViewModel
         set => this.RaiseAndSetIfChanged(ref _tempDirectory, value);
     }
 
-    private bool _showSnipCursor = false;
     public bool ShowSnipCursor
     {
-        get => _showSnipCursor;
-        set => this.RaiseAndSetIfChanged(ref _showSnipCursor, value);
+        get => Snip.ShowSnipCursor;
+        set => Snip.ShowSnipCursor = value;
     }
 
     public bool ShowAIScanBox
