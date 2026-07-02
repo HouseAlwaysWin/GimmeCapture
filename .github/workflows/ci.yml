@@ -19,17 +19,37 @@ jobs:
       with:
         dotnet-version: '10.0.x'
 
+    # The bundled FFmpeg build is pinned (URL + SHA-256 inside the script), so the
+    # extracted DLLs are cacheable; keying on the script hash invalidates the cache
+    # exactly when the pinned build changes. Saves a ~93 MB download per run.
+    - name: Cache FFmpeg DLLs
+      id: cache-ffmpeg
+      uses: actions/cache@v4
+      with:
+        path: src/GimmeCapture/ffmpeg-lib
+        key: ffmpeg-${{ hashFiles('scripts/ensure-ffmpeg-libs.ps1') }}
+
     - name: Ensure bundled FFmpeg DLLs
+      if: steps.cache-ffmpeg.outputs.cache-hit != 'true'
       shell: powershell
       run: powershell -ExecutionPolicy Bypass -File scripts/ensure-ffmpeg-libs.ps1
 
-    - name: Check localization parity
-      shell: powershell
-      run: powershell -ExecutionPolicy Bypass -File scripts/check-localization.ps1
+    - name: Cache NuGet packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.nuget/packages
+        key: nuget-${{ runner.os }}-${{ hashFiles('**/packages.lock.json') }}
+        restore-keys: |
+          nuget-${{ runner.os }}-
 
+    # Localization parity is already enforced inside verify.ps1 and again by the
+    # LocalizationParityTests xUnit test, so no standalone step here.
+
+    # PRs skip the self-contained single-file publish smoke (the slowest verify
+    # step); pushes to main still run it so the shipping shape stays covered.
     - name: Verify
       shell: powershell
-      run: powershell -ExecutionPolicy Bypass -File scripts/verify.ps1
+      run: powershell -ExecutionPolicy Bypass -File scripts/verify.ps1 ${{ github.event_name == 'pull_request' && '-SkipPublish' || '' }}
 
     - name: Upload coverage
       if: always()
