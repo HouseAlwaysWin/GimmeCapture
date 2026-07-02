@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using FFmpeg.AutoGen;
 using GimmeCapture.Models;
 
@@ -6,6 +7,40 @@ namespace GimmeCapture.Services.Core.Media.NativeFFmpeg;
 
 internal static class LibavWebmTranscoder
 {
+    /// <summary>
+    /// Encodes <paramref name="wavPath"/> to Opus-in-OGG and muxes it with an already-produced
+    /// video-only WebM into <paramref name="outputPath"/> (WebM container). The temp .ogg is written
+    /// next to the output and deleted before returning. Throws on encode/mux failure so the caller
+    /// can fall back to the video-only file. Shared by the recording-finalize and pinned-video WebM
+    /// export routes (their audio *acquisition* differs; only this WAV->Opus->mux tail is common).
+    /// </summary>
+    public static LibavMuxer.MuxStats MuxWebmWithOpus(
+        string videoOnlyWebmPath,
+        string wavPath,
+        string outputPath,
+        VideoQuality quality)
+    {
+        string opusPath = Path.Combine(
+            Path.GetDirectoryName(outputPath) ?? Path.GetTempPath(),
+            "audio_" + Guid.NewGuid().ToString("N") + ".ogg");
+        try
+        {
+            LibavOpusTranscoder.EncodeWavToOpusOgg(wavPath, opusPath, quality);
+            return LibavMuxer.MuxVideoAndAudio(videoOnlyWebmPath, opusPath, outputPath, "webm");
+        }
+        finally
+        {
+            try
+            {
+                if (File.Exists(opusPath)) File.Delete(opusPath);
+            }
+            catch
+            {
+                // Best-effort temp cleanup; a stray .ogg is harmless.
+            }
+        }
+    }
+
     public static unsafe void TranscodeToWebm(
         string inputPath,
         string outputPath,

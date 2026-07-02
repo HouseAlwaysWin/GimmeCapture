@@ -509,9 +509,7 @@ public partial class FloatingVideoViewModel
                             writer.Write(pcm.PcmBytes, 0, pcm.PcmBytes.Length);
                         }
 
-                        string opus = Path.Combine(tempDir, "audio.ogg");
-                        await Task.Run(() => LibavOpusTranscoder.EncodeWavToOpusOgg(wav, opus, quality));
-                        await Task.Run(() => LibavMuxer.MuxVideoAndAudio(videoOnly, opus, outputPath, "webm"));
+                        await Task.Run(() => LibavWebmTranscoder.MuxWebmWithOpus(videoOnly, wav, outputPath, quality));
                         if (File.Exists(outputPath) && new FileInfo(outputPath).Length > 0) return outputPath;
                     }
                 }
