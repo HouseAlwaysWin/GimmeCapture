@@ -31,8 +31,6 @@ public class FFmpegDownloaderService : ReactiveObject
         set => this.RaiseAndSetIfChanged(ref _isDownloading, value);
     }
 
-    public string FfmpegExecutablePath => string.Empty;
-
     public FFmpegDownloaderService(AppSettingsService? settingsService = null) { }
 
     /// <summary>FFmpeg DLL runtime available (pure DLL mode).</summary>

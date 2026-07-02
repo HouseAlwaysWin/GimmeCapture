@@ -95,7 +95,6 @@ public partial class FloatingVideoWindow : FloatingWindowBase
             {
                 var newVm = new FloatingVideoViewModel(
                     recordingPath,
-                    string.Empty,
                     pixelWidth,
                     pixelHeight,
                     originalWidth,

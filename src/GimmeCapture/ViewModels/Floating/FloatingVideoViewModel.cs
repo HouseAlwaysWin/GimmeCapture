@@ -45,10 +45,6 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
     }
 
     public string VideoPath { get; }
-    private readonly string _ffmpegPath;
-    // Legacy CLI export path (annotations/crop). Empty when no external ffmpeg.exe is supplied, in which
-    // case those legacy paths report a clear failure; trim/cut export runs fully in-process (LibavClipExporter).
-    public string FFmpegPath => _ffmpegPath;
     public VideoCodec VideoCodec => _appSettingsService?.Settings.VideoCodec ?? VideoCodec.H264;
     private CancellationTokenSource? _playCts;
     private Task? _playbackTask;
@@ -396,10 +392,9 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
         return Math.Max(1, 1000 / safeFps);
     }
 
-    public FloatingVideoViewModel(string videoPath, string ffmpegPath, int width, int height, double originalWidth, double originalHeight, Avalonia.Media.Color borderColor, double borderThickness, bool hideDecoration, bool hideBorder, GimmeCapture.Services.Abstractions.IClipboardService clipboardService, AppSettingsService? appSettingsService)
+    public FloatingVideoViewModel(string videoPath, int width, int height, double originalWidth, double originalHeight, Avalonia.Media.Color borderColor, double borderThickness, bool hideDecoration, bool hideBorder, GimmeCapture.Services.Abstractions.IClipboardService clipboardService, AppSettingsService? appSettingsService)
     {
         VideoPath = videoPath;
-        _ffmpegPath = ffmpegPath;
         _width = NormalizeVideoDimension(width); // Ensure even and valid for bitmap/FFmpeg
         _height = NormalizeVideoDimension(height);
         OriginalWidth = originalWidth;
