@@ -29,7 +29,9 @@
                          separate visual tree that UserControl/App-level styles don't reach, and the app's
                          global Slider style assumes a HORIZONTAL 2px track — so re-orient it to a centred
                          vertical bar here. -->
-                    <Slider x:Name="VolumeSlider" Orientation="Vertical" Height="120" Width="30"
+                    <!-- No fixed Width: a fixed width leaves slack that the vertical template distributes
+                         asymmetrically (thumb drifts off-centre). Auto-width sizes tight to the thumb → centred. -->
+                    <Slider x:Name="VolumeSlider" Orientation="Vertical" Height="120"
                             Minimum="0" Maximum="1" HorizontalAlignment="Center"
                             Value="{Binding Volume, ElementName=Root, Mode=OneWay}">
                         <Slider.Styles>
