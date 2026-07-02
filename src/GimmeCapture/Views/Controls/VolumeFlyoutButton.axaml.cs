@@ -4,16 +4,14 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Data;
-using Avalonia.Input;
-using Avalonia.Threading;
+using Avalonia.Interactivity;
 
 namespace GimmeCapture.Views.Controls;
 
 /// <summary>
 /// A compact volume control shared by the video editors (the Pin floating video window and the compress
-/// 進階影片編輯 editor): a speaker button whose click toggles mute, and hovering it reveals a floating
-/// <em>vertical</em> volume slider (media-player style). Replaces the older inline horizontal slider so the
-/// transport bar stays compact. Bindable: <see cref="Volume"/> (0–1, two-way), <see cref="IsMuted"/>,
+/// 進階影片編輯 editor): a speaker button that opens a floating <em>vertical</em> volume slider popup on
+/// click (with a mute toggle inside). Bindable: <see cref="Volume"/> (0–1, two-way), <see cref="IsMuted"/>,
 /// <see cref="ToggleMuteCommand"/>, <see cref="MuteTooltip"/>.
 /// </summary>
 public partial class VolumeFlyoutButton : UserControl
@@ -56,50 +54,29 @@ public partial class VolumeFlyoutButton : UserControl
         set => SetValue(MuteTooltipProperty, value);
     }
 
-    private readonly DispatcherTimer _closeTimer;
     private readonly Popup? _popup;
     private readonly Button? _speaker;
-    private readonly Border? _popupBorder;
     private readonly Slider? _slider;
-    private readonly EventHandler<PointerEventArgs> _onSpeakerEntered;
-    private readonly EventHandler<PointerEventArgs> _onSpeakerExited;
-    private readonly EventHandler<PointerEventArgs> _onPopupEntered;
-    private readonly EventHandler<PointerEventArgs> _onPopupExited;
-    private bool _overButton;
-    private bool _overPopup;
+    private long _lastClosedTick;
 
     public VolumeFlyoutButton()
     {
         InitializeComponent();
-
         _popup = this.FindControl<Popup>("VolumePopup");
         _slider = this.FindControl<Slider>("VolumeSlider");
         _speaker = this.FindControl<Button>("SpeakerButton");
-        _popupBorder = this.FindControl<Border>("PopupBorder");
-
-        _closeTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(220) };
-        _closeTimer.Tick += OnCloseTick;
-
-        _onSpeakerEntered = (_, _) => { _overButton = true; OpenPopup(); };
-        _onSpeakerExited = (_, _) => { _overButton = false; ScheduleClose(); };
-        _onPopupEntered = (_, _) => { _overPopup = true; _closeTimer.Stop(); };
-        _onPopupExited = (_, _) => { _overPopup = false; ScheduleClose(); };
     }
 
-    // Subscribe on attach / unsubscribe on detach (symmetric, so it survives a detach+reattach and, more
-    // importantly, does NOT keep the control alive via the running DispatcherTimer once its window closes).
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnAttachedToVisualTree(e);
         if (_speaker != null)
         {
-            _speaker.PointerEntered += _onSpeakerEntered;
-            _speaker.PointerExited += _onSpeakerExited;
+            _speaker.Click += OnSpeakerClick;
         }
-        if (_popupBorder != null)
+        if (_popup != null)
         {
-            _popupBorder.PointerEntered += _onPopupEntered;
-            _popupBorder.PointerExited += _onPopupExited;
+            _popup.Closed += OnPopupClosed;
         }
         if (_slider != null)
         {
@@ -110,47 +87,38 @@ public partial class VolumeFlyoutButton : UserControl
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnDetachedFromVisualTree(e);
-        _closeTimer.Stop();
         if (_speaker != null)
         {
-            _speaker.PointerEntered -= _onSpeakerEntered;
-            _speaker.PointerExited -= _onSpeakerExited;
+            _speaker.Click -= OnSpeakerClick;
         }
-        if (_popupBorder != null)
+        if (_popup != null)
         {
-            _popupBorder.PointerEntered -= _onPopupEntered;
-            _popupBorder.PointerExited -= _onPopupExited;
+            _popup.Closed -= OnPopupClosed;
+            _popup.IsOpen = false;
         }
         if (_slider != null)
         {
             _slider.PropertyChanged -= OnSliderPropertyChanged;
         }
-        _overButton = false;
-        _overPopup = false;
-        if (_popup != null)
-        {
-            _popup.IsOpen = false;
-        }
     }
 
-    private void OnCloseTick(object? sender, EventArgs e)
+    // Click toggles the popup. When it's open, clicking the speaker light-dismisses it first (Closed fires
+    // on the pointer-press); the tick guard then suppresses the immediate reopen so the click reads as a
+    // clean toggle. Dragging the slider inside the popup never dismisses it (the press is inside).
+    private void OnSpeakerClick(object? sender, RoutedEventArgs e)
     {
-        _closeTimer.Stop();
-        if (_popup == null || !_popup.IsOpen)
+        if (_popup == null)
         {
             return;
         }
 
-        // Close only when the pointer is genuinely off both the speaker and the popup. The IsPointerOver
-        // re-check guards against a missed PointerExited (e.g. while dragging the thumb) closing the popup
-        // out from under the user.
-        bool overButton = _overButton || (_speaker?.IsPointerOver ?? false);
-        bool overPopup = _overPopup || (_popupBorder?.IsPointerOver ?? false);
-        if (!overButton && !overPopup)
+        if (Environment.TickCount64 - _lastClosedTick > 150)
         {
-            _popup.IsOpen = false;
+            _popup.IsOpen = true;
         }
     }
+
+    private void OnPopupClosed(object? sender, EventArgs e) => _lastClosedTick = Environment.TickCount64;
 
     // Push slider drags onto the Volume StyledProperty via code (SetValue) — this reliably fires the
     // control's outer TwoWay binding to the VM's PreviewVolume, unlike a chained TwoWay slider binding.
@@ -160,20 +128,5 @@ public partial class VolumeFlyoutButton : UserControl
         {
             Volume = _slider.Value;
         }
-    }
-
-    private void OpenPopup()
-    {
-        _closeTimer.Stop();
-        if (_popup != null)
-        {
-            _popup.IsOpen = true;
-        }
-    }
-
-    private void ScheduleClose()
-    {
-        _closeTimer.Stop();
-        _closeTimer.Start();
     }
 }
