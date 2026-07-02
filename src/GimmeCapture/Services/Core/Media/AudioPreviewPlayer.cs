@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Threading;
+using System.Threading.Tasks;
 using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Core.Media.NativeFFmpeg;
 using NAudio.Wave;
@@ -23,6 +24,8 @@ internal sealed class AudioPreviewPlayer : IDisposable
     private WaveStream? _stream;
     private VolumeSampleProvider? _volumeProvider;
     private CancellationTokenSource? _decodeCts;
+    private BufferedWaveProvider? _buffered;
+    private Task? _decodeTask;
     private volatile bool _disposed;
     private float _volume = 1f;
 
@@ -125,46 +128,70 @@ internal sealed class AudioPreviewPlayer : IDisposable
         }
 
         var token = _decodeCts.Token;
-        var decoded = LibavPinAudioPcmDecoder.Decode(videoPath, startSeconds, token);
-        if (_disposed || token.IsCancellationRequested)
-        {
-            return;
-        }
 
-        if (decoded.PcmBytes.Length == 0)
+        // Stream the audio: start the device on an initially-empty BufferedWaveProvider, then feed it from a
+        // background decode. First audio lands in ~100-200 ms; memory stays bounded (decoder throttled ~4 s
+        // ahead) regardless of file size — versus the old full-file PCM decode that blocked the play loop and
+        // held hundreds of MB in a MemoryStream.
+        _decodeTask = Task.Run(() =>
         {
-            throw new InvalidOperationException("Decoded PCM is empty.");
-        }
-
-        var playbackWaveFormat = CreatePlaybackWaveFormat(decoded.WaveFormat, playbackSpeed);
-        var stream = new RawSourceWaveStream(new MemoryStream(decoded.PcmBytes, writable: false), playbackWaveFormat);
-        if (_disposed || token.IsCancellationRequested)
-        {
-            stream.Dispose();
-            return;
-        }
-
-        IWavePlayer? player = null;
-        try
-        {
-            player = CreateOutput(stream);
-            if (_disposed || token.IsCancellationRequested)
+            try
             {
-                player.Dispose();
-                stream.Dispose();
-                return;
-            }
+                LibavPinAudioPcmDecoder.DecodeStreaming(
+                    videoPath,
+                    startSeconds,
+                    onFormat: sourceFormat =>
+                    {
+                        if (_disposed || token.IsCancellationRequested)
+                        {
+                            return;
+                        }
 
-            _stream = stream;
-            _player = player;
-            player.Play();
-        }
-        catch
-        {
-            player?.Dispose();
-            stream.Dispose();
-            throw;
-        }
+                        // Retime by declaring the buffer at sourceRate*speed and feeding it source-rate S16
+                        // PCM — same pitch-shift retiming as the old RawSourceWaveStream path.
+                        WaveFormat retimed = CreatePlaybackWaveFormat(sourceFormat, playbackSpeed);
+                        var buffered = new BufferedWaveProvider(retimed)
+                        {
+                            BufferDuration = TimeSpan.FromSeconds(4),
+                            DiscardOnBufferOverflow = false,
+                            ReadFully = true, // underrun => silence, never signals end-of-stream (device won't stop)
+                        };
+
+                        IWavePlayer player = CreateOutput(buffered);
+                        if (_disposed || token.IsCancellationRequested)
+                        {
+                            player.Dispose();
+                            return;
+                        }
+
+                        _buffered = buffered;
+                        _player = player;
+                        player.Play();
+                    },
+                    onPcm: (buffer, length) => _buffered?.AddSamples(buffer, 0, length),
+                    waitIfFull: () =>
+                    {
+                        // Backpressure: keep the decoder ~3-4 s ahead so memory stays bounded (~768 KB).
+                        BufferedWaveProvider? bp;
+                        while ((bp = _buffered) != null
+                               && !token.IsCancellationRequested
+                               && bp.BufferedDuration > TimeSpan.FromSeconds(3))
+                        {
+                            Thread.Sleep(15);
+                        }
+                    },
+                    token);
+            }
+            catch (OperationCanceledException)
+            {
+                // stopped or seeked — expected
+            }
+            catch (Exception ex)
+            {
+                // "No audio stream", device init failure, etc. Preview audio is best-effort: log and stay silent.
+                Debug.WriteLine($"[PinAudio] streaming decode failed: {ex.Message}");
+            }
+        }, token);
     }
 
     /// <summary>Retimes audio by scaling the sample rate (pitch shifts with speed, like the Pin preview).</summary>
@@ -187,15 +214,18 @@ internal sealed class AudioPreviewPlayer : IDisposable
     /// to feed the output device. Setting <see cref="IWavePlayer.Volume"/> instead would move this app's
     /// level in the Windows volume mixer (the whole app, not just the preview). Kept testable (no device).
     /// </summary>
-    internal static (VolumeSampleProvider Volume, IWaveProvider Output) BuildVolumePipeline(WaveStream stream, float volume)
+    internal static (VolumeSampleProvider Volume, IWaveProvider Output) BuildVolumePipeline(IWaveProvider source, float volume)
     {
-        var volumeProvider = new VolumeSampleProvider(stream.ToSampleProvider()) { Volume = volume };
+        var volumeProvider = new VolumeSampleProvider(source.ToSampleProvider()) { Volume = volume };
         return (volumeProvider, new SampleToWaveProvider(volumeProvider));
     }
 
-    private IWavePlayer CreateOutput(WaveStream stream)
+    internal static (VolumeSampleProvider Volume, IWaveProvider Output) BuildVolumePipeline(WaveStream stream, float volume)
+        => BuildVolumePipeline((IWaveProvider)stream, volume);
+
+    private IWavePlayer CreateOutput(IWaveProvider source)
     {
-        (VolumeSampleProvider volumeProvider, IWaveProvider output) = BuildVolumePipeline(stream, _volume);
+        (VolumeSampleProvider volumeProvider, IWaveProvider output) = BuildVolumePipeline(source, _volume);
         _volumeProvider = volumeProvider;
 
         var wasapi = new WasapiOut();
@@ -213,6 +243,8 @@ internal sealed class AudioPreviewPlayer : IDisposable
         waveOut.Init(output);
         return waveOut;
     }
+
+    private IWavePlayer CreateOutput(WaveStream stream) => CreateOutput((IWaveProvider)stream);
 
     /// <summary>
     /// Cancels any in-flight PCM decode and hands the token source to the caller (dispose off-thread) —
@@ -249,6 +281,7 @@ internal sealed class AudioPreviewPlayer : IDisposable
             _volumeProvider = null;
             _stream?.Dispose();
             _stream = null;
+            _buffered = null; // decode thread's onPcm/waitIfFull observe null + the cancelled token and exit
         }
         catch (Exception ex)
         {

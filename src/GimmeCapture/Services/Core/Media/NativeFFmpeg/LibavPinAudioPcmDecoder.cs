@@ -16,7 +16,39 @@ internal static class LibavPinAudioPcmDecoder
 {
     internal sealed record DecodeResult(byte[] PcmBytes, WaveFormat WaveFormat);
 
-    internal static unsafe DecodeResult Decode(string path, double startSeconds, CancellationToken cancellationToken = default)
+    internal static DecodeResult Decode(string path, double startSeconds, CancellationToken cancellationToken = default)
+    {
+        using var accumulator = new PooledByteAccumulator();
+        WaveFormat wf = DecodeCore(path, startSeconds, onFormat: null, accumulator, waitIfFull: null, cancellationToken);
+        return new DecodeResult(accumulator.ToArray(), wf);
+    }
+
+    /// <summary>
+    /// Streaming variant for preview playback: decodes on the caller's thread and pushes each converted
+    /// S16-stereo chunk to <paramref name="onPcm"/> (the buffer is reused — copy out synchronously).
+    /// <paramref name="onFormat"/> fires once with the output WaveFormat before any chunk; <paramref
+    /// name="waitIfFull"/> applies consumer backpressure so memory stays bounded. Unlike <see cref="Decode"/>
+    /// it never buffers the whole file.
+    /// </summary>
+    internal static void DecodeStreaming(
+        string path,
+        double startSeconds,
+        Action<WaveFormat> onFormat,
+        Action<byte[], int> onPcm,
+        Action? waitIfFull,
+        CancellationToken cancellationToken)
+    {
+        using var sink = new StreamingPcmSink(onPcm);
+        DecodeCore(path, startSeconds, onFormat, sink, waitIfFull, cancellationToken);
+    }
+
+    private static unsafe WaveFormat DecodeCore(
+        string path,
+        double startSeconds,
+        Action<WaveFormat>? onFormat,
+        IPcmChunkSink pcmBuffer,
+        Action? waitIfFull,
+        CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         FFmpegRuntime.EnsureInitialized();
@@ -63,6 +95,11 @@ internal static class LibavPinAudioPcmDecoder
                 sampleRate = 48000;
             }
 
+            // Output format is known now — signal it so a streaming consumer can start the device before any
+            // PCM arrives (first audio in ~100–200 ms instead of after a full-file decode).
+            var waveFormat = new WaveFormat(sampleRate, 16, 2);
+            onFormat?.Invoke(waveFormat);
+
             ffmpeg.av_channel_layout_default(&outLayout, 2);
             ThrowIfErr(ffmpeg.swr_alloc_set_opts2(
                     &swr,
@@ -96,12 +133,12 @@ internal static class LibavPinAudioPcmDecoder
                 }
             }
 
-            using var pcmBuffer = new PooledByteAccumulator();
             long startSample = startSeconds > 0 ? (long)Math.Round(startSeconds * sampleRate) : 0;
 
             while (true)
             {
                 cancellationToken.ThrowIfCancellationRequested();
+                waitIfFull?.Invoke(); // consumer backpressure — bounds memory in the streaming path (no-op for Decode)
                 int rr = ffmpeg.av_read_frame(fmt, pkt);
                 if (rr == ffmpeg.AVERROR_EOF)
                 {
@@ -133,8 +170,7 @@ internal static class LibavPinAudioPcmDecoder
             ReceiveDraining(decCtx, swr, frame, outFrm, outLayout, ast->time_base, startSample, pcmBuffer, cancellationToken);
             DrainSwrTail(swr, outFrm, outLayout, pcmBuffer, sampleRate, cancellationToken);
 
-            var wf = new WaveFormat(sampleRate, 16, 2);
-            return new DecodeResult(pcmBuffer.ToArray(), wf);
+            return waveFormat;
         }
         finally
         {
@@ -180,7 +216,7 @@ internal static class LibavPinAudioPcmDecoder
         AVChannelLayout outLayout,
         AVRational streamTimeBase,
         long startSample,
-        PooledByteAccumulator pcmBuffer,
+        IPcmChunkSink pcmBuffer,
         CancellationToken cancellationToken)
     {
         while (true)
@@ -205,7 +241,7 @@ internal static class LibavPinAudioPcmDecoder
         AVChannelLayout outLayout,
         AVRational streamTimeBase,
         long startSample,
-        PooledByteAccumulator pcmBuffer,
+        IPcmChunkSink pcmBuffer,
         CancellationToken cancellationToken)
     {
         while (true)
@@ -231,7 +267,7 @@ internal static class LibavPinAudioPcmDecoder
         SwrContext* swr,
         AVFrame* outFrm,
         AVChannelLayout outLayout,
-        PooledByteAccumulator pcmBuffer,
+        IPcmChunkSink pcmBuffer,
         int sampleRate,
         CancellationToken cancellationToken)
     {
@@ -262,7 +298,7 @@ internal static class LibavPinAudioPcmDecoder
         }
     }
 
-    private static unsafe void AppendConvertedPlain(AVFrame* outFrm, PooledByteAccumulator pcmBuffer, int skipSamples = 0)
+    private static unsafe void AppendConvertedPlain(AVFrame* outFrm, IPcmChunkSink pcmBuffer, int skipSamples = 0)
     {
         int nb = outFrm->nb_samples;
         int ch = outFrm->ch_layout.nb_channels > 0 ? outFrm->ch_layout.nb_channels : 2;
@@ -284,7 +320,7 @@ internal static class LibavPinAudioPcmDecoder
         AVChannelLayout outLayout,
         AVRational streamTimeBase,
         long startSample,
-        PooledByteAccumulator pcmBuffer)
+        IPcmChunkSink pcmBuffer)
     {
         ffmpeg.av_channel_layout_copy(&outFrm->ch_layout, &outLayout);
         outFrm->sample_rate = frame->sample_rate > 0 ? frame->sample_rate : outFrm->sample_rate;
@@ -321,7 +357,54 @@ internal static class LibavPinAudioPcmDecoder
         }
     }
 
-    private sealed class PooledByteAccumulator : IDisposable
+    /// <summary>Sink for converted S16 PCM chunks — either the full-file accumulator or the streaming pump.</summary>
+    private interface IPcmChunkSink
+    {
+        unsafe void Append(byte* data, int byteLength);
+    }
+
+    /// <summary>Streaming sink: copies each converted chunk into a reusable managed buffer and hands it to the
+    /// consumer synchronously. No full-file buffering.</summary>
+    private sealed class StreamingPcmSink : IPcmChunkSink, IDisposable
+    {
+        private readonly Action<byte[], int> _onPcm;
+        private byte[] _scratch = ArrayPool<byte>.Shared.Rent(64 * 1024);
+
+        public StreamingPcmSink(Action<byte[], int> onPcm) => _onPcm = onPcm;
+
+        public unsafe void Append(byte* data, int byteLength)
+        {
+            if (byteLength <= 0 || data == null)
+            {
+                return;
+            }
+
+            if (_scratch.Length < byteLength)
+            {
+                ArrayPool<byte>.Shared.Return(_scratch);
+                _scratch = ArrayPool<byte>.Shared.Rent(byteLength);
+            }
+
+            fixed (byte* dst = _scratch)
+            {
+                Buffer.MemoryCopy(data, dst, _scratch.Length, byteLength);
+            }
+
+            // The consumer (BufferedWaveProvider.AddSamples) copies synchronously, so reusing _scratch is safe.
+            _onPcm(_scratch, byteLength);
+        }
+
+        public void Dispose()
+        {
+            if (_scratch.Length > 0)
+            {
+                ArrayPool<byte>.Shared.Return(_scratch);
+                _scratch = Array.Empty<byte>();
+            }
+        }
+    }
+
+    private sealed class PooledByteAccumulator : IPcmChunkSink, IDisposable
     {
         private byte[] _buffer = Array.Empty<byte>();
         private int _length;
