@@ -95,7 +95,7 @@ public partial class MainWindowViewModel
             : "Avalonia/Skia (backend auto)";
         string diagnostics = DiagnosticInfoService.Build(CurrentVersionLabel, moduleDiagnostics, renderer);
 
-        await new ClipboardService().CopyTextAsync(diagnostics);
+        await _clipboardService.CopyTextAsync(diagnostics);
         SetStatus("DiagnosticsCopied");
     }
 

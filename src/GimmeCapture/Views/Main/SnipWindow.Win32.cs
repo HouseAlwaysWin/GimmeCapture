@@ -14,6 +14,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using Avalonia.Input;
 using Avalonia.Input.Raw;
+using GimmeCapture.Services.Platforms.Avalonia;
 
 namespace GimmeCapture.Views.Main;
 

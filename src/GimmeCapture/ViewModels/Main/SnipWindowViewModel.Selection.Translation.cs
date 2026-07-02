@@ -388,7 +388,7 @@ public partial class SnipWindowViewModel
             LogTranslationMemoryState("translation-scan-all-capture", bitmap: detectionBitmap);
 
             // 使用 PaddleOCR 偵測文字區域
-            using var ocrEngine = new PaddleOCREngine(_mainVm.AIResourceService, _mainVm.AppSettingsService, _mainVm.OcrRuntimeService);
+            using var ocrEngine = _ocrEngineFactory.Create(_mainVm.AIResourceService, _mainVm.AppSettingsService, _mainVm.OcrRuntimeService);
             var ocrLang = _mainVm.AppSettingsService.Settings.SourceLanguage;
             await ocrEngine.EnsureLoadedAsync(ocrLang);
             

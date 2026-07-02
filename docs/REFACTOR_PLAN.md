@@ -36,10 +36,10 @@ In sanctioned locations (platform impls / composition root / view code-behind):
 - `Composition/AppBootstrapper.cs` (composition root — acceptable)
 - `Views/Main/SnipWindow.ViewModelWiring.cs` (view code-behind — acceptable)
 
-⚠️ Outside the sanctioned boundary (should be routed through a platform service):
-- `Services/Core/Infrastructure/TranslationResultLayerManager.cs` — a Core/Infrastructure
-  service, not an Avalonia platform impl; migrate its `Application.Current` access behind
-  `IWindowManager`/`IWindowLayerService`.
+- `Services/Platforms/Avalonia/TranslationResultLayerManager.cs` — relocated here from
+  Core/Infrastructure (it creates/queries Avalonia windows, so the platform layer is its honest
+  home). Follow-up: convert the static class to an injected service behind an abstraction so
+  ViewModels stop calling it directly.
 
 ## Risk Controls
 - Keep behavior identical per step

@@ -22,6 +22,7 @@ using System.Reactive.Linq;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Collections.Specialized;
+using GimmeCapture.Services.Platforms.Avalonia;
 
 namespace GimmeCapture.Views.Main;
 
@@ -52,7 +53,7 @@ public partial class SnipWindow : Window
     private Rect _originalRect;
     
     // Services
-    private readonly ClipboardService _clipboardService = new ClipboardService();
+    private readonly GimmeCapture.Services.Abstractions.IClipboardService _clipboardService = new ClipboardService();
     private readonly HotkeyRouterService _hotkeyRouter = new();
     private readonly IScreenLayoutService _screenLayoutService;
     private readonly IWindowLayerService _windowLayerService;

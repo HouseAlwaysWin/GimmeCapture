@@ -13,6 +13,7 @@ using System.ComponentModel;
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core;
 using GimmeCapture.Services.Core.Media;
+using GimmeCapture.Services.OCR;
 using GimmeCapture.ViewModels.Shared;
 using System.Reactive.Disposables;
 using Avalonia.Threading;
@@ -72,6 +73,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     private readonly ITranslationSelectionMonitor? _translationSelectionMonitor;
     private readonly IAIScanSessionService? _aiScanSessionService;
     private readonly IQuickOcrService? _quickOcrService;
+    private readonly IOcrEngineFactory _ocrEngineFactory;
     private readonly ICaptureVisibilityCoordinator _captureVisibilityCoordinator;
     private readonly SnipSelectionStateController _selectionStateController;
     private readonly CompositeDisposable _disposables = new();
@@ -332,7 +334,8 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         ITranslationSelectionMonitor? translationSelectionMonitor = null,
         IAIScanSessionService? aiScanSessionService = null,
         IQuickOcrService? quickOcrService = null,
-        ICaptureVisibilityCoordinator? captureVisibilityCoordinator = null)
+        ICaptureVisibilityCoordinator? captureVisibilityCoordinator = null,
+        IOcrEngineFactory? ocrEngineFactory = null)
     {
         _captureService = captureService ?? throw new ArgumentNullException(nameof(captureService));
         _detectionService = detectionService ?? CreateDesignWindowDetectionService();
@@ -340,6 +343,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         _translationSelectionMonitor = translationSelectionMonitor;
         _aiScanSessionService = aiScanSessionService;
         _quickOcrService = quickOcrService;
+        _ocrEngineFactory = ocrEngineFactory ?? new PaddleOcrEngineFactory();
         _captureVisibilityCoordinator = captureVisibilityCoordinator ?? new ImmediateCaptureVisibilityCoordinator();
         _selectionBorderColor = borderColor;
         _selectionBorderThickness = borderThickness;

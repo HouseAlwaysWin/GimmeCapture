@@ -10,7 +10,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace GimmeCapture.Services.Core.Infrastructure;
+namespace GimmeCapture.Services.Platforms.Avalonia;
 
 internal static class TranslationResultLayerManager
 {
