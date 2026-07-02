@@ -57,6 +57,20 @@ if ($remoteTagExitCode -ne 2) {
     throw "Unable to check whether tag $version exists on origin."
 }
 
+# The release commit only ever touches the csproj (any other dirty file aborts), so
+# CHANGELOG.md can never be updated during the release itself — it must be committed
+# BEFORE running this script. This gate stops the changelog from silently rotting.
+$changelog = Get-Content -LiteralPath "CHANGELOG.md" -Raw
+$versionPattern = [regex]::Escape($version.TrimStart('v'))
+if ($changelog -notmatch "(^|\n)##[^\n]*\bv?$versionPattern\b") {
+    throw ("CHANGELOG.md has no section for $version. Add a '## $version' entry (own commit) " +
+        "before releasing, so the user-facing release log stays current.")
+}
+$releasesCatalog = "docs/catalog/releases.md"
+if ((Test-Path $releasesCatalog) -and ((Get-Content -LiteralPath $releasesCatalog -Raw) -notmatch "\bv?$versionPattern\b")) {
+    Write-Warning "$releasesCatalog has no entry for $version - consider updating it (not enforced)."
+}
+
 Write-Host "Starting release process for $version..." -ForegroundColor Cyan
 
 $csprojPath = "src/GimmeCapture/GimmeCapture.csproj"
