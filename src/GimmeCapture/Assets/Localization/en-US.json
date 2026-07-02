@@ -30,7 +30,7 @@
   "TranslationLlamaGroup": "Local Model (GGUF)",
   "TabControl": "Control",
   "TabRecord": "Record",
-  "TabCompress": "Compress",
+  "TabCompress": "Video Editing",
   "CompressHint": "Pick any video file on disk and re-encode it to a smaller copy. Lower quality = smaller file.",
   "CompressInputLabel": "Source video",
   "CompressSelectFile": "Select file…",

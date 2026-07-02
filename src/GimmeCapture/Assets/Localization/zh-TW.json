@@ -30,7 +30,7 @@
   "TranslationLlamaGroup": "本機模型 (GGUF)",
   "TabControl": "快捷鍵",
   "TabRecord": "錄影",
-  "TabCompress": "壓縮",
+  "TabCompress": "影片編輯",
   "CompressHint": "選擇硬碟上任意影片檔，重新編碼成較小的副本。畫質越低，檔案越小。",
   "CompressInputLabel": "來源影片",
   "CompressSelectFile": "選擇檔案…",

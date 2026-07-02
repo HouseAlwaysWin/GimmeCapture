@@ -702,6 +702,14 @@ public partial class MainWindowViewModel
         item.Crop = st.CropWidth > 0 && st.CropHeight > 0
             ? new VideoEditCrop(st.CropX, st.CropY, st.CropWidth, st.CropHeight)
             : null;
+        item.Annotations = st.Annotations is { Count: > 0 }
+            ? CompressEditStateMapper.FromState(st.Annotations)
+            : null;
+        item.AnnotationSurfaceWidth = st.AnnotationSurfaceWidth;
+        item.AnnotationSurfaceHeight = st.AnnotationSurfaceHeight;
+        item.RedactionTracks = st.RedactionTracks is { Count: > 0 }
+            ? CompressEditStateMapper.FromState(st.RedactionTracks)
+            : null;
         if (st.Done)
         {
             item.Status = CompressQueueStatus.Done;
@@ -731,7 +739,15 @@ public partial class MainWindowViewModel
             CropX = item.Crop?.X ?? 0,
             CropY = item.Crop?.Y ?? 0,
             CropWidth = item.Crop?.Width ?? 0,
-            CropHeight = item.Crop?.Height ?? 0
+            CropHeight = item.Crop?.Height ?? 0,
+            Annotations = item.Annotations is { Count: > 0 }
+                ? CompressEditStateMapper.ToState(item.Annotations)
+                : null,
+            AnnotationSurfaceWidth = item.AnnotationSurfaceWidth,
+            AnnotationSurfaceHeight = item.AnnotationSurfaceHeight,
+            RedactionTracks = item.RedactionTracks is { Count: > 0 }
+                ? CompressEditStateMapper.ToState(item.RedactionTracks)
+                : null
         };
         CompressItemStateService.Save(_itemStates);
     }
@@ -889,6 +905,10 @@ public partial class MainWindowViewModel
                             PersistItemState(item);
                             item.EstimatedText = BuildItemEstimate(item);
                         });
+                    // Burn-in layers persist too (they don't change the size estimate meaningfully).
+                    item.WhenAnyValue(x => x.Annotations, x => x.RedactionTracks)
+                        .Skip(1)
+                        .Subscribe(_ => PersistItemState(item));
                     CompressQueue.Add(item);
                     added.Add(item);
                 }
@@ -1109,6 +1129,9 @@ public partial class MainWindowViewModel
         bool appendDate = CompressAppendDate;
         // Per-file kept runs captured on the UI thread (whole clip when trim off); re-clamped against the fresh probe.
         IReadOnlyList<(double Start, double End, double Speed)> keptRuns = item.EffectiveKeptRuns();
+        // Annotations/redaction burn-in (snapshotted here on the UI thread; null when the item has neither).
+        Action<SKBitmap, double>? burnIn = BuildBurnInComposite(
+            item.Annotations, item.AnnotationSurfaceWidth, item.AnnotationSurfaceHeight, item.RedactionTracks);
         item.PrepareForStart(_batchCts.Token);
         var progress = new Progress<double>(p => item.Progress = p); // UI thread → callbacks marshal back
         var resumeProgress = new Progress<double>(p => item.ResumePoint = p); // last safe pause checkpoint
@@ -1116,12 +1139,13 @@ public partial class MainWindowViewModel
 
         _inFlight++;
         IsBatchRunning = true;
-        _ = RunQueueItemAsync(item, snap, ext, outputFolder, appendDate, progress, resumeProgress, keptRuns);
+        _ = RunQueueItemAsync(item, snap, ext, outputFolder, appendDate, progress, resumeProgress, keptRuns, burnIn);
     }
 
     private async Task RunQueueItemAsync(
         CompressQueueItem item, CompressSettingsSnapshot snap, string ext, string outputFolder, bool appendDate,
-        IProgress<double> progress, IProgress<double> resumeProgress, IReadOnlyList<(double Start, double End, double Speed)> keptRuns)
+        IProgress<double> progress, IProgress<double> resumeProgress,
+        IReadOnlyList<(double Start, double End, double Speed)> keptRuns, Action<SKBitmap, double>? burnInComposite)
     {
         SemaphoreSlim semaphore = _batchSemaphore!;
         CancellationToken token = item.Cts!.Token;
@@ -1170,9 +1194,10 @@ public partial class MainWindowViewModel
                 bool hasSpeed = runs.Any(r => Math.Abs(r.Speed - 1.0) > 0.001);
                 VideoEditCrop? crop = item.Crop;
 
-                // Resumable segmented CRF only handles one contiguous, full-speed, un-cropped span; anything else
-                // (target-size / multi-segment / speed / crop) uses the whole-file concat path below.
-                item.SupportsResume = !snap.UseTargetSize && duration > 0 && !multiSegment && !hasSpeed && crop == null;
+                // Resumable segmented CRF only handles one contiguous, full-speed, un-cropped, un-annotated span;
+                // anything else (target-size / multi-segment / speed / crop / burn-in) uses the whole-file path below.
+                item.SupportsResume = !snap.UseTargetSize && duration > 0 && !multiSegment && !hasSpeed && crop == null
+                    && burnInComposite == null;
                 int targetKbps = 0;
                 if (snap.UseTargetSize)
                 {
@@ -1201,7 +1226,7 @@ public partial class MainWindowViewModel
 
                 bool ok = await EncodeOneFileAsync(
                     item.Path, outputPath, snap, targetKbps, duration, progress, token, item.Gate, item.Rotation,
-                    resumeProgress, runs, crop);
+                    resumeProgress, runs, crop, burnInComposite);
                 item.Status = ok ? CompressQueueStatus.Done : CompressQueueStatus.Failed;
                 if (ok)
                 {

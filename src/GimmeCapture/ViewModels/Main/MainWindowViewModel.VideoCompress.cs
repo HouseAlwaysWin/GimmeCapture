@@ -11,6 +11,7 @@ using GimmeCapture.Models;
 using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Core.Media.NativeFFmpeg;
 using ReactiveUI;
+using SkiaSharp;
 
 namespace GimmeCapture.ViewModels.Main;
 
@@ -779,7 +780,8 @@ public partial class MainWindowViewModel
         string input, string outputPath, CompressSettingsSnapshot s, int targetBitrateKbps,
         double durationSeconds, IProgress<double> progress, CancellationToken token, ManualResetEventSlim? pauseGate,
         int rotationDegrees = 0, IProgress<double>? resumeProgress = null,
-        IReadOnlyList<(double Start, double End, double Speed)>? keptRuns = null, VideoEditCrop? crop = null)
+        IReadOnlyList<(double Start, double End, double Speed)>? keptRuns = null, VideoEditCrop? crop = null,
+        Action<SKBitmap, double>? burnInComposite = null)
     {
         // Kept runs to concatenate (whole file when none). TryExport joins multiple ranges into one output.
         var runs = (keptRuns ?? Array.Empty<(double Start, double End, double Speed)>())
@@ -794,9 +796,10 @@ public partial class MainWindowViewModel
         var ranges = runs.Select(r => new LibavClipExporter.SourceRange(r.Start, r.End, r.Speed)).ToArray();
         bool hasSpeed = runs.Any(r => Math.Abs(r.Speed - 1.0) > 0.001);
 
-        // CRF + known duration + a single contiguous, full-speed, un-cropped run → resumable segmented path;
-        // target-size / 2-pass / unknown-duration / multi-segment / speed / crop keep the whole-file concat path.
-        if (!s.UseTargetSize && durationSeconds > 0 && runs.Count == 1 && !hasSpeed && crop == null)
+        // CRF + known duration + a single contiguous, full-speed, un-cropped, un-annotated run → resumable
+        // segmented path; target-size / 2-pass / unknown-duration / multi-segment / speed / crop / burn-in
+        // keep the whole-file concat path.
+        if (!s.UseTargetSize && durationSeconds > 0 && runs.Count == 1 && !hasSpeed && crop == null && burnInComposite == null)
         {
             return await EncodeOneFileSegmentedAsync(
                 input, outputPath, s, durationSeconds, progress, token, pauseGate, rotationDegrees, resumeProgress,
@@ -833,7 +836,8 @@ public partial class MainWindowViewModel
                 bool encoded = await Task.Run(() =>
                     LibavClipExporter.TryExport(
                         input, ranges, attemptOut, VideoQuality.Medium, crop: crop,
-                        cancellationToken: token, options: options, progress: progress, pauseGate: pauseGate), token);
+                        cancellationToken: token, options: options, progress: progress, pauseGate: pauseGate,
+                        frameCompositeAfterTransform: burnInComposite), token);
                 return encoded && File.Exists(attemptOut) && new FileInfo(attemptOut).Length > 0 ? attemptOut : null;
             }
 
@@ -1064,6 +1068,43 @@ public partial class MainWindowViewModel
         var vm = new CompareViewModel(
             item.Path, item.ProbedDuration, item.ProbedFps, item.ProbedWidth, item.ProbedHeight, options, item.Rotation);
         OpenCompareAction(vm);
+    }
+
+    /// <summary>
+    /// The per-frame burn-in for a queue item's annotations (surface space) + redaction tracks (normalized),
+    /// or null when the item has neither. Runs on the exporter's post-transform (cropped+rotated) frame —
+    /// exactly what the editor preview showed. Layers are snapshotted for the worker thread (mirrors the Pin
+    /// window's ExportAnnotatedInProcessAsync).
+    /// </summary>
+    private static Action<SKBitmap, double>? BuildBurnInComposite(
+        IReadOnlyList<Annotation>? annotations, double surfaceW, double surfaceH,
+        IReadOnlyList<RedactionTrack>? redactionTracks)
+    {
+        List<Annotation>? anns = annotations is { Count: > 0 } ? annotations.ToList() : null;
+        List<RedactionTrack>? tracks = redactionTracks?.Where(t => t.Keyframes.Count > 0).ToList();
+        if (tracks is { Count: 0 })
+        {
+            tracks = null;
+        }
+
+        if (anns == null && tracks == null)
+        {
+            return null;
+        }
+
+        return (sk, t) =>
+        {
+            if (anns != null && surfaceW > 0 && surfaceH > 0)
+            {
+                Services.Core.Rendering.AnnotationRenderService.Shared.RenderAnnotationsToBitmap(
+                    sk, anns, surfaceW, surfaceH, sk.Width, sk.Height);
+            }
+
+            if (tracks != null)
+            {
+                Services.Core.Rendering.RedactionRenderer.Render(sk, tracks, t);
+            }
+        };
     }
 
     // Opens the 進階影片編輯 window for the selected file; on Apply writes the whole edit (kept runs with speed,
