@@ -71,14 +71,12 @@ public partial class MainWindow
 
                 vm.StatusText = $"[RegisterFailed] {hotkey} -> {hotkeyName}";
 
-                Avalonia.Threading.Dispatcher.UIThread.Post(async () =>
-                {
-                    await ConfirmationDialog.ShowConfirmation(
+                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                    ConfirmationDialog.ShowConfirmation(
                         this,
                         "快捷鍵註冊失敗",
                         $"無法註冊「{hotkeyName}」的快捷鍵 {hotkey}。這個組合可能已被 Windows 或其他程式使用。",
-                        ConfirmationMode.OkOnly);
-                });
+                        ConfirmationMode.OkOnly).Forget("Hotkey.RegisterFailedDialog"));
             };
 
             vm.ShowToastAction = (message, severity) => _toastService.Show(message, severity);

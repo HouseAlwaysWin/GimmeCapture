@@ -317,7 +317,7 @@ public partial class FloatingVideoViewModel
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error copying video: {ex}");
+                AppLog.Error("FloatingVideo.Copy", ex);
             }
             finally
             {
@@ -622,7 +622,7 @@ public partial class FloatingVideoViewModel
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error saving video: {ex}");
+                AppLog.Error("FloatingVideo.Save", ex);
                 ProcessingText = "Save Failed: " + ex.Message;
                 IsProcessing = true;
                 await Task.Delay(2000);
