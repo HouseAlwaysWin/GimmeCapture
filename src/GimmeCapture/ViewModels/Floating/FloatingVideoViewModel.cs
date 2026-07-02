@@ -54,9 +54,9 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
     private Task? _playbackTask;
     private readonly int _width;
     private readonly int _height;
-    private IWavePlayer? _pinAudioPlayer;
-    private WaveStream? _audioPlaybackStream;
-    private CancellationTokenSource? _pinAudioDecodeCts;
+    // Preview audio (player/stream/decode-token trio) lives in the shared component, also used by the
+    // compress 進階影片編輯 editor; this VM keeps only the mute/effective-speed policy.
+    private readonly AudioPreviewPlayer _audioPreview = new();
     private bool _isMuted;
     private readonly LibavVideoFramePlayer _nativeFramePlayer = new();
 
@@ -427,7 +427,7 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
                 OpenPinnedVideoWindowAction = null;
 
                 var playbackCts = CancelPlaybackToken();
-                var audioDecodeCts = CancelAudioDecodeToken();
+                var audioDecodeCts = _audioPreview.CancelDecode();
                 _disposeTask = Task.Run(() => DisposeCoreAsync(playbackCts, audioDecodeCts));
             }
 
@@ -479,7 +479,7 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
             System.Diagnostics.Debug.WriteLine($"Video disposal wait failed: {ex}");
         }
 
-        StopAudioPlayback();
+        _audioPreview.Dispose();
         _nativeFramePlayer.Dispose();
         if (playbackCompleted)
         {

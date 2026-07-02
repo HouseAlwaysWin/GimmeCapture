@@ -18,7 +18,8 @@ namespace GimmeCapture.ViewModels.Floating;
 public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
 {
     private readonly AnnotationEditorState _editorState = new();
-    protected AnnotationEditorState EditorState => _editorState;
+    // Public so the window layer (AnnotationInputController) can drive the same state the VM delegates to.
+    public AnnotationEditorState EditorState => _editorState;
     private readonly IDisposable _editorStateSubscription;
 
     protected FloatingWindowViewModelBase()
@@ -601,55 +602,17 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
         var canRedo = this.WhenAnyValue(x => x.HasRedo, x => x.IsEnteringText, (r, t) => r && !t).ObserveOn(RxSchedulers.MainThreadScheduler);
         RedoCommand = ReactiveCommand.Create(Redo, canRedo);
 
+        // Text-entry completion (incl. Callout leader attach) lives in the shared editor state so the
+        // compress 進階影片編輯 editor reuses it; the window-focus side effect stays here.
         ConfirmTextEntryCommand = ReactiveCommand.Create(() =>
         {
-            if (_pendingTextLeader != null)
-            {
-                // Callout: the leader was already drawn by dragging and is pending in the list.
-                // Attach the typed label, sync the current style, and commit it.
-                var leader = _pendingTextLeader;
-                _pendingTextLeader = null;
-                leader.Text = PendingText ?? string.Empty;
-                leader.Color = SelectedColor;
-                leader.Thickness = CurrentThickness;
-                leader.FontSize = CurrentFontSize;
-                leader.FontFamily = CurrentFontFamily;
-                leader.IsBold = IsBold;
-                leader.IsItalic = IsItalic;
-                if (!CommitPendingAnnotation(leader))
-                {
-                    CancelPendingAnnotation(leader);
-                }
-            }
-            else if (!string.IsNullOrWhiteSpace(PendingText))
-            {
-                AddAnnotation(new Annotation
-                {
-                    Type = AnnotationType.Text,
-                    StartPoint = TextInputPosition,
-                    EndPoint = TextInputPosition,
-                    Text = PendingText,
-                    Color = SelectedColor,
-                    FontSize = CurrentFontSize,
-                    FontFamily = CurrentFontFamily,
-                    IsBold = IsBold,
-                    IsItalic = IsItalic
-                });
-            }
-            IsEnteringText = false;
-            PendingText = string.Empty;
+            _editorState.ConfirmTextEntry();
             FocusWindowAction?.Invoke();
         });
 
         CancelTextEntryCommand = ReactiveCommand.Create(() =>
         {
-            if (_pendingTextLeader != null)
-            {
-                CancelPendingAnnotation(_pendingTextLeader);
-                _pendingTextLeader = null;
-            }
-            IsEnteringText = false;
-            PendingText = string.Empty;
+            _editorState.CancelTextEntry();
             FocusWindowAction?.Invoke();
         });
     }
@@ -665,10 +628,7 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
 
     public void CancelPendingAnnotation(Annotation annotation) => _editorState.CancelPendingAnnotation(annotation);
 
-    // A Callout leader drawn by dragging, pending in the list and awaiting its label text.
-    private Annotation? _pendingTextLeader;
-
-    public void BeginCalloutTextEntry(Annotation leader) => _pendingTextLeader = leader;
+    public void BeginCalloutTextEntry(Annotation leader) => _editorState.BeginCalloutTextEntry(leader);
 
     public void RemoveAnnotation(Annotation annotation) => _editorState.RemoveAnnotation(annotation);
 
