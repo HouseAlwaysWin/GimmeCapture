@@ -1,0 +1,44 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="GimmeCapture.Views.Controls.VolumeFlyoutButton"
+             x:Name="Root">
+    <UserControl.Styles>
+        <!-- The app's global Slider style assumes a HORIZONTAL 2px track (Height=2, centred). Re-orient
+             it into a vertical bar for the volume popup slider (only sliders with the "volume" class). -->
+        <Style Selector="Slider.volume /template/ Border#TrackBackground">
+            <Setter Property="Height" Value="NaN"/>
+            <Setter Property="Width" Value="3"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="VerticalAlignment" Value="Stretch"/>
+        </Style>
+    </UserControl.Styles>
+
+    <!-- Speaker button (click = mute toggle); hovering it reveals a vertical volume slider popup. -->
+    <Panel>
+        <Button x:Name="SpeakerButton" Theme="{StaticResource SnipButton}" Width="30" Height="30"
+                Command="{Binding ToggleMuteCommand, ElementName=Root}"
+                ToolTip.Tip="{Binding MuteTooltip, ElementName=Root}">
+            <Panel>
+                <PathIcon Data="M14,3.23V20.77C14,21.37 13.33,21.74 12.83,21.42L7.6,18H3C1.9,18 1,17.1 1,16V8C1,6.9 1.9,6 3,6H7.6L12.83,2.58C13.33,2.26 14,2.63 14,3.23M19,9L16.41,11.59L19,14.17L17.59,15.59L15,13L12.41,15.59L11,14.17L13.59,11.59L11,9L12.41,7.59L15,10.17L17.59,7.59L19,9Z"
+                          Width="12" Height="12" IsVisible="{Binding IsMuted, ElementName=Root}"/>
+                <PathIcon Data="M14,3.23V20.77C14,21.37 13.33,21.74 12.83,21.42L7.6,18H3C1.9,18 1,17.1 1,16V8C1,6.9 1.9,6 3,6H7.6L12.83,2.58C13.33,2.26 14,2.63 14,3.23M16,7.82V10.73C17.16,11.14 18,12.25 18,13.55C18,14.84 17.16,15.95 16,16.36V19.27C18.89,18.78 21,16.35 21,13.55C21,10.74 18.89,8.31 16,7.82Z"
+                          Width="12" Height="12" IsVisible="{Binding !IsMuted, ElementName=Root}"/>
+            </Panel>
+        </Button>
+
+        <Popup x:Name="VolumePopup" PlacementTarget="{Binding #SpeakerButton}"
+               Placement="Top" VerticalOffset="4" IsLightDismissEnabled="False">
+            <Border x:Name="PopupBorder" Background="#1A1A1A" BorderBrush="#444444" BorderThickness="1"
+                    CornerRadius="4" Padding="8,10" Margin="0,0,0,4"
+                    BoxShadow="0 4 15 0 #D0000000">
+                <StackPanel Orientation="Vertical" Spacing="6" HorizontalAlignment="Center">
+                    <TextBlock Text="{Binding Volume, ElementName=Root, StringFormat='{}{0:0%}'}"
+                               Foreground="#E0E0E0" FontSize="10" HorizontalAlignment="Center"/>
+                    <Slider Classes="volume" Orientation="Vertical" Width="26" Height="120"
+                            Minimum="0" Maximum="1" HorizontalAlignment="Center"
+                            Value="{Binding Volume, ElementName=Root, Mode=TwoWay}"/>
+                </StackPanel>
+            </Border>
+        </Popup>
+    </Panel>
+</UserControl>
