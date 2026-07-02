@@ -27,6 +27,9 @@ public partial class FloatingVideoViewModel
         set => _redaction.SelectedRedactionEffect = value;
     }
 
+    /// <summary>The selectable redaction effects, for the effect dropdown.</summary>
+    public System.Collections.Generic.IReadOnlyList<RedactionEffect> AvailableRedactionEffects => _redaction.AvailableEffects;
+
     /// <summary>True when at least one track has a keyframe (i.e. export must burn redaction in).</summary>
     public bool HasRedaction => _redaction.HasRedaction;
 

@@ -92,6 +92,30 @@ public class RedactionEditorStateTests
     }
 
     [Fact]
+    public void SettingSelectedEffect_RestylesTheActiveTrack()
+    {
+        // The dropdown sets SelectedRedactionEffect directly (not via CycleEffect); the in-progress
+        // track must pick up the new effect immediately, same as cycling did.
+        var host = new Host { Playhead = 1, Selection = new Avalonia.Rect(0, 0, 40, 40) };
+        RedactionEditorState state = host.MakeState();
+        state.AddKeyframe(); // Blur (default)
+        Assert.Equal(RedactionEffect.Blur, state.RedactionTracks[0].Effect);
+
+        state.SelectedRedactionEffect = RedactionEffect.SolidBlack;
+
+        Assert.Equal(RedactionEffect.SolidBlack, state.RedactionTracks[0].Effect);
+    }
+
+    [Fact]
+    public void AvailableEffects_ExposesTheThreeEffects()
+    {
+        RedactionEditorState state = new Host().MakeState();
+        Assert.Equal(
+            new[] { RedactionEffect.Blur, RedactionEffect.Mosaic, RedactionEffect.SolidBlack },
+            state.AvailableEffects);
+    }
+
+    [Fact]
     public void RefreshActiveBoxes_MapsNormalizedBoxBackToDisplaySpace()
     {
         var host = new Host { Playhead = 5, Selection = new Avalonia.Rect(20, 10, 100, 50) };

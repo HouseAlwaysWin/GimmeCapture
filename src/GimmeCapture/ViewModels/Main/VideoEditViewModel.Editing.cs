@@ -100,6 +100,18 @@ internal sealed partial class VideoEditViewModel
     private bool _isLooping;
     public bool IsLooping { get => _isLooping; set => this.RaiseAndSetIfChanged(ref _isLooping, value); }
 
+    private double _previewVolume = 1.0;
+    /// <summary>Preview playback volume (0–1). Preview-only — does not change the encoded output.</summary>
+    public double PreviewVolume
+    {
+        get => _previewVolume;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _previewVolume, value);
+            _audioPreview.Volume = (float)Math.Clamp(value, 0.0, 1.0);
+        }
+    }
+
     private double _playbackSpeed = 1.0;
     /// <summary>Global preview speed (0.5/1/1.5/2×), multiplied with each kept run's own speed.</summary>
     public double PlaybackSpeed

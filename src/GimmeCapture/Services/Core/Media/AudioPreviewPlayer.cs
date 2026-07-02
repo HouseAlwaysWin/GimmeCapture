@@ -5,6 +5,7 @@ using System.Threading;
 using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Core.Media.NativeFFmpeg;
 using NAudio.Wave;
+using NAudio.Wave.SampleProviders;
 
 namespace GimmeCapture.Services.Core.Media;
 
@@ -20,8 +21,30 @@ internal sealed class AudioPreviewPlayer : IDisposable
 {
     private IWavePlayer? _player;
     private WaveStream? _stream;
+    private VolumeSampleProvider? _volumeProvider;
     private CancellationTokenSource? _decodeCts;
     private volatile bool _disposed;
+    private float _volume = 1f;
+
+    /// <summary>
+    /// Preview playback volume, 0–1. Scales the audio samples <em>in the stream</em> (via
+    /// <see cref="VolumeSampleProvider"/>), so it only affects this preview — it never touches
+    /// <see cref="IWavePlayer.Volume"/>, which would move the whole app's level in the Windows mixer
+    /// (that bug drove system audio to max on open). Applies live to the current playback.
+    /// </summary>
+    public float Volume
+    {
+        get => _volume;
+        set
+        {
+            _volume = Math.Clamp(value, 0f, 1f);
+            var vp = _volumeProvider;
+            if (vp != null)
+            {
+                vp.Volume = _volume;
+            }
+        }
+    }
 
     /// <summary>
     /// (Re)start audio at <paramref name="startSeconds"/> with the given effective speed. Any previous
@@ -158,12 +181,17 @@ internal sealed class AudioPreviewPlayer : IDisposable
         return new WaveFormat(adjustedSampleRate, sourceFormat.BitsPerSample, sourceFormat.Channels);
     }
 
-    private static IWavePlayer CreateOutput(WaveStream stream)
+    private IWavePlayer CreateOutput(WaveStream stream)
     {
+        // Scale volume by multiplying samples in the pipeline. Setting IWavePlayer.Volume instead would
+        // move this app's level in the Windows volume mixer (the whole app, not just the preview).
+        _volumeProvider = new VolumeSampleProvider(stream.ToSampleProvider()) { Volume = _volume };
+        IWaveProvider output = new SampleToWaveProvider(_volumeProvider);
+
         var wasapi = new WasapiOut();
         try
         {
-            wasapi.Init(stream);
+            wasapi.Init(output);
             return wasapi;
         }
         catch
@@ -172,7 +200,7 @@ internal sealed class AudioPreviewPlayer : IDisposable
         }
 
         var waveOut = new WaveOutEvent();
-        waveOut.Init(stream);
+        waveOut.Init(output);
         return waveOut;
     }
 
@@ -208,6 +236,7 @@ internal sealed class AudioPreviewPlayer : IDisposable
             _player?.Stop();
             _player?.Dispose();
             _player = null;
+            _volumeProvider = null;
             _stream?.Dispose();
             _stream = null;
         }

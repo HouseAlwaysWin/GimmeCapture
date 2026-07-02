@@ -44,8 +44,9 @@ public partial class FloatingVideoViewModel
     }
 
     /// <summary>
-    /// Pauses on the current frame and opens it as a new image pin (entering SAM2 point-removal), so the
-    /// user can cut an object out of that single frame. The result is a still image, not a video edit.
+    /// Pauses on the current frame and opens it as a new plain image pin (no AI) — just the current frame
+    /// pinned out. The result is a still image, not a video edit; the user can enter point-removal /
+    /// background-removal from the pinned image's own toolbar if they want to cut an object out.
     /// </summary>
     private async Task FreezeFrameAsync()
     {

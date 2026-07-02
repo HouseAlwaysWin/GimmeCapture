@@ -60,8 +60,33 @@ public sealed class RedactionEditorState : ReactiveObject
     public RedactionEffect SelectedRedactionEffect
     {
         get => _selectedEffect;
-        set => this.RaiseAndSetIfChanged(ref _selectedEffect, value);
+        set
+        {
+            if (_selectedEffect == value)
+            {
+                return;
+            }
+
+            this.RaiseAndSetIfChanged(ref _selectedEffect, value);
+
+            // Re-style the track currently being authored so the choice takes effect immediately — this
+            // runs whether the effect is picked from the dropdown or cycled, so both stay in sync.
+            if (_activeTrack != null)
+            {
+                _activeTrack.Effect = value;
+            }
+
+            RaiseRedactionChanged();
+        }
     }
+
+    /// <summary>The selectable redaction effects, for the effect dropdown (editor + Pin).</summary>
+    public IReadOnlyList<RedactionEffect> AvailableEffects { get; } = new[]
+    {
+        RedactionEffect.Blur,
+        RedactionEffect.Mosaic,
+        RedactionEffect.SolidBlack,
+    };
 
     /// <summary>True when at least one track has a keyframe (i.e. export must burn redaction in).</summary>
     public bool HasRedaction => RedactionTracks.Any(t => t.Keyframes.Count > 0);
@@ -139,6 +164,7 @@ public sealed class RedactionEditorState : ReactiveObject
         RaiseRedactionChanged();
     }
 
+    // Kept for the (optional) hotkey/cycle path; the setter does the restyle + change notification.
     public void CycleEffect()
     {
         SelectedRedactionEffect = SelectedRedactionEffect switch
@@ -147,14 +173,6 @@ public sealed class RedactionEditorState : ReactiveObject
             RedactionEffect.Mosaic => RedactionEffect.SolidBlack,
             _ => RedactionEffect.Blur,
         };
-
-        // Re-style the track currently being authored so the choice takes effect immediately.
-        if (_activeTrack != null)
-        {
-            _activeTrack.Effect = SelectedRedactionEffect;
-        }
-
-        RaiseRedactionChanged();
     }
 
     /// <summary>Restore previously saved tracks (compress items round-trip them across restarts).</summary>

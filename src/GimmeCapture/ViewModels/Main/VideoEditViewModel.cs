@@ -144,10 +144,16 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
     public int RotationDegrees
     {
         get => _rotation;
-        private set { this.RaiseAndSetIfChanged(ref _rotation, value); this.RaisePropertyChanged(nameof(RotationText)); }
+        private set
+        {
+            this.RaiseAndSetIfChanged(ref _rotation, value);
+            this.RaisePropertyChanged(nameof(RotationText));
+            this.RaisePropertyChanged(nameof(HasRotation));
+        }
     }
 
     public string RotationText => $"{_rotation}°";
+    public bool HasRotation => _rotation != 0;
 
     /// <summary>Cycle the output rotation 0 → 90 → 180 → 270 → 0.</summary>
     public void Rotate()

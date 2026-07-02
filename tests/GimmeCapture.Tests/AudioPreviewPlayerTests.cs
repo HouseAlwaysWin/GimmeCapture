@@ -49,4 +49,21 @@ public class AudioPreviewPlayerTests
         Assert.Equal(24, result.BitsPerSample);
         Assert.Equal(1, result.Channels);
     }
+
+    [Fact]
+    public void Volume_ClampsToUnitRange()
+    {
+        // Volume scales samples in-stream (VolumeSampleProvider), never the output device's session
+        // volume; the setter just clamps + stores when nothing is playing (no device touched here).
+        using var player = new AudioPreviewPlayer();
+
+        player.Volume = 2.5f;
+        Assert.Equal(1f, player.Volume);
+
+        player.Volume = -1f;
+        Assert.Equal(0f, player.Volume);
+
+        player.Volume = 0.3f;
+        Assert.Equal(0.3f, player.Volume, 3);
+    }
 }

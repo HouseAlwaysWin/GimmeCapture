@@ -50,7 +50,9 @@ public partial class VideoEditWindow : Window
                 }
             },
             focusTextInput: () => EditTextEntry?.FocusTextInput(),
-            captureTarget: this,
+            // Capture to the surface panel (its own PointerMoved/Released handlers drive the state machine).
+            // Capturing to the window would redirect events away from the panel and strand mid-drag draws.
+            captureTarget: SurfacePanel,
             setCursor: c => Cursor = c);
 
         // Preview surface: annotation drawing/selection OR the redaction marquee, in surface coords.

@@ -102,7 +102,8 @@ public partial class SettingsCompressTab : UserControl
                 vm.ConfirmYesNoAction?.Invoke(loc["CompressEditWindowTitle"], loc["CompressEditTransformClearsEdits"])
                 ?? System.Threading.Tasks.Task.FromResult(true);
 
-            // Freeze-frame → a floating image pin in SAM2 point-removal mode (same flow as the Pin window).
+            // Freeze-frame → a plain floating image pin (no AI): just the current frame pinned out.
+            // The user can enter point-removal / background-removal from the pinned image's own toolbar.
             editVm.FreezeFrameToImagePinAction = bitmap => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
             {
                 var pinVm = new GimmeCapture.ViewModels.Floating.FloatingImageViewModel(
@@ -117,7 +118,6 @@ public partial class SettingsCompressTab : UserControl
                     WindowStartupLocation = WindowStartupLocation.CenterScreen,
                 };
                 pinWin.Show();
-                Avalonia.Threading.Dispatcher.UIThread.Post(() => pinVm.IsPointRemovalMode = true);
             });
 
             var window = new VideoEditWindow { DataContext = editVm };

@@ -426,8 +426,9 @@ public partial class SnipWindow : Window
                     }
                 };
 
-                // Freeze the current video frame into an image pin that enters SAM2 point-removal, so an
-                // object can be cut out of that single frame (reuses the image pin's interactive flow).
+                // Freeze the current video frame into a plain image pin (no AI): it's just the current
+                // frame pinned out. The user can still enter point-removal / background-removal from the
+                // pinned image's own toolbar if they want to cut something out.
                 vm.FreezeFrameToImagePinAction = bitmap =>
                 {
                     Avalonia.Threading.Dispatcher.UIThread.Post(() =>
@@ -437,7 +438,7 @@ public partial class SnipWindow : Window
                             vm.BorderColor,
                             vm.BorderThickness,
                             false, // runAI (auto background removal)
-                            true,  // initialInteractive → enter SAM2 point-removal
+                            false, // initialInteractive (do NOT auto-enter SAM2 point-removal)
                             null,  // pinnedText
                             0.0)); // inferredFontSize
                 };
