@@ -1,12 +1,8 @@
 using System;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Linq;
 using System.Reactive;
-using System.Reactive.Linq;
 using GimmeCapture.Models;
-using GimmeCapture.Services.Core.Infrastructure;
-using GimmeCapture.Services.Core.Rendering;
+using GimmeCapture.ViewModels.Shared;
 using ReactiveUI;
 using SkiaSharp;
 
@@ -15,34 +11,36 @@ namespace GimmeCapture.ViewModels.Floating;
 // Tier-2a object redaction: the user draws a box around an object at a few playhead positions
 // ("keyframes"); on export the box is interpolated between them and the chosen effect (blur / mosaic /
 // black) is burned into every frame. Authoring uses the existing selection rectangle (no SAM2 wiring).
+// The editing logic lives in the shared RedactionEditorState (also used by the compress 進階影片編輯
+// editor); this partial is pure delegation so the Pin window's public surface and XAML bindings are
+// unchanged.
 public partial class FloatingVideoViewModel
 {
+    private RedactionEditorState _redaction = null!;
+
     /// <summary>Redaction tracks (one per tracked object) burned into the exported video.</summary>
-    public ObservableCollection<RedactionTrack> RedactionTracks { get; } = new();
+    public ObservableCollection<RedactionTrack> RedactionTracks => _redaction.RedactionTracks;
 
-    // The track new keyframes are appended to. Null until the first keyframe, or after "new object".
-    private RedactionTrack? _activeRedactionTrack;
-
-    private RedactionEffect _selectedRedactionEffect = RedactionEffect.Blur;
     public RedactionEffect SelectedRedactionEffect
     {
-        get => _selectedRedactionEffect;
-        set => this.RaiseAndSetIfChanged(ref _selectedRedactionEffect, value);
+        get => _redaction.SelectedRedactionEffect;
+        set => _redaction.SelectedRedactionEffect = value;
     }
+
+    /// <summary>The selectable redaction effects, for the effect dropdown.</summary>
+    public System.Collections.Generic.IReadOnlyList<RedactionEffect> AvailableRedactionEffects => _redaction.AvailableEffects;
 
     /// <summary>True when at least one track has a keyframe (i.e. export must burn redaction in).</summary>
-    public bool HasRedaction => RedactionTracks.Any(t => t.Keyframes.Count > 0);
+    public bool HasRedaction => _redaction.HasRedaction;
 
     /// <summary>Short human summary for the toolbar tooltip / status.</summary>
-    public string RedactionStatus
-    {
-        get
-        {
-            int objects = RedactionTracks.Count(t => t.Keyframes.Count > 0);
-            int keyframes = RedactionTracks.Sum(t => t.Keyframes.Count);
-            return $"{objects} object(s), {keyframes} keyframe(s) — {SelectedRedactionEffect}";
-        }
-    }
+    public string RedactionStatus => _redaction.RedactionStatus;
+
+    /// <summary>
+    /// Display-space boxes for every track at the current playhead — the live-preview overlay binds to
+    /// this so a just-added keyframe is visible immediately (and the box moves as you scrub/play).
+    /// </summary>
+    public ObservableCollection<Avalonia.Rect> ActiveRedactionBoxes => _redaction.ActiveRedactionBoxes;
 
     public ReactiveCommand<Unit, Unit> AddRedactionKeyframeCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> NewRedactionObjectCommand { get; private set; } = null!;
@@ -51,128 +49,33 @@ public partial class FloatingVideoViewModel
 
     private void InitializeRedactionCommands()
     {
-        var canAdd = this.WhenAnyValue(x => x.IsSelectionActive);
-        AddRedactionKeyframeCommand = ReactiveCommand.Create(AddRedactionKeyframe, canAdd);
-        NewRedactionObjectCommand = ReactiveCommand.Create(() => { _activeRedactionTrack = null; });
-        ClearRedactionCommand = ReactiveCommand.Create(ClearRedaction);
-        CycleRedactionEffectCommand = ReactiveCommand.Create(CycleRedactionEffect);
-    }
+        _redaction = new RedactionEditorState(
+            () => (DisplayWidth, DisplayHeight),
+            () => CurrentTime.TotalSeconds,
+            () => SelectionRect,
+            () => SelectionRect = new Avalonia.Rect(),
+            this.WhenAnyValue(x => x.IsSelectionActive));
 
-    // Snaps the current selection box (display coords) as a keyframe at the playhead, normalized to
-    // [0,1] so it is resolution-independent at export. Replaces an existing keyframe at the same time.
-    private void AddRedactionKeyframe()
-    {
-        double dw = DisplayWidth, dh = DisplayHeight;
-        if (!IsSelectionActive || dw <= 0 || dh <= 0)
+        // Re-raise the delegating properties so existing bindings (tooltip, export guards) stay live.
+        _redaction.Changed += () =>
         {
-            return;
-        }
-
-        var r = SelectionRect;
-        double w = Math.Clamp(r.Width / dw, 0, 1);
-        double h = Math.Clamp(r.Height / dh, 0, 1);
-        if (w <= 0 || h <= 0)
-        {
-            return;
-        }
-
-        var keyframe = new RedactionKeyframe
-        {
-            TimeSeconds = CurrentTime.TotalSeconds,
-            X = Math.Clamp(r.X / dw, 0, 1),
-            Y = Math.Clamp(r.Y / dh, 0, 1),
-            Width = w,
-            Height = h,
+            this.RaisePropertyChanged(nameof(HasRedaction));
+            this.RaisePropertyChanged(nameof(RedactionStatus));
+            this.RaisePropertyChanged(nameof(SelectedRedactionEffect));
         };
 
-        if (_activeRedactionTrack == null)
-        {
-            _activeRedactionTrack = new RedactionTrack { Effect = SelectedRedactionEffect };
-            RedactionTracks.Add(_activeRedactionTrack);
-        }
-
-        _activeRedactionTrack.Keyframes.RemoveAll(k => Math.Abs(k.TimeSeconds - keyframe.TimeSeconds) < 1e-3);
-        _activeRedactionTrack.Keyframes.Add(keyframe);
-
-        AppLog.Information($"FloatingVideo.RedactionKeyframe t={keyframe.TimeSeconds:0.###} effect={_activeRedactionTrack.Effect}");
-        RaiseRedactionChanged();
-
-        // Clear the selection marquee so the semi-transparent box doesn't linger on screen (it looked like
-        // a stuck redaction); the red dashed preview now shows the keyframe. Re-draw for the next keyframe.
-        SelectionRect = new Avalonia.Rect();
+        AddRedactionKeyframeCommand = _redaction.AddKeyframeCommand;
+        NewRedactionObjectCommand = _redaction.NewObjectCommand;
+        ClearRedactionCommand = _redaction.ClearCommand;
+        CycleRedactionEffectCommand = _redaction.CycleEffectCommand;
     }
 
-    private void ClearRedaction()
-    {
-        RedactionTracks.Clear();
-        _activeRedactionTrack = null;
-        RaiseRedactionChanged();
-    }
-
-    private void CycleRedactionEffect()
-    {
-        SelectedRedactionEffect = SelectedRedactionEffect switch
-        {
-            RedactionEffect.Blur => RedactionEffect.Mosaic,
-            RedactionEffect.Mosaic => RedactionEffect.SolidBlack,
-            _ => RedactionEffect.Blur,
-        };
-
-        // Re-style the track currently being authored so the choice takes effect immediately.
-        if (_activeRedactionTrack != null)
-        {
-            _activeRedactionTrack.Effect = SelectedRedactionEffect;
-        }
-
-        RaiseRedactionChanged();
-    }
-
-    private void RaiseRedactionChanged()
-    {
-        this.RaisePropertyChanged(nameof(HasRedaction));
-        this.RaisePropertyChanged(nameof(RedactionStatus));
-        RefreshActiveRedactionBoxes();
-    }
-
-    /// <summary>
-    /// Display-space boxes for every track at the current playhead — the live-preview overlay binds to
-    /// this so a just-added keyframe is visible immediately (and the box moves as you scrub/play).
-    /// </summary>
-    public ObservableCollection<Avalonia.Rect> ActiveRedactionBoxes { get; } = new();
-
-    internal void RefreshActiveRedactionBoxes()
-    {
-        ActiveRedactionBoxes.Clear();
-        double dw = DisplayWidth, dh = DisplayHeight;
-        if (dw <= 0 || dh <= 0)
-        {
-            return;
-        }
-
-        double t = CurrentTime.TotalSeconds;
-        foreach (RedactionTrack track in RedactionTracks)
-        {
-            RedactionBox? box = RedactionInterpolator.EvaluateAt(track, t);
-            if (box is { } b)
-            {
-                ActiveRedactionBoxes.Add(new Avalonia.Rect(b.X * dw, b.Y * dh, b.Width * dw, b.Height * dh));
-            }
-        }
-    }
+    internal void RefreshActiveRedactionBoxes() => _redaction.RefreshActiveBoxes();
 
     /// <summary>
     /// A composite hook that burns the current redaction tracks into each frame at its source time,
     /// or null when there is nothing to redact. The tracks are snapshotted so the export worker thread
     /// is not affected by later edits.
     /// </summary>
-    private Action<SKBitmap, double>? BuildRedactionComposite()
-    {
-        if (!HasRedaction)
-        {
-            return null;
-        }
-
-        List<RedactionTrack> snapshot = RedactionTracks.Where(t => t.Keyframes.Count > 0).ToList();
-        return (sk, t) => RedactionRenderer.Render(sk, snapshot, t);
-    }
+    private Action<SKBitmap, double>? BuildRedactionComposite() => _redaction.BuildComposite();
 }

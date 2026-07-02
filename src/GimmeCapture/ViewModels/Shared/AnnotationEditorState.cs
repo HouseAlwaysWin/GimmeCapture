@@ -449,6 +449,69 @@ public sealed class AnnotationEditorState : ReactiveObject, IDisposable
         }
     }
 
+    // A Callout leader drawn by dragging, pending in the list and awaiting its label text.
+    private Annotation? _pendingTextLeader;
+
+    /// <summary>Marks a dragged Callout leader as awaiting its label; the next text confirm attaches it.</summary>
+    public void BeginCalloutTextEntry(Annotation leader) => _pendingTextLeader = leader;
+
+    /// <summary>
+    /// Completes the text-entry overlay: attaches the typed label to a pending Callout leader (syncing the
+    /// current style), or adds a plain Text annotation at the input position. Clears the entry state.
+    /// </summary>
+    public void ConfirmTextEntry()
+    {
+        if (_pendingTextLeader != null)
+        {
+            // Callout: the leader was already drawn by dragging and is pending in the list.
+            // Attach the typed label, sync the current style, and commit it.
+            var leader = _pendingTextLeader;
+            _pendingTextLeader = null;
+            leader.Text = PendingText ?? string.Empty;
+            leader.Color = SelectedColor;
+            leader.Thickness = CurrentThickness;
+            leader.FontSize = CurrentFontSize;
+            leader.FontFamily = CurrentFontFamily;
+            leader.IsBold = IsBold;
+            leader.IsItalic = IsItalic;
+            if (!CommitPendingAnnotation(leader))
+            {
+                CancelPendingAnnotation(leader);
+            }
+        }
+        else if (!string.IsNullOrWhiteSpace(PendingText))
+        {
+            AddAnnotation(new Annotation
+            {
+                Type = AnnotationType.Text,
+                StartPoint = TextInputPosition,
+                EndPoint = TextInputPosition,
+                Text = PendingText,
+                Color = SelectedColor,
+                FontSize = CurrentFontSize,
+                FontFamily = CurrentFontFamily,
+                IsBold = IsBold,
+                IsItalic = IsItalic
+            });
+        }
+
+        IsEnteringText = false;
+        PendingText = string.Empty;
+    }
+
+    /// <summary>Cancels the text-entry overlay, removing any pending Callout leader.</summary>
+    public void CancelTextEntry()
+    {
+        if (_pendingTextLeader != null)
+        {
+            CancelPendingAnnotation(_pendingTextLeader);
+            _pendingTextLeader = null;
+        }
+
+        IsEnteringText = false;
+        PendingText = string.Empty;
+    }
+
     public void RemoveAnnotation(Annotation annotation)
     {
         if (ReferenceEquals(SelectedAnnotation, annotation))

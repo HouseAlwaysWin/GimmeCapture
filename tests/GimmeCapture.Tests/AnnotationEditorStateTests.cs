@@ -18,6 +18,84 @@ public class AnnotationEditorStateTests
         };
 
     [Fact]
+    public void ConfirmTextEntry_AddsTextAnnotation_WithCurrentStyle()
+    {
+        var state = new AnnotationEditorState();
+        state.IsEnteringText = true;
+        state.TextInputPosition = new Point(20, 30);
+        state.PendingText = "hello";
+        state.CurrentFontSize = 24;
+        state.IsBold = true;
+
+        state.ConfirmTextEntry();
+
+        Assert.Single(state.Annotations);
+        Assert.Equal(AnnotationType.Text, state.Annotations[0].Type);
+        Assert.Equal("hello", state.Annotations[0].Text);
+        Assert.Equal(24, state.Annotations[0].FontSize);
+        Assert.True(state.Annotations[0].IsBold);
+        Assert.False(state.IsEnteringText);
+        Assert.Equal(string.Empty, state.PendingText);
+    }
+
+    [Fact]
+    public void ConfirmTextEntry_AttachesLabelToPendingCalloutLeader()
+    {
+        var state = new AnnotationEditorState();
+        var leader = new Annotation
+        {
+            Type = AnnotationType.Callout,
+            StartPoint = new Point(10, 10),
+            EndPoint = new Point(80, 80),
+        };
+        state.BeginPendingAnnotation(leader);
+        state.BeginCalloutTextEntry(leader);
+        state.IsEnteringText = true;
+        state.PendingText = "label";
+
+        state.ConfirmTextEntry();
+
+        Assert.Contains(leader, state.Annotations);
+        Assert.Equal("label", leader.Text);
+        Assert.False(state.IsEnteringText);
+    }
+
+    [Fact]
+    public void CancelTextEntry_RemovesPendingCalloutLeader()
+    {
+        var state = new AnnotationEditorState();
+        var leader = new Annotation
+        {
+            Type = AnnotationType.Callout,
+            StartPoint = new Point(10, 10),
+            EndPoint = new Point(80, 80),
+        };
+        state.BeginPendingAnnotation(leader);
+        state.BeginCalloutTextEntry(leader);
+        state.IsEnteringText = true;
+        state.PendingText = "discard";
+
+        state.CancelTextEntry();
+
+        Assert.DoesNotContain(leader, state.Annotations);
+        Assert.False(state.IsEnteringText);
+        Assert.Equal(string.Empty, state.PendingText);
+    }
+
+    [Fact]
+    public void ConfirmTextEntry_WhitespaceOnly_AddsNothing()
+    {
+        var state = new AnnotationEditorState();
+        state.IsEnteringText = true;
+        state.PendingText = "   ";
+
+        state.ConfirmTextEntry();
+
+        Assert.Empty(state.Annotations);
+        Assert.False(state.IsEnteringText);
+    }
+
+    [Fact]
     public void ToggleToolGroup_RemembersLastRedactionToolAndPreset()
     {
         var state = new AnnotationEditorState();

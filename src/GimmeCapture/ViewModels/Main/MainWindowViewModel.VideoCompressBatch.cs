@@ -188,6 +188,40 @@ public partial class MainWindowViewModel
             }
         }
 
+        // Optional burn-in layers from the 進階影片編輯 editor: annotations (drawn in the editor's surface
+        // space — the cropped+rotated preview-frame pixel size recorded below) and redaction tracks
+        // (normalized [0,1]). Burned into the frames post-transform at encode.
+        private IReadOnlyList<Annotation>? _annotations;
+        public IReadOnlyList<Annotation>? Annotations
+        {
+            get => _annotations;
+            set
+            {
+                this.RaiseAndSetIfChanged(ref _annotations, value);
+                RaiseEditSummary();
+            }
+        }
+
+        /// <summary>The surface (reference) size the annotations were drawn against.</summary>
+        public double AnnotationSurfaceWidth { get; set; }
+        public double AnnotationSurfaceHeight { get; set; }
+
+        private IReadOnlyList<RedactionTrack>? _redactionTracks;
+        public IReadOnlyList<RedactionTrack>? RedactionTracks
+        {
+            get => _redactionTracks;
+            set
+            {
+                this.RaiseAndSetIfChanged(ref _redactionTracks, value);
+                RaiseEditSummary();
+            }
+        }
+
+        /// <summary>True when annotations/redaction must be burned per frame (forces the whole-file path).</summary>
+        public bool HasBurnInEdits =>
+            (_annotations?.Count ?? 0) > 0
+            || (_redactionTracks?.Any(t => t.Keyframes.Count > 0) ?? false);
+
         // Optional per-file edit: the kept runs (source [start,end] pieces, each optionally time-scaled)
         // concatenated at encode. Empty/off = whole clip. Edited in the 進階影片編輯 window; persisted per file.
         private bool _trimEnabled;
@@ -244,14 +278,14 @@ public partial class MainWindowViewModel
             runs.Count > 1
             || (runs.Count == 1 && (runs[0].Start > 0.05 || (ProbedDuration > 0 && runs[0].End < ProbedDuration - 0.05)));
 
-        /// <summary>True when the clip carries any edit (trim, speed, crop, or rotation).</summary>
+        /// <summary>True when the clip carries any edit (trim, speed, crop, rotation, or burn-in layers).</summary>
         public bool HasEdits
         {
             get
             {
                 IReadOnlyList<(double Start, double End, double Speed)> runs = EffectiveKeptRuns();
                 bool retimed = runs.Any(r => Math.Abs(r.Speed - 1.0) > 0.001);
-                return RunsAreTrimmed(runs) || retimed || Crop != null || Rotation != 0;
+                return RunsAreTrimmed(runs) || retimed || Crop != null || Rotation != 0 || HasBurnInEdits;
             }
         }
 
@@ -285,6 +319,14 @@ public partial class MainWindowViewModel
                 if (Rotation != 0)
                 {
                     parts.Add($"{loc["CompressEditRotate"]} {Rotation}°");
+                }
+                if ((_annotations?.Count ?? 0) > 0)
+                {
+                    parts.Add(loc["CompressEditAnnotated"]);
+                }
+                if (_redactionTracks?.Any(t => t.Keyframes.Count > 0) ?? false)
+                {
+                    parts.Add(loc["CompressEditRedacted"]);
                 }
                 return string.Join(" · ", parts);
             }
@@ -660,6 +702,14 @@ public partial class MainWindowViewModel
         item.Crop = st.CropWidth > 0 && st.CropHeight > 0
             ? new VideoEditCrop(st.CropX, st.CropY, st.CropWidth, st.CropHeight)
             : null;
+        item.Annotations = st.Annotations is { Count: > 0 }
+            ? CompressEditStateMapper.FromState(st.Annotations)
+            : null;
+        item.AnnotationSurfaceWidth = st.AnnotationSurfaceWidth;
+        item.AnnotationSurfaceHeight = st.AnnotationSurfaceHeight;
+        item.RedactionTracks = st.RedactionTracks is { Count: > 0 }
+            ? CompressEditStateMapper.FromState(st.RedactionTracks)
+            : null;
         if (st.Done)
         {
             item.Status = CompressQueueStatus.Done;
@@ -689,7 +739,15 @@ public partial class MainWindowViewModel
             CropX = item.Crop?.X ?? 0,
             CropY = item.Crop?.Y ?? 0,
             CropWidth = item.Crop?.Width ?? 0,
-            CropHeight = item.Crop?.Height ?? 0
+            CropHeight = item.Crop?.Height ?? 0,
+            Annotations = item.Annotations is { Count: > 0 }
+                ? CompressEditStateMapper.ToState(item.Annotations)
+                : null,
+            AnnotationSurfaceWidth = item.AnnotationSurfaceWidth,
+            AnnotationSurfaceHeight = item.AnnotationSurfaceHeight,
+            RedactionTracks = item.RedactionTracks is { Count: > 0 }
+                ? CompressEditStateMapper.ToState(item.RedactionTracks)
+                : null
         };
         CompressItemStateService.Save(_itemStates);
     }
@@ -847,6 +905,10 @@ public partial class MainWindowViewModel
                             PersistItemState(item);
                             item.EstimatedText = BuildItemEstimate(item);
                         });
+                    // Burn-in layers persist too (they don't change the size estimate meaningfully).
+                    item.WhenAnyValue(x => x.Annotations, x => x.RedactionTracks)
+                        .Skip(1)
+                        .Subscribe(_ => PersistItemState(item));
                     CompressQueue.Add(item);
                     added.Add(item);
                 }
@@ -1067,6 +1129,9 @@ public partial class MainWindowViewModel
         bool appendDate = CompressAppendDate;
         // Per-file kept runs captured on the UI thread (whole clip when trim off); re-clamped against the fresh probe.
         IReadOnlyList<(double Start, double End, double Speed)> keptRuns = item.EffectiveKeptRuns();
+        // Annotations/redaction burn-in (snapshotted here on the UI thread; null when the item has neither).
+        Action<SKBitmap, double>? burnIn = BuildBurnInComposite(
+            item.Annotations, item.AnnotationSurfaceWidth, item.AnnotationSurfaceHeight, item.RedactionTracks);
         item.PrepareForStart(_batchCts.Token);
         var progress = new Progress<double>(p => item.Progress = p); // UI thread → callbacks marshal back
         var resumeProgress = new Progress<double>(p => item.ResumePoint = p); // last safe pause checkpoint
@@ -1074,12 +1139,13 @@ public partial class MainWindowViewModel
 
         _inFlight++;
         IsBatchRunning = true;
-        _ = RunQueueItemAsync(item, snap, ext, outputFolder, appendDate, progress, resumeProgress, keptRuns);
+        _ = RunQueueItemAsync(item, snap, ext, outputFolder, appendDate, progress, resumeProgress, keptRuns, burnIn);
     }
 
     private async Task RunQueueItemAsync(
         CompressQueueItem item, CompressSettingsSnapshot snap, string ext, string outputFolder, bool appendDate,
-        IProgress<double> progress, IProgress<double> resumeProgress, IReadOnlyList<(double Start, double End, double Speed)> keptRuns)
+        IProgress<double> progress, IProgress<double> resumeProgress,
+        IReadOnlyList<(double Start, double End, double Speed)> keptRuns, Action<SKBitmap, double>? burnInComposite)
     {
         SemaphoreSlim semaphore = _batchSemaphore!;
         CancellationToken token = item.Cts!.Token;
@@ -1128,9 +1194,10 @@ public partial class MainWindowViewModel
                 bool hasSpeed = runs.Any(r => Math.Abs(r.Speed - 1.0) > 0.001);
                 VideoEditCrop? crop = item.Crop;
 
-                // Resumable segmented CRF only handles one contiguous, full-speed, un-cropped span; anything else
-                // (target-size / multi-segment / speed / crop) uses the whole-file concat path below.
-                item.SupportsResume = !snap.UseTargetSize && duration > 0 && !multiSegment && !hasSpeed && crop == null;
+                // Resumable segmented CRF only handles one contiguous, full-speed, un-cropped, un-annotated span;
+                // anything else (target-size / multi-segment / speed / crop / burn-in) uses the whole-file path below.
+                item.SupportsResume = !snap.UseTargetSize && duration > 0 && !multiSegment && !hasSpeed && crop == null
+                    && burnInComposite == null;
                 int targetKbps = 0;
                 if (snap.UseTargetSize)
                 {
@@ -1159,7 +1226,7 @@ public partial class MainWindowViewModel
 
                 bool ok = await EncodeOneFileAsync(
                     item.Path, outputPath, snap, targetKbps, duration, progress, token, item.Gate, item.Rotation,
-                    resumeProgress, runs, crop);
+                    resumeProgress, runs, crop, burnInComposite);
                 item.Status = ok ? CompressQueueStatus.Done : CompressQueueStatus.Failed;
                 if (ok)
                 {

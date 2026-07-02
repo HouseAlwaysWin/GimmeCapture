@@ -15,10 +15,15 @@ public class VideoEditViewModelTests
 {
     private static VideoEditViewModel Make(
         double duration = 100, IReadOnlyList<VideoEditSegment>? kept = null, VideoEditCrop? crop = null,
-        int rotation = 0, Action<IReadOnlyList<VideoEditSegment>, VideoEditCrop?, int>? onApply = null)
-        => new(@"C:\does-not-exist.mp4", duration, 30, 1920, 1080, rotation,
-               kept ?? new[] { new VideoEditSegment(0, duration) }, crop,
-               onApply ?? ((_, _, _) => { }));
+        int rotation = 0, Action<VideoEditResult>? onApply = null)
+        => new(@"C:\does-not-exist.mp4", duration, 30, 1920, 1080,
+               VideoEditResult.Empty with
+               {
+                   KeptRuns = kept ?? new[] { new VideoEditSegment(0, duration) },
+                   Crop = crop,
+                   RotationDegrees = rotation,
+               },
+               onApply ?? (_ => { }));
 
     [Fact]
     public void Constructor_WholeClip_IsOneKeptRun()
@@ -127,44 +132,145 @@ public class VideoEditViewModelTests
     }
 
     [Fact]
-    public void SetCropFromSelection_MapsToSourcePixels_AndClearResets()
+    public async Task SetCropFromSelection_MapsToSourcePixels_AndClearResets()
     {
         using var vm = Make(100); // source 1920×1080
 
         // Left-half selection on a 960×540 display (2× scale) → source (0,0,960,540).
-        vm.SetCropFromSelection(0, 0, 480, 270, 960, 540);
+        await vm.SetCropFromSelectionAsync(0, 0, 480, 270, 960, 540);
 
         Assert.True(vm.HasCrop);
         Assert.Equal(0, vm.Crop!.X);
         Assert.Equal(960, vm.Crop.Width);
         Assert.Equal(540, vm.Crop.Height);
 
-        vm.ClearCrop();
+        await vm.ClearCropAsync();
         Assert.False(vm.HasCrop);
     }
 
     [Fact]
-    public void Apply_ReturnsKeptRuns_Crop_AndRotation()
+    public async Task Apply_ReturnsFullEditResult()
     {
-        IReadOnlyList<VideoEditSegment>? gotRuns = null;
-        VideoEditCrop? gotCrop = null;
-        int gotRotation = -1;
-        using var vm = Make(100, rotation: 90,
-            onApply: (runs, crop, rot) => { gotRuns = runs; gotCrop = crop; gotRotation = rot; });
+        VideoEditResult? got = null;
+        using var vm = Make(100, rotation: 90, onApply: r => got = r);
         vm.PositionSeconds = 50;
         vm.Split();
         vm.ToggleKept(0); // keep [50,100]
-        vm.SetCropFromSelection(0, 0, 480, 270, 960, 540);
+        await vm.SetCropFromSelectionAsync(0, 0, 480, 270, 960, 540);
         vm.Rotate(); // 90 → 180
 
         vm.Apply();
 
-        Assert.NotNull(gotRuns);
-        Assert.Single(gotRuns!);
-        Assert.Equal(50d, gotRuns![0].SourceStart);
-        Assert.Equal(100d, gotRuns[0].SourceEnd);
-        Assert.NotNull(gotCrop);
-        Assert.Equal(180, gotRotation);
+        Assert.NotNull(got);
+        Assert.Single(got!.KeptRuns);
+        Assert.Equal(50d, got.KeptRuns[0].SourceStart);
+        Assert.Equal(100d, got.KeptRuns[0].SourceEnd);
+        Assert.NotNull(got.Crop);
+        Assert.Equal(180, got.RotationDegrees);
+        Assert.Empty(got.Annotations);
+        Assert.Empty(got.RedactionTracks);
+    }
+
+    [Fact]
+    public void Apply_CarriesAnnotationsAndRedaction_WithSurfaceDims()
+    {
+        VideoEditResult? got = null;
+        using var vm = Make(100, onApply: r => got = r);
+
+        vm.EditorState.AddAnnotation(new Annotation
+        {
+            Type = AnnotationType.Rectangle,
+            StartPoint = new Avalonia.Point(10, 10),
+            EndPoint = new Avalonia.Point(60, 60),
+        });
+        vm.PositionSeconds = 5;
+        vm.SelectionRect = new Avalonia.Rect(10, 10, 100, 80);
+        vm.Redaction.AddKeyframe();
+
+        vm.Apply();
+
+        Assert.NotNull(got);
+        Assert.Single(got!.Annotations);
+        Assert.Single(got.RedactionTracks);
+        Assert.True(got.AnnotationSurfaceWidth > 0);
+        Assert.True(got.AnnotationSurfaceHeight > 0);
+    }
+
+    [Fact]
+    public async Task TransformChange_WithBurnInEdits_ConfirmsAndClears()
+    {
+        using var vm = Make(100);
+        vm.EditorState.AddAnnotation(new Annotation
+        {
+            Type = AnnotationType.Rectangle,
+            StartPoint = new Avalonia.Point(0, 0),
+            EndPoint = new Avalonia.Point(20, 20),
+        });
+
+        bool asked = false;
+        vm.ConfirmTransformClearsEditsAction = () => { asked = true; return Task.FromResult(true); };
+        await vm.SetCropFromSelectionAsync(0, 0, 480, 270, 960, 540);
+
+        Assert.True(asked);
+        Assert.Empty(vm.EditorState.Annotations); // cleared on confirm
+        Assert.True(vm.HasCrop);
+    }
+
+    [Fact]
+    public async Task TransformChange_Declined_KeepsEditsAndTransform()
+    {
+        using var vm = Make(100);
+        vm.EditorState.AddAnnotation(new Annotation
+        {
+            Type = AnnotationType.Rectangle,
+            StartPoint = new Avalonia.Point(0, 0),
+            EndPoint = new Avalonia.Point(20, 20),
+        });
+        vm.ConfirmTransformClearsEditsAction = () => Task.FromResult(false);
+
+        await vm.SetCropFromSelectionAsync(0, 0, 480, 270, 960, 540);
+
+        Assert.Single(vm.EditorState.Annotations);
+        Assert.False(vm.HasCrop);
+    }
+
+    [Fact]
+    public void SurfaceDims_FollowCropAndRotation()
+    {
+        using var vm = Make(100); // 1920×1080 source → decode capped at 720 wide (720×404)
+        double w0 = vm.SurfaceWidth, h0 = vm.SurfaceHeight;
+        Assert.True(w0 > h0); // landscape
+
+        vm.Rotate(); // 90° → transposed surface
+        Assert.Equal(w0, vm.SurfaceHeight, 3);
+        Assert.Equal(h0, vm.SurfaceWidth, 3);
+    }
+
+    [Fact]
+    public void GlobalSpeed_CyclesAndFormats()
+    {
+        using var vm = Make(100);
+        Assert.Equal("1×", vm.PlaybackSpeedText);
+
+        vm.CycleGlobalSpeedCommand.Execute().Subscribe();
+        Assert.Equal(1.5, vm.PlaybackSpeed, 3);
+        vm.CycleGlobalSpeedCommand.Execute().Subscribe();
+        Assert.Equal(2.0, vm.PlaybackSpeed, 3);
+        vm.CycleGlobalSpeedCommand.Execute().Subscribe();
+        Assert.Equal(0.5, vm.PlaybackSpeed, 3);
+    }
+
+    [Fact]
+    public void ToolbarCategory_TogglesAndCollapses()
+    {
+        using var vm = Make(100);
+        Assert.True(vm.IsEditCategory); // default
+
+        vm.SelectToolbarCategoryCommand.Execute(ToolbarCategory.Annotate).Subscribe();
+        Assert.True(vm.IsAnnotateCategory);
+        vm.SelectToolbarCategoryCommand.Execute(ToolbarCategory.Annotate).Subscribe();
+        Assert.False(vm.IsAnnotateCategory); // same category collapses
+        Assert.False(vm.IsSubToolbarVisible);
     }
 
     [Fact]

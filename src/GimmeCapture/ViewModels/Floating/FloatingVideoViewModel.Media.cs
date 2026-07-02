@@ -164,22 +164,6 @@ public partial class FloatingVideoViewModel
         return oldCts;
     }
 
-    private CancellationTokenSource? CancelAudioDecodeToken()
-    {
-        var oldCts = Interlocked.Exchange(ref _pinAudioDecodeCts, null);
-        if (oldCts != null)
-        {
-            try
-            {
-                oldCts.Cancel();
-            }
-            catch (ObjectDisposedException)
-            {
-            }
-        }
-
-        return oldCts;
-    }
 
     private void StartPlayback()
     {
@@ -405,62 +389,13 @@ public partial class FloatingVideoViewModel
 
     private void StartAudioPlayback()
     {
-        StopAudioPlayback();
+        _audioPreview.Stop();
         if (_isDisposed || IsMuted || !_isPlaybackActive) return;
 
-        var startSeconds = Math.Max(0, _currentTime.TotalSeconds);
         // Preview audio must honor the per-segment speed too (the timeline blocks' 1.5×/0.5×/2×),
         // not just the global playback-speed button — otherwise a sped-up segment's video runs fast
         // while its audio stays at the global rate. Mirrors the video's effectivePlaybackSpeed.
-        var effSpeed = EffectiveAudioSpeed();
-        try
-        {
-            if (ShouldUseDecodedAudioPlayback(effSpeed))
-            {
-                StartDecodedAudioPlayback(startSeconds, effSpeed);
-                return;
-            }
-
-            var reader = new MediaFoundationReader(VideoPath);
-            if (_isDisposed)
-            {
-                reader.Dispose();
-                return;
-            }
-
-            reader.CurrentTime = TimeSpan.FromSeconds(startSeconds);
-            _audioPlaybackStream = reader;
-            _pinAudioPlayer = CreatePinAudioOutput(_audioPlaybackStream);
-            _pinAudioPlayer.Play();
-        }
-        catch (Exception ex)
-        {
-            if (_isDisposed)
-            {
-                return;
-            }
-
-            Debug.WriteLine($"[PinAudio] primary output failed: {ex.Message}");
-            StopAudioPlayback();
-
-            try
-            {
-                StartDecodedAudioPlayback(startSeconds, effSpeed);
-            }
-            catch (Exception fallbackEx)
-            {
-                Debug.WriteLine($"[PinAudio] FFmpeg fallback failed: {fallbackEx.Message}");
-                StopAudioPlayback();
-            }
-        }
-    }
-
-    private bool ShouldUseDecodedAudioPlayback(double effectiveSpeed)
-    {
-        // The MediaFoundationReader path plays at native (1×) speed only; any non-1× effective speed
-        // (global button and/or per-segment) must go through the decoded path, which retimes audio.
-        return string.Equals(Path.GetExtension(VideoPath), ".webm", StringComparison.OrdinalIgnoreCase)
-            || Math.Abs(effectiveSpeed - 1.0) > 0.01;
+        _audioPreview.Start(VideoPath, Math.Max(0, _currentTime.TotalSeconds), EffectiveAudioSpeed());
     }
 
     /// <summary>
@@ -485,109 +420,7 @@ public partial class FloatingVideoViewModel
         return _playbackSpeed * pieceSpeed;
     }
 
-    private void StartDecodedAudioPlayback(double startSeconds, double playbackSpeed)
-    {
-        if (_isDisposed)
-        {
-            return;
-        }
-
-        _pinAudioDecodeCts = new CancellationTokenSource();
-        if (_isDisposed)
-        {
-            CancelAudioDecodeToken()?.Dispose();
-            return;
-        }
-
-        var token = _pinAudioDecodeCts.Token;
-        var decoded = LibavPinAudioPcmDecoder.Decode(VideoPath, startSeconds, token);
-        if (_isDisposed || token.IsCancellationRequested)
-        {
-            return;
-        }
-
-        if (decoded.PcmBytes.Length == 0)
-        {
-            throw new InvalidOperationException("Decoded PCM is empty.");
-        }
-
-        var playbackWaveFormat = CreatePlaybackWaveFormat(decoded.WaveFormat, playbackSpeed);
-        var stream = new RawSourceWaveStream(new MemoryStream(decoded.PcmBytes, writable: false), playbackWaveFormat);
-        if (_isDisposed || token.IsCancellationRequested)
-        {
-            stream.Dispose();
-            return;
-        }
-
-        IWavePlayer? player = null;
-        try
-        {
-            player = CreatePinAudioOutput(stream);
-            if (_isDisposed || token.IsCancellationRequested)
-            {
-                player.Dispose();
-                stream.Dispose();
-                return;
-            }
-
-            _audioPlaybackStream = stream;
-            _pinAudioPlayer = player;
-            player.Play();
-        }
-        catch
-        {
-            player?.Dispose();
-            stream.Dispose();
-            throw;
-        }
-    }
-
-    private static WaveFormat CreatePlaybackWaveFormat(WaveFormat sourceFormat, double playbackSpeed)
-    {
-        double safeSpeed = Math.Clamp(playbackSpeed, 0.25, 4.0);
-        if (Math.Abs(safeSpeed - 1.0) < 0.01)
-        {
-            return sourceFormat;
-        }
-
-        int adjustedSampleRate = (int)Math.Round(sourceFormat.SampleRate * safeSpeed);
-        adjustedSampleRate = Math.Clamp(adjustedSampleRate, 8_000, 192_000);
-        return new WaveFormat(adjustedSampleRate, sourceFormat.BitsPerSample, sourceFormat.Channels);
-    }
-
-    private static IWavePlayer CreatePinAudioOutput(WaveStream stream)
-    {
-        var wasapi = new WasapiOut();
-        try
-        {
-            wasapi.Init(stream);
-            return wasapi;
-        }
-        catch
-        {
-            wasapi.Dispose();
-        }
-
-        var waveOut = new WaveOutEvent();
-        waveOut.Init(stream);
-        return waveOut;
-    }
-
-    private void StopAudioPlayback()
-    {
-        try
-        {
-            _pinAudioDecodeCts?.Cancel();
-            _pinAudioDecodeCts?.Dispose();
-            _pinAudioDecodeCts = null;
-            _pinAudioPlayer?.Stop();
-            _pinAudioPlayer?.Dispose();
-            _pinAudioPlayer = null;
-            _audioPlaybackStream?.Dispose();
-            _audioPlaybackStream = null;
-        }
-        catch (Exception ex) { AppLog.Warning("FloatingVideo.DisposeAudio", ex); }
-    }
+    private void StopAudioPlayback() => _audioPreview.Stop();
 
     private void RequestCurrentTimeUiRefresh(bool force = false)
     {

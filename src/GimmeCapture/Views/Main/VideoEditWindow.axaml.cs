@@ -6,9 +6,11 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Threading;
+using GimmeCapture.Models;
 using GimmeCapture.Services.Core.Media;
 using GimmeCapture.ViewModels.Floating;
 using GimmeCapture.ViewModels.Main;
+using GimmeCapture.Views.Shared;
 using ReactiveUI;
 
 namespace GimmeCapture.Views.Main;
@@ -24,9 +26,41 @@ public partial class VideoEditWindow : Window
     private bool _cropDragging;
     private Point _cropStart;
 
+    // Redaction selection marquee (surface coords)
+    private bool _marqueeActive;
+    private Point _marqueeStart;
+
+    // Shared annotation pointer state machine (same one the Pin windows use)
+    private readonly AnnotationInputController _annotationInput;
+
     public VideoEditWindow()
     {
         InitializeComponent();
+
+        _annotationInput = new AnnotationInputController(
+            getState: () => (DataContext as VideoEditViewModel)?.EditorState,
+            getContentControl: () => SurfacePanel,
+            getContentSnapshot: () => (DataContext as VideoEditViewModel)?.Frame,
+            isInteractionBlocked: () => (DataContext as VideoEditViewModel)?.IsPreparing ?? true,
+            confirmTextEntry: () =>
+            {
+                if (DataContext is VideoEditViewModel vm)
+                {
+                    vm.Draw.ConfirmTextEntryCommand.Execute(System.Reactive.Unit.Default).Subscribe();
+                }
+            },
+            focusTextInput: () => EditTextEntry?.FocusTextInput(),
+            // Capture to the surface panel (its own PointerMoved/Released handlers drive the state machine).
+            // Capturing to the window would redirect events away from the panel and strand mid-drag draws.
+            captureTarget: SurfacePanel,
+            setCursor: c => Cursor = c);
+
+        // Preview surface: annotation drawing/selection OR the redaction marquee, in surface coords.
+        SurfacePanel.PointerPressed += OnSurfacePressed;
+        SurfacePanel.PointerMoved += OnSurfaceMoved;
+        SurfacePanel.PointerReleased += OnSurfaceReleased;
+
+        KeyDown += OnEditorKeyDown;
 
         // Playback scrubber: pause on grab, seek to the dropped position on release.
         PositionSlider.AddHandler(PointerPressedEvent, OnScrubPressed, RoutingStrategies.Bubble, handledEventsToo: true);
@@ -48,6 +82,115 @@ public partial class VideoEditWindow : Window
         CropOverlay.PointerPressed += OnCropPressed;
         CropOverlay.PointerMoved += OnCropMoved;
         CropOverlay.PointerReleased += OnCropReleased;
+    }
+
+    // ── Preview surface: redaction marquee first (selection mode), else the annotation state machine ──
+
+    private void OnSurfacePressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (DataContext is not VideoEditViewModel vm)
+        {
+            return;
+        }
+
+        if (vm.IsSelectionMode && e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+        {
+            _marqueeActive = true;
+            _marqueeStart = ClampToSurface(e.GetPosition(SurfacePanel));
+            vm.SelectionRect = new Rect(_marqueeStart, new Size(0, 0));
+            e.Pointer.Capture(SurfacePanel);
+            e.Handled = true;
+            return;
+        }
+
+        _annotationInput.HandlePointerPressed(e);
+    }
+
+    private void OnSurfaceMoved(object? sender, PointerEventArgs e)
+    {
+        if (DataContext is not VideoEditViewModel vm)
+        {
+            return;
+        }
+
+        if (_marqueeActive)
+        {
+            Point pos = ClampToSurface(e.GetPosition(SurfacePanel));
+            vm.SelectionRect = new Rect(
+                Math.Min(_marqueeStart.X, pos.X),
+                Math.Min(_marqueeStart.Y, pos.Y),
+                Math.Abs(pos.X - _marqueeStart.X),
+                Math.Abs(pos.Y - _marqueeStart.Y));
+            return;
+        }
+
+        _annotationInput.HandlePointerMoved(e);
+    }
+
+    private void OnSurfaceReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        if (_marqueeActive)
+        {
+            _marqueeActive = false;
+            e.Pointer.Capture(null);
+            return;
+        }
+
+        _annotationInput.HandlePointerReleased(e);
+    }
+
+    private Point ClampToSurface(Point p) => new(
+        Math.Clamp(p.X, 0, SurfacePanel.Bounds.Width),
+        Math.Clamp(p.Y, 0, SurfacePanel.Bounds.Height));
+
+    // ── Keys: Delete (remove selected annotation), Esc (cancel in priority order), Ctrl+Z/Y ──
+    private void OnEditorKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (DataContext is not VideoEditViewModel vm)
+        {
+            return;
+        }
+
+        if (vm.Draw.IsEnteringText)
+        {
+            if (e.Key == Key.Escape)
+            {
+                vm.Draw.CancelTextEntryCommand.Execute(System.Reactive.Unit.Default).Subscribe();
+                e.Handled = true;
+            }
+            return; // typing — leave every other key to the TextBox
+        }
+
+        switch (e.Key)
+        {
+            case Key.Delete when vm.EditorState.SelectedAnnotation != null:
+                vm.EditorState.RemoveSelectedAnnotation();
+                e.Handled = true;
+                break;
+            case Key.Escape:
+                if (vm.IsSelectionMode)
+                {
+                    vm.IsSelectionMode = false;
+                }
+                else if (vm.EditorState.SelectedAnnotation != null)
+                {
+                    vm.EditorState.ClearSelection();
+                }
+                else if (vm.EditorState.CurrentAnnotationTool != AnnotationType.None)
+                {
+                    vm.EditorState.CurrentAnnotationTool = AnnotationType.None;
+                }
+                e.Handled = true;
+                break;
+            case Key.Z when e.KeyModifiers.HasFlag(KeyModifiers.Control):
+                vm.Draw.UndoCommand.Execute(System.Reactive.Unit.Default).Subscribe();
+                e.Handled = true;
+                break;
+            case Key.Y when e.KeyModifiers.HasFlag(KeyModifiers.Control):
+                vm.Draw.RedoCommand.Execute(System.Reactive.Unit.Default).Subscribe();
+                e.Handled = true;
+                break;
+        }
     }
 
     private void OnScrubPressed(object? sender, PointerPressedEventArgs e)
@@ -256,7 +399,7 @@ public partial class VideoEditWindow : Window
         double relW = relRight - relX, relH = relBottom - relY;
         if (relW >= 4 && relH >= 4)
         {
-            vm.SetCropFromSelection(relX, relY, relW, relH, contentW, contentH);
+            _ = vm.SetCropFromSelectionAsync(relX, relY, relW, relH, contentW, contentH);
         }
     }
 }

@@ -26,7 +26,7 @@ namespace GimmeCapture.ViewModels.Main;
 /// Playback plays the raw source (to find cut points); the strip shows what is kept and any per-piece speed.
 /// Reuses the shared VideoSegmentEditor / VideoEditSegment / SegmentBlockViewModel engine (same as the Pin editor).
 /// </summary>
-internal sealed class VideoEditViewModel : ViewModelBase, IDisposable
+internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
 {
     private readonly string _sourcePath;
     private readonly int _fps;
@@ -35,7 +35,7 @@ internal sealed class VideoEditViewModel : ViewModelBase, IDisposable
     private readonly double _duration;
     private readonly int _sourceWidth;
     private readonly int _sourceHeight;
-    private readonly Action<IReadOnlyList<VideoEditSegment>, VideoEditCrop?, int> _onApply;
+    private readonly Action<VideoEditResult> _onApply;
 
     private CancellationTokenSource? _playCts;
     private CancellationTokenSource? _stepCts;
@@ -43,13 +43,12 @@ internal sealed class VideoEditViewModel : ViewModelBase, IDisposable
 
     internal VideoEditViewModel(
         string sourcePath, double durationSeconds, int fps, int sourceWidth, int sourceHeight,
-        int rotation, IReadOnlyList<VideoEditSegment> initialKeptRuns, VideoEditCrop? initialCrop,
-        Action<IReadOnlyList<VideoEditSegment>, VideoEditCrop?, int> onApply)
+        VideoEditResult initial, Action<VideoEditResult> onApply)
     {
         _sourcePath = sourcePath;
         _fps = fps > 0 ? fps : 30;
-        _rotation = ((rotation % 360) + 360) % 360;
-        _crop = initialCrop;
+        _rotation = ((initial.RotationDegrees % 360) + 360) % 360;
+        _crop = initial.Crop;
         _onApply = onApply;
         _duration = durationSeconds > 0 ? durationSeconds : 0;
 
@@ -71,7 +70,7 @@ internal sealed class VideoEditViewModel : ViewModelBase, IDisposable
         CycleSpeedCommand = ReactiveCommand.Create(CycleSpeed);
         RotateCommand = ReactiveCommand.CreateFromTask(RotateAsync);
         ToggleCropCommand = ReactiveCommand.CreateFromTask(ToggleCropAsync);
-        ClearCropCommand = ReactiveCommand.Create(ClearCrop);
+        ClearCropCommand = ReactiveCommand.CreateFromTask(ClearCropAsync);
         ApplyCommand = ReactiveCommand.Create(Apply);
         CancelCommand = ReactiveCommand.Create(() => RequestClose?.Invoke());
 
@@ -86,7 +85,8 @@ internal sealed class VideoEditViewModel : ViewModelBase, IDisposable
         RotateCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.EditRotate", ex));
         ToggleCropCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.EditCrop", ex));
 
-        ReplaceSegments(BuildEditSegments(initialKeptRuns, _duration));
+        InitializeEditing(initial);
+        ReplaceSegments(BuildEditSegments(initial.KeptRuns, _duration));
     }
 
     public string Title { get; }
@@ -144,16 +144,32 @@ internal sealed class VideoEditViewModel : ViewModelBase, IDisposable
     public int RotationDegrees
     {
         get => _rotation;
-        private set { this.RaiseAndSetIfChanged(ref _rotation, value); this.RaisePropertyChanged(nameof(RotationText)); }
+        private set
+        {
+            this.RaiseAndSetIfChanged(ref _rotation, value);
+            this.RaisePropertyChanged(nameof(RotationText));
+            this.RaisePropertyChanged(nameof(HasRotation));
+        }
     }
 
     public string RotationText => $"{_rotation}°";
+    public bool HasRotation => _rotation != 0;
 
     /// <summary>Cycle the output rotation 0 → 90 → 180 → 270 → 0.</summary>
-    public void Rotate() => RotationDegrees = (_rotation + 90) % 360;
+    public void Rotate()
+    {
+        RotationDegrees = (_rotation + 90) % 360;
+        RaiseSurfaceChanged();
+    }
 
     private async Task RotateAsync()
     {
+        // Surface-space annotations/redaction don't survive a transform change — confirm, then clear.
+        if (!await ConfirmTransformChangeAsync())
+        {
+            return;
+        }
+
         Rotate();
         await ShowFrameAtAsync(PositionSeconds); // re-render the current frame at the new angle
     }
@@ -185,19 +201,30 @@ internal sealed class VideoEditViewModel : ViewModelBase, IDisposable
         await ShowFrameAtAsync(PositionSeconds);
     }
 
-    public void ClearCrop() => Crop = null;
+    public async Task ClearCropAsync()
+    {
+        if (_crop == null || !await ConfirmTransformChangeAsync())
+        {
+            return;
+        }
+
+        Crop = null;
+        RaiseSurfaceChanged();
+        await ShowFrameAtAsync(PositionSeconds);
+    }
 
     /// <summary>Set the crop from a selection drawn on the un-rotated preview content rect (view maps to content coords).</summary>
-    public void SetCropFromSelection(double relX, double relY, double relWidth, double relHeight, double contentWidth, double contentHeight)
+    public async Task SetCropFromSelectionAsync(double relX, double relY, double relWidth, double relHeight, double contentWidth, double contentHeight)
     {
         VideoEditCrop? crop = VideoCropMath.SelectionToCrop(
             relX, relY, relWidth, relHeight, contentWidth, contentHeight, _sourceWidth, _sourceHeight);
-        if (crop != null)
+        if (crop != null && await ConfirmTransformChangeAsync())
         {
             Crop = crop;
+            RaiseSurfaceChanged();
         }
         IsCropMode = false;
-        _ = ShowFrameAtAsync(PositionSeconds);
+        await ShowFrameAtAsync(PositionSeconds);
     }
 
     private bool _isPlaying;
@@ -409,10 +436,13 @@ internal sealed class VideoEditViewModel : ViewModelBase, IDisposable
         return segs;
     }
 
-    /// <summary>Write the edit (kept runs with speed, crop, rotation) back to the queue item and close.</summary>
+    /// <summary>Write the full edit (kept runs, crop, rotation, annotations, redaction) back and close.</summary>
     public void Apply()
     {
-        _onApply(KeptRuns(), _crop, _rotation);
+        _onApply(new VideoEditResult(
+            KeptRuns(), _crop, _rotation,
+            EditorState.Annotations.ToList(), SurfaceWidth, SurfaceHeight,
+            Redaction.RedactionTracks.Where(t => t.Keyframes.Count > 0).ToList()));
         RequestClose?.Invoke();
     }
 
@@ -471,39 +501,58 @@ internal sealed class VideoEditViewModel : ViewModelBase, IDisposable
         {
             try
             {
-                for (int i = startIdx; i < runs.Length && !ct.IsCancellationRequested; i++)
+                bool firstLap = true;
+                do
                 {
-                    VideoEditSegment run = runs[i];
-                    double from = i == startIdx ? startWithin : run.SourceStart;
-                    double speed = run.Speed > 0 ? run.Speed : 1.0;
-                    using var runCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                    using var p = new LibavVideoFramePlayer();
-                    try
+                    int lapStartIdx = firstLap ? startIdx : 0;
+                    for (int i = lapStartIdx; i < runs.Length && !ct.IsCancellationRequested; i++)
                     {
-                        await p.PlayAsync(_sourcePath, _decodeW, _decodeH, from, speed, false, (data, ts) =>
+                        VideoEditSegment run = runs[i];
+                        double from = firstLap && i == startIdx ? startWithin : run.SourceStart;
+                        double pieceSpeed = run.Speed > 0 ? run.Speed : 1.0;
+                        double speed = pieceSpeed * _playbackSpeed; // per-run × global preview speed
+                        using var runCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                        using var p = new LibavVideoFramePlayer();
+
+                        // (Re)start preview audio at this run's start, retimed to the effective speed.
+                        if (!IsMuted)
                         {
-                            if (ts >= run.SourceEnd - 0.0005)
+                            _audioPreview.Start(_sourcePath, from, speed);
+                        }
+
+                        try
+                        {
+                            await p.PlayAsync(_sourcePath, _decodeW, _decodeH, from, speed, false, (data, ts) =>
                             {
-                                runCts.Cancel(); // reached this kept run's end → advance to the next kept run
-                                return;
-                            }
-                            Bitmap? bmp = BytesToBitmap(data);
-                            Dispatcher.UIThread.Post(() =>
-                            {
-                                if (gen != _playGeneration)
+                                if (ts >= run.SourceEnd - 0.0005)
                                 {
-                                    return; // a superseded/cancelled loop must not overwrite the current frame/playhead
+                                    runCts.Cancel(); // reached this kept run's end → advance to the next kept run
+                                    return;
                                 }
-                                Frame = bmp;
-                                PositionSeconds = Math.Min(ts, _duration);
-                            });
-                        }, runCts.Token);
+                                Bitmap? bmp = BytesToBitmap(data);
+                                Dispatcher.UIThread.Post(() =>
+                                {
+                                    if (gen != _playGeneration)
+                                    {
+                                        return; // a superseded/cancelled loop must not overwrite the current frame/playhead
+                                    }
+                                    Frame = bmp;
+                                    PositionSeconds = Math.Min(ts, _duration);
+                                });
+                            }, runCts.Token);
+                        }
+                        catch (OperationCanceledException) { /* run end or paused */ }
                     }
-                    catch (OperationCanceledException) { /* run end or paused */ }
-                }
+
+                    firstLap = false;
+                } while (IsLooping && !ct.IsCancellationRequested);
             }
             catch (Exception ex) { AppLog.Error("Compress.EditPlay", ex); }
-            finally { Dispatcher.UIThread.Post(() => { if (gen == _playGeneration) IsPlaying = false; }); }
+            finally
+            {
+                _audioPreview.Stop();
+                Dispatcher.UIThread.Post(() => { if (gen == _playGeneration) IsPlaying = false; });
+            }
         }, ct);
 
         return Task.CompletedTask;
@@ -512,6 +561,7 @@ internal sealed class VideoEditViewModel : ViewModelBase, IDisposable
     private void Pause()
     {
         _playCts?.Cancel();
+        _audioPreview.Stop();
         IsPlaying = false;
     }
 
@@ -644,5 +694,7 @@ internal sealed class VideoEditViewModel : ViewModelBase, IDisposable
         _stepCts?.Cancel();
         _playCts?.Dispose();
         _stepCts?.Dispose();
+        _audioPreview.Dispose();
+        Draw.Dispose();
     }
 }

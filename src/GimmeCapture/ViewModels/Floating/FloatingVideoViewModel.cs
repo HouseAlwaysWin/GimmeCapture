@@ -54,9 +54,9 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
     private Task? _playbackTask;
     private readonly int _width;
     private readonly int _height;
-    private IWavePlayer? _pinAudioPlayer;
-    private WaveStream? _audioPlaybackStream;
-    private CancellationTokenSource? _pinAudioDecodeCts;
+    // Preview audio (player/stream/decode-token trio) lives in the shared component, also used by the
+    // compress 進階影片編輯 editor; this VM keeps only the mute/effective-speed policy.
+    private readonly AudioPreviewPlayer _audioPreview = new();
     private bool _isMuted;
     private readonly LibavVideoFramePlayer _nativeFramePlayer = new();
 
@@ -148,6 +148,19 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
             this.RaiseAndSetIfChanged(ref _isMuted, value);
             this.RaisePropertyChanged(nameof(MuteTooltip));
             UpdateAudioStateFromPlayback();
+        }
+    }
+
+    private double _previewVolume = 1.0;
+    /// <summary>Preview playback volume (0–1). Scales this preview's audio in-stream only — it does not
+    /// change the encoded output or the Windows system/app volume. Mirrors the compress editor's slider.</summary>
+    public double PreviewVolume
+    {
+        get => _previewVolume;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _previewVolume, value);
+            _audioPreview.Volume = (float)Math.Clamp(value, 0.0, 1.0);
         }
     }
 
@@ -349,12 +362,12 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
     public ReactiveCommand<Unit, Unit> FreezeFrameCommand { get; private set; } = null!;
     public System.Func<Task<string?>>? PickSaveFileAction { get; set; }
 
-    // Freezes the current video frame into a new IMAGE pin that immediately enters SAM2 point-removal,
-    // so an object can be cut out of that frame (single-frame scope; the still becomes an image pin).
+    // Freezes the current video frame into a new plain IMAGE pin (no AI) — the still just becomes an
+    // image pin. The user can enter point-removal / background-removal from the image pin's own toolbar.
     // Wired by the host where the AI services live. (frameBitmap)
     public System.Action<Avalonia.Media.Imaging.Bitmap>? FreezeFrameToImagePinAction { get; set; }
 
-    public string FreezeFrameTooltip => LocalizationService.Instance["TipFreezeRemove"] ?? "Freeze frame → remove object (image pin)";
+    public string FreezeFrameTooltip => LocalizationService.Instance["TipFreezeRemove"] ?? "Freeze this frame as an image pin";
 
     // Spawns a new pinned video window (cropped selection). Signature mirrors
     // SnipWindowViewModel.OpenPinnedVideoWindowAction; self-wired by the view so
@@ -427,7 +440,7 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
                 OpenPinnedVideoWindowAction = null;
 
                 var playbackCts = CancelPlaybackToken();
-                var audioDecodeCts = CancelAudioDecodeToken();
+                var audioDecodeCts = _audioPreview.CancelDecode();
                 _disposeTask = Task.Run(() => DisposeCoreAsync(playbackCts, audioDecodeCts));
             }
 
@@ -479,7 +492,7 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
             System.Diagnostics.Debug.WriteLine($"Video disposal wait failed: {ex}");
         }
 
-        StopAudioPlayback();
+        _audioPreview.Dispose();
         _nativeFramePlayer.Dispose();
         if (playbackCompleted)
         {

@@ -6,6 +6,7 @@ using Avalonia.Controls.Primitives;
 using GimmeCapture.ViewModels.Floating;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Core;
+using GimmeCapture.Views.Shared;
 using System;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
@@ -44,19 +45,8 @@ public abstract class FloatingWindowBase : Window
     protected Point _mouseDownPoint;
     protected PointerPressedEventArgs? _pendingMoveEvent;
 
-    // Drawing State
-    protected Annotation? _currentAnnotation;
-    protected bool _isDrawing;
-    protected Point _startPoint;
-    protected DateTime _lastTextFinishTime = DateTime.MinValue;
-    
-    // Drag Annotation State
-    protected bool _isDraggingAnnotation;
-    protected Annotation? _draggingAnnotation;
-    protected Point _dragOffset;
-    protected AnnotationSnapshot? _annotationEditBefore;
-    protected AnnotationHitZone _annotationHitZone;
-    protected Point _annotationDragStart;
+    // Annotation drawing / drag / text-entry pointer state machine (shared with the compress editor).
+    private AnnotationInputController _annotationInput = null!;
 
     // Selection State
     protected bool _isSelecting;
@@ -69,6 +59,22 @@ public abstract class FloatingWindowBase : Window
 
     public FloatingWindowBase()
     {
+        _annotationInput = new AnnotationInputController(
+            getState: () => (DataContext as FloatingWindowViewModelBase)?.EditorState,
+            getContentControl: GetContentControl,
+            getContentSnapshot: GetContentSnapshot,
+            isInteractionBlocked: () => (DataContext as FloatingWindowViewModelBase)?.IsProcessing ?? true,
+            confirmTextEntry: () =>
+            {
+                if (DataContext is FloatingWindowViewModelBase vm)
+                {
+                    vm.ConfirmTextEntryCommand.Execute(System.Reactive.Unit.Default).Subscribe();
+                }
+            },
+            focusTextInput: () => this.FindControl<TextBox>("TextInputOverlay")?.Focus(),
+            captureTarget: this,
+            setCursor: c => Cursor = c);
+
         // Shared Event Handlers via AddHandler to handle Tunneling/Bubbling correctly
         AddHandler(PointerPressedEvent, OnPointerPressed, RoutingStrategies.Tunnel);
         // Note: OnPointerMoved is handled via override, so we strictly follow original logic which didn't verify Tunnel for Move.
@@ -261,7 +267,7 @@ public abstract class FloatingWindowBase : Window
             if (vm.ShowToolbar) return; 
             
             // Logic to prevent showing toolbar if we just finished an interaction
-            if (!_isResizing && !_isDrawing && !_isMaybeMoving && !_isSelecting &&
+            if (!_isResizing && !_annotationInput.IsDrawing && !_isMaybeMoving && !_isSelecting &&
                 !vm.IsAnyToolActive)
             {
                 vm.ShowToolbar = true;
@@ -312,140 +318,11 @@ public abstract class FloatingWindowBase : Window
             vFallback = vFallback.GetVisualParent();
         }
 
-        // 3. Drawing / Text Interaction
-        if (pProperties.IsLeftButtonPressed && vm.CurrentAnnotationTool != AnnotationType.None && !vm.IsProcessing)
+        // 3. Drawing / Text Interaction — the shared annotation pointer state machine (also used by the
+        // compress 進階影片編輯 editor). Returns true when the annotation branch applied (handled OR vetoed),
+        // matching the original early-return semantics.
+        if (_annotationInput.HandlePointerPressed(e))
         {
-            var contentControl = GetContentControl();
-            if (contentControl == null) return;
-
-            var pointerPosOnContent = e.GetPosition(contentControl);
-            var contentBounds = new Rect(0, 0, contentControl.Bounds.Width, contentControl.Bounds.Height);
-            var interactionBounds = vm.SelectedAnnotation != null
-                ? contentBounds.Inflate(AnnotationInteractionService.HandleRadius + 2)
-                : contentBounds;
-
-            // Restrict drawing interaction to the content area
-            if (!interactionBounds.Contains(pointerPosOnContent))
-            {
-                return;
-            }
-
-            if ((DateTime.Now - _lastTextFinishTime).TotalMilliseconds < 300) return;
-
-            if (vm.IsEnteringText)
-            {
-                var src = e.Source as Control;
-                if (src != null && (src.Name == "TextInputOverlay" || src.FindAncestorOfType<TextBox>() != null)) return;
-                
-                // Clicking outside text box confirms text
-                vm.ConfirmTextEntryCommand.Execute(System.Reactive.Unit.Default).Subscribe();
-                e.Handled = true;
-                return;
-            }
-
-            var annotationHit = AnnotationInteractionService.HitTest(
-                vm.Annotations,
-                vm.SelectedAnnotation,
-                pointerPosOnContent);
-            if (annotationHit.IsHit && annotationHit.Annotation != null)
-            {
-                _isDraggingAnnotation = true;
-                _draggingAnnotation = annotationHit.Annotation;
-                _annotationHitZone = annotationHit.Zone;
-                _annotationDragStart = pointerPosOnContent;
-                _annotationEditBefore = vm.BeginAnnotationEdit(annotationHit.Annotation);
-                if (annotationHit.Annotation.Type == AnnotationType.Text)
-                {
-                    _dragOffset = new Point(
-                        pointerPosOnContent.X - annotationHit.Annotation.StartPoint.X,
-                        pointerPosOnContent.Y - annotationHit.Annotation.StartPoint.Y);
-                }
-                e.Pointer.Capture(this);
-                e.Handled = true;
-                return;
-            }
-
-            if (!contentBounds.Contains(pointerPosOnContent))
-            {
-                return;
-            }
-
-            vm.ClearAnnotationSelection();
-
-            if (vm.CurrentAnnotationTool == AnnotationType.Text)
-            {
-                // Check if clicking existing text to edit/drag
-                for (int i = vm.Annotations.Count - 1; i >= 0; i--)
-                {
-                    var ann = vm.Annotations[i];
-                    if (ann.Type == AnnotationType.Text)
-                    {
-                        double estimatedWidth = ann.Text.Length * ann.FontSize * 0.6;
-                        double estimatedHeight = ann.FontSize * 1.5;
-                        var rect = new Rect(ann.StartPoint.X, ann.StartPoint.Y, estimatedWidth, estimatedHeight);
-                        if (rect.Contains(pointerPosOnContent))
-                        {
-                            if (e.ClickCount == 2)
-                            {
-                                // Edit Mode
-                                vm.RemoveAnnotation(ann);
-                                vm.IsEnteringText = true;
-                                vm.TextInputPosition = ann.StartPoint;
-                                vm.PendingText = ann.Text;
-                                vm.CurrentFontSize = ann.FontSize;
-                                vm.IsBold = ann.IsBold;
-                                vm.IsItalic = ann.IsItalic;
-                                vm.SelectedColor = ann.Color;
-
-                                var textBox = this.FindControl<TextBox>("TextInputOverlay");
-                                Dispatcher.UIThread.Post(() => textBox?.Focus());
-                                e.Handled = true;
-                                return;
-                            }
-                            else
-                            {
-                                // Drag Mode
-                                _isDraggingAnnotation = true;
-                                _draggingAnnotation = ann;
-                                _dragOffset = new Point(pointerPosOnContent.X - ann.StartPoint.X, pointerPosOnContent.Y - ann.StartPoint.Y);
-                                _annotationHitZone = AnnotationHitZone.Body;
-                                _annotationDragStart = pointerPosOnContent;
-                                _annotationEditBefore = vm.BeginAnnotationEdit(ann);
-                                e.Pointer.Capture(this);
-                                e.Handled = true;
-                                return;
-                            }
-                        }
-                    }
-                }
-                
-                // Start NEW Text Entry
-                vm.IsEnteringText = true;
-                vm.TextInputPosition = pointerPosOnContent;
-                vm.PendingText = string.Empty;
-                var textBoxNew = this.FindControl<TextBox>("TextInputOverlay");
-                textBoxNew?.Focus();
-                e.Handled = true;
-                return;
-            }
-
-            // Start Drawing Shape/Pen
-            _isDrawing = true;
-            _startPoint = pointerPosOnContent;
-            
-            // Snapshot is only needed for effects that sample underlying pixels.
-            Bitmap? frameSnapshot = (vm.CurrentAnnotationTool == AnnotationType.Mosaic || vm.CurrentAnnotationTool == AnnotationType.Blur)
-                ? GetContentSnapshot()
-                : null;
-
-            _currentAnnotation = vm.CreateAnnotationForCurrentTool(
-                pointerPosOnContent,
-                frameSnapshot,
-                contentControl.Bounds.Size);
-
-            vm.BeginPendingAnnotation(_currentAnnotation);
-            e.Pointer.Capture(this);
-            e.Handled = true;
             return;
         }
 
@@ -494,7 +371,7 @@ public abstract class FloatingWindowBase : Window
         var currentPoint = e.GetCurrentPoint(this);
         var pointerPos = currentPoint.Position;
 
-        UpdateAnnotationCursor(e, vm);
+        _annotationInput.UpdateCursor(e, hostBusy: _isSelecting || _isResizing);
 
         if (_isResizing)
         {
@@ -516,62 +393,16 @@ public abstract class FloatingWindowBase : Window
                     Math.Min(_selectionStartPoint.Y, currentPos.Y),
                     Math.Abs(currentPos.X - _selectionStartPoint.X),
                     Math.Abs(currentPos.Y - _selectionStartPoint.Y));
-                
+
                 vm.SelectionRect = rect;
             }
         }
-        else if (_isDrawing && _currentAnnotation != null)
+        else
         {
-            var contentControl = GetContentControl();
-            if (contentControl != null)
-            {
-                var pointerPosOnContent = e.GetPosition(contentControl);
-                pointerPosOnContent = new Point(
-                    Math.Clamp(pointerPosOnContent.X, 0, contentControl.Bounds.Width),
-                    Math.Clamp(pointerPosOnContent.Y, 0, contentControl.Bounds.Height));
-                if (_currentAnnotation.Type == AnnotationType.Pen)
-                {
-                    _currentAnnotation.AddPoint(pointerPosOnContent);
-                }
-                else
-                {
-                    _currentAnnotation.EndPoint = pointerPosOnContent;
-                }
-                e.Handled = true;
-            }
+            // Shared drawing / annotation-drag move branches (no-op when neither is active).
+            _annotationInput.HandlePointerMoved(e, suppressCursor: true);
         }
-        else if (_isDraggingAnnotation && _draggingAnnotation != null)
-        {
-            var contentControl = GetContentControl();
-            if (contentControl != null)
-            {
-                var pointerPosOnContent = e.GetPosition(contentControl);
-                if (_draggingAnnotation.Type == AnnotationType.Text)
-                {
-                    var estimatedWidth = _draggingAnnotation.Text.Length * _draggingAnnotation.FontSize * 0.6;
-                    var estimatedHeight = _draggingAnnotation.FontSize * 1.5;
-                    var newStart = new Point(
-                        Math.Clamp(pointerPosOnContent.X - _dragOffset.X, 0, Math.Max(0, contentControl.Bounds.Width - estimatedWidth)),
-                        Math.Clamp(pointerPosOnContent.Y - _dragOffset.Y, 0, Math.Max(0, contentControl.Bounds.Height - estimatedHeight)));
-                    var delta = newStart - _draggingAnnotation.StartPoint;
-                    _draggingAnnotation.StartPoint = newStart;
-                    _draggingAnnotation.EndPoint = new Point(
-                        _draggingAnnotation.EndPoint.X + delta.X,
-                        _draggingAnnotation.EndPoint.Y + delta.Y);
-                }
-                else if (_annotationEditBefore != null)
-                {
-                    AnnotationInteractionService.ApplyTransform(
-                        _draggingAnnotation,
-                        _annotationEditBefore,
-                        _annotationHitZone,
-                        _annotationDragStart,
-                        pointerPosOnContent,
-                        contentControl.Bounds.Size);
-                }
-            }
-        }
-        
+
         if (_isMaybeMoving)
         {
              var delta = pointerPos - _mouseDownPoint;
@@ -581,27 +412,6 @@ public abstract class FloatingWindowBase : Window
                  BeginMoveDrag(e);
              }
         }
-    }
-
-    // After the Callout leader is dragged, open the label text-entry overlay at the leader's end
-    // (label anchor). A click with no real drag gets a default offset so the leader stays visible
-    // and valid. The pending leader is finalized by the VM's ConfirmTextEntryCommand.
-    private void BeginCalloutLabelEntry(FloatingWindowViewModelBase vm, Annotation leader)
-    {
-        var dx = leader.EndPoint.X - leader.StartPoint.X;
-        var dy = leader.EndPoint.Y - leader.StartPoint.Y;
-        if (Math.Sqrt((dx * dx) + (dy * dy)) < AnnotationInteractionService.MinimumLineLength)
-        {
-            leader.EndPoint = new Point(leader.StartPoint.X + 48, leader.StartPoint.Y + 48);
-        }
-
-        vm.BeginCalloutTextEntry(leader);
-        vm.IsEnteringText = true;
-        vm.TextInputPosition = leader.EndPoint;
-        vm.PendingText = leader.Text ?? string.Empty;
-
-        var textBox = this.FindControl<TextBox>("TextInputOverlay");
-        Dispatcher.UIThread.Post(() => textBox?.Focus());
     }
 
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
@@ -624,36 +434,9 @@ public abstract class FloatingWindowBase : Window
             e.Pointer.Capture(null);
             _isSelecting = false;
         }
-        else if (_isDrawing)
+        else if (_annotationInput.HandlePointerReleased(e))
         {
-            e.Pointer.Capture(null);
-            _isDrawing = false;
-            if (DataContext is FloatingWindowViewModelBase vm && _currentAnnotation != null)
-            {
-                if (_currentAnnotation.Type == AnnotationType.Callout)
-                {
-                    BeginCalloutLabelEntry(vm, _currentAnnotation);
-                }
-                else
-                {
-                    vm.CommitPendingAnnotation(_currentAnnotation);
-                }
-            }
-            _currentAnnotation = null;
-        }
-        else if (_isDraggingAnnotation)
-        {
-            e.Pointer.Capture(null);
-            if (DataContext is FloatingWindowViewModelBase vm
-                && _draggingAnnotation != null
-                && _annotationEditBefore != null)
-            {
-                vm.CommitAnnotationEdit(_draggingAnnotation, _annotationEditBefore);
-            }
-            _isDraggingAnnotation = false;
-            _draggingAnnotation = null;
-            _annotationEditBefore = null;
-            _annotationHitZone = AnnotationHitZone.None;
+            // Shared drawing / annotation-drag release branches (commit pending shape / finalize edit).
         }
         else if (_isMaybeMoving)
         {
@@ -661,65 +444,6 @@ public abstract class FloatingWindowBase : Window
             _isMaybeMoving = false;
             _pendingMoveEvent = null;
         }
-    }
-
-    private void UpdateAnnotationCursor(PointerEventArgs e, FloatingWindowViewModelBase vm)
-    {
-        if (vm.CurrentAnnotationTool == AnnotationType.None || vm.IsProcessing)
-        {
-            return;
-        }
-
-        if (_isDraggingAnnotation)
-        {
-            Cursor = CreateAnnotationCursor(_annotationHitZone);
-            return;
-        }
-
-        if (_isDrawing || _isSelecting || _isResizing)
-        {
-            return;
-        }
-
-        var contentControl = GetContentControl();
-        if (contentControl == null)
-        {
-            return;
-        }
-
-        var point = e.GetPosition(contentControl);
-        var contentBounds = new Rect(0, 0, contentControl.Bounds.Width, contentControl.Bounds.Height);
-        var interactionBounds = vm.SelectedAnnotation != null
-            ? contentBounds.Inflate(AnnotationInteractionService.HandleRadius + 2)
-            : contentBounds;
-        if (!interactionBounds.Contains(point))
-        {
-            Cursor = new Cursor(StandardCursorType.Arrow);
-            return;
-        }
-
-        var hit = AnnotationInteractionService.HitTest(vm.Annotations, vm.SelectedAnnotation, point);
-        Cursor = hit.IsHit
-            ? CreateAnnotationCursor(hit.Zone)
-            : new Cursor(contentBounds.Contains(point)
-                ? (vm.CurrentAnnotationTool == AnnotationType.Text
-                    ? StandardCursorType.Ibeam
-                    : StandardCursorType.Cross)
-                : StandardCursorType.Arrow);
-    }
-
-    private static Cursor CreateAnnotationCursor(AnnotationHitZone zone)
-    {
-        var cursorType = zone switch
-        {
-            AnnotationHitZone.TopLeft or AnnotationHitZone.BottomRight => StandardCursorType.TopLeftCorner,
-            AnnotationHitZone.TopRight or AnnotationHitZone.BottomLeft => StandardCursorType.TopRightCorner,
-            AnnotationHitZone.Top or AnnotationHitZone.Bottom => StandardCursorType.SizeNorthSouth,
-            AnnotationHitZone.Left or AnnotationHitZone.Right => StandardCursorType.SizeWestEast,
-            AnnotationHitZone.StartPoint or AnnotationHitZone.EndPoint => StandardCursorType.Hand,
-            _ => StandardCursorType.SizeAll
-        };
-        return new Cursor(cursorType);
     }
 
     private void BeginMoveDrag(PointerEventArgs e)

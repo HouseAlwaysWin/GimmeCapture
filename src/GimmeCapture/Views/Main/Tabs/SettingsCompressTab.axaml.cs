@@ -95,6 +95,31 @@ public partial class SettingsCompressTab : UserControl
         // Advanced video editing: open a standalone editor window for the prepared view model.
         vm.OpenEditorAction = editVm =>
         {
+            var loc = GimmeCapture.Services.Core.Infrastructure.LocalizationService.Instance;
+
+            // Changing crop/rotation clears surface-space annotations/redaction — confirm via the main dialog.
+            editVm.ConfirmTransformClearsEditsAction = () =>
+                vm.ConfirmYesNoAction?.Invoke(loc["CompressEditWindowTitle"], loc["CompressEditTransformClearsEdits"])
+                ?? System.Threading.Tasks.Task.FromResult(true);
+
+            // Freeze-frame → a plain floating image pin (no AI): just the current frame pinned out.
+            // The user can enter point-removal / background-removal from the pinned image's own toolbar.
+            editVm.FreezeFrameToImagePinAction = bitmap => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                var pinVm = new GimmeCapture.ViewModels.Floating.FloatingImageViewModel(
+                    bitmap, bitmap.Size.Width, bitmap.Size.Height,
+                    Avalonia.Media.Colors.Red, 2, false, false,
+                    new GimmeCapture.Services.Core.Infrastructure.ClipboardService(),
+                    vm.AIResourceService, vm.SAM2RuntimeService, vm.AppSettingsService,
+                    vm.AIPathService, vm.ResourceQueue, null, 0.0);
+                var pinWin = new GimmeCapture.Views.Floating.FloatingImageWindow
+                {
+                    DataContext = pinVm,
+                    WindowStartupLocation = WindowStartupLocation.CenterScreen,
+                };
+                pinWin.Show();
+            });
+
             var window = new VideoEditWindow { DataContext = editVm };
             window.Show();
         };

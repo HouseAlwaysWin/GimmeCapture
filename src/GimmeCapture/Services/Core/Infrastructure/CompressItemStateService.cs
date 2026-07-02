@@ -31,6 +31,13 @@ public sealed class CompressItemState
     /// <summary>The kept runs (source ranges) to concatenate; null = whole clip. Multi-segment shape.</summary>
     public List<TrimSegment>? Segments { get; set; }
 
+    // Burn-in layers from the 進階影片編輯 editor: annotations (in surface coords — the cropped+rotated
+    // preview-frame size below) and redaction tracks (normalized [0,1]). Null = none.
+    public List<CompressAnnotationState>? Annotations { get; set; }
+    public double AnnotationSurfaceWidth { get; set; }
+    public double AnnotationSurfaceHeight { get; set; }
+    public List<CompressRedactionTrackState>? RedactionTracks { get; set; }
+
     // Legacy single-range trim (pre-multi-segment). Kept so old state files still load; migrated into Segments.
     public decimal TrimStart { get; set; }
     public decimal TrimEnd { get; set; }

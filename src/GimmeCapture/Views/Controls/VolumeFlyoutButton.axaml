@@ -1,0 +1,56 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:services="using:GimmeCapture.Services.Core.Infrastructure"
+             x:Class="GimmeCapture.Views.Controls.VolumeFlyoutButton"
+             x:Name="Root">
+    <!-- Volume button: CLICK toggles a volume popup (deliberate, not hover). The popup is light-dismiss,
+         so clicking away closes it, but dragging the slider inside never closes it. The toolbar button uses
+         a distinct "levels" icon; mute (a speaker toggle) lives inside the popup. -->
+    <Panel>
+        <Button x:Name="SpeakerButton" Theme="{StaticResource SnipButton}" Width="30" Height="30"
+                ToolTip.Tip="{Binding [TipPreviewVolume], Source={x:Static services:LocalizationService.Instance}}">
+            <PathIcon Data="M7,3H9V13.17C10.16,13.58 11,14.69 11,16C11,17.31 10.16,18.42 9,18.83V21H7V18.83C5.84,18.42 5,17.31 5,16C5,14.69 5.84,13.58 7,13.17V3M15,3H17V5.17C18.16,5.58 19,6.69 19,8C19,9.31 18.16,10.42 17,10.83V21H15V10.83C13.84,10.42 13,9.31 13,8C13,6.69 13.84,5.58 15,5.17V3Z"
+                      Width="13" Height="13" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+        </Button>
+
+        <Popup x:Name="VolumePopup" PlacementTarget="{Binding #SpeakerButton}"
+               Placement="Top" VerticalOffset="4" IsLightDismissEnabled="True">
+            <Border x:Name="PopupBorder" Background="#1A1A1A" BorderBrush="#444444" BorderThickness="1"
+                    CornerRadius="4" Padding="8,10" Margin="0,0,0,4"
+                    BoxShadow="0 4 15 0 #D0000000">
+                <StackPanel Orientation="Vertical" Spacing="8" HorizontalAlignment="Center">
+                    <TextBlock Text="{Binding Volume, ElementName=Root, StringFormat='{}{0:0%}'}"
+                               Foreground="#E0E0E0" FontSize="10" HorizontalAlignment="Center"/>
+                    <!-- Native vertical slider (up = louder). OneWay for display; the drag is pushed back to
+                         Volume in code-behind. The track-fix style MUST be inline (the popup is a separate
+                         visual tree app/UserControl styles don't reach); no fixed Width so the thumb centres. -->
+                    <Slider x:Name="VolumeSlider" Orientation="Vertical" Height="120"
+                            Minimum="0" Maximum="1" HorizontalAlignment="Center"
+                            Value="{Binding Volume, ElementName=Root, Mode=OneWay}">
+                        <Slider.Styles>
+                            <Style Selector="Slider /template/ Border#TrackBackground">
+                                <Setter Property="Width" Value="3"/>
+                                <Setter Property="Height" Value="NaN"/>
+                                <Setter Property="HorizontalAlignment" Value="Center"/>
+                                <Setter Property="VerticalAlignment" Value="Stretch"/>
+                            </Style>
+                        </Slider.Styles>
+                    </Slider>
+                    <!-- Mute toggle (speaker icon reflects mute state) — square button so the glyph is centred. -->
+                    <Button Theme="{StaticResource SnipButton}" Width="30" Height="30"
+                            Command="{Binding ToggleMuteCommand, ElementName=Root}"
+                            ToolTip.Tip="{Binding MuteTooltip, ElementName=Root}">
+                        <Panel HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <PathIcon Data="M14,3.23V20.77C14,21.37 13.33,21.74 12.83,21.42L7.6,18H3C1.9,18 1,17.1 1,16V8C1,6.9 1.9,6 3,6H7.6L12.83,2.58C13.33,2.26 14,2.63 14,3.23M19,9L16.41,11.59L19,14.17L17.59,15.59L15,13L12.41,15.59L11,14.17L13.59,11.59L11,9L12.41,7.59L15,10.17L17.59,7.59L19,9Z"
+                                      Width="12" Height="12" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                      IsVisible="{Binding IsMuted, ElementName=Root}"/>
+                            <PathIcon Data="M14,3.23V20.77C14,21.37 13.33,21.74 12.83,21.42L7.6,18H3C1.9,18 1,17.1 1,16V8C1,6.9 1.9,6 3,6H7.6L12.83,2.58C13.33,2.26 14,2.63 14,3.23M16,7.82V10.73C17.16,11.14 18,12.25 18,13.55C18,14.84 17.16,15.95 16,16.36V19.27C18.89,18.78 21,16.35 21,13.55C21,10.74 18.89,8.31 16,7.82Z"
+                                      Width="12" Height="12" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                      IsVisible="{Binding !IsMuted, ElementName=Root}"/>
+                        </Panel>
+                    </Button>
+                </StackPanel>
+            </Border>
+        </Popup>
+    </Panel>
+</UserControl>
