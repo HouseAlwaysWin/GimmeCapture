@@ -30,8 +30,11 @@
                         <LayoutTransformControl.LayoutTransform>
                             <RotateTransform Angle="-90"/>
                         </LayoutTransformControl.LayoutTransform>
-                        <Slider Width="120" Minimum="0" Maximum="1"
-                                Value="{Binding Volume, ElementName=Root, Mode=TwoWay}"/>
+                        <!-- OneWay for display; the drag is pushed back to Volume in code-behind. A chained
+                             TwoWay-through-a-StyledProperty binding does not reliably propagate to the VM
+                             (mirrors the CompactNumericStep pattern). -->
+                        <Slider x:Name="VolumeSlider" Width="120" Minimum="0" Maximum="1"
+                                Value="{Binding Volume, ElementName=Root, Mode=OneWay}"/>
                     </LayoutTransformControl>
                 </StackPanel>
             </Border>

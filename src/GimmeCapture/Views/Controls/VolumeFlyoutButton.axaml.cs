@@ -60,6 +60,7 @@ public partial class VolumeFlyoutButton : UserControl
     private readonly Popup? _popup;
     private readonly Button? _speaker;
     private readonly Border? _popupBorder;
+    private readonly Slider? _slider;
     private readonly EventHandler<PointerEventArgs> _onSpeakerEntered;
     private readonly EventHandler<PointerEventArgs> _onSpeakerExited;
     private readonly EventHandler<PointerEventArgs> _onPopupEntered;
@@ -72,6 +73,7 @@ public partial class VolumeFlyoutButton : UserControl
         InitializeComponent();
 
         _popup = this.FindControl<Popup>("VolumePopup");
+        _slider = this.FindControl<Slider>("VolumeSlider");
         _speaker = this.FindControl<Button>("SpeakerButton");
         _popupBorder = this.FindControl<Border>("PopupBorder");
 
@@ -99,6 +101,10 @@ public partial class VolumeFlyoutButton : UserControl
             _popupBorder.PointerEntered += _onPopupEntered;
             _popupBorder.PointerExited += _onPopupExited;
         }
+        if (_slider != null)
+        {
+            _slider.PropertyChanged += OnSliderPropertyChanged;
+        }
     }
 
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
@@ -114,6 +120,10 @@ public partial class VolumeFlyoutButton : UserControl
         {
             _popupBorder.PointerEntered -= _onPopupEntered;
             _popupBorder.PointerExited -= _onPopupExited;
+        }
+        if (_slider != null)
+        {
+            _slider.PropertyChanged -= OnSliderPropertyChanged;
         }
         _overButton = false;
         _overPopup = false;
@@ -139,6 +149,16 @@ public partial class VolumeFlyoutButton : UserControl
         if (!overButton && !overPopup)
         {
             _popup.IsOpen = false;
+        }
+    }
+
+    // Push slider drags onto the Volume StyledProperty via code (SetValue) — this reliably fires the
+    // control's outer TwoWay binding to the VM's PreviewVolume, unlike a chained TwoWay slider binding.
+    private void OnSliderPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
+    {
+        if (e.Property == RangeBase.ValueProperty && _slider != null)
+        {
+            Volume = _slider.Value;
         }
     }
 
