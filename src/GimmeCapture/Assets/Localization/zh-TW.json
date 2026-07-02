@@ -41,6 +41,8 @@
   "CompressStatusReady": "請選擇要壓縮的影片。",
   "StatusCompressing": "壓縮中…",
   "StatusCompressRefining": "調整位元率以符合目標大小…",
+  "SaveVideo": "儲存影片",
+  "StatusExportingVideo": "影片輸出中…",
   "StatusCompressDone": "壓縮完成",
   "StatusCompressFailed": "壓縮失敗",
   "CompressCodecLabel": "編碼",
