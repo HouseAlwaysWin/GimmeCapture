@@ -3,10 +3,8 @@
 # feedback without waiting for a Windows machine. This does NOT run tests or the
 # app — it only proves the managed code compiles.
 #
-# Spike status: continue-on-error until proven reliable; flip to enforcing after
-# a few green runs. If restore of the Windows targeting/WinRT packs turns out to
-# be impossible cross-platform, delete this workflow and note the result in
-# docs/COMPRESS_LOCAL_HANDOFF.md.
+# Proven: run #1 compiled the full solution (WinForms + WGC WinRT + FFmpeg.AutoGen)
+# on ubuntu-latest in ~78 s (restore 22 s + build 33 s), so this is enforcing.
 name: Linux Compile Check
 
 on:
@@ -20,7 +18,6 @@ on:
 jobs:
   compile:
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 

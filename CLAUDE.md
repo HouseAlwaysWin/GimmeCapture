@@ -82,9 +82,11 @@ release.ps1 / release.bat      # release automation (main branch only)
 
 ## Build, Test & Verify
 
-> All of the following require a **Windows** environment with the **.NET 10 SDK**.
-> The project targets `net10.0-windows` and uses Win32/WinForms; it does not build
-> or run on Linux/macOS. CI runs on `windows-latest`.
+> Running, testing and publishing require a **Windows** environment with the **.NET 10 SDK**;
+> CI runs on `windows-latest`. However, the solution **does compile on Linux/macOS** with
+> `dotnet build -p:EnableWindowsTargeting=true` (proven by the `linux-compile-check.yml`
+> workflow, which type-checks every `claude/**` push in ~80 s) — so cross-platform sessions
+> can get compiler feedback even though they cannot run the app or the tests.
 
 **Before building Release/Publish**, native FFmpeg DLLs must exist under
 `src/GimmeCapture/ffmpeg-lib/` or the build fails (guardrail target
@@ -214,9 +216,11 @@ Three locales are kept in **strict key parity**:
 - **Keep package lock files in sync** (`packages.lock.json`); CI restores in locked
   mode. If you change `PackageReference`s, restore so the lock file updates.
 - **Don't commit native FFmpeg DLLs** — they are produced by script and gitignored.
-- **Can't fully build/test here**: this is a Windows-only app. On non-Windows
-  environments, you can edit and reason about code but cannot run `dotnet build`/
-  `verify.ps1`; state that limitation rather than claiming a green build.
+- **Can't run/test on non-Windows, but CAN compile**: on non-Windows environments use
+  `dotnet build GimmeCapture.slnx -p:EnableWindowsTargeting=true` (or rely on the
+  `Linux Compile Check` workflow that runs on every `claude/**` push) for compiler
+  feedback. Tests, `verify.ps1`, and running the app still require Windows; state that
+  limitation rather than claiming a green build from a compile alone.
 - **Git workflow**: develop on the assigned feature branch, commit with clear
   messages, push with `git push -u origin <branch>`. Do **not** open a PR unless
   explicitly asked.
