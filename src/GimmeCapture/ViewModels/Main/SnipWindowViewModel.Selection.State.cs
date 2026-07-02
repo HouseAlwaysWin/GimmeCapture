@@ -108,8 +108,21 @@ public partial class SnipWindowViewModel
 
         if (CurrentState != SnipState.Selected || IsRecordingFinalizing) return;
 
-        _toolbarParkedOffscreenSaved = false;
-        UpdateToolbarPosition();
+        if (_toolbarParkedOffscreenSaved && IsToolbarManuallyPositioned)
+        {
+            // A manually-dragged toolbar must be restored to its exact parked position: UpdateToolbarPosition()
+            // defers to InitializeTranslationToolbarPosition, which refuses to re-place a manually-positioned
+            // toolbar and so would leave it stuck off-screen — i.e. F4 fails to bring the toolbar back after it
+            // has been moved. (The non-moved case keeps recomputing top-center as before.)
+            ToolbarLeft = _savedParkToolbarLeft;
+            ToolbarTop = _savedParkToolbarTop;
+            _toolbarParkedOffscreenSaved = false;
+        }
+        else
+        {
+            _toolbarParkedOffscreenSaved = false;
+            UpdateToolbarPosition();
+        }
     }
 
     /// <summary>
