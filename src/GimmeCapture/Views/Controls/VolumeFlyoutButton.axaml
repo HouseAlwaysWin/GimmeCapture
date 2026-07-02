@@ -2,17 +2,6 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="GimmeCapture.Views.Controls.VolumeFlyoutButton"
              x:Name="Root">
-    <UserControl.Styles>
-        <!-- The app's global Slider style assumes a HORIZONTAL 2px track (Height=2, centred). Re-orient
-             it into a vertical bar for the volume popup slider (only sliders with the "volume" class). -->
-        <Style Selector="Slider.volume /template/ Border#TrackBackground">
-            <Setter Property="Height" Value="NaN"/>
-            <Setter Property="Width" Value="3"/>
-            <Setter Property="HorizontalAlignment" Value="Center"/>
-            <Setter Property="VerticalAlignment" Value="Stretch"/>
-        </Style>
-    </UserControl.Styles>
-
     <!-- Speaker button (click = mute toggle); hovering it reveals a vertical volume slider popup. -->
     <Panel>
         <Button x:Name="SpeakerButton" Theme="{StaticResource SnipButton}" Width="30" Height="30"
@@ -34,9 +23,16 @@
                 <StackPanel Orientation="Vertical" Spacing="6" HorizontalAlignment="Center">
                     <TextBlock Text="{Binding Volume, ElementName=Root, StringFormat='{}{0:0%}'}"
                                Foreground="#E0E0E0" FontSize="10" HorizontalAlignment="Center"/>
-                    <Slider Classes="volume" Orientation="Vertical" Width="26" Height="120"
-                            Minimum="0" Maximum="1" HorizontalAlignment="Center"
-                            Value="{Binding Volume, ElementName=Root, Mode=TwoWay}"/>
+                    <!-- A horizontal Slider rotated -90° gives a reliably CENTRED vertical bar: the horizontal
+                         template's track spans the full width (centred), unlike the native vertical template
+                         whose track sits in a fixed left-of-centre column. Rotating up = towards Maximum. -->
+                    <LayoutTransformControl HorizontalAlignment="Center">
+                        <LayoutTransformControl.LayoutTransform>
+                            <RotateTransform Angle="-90"/>
+                        </LayoutTransformControl.LayoutTransform>
+                        <Slider Width="120" Minimum="0" Maximum="1"
+                                Value="{Binding Volume, ElementName=Root, Mode=TwoWay}"/>
+                    </LayoutTransformControl>
                 </StackPanel>
             </Border>
         </Popup>
