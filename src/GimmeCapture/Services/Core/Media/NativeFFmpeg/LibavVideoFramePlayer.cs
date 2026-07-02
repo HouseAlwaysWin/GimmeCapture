@@ -203,6 +203,12 @@ internal sealed class LibavVideoFramePlayer : IDisposable
 
                     decCtx = ffmpeg.avcodec_alloc_context3(dec);
                     ThrowIfErr(ffmpeg.avcodec_parameters_to_context(decCtx, par), "par_to_ctx");
+                    // Multi-core decode: single-threaded decode can't keep up with real-time playback of
+                    // large/high-res H.264/H.265 files. 0 = auto (one thread per logical core). FFmpeg ANDs
+                    // thread_type against the codec's capabilities, so requesting both frame+slice is safe
+                    // (a codec that supports only one uses only that one).
+                    decCtx->thread_count = 0;
+                    decCtx->thread_type = ffmpeg.FF_THREAD_FRAME | ffmpeg.FF_THREAD_SLICE;
                     ThrowIfErr(ffmpeg.avcodec_open2(decCtx, dec, null), "open_decoder");
 
                     pkt = ffmpeg.av_packet_alloc();

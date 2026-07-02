@@ -309,6 +309,10 @@ internal static class LibavClipExporter
 
             decCtx = ffmpeg.avcodec_alloc_context3(dec);
             ThrowIfErr(ffmpeg.avcodec_parameters_to_context(decCtx, inStream->codecpar), "clip_par_to_ctx");
+            // Multi-core decode (auto). The encode side (x264/x265) already threads internally; this speeds
+            // the decode half of the compress/estimate pass on large sources.
+            decCtx->thread_count = 0;
+            decCtx->thread_type = ffmpeg.FF_THREAD_FRAME | ffmpeg.FF_THREAD_SLICE;
             ThrowIfErr(ffmpeg.avcodec_open2(decCtx, dec, null), "clip_open_decoder");
 
             int srcFps = ResolveFps(inStream);
