@@ -363,8 +363,8 @@ public partial class SnipWindow : Window
                  var fileChoices = new System.Collections.Generic.List<Avalonia.Platform.Storage.FilePickerFileType>();
                  if (isRecording)
                  {
-                     fileChoices.Add(new Avalonia.Platform.Storage.FilePickerFileType("Video Files") { Patterns = new[] { "*.mp4", "*.mkv", "*.gif", "*.webm", "*.mov" } });
-                     fileChoices.Add(new Avalonia.Platform.Storage.FilePickerFileType("All Files") { Patterns = new[] { "*.*" } });
+                     fileChoices.Add(GimmeCapture.Views.Shared.VideoFilePickerTypes.SaveVideos);
+                     fileChoices.Add(GimmeCapture.Views.Shared.VideoFilePickerTypes.AllFiles);
                  }
                  else
                  {
@@ -582,7 +582,7 @@ public partial class SnipWindow : Window
                                     SuggestedFileName = CaptureFileNameService.SuggestedBaseName(),
                                     FileTypeChoices = new[]
                                     {
-                                        new Avalonia.Platform.Storage.FilePickerFileType("PNG Image") { Patterns = new[] { "*.png" } }
+                                        GimmeCapture.Views.Shared.VideoFilePickerTypes.PngImage
                                     }
                                 });
 

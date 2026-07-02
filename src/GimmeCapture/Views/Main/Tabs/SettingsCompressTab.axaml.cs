@@ -52,10 +52,7 @@ public partial class SettingsCompressTab : UserControl
                 return Array.Empty<string>();
             }
 
-            var videoTypes = new FilePickerFileType("Video Files")
-            {
-                Patterns = new[] { "*.mp4", "*.mkv", "*.mov", "*.avi", "*.webm", "*.m4v", "*.wmv", "*.flv" }
-            };
+            var videoTypes = GimmeCapture.Views.Shared.VideoFilePickerTypes.OpenVideos;
 
             var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
             {
