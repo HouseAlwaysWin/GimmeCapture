@@ -145,6 +145,18 @@ public partial class FloatingVideoViewModel
             EditSegments[index] = seg with { Speed = next };
             RebuildSegmentBlocks();
         });
+
+        // Closing the Edit category (collapsing it or switching to another category) must exit timeline
+        // mode too, otherwise the strip — and its reserved bottom padding (WindowPadding keys off
+        // IsTimelineMode) — linger after the trim editor is closed. Mirrors the tool/annotation/Esc resets.
+        this.WhenAnyValue(x => x.IsEditCategory)
+            .Subscribe(isEditCategory =>
+            {
+                if (!isEditCategory && IsTimelineMode)
+                {
+                    IsTimelineMode = false;
+                }
+            });
     }
 
     /// <summary>
