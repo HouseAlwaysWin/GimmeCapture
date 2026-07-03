@@ -24,9 +24,9 @@ namespace GimmeCapture.ViewModels.Main;
 /// </summary>
 internal sealed class CompareViewModel : ViewModelBase, IDisposable
 {
-    // Immutable (temp file, source start) pair for one encoded window. Published as a single volatile reference so
-    // readers always get a matched pair (never a torn path/offset).
-    private sealed record SampleWindow(string Path, double Start);
+    // Immutable (temp file, source start, length) triple for one encoded window. Published as a single volatile
+    // reference so readers always get a matched set (never a torn path/offset/length).
+    private sealed record SampleWindow(string Path, double Start, double Length);
 
     private readonly string _sourcePath;
     private readonly LibavExportOptions _options;
@@ -37,9 +37,11 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
     private readonly int _rotation;         // applied to BOTH frames at display time so they match orientation
     private readonly double _anchorSeconds;  // initial window position (editor playhead); < 0 = ~10% in
 
-    // Short encoded window that follows the playhead. Kept small so each (re)encode is fast, even for 4K.
-    private const double WindowSeconds = 4.0;
-    private readonly double _winLen;         // = clamp(WindowSeconds, 0.5, duration)
+    // The compressed side encodes a short window that follows the playhead. Two sizes trade off open speed vs
+    // re-sample frequency: a SHORT window for the first frame / seeks (fast to show), and a LONGER window during
+    // playback so it only re-samples every ~30s instead of constantly. Clamped to the clip length per encode.
+    private const double SeekWindowSeconds = 6.0;
+    private const double PlayWindowSeconds = 30.0;
 
     private string? _sampleDir;
     private volatile SampleWindow? _window;  // the current encoded window (null until first encode) — atomic swap
@@ -59,8 +61,7 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
         _fps = fps > 0 ? fps : 30;
         _rotation = ((rotation % 360) + 360) % 360;
 
-        _duration = durationSeconds > 0 ? durationSeconds : WindowSeconds;
-        _winLen = Math.Max(0.5, Math.Min(WindowSeconds, _duration));
+        _duration = durationSeconds > 0 ? durationSeconds : SeekWindowSeconds;
         _anchorSeconds = anchorSeconds;
 
         int sw = sourceWidth > 0 ? sourceWidth : 1280;
@@ -197,17 +198,17 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
             double pos = startPos;
             while (!ct.IsCancellationRequested && pos < _duration - 0.05)
             {
-                // Encode (or reuse) a window that STARTS at pos, so windows are contiguous [pos, pos+winLen] and
-                // playback always moves forward — reusing the seek-window (which starts *before* pos) here would
-                // stall at boundaries.
-                SampleWindow? win = await EnsureWindowAsync(pos);
+                // Encode (or reuse) a LONG window that STARTS at pos, so windows are contiguous [pos, pos+len] and
+                // playback moves forward with infrequent re-samples — reusing the short seek-window (which starts
+                // *before* pos) here would stall at boundaries.
+                SampleWindow? win = await EnsureWindowAsync(pos, PlayWindowSeconds);
                 if (win == null || ct.IsCancellationRequested)
                 {
                     break;
                 }
 
                 double winStart = win.Start;
-                double winEnd = Math.Min(_duration, winStart + _winLen);
+                double winEnd = Math.Min(_duration, winStart + win.Length);
                 double playFrom = Math.Max(pos, winStart);
                 if (playFrom >= winEnd - 0.02)
                 {
@@ -338,7 +339,7 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
     }
 
     // Seek path: reuse the current window if it already covers `pos` (so small seeks/steps don't re-encode);
-    // otherwise encode a fresh window positioned a little before `pos` (room to step back).
+    // otherwise encode a fresh SHORT window positioned a little before `pos` (fast to show + room to step back).
     private Task<SampleWindow?> EnsureWindowForPosAsync(double pos)
     {
         SampleWindow? cur = _window;
@@ -347,22 +348,24 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
             return Task.FromResult(cur);
         }
 
-        return EnsureWindowAsync(ComputeWindowStart(_duration, _winLen, pos));
+        double len = Math.Max(0.5, Math.Min(SeekWindowSeconds, _duration));
+        return EnsureWindowAsync(ComputeWindowStart(_duration, len, pos), len);
     }
 
-    // Ensures an encoded window STARTING at `winStart` (clamped so it fits), reusing the current window when it
-    // already starts there. Supersedes any in-flight encode (latest request wins). Returns the window, or null.
-    private async Task<SampleWindow?> EnsureWindowAsync(double winStart)
+    // Ensures an encoded `len`-second window STARTING at `winStart` (both clamped so it fits), reusing the current
+    // window when it already matches. Supersedes any in-flight encode (latest request wins). Returns it, or null.
+    private async Task<SampleWindow?> EnsureWindowAsync(double winStart, double len)
     {
         if (_disposed || _sampleDir == null)
         {
             return null;
         }
 
-        winStart = Math.Clamp(winStart, 0, Math.Max(0, _duration - _winLen));
+        len = Math.Max(0.5, Math.Min(len, _duration));
+        winStart = Math.Clamp(winStart, 0, Math.Max(0, _duration - len));
 
         SampleWindow? current = _window;
-        if (StartsAt(current, winStart))
+        if (StartsAt(current, winStart, len))
         {
             return current;
         }
@@ -393,7 +396,7 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
             }
 
             current = _window;
-            if (StartsAt(current, winStart))
+            if (StartsAt(current, winStart, len))
             {
                 return current; // a prior waiter already produced this window
             }
@@ -405,7 +408,7 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
                 IsPreparing = true;
             });
 
-            var ranges = new[] { new LibavClipExporter.SourceRange(winStart, winStart + _winLen) };
+            var ranges = new[] { new LibavClipExporter.SourceRange(winStart, winStart + len) };
             bool ok = await Task.Run(() => LibavClipExporter.TryExport(
                 _sourcePath, ranges, newPath, VideoQuality.Medium, cancellationToken: ct, options: _options), ct)
                 .ConfigureAwait(false);
@@ -427,9 +430,9 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
                 return null;
             }
 
-            var newWin = new SampleWindow(newPath, winStart);
+            var newWin = new SampleWindow(newPath, winStart, len);
             SampleWindow? old = _window;
-            _window = newWin;                 // atomic publish of the matched (path, start) pair
+            _window = newWin;                 // atomic publish of the matched (path, start, length) triple
             if (old != null) { TryDelete(old.Path); }
 
             Dispatcher.UIThread.Post(() => { StatusText = string.Empty; IsPreparing = false; });
@@ -446,11 +449,11 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
         }
     }
 
-    private bool Covers(SampleWindow? w, double pos)
-        => w != null && pos >= w.Start - 0.001 && pos <= w.Start + _winLen + 0.001;
+    private static bool Covers(SampleWindow? w, double pos)
+        => w != null && pos >= w.Start - 0.001 && pos <= w.Start + w.Length + 0.001;
 
-    private static bool StartsAt(SampleWindow? w, double winStart)
-        => w != null && Math.Abs(w.Start - winStart) < 0.01;
+    private static bool StartsAt(SampleWindow? w, double winStart, double len)
+        => w != null && Math.Abs(w.Start - winStart) < 0.01 && Math.Abs(w.Length - len) < 0.01;
 
     private static void TryDelete(string path)
     {
