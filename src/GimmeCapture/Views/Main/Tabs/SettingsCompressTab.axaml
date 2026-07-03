@@ -29,10 +29,10 @@
             <!-- ① Batch queue: add files and compress them in parallel -->
             <TabItem Header="{Binding [CompressQueueLabel], Source={x:Static services:LocalizationService.Instance}}">
                 <ScrollViewer Padding="0,0,16,0">
-                    <StackPanel Spacing="6" Margin="0,8,0,0">
+                    <StackPanel Spacing="12" Margin="0,10,0,0">
 
                         <!-- Persistent working directories: their videos auto-load into the queue on startup -->
-                        <StackPanel Spacing="5">
+                        <StackPanel Spacing="6">
                             <DockPanel>
                                 <Button Content="{Binding [CompressWorkingDirAdd], Source={x:Static services:LocalizationService.Instance}}"
                                         DockPanel.Dock="Right"
@@ -49,7 +49,7 @@
                             <ItemsControl ItemsSource="{Binding CompressWorkingDirectories}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate x:CompileBindings="False">
-                                        <Border BorderBrush="#333333" BorderThickness="0,0,0,1" Padding="0,2,0,3">
+                                        <Border BorderBrush="#333333" BorderThickness="0,0,0,1" Padding="0,6,0,7">
                                         <DockPanel>
                                             <Button Content="{Binding [CompressWorkingDirRemove], Source={x:Static services:LocalizationService.Instance}}"
                                                     DockPanel.Dock="Right"
@@ -108,7 +108,7 @@
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate x:DataType="vm:MainWindowViewModel+CompressQueueItem">
                                         <!-- Hairline separator between rows -->
-                                        <Border BorderBrush="#333333" BorderThickness="0,0,0,1" Padding="0,3,0,5">
+                                        <Border BorderBrush="#333333" BorderThickness="0,0,0,1" Padding="0,8,0,10">
                                         <Grid ColumnDefinitions="Auto,*,Auto">
                                             <Border Grid.Column="0" Width="64" Height="40"
                                                     Background="#101010" CornerRadius="3"
