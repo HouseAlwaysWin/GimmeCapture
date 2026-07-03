@@ -37,6 +37,18 @@ internal sealed partial class VideoEditViewModel
     /// <summary>The hosted compare engine (encode sample + decode source/sample frames); null when not comparing.</summary>
     public CompareViewModel? Compare { get => _compare; private set => this.RaiseAndSetIfChanged(ref _compare, value); }
 
+    // 畫質比較 button is a toggle: open the inline compare, or close it if it's already showing.
+    private async Task ToggleCompareAsync()
+    {
+        if (IsComparing)
+        {
+            CloseCompare();
+            return;
+        }
+
+        await StartCompareAsync();
+    }
+
     // Compare button: build the engine for the current playhead, show it inline, then load (encode) on click.
     private async Task StartCompareAsync()
     {

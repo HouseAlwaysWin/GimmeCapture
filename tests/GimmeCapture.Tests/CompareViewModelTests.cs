@@ -5,28 +5,29 @@ using Xunit;
 
 namespace GimmeCapture.Tests;
 
-// Unit-level checks for the compare view model's framing/timeline math + safe behavior before the sample
-// is encoded. The actual decode/playback is covered by the gated real-encode integration tests.
+// Unit-level checks for the compare view model's framing/timeline math + safe behavior before a sample window is
+// encoded. The scrubber now spans the whole clip; the compressed side samples a short window on demand. Actual
+// decode/playback is covered by the gated real-encode integration tests.
 public class CompareViewModelTests
 {
     private static CompareViewModel Make(double duration = 100, int fps = 30, int width = 1920, int height = 1080, int rotation = 0)
         => new(@"C:\does-not-exist.mp4", duration, fps, width, height, new LibavExportOptions(), rotation);
 
     [Fact]
-    public void Constructor_CapsWindowAndSetsInitialState()
+    public void Constructor_SpansFullDuration_AndSetsInitialState()
     {
         using var vm = Make(duration: 100);
 
-        Assert.Equal(15, vm.WindowLength);             // ~15s window cap
-        Assert.Equal("0:00 / 0:15", vm.TimeText);
-        Assert.Equal("▶", vm.PlayPauseGlyph);     // play triangle
-        Assert.True(vm.IsPreparing);
+        Assert.Equal(100, vm.WindowLength);            // slider spans the whole clip
+        Assert.Equal("0:00 / 1:40", vm.TimeText);
+        Assert.Equal("▶", vm.PlayPauseGlyph);
+        Assert.True(vm.IsPreparing);                   // compressed side samples before the first window is ready
         Assert.False(vm.IsPlaying);
         Assert.Equal(0, vm.PositionSeconds);
     }
 
     [Fact]
-    public void Window_UsesWholeClip_WhenShorterThanCap()
+    public void WindowLength_IsFullDuration_ForShortClip()
     {
         using var vm = Make(duration: 6);
 
@@ -39,7 +40,7 @@ public class CompareViewModelTests
     {
         using var vm = Make(duration: 100);
 
-        await vm.SeekAsync(5);   // no sample yet -> pauses, no decode
+        await vm.SeekAsync(5);   // no sample dir yet -> source decode guarded, no window encoded
         await vm.SeekAsync(-3);  // clamps without throwing
         vm.BeginScrub();
 
@@ -47,30 +48,29 @@ public class CompareViewModelTests
     }
 
     [Fact]
-    public void ComputeSampleStart_NoAnchor_UsesTenPercentIn()
+    public void ComputeWindowStart_StartsSlightlyBeforePos()
     {
-        // anchorSeconds < 0 -> representative segment ~10% into the clip.
-        Assert.Equal(10, CompareViewModel.ComputeSampleStart(100, 15, -1));
+        // The window starts a little before the requested position (winLen*0.25 = 1s for a 4s window).
+        Assert.Equal(39, CompareViewModel.ComputeWindowStart(100, 4, 40));
     }
 
     [Fact]
-    public void ComputeSampleStart_Anchor_WindowStartsAtPlayhead()
+    public void ComputeWindowStart_ClampsToZeroNearStart()
     {
-        // A mid-clip anchor with room for the whole window starts exactly there.
-        Assert.Equal(40, CompareViewModel.ComputeSampleStart(100, 15, 40));
+        Assert.Equal(0, CompareViewModel.ComputeWindowStart(100, 4, 0.5));
     }
 
     [Fact]
-    public void ComputeSampleStart_AnchorNearEnd_ClampsSoWindowFits()
+    public void ComputeWindowStart_ClampsSoWindowFitsNearEnd()
     {
-        // Anchoring past (duration - window) clamps back so the 15s window still fits inside the 100s clip.
-        Assert.Equal(85, CompareViewModel.ComputeSampleStart(100, 15, 98));
+        // Near the end the window slides back so the whole 4s window still fits inside the 100s clip.
+        Assert.Equal(96, CompareViewModel.ComputeWindowStart(100, 4, 100));
     }
 
     [Fact]
-    public void ComputeSampleStart_ClipShorterThanWindow_StartsAtZero()
+    public void ComputeWindowStart_ShortClip_AlwaysZero()
     {
-        // When the window is the whole (short) clip, the start is 0 regardless of anchor.
-        Assert.Equal(0, CompareViewModel.ComputeSampleStart(6, 6, 3));
+        // When the window is the whole (short) clip, the start stays pinned at 0 regardless of position.
+        Assert.Equal(0, CompareViewModel.ComputeWindowStart(6, 6, 3));
     }
 }

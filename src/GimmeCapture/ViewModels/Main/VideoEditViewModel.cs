@@ -73,8 +73,7 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
         ClearCropCommand = ReactiveCommand.CreateFromTask(ClearCropAsync);
         ApplyCommand = ReactiveCommand.Create(Apply);
         CancelCommand = ReactiveCommand.Create(() => RequestClose?.Invoke());
-        CompareCommand = ReactiveCommand.CreateFromTask(StartCompareAsync);
-        CloseCompareCommand = ReactiveCommand.Create(CloseCompare);
+        CompareCommand = ReactiveCommand.CreateFromTask(ToggleCompareAsync);
 
         PlayPauseCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.EditPlayPause", ex));
         StepBackCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.EditStepBack", ex));
@@ -118,7 +117,6 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
     public Func<double, CompareViewModel?>? BuildCompareViewModel { get; set; }
 
     public ReactiveCommand<Unit, Unit> CompareCommand { get; }
-    public ReactiveCommand<Unit, Unit> CloseCompareCommand { get; }
 
     private string _outputFileName = string.Empty;
     /// <summary>Output file name (no extension; may contain \subfolder\). Written back to the queue item on Apply.</summary>

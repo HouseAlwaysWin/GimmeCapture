@@ -37,8 +37,10 @@
                 </Grid>
             </Border>
 
-            <!-- "Preparing sample" overlay while the compressed clip encodes -->
-            <Border Grid.ColumnSpan="2" IsVisible="{Binding IsPreparing}" Background="#C8101010">
+            <!-- "Sampling" overlay over the COMPRESSED (right) panel only — the source side stays live while the
+                 window re-encodes. -->
+            <Border Grid.Column="1" Margin="5,0,0,0" IsVisible="{Binding IsPreparing}"
+                    Background="#C8101010" CornerRadius="4">
                 <TextBlock Text="{Binding StatusText}" Foreground="White" FontSize="14"
                            HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </Border>
@@ -47,12 +49,10 @@
         <!-- Transport: scrubber + time on top, then 5s-skip / frame-step / play-pause centered below -->
         <StackPanel Grid.Row="1" Spacing="6" Margin="0,12,0,0">
             <Slider x:Name="PositionSlider" Minimum="0" Maximum="{Binding WindowLength}"
-                    Value="{Binding PositionSeconds}"
-                    IsEnabled="{Binding IsPreparing, Converter={StaticResource BoolInvertConverter}}"/>
+                    Value="{Binding PositionSeconds}"/>
             <TextBlock Text="{Binding TimeText}" HorizontalAlignment="Center"
                        Foreground="#C8C8C8" FontSize="12"/>
-            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center"
-                        IsEnabled="{Binding IsPreparing, Converter={StaticResource BoolInvertConverter}}">
+            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
                 <Button Content="{Binding [CompressCompareBack5], Source={x:Static services:LocalizationService.Instance}}"
                         Theme="{StaticResource SmallGothicMetalButton}"
                         Command="{Binding SkipBackCommand}"/>

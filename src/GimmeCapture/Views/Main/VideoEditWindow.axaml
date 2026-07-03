@@ -26,21 +26,23 @@
 
         <!-- ── Top toolbar: output filename + compare (top-left) · undo/redo + category buttons and the
                 open category's tools (centre) · Cancel/Apply (top-right). ── -->
-        <!-- IsEnabled=!IsComparing: while the inline quality compare is showing, all editing controls
-             (filename, compare button, categories, tools, undo/redo, Apply/Cancel) are locked. -->
-        <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,8" IsEnabled="{Binding !IsComparing}">
+        <!-- While comparing, editing controls lock individually (filename + centre tools + Cancel/Apply); the
+             畫質比較 button stays live because it toggles the compare off. -->
+        <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,8">
             <!-- Top-left: output filename + quality compare (moved here from the 編輯 tab). -->
             <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Top" Margin="0,0,12,0">
                 <TextBox Text="{Binding OutputFileName, Mode=TwoWay}" Width="170" FontSize="11"
-                         VerticalAlignment="Center"
+                         VerticalAlignment="Center" IsEnabled="{Binding !IsComparing}"
                          Watermark="{Binding [CompressOutputNameWatermark], Source={x:Static services:LocalizationService.Instance}}"
                          ToolTip.Tip="{Binding [CompressOutputNameLabel], Source={x:Static services:LocalizationService.Instance}}"/>
+                <!-- Toggle: opens/closes the inline compare; dims to show the active state. Stays enabled while comparing. -->
                 <Button Content="{Binding [CompressCompareButton], Source={x:Static services:LocalizationService.Instance}}"
                         Theme="{StaticResource SmallGothicMetalButton}" VerticalAlignment="Center"
-                        Command="{Binding CompareCommand}"/>
+                        Command="{Binding CompareCommand}"
+                        Opacity="{Binding IsComparing, Converter={StaticResource BoolToOpacityConverter}}"/>
             </StackPanel>
 
-            <StackPanel Grid.Column="1" Spacing="6">
+            <StackPanel Grid.Column="1" Spacing="6" IsEnabled="{Binding !IsComparing}">
                 <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
                     <Button Theme="{StaticResource SmallGothicMetalButton}" Command="{Binding Draw.UndoCommand}" ToolTip.Tip="{Binding Draw.UndoTooltip}">
                         <PathIcon Data="M12.5,8C9.85,8 7.45,8.99 5.6,10.6L2,7V16H11L7.38,12.38C8.77,11.22 10.54,10.5 12.5,10.5C16.04,10.5 19.05,12.81 20.1,16L22.47,15.22C21.08,11.03 17.15,8 12.5,8Z" Width="14" Height="14"/>
@@ -154,7 +156,8 @@
             </StackPanel>
 
             <!-- Top-right: Cancel / Apply. -->
-            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Top" Margin="12,0,0,0">
+            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Top" Margin="12,0,0,0"
+                        IsEnabled="{Binding !IsComparing}">
                 <Button Content="{Binding [CompressCancel], Source={x:Static services:LocalizationService.Instance}}"
                         Theme="{StaticResource SmallGothicMetalButton}" VerticalAlignment="Center" Command="{Binding CancelCommand}"/>
                 <Button Content="{Binding [CompressTrimApply], Source={x:Static services:LocalizationService.Instance}}"
@@ -236,15 +239,11 @@
                                Foreground="#FFE0E0" FontSize="11"/>
                 </Border>
 
-                <!-- Inline quality compare: opaque panel covering the preview while active (editing is locked
-                     via the top bar's IsEnabled). CompareView binds to the hosted Compare VM; Close is on the
-                     editor VM. -->
+                <!-- Inline quality compare: opaque panel covering the preview while active. Closed by toggling the
+                     畫質比較 button again (no separate Close button). The Panel keeps the editor VM context for
+                     IsVisible; the inner CompareView binds to the hosted Compare VM. -->
                 <Panel IsVisible="{Binding IsComparing}" Background="#101010">
                     <views:CompareView DataContext="{Binding Compare}" Margin="4"/>
-                    <Button Content="{Binding [CompressCompareClose], Source={x:Static services:LocalizationService.Instance}}"
-                            Theme="{StaticResource SmallGothicMetalButton}"
-                            HorizontalAlignment="Right" VerticalAlignment="Top" Margin="8"
-                            Command="{Binding CloseCompareCommand}"/>
                 </Panel>
             </Grid>
         </Border>
