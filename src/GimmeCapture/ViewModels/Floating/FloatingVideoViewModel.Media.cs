@@ -37,13 +37,18 @@ public partial class FloatingVideoViewModel
             this.RaisePropertyChanged(nameof(IsPlaying));
         });
 
-        FastForwardCommand = ReactiveCommand.Create(() => 
+        FastForwardCommand = ReactiveCommand.Create(() =>
         {
             var target = _currentTime.TotalSeconds + 5;
-            if (target >= _totalDuration.TotalSeconds) target = _totalDuration.TotalSeconds - 0.1;
+            // Only clamp to the end once the duration is known — at boot it can still be 0 (the callback from
+            // PlayAsync fills it), and clamping against 0 would produce a negative target the seek gate drops.
+            if (_totalDuration > TimeSpan.Zero && target >= _totalDuration.TotalSeconds)
+            {
+                target = _totalDuration.TotalSeconds - 0.1;
+            }
             _seekTargetSeconds = target;
-            
-            // Just seek and update 
+
+            // Just seek and update
             StartPlayback();
         });
 
@@ -90,41 +95,42 @@ public partial class FloatingVideoViewModel
         _bootMediaTask = BootMediaAsync();
     }
 
-    private async Task BootMediaAsync()
+    private Task BootMediaAsync()
     {
-        try
+        // Start playback immediately instead of blocking first frame behind a separate duration probe: PlayAsync
+        // already opens+scans the file to decode, and now reports the duration it reads via onDurationKnown
+        // (see ApplyProbedDuration below), so a large file is scanned once, not twice.
+        if (!_isDisposed)
         {
-            await DetectDurationAsync().ConfigureAwait(false);
-        }
-        finally
-        {
-            if (!_isDisposed)
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
             {
-                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                if (!_isDisposed)
                 {
-                    if (!_isDisposed)
-                    {
-                        StartPlayback();
-                    }
-                });
-            }
+                    StartPlayback();
+                }
+            });
         }
+
+        return Task.CompletedTask;
     }
 
-    private async Task DetectDurationAsync()
+    // Fed by LibavVideoFramePlayer.PlayAsync on open; sets the slider's known length without a second file scan.
+    // PlayAsync re-opens on every seek/segment/loop pass, so short-circuit once the (invariant) duration is known
+    // to avoid re-posting to the UI thread on every pass.
+    private void ApplyProbedDuration(double seconds)
     {
-        try
+        if (_isDisposed || seconds <= 0 || Math.Abs(TotalDuration.TotalSeconds - seconds) <= 0.01)
         {
-            var seconds = await _nativeFramePlayer.ProbeDurationSecondsAsync(VideoPath).ConfigureAwait(false);
-            if (seconds.HasValue && seconds.Value > 0)
+            return;
+        }
+
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            if (!_isDisposed && seconds > 0 && Math.Abs(TotalDuration.TotalSeconds - seconds) > 0.01)
             {
-                TotalDuration = TimeSpan.FromSeconds(seconds.Value);
+                TotalDuration = TimeSpan.FromSeconds(seconds);
             }
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"DetectDuration Error: {ex.Message}");
-        }
+        });
     }
 
     /// <summary>
@@ -289,7 +295,8 @@ public partial class FloatingVideoViewModel
                                 passCts?.Cancel();
                             }
                         },
-                        stopAtPassEnd ? passCts!.Token : ct).ConfigureAwait(false);
+                        stopAtPassEnd ? passCts!.Token : ct,
+                        onDurationKnown: ApplyProbedDuration).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException) when (playSingleFrame || _trimEndReached)
                 {

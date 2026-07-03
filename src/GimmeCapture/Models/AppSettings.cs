@@ -173,6 +173,9 @@ public class AppSettings
     // Pinned video playback UI throttling (higher FPS = smoother, more UI load)
     public int PlaybackUiFps { get; set; } = 30;
     public int PlaybackTimelineFps { get; set; } = 15;
+    // GPU (D3D11VA) hardware decode for video playback (editor / Pin / compare). On by default with automatic
+    // software fallback; turn off if a GPU driver misbehaves.
+    public bool HardwareDecodeEnabled { get; set; } = true;
     public bool UseFixedRecordPath { get; set; }
     public string TempDirectory { get; set; } = string.Empty;
     

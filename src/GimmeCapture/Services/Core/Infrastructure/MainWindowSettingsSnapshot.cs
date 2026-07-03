@@ -57,6 +57,7 @@ public sealed class MainWindowSettingsSnapshot
     public required double MaxRecordingSizeMb { get; init; }
     public required int PlaybackUiFps { get; init; }
     public required int PlaybackTimelineFps { get; init; }
+    public bool HardwareDecodeEnabled { get; init; } = true;
     public required bool UseFixedRecordPath { get; init; }
     public required string TempDirectory { get; init; }
     public required string SnipHotkey { get; init; }
@@ -133,6 +134,7 @@ public sealed class MainWindowSettingsSnapshot
             MaxRecordingSizeMb = settings.MaxRecordingSizeMB,
             PlaybackUiFps = settings.PlaybackUiFps,
             PlaybackTimelineFps = settings.PlaybackTimelineFps,
+            HardwareDecodeEnabled = settings.HardwareDecodeEnabled,
             UseFixedRecordPath = settings.UseFixedRecordPath,
             TempDirectory = settings.TempDirectory,
             SnipHotkey = settings.SnipHotkey,
@@ -209,6 +211,7 @@ public sealed class MainWindowSettingsSnapshot
         settings.MaxRecordingSizeMB = MaxRecordingSizeMb;
         settings.PlaybackUiFps = PlaybackUiFps;
         settings.PlaybackTimelineFps = PlaybackTimelineFps;
+        settings.HardwareDecodeEnabled = HardwareDecodeEnabled;
         settings.UseFixedRecordPath = UseFixedRecordPath;
         settings.TempDirectory = TempDirectory;
         settings.SnipHotkey = SnipHotkey;

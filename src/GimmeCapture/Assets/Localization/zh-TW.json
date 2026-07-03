@@ -294,6 +294,8 @@
   "HighlightClicks": "點擊高亮（漣漪）",
   "ShowKeystrokes": "顯示按下的按鍵（鍵盤浮層）",
   "PipelinedEncoding": "管線化編碼（實驗性 — 高幀率較少掉幀）",
+  "HardwareDecodeEnabled": "GPU 硬體解碼 (D3D11VA)",
+  "HardwareDecodeHint": "用 GPU 流暢播放大檔／4K 影片，失敗時自動退回軟體解碼。下次播放時生效。",
   "RecordSystemAudio": "錄影時擷取系統音訊",
   "EnableWebcam": "Webcam 子母畫面",
   "WebcamDevice": "Webcam",

@@ -1020,6 +1020,18 @@ public partial class MainWindowViewModel
         set => this.RaiseAndSetIfChanged(ref _playbackTimelineFps, IntParameterValidator.ClampPlaybackFps(value));
     }
 
+    private bool _hardwareDecodeEnabled = true;
+    public bool HardwareDecodeEnabled
+    {
+        get => _hardwareDecodeEnabled;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _hardwareDecodeEnabled, value);
+            // Drive the decoder's process-wide switch so the choice takes effect on the next playback open.
+            Services.Core.Media.NativeFFmpeg.LibavVideoFramePlayer.HardwareDecodeEnabled = value;
+        }
+    }
+
     public bool IsGifAvailable => RecordingFormatCapabilities.IsGifAvailable();
     public string GifUnavailableReason => LocalizationService.Instance["GifUnavailableReason"];
     public string[] AvailableRecordFormats => IsGifAvailable
