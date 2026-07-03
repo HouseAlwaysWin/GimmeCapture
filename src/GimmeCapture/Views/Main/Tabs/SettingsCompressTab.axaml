@@ -106,7 +106,9 @@
                                 <ItemsControl ItemsSource="{Binding CompressQueue}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate x:DataType="vm:MainWindowViewModel+CompressQueueItem">
-                                        <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,3">
+                                        <!-- Hairline separator between rows -->
+                                        <Border BorderBrush="#333333" BorderThickness="0,0,0,1" Padding="0,3,0,5">
+                                        <Grid ColumnDefinitions="Auto,*,Auto">
                                             <Border Grid.Column="0" Width="64" Height="40"
                                                     Background="#101010" CornerRadius="3"
                                                     VerticalAlignment="Center" Margin="0,0,10,0">
@@ -152,6 +154,18 @@
                                             </StackPanel>
                                             <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6"
                                                         VerticalAlignment="Center" Margin="10,0,0,0">
+                                                <!-- Edit summary + 編輯 (the former 編輯 tab now lives on each row). -->
+                                                <TextBlock Text="{Binding EditSummaryText}"
+                                                           Foreground="#C8A24B" FontSize="10"
+                                                           VerticalAlignment="Center" Margin="0,0,4,0"
+                                                           MaxWidth="260" TextTrimming="CharacterEllipsis"
+                                                           ToolTip.Tip="{Binding EditSummaryText}"/>
+                                                <Button Content="{Binding [CompressEditButton], Source={x:Static services:LocalizationService.Instance}}"
+                                                        Theme="{StaticResource SmallGothicMetalButton}"
+                                                        FontSize="10"
+                                                        IsVisible="{Binding IsActive, Converter={StaticResource BoolInvertConverter}}"
+                                                        Command="{Binding $parent[UserControl].((vm:MainWindowViewModel)DataContext).OpenEditorCommand}"
+                                                        CommandParameter="{Binding}"/>
                                                 <Button Content="{Binding [CompressEstimateItem], Source={x:Static services:LocalizationService.Instance}}"
                                                         Theme="{StaticResource SmallGothicMetalButton}"
                                                         FontSize="10"
@@ -185,6 +199,7 @@
                                                         Command="{Binding CancelCommand}"/>
                                             </StackPanel>
                                         </Grid>
+                                        </Border>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                                 </ItemsControl>
@@ -202,56 +217,6 @@
             </TabItem>
 
             <!-- ② Edit: pick a queued file, preview its first frame, rotate it -->
-            <TabItem Header="{Binding [CompressEditGroup], Source={x:Static services:LocalizationService.Instance}}">
-                <!-- List only: 輸出檔名 + 畫質比較 live inside the 進階影片編輯 window now (opened per row). -->
-                <ListBox ItemsSource="{Binding CompressQueue}"
-                         SelectedItem="{Binding SelectedQueueItem}"
-                         HorizontalAlignment="Stretch"
-                         Margin="0,8,16,0"
-                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-                    <ListBox.ItemTemplate>
-                        <DataTemplate x:CompileBindings="False">
-                            <!-- Row separated by a hairline; name column stars so long names ellipsize
-                                 instead of pushing the trailing summary/edit cluster. -->
-                            <Border BorderBrush="#333333" BorderThickness="0,0,0,1" Padding="0,4,0,6">
-                                <Grid ColumnDefinitions="Auto,*,Auto">
-                                    <!-- first-frame thumbnail -->
-                                    <Border Grid.Column="0" Width="64" Height="40"
-                                            Background="#101010" CornerRadius="3"
-                                            VerticalAlignment="Center" Margin="0,0,10,0">
-                                        <Image Source="{Binding Thumbnail}" Stretch="Uniform"/>
-                                    </Border>
-                                    <!-- name + size + date -->
-                                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
-                                        <TextBlock Text="{Binding FileName}" FontSize="12"
-                                                   TextTrimming="CharacterEllipsis"
-                                                   ToolTip.Tip="{Binding FileName}"/>
-                                        <StackPanel Orientation="Horizontal" Spacing="8">
-                                            <TextBlock Text="{Binding FileSizeText}" FontSize="10" Foreground="#9A9A9A"/>
-                                            <TextBlock Text="{Binding DateText}" FontSize="10" Foreground="#9A9A9A"/>
-                                        </StackPanel>
-                                    </StackPanel>
-                                    <!-- trailing cluster: edit summary + 編輯 (like the batch rows) -->
-                                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="10"
-                                                VerticalAlignment="Center" Margin="10,0,0,0">
-                                        <TextBlock Text="{Binding EditSummaryText}"
-                                                   Foreground="#C8A24B" FontSize="10"
-                                                   VerticalAlignment="Center"
-                                                   MaxWidth="300" TextTrimming="CharacterEllipsis"
-                                                   ToolTip.Tip="{Binding EditSummaryText}"/>
-                                        <Button Content="{Binding [CompressEditButton], Source={x:Static services:LocalizationService.Instance}}"
-                                                Theme="{StaticResource SmallGothicMetalButton}"
-                                                FontSize="10"
-                                                Command="{Binding $parent[UserControl].DataContext.OpenEditorCommand}"
-                                                CommandParameter="{Binding}"/>
-                                    </StackPanel>
-                                </Grid>
-                            </Border>
-                        </DataTemplate>
-                    </ListBox.ItemTemplate>
-                </ListBox>
-            </TabItem>
-
             <!-- ③ Output settings -->
             <TabItem Header="{Binding [CompressSettingsGroup], Source={x:Static services:LocalizationService.Instance}}">
                 <ScrollViewer Padding="0,0,16,0">

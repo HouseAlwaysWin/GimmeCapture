@@ -23,10 +23,21 @@
     </Window.Styles>
     <Grid RowDefinitions="Auto,*,Auto" Margin="12">
 
-        <!-- ── Top toolbar: undo/redo · category buttons (標註/編輯/遮蔽) + the open category's tools;
-                Cancel/Apply + output filename/compare live in the top-right corner. ── -->
-        <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,8">
-            <StackPanel Grid.Column="0" Spacing="6">
+        <!-- ── Top toolbar: output filename + compare (top-left) · undo/redo + category buttons and the
+                open category's tools (centre) · Cancel/Apply (top-right). ── -->
+        <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,8">
+            <!-- Top-left: output filename + quality compare (moved here from the 編輯 tab). -->
+            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Top" Margin="0,0,12,0">
+                <TextBox Text="{Binding OutputFileName, Mode=TwoWay}" Width="170" FontSize="11"
+                         VerticalAlignment="Center"
+                         Watermark="{Binding [CompressOutputNameWatermark], Source={x:Static services:LocalizationService.Instance}}"
+                         ToolTip.Tip="{Binding [CompressOutputNameLabel], Source={x:Static services:LocalizationService.Instance}}"/>
+                <Button Content="{Binding [CompressCompareButton], Source={x:Static services:LocalizationService.Instance}}"
+                        Theme="{StaticResource SmallGothicMetalButton}" VerticalAlignment="Center"
+                        Command="{Binding CompareCommand}"/>
+            </StackPanel>
+
+            <StackPanel Grid.Column="1" Spacing="6">
                 <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
                     <Button Theme="{StaticResource SmallGothicMetalButton}" Command="{Binding Draw.UndoCommand}" ToolTip.Tip="{Binding Draw.UndoTooltip}">
                         <PathIcon Data="M12.5,8C9.85,8 7.45,8.99 5.6,10.6L2,7V16H11L7.38,12.38C8.77,11.22 10.54,10.5 12.5,10.5C16.04,10.5 19.05,12.81 20.1,16L22.47,15.22C21.08,11.03 17.15,8 12.5,8Z" Width="14" Height="14"/>
@@ -139,22 +150,12 @@
             </Border>
             </StackPanel>
 
-            <!-- Top-right: Cancel/Apply on the first row, output filename + quality compare below. -->
-            <StackPanel Grid.Column="1" Spacing="6" Margin="12,0,0,0" VerticalAlignment="Top">
-                <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
-                    <Button Content="{Binding [CompressCancel], Source={x:Static services:LocalizationService.Instance}}"
-                            Theme="{StaticResource SmallGothicMetalButton}" Command="{Binding CancelCommand}"/>
-                    <Button Content="{Binding [CompressTrimApply], Source={x:Static services:LocalizationService.Instance}}"
-                            Theme="{StaticResource SmallGothicMetalButton}" FontWeight="Bold" Command="{Binding ApplyCommand}"/>
-                </StackPanel>
-                <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
-                    <TextBox Text="{Binding OutputFileName, Mode=TwoWay}" Width="170" FontSize="11"
-                             VerticalAlignment="Center"
-                             Watermark="{Binding [CompressOutputNameWatermark], Source={x:Static services:LocalizationService.Instance}}"
-                             ToolTip.Tip="{Binding [CompressOutputNameLabel], Source={x:Static services:LocalizationService.Instance}}"/>
-                    <Button Content="{Binding [CompressCompareButton], Source={x:Static services:LocalizationService.Instance}}"
-                            Theme="{StaticResource SmallGothicMetalButton}" Command="{Binding CompareCommand}"/>
-                </StackPanel>
+            <!-- Top-right: Cancel / Apply. -->
+            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Top" Margin="12,0,0,0">
+                <Button Content="{Binding [CompressCancel], Source={x:Static services:LocalizationService.Instance}}"
+                        Theme="{StaticResource SmallGothicMetalButton}" VerticalAlignment="Center" Command="{Binding CancelCommand}"/>
+                <Button Content="{Binding [CompressTrimApply], Source={x:Static services:LocalizationService.Instance}}"
+                        Theme="{StaticResource SmallGothicMetalButton}" FontWeight="Bold" VerticalAlignment="Center" Command="{Binding ApplyCommand}"/>
             </StackPanel>
         </Grid>
 

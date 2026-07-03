@@ -42,12 +42,9 @@ public partial class DrawingToolbar : UserControl
     public DrawingToolbar()
     {
         InitializeComponent();
-    }
-
-    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
-    {
-        base.OnAttachedToVisualTree(e);
-        ApplyButtonTheme();
+        // Loaded (not AttachedToVisualTree): the UserControl's content only becomes visual descendants
+        // once its template has been applied on the first layout pass, so an attach-time walk finds nothing.
+        Loaded += (_, _) => ApplyButtonTheme();
     }
 
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
