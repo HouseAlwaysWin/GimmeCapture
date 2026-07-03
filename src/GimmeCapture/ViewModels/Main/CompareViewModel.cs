@@ -188,15 +188,18 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
         return Task.CompletedTask;
     }
 
-    // Plays source + sample in sync, chaining short windows so playback follows the playhead through the whole
-    // clip (with a brief re-sample at each window boundary).
+    // Plays source + sample in sync, encoding CONTIGUOUS short windows so playback follows the playhead through
+    // the whole clip (with a brief re-sample at each window boundary).
     private async Task PlayLoopAsync(double startPos, CancellationToken ct)
     {
         try
         {
             double pos = startPos;
-            while (!ct.IsCancellationRequested && pos < _duration - 0.02)
+            while (!ct.IsCancellationRequested && pos < _duration - 0.05)
             {
+                // Encode (or reuse) a window that STARTS at pos, so windows are contiguous [pos, pos+winLen] and
+                // playback always moves forward — reusing the seek-window (which starts *before* pos) here would
+                // stall at boundaries.
                 SampleWindow? win = await EnsureWindowAsync(pos);
                 if (win == null || ct.IsCancellationRequested)
                 {
@@ -205,18 +208,28 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
 
                 double winStart = win.Start;
                 double winEnd = Math.Min(_duration, winStart + _winLen);
+                double playFrom = Math.Max(pos, winStart);
+                if (playFrom >= winEnd - 0.02)
+                {
+                    break; // nothing left to play in this (final) window
+                }
                 string samplePath = win.Path;
 
                 using var winCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
                 CancellationToken wct = winCts.Token;
 
-                // Compressed (right): play this window [pos-winStart, winLen].
+                // Align the two streams at the window start: the 4K source opens slower than the small sample
+                // clip, so the sample would otherwise race ahead. Hold the sample until the source shows its
+                // first frame of this window.
+                var srcReady = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
                 var sampleTask = Task.Run(async () =>
                 {
                     try
                     {
+                        await srcReady.Task.WaitAsync(wct).ConfigureAwait(false);
                         using var ps = new LibavVideoFramePlayer();
-                        await ps.PlayAsync(samplePath, _decodeW, _decodeH, pos - winStart, 1.0, false, (data, _) =>
+                        await ps.PlayAsync(samplePath, _decodeW, _decodeH, playFrom - winStart, 1.0, false, (data, _) =>
                         {
                             if (wct.IsCancellationRequested) throw new OperationCanceledException();
                             Bitmap? bmp = BytesToBitmap(data);
@@ -229,11 +242,12 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
 
                 try
                 {
-                    // Original (left): play [pos, winEnd]; stop at the window end.
+                    // Original (left): play [playFrom, winEnd]; stop at the window end.
                     using var pp = new LibavVideoFramePlayer();
-                    await pp.PlayAsync(_sourcePath, _decodeW, _decodeH, pos, 1.0, false, (data, ts) =>
+                    await pp.PlayAsync(_sourcePath, _decodeW, _decodeH, playFrom, 1.0, false, (data, ts) =>
                     {
                         if (wct.IsCancellationRequested || ts >= winEnd) throw new OperationCanceledException();
+                        srcReady.TrySetResult(); // first frame of the window releases the sample to start in step
                         Bitmap? bmp = BytesToBitmap(data);
                         Dispatcher.UIThread.Post(() => { SourceFrame = bmp; PositionSeconds = ts; });
                     }, wct);
@@ -241,9 +255,10 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
                 catch (OperationCanceledException) { /* window end or paused */ }
                 finally
                 {
-                    // Always stop + await the sample player for this window, whatever ended the source player
-                    // (window end, pause, or a decode fault) — so it is never stranded and winCts isn't disposed
-                    // while it is still in use.
+                    // Always release the barrier + stop and await the sample player, whatever ended the source
+                    // (window end, pause, or a decode fault), so it is never stranded and winCts isn't disposed
+                    // while still in use.
+                    srcReady.TrySetResult();
                     winCts.Cancel();
                     try { await sampleTask; } catch { /* already stopping */ }
                 }
@@ -253,7 +268,7 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
                     break;                       // paused by the user
                 }
 
-                pos = winEnd;                    // advance to the next window
+                pos = winEnd;                    // advance to the next contiguous window
                 double next = pos;
                 Dispatcher.UIThread.Post(() => PositionSeconds = next);
             }
@@ -304,7 +319,7 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
             }
             if (src != null) { SourceFrame = BytesToBitmap(src); }
 
-            SampleWindow? win = await EnsureWindowAsync(pos);
+            SampleWindow? win = await EnsureWindowForPosAsync(pos);
             if (ct.IsCancellationRequested || win == null)
             {
                 return;
@@ -322,17 +337,32 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
         catch (Exception ex) { AppLog.Error("Compress.CompareShowFrame", ex); }
     }
 
-    // Ensures the compressed sample covers `pos`, re-encoding a short window around it if needed. Supersedes any
-    // in-flight encode (rapid seeks coalesce to the latest). Returns the window covering `pos`, or null.
-    private async Task<SampleWindow?> EnsureWindowAsync(double pos)
+    // Seek path: reuse the current window if it already covers `pos` (so small seeks/steps don't re-encode);
+    // otherwise encode a fresh window positioned a little before `pos` (room to step back).
+    private Task<SampleWindow?> EnsureWindowForPosAsync(double pos)
+    {
+        SampleWindow? cur = _window;
+        if (Covers(cur, pos))
+        {
+            return Task.FromResult(cur);
+        }
+
+        return EnsureWindowAsync(ComputeWindowStart(_duration, _winLen, pos));
+    }
+
+    // Ensures an encoded window STARTING at `winStart` (clamped so it fits), reusing the current window when it
+    // already starts there. Supersedes any in-flight encode (latest request wins). Returns the window, or null.
+    private async Task<SampleWindow?> EnsureWindowAsync(double winStart)
     {
         if (_disposed || _sampleDir == null)
         {
             return null;
         }
 
+        winStart = Math.Clamp(winStart, 0, Math.Max(0, _duration - _winLen));
+
         SampleWindow? current = _window;
-        if (Covers(current, pos))
+        if (StartsAt(current, winStart))
         {
             return current;
         }
@@ -363,12 +393,11 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
             }
 
             current = _window;
-            if (Covers(current, pos))
+            if (StartsAt(current, winStart))
             {
-                return current; // a prior waiter already produced a covering window
+                return current; // a prior waiter already produced this window
             }
 
-            double winStart = ComputeWindowStart(_duration, _winLen, pos);
             string newPath = Path.Combine(_sampleDir, $"win_{++_sampleSeq}.mp4");
             Dispatcher.UIThread.Post(() =>
             {
@@ -419,6 +448,9 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
 
     private bool Covers(SampleWindow? w, double pos)
         => w != null && pos >= w.Start - 0.001 && pos <= w.Start + _winLen + 0.001;
+
+    private static bool StartsAt(SampleWindow? w, double winStart)
+        => w != null && Math.Abs(w.Start - winStart) < 0.01;
 
     private static void TryDelete(string path)
     {
