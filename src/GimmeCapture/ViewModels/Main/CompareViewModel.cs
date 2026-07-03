@@ -16,40 +16,53 @@ using SkiaSharp;
 namespace GimmeCapture.ViewModels.Main;
 
 /// <summary>
-/// Drives the side-by-side quality-compare window: encodes a short sample of the source with the chosen
-/// settings, then plays the original and the compressed sample in sync, with pause + frame-by-frame stepping
-/// so the user can judge quality loss by eye. Original plays the source window [t0, t1]; the sample plays
-/// [0, t1-t0], synced by relative position.
+/// Drives the inline side-by-side quality compare hosted in the editor preview. The scrubber spans the WHOLE
+/// clip; the original (left) is decoded straight from the source at any position (instant), while the compressed
+/// (right) is produced by encoding a short window that FOLLOWS the playhead on demand — so any point can be
+/// compared quickly without encoding the whole (potentially 4K) file. Playback chains windows so it carries
+/// through the clip. Both frames are rotated equally to match the editor's orientation.
 /// </summary>
 internal sealed class CompareViewModel : ViewModelBase, IDisposable
 {
+    // Immutable (temp file, source start, length) triple for one encoded window. Published as a single volatile
+    // reference so readers always get a matched set (never a torn path/offset/length).
+    private sealed record SampleWindow(string Path, double Start, double Length);
+
     private readonly string _sourcePath;
     private readonly LibavExportOptions _options;
     private readonly int _fps;
     private readonly int _decodeW;
     private readonly int _decodeH;
-    private readonly double _t0;        // source window start (seconds)
-    private readonly double _windowLen; // window length (seconds)
-    private readonly int _rotation;     // applied to BOTH frames at display time so they match orientation
+    private readonly double _duration;      // full source duration — the slider spans this
+    private readonly int _rotation;         // applied to BOTH frames at display time so they match orientation
+    private readonly double _anchorSeconds;  // initial window position (editor playhead); < 0 = ~10% in
+
+    // The compressed side encodes a short window that follows the playhead. Two sizes trade off open speed vs
+    // re-sample frequency: a SHORT window for the first frame / seeks (fast to show), and a LONGER window during
+    // playback so it only re-samples every ~30s instead of constantly. Clamped to the clip length per encode.
+    private const double SeekWindowSeconds = 6.0;
+    private const double PlayWindowSeconds = 30.0;
 
     private string? _sampleDir;
-    private string? _samplePath;
+    private volatile SampleWindow? _window;  // the current encoded window (null until first encode) — atomic swap
+    private int _sampleSeq;                  // unique temp-file name per window (mutated only under _sampleLock)
+    private readonly SemaphoreSlim _sampleLock = new(1, 1); // serialize encodes; latest request wins
     private CancellationTokenSource? _playCts;
     private CancellationTokenSource? _stepCts;
+    private CancellationTokenSource? _sampleCts; // supersedes an in-flight window encode when the target moves
+    private volatile bool _disposed;
 
     internal CompareViewModel(
         string sourcePath, double durationSeconds, int fps, int sourceWidth, int sourceHeight,
-        LibavExportOptions options, int rotation)
+        LibavExportOptions options, int rotation, double anchorSeconds = -1)
     {
         _sourcePath = sourcePath;
         _options = options;
         _fps = fps > 0 ? fps : 30;
         _rotation = ((rotation % 360) + 360) % 360;
 
-        const double window = 15.0;
-        double dur = durationSeconds > 0 ? durationSeconds : window;
-        _windowLen = Math.Max(0.5, Math.Min(window, dur));
-        _t0 = Math.Clamp(dur * 0.1, 0, Math.Max(0, dur - _windowLen)); // a representative segment ~10% in
+        _duration = durationSeconds > 0 ? durationSeconds : SeekWindowSeconds;
+        _anchorSeconds = anchorSeconds;
 
         int sw = sourceWidth > 0 ? sourceWidth : 1280;
         int sh = sourceHeight > 0 ? sourceHeight : 720;
@@ -73,7 +86,14 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
     }
 
     public string Title { get; }
-    public double WindowLength => _windowLen;
+
+    /// <summary>The scrubber's max — the whole source duration (the compare now spans the full clip).</summary>
+    public double WindowLength => _duration;
+
+    // The encoded window starts a little before the requested position (room to view/step around it), clamped so
+    // the whole window still fits inside the clip.
+    internal static double ComputeWindowStart(double durationSeconds, double windowLen, double pos)
+        => Math.Clamp(pos - windowLen * 0.25, 0, Math.Max(0, durationSeconds - windowLen));
 
     private Bitmap? _sourceFrame;
     public Bitmap? SourceFrame { get => _sourceFrame; private set => this.RaiseAndSetIfChanged(ref _sourceFrame, value); }
@@ -92,7 +112,7 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
         }
     }
 
-    public string TimeText => $"{Fmt(_positionSeconds)} / {Fmt(_windowLen)}";
+    public string TimeText => $"{Fmt(_positionSeconds)} / {Fmt(_duration)}";
 
     private static string Fmt(double seconds) => TimeSpan.FromSeconds(Math.Max(0, seconds)).ToString(@"m\:ss");
 
@@ -109,6 +129,8 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
 
     public string PlayPauseGlyph => _isPlaying ? "⏸" : "▶";
 
+    // True while the compressed side is (re)sampling a window. The overlay is shown over the RIGHT panel only —
+    // the source side stays navigable.
     private bool _isPreparing = true;
     public bool IsPreparing { get => _isPreparing; private set => this.RaiseAndSetIfChanged(ref _isPreparing, value); }
 
@@ -121,37 +143,22 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
     public ReactiveCommand<Unit, Unit> SkipBackCommand { get; }
     public ReactiveCommand<Unit, Unit> SkipForwardCommand { get; }
 
-    /// <summary>Encodes the sample, then shows the first frame of both. Call once after the window opens.</summary>
+    /// <summary>Creates the temp dir and shows the first frame at the anchor position (which encodes the first
+    /// window). Call once after the panel is shown.</summary>
     public async Task InitializeAsync()
     {
-        IsPreparing = true;
         try
         {
             _sampleDir = Path.Combine(Path.GetTempPath(), "GimmeCapture_Compare_" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(_sampleDir);
-            _samplePath = Path.Combine(_sampleDir, "sample.mp4");
 
-            var ranges = new[] { new LibavClipExporter.SourceRange(_t0, _t0 + _windowLen) };
-            bool ok = await Task.Run(() => LibavClipExporter.TryExport(
-                _sourcePath, ranges, _samplePath, VideoQuality.Medium, options: _options));
-
-            if (!ok || !File.Exists(_samplePath) || new FileInfo(_samplePath).Length == 0)
-            {
-                _samplePath = null;
-                StatusText = LocalizationService.Instance["CompressQueueFailed"];
-                return;
-            }
-
-            await ShowFrameAtAsync(0);
-            StatusText = string.Empty;
+            double startPos = _anchorSeconds >= 0 ? Math.Clamp(_anchorSeconds, 0, _duration) : _duration * 0.1;
+            await ShowFrameAtAsync(startPos);
         }
         catch (Exception ex)
         {
             AppLog.Error("Compress.CompareInit", ex);
             StatusText = LocalizationService.Instance["CompressQueueFailed"];
-        }
-        finally
-        {
             IsPreparing = false;
         }
     }
@@ -169,59 +176,107 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
 
     private Task PlayAsync()
     {
-        if (_samplePath == null)
-        {
-            return Task.CompletedTask;
-        }
-
         _stepCts?.Cancel();
         _playCts?.Cancel();
         _playCts = new CancellationTokenSource();
         CancellationToken ct = _playCts.Token;
         IsPlaying = true;
 
-        double start = PositionSeconds >= _windowLen - 0.05 ? 0 : PositionSeconds; // replay from start if at end
+        double start = PositionSeconds >= _duration - 0.05 ? 0 : PositionSeconds; // replay from start if at end
         PositionSeconds = start;
 
-        // Original (left): plays the source window [t0+start, t1]; stops at the window end.
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                using var p = new LibavVideoFramePlayer();
-                await p.PlayAsync(_sourcePath, _decodeW, _decodeH, _t0 + start, 1.0, false, (data, ts) =>
-                {
-                    double pos = ts - _t0;
-                    if (pos > _windowLen)
-                    {
-                        throw new OperationCanceledException(); // reached the window end
-                    }
-                    Bitmap? bmp = BytesToBitmap(data);
-                    Dispatcher.UIThread.Post(() => { SourceFrame = bmp; PositionSeconds = pos; });
-                }, ct);
-            }
-            catch (OperationCanceledException) { /* paused or window end */ }
-            catch (Exception ex) { AppLog.Error("Compress.ComparePlaySource", ex); }
-            finally { Dispatcher.UIThread.Post(() => IsPlaying = false); }
-        }, ct);
-
-        // Compressed (right): plays the whole sample [0, windowLen].
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                using var p = new LibavVideoFramePlayer();
-                await p.PlayAsync(_samplePath!, _decodeW, _decodeH, start, 1.0, false, (data, _) =>
-                {
-                    Bitmap? bmp = BytesToBitmap(data);
-                    Dispatcher.UIThread.Post(() => SampleFrame = bmp);
-                }, ct);
-            }
-            catch (OperationCanceledException) { /* paused */ }
-            catch (Exception ex) { AppLog.Error("Compress.ComparePlaySample", ex); }
-        }, ct);
-
+        _ = Task.Run(() => PlayLoopAsync(start, ct), ct);
         return Task.CompletedTask;
+    }
+
+    // Plays source + sample in sync, encoding CONTIGUOUS short windows so playback follows the playhead through
+    // the whole clip (with a brief re-sample at each window boundary).
+    private async Task PlayLoopAsync(double startPos, CancellationToken ct)
+    {
+        try
+        {
+            double pos = startPos;
+            while (!ct.IsCancellationRequested && pos < _duration - 0.05)
+            {
+                // Encode (or reuse) a LONG window that STARTS at pos, so windows are contiguous [pos, pos+len] and
+                // playback moves forward with infrequent re-samples — reusing the short seek-window (which starts
+                // *before* pos) here would stall at boundaries.
+                SampleWindow? win = await EnsureWindowAsync(pos, PlayWindowSeconds);
+                if (win == null || ct.IsCancellationRequested)
+                {
+                    break;
+                }
+
+                double winStart = win.Start;
+                double winEnd = Math.Min(_duration, winStart + win.Length);
+                double playFrom = Math.Max(pos, winStart);
+                if (playFrom >= winEnd - 0.02)
+                {
+                    break; // nothing left to play in this (final) window
+                }
+                string samplePath = win.Path;
+
+                using var winCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                CancellationToken wct = winCts.Token;
+
+                // Align the two streams at the window start: the 4K source opens slower than the small sample
+                // clip, so the sample would otherwise race ahead. Hold the sample until the source shows its
+                // first frame of this window.
+                var srcReady = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+                var sampleTask = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await srcReady.Task.WaitAsync(wct).ConfigureAwait(false);
+                        using var ps = new LibavVideoFramePlayer();
+                        await ps.PlayAsync(samplePath, _decodeW, _decodeH, playFrom - winStart, 1.0, false, (data, _) =>
+                        {
+                            if (wct.IsCancellationRequested) throw new OperationCanceledException();
+                            Bitmap? bmp = BytesToBitmap(data);
+                            Dispatcher.UIThread.Post(() => SampleFrame = bmp);
+                        }, wct);
+                    }
+                    catch (OperationCanceledException) { }
+                    catch (Exception ex) { AppLog.Error("Compress.ComparePlaySample", ex); }
+                }, wct);
+
+                try
+                {
+                    // Original (left): play [playFrom, winEnd]; stop at the window end.
+                    using var pp = new LibavVideoFramePlayer();
+                    await pp.PlayAsync(_sourcePath, _decodeW, _decodeH, playFrom, 1.0, false, (data, ts) =>
+                    {
+                        if (wct.IsCancellationRequested || ts >= winEnd) throw new OperationCanceledException();
+                        srcReady.TrySetResult(); // first frame of the window releases the sample to start in step
+                        Bitmap? bmp = BytesToBitmap(data);
+                        Dispatcher.UIThread.Post(() => { SourceFrame = bmp; PositionSeconds = ts; });
+                    }, wct);
+                }
+                catch (OperationCanceledException) { /* window end or paused */ }
+                finally
+                {
+                    // Always release the barrier + stop and await the sample player, whatever ended the source
+                    // (window end, pause, or a decode fault), so it is never stranded and winCts isn't disposed
+                    // while still in use.
+                    srcReady.TrySetResult();
+                    winCts.Cancel();
+                    try { await sampleTask; } catch { /* already stopping */ }
+                }
+
+                if (ct.IsCancellationRequested)
+                {
+                    break;                       // paused by the user
+                }
+
+                pos = winEnd;                    // advance to the next contiguous window
+                double next = pos;
+                Dispatcher.UIThread.Post(() => PositionSeconds = next);
+            }
+        }
+        catch (OperationCanceledException) { /* paused */ }
+        catch (Exception ex) { AppLog.Error("Compress.ComparePlay", ex); }
+        finally { Dispatcher.UIThread.Post(() => IsPlaying = false); }
     }
 
     private void Pause()
@@ -230,7 +285,7 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
         IsPlaying = false;
     }
 
-    // Slider scrubbing (driven by the window code-behind): pause on grab, seek to the dropped position on release.
+    // Slider scrubbing (driven by the panel code-behind): pause on grab, seek to the dropped position on release.
     public void BeginScrub() => Pause();
 
     public async Task SeekAsync(double pos)
@@ -245,30 +300,168 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
         await ShowFrameAtAsync(PositionSeconds + direction * (1.0 / _fps));
     }
 
-    // Decodes both videos at the shared relative position and shows them (paused frame-step / seek).
+    // Shows the source frame immediately (no encode), then ensures a compressed window covering `pos` and shows
+    // the sample frame at the in-window offset — so full-length navigation stays instant on the original side.
     private async Task ShowFrameAtAsync(double pos)
     {
-        if (_samplePath == null)
-        {
-            return;
-        }
-
-        pos = Math.Clamp(pos, 0, _windowLen);
+        pos = Math.Clamp(pos, 0, _duration);
         PositionSeconds = pos;
 
         _stepCts?.Cancel();
         _stepCts = new CancellationTokenSource();
         CancellationToken ct = _stepCts.Token;
 
-        byte[]? src = await LibavVideoFramePlayer.DecodeFrameAtAsync(_sourcePath, _t0 + pos, _decodeW, _decodeH, ct);
-        byte[]? smp = await LibavVideoFramePlayer.DecodeFrameAtAsync(_samplePath, pos, _decodeW, _decodeH, ct);
-        if (ct.IsCancellationRequested)
+        try
         {
-            return;
+            byte[]? src = await LibavVideoFramePlayer.DecodeFrameAtAsync(_sourcePath, pos, _decodeW, _decodeH, ct);
+            if (ct.IsCancellationRequested)
+            {
+                return;
+            }
+            if (src != null) { SourceFrame = BytesToBitmap(src); }
+
+            SampleWindow? win = await EnsureWindowForPosAsync(pos);
+            if (ct.IsCancellationRequested || win == null)
+            {
+                return;
+            }
+
+            // Decode from the window EnsureWindowAsync returned (a matched path/offset pair), not re-read fields.
+            byte[]? smp = await LibavVideoFramePlayer.DecodeFrameAtAsync(win.Path, pos - win.Start, _decodeW, _decodeH, ct);
+            if (ct.IsCancellationRequested)
+            {
+                return;
+            }
+            if (smp != null) { SampleFrame = BytesToBitmap(smp); }
+        }
+        catch (OperationCanceledException) { /* superseded by a newer seek/step */ }
+        catch (Exception ex) { AppLog.Error("Compress.CompareShowFrame", ex); }
+    }
+
+    // Seek path: reuse the current window if it already covers `pos` (so small seeks/steps don't re-encode);
+    // otherwise encode a fresh SHORT window positioned a little before `pos` (fast to show + room to step back).
+    private Task<SampleWindow?> EnsureWindowForPosAsync(double pos)
+    {
+        SampleWindow? cur = _window;
+        if (Covers(cur, pos))
+        {
+            return Task.FromResult(cur);
         }
 
-        if (src != null) { SourceFrame = BytesToBitmap(src); }
-        if (smp != null) { SampleFrame = BytesToBitmap(smp); }
+        double len = Math.Max(0.5, Math.Min(SeekWindowSeconds, _duration));
+        return EnsureWindowAsync(ComputeWindowStart(_duration, len, pos), len);
+    }
+
+    // Ensures an encoded `len`-second window STARTING at `winStart` (both clamped so it fits), reusing the current
+    // window when it already matches. Supersedes any in-flight encode (latest request wins). Returns it, or null.
+    private async Task<SampleWindow?> EnsureWindowAsync(double winStart, double len)
+    {
+        if (_disposed || _sampleDir == null)
+        {
+            return null;
+        }
+
+        len = Math.Max(0.5, Math.Min(len, _duration));
+        winStart = Math.Clamp(winStart, 0, Math.Max(0, _duration - len));
+
+        SampleWindow? current = _window;
+        if (StartsAt(current, winStart, len))
+        {
+            return current;
+        }
+
+        // Atomically install our CTS and cancel the previous in-flight encode (latest request wins).
+        var cts = new CancellationTokenSource();
+        Interlocked.Exchange(ref _sampleCts, cts)?.Cancel();
+        CancellationToken ct = cts.Token;
+
+        try
+        {
+            await _sampleLock.WaitAsync(ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            return null; // superseded (or disposed) while waiting
+        }
+        catch (ObjectDisposedException)
+        {
+            return null;
+        }
+
+        try
+        {
+            if (_disposed || ct.IsCancellationRequested)
+            {
+                return null;
+            }
+
+            current = _window;
+            if (StartsAt(current, winStart, len))
+            {
+                return current; // a prior waiter already produced this window
+            }
+
+            string newPath = Path.Combine(_sampleDir, $"win_{++_sampleSeq}.mp4");
+            Dispatcher.UIThread.Post(() =>
+            {
+                StatusText = LocalizationService.Instance["CompressComparePreparing"];
+                IsPreparing = true;
+            });
+
+            var ranges = new[] { new LibavClipExporter.SourceRange(winStart, winStart + len) };
+            bool ok = await Task.Run(() => LibavClipExporter.TryExport(
+                _sourcePath, ranges, newPath, VideoQuality.Medium, cancellationToken: ct, options: _options), ct)
+                .ConfigureAwait(false);
+
+            if (_disposed || ct.IsCancellationRequested)
+            {
+                TryDelete(newPath);
+                return null;
+            }
+
+            if (!ok || !File.Exists(newPath) || new FileInfo(newPath).Length == 0)
+            {
+                TryDelete(newPath);
+                Dispatcher.UIThread.Post(() =>
+                {
+                    StatusText = LocalizationService.Instance["CompressQueueFailed"];
+                    IsPreparing = false;
+                });
+                return null;
+            }
+
+            var newWin = new SampleWindow(newPath, winStart, len);
+            SampleWindow? old = _window;
+            _window = newWin;                 // atomic publish of the matched (path, start, length) triple
+            if (old != null) { TryDelete(old.Path); }
+
+            Dispatcher.UIThread.Post(() => { StatusText = string.Empty; IsPreparing = false; });
+            return newWin;
+        }
+        catch (OperationCanceledException)
+        {
+            return null;
+        }
+        finally
+        {
+            // _sampleLock is never disposed (see Dispose), but guard defensively so a teardown race can't surface.
+            try { _sampleLock.Release(); } catch (ObjectDisposedException) { }
+        }
+    }
+
+    private static bool Covers(SampleWindow? w, double pos)
+        => w != null && pos >= w.Start - 0.001 && pos <= w.Start + w.Length + 0.001;
+
+    private static bool StartsAt(SampleWindow? w, double winStart, double len)
+        => w != null && Math.Abs(w.Start - winStart) < 0.01 && Math.Abs(w.Length - len) < 0.01;
+
+    private static void TryDelete(string path)
+    {
+        try
+        {
+            if (File.Exists(path)) { File.Delete(path); }
+        }
+        catch { /* best-effort; the whole temp dir is removed on Dispose */ }
     }
 
     private Bitmap? BytesToBitmap(byte[] bgra)
@@ -301,10 +494,12 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
 
     public void Dispose()
     {
+        _disposed = true;
         _playCts?.Cancel();
         _stepCts?.Cancel();
-        _playCts?.Dispose();
-        _stepCts?.Dispose();
+        Interlocked.Exchange(ref _sampleCts, null)?.Cancel();
+        // The CancellationTokenSources and _sampleLock are intentionally left for GC (none hold a wait handle):
+        // disposing them here would race an in-flight play/encode task into ObjectDisposedException on close.
         try
         {
             if (_sampleDir != null && Directory.Exists(_sampleDir))

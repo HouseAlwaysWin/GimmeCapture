@@ -22,11 +22,6 @@ public partial class MainWindowViewModel
     /// <summary>Set by the view: opens a folder picker for the batch output folder; returns the chosen dir (or null).</summary>
     public Func<Task<string?>>? PickCompressOutputFolderAction { get; set; }
 
-    /// <summary>Set by the view: opens the side-by-side quality-compare window for a prepared view model.</summary>
-    internal Action<CompareViewModel>? OpenCompareAction { get; set; }
-
-    public ReactiveCommand<CompressQueueItem?, Unit> CompareQualityCommand { get; private set; } = null!;
-
     /// <summary>Set by the view: opens the standalone 進階影片編輯 window for a prepared view model.</summary>
     internal Action<VideoEditViewModel>? OpenEditorAction { get; set; }
 
@@ -411,12 +406,6 @@ public partial class MainWindowViewModel
             () => { CompressOutputFolder = string.Empty; },
             this.WhenAnyValue(x => x.CompressOutputFolder, x => x.IsBusy,
                 (folder, busy) => !string.IsNullOrEmpty(folder) && !busy));
-
-        // Quality compare: per-item (parameter) with the tab's selection as fallback; idle queue only.
-        CompareQualityCommand = ReactiveCommand.Create<CompressQueueItem?>(
-            OpenCompare,
-            this.WhenAnyValue(x => x.IsBusy, (bool busy) => !busy));
-        CompareQualityCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.OpenCompare", ex));
 
         // Advanced video editing: per-item (parameter) with the tab's selection as fallback; idle queue only.
         OpenEditorCommand = ReactiveCommand.Create<CompressQueueItem?>(
@@ -1121,16 +1110,16 @@ public partial class MainWindowViewModel
     private void ShowPauseNoResumeWarning() =>
         ShowToastAction?.Invoke(LocalizationService.Instance["CompressPauseNoResume"], ToastSeverity.Info);
 
-    // Builds a CompareViewModel for the given (or selected) file with the current encode settings.
-    private void OpenCompare(CompressQueueItem? target)
+    // Builds a CompareViewModel for the given file with the current encode settings, anchored at the editor's
+    // playhead and using the editor's live rotation. Returns null if there is no item. The editor hosts the
+    // result inline (no separate window).
+    private CompareViewModel? BuildCompareVm(CompressQueueItem? target, double anchorSeconds, int rotationDegrees)
     {
         CompressQueueItem? item = target ?? SelectedQueueItem;
-        if (item == null || OpenCompareAction == null)
+        if (item == null)
         {
-            return;
+            return null;
         }
-
-        SelectedQueueItem = item; // keep the tab's selection in sync with the row that was acted on
 
         CompressSettingsSnapshot snap = BuildSettingsSnapshot();
         int targetKbps = snap.UseTargetSize && item.ProbedDuration > 0
@@ -1151,9 +1140,9 @@ public partial class MainWindowViewModel
             RotationDegrees = 0 // rotation is applied at display time to BOTH frames, not baked into the sample
         };
 
-        var vm = new CompareViewModel(
-            item.Path, item.ProbedDuration, item.ProbedFps, item.ProbedWidth, item.ProbedHeight, options, item.Rotation);
-        OpenCompareAction(vm);
+        return new CompareViewModel(
+            item.Path, item.ProbedDuration, item.ProbedFps, item.ProbedWidth, item.ProbedHeight,
+            options, rotationDegrees, anchorSeconds);
     }
 
     /// <summary>
@@ -1240,7 +1229,7 @@ public partial class MainWindowViewModel
 
         // Output filename + quality compare moved from the 編輯 tab into the editor window.
         vm.OutputFileName = item.OutputName;
-        vm.OpenCompareAction = () => OpenCompare(item);
+        vm.BuildCompareViewModel = (anchor, rotation) => BuildCompareVm(item, anchor, rotation);
 
         OpenEditorAction(vm);
     }

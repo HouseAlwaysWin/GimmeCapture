@@ -82,13 +82,6 @@ public partial class SettingsCompressTab : UserControl
             return folders.Count > 0 ? folders[0].Path.LocalPath : null;
         };
 
-        // Quality compare: open a standalone side-by-side window for the prepared view model.
-        vm.OpenCompareAction = compareVm =>
-        {
-            var window = new CompareWindow { DataContext = compareVm };
-            window.Show();
-        };
-
         // Advanced video editing: open a standalone editor window for the prepared view model.
         vm.OpenEditorAction = editVm =>
         {
