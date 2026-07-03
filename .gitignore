@@ -79,3 +79,7 @@ project.nuget.cache
 *.so.*
 *.dylib
 *.lib
+
+# Build / publish output
+/publish/
+/installer/output/

@@ -82,17 +82,41 @@ jobs:
       run: |
         Compress-Archive -Path ./publish/* -DestinationPath GimmeCapture_win-x64.zip
 
+    # Optional installer alongside the portable zip: an Inno Setup wizard that lets the user pick the install
+    # drive/folder, adds Start-Menu/desktop shortcuts + an uninstaller. Per-user by default (no admin). The zip
+    # + in-app auto-updater are unchanged.
+    - name: Build Windows installer (Inno Setup)
+      shell: powershell
+      run: |
+        choco install innosetup --no-progress -y
+        if ($LASTEXITCODE -ne 0) { throw "Inno Setup install failed ($LASTEXITCODE)" }
+        $version = "${{ github.ref_name }}".TrimStart('v')
+        $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+        if (-not (Test-Path $iscc)) { throw "ISCC.exe not found at $iscc" }
+        $src = (Resolve-Path './publish').Path
+        & $iscc "/DAppVersion=$version" "/DSourceDir=$src" installer\GimmeCapture.iss
+        if ($LASTEXITCODE -ne 0) { throw "ISCC failed ($LASTEXITCODE)" }
+        Get-ChildItem installer\output
+
     - name: Generate checksum manifest
       shell: powershell
       run: |
-        $hash = (Get-FileHash GimmeCapture_win-x64.zip -Algorithm SHA256).Hash.ToLowerInvariant()
-        "$hash  GimmeCapture_win-x64.zip" | Set-Content -Encoding ascii SHA256SUMS.txt
+        $lines = @()
+        $zipHash = (Get-FileHash GimmeCapture_win-x64.zip -Algorithm SHA256).Hash.ToLowerInvariant()
+        $lines += "$zipHash  GimmeCapture_win-x64.zip"
+        $setup = Get-ChildItem installer\output\GimmeCapture_Setup_*.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($setup) {
+          $setupHash = (Get-FileHash $setup.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          $lines += "$setupHash  $($setup.Name)"
+        }
+        $lines | Set-Content -Encoding ascii SHA256SUMS.txt
 
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v2
       with:
         files: |
           GimmeCapture_win-x64.zip
+          installer/output/GimmeCapture_Setup_*.exe
           SHA256SUMS.txt
         generate_release_notes: true
         prerelease: ${{ contains(github.ref_name, '-') }}
