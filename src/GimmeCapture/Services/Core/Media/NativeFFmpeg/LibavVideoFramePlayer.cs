@@ -19,7 +19,7 @@ internal sealed class LibavVideoFramePlayer : IDisposable
     /// When a file's codec has no D3D11VA config, or hw bring-up/transfer fails, we transparently fall back
     /// to software regardless of this flag.
     /// </summary>
-    public static bool HardwareDecodeEnabled = true;
+    public static volatile bool HardwareDecodeEnabled = true;
 
     // AV_CODEC_HW_CONFIG_METHOD_HW_DEVICE_CTX (libavcodec/codec.h) — stable ABI value; this FFmpeg.AutoGen
     // build does not surface it as a named constant. Bit set in AVCodecHWConfig.methods when a codec can be
@@ -32,6 +32,12 @@ internal sealed class LibavVideoFramePlayer : IDisposable
     // cap on consecutive drops guarantees the picture (and the UI time readout) keeps advancing.
     private const double LateFrameThresholdSeconds = 0.10;
     private const int MaxConsecutiveDrops = 4;
+
+    // A single GPU→system frame download (av_hwframe_transfer_data) can fail transiently (e.g. staging exhaustion)
+    // — we skip that frame. But a persistent failure (device-removed / TDR) would otherwise freeze on a stale
+    // picture forever; past this many consecutive failures we tear the stream down so the caller surfaces it and
+    // the user can disable hardware decode.
+    private const int MaxHwTransferFailures = 8;
 
     // Kept alive for the whole process: Marshal.GetFunctionPointerForDelegate hands libav a native thunk over
     // this instance, and libav invokes it from inside avcodec_open2/decode. If the delegate were collected the
@@ -455,6 +461,7 @@ internal sealed class LibavVideoFramePlayer : IDisposable
                     bool shouldResetLoop = false;
                     double startedAtSeconds = -1;
                     int consecutiveDrops = 0;
+                    int hwTransferFailures = 0;
                     var playbackClock = Stopwatch.StartNew();
 
                     try
@@ -546,12 +553,22 @@ internal sealed class LibavVideoFramePlayer : IDisposable
                                 if (decFrame->format == (int)AVPixelFormat.AV_PIX_FMT_D3D11)
                                 {
                                     ffmpeg.av_frame_unref(swFrame);
-                                    if (ffmpeg.av_hwframe_transfer_data(swFrame, decFrame, 0) < 0)
+                                    int tr = ffmpeg.av_hwframe_transfer_data(swFrame, decFrame, 0);
+                                    if (tr < 0)
                                     {
-                                        // Download failed for this frame — skip it rather than tear down the stream.
+                                        // Transient failure: skip just this frame. Persistent failure (device-removed):
+                                        // tear down so the caller can surface it and the user can turn hw decode off —
+                                        // otherwise we would freeze on a stale picture with the clock stuck.
+                                        if (++hwTransferFailures >= MaxHwTransferFailures)
+                                        {
+                                            AppLog.Information($"LibavVideoFramePlayer.PlayAsync hwframe transfer failing persistently (rc={tr}); tearing down");
+                                            throw FFmpegErrors.ToException(tr, "hwframe_transfer_data");
+                                        }
+
                                         continue;
                                     }
 
+                                    hwTransferFailures = 0;
                                     srcFrame = swFrame;
                                 }
 
@@ -596,6 +613,7 @@ internal sealed class LibavVideoFramePlayer : IDisposable
                                 shouldResetLoop = false;
                                 startedAtSeconds = -1;
                                 consecutiveDrops = 0;
+                                hwTransferFailures = 0;
                                 Seek(fmt, decCtx, videoStream, st->time_base, loopStartSeconds);
                                 continue;
                             }

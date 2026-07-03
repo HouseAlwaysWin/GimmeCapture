@@ -37,13 +37,18 @@ public partial class FloatingVideoViewModel
             this.RaisePropertyChanged(nameof(IsPlaying));
         });
 
-        FastForwardCommand = ReactiveCommand.Create(() => 
+        FastForwardCommand = ReactiveCommand.Create(() =>
         {
             var target = _currentTime.TotalSeconds + 5;
-            if (target >= _totalDuration.TotalSeconds) target = _totalDuration.TotalSeconds - 0.1;
+            // Only clamp to the end once the duration is known — at boot it can still be 0 (the callback from
+            // PlayAsync fills it), and clamping against 0 would produce a negative target the seek gate drops.
+            if (_totalDuration > TimeSpan.Zero && target >= _totalDuration.TotalSeconds)
+            {
+                target = _totalDuration.TotalSeconds - 0.1;
+            }
             _seekTargetSeconds = target;
-            
-            // Just seek and update 
+
+            // Just seek and update
             StartPlayback();
         });
 
@@ -110,9 +115,11 @@ public partial class FloatingVideoViewModel
     }
 
     // Fed by LibavVideoFramePlayer.PlayAsync on open; sets the slider's known length without a second file scan.
+    // PlayAsync re-opens on every seek/segment/loop pass, so short-circuit once the (invariant) duration is known
+    // to avoid re-posting to the UI thread on every pass.
     private void ApplyProbedDuration(double seconds)
     {
-        if (_isDisposed || seconds <= 0)
+        if (_isDisposed || seconds <= 0 || Math.Abs(TotalDuration.TotalSeconds - seconds) <= 0.01)
         {
             return;
         }
