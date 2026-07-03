@@ -1,6 +1,9 @@
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.LogicalTree;
 using Avalonia.Markup.Xaml;
+using Avalonia.Styling;
 using Avalonia.Threading;
 using GimmeCapture.Models;
 using GimmeCapture.ViewModels.Shared;
@@ -22,9 +25,49 @@ public partial class DrawingToolbar : UserControl
         set => SetValue(ShowHistoryProperty, value);
     }
 
+    /// <summary>
+    /// Optional theme override for the toolbar's MAIN-ROW buttons, so a host can match its own button
+    /// style (the video editor passes the gold GothicToolMetalButton; Pin/Snip keep the default dark
+    /// Snip themes). Flyout interiors are separate visual trees and intentionally keep the dark look.
+    /// </summary>
+    public static readonly StyledProperty<ControlTheme?> ButtonThemeProperty =
+        AvaloniaProperty.Register<DrawingToolbar, ControlTheme?>(nameof(ButtonTheme));
+
+    public ControlTheme? ButtonTheme
+    {
+        get => GetValue(ButtonThemeProperty);
+        set => SetValue(ButtonThemeProperty, value);
+    }
+
     public DrawingToolbar()
     {
         InitializeComponent();
+    }
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property == ButtonThemeProperty)
+        {
+            ApplyButtonTheme();
+        }
+    }
+
+    // Re-theme the main-row buttons via the LOGICAL tree: logical children exist right after
+    // InitializeComponent, so this works regardless of visibility/layout timing (the toolbar starts
+    // hidden in the editor until a category is picked — visual descendants would not exist yet).
+    // Flyout contents are not logical descendants, so the flyout panels' dark buttons stay untouched.
+    private void ApplyButtonTheme()
+    {
+        if (ButtonTheme is not { } theme)
+        {
+            return;
+        }
+
+        foreach (Button button in this.GetLogicalDescendants().OfType<Button>().ToList())
+        {
+            button.Theme = theme;
+        }
     }
 
     private void OnShapeSelected(object sender, Avalonia.Interactivity.RoutedEventArgs e)

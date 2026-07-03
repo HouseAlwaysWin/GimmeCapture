@@ -240,7 +240,18 @@
                     </Style>
                 </Style>
             </ControlTheme>
-            
+
+            <!-- SmallGothicMetalButton + ".active" state (accent-filled body), for tool buttons whose
+                 active tool is flagged via Classes.active (e.g. the drawing toolbar in the video editor). -->
+            <ControlTheme x:Key="GothicToolMetalButton" TargetType="Button" BasedOn="{StaticResource SmallGothicMetalButton}">
+                <Style Selector="^.active">
+                    <Setter Property="Foreground" Value="White"/>
+                </Style>
+                <Style Selector="^.active /template/ Path#BgLeft, ^.active /template/ Rectangle#BgCenter, ^.active /template/ Path#BgRight">
+                    <Setter Property="Fill" Value="{DynamicResource ThemeDeepBrush}"/>
+                </Style>
+            </ControlTheme>
+
             <!-- Window Control Button (Octagonal Gothic Style) -->
             <ControlTheme x:Key="WindowControlButton" TargetType="Button">
                 <Setter Property="Background" Value="Black"/>

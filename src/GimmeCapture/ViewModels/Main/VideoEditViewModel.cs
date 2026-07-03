@@ -73,6 +73,7 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
         ClearCropCommand = ReactiveCommand.CreateFromTask(ClearCropAsync);
         ApplyCommand = ReactiveCommand.Create(Apply);
         CancelCommand = ReactiveCommand.Create(() => RequestClose?.Invoke());
+        CompareCommand = ReactiveCommand.Create(() => OpenCompareAction?.Invoke());
 
         PlayPauseCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.EditPlayPause", ex));
         StepBackCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.EditStepBack", ex));
@@ -109,6 +110,19 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
 
     /// <summary>Set by the window; invoked to close it from Apply/Cancel.</summary>
     public Action? RequestClose { get; set; }
+
+    /// <summary>Set by the host: opens the quality-compare window for this item (moved here from the tab).</summary>
+    public Action? OpenCompareAction { get; set; }
+
+    public ReactiveCommand<Unit, Unit> CompareCommand { get; }
+
+    private string _outputFileName = string.Empty;
+    /// <summary>Output file name (no extension; may contain \subfolder\). Written back to the queue item on Apply.</summary>
+    public string OutputFileName
+    {
+        get => _outputFileName;
+        set => this.RaiseAndSetIfChanged(ref _outputFileName, value);
+    }
 
     private Bitmap? _frame;
     public Bitmap? Frame { get => _frame; private set => this.RaiseAndSetIfChanged(ref _frame, value); }

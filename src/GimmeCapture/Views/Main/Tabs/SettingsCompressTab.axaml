@@ -106,7 +106,9 @@
                                 <ItemsControl ItemsSource="{Binding CompressQueue}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate x:DataType="vm:MainWindowViewModel+CompressQueueItem">
-                                        <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,3">
+                                        <!-- Hairline separator between rows -->
+                                        <Border BorderBrush="#333333" BorderThickness="0,0,0,1" Padding="0,3,0,5">
+                                        <Grid ColumnDefinitions="Auto,*,Auto">
                                             <Border Grid.Column="0" Width="64" Height="40"
                                                     Background="#101010" CornerRadius="3"
                                                     VerticalAlignment="Center" Margin="0,0,10,0">
@@ -115,8 +117,10 @@
                                             <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
                                                 <!-- Status text sits right after the file name. -->
                                                 <Grid ColumnDefinitions="Auto,*">
+                                                    <!-- Cap the name so very long files can't push the status/buttons around. -->
                                                     <TextBlock Grid.Column="0" Text="{Binding FileName}"
-                                                               TextTrimming="CharacterEllipsis"
+                                                               TextTrimming="CharacterEllipsis" MaxWidth="420"
+                                                               ToolTip.Tip="{Binding FileName}"
                                                                FontSize="12" VerticalAlignment="Center"/>
                                                     <TextBlock Grid.Column="1" Text="{Binding StatusText}"
                                                                Foreground="{DynamicResource ThemeAccentBrush}"
@@ -150,6 +154,18 @@
                                             </StackPanel>
                                             <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6"
                                                         VerticalAlignment="Center" Margin="10,0,0,0">
+                                                <!-- Edit summary + 編輯 (the former 編輯 tab now lives on each row). -->
+                                                <TextBlock Text="{Binding EditSummaryText}"
+                                                           Foreground="#C8A24B" FontSize="10"
+                                                           VerticalAlignment="Center" Margin="0,0,4,0"
+                                                           MaxWidth="260" TextTrimming="CharacterEllipsis"
+                                                           ToolTip.Tip="{Binding EditSummaryText}"/>
+                                                <Button Content="{Binding [CompressEditButton], Source={x:Static services:LocalizationService.Instance}}"
+                                                        Theme="{StaticResource SmallGothicMetalButton}"
+                                                        FontSize="10"
+                                                        IsVisible="{Binding IsActive, Converter={StaticResource BoolInvertConverter}}"
+                                                        Command="{Binding $parent[UserControl].((vm:MainWindowViewModel)DataContext).OpenEditorCommand}"
+                                                        CommandParameter="{Binding}"/>
                                                 <Button Content="{Binding [CompressEstimateItem], Source={x:Static services:LocalizationService.Instance}}"
                                                         Theme="{StaticResource SmallGothicMetalButton}"
                                                         FontSize="10"
@@ -183,6 +199,7 @@
                                                         Command="{Binding CancelCommand}"/>
                                             </StackPanel>
                                         </Grid>
+                                        </Border>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                                 </ItemsControl>
@@ -200,69 +217,6 @@
             </TabItem>
 
             <!-- ② Edit: pick a queued file, preview its first frame, rotate it -->
-            <TabItem Header="{Binding [CompressEditGroup], Source={x:Static services:LocalizationService.Instance}}">
-                <ScrollViewer Padding="0,0,16,0">
-                    <StackPanel Spacing="10" Margin="0,8,0,0">
-                        <ListBox ItemsSource="{Binding CompressQueue}"
-                                 SelectedItem="{Binding SelectedQueueItem}"
-                                 HorizontalAlignment="Stretch"
-                                 MaxHeight="220"
-                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-                            <ListBox.ItemTemplate>
-                                <DataTemplate x:DataType="vm:MainWindowViewModel+CompressQueueItem">
-                                    <Grid ColumnDefinitions="Auto,*" Margin="0,2">
-                                        <!-- first-frame thumbnail -->
-                                        <Border Grid.Column="0" Width="64" Height="40"
-                                                Background="#101010" CornerRadius="3" Margin="0,0,10,0">
-                                            <Image Source="{Binding Thumbnail}" Stretch="Uniform"/>
-                                        </Border>
-                                        <!-- name + size + date -->
-                                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
-                                            <TextBlock Text="{Binding FileName}" FontSize="12"
-                                                       TextTrimming="CharacterEllipsis"/>
-                                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                                <TextBlock Text="{Binding FileSizeText}" FontSize="10" Foreground="#9A9A9A"/>
-                                                <TextBlock Text="{Binding DateText}" FontSize="10" Foreground="#9A9A9A"/>
-                                            </StackPanel>
-                                        </StackPanel>
-                                    </Grid>
-                                </DataTemplate>
-                            </ListBox.ItemTemplate>
-                        </ListBox>
-
-                        <TextBlock Text="{Binding [CompressEditSelectHint], Source={x:Static services:LocalizationService.Instance}}"
-                                   IsVisible="{Binding SelectedQueueItem, Converter={x:Static conv:ObjectConverters.IsNull}}"
-                                   Foreground="#9A9A9A" FontSize="12" TextWrapping="Wrap"/>
-
-                        <StackPanel Spacing="10"
-                                    IsVisible="{Binding SelectedQueueItem, Converter={x:Static conv:ObjectConverters.IsNotNull}}">
-                            <StackPanel Spacing="4">
-                                <TextBlock Text="{Binding [CompressOutputNameLabel], Source={x:Static services:LocalizationService.Instance}}"
-                                           FontSize="12"/>
-                                <TextBox Text="{Binding SelectedQueueItem.OutputName}"
-                                         Watermark="{Binding [CompressOutputNameWatermark], Source={x:Static services:LocalizationService.Instance}}"/>
-                            </StackPanel>
-                            <!-- Preview of the selected clip (reflects the applied rotation). -->
-                            <Border Background="#101010" CornerRadius="4" Padding="6" HorizontalAlignment="Center">
-                                <Image Source="{Binding PreviewBitmap}" Stretch="Uniform" MaxHeight="220" MaxWidth="380"/>
-                            </Border>
-                            <!-- Editor + quality-compare buttons side by side; the edit summary sits on its own line below. -->
-                            <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Center">
-                                <Button Content="{Binding [CompressEditButton], Source={x:Static services:LocalizationService.Instance}}"
-                                        Theme="{StaticResource GothicMetalButton}"
-                                        Command="{Binding OpenEditorCommand}"/>
-                                <Button Content="{Binding [CompressCompareButton], Source={x:Static services:LocalizationService.Instance}}"
-                                        Theme="{StaticResource SmallGothicMetalButton}"
-                                        Command="{Binding CompareQualityCommand}"/>
-                            </StackPanel>
-                            <TextBlock Text="{Binding SelectedQueueItem.EditSummaryText}"
-                                       HorizontalAlignment="Center" Foreground="#C8A24B" FontSize="12"
-                                       TextWrapping="Wrap" Margin="0,2,0,0"/>
-                        </StackPanel>
-                    </StackPanel>
-                </ScrollViewer>
-            </TabItem>
-
             <!-- ③ Output settings -->
             <TabItem Header="{Binding [CompressSettingsGroup], Source={x:Static services:LocalizationService.Instance}}">
                 <ScrollViewer Padding="0,0,16,0">
