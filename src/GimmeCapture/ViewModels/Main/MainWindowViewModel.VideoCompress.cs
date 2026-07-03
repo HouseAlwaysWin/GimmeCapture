@@ -25,12 +25,12 @@ public partial class MainWindowViewModel
     /// <summary>Set by the view: opens the side-by-side quality-compare window for a prepared view model.</summary>
     internal Action<CompareViewModel>? OpenCompareAction { get; set; }
 
-    public ReactiveCommand<Unit, Unit> CompareQualityCommand { get; private set; } = null!;
+    public ReactiveCommand<CompressQueueItem?, Unit> CompareQualityCommand { get; private set; } = null!;
 
     /// <summary>Set by the view: opens the standalone 進階影片編輯 window for a prepared view model.</summary>
     internal Action<VideoEditViewModel>? OpenEditorAction { get; set; }
 
-    public ReactiveCommand<Unit, Unit> OpenEditorCommand { get; private set; } = null!;
+    public ReactiveCommand<CompressQueueItem?, Unit> OpenEditorCommand { get; private set; } = null!;
 
     // Optional batch output folder. Empty = auto-save each output next to its source.
     private string _compressOutputFolder = string.Empty;
@@ -326,18 +326,16 @@ public partial class MainWindowViewModel
             this.WhenAnyValue(x => x.CompressOutputFolder, x => x.IsBusy,
                 (folder, busy) => !string.IsNullOrEmpty(folder) && !busy));
 
-        // Quality compare: needs a selected file and an idle queue (it encodes a short sample).
-        CompareQualityCommand = ReactiveCommand.Create(
+        // Quality compare: per-item (parameter) with the tab's selection as fallback; idle queue only.
+        CompareQualityCommand = ReactiveCommand.Create<CompressQueueItem?>(
             OpenCompare,
-            this.WhenAnyValue(x => x.SelectedQueueItem, x => x.IsBusy,
-                (CompressQueueItem? sel, bool busy) => sel != null && !busy));
+            this.WhenAnyValue(x => x.IsBusy, (bool busy) => !busy));
         CompareQualityCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.OpenCompare", ex));
 
-        // Advanced video editing: needs a selected file and an idle queue.
-        OpenEditorCommand = ReactiveCommand.Create(
+        // Advanced video editing: per-item (parameter) with the tab's selection as fallback; idle queue only.
+        OpenEditorCommand = ReactiveCommand.Create<CompressQueueItem?>(
             OpenEditor,
-            this.WhenAnyValue(x => x.SelectedQueueItem, x => x.IsBusy,
-                (CompressQueueItem? sel, bool busy) => sel != null && !busy));
+            this.WhenAnyValue(x => x.IsBusy, (bool busy) => !busy));
         OpenEditorCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.OpenEditor", ex));
 
         // Presets: save needs a non-blank name; load/delete need a selection. None while busy.
@@ -1037,14 +1035,16 @@ public partial class MainWindowViewModel
     private void ShowPauseNoResumeWarning() =>
         ShowToastAction?.Invoke(LocalizationService.Instance["CompressPauseNoResume"], ToastSeverity.Info);
 
-    // Builds a CompareViewModel for the selected file with the current encode settings and hands it to the view.
-    private void OpenCompare()
+    // Builds a CompareViewModel for the given (or selected) file with the current encode settings.
+    private void OpenCompare(CompressQueueItem? target)
     {
-        CompressQueueItem? item = SelectedQueueItem;
+        CompressQueueItem? item = target ?? SelectedQueueItem;
         if (item == null || OpenCompareAction == null)
         {
             return;
         }
+
+        SelectedQueueItem = item; // keep the tab's selection in sync with the row that was acted on
 
         CompressSettingsSnapshot snap = BuildSettingsSnapshot();
         int targetKbps = snap.UseTargetSize && item.ProbedDuration > 0
@@ -1109,13 +1109,15 @@ public partial class MainWindowViewModel
 
     // Opens the 進階影片編輯 window for the selected file; on Apply writes the whole edit (kept runs with speed,
     // crop, rotation) back to the item (the property sets trigger the existing persist + re-estimate + summary).
-    private void OpenEditor()
+    private void OpenEditor(CompressQueueItem? target)
     {
-        CompressQueueItem? item = SelectedQueueItem;
+        CompressQueueItem? item = target ?? SelectedQueueItem;
         if (item == null || OpenEditorAction == null || item.ProbedDuration <= 0)
         {
             return;
         }
+
+        SelectedQueueItem = item; // keep the tab's selection in sync with the row that was acted on
 
         var initial = new VideoEditResult(
             item.EffectiveKeptRuns().Select(r => new VideoEditSegment(r.Start, r.End, r.Speed)).ToList(),
@@ -1126,6 +1128,9 @@ public partial class MainWindowViewModel
             item.AnnotationSurfaceHeight,
             item.RedactionTracks ?? Array.Empty<RedactionTrack>());
 
+        // The onApply lambda needs the editor VM (for the output filename typed there), but it is
+        // passed INTO the VM's constructor — capture via a local set right after construction.
+        VideoEditViewModel? editorVm = null;
         var vm = new VideoEditViewModel(
             item.Path, item.ProbedDuration, item.ProbedFps, item.ProbedWidth, item.ProbedHeight,
             initial,
@@ -1139,8 +1144,18 @@ public partial class MainWindowViewModel
                 item.AnnotationSurfaceWidth = result.AnnotationSurfaceWidth;
                 item.AnnotationSurfaceHeight = result.AnnotationSurfaceHeight;
                 item.RedactionTracks = result.RedactionTracks.Count > 0 ? result.RedactionTracks : null;
+                if (editorVm != null)
+                {
+                    item.OutputName = editorVm.OutputFileName;
+                }
                 RefreshSelectedPreview(item);
             });
+        editorVm = vm;
+
+        // Output filename + quality compare moved from the 編輯 tab into the editor window.
+        vm.OutputFileName = item.OutputName;
+        vm.OpenCompareAction = () => OpenCompare(item);
+
         OpenEditorAction(vm);
     }
 
