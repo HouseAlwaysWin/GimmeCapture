@@ -91,5 +91,11 @@ Recording mode supports:
 
 ## License
 
-Released under the [MIT License](LICENSE).
+Released under the [GNU General Public License v3.0](LICENSE).
+
+GimmeCapture links against and bundles **FFmpeg** built with `--enable-gpl` — including the
+GPL-licensed **x264** and **x265** encoders it uses for H.264/H.265 — so the application as
+distributed is a combined work licensed under the GPL. See
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) for third-party component licenses and
+corresponding-source information.
 

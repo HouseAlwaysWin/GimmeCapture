@@ -1,5 +1,14 @@
 # Release Log / 更新日誌 / リリースノート
 
+## Licensing — 2026-07-03
+
+- **Relicensed from MIT to GPLv3.** GimmeCapture bundles and links against FFmpeg built with
+  `--enable-gpl` — including the GPL-licensed **x264**/**x265** encoders used for H.264/H.265 —
+  so the application as distributed is a combined work that must be under the GPL. See
+  [LICENSE](LICENSE) and [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+
+---
+
 ## [v0.8.0] - 2026-02-04
 
 ### 🎸 Skeletal Theme Enhancement
