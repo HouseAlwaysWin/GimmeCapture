@@ -113,8 +113,9 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
     public Action? RequestClose { get; set; }
 
     /// <summary>Set by the host: builds a <see cref="CompareViewModel"/> for this item with the current output
-    /// settings, anchored at the given playhead position. The editor hosts it inline (no separate window).</summary>
-    public Func<double, CompareViewModel?>? BuildCompareViewModel { get; set; }
+    /// settings, anchored at the given playhead position and using the editor's live rotation (so the compare
+    /// matches the on-screen orientation). The editor hosts it inline (no separate window).</summary>
+    public Func<double, int, CompareViewModel?>? BuildCompareViewModel { get; set; }
 
     public ReactiveCommand<Unit, Unit> CompareCommand { get; }
 

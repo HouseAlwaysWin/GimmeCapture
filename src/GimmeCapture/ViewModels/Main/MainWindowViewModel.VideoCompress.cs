@@ -1111,8 +1111,9 @@ public partial class MainWindowViewModel
         ShowToastAction?.Invoke(LocalizationService.Instance["CompressPauseNoResume"], ToastSeverity.Info);
 
     // Builds a CompareViewModel for the given file with the current encode settings, anchored at the editor's
-    // playhead. Returns null if there is no item. The editor hosts the result inline (no separate window).
-    private CompareViewModel? BuildCompareVm(CompressQueueItem? target, double anchorSeconds)
+    // playhead and using the editor's live rotation. Returns null if there is no item. The editor hosts the
+    // result inline (no separate window).
+    private CompareViewModel? BuildCompareVm(CompressQueueItem? target, double anchorSeconds, int rotationDegrees)
     {
         CompressQueueItem? item = target ?? SelectedQueueItem;
         if (item == null)
@@ -1141,7 +1142,7 @@ public partial class MainWindowViewModel
 
         return new CompareViewModel(
             item.Path, item.ProbedDuration, item.ProbedFps, item.ProbedWidth, item.ProbedHeight,
-            options, item.Rotation, anchorSeconds);
+            options, rotationDegrees, anchorSeconds);
     }
 
     /// <summary>
@@ -1228,7 +1229,7 @@ public partial class MainWindowViewModel
 
         // Output filename + quality compare moved from the 編輯 tab into the editor window.
         vm.OutputFileName = item.OutputName;
-        vm.BuildCompareViewModel = anchor => BuildCompareVm(item, anchor);
+        vm.BuildCompareViewModel = (anchor, rotation) => BuildCompareVm(item, anchor, rotation);
 
         OpenEditorAction(vm);
     }
