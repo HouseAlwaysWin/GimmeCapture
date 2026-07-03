@@ -45,4 +45,32 @@ public class CompareViewModelTests
 
         Assert.False(vm.IsPlaying);
     }
+
+    [Fact]
+    public void ComputeSampleStart_NoAnchor_UsesTenPercentIn()
+    {
+        // anchorSeconds < 0 -> representative segment ~10% into the clip.
+        Assert.Equal(10, CompareViewModel.ComputeSampleStart(100, 15, -1));
+    }
+
+    [Fact]
+    public void ComputeSampleStart_Anchor_WindowStartsAtPlayhead()
+    {
+        // A mid-clip anchor with room for the whole window starts exactly there.
+        Assert.Equal(40, CompareViewModel.ComputeSampleStart(100, 15, 40));
+    }
+
+    [Fact]
+    public void ComputeSampleStart_AnchorNearEnd_ClampsSoWindowFits()
+    {
+        // Anchoring past (duration - window) clamps back so the 15s window still fits inside the 100s clip.
+        Assert.Equal(85, CompareViewModel.ComputeSampleStart(100, 15, 98));
+    }
+
+    [Fact]
+    public void ComputeSampleStart_ClipShorterThanWindow_StartsAtZero()
+    {
+        // When the window is the whole (short) clip, the start is 0 regardless of anchor.
+        Assert.Equal(0, CompareViewModel.ComputeSampleStart(6, 6, 3));
+    }
 }

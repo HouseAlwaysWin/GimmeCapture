@@ -1,4 +1,3 @@
-using System;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -6,9 +5,12 @@ using GimmeCapture.ViewModels.Main;
 
 namespace GimmeCapture.Views.Main;
 
-public partial class CompareWindow : Window
+// Inline before/after quality-compare panel hosted in the editor preview (DataContext = CompareViewModel).
+// Replaces the former standalone CompareWindow; the editor VM drives its lifecycle (InitializeAsync on show,
+// Dispose on close).
+public partial class CompareView : UserControl
 {
-    public CompareWindow()
+    public CompareView()
     {
         InitializeComponent();
 
@@ -26,20 +28,5 @@ public partial class CompareWindow : Window
         {
             _ = vm.SeekAsync(PositionSlider.Value);
         }
-    }
-
-    protected override void OnOpened(EventArgs e)
-    {
-        base.OnOpened(e);
-        if (DataContext is CompareViewModel vm)
-        {
-            _ = vm.InitializeAsync(); // encode the sample + show the first frame
-        }
-    }
-
-    protected override void OnClosed(EventArgs e)
-    {
-        base.OnClosed(e);
-        (DataContext as CompareViewModel)?.Dispose(); // stop playback + delete the temp sample
     }
 }

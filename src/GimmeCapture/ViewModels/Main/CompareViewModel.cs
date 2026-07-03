@@ -39,7 +39,7 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
 
     internal CompareViewModel(
         string sourcePath, double durationSeconds, int fps, int sourceWidth, int sourceHeight,
-        LibavExportOptions options, int rotation)
+        LibavExportOptions options, int rotation, double anchorSeconds = -1)
     {
         _sourcePath = sourcePath;
         _options = options;
@@ -49,7 +49,7 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
         const double window = 15.0;
         double dur = durationSeconds > 0 ? durationSeconds : window;
         _windowLen = Math.Max(0.5, Math.Min(window, dur));
-        _t0 = Math.Clamp(dur * 0.1, 0, Math.Max(0, dur - _windowLen)); // a representative segment ~10% in
+        _t0 = ComputeSampleStart(dur, _windowLen, anchorSeconds);
 
         int sw = sourceWidth > 0 ? sourceWidth : 1280;
         int sh = sourceHeight > 0 ? sourceHeight : 720;
@@ -74,6 +74,14 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
 
     public string Title { get; }
     public double WindowLength => _windowLen;
+
+    // Sample-window start: anchored at the caller's playhead (so the compare reflects the frame being viewed),
+    // or a representative segment ~10% in when no anchor is given (anchorSeconds &lt; 0). Clamped to fit the clip.
+    internal static double ComputeSampleStart(double durationSeconds, double windowLen, double anchorSeconds)
+    {
+        double anchor = anchorSeconds >= 0 ? anchorSeconds : durationSeconds * 0.1;
+        return Math.Clamp(anchor, 0, Math.Max(0, durationSeconds - windowLen));
+    }
 
     private Bitmap? _sourceFrame;
     public Bitmap? SourceFrame { get => _sourceFrame; private set => this.RaiseAndSetIfChanged(ref _sourceFrame, value); }

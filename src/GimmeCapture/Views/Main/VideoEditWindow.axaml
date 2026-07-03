@@ -6,6 +6,7 @@
         xmlns:controls="using:GimmeCapture.Views.Controls"
         xmlns:converters="using:GimmeCapture.Converters"
         xmlns:services="using:GimmeCapture.Services.Core.Infrastructure"
+        xmlns:views="using:GimmeCapture.Views.Main"
         x:Class="GimmeCapture.Views.Main.VideoEditWindow"
         x:DataType="vm:VideoEditViewModel"
         Title="{Binding [CompressEditWindowTitle], Source={x:Static services:LocalizationService.Instance}}"
@@ -25,7 +26,9 @@
 
         <!-- ── Top toolbar: output filename + compare (top-left) · undo/redo + category buttons and the
                 open category's tools (centre) · Cancel/Apply (top-right). ── -->
-        <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,8">
+        <!-- IsEnabled=!IsComparing: while the inline quality compare is showing, all editing controls
+             (filename, compare button, categories, tools, undo/redo, Apply/Cancel) are locked. -->
+        <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,8" IsEnabled="{Binding !IsComparing}">
             <!-- Top-left: output filename + quality compare (moved here from the 編輯 tab). -->
             <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Top" Margin="0,0,12,0">
                 <TextBox Text="{Binding OutputFileName, Mode=TwoWay}" Width="170" FontSize="11"
@@ -232,11 +235,23 @@
                     <TextBlock Text="{Binding [CompressEditCropHint], Source={x:Static services:LocalizationService.Instance}}"
                                Foreground="#FFE0E0" FontSize="11"/>
                 </Border>
+
+                <!-- Inline quality compare: opaque panel covering the preview while active (editing is locked
+                     via the top bar's IsEnabled). CompareView binds to the hosted Compare VM; Close is on the
+                     editor VM. -->
+                <Panel IsVisible="{Binding IsComparing}" Background="#101010">
+                    <views:CompareView DataContext="{Binding Compare}" Margin="4"/>
+                    <Button Content="{Binding [CompressCompareClose], Source={x:Static services:LocalizationService.Instance}}"
+                            Theme="{StaticResource SmallGothicMetalButton}"
+                            HorizontalAlignment="Right" VerticalAlignment="Top" Margin="8"
+                            Command="{Binding CloseCompareCommand}"/>
+                </Panel>
             </Grid>
         </Border>
 
-        <!-- ── Bottom: scrubber + segment strip + transport (+loop/mute/speed) + Apply/Cancel ── -->
-        <StackPanel Grid.Row="2" Spacing="6" Margin="0,12,0,0">
+        <!-- ── Bottom: scrubber + segment strip + transport (+loop/mute/speed). Hidden while comparing —
+             the inline CompareView supplies its own transport scoped to the sample window. ── -->
+        <StackPanel Grid.Row="2" Spacing="6" Margin="0,12,0,0" IsVisible="{Binding !IsComparing}">
             <Slider x:Name="PositionSlider" Minimum="0" Maximum="{Binding TotalSourceDuration}"
                     Value="{Binding PositionSeconds}"
                     IsEnabled="{Binding IsPreparing, Converter={StaticResource BoolInvertConverter}}"/>

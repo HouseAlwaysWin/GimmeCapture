@@ -1,23 +1,18 @@
-<Window xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:vm="using:GimmeCapture.ViewModels.Main"
-        xmlns:services="using:GimmeCapture.Services.Core.Infrastructure"
-        x:Class="GimmeCapture.Views.Main.CompareWindow"
-        x:DataType="vm:CompareViewModel"
-        Title="{Binding Title}"
-        Width="1100" Height="640"
-        MinWidth="640" MinHeight="420"
-        Background="#101010"
-        FontFamily="{Binding CurrentFontFamily, Source={x:Static services:LocalizationService.Instance}}">
-    <Window.Styles>
-        <!-- Make the scrubber's unfilled track clearly visible full-width on the near-black window. -->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:GimmeCapture.ViewModels.Main"
+             xmlns:services="using:GimmeCapture.Services.Core.Infrastructure"
+             x:Class="GimmeCapture.Views.Main.CompareView"
+             x:DataType="vm:CompareViewModel">
+    <UserControl.Styles>
+        <!-- Make the scrubber's unfilled track clearly visible full-width on the near-black background. -->
         <Style Selector="Slider#PositionSlider /template/ Border#TrackBackground">
             <Setter Property="Height" Value="4"/>
             <Setter Property="Background" Value="#5A5A5A"/>
             <Setter Property="CornerRadius" Value="2"/>
         </Style>
-    </Window.Styles>
-    <Grid RowDefinitions="*,Auto" Margin="12">
+    </UserControl.Styles>
+    <Grid RowDefinitions="*,Auto">
 
         <!-- Side-by-side video panels (original | compressed) -->
         <Grid Grid.Row="0" ColumnDefinitions="*,*">
@@ -87,4 +82,4 @@
             </StackPanel>
         </StackPanel>
     </Grid>
-</Window>
+</UserControl>

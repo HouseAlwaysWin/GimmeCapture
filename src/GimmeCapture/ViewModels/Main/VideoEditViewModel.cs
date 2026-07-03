@@ -73,7 +73,8 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
         ClearCropCommand = ReactiveCommand.CreateFromTask(ClearCropAsync);
         ApplyCommand = ReactiveCommand.Create(Apply);
         CancelCommand = ReactiveCommand.Create(() => RequestClose?.Invoke());
-        CompareCommand = ReactiveCommand.Create(() => OpenCompareAction?.Invoke());
+        CompareCommand = ReactiveCommand.CreateFromTask(StartCompareAsync);
+        CloseCompareCommand = ReactiveCommand.Create(CloseCompare);
 
         PlayPauseCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.EditPlayPause", ex));
         StepBackCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.EditStepBack", ex));
@@ -85,6 +86,7 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
         CycleSpeedCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.EditSpeed", ex));
         RotateCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.EditRotate", ex));
         ToggleCropCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.EditCrop", ex));
+        CompareCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.EditCompare", ex));
 
         InitializeEditing(initial);
         ReplaceSegments(BuildEditSegments(initial.KeptRuns, _duration));
@@ -111,10 +113,12 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
     /// <summary>Set by the window; invoked to close it from Apply/Cancel.</summary>
     public Action? RequestClose { get; set; }
 
-    /// <summary>Set by the host: opens the quality-compare window for this item (moved here from the tab).</summary>
-    public Action? OpenCompareAction { get; set; }
+    /// <summary>Set by the host: builds a <see cref="CompareViewModel"/> for this item with the current output
+    /// settings, anchored at the given playhead position. The editor hosts it inline (no separate window).</summary>
+    public Func<double, CompareViewModel?>? BuildCompareViewModel { get; set; }
 
     public ReactiveCommand<Unit, Unit> CompareCommand { get; }
+    public ReactiveCommand<Unit, Unit> CloseCompareCommand { get; }
 
     private string _outputFileName = string.Empty;
     /// <summary>Output file name (no extension; may contain \subfolder\). Written back to the queue item on Apply.</summary>
@@ -719,5 +723,6 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
         _stepCts?.Dispose();
         _audioPreview.Dispose();
         Draw.Dispose();
+        Compare?.Dispose(); // stops the inline compare's playback + deletes its temp sample, if still open
     }
 }

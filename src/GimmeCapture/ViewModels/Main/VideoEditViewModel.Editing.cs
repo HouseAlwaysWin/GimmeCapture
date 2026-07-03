@@ -27,6 +27,50 @@ internal sealed partial class VideoEditViewModel
     /// <summary>DataContext for the shared drawing controls.</summary>
     public DrawingToolAdapter Draw { get; private set; } = null!;
 
+    // ── Inline quality compare (hosted in the editor preview; replaces the old separate CompareWindow) ──
+    private bool _isComparing;
+    /// <summary>True while the inline before/after quality comparison is showing. Drives the panel visibility
+    /// and locks all editing controls (bound as <c>!IsComparing</c>) until the compare view is closed.</summary>
+    public bool IsComparing { get => _isComparing; private set => this.RaiseAndSetIfChanged(ref _isComparing, value); }
+
+    private CompareViewModel? _compare;
+    /// <summary>The hosted compare engine (encode sample + decode source/sample frames); null when not comparing.</summary>
+    public CompareViewModel? Compare { get => _compare; private set => this.RaiseAndSetIfChanged(ref _compare, value); }
+
+    // Compare button: build the engine for the current playhead, show it inline, then load (encode) on click.
+    private async Task StartCompareAsync()
+    {
+        if (IsComparing || BuildCompareViewModel == null)
+        {
+            return;
+        }
+
+        CompareViewModel? vm = BuildCompareViewModel(PositionSeconds);
+        if (vm == null)
+        {
+            return;
+        }
+
+        Pause(); // stop the editor's own playback while comparing
+        Compare = vm;
+        IsComparing = true;
+        await vm.InitializeAsync(); // encodes the sample (shows its IsPreparing overlay), then the first frame
+    }
+
+    // Close button in the inline compare panel: tear the engine down and re-enable editing.
+    private void CloseCompare()
+    {
+        if (!IsComparing)
+        {
+            return;
+        }
+
+        IsComparing = false;
+        CompareViewModel? old = Compare;
+        Compare = null;
+        old?.Dispose(); // stop playback + delete the temp sample
+    }
+
     // ── Redaction ──
     public RedactionEditorState Redaction { get; private set; } = null!;
 
