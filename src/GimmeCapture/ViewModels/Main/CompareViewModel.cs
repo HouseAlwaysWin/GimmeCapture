@@ -24,6 +24,10 @@ namespace GimmeCapture.ViewModels.Main;
 /// </summary>
 internal sealed class CompareViewModel : ViewModelBase, IDisposable
 {
+    // Immutable (temp file, source start) pair for one encoded window. Published as a single volatile reference so
+    // readers always get a matched pair (never a torn path/offset).
+    private sealed record SampleWindow(string Path, double Start);
+
     private readonly string _sourcePath;
     private readonly LibavExportOptions _options;
     private readonly int _fps;
@@ -38,13 +42,13 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
     private readonly double _winLen;         // = clamp(WindowSeconds, 0.5, duration)
 
     private string? _sampleDir;
-    private string? _samplePath;             // the currently-encoded window's temp file (null until first encode)
-    private double _winStart = -1;           // start of the currently-encoded window (-1 = none yet)
-    private int _sampleSeq;                  // unique temp-file name per window
+    private volatile SampleWindow? _window;  // the current encoded window (null until first encode) — atomic swap
+    private int _sampleSeq;                  // unique temp-file name per window (mutated only under _sampleLock)
     private readonly SemaphoreSlim _sampleLock = new(1, 1); // serialize encodes; latest request wins
     private CancellationTokenSource? _playCts;
     private CancellationTokenSource? _stepCts;
     private CancellationTokenSource? _sampleCts; // supersedes an in-flight window encode when the target moves
+    private volatile bool _disposed;
 
     internal CompareViewModel(
         string sourcePath, double durationSeconds, int fps, int sourceWidth, int sourceHeight,
@@ -193,14 +197,15 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
             double pos = startPos;
             while (!ct.IsCancellationRequested && pos < _duration - 0.02)
             {
-                if (!await EnsureWindowAsync(pos) || ct.IsCancellationRequested)
+                SampleWindow? win = await EnsureWindowAsync(pos);
+                if (win == null || ct.IsCancellationRequested)
                 {
                     break;
                 }
 
-                double winStart = _winStart;
+                double winStart = win.Start;
                 double winEnd = Math.Min(_duration, winStart + _winLen);
-                string samplePath = _samplePath!;
+                string samplePath = win.Path;
 
                 using var winCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
                 CancellationToken wct = winCts.Token;
@@ -222,9 +227,9 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
                     catch (Exception ex) { AppLog.Error("Compress.ComparePlaySample", ex); }
                 }, wct);
 
-                // Original (left): play [pos, winEnd]; stop at the window end.
                 try
                 {
+                    // Original (left): play [pos, winEnd]; stop at the window end.
                     using var pp = new LibavVideoFramePlayer();
                     await pp.PlayAsync(_sourcePath, _decodeW, _decodeH, pos, 1.0, false, (data, ts) =>
                     {
@@ -234,9 +239,14 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
                     }, wct);
                 }
                 catch (OperationCanceledException) { /* window end or paused */ }
-
-                winCts.Cancel();                 // stop the sample player for this window
-                try { await sampleTask; } catch { /* already stopping */ }
+                finally
+                {
+                    // Always stop + await the sample player for this window, whatever ended the source player
+                    // (window end, pause, or a decode fault) — so it is never stranded and winCts isn't disposed
+                    // while it is still in use.
+                    winCts.Cancel();
+                    try { await sampleTask; } catch { /* already stopping */ }
+                }
 
                 if (ct.IsCancellationRequested)
                 {
@@ -294,13 +304,14 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
             }
             if (src != null) { SourceFrame = BytesToBitmap(src); }
 
-            bool ready = await EnsureWindowAsync(pos);
-            if (ct.IsCancellationRequested || !ready || _samplePath == null)
+            SampleWindow? win = await EnsureWindowAsync(pos);
+            if (ct.IsCancellationRequested || win == null)
             {
                 return;
             }
 
-            byte[]? smp = await LibavVideoFramePlayer.DecodeFrameAtAsync(_samplePath, pos - _winStart, _decodeW, _decodeH, ct);
+            // Decode from the window EnsureWindowAsync returned (a matched path/offset pair), not re-read fields.
+            byte[]? smp = await LibavVideoFramePlayer.DecodeFrameAtAsync(win.Path, pos - win.Start, _decodeW, _decodeH, ct);
             if (ct.IsCancellationRequested)
             {
                 return;
@@ -312,22 +323,23 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
     }
 
     // Ensures the compressed sample covers `pos`, re-encoding a short window around it if needed. Supersedes any
-    // in-flight encode (rapid seeks coalesce to the latest). Returns true when a window covering `pos` is ready.
-    private async Task<bool> EnsureWindowAsync(double pos)
+    // in-flight encode (rapid seeks coalesce to the latest). Returns the window covering `pos`, or null.
+    private async Task<SampleWindow?> EnsureWindowAsync(double pos)
     {
-        if (_sampleDir == null)
+        if (_disposed || _sampleDir == null)
         {
-            return false;
+            return null;
         }
 
-        if (Covers(pos))
+        SampleWindow? current = _window;
+        if (Covers(current, pos))
         {
-            return true;
+            return current;
         }
 
-        _sampleCts?.Cancel();
+        // Atomically install our CTS and cancel the previous in-flight encode (latest request wins).
         var cts = new CancellationTokenSource();
-        _sampleCts = cts;
+        Interlocked.Exchange(ref _sampleCts, cts)?.Cancel();
         CancellationToken ct = cts.Token;
 
         try
@@ -336,18 +348,24 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
         }
         catch (OperationCanceledException)
         {
-            return false; // superseded while waiting
+            return null; // superseded (or disposed) while waiting
+        }
+        catch (ObjectDisposedException)
+        {
+            return null;
         }
 
         try
         {
-            if (ct.IsCancellationRequested)
+            if (_disposed || ct.IsCancellationRequested)
             {
-                return false;
+                return null;
             }
-            if (Covers(pos))
+
+            current = _window;
+            if (Covers(current, pos))
             {
-                return true; // a prior waiter already produced a covering window
+                return current; // a prior waiter already produced a covering window
             }
 
             double winStart = ComputeWindowStart(_duration, _winLen, pos);
@@ -363,10 +381,10 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
                 _sourcePath, ranges, newPath, VideoQuality.Medium, cancellationToken: ct, options: _options), ct)
                 .ConfigureAwait(false);
 
-            if (ct.IsCancellationRequested)
+            if (_disposed || ct.IsCancellationRequested)
             {
                 TryDelete(newPath);
-                return false;
+                return null;
             }
 
             if (!ok || !File.Exists(newPath) || new FileInfo(newPath).Length == 0)
@@ -377,29 +395,30 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
                     StatusText = LocalizationService.Instance["CompressQueueFailed"];
                     IsPreparing = false;
                 });
-                return false;
+                return null;
             }
 
-            string? old = _samplePath;
-            _samplePath = newPath;
-            _winStart = winStart;
-            if (old != null) { TryDelete(old); }
+            var newWin = new SampleWindow(newPath, winStart);
+            SampleWindow? old = _window;
+            _window = newWin;                 // atomic publish of the matched (path, start) pair
+            if (old != null) { TryDelete(old.Path); }
 
             Dispatcher.UIThread.Post(() => { StatusText = string.Empty; IsPreparing = false; });
-            return true;
+            return newWin;
         }
         catch (OperationCanceledException)
         {
-            return false;
+            return null;
         }
         finally
         {
-            _sampleLock.Release();
+            // _sampleLock is never disposed (see Dispose), but guard defensively so a teardown race can't surface.
+            try { _sampleLock.Release(); } catch (ObjectDisposedException) { }
         }
     }
 
-    private bool Covers(double pos)
-        => _samplePath != null && _winStart >= 0 && pos >= _winStart - 0.001 && pos <= _winStart + _winLen + 0.001;
+    private bool Covers(SampleWindow? w, double pos)
+        => w != null && pos >= w.Start - 0.001 && pos <= w.Start + _winLen + 0.001;
 
     private static void TryDelete(string path)
     {
@@ -440,13 +459,12 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
 
     public void Dispose()
     {
+        _disposed = true;
         _playCts?.Cancel();
         _stepCts?.Cancel();
-        _sampleCts?.Cancel();
-        _playCts?.Dispose();
-        _stepCts?.Dispose();
-        _sampleCts?.Dispose();
-        _sampleLock.Dispose();
+        Interlocked.Exchange(ref _sampleCts, null)?.Cancel();
+        // The CancellationTokenSources and _sampleLock are intentionally left for GC (none hold a wait handle):
+        // disposing them here would race an in-flight play/encode task into ObjectDisposedException on close.
         try
         {
             if (_sampleDir != null && Directory.Exists(_sampleDir))
