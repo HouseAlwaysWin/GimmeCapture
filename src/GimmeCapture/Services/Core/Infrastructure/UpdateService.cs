@@ -355,7 +355,7 @@ public sealed class UpdateService : ReactiveObject
         {
             Avalonia.Threading.Dispatcher.UIThread.Post(() =>
             {
-                System.Windows.Forms.MessageBox.Show($"Update failed: {ex.Message}", "Update Error");
+                PlatformErrorDialog.ShowError($"Update failed: {ex.Message}", "Update Error");
             });
         }
     }

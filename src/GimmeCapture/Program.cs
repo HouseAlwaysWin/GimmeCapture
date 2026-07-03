@@ -34,7 +34,7 @@ class Program
             // Startup failure can happen before Avalonia UI is fully available,
             // so keep the fatal prompt on a platform-native dialog.
             var message = $"Application Startup Failed:\n{ex.Message}\n\nStack:\n{ex.StackTrace}";
-            System.Windows.Forms.MessageBox.Show(message, "GimmeCapture Fatal Error");
+            PlatformErrorDialog.ShowError(message, "GimmeCapture Fatal Error");
         }
         finally
         {
