@@ -14,6 +14,7 @@ public static class ProcessMemoryTrimService
     private static readonly IdleMemoryTrimScheduler FullTrimScheduler = new(TrimCore);
     private static readonly IdleMemoryTrimScheduler WorkingSetTrimScheduler = new(TrimWorkingSetCore);
 
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
     [DllImport("psapi.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool EmptyWorkingSet(IntPtr hProcess);
@@ -59,7 +60,10 @@ public static class ProcessMemoryTrimService
             GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true, compacting: true);
 
             using var process = Process.GetCurrentProcess();
-            _ = EmptyWorkingSet(process.Handle);
+            if (OperatingSystem.IsWindows())
+            {
+                _ = EmptyWorkingSet(process.Handle);
+            }
             process.Refresh();
 
             var after = CaptureSnapshot();
@@ -80,7 +84,10 @@ public static class ProcessMemoryTrimService
             AppLog.Information($"MemoryTrim.WorkingSetBefore.{reason}.{before}");
 
             using var process = Process.GetCurrentProcess();
-            _ = EmptyWorkingSet(process.Handle);
+            if (OperatingSystem.IsWindows())
+            {
+                _ = EmptyWorkingSet(process.Handle);
+            }
             process.Refresh();
 
             var after = CaptureSnapshot();
