@@ -241,6 +241,45 @@ public partial class MainWindowViewModel
     public ReactiveCommand<Unit, Unit> LoadCompressPresetCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> DeleteCompressPresetCommand { get; private set; } = null!;
 
+    // Batch-toolbar output-settings picker: a "current settings" sentinel + the saved bundles. Selecting a
+    // bundle applies its encode settings to the live 輸出設定; the sentinel leaves them as manually set.
+    private readonly CompressPreset _currentSettingsChoice = new();
+    public ObservableCollection<CompressPreset> BatchPresetChoices { get; } = new();
+
+    private CompressPreset? _selectedBatchPreset;
+    public CompressPreset? SelectedBatchPreset
+    {
+        get => _selectedBatchPreset;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _selectedBatchPreset, value);
+            // Only a real saved bundle applies; the "current settings" sentinel is a no-op.
+            if (value != null && !ReferenceEquals(value, _currentSettingsChoice))
+            {
+                ApplyCompressPreset(value);
+            }
+        }
+    }
+
+    private void RebuildBatchPresetChoices()
+    {
+        _currentSettingsChoice.Name = LocalizationService.Instance["CompressPresetCurrent"];
+        CompressPreset? keep = SelectedBatchPreset != null && CompressPresets.Contains(SelectedBatchPreset)
+            ? SelectedBatchPreset
+            : null;
+
+        BatchPresetChoices.Clear();
+        BatchPresetChoices.Add(_currentSettingsChoice);
+        foreach (CompressPreset p in CompressPresets)
+        {
+            BatchPresetChoices.Add(p);
+        }
+
+        // Restore/reset the selection WITHOUT re-applying (assign the backing field directly).
+        _selectedBatchPreset = keep ?? _currentSettingsChoice;
+        this.RaisePropertyChanged(nameof(SelectedBatchPreset));
+    }
+
     // A built-in "quick recipe": applies a bundle of the global encode knobs in one pick. Distinct from the
     // user-savable CompressPreset (those persist); these are fixed. IsCustom is a no-op "leave as-is" entry.
     public sealed class CompressQuickProfile
@@ -356,6 +395,8 @@ public partial class MainWindowViewModel
         {
             CompressPresets.Add(preset);
         }
+        RebuildBatchPresetChoices();
+        CompressPresets.CollectionChanged += (_, _) => RebuildBatchPresetChoices();
 
         // Restore last-used settings before the queue is populated, so estimates use them from the start.
         RestoreCompressSession();

@@ -115,6 +115,7 @@
   "CompressCompareBack5": "« 5s",
   "CompressCompareFwd5": "5s »",
   "CompressPresetsLabel": "Presets",
+  "CompressPresetCurrent": "Current settings",
   "CompressPresetNameWatermark": "Preset name",
   "CompressPresetSave": "Save",
   "CompressPresetLoad": "Load",

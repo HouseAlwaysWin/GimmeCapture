@@ -115,6 +115,7 @@
   "CompressCompareBack5": "« 5秒",
   "CompressCompareFwd5": "5秒 »",
   "CompressPresetsLabel": "プリセット",
+  "CompressPresetCurrent": "現在の設定",
   "CompressPresetNameWatermark": "プリセット名",
   "CompressPresetSave": "保存",
   "CompressPresetLoad": "読み込み",
