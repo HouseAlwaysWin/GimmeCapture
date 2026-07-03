@@ -3,6 +3,7 @@ using GimmeCapture.Services.Core.AI;
 using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Core.Media;
 using GimmeCapture.Services.Platforms.Desktop;
+using GimmeCapture.Services.Platforms.Linux;
 using GimmeCapture.Services.Platforms.Windows;
 using GimmeCapture.ViewModels.Main;
 using System;
@@ -19,9 +20,13 @@ public static class MainWindowViewModelDependenciesFactory
         var settingsService = existingSettingsService ?? new AppSettingsService();
         var windowManager = new AvaloniaWindowManager();
         var themeResourceService = new AvaloniaThemeResourceService();
-        var hotkeyService = new WindowsGlobalHotkeyService();
+        // Global hotkeys are Windows-only today; other platforms get a no-op service until an X11 /
+        // portal binding lands (docs/LINUX_PORT_FEASIBILITY.md, Phase 2).
+        IGlobalHotkeyService hotkeyService = OperatingSystem.IsWindows()
+            ? new WindowsGlobalHotkeyService()
+            : new LinuxGlobalHotkeyService();
         var globalHotkeySettingsCoordinator = new GlobalHotkeySettingsCoordinator(hotkeyService);
-        var startupRegistrationService = existingStartupRegistrationService ?? new WindowsStartupRegistrationService();
+        var startupRegistrationService = existingStartupRegistrationService ?? CreateStartupRegistrationService();
         var settingsSaveCoordinatorFactory = new DebouncedSettingsSaveCoordinatorFactory();
         var settingsPersistenceService = existingSettingsPersistenceService ?? new MainWindowSettingsPersistenceService();
         var hotkeyMappingService = new HotkeyMappingService();
@@ -66,5 +71,13 @@ public static class MainWindowViewModelDependenciesFactory
             ocrRuntimeService,
             aiPathService,
             resourceQueue);
+    }
+
+    internal static IStartupRegistrationService CreateStartupRegistrationService()
+    {
+        // Windows writes an HKCU Run key; other platforms get a no-op until XDG autostart lands.
+        return OperatingSystem.IsWindows()
+            ? new WindowsStartupRegistrationService()
+            : new LinuxStartupRegistrationService();
     }
 }
