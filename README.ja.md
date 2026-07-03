@@ -92,5 +92,10 @@ Record モードでは以下をサポートします。
 
 ## ライセンス
 
-[MIT License](LICENSE) のもとで公開しています。
+[GNU General Public License v3.0](LICENSE) のもとで公開しています。
+
+GimmeCapture は `--enable-gpl` でビルドした **FFmpeg**（H.264/H.265 に使用する GPL ライセンスの
+**x264**／**x265** エンコーダーを含む）をリンク・同梱しているため、配布物全体は GPL のもとで
+ライセンスされる結合著作物です。各サードパーティ コンポーネントのライセンスと対応ソースについては
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) を参照してください。
 

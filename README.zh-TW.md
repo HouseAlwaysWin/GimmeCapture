@@ -92,5 +92,9 @@ AI 資源會透過 **Modules** 頁籤按需下載。
 
 ## 授權
 
-本專案採用 [MIT License](LICENSE)。
+本專案採用 [GNU General Public License v3.0](LICENSE)。
+
+GimmeCapture 連結並捆綁以 `--enable-gpl` 編譯的 **FFmpeg**（包含用於 H.264/H.265 的 GPL 授權
+**x264**／**x265** 編碼器），因此發行的整體作品為採用 GPL 授權的結合著作。各第三方元件的授權與
+對應原始碼資訊請見 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)。
 
