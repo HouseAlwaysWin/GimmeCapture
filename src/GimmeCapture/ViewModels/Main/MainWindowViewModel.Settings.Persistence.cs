@@ -82,6 +82,7 @@ public partial class MainWindowViewModel
             MaxRecordingSizeMb = RecordingSettings.MaxRecordingSizeMB,
             PlaybackUiFps = PlaybackUiFps,
             PlaybackTimelineFps = PlaybackTimelineFps,
+            HardwareDecodeEnabled = HardwareDecodeEnabled,
             UseFixedRecordPath = RecordingSettings.UseFixedRecordPath,
             TempDirectory = TempDirectory,
             SnipHotkey = SnipHotkey,
@@ -156,6 +157,7 @@ public partial class MainWindowViewModel
         PipelinedEncoding = snapshot.PipelinedEncoding;
         PlaybackUiFps = snapshot.PlaybackUiFps;
         PlaybackTimelineFps = snapshot.PlaybackTimelineFps;
+        HardwareDecodeEnabled = snapshot.HardwareDecodeEnabled;
         TempDirectory = snapshot.TempDirectory;
         ShowAIScanBox = snapshot.ShowAIScanBox;
         EnableAI = snapshot.EnableAI;

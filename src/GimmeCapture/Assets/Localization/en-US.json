@@ -302,6 +302,8 @@
   "HighlightClicks": "Highlight mouse clicks (ripple)",
   "ShowKeystrokes": "Show pressed keys (keystroke overlay)",
   "PipelinedEncoding": "Pipelined encoding (experimental — fewer drops at high fps)",
+  "HardwareDecodeEnabled": "GPU hardware decoding (D3D11VA)",
+  "HardwareDecodeHint": "Uses the GPU to play large/4K videos smoothly. Falls back to software automatically. Takes effect on the next playback.",
   "RecordSystemAudio": "Capture system audio while recording",
   "EnableWebcam": "Webcam overlay (picture-in-picture)",
   "WebcamDevice": "Webcam",
