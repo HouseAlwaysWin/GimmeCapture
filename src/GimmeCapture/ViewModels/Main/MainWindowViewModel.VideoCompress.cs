@@ -241,43 +241,89 @@ public partial class MainWindowViewModel
     public ReactiveCommand<Unit, Unit> LoadCompressPresetCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> DeleteCompressPresetCommand { get; private set; } = null!;
 
-    // Batch-toolbar output-settings picker: a "current settings" sentinel + the saved bundles. Selecting a
-    // bundle applies its encode settings to the live 輸出設定; the sentinel leaves them as manually set.
-    private readonly CompressPreset _currentSettingsChoice = new();
+    // Per-item output-settings picker choices: a shared "current settings" sentinel + the saved bundles,
+    // used as the ItemsSource for every queue row's dropdown. Each item stores its own SelectedPreset;
+    // the sentinel means "use the live 輸出設定", a real bundle overrides those settings for that file.
+    internal readonly CompressPreset _currentSettingsChoice = new();
     public ObservableCollection<CompressPreset> BatchPresetChoices { get; } = new();
 
-    private CompressPreset? _selectedBatchPreset;
-    public CompressPreset? SelectedBatchPreset
-    {
-        get => _selectedBatchPreset;
-        set
-        {
-            this.RaiseAndSetIfChanged(ref _selectedBatchPreset, value);
-            // Only a real saved bundle applies; the "current settings" sentinel is a no-op.
-            if (value != null && !ReferenceEquals(value, _currentSettingsChoice))
-            {
-                ApplyCompressPreset(value);
-            }
-        }
-    }
-
-    private void RebuildBatchPresetChoices()
+    private void InitBatchPresetChoices()
     {
         _currentSettingsChoice.Name = LocalizationService.Instance["CompressPresetCurrent"];
-        CompressPreset? keep = SelectedBatchPreset != null && CompressPresets.Contains(SelectedBatchPreset)
-            ? SelectedBatchPreset
-            : null;
-
-        BatchPresetChoices.Clear();
         BatchPresetChoices.Add(_currentSettingsChoice);
         foreach (CompressPreset p in CompressPresets)
         {
             BatchPresetChoices.Add(p);
         }
 
-        // Restore/reset the selection WITHOUT re-applying (assign the backing field directly).
-        _selectedBatchPreset = keep ?? _currentSettingsChoice;
-        this.RaisePropertyChanged(nameof(SelectedBatchPreset));
+        // Mirror preset add/remove incrementally (never Clear the shared list — that would drop every row's
+        // selection). A removed bundle sends the rows that used it back to "current settings".
+        CompressPresets.CollectionChanged += (_, e) =>
+        {
+            if (e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Add && e.NewItems != null)
+            {
+                foreach (CompressPreset p in e.NewItems.Cast<CompressPreset>())
+                {
+                    BatchPresetChoices.Add(p);
+                }
+            }
+            else if (e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Remove && e.OldItems != null)
+            {
+                foreach (CompressPreset p in e.OldItems.Cast<CompressPreset>())
+                {
+                    BatchPresetChoices.Remove(p);
+                    foreach (CompressQueueItem item in CompressQueue)
+                    {
+                        if (ReferenceEquals(item.SelectedPreset, p))
+                        {
+                            item.SelectedPreset = _currentSettingsChoice;
+                        }
+                    }
+                }
+            }
+            else
+            {
+                BatchPresetChoices.Clear();
+                BatchPresetChoices.Add(_currentSettingsChoice);
+                foreach (CompressPreset p in CompressPresets)
+                {
+                    BatchPresetChoices.Add(p);
+                }
+            }
+        };
+    }
+
+    // The effective encode snapshot for an item: its own bundle if one is picked, else the live settings.
+    private CompressSettingsSnapshot BuildSettingsSnapshot(CompressQueueItem? item)
+    {
+        if (item?.SelectedPreset is { } p && !ReferenceEquals(p, _currentSettingsChoice))
+        {
+            return SnapshotFromPreset(p);
+        }
+
+        return BuildSettingsSnapshot();
+    }
+
+    private CompressSettingsSnapshot SnapshotFromPreset(CompressPreset p) => new(
+        p.Codec,
+        Math.Clamp(p.Crf, 1, 51),
+        p.MaxHeight,
+        p.MaxFps,
+        CompressPresetOptions.Contains(p.Preset) ? p.Preset : "veryfast",
+        p.DropAudio,
+        p.AudioBitrateKbps,
+        p.AudioChannels,
+        p.UseTargetSize,
+        p.TargetSizeMB > 0 ? p.TargetSizeMB : 25m,
+        p.UseTargetSize && p.Codec == VideoCodec.H264);
+
+    // Output container/extension for an item: its bundle's format if picked, else the live format.
+    private string EffectiveFormatFor(CompressQueueItem? item)
+    {
+        string fmt = item?.SelectedPreset is { } p && !ReferenceEquals(p, _currentSettingsChoice)
+            ? p.Format
+            : SelectedCompressFormat;
+        return CompressOutputFormats.Contains(fmt) ? fmt : SelectedCompressFormat;
     }
 
     // A built-in "quick recipe": applies a bundle of the global encode knobs in one pick. Distinct from the
@@ -395,8 +441,7 @@ public partial class MainWindowViewModel
         {
             CompressPresets.Add(preset);
         }
-        RebuildBatchPresetChoices();
-        CompressPresets.CollectionChanged += (_, _) => RebuildBatchPresetChoices();
+        InitBatchPresetChoices();
 
         // Restore last-used settings before the queue is populated, so estimates use them from the start.
         RestoreCompressSession();
@@ -610,23 +655,17 @@ public partial class MainWindowViewModel
         }
 
         string prefix = LocalizationService.Instance["CompressEstimateLabel"];
+        CompressSettingsSnapshot s = BuildSettingsSnapshot(item); // per-item bundle, or the live settings
 
-        if (CompressUseTargetSize)
+        if (s.UseTargetSize)
         {
             // Target-size mode encodes to (approximately) the requested size by design.
-            return $"{prefix}: ≈ {FormatFileSize((long)((double)(CompressTargetSizeMB ?? 25m) * 1024 * 1024))}";
+            return $"{prefix}: ≈ {FormatFileSize((long)((double)s.TargetSizeMB * 1024 * 1024))}";
         }
 
-        VideoCodec codec = SelectedCompressCodecOption?.Value ?? VideoCodec.H264;
-        int maxHeight = SelectedCompressResolution?.MaxHeight ?? 0;
-        int maxFps = SelectedCompressFps?.Fps ?? 0;
-        int crf = Math.Clamp(CompressCrf, 1, 51);
-        int audioKbps = CompressDropAudio
-            ? 0
-            : (SelectedCompressAudioBitrate?.Kbps > 0 ? SelectedCompressAudioBitrate.Kbps : 128);
-
+        int audioKbps = s.DropAudio ? 0 : (s.AudioBitrateKbps > 0 ? s.AudioBitrateKbps : 128);
         long est = EstimateOutputSizeBytes(
-            item.ProbedWidth, item.ProbedHeight, item.ProbedFps, dur, maxHeight, maxFps, codec, crf, audioKbps);
+            item.ProbedWidth, item.ProbedHeight, item.ProbedFps, dur, s.MaxHeight, s.MaxFps, s.Codec, s.Crf, audioKbps);
         return $"{prefix}: ≈ {FormatFileSize(est)}";
     }
 

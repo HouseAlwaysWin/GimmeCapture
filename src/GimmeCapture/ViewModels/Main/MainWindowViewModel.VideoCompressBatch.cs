@@ -100,6 +100,15 @@ public partial class MainWindowViewModel
             set => this.RaiseAndSetIfChanged(ref _outputName, value);
         }
 
+        // Per-item output-settings bundle. The "current settings" sentinel (set as the default) means "use
+        // the live 輸出設定 tab"; a real saved bundle overrides those settings for this file only.
+        private CompressPreset? _selectedPreset;
+        public CompressPreset? SelectedPreset
+        {
+            get => _selectedPreset;
+            set => this.RaiseAndSetIfChanged(ref _selectedPreset, value);
+        }
+
         // Set by the view model so the per-item Start / Estimate buttons can call back into it.
         internal Action<CompressQueueItem>? StartRequested;
         internal Action<CompressQueueItem>? EstimateRequested;
@@ -883,6 +892,7 @@ public partial class MainWindowViewModel
                 {
                     var item = new CompressQueueItem(file)
                     {
+                        SelectedPreset = _currentSettingsChoice, // "current settings" by default
                         StartRequested = StartCompressItem,
                         EstimateRequested = EstimateQueueItem,
                         PauseWarningRequested = ShowPauseNoResumeWarning
@@ -908,6 +918,10 @@ public partial class MainWindowViewModel
                     item.WhenAnyValue(x => x.Annotations, x => x.RedactionTracks)
                         .Skip(1)
                         .Subscribe(_ => PersistItemState(item));
+                    // Re-estimate this item when its output-settings bundle changes.
+                    item.WhenAnyValue(x => x.SelectedPreset)
+                        .Skip(1)
+                        .Subscribe(_ => item.EstimatedText = BuildItemEstimate(item));
                     CompressQueue.Add(item);
                     added.Add(item);
                 }
@@ -1056,7 +1070,7 @@ public partial class MainWindowViewModel
             return;
         }
 
-        CompressSettingsSnapshot snap = BuildSettingsSnapshot();
+        CompressSettingsSnapshot snap = BuildSettingsSnapshot(item); // per-item bundle or live settings
         string prefix = LocalizationService.Instance["CompressEstimateLabel"];
 
         // Target-size mode is already exact (the requested size) — no sample encode needed. Warn on a direct
@@ -1119,8 +1133,8 @@ public partial class MainWindowViewModel
             _batchSemaphore = new SemaphoreSlim(Math.Clamp(CompressParallelCount, 1, 8));
         }
 
-        CompressSettingsSnapshot snap = BuildSettingsSnapshot();
-        string ext = "." + SelectedCompressFormat.ToLowerInvariant();
+        CompressSettingsSnapshot snap = BuildSettingsSnapshot(item);         // per-item bundle or live settings
+        string ext = "." + EffectiveFormatFor(item).ToLowerInvariant();      // container follows the effective format
         string outputFolder = CompressOutputFolder; // captured on the UI thread; empty = next to source
         bool appendDate = CompressAppendDate;
         // Per-file kept runs captured on the UI thread (whole clip when trim off); re-clamped against the fresh probe.
