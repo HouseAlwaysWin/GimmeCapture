@@ -137,7 +137,21 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
         }
     }
 
-    private static string Fmt(double seconds) => TimeSpan.FromSeconds(Math.Max(0, seconds)).ToString(@"m\:ss");
+    // Timeline clock: seconds to 2 decimals; switches to h:mm:ss once the SOURCE is an hour or longer
+    // (keyed to total duration, not the value, so every readout has a consistent shape).
+    private string Fmt(double seconds)
+    {
+        var t = TimeSpan.FromSeconds(Math.Max(0, seconds));
+        int centis = (int)Math.Round(t.Milliseconds / 10.0);
+        if (centis >= 100)
+        {
+            centis = 99; // guard the .995+ rounding edge so we never print ".100"
+        }
+
+        return _duration >= 3600
+            ? $"{(int)t.TotalHours}:{t.Minutes:00}:{t.Seconds:00}.{centis:00}"
+            : $"{(int)t.TotalMinutes}:{t.Seconds:00}.{centis:00}";
+    }
 
     // ── Rotation ──
     private int _rotation;
@@ -379,7 +393,7 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
             VideoEditSegment s = EditSegments[i];
             // Pieces are contiguous in source, so SourceStart is the block's position on the strip.
             SegmentBlocks.Add(new SegmentBlockViewModel(
-                i, $"{FormatClock(s.SourceStart)}–{FormatClock(s.SourceEnd)}", s.SourceStart, s.SourceDuration)
+                i, $"{Fmt(s.SourceStart)}–{Fmt(s.SourceEnd)}", s.SourceStart, s.SourceDuration)
             {
                 IsKept = s.Kept,
                 Speed = s.Speed,
@@ -391,11 +405,6 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
         SegmentLayoutChanged?.Invoke();
     }
 
-    private static string FormatClock(double seconds)
-    {
-        var t = TimeSpan.FromSeconds(Math.Max(0, seconds));
-        return $"{(int)t.TotalMinutes}:{t.Seconds:00}";
-    }
 
     // Reconstruct the full source timeline (kept runs + dropped gaps) from a kept-run list over [0,duration].
     private static IReadOnlyList<VideoEditSegment> BuildEditSegments(IReadOnlyList<VideoEditSegment> keptRuns, double duration)

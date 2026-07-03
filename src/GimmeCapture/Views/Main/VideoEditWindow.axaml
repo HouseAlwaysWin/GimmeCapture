@@ -23,32 +23,42 @@
     </Window.Styles>
     <Grid RowDefinitions="Auto,*,Auto" Margin="12">
 
-        <!-- ── Top toolbar: undo/redo · category buttons (標註/編輯/遮蔽) + the open category's tools ── -->
+        <!-- ── Top toolbar: undo/redo · category buttons (標註/編輯/遮蔽) + the open category's tools;
+                Cancel/Apply live in the top-right corner. ── -->
         <StackPanel Grid.Row="0" Spacing="6" Margin="0,0,0,8">
-            <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
-                <Button Theme="{StaticResource SnipButton}" Command="{Binding Draw.UndoCommand}" ToolTip.Tip="{Binding Draw.UndoTooltip}">
-                    <PathIcon Data="M12.5,8C9.85,8 7.45,8.99 5.6,10.6L2,7V16H11L7.38,12.38C8.77,11.22 10.54,10.5 12.5,10.5C16.04,10.5 19.05,12.81 20.1,16L22.47,15.22C21.08,11.03 17.15,8 12.5,8Z" Width="14" Height="14"/>
-                </Button>
-                <Button Theme="{StaticResource SnipButton}" Command="{Binding Draw.RedoCommand}" ToolTip.Tip="{Binding Draw.RedoTooltip}">
-                    <PathIcon Data="M18.4,10.6C16.55,8.99 14.15,8 11.5,8C6.85,8 2.92,11.03 1.54,15.22L3.9,16C4.95,12.81 7.96,10.5 11.5,10.5C13.46,10.5 15.23,11.22 16.62,12.38L13,16H22V7L18.4,10.6Z" Width="14" Height="14"/>
-                </Button>
-                <Rectangle Fill="#444444" Width="1" Height="18" Margin="4,0" VerticalAlignment="Center"/>
-                <Button Theme="{StaticResource SmallGothicMetalButton}"
-                        Content="{Binding [CompressEditCatAnnotate], Source={x:Static services:LocalizationService.Instance}}"
-                        ToolTip.Tip="{Binding [TipCatAnnotate], Source={x:Static services:LocalizationService.Instance}}"
-                        Command="{Binding SelectToolbarCategoryCommand}" CommandParameter="{x:Static models:ToolbarCategory.Annotate}"
-                        Opacity="{Binding IsAnnotateCategory, Converter={StaticResource BoolToOpacityConverter}}"/>
-                <Button Theme="{StaticResource SmallGothicMetalButton}"
-                        Content="{Binding [CompressEditCatEdit], Source={x:Static services:LocalizationService.Instance}}"
-                        ToolTip.Tip="{Binding [TipCatEdit], Source={x:Static services:LocalizationService.Instance}}"
-                        Command="{Binding SelectToolbarCategoryCommand}" CommandParameter="{x:Static models:ToolbarCategory.Edit}"
-                        Opacity="{Binding IsEditCategory, Converter={StaticResource BoolToOpacityConverter}}"/>
-                <Button Theme="{StaticResource SmallGothicMetalButton}"
-                        Content="{Binding [CompressEditCatRedact], Source={x:Static services:LocalizationService.Instance}}"
-                        ToolTip.Tip="{Binding [TipCatRedact], Source={x:Static services:LocalizationService.Instance}}"
-                        Command="{Binding SelectToolbarCategoryCommand}" CommandParameter="{x:Static models:ToolbarCategory.Redact}"
-                        Opacity="{Binding IsRedactCategory, Converter={StaticResource BoolToOpacityConverter}}"/>
-            </StackPanel>
+            <Grid>
+                <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
+                    <Button Theme="{StaticResource SnipButton}" Command="{Binding Draw.UndoCommand}" ToolTip.Tip="{Binding Draw.UndoTooltip}">
+                        <PathIcon Data="M12.5,8C9.85,8 7.45,8.99 5.6,10.6L2,7V16H11L7.38,12.38C8.77,11.22 10.54,10.5 12.5,10.5C16.04,10.5 19.05,12.81 20.1,16L22.47,15.22C21.08,11.03 17.15,8 12.5,8Z" Width="14" Height="14"/>
+                    </Button>
+                    <Button Theme="{StaticResource SnipButton}" Command="{Binding Draw.RedoCommand}" ToolTip.Tip="{Binding Draw.RedoTooltip}">
+                        <PathIcon Data="M18.4,10.6C16.55,8.99 14.15,8 11.5,8C6.85,8 2.92,11.03 1.54,15.22L3.9,16C4.95,12.81 7.96,10.5 11.5,10.5C13.46,10.5 15.23,11.22 16.62,12.38L13,16H22V7L18.4,10.6Z" Width="14" Height="14"/>
+                    </Button>
+                    <Rectangle Fill="#444444" Width="1" Height="18" Margin="4,0" VerticalAlignment="Center"/>
+                    <Button Theme="{StaticResource SmallGothicMetalButton}"
+                            Content="{Binding [CompressEditCatAnnotate], Source={x:Static services:LocalizationService.Instance}}"
+                            ToolTip.Tip="{Binding [TipCatAnnotate], Source={x:Static services:LocalizationService.Instance}}"
+                            Command="{Binding SelectToolbarCategoryCommand}" CommandParameter="{x:Static models:ToolbarCategory.Annotate}"
+                            Opacity="{Binding IsAnnotateCategory, Converter={StaticResource BoolToOpacityConverter}}"/>
+                    <Button Theme="{StaticResource SmallGothicMetalButton}"
+                            Content="{Binding [CompressEditCatEdit], Source={x:Static services:LocalizationService.Instance}}"
+                            ToolTip.Tip="{Binding [TipCatEdit], Source={x:Static services:LocalizationService.Instance}}"
+                            Command="{Binding SelectToolbarCategoryCommand}" CommandParameter="{x:Static models:ToolbarCategory.Edit}"
+                            Opacity="{Binding IsEditCategory, Converter={StaticResource BoolToOpacityConverter}}"/>
+                    <Button Theme="{StaticResource SmallGothicMetalButton}"
+                            Content="{Binding [CompressEditCatRedact], Source={x:Static services:LocalizationService.Instance}}"
+                            ToolTip.Tip="{Binding [TipCatRedact], Source={x:Static services:LocalizationService.Instance}}"
+                            Command="{Binding SelectToolbarCategoryCommand}" CommandParameter="{x:Static models:ToolbarCategory.Redact}"
+                            Opacity="{Binding IsRedactCategory, Converter={StaticResource BoolToOpacityConverter}}"/>
+                </StackPanel>
+                <!-- Cancel / Apply (top-right) -->
+                <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <Button Content="{Binding [CompressCancel], Source={x:Static services:LocalizationService.Instance}}"
+                            Theme="{StaticResource SmallGothicMetalButton}" Command="{Binding CancelCommand}"/>
+                    <Button Content="{Binding [CompressTrimApply], Source={x:Static services:LocalizationService.Instance}}"
+                            Theme="{StaticResource SmallGothicMetalButton}" FontWeight="Bold" Command="{Binding ApplyCommand}"/>
+                </StackPanel>
+            </Grid>
 
             <!-- Sub-toolbar: the open category's tools (same visual language as the Pin window). -->
             <Border IsVisible="{Binding IsSubToolbarVisible}"
@@ -281,13 +291,15 @@
                 <Button Content="{Binding [CompressCompareFwd5], Source={x:Static services:LocalizationService.Instance}}"
                         Theme="{StaticResource SmallGothicMetalButton}" Command="{Binding SkipForwardCommand}"/>
                 <Rectangle Fill="#444444" Width="1" Height="18" Margin="2,0" VerticalAlignment="Center"/>
-                <Button Theme="{StaticResource SnipButton}" Width="30" Height="30" Command="{Binding ToggleLoopCommand}"
+                <!-- Loop + volume share the transport row's gold metal style so they don't stick out. -->
+                <Button Theme="{StaticResource SmallGothicMetalButton}" Width="30" Height="30" Command="{Binding ToggleLoopCommand}"
                         ToolTip.Tip="{Binding [TipLoop], Source={x:Static services:LocalizationService.Instance}}">
                     <PathIcon Data="M17,17H7V14L3,18L7,22V19H19V13H17V17M7,7H17V10L21,6L17,2V5H5V11H7V7Z" Width="12" Height="12"
                               Opacity="{Binding IsLooping, Converter={StaticResource BoolToOpacityConverter}}"/>
                 </Button>
                 <controls:VolumeFlyoutButton Volume="{Binding PreviewVolume, Mode=TwoWay}" IsMuted="{Binding IsMuted}"
                                              ToggleMuteCommand="{Binding ToggleMuteCommand}"
+                                             ButtonTheme="{StaticResource SmallGothicMetalButton}"
                                              MuteTooltip="{Binding [TipMute], Source={x:Static services:LocalizationService.Instance}}"/>
                 <Button Theme="{StaticResource SmallGothicMetalButton}" Content="{Binding PlaybackSpeedText}"
                         Command="{Binding CycleGlobalSpeedCommand}" MinWidth="44"
@@ -297,14 +309,6 @@
             <TextBlock Text="{Binding RangeText}" HorizontalAlignment="Center" Foreground="#C8A24B" FontSize="12"/>
             <TextBlock Text="{Binding [CompressEditHint], Source={x:Static services:LocalizationService.Instance}}"
                        HorizontalAlignment="Center" Foreground="#9A9A9A" FontSize="11"/>
-
-            <!-- Cancel / Apply -->
-            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center" Margin="0,4,0,0">
-                <Button Content="{Binding [CompressCancel], Source={x:Static services:LocalizationService.Instance}}"
-                        Theme="{StaticResource SmallGothicMetalButton}" Command="{Binding CancelCommand}"/>
-                <Button Content="{Binding [CompressTrimApply], Source={x:Static services:LocalizationService.Instance}}"
-                        Theme="{StaticResource GothicMetalButton}" Command="{Binding ApplyCommand}"/>
-            </StackPanel>
         </StackPanel>
     </Grid>
 </Window>

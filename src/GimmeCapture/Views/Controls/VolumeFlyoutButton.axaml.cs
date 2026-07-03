@@ -30,6 +30,11 @@ public partial class VolumeFlyoutButton : UserControl
     public static readonly StyledProperty<string?> MuteTooltipProperty =
         AvaloniaProperty.Register<VolumeFlyoutButton, string?>(nameof(MuteTooltip));
 
+    /// <summary>Optional theme override for the toolbar (speaker) button, so hosts can match their row's
+    /// button style (e.g. the editor's gold metal buttons). Unset → the control's default (SnipButton).</summary>
+    public static readonly StyledProperty<Avalonia.Styling.ControlTheme?> ButtonThemeProperty =
+        AvaloniaProperty.Register<VolumeFlyoutButton, Avalonia.Styling.ControlTheme?>(nameof(ButtonTheme));
+
     public double Volume
     {
         get => GetValue(VolumeProperty);
@@ -52,6 +57,22 @@ public partial class VolumeFlyoutButton : UserControl
     {
         get => GetValue(MuteTooltipProperty);
         set => SetValue(MuteTooltipProperty, value);
+    }
+
+    public Avalonia.Styling.ControlTheme? ButtonTheme
+    {
+        get => GetValue(ButtonThemeProperty);
+        set => SetValue(ButtonThemeProperty, value);
+    }
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property == ButtonThemeProperty && _speaker != null
+            && change.NewValue is Avalonia.Styling.ControlTheme theme)
+        {
+            _speaker.Theme = theme;
+        }
     }
 
     private readonly Popup? _popup;
