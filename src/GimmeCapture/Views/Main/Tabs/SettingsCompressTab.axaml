@@ -167,7 +167,14 @@
                                                           FontSize="10" MinWidth="120" VerticalAlignment="Center">
                                                     <ComboBox.ItemTemplate>
                                                         <DataTemplate x:CompileBindings="False">
-                                                            <TextBlock Text="{Binding Name}"/>
+                                                            <!-- The "current settings" sentinel has an empty Name → show the
+                                                                 localized label (reactive to language); saved bundles show Name. -->
+                                                            <Panel>
+                                                                <TextBlock Text="{Binding [CompressPresetCurrent], Source={x:Static services:LocalizationService.Instance}}"
+                                                                           IsVisible="{Binding Name, Converter={x:Static conv:StringConverters.IsNullOrEmpty}}"/>
+                                                                <TextBlock Text="{Binding Name}"
+                                                                           IsVisible="{Binding Name, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"/>
+                                                            </Panel>
                                                         </DataTemplate>
                                                     </ComboBox.ItemTemplate>
                                                 </ComboBox>

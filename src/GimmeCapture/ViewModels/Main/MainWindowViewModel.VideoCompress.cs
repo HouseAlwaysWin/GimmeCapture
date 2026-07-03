@@ -249,7 +249,8 @@ public partial class MainWindowViewModel
 
     private void InitBatchPresetChoices()
     {
-        _currentSettingsChoice.Name = LocalizationService.Instance["CompressPresetCurrent"];
+        // Sentinel keeps an EMPTY Name (real bundles always have a name) — the row's item template shows the
+        // localized "current settings" label for it, so it re-localizes when the language changes.
         BatchPresetChoices.Add(_currentSettingsChoice);
         foreach (CompressPreset p in CompressPresets)
         {
@@ -442,6 +443,11 @@ public partial class MainWindowViewModel
             CompressPresets.Add(preset);
         }
         InitBatchPresetChoices();
+
+        // EstimatedText is a cached localized string; re-localize the labels when the language changes.
+        LocalizationService.Instance.WhenAnyValue(x => x.CurrentLanguage)
+            .Skip(1)
+            .Subscribe(_ => RecomputeQueueEstimates());
 
         // Restore last-used settings before the queue is populated, so estimates use them from the start.
         RestoreCompressSession();
