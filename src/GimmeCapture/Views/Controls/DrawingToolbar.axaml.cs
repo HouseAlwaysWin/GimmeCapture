@@ -1,10 +1,10 @@
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.LogicalTree;
 using Avalonia.Markup.Xaml;
 using Avalonia.Styling;
 using Avalonia.Threading;
-using Avalonia.VisualTree;
 using GimmeCapture.Models;
 using GimmeCapture.ViewModels.Shared;
 
@@ -42,22 +42,21 @@ public partial class DrawingToolbar : UserControl
     public DrawingToolbar()
     {
         InitializeComponent();
-        // Loaded (not AttachedToVisualTree): the UserControl's content only becomes visual descendants
-        // once its template has been applied on the first layout pass, so an attach-time walk finds nothing.
-        Loaded += (_, _) => ApplyButtonTheme();
     }
 
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
-        if (change.Property == ButtonThemeProperty && VisualRoot != null)
+        if (change.Property == ButtonThemeProperty)
         {
             ApplyButtonTheme();
         }
     }
 
-    // Re-theme the visible main-row buttons. Buttons inside Flyouts are not visual descendants until
-    // their popup opens, so this walk naturally leaves the flyout panels' dark buttons untouched.
+    // Re-theme the main-row buttons via the LOGICAL tree: logical children exist right after
+    // InitializeComponent, so this works regardless of visibility/layout timing (the toolbar starts
+    // hidden in the editor until a category is picked — visual descendants would not exist yet).
+    // Flyout contents are not logical descendants, so the flyout panels' dark buttons stay untouched.
     private void ApplyButtonTheme()
     {
         if (ButtonTheme is not { } theme)
@@ -65,7 +64,7 @@ public partial class DrawingToolbar : UserControl
             return;
         }
 
-        foreach (Button button in this.GetVisualDescendants().OfType<Button>().ToList())
+        foreach (Button button in this.GetLogicalDescendants().OfType<Button>().ToList())
         {
             button.Theme = theme;
         }
