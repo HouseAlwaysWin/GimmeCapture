@@ -9,6 +9,43 @@
 
 ---
 
+## v0.50.0 - 2026-07-04
+
+First release since v0.48.0, collecting the compress/editor and recording work built over the
+past week (166 commits).
+
+### 🎬 Compress (new tab)
+- Import any video and re-encode it smaller entirely in-process (libav): **H.264 / H.265**,
+  **compress-to-target-size** (true two-pass for H.264), resolution downscale, **frame-rate cap**,
+  encoder preset, CRF, **audio bitrate + mono/stereo mixdown** or drop-audio, custom output path.
+- **Batch queue** with parallel encoding, **per-item** output settings + presets, live output-size
+  estimate, persistent working directories, and per-row **rotation**.
+- **Advanced video editor**: trim / speed / crop / rotate plus Pin-parity annotations, redaction and
+  freeze-frame; **inline side-by-side quality compare** with a playhead-following window.
+
+### ⏺️ Recording
+- **True per-window capture** via Windows Graphics Capture (WGC), **multi-window** composite and
+  separate-file capture, and a **monitor / window capture-scope picker**.
+- **Keystroke overlay**, **high-quality GIF** (palettegen/paletteuse) with a **disk-space guard**,
+  deterministic audio mixing, webcam PiP (size/shape) with buffer pooling, global **stop hotkey** +
+  live **mute**, and an optional pipelined encode path.
+
+### ▶️ Playback
+- **GPU hardware-accelerated decode** + frame-drop for smooth large-file preview.
+
+### 🗂️ History
+- Compress-style category **tab strip** (Output-copy / Plain-copy).
+
+### 📦 Packaging & licensing
+- Optional **Inno Setup installer** (choose install drive) alongside the portable zip.
+- **Relicensed MIT → GPLv3** (bundles GPL FFmpeg incl. x264/x265).
+
+### 🧹 Internal
+- **Linux port groundwork**: platform-selection seams + stub services (build-shape unchanged,
+  Windows-only for now). Tier-2/3/4 refactors (dead-code cleanup, transcoder characterization tests,
+  settings split) and a CI Linux compile gate + caching.
+
+
 ## [v0.8.0] - 2026-02-04
 
 ### 🎸 Skeletal Theme Enhancement

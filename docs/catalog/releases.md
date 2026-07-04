@@ -2,6 +2,18 @@
 
 This catalog summarizes released versions from `v0.1.0` onward based on repository tags and commit history.
 
+## v0.50.0 - 2026-07-04
+
+- New **Compress** tab: in-process re-encode (H.264/H.265, target-size two-pass, resolution/fps-cap/
+  preset/CRF, audio bitrate + mixdown), batch queue with per-item settings/presets and live estimate,
+  and an advanced editor (trim/speed/crop/rotate + annotations/redaction/freeze) with inline quality compare.
+- **Recording**: true per-window capture (WGC), multi-window composite/separate capture, capture-scope
+  picker, keystroke overlay, high-quality GIF + disk guard, deterministic audio mixing, webcam PiP.
+- **Playback**: GPU hardware-accelerated decode for large files.
+- **History** category tab strip; optional **Inno Setup installer**; relicensed **MIT → GPLv3**.
+- Internal: Linux port groundwork (platform seams) and Tier-2/3/4 refactors + CI Linux compile gate.
+
+
 ## v0.25.0 - 2026-05-26
 
 - Unified the main action-style hotkeys around the new `F6` and `F8` layout for better consistency.
