@@ -32,7 +32,7 @@ public partial class App : Application
             var verificationResult = UpdateService.VerifyPendingUpdateOnStartup(AppVersionInfo.CurrentVersion, currentExePath);
             if (verificationResult.HasPendingUpdate && !verificationResult.IsSuccess)
             {
-                System.Windows.Forms.MessageBox.Show(
+                PlatformErrorDialog.ShowError(
                     $"Update verification failed.{Environment.NewLine}{Environment.NewLine}{verificationResult.FailureMessage}",
                     "Update Verification Failed");
                 desktop.Shutdown();

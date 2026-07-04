@@ -1,6 +1,5 @@
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core.Infrastructure;
-using GimmeCapture.Services.Platforms.Windows;
 using GimmeCapture.ViewModels.Main;
 using GimmeCapture.Views.Main;
 using GimmeCapture.Views.Dialogs;
@@ -28,7 +27,7 @@ public sealed class AppBootstrapper : IAsyncDisposable
     public AppBootstrapper()
     {
         _settingsService = new AppSettingsService();
-        _startupRegistrationService = new WindowsStartupRegistrationService();
+        _startupRegistrationService = MainWindowViewModelDependenciesFactory.CreateStartupRegistrationService();
         _settingsPersistenceService = new MainWindowSettingsPersistenceService();
         _mainWindowDependencies = new Lazy<MainWindowViewModelDependencies>(() =>
             MainWindowViewModelDependenciesFactory.CreateDefault(
