@@ -6,7 +6,9 @@ using System.Threading.Tasks;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Core.Media.NativeFFmpeg;
+#if WINDOWS
 using GimmeCapture.Services.Platforms.Windows;
+#endif
 
 namespace GimmeCapture.Services.Core.Media;
 
@@ -39,7 +41,12 @@ public partial class RecordingService
 
     private bool WgcAvailable =>
         !_wgcNoFramesThisSession
-        && OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041) && WgcWindowCaptureSource.IsSupported;
+        && OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041)
+#if WINDOWS
+        && WgcWindowCaptureSource.IsSupported;
+#else
+        ;
+#endif
 
     private static void MarkWgcUnusableThisSession()
     {

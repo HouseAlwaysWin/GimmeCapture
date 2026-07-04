@@ -236,22 +236,38 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
 
         try
         {
-            var ifmt = ffmpeg.av_find_input_format("gdigrab");
+            // Windows captures the screen via gdigrab; Linux/X11 via x11grab (same libavdevice API).
+            bool isWindows = OperatingSystem.IsWindows();
+            string grabber = isWindows ? "gdigrab" : "x11grab";
+            var ifmt = ffmpeg.av_find_input_format(grabber);
             if (ifmt == null)
             {
-                throw new InvalidOperationException("gdigrab demuxer missing (need avdevice DLL).");
+                throw new InvalidOperationException($"{grabber} demuxer missing (need the avdevice native lib).");
             }
 
             ffmpeg.av_dict_set(&demuxOpts, "framerate", fps.ToString(), 0);
-            ffmpeg.av_dict_set(&demuxOpts, "offset_x", offsetX.ToString(), 0);
-            ffmpeg.av_dict_set(&demuxOpts, "offset_y", offsetY.ToString(), 0);
             ffmpeg.av_dict_set(&demuxOpts, "video_size", $"{width}x{height}", 0);
             ffmpeg.av_dict_set(&demuxOpts, "draw_mouse", drawMouse ? "1" : "0", 0);
             ffmpeg.av_dict_set(&demuxOpts, "probesize", "32768", 0);
             ffmpeg.av_dict_set(&demuxOpts, "analyzeduration", "0", 0);
 
+            string inputUrl;
+            if (isWindows)
+            {
+                // gdigrab: the capture-region offset is passed as options; the URL is "desktop".
+                ffmpeg.av_dict_set(&demuxOpts, "offset_x", offsetX.ToString(), 0);
+                ffmpeg.av_dict_set(&demuxOpts, "offset_y", offsetY.ToString(), 0);
+                inputUrl = "desktop";
+            }
+            else
+            {
+                // x11grab: the offset lives in the URL as :<display>+x,y (offset_x/y options are ignored).
+                string display = Environment.GetEnvironmentVariable("DISPLAY") ?? ":0";
+                inputUrl = $"{display}+{offsetX},{offsetY}";
+            }
+
             ThrowIfErr(
-                ffmpeg.avformat_open_input(&inputFmt, "desktop", ifmt, &demuxOpts),
+                ffmpeg.avformat_open_input(&inputFmt, inputUrl, ifmt, &demuxOpts),
                 "avformat_open_input");
 
             // Skip avformat_find_stream_info for gdigrab live input.

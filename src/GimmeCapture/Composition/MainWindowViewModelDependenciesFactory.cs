@@ -4,7 +4,9 @@ using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Core.Media;
 using GimmeCapture.Services.Platforms.Desktop;
 using GimmeCapture.Services.Platforms.Linux;
+#if WINDOWS
 using GimmeCapture.Services.Platforms.Windows;
+#endif
 using GimmeCapture.ViewModels.Main;
 using System;
 
@@ -22,9 +24,14 @@ public static class MainWindowViewModelDependenciesFactory
         var themeResourceService = new AvaloniaThemeResourceService();
         // Global hotkeys are Windows-only today; other platforms get a no-op service until an X11 /
         // portal binding lands (docs/LINUX_PORT_FEASIBILITY.md, Phase 2).
-        IGlobalHotkeyService hotkeyService = OperatingSystem.IsWindows()
+        IGlobalHotkeyService hotkeyService =
+#if WINDOWS
+            OperatingSystem.IsWindows()
             ? new WindowsGlobalHotkeyService()
             : new LinuxGlobalHotkeyService();
+#else
+            new LinuxGlobalHotkeyService();
+#endif
         var globalHotkeySettingsCoordinator = new GlobalHotkeySettingsCoordinator(hotkeyService);
         var startupRegistrationService = existingStartupRegistrationService ?? CreateStartupRegistrationService();
         var settingsSaveCoordinatorFactory = new DebouncedSettingsSaveCoordinatorFactory();
@@ -76,8 +83,12 @@ public static class MainWindowViewModelDependenciesFactory
     internal static IStartupRegistrationService CreateStartupRegistrationService()
     {
         // Windows writes an HKCU Run key; other platforms get a no-op until XDG autostart lands.
+#if WINDOWS
         return OperatingSystem.IsWindows()
             ? new WindowsStartupRegistrationService()
             : new LinuxStartupRegistrationService();
+#else
+        return new LinuxStartupRegistrationService();
+#endif
     }
 }

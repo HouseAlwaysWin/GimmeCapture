@@ -2,7 +2,9 @@ using System;
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Platforms.Desktop;
 using GimmeCapture.Services.Platforms.Linux;
+#if WINDOWS
 using GimmeCapture.Services.Platforms.Windows;
+#endif
 
 namespace GimmeCapture.Composition;
 
@@ -14,22 +16,26 @@ public static class RuntimeServiceFactory
 
     public static IScreenCaptureService CreateScreenCaptureService()
     {
-        // Windows uses GDI/WGC capture; other platforms fall back to the placeholder backend until a
-        // real X11/PipeWire capture is implemented (docs/LINUX_PORT_FEASIBILITY.md, Phase 1).
+        // Windows uses GDI/WGC capture; other platforms fall back to the X11 backend
+        // (docs/LINUX_PORT_FEASIBILITY.md, Phase 1).
+#if WINDOWS
         if (OperatingSystem.IsWindows())
         {
             return new WindowsScreenCaptureService(new AvaloniaWindowManager());
         }
+#endif
 
         return new LinuxScreenCaptureService();
     }
 
     public static IWindowDetectionService CreateWindowDetectionService()
     {
+#if WINDOWS
         if (OperatingSystem.IsWindows())
         {
             return new WindowDetectionService();
         }
+#endif
 
         return new LinuxWindowDetectionService();
     }

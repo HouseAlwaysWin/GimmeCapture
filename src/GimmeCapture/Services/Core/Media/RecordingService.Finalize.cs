@@ -41,7 +41,7 @@ public partial class RecordingService
         catch (Exception ex)
         {
             Debug.WriteLine($"Error finalizing recording: {ex.Message}");
-            System.Windows.Forms.MessageBox.Show($"Error saving recording: {ex.Message}", "Save Error");
+            Infrastructure.PlatformErrorDialog.ShowError($"Error saving recording: {ex.Message}", "Save Error");
         }
         finally
         {

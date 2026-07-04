@@ -112,6 +112,7 @@ public partial class SnipWindow : Window
     {
         base.OnClosed(e);
         UninstallLLKeyboardHook();
+        StopLinuxSnipKeyGrab();
         TranslationResultLayerManager.RefreshWindowState();
 
         // Safety net: force the whole desktop to repaint so any lingering DWM ghost of this (capture-excluded,

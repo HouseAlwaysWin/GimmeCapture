@@ -63,6 +63,50 @@
                 "${workspaceFolder}/src/GimmeCapture/GimmeCapture.csproj"
             ],
             "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "linux-build",
+            "detail": "Build the net10.0 (Linux) head of the app for running / F5 debugging on Linux.",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "build",
+                "${workspaceFolder}/src/GimmeCapture/GimmeCapture.csproj",
+                "-f",
+                "net10.0",
+                "/property:GenerateFullPaths=true",
+                "/consoleloggerparameters:NoSummary;ForceNoAlign"
+            ],
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "linux-compile-check",
+            "detail": "Type-check the whole solution on Linux/macOS (mirrors the CI Linux Compile Check). The app cannot run or be tested off Windows.",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "build",
+                "${workspaceFolder}/GimmeCapture.slnx",
+                "-p:EnableWindowsTargeting=true",
+                "/property:GenerateFullPaths=true",
+                "/consoleloggerparameters:NoSummary;ForceNoAlign"
+            ],
+            "group": "build",
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "linux-restore",
+            "detail": "Restore packages for win-x64 on Linux/macOS.",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "restore",
+                "${workspaceFolder}/GimmeCapture.slnx",
+                "--runtime",
+                "win-x64",
+                "-p:EnableWindowsTargeting=true"
+            ],
+            "problemMatcher": []
         }
     ]
 }

@@ -147,6 +147,8 @@ public partial class SnipWindow : Window
                 _viewModel.ScreenOffset = this.Position;
                 // Initialize Win32 Hook for click-through
                 InitializeWin32Hook();
+                // Linux: grab the snip action keys (Pin/toolbar/save/copy) so they survive click-through focus loss.
+                StartLinuxSnipKeyGrab();
 
                 // Populate AllScreenBounds for multi-monitor UI
                 double scaling = this.RenderScaling;
@@ -167,10 +169,22 @@ public partial class SnipWindow : Window
                 _viewModel.AllScreenBounds = new System.Collections.ObjectModel.ObservableCollection<ScreenBoundsViewModel>(screenBoundsList);
                 
                 // Initial Active Screen Update
-                if (GetCursorPos(out POINT p))
+                if (OperatingSystem.IsWindows() && GetCursorPos(out POINT p))
                 {
                      var clientPoint = this.PointToClient(new PixelPoint(p.X, p.Y));
                      UpdateActiveScreenBounds(clientPoint);
+                }
+                else if (!OperatingSystem.IsWindows())
+                {
+                     // No GetCursorPos off Windows: seed the active screen from the primary monitor so the
+                     // toolbar has a screen to place on (subsequent pointer moves refine it).
+                     var seedScreen = this.Screens.Primary ?? (this.Screens.All.Count > 0 ? this.Screens.All[0] : null);
+                     if (seedScreen != null)
+                     {
+                         var b = seedScreen.Bounds;
+                         var center = new PixelPoint(b.X + (b.Width / 2), b.Y + (b.Height / 2));
+                         UpdateActiveScreenBounds(this.PointToClient(center));
+                     }
                 }
                 
                 // Trigger AI Auto-Scan (single entry point after AllScreenBounds is ready)

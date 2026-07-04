@@ -1,0 +1,8 @@
+{
+    // Recommended extensions for developing GimmeCapture on Linux (and everywhere).
+    "recommendations": [
+        "ms-dotnettools.csdevkit",       // C# Dev Kit — solution/project explorer + Roslyn LS
+        "ms-dotnettools.csharp",         // C# language support / debugger
+        "AvaloniaTeam.vscode-avalonia"   // Avalonia XAML (.axaml) IntelliSense & previewer
+    ]
+}

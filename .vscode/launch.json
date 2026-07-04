@@ -2,6 +2,19 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Debug GimmeCapture (Linux)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "linux-build",
+            "program": "${workspaceFolder}/src/GimmeCapture/bin/Debug/net10.0/GimmeCapture.dll",
+            "cwd": "${workspaceFolder}/src/GimmeCapture",
+            "console": "internalConsole",
+            "stopAtEntry": false,
+            "env": {
+                "DISPLAY": ":0"
+            }
+        },
+        {
             "name": "Debug GimmeCapture",
             "type": "coreclr",
             "request": "launch",
