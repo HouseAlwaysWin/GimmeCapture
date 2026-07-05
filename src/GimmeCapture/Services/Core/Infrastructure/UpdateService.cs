@@ -480,7 +480,11 @@ public sealed class UpdateService : ReactiveObject
         string targetConfigPath,
         string pendingUpdateStatePath)
     {
-        var targetConfigDir = Path.GetDirectoryName(targetConfigPath) ?? string.Empty;
+        // Derive the parent dir with a forward-slash string op, not Path.GetDirectoryName — this builds a
+        // Linux shell script, and on a Windows host (e.g. CI) Path.GetDirectoryName rewrites '/' to '\',
+        // which would corrupt the mkdir/cp paths.
+        int lastSlash = targetConfigPath.LastIndexOf('/');
+        var targetConfigDir = lastSlash > 0 ? targetConfigPath[..lastSlash] : string.Empty;
 
         // Single-quote every path so spaces/metacharacters are inert; escape any embedded single quotes.
         static string Q(string s) => "'" + s.Replace("'", "'\\''") + "'";
