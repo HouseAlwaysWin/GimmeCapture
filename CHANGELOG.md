@@ -9,6 +9,18 @@
 
 ---
 
+## v0.52.0 - 2026-07-05
+
+Documentation update — no application changes since v0.51.0 (the shipped binaries are identical).
+
+### 📝 Docs
+- **Refreshed the Traditional-Chinese and Japanese READMEs** to match the English one. They were
+  stale (Windows-only) and now cover Linux, scrolling capture, compress, AI modules,
+  webcam/keystroke recording, and in-app auto-update.
+- **Documented Linux support**: developed and tested on **Linux Mint** (Ubuntu-based); needs an
+  x86-64 glibc distro with an X11 session and PulseAudio (e.g. Ubuntu 22.04+ / Debian 12+; XWayland
+  on Wayland desktops; not musl/Alpine or ARM).
+
 ## v0.51.0 - 2026-07-05
 
 **GimmeCapture now runs on Linux (X11)** — the whole capture/record/translate/pin/compress
