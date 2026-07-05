@@ -868,8 +868,9 @@ public partial class MainWindowViewModel
         set => this.RaiseAndSetIfChanged(ref _webcamDeviceName, value);
     }
 
-    // Auto-detected webcam names (DirectShow). The settings combo is editable, so a hand-typed name
-    // still works if enumeration comes back empty (e.g. a virtual camera not exposed to dshow).
+    // Auto-detected webcam names (DirectShow on Windows, V4L2 /dev/video* on Linux). The settings combo is
+    // editable, so a hand-typed name (or a /dev/videoN path on Linux) still works if enumeration comes back
+    // empty (e.g. a virtual camera not exposed to dshow).
     public ObservableCollection<string> WebcamDevices { get; } = new();
 
     /// <summary>Re-enumerates connected webcams and, if nothing is selected yet, picks the first one.</summary>

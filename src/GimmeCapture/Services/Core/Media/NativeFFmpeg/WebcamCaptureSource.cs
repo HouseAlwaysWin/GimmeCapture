@@ -102,10 +102,11 @@ internal sealed class WebcamPipCompositor : IDisposable
 }
 
 /// <summary>
-/// Opens a webcam via libav <c>dshow</c> on a background thread and continuously decodes it to BGRA,
-/// keeping only the latest frame (lock-protected). The recording encode loop polls
-/// <see cref="TryCopyLatest"/> each desktop frame to composite a picture-in-picture overlay. All failures
-/// are swallowed — a missing/busy webcam just means no PiP, never a broken recording.
+/// Opens a webcam via libav <c>dshow</c> (Windows) or <c>v4l2</c> (Linux) on a background thread and
+/// continuously decodes it to BGRA, keeping only the latest frame (lock-protected). The recording encode
+/// loop polls <see cref="TryCopyLatest"/> each desktop frame to composite a picture-in-picture overlay.
+/// The decode path is codec-agnostic, so it handles both raw (YUYV) and MJPEG webcams. All failures are
+/// swallowed — a missing/busy webcam just means no PiP, never a broken recording.
 /// </summary>
 internal sealed class WebcamCaptureSource : IDisposable
 {
@@ -126,6 +127,11 @@ internal sealed class WebcamCaptureSource : IDisposable
 
     public void Start()
     {
+        if (_thread != null)
+        {
+            return; // already started; ignore re-entrant Start so we never orphan a decode thread
+        }
+
         _running = true;
         _thread = new Thread(DecodeLoop) { IsBackground = true, Name = "WebcamCapture" };
         _thread.Start();
@@ -170,15 +176,32 @@ internal sealed class WebcamCaptureSource : IDisposable
         {
             FFmpegRuntime.EnsureInitialized();
 
-            AVInputFormat* ifmt = ffmpeg.av_find_input_format("dshow");
+            bool onWindows = OperatingSystem.IsWindows();
+
+            // Windows opens webcams by dshow friendly name (video=<name>); Linux opens a V4L2 node by path.
+            AVInputFormat* ifmt = ffmpeg.av_find_input_format(onWindows ? "dshow" : "v4l2");
+            if (ifmt == null && !onWindows)
+            {
+                ifmt = ffmpeg.av_find_input_format("video4linux2"); // the demuxer's long name, if the alias missed
+            }
+
             if (ifmt == null)
             {
-                Debug.WriteLine("[Webcam] dshow demuxer unavailable.");
+                Debug.WriteLine($"[Webcam] {(onWindows ? "dshow" : "v4l2")} demuxer unavailable.");
                 return;
             }
 
-            ffmpeg.av_dict_set(&opts, "rtbufsize", "64M", 0);
-            string url = $"video={_deviceName}";
+            string url;
+            if (onWindows)
+            {
+                ffmpeg.av_dict_set(&opts, "rtbufsize", "64M", 0);
+                url = $"video={_deviceName}";
+            }
+            else
+            {
+                url = LinuxV4l2CaptureDevices.ResolveDevicePath(_deviceName) ?? _deviceName;
+            }
+
             if (ffmpeg.avformat_open_input(&fmt, url, ifmt, &opts) < 0)
             {
                 Debug.WriteLine($"[Webcam] Failed to open '{url}'.");
@@ -315,6 +338,9 @@ internal sealed class WebcamCaptureSource : IDisposable
         }
         finally
         {
+            // avformat_open_input only takes ownership of opts on success; free any leftover (e.g. it failed,
+            // or unconsumed entries remain) so the Windows rtbufsize dict isn't leaked per session.
+            if (opts != null) { var o = opts; ffmpeg.av_dict_free(&o); }
             if (sws != null) ffmpeg.sws_freeContext(sws);
             if (bgra != null) { var b = bgra; ffmpeg.av_frame_free(&b); }
             if (frame != null) { var f = frame; ffmpeg.av_frame_free(&f); }
