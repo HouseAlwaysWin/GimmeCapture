@@ -40,11 +40,11 @@ GimmeCapture runs on **Windows 10/11** and **Linux (X11)**.
 
 - **Windows** — full feature set, including **per-window GPU capture** (Windows Graphics Capture),
   a native system-tray, and an optional installer.
-- **Linux (X11)** — snip/capture, recording (screen via x11grab + **system/mic audio via
-  PulseAudio** + **webcam PiP via V4L2**), translation, pin playback, compress, scrolling capture,
-  and in-app auto-update all work. **Per-window (WGC) recording has no Linux equivalent and is
-  hidden** — the capture-scope picker keeps monitor selection. Global hotkeys use X11 (they work
-  under XWayland; native Wayland global hotkeys are not yet supported).
+- **Linux (X11)** — developed and **tested on Linux Mint** (Ubuntu-based). Snip/capture, recording
+  (screen via x11grab + **system/mic audio via PulseAudio** + **webcam PiP via V4L2**), translation,
+  pin playback, compress, scrolling capture, and in-app auto-update all work. **Per-window (WGC)
+  recording has no Linux equivalent and is hidden** — the capture-scope picker keeps monitor selection.
+  Global hotkeys use X11 (they work under XWayland; native Wayland global hotkeys are not yet supported).
 
 ## Recording
 
@@ -133,8 +133,13 @@ Pinned windows are meant for quick reference while you work.
 
 ## Requirements
 
-- **Windows 10 / Windows 11**, or
-- **Linux with an X11 session** (x86-64)
+- **Windows 10 / Windows 11** (x64), or
+- **Linux (x86-64)** with an **X11 session** and **PulseAudio**. Developed and **tested on Linux Mint**;
+  it runs on modern glibc-based Ubuntu/Debian-family distributions (for example **Ubuntu 22.04+** or
+  **Debian 12+**). On Wayland desktops it runs under **XWayland**. It is not built for musl/Alpine or ARM.
+
+The Linux build ships as a self-contained single-file `.tar.gz` (no .NET install required) with the
+FFmpeg `.so` libraries bundled; the Windows build ships as a portable `.zip` and an optional installer.
 
 ## License
 
