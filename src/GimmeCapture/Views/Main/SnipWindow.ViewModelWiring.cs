@@ -174,12 +174,32 @@ public partial class SnipWindow : Window
 
                 if (_scrollRegionWindow == null)
                 {
-                    _scrollRegionWindow = new ScrollingCaptureRegionWindow(
-                        _viewModel.SelectionBorderThickness, _viewModel.SelectionBorderColor)
+                    // Effective outline thickness (matches the window ctor's Math.Max(2, ...)).
+                    double borderThickness = Math.Max(2, _viewModel.SelectionBorderThickness);
+                    int regionX = px, regionY = py;
+                    double regionW = r.Width, regionH = r.Height;
+
+                    if (OperatingSystem.IsLinux())
                     {
-                        Position = new PixelPoint(px, py),
-                        Width = r.Width,
-                        Height = r.Height
+                        // X11 can't exclude our window from the screen grab, so an outline drawn on the
+                        // SelectionRect edge would stitch into the image as red seams. Inflate the window
+                        // outward (physical px, +1 so sub-pixel rounding never bleeds red into the capture)
+                        // so the outline sits in a margin JUST OUTSIDE the captured rect; the transparent
+                        // centre then fully contains SelectionRect, keeping the capture clean while the
+                        // region is still outlined.
+                        int inflate = (int)Math.Ceiling(borderThickness * scaling) + 1;
+                        regionX = px - inflate;
+                        regionY = py - inflate;
+                        regionW = r.Width + (2 * inflate / scaling);
+                        regionH = r.Height + (2 * inflate / scaling);
+                    }
+
+                    _scrollRegionWindow = new ScrollingCaptureRegionWindow(
+                        borderThickness, _viewModel.SelectionBorderColor)
+                    {
+                        Position = new PixelPoint(regionX, regionY),
+                        Width = regionW,
+                        Height = regionH
                     };
                     _scrollRegionWindow.Show();
                 }

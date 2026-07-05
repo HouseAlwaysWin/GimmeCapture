@@ -4,12 +4,15 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
 using GimmeCapture.Services.Interop;
+using GimmeCapture.Services.Platforms.Linux;
 
 namespace GimmeCapture.Views.Main;
 
-// A thin outline showing the capture region during manual scrolling capture. It is excluded
-// from screen capture (so it never appears in the stitched image) and fully click-through /
-// non-activating (so it never blocks the user scrolling the target window underneath).
+// A thin outline showing the capture region during manual scrolling capture. It must be fully
+// click-through / non-activating (so it never blocks the user scrolling the target window underneath)
+// and must not appear in the stitched image. On Windows WDA_EXCLUDEFROMCAPTURE hides it from capture;
+// X11 has no such affinity, so the caller (SnipWindow.ViewModelWiring) instead insets the outline just
+// OUTSIDE the captured rect, and here we only make the window click-through via an empty X input shape.
 public sealed class ScrollingCaptureRegionWindow : Window
 {
     private const int GWL_EXSTYLE = -20;
@@ -43,8 +46,18 @@ public sealed class ScrollingCaptureRegionWindow : Window
                 return;
             }
 
-            Win32Helpers.SetWindowCaptureVisibility(hwnd, visible: false);
-            MakeClickThrough(hwnd);
+            if (OperatingSystem.IsWindows())
+            {
+                Win32Helpers.SetWindowCaptureVisibility(hwnd, visible: false);
+                MakeClickThrough(hwnd);
+            }
+            else if (OperatingSystem.IsLinux())
+            {
+                // Empty input shape = no part of the window catches the pointer, so every scroll/click
+                // passes through to the target beneath. (Capture exclusion is handled by the caller
+                // insetting this outline outside the captured rect — X11 has no WDA_EXCLUDEFROMCAPTURE.)
+                LinuxWindowShape.SetInputRegion(hwnd, Array.Empty<PixelRect>());
+            }
         };
     }
 
