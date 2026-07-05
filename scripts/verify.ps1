@@ -79,6 +79,10 @@ if ($coveragePercent -lt $CoverageThreshold) {
 if (-not $SkipPublish) {
     $publishArgs = @(
         "publish", $appProject,
+        # The project is multi-targeted (net10.0-windows;net10.0) since the Linux port, so publish must
+        # name a framework — the win-x64 smoke uses the Windows TFM. Without this, dotnet publish errors
+        # NETSDK1129 ("Publish not supported without specifying a target framework").
+        "--framework", "net10.0-windows10.0.19041.0",
         "--configuration", "Release",
         "--runtime", "win-x64",
         "--self-contained", "true",
