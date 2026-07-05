@@ -310,6 +310,7 @@
   "RecordAudioIdle": "無信号",
   "RecordMute": "ミュート",
   "CaptureScopeTooltip": "モニターまたはウィンドウを録画",
+  "CaptureScopeTooltipMonitorOnly": "モニターを録画",
   "CaptureScopeMonitor": "モニター {0}",
   "CaptureScopeMultiHint": "モニターを選ぶか、ウィンドウをクリックして複数選択できます。",
   "RecordSeparateFilesToggle": "各ウィンドウを個別ファイルで保存",
