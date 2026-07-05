@@ -38,8 +38,20 @@ public sealed class ReleaseInfo
     [JsonIgnore]
     public string NormalizedVersion => TagName.TrimStart('v');
 
+    /// <summary>
+    /// The release artifact for the running OS: the win-x64 <c>.zip</c> on Windows, the linux-x64
+    /// <c>.tar.gz</c> on Linux. (Name kept for compatibility; it returns whatever the platform installs.)
+    /// </summary>
     public ReleaseAsset? GetPreferredZipAsset()
     {
+        if (!OperatingSystem.IsWindows())
+        {
+            // Linux ships a self-contained single-file tarball.
+            return Assets.Find(a => a.Name.EndsWith(".tar.gz", StringComparison.OrdinalIgnoreCase)
+                                    && a.Name.Contains("linux", StringComparison.OrdinalIgnoreCase))
+                   ?? Assets.Find(a => a.Name.EndsWith(".tar.gz", StringComparison.OrdinalIgnoreCase));
+        }
+
         return Assets.Find(a => a.Name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)
                                 && a.Name.Contains("win", StringComparison.OrdinalIgnoreCase))
                ?? Assets.Find(a => a.Name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase));
@@ -297,6 +309,12 @@ public sealed class UpdateService : ReactiveObject
     {
         try
         {
+            if (!OperatingSystem.IsWindows())
+            {
+                ApplyUpdateLinux(zipPath, targetVersion);
+                return;
+            }
+
             var currentExePath = RuntimePathProvider.GetExecutablePath();
             var appDir = Path.GetDirectoryName(currentExePath) ?? RuntimePathProvider.GetExecutableDirectory();
             var currentProcessId = Environment.ProcessId;
@@ -358,6 +376,161 @@ public sealed class UpdateService : ReactiveObject
                 PlatformErrorDialog.ShowError($"Update failed: {ex.Message}", "Update Error");
             });
         }
+    }
+
+    // Linux counterpart of the Windows apply flow. The release is a self-contained single-file ELF, so
+    // "apply" = extract the tarball, wait for this process to exit, swap the one executable in place, and
+    // relaunch it — via a detached /bin/sh script (there is no cmd.exe). A backup is kept and restored if
+    // the swap fails. The pending-update state + startup verification are cross-platform and reused as-is.
+    private void ApplyUpdateLinux(string tarGzPath, string targetVersion)
+    {
+        var currentExePath = RuntimePathProvider.GetExecutablePath();
+        var appDir = Path.GetDirectoryName(currentExePath) ?? RuntimePathProvider.GetExecutableDirectory();
+        var currentExeName = Path.GetFileName(currentExePath);
+        var currentProcessId = Environment.ProcessId;
+        var parentDir = Path.GetDirectoryName(tarGzPath)!;
+
+        var tempExtractDir = Path.Combine(parentDir, "extract-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempExtractDir);
+        ExtractTarGz(tarGzPath, tempExtractDir);
+
+        var newExePath = ResolveLinuxNewExecutable(tempExtractDir, currentExeName)
+            ?? throw new InvalidOperationException("Updated executable was not found in the downloaded archive.");
+
+        WritePendingUpdateState(new PendingUpdateState
+        {
+            TargetVersion = targetVersion.TrimStart('v'),
+            ExpectedExePath = currentExePath,
+            AppDirectory = appDir
+        });
+
+        // Carry user settings into the new version's config directory (config is per-version), mirroring the
+        // Windows script: prefer the current version's versioned config, then a local, then the legacy config.
+        var currentVersionedConfig = AppStoragePaths.GetVersionedConfigPath(appDir, _currentVersion);
+        var localConfig = Path.Combine(appDir, "config.json");
+        var legacyConfig = AppStoragePaths.GetLegacyConfigPath();
+        var sourceConfig = File.Exists(currentVersionedConfig)
+            ? currentVersionedConfig
+            : (File.Exists(localConfig) ? localConfig : legacyConfig);
+        var targetConfig = AppStoragePaths.GetVersionedConfigPath(appDir, targetVersion.TrimStart('v'));
+        var backupExe = Path.Combine(parentDir, currentExeName + ".backup");
+        var pendingStatePath = AppStoragePaths.GetPendingUpdateStatePath(appDir);
+
+        var scriptPath = Path.Combine(Path.GetTempPath(), "GimmeCapture_Update_" + Guid.NewGuid().ToString("N") + ".sh");
+        var script = BuildLinuxUpdateScript(
+            currentProcessId,
+            newExePath,
+            currentExePath,
+            backupExe,
+            parentDir,
+            sourceConfig,
+            targetConfig,
+            pendingStatePath);
+        File.WriteAllText(scriptPath, script);
+
+        Process.Start(new ProcessStartInfo
+        {
+            FileName = "/bin/sh",
+            Arguments = $"\"{scriptPath}\"",
+            UseShellExecute = false,
+        });
+
+        Environment.Exit(0);
+    }
+
+    private static void ExtractTarGz(string tarGzPath, string destDir)
+    {
+        using var fs = File.OpenRead(tarGzPath);
+        using var gz = new GZipStream(fs, CompressionMode.Decompress);
+        System.Formats.Tar.TarFile.ExtractToDirectory(gz, destDir, overwriteFiles: true);
+    }
+
+    // The tarball holds the single self-contained executable. Prefer the same file name as the running
+    // exe; otherwise the only extracted file; otherwise any file matching the name deeper in the tree.
+    private static string? ResolveLinuxNewExecutable(string extractRoot, string expectedExeName)
+    {
+        var direct = Path.Combine(extractRoot, expectedExeName);
+        if (File.Exists(direct))
+        {
+            return direct;
+        }
+
+        var files = Directory.GetFiles(extractRoot, "*", SearchOption.AllDirectories);
+        var named = Array.Find(files, f => string.Equals(Path.GetFileName(f), expectedExeName, StringComparison.Ordinal));
+        if (named != null)
+        {
+            return named;
+        }
+
+        return files.Length == 1 ? files[0] : null;
+    }
+
+    /// <summary>
+    /// Builds the detached POSIX shell script that finishes the Linux update: wait for the old process to
+    /// exit, back up and swap the executable, migrate config, relaunch, and clean up (restoring the backup
+    /// on failure). Pure string builder so it is unit-testable off a Linux host.
+    /// </summary>
+    public static string BuildLinuxUpdateScript(
+        int currentProcessId,
+        string newExePath,
+        string currentExePath,
+        string backupExePath,
+        string parentDir,
+        string sourceConfigPath,
+        string targetConfigPath,
+        string pendingUpdateStatePath)
+    {
+        // Derive the parent dir with a forward-slash string op, not Path.GetDirectoryName — this builds a
+        // Linux shell script, and on a Windows host (e.g. CI) Path.GetDirectoryName rewrites '/' to '\',
+        // which would corrupt the mkdir/cp paths.
+        int lastSlash = targetConfigPath.LastIndexOf('/');
+        var targetConfigDir = lastSlash > 0 ? targetConfigPath[..lastSlash] : string.Empty;
+
+        // Single-quote every path so spaces/metacharacters are inert; escape any embedded single quotes.
+        static string Q(string s) => "'" + s.Replace("'", "'\\''") + "'";
+
+        return $@"#!/bin/sh
+trap '' HUP INT
+# Wait (up to ~60s) for the old process to exit before swapping the busy executable.
+i=0
+while kill -0 {currentProcessId} 2>/dev/null; do
+  i=$((i+1))
+  if [ ""$i"" -ge 120 ]; then
+    # Timed out: the old binary is still untouched, so relaunch it rather than leave the app closed.
+    rm -f {Q(pendingUpdateStatePath)}
+    setsid {Q(currentExePath)} >/dev/null 2>&1 &
+    exit 1
+  fi
+  sleep 0.5
+done
+# Back up the current binary first; if the backup can't be written, do NOT risk an unrecoverable swap —
+# relaunch the untouched old binary instead.
+if ! cp -f {Q(currentExePath)} {Q(backupExePath)}; then
+  rm -f {Q(pendingUpdateStatePath)}
+  setsid {Q(currentExePath)} >/dev/null 2>&1 &
+  exit 1
+fi
+if cp -f {Q(newExePath)} {Q(currentExePath)}; then
+  chmod +x {Q(currentExePath)}
+  # Migrate user config into the new version's dir, but only if its directory could be created.
+  if [ -f {Q(sourceConfigPath)} ]; then
+    if mkdir -p {Q(targetConfigDir)} 2>/dev/null; then
+      cp -f {Q(sourceConfigPath)} {Q(targetConfigPath)} 2>/dev/null
+    fi
+  fi
+  setsid {Q(currentExePath)} >/dev/null 2>&1 &
+  rm -rf {Q(parentDir)}
+  rm -f ""$0""
+  exit 0
+else
+  # Swap failed: restore the backup and relaunch the old binary.
+  cp -f {Q(backupExePath)} {Q(currentExePath)} 2>/dev/null
+  chmod +x {Q(currentExePath)} 2>/dev/null
+  rm -f {Q(pendingUpdateStatePath)}
+  setsid {Q(currentExePath)} >/dev/null 2>&1 &
+  exit 1
+fi
+";
     }
 
     public static IReadOnlyList<ReleaseInfo> FilterAndSortReleases(IEnumerable<ReleaseInfo> releases)

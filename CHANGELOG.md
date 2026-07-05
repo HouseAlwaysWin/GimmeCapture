@@ -9,6 +9,32 @@
 
 ---
 
+## v0.51.0 - 2026-07-05
+
+**GimmeCapture now runs on Linux (X11)** — the whole capture/record/translate/pin/compress
+feature set is ported; only per-window GPU capture (WGC) stays Windows-exclusive.
+
+### 🐧 Linux support (X11)
+- **Snip / static capture** (libX11 `XGetImage`), **global hotkeys** (`XGrabKey`), and the snip
+  overlay's **click-through** + action-key priority (X Shape input regions).
+- **Recording**: screen via `x11grab`, **system + microphone audio via PulseAudio**, and
+  **webcam picture-in-picture via V4L2** (`/dev/video*`).
+- **Pin / preview audio playback** through PulseAudio (`pa_simple`) — fixes silent pinned videos.
+- **Scrolling (long) capture** — fixed X11 seam lines and no-click-through.
+- Windows-exclusive **per-window (WGC) recording** is hidden on Linux (no equivalent); the
+  capture-scope picker keeps monitor selection.
+- Bundled native **FFmpeg `.so`** (x11grab / pulse / v4l2 / libx264) resolved next to the app.
+
+### 🔄 Auto-update
+- The in-app updater is now **cross-platform**: Windows downloads/swaps the `.zip`; Linux
+  downloads/swaps the self-contained single-file `.tar.gz` and relaunches (with backup + rollback).
+
+### 📦 Packaging
+- Releases now include a **Linux x64** self-contained single-file tarball
+  (`GimmeCapture_linux-x64.tar.gz`) alongside the Windows portable zip + Inno installer, all under
+  one combined `SHA256SUMS.txt`.
+
+
 ## v0.50.0 - 2026-07-04
 
 First release since v0.48.0, collecting the compress/editor and recording work built over the

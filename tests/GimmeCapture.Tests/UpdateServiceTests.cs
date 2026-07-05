@@ -54,6 +54,46 @@ public class UpdateServiceTests
     }
 
     [Fact]
+    public void BuildLinuxUpdateScript_WaitsSwapsMigratesRelaunches_AndRollsBack()
+    {
+        var script = UpdateService.BuildLinuxUpdateScript(
+            currentProcessId: 4242,
+            newExePath: "/tmp/dl/extract/GimmeCapture",
+            currentExePath: "/opt/GimmeCapture/GimmeCapture",
+            backupExePath: "/tmp/dl/GimmeCapture.backup",
+            parentDir: "/tmp/dl",
+            sourceConfigPath: "/home/u/.local/share/GimmeCapture/instances/ab/versions/0.50.0/config.json",
+            targetConfigPath: "/home/u/.local/share/GimmeCapture/instances/ab/versions/0.51.0/config.json",
+            pendingUpdateStatePath: "/home/u/.local/share/GimmeCapture/instances/ab/pending-update.json");
+
+        // Waits for the old process, swaps the binary, migrates config, relaunches detached.
+        Assert.Contains("kill -0 4242", script);
+        // Backup is guarded: a failed backup aborts the swap instead of risking an unrecoverable state.
+        Assert.Contains("if ! cp -f '/opt/GimmeCapture/GimmeCapture' '/tmp/dl/GimmeCapture.backup'; then", script);
+        // Config dir creation is guarded so a mkdir failure doesn't lead to a silent half-migration.
+        Assert.Contains("if mkdir -p '/home/u/.local/share/GimmeCapture/instances/ab/versions/0.51.0' 2>/dev/null; then", script);
+        Assert.Contains("if cp -f '/tmp/dl/extract/GimmeCapture' '/opt/GimmeCapture/GimmeCapture'; then", script);
+        Assert.Contains("mkdir -p '/home/u/.local/share/GimmeCapture/instances/ab/versions/0.51.0'", script);
+        Assert.Contains("cp -f '/home/u/.local/share/GimmeCapture/instances/ab/versions/0.50.0/config.json' '/home/u/.local/share/GimmeCapture/instances/ab/versions/0.51.0/config.json'", script);
+        Assert.Contains("setsid '/opt/GimmeCapture/GimmeCapture'", script);
+        Assert.Contains("rm -rf '/tmp/dl'", script);
+        // Rollback branch restores the backup and clears the pending state so startup does not flag a failure.
+        Assert.Contains("cp -f '/tmp/dl/GimmeCapture.backup' '/opt/GimmeCapture/GimmeCapture'", script);
+        Assert.Contains("rm -f '/home/u/.local/share/GimmeCapture/instances/ab/pending-update.json'", script);
+    }
+
+    [Fact]
+    public void BuildLinuxUpdateScript_SingleQuotesPathsWithSpaces()
+    {
+        var script = UpdateService.BuildLinuxUpdateScript(
+            1, "/tmp/a b/new/GimmeCapture", "/opt/My Apps/GimmeCapture", "/tmp/a b/bak",
+            "/tmp/a b", "/cfg/src.json", "/cfg/dst.json", "/state/pending.json");
+
+        // A space-containing app path stays a single shell token thanks to single-quoting.
+        Assert.Contains("'/opt/My Apps/GimmeCapture'", script);
+    }
+
+    [Fact]
     public void FilterAndSortReleases_Excludes_DraftsPrereleases_And_SortsByVersion()
     {
         var releases = new[]
