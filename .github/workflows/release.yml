@@ -107,6 +107,9 @@ jobs:
         $assemblyVersion = "$($parts[0]).$($parts[1]).$($parts[2]).0"
         $pub = @(
           '-c', 'Release'
+          # Multi-target project (net10.0-windows;net10.0) since the Linux port — publish must name a
+          # framework or dotnet errors NETSDK1129. The Windows artifact uses the Windows TFM.
+          '-f', 'net10.0-windows10.0.19041.0'
           '-r', 'win-x64'
           '--self-contained', 'true'
           '--no-restore'
