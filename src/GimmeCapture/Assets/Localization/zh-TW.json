@@ -322,6 +322,7 @@
   "RecordAudioIdle": "無訊號",
   "RecordMute": "靜音",
   "CaptureScopeTooltip": "錄製指定螢幕或視窗",
+  "CaptureScopeTooltipMonitorOnly": "錄製指定螢幕",
   "CaptureScopeMonitor": "螢幕 {0}",
   "CaptureScopeMultiHint": "選擇螢幕，或點選視窗（可複選多個）。",
   "RecordSeparateFilesToggle": "每個視窗存成獨立檔案",

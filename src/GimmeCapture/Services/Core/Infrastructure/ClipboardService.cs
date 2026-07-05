@@ -19,6 +19,7 @@ public class ClipboardService : IClipboardService
     {
         try
         {
+#if WINDOWS
             if (OperatingSystem.IsWindows())
             {
                 // Windows-specific robust copy - MUST run on UI Thread (STA) for Clipboard
@@ -65,6 +66,7 @@ public class ClipboardService : IClipboardService
                 });
             }
             else
+#endif
             {
                 await CopyImageFallbackAsync(bitmap);
             }
@@ -98,9 +100,10 @@ public class ClipboardService : IClipboardService
     {
         if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath)) return;
 
+#if WINDOWS
         if (OperatingSystem.IsWindows())
         {
-            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => 
+            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
             {
                 try
                 {
@@ -128,6 +131,7 @@ public class ClipboardService : IClipboardService
             });
         }
         else
+#endif
         {
             var topLevel = GetTopLevel();
             var clipboard = topLevel?.Clipboard;
@@ -154,6 +158,7 @@ public class ClipboardService : IClipboardService
 
         try
         {
+#if WINDOWS
             if (OperatingSystem.IsWindows())
             {
                 await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
@@ -204,6 +209,7 @@ public class ClipboardService : IClipboardService
                 });
             }
             else
+#endif
             {
                 // Fallback: Copy file first, then image (the second will likely win on non-Windows)
                 // or just copy image as it's the "richer" one for annotations

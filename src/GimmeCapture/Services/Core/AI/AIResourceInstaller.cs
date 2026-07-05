@@ -175,10 +175,20 @@ internal sealed class AIResourceInstaller
             Directory.CreateDirectory(_pathService.GetAIModelsDir());
 
             var package = _modelCatalog.GetAICorePackage();
-            var onnxDll = _pathService.GetOnnxDllPath();
-            if (!File.Exists(onnxDll))
+
+            // The AI-Core runtime zip is the Windows-only onnxruntime.dll build; on Linux/macOS the native
+            // runtime ships with the app (libonnxruntime.so/.dylib), so skip it and only fetch the model.
+            if (OperatingSystem.IsWindows())
             {
-                await _downloader.DownloadAndExtractZipAsync(package.OnnxRuntimeZip, _pathService.GetRuntimeDir(), 0, 60, ct);
+                var onnxDll = _pathService.GetOnnxDllPath();
+                if (!File.Exists(onnxDll))
+                {
+                    await _downloader.DownloadAndExtractZipAsync(package.OnnxRuntimeZip, _pathService.GetRuntimeDir(), 0, 60, ct);
+                }
+                else
+                {
+                    _downloader.DownloadProgress = 60;
+                }
             }
             else
             {

@@ -1,22 +1,27 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <!-- Windows 10 2004 (10.0.19041) SDK projection enables WinRT Windows.Graphics.Capture (WGC)
-         for true per-window recording (GPU/DWM-composited windows, follows the window). -->
-    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
-    <UseWindowsForms>true</UseWindowsForms>
+    <!-- Multi-target: the Windows head (net10.0-windows) keeps WinForms + WinRT WGC + Win32;
+         the plain net10.0 head is the Linux/macOS runtime target (Phase 0, see
+         docs/LINUX_PORT_FEASIBILITY.md). Windows-only sources are fenced out of net10.0 below. -->
+    <TargetFrameworks>net10.0-windows10.0.19041.0;net10.0</TargetFrameworks>
     <Nullable>enable</Nullable>
-    <ApplicationManifest Condition="'$(Configuration)' == 'Release'">app.admin.manifest</ApplicationManifest>
-    <ApplicationManifest Condition="'$(Configuration)' != 'Release'">app.manifest</ApplicationManifest>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <Version>0.48.0</Version>
-    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <ErrorOnDuplicatePublishOutputFiles>false</ErrorOnDuplicatePublishOutputFiles>
-    <!-- <DebugType>portable</DebugType> -->
-    <!-- <Optimize Condition="'$(Configuration)' == 'Debug'">false</Optimize> -->
     <!-- Drop unused dependency satellite assemblies (keeps en + Chinese + Japanese for our UI). -->
     <SatelliteResourceLanguages>en;zh-Hans;zh-Hant;ja</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+  <!-- Windows-only build shape: WinForms (Clipboard/MessageBox), the UAC manifest and the .ico
+       Win32 resource only make sense for the Windows head. The SDK auto-defines the WINDOWS
+       preprocessor symbol for the net*-windows TFM, which drives the #if WINDOWS guards in code. -->
+  <PropertyGroup Condition="$(TargetFramework.Contains('-windows'))">
+    <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
+    <ApplicationManifest Condition="'$(Configuration)' == 'Release'">app.admin.manifest</ApplicationManifest>
+    <ApplicationManifest Condition="'$(Configuration)' != 'Release'">app.manifest</ApplicationManifest>
   </PropertyGroup>
 
   <ItemGroup>
@@ -30,17 +35,37 @@
       <CopyToPublishDirectory>Never</CopyToPublishDirectory>
       <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
     </None>
-    <!-- Native FFmpeg shared DLLs only: run scripts/ensure-ffmpeg-libs.ps1 -->
+    <!-- Native FFmpeg shared libs. Windows DLLs: scripts/ensure-ffmpeg-libs.ps1.
+         Linux .so (libavcodec.so.62 …): scripts/ensure-ffmpeg-libs-linux.sh. -->
     <Content Include="ffmpeg-lib\*.dll"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest"
+             Link="ffmpeg-lib\%(Filename)%(Extension)" />
+    <Content Include="ffmpeg-lib\*.so.*"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest"
              Link="ffmpeg-lib\%(Filename)%(Extension)" />
   </ItemGroup>
 
-  <!-- Guardrail: fail Release/Publish if ffmpeg-lib/*.dll are missing -->
+  <!-- Windows-only sources: WinRT WGC (won't compile without the net*-windows projection) plus the
+       GDI/Win32 capture, hotkey and window-detection backends. Fenced out of the net10.0 head; the
+       DI factories and RecordingService reference these behind #if WINDOWS. -->
+  <ItemGroup Condition="!$(TargetFramework.Contains('-windows'))">
+    <Compile Remove="Services\Platforms\Windows\**\*.cs" />
+    <Compile Remove="Services\Core\Media\NativeFFmpeg\LibavWgcMkvSession.cs" />
+    <Compile Remove="Services\Core\Media\NativeFFmpeg\LibavWgcCompositeMkvSession.cs" />
+  </ItemGroup>
+
+  <!-- The WGC compile shims (LibavWgcSessions.NonWindows.cs) replace the real WGC sessions only on the
+       net10.0 head; remove them from the Windows head so they don't duplicate the real types. -->
+  <ItemGroup Condition="$(TargetFramework.Contains('-windows'))">
+    <Compile Remove="Services\Core\Media\NativeFFmpeg\LibavWgcSessions.NonWindows.cs" />
+  </ItemGroup>
+
+  <!-- Guardrail: fail Release/Publish if ffmpeg-lib/*.dll are missing (Windows head only) -->
   <Target Name="FailIfBundledFfmpegMissing"
           BeforeTargets="Build;Publish"
-          Condition="'$(Configuration)' == 'Release'">
+          Condition="'$(Configuration)' == 'Release' and $(TargetFramework.Contains('-windows'))">
     <ItemGroup>
       <_BundledFfmpegDlls Include="ffmpeg-lib\*.dll" />
     </ItemGroup>
@@ -64,8 +89,16 @@
     <PackageReference Include="Microsoft.ML.Tokenizers" Version="2.0.0" />
     <PackageReference Include="NAudio" Version="2.2.1" />
     <PackageReference Include="SkiaSharp" Version="3.119.4" />
-    <PackageReference Include="Microsoft.ML.OnnxRuntime.DirectML" Version="1.20.1" />
     <PackageReference Include="ZLinq" Version="1.5.5" />
+  </ItemGroup>
+
+  <!-- ONNX Runtime: DirectML (GPU) on Windows, CPU package elsewhere. Same managed API surface;
+       the DirectML-specific provider call in OnnxProviderConfigurator is behind #if WINDOWS. -->
+  <ItemGroup Condition="$(TargetFramework.Contains('-windows'))">
+    <PackageReference Include="Microsoft.ML.OnnxRuntime.DirectML" Version="1.20.1" />
+  </ItemGroup>
+  <ItemGroup Condition="!$(TargetFramework.Contains('-windows'))">
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.20.1" />
   </ItemGroup>
 
 </Project>

@@ -28,6 +28,7 @@ internal sealed class AudioPreviewPlayer : IDisposable
     private Task? _decodeTask;
     private volatile bool _disposed;
     private float _volume = 1f;
+    private LinuxPulseAudioOutput? _linuxOutput; // Linux audio output (NAudio IWavePlayer is Windows-only)
 
     /// <summary>
     /// Preview playback volume, 0–1. Scales the audio samples <em>in the stream</em> (via
@@ -45,6 +46,12 @@ internal sealed class AudioPreviewPlayer : IDisposable
             if (vp != null)
             {
                 vp.Volume = _volume;
+            }
+
+            var lo = _linuxOutput;
+            if (lo != null)
+            {
+                lo.Volume = _volume;
             }
         }
     }
@@ -109,6 +116,12 @@ internal sealed class AudioPreviewPlayer : IDisposable
     // through the decoded path, which retimes audio. WebM is not MediaFoundation-decodable.
     private static bool ShouldUseDecodedPlayback(string videoPath, double effectiveSpeed)
     {
+        // MediaFoundationReader is Windows-only, so on Linux/macOS always take the libav-decoded path.
+        if (!OperatingSystem.IsWindows())
+        {
+            return true;
+        }
+
         return string.Equals(Path.GetExtension(videoPath), ".webm", StringComparison.OrdinalIgnoreCase)
             || Math.Abs(effectiveSpeed - 1.0) > 0.01;
     }
@@ -150,6 +163,23 @@ internal sealed class AudioPreviewPlayer : IDisposable
                         // Retime by declaring the buffer at sourceRate*speed and feeding it source-rate S16
                         // PCM — same pitch-shift retiming as the old RawSourceWaveStream path.
                         WaveFormat retimed = CreatePlaybackWaveFormat(sourceFormat, playbackSpeed);
+
+                        if (!OperatingSystem.IsWindows())
+                        {
+                            // NAudio's device output is Windows-only; play the decoded PCM through PulseAudio.
+                            // pa_simple_write blocks, so it provides the backpressure the BufferedWaveProvider
+                            // gave on Windows — waitIfFull below stays a no-op (there's no _buffered on Linux).
+                            var output = new LinuxPulseAudioOutput { Volume = _volume };
+                            if (!output.Start(retimed.SampleRate, retimed.Channels) || _disposed || token.IsCancellationRequested)
+                            {
+                                output.Dispose();
+                                return;
+                            }
+
+                            _linuxOutput = output;
+                            return;
+                        }
+
                         var buffered = new BufferedWaveProvider(retimed)
                         {
                             BufferDuration = TimeSpan.FromSeconds(4),
@@ -168,7 +198,19 @@ internal sealed class AudioPreviewPlayer : IDisposable
                         _player = player;
                         player.Play();
                     },
-                    onPcm: (buffer, length) => _buffered?.AddSamples(buffer, 0, length),
+                    onPcm: (buffer, length) =>
+                    {
+                        // Linux: pa_simple_write blocks → paces the decoder itself. Windows: feed the buffer.
+                        var lo = _linuxOutput;
+                        if (lo != null)
+                        {
+                            lo.Write(buffer, length);
+                        }
+                        else
+                        {
+                            _buffered?.AddSamples(buffer, 0, length);
+                        }
+                    },
                     waitIfFull: () =>
                     {
                         // Backpressure: keep the decoder ~3-4 s ahead so memory stays bounded (~768 KB).
@@ -281,6 +323,8 @@ internal sealed class AudioPreviewPlayer : IDisposable
             _volumeProvider = null;
             _stream?.Dispose();
             _stream = null;
+            _linuxOutput?.Dispose(); // frees the pa_simple handle (Dispose waits out any in-flight blocking write)
+            _linuxOutput = null;
             _buffered = null; // decode thread's onPcm/waitIfFull observe null + the cancelled token and exit
         }
         catch (Exception ex)

@@ -1,0 +1,38 @@
+{
+    // ── C# Dev Kit ────────────────────────────────────────────────────────────
+    // Load the whole solution so IntelliSense sees every project.
+    "dotnet.defaultSolution": "GimmeCapture.slnx",
+
+    // This is a Windows-target app (net10.0-windows). On Linux/macOS the C# Dev Kit
+    // design-time build needs EnableWindowsTargeting=true — that is set for non-Windows
+    // hosts in Directory.Build.props, so the language server builds cleanly here.
+
+    // ── Editor ────────────────────────────────────────────────────────────────
+    "[csharp]": {
+        "editor.defaultFormatter": "ms-dotnettools.csharp",
+        "editor.formatOnSave": true
+    },
+
+    // ── Integrated terminal (mirrors tasks.json env) ──────────────────────────
+    "terminal.integrated.env.linux": {
+        "DOTNET_CLI_TELEMETRY_OPTOUT": "1",
+        "DOTNET_NOLOGO": "1"
+    },
+
+    // ── Noise reduction: hide build output & bundled native libs ───────────────
+    "files.exclude": {
+        "**/bin": true,
+        "**/obj": true
+    },
+    "search.exclude": {
+        "**/bin": true,
+        "**/obj": true,
+        "**/packages.lock.json": true,
+        "src/GimmeCapture/ffmpeg-lib": true
+    },
+    "files.watcherExclude": {
+        "**/bin/**": true,
+        "**/obj/**": true,
+        "src/GimmeCapture/ffmpeg-lib/**": true
+    }
+}

@@ -82,15 +82,19 @@
             <!-- Capture-scope picker (record mode): pick a monitor or window to set the recording region. -->
             <Button x:Name="CaptureScopeButton" Theme="{StaticResource SnipToolButton}" FontSize="12" BorderThickness="1"
                     IsVisible="{Binding IsRecordingMode}"
-                    ToolTip.Tip="{Binding [CaptureScopeTooltip], Source={x:Static infra:LocalizationService.Instance}}">
+                    ToolTip.Tip="{Binding CaptureScopeTooltip}">
                 <Button.Flyout>
                     <Flyout Placement="Top">
                         <Border Background="#1A1A1A" BorderBrush="#333333" BorderThickness="1" Padding="2" CornerRadius="4" MaxHeight="320" MinWidth="180">
                             <StackPanel Orientation="Vertical" Spacing="2">
+                                <!-- Multi-window (WGC) hint + per-window "separate files" toggle: hidden on Linux,
+                                     where the picker offers monitors only (no per-window recording). -->
                                 <TextBlock Text="{Binding [CaptureScopeMultiHint], Source={x:Static infra:LocalizationService.Instance}}"
+                                           IsVisible="{Binding SupportsWindowCapture}"
                                            Foreground="#999999" FontSize="11" Margin="6,3,6,1" TextWrapping="Wrap" MaxWidth="260"/>
                                 <CheckBox Content="{Binding [RecordSeparateFilesToggle], Source={x:Static infra:LocalizationService.Instance}}"
-                                          IsChecked="{Binding RecordSeparateFiles}" Margin="6,0,6,2" FontSize="11"/>
+                                          IsChecked="{Binding RecordSeparateFiles}" IsVisible="{Binding SupportsWindowCapture}"
+                                          Margin="6,0,6,2" FontSize="11"/>
                                 <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
                                     <ItemsControl ItemsSource="{Binding CaptureTargets}">
                                         <ItemsControl.ItemTemplate>

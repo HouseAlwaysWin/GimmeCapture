@@ -11,16 +11,23 @@ namespace GimmeCapture.Services.Core.Media;
 public sealed record VideoInputDevice(string Name);
 
 /// <summary>
-/// Enumerates DirectShow video capture devices (webcams) for the Record settings UI, mirroring
-/// <c>AudioInputDevices</c>. Uses libav's <c>avdevice_list_input_sources</c> on the dshow demuxer so the
-/// friendly names returned match what <see cref="NativeFFmpeg.WebcamCaptureSource"/> opens via
-/// <c>video=&lt;name&gt;</c>. All failures are swallowed — enumeration is best-effort, and the user can
-/// still type a device name by hand if the list comes back empty.
+/// Enumerates video capture devices (webcams) for the Record settings UI, mirroring <c>AudioInputDevices</c>.
+/// On Windows it uses libav's <c>avdevice_list_input_sources</c> on the dshow demuxer so the friendly names
+/// returned match what <see cref="NativeFFmpeg.WebcamCaptureSource"/> opens via <c>video=&lt;name&gt;</c>; on
+/// Linux it delegates to <see cref="NativeFFmpeg.LinuxV4l2CaptureDevices"/> (V4L2 <c>/dev/video*</c> nodes).
+/// All failures are swallowed — enumeration is best-effort, and the user can still type a device name (or a
+/// <c>/dev/videoN</c> path) by hand if the list comes back empty.
 /// </summary>
 public static class VideoInputDevices
 {
     public static IReadOnlyList<VideoInputDevice> Enumerate()
     {
+        // Linux has no dshow; enumerate V4L2 /dev/video* capture nodes instead.
+        if (!OperatingSystem.IsWindows())
+        {
+            return NativeFFmpeg.LinuxV4l2CaptureDevices.Enumerate();
+        }
+
         var devices = new List<VideoInputDevice>();
 
         try

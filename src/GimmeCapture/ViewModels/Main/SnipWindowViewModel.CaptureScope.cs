@@ -29,6 +29,13 @@ public partial class SnipWindowViewModel
     /// <summary>HWNDs of the picked recording-target windows (empty for region/monitor capture).</summary>
     internal IReadOnlyList<IntPtr> RecordWindowHandles => _recordWindowHandles;
 
+    /// <summary>
+    /// True only where per-window recording exists (Windows Graphics Capture) — i.e. Windows. On Linux the
+    /// capture-scope picker lists monitors only (window detection returns none), so the multi-window hint and
+    /// the separate-files toggle are hidden and the tooltip drops its "or window" wording. Constant per run.
+    /// </summary>
+    public bool SupportsWindowCapture { get; } = OperatingSystem.IsWindows();
+
     /// <summary>When multiple windows are picked, whether to record each to its own file (vs. one composite video).</summary>
     public bool RecordSeparateFiles
     {

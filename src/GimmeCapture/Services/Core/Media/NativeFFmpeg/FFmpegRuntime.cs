@@ -40,14 +40,22 @@ public static class FFmpegRuntime
                     return false;
                 }
 
+                // Windows ships avcodec-62.dll etc.; Linux/macOS ship libavcodec.so.62 / libavcodec.dylib.
                 var required = new[] { "avutil", "avcodec", "avformat", "swscale", "swresample", "avdevice", "avfilter" };
-                var dlls = Directory.GetFiles(libsDir, "*.dll").Select(Path.GetFileName).ToArray();
+                bool isWindows = OperatingSystem.IsWindows();
+                string globPattern = isWindows ? "*.dll" : (OperatingSystem.IsMacOS() ? "lib*.dylib*" : "lib*.so*");
+                var libs = Directory.GetFiles(libsDir, globPattern).Select(Path.GetFileName).ToArray();
                 foreach (var prefix in required)
                 {
-                    if (!dlls.Any(d => d != null && d.StartsWith(prefix + "-", StringComparison.OrdinalIgnoreCase)))
+                    bool present = isWindows
+                        ? libs.Any(d => d != null && d.StartsWith(prefix + "-", StringComparison.OrdinalIgnoreCase))
+                        : libs.Any(d => d != null && d.StartsWith("lib" + prefix + ".", StringComparison.OrdinalIgnoreCase));
+                    if (!present)
                     {
+                        string want = isWindows ? $"{prefix}-*.dll" : $"lib{prefix}.so*";
                         errorMessage =
-                            $"Incomplete FFmpeg native bundle: expected {prefix}-*.dll under {libsDir}. Run scripts/ensure-ffmpeg-libs.ps1.";
+                            $"Incomplete FFmpeg native bundle: expected {want} under {libsDir}. " +
+                            (isWindows ? "Run scripts/ensure-ffmpeg-libs.ps1." : "Run scripts/ensure-ffmpeg-libs-linux.sh.");
                         return false;
                     }
                 }

@@ -6,7 +6,71 @@ on:
       - 'v*'
 
 jobs:
+  # Linux (net10.0 head) self-contained single-file build. Runs first; the Windows job below
+  # downloads its artifact and publishes everything to one GitHub Release.
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '10.0.x'
+
+    - name: Ensure bundled FFmpeg .so
+      run: |
+        chmod +x scripts/ensure-ffmpeg-libs-linux.sh
+        scripts/ensure-ffmpeg-libs-linux.sh
+
+    # Only the net10.0 head runs on Linux (the net10.0-windows head is not built here). The repo lock
+    # file pins win-x64 only, so restore non-locked (RestoreLockedMode=false) to resolve linux-x64 assets;
+    # package versions stay pinned by the exact PackageReferences.
+    - name: Publish application (self-contained, single file)
+      run: |
+        version="${GITHUB_REF_NAME#v}"
+        core="${version%%-*}"
+        IFS='.' read -r major minor patch <<< "$core"
+        if [ -z "$major" ] || [ -z "$minor" ] || [ -z "$patch" ]; then
+          echo "Tag version must contain major.minor.patch: $version" >&2
+          exit 1
+        fi
+        asmver="$major.$minor.$patch.0"
+        dotnet publish src/GimmeCapture/GimmeCapture.csproj \
+          -f net10.0 -r linux-x64 -c Release --self-contained true \
+          -p:RestoreLockedMode=false \
+          -p:PublishSingleFile=true \
+          -p:IncludeNativeLibrariesForSelfExtract=true \
+          -p:IncludeAllContentForSelfExtract=true \
+          -p:EnableCompressionInSingleFile=true \
+          -p:DebugType=none \
+          -p:DebugSymbols=false \
+          -p:Version="$version" \
+          -p:AssemblyVersion="$asmver" \
+          -p:FileVersion="$asmver" \
+          -p:InformationalVersion="$version" \
+          -o ./publish-linux
+
+    - name: Clean publish output
+      run: |
+        find ./publish-linux -name '*.pdb' -delete
+        rm -f ./publish-linux/config.json
+
+    - name: Package tarball
+      run: |
+        chmod +x ./publish-linux/GimmeCapture
+        tar -C ./publish-linux -czf GimmeCapture_linux-x64.tar.gz .
+
+    - name: Upload Linux artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: linux-release
+        path: GimmeCapture_linux-x64.tar.gz
+        retention-days: 1
+
   release:
+    needs: build-linux
     runs-on: windows-latest
     permissions:
       contents: write
@@ -98,12 +162,23 @@ jobs:
         if ($LASTEXITCODE -ne 0) { throw "ISCC failed ($LASTEXITCODE)" }
         Get-ChildItem installer\output
 
+    # Pull in the Linux tarball built by the build-linux job so both platforms ship in one release.
+    - name: Download Linux artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: linux-release
+        path: .
+
     - name: Generate checksum manifest
       shell: powershell
       run: |
         $lines = @()
         $zipHash = (Get-FileHash GimmeCapture_win-x64.zip -Algorithm SHA256).Hash.ToLowerInvariant()
         $lines += "$zipHash  GimmeCapture_win-x64.zip"
+        if (Test-Path GimmeCapture_linux-x64.tar.gz) {
+          $lxHash = (Get-FileHash GimmeCapture_linux-x64.tar.gz -Algorithm SHA256).Hash.ToLowerInvariant()
+          $lines += "$lxHash  GimmeCapture_linux-x64.tar.gz"
+        }
         $setup = Get-ChildItem installer\output\GimmeCapture_Setup_*.exe -ErrorAction SilentlyContinue | Select-Object -First 1
         if ($setup) {
           $setupHash = (Get-FileHash $setup.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -116,6 +191,7 @@ jobs:
       with:
         files: |
           GimmeCapture_win-x64.zip
+          GimmeCapture_linux-x64.tar.gz
           installer/output/GimmeCapture_Setup_*.exe
           SHA256SUMS.txt
         generate_release_notes: true

@@ -120,6 +120,13 @@ public sealed class AIResourceOrchestrator
     public bool IsAICoreReady()
     {
         var modelPath = _pathService.GetAICoreModelPath();
+        // Windows downloads the ONNX runtime as onnxruntime.dll; on Linux/macOS the native runtime
+        // (libonnxruntime.so/.dylib) is bundled with the app, so only the model needs to be present.
+        if (!OperatingSystem.IsWindows())
+        {
+            return File.Exists(modelPath);
+        }
+
         var onnxDll = _pathService.GetOnnxDllPath();
         return File.Exists(modelPath) && File.Exists(onnxDll);
     }

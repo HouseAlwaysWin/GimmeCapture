@@ -2,13 +2,44 @@ using System;
 using System.Diagnostics;
 using NAudio.CoreAudioApi;
 using NAudio.Wave;
+using GimmeCapture.Services.Core.Media.NativeFFmpeg;
 
 namespace GimmeCapture.Services.Core.Media;
 
 public partial class RecordingService
 {
+    // Linux uses libav PulseAudio capture instead of NAudio WASAPI (Windows-only).
+    private LinuxPulseAudioRecorder? _linuxSystemAudio;
+    private LinuxPulseAudioRecorder? _linuxMic;
+
+    private bool TryStartLinuxPulse(string wavPath, string source, ref LinuxPulseAudioRecorder? slot, Func<bool> isMuted)
+    {
+        slot?.Dispose();
+        slot = null;
+        var rec = new LinuxPulseAudioRecorder(source, wavPath, isMuted);
+        if (rec.Start())
+        {
+            slot = rec;
+            return true;
+        }
+
+        rec.Dispose();
+        return false;
+    }
+
+    private static void StopLinuxPulse(ref LinuxPulseAudioRecorder? slot)
+    {
+        slot?.Dispose();
+        slot = null;
+    }
+
     private bool TryStartAudioCapture(string audioSegmentPath)
     {
+        if (!OperatingSystem.IsWindows())
+        {
+            return TryStartLinuxPulse(audioSegmentPath, LinuxPulseAudioRecorder.DefaultMonitorSource, ref _linuxSystemAudio, () => MuteSystemAudio);
+        }
+
         try
         {
             StopAudioCapture();
@@ -35,6 +66,12 @@ public partial class RecordingService
 
     private void StopAudioCapture()
     {
+        if (!OperatingSystem.IsWindows())
+        {
+            StopLinuxPulse(ref _linuxSystemAudio);
+            return;
+        }
+
         try
         {
             _audioCapture?.StopRecording();
@@ -52,6 +89,11 @@ public partial class RecordingService
 
     private bool TryStartMicCapture(string micSegmentPath)
     {
+        if (!OperatingSystem.IsWindows())
+        {
+            return TryStartLinuxPulse(micSegmentPath, LinuxPulseAudioRecorder.DefaultSource, ref _linuxMic, () => MuteMicrophone);
+        }
+
         try
         {
             StopMicCapture();
@@ -109,6 +151,12 @@ public partial class RecordingService
 
     private void StopMicCapture()
     {
+        if (!OperatingSystem.IsWindows())
+        {
+            StopLinuxPulse(ref _linuxMic);
+            return;
+        }
+
         try
         {
             _micCapture?.StopRecording();

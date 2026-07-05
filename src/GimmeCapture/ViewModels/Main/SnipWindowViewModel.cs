@@ -51,6 +51,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         nameof(BringToFrontTooltip),
         nameof(SendToBackTooltip),
         nameof(FullscreenSelectTooltip),
+        nameof(CaptureScopeTooltip),
         nameof(HideTranslationResultsTooltip),
         nameof(TranslationPinTooltip),
         nameof(TranslateAllTooltip),
@@ -188,6 +189,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     public string BringToFrontTooltip => LocalizationService.Instance["TipBringToFront"];
     public string SendToBackTooltip => LocalizationService.Instance["TipSendToBack"];
     public string FullscreenSelectTooltip => $"{LocalizationService.Instance["ActionSelectFullscreen"]} ({FullscreenSelectHotkey})";
+    public string CaptureScopeTooltip => LocalizationService.Instance[SupportsWindowCapture ? "CaptureScopeTooltip" : "CaptureScopeTooltipMonitorOnly"];
     public string SnipTooltip => CurrentMode == SnipMode.Screenshot ? LocalizationService.Instance["CaptureModeNormal"] : $"{LocalizationService.Instance["CaptureModeNormal"]} ({SwitchToSnipHotkey})";
     public string RecordTooltip => CurrentMode == SnipMode.Recording ? LocalizationService.Instance["CaptureModeRecord"] : $"{LocalizationService.Instance["CaptureModeRecord"]} ({SwitchToRecordHotkey})";
     public string TranslateTooltip => CurrentMode == SnipMode.Translation ? (LocalizationService.Instance["CaptureModeTranslation"] ?? "Translation") : $"{(LocalizationService.Instance["CaptureModeTranslation"] ?? "Translation")} ({SwitchToTranslateHotkey})";

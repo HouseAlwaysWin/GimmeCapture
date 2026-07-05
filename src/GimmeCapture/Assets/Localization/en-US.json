@@ -330,6 +330,7 @@
   "RecordAudioIdle": "Idle",
   "RecordMute": "Mute",
   "CaptureScopeTooltip": "Record a monitor or window",
+  "CaptureScopeTooltipMonitorOnly": "Record a monitor",
   "CaptureScopeMonitor": "Monitor {0}",
   "CaptureScopeMultiHint": "Pick a monitor, or click windows to select one or more.",
   "RecordSeparateFilesToggle": "Save each window as a separate file",

@@ -69,6 +69,10 @@ public partial class SnipWindow
     private static bool IsPhysicalModifierLabelDown(string? label)
     {
         if (string.IsNullOrEmpty(label)) return false;
+        // GetAsyncKeyState is user32-only; on Linux it throws DllNotFoundException. This fires on
+        // every pointer move during a snip, so guard it. Physical-modifier hold-to-select for
+        // Translation mode is a Linux Phase 2 item (docs/LINUX_PORT_FEASIBILITY.md).
+        if (!OperatingSystem.IsWindows()) return false;
         if (string.Equals(label, "Ctrl", StringComparison.OrdinalIgnoreCase))
             return (GetAsyncKeyState(0x11) & 0x8000) != 0;
         if (string.Equals(label, "Shift", StringComparison.OrdinalIgnoreCase))

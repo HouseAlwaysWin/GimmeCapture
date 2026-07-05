@@ -413,14 +413,72 @@ public partial class SnipWindow : Window
     }
 
     /// <summary>
+    /// Linux click-through, mirroring the Win32 pass-through: once a screenshot/recording region is
+    /// confirmed, shape the overlay's X11 INPUT region to just the selection frame / handles / toolbar,
+    /// so clicks inside the selection (and outside it) reach the windows beneath. Drawing and translation
+    /// modes keep the whole overlay interactive (annotation / text selection need every pixel).
+    /// </summary>
+    private void UpdateInputShapeLinux(Rect selectionRect, SnipState state, bool isDrawingMode)
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+
+        var window = this.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
+        if (window == IntPtr.Zero)
+        {
+            return;
+        }
+
+        bool isTranslation = _viewModel?.IsTranslationMode ?? false;
+        bool selected = state == SnipState.Selected && selectionRect.Width > 10 && selectionRect.Height > 10;
+
+        if (isDrawingMode || isTranslation || !selected)
+        {
+            GimmeCapture.Services.Platforms.Linux.LinuxWindowShape.ClearInputRegion(window);
+            return;
+        }
+
+        double scaling = this.RenderScaling;
+        var geometry = BuildSelectionInteractionGeometry(selectionRect);
+        var rects = new List<PixelRect>();
+        foreach (var r in geometry.EnumerateWindowRegionRects())
+        {
+            rects.Add(ToPhysicalPixelRect(r, scaling));
+        }
+
+        // TryGetToolbarOpaqueRect already returns physical pixels.
+        if (TryGetToolbarOpaqueRect(scaling, 4, out var toolbarRect) && toolbarRect.Width > 0 && toolbarRect.Height > 0)
+        {
+            rects.Add(new PixelRect((int)toolbarRect.X, (int)toolbarRect.Y, (int)toolbarRect.Width, (int)toolbarRect.Height));
+        }
+
+        GimmeCapture.Services.Platforms.Linux.LinuxWindowShape.SetInputRegion(window, rects);
+    }
+
+    private static PixelRect ToPhysicalPixelRect(Rect logical, double scaling)
+    {
+        return new PixelRect(
+            (int)Math.Floor(logical.X * scaling),
+            (int)Math.Floor(logical.Y * scaling),
+            (int)Math.Ceiling(logical.Width * scaling),
+            (int)Math.Ceiling(logical.Height * scaling));
+    }
+
+    /// <summary>
     /// Updates the window region to create a "hole" in the selection area for mouse pass-through.
     /// This allows clicking on underlying windows (like YouTube) while keeping the border UI interactive.
     /// The hole is disabled when in drawing mode to allow annotations.
     /// </summary>
     private void UpdateWindowRegion(Rect selectionRect, SnipState state, bool isDrawingMode)
     {
-        if (!OperatingSystem.IsWindows()) return;
-        
+        if (!OperatingSystem.IsWindows())
+        {
+            UpdateInputShapeLinux(selectionRect, state, isDrawingMode);
+            return;
+        }
+
         var hwnd = this.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
         if (hwnd == IntPtr.Zero) return;
 
