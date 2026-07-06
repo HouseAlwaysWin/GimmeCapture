@@ -3,7 +3,9 @@ using System.Text.Json.Serialization;
 
 namespace GimmeCapture.Models;
 
-public enum VideoCodec { H264, H265 }
+// Av1 is appended last so existing by-name/by-value JSON (H264=0, H265=1) still deserializes. It is offered
+// only in the offline Compress pipeline (SVT-AV1); realtime recording never uses it.
+public enum VideoCodec { H264, H265, Av1 }
 public enum VideoQuality { Low, Medium, High }
 // Whether to try GPU/Media-Foundation encoders (NVENC/QSV/AMF) before software libx264/265.
 public enum VideoEncoderHint { PreferHardware, SoftwareOnly }

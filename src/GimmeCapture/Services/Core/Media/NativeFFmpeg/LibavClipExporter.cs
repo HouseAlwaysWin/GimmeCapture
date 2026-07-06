@@ -74,6 +74,55 @@ internal static class LibavClipExporter
         return r is 90 or 180 or 270 ? r : 0;
     }
 
+    /// <summary>
+    /// Maps an x264/x265-style speed preset to the value the selected encoder expects. x264/x265 use the
+    /// word as-is; SVT-AV1's <c>preset</c> is an integer 0 (slowest/smallest) .. 13 (fastest), so the words
+    /// are translated. Pure, so the mapping is unit-testable.
+    /// </summary>
+    internal static string MapPreset(string? preset, bool isAv1)
+    {
+        string p = string.IsNullOrWhiteSpace(preset) ? "veryfast" : preset;
+        if (!isAv1)
+        {
+            return p;
+        }
+        return p switch
+        {
+            "ultrafast" => "10",
+            "superfast" => "9",
+            "veryfast" => "8",
+            "faster" => "7",
+            "fast" => "7",
+            "medium" => "6",
+            "slow" => "4",
+            "slower" => "2",
+            "veryslow" => "1",
+            _ => "6",
+        };
+    }
+
+    /// <summary>
+    /// Maps an x264/x265-style speed preset to libaom-av1's <c>cpu-used</c> (0 = slowest/best .. 8 = fastest).
+    /// Used only on the rare libaom fallback (SVT-AV1 absent); libaom has no "preset" option. Pure/testable.
+    /// </summary>
+    internal static string MapLibaomCpuUsed(string? preset)
+    {
+        string p = string.IsNullOrWhiteSpace(preset) ? "veryfast" : preset;
+        return p switch
+        {
+            "ultrafast" => "8",
+            "superfast" => "7",
+            "veryfast" => "6",
+            "faster" => "5",
+            "fast" => "5",
+            "medium" => "4",
+            "slow" => "2",
+            "slower" => "1",
+            "veryslow" => "0",
+            _ => "4",
+        };
+    }
+
     /// <summary>Maps an output file extension to the libav container name, or null if unsupported here.</summary>
     public static string? ContainerForExtension(string extension)
     {
@@ -323,10 +372,28 @@ internal static class LibavClipExporter
             // per source frame. 1.0 when not capping, so the speed-only path is byte-for-byte unchanged.
             double fpsCursorScale = (double)srcFps / fps;
 
-            // H.265 when requested and available; otherwise fall back to H.264 (libx265 may be absent
-            // from the bundled build). Existing callers default to H.264 so their output is unchanged.
+            // AV1 (SVT-AV1) / H.265 when requested and available; otherwise fall back to H.264 (the AV1 and
+            // libx265 encoders may be absent from a given build). Existing callers default to H.264 so their
+            // output is unchanged.
             AVCodec* enc = null;
-            if (codec == VideoCodec.H265)
+            bool isSvtAv1 = false; // SVT-AV1 vs the libaom-av1 fallback: they take different speed knobs.
+            if (codec == VideoCodec.Av1)
+            {
+                enc = ffmpeg.avcodec_find_encoder_by_name("libsvtav1");
+                if (enc != null)
+                {
+                    isSvtAv1 = true;
+                }
+                if (enc == null)
+                {
+                    enc = ffmpeg.avcodec_find_encoder_by_name("libaom-av1");
+                }
+                if (enc == null)
+                {
+                    enc = ffmpeg.avcodec_find_encoder(AVCodecID.AV_CODEC_ID_AV1);
+                }
+            }
+            if (enc == null && codec == VideoCodec.H265)
             {
                 enc = ffmpeg.avcodec_find_encoder_by_name("libx265");
                 if (enc == null)
@@ -344,8 +411,12 @@ internal static class LibavClipExporter
             }
             if (enc == null)
             {
-                throw new InvalidOperationException("No H.264/H.265 encoder available.");
+                throw new InvalidOperationException("No AV1/H.264/H.265 encoder available.");
             }
+            // Branch on the ACTUALLY-selected encoder (not the request): SVT-AV1 needs a 0-13 integer preset,
+            // 10-bit pixels, and no explicit B-frame count. If AV1 was requested but unavailable we fell back
+            // to H.264/H.265, which must stay on the original 8-bit path.
+            bool isAv1 = enc->id == AVCodecID.AV_CODEC_ID_AV1;
 
             ThrowIfErr(ffmpeg.avformat_alloc_output_context2(&outFmt, null, "mp4", outputPath), "clip_alloc_output");
             if (outFmt == null)
@@ -368,17 +439,36 @@ internal static class LibavClipExporter
             encCtx->codec_id = enc->id;
             encCtx->width = encW;
             encCtx->height = encH;
-            encCtx->pix_fmt = AVPixelFormat.AV_PIX_FMT_YUV420P;
+            // AV1 encodes 10-bit (yuv420p10le): smaller and banding-free even from 8-bit sources. The sws
+            // target and the encFrame buffer both follow encCtx->pix_fmt, so this is the only knob to flip.
+            encCtx->pix_fmt = isAv1 ? AVPixelFormat.AV_PIX_FMT_YUV420P10LE : AVPixelFormat.AV_PIX_FMT_YUV420P;
             encCtx->time_base = new AVRational { num = 1, den = fps };
             encCtx->framerate = new AVRational { num = fps, den = 1 };
             encCtx->gop_size = fps * 2;
-            encCtx->max_b_frames = 0;
+            // B-frames materially shrink offline output at the same quality. This whole path is offline export
+            // (never realtime capture), so enable them for x264/x265; SVT-AV1 manages hierarchical frames
+            // internally and takes no explicit count.
+            encCtx->max_b_frames = isAv1 ? 0 : 3;
             if ((outFmt->oformat->flags & ffmpeg.AVFMT_GLOBALHEADER) != 0)
             {
                 encCtx->flags |= ffmpeg.AV_CODEC_FLAG_GLOBAL_HEADER;
             }
 
-            ffmpeg.av_dict_set(&encOpts, "preset", string.IsNullOrWhiteSpace(opt.Preset) ? "veryfast" : opt.Preset, 0);
+            // Speed knob differs per encoder: x264/x265 take the word (e.g. "slow"); SVT-AV1 takes an integer
+            // 0-13 via "preset"; libaom-av1 has NO "preset" option and uses "cpu-used" 0-8 instead (feeding it
+            // an SVT integer would be silently ignored, leaving libaom at its near-placebo default speed).
+            if (isSvtAv1)
+            {
+                ffmpeg.av_dict_set(&encOpts, "preset", MapPreset(opt.Preset, true), 0);
+            }
+            else if (isAv1)
+            {
+                ffmpeg.av_dict_set(&encOpts, "cpu-used", MapLibaomCpuUsed(opt.Preset), 0);
+            }
+            else
+            {
+                ffmpeg.av_dict_set(&encOpts, "preset", MapPreset(opt.Preset, false), 0);
+            }
             if (targetVideoBitrateKbps > 0)
             {
                 // Average-bitrate mode for "compress to a target size".
@@ -409,14 +499,24 @@ internal static class LibavClipExporter
             }
             else
             {
+                // AV1's CRF scale is 0-63 and sits ~8 higher than x264/x265 for equal quality. The compress UI
+                // already folds that offset into CrfOverride, so honour it verbatim; only the no-override
+                // fallback ladder (pin/editor trim path, which never uses AV1) needs a per-codec scale.
                 string crf = opt.CrfOverride > 0
                     ? opt.CrfOverride.ToString(System.Globalization.CultureInfo.InvariantCulture)
-                    : quality switch
-                    {
-                        VideoQuality.High => "20",
-                        VideoQuality.Low => "28",
-                        _ => "23",
-                    };
+                    : isAv1
+                        ? quality switch
+                        {
+                            VideoQuality.High => "28",
+                            VideoQuality.Low => "36",
+                            _ => "31",
+                        }
+                        : quality switch
+                        {
+                            VideoQuality.High => "20",
+                            VideoQuality.Low => "28",
+                            _ => "23",
+                        };
                 ffmpeg.av_dict_set(&encOpts, "crf", crf, 0);
             }
             ThrowIfErr(ffmpeg.avcodec_open2(encCtx, enc, &encOpts), "clip_open_encoder");

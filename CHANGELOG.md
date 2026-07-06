@@ -9,6 +9,21 @@
 
 ---
 
+## Unreleased
+
+### 🗜️ Smaller video compression
+
+- **AV1 (SVT-AV1) codec in the compress pipeline** — the most efficient codec, for the smallest
+  files at the same perceived quality (in testing ~65% smaller than H.264 and noticeably smaller
+  than H.265 at matching quality). Encoded as **10-bit** (smaller and banding-free even from 8-bit
+  sources) using the AV1 encoder already bundled in the app's FFmpeg build — no new dependencies.
+  A new **「最小體積 (AV1)」** quick preset applies it at a slow preset / full resolution. AV1 is
+  offline-compress-only (not offered for realtime recording, where it would be impractically slow).
+- **B-frames enabled** on the offline compress/export path (they were previously disabled) — this
+  shrinks output at the same quality for **H.264 and H.265 too**, not just AV1.
+- One CRF slider still drives every codec: AV1's different CRF scale is handled transparently, so a
+  given CRF means comparable quality across H.264 / H.265 / AV1.
+
 ## v0.52.0 - 2026-07-05
 
 Documentation update — no application changes since v0.51.0 (the shipped binaries are identical).

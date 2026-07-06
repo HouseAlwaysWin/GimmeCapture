@@ -47,4 +47,15 @@ public class CompressQuickProfileTests
         string[] valid = { "ultrafast", "veryfast", "fast", "medium", "slow" };
         Assert.All(Profiles.Where(p => !p.IsCustom), p => Assert.Contains(p.Preset, valid));
     }
+
+    [Fact]
+    public void SmallestAv1_UsesAv1_FullResolution_SlowPreset()
+    {
+        MainWindowViewModel.CompressQuickProfile av1 = Profiles.Single(p => p.Key == "CompressQuickSmallestAv1");
+        Assert.Equal(VideoCodec.Av1, av1.Codec);
+        Assert.Equal("slow", av1.Preset);
+        Assert.False(av1.UseTargetSize);
+        Assert.Equal(1080, av1.MaxHeight);
+        Assert.InRange(av1.Crf, 14, 40); // UI (x265) scale; the +8 AV1 offset is applied on encode
+    }
 }

@@ -80,6 +80,16 @@ public class CompressIntegrationTests
         // H.265 + downscale.
         await AssertHeight(await Run("h265_720", new LibavExportOptions { Codec = VideoCodec.H265, MaxHeight = 720 }), 720);
 
+        // AV1 (SVT-AV1, 10-bit): the new smallest-size codec. Encodes at the source resolution and, being far
+        // more efficient than H.264, must be smaller than the H.264 baseline (this also catches a silent
+        // fallback to H.264 if libsvtav1 were missing). CRF is the encoder-native scale (UI 24 + AV1 offset).
+        string av1 = await Run("av1_crf24",
+            new LibavExportOptions { Codec = VideoCodec.Av1, CrfOverride = MainWindowViewModel.EncoderScaleCrf(VideoCodec.Av1, 24) });
+        await AssertHeight(av1, srcSize!.Value.Height);
+        long av1Len = new FileInfo(av1).Length;
+        Assert.True(av1Len < new FileInfo(baseline).Length, $"av1 ({av1Len}) should be smaller than H.264 baseline");
+        Assert.True(await player.ProbeHasAudioAsync(av1), "av1 output lost audio");
+
         // FPS cap: the output frame rate should drop to the requested cap (here, half the source rate).
         int srcFps = LibavClipExporter.ProbeFps(source);
         if (srcFps > 2)
