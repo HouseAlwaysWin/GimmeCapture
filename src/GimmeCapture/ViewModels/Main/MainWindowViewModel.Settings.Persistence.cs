@@ -46,6 +46,7 @@ public partial class MainWindowViewModel
             CaptureDelay = CaptureDelay,
             OcrTextLayout = OcrTextLayout,
             ScrollingCaptureDirection = ScrollingCaptureDirection,
+            SnipToolbarPosition = SnipToolbarPosition,
             HideRecordPinDecoration = HideRecordPinDecoration,
             HideRecordPinBorder = HideRecordPinBorder,
             HideRecordSelectionDecoration = HideRecordSelectionDecoration,
@@ -138,6 +139,7 @@ public partial class MainWindowViewModel
         CaptureDelay = snapshot.CaptureDelay;
         OcrTextLayout = snapshot.OcrTextLayout;
         ScrollingCaptureDirection = snapshot.ScrollingCaptureDirection;
+        SnipToolbarPosition = snapshot.SnipToolbarPosition;
         HideRecordSelectionDecoration = snapshot.HideRecordSelectionDecoration;
         HideRecordSelectionBorder = snapshot.HideRecordSelectionBorder;
         ShowSnipCursor = snapshot.ShowSnipCursor;
@@ -200,5 +202,7 @@ public partial class MainWindowViewModel
         this.RaisePropertyChanged(nameof(AvailableOcrTextLayouts));
         this.RaisePropertyChanged(nameof(AvailableScrollDirections));
         this.RaisePropertyChanged(nameof(ScrollingCaptureDirection));
+        this.RaisePropertyChanged(nameof(AvailableSnipToolbarPositions));
+        this.RaisePropertyChanged(nameof(SnipToolbarPosition));
     }
 }

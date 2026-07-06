@@ -317,10 +317,13 @@ public partial class SnipWindow : Window
                 return;
             }
 
-            if (vm.CurrentState == SnipState.Selecting || vm.CurrentState == SnipState.Selected)
+            // Two-stage Esc: a drawn box is cleared first (staying in manual draw / Selecting mode); only a
+            // second Esc with no box closes the overlay — instead of dropping back to auto-detect.
+            bool hasBox = vm.SelectionRect.Width > 0 && vm.SelectionRect.Height > 0;
+            if (SnipWindowViewModel.ShouldClearBoxToDraw(vm.CurrentState, hasBox))
             {
-                vm.CurrentState = SnipState.Detecting;
                 vm.SelectionRect = new Rect(0, 0, 0, 0);
+                vm.CurrentState = SnipState.Selecting;
                 return;
             }
 

@@ -30,6 +30,7 @@ public partial class MainWindowViewModel
     public sealed record CaptureDelayOption(CaptureDelay Value, string DisplayName);
     public sealed record OcrTextLayoutOption(OcrTextLayout Value, string DisplayName);
     public sealed record ScrollDirectionOption(ScrollingCaptureDirection Value, string DisplayName);
+    public sealed record SnipToolbarPositionOption(SnipToolbarPosition Value, string DisplayName);
 
     public IReadOnlyList<CaptureDelayOption> AvailableCaptureDelays =>
     [
@@ -51,6 +52,13 @@ public partial class MainWindowViewModel
         new(ScrollingCaptureDirection.Auto, LocalizationService.Instance["ScrollDirectionAuto"]),
         new(ScrollingCaptureDirection.Vertical, LocalizationService.Instance["ScrollDirectionVertical"]),
         new(ScrollingCaptureDirection.Horizontal, LocalizationService.Instance["ScrollDirectionHorizontal"])
+    ];
+
+    public IReadOnlyList<SnipToolbarPositionOption> AvailableSnipToolbarPositions =>
+    [
+        new(SnipToolbarPosition.TopLeft, LocalizationService.Instance["SnipToolbarPositionTopLeft"]),
+        new(SnipToolbarPosition.TopCenter, LocalizationService.Instance["SnipToolbarPositionTopCenter"]),
+        new(SnipToolbarPosition.TopRight, LocalizationService.Instance["SnipToolbarPositionTopRight"])
     ];
 
     public List<TranslationLanguage> AvailableTranslationLanguages =>
@@ -444,6 +452,23 @@ public partial class MainWindowViewModel
             if (changed && !_isDataLoading)
             {
                 _settingsService.Settings.ScrollingCaptureDirection = value;
+                MarkModifiedAndQueueSettingsSave();
+            }
+        }
+    }
+
+    // Backing field defaults to TopCenter to match AppSettings (the enum's numeric default is TopLeft).
+    private SnipToolbarPosition _snipToolbarPosition = SnipToolbarPosition.TopCenter;
+    public SnipToolbarPosition SnipToolbarPosition
+    {
+        get => _snipToolbarPosition;
+        set
+        {
+            var changed = _snipToolbarPosition != value;
+            this.RaiseAndSetIfChanged(ref _snipToolbarPosition, value);
+            if (changed && !_isDataLoading)
+            {
+                _settingsService.Settings.SnipToolbarPosition = value;
                 MarkModifiedAndQueueSettingsSave();
             }
         }
