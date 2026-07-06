@@ -461,51 +461,10 @@ public partial class SnipWindow : Window
             ApplyTranslationSelectionModifierState(true);
         }
 
-        if (e.Key == Key.Escape)
-        {
-            if (_viewModel == null) return;
-
-            // If currently entering text, cancel it
-            if (_viewModel.IsEnteringText)
-            {
-                _viewModel.CancelTextEntryCommand.Execute(System.Reactive.Unit.Default).Subscribe();
-                e.Handled = true;
-                return;
-            }
-
-            // Prevent resetting or closing if we are actively recording
-            if (_viewModel.RecState != RecordingState.Idle)
-            {
-                e.Handled = true;
-                return;
-            }
-
-            if (_viewModel.IsTranslationMode)
-            {
-                Close();
-                e.Handled = true;
-                return;
-            }
-
-            if (_viewModel.IsDrawingMode)
-            {
-                _viewModel.IsDrawingMode = false;
-                e.Handled = true;
-            }
-            else if (SnipWindowViewModel.ShouldClearBoxToDraw(
-                         _viewModel.CurrentState,
-                         _viewModel.SelectionRect.Width > 0 && _viewModel.SelectionRect.Height > 0))
-            {
-                // First Esc after a box is drawn: clear it and stay in manual draw (Selecting) mode.
-                _viewModel.SelectionRect = new Rect(0, 0, 0, 0);
-                _viewModel.CurrentState = SnipState.Selecting;
-                e.Handled = true;
-            }
-            else
-            {
-                 Close();
-            }
-        }
+        // Esc is handled centrally by the CloseHotkey KeyBinding -> DismissOrCloseCommand (the path that
+        // actually fires in focused screenshot/recording mode) and, in translation/unfocused capture, by the
+        // low-level keyboard hook -> DismissOrClose(). Both call the same SnipWindowViewModel.DismissOrClose(),
+        // so Esc is NOT handled here (doing so would double-process against the KeyBinding).
 
         // Prefer live focus (same-frame as key) — VM flag can lag one dispatcher tick behind GotFocus.
         var focusedNow = TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement();

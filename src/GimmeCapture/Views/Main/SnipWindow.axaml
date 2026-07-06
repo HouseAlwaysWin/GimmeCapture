@@ -35,7 +35,7 @@
         <!-- Actions (Dynamic by Mode) -->
         <KeyBinding Gesture="{Binding CopyHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding CopyCommand}" />
         <KeyBinding Gesture="{Binding SaveHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding SaveCommand}" />
-        <KeyBinding Gesture="{Binding CloseHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding CloseCommand}" />
+        <KeyBinding Gesture="{Binding CloseHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding DismissOrCloseCommand}" />
         <KeyBinding Gesture="{Binding ClearHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding ClearAnnotationsCommand}" />
 
         <!-- Drawing hotkeys are routed by SnipWindow's keyboard hook so text input can suppress them safely. -->
@@ -238,9 +238,16 @@
                   Height="{Binding SelectionRect.Height}"
                   Canvas.Left="{Binding SelectionRect.X}"
                   Canvas.Top="{Binding SelectionRect.Y}"
-                  IsVisible="{Binding CurrentState, Converter={StaticResource StateToBoolConverter}}"
                   ClipToBounds="False"
                   ZIndex="2">
+                <!-- Show only in a selection state AND when the box has real area, so the wing decoration
+                     doesn't render at the origin while resting in manual-draw mode with an empty rect. -->
+                <Grid.IsVisible>
+                    <MultiBinding Converter="{x:Static BoolConverters.And}">
+                        <Binding Path="CurrentState" Converter="{StaticResource StateToBoolConverter}"/>
+                        <Binding Path="HasSelectionArea"/>
+                    </MultiBinding>
+                </Grid.IsVisible>
                   
                 <!-- Selection Border -->
                 <Border CornerRadius="0" Background="#01FFFFFF"

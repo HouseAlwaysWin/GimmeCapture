@@ -360,10 +360,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         _recordingService = recService;
         _mainVm = mainVm;
         _selectionStateController = new SnipSelectionStateController(
-            shouldTriggerAutoScan: () =>
-                EnableAIScan
-                && CurrentMode != SnipMode.Translation
-                && AllScreenBounds?.Count > 0,
+            shouldTriggerAutoScan: ShouldTriggerAutoScan,
             triggerAutoScan: () => TriggerAutoScanCommand?.Execute(Unit.Default).Subscribe(),
             cancelScan: () => _scanCts?.Cancel(),
             dismissHoverPreview: preserveTargetRect => DismissWindowSnapHoverPreview(preserveTargetRect),
