@@ -12,6 +12,7 @@ using System.Threading.Tasks;
 using System.ComponentModel;
 using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core;
+using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Core.Media;
 using GimmeCapture.Services.OCR;
 using GimmeCapture.ViewModels.Shared;
@@ -361,7 +362,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         _mainVm = mainVm;
         _selectionStateController = new SnipSelectionStateController(
             shouldTriggerAutoScan: ShouldTriggerAutoScan,
-            triggerAutoScan: () => TriggerAutoScanCommand?.Execute(Unit.Default).Subscribe(),
+            triggerAutoScan: () => RunOCRScanAsync().Forget("Snip.AutoScan"),
             cancelScan: () => _scanCts?.Cancel(),
             dismissHoverPreview: preserveTargetRect => DismissWindowSnapHoverPreview(preserveTargetRect),
             triggerAutoAction: TriggerAutoAction,

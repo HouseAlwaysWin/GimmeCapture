@@ -819,7 +819,6 @@ public partial class SnipWindowViewModel
 
     // Command Declarations (Partial)
     public ReactiveCommand<Unit, Unit> AIScanCommand { get; set; } = null!;
-    public ReactiveCommand<Unit, Unit> TriggerAutoScanCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> ToggleAIScanBoxCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> TranslateAllSelectionsCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> ScanAllTextCommand { get; set; } = null!;
@@ -844,9 +843,6 @@ public partial class SnipWindowViewModel
     {
         AIScanCommand = ReactiveCommand.CreateFromTask(RunAIScanAsync);
         AIScanCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"AI Scan Command error: {ex}"));
-
-        TriggerAutoScanCommand = ReactiveCommand.CreateFromTask(RunOCRScanAsync);
-        TriggerAutoScanCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Auto OCR Scan Command error: {ex}"));
 
         ToggleAIScanBoxCommand = ReactiveCommand.Create(() => { ShowAIScanBox = !ShowAIScanBox; return Unit.Default; });
         ToggleAIScanBoxCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Toggle AI Box error: {ex}"));

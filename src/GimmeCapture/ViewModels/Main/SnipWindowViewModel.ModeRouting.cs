@@ -935,7 +935,11 @@ public partial class SnipWindowViewModel
             // state does — the transition into Selecting cancelled it, so kick off a fresh scan.
             if (ShouldTriggerAutoScan())
             {
-                TriggerAutoScanCommand?.Execute(Unit.Default).Subscribe();
+                // Call RunOCRScanAsync directly, NOT via TriggerAutoScanCommand: the just-cancelled Detecting
+                // scan can still be running its CPU-bound OCR DetectText (uninterruptible), which keeps the
+                // ReactiveCommand "executing" so Execute() is silently skipped — the reason the Esc-clear
+                // re-scan never actually ran. RunOCRScanAsync self-cancels the prior scan and always starts.
+                RunOCRScanAsync().Forget("Snip.EscRescan");
             }
             return;
         }

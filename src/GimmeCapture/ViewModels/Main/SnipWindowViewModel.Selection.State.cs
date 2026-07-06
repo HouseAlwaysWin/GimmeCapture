@@ -10,6 +10,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Threading;
 using GimmeCapture.Services.Core;
+using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Core.Media;
 
 namespace GimmeCapture.ViewModels.Main;
@@ -204,7 +205,7 @@ public partial class SnipWindowViewModel
                     && CurrentMode != SnipMode.Translation
                     && AllScreenBounds?.Count > 0)
                 {
-                    TriggerAutoScanCommand?.Execute(Unit.Default).Subscribe();
+                    RunOCRScanAsync().Forget("Snip.ShowScanBox");
                 }
             }
         }
