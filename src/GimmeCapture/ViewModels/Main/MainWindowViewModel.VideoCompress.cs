@@ -172,11 +172,13 @@ public partial class MainWindowViewModel
         set => this.RaiseAndSetIfChanged(ref _selectedCompressAudioChannels, value);
     }
 
-    // Codec picker (H.264 / H.265) reuses the same option type/localized strings as the Record tab.
+    // Codec picker. H.264 / H.265 mirror the Record tab; AV1 (SVT-AV1) is compress-only (offline) — the most
+    // efficient codec, for the smallest files at the same quality. Reuses the Record tab's option type / labels.
     public RecordingSettingsViewModel.VideoCodecOption[] CompressCodecOptions { get; } =
     [
         new RecordingSettingsViewModel.VideoCodecOption { Value = VideoCodec.H264 },
-        new RecordingSettingsViewModel.VideoCodecOption { Value = VideoCodec.H265 }
+        new RecordingSettingsViewModel.VideoCodecOption { Value = VideoCodec.H265 },
+        new RecordingSettingsViewModel.VideoCodecOption { Value = VideoCodec.Av1 }
     ];
 
     private RecordingSettingsViewModel.VideoCodecOption? _selectedCompressCodecOption;
@@ -302,7 +304,7 @@ public partial class MainWindowViewModel
 
     private CompressSettingsSnapshot SnapshotFromPreset(CompressPreset p) => new(
         p.Codec,
-        Math.Clamp(p.Crf, 1, 51),
+        EncoderScaleCrf(p.Codec, p.Crf),
         p.MaxHeight,
         p.MaxFps,
         CompressPresetOptions.Contains(p.Preset) ? p.Preset : "veryfast",
@@ -347,6 +349,9 @@ public partial class MainWindowViewModel
         new CompressQuickProfile { Key = "CompressQuickWeb1080", Codec = VideoCodec.H264, Crf = 23, MaxHeight = 1080, Preset = "medium", Format = "MP4" },
         new CompressQuickProfile { Key = "CompressQuickSmallest", Codec = VideoCodec.H265, Crf = 30, MaxHeight = 480, Preset = "medium", Format = "MP4" },
         new CompressQuickProfile { Key = "CompressQuickHighQuality", Codec = VideoCodec.H265, Crf = 18, MaxHeight = 0, Preset = "slow", Format = "MP4" },
+        // Headline "smallest at the same quality" recipe: AV1 (10-bit, ~30% smaller than H.265) at a slow
+        // preset, full resolution. The CRF here is the UI (x265) scale; the +8 AV1 offset is applied on encode.
+        new CompressQuickProfile { Key = "CompressQuickSmallestAv1", Codec = VideoCodec.Av1, Crf = 24, MaxHeight = 1080, Preset = "slow", Format = "MP4" },
     ];
 
     public CompressQuickProfile[] CompressQuickProfiles { get; } = BuildCompressQuickProfiles();
@@ -682,8 +687,15 @@ public partial class MainWindowViewModel
         int baseFps = srcFps > 0 ? srcFps : 30;
         int fps = (maxFps > 0 && maxFps < baseFps) ? maxFps : baseFps;
 
-        double bppRef = codec == VideoCodec.H265 ? 0.050 : 0.085; // bits/pixel at CRF 23
-        double bpp = bppRef * Math.Pow(2.0, -(crf - 23) / 6.0);
+        // Per-codec bits/pixel reference at its CRF anchor. AV1 is anchored at CRF 31 (≈ x265 CRF 23 after the
+        // +8 offset) and ~30% smaller than H.265; the incoming crf is already the encoder-native scale.
+        (double bppRef, double anchor) = codec switch
+        {
+            VideoCodec.Av1 => (0.035, 31.0),
+            VideoCodec.H265 => (0.050, 23.0),
+            _ => (0.085, 23.0),
+        };
+        double bpp = bppRef * Math.Pow(2.0, -(crf - anchor) / 6.0);
         double videoBytes = (double)w * h * fps * bpp * durationSeconds / 8.0;
         double audioBytes = audioKbps > 0 ? audioKbps * 1000.0 / 8.0 * durationSeconds : 0;
         return (long)(videoBytes + audioBytes);
@@ -812,12 +824,26 @@ public partial class MainWindowViewModel
         bool DropAudio, int AudioBitrateKbps, int AudioChannels,
         bool UseTargetSize, decimal TargetSizeMB, bool UseTwoPass);
 
+    // AV1 (SVT-AV1) uses a 0-63 CRF scale that sits ~8 higher than x264/x265 for the same visual quality.
+    // The compress UI keeps ONE slider on the x265 scale; this offset is folded in HERE when snapshotting, so
+    // every downstream encode, estimate, and cache key sees the encoder-native value with no further remapping.
+    internal const int Av1CrfOffset = 8;
+
+    /// <summary>
+    /// Maps the UI CRF (x265 scale) into the selected encoder's native scale: x264/x265 clamp to 1-51; AV1
+    /// adds <see cref="Av1CrfOffset"/> and clamps to 1-63. Pure/static so tests can assert the mapping.
+    /// </summary>
+    internal static int EncoderScaleCrf(VideoCodec codec, int uiCrf) =>
+        codec == VideoCodec.Av1
+            ? Math.Clamp(uiCrf + Av1CrfOffset, 1, 63)
+            : Math.Clamp(uiCrf, 1, 51);
+
     private CompressSettingsSnapshot BuildSettingsSnapshot()
     {
         VideoCodec codec = SelectedCompressCodecOption?.Value ?? VideoCodec.H264;
         return new CompressSettingsSnapshot(
             codec,
-            Math.Clamp(CompressCrf, 1, 51),
+            EncoderScaleCrf(codec, CompressCrf),
             SelectedCompressResolution?.MaxHeight ?? 0,
             SelectedCompressFps?.Fps ?? 0,
             SelectedCompressPreset,
