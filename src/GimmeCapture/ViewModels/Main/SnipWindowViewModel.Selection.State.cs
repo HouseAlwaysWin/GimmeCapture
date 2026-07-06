@@ -749,15 +749,8 @@ public partial class SnipWindowViewModel
             ? ToolbarWidth
             : Math.Min(1080, Math.Max(200, bounds.Width - margin * 2));
 
-        double left = bounds.X + (bounds.Width - tw) / 2;
-        if (tw >= bounds.Width - margin * 2)
-        {
-            left = bounds.X + margin;
-        }
-        else
-        {
-            left = Math.Clamp(left, bounds.X + margin, bounds.X + bounds.Width - tw - margin);
-        }
+        var toolbarPos = _mainVm?.SnipToolbarPosition ?? SnipToolbarPosition.TopCenter;
+        double left = ComputeToolbarLeft(bounds, tw, margin, toolbarPos);
 
         TranslationToolbarLeft = left;
         TranslationToolbarTop = bounds.Y + margin;
@@ -768,6 +761,27 @@ public partial class SnipWindowViewModel
 
     /// <summary>Pins the toolbar to the top-center of the active screen (Translation and Recording modes).</summary>
     private void PositionFixedTopCenterToolbar() => InitializeTranslationToolbarPosition();
+
+    /// <summary>
+    /// Computes the toolbar's horizontal (Left) position along the top of the active screen for the chosen
+    /// <see cref="SnipToolbarPosition"/>, honoring a margin and clamping to stay on-screen. A toolbar too wide
+    /// to fit with margins on both sides pins to the left margin. Pure/static so it is unit-testable.
+    /// </summary>
+    internal static double ComputeToolbarLeft(Rect bounds, double toolbarWidth, double margin, SnipToolbarPosition pos)
+    {
+        if (toolbarWidth >= bounds.Width - margin * 2)
+        {
+            return bounds.X + margin;
+        }
+
+        double left = pos switch
+        {
+            SnipToolbarPosition.TopLeft => bounds.X + margin,
+            SnipToolbarPosition.TopRight => bounds.X + bounds.Width - toolbarWidth - margin,
+            _ => bounds.X + (bounds.Width - toolbarWidth) / 2, // TopCenter (default / current behaviour)
+        };
+        return Math.Clamp(left, bounds.X + margin, bounds.X + bounds.Width - toolbarWidth - margin);
+    }
 
     private void UpdateToolbarPosition()
     {

@@ -36,6 +36,21 @@
                         <CheckBox IsChecked="{Binding HideSnipSelectionBorder}" Content="{Binding [HideSnipSelectionBorder], Source={x:Static services:LocalizationService.Instance}}"/>
                         <CheckBox IsChecked="{Binding AutoPinScreenshotSelection}" Content="{Binding [AutoPinScreenshotSelection], Source={x:Static services:LocalizationService.Instance}}"/>
                         <CheckBox IsChecked="{Binding DefaultHideSnipToolbar}" Content="{Binding [DefaultHideSnipToolbar], Source={x:Static services:LocalizationService.Instance}}"/>
+                        <Grid ColumnDefinitions="Auto,*" Margin="0,6,0,0">
+                            <TextBlock Text="{Binding [SnipToolbarPosition], Source={x:Static services:LocalizationService.Instance}}"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,12,0"/>
+                            <ComboBox Grid.Column="1"
+                                      ItemsSource="{Binding AvailableSnipToolbarPositions}"
+                                      SelectedValue="{Binding SnipToolbarPosition}"
+                                      SelectedValueBinding="{Binding Value}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:CompileBindings="False">
+                                        <TextBlock Text="{Binding DisplayName}"/>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </Grid>
                         <CheckBox IsChecked="{Binding ShowSnipCursor}" Content="{Binding [ShowSnipCursor], Source={x:Static services:LocalizationService.Instance}}"/>
                     </StackPanel>
                 </Expander>

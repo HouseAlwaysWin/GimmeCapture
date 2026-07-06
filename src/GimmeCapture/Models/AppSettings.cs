@@ -16,6 +16,8 @@ public enum AIScanEngine { OCR, SAM2 }
 public enum CaptureDelay { Off = 0, OneSecond = 1, ThreeSeconds = 3, FiveSeconds = 5, TenSeconds = 10 }
 public enum OcrTextLayout { PreserveLines, SingleLine }
 public enum ScrollingCaptureDirection { Auto, Vertical, Horizontal }
+// Where the snip region-selection toolbar is pinned along the top of the active screen.
+public enum SnipToolbarPosition { TopLeft, TopCenter, TopRight }
 
 public class TranslatedBlock
 {
@@ -123,6 +125,8 @@ public class AppSettings
     public OcrTextLayout OcrTextLayout { get; set; } = OcrTextLayout.PreserveLines;
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public ScrollingCaptureDirection ScrollingCaptureDirection { get; set; } = ScrollingCaptureDirection.Auto;
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public SnipToolbarPosition SnipToolbarPosition { get; set; } = SnipToolbarPosition.TopCenter;
 
     public bool HideRecordPinDecoration { get; set; } = false;
     public bool HideRecordPinBorder { get; set; } = false;

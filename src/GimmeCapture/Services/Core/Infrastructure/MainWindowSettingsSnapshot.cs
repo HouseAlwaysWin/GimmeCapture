@@ -21,6 +21,7 @@ public sealed class MainWindowSettingsSnapshot
     public required CaptureDelay CaptureDelay { get; init; }
     public required OcrTextLayout OcrTextLayout { get; init; }
     public required ScrollingCaptureDirection ScrollingCaptureDirection { get; init; }
+    public required SnipToolbarPosition SnipToolbarPosition { get; init; }
     public required bool HideRecordPinDecoration { get; init; }
     public required bool HideRecordPinBorder { get; init; }
     public required bool HideRecordSelectionDecoration { get; init; }
@@ -98,6 +99,7 @@ public sealed class MainWindowSettingsSnapshot
             CaptureDelay = settings.CaptureDelay,
             OcrTextLayout = settings.OcrTextLayout,
             ScrollingCaptureDirection = settings.ScrollingCaptureDirection,
+            SnipToolbarPosition = settings.SnipToolbarPosition,
             HideRecordPinDecoration = settings.HideRecordPinDecoration,
             HideRecordPinBorder = settings.HideRecordPinBorder,
             HideRecordSelectionDecoration = settings.HideRecordSelectionDecoration,
@@ -175,6 +177,7 @@ public sealed class MainWindowSettingsSnapshot
         settings.CaptureDelay = CaptureDelay;
         settings.OcrTextLayout = OcrTextLayout;
         settings.ScrollingCaptureDirection = ScrollingCaptureDirection;
+        settings.SnipToolbarPosition = SnipToolbarPosition;
         settings.HideRecordPinDecoration = HideRecordPinDecoration;
         settings.HideRecordPinBorder = HideRecordPinBorder;
         settings.HideRecordSelectionDecoration = HideRecordSelectionDecoration;

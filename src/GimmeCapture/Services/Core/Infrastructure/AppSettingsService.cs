@@ -265,6 +265,8 @@ public class AppSettingsService
         dest.AutoPinScreenshotSelection = source.AutoPinScreenshotSelection;
         dest.CaptureDelay = source.CaptureDelay;
         dest.OcrTextLayout = source.OcrTextLayout;
+        dest.ScrollingCaptureDirection = source.ScrollingCaptureDirection;
+        dest.SnipToolbarPosition = source.SnipToolbarPosition;
         dest.HideRecordPinDecoration = source.HideRecordPinDecoration;
         dest.HideRecordPinBorder = source.HideRecordPinBorder;
         dest.HideRecordSelectionDecoration = source.HideRecordSelectionDecoration;

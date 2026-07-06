@@ -492,12 +492,13 @@ public partial class SnipWindow : Window
                 _viewModel.IsDrawingMode = false;
                 e.Handled = true;
             }
-            else if (_viewModel.CurrentState == SnipState.Selecting || 
-                     _viewModel.CurrentState == SnipState.Selected)
+            else if (SnipWindowViewModel.ShouldClearBoxToDraw(
+                         _viewModel.CurrentState,
+                         _viewModel.SelectionRect.Width > 0 && _viewModel.SelectionRect.Height > 0))
             {
-                // Reset to Detecting to re-enable auto-detection (red box)
-                _viewModel.CurrentState = SnipState.Detecting;
-                _viewModel.SelectionRect = new Rect(0,0,0,0);
+                // First Esc after a box is drawn: clear it and stay in manual draw (Selecting) mode.
+                _viewModel.SelectionRect = new Rect(0, 0, 0, 0);
+                _viewModel.CurrentState = SnipState.Selecting;
                 e.Handled = true;
             }
             else

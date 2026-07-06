@@ -38,6 +38,7 @@ public class MainWindowSettingsPersistenceServiceTests
             CaptureDelay = CaptureDelay.FiveSeconds,
             OcrTextLayout = OcrTextLayout.SingleLine,
             ScrollingCaptureDirection = ScrollingCaptureDirection.Horizontal,
+            SnipToolbarPosition = SnipToolbarPosition.TopRight,
             HideRecordPinDecoration = true,
             HideRecordPinBorder = false,
             HideRecordSelectionDecoration = true,
@@ -104,6 +105,7 @@ public class MainWindowSettingsPersistenceServiceTests
         Assert.Equal(snapshot.CaptureDelay, persisted.CaptureDelay);
         Assert.Equal(snapshot.OcrTextLayout, persisted.OcrTextLayout);
         Assert.Equal(snapshot.ScrollingCaptureDirection, persisted.ScrollingCaptureDirection);
+        Assert.Equal(snapshot.SnipToolbarPosition, persisted.SnipToolbarPosition);
         Assert.Equal(snapshot.TextCopyHotkey, persisted.TextCopyHotkey);
         Assert.Equal(snapshot.EnableAIScan, persisted.EnableAIScan);
         Assert.Equal(snapshot.AIResourcesDirectory, persisted.AIResourcesDirectory);
@@ -123,9 +125,38 @@ public class MainWindowSettingsPersistenceServiceTests
         Assert.Contains("\"RecordHotkey\": \"Shift\\u002BF8\"", savedJson);
         Assert.Contains("\"AutoPinScreenshotSelection\": true", savedJson);
         Assert.Contains("\"CaptureDelay\": \"FiveSeconds\"", savedJson);
+        Assert.Contains("\"SnipToolbarPosition\": \"TopRight\"", savedJson);
         Assert.Contains("\"AIResourcesDirectory\": \"D:\\\\captures\\\\ai\"", savedJson);
         Assert.DoesNotContain("AIScanEngine", savedJson, StringComparison.Ordinal);
         Assert.DoesNotContain("SAM2GridDensity", savedJson, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void LoadSync_RestoresSnipEnumSettings_ThroughUpdateSettings()
+    {
+        // Guards that the load path's field-by-field copy (AppSettingsService.UpdateSettings) actually carries
+        // these enum snip settings — a gap that silently reverted them to defaults on every restart.
+        var tempDir = Path.Combine(
+            Path.GetTempPath(),
+            "GimmeCapture.Tests",
+            nameof(LoadSync_RestoresSnipEnumSettings_ThroughUpdateSettings),
+            Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        File.WriteAllText(
+            Path.Combine(tempDir, "config.json"),
+            $$"""
+            {
+              "ConfigVersion": {{AppSettingsService.CurrentConfigVersion}},
+              "SnipToolbarPosition": "TopRight",
+              "ScrollingCaptureDirection": "Vertical"
+            }
+            """);
+
+        var settingsService = new AppSettingsService(tempDir);
+        settingsService.LoadSync();
+
+        Assert.Equal(SnipToolbarPosition.TopRight, settingsService.Settings.SnipToolbarPosition);
+        Assert.Equal(ScrollingCaptureDirection.Vertical, settingsService.Settings.ScrollingCaptureDirection);
     }
 
     [Theory]

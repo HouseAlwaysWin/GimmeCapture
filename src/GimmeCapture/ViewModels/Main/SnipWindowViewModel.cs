@@ -26,6 +26,14 @@ public enum SnipAutoAction { None, Copy, Pin, EnterRecordMode, TextCopy, Scrolli
 
 public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingToolViewModel
 {
+    /// <summary>
+    /// Two-stage Esc decision for box-select mode: when a box has been drawn (finalized <c>Selected</c> state
+    /// with a non-empty rect), the first Esc clears it and returns to the draw state rather than closing. Any
+    /// other state (empty selection / auto-detect) means Esc closes the overlay. Pure/static so it is testable.
+    /// </summary>
+    internal static bool ShouldClearBoxToDraw(SnipState state, bool hasBox) =>
+        state == SnipState.Selected && hasBox;
+
     private static readonly string[] _localizedPropertyNames =
     {
         nameof(SnipTooltip),

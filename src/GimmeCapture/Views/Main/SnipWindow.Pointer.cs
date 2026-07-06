@@ -284,8 +284,10 @@ public partial class SnipWindow : Window
         }
         
         // 修正：只有左鍵才能開啟新的選取框
-        if (props.IsLeftButtonPressed && _viewModel.RecState == RecordingState.Idle && 
-            (_viewModel.CurrentState == SnipState.Idle || _viewModel.CurrentState == SnipState.Detecting))
+        // Selecting is included so a fresh press RE-ANCHORS _startPoint when resting in manual draw mode
+        // (entered via Esc-clear or the selection-mode hotkey); otherwise the press wouldn't start a new box.
+        if (props.IsLeftButtonPressed && _viewModel.RecState == RecordingState.Idle &&
+            (_viewModel.CurrentState == SnipState.Idle || _viewModel.CurrentState == SnipState.Detecting || _viewModel.CurrentState == SnipState.Selecting))
         {
             _startPoint = point;
             _viewModel.CurrentState = SnipState.Selecting;
@@ -601,7 +603,10 @@ public partial class SnipWindow : Window
         if (TryHandleAnnotationPointerMoved(currentPoint))
             return;
 
-        if (_viewModel.CurrentState == SnipState.Selecting)
+        // Only rubber-band while the button is actually held: 'Selecting' is also a resting manual-draw state
+        // (after an Esc-clear or the selection-mode hotkey), where a plain hover must NOT drag a phantom box
+        // out from a stale start point.
+        if (_viewModel.CurrentState == SnipState.Selecting && e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
         {
             var x = Math.Min(_startPoint.X, currentPoint.X);
             var y = Math.Min(_startPoint.Y, currentPoint.Y);
