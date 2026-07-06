@@ -43,7 +43,7 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
 
     internal VideoEditViewModel(
         string sourcePath, double durationSeconds, int fps, int sourceWidth, int sourceHeight,
-        VideoEditResult initial, Action<VideoEditResult> onApply)
+        VideoEditResult initial, Action<VideoEditResult> onApply, Bitmap? initialPreview = null)
     {
         _sourcePath = sourcePath;
         _fps = fps > 0 ? fps : 30;
@@ -59,6 +59,11 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
         _decodeH = Math.Max(2, (int)(_sourceHeight * scale)); _decodeH -= _decodeH & 1;
 
         Title = Path.GetFileName(sourcePath);
+
+        // Show the queue thumbnail immediately as a placeholder so a slow first-frame decode (big / non-faststart
+        // MP4 = large moov read) doesn't leave the preview blank; the sharp first frame replaces it once
+        // ShowFrameAtAsync finishes.
+        Frame = initialPreview;
 
         PlayPauseCommand = ReactiveCommand.CreateFromTask(TogglePlayAsync);
         StepBackCommand = ReactiveCommand.CreateFromTask(() => StepAsync(-1));

@@ -1224,7 +1224,8 @@ public partial class MainWindowViewModel
                     item.OutputName = editorVm.OutputFileName;
                 }
                 RefreshSelectedPreview(item);
-            });
+            },
+            item.Thumbnail); // placeholder preview while the first frame decodes (slow for big/non-faststart MP4)
         editorVm = vm;
 
         // Output filename + quality compare moved from the 編輯 tab into the editor window.
