@@ -13,6 +13,8 @@
             "args": [
                 "build",
                 "${workspaceFolder}/src/GimmeCapture/GimmeCapture.csproj",
+                "-f",
+                "net10.0-windows10.0.19041.0",
                 "/property:GenerateFullPaths=true",
                 "/consoleloggerparameters:NoSummary;ForceNoAlign"
             ],

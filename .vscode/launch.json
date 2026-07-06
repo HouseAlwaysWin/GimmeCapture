@@ -24,6 +24,8 @@
                 "run",
                 "--project",
                 "${workspaceFolder}/src/GimmeCapture/GimmeCapture.csproj",
+                "--framework",
+                "net10.0-windows10.0.19041.0",
                 "--no-build"
             ],
             "cwd": "${workspaceFolder}/src/GimmeCapture",
@@ -35,9 +37,9 @@
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "debug-build",
-            "program": "${workspaceFolder}/src/GimmeCapture/bin/Debug/net10.0-windows/GimmeCapture.exe",
+            "program": "${workspaceFolder}/src/GimmeCapture/bin/Debug/net10.0-windows10.0.19041.0/GimmeCapture.exe",
             "args": [],
-            "cwd": "${workspaceFolder}/src/GimmeCapture/bin/Debug/net10.0-windows",
+            "cwd": "${workspaceFolder}/src/GimmeCapture/bin/Debug/net10.0-windows10.0.19041.0",
             "console": "internalConsole",
             "stopAtEntry": false
         },
