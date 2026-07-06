@@ -270,8 +270,19 @@ internal sealed class LibavVideoFramePlayer : IDisposable
                 AVFormatContext* fmt = null;
                 try
                 {
+                    // Same open-stage timing as PlayAsync (queue-add path): a slow probe on a big/non-faststart
+                    // file is the moov read in open_input. Logged only when slow.
+                    var probeStage = Stopwatch.StartNew();
                     ThrowIfErr(ffmpeg.avformat_open_input(&fmt, videoPath, null, null), "open_input");
+                    long openMs = probeStage.ElapsedMilliseconds; probeStage.Restart();
                     ThrowIfErr(ffmpeg.avformat_find_stream_info(fmt, null), "find_stream_info");
+                    long findMs = probeStage.ElapsedMilliseconds;
+                    if (openMs + findMs > 250)
+                    {
+                        AppLog.Information(
+                            $"LibavVideoFramePlayer.ProbeAsync slow probe {System.IO.Path.GetFileName(videoPath)}: " +
+                            $"open_input={openMs}ms find_stream_info={findMs}ms");
+                    }
 
                     double duration = fmt->duration > 0 ? fmt->duration / (double)ffmpeg.AV_TIME_BASE : 0;
 
@@ -375,6 +386,11 @@ internal sealed class LibavVideoFramePlayer : IDisposable
 
                 try
                 {
+                    // Per-stage timing so a slow first-frame can be diagnosed from the log: for a large / non-
+                    // faststart MP4 the cost is the moov (index) read inside open_input, which probesize/
+                    // analyzeduration do NOT bound. Only logged when the open is actually slow (see below).
+                    var openStage = Stopwatch.StartNew();
+
                     // Bound the container scan so a pathological large file can't stall the open. Values are
                     // >= libav defaults, so well-formed media still detects all streams/duration; they only cap
                     // truly degenerate inputs. probesize in bytes, analyzeduration in microseconds.
@@ -384,7 +400,9 @@ internal sealed class LibavVideoFramePlayer : IDisposable
                     int openRc = ffmpeg.avformat_open_input(&fmt, videoPath, null, &openOpts);
                     ffmpeg.av_dict_free(&openOpts);
                     ThrowIfErr(openRc, "open_input");
+                    long openMs = openStage.ElapsedMilliseconds; openStage.Restart();
                     ThrowIfErr(ffmpeg.avformat_find_stream_info(fmt, null), "find_stream_info");
+                    long findMs = openStage.ElapsedMilliseconds; openStage.Restart();
 
                     int videoStream = ffmpeg.av_find_best_stream(fmt, AVMediaType.AVMEDIA_TYPE_VIDEO, -1, -1, null, 0);
                     if (videoStream < 0)
@@ -428,6 +446,7 @@ internal sealed class LibavVideoFramePlayer : IDisposable
                     decCtx->thread_count = 0;
                     decCtx->thread_type = ffmpeg.FF_THREAD_FRAME | ffmpeg.FF_THREAD_SLICE;
                     ThrowIfErr(ffmpeg.avcodec_open2(decCtx, dec, null), "open_decoder");
+                    long codecMs = openStage.ElapsedMilliseconds; openStage.Restart();
                     AppLog.Information(hardwareDecode
                         ? "LibavVideoFramePlayer.PlayAsync D3D11VA hardware decode"
                         : $"LibavVideoFramePlayer.PlayAsync software decode ({hwReason ?? "hw unavailable"})");
@@ -452,6 +471,19 @@ internal sealed class LibavVideoFramePlayer : IDisposable
                     if (startSeconds > 0)
                     {
                         Seek(fmt, decCtx, videoStream, st->time_base, startSeconds);
+                    }
+                    long seekMs = openStage.ElapsedMilliseconds;
+
+                    // One diagnostic line only when the open is slow (so fast opens stay silent). The stage that
+                    // dominates tells us why: open_input = moov/index read (large / non-faststart file), the rest is
+                    // stream analysis / codec+GPU init / keyframe seek.
+                    long openTotalMs = openMs + findMs + codecMs + seekMs;
+                    if (openTotalMs > 250)
+                    {
+                        AppLog.Information(
+                            $"LibavVideoFramePlayer.PlayAsync slow open {System.IO.Path.GetFileName(videoPath)} " +
+                            $"{par->width}x{par->height} {par->codec_id} hw={hardwareDecode}: total={openTotalMs}ms " +
+                            $"open_input={openMs}ms find_stream_info={findMs}ms codec/hw={codecMs}ms seek={seekMs}ms");
                     }
 
                     double loopStartSeconds = Math.Max(0, startSeconds);

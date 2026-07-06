@@ -245,6 +245,17 @@
                 <Panel IsVisible="{Binding IsComparing}" Background="#101010">
                     <views:CompareView DataContext="{Binding Compare}" Margin="4"/>
                 </Panel>
+
+                <!-- First-frame loading: opening a large / non-faststart MP4 must read the moov index before any
+                     frame decodes. The preview shows the queue thumbnail (bound to Frame) behind this dimmed
+                     spinner so it isn't a blank freeze; cleared when the sharp first frame is ready. -->
+                <Border IsVisible="{Binding IsPreparing}" Background="#55000000" IsHitTestVisible="False">
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10">
+                        <ProgressBar IsIndeterminate="True" Width="160" Height="4"/>
+                        <TextBlock Text="{Binding [EditorLoadingVideo], Source={x:Static services:LocalizationService.Instance}}"
+                                   Foreground="White" FontSize="13" HorizontalAlignment="Center"/>
+                    </StackPanel>
+                </Border>
             </Grid>
         </Border>
 
