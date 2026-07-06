@@ -244,17 +244,13 @@ public partial class SnipWindow : Window
 
             Avalonia.Threading.Dispatcher.UIThread.Post(() =>
             {
-                if (_viewModel == null
-                    || !_viewModel.ShowAIScanBox
-                    || _viewModel.IsTranslationMode
-                    || _viewModel.CurrentState != SnipState.Detecting)
-                {
-                    return;
-                }
-
                 try
                 {
-                    _viewModel.AIScanCommand?.Execute().Subscribe();
+                    // Route the open-time OCR auto-scan through the VM: the gate + skip-logging live in one
+                    // place, and the scan is started directly (RunOCRScanAsync) instead of via the
+                    // isExecuting-gated AIScanCommand, which could silently drop this trigger so "entering
+                    // screenshot mode runs no OCR at all" with nothing in the log.
+                    _viewModel?.RequestOcrAutoScanOnEntry("Open");
                 }
                 catch (Exception ex)
                 {

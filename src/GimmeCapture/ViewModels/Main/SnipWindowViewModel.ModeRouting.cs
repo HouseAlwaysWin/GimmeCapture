@@ -488,6 +488,10 @@ public partial class SnipWindowViewModel
                 LockSelectedScreenshotSelection = _mainVm?.AutoPinScreenshotSelection == true;
                 AutoActionMode = ResolveAutoActionMode(mode, _mainVm?.AutoPinScreenshotSelection == true);
                 HandleScreenshotModeHotkeyCommand?.Execute().Subscribe();
+                // Reused overlay: the snip hotkey was pressed while the overlay is still open, so OnOpened does
+                // NOT run again and the open-time OCR auto-scan never re-fires. Re-trigger it here so re-entering
+                // screenshot mode shows OCR candidates just like a fresh open.
+                RequestOcrAutoScanOnEntry("ReenterNormal");
                 break;
             case CaptureMode.Record:
                 LockSelectedScreenshotSelection = false;
