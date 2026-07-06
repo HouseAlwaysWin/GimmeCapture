@@ -264,10 +264,19 @@ public partial class SnipWindowViewModel
                 ClearRecordWindowSelection();
             }
             this.RaiseAndSetIfChanged(ref _selectionRect, value);
+            this.RaisePropertyChanged(nameof(HasSelectionArea));
+            // HasSelectionArea gates the AI-scan candidate layer in the resting-Selecting state, so refresh it
+            // as the rect changes (start of a drag hides the candidates; clearing shows them again).
+            this.RaisePropertyChanged(nameof(IsAiScanCandidateLayerVisible));
             RefreshInteractionRegion();
             UpdateToolbarPosition();
         }
     }
+
+    // True only when a real (non-empty) box exists. Gates the selection visual (border + wing decoration) so
+    // it stays hidden while resting in manual-draw mode with an empty rect — e.g. right after an Esc-clear —
+    // instead of drawing the wings at the origin (top-left corner).
+    public bool HasSelectionArea => SelectionRect.Width > 0 && SelectionRect.Height > 0;
 
     // Auto-Detect OCR Monitor Loop
     private CancellationTokenSource? _autoDetectCts;

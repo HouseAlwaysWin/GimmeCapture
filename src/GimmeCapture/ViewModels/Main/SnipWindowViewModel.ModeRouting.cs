@@ -352,6 +352,9 @@ public partial class SnipWindowViewModel
     public ReactiveCommand<Unit, Unit> ScrollingCaptureCommand { get; set; } = null!;
     public ReactiveCommand<ScrollingCaptureDirection, Unit> SetScrollDirectionCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> CloseCommand { get; set; } = null!;
+    // Esc-specific: two-stage dismiss (clear a drawn box first, then close). Kept separate from CloseCommand
+    // so the right-click Close menu and after-capture closes still close outright.
+    public ReactiveCommand<Unit, Unit> DismissOrCloseCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> ToggleModeCommand { get; set; } = null!;
     public ReactiveCommand<bool, Unit> SetCaptureModeCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> SetTranslationModeCommand { get; set; } = null!;
@@ -554,6 +557,7 @@ public partial class SnipWindowViewModel
             canExecuteHotkeys);
 
         CloseCommand = CreateCommand(Close, nameof(CloseCommand), canExecuteHotkeys);
+        DismissOrCloseCommand = CreateCommand(DismissOrClose, nameof(DismissOrCloseCommand), canExecuteHotkeys);
 
         ToggleModeCommand = CreateCommand(() =>
         {
@@ -909,7 +913,35 @@ public partial class SnipWindowViewModel
         _scanCts?.Cancel();
         CloseAction?.Invoke();
     }
-    
+
+    /// <summary>
+    /// The single Esc / dismiss decision for the snip overlay, invoked by BOTH the Esc key-binding
+    /// (screenshot / recording modes) and the low-level keyboard hook (translation / unfocused capture), so the
+    /// behaviour can't diverge. Two-stage in box-select: a finalized box is cleared first (staying in manual
+    /// draw mode) and only a second Esc — with no box — closes the overlay.
+    /// </summary>
+    public void DismissOrClose()
+    {
+        if (_manualScrollActive) { FinishManualScrollCapture(cancelled: true); return; }
+        if (IsEnteringText) { CancelTextEntryCommand.Execute(Unit.Default).Subscribe(); return; }
+        if (RecState != RecordingState.Idle) { return; }
+        if (IsTranslationMode) { Close(); return; }
+        if (IsDrawingMode) { IsDrawingMode = false; return; }
+        if (ShouldClearBoxToDraw(CurrentState, SelectionRect.Width > 0 && SelectionRect.Height > 0))
+        {
+            SelectionRect = new Rect(0, 0, 0, 0);
+            CurrentState = SnipState.Selecting;
+            // Back in the draw-ready state, re-activate the OCR auto-scan just like the auto-detect (Detecting)
+            // state does — the transition into Selecting cancelled it, so kick off a fresh scan.
+            if (ShouldTriggerAutoScan())
+            {
+                TriggerAutoScanCommand?.Execute(Unit.Default).Subscribe();
+            }
+            return;
+        }
+        Close();
+    }
+
     public void HandleRightClick()
     {
         if (RecState != RecordingState.Idle) return;

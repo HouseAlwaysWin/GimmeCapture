@@ -53,7 +53,10 @@ public partial class SnipWindowViewModel
     /// </summary>
     public bool IsAiScanCandidateLayerVisible =>
         _mainVm?.ShowAIScanBox == true &&
-        ((CurrentState == SnipState.Detecting && CurrentMode != SnipMode.Translation)
+        (((CurrentState == SnipState.Detecting
+           // Also show in the resting manual-draw state (empty box, e.g. after an Esc-clear) so the re-run OCR
+           // candidates are visible; an active drag (HasSelectionArea) hides them again.
+           || (CurrentState == SnipState.Selecting && !HasSelectionArea)) && CurrentMode != SnipMode.Translation)
          || (CurrentMode == SnipMode.Translation && ShowOcrResult));
 
     /// <summary>
@@ -828,6 +831,14 @@ public partial class SnipWindowViewModel
     public ReactiveCommand<object?, Unit> CopyTranslationTextCommand { get; set; } = null!;
     public ReactiveCommand<object?, Unit> PinTranslationCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> PinTranslationResultsCommand { get; set; } = null!;
+
+    /// <summary>
+    /// Whether the OCR auto-scan should run in the current "ready to select" state: AI scan enabled, not in
+    /// translation mode, and at least one screen is known. Shared by the state controller (which scans on
+    /// entering Detecting) and the Esc-clear path (which returns to the manual draw state).
+    /// </summary>
+    internal bool ShouldTriggerAutoScan() =>
+        EnableAIScan && CurrentMode != SnipMode.Translation && AllScreenBounds?.Count > 0;
 
     private void InitializeSelectionCommands()
     {

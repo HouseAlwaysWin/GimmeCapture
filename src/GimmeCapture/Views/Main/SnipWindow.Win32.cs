@@ -281,54 +281,10 @@ public partial class SnipWindow : Window
 
     private void PostHandleDismissOrCloseHotkey()
     {
-        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-        {
-            var vm = _viewModel;
-            if (vm == null) return;
-
-            // During manual scrolling capture, Esc must cancel the session — not reset the
-            // (hidden) selection — whichever path delivered the key.
-            if (vm.IsManualScrollActive)
-            {
-                vm.FinishManualScrollCapture(cancelled: true);
-                return;
-            }
-
-            if (vm.IsEnteringText)
-            {
-                vm.CancelTextEntryCommand.Execute(System.Reactive.Unit.Default).Subscribe();
-                return;
-            }
-
-            if (vm.RecState != RecordingState.Idle)
-            {
-                return;
-            }
-
-            if (vm.IsTranslationMode)
-            {
-                Close();
-                return;
-            }
-
-            if (vm.IsDrawingMode)
-            {
-                vm.IsDrawingMode = false;
-                return;
-            }
-
-            // Two-stage Esc: a drawn box is cleared first (staying in manual draw / Selecting mode); only a
-            // second Esc with no box closes the overlay — instead of dropping back to auto-detect.
-            bool hasBox = vm.SelectionRect.Width > 0 && vm.SelectionRect.Height > 0;
-            if (SnipWindowViewModel.ShouldClearBoxToDraw(vm.CurrentState, hasBox))
-            {
-                vm.SelectionRect = new Rect(0, 0, 0, 0);
-                vm.CurrentState = SnipState.Selecting;
-                return;
-            }
-
-            Close();
-        }, Avalonia.Threading.DispatcherPriority.Input);
+        // Route to the same VM decision the Esc key-binding uses, so the two paths can't diverge.
+        Avalonia.Threading.Dispatcher.UIThread.Post(
+            () => _viewModel?.DismissOrClose(),
+            Avalonia.Threading.DispatcherPriority.Input);
     }
 
     private bool TryHandleUnfocusedCaptureHotkey(Func<string, bool> isMatch)
