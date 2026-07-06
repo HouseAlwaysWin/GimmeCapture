@@ -197,11 +197,19 @@ public partial class SnipWindowViewModel
             if (_mainVm != null)
             {
                 _mainVm.ShowAIScanBox = value;
+                // IsAiScanCandidateLayerVisible reads _mainVm.ShowAIScanBox but is only re-raised by the
+                // CurrentState/SelectionRect setters — raise it here too so toggling the box updates the
+                // overlay immediately instead of waiting for the next state change.
+                this.RaisePropertyChanged(nameof(IsAiScanCandidateLayerVisible));
                 RefreshProjectedOcrRects();
 
+                // Scan in the same states OCR results can be stored/shown (Detecting or the resting
+                // manual-draw state), consistent with ApplyOcrScanResult / IsAiScanCandidateLayerVisible.
+                bool stateAllowsOcr = CurrentState == SnipState.Detecting
+                    || (CurrentState == SnipState.Selecting && !HasSelectionArea);
                 if (value
                     && EnableAIScan
-                    && CurrentState == SnipState.Detecting
+                    && stateAllowsOcr
                     && CurrentMode != SnipMode.Translation
                     && AllScreenBounds?.Count > 0)
                 {
