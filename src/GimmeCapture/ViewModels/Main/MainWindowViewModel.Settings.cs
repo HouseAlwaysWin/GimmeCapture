@@ -553,11 +553,20 @@ public partial class MainWindowViewModel
 
             if (!_isDataLoading)
             {
+                // Turning ON OCR selection detection implies wanting local AI on. Without this, the master
+                // EnableAI can be OFF while this sub-toggle is ON, and the OCR auto-scan silently aborts at the
+                // EnableAI gate in RunOCRScanAsync — nothing ever appears and there is no visible reason.
+                // Force the master on so this toggle can never be a dead switch. Only on an explicit user toggle
+                // (guarded by !_isDataLoading) so loading a saved config never overrides a persisted EnableAI.
+                if (value && !EnableAI)
+                {
+                    EnableAI = true;
+                }
                 QueueSettingsSave();
             }
         }
     }
-    
+
     private bool _enableAI = true;
     public bool EnableAI
     {
