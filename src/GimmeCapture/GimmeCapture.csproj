@@ -7,7 +7,7 @@
     <TargetFrameworks>net10.0-windows10.0.19041.0;net10.0</TargetFrameworks>
     <Nullable>enable</Nullable>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
-    <Version>0.52.0</Version>
+    <Version>0.60.0</Version>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <ErrorOnDuplicatePublishOutputFiles>false</ErrorOnDuplicatePublishOutputFiles>
     <!-- Drop unused dependency satellite assemblies (keeps en + Chinese + Japanese for our UI). -->
@@ -36,7 +36,7 @@
       <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
     </None>
     <!-- Native FFmpeg shared libs. Windows DLLs: scripts/ensure-ffmpeg-libs.ps1.
-         Linux .so (libavcodec.so.62 …): scripts/ensure-ffmpeg-libs-linux.sh. -->
+         Linux .so (libavcodec.so.62 ??: scripts/ensure-ffmpeg-libs-linux.sh. -->
     <Content Include="ffmpeg-lib\*.dll"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest"
