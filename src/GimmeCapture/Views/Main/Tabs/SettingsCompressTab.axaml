@@ -4,6 +4,7 @@
              xmlns:services="using:GimmeCapture.Services.Core.Infrastructure"
              xmlns:models="using:GimmeCapture.Models"
              xmlns:conv="using:Avalonia.Data.Converters"
+             xmlns:converters="using:GimmeCapture.Converters"
              x:Class="GimmeCapture.Views.Main.Tabs.SettingsCompressTab"
              x:DataType="vm:MainWindowViewModel">
     <UserControl.Styles>
@@ -74,6 +75,23 @@
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
+
+                            <!-- Create a category subfolder inside the active working area. Each row can then sort
+                                 its output into one of these categories via the per-row dropdown below. -->
+                            <DockPanel IsEnabled="{Binding ActiveWorkingDir, Converter={x:Static conv:ObjectConverters.IsNotNull}}">
+                                <Button Content="{Binding [CompressAddCategory], Source={x:Static services:LocalizationService.Instance}}"
+                                        DockPanel.Dock="Right"
+                                        Theme="{StaticResource SmallGothicMetalButton}"
+                                        FontSize="10"
+                                        Command="{Binding AddCompressCategoryCommand}"
+                                        Margin="10,0,0,0"/>
+                                <TextBlock Text="{Binding [CompressCategoryLabel], Source={x:Static services:LocalizationService.Instance}}"
+                                           DockPanel.Dock="Left"
+                                           VerticalAlignment="Center" FontSize="12" Margin="0,0,10,0"/>
+                                <TextBox Text="{Binding NewCategoryName}"
+                                         FontSize="11"
+                                         PlaceholderText="{Binding [CompressCategoryNameWatermark], Source={x:Static services:LocalizationService.Instance}}"/>
+                            </DockPanel>
                         </StackPanel>
 
                         <StackPanel Orientation="Horizontal" Spacing="10">
@@ -115,7 +133,9 @@
                                                     VerticalAlignment="Center" Margin="0,0,10,0">
                                                 <Image Source="{Binding Thumbnail}" Stretch="Uniform"/>
                                             </Border>
-                                            <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                                            <!-- MinWidth keeps the file-name / status / estimate column readable so the
+                                                 two dropdowns + action buttons on the right can't crowd it. -->
+                                            <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center" MinWidth="210">
                                                 <!-- Status text sits right after the file name. -->
                                                 <Grid ColumnDefinitions="Auto,*">
                                                     <!-- Cap the name so very long files can't push the status/buttons around. -->
@@ -179,6 +199,28 @@
                                                         </DataTemplate>
                                                     </ComboBox.ItemTemplate>
                                                 </ComboBox>
+                                                <!-- Per-item output category: sort this file's output into a subfolder
+                                                     of the active working area; the empty sentinel keeps the global /
+                                                     next-to-source default. Entries show the category (leaf) name. -->
+                                                <ComboBox ItemsSource="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).CompressCategoryChoices}"
+                                                          SelectedItem="{Binding SelectedOutputDir}"
+                                                          IsEnabled="{Binding IsActive, Converter={StaticResource BoolInvertConverter}}"
+                                                          FontSize="10" MinWidth="96" MaxWidth="150" VerticalAlignment="Center"
+                                                          ToolTip.Tip="{Binding [CompressItemOutputDirTip], Source={x:Static services:LocalizationService.Instance}}">
+                                                    <ComboBox.ItemTemplate>
+                                                        <DataTemplate x:CompileBindings="False">
+                                                            <!-- Empty string = the localized "default" label (reactive to
+                                                                 language); a category path shows just its leaf name. -->
+                                                            <Panel>
+                                                                <TextBlock Text="{Binding [CompressOutputDirDefault], Source={x:Static services:LocalizationService.Instance}}"
+                                                                           IsVisible="{Binding Converter={x:Static conv:StringConverters.IsNullOrEmpty}}"/>
+                                                                <TextBlock Text="{Binding Converter={x:Static converters:FolderLeafNameConverter.Instance}}"
+                                                                           TextTrimming="CharacterEllipsis"
+                                                                           IsVisible="{Binding Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"/>
+                                                            </Panel>
+                                                        </DataTemplate>
+                                                    </ComboBox.ItemTemplate>
+                                                </ComboBox>
                                                 <!-- Per-row 編輯 (the former 編輯 tab now lives on each row). -->
                                                 <Button Content="{Binding [CompressEditButton], Source={x:Static services:LocalizationService.Instance}}"
                                                         Theme="{StaticResource SmallGothicMetalButton}"
@@ -217,6 +259,12 @@
                                                         FontSize="10"
                                                         IsVisible="{Binding CanCancel}"
                                                         Command="{Binding CancelCommand}"/>
+                                                <!-- Open the produced file's folder; only shown once this row has finished. -->
+                                                <Button Content="{Binding [CompressOpenOutputFolder], Source={x:Static services:LocalizationService.Instance}}"
+                                                        Theme="{StaticResource SmallGothicMetalButton}"
+                                                        FontSize="10"
+                                                        IsVisible="{Binding HasOutput}"
+                                                        Command="{Binding RevealCommand}"/>
                                             </StackPanel>
                                         </Grid>
                                         </Border>
@@ -347,6 +395,43 @@
                                       SelectedItem="{Binding SelectedCompressPreset}"
                                       HorizontalAlignment="Stretch"/>
                         </DockPanel>
+
+                        <!-- Video filters (HandBrake-style safe 1:1 subset): denoise/sharpen strength pickers
+                             plus deblock/grayscale toggles. Applied to every encode via the settings snapshot. -->
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="{Binding [CompressFiltersGroup], Source={x:Static services:LocalizationService.Instance}}"
+                                       FontSize="12" Foreground="{DynamicResource ThemeAccentBrush}"/>
+                            <DockPanel>
+                                <TextBlock Text="{Binding [CompressFilterDenoise], Source={x:Static services:LocalizationService.Instance}}"
+                                           VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                <ComboBox ItemsSource="{Binding CompressDenoiseOptions}"
+                                          SelectedItem="{Binding SelectedCompressDenoise}"
+                                          HorizontalAlignment="Stretch">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:MainWindowViewModel+CompressDenoiseOption">
+                                            <TextBlock Text="{Binding Label}"/>
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                            </DockPanel>
+                            <DockPanel>
+                                <TextBlock Text="{Binding [CompressFilterSharpen], Source={x:Static services:LocalizationService.Instance}}"
+                                           VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                <ComboBox ItemsSource="{Binding CompressSharpenOptions}"
+                                          SelectedItem="{Binding SelectedCompressSharpen}"
+                                          HorizontalAlignment="Stretch">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:MainWindowViewModel+CompressSharpenOption">
+                                            <TextBlock Text="{Binding Label}"/>
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                            </DockPanel>
+                            <CheckBox IsChecked="{Binding CompressDeblock}"
+                                      Content="{Binding [CompressFilterDeblock], Source={x:Static services:LocalizationService.Instance}}"/>
+                            <CheckBox IsChecked="{Binding CompressGrayscale}"
+                                      Content="{Binding [CompressFilterGrayscale], Source={x:Static services:LocalizationService.Instance}}"/>
+                        </StackPanel>
 
                         <!-- Output format -->
                         <DockPanel>

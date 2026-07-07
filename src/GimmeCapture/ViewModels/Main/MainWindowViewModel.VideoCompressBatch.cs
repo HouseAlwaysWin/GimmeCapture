@@ -53,6 +53,7 @@ public partial class MainWindowViewModel
             EstimateCommand = ReactiveCommand.Create(
                 () => EstimateRequested?.Invoke(this),
                 this.WhenAnyValue(x => x.IsEstimating, x => x.Status, (est, st) => !est && st != CompressQueueStatus.Running));
+            RevealCommand = ReactiveCommand.Create(Reveal, this.WhenAnyValue(x => x.HasOutput));
             UpdateStatusText();
         }
 
@@ -116,6 +117,32 @@ public partial class MainWindowViewModel
             set => this.RaiseAndSetIfChanged(ref _selectedPreset, value);
         }
 
+        // Per-item output category (a subfolder of the active working area) chosen from the row dropdown. null /
+        // the "default" sentinel (CompressCategoryChoices[0], an empty string) means "use the global 輸出設定
+        // folder, else next to the source"; otherwise this is the full path of the chosen category subfolder.
+        private string? _selectedOutputDir = string.Empty;
+        public string? SelectedOutputDir
+        {
+            get => _selectedOutputDir;
+            set => this.RaiseAndSetIfChanged(ref _selectedOutputDir, value);
+        }
+
+        // The full path of the file this item produced, set on success. Drives the per-row "open output
+        // folder" button (it needs a concrete existing file for explorer /select).
+        private string? _outputPath;
+        public string? OutputPath
+        {
+            get => _outputPath;
+            internal set
+            {
+                this.RaiseAndSetIfChanged(ref _outputPath, value);
+                this.RaisePropertyChanged(nameof(HasOutput));
+            }
+        }
+
+        /// <summary>True once this item has finished and recorded a produced output path (enables 開啟資料夾).</summary>
+        public bool HasOutput => Status == CompressQueueStatus.Done && !string.IsNullOrEmpty(OutputPath);
+
         // Set by the view model so the per-item Start / Estimate buttons can call back into it.
         internal Action<CompressQueueItem>? StartRequested;
         internal Action<CompressQueueItem>? EstimateRequested;
@@ -149,6 +176,7 @@ public partial class MainWindowViewModel
                 this.RaisePropertyChanged(nameof(ShowStart));
                 this.RaisePropertyChanged(nameof(ShowColdResume));
                 this.RaisePropertyChanged(nameof(ShowResumeHint));
+                this.RaisePropertyChanged(nameof(HasOutput));
             }
         }
 
@@ -433,6 +461,17 @@ public partial class MainWindowViewModel
         public ReactiveCommand<Unit, Unit> ResumeCommand { get; }
         public ReactiveCommand<Unit, Unit> CancelCommand { get; }
         public ReactiveCommand<Unit, Unit> EstimateCommand { get; }
+        public ReactiveCommand<Unit, Unit> RevealCommand { get; }
+
+        // Open the produced file's folder in Explorer (selected). Gated on HasOutput so it only runs once the
+        // file exists; RevealInFileExplorer additionally guards File.Exists internally.
+        private void Reveal()
+        {
+            if (!string.IsNullOrEmpty(OutputPath))
+            {
+                FileLocationService.RevealInFileExplorer(OutputPath);
+            }
+        }
 
         // Prepares the item just before a worker is launched (caller has ensured a batch context exists).
         internal void PrepareForStart(CancellationToken batchToken)
@@ -498,6 +537,20 @@ public partial class MainWindowViewModel
 
     // Persisted batch "working directories" (source folders). Their videos auto-load into the queue on startup.
     public ObservableCollection<string> CompressWorkingDirectories { get; } = new();
+
+    // ItemsSource for each row's output-category dropdown: an empty-string sentinel ("default": global folder,
+    // else next to source) followed by the immediate subfolders (categories) of the ACTIVE working area. Rebuilt
+    // whenever the active working area changes and appended to when a category is created. The empty sentinel
+    // re-localizes via the row's item template; category entries display their leaf name (FolderLeafNameConverter).
+    public ObservableCollection<string> CompressCategoryChoices { get; } = new();
+
+    // New-category name typed in the working-area section; "新增分類" creates a subfolder of the active area.
+    private string _newCategoryName = string.Empty;
+    public string NewCategoryName
+    {
+        get => _newCategoryName;
+        set => this.RaiseAndSetIfChanged(ref _newCategoryName, value);
+    }
 
     public Func<Task<IReadOnlyList<string>>>? PickCompressFilesAction { get; set; }
     public Func<Task<string?>>? PickCompressFolderAction { get; set; }
@@ -565,6 +618,7 @@ public partial class MainWindowViewModel
     public ReactiveCommand<Unit, Unit> AddCompressWorkingDirCommand { get; private set; } = null!;
     public ReactiveCommand<string, Unit> SwitchCompressWorkingDirCommand { get; private set; } = null!;
     public ReactiveCommand<string, Unit> RemoveCompressWorkingDirCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> AddCompressCategoryCommand { get; private set; } = null!;
 
     private string? _activeWorkingDir;
     // The working directory whose videos are currently loaded in the queue (auto-loaded again next launch).
@@ -613,6 +667,13 @@ public partial class MainWindowViewModel
         SwitchCompressWorkingDirCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.SwitchWorkingDir", ex));
         RemoveCompressWorkingDirCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.RemoveWorkingDir", ex));
 
+        // Create a category (subfolder) under the active working area. Enabled only when a working area is active
+        // and no batch is running (creating dirs while encoding is fine, but keep it consistent with switching).
+        var canAddCategory = this.WhenAnyValue(
+            x => x.ActiveWorkingDir, x => x.IsBatchRunning, (area, busy) => !string.IsNullOrEmpty(area) && !busy);
+        AddCompressCategoryCommand = ReactiveCommand.Create(AddCompressCategory, canAddCategory);
+        AddCompressCategoryCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.AddCategory", ex));
+
         // Restore the persisted per-file edit/done state BEFORE any queue items are created below.
         _itemStates = CompressItemStateService.Load();
         CompressSegmentStore.PruneOrphans(); // drop abandoned resume chunks from crashed/old sessions
@@ -623,6 +684,8 @@ public partial class MainWindowViewModel
         {
             CompressWorkingDirectories.Add(dir);
         }
+        RefreshCategoryChoices(); // seed the row category dropdown (just the default until an area is active)
+
         string? startupDir = dirState.Directories
             .FirstOrDefault(d => string.Equals(d, dirState.Active, StringComparison.OrdinalIgnoreCase))
             ?? dirState.Directories.FirstOrDefault();
@@ -630,6 +693,83 @@ public partial class MainWindowViewModel
         {
             SwitchToWorkingDir(startupDir);
         }
+    }
+
+    // Rebuilds the per-row category dropdown for the ACTIVE working area: an empty "default" sentinel followed by
+    // that area's immediate subfolders (categories). Called on switch / startup / active-area removal — the queue
+    // is either empty or its items get reset alongside, so a full rebuild never silently drops a live selection.
+    private void RefreshCategoryChoices()
+    {
+        CompressCategoryChoices.Clear();
+        CompressCategoryChoices.Add(string.Empty); // index 0 = "default (global / next to source)"
+
+        string? area = _activeWorkingDir;
+        if (string.IsNullOrEmpty(area))
+        {
+            return;
+        }
+
+        try
+        {
+            foreach (string sub in Directory.GetDirectories(area).OrderBy(d => d, StringComparer.OrdinalIgnoreCase))
+            {
+                CompressCategoryChoices.Add(sub);
+            }
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error("Compress.RefreshCategories", ex); // unreadable/removed area — just the default remains
+        }
+    }
+
+    // Creates a category subfolder (named in NewCategoryName) directly under the active working area, then appends
+    // it to the dropdown (incremental, so existing rows keep their selection). No-op without an active area / name.
+    private void AddCompressCategory()
+    {
+        string? area = _activeWorkingDir;
+        if (string.IsNullOrEmpty(area))
+        {
+            return;
+        }
+
+        string name = SanitizeCategoryName(NewCategoryName);
+        if (name.Length == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            string full = Path.Combine(area, name);
+            Directory.CreateDirectory(full); // idempotent — creating an existing category just selects it
+            if (!CompressCategoryChoices.Any(c => string.Equals(c, full, StringComparison.OrdinalIgnoreCase)))
+            {
+                CompressCategoryChoices.Add(full);
+            }
+            NewCategoryName = string.Empty;
+            ShowToastAction?.Invoke(LocalizationService.Instance["CompressCategoryCreated"], ToastSeverity.Success);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error("Compress.AddCategory", ex);
+        }
+    }
+
+    // A category is a single subfolder name under the working area: strip characters invalid in a file name
+    // (this includes the path separators, so a name can't escape the area or nest).
+    private static string SanitizeCategoryName(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return string.Empty;
+        }
+
+        string trimmed = name.Trim();
+        foreach (char c in Path.GetInvalidFileNameChars())
+        {
+            trimmed = trimmed.Replace(c, '_');
+        }
+        return trimmed.Trim();
     }
 
     private async Task AddCompressWorkingDirAsync()
@@ -663,6 +803,7 @@ public partial class MainWindowViewModel
 
         ActiveWorkingDir = dir;
         ClearCompressQueue();
+        RefreshCategoryChoices();        // categories = the new area's subfolders (before items are (re)created)
         AddPathsToQueue(new[] { dir });
         PersistWorkingDirs();
     }
@@ -677,6 +818,11 @@ public partial class MainWindowViewModel
         if (string.Equals(dir, _activeWorkingDir, StringComparison.OrdinalIgnoreCase))
         {
             ActiveWorkingDir = null; // active folder removed; leave the queue until another is picked
+            RefreshCategoryChoices(); // its categories are gone → dropdown back to just the default
+            foreach (CompressQueueItem item in CompressQueue)
+            {
+                item.SelectedOutputDir = string.Empty; // reset rows whose category belonged to the removed area
+            }
         }
 
         PersistWorkingDirs();
@@ -710,6 +856,7 @@ public partial class MainWindowViewModel
         {
             item.OutputName = st.OutputName;
         }
+        item.SelectedOutputDir = st.SelectedOutputDir ?? string.Empty;
         item.TrimEnabled = st.TrimEnabled;
         // CompressItemStateService.Load migrates the legacy single TrimStart/End into Segments, so read Segments here.
         item.KeptSegments = st.Segments is { Count: > 0 }
@@ -728,6 +875,7 @@ public partial class MainWindowViewModel
             : null;
         if (st.Done)
         {
+            item.OutputPath = st.OutputPath; // so a restored, already-compressed file can still 開啟資料夾
             item.Status = CompressQueueStatus.Done;
         }
         else if (st.Paused)
@@ -746,6 +894,8 @@ public partial class MainWindowViewModel
             Rotation = item.Rotation,
             OutputName = item.OutputName,
             Done = item.Status == CompressQueueStatus.Done,
+            OutputPath = item.OutputPath,
+            SelectedOutputDir = item.SelectedOutputDir,
             Paused = item.IsPaused || item.WasPaused,
             Progress = item.Progress,
             TrimEnabled = item.TrimEnabled,
@@ -911,6 +1061,11 @@ public partial class MainWindowViewModel
                         .Skip(1)
                         .Subscribe(_ => PersistItemState(item));
                     item.WhenAnyValue(x => x.IsPaused)
+                        .Skip(1)
+                        .Subscribe(_ => PersistItemState(item));
+                    // Per-item output folder persists on pick (and when a removed working dir resets it to Default),
+                    // so a configure-many-then-run-later batch keeps each row's chosen folder across a restart.
+                    item.WhenAnyValue(x => x.SelectedOutputDir)
                         .Skip(1)
                         .Subscribe(_ => PersistItemState(item));
                     // Edits persist and re-estimate (trim/speed/crop/rotation all change the estimated output size).
@@ -1146,7 +1301,9 @@ public partial class MainWindowViewModel
 
         CompressSettingsSnapshot snap = BuildSettingsSnapshot(item);         // per-item bundle or live settings
         string ext = "." + EffectiveFormatFor(item).ToLowerInvariant();      // container follows the effective format
-        string outputFolder = CompressOutputFolder; // captured on the UI thread; empty = next to source
+        // Per-item folder chosen from the working-dir dropdown overrides the global one; empty = global, else
+        // next to source. Captured on the UI thread alongside the other per-run values.
+        string outputFolder = string.IsNullOrEmpty(item.SelectedOutputDir) ? CompressOutputFolder : item.SelectedOutputDir;
         bool appendDate = CompressAppendDate;
         // Per-file kept runs captured on the UI thread (whole clip when trim off); re-clamped against the fresh probe.
         IReadOnlyList<(double Start, double End, double Speed)> keptRuns = item.EffectiveKeptRuns();
@@ -1248,6 +1405,10 @@ public partial class MainWindowViewModel
                 bool ok = await EncodeOneFileAsync(
                     item.Path, outputPath, snap, targetKbps, duration, progress, token, item.Gate, item.Rotation,
                     resumeProgress, runs, crop, burnInComposite);
+                if (ok)
+                {
+                    item.OutputPath = outputPath; // record the produced file for the 開啟資料夾 button
+                }
                 item.Status = ok ? CompressQueueStatus.Done : CompressQueueStatus.Failed;
                 if (ok)
                 {

@@ -172,6 +172,65 @@ public partial class MainWindowViewModel
         set => this.RaiseAndSetIfChanged(ref _selectedCompressAudioChannels, value);
     }
 
+    // HandBrake-style video filters (safe 1:1 subset), applied on the 輸出設定 tab and folded into every encode
+    // via the settings snapshot. Denoise/Sharpen are strength pickers; Deblock/Grayscale are on/off toggles.
+    public sealed class CompressDenoiseOption
+    {
+        public DenoiseMode Value { get; init; }
+        public string Label => LocalizationService.Instance[$"CompressDenoise{Value}"];
+    }
+
+    public CompressDenoiseOption[] CompressDenoiseOptions { get; } =
+    [
+        new CompressDenoiseOption { Value = DenoiseMode.Off },
+        new CompressDenoiseOption { Value = DenoiseMode.Light },
+        new CompressDenoiseOption { Value = DenoiseMode.Medium },
+        new CompressDenoiseOption { Value = DenoiseMode.Strong },
+        new CompressDenoiseOption { Value = DenoiseMode.NLMeans }
+    ];
+
+    private CompressDenoiseOption? _selectedCompressDenoise;
+    public CompressDenoiseOption? SelectedCompressDenoise
+    {
+        get => _selectedCompressDenoise;
+        set => this.RaiseAndSetIfChanged(ref _selectedCompressDenoise, value);
+    }
+
+    public sealed class CompressSharpenOption
+    {
+        public SharpenMode Value { get; init; }
+        public string Label => LocalizationService.Instance[$"CompressSharpen{Value}"];
+    }
+
+    public CompressSharpenOption[] CompressSharpenOptions { get; } =
+    [
+        new CompressSharpenOption { Value = SharpenMode.Off },
+        new CompressSharpenOption { Value = SharpenMode.Light },
+        new CompressSharpenOption { Value = SharpenMode.Medium },
+        new CompressSharpenOption { Value = SharpenMode.Strong }
+    ];
+
+    private CompressSharpenOption? _selectedCompressSharpen;
+    public CompressSharpenOption? SelectedCompressSharpen
+    {
+        get => _selectedCompressSharpen;
+        set => this.RaiseAndSetIfChanged(ref _selectedCompressSharpen, value);
+    }
+
+    private bool _compressDeblock;
+    public bool CompressDeblock
+    {
+        get => _compressDeblock;
+        set => this.RaiseAndSetIfChanged(ref _compressDeblock, value);
+    }
+
+    private bool _compressGrayscale;
+    public bool CompressGrayscale
+    {
+        get => _compressGrayscale;
+        set => this.RaiseAndSetIfChanged(ref _compressGrayscale, value);
+    }
+
     // Codec picker. H.264 / H.265 mirror the Record tab; AV1 (SVT-AV1) is compress-only (offline) — the most
     // efficient codec, for the smallest files at the same quality. Reuses the Record tab's option type / labels.
     public RecordingSettingsViewModel.VideoCodecOption[] CompressCodecOptions { get; } =
@@ -313,7 +372,11 @@ public partial class MainWindowViewModel
         p.AudioChannels,
         p.UseTargetSize,
         p.TargetSizeMB > 0 ? p.TargetSizeMB : 25m,
-        p.UseTargetSize && p.Codec == VideoCodec.H264);
+        p.UseTargetSize && p.Codec == VideoCodec.H264,
+        p.Denoise,
+        p.Sharpen,
+        p.Deblock,
+        p.Grayscale);
 
     // Output container/extension for an item: its bundle's format if picked, else the live format.
     private string EffectiveFormatFor(CompressQueueItem? item)
@@ -393,6 +456,8 @@ public partial class MainWindowViewModel
         _selectedCompressFps = CompressFpsOptions[0]; // source rate
         _selectedCompressAudioBitrate = CompressAudioBitrateOptions[0]; // Auto
         _selectedCompressAudioChannels = CompressAudioChannelsOptions[0]; // Stereo
+        _selectedCompressDenoise = CompressDenoiseOptions[0]; // Off
+        _selectedCompressSharpen = CompressSharpenOptions[0]; // Off
 
         // Default to the HandBrake "shrink ~80%, near-lossless" recipe: H.265 (with CRF 22 / medium above).
         _selectedCompressCodecOption = Array.Find(CompressCodecOptions, o => o.Value == VideoCodec.H265)
@@ -475,6 +540,19 @@ public partial class MainWindowViewModel
                 (a, b, c) => Unit.Default)
             .Skip(1)
             .Subscribe(_ => SaveCompressSession());
+        // Video filters drive the estimate + persist too — kept as their own subscription to stay under
+        // WhenAnyValue's argument cap (the two blocks above are already near it).
+        this.WhenAnyValue(
+                x => x.SelectedCompressDenoise, x => x.SelectedCompressSharpen,
+                x => x.CompressDeblock, x => x.CompressGrayscale,
+                (a, b, c, d) => Unit.Default)
+            .Subscribe(_ => RecomputeQueueEstimates());
+        this.WhenAnyValue(
+                x => x.SelectedCompressDenoise, x => x.SelectedCompressSharpen,
+                x => x.CompressDeblock, x => x.CompressGrayscale,
+                (a, b, c, d) => Unit.Default)
+            .Skip(1)
+            .Subscribe(_ => SaveCompressSession());
 
         PickCompressOutputFolderCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.PickOutputFolder", ex));
         ClearCompressOutputFolderCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.ClearOutputFolder", ex));
@@ -511,7 +589,11 @@ public partial class MainWindowViewModel
         TargetSizeMB = CompressTargetSizeMB ?? 25m,
         DropAudio = CompressDropAudio,
         AudioBitrateKbps = SelectedCompressAudioBitrate?.Kbps ?? 0,
-        AudioChannels = SelectedCompressAudioChannels?.Channels ?? 2
+        AudioChannels = SelectedCompressAudioChannels?.Channels ?? 2,
+        Denoise = SelectedCompressDenoise?.Value ?? DenoiseMode.Off,
+        Sharpen = SelectedCompressSharpen?.Value ?? SharpenMode.Off,
+        Deblock = CompressDeblock,
+        Grayscale = CompressGrayscale
     };
 
     private void SaveCompressPreset()
@@ -568,6 +650,10 @@ public partial class MainWindowViewModel
             ?? CompressAudioBitrateOptions[0];
         SelectedCompressAudioChannels = Array.Find(CompressAudioChannelsOptions, o => o.Channels == p.AudioChannels)
             ?? CompressAudioChannelsOptions[0];
+        SelectedCompressDenoise = Array.Find(CompressDenoiseOptions, o => o.Value == p.Denoise) ?? CompressDenoiseOptions[0];
+        SelectedCompressSharpen = Array.Find(CompressSharpenOptions, o => o.Value == p.Sharpen) ?? CompressSharpenOptions[0];
+        CompressDeblock = p.Deblock;
+        CompressGrayscale = p.Grayscale;
     }
 
     private bool _restoringSession;
@@ -737,7 +823,11 @@ public partial class MainWindowViewModel
                 MaxFps = snap.MaxFps,
                 DropAudio = snap.DropAudio,
                 AudioBitrateKbps = snap.AudioBitrateKbps,
-                AudioChannels = snap.AudioChannels
+                AudioChannels = snap.AudioChannels,
+                Denoise = snap.Denoise,
+                Sharpen = snap.Sharpen,
+                Deblock = snap.Deblock,
+                Grayscale = snap.Grayscale
             };
 
             bool ok = await Task.Run(() =>
@@ -822,7 +912,8 @@ public partial class MainWindowViewModel
     private readonly record struct CompressSettingsSnapshot(
         VideoCodec Codec, int Crf, int MaxHeight, int MaxFps, string Preset,
         bool DropAudio, int AudioBitrateKbps, int AudioChannels,
-        bool UseTargetSize, decimal TargetSizeMB, bool UseTwoPass);
+        bool UseTargetSize, decimal TargetSizeMB, bool UseTwoPass,
+        DenoiseMode Denoise, SharpenMode Sharpen, bool Deblock, bool Grayscale);
 
     // AV1 (SVT-AV1) uses a 0-63 CRF scale that sits ~8 higher than x264/x265 for the same visual quality.
     // The compress UI keeps ONE slider on the x265 scale; this offset is folded in HERE when snapshotting, so
@@ -853,7 +944,11 @@ public partial class MainWindowViewModel
             CompressUseTargetSize,
             CompressTargetSizeMB ?? 25m,
             // True two-pass replaces the corrective pass for H.264 target-size; H.265 keeps single-pass + correct.
-            CompressUseTargetSize && codec == VideoCodec.H264);
+            CompressUseTargetSize && codec == VideoCodec.H264,
+            SelectedCompressDenoise?.Value ?? DenoiseMode.Off,
+            SelectedCompressSharpen?.Value ?? SharpenMode.Off,
+            CompressDeblock,
+            CompressGrayscale);
     }
 
     private static async Task<double> ProbeInputDurationAsync(string input)
@@ -926,7 +1021,11 @@ public partial class MainWindowViewModel
                     AudioBitrateKbps = s.AudioBitrateKbps,
                     AudioChannels = s.AudioChannels,
                     TwoPass = s.UseTwoPass,
-                    RotationDegrees = rotationDegrees
+                    RotationDegrees = rotationDegrees,
+                    Denoise = s.Denoise,
+                    Sharpen = s.Sharpen,
+                    Deblock = s.Deblock,
+                    Grayscale = s.Grayscale
                 };
                 if (attempt > 1)
                 {
@@ -1043,7 +1142,11 @@ public partial class MainWindowViewModel
             MaxFps = s.MaxFps,
             DropAudio = true,             // video-only chunks; audio is built once at finalize
             TwoPass = false,
-            RotationDegrees = rotationDegrees
+            RotationDegrees = rotationDegrees,
+            Denoise = s.Denoise,
+            Sharpen = s.Sharpen,
+            Deblock = s.Deblock,
+            Grayscale = s.Grayscale
         };
 
         for (int i = 0; i < chunkCount; i++)
@@ -1130,6 +1233,7 @@ public partial class MainWindowViewModel
     private static string BuildSegmentSettingsKey(CompressSettingsSnapshot s, int rotationDegrees, double trimStart, double trimEnd) =>
         string.Join('|', s.Codec, s.Crf, s.Preset, s.MaxHeight, s.MaxFps,
             s.DropAudio, s.AudioBitrateKbps, s.AudioChannels, rotationDegrees,
+            s.Denoise, s.Sharpen, s.Deblock, s.Grayscale,
             Math.Round(trimStart, 2), Math.Round(trimEnd, 2));
 
     // Toast shown when the user pauses a non-CRF file: only CRF mode can resume mid-encode after a restart.
@@ -1163,7 +1267,11 @@ public partial class MainWindowViewModel
             DropAudio = snap.DropAudio,
             AudioBitrateKbps = snap.AudioBitrateKbps,
             AudioChannels = snap.AudioChannels,
-            RotationDegrees = 0 // rotation is applied at display time to BOTH frames, not baked into the sample
+            RotationDegrees = 0, // rotation is applied at display time to BOTH frames, not baked into the sample
+            Denoise = snap.Denoise,
+            Sharpen = snap.Sharpen,
+            Deblock = snap.Deblock,
+            Grayscale = snap.Grayscale
         };
 
         return new CompareViewModel(

@@ -51,4 +51,16 @@ internal sealed class LibavExportOptions
 
     /// <summary>Output audio channels: 1 = mono mixdown, 2 = stereo. 0 = stereo (the original behaviour).</summary>
     public int AudioChannels { get; init; }
+
+    /// <summary>HandBrake-style denoise (hqdn3d / nlmeans). Off = no filter (default; original behaviour).</summary>
+    public DenoiseMode Denoise { get; init; } = DenoiseMode.Off;
+
+    /// <summary>HandBrake-style sharpen (unsharp). Off = no filter (default; original behaviour).</summary>
+    public SharpenMode Sharpen { get; init; } = SharpenMode.Off;
+
+    /// <summary>Deblock filter (removes compression block artifacts). Default false = no filter.</summary>
+    public bool Deblock { get; init; }
+
+    /// <summary>Grayscale (desaturate via hue=s=0, pixel format unchanged). Default false = no filter.</summary>
+    public bool Grayscale { get; init; }
 }
