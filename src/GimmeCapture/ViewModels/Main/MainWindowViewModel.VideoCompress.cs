@@ -1251,7 +1251,9 @@ public partial class MainWindowViewModel
                 }
                 RefreshSelectedPreview(item);
             },
-            item.Thumbnail); // placeholder preview while the first frame decodes (slow for big/non-faststart MP4)
+            CloneBitmapForEditor(item.Thumbnail)); // placeholder preview while the first frame decodes. A CLONE,
+        // not the shared instance: the queue item owns its Thumbnail and may be disposed (e.g. 清空) while this
+        // non-modal editor is still rendering the placeholder — a shared bitmap would crash on the next render.
         editorVm = vm;
 
         // Output filename + quality compare moved from the 編輯 tab into the editor window.
@@ -1259,6 +1261,29 @@ public partial class MainWindowViewModel
         vm.BuildCompareViewModel = (anchor, rotation) => BuildCompareVm(item, anchor, rotation);
 
         OpenEditorAction(vm);
+    }
+
+    // Independent copy of a queue-item thumbnail for the editor's placeholder preview, so disposing the item's
+    // own Thumbnail (on 清空) can't free a bitmap the still-open editor is rendering. Small (~360px) → cheap.
+    private static Avalonia.Media.Imaging.Bitmap? CloneBitmapForEditor(Avalonia.Media.Imaging.Bitmap? src)
+    {
+        if (src == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            using var ms = new System.IO.MemoryStream();
+            src.Save(ms);
+            ms.Position = 0;
+            return new Avalonia.Media.Imaging.Bitmap(ms);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error("Compress.CloneThumbnail", ex);
+            return null;
+        }
     }
 
     /// <summary>

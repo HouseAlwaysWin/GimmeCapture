@@ -126,7 +126,9 @@ public sealed class OcrRuntimeService : IDisposable
         }
 
         ForceUnload();
-        ProcessMemoryTrimService.RequestIdleTrimAsync("ocr-unloaded")
+        // OCR is a one-shot scan, so reclaim promptly after it finishes. Debounced (5s): a re-scan within the
+        // window cancels this rather than trimming then immediately reloading.
+        ProcessMemoryTrimService.RequestIdleTrimAsync("ocr-unloaded", TimeSpan.FromSeconds(5))
             .Forget("MemoryTrim.OcrUnloaded");
         Debug.WriteLine("[OcrRuntime] Unloaded OCR runtime.");
     }

@@ -115,6 +115,12 @@ public partial class SnipWindow : Window
         StopLinuxSnipKeyGrab();
         TranslationResultLayerManager.RefreshWindowState();
 
+        // The snip/record/translate overlay held large capture/preview buffers (a full-screen grab is tens of
+        // MB), now released. The app usually returns to idle/tray after a capture, so reclaim the working set
+        // like the main-window→tray path does. The scheduler skips this if the user is immediately active again.
+        _ = GimmeCapture.Services.Core.Infrastructure.ProcessMemoryTrimService
+            .RequestIdleWorkingSetTrimAsync("snip-overlay-closed");
+
         // Safety net: force the whole desktop to repaint so any lingering DWM ghost of this (capture-excluded,
         // regioned) overlay — the yellow recording selection frame — is cleared even if the hide-time cleanup
         // didn't catch it. See docs/WGC_HANDOFF.md.

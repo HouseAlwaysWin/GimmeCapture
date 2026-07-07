@@ -46,6 +46,8 @@ public partial class RecordingService
         finally
         {
             CleanupTempDirectory();
+            // Recording finalized — release the large frame/audio/encode buffers back to the OS.
+            _ = Infrastructure.ProcessMemoryTrimService.RequestIdleTrimAsync("after-recording");
         }
     }
 

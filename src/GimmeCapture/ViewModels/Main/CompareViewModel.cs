@@ -498,6 +498,11 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
         _playCts?.Cancel();
         _stepCts?.Cancel();
         Interlocked.Exchange(ref _sampleCts, null)?.Cancel();
+        // Release the two decoded comparison frames (each an MB-sized Bitmap) — the window is closing.
+        _sourceFrame?.Dispose();
+        _sampleFrame?.Dispose();
+        _sourceFrame = null;
+        _sampleFrame = null;
         // The CancellationTokenSources and _sampleLock are intentionally left for GC (none hold a wait handle):
         // disposing them here would race an in-flight play/encode task into ObjectDisposedException on close.
         try
@@ -511,5 +516,8 @@ internal sealed class CompareViewModel : ViewModelBase, IDisposable
         {
             AppLog.Error("Compress.CompareCleanup", ex);
         }
+
+        // Compare window closed — reclaim the two decoded frames just released.
+        ProcessMemoryTrimService.RequestIdleTrimAsync("compare-closed").Forget("MemoryTrim.CompareClosed");
     }
 }

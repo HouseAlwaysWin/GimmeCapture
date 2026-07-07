@@ -38,7 +38,7 @@ public partial class MainWindowViewModel
         Cancelled
     }
 
-    public sealed class CompressQueueItem : ReactiveObject
+    public sealed class CompressQueueItem : ReactiveObject, IDisposable
     {
         public CompressQueueItem(string path)
         {
@@ -71,6 +71,13 @@ public partial class MainWindowViewModel
         {
             get => _thumbnail;
             internal set => this.RaiseAndSetIfChanged(ref _thumbnail, value);
+        }
+
+        /// <summary>Releases the decoded thumbnail bitmap. Call when the item leaves the queue (e.g. 清空).</summary>
+        public void Dispose()
+        {
+            _thumbnail?.Dispose();
+            _thumbnail = null;
         }
 
         private static (string Size, string Date) ReadFileMeta(string path)
@@ -1044,6 +1051,10 @@ public partial class MainWindowViewModel
 
     private void ClearCompressQueue()
     {
+        foreach (CompressQueueItem item in CompressQueue)
+        {
+            item.Dispose();
+        }
         CompressQueue.Clear();
         CompressQueueCount = 0;
     }
@@ -1286,5 +1297,8 @@ public partial class MainWindowViewModel
 
         int done = CompressQueue.Count(i => i.Status == CompressQueueStatus.Done);
         CompressStatusText = $"{LocalizationService.Instance["CompressQueueComplete"]}  ({done}/{CompressQueue.Count})";
+
+        // Batch finished — release the encode/decode working buffers accumulated across the run.
+        ProcessMemoryTrimService.RequestIdleTrimAsync("after-batch-compress").Forget("MemoryTrim.BatchCompress");
     }
 }
