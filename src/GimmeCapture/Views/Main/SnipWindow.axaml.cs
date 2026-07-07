@@ -132,6 +132,9 @@ public partial class SnipWindow : Window
     {
         base.OnOpened(e);
 
+        // A capture is starting — cancel any pending idle trim so we don't page memory out mid-capture.
+        ProcessMemoryTrimService.NotifyActivity("snip-opened");
+
         // Position logic ...
         
         // Defer Z-Order logic to ensure window is fully initialized. This is a fire-and-forget

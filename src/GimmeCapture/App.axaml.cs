@@ -59,6 +59,16 @@ public partial class App : Application
             // Tray icon + native menu lifecycle lives in TrayController.
             _trayController = new TrayController(this, _bootstrapper, desktop);
             _trayController.Install();
+
+            // Once the app settles into idle, do a FULL trim (GC to collect startup/JIT garbage + working-set
+            // reclaim). Decoupled from the window-shown activity so it isn't immediately cancelled; the scheduler
+            // still skips it if the user is interacting. Note: while the main window is open and rendering,
+            // Windows keeps its working set resident, so this reaches a lower baseline (not the tray <10MB).
+            _ = System.Threading.Tasks.Task.Run(async () =>
+            {
+                await System.Threading.Tasks.Task.Delay(TimeSpan.FromSeconds(8)).ConfigureAwait(false);
+                await ProcessMemoryTrimService.RequestIdleTrimAsync("startup-settled", TimeSpan.FromSeconds(3)).ConfigureAwait(false);
+            });
         }
 
         base.OnFrameworkInitializationCompleted();

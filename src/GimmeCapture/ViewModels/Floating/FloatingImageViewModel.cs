@@ -41,7 +41,14 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
     public Bitmap? InteractiveMask
     {
         get => _interactiveMask;
-        set => this.RaiseAndSetIfChanged(ref _interactiveMask, value);
+        set
+        {
+            var old = _interactiveMask;
+            if (ReferenceEquals(old, value)) return;
+            this.RaiseAndSetIfChanged(ref _interactiveMask, value);
+            // Free the previous SAM2 mask once the binding has switched to the new one.
+            old?.Dispose();
+        }
     }
 
     // Only allow background removal if not processing.
@@ -362,5 +369,7 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
 
         base.Dispose();
         ReleaseSam2Resources();
+        _interactiveMask?.Dispose();
+        _interactiveMask = null;
     }
 }

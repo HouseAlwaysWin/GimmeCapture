@@ -33,6 +33,9 @@ public sealed class LlamaSharpTranslationEngine : ITranslationEngine, IDisposabl
     private string? _loadedModelPath;
     private readonly SemaphoreSlim _loadLock = new(1, 1);
     private readonly SemaphoreSlim _inferLock = new(1, 1);
+    // Unload the (multi-GB) GGUF weights after they've gone unused for a while, so leaving the app idle in
+    // translation mode doesn't hold RAM/VRAM. A subsequent translation transparently reloads.
+    private readonly IdleReleaseScheduler _idleUnload;
 
     internal bool IsModelLoaded => _executor != null && _weights != null;
 
@@ -44,6 +47,7 @@ public sealed class LlamaSharpTranslationEngine : ITranslationEngine, IDisposabl
         _aiResourceService = aiResourceService ?? throw new ArgumentNullException(nameof(aiResourceService));
         _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
         _cache = cache ?? throw new ArgumentNullException(nameof(cache));
+        _idleUnload = new IdleReleaseScheduler(TimeSpan.FromMinutes(5), ReleaseIdleModel);
     }
 
     public async Task<string> TranslateAsync(string text, OCRLanguage sourceLang, TranslationLanguage targetLang, CancellationToken ct = default)
@@ -60,6 +64,7 @@ public sealed class LlamaSharpTranslationEngine : ITranslationEngine, IDisposabl
         }
 
         ProcessMemoryTrimService.NotifyActivity("translation");
+        _idleUnload.NotifyUse();
         await EnsureLoadedAsync(ct);
         if (_executor == null)
         {
@@ -209,12 +214,96 @@ public sealed class LlamaSharpTranslationEngine : ITranslationEngine, IDisposabl
 
     internal void ReleaseModel()
     {
-        DisposeModel();
+        // Never free the native weights out from under a running inference (mode-exit can race a background
+        // translation). Try non-blocking so we don't block/deadlock the UI thread; if a translation is in
+        // flight, re-arm the idle timer so the model unloads shortly after it finishes instead.
+        if (!_inferLock.Wait(0))
+        {
+            _idleUnload.NotifyUse();
+            return;
+        }
+
+        try
+        {
+            _idleUnload.Cancel();
+            _loadLock.Wait();
+            try
+            {
+                DisposeModel();
+            }
+            finally
+            {
+                _loadLock.Release();
+            }
+        }
+        finally
+        {
+            _inferLock.Release();
+        }
+    }
+
+    // Idle-unload callback: free the weights only if no translation is in flight (skip + retry on the next
+    // idle otherwise), then request a working-set trim. Guarded by both locks so it can't race load/inference.
+    private void ReleaseIdleModel()
+    {
+        if (!_inferLock.Wait(0))
+        {
+            return;
+        }
+
+        bool released = false;
+        try
+        {
+            _loadLock.Wait();
+            try
+            {
+                if (IsModelLoaded)
+                {
+                    DisposeModel();
+                    released = true;
+                }
+            }
+            finally
+            {
+                _loadLock.Release();
+            }
+        }
+        finally
+        {
+            _inferLock.Release();
+        }
+
+        if (released)
+        {
+            ProcessMemoryTrimService.RequestIdleTrimAsync("llama-idle").Forget("MemoryTrim.LlamaIdle");
+        }
     }
 
     public void Dispose()
     {
-        DisposeModel();
+        _idleUnload.Cancel();
+        // Free the model under the locks so we don't race a still-running inference (rare at shutdown). If one
+        // is somehow still in flight, skip the managed dispose — process exit reclaims the native memory.
+        if (_inferLock.Wait(0))
+        {
+            try
+            {
+                _loadLock.Wait();
+                try
+                {
+                    DisposeModel();
+                }
+                finally
+                {
+                    _loadLock.Release();
+                }
+            }
+            finally
+            {
+                _inferLock.Release();
+            }
+        }
+
         _loadLock.Dispose();
         _inferLock.Dispose();
     }

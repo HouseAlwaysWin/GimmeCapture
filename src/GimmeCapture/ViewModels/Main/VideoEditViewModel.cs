@@ -728,5 +728,7 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
         _audioPreview.Dispose();
         Draw.Dispose();
         Compare?.Dispose(); // stops the inline compare's playback + deletes its temp sample, if still open
+        // Editor closed — reclaim the decoded preview/compare frames.
+        ProcessMemoryTrimService.RequestIdleTrimAsync("editor-closed").Forget("MemoryTrim.EditorClosed");
     }
 }

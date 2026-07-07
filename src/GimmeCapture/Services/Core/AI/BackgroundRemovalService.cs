@@ -2,7 +2,9 @@ using System;
 using System.Buffers;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
+using GimmeCapture.Services.Core.Infrastructure;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
 using SkiaSharp;
@@ -18,13 +20,20 @@ public class BackgroundRemovalService : IDisposable
     private readonly AIResourceService _aiResourceService;
     private readonly AIPathService _pathService;
     private bool _isInitialized = false;
+    // Serializes session use vs. unload, and idle-unloads the ~hundreds-of-MB U2Net session when unused, so a
+    // one-off background removal doesn't keep the model resident. The next removal transparently reloads it.
+    private readonly SemaphoreSlim _sessionGate = new(1, 1);
+    private readonly IdleReleaseScheduler _idleUnload;
 
 
     public BackgroundRemovalService(AIResourceService aiResourceService, AIPathService pathService)
     {
         _aiResourceService = aiResourceService;
         _pathService = pathService;
-        
+        // Background removal is a one-shot per image, so unload promptly (10s) after it finishes; a fresh
+        // removal within the window resets this (keep-warm) instead of unloading then reloading the model.
+        _idleUnload = new IdleReleaseScheduler(TimeSpan.FromSeconds(10), UnloadSession);
+
         AIResourceService.RequestGlobalUnload += HandleGlobalUnload;
     }
 
@@ -93,6 +102,10 @@ public class BackgroundRemovalService : IDisposable
 
     public async Task<byte[]> RemoveBackgroundAsync(byte[] imageBytes, Avalonia.Rect? selectionRect = null)
     {
+        // Hold the gate across init + inference so the idle-unload can't dispose the session mid-removal.
+        await _sessionGate.WaitAsync();
+        try
+        {
         if (!_isInitialized) await InitializeAsync();
         if (_session == null) throw new InvalidOperationException("AI Session not initialized.");
 
@@ -167,6 +180,14 @@ public class BackgroundRemovalService : IDisposable
                 return processedBytes;
             }
         });
+        }
+        finally
+        {
+            _sessionGate.Release();
+            // Start the idle-unload countdown from completion, so a slow removal can't trip it mid-run and a
+            // fresh removal within the window keeps the model warm.
+            _idleUnload.NotifyUse();
+        }
     }
 
     internal static bool IsSolidBackground(SKBitmap bmp, out SKColor bgColor)
@@ -622,10 +643,38 @@ public class BackgroundRemovalService : IDisposable
         public long SumB;
     }
 
+    // Frees the ONNX session — the idle-unload callback and Dispose both use it. Skips if a removal is in
+    // flight (the gate is held); the next idle retries. A later RemoveBackgroundAsync re-initializes lazily.
+    private void UnloadSession()
+    {
+        if (!_sessionGate.Wait(0))
+        {
+            return;
+        }
+
+        bool released;
+        try
+        {
+            released = _session != null;
+            _session?.Dispose();
+            _session = null;
+            _isInitialized = false;
+        }
+        finally
+        {
+            _sessionGate.Release();
+        }
+
+        if (released)
+        {
+            ProcessMemoryTrimService.RequestIdleTrimAsync("u2net-idle", TimeSpan.FromSeconds(5)).Forget("MemoryTrim.U2NetIdle");
+        }
+    }
+
     public void Dispose()
     {
         AIResourceService.RequestGlobalUnload -= HandleGlobalUnload;
-        _session?.Dispose();
-        _session = null;
+        _idleUnload.Cancel();
+        UnloadSession();
     }
 }
