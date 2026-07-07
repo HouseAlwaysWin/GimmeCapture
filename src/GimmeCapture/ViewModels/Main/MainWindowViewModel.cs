@@ -155,6 +155,8 @@ public partial class MainWindowViewModel : ViewModelBase
     public Action? RequestOpenModulesAction { get; set; }
     public Func<SnipWindowViewModel?>? GetActiveSnipViewModelAction { get; set; }
     public Func<Task<string?>>? PickFolderAction { get; set; }
+    // Opens a file picker (filtered to *.gguf) for choosing the custom translation model; null = cancelled.
+    public Func<Task<string?>>? PickGgufFileAction { get; set; }
     public Func<string, string, bool, Task<bool>>? ConfirmAction { get; set; }
     /// <summary>Two-button Yes/No confirmation (no Cancel). Returns true on Yes.</summary>
     public Func<string, string, Task<bool>>? ConfirmYesNoAction { get; set; }

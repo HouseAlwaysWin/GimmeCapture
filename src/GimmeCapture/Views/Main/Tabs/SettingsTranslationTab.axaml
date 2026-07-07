@@ -131,8 +131,15 @@
                         <TextBlock Text="{Binding [LlamaCustomModelPath], Source={x:Static services:LocalizationService.Instance}}"
                                    FontSize="12"
                                    Margin="0,5,0,0"/>
-                        <TextBox Text="{Binding LlamaCustomModelPath}"
-                                 PlaceholderText="C:\Models\my-model.gguf or folder path"/>
+                        <DockPanel>
+                            <Button Content="{Binding [SelectPath], Source={x:Static services:LocalizationService.Instance}}"
+                                    DockPanel.Dock="Right"
+                                    Theme="{StaticResource SmallGothicMetalButton}"
+                                    Command="{Binding SelectLlamaModelPath}"
+                                    Margin="8,0,0,0"/>
+                            <TextBox Text="{Binding LlamaCustomModelPath}"
+                                     PlaceholderText="C:\Models\my-model.gguf or folder path"/>
+                        </DockPanel>
 
                         <TextBlock Text="{Binding [LlamaContextSize], Source={x:Static services:LocalizationService.Instance}}"
                                    FontSize="12"
