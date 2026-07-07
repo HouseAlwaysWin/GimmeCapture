@@ -10,6 +10,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Threading;
 using GimmeCapture.Services.Core;
+using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Core.Media;
 
 namespace GimmeCapture.ViewModels.Main;
@@ -196,15 +197,23 @@ public partial class SnipWindowViewModel
             if (_mainVm != null)
             {
                 _mainVm.ShowAIScanBox = value;
+                // IsAiScanCandidateLayerVisible reads _mainVm.ShowAIScanBox but is only re-raised by the
+                // CurrentState/SelectionRect setters — raise it here too so toggling the box updates the
+                // overlay immediately instead of waiting for the next state change.
+                this.RaisePropertyChanged(nameof(IsAiScanCandidateLayerVisible));
                 RefreshProjectedOcrRects();
 
+                // Scan in the same states OCR results can be stored/shown (Detecting or the resting
+                // manual-draw state), consistent with ApplyOcrScanResult / IsAiScanCandidateLayerVisible.
+                bool stateAllowsOcr = CurrentState == SnipState.Detecting
+                    || (CurrentState == SnipState.Selecting && !HasSelectionArea);
                 if (value
                     && EnableAIScan
-                    && CurrentState == SnipState.Detecting
+                    && stateAllowsOcr
                     && CurrentMode != SnipMode.Translation
                     && AllScreenBounds?.Count > 0)
                 {
-                    TriggerAutoScanCommand?.Execute(Unit.Default).Subscribe();
+                    RunOCRScanAsync().Forget("Snip.ShowScanBox");
                 }
             }
         }
@@ -265,9 +274,6 @@ public partial class SnipWindowViewModel
             }
             this.RaiseAndSetIfChanged(ref _selectionRect, value);
             this.RaisePropertyChanged(nameof(HasSelectionArea));
-            // HasSelectionArea gates the AI-scan candidate layer in the resting-Selecting state, so refresh it
-            // as the rect changes (start of a drag hides the candidates; clearing shows them again).
-            this.RaisePropertyChanged(nameof(IsAiScanCandidateLayerVisible));
             RefreshInteractionRegion();
             UpdateToolbarPosition();
         }

@@ -53,10 +53,7 @@ public partial class SnipWindowViewModel
     /// </summary>
     public bool IsAiScanCandidateLayerVisible =>
         _mainVm?.ShowAIScanBox == true &&
-        (((CurrentState == SnipState.Detecting
-           // Also show in the resting manual-draw state (empty box, e.g. after an Esc-clear) so the re-run OCR
-           // candidates are visible; an active drag (HasSelectionArea) hides them again.
-           || (CurrentState == SnipState.Selecting && !HasSelectionArea)) && CurrentMode != SnipMode.Translation)
+        ((CurrentState == SnipState.Detecting && CurrentMode != SnipMode.Translation)
          || (CurrentMode == SnipMode.Translation && ShowOcrResult));
 
     /// <summary>
@@ -682,13 +679,6 @@ public partial class SnipWindowViewModel
 
     private System.Threading.CancellationTokenSource? _scanCts;
 
-    private async Task RunAIScanAsync()
-    {
-        if (CurrentMode == SnipMode.Translation) return;
-
-        await RunOCRScanAsync();
-    }
-
     private async Task RunOCRScanAsync()
     {
         System.Diagnostics.Debug.WriteLine("[AI Scan][OCR] RunOCRScanAsync started");
@@ -702,12 +692,14 @@ public partial class SnipWindowViewModel
         if (_mainVm == null || !_mainVm.EnableAI)
         {
             System.Diagnostics.Debug.WriteLine("[AI Scan][OCR] Abort: EnableAI is false or MainVm is null");
+            AppLog.Information("Snip.OCRAutoScan: skipped — master EnableAI is off (Settings > AI).");
             return;
         }
 
         if (!_mainVm.EnableAIScan)
         {
             System.Diagnostics.Debug.WriteLine("[AI Scan][OCR] Abort: EnableAIScan is false");
+            AppLog.Information("Snip.OCRAutoScan: skipped — EnableAIScan (OCR selection detection) is off.");
             return;
         }
 
@@ -720,6 +712,7 @@ public partial class SnipWindowViewModel
         if (_aiScanSessionService == null)
         {
             System.Diagnostics.Debug.WriteLine("[AI Scan][OCR] Abort: AI scan session service is null");
+            AppLog.Information("Snip.OCRAutoScan: skipped — AI scan session service is null (service not wired).");
             return;
         }
 
@@ -747,6 +740,10 @@ public partial class SnipWindowViewModel
             if (!result.IsReady)
             {
                 System.Diagnostics.Debug.WriteLine("[AI Scan][OCR] OCR resources are not ready");
+                // Most common reason OCR "does nothing" with no visible error: the OCR model module is not
+                // installed (or a download failed/was cancelled). Log it to the file sink so it is
+                // diagnosable without a debugger; the user installs it from the Modules tab.
+                AppLog.Information($"Snip.OCRAutoScan: OCR model not ready ({result.NotReadyStatusKey ?? "unknown"}) — install the OCR model from the Modules tab.");
                 return;
             }
 
@@ -782,7 +779,16 @@ public partial class SnipWindowViewModel
         Avalonia.Threading.Dispatcher.UIThread.Post(() =>
         {
             if (token.IsCancellationRequested) return;
-            if (CurrentState != SnipState.Detecting || _mainVm?.EnableAI != true || CurrentMode == SnipMode.Translation) return;
+            // Store results in the SAME states the candidate overlay is willing to SHOW them
+            // (see IsAiScanCandidateLayerVisible): Detecting, or the resting manual-draw state after an
+            // Esc-clear (Selecting with no active drag). Previously this accepted ONLY Detecting, so a scan
+            // whose slow async OCR finished after the state had moved to resting-Selecting — exactly the
+            // Esc-cancel rescan — had its result silently discarded here. That is why OCR "did nothing"
+            // after select-then-Esc even though the scan itself ran (the store gate and the render gate
+            // were asymmetric).
+            bool stateAllowsOcr = CurrentState == SnipState.Detecting
+                || (CurrentState == SnipState.Selecting && !HasSelectionArea);
+            if (!stateAllowsOcr || _mainVm?.EnableAI != true || CurrentMode == SnipMode.Translation) return;
 
             _ocrRawRects = result.RawDetectedRects.AsValueEnumerable().ToList();
             _ocrParagraphCandidates = result.Candidates.AsValueEnumerable()
@@ -818,8 +824,6 @@ public partial class SnipWindowViewModel
     }
 
     // Command Declarations (Partial)
-    public ReactiveCommand<Unit, Unit> AIScanCommand { get; set; } = null!;
-    public ReactiveCommand<Unit, Unit> TriggerAutoScanCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> ToggleAIScanBoxCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> TranslateAllSelectionsCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> ScanAllTextCommand { get; set; } = null!;
@@ -840,14 +844,40 @@ public partial class SnipWindowViewModel
     internal bool ShouldTriggerAutoScan() =>
         EnableAIScan && CurrentMode != SnipMode.Translation && AllScreenBounds?.Count > 0;
 
+    /// <summary>
+    /// Runs the OCR auto-scan for "just entered / re-entered the draw-ready overlay" — both the window-open path
+    /// (SnipWindow.OnOpened) and the reused-overlay re-activation path (snip hotkey pressed while the overlay is
+    /// still up, where OnOpened does NOT run again). Calls RunOCRScanAsync DIRECTLY so it is not subject to the
+    /// ReactiveCommand isExecuting gate that used to silently drop this trigger, and logs the reason whenever it
+    /// is intentionally skipped — so a "OCR does nothing on entry" report is diagnosable from the log file
+    /// (%LOCALAPPDATA%\GimmeCapture\...\logs) instead of needing an attached debugger.
+    /// Reads _mainVm.ShowAIScanBox (the source of truth used by IsAiScanCandidateLayerVisible /
+    /// RefreshProjectedOcrRects) rather than the local mirror, to avoid a first-frame binding race.
+    /// </summary>
+    public void RequestOcrAutoScanOnEntry(string reason)
+    {
+        if (CurrentMode == SnipMode.Translation)
+        {
+            AppLog.Information($"Snip.OcrAutoScanOnEntry[{reason}]: skipped — translation mode.");
+            return;
+        }
+        if (_mainVm?.ShowAIScanBox != true)
+        {
+            AppLog.Information($"Snip.OcrAutoScanOnEntry[{reason}]: skipped — scan box (ShowAIScanBox) is off.");
+            return;
+        }
+        bool stateAllowsOcr = CurrentState == SnipState.Detecting
+            || (CurrentState == SnipState.Selecting && !HasSelectionArea);
+        if (!stateAllowsOcr)
+        {
+            AppLog.Information($"Snip.OcrAutoScanOnEntry[{reason}]: skipped — state is {CurrentState} (needs Detecting or empty Selecting).");
+            return;
+        }
+        RunOCRScanAsync().Forget($"Snip.OcrAutoScanOnEntry.{reason}");
+    }
+
     private void InitializeSelectionCommands()
     {
-        AIScanCommand = ReactiveCommand.CreateFromTask(RunAIScanAsync);
-        AIScanCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"AI Scan Command error: {ex}"));
-
-        TriggerAutoScanCommand = ReactiveCommand.CreateFromTask(RunOCRScanAsync);
-        TriggerAutoScanCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Auto OCR Scan Command error: {ex}"));
-
         ToggleAIScanBoxCommand = ReactiveCommand.Create(() => { ShowAIScanBox = !ShowAIScanBox; return Unit.Default; });
         ToggleAIScanBoxCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Toggle AI Box error: {ex}"));
 

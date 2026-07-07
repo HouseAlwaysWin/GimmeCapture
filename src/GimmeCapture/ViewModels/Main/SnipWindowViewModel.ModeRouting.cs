@@ -488,6 +488,10 @@ public partial class SnipWindowViewModel
                 LockSelectedScreenshotSelection = _mainVm?.AutoPinScreenshotSelection == true;
                 AutoActionMode = ResolveAutoActionMode(mode, _mainVm?.AutoPinScreenshotSelection == true);
                 HandleScreenshotModeHotkeyCommand?.Execute().Subscribe();
+                // Reused overlay: the snip hotkey was pressed while the overlay is still open, so OnOpened does
+                // NOT run again and the open-time OCR auto-scan never re-fires. Re-trigger it here so re-entering
+                // screenshot mode shows OCR candidates just like a fresh open.
+                RequestOcrAutoScanOnEntry("ReenterNormal");
                 break;
             case CaptureMode.Record:
                 LockSelectedScreenshotSelection = false;
@@ -930,12 +934,16 @@ public partial class SnipWindowViewModel
         if (ShouldClearBoxToDraw(CurrentState, SelectionRect.Width > 0 && SelectionRect.Height > 0))
         {
             SelectionRect = new Rect(0, 0, 0, 0);
-            CurrentState = SnipState.Selecting;
-            // Back in the draw-ready state, re-activate the OCR auto-scan just like the auto-detect (Detecting)
-            // state does — the transition into Selecting cancelled it, so kick off a fresh scan.
+            // Return to the auto-detect (Detecting) ready state — NOT Selecting. Detecting is the full "ready to
+            // select" state: hover-to-auto-select a window/OCR region, the AI-scan overlay, AND manual drag; it
+            // also hides the selection visual, so no stray wings render at the origin.
+            CurrentState = SnipState.Detecting;
+            // Detecting's own transition re-triggers the OCR scan, but that path (TriggerAutoScanCommand.Execute)
+            // is silently skipped while the prior scan's CPU-bound OCR is still "executing". Call RunOCRScanAsync
+            // directly (it self-cancels the prior scan and always starts) so the re-scan is guaranteed.
             if (ShouldTriggerAutoScan())
             {
-                TriggerAutoScanCommand?.Execute(Unit.Default).Subscribe();
+                RunOCRScanAsync().Forget("Snip.EscRescan");
             }
             return;
         }
