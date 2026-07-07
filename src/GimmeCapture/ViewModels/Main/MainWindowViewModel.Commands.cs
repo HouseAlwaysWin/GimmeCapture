@@ -254,6 +254,15 @@ public partial class MainWindowViewModel
         }
     }
 
+    public async Task SelectLlamaModelPath()
+    {
+        if (PickGgufFileAction != null)
+        {
+            var path = await PickGgufFileAction();
+            if (!string.IsNullOrEmpty(path)) LlamaCustomModelPath = path;
+        }
+    }
+
     private void OpenProjectUrl()
     {
         try

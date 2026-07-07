@@ -42,6 +42,23 @@ public partial class MainWindow
                 return folders.Count > 0 ? folders[0].Path.LocalPath : null;
             };
 
+            vm.PickGgufFileAction = async () =>
+            {
+                var storage = this.StorageProvider;
+                var files = await storage.OpenFilePickerAsync(new Avalonia.Platform.Storage.FilePickerOpenOptions
+                {
+                    Title = LocalizationService.Instance["LlamaCustomModelPath"],
+                    AllowMultiple = false,
+                    FileTypeFilter = new[]
+                    {
+                        new Avalonia.Platform.Storage.FilePickerFileType("GGUF") { Patterns = new[] { "*.gguf" } },
+                        new Avalonia.Platform.Storage.FilePickerFileType("All files") { Patterns = new[] { "*" } }
+                    }
+                });
+
+                return files.Count > 0 ? files[0].Path.LocalPath : null;
+            };
+
             vm.ConfirmAction = async (title, message, isOkOnly) =>
             {
                 var mode = isOkOnly ? ConfirmationMode.OkOnly : ConfirmationMode.YesNoCancel;
