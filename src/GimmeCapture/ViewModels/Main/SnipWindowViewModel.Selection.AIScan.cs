@@ -53,10 +53,7 @@ public partial class SnipWindowViewModel
     /// </summary>
     public bool IsAiScanCandidateLayerVisible =>
         _mainVm?.ShowAIScanBox == true &&
-        (((CurrentState == SnipState.Detecting
-           // Also show in the resting manual-draw state (empty box, e.g. after an Esc-clear) so the re-run OCR
-           // candidates are visible; an active drag (HasSelectionArea) hides them again.
-           || (CurrentState == SnipState.Selecting && !HasSelectionArea)) && CurrentMode != SnipMode.Translation)
+        ((CurrentState == SnipState.Detecting && CurrentMode != SnipMode.Translation)
          || (CurrentMode == SnipMode.Translation && ShowOcrResult));
 
     /// <summary>

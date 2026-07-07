@@ -934,15 +934,15 @@ public partial class SnipWindowViewModel
         if (ShouldClearBoxToDraw(CurrentState, SelectionRect.Width > 0 && SelectionRect.Height > 0))
         {
             SelectionRect = new Rect(0, 0, 0, 0);
-            CurrentState = SnipState.Selecting;
-            // Back in the draw-ready state, re-activate the OCR auto-scan just like the auto-detect (Detecting)
-            // state does — the transition into Selecting cancelled it, so kick off a fresh scan.
+            // Return to the auto-detect (Detecting) ready state — NOT Selecting. Detecting is the full "ready to
+            // select" state: hover-to-auto-select a window/OCR region, the AI-scan overlay, AND manual drag; it
+            // also hides the selection visual, so no stray wings render at the origin.
+            CurrentState = SnipState.Detecting;
+            // Detecting's own transition re-triggers the OCR scan, but that path (TriggerAutoScanCommand.Execute)
+            // is silently skipped while the prior scan's CPU-bound OCR is still "executing". Call RunOCRScanAsync
+            // directly (it self-cancels the prior scan and always starts) so the re-scan is guaranteed.
             if (ShouldTriggerAutoScan())
             {
-                // Call RunOCRScanAsync directly, NOT via TriggerAutoScanCommand: the just-cancelled Detecting
-                // scan can still be running its CPU-bound OCR DetectText (uninterruptible), which keeps the
-                // ReactiveCommand "executing" so Execute() is silently skipped — the reason the Esc-clear
-                // re-scan never actually ran. RunOCRScanAsync self-cancels the prior scan and always starts.
                 RunOCRScanAsync().Forget("Snip.EscRescan");
             }
             return;

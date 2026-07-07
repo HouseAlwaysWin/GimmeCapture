@@ -274,9 +274,6 @@ public partial class SnipWindowViewModel
             }
             this.RaiseAndSetIfChanged(ref _selectionRect, value);
             this.RaisePropertyChanged(nameof(HasSelectionArea));
-            // HasSelectionArea gates the AI-scan candidate layer in the resting-Selecting state, so refresh it
-            // as the rect changes (start of a drag hides the candidates; clearing shows them again).
-            this.RaisePropertyChanged(nameof(IsAiScanCandidateLayerVisible));
             RefreshInteractionRegion();
             UpdateToolbarPosition();
         }
