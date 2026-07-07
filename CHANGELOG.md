@@ -9,7 +9,7 @@
 
 ---
 
-## Unreleased
+## v0.60.0 - 2026-07-07
 
 ### 🗜️ Smaller video compression
 
@@ -23,6 +23,31 @@
   shrinks output at the same quality for **H.264 and H.265 too**, not just AV1.
 - One CRF slider still drives every codec: AV1's different CRF scale is handled transparently, so a
   given CRF means comparable quality across H.264 / H.265 / AV1.
+
+### ✂️ Snip overlay
+
+- **Toolbar position setting** — the region-selection toolbar can now be pinned **top-left / top-center /
+  top-right** (Settings → Snip) instead of always top-center. It positions on the active monitor and persists.
+- **Two-stage Esc in box-select** — after you've drawn a selection box, the first Esc now **clears the box and
+  returns to the ready-to-select state** (auto-detect, hover-to-select, and a fresh OCR scan) rather than
+  closing; a second Esc, with no box, closes the overlay.
+- **OCR auto-scan reliability** — the text-detection scan now fires correctly on entry and after an Esc-clear
+  (it was being skipped while a previous scan's CPU-bound OCR was still finishing).
+
+### 🌐 Translation
+
+- **Pick the custom GGUF model with a button** — the local-model area gained a picker/browse button so you can
+  select a downloaded model (or a `.gguf` file directly) instead of typing the path.
+
+### 🧠 Memory
+
+- **Idle-unload of heavy AI resources** — the translation LLM (multi-GB), background-removal (U2Net), and OCR
+  models now release themselves when unused instead of staying resident for the whole session; the next use
+  transparently reloads them. One-shot resources (OCR / background removal) reclaim within seconds.
+- **Broader working-set trimming** — memory is reclaimed after a capture / recording / compress / edit and once
+  the app settles at startup, not only when minimizing to tray.
+- **Bitmap-leak fixes** — the quality-compare window's decoded frames, compress-queue thumbnails, and the
+  smart-selection mask are now released promptly, and a dispose-while-rendered editor crash was fixed.
 
 ## v0.52.0 - 2026-07-05
 

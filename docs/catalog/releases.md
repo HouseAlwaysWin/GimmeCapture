@@ -2,6 +2,16 @@
 
 This catalog summarizes released versions from `v0.1.0` onward based on repository tags and commit history.
 
+## v0.60.0 - 2026-07-07
+
+- **AV1 (SVT-AV1) video compression** — the most efficient codec for the smallest files at the same perceived
+  quality (10-bit, offline-compress only); B-frames enabled on the export path shrink H.264/H.265 output too.
+- **Snip overlay**: configurable toolbar position (top-left / center / right); two-stage Esc (first clears the
+  box back to the ready state, second closes); OCR auto-scan reliability fixes.
+- **Translation**: a picker/browse button for the custom local GGUF model.
+- **Memory**: idle-unload of heavy AI models (translation LLM / background removal / OCR), broader working-set
+  trimming (after captures/exports and at startup, not just tray), and several bitmap-leak/crash fixes.
+
 ## v0.50.0 - 2026-07-04
 
 - New **Compress** tab: in-process re-encode (H.264/H.265, target-size two-pass, resolution/fps-cap/
