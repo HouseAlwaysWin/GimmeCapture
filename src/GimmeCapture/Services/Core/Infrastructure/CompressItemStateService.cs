@@ -13,6 +13,12 @@ public sealed class CompressItemState
     public string OutputName { get; set; } = string.Empty;
     public bool Done { get; set; }
 
+    /// <summary>Full path of the last produced output file (set on success). Drives the "open output folder" button.</summary>
+    public string? OutputPath { get; set; }
+
+    /// <summary>Per-file chosen output folder (a working directory); empty/null = global/next-to-source default.</summary>
+    public string? SelectedOutputDir { get; set; }
+
     // Optional per-file crop (source pixels). A zero-size rect means "no crop". Applied before rotation at encode.
     public int CropX { get; set; }
     public int CropY { get; set; }

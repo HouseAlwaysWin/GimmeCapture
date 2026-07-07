@@ -317,6 +317,12 @@ internal static class LibavClipExporter
         AVFrame* decFrame = null;
         AVFrame* encFrame = null;
         AVFrame* bgraFrame = null;
+        // Optional HandBrake-style video filter graph (denoise/sharpen/deblock/grayscale). Null when no filter
+        // is enabled — the fast path is then byte-for-byte unchanged.
+        AVFilterGraph* filterGraph = null;
+        AVFilterContext* filterSrc = null;
+        AVFilterContext* filterSink = null;
+        AVFrame* filterFrame = null;
         AVDictionary* encOpts = null;
         AVStream* outStream = null;
         long frameIndex = 0;
@@ -550,6 +556,23 @@ internal static class LibavClipExporter
             encFrame->height = encCtx->height;
             ThrowIfErr(ffmpeg.av_frame_get_buffer(encFrame, 32), "clip_frame_get_buffer");
 
+            // Build the optional HandBrake-style filter graph BEFORE the sws contexts, so the sws source pixel
+            // format follows the graph's ACTUAL output (a filter — e.g. nlmeans on a 10-bit source — may force a
+            // format conversion we must not desync from). With no filter, srcPixFmt stays decCtx->pix_fmt and the
+            // sws contexts are identical to before. The graph input is the post-crop frame (outW×outH).
+            System.Collections.Generic.List<(string Name, string Args)> filterNodes = BuildVideoFilterChain(opt);
+            AVPixelFormat srcPixFmt = decCtx->pix_fmt;
+            if (filterNodes.Count > 0)
+            {
+                filterGraph = BuildFilterGraph(decCtx, inStream, outW, outH, filterNodes, out filterSrc, out filterSink);
+                filterFrame = ffmpeg.av_frame_alloc();
+                if (filterFrame == null)
+                {
+                    throw new OutOfMemoryException("clip_filter_frame_alloc");
+                }
+                srcPixFmt = (AVPixelFormat)ffmpeg.av_buffersink_get_format(filterSink);
+            }
+
             if (needBgra)
             {
                 // BGRA round-trip: decode(+crop) → BGRA (optional composite, optional rotate, optional
@@ -559,7 +582,7 @@ internal static class LibavClipExporter
                 int finalSrcW = rotate ? rotW : outW;
                 int finalSrcH = rotate ? rotH : outH;
                 swsToBgra = ffmpeg.sws_getContext(
-                    outW, outH, decCtx->pix_fmt,
+                    outW, outH, srcPixFmt,
                     outW, outH, AVPixelFormat.AV_PIX_FMT_BGRA,
                     (int)SwsFlags.SWS_BILINEAR, null, null, null);
                 sws = ffmpeg.sws_getContext(
@@ -586,7 +609,7 @@ internal static class LibavClipExporter
                 // When cropping, each decoded frame is cropped (av_frame_apply_cropping) down to outW×outH
                 // before scaling, so the sws source dimensions are the crop size too.
                 sws = ffmpeg.sws_getContext(
-                    outW, outH, decCtx->pix_fmt,
+                    outW, outH, srcPixFmt,
                     encCtx->width, encCtx->height, encCtx->pix_fmt,
                     (int)SwsFlags.SWS_BILINEAR, null, null, null);
                 if (sws == null)
@@ -636,7 +659,8 @@ internal static class LibavClipExporter
                     ffmpeg.av_packet_unref(inPkt);
 
                     runDone = DrainDecodedFrames(
-                        decCtx, encCtx, sws, swsToBgra, decFrame, encFrame, bgraFrame, frameComposite,
+                        decCtx, encCtx, sws, swsToBgra, decFrame, encFrame, bgraFrame,
+                        filterSrc, filterSink, filterFrame, frameComposite,
                         rotation, rotateDst, frameCompositeAfterTransform,
                         outFmt, outStream, outPkt, inStream->time_base, range, crop, ref frameIndex, ref frameAccum,
                         fpsCursorScale, progress, totalSrcDuration, elapsedBeforeRange, ref lastPercent);
@@ -647,7 +671,8 @@ internal static class LibavClipExporter
                 {
                     ffmpeg.avcodec_send_packet(decCtx, null);
                     DrainDecodedFrames(
-                        decCtx, encCtx, sws, swsToBgra, decFrame, encFrame, bgraFrame, frameComposite,
+                        decCtx, encCtx, sws, swsToBgra, decFrame, encFrame, bgraFrame,
+                        filterSrc, filterSink, filterFrame, frameComposite,
                         rotation, rotateDst, frameCompositeAfterTransform,
                         outFmt, outStream, outPkt, inStream->time_base, range, crop, ref frameIndex, ref frameAccum,
                         fpsCursorScale, progress, totalSrcDuration, elapsedBeforeRange, ref lastPercent);
@@ -671,6 +696,8 @@ internal static class LibavClipExporter
             if (decFrame != null) ffmpeg.av_frame_free(&decFrame);
             if (encFrame != null) ffmpeg.av_frame_free(&encFrame);
             if (bgraFrame != null) ffmpeg.av_frame_free(&bgraFrame);
+            if (filterFrame != null) ffmpeg.av_frame_free(&filterFrame);
+            if (filterGraph != null) ffmpeg.avfilter_graph_free(&filterGraph); // frees filterSrc/filterSink too
             if (sws != null) ffmpeg.sws_freeContext(sws);
             if (swsToBgra != null) ffmpeg.sws_freeContext(swsToBgra);
             rotateDst?.Dispose();
@@ -689,6 +716,108 @@ internal static class LibavClipExporter
         }
     }
 
+    // The libavfilter chain (ordered node list) for the HandBrake-style compress filters. Empty when nothing is
+    // enabled (the exporter then skips the whole graph). All nodes are 1:1 (frame count preserved). Pure/static
+    // so it's unit-testable. Order: denoise → deblock → sharpen → grayscale (clean, de-artifact, then enhance).
+    internal static System.Collections.Generic.List<(string Name, string Args)> BuildVideoFilterChain(LibavExportOptions opt)
+    {
+        var nodes = new System.Collections.Generic.List<(string, string)>();
+        switch (opt.Denoise)
+        {
+            case DenoiseMode.Light: nodes.Add(("hqdn3d", "2:1.5:3:3")); break;
+            case DenoiseMode.Medium: nodes.Add(("hqdn3d", "4:3:6:4.5")); break;
+            case DenoiseMode.Strong: nodes.Add(("hqdn3d", "8:6:12:9")); break;
+            case DenoiseMode.NLMeans: nodes.Add(("nlmeans", string.Empty)); break;
+        }
+        if (opt.Deblock)
+        {
+            nodes.Add(("deblock", string.Empty));
+        }
+        switch (opt.Sharpen)
+        {
+            case SharpenMode.Light: nodes.Add(("unsharp", "3:3:0.5:3:3:0.0")); break;
+            case SharpenMode.Medium: nodes.Add(("unsharp", "5:5:1.0:5:5:0.0")); break;
+            case SharpenMode.Strong: nodes.Add(("unsharp", "7:7:1.6:7:7:0.0")); break;
+        }
+        if (opt.Grayscale)
+        {
+            nodes.Add(("hue", "s=0")); // desaturate; keeps the yuv pixel format (no format= tail needed)
+        }
+        return nodes;
+    }
+
+    // Builds a video filter graph: buffer(in) → node → … → buffersink(out), configured for the post-crop source
+    // (w×h, decoder pix_fmt). Follows LibavAtempoFilter's create-filter + link idiom. The caller frees the graph
+    // (which frees the src/sink contexts) and reads the actual output format from the sink. Throws on any error.
+    private static unsafe AVFilterGraph* BuildFilterGraph(
+        AVCodecContext* decCtx, AVStream* inStream, int w, int h,
+        System.Collections.Generic.IReadOnlyList<(string Name, string Args)> nodes,
+        out AVFilterContext* srcCtx, out AVFilterContext* sinkCtx)
+    {
+        srcCtx = null;
+        sinkCtx = null;
+        AVFilterGraph* graph = ffmpeg.avfilter_graph_alloc();
+        if (graph == null)
+        {
+            throw new OutOfMemoryException("clip_filter_graph_alloc");
+        }
+
+        try
+        {
+            AVRational sar = decCtx->sample_aspect_ratio;
+            if (sar.num <= 0 || sar.den <= 0) { sar.num = 1; sar.den = 1; }
+            string srcArgs = string.Format(
+                System.Globalization.CultureInfo.InvariantCulture,
+                "video_size={0}x{1}:pix_fmt={2}:time_base={3}/{4}:pixel_aspect={5}/{6}",
+                w, h, (int)decCtx->pix_fmt,
+                inStream->time_base.num, inStream->time_base.den, sar.num, sar.den);
+
+            AVFilter* buffer = ffmpeg.avfilter_get_by_name("buffer");
+            AVFilter* buffersink = ffmpeg.avfilter_get_by_name("buffersink");
+            if (buffer == null || buffersink == null)
+            {
+                throw new InvalidOperationException("buffer/buffersink filter unavailable in this libav build.");
+            }
+
+            AVFilterContext* src = null;
+            ThrowIfErr(ffmpeg.avfilter_graph_create_filter(&src, buffer, "in", srcArgs, null, graph), "clip_filter_src");
+
+            AVFilterContext* prev = src;
+            int idx = 0;
+            foreach ((string name, string args) in nodes)
+            {
+                AVFilter* filter = ffmpeg.avfilter_get_by_name(name);
+                if (filter == null)
+                {
+                    throw new InvalidOperationException($"Video filter '{name}' unavailable in this libav build.");
+                }
+
+                AVFilterContext* node = null;
+                ThrowIfErr(ffmpeg.avfilter_graph_create_filter(
+                    &node, filter, $"f{idx}", string.IsNullOrEmpty(args) ? null : args, null, graph),
+                    "clip_filter_node");
+                ThrowIfErr(ffmpeg.avfilter_link(prev, 0, node, 0), "clip_filter_link");
+                prev = node;
+                idx++;
+            }
+
+            AVFilterContext* sink = null;
+            ThrowIfErr(ffmpeg.avfilter_graph_create_filter(&sink, buffersink, "out", null, null, graph), "clip_filter_sink");
+            ThrowIfErr(ffmpeg.avfilter_link(prev, 0, sink, 0), "clip_filter_link_sink");
+
+            ThrowIfErr(ffmpeg.avfilter_graph_config(graph, null), "clip_filter_config");
+
+            srcCtx = src;
+            sinkCtx = sink;
+            return graph;
+        }
+        catch
+        {
+            ffmpeg.avfilter_graph_free(&graph);
+            throw;
+        }
+    }
+
     // Pulls decoded frames, drops those before the range start, encodes those in [start,end).
     // Returns true once a frame at/after the range end is seen (the run is complete).
     private static unsafe bool DrainDecodedFrames(
@@ -699,6 +828,9 @@ internal static class LibavClipExporter
         AVFrame* decFrame,
         AVFrame* encFrame,
         AVFrame* bgraFrame,
+        AVFilterContext* filterSrc,
+        AVFilterContext* filterSink,
+        AVFrame* filterFrame,
         Action<SKBitmap, double>? composite,
         int rotation,
         SKBitmap? rotateDst,
@@ -754,11 +886,34 @@ internal static class LibavClipExporter
                 ffmpeg.av_frame_apply_cropping(decFrame, 1);
             }
 
+            // Optional HandBrake-style filter pass: push the (cropped) frame through the graph and pull the
+            // filtered result, then run the existing sws/composite/encode path on it. Our filter set is 1:1 with
+            // no frame delay, so pts/cursor logic is unchanged; an EAGAIN (a filter buffering) just means fetch
+            // the next decoded frame. av_buffersrc_add_frame consumes decFrame's ref (resets it).
+            AVFrame* srcFrame = decFrame;
+            if (filterSrc != null && filterSink != null && filterFrame != null)
+            {
+                ThrowIfErr(ffmpeg.av_buffersrc_add_frame(filterSrc, decFrame), "clip_filter_push");
+                int fr = ffmpeg.av_buffersink_get_frame(filterSink, filterFrame);
+                if (fr == ffmpeg.AVERROR(11)) // EAGAIN — filter needs more input before it emits a frame
+                {
+                    ffmpeg.av_frame_unref(decFrame);
+                    continue;
+                }
+                if (fr == ffmpeg.AVERROR_EOF)
+                {
+                    ffmpeg.av_frame_unref(decFrame);
+                    return false;
+                }
+                ThrowIfErr(fr, "clip_filter_pull");
+                srcFrame = filterFrame;
+            }
+
             ThrowIfErr(ffmpeg.av_frame_make_writable(encFrame), "clip_make_writable");
             if (bgraFrame != null && swsToBgra != null)
             {
-                // decode pix -> BGRA (our private buffer, full decode dims)
-                ffmpeg.sws_scale(swsToBgra, decFrame->data, decFrame->linesize, 0, decFrame->height,
+                // decode(+filter) pix -> BGRA (our private buffer, post-crop dims)
+                ffmpeg.sws_scale(swsToBgra, srcFrame->data, srcFrame->linesize, 0, srcFrame->height,
                     bgraFrame->data, bgraFrame->linesize);
 
                 if (composite != null)
@@ -819,7 +974,7 @@ internal static class LibavClipExporter
             }
             else
             {
-                ffmpeg.sws_scale(sws, decFrame->data, decFrame->linesize, 0, decFrame->height,
+                ffmpeg.sws_scale(sws, srcFrame->data, srcFrame->linesize, 0, srcFrame->height,
                     encFrame->data, encFrame->linesize);
             }
             // Report encode progress by source-time consumed (this frame's offset within the kept ranges),
@@ -847,7 +1002,11 @@ internal static class LibavClipExporter
                 WriteEncoded(encCtx, outFmt, outStream, outPkt);
             }
 
-            ffmpeg.av_frame_unref(decFrame);
+            ffmpeg.av_frame_unref(decFrame); // safe no-op when the filter already consumed it
+            if (srcFrame == filterFrame)
+            {
+                ffmpeg.av_frame_unref(filterFrame);
+            }
         }
     }
 

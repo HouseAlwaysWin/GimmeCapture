@@ -9,6 +9,17 @@
 
 ---
 
+## Unreleased
+
+### 🎬 Compress
+
+- **Video filters** — HandBrake-style **denoise** (hqdn3d / NLMeans), **sharpen** (unsharp), **deblock**, and
+  **grayscale**, on the Output-settings tab. Applied in-process via a libavfilter graph and folded into every encode
+  path, the size estimate, and the quality compare; denoise also helps the output compress smaller.
+- **Output categories** — create category subfolders inside the active working directory (**新增分類**), then sort
+  each queued file's output into one via a per-row dropdown (defaults to the global output folder / next to source).
+- **Open output folder** — a per-row button (shown once a file finishes) reveals the produced file in Explorer.
+
 ## v0.60.0 - 2026-07-07
 
 ### 🗜️ Smaller video compression

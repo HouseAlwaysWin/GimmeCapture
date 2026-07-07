@@ -18,4 +18,10 @@ public sealed class CompressPreset
     public bool DropAudio { get; set; }
     public int AudioBitrateKbps { get; set; }     // 0 = auto
     public int AudioChannels { get; set; } = 2;   // 1 = mono, 2 = stereo
+
+    // HandBrake-style video filters (safe 1:1 subset). Off/false = no filter (original behaviour).
+    public DenoiseMode Denoise { get; set; } = DenoiseMode.Off;
+    public SharpenMode Sharpen { get; set; } = SharpenMode.Off;
+    public bool Deblock { get; set; }
+    public bool Grayscale { get; set; }
 }
