@@ -706,6 +706,9 @@ public partial class SnipWindowViewModel
         {
             _recordTimer?.Stop();
             ClearRecordingSelectionVisuals(); // before StopAsync — see ExecuteStopRecordingAsync (prevents border ghost).
+            // Opt into the GIF audio sidecar: only the pin path uses it, so Save/Copy don't pay for it (finalize
+            // runs inside StopAsync, so this must be set first).
+            _recordingService.BuildPinAudioSidecar = true;
             await _recordingService.StopAsync();
 
             // Separate mode: pin each window's file as its own floating window.
@@ -737,6 +740,14 @@ public partial class SnipWindowViewModel
                     return;
                 }
 
+                // A GIF recording can't hold audio, so pin from the audio-bearing sidecar (when one was produced)
+                // instead of the silent .gif — the pin then plays sound and non-gif re-exports keep it. History
+                // and reveal below stay on the actual saved output (the .gif).
+                string pinSource = !string.IsNullOrEmpty(_recordingService.PinSourceFilePath)
+                    && System.IO.File.Exists(_recordingService.PinSourceFilePath)
+                    ? _recordingService.PinSourceFilePath!
+                    : recordingPath;
+
                 var baseRect = _recordingCaptureLogicalRect ?? SelectionRect;
                 var originalWidth = Math.Max(2.0, baseRect.Width > 1 ? baseRect.Width : 640.0);
                 var originalHeight = Math.Max(2.0, baseRect.Height > 1 ? baseRect.Height : 360.0);
@@ -750,7 +761,7 @@ public partial class SnipWindowViewModel
                     try
                     {
                         OpenPinnedVideoWindowAction(
-                            recordingPath,
+                            pinSource,
                             pixelWidth,
                             pixelHeight,
                             originalWidth,

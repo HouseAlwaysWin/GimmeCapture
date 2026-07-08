@@ -89,6 +89,14 @@ public partial class RecordingService : ReactiveObject
     }
 
     public string? OutputFilePath => _outputFile;
+    // For a GIF recording (which can't hold audio), the audio-bearing mp4 the pin should use instead of the
+    // silent .gif, so pin playback + non-gif re-exports keep sound. Null for other formats (their output has
+    // the audio already) and when the gif recording captured no audio.
+    public string? PinSourceFilePath { get; private set; }
+    // Set by the pin handler before StopAsync so gif finalize builds the audio sidecar ONLY when the recording
+    // will actually be pinned — Save/Copy (which use the .gif directly) don't pay the transcode/mux for a file
+    // they'd ignore. Reset at StartAsync.
+    public bool BuildPinAudioSidecar { get; set; }
     public string? LastRecordingPath => string.IsNullOrEmpty(_outputFile) ? null : _outputFile;
     public string LastStartError { get; private set; } = string.Empty;
     public string LastStartWarning { get; private set; } = string.Empty;
@@ -217,6 +225,8 @@ public partial class RecordingService : ReactiveObject
 
         _region = region;
         _outputFile = outputFile;
+        PinSourceFilePath = null;
+        BuildPinAudioSidecar = false; // the pin handler opts in before StopAsync
         _targetFormat = targetFormat.ToLowerInvariant();
         _includeCursor = includeCursor;
         _screenOffset = screenOffset;

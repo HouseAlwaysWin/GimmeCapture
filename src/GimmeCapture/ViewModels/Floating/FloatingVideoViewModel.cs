@@ -47,9 +47,8 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
     public string VideoPath { get; }
     public VideoCodec VideoCodec => _appSettingsService?.Settings.VideoCodec ?? VideoCodec.H264;
 
-    // Toolbar export-format picker: drives the Save dialog's default container so the user can change the output
-    // format from the pin itself instead of the main-menu recording format. Defaults to the pinned clip's own
-    // container (set in the constructor), so behaviour is unchanged until the user picks another.
+    // Toolbar export-format picker: drives the Save/Copy output format. Defaults to the main-menu recording
+    // format so it syncs with the app setting (set in the constructor), and the user can change it per-pin.
     public string[] AvailableExportFormats { get; } = { "MP4", "MKV", "MOV", "GIF", "WebM" };
 
     private string _selectedExportFormat = "MP4";
@@ -59,18 +58,35 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
         set => this.RaiseAndSetIfChanged(ref _selectedExportFormat, value);
     }
 
-    // Matches the source clip's container to a toolbar label (e.g. ".mkv" → "MKV"); unknown/empty → "MP4".
-    private string DefaultExportFormatFor(string? path)
+    // Defaults the pin's export format to the main-menu recording format so it "syncs" with the app setting
+    // (e.g. recording as GIF → the pin exports GIF by default); the user can still change it in the toolbar.
+    // Falls back to the pinned clip's own container (for non-recording pins), then MP4.
+    private string DefaultExportFormatFor(string? path, string? recordFormat)
     {
-        string ext = System.IO.Path.GetExtension(path ?? string.Empty).TrimStart('.');
+        return MatchExportFormat(recordFormat)
+            ?? MatchExportFormat(System.IO.Path.GetExtension(path ?? string.Empty))
+            ?? "MP4";
+    }
+
+    // The matching toolbar label for an extension or format string (e.g. ".mkv" / "mkv" / "gif" → "MKV"/"GIF"),
+    // or null when it isn't one of AvailableExportFormats.
+    private string? MatchExportFormat(string? extOrFormat)
+    {
+        string key = (extOrFormat ?? string.Empty).TrimStart('.');
+        if (key.Length == 0)
+        {
+            return null;
+        }
+
         foreach (string f in AvailableExportFormats)
         {
-            if (string.Equals(f, ext, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(f, key, StringComparison.OrdinalIgnoreCase))
             {
                 return f;
             }
         }
-        return "MP4";
+
+        return null;
     }
     private CancellationTokenSource? _playCts;
     private Task? _playbackTask;
@@ -421,7 +437,9 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
     public FloatingVideoViewModel(string videoPath, int width, int height, double originalWidth, double originalHeight, Avalonia.Media.Color borderColor, double borderThickness, bool hideDecoration, bool hideBorder, GimmeCapture.Services.Abstractions.IClipboardService clipboardService, AppSettingsService? appSettingsService)
     {
         VideoPath = videoPath;
-        _selectedExportFormat = DefaultExportFormatFor(videoPath); // toolbar defaults to the clip's own container
+        // Toolbar export format defaults to the main-menu recording format (synced with the app setting), else
+        // the clip's own container. The user can change it per-pin.
+        _selectedExportFormat = DefaultExportFormatFor(videoPath, appSettingsService?.Settings.RecordFormat);
         _width = NormalizeVideoDimension(width); // Ensure even and valid for bitmap/FFmpeg
         _height = NormalizeVideoDimension(height);
         OriginalWidth = originalWidth;

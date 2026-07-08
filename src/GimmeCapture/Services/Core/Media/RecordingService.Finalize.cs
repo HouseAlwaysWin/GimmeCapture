@@ -90,7 +90,9 @@ public partial class RecordingService
 
                     // Retarget the single-output finalize path at this track's file (sequential, so safe).
                     _outputFile = track.OutputFile;
-                    await FinalizeByTargetFormatAsync(trackMerged, mergedAudio, cropFilter: null);
+                    // Separate-window pins go through TryHandleSeparateOutputs (the .gif files directly), which
+                    // never uses PinSourceFilePath — so don't build per-track sidecars that nothing consumes.
+                    await FinalizeByTargetFormatAsync(trackMerged, mergedAudio, cropFilter: null, allowPinSidecar: false);
                     track.OutputFile = _outputFile; // EnsureOutputExtension may have changed the extension
                 }
                 catch (Exception ex)
@@ -321,13 +323,20 @@ public partial class RecordingService
         await File.WriteAllTextAsync(listPath, sb.ToString());
     }
 
-    private async Task FinalizeByTargetFormatAsync(string mergedMkv, string? mergedAudio, string? cropFilter)
+    private async Task FinalizeByTargetFormatAsync(string mergedMkv, string? mergedAudio, string? cropFilter, bool allowPinSidecar = true)
     {
         _ = cropFilter;
+        PinSourceFilePath = null; // reset per finalize; only the gif branch (when pinning) sets a sidecar
         if (_targetFormat == "gif")
         {
             EnsureOutputExtension("gif");
             await FinalizeAsGifAsync(mergedMkv, cropFilter: null);
+            // GIF can't hold audio; keep an audio-bearing mp4 sidecar for the pin — but only when this recording
+            // will actually be pinned (single-output pin), so Save/Copy and separate-window mode don't pay for it.
+            if (allowPinSidecar && BuildPinAudioSidecar)
+            {
+                await BuildGifAudioSidecarAsync(mergedMkv, mergedAudio);
+            }
             return;
         }
 
@@ -515,6 +524,49 @@ public partial class RecordingService
         await Task.Run(() => LibavGifTranscoder.TranscodeToGif(mergedMkv, _outputFile, gifFps, maxWidth, paletteuseArgs));
 
         FinalizationProgress = 100;
+    }
+
+    // A GIF can't carry audio, so alongside the saved (silent) .gif keep an audio-bearing mp4 — the merged
+    // video muxed with the captured audio — for the pin to use. A pinned GIF recording then still plays sound
+    // and non-GIF re-exports keep it. Best-effort: on any failure (or no captured audio) PinSourceFilePath
+    // stays null and the pin falls back to the silent .gif. Written to the persistent pin temp dir (NOT the
+    // per-session dir that CleanupTempDirectory deletes) so it outlives finalize.
+    private async Task BuildGifAudioSidecarAsync(string mergedMkv, string? mergedAudio)
+    {
+        if (string.IsNullOrWhiteSpace(mergedAudio) || !File.Exists(mergedAudio) || !File.Exists(mergedMkv))
+        {
+            return;
+        }
+
+        string? sidecar = null;
+        try
+        {
+            string? aac = await PrepareAudioForTargetContainerAsync(mergedAudio, "mp4");
+            if (string.IsNullOrWhiteSpace(aac) || !File.Exists(aac))
+            {
+                return;
+            }
+
+            string sidecarDir = Path.Combine(Path.GetTempPath(), "GimmeCapture_Pins");
+            Directory.CreateDirectory(sidecarDir);
+            sidecar = Path.Combine(sidecarDir, $"gifrec_{Guid.NewGuid():N}.mp4");
+            await Task.Run(() => LibavMuxer.MuxVideoAndAudio(mergedMkv, aac, sidecar, GetMuxerFormatName("mp4")));
+            if (File.Exists(sidecar) && new FileInfo(sidecar).Length > 0)
+            {
+                PinSourceFilePath = sidecar;
+                LogToFile($"[Finalize] GIF audio sidecar: {sidecar} ({new FileInfo(sidecar).Length} bytes)");
+            }
+        }
+        catch (Exception ex)
+        {
+            LogToFile($"[Finalize] GIF audio sidecar failed: {ex}"); // pin falls back to the silent .gif
+            // MuxVideoAndAudio opens the file before it can throw (e.g. zero audio packets); remove the partial.
+            if (!string.IsNullOrEmpty(sidecar))
+            {
+                try { if (File.Exists(sidecar)) File.Delete(sidecar); }
+                catch { /* best effort */ }
+            }
+        }
     }
 
     private async Task FinalizeAsWebmAsync(string mergedMkv, string? mergedAudio)
