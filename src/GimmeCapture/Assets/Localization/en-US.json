@@ -75,6 +75,7 @@
   "CompressFpsLabel": "Max frame rate",
   "CompressFpsOriginal": "Original",
   "CompressEstimateLabel": "Estimated size",
+  "CompressEstimateVaries": "depends on content",
   "CompressSettingsGroup": "Output settings",
   "CompressOutputFolderLabel": "Output folder",
   "CompressOutputFolderAuto": "Save each output next to its source",

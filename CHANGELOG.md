@@ -19,6 +19,9 @@
 - **Output categories** — create category subfolders inside the active working directory (**新增分類**), then sort
   each queued file's output into one via a per-row dropdown (defaults to the global output folder / next to source).
 - **Open output folder** — a per-row button (shown once a file finishes) reveals the produced file in Explorer.
+- **GIF and WebM output** — the Video-Editing (Compress) tab can now output **GIF** and **WebM** in addition to
+  MP4/MKV/MOV, matching Pin mode. All edits (trim/crop/rotate/filters/annotations) are baked into an intermediate
+  render first, then transcoded, so the GIF/WebM reflects the full edit.
 
 ### 📌 Pin
 
