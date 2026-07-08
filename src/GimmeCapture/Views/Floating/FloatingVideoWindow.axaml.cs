@@ -70,11 +70,11 @@ public partial class FloatingVideoWindow : FloatingWindowBase
                 var topLevel = Avalonia.Controls.TopLevel.GetTopLevel(this);
                 if (topLevel == null) return null;
 
-                // Default the dialog to the pinned clip's own format so e.g. a recorded GIF saves as a GIF
-                // (not silently transcoded to mp4). The user can still pick any other type from the dropdown;
-                // SaveAsync converts when the chosen extension differs from the source.
+                // Default the dialog to the format chosen in the pin's toolbar (which itself defaults to the
+                // clip's own container). The user can still pick any other type from the dropdown; SaveAsync
+                // converts when the chosen extension differs from the source.
                 var (choices, defaultExt) = GimmeCapture.Views.Shared.VideoFilePickerTypes
-                    .SaveChoicesPreferring(Path.GetExtension(vm.VideoPath));
+                    .SaveChoicesPreferring(vm.SelectedExportFormat);
 
                 var file = await topLevel.StorageProvider.SaveFilePickerAsync(new Avalonia.Platform.Storage.FilePickerSaveOptions
                 {

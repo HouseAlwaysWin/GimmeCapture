@@ -593,23 +593,42 @@ public partial class SnipWindow : Window
                             var topLevel = TopLevel.GetTopLevel(win);
                             if (topLevel?.StorageProvider is { } storageProvider)
                             {
+                                // Default the dialog to the format chosen in the pin's toolbar (PNG/JPG/WebP).
+                                var (choices, defaultExt) = GimmeCapture.Views.Shared.VideoFilePickerTypes
+                                    .SaveImageChoicesPreferring(vm.SelectedImageFormat);
                                 var file = await storageProvider.SaveFilePickerAsync(new Avalonia.Platform.Storage.FilePickerSaveOptions
                                 {
                                     Title = "Save Pinned Image",
-                                    DefaultExtension = "png",
+                                    DefaultExtension = defaultExt,
                                     ShowOverwritePrompt = true,
-                                    SuggestedFileName = CaptureFileNameService.SuggestedBaseName(),
-                                    FileTypeChoices = new[]
-                                    {
-                                        GimmeCapture.Views.Shared.VideoFilePickerTypes.PngImage
-                                    }
+                                    SuggestedFileName = $"{CaptureFileNameService.SuggestedBaseName()}.{defaultExt}",
+                                    FileTypeChoices = choices
                                 });
 
                                 if (file != null)
                                 {
-                                    using var stream = await file.OpenWriteAsync();
-                                    vm.Image?.Save(stream); // Save current image (might be transparent)
-                                    FileLocationService.RevealInFileExplorer(file.Path.LocalPath);
+                                    // Encode to the ACTUALLY chosen extension (the dialog can override the toolbar
+                                    // default) via SkiaSharp, since Avalonia's Bitmap.Save only writes PNG.
+                                    string ext = System.IO.Path.GetExtension(file.Name).TrimStart('.').ToLowerInvariant();
+                                    var (skFormat, quality) = ext switch
+                                    {
+                                        "jpg" or "jpeg" => (SkiaSharp.SKEncodedImageFormat.Jpeg, 92),
+                                        "webp" => (SkiaSharp.SKEncodedImageFormat.Webp, 90),
+                                        _ => (SkiaSharp.SKEncodedImageFormat.Png, 100)
+                                    };
+                                    if (GimmeCapture.ViewModels.Floating.FloatingBitmapConversionHelper.TryEncodeBitmap(
+                                            vm.Image, skFormat, quality, out var bytes, out var encErr))
+                                    {
+                                        using (var stream = new System.IO.FileStream(file.Path.LocalPath, System.IO.FileMode.Create))
+                                        {
+                                            await stream.WriteAsync(bytes, 0, bytes.Length);
+                                        }
+                                        FileLocationService.RevealInFileExplorer(file.Path.LocalPath);
+                                    }
+                                    else
+                                    {
+                                        System.Diagnostics.Debug.WriteLine($"Failed to encode pinned image: {encErr}");
+                                    }
                                 }
                             }
                         }

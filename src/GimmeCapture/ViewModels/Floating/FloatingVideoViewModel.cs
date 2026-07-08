@@ -46,6 +46,32 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
 
     public string VideoPath { get; }
     public VideoCodec VideoCodec => _appSettingsService?.Settings.VideoCodec ?? VideoCodec.H264;
+
+    // Toolbar export-format picker: drives the Save dialog's default container so the user can change the output
+    // format from the pin itself instead of the main-menu recording format. Defaults to the pinned clip's own
+    // container (set in the constructor), so behaviour is unchanged until the user picks another.
+    public string[] AvailableExportFormats { get; } = { "MP4", "MKV", "MOV", "GIF", "WebM" };
+
+    private string _selectedExportFormat = "MP4";
+    public string SelectedExportFormat
+    {
+        get => _selectedExportFormat;
+        set => this.RaiseAndSetIfChanged(ref _selectedExportFormat, value);
+    }
+
+    // Matches the source clip's container to a toolbar label (e.g. ".mkv" → "MKV"); unknown/empty → "MP4".
+    private string DefaultExportFormatFor(string? path)
+    {
+        string ext = System.IO.Path.GetExtension(path ?? string.Empty).TrimStart('.');
+        foreach (string f in AvailableExportFormats)
+        {
+            if (string.Equals(f, ext, StringComparison.OrdinalIgnoreCase))
+            {
+                return f;
+            }
+        }
+        return "MP4";
+    }
     private CancellationTokenSource? _playCts;
     private Task? _playbackTask;
     private readonly int _width;
@@ -395,6 +421,7 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
     public FloatingVideoViewModel(string videoPath, int width, int height, double originalWidth, double originalHeight, Avalonia.Media.Color borderColor, double borderThickness, bool hideDecoration, bool hideBorder, GimmeCapture.Services.Abstractions.IClipboardService clipboardService, AppSettingsService? appSettingsService)
     {
         VideoPath = videoPath;
+        _selectedExportFormat = DefaultExportFormatFor(videoPath); // toolbar defaults to the clip's own container
         _width = NormalizeVideoDimension(width); // Ensure even and valid for bitmap/FFmpeg
         _height = NormalizeVideoDimension(height);
         OriginalWidth = originalWidth;

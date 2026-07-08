@@ -31,6 +31,17 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
         get => _image;
         set => this.RaiseAndSetIfChanged(ref _image, value);
     }
+
+    // Toolbar export-format picker for the pinned image; drives the Save dialog default + the SkiaSharp encoder
+    // (Avalonia's Bitmap.Save is PNG-only, so JPG/WebP go through FloatingBitmapConversionHelper).
+    public string[] AvailableImageFormats { get; } = { "PNG", "JPG", "WebP" };
+
+    private string _selectedImageFormat = "PNG";
+    public string SelectedImageFormat
+    {
+        get => _selectedImageFormat;
+        set => this.RaiseAndSetIfChanged(ref _selectedImageFormat, value);
+    }
     
     // AI / SAM2 Properties & State
     private SAM2Service? _sam2Service;

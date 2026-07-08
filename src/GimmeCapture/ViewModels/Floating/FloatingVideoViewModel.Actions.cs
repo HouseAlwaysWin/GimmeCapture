@@ -604,9 +604,48 @@ public partial class FloatingVideoViewModel
                     return;
                 }
 
+                // No trim, no annotations, plain-container target (gif/webm returned above). Produce the file:
+                //   • plain ↔ plain (mp4/mkv/mov) → stream-copy remux (lossless, keeps audio) — NOT a raw byte
+                //     copy, which would leave the source bytes under a mismatched extension;
+                //   • otherwise a differing container (e.g. gif/webm source → mp4) → re-encode, since the codecs
+                //     can't be stream-copied into the target;
+                //   • same container → a lossless byte copy.
+                if (needsConversion && System.IO.File.Exists(VideoPath)
+                    && LibavClipExporter.ContainerForExtension(sourceExt) != null
+                    && LibavClipExporter.ContainerForExtension(targetExt) is { } container)
+                {
+                    try
+                    {
+                        await Task.Run(() => LibavMuxer.RemuxAllStreams(VideoPath, targetPath, container));
+                        FileLocationService.RevealInFileExplorer(targetPath);
+                        return;
+                    }
+                    catch (Exception ex)
+                    {
+                        AppLog.Error("FloatingVideo.Remux", ex); // fall through to a re-encode as a last resort
+                    }
+                }
+
+                if (needsConversion)
+                {
+                    // Codecs can't be stream-copied into the target container (recorded GIF/WebM → mp4, or a
+                    // remux that failed): re-encode the whole clip so the output is a valid file of that container.
+                    var reencoded = await ExportTrimmedInProcessAsync(targetExt);
+                    if (!string.IsNullOrEmpty(reencoded) && System.IO.File.Exists(reencoded))
+                    {
+                        System.IO.File.Copy(reencoded, targetPath, true);
+                        FileLocationService.RevealInFileExplorer(targetPath);
+                        return;
+                    }
+
+                    ProcessingText = LocalizationService.Instance["StatusExportFailed"] ?? "Export failed";
+                    await Task.Delay(2000);
+                    return;
+                }
+
                 if (System.IO.File.Exists(VideoPath))
                 {
-                    System.IO.File.Copy(VideoPath, targetPath, true);
+                    System.IO.File.Copy(VideoPath, targetPath, true); // same container: lossless byte copy
                     FileLocationService.RevealInFileExplorer(targetPath);
                 }
                 else
