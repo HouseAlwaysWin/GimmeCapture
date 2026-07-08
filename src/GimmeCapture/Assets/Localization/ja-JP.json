@@ -75,6 +75,7 @@
   "CompressFpsLabel": "最大フレームレート",
   "CompressFpsOriginal": "元のまま",
   "CompressEstimateLabel": "推定サイズ",
+  "CompressEstimateVaries": "内容により変動",
   "CompressSettingsGroup": "出力設定",
   "CompressOutputFolderLabel": "出力先",
   "CompressOutputFolderAuto": "各元ファイルの隣に保存",

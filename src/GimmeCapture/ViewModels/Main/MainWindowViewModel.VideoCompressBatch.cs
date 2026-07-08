@@ -1252,6 +1252,14 @@ public partial class MainWindowViewModel
             return;
         }
 
+        // GIF/WebM: a sample-mp4 measure doesn't reflect the palette/VP9 output — show the "varies" note.
+        string estFmt = EffectiveFormatFor(item);
+        if (estFmt.Equals("GIF", StringComparison.OrdinalIgnoreCase) || estFmt.Equals("WebM", StringComparison.OrdinalIgnoreCase))
+        {
+            item.EstimatedText = BuildItemEstimate(item);
+            return;
+        }
+
         item.IsEstimating = true;
         item.EstimatedText = $"{prefix}: {LocalizationService.Instance["CompressEstimating"]}";
         try
@@ -1372,10 +1380,13 @@ public partial class MainWindowViewModel
                 bool hasSpeed = runs.Any(r => Math.Abs(r.Speed - 1.0) > 0.001);
                 VideoEditCrop? crop = item.Crop;
 
-                // Resumable segmented CRF only handles one contiguous, full-speed, un-cropped, un-annotated span;
-                // anything else (target-size / multi-segment / speed / crop / burn-in) uses the whole-file path below.
+                // Resumable segmented CRF only handles one contiguous, full-speed, un-cropped, un-annotated span
+                // into a plain container; anything else (target-size / multi-segment / speed / crop / burn-in /
+                // GIF / WebM) uses the whole-file path below.
+                bool gifWebm = ext.Equals(".gif", StringComparison.OrdinalIgnoreCase)
+                    || ext.Equals(".webm", StringComparison.OrdinalIgnoreCase);
                 item.SupportsResume = !snap.UseTargetSize && duration > 0 && !multiSegment && !hasSpeed && crop == null
-                    && burnInComposite == null;
+                    && burnInComposite == null && !gifWebm;
                 int targetKbps = 0;
                 if (snap.UseTargetSize)
                 {
