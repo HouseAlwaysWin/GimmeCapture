@@ -57,14 +57,17 @@ if ($remoteTagExitCode -ne 2) {
     throw "Unable to check whether tag $version exists on origin."
 }
 
-# The release commit only ever touches the csproj (any other dirty file aborts), so
-# CHANGELOG.md can never be updated during the release itself — it must be committed
-# BEFORE running this script. This gate stops the changelog from silently rotting.
+# The release commit bumps the csproj AND promotes the changelog's "## Unreleased" section to
+# "## <version> - <date>" (done below, after verify); any OTHER dirty file still aborts. Require the changelog
+# to already have either a "## <version>" section (written by hand) or an "## Unreleased" section to promote —
+# this keeps the release log current while removing the manual rename + date step.
 $changelog = Get-Content -LiteralPath "CHANGELOG.md" -Raw
 $versionPattern = [regex]::Escape($version.TrimStart('v'))
-if ($changelog -notmatch "(^|\n)##[^\n]*\bv?$versionPattern\b") {
-    throw ("CHANGELOG.md has no section for $version. Add a '## $version' entry (own commit) " +
-        "before releasing, so the user-facing release log stays current.")
+$hasVersionSection = $changelog -match "(^|\n)##[^\n]*\bv?$versionPattern\b"
+$hasUnreleasedSection = $changelog -match "(?im)^##[ \t]+Unreleased\b"
+if (-not $hasVersionSection -and -not $hasUnreleasedSection) {
+    throw ("CHANGELOG.md has no section for $version and no '## Unreleased' section to promote. Add an " +
+        "'## Unreleased' entry (or a '## $version' entry) before releasing, so the release log stays current.")
 }
 $releasesCatalog = "docs/catalog/releases.md"
 if ((Test-Path $releasesCatalog) -and ((Get-Content -LiteralPath $releasesCatalog -Raw) -notmatch "\bv?$versionPattern\b")) {
@@ -77,6 +80,7 @@ $csprojPath = "src/GimmeCapture/GimmeCapture.csproj"
 $verifyScript = "scripts/verify.ps1"
 $rollbackFiles = @(
     "src/GimmeCapture/GimmeCapture.csproj",
+    "CHANGELOG.md",
     "src/GimmeCapture/packages.lock.json",
     "tests/GimmeCapture.Tests/packages.lock.json",
     "tests/GimmeCapture.Benchmarks/packages.lock.json"
@@ -101,6 +105,26 @@ try {
         throw "Verification modified tracked files: $($verifyChanges -join ', ')"
     }
 
+    # Promote the changelog's "## Unreleased" section to "## <version> - <today>" (only when the version section
+    # wasn't already written by hand). Done AFTER verify so the tree is clean during verify, and staged with the
+    # csproj in the release commit below. Uses the count-limited instance Replace so only the first heading moves.
+    if (-not $hasVersionSection) {
+        $releaseDate = Get-Date -Format 'yyyy-MM-dd'
+        Write-Host "Promoting CHANGELOG '## Unreleased' to '## $version - $releaseDate'..." -ForegroundColor Gray
+        # Read as UTF-8 explicitly (the changelog has em-dashes + CJK); the write below is UTF-8 no-BOM, so a
+        # mis-decoded read would corrupt those characters.
+        $changelogRaw = Get-Content -LiteralPath "CHANGELOG.md" -Raw -Encoding UTF8
+        $unreleasedRegex = [regex]::new('(?im)^##[ \t]+Unreleased\b.*$')
+        $promotedChangelog = $unreleasedRegex.Replace($changelogRaw, "## $version - $releaseDate", 1)
+        if ($promotedChangelog -eq $changelogRaw) {
+            throw "Failed to promote the '## Unreleased' section in CHANGELOG.md."
+        }
+        [IO.File]::WriteAllText(
+            (Resolve-Path "CHANGELOG.md"),
+            $promotedChangelog,
+            [Text.UTF8Encoding]::new($false))
+    }
+
     Write-Host "Updating $csprojPath to version $versionPlain..." -ForegroundColor Gray
     $csproj = Get-Content -LiteralPath $csprojPath -Raw
     $updatedCsproj = [regex]::Replace(
@@ -120,12 +144,14 @@ try {
     if ($LASTEXITCODE -ne 0) {
         throw "Unable to inspect release changes."
     }
-    $unexpectedFiles = @($changedFiles | Where-Object { $_ -ne $csprojPath })
+    # The release commit may touch the csproj (always) and CHANGELOG.md (the promotion above); nothing else.
+    $allowedChanges = @($csprojPath, "CHANGELOG.md")
+    $unexpectedFiles = @($changedFiles | Where-Object { $allowedChanges -notcontains $_ })
     if ($unexpectedFiles.Count -gt 0) {
         throw "Release produced unexpected changes: $($unexpectedFiles -join ', ')"
     }
 
-    & git add -- $csprojPath
+    & git add -- $csprojPath "CHANGELOG.md"
     if ($LASTEXITCODE -ne 0) {
         throw "Unable to stage release files."
     }
