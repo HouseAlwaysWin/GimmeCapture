@@ -573,6 +573,26 @@ public sealed class AnnotationEditorState : ReactiveObject, IDisposable
         Annotations.Clear();
     }
 
+    /// <summary>
+    /// Discard the undo/redo history without touching the annotations. Used by a non-undoable reset (e.g. the
+    /// editor's 還原預設, which also clears crop/rotation that have no history) so a later Undo can't resurrect
+    /// annotations onto a now differently-sized surface.
+    /// </summary>
+    public void ClearHistory()
+    {
+        foreach (var action in _historyStack)
+        {
+            action.Dispose();
+        }
+        _historyStack.Clear();
+        foreach (var action in _redoHistoryStack)
+        {
+            action.Dispose();
+        }
+        _redoHistoryStack.Clear();
+        UpdateHistoryStatus();
+    }
+
     public void PushUndoAction(IHistoryAction action)
     {
         _historyStack.Push(action);

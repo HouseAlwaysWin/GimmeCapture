@@ -198,6 +198,12 @@ internal sealed partial class VideoEditViewModel
     /// </summary>
     public Func<Task<bool>>? ConfirmTransformClearsEditsAction { get; set; }
 
+    /// <summary>
+    /// Set by the view: confirm reverting every edit back to defaults (還原預設). Segment/crop/rotation edits
+    /// aren't undoable, so this guards the destructive reset. Null (headless/tests) auto-confirms.
+    /// </summary>
+    public Func<Task<bool>>? ConfirmResetAllAction { get; set; }
+
     // Wire the composed editing pieces; called once from the constructor.
     private void InitializeEditing(VideoEditResult initial)
     {
@@ -279,6 +285,49 @@ internal sealed partial class VideoEditViewModel
             lastBoxRefreshMs = now;
             Redaction.RefreshActiveBoxes();
         });
+    }
+
+    // ── 還原預設 (reset all): wipe every edit back to a pristine whole-clip, 1× state ──
+
+    /// <summary>True when anything has been edited away from the pristine defaults — gates the confirm prompt.</summary>
+    private bool HasAnyEdit =>
+        EditSegments.Count > 1
+        || EditSegments.Any(s => !s.Kept || Math.Abs(s.Speed - 1.0) > 0.001)
+        || _crop != null
+        || _rotation != 0
+        || EditorState.Annotations.Count > 0
+        || Redaction.HasRedaction
+        || Math.Abs(_playbackSpeed - 1.0) > 0.001;
+
+    // Revert segments/speed, crop, rotation, annotations, redaction and the preview speed to defaults. Crop,
+    // rotation and segment edits have no undo, so confirm first; a pristine editor short-circuits (no prompt).
+    private async Task ResetAllAsync()
+    {
+        if (!HasAnyEdit)
+        {
+            return;
+        }
+
+        if (ConfirmResetAllAction != null && !await ConfirmResetAllAction())
+        {
+            return;
+        }
+
+        Pause();
+        IsCropMode = false;
+        IsSelectionMode = false;
+        EditorState.CurrentAnnotationTool = AnnotationType.None;
+
+        EditorState.ClearAnnotations();
+        EditorState.ClearHistory();  // reset is non-undoable — Undo mustn't resurrect annotations onto the reset surface
+        Redaction.Clear();
+        Crop = null;
+        RotationDegrees = 0;
+        PlaybackSpeed = 1.0;
+        ReplaceSegments(BuildEditSegments(Array.Empty<VideoEditSegment>(), _duration));
+
+        RaiseSurfaceChanged();       // crop/rotation cleared → the overlay stack re-aligns to the full frame
+        await ShowFrameAtAsync(PositionSeconds);
     }
 
     // ── Surface space: the cropped+rotated preview-frame pixel size annotations/redaction are stored in ──

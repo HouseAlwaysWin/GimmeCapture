@@ -158,7 +158,7 @@ public partial class FloatingVideoWindow : FloatingWindowBase
                 Dispatcher.UIThread.Post(UpdateSegmentLayout);
         };
 
-        // The strip = the SOURCE timeline. DRAG scrubs (playhead follows the finger); a TAP (no real
+        // The strip = the SOURCE timeline. DRAG scrubs (playhead follows the finger); a DOUBLE-click (no real
         // drag) toggles whether the piece under it is kept in the output.
         _segmentStripGrid.PointerPressed += OnSegmentStripPointerPressed;
         _segmentStripGrid.PointerMoved += OnSegmentStripPointerMoved;
@@ -167,12 +167,14 @@ public partial class FloatingVideoWindow : FloatingWindowBase
 
     private double _segmentPressX;
     private bool _segmentDidDrag;
+    private int _segmentPressClickCount;
 
     private void OnSegmentStripPointerPressed(object? sender, PointerPressedEventArgs e)
     {
         if (DataContext is not FloatingVideoViewModel vm || _segmentStripGrid == null) return;
         _scrubbingSegmentStrip = true;
         _segmentDidDrag = false;
+        _segmentPressClickCount = e.ClickCount;
         _segmentPressX = e.GetPosition(_segmentStripGrid).X;
         e.Pointer.Capture(_segmentStripGrid);
         ScrubSegmentStripTo(vm, _segmentPressX);
@@ -192,8 +194,10 @@ public partial class FloatingVideoWindow : FloatingWindowBase
         _scrubbingSegmentStrip = false;
         e.Pointer.Capture(null);
 
-        // A tap (no real drag) toggles the kept/dropped state of the piece under the pointer.
-        if (!_segmentDidDrag && DataContext is FloatingVideoViewModel vm && _segmentStripGrid != null)
+        // A DOUBLE-click (no real drag) toggles the kept/dropped state of the piece under the pointer; a single
+        // click just scrubs, so seeking the timeline no longer accidentally flips a segment's keep/drop state.
+        // `== 2` (not `>= 2`) so a triple/quadruple over-click fires exactly once — ClickCount keeps rising past 2.
+        if (!_segmentDidDrag && _segmentPressClickCount == 2 && DataContext is FloatingVideoViewModel vm && _segmentStripGrid != null)
         {
             double trackWidth = _segmentStripGrid.Bounds.Width;
             double total = vm.TotalOutputDuration;

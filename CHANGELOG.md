@@ -9,6 +9,15 @@
 
 ---
 
+## Unreleased
+
+### ✂️ Video editing
+
+- **還原預設 (Reset all)** — a new button in the advanced video editor reverts every edit — trim segments, per-piece
+  speed, crop, rotation, annotations, and redaction — back to defaults in one click (with a confirm prompt).
+- **Double-click to keep/drop a segment** — on the editor and pin timeline strips, toggling a piece's keep/drop
+  state now takes a **double-click**; a single click only scrubs, so seeking no longer flips segments by accident.
+
 ## v0.62.0 - 2026-07-08
 
 ### 🎬 Compress
