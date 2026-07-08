@@ -20,6 +20,12 @@
   each queued file's output into one via a per-row dropdown (defaults to the global output folder / next to source).
 - **Open output folder** — a per-row button (shown once a file finishes) reveals the produced file in Explorer.
 
+### ⏺️ Recording
+
+- **GIF recordings keep their audio for pinning** — recording with the format set to GIF now still captures audio.
+  A pinned GIF recording plays sound, and re-exporting it to a non-GIF format keeps the audio (only the saved
+  `.gif` itself is silent, since GIF has no audio track).
+
 ## v0.60.0 - 2026-07-07
 
 ### 🗜️ Smaller video compression

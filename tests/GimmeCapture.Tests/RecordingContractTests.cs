@@ -11,10 +11,12 @@ public class RecordingContractTests
     [Theory]
     [InlineData(false, "mp4", false)]
     [InlineData(true, "mp4", true)]
-    [InlineData(true, "gif", false)]
-    public void AudioPolicy_RespectsSwitchAndGifContract(bool requested, string format, bool expected)
+    [InlineData(false, "gif", false)]
+    [InlineData(true, "gif", true)]   // gif now captures audio too — kept in an mp4 sidecar for the pin
+    public void AudioPolicy_FollowsTheRequestSwitchForEveryFormat(bool requested, string format, bool expected)
     {
         Assert.Equal(expected, RecordingAudioPolicy.ShouldRecordSystemAudio(requested, format));
+        Assert.Equal(expected, RecordingAudioPolicy.ShouldRecordMicrophone(requested, format));
     }
 
     [Fact]
