@@ -368,6 +368,7 @@
   "AIScan": "AI Scan",
   "TipCopy": "Copy to Clipboard",
   "TipSave": "Save to File",
+  "TipExportFormat": "Output format",
   "MenuClose": "Close",
   "TipCrop": "Crop Selection",
   "TipPinSelection": "Pin Selection",

@@ -348,6 +348,7 @@
   "AIScan": "AI 自動スキャン",
   "TipCopy": "クリップボードにコピー",
   "TipSave": "ファイルに保存",
+  "TipExportFormat": "出力形式",
   "MenuClose": "閉じる",
   "TipCrop": "選択範囲を切り抜き",
   "TipPinSelection": "選択範囲をピン留め",

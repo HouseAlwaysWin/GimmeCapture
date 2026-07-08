@@ -355,6 +355,13 @@
                     </Button>
 
                     <Rectangle Fill="#444444" Width="1" Height="20" Margin="4,0" VerticalAlignment="Center"/>
+                    <!-- Export format: sets the container the Save dialog defaults to (mp4/mkv/mov/gif/webm). -->
+                    <ComboBox ItemsSource="{Binding AvailableExportFormats}"
+                              SelectedItem="{Binding SelectedExportFormat}"
+                              MinWidth="72" FontSize="11" VerticalAlignment="Center"
+                              IsTextSearchEnabled="False"
+                              Theme="{StaticResource {x:Type ComboBox}}"
+                              ToolTip.Tip="{Binding [TipExportFormat], Source={x:Static services:LocalizationService.Instance}}"/>
                     <!-- Basic actions: copy / save (always available, not behind a category) -->
                     <Button Theme="{StaticResource SnipButton}" Command="{Binding CopyCommand}" ToolTip.Tip="{Binding CopyTooltip}">
                         <PathIcon Data="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z" Width="14" Height="14"/>

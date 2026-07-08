@@ -120,20 +120,56 @@ public partial class FloatingImageViewModel
 
         if (IsSelectionActive)
         {
-             // Strategy: 
+             // Strategy:
              // 1. Get flattened bitmap (entire image + annotations)
              // 2. Crop it using the same logic as GetSelectedBitmapAsync but operating on the new bitmap.
-             
+
              var selected = await GetSelectedBitmapFromAsync(bitmapToCopy);
              if (selected != null)
              {
-                 await _clipboardService.CopyImageAsync(selected);
+                 await CopyBitmapInSelectedFormatAsync(selected);
              }
         }
         else
         {
-            await _clipboardService.CopyImageAsync(bitmapToCopy);
+            await CopyBitmapInSelectedFormatAsync(bitmapToCopy);
         }
+    }
+
+    // Puts the image on the clipboard as a file in the toolbar's SelectedImageFormat (so pasting into a folder
+    // yields the chosen format, like the pin's Save) alongside the raw bitmap (so pasting into an editor still
+    // works). Falls back to a plain image copy if encoding the file fails.
+    private async Task CopyBitmapInSelectedFormatAsync(Bitmap bitmap)
+    {
+        string fmt = (SelectedImageFormat ?? "PNG").ToLowerInvariant();
+        var (skFormat, quality) = fmt switch
+        {
+            "jpg" or "jpeg" => (SKEncodedImageFormat.Jpeg, 92),
+            "webp" => (SKEncodedImageFormat.Webp, 90),
+            _ => (SKEncodedImageFormat.Png, 100)
+        };
+
+        if (FloatingBitmapConversionHelper.TryEncodeBitmap(bitmap, skFormat, quality, out var bytes, out _))
+        {
+            try
+            {
+                string tempDir = System.IO.Path.Combine(
+                    System.IO.Path.GetTempPath(), "GimmeCapture_Copy_" + Guid.NewGuid().ToString("N"));
+                System.IO.Directory.CreateDirectory(tempDir);
+                string ext = fmt == "jpeg" ? "jpg" : fmt;
+                string temp = System.IO.Path.Combine(
+                    tempDir, GimmeCapture.Services.Core.Infrastructure.CaptureFileNameService.SuggestedBaseName() + "." + ext);
+                await System.IO.File.WriteAllBytesAsync(temp, bytes);
+                await _clipboardService.CopyFileAndImageAsync(temp, bitmap);
+                return;
+            }
+            catch (Exception ex)
+            {
+                GimmeCapture.Services.Core.Infrastructure.AppLog.Error("FloatingImage.CopyFormat", ex);
+            }
+        }
+
+        await _clipboardService.CopyImageAsync(bitmap);
     }
 
     private async Task CutAsync()
