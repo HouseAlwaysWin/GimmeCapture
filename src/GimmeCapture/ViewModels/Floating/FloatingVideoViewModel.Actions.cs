@@ -231,89 +231,47 @@ public partial class FloatingVideoViewModel
             try
             {
                 ProcessingText = LocalizationService.Instance["StatusExportingVideo"] ?? "Exporting Video...";
-                bool hasAnnotations = Annotations.AsValueEnumerable().Any();
-                bool cutRequested = EditChangesOutput;
 
-                // Trim/cut copy runs fully in-process (no ffmpeg.exe) for plain video sources.
-                string copyExt = Path.GetExtension(VideoPath).ToLowerInvariant();
-                if (LibavClipExporter.ContainerForExtension(copyExt) == null) copyExt = ".mp4";
-                if (cutRequested && CanExportTrimInProcess(hasAnnotations, copyExt))
+                // Copy honors the toolbar's export format (previously fixed to the source container).
+                string copyExt = SelectedExportFormat.StartsWith('.') ? SelectedExportFormat : "." + SelectedExportFormat;
+                var produced = await ProduceExportFileAsync(copyExt);
+                if (!string.IsNullOrEmpty(produced) && System.IO.File.Exists(produced))
                 {
-                    var trimmed = await ExportTrimmedInProcessAsync(copyExt);
-                    if (!string.IsNullOrEmpty(trimmed) && System.IO.File.Exists(trimmed))
+                    // Put the clip on the clipboard as a file (+ a best-effort thumbnail). Never let a null
+                    // thumbnail stop the file copy, or a stale prior clipboard entry would paste instead.
+                    var thumb = await GetFlattenedBitmapAsync() ?? VideoBitmap;
+                    if (thumb != null)
                     {
-                        // Put the trimmed clip on the clipboard. The thumbnail is optional — never let a
-                        // null/failed bitmap stop the file from being copied (a stale prior clipboard entry
-                        // would otherwise paste the whole video).
-                        var thumb = await GetFlattenedBitmapAsync() ?? VideoBitmap;
-                        if (thumb != null)
-                        {
-                            await _clipboardService.CopyFileAndImageAsync(trimmed, thumb);
-                        }
-                        else
-                        {
-                            await _clipboardService.CopyFileAsync(trimmed);
-                        }
-                        AppLog.Information($"FloatingVideo.Copy trimmed clip -> {Path.GetFileName(trimmed)} ({new FileInfo(trimmed).Length} bytes)");
-
-                        // Also persist the copied clip into History (like image copy) so it shows up there.
-                        if (AddClipToHistoryAsync != null)
-                        {
-                            await AddClipToHistoryAsync(trimmed, (int)OriginalWidth, (int)OriginalHeight);
-                        }
-                        return;
+                        await _clipboardService.CopyFileAndImageAsync(produced, thumb);
                     }
-
-                    ProcessingText = LocalizationService.Instance["StatusExportFailed"] ?? "Export failed";
-                    await Task.Delay(2000);
-                    return;
-                }
-
-                // Annotation/redaction burn-in copy runs in-process (Skia per frame), honoring any cut.
-                if (hasAnnotations && LibavClipExporter.ContainerForExtension(copyExt) != null)
-                {
-                    var burnt = await ExportAnnotatedInProcessAsync(copyExt);
-                    if (!string.IsNullOrEmpty(burnt) && System.IO.File.Exists(burnt))
+                    else
                     {
-                        var thumb = await GetFlattenedBitmapAsync() ?? VideoBitmap;
-                        if (thumb != null)
-                        {
-                            await _clipboardService.CopyFileAndImageAsync(burnt, thumb);
-                        }
-                        else
-                        {
-                            await _clipboardService.CopyFileAsync(burnt);
-                        }
-                        return;
+                        await _clipboardService.CopyFileAsync(produced);
                     }
+                    AppLog.Information($"FloatingVideo.Copy -> {Path.GetFileName(produced)} ({new FileInfo(produced).Length} bytes)");
 
-                    ProcessingText = LocalizationService.Instance["StatusExportFailed"] ?? "Export failed";
-                    await Task.Delay(2000);
+                    // Persist a newly-produced clip (trimmed/converted/transcoded) into History; skip when the
+                    // source file itself was copied unchanged.
+                    if (AddClipToHistoryAsync != null && !string.Equals(produced, VideoPath, StringComparison.OrdinalIgnoreCase))
+                    {
+                        await AddClipToHistoryAsync(produced, (int)OriginalWidth, (int)OriginalHeight);
+                    }
                     return;
                 }
 
-                // Trim/cut and annotation burn-in are handled fully in-process above and always return.
-                // If a cut/annotation ever reaches here, surface the failure rather than silently putting
-                // the untrimmed original on the clipboard.
-                if (cutRequested || hasAnnotations)
-                {
-                    ProcessingText = LocalizationService.Instance["StatusExportFailed"] ?? "Export failed";
-                    await Task.Delay(2000);
-                    return;
-                }
-
-                if (!string.IsNullOrEmpty(VideoPath) && System.IO.File.Exists(VideoPath))
-                {
-                    await _clipboardService.CopyFileAsync(VideoPath);
-                }
-                else
+                // No produced file. If there's no source clip (a freeze-frame pin), copy the current frame image.
+                if (string.IsNullOrEmpty(VideoPath) || !System.IO.File.Exists(VideoPath))
                 {
                     var bitmapToCopy = await GetFlattenedBitmapAsync();
                     if (bitmapToCopy != null)
                     {
                         await _clipboardService.CopyImageAsync(bitmapToCopy);
+                        return;
                     }
                 }
+
+                ProcessingText = LocalizationService.Instance["StatusExportFailed"] ?? "Export failed";
+                await Task.Delay(2000);
             }
             catch (Exception ex)
             {
@@ -522,6 +480,85 @@ public partial class FloatingVideoViewModel
         }
     }
 
+    /// <summary>
+    /// Produces a file of the whole pin clip — honoring trim/annotations/redaction — in the requested container/
+    /// format, returning its path (or <see cref="VideoPath"/> when the source is already in that format, or null
+    /// on failure). Shared by Save (copies it to the chosen path) and Copy (puts it on the clipboard) so both
+    /// honor the toolbar's export format. Plain-container changes stream-copy; codec-incompatible ones re-encode.
+    /// </summary>
+    private async Task<string?> ProduceExportFileAsync(string targetExtension)
+    {
+        string targetExt = targetExtension.StartsWith('.')
+            ? targetExtension.ToLowerInvariant()
+            : "." + targetExtension.ToLowerInvariant();
+        bool hasAnnotations = Annotations.AsValueEnumerable().Any();
+        bool cutRequested = EditChangesOutput;
+        string sourceExt = Path.GetExtension(VideoPath).ToLowerInvariant();
+
+        // Fast path: no edits and already in the requested format → the source file IS the output (lossless).
+        // MUST precede the GIF/WebM branch so an unchanged same-format clip isn't needlessly re-encoded.
+        if (!cutRequested && !hasAnnotations && sourceExt == targetExt
+            && !string.IsNullOrEmpty(VideoPath) && System.IO.File.Exists(VideoPath))
+        {
+            return VideoPath;
+        }
+
+        // Trim/cut to a plain container → in-process trim export.
+        if (cutRequested && CanExportTrimInProcess(hasAnnotations, targetExt))
+        {
+            return await ExportTrimmedInProcessAsync(targetExt);
+        }
+
+        // Annotation/redaction burn-in to a plain container → in-process burn-in.
+        if (hasAnnotations && LibavClipExporter.ContainerForExtension(targetExt) != null)
+        {
+            return await ExportAnnotatedInProcessAsync(targetExt);
+        }
+
+        // GIF/WebM (no annotations) → in-process transcode.
+        if (!hasAnnotations && (targetExt == ".gif" || targetExt == ".webm"))
+        {
+            return await ExportGifWebmInProcessAsync(targetExt);
+        }
+
+        // An edit was requested but none of the paths above could produce it.
+        if (cutRequested || hasAnnotations)
+        {
+            return null;
+        }
+
+        if (string.IsNullOrEmpty(VideoPath) || !System.IO.File.Exists(VideoPath))
+        {
+            return null;
+        }
+
+        // (Same container + no edits already returned VideoPath at the top.)
+        // Different plain container (mp4↔mkv↔mov) → lossless stream-copy remux to a temp file (keeps audio).
+        string? sourceContainer = LibavClipExporter.ContainerForExtension(sourceExt);
+        string? targetContainer = LibavClipExporter.ContainerForExtension(targetExt);
+        if (sourceContainer != null && targetContainer != null)
+        {
+            string remuxDir = Path.Combine(Path.GetTempPath(), "GimmeCapture_Export_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(remuxDir);
+            string remuxOut = Path.Combine(remuxDir, "output" + targetExt);
+            try
+            {
+                await Task.Run(() => LibavMuxer.RemuxAllStreams(VideoPath, remuxOut, targetContainer));
+                if (System.IO.File.Exists(remuxOut))
+                {
+                    return remuxOut;
+                }
+            }
+            catch (Exception ex)
+            {
+                AppLog.Error("FloatingVideo.Remux", ex); // fall through to a re-encode
+            }
+        }
+
+        // Codec-incompatible container (e.g. a recorded GIF/WebM → mp4) or a remux that failed → re-encode.
+        return await ExportTrimmedInProcessAsync(targetExt);
+    }
+
     private async Task SaveAsync()
     {
         if (PickSaveFileAction == null || IsProcessing) return;
@@ -537,118 +574,18 @@ public partial class FloatingVideoViewModel
 
             try
             {
-                bool hasAnnotations = Annotations.AsValueEnumerable().Any();
-                string sourceExt = Path.GetExtension(VideoPath).ToLowerInvariant();
+                // The Save dialog's chosen extension (defaulted from the toolbar format) decides the container.
                 string targetExt = Path.GetExtension(targetPath).ToLowerInvariant();
-                bool needsConversion = sourceExt != targetExt;
-                bool cutRequested = EditChangesOutput;
-
-                // Trim/cut export runs fully in-process (no ffmpeg.exe) for plain video targets.
-                if (cutRequested && CanExportTrimInProcess(hasAnnotations, targetExt))
+                var produced = await ProduceExportFileAsync(targetExt);
+                if (!string.IsNullOrEmpty(produced) && System.IO.File.Exists(produced))
                 {
-                    var trimmed = await ExportTrimmedInProcessAsync(targetExt);
-                    if (!string.IsNullOrEmpty(trimmed) && System.IO.File.Exists(trimmed))
-                    {
-                        System.IO.File.Copy(trimmed, targetPath, true);
-                        FileLocationService.RevealInFileExplorer(targetPath);
-                        return;
-                    }
-
-                    ProcessingText = LocalizationService.Instance["StatusExportFailed"] ?? "Export failed";
-                    await Task.Delay(2000);
-                    return;
-                }
-
-                // Annotation/redaction burn-in runs in-process (Skia per frame), honoring any cut.
-                if (hasAnnotations && LibavClipExporter.ContainerForExtension(targetExt) != null)
-                {
-                    var burnt = await ExportAnnotatedInProcessAsync(targetExt);
-                    if (!string.IsNullOrEmpty(burnt) && System.IO.File.Exists(burnt))
-                    {
-                        System.IO.File.Copy(burnt, targetPath, true);
-                        FileLocationService.RevealInFileExplorer(targetPath);
-                        return;
-                    }
-
-                    ProcessingText = LocalizationService.Instance["StatusExportFailed"] ?? "Export failed";
-                    await Task.Delay(2000);
-                    return;
-                }
-
-                // GIF/WebM export also runs in-process (no ffmpeg.exe): trim to mp4 if a cut was made,
-                // then transcode with the existing GIF/WebM encoders. Annotations excluded (handled above).
-                if (!hasAnnotations && (targetExt == ".gif" || targetExt == ".webm"))
-                {
-                    var produced = await ExportGifWebmInProcessAsync(targetExt);
-                    if (!string.IsNullOrEmpty(produced) && System.IO.File.Exists(produced))
-                    {
-                        System.IO.File.Copy(produced, targetPath, true);
-                        FileLocationService.RevealInFileExplorer(targetPath);
-                        return;
-                    }
-
-                    ProcessingText = LocalizationService.Instance["StatusExportFailed"] ?? "Export failed";
-                    await Task.Delay(2000);
-                    return;
-                }
-
-                // Trim/cut, annotation burn-in, and GIF/WebM are all handled in-process above. Anything
-                // left that still requested an edit (e.g. annotations to a GIF/WebM target, which the
-                // in-process paths don't cover) can no longer be produced now that the legacy ffmpeg.exe
-                // path is gone — surface the failure rather than silently writing the unedited original.
-                // A plain container change with no edits (needsConversion only) falls through to the copy.
-                if (cutRequested || hasAnnotations)
-                {
-                    ProcessingText = LocalizationService.Instance["StatusExportFailed"] ?? "Export failed";
-                    await Task.Delay(2000);
-                    return;
-                }
-
-                // No trim, no annotations, plain-container target (gif/webm returned above). Produce the file:
-                //   • plain ↔ plain (mp4/mkv/mov) → stream-copy remux (lossless, keeps audio) — NOT a raw byte
-                //     copy, which would leave the source bytes under a mismatched extension;
-                //   • otherwise a differing container (e.g. gif/webm source → mp4) → re-encode, since the codecs
-                //     can't be stream-copied into the target;
-                //   • same container → a lossless byte copy.
-                if (needsConversion && System.IO.File.Exists(VideoPath)
-                    && LibavClipExporter.ContainerForExtension(sourceExt) != null
-                    && LibavClipExporter.ContainerForExtension(targetExt) is { } container)
-                {
-                    try
-                    {
-                        await Task.Run(() => LibavMuxer.RemuxAllStreams(VideoPath, targetPath, container));
-                        FileLocationService.RevealInFileExplorer(targetPath);
-                        return;
-                    }
-                    catch (Exception ex)
-                    {
-                        AppLog.Error("FloatingVideo.Remux", ex); // fall through to a re-encode as a last resort
-                    }
-                }
-
-                if (needsConversion)
-                {
-                    // Codecs can't be stream-copied into the target container (recorded GIF/WebM → mp4, or a
-                    // remux that failed): re-encode the whole clip so the output is a valid file of that container.
-                    var reencoded = await ExportTrimmedInProcessAsync(targetExt);
-                    if (!string.IsNullOrEmpty(reencoded) && System.IO.File.Exists(reencoded))
-                    {
-                        System.IO.File.Copy(reencoded, targetPath, true);
-                        FileLocationService.RevealInFileExplorer(targetPath);
-                        return;
-                    }
-
-                    ProcessingText = LocalizationService.Instance["StatusExportFailed"] ?? "Export failed";
-                    await Task.Delay(2000);
-                    return;
-                }
-
-                if (System.IO.File.Exists(VideoPath))
-                {
-                    System.IO.File.Copy(VideoPath, targetPath, true); // same container: lossless byte copy
+                    System.IO.File.Copy(produced, targetPath, true);
                     FileLocationService.RevealInFileExplorer(targetPath);
+                    return;
                 }
-                else
+
+                // No produced file. If there's no source clip (a freeze-frame pin), save the current frame image.
+                if (string.IsNullOrEmpty(VideoPath) || !System.IO.File.Exists(VideoPath))
                 {
                     var bitmap = await GetFlattenedBitmapAsync();
                     if (bitmap != null)
@@ -656,8 +593,12 @@ public partial class FloatingVideoViewModel
                         using var stream = new System.IO.FileStream(targetPath, System.IO.FileMode.Create);
                         bitmap.Save(stream);
                         FileLocationService.RevealInFileExplorer(targetPath);
+                        return;
                     }
                 }
+
+                ProcessingText = LocalizationService.Instance["StatusExportFailed"] ?? "Export failed";
+                await Task.Delay(2000);
             }
             catch (Exception ex)
             {

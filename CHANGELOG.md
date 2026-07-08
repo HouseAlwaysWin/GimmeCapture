@@ -22,10 +22,11 @@
 
 ### 📌 Pin
 
-- **Pick the export format from the pin toolbar** — image pins can save as **PNG / JPG / WebP** and video pins export
-  as **MP4 / MKV / MOV / GIF / WebM**, chosen from a dropdown on the pin itself instead of being fixed by the
-  main-menu recording format. Video container changes stream-copy losslessly where possible (falling back to a
-  re-encode when the codecs can't be remuxed), and saving a transparent pin as JPG composites it over white.
+- **Pick the export format from the pin toolbar** — image pins output **PNG / JPG / WebP** and video pins output
+  **MP4 / MKV / MOV / GIF / WebM**, chosen from a dropdown on the pin itself instead of being fixed by the
+  main-menu recording format. The choice applies to **both Save and Copy**. Video container changes stream-copy
+  losslessly where possible (falling back to a re-encode when the codecs can't be remuxed), and saving a
+  transparent pin as JPG composites it over white.
 
 ## v0.60.0 - 2026-07-07
 
