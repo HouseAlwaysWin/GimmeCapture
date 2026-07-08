@@ -18,6 +18,13 @@ internal static class FloatingBitmapConversionHelper
     }
 
     public static bool TryEncodeBitmapToPngBytes(Bitmap? bitmap, out byte[] bytes, out string? error)
+        => TryEncodeBitmap(bitmap, SKEncodedImageFormat.Png, 100, out bytes, out error);
+
+    /// <summary>
+    /// Encodes an Avalonia bitmap to the given SkiaSharp format (Png/Jpeg/Webp…) at the given quality (0-100,
+    /// ignored for lossless Png). Used by the pin's Save flow so the toolbar's chosen output format is honored.
+    /// </summary>
+    public static bool TryEncodeBitmap(Bitmap? bitmap, SKEncodedImageFormat format, int quality, out byte[] bytes, out string? error)
     {
         bytes = Array.Empty<byte>();
         error = null;
@@ -36,15 +43,37 @@ internal static class FloatingBitmapConversionHelper
 
             using (skBitmap)
             {
-                using var image = SKImage.FromBitmap(skBitmap);
-                using var data = image.Encode(SKEncodedImageFormat.Png, 100);
-                if (data == null)
+                SKBitmap encodeSource = skBitmap;
+                SKBitmap? flattened = null;
+                // JPEG has no alpha channel: composite a transparent pin over white so it doesn't export with a
+                // black background (a premultiplied transparent pixel is RGB 0,0,0). PNG/WebP keep alpha as-is.
+                if (format == SKEncodedImageFormat.Jpeg && skBitmap.AlphaType != SKAlphaType.Opaque)
                 {
-                    error = "Encoded bitmap bytes are empty.";
-                    return false;
+                    flattened = new SKBitmap(skBitmap.Width, skBitmap.Height, SKColorType.Bgra8888, SKAlphaType.Opaque);
+                    using (var canvas = new SKCanvas(flattened))
+                    {
+                        canvas.Clear(SKColors.White);
+                        canvas.DrawBitmap(skBitmap, 0, 0);
+                    }
+                    encodeSource = flattened;
                 }
 
-                bytes = data.ToArray();
+                try
+                {
+                    using var image = SKImage.FromBitmap(encodeSource);
+                    using var data = image.Encode(format, quality);
+                    if (data == null)
+                    {
+                        error = "Encoded bitmap bytes are empty.";
+                        return false;
+                    }
+
+                    bytes = data.ToArray();
+                }
+                finally
+                {
+                    flattened?.Dispose();
+                }
             }
             if (bytes.Length == 0)
             {

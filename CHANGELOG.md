@@ -19,6 +19,17 @@
 - **Output categories** — create category subfolders inside the active working directory (**新增分類**), then sort
   each queued file's output into one via a per-row dropdown (defaults to the global output folder / next to source).
 - **Open output folder** — a per-row button (shown once a file finishes) reveals the produced file in Explorer.
+- **GIF and WebM output** — the Video-Editing (Compress) tab can now output **GIF** and **WebM** in addition to
+  MP4/MKV/MOV, matching Pin mode. All edits (trim/crop/rotate/filters/annotations) are baked into an intermediate
+  render first, then transcoded, so the GIF/WebM reflects the full edit.
+
+### 📌 Pin
+
+- **Pick the export format from the pin toolbar** — image pins output **PNG / JPG / WebP** and video pins output
+  **MP4 / MKV / MOV / GIF / WebM**, chosen from a dropdown on the pin itself instead of being fixed by the
+  main-menu recording format. The choice applies to **both Save and Copy**. Video container changes stream-copy
+  losslessly where possible (falling back to a re-encode when the codecs can't be remuxed), and saving a
+  transparent pin as JPG composites it over white.
 
 ### ⏺️ Recording
 

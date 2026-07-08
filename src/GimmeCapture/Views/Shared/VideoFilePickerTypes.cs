@@ -24,6 +24,15 @@ internal static class VideoFilePickerTypes
     public static FilePickerFileType AllFiles { get; } = new("All Files") { Patterns = new[] { "*.*" } };
 
     public static FilePickerFileType PngImage { get; } = new("PNG Image") { Patterns = new[] { "*.png" } };
+    public static FilePickerFileType JpegImage { get; } = new("JPEG Image") { Patterns = new[] { "*.jpg", "*.jpeg" } };
+    public static FilePickerFileType WebpImage { get; } = new("WebP Image") { Patterns = new[] { "*.webp" } };
+
+    private static readonly (string Ext, FilePickerFileType Type)[] SaveImageFormats =
+    {
+        ("png", PngImage),
+        ("jpg", JpegImage),
+        ("webp", WebpImage),
+    };
 
     private static readonly (string Ext, FilePickerFileType Type)[] SaveFormats =
     {
@@ -54,6 +63,46 @@ internal static class VideoFilePickerTypes
         string defaultExt = known ? ext : "mp4";
         var choices = new List<FilePickerFileType>(SaveFormats.Length + 1);
         foreach (var (fmt, type) in SaveFormats)
+        {
+            if (fmt == defaultExt)
+            {
+                choices.Insert(0, type);
+            }
+            else
+            {
+                choices.Add(type);
+            }
+        }
+
+        choices.Add(AllFiles);
+        return (choices, defaultExt);
+    }
+
+    /// <summary>
+    /// Per-format image save choices with the preferred format first (so the dialog defaults to it) and
+    /// "All Files" last. Unknown/empty inputs default to png. Mirrors <see cref="SaveChoicesPreferring"/>.
+    /// </summary>
+    public static (List<FilePickerFileType> Choices, string DefaultExt) SaveImageChoicesPreferring(string? preferred)
+    {
+        string ext = (preferred ?? string.Empty).TrimStart('.').ToLowerInvariant();
+        if (ext == "jpeg")
+        {
+            ext = "jpg";
+        }
+
+        bool known = false;
+        foreach (var (fmt, _) in SaveImageFormats)
+        {
+            if (fmt == ext)
+            {
+                known = true;
+                break;
+            }
+        }
+
+        string defaultExt = known ? ext : "png";
+        var choices = new List<FilePickerFileType>(SaveImageFormats.Length + 1);
+        foreach (var (fmt, type) in SaveImageFormats)
         {
             if (fmt == defaultExt)
             {

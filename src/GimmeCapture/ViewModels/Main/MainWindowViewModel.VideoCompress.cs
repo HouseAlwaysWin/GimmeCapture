@@ -9,6 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Core.Infrastructure;
+using GimmeCapture.Services.Core.Media;
 using GimmeCapture.Services.Core.Media.NativeFFmpeg;
 using ReactiveUI;
 using SkiaSharp;
@@ -263,8 +264,9 @@ public partial class MainWindowViewModel
         set => this.RaiseAndSetIfChanged(ref _compressTargetSizeMB, value);
     }
 
-    // Output container — only what LibavClipExporter.ContainerForExtension supports.
-    public string[] CompressOutputFormats { get; } = ["MP4", "MKV", "MOV"];
+    // Output container. MP4/MKV/MOV go through LibavClipExporter; GIF/WebM render an edited intermediate mp4
+    // then transcode (see EncodeGifWebmAsync), matching the formats Pin mode offers.
+    public string[] CompressOutputFormats { get; } = ["MP4", "MKV", "MOV", "GIF", "WebM"];
 
     private string _selectedCompressFormat = "MP4";
     public string SelectedCompressFormat
@@ -743,6 +745,14 @@ public partial class MainWindowViewModel
         string prefix = LocalizationService.Instance["CompressEstimateLabel"];
         CompressSettingsSnapshot s = BuildSettingsSnapshot(item); // per-item bundle, or the live settings
 
+        // GIF/WebM aren't bitrate/CRF-modelled by the bpp estimator (palette / VP9), so don't show a misleading
+        // number — the size depends heavily on content, resolution, and frame rate.
+        string fmt = EffectiveFormatFor(item);
+        if (fmt.Equals("GIF", StringComparison.OrdinalIgnoreCase) || fmt.Equals("WebM", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"{prefix}: {LocalizationService.Instance["CompressEstimateVaries"]}";
+        }
+
         if (s.UseTargetSize)
         {
             // Target-size mode encodes to (approximately) the requested size by design.
@@ -990,6 +1000,15 @@ public partial class MainWindowViewModel
         var ranges = runs.Select(r => new LibavClipExporter.SourceRange(r.Start, r.End, r.Speed)).ToArray();
         bool hasSpeed = runs.Any(r => Math.Abs(r.Speed - 1.0) > 0.001);
 
+        // GIF/WebM: the transcoders take a whole file and apply no edits, so render an all-edits-applied
+        // intermediate mp4 first, then transcode. Target-size / two-pass / segmented-resume don't apply here.
+        string outFmtExt = Path.GetExtension(outputPath).ToLowerInvariant();
+        if (outFmtExt == ".gif" || outFmtExt == ".webm")
+        {
+            return await EncodeGifWebmAsync(
+                input, outputPath, outFmtExt, s, ranges, rotationDegrees, crop, burnInComposite, progress, pauseGate, token);
+        }
+
         // CRF + known duration + a single contiguous, full-speed, un-cropped, un-annotated run → resumable
         // segmented path; target-size / 2-pass / unknown-duration / multi-segment / speed / crop / burn-in
         // keep the whole-file concat path.
@@ -1080,6 +1099,98 @@ public partial class MainWindowViewModel
             catch (Exception ex)
             {
                 AppLog.Error("Compress.Cleanup", ex);
+            }
+        }
+    }
+
+    // GIF/WebM output for the compress pipeline. The GIF/WebM encoders take a whole file and apply no edits, so
+    // render an all-edits-applied intermediate mp4 (trim/crop/rotate/filters/downscale/fps/burn-in) via the clip
+    // exporter, then transcode it (shared with the pin via GifWebmVideoExporter). Quality follows the CRF slider;
+    // target-size / two-pass / segmented-resume don't apply (the transcoders are quality-driven).
+    private async Task<bool> EncodeGifWebmAsync(
+        string input, string outputPath, string outExt, CompressSettingsSnapshot s,
+        LibavClipExporter.SourceRange[] ranges, int rotationDegrees, VideoEditCrop? crop,
+        Action<SKBitmap, double>? burnInComposite, IProgress<double> progress,
+        ManualResetEventSlim? pauseGate, CancellationToken token)
+    {
+        bool isGif = outExt == ".gif";
+        // Loosely map the CRF slider (x265 scale) to the transcoders' quality tier.
+        VideoQuality quality = s.Crf <= 20 ? VideoQuality.High : s.Crf >= 30 ? VideoQuality.Low : VideoQuality.Medium;
+
+        string tempDir = Path.Combine(Path.GetTempPath(), "GimmeCapture_Compress_" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(tempDir);
+
+            // 1. Fully-edited intermediate mp4 (near-lossless CRF to limit generational loss before the transcode).
+            string intermediate = Path.Combine(tempDir, "intermediate.mp4");
+            var interOptions = new LibavExportOptions
+            {
+                Codec = VideoCodec.H264,
+                CrfOverride = 18,
+                Preset = s.Preset,
+                MaxHeight = s.MaxHeight,
+                MaxFps = s.MaxFps,
+                RotationDegrees = rotationDegrees,
+                Denoise = s.Denoise,
+                Sharpen = s.Sharpen,
+                Deblock = s.Deblock,
+                Grayscale = s.Grayscale,
+                DropAudio = isGif || s.DropAudio, // GIF has no audio; WebM keeps it (unless dropped) for the Opus mux
+                AudioBitrateKbps = s.AudioBitrateKbps,
+                AudioChannels = s.AudioChannels
+            };
+            bool built = await Task.Run(() => LibavClipExporter.TryExport(
+                input, ranges, intermediate, VideoQuality.Medium, crop: crop, cancellationToken: token,
+                options: interOptions, progress: progress, pauseGate: pauseGate,
+                frameCompositeAfterTransform: burnInComposite), token);
+            if (!built || !File.Exists(intermediate) || new FileInfo(intermediate).Length == 0)
+            {
+                return false;
+            }
+
+            token.ThrowIfCancellationRequested();
+
+            // 2. Transcode the intermediate to the final format INTO the temp dir, then copy to the real output
+            //    only on success — so a mid-transcode failure never leaves a partial file at the user's location.
+            //    MaxHeight/MaxFps are already baked into the intermediate, so let the GIF ladder only kick in when
+            //    the user left resolution/fps at Original.
+            string finalTemp = Path.Combine(tempDir, "output" + outExt);
+            bool ok;
+            if (isGif)
+            {
+                (int ladderFps, int ladderWidth) = LibavGifTranscoder.QualityLadder(quality);
+                int gifFps = s.MaxFps > 0 ? s.MaxFps : ladderFps;
+                int maxWidth = s.MaxHeight > 0 ? 0 : ladderWidth;
+                ok = await Task.Run(() => GifWebmVideoExporter.TranscodeToGif(intermediate, finalTemp, gifFps, maxWidth), token);
+            }
+            else
+            {
+                ok = await Task.Run(() => GifWebmVideoExporter.TranscodeToWebm(
+                    intermediate, finalTemp, tempDir, quality, keepAudio: !s.DropAudio, ct: token), token);
+            }
+
+            if (!ok || !File.Exists(finalTemp) || new FileInfo(finalTemp).Length == 0)
+            {
+                return false;
+            }
+
+            File.Copy(finalTemp, outputPath, true);
+            progress.Report(1.0);
+            return true;
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(tempDir))
+                {
+                    Directory.Delete(tempDir, true);
+                }
+            }
+            catch (Exception ex)
+            {
+                AppLog.Error("Compress.GifWebmCleanup", ex);
             }
         }
     }

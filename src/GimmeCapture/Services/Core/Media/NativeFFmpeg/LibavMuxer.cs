@@ -219,6 +219,112 @@ internal static class LibavMuxer
         }
     }
 
+    /// <summary>
+    /// Stream-copies every video + audio stream from a SINGLE input into a new container (no re-encode:
+    /// lossless and fast, and it keeps the audio). Used for a pin's plain-container change (mp4↔mkv↔mov) so the
+    /// output is a valid file of the chosen container instead of the source bytes under a mismatched extension.
+    /// The source codecs must be acceptable in the target container (true for h264/h265/aac across mp4/mkv/mov);
+    /// codec-incompatible changes (e.g. a GIF/WebM source → mp4) must re-encode instead.
+    /// </summary>
+    public static unsafe MuxStats RemuxAllStreams(string inputPath, string outputPath, string containerFormat)
+    {
+        FFmpegRuntime.EnsureInitialized();
+
+        AVFormatContext* inFmt = null;
+        AVFormatContext* outFmt = null;
+        AVPacket* pkt = null;
+        try
+        {
+            ThrowIfErr(ffmpeg.avformat_open_input(&inFmt, inputPath, null, null), "open_input(remux_all)");
+            ThrowIfErr(ffmpeg.avformat_find_stream_info(inFmt, null), "find_stream_info(remux_all)");
+
+            ThrowIfErr(ffmpeg.avformat_alloc_output_context2(&outFmt, null, containerFormat, outputPath), "alloc_output(remux_all)");
+            if (outFmt == null) throw new InvalidOperationException("Failed to create output format context.");
+
+            int nStreams = (int)inFmt->nb_streams;
+            int[] streamMap = new int[nStreams];
+            int outIndex = 0;
+            for (int i = 0; i < nStreams; i++)
+            {
+                streamMap[i] = -1;
+                AVStream* inStream = inFmt->streams[i];
+                AVMediaType type = inStream->codecpar->codec_type;
+                // Copy only video + audio (drop data/subtitle streams the target container may reject).
+                if (type != AVMediaType.AVMEDIA_TYPE_VIDEO && type != AVMediaType.AVMEDIA_TYPE_AUDIO)
+                {
+                    continue;
+                }
+
+                AVStream* outStream = ffmpeg.avformat_new_stream(outFmt, null);
+                if (outStream == null) throw new OutOfMemoryException("new_stream(remux_all)");
+                ThrowIfErr(ffmpeg.avcodec_parameters_copy(outStream->codecpar, inStream->codecpar), "copy_codecpar(remux_all)");
+                outStream->codecpar->codec_tag = 0;
+                streamMap[i] = outIndex++;
+            }
+
+            if (outIndex == 0) throw new InvalidOperationException("No video/audio streams to remux.");
+
+            if ((outFmt->oformat->flags & ffmpeg.AVFMT_NOFILE) == 0)
+            {
+                ThrowIfErr(ffmpeg.avio_open(&outFmt->pb, outputPath, ffmpeg.AVIO_FLAG_WRITE), "avio_open(remux_all)");
+            }
+
+            ThrowIfErr(ffmpeg.avformat_write_header(outFmt, null), "write_header(remux_all)");
+
+            pkt = ffmpeg.av_packet_alloc();
+            if (pkt == null) throw new OutOfMemoryException("av_packet_alloc(remux_all)");
+
+            int videoPackets = 0;
+            int audioPackets = 0;
+            while (true)
+            {
+                int rr = ffmpeg.av_read_frame(inFmt, pkt);
+                if (rr == ffmpeg.AVERROR_EOF) break;
+                ThrowIfErr(rr, "read_frame(remux_all)");
+
+                int src = pkt->stream_index;
+                if (src < 0 || src >= nStreams || streamMap[src] < 0)
+                {
+                    ffmpeg.av_packet_unref(pkt);
+                    continue;
+                }
+
+                AVStream* inStream = inFmt->streams[src];
+                AVStream* outStream = outFmt->streams[streamMap[src]];
+                ffmpeg.av_packet_rescale_ts(pkt, inStream->time_base, outStream->time_base);
+                pkt->stream_index = streamMap[src];
+                pkt->pos = -1;
+                ThrowIfErr(ffmpeg.av_interleaved_write_frame(outFmt, pkt), "write_frame(remux_all)");
+                if (inStream->codecpar->codec_type == AVMediaType.AVMEDIA_TYPE_VIDEO)
+                {
+                    videoPackets++;
+                }
+                else
+                {
+                    audioPackets++;
+                }
+                ffmpeg.av_packet_unref(pkt); // safe no-op: av_interleaved_write_frame already reset the packet
+            }
+
+            ffmpeg.av_write_trailer(outFmt);
+            return new MuxStats(videoPackets, audioPackets);
+        }
+        finally
+        {
+            if (pkt != null) ffmpeg.av_packet_free(&pkt);
+            if (inFmt != null) ffmpeg.avformat_close_input(&inFmt);
+            if (outFmt != null)
+            {
+                if ((outFmt->oformat->flags & ffmpeg.AVFMT_NOFILE) == 0 && outFmt->pb != null)
+                {
+                    ffmpeg.avio_closep(&outFmt->pb);
+                }
+
+                ffmpeg.avformat_free_context(outFmt);
+            }
+        }
+    }
+
     public static unsafe MuxStats MuxVideoAndAudio(string videoPath, string audioPath, string outputPath, string containerFormat)
     {
         FFmpegRuntime.EnsureInitialized();
