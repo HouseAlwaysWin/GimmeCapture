@@ -9,7 +9,7 @@
 
 ---
 
-## Unreleased
+## v0.62.0 - 2026-07-08
 
 ### 🎬 Compress
 
