@@ -131,6 +131,7 @@
   "RedactionEffectSolidBlack": "黒塗り",
   "CompressEditTransformClearsEdits": "トリミング／回転を変更すると、追加した注釈とマスクが消去されます。続行しますか？",
   "CompressEditResetAll": "すべての編集をリセット",
+  "CompressEditResetLabel": "リセット",
   "CompressEditResetConfirm": "すべての編集（セグメント・速度・トリミング・回転・注釈・マスク）をデフォルトに戻しますか？",
   "CompressCompareButton": "画質比較",
   "CompressCompareSource": "元動画",

@@ -131,6 +131,7 @@
   "RedactionEffectSolidBlack": "塗黑",
   "CompressEditTransformClearsEdits": "變更裁切/旋轉會清除已加入的標註與遮蔽，要繼續嗎？",
   "CompressEditResetAll": "還原所有編輯",
+  "CompressEditResetLabel": "預設",
   "CompressEditResetConfirm": "要將所有編輯（片段、變速、裁切、旋轉、標註、遮蔽）還原為預設值嗎？",
   "CompressCompareButton": "畫質比較",
   "CompressCompareSource": "原始",

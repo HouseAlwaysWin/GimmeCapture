@@ -131,6 +131,7 @@
   "RedactionEffectSolidBlack": "Solid black",
   "CompressEditTransformClearsEdits": "Changing the crop/rotation clears the annotations and redaction you added. Continue?",
   "CompressEditResetAll": "Reset all edits",
+  "CompressEditResetLabel": "Reset",
   "CompressEditResetConfirm": "Reset every edit — segments, speed, crop, rotation, annotations and redaction — back to defaults?",
   "CompressCompareButton": "Compare quality",
   "CompressCompareSource": "Original",
