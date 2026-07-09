@@ -58,8 +58,8 @@ public partial class SnipWindowViewModel
             switch (result.Status)
             {
                 case QuickOcrStatus.Success:
-                    await _captureService.CopyToClipboardAsync(result.Text);
-                    _mainVm.SetStatus("QuickOcrCopied");
+                    bool copied = await _captureService.CopyToClipboardAsync(result.Text);
+                    _mainVm.SetStatus(copied ? "QuickOcrCopied" : "QuickOcrCopyFailed");
                     break;
                 case QuickOcrStatus.ModuleMissing:
                     _mainVm.SetStatus("QuickOcrModuleMissing");

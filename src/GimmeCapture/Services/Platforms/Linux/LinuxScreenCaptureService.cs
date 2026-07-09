@@ -143,14 +143,22 @@ public sealed class LinuxScreenCaptureService : IScreenCaptureService
         });
     }
 
-    public async Task CopyToClipboardAsync(string text)
+    public async Task<bool> CopyToClipboardAsync(string text)
     {
-        await Dispatcher.UIThread.InvokeAsync(async () =>
+        if (string.IsNullOrEmpty(text))
+        {
+            return false;
+        }
+
+        return await Dispatcher.UIThread.InvokeAsync(async () =>
         {
             if (ResolveTopLevel()?.Clipboard is { } clipboard)
             {
                 await global::Avalonia.Input.Platform.ClipboardExtensions.SetTextAsync(clipboard, text);
+                return true;
             }
+
+            return false;
         });
     }
 

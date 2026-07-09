@@ -18,6 +18,14 @@
 - **Double-click to keep/drop a segment** — on the editor and pin timeline strips, toggling a piece's keep/drop
   state now takes a **double-click**; a single click only scrubs, so seeking no longer flips segments by accident.
 
+### 🐛 Fixed
+
+- **Shift+F4 OCR copy no longer freezes the app on long text.** The recognized text was written to the clipboard
+  synchronously on the UI thread; a large payload racing the Windows clipboard-history listeners could wedge that
+  OLE call and hang the whole app. The write now runs on a dedicated STA thread bounded by a timeout, so the
+  clipboard can never block the UI thread — and a copy that still fails reports a distinct status instead of a
+  false "copied".
+
 ## v0.62.0 - 2026-07-08
 
 ### 🎬 Compress

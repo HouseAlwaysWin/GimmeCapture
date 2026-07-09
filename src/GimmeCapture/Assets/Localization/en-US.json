@@ -567,6 +567,7 @@
   "ScrollingCaptureHotkey": "Scrolling Capture",
   "QuickOcrProcessing": "Recognizing text...",
   "QuickOcrCopied": "Recognized text copied to the clipboard.",
+  "QuickOcrCopyFailed": "Recognized the text, but copying to the clipboard failed.",
   "QuickOcrModuleMissing": "PaddleOCR is not installed. Install it from Modules first.",
   "QuickOcrNoText": "No recognizable text was found in the selection.",
   "QuickOcrFailed": "Text recognition failed.",

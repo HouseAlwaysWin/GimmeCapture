@@ -491,29 +491,87 @@ public class WindowsScreenCaptureService : IScreenCaptureService
         });
     }
 
-    public async Task CopyToClipboardAsync(string text)
+    public async Task<bool> CopyToClipboardAsync(string text)
     {
-        await global::Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
+        // WinForms Clipboard.SetText throws on null/empty — nothing to copy anyway.
+        if (string.IsNullOrEmpty(text))
         {
-            if (OperatingSystem.IsWindows())
-            {
-                try
-                {
-                    System.Windows.Forms.Clipboard.SetText(text);
-                    return;
-                }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"WinForms Clipboard (Text) failed: {ex.Message}");
-                }
-            }
+            return false;
+        }
 
-            var topLevel = ResolveClipboardTopLevel();
-            if (topLevel?.Clipboard is { } clipboard)
+        if (OperatingSystem.IsWindows())
+        {
+            // The OLE/WinForms clipboard write is SYNCHRONOUS and can block for a long time — a large payload
+            // racing the Windows clipboard-history listeners (or another app holding the clipboard open) can
+            // wedge it. Running it on the UI thread froze the whole app when OCR produced long text. Do it on a
+            // dedicated STA thread bounded by a timeout so the clipboard can never block the UI thread; a
+            // successful SetText flushes the data (copy:true) so it persists after the worker thread exits.
+            return await TrySetClipboardTextStaAsync(text, TimeSpan.FromSeconds(4)).ConfigureAwait(false);
+        }
+
+        // Non-Windows: Avalonia's async clipboard.
+        try
+        {
+            return await global::Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
             {
-                await clipboard.SetTextAsync(text);
+                var topLevel = ResolveClipboardTopLevel();
+                if (topLevel?.Clipboard is { } clipboard)
+                {
+                    await clipboard.SetTextAsync(text);
+                    return true;
+                }
+
+                return false;
+            });
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warning("Clipboard.SetText.Fallback", ex);
+            return false;
+        }
+    }
+
+    // Write text to the clipboard on a dedicated STA thread, bounded by <paramref name="timeout"/>. Returns true
+    // only if the write completed successfully in time. A thread that overruns the timeout is abandoned (it's a
+    // background thread, so it never blocks the caller or app exit) rather than blocking the UI thread — which is
+    // what caused the reported hang with long OCR text.
+    private static Task<bool> TrySetClipboardTextStaAsync(string text, TimeSpan timeout)
+    {
+        var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var thread = new System.Threading.Thread(() =>
+        {
+            try
+            {
+                System.Windows.Forms.Clipboard.SetText(text);
+                tcs.TrySetResult(true);
             }
-        });
+            catch (Exception ex)
+            {
+                AppLog.Warning("Clipboard.SetText.Sta", ex);
+                tcs.TrySetResult(false);
+            }
+        })
+        {
+            IsBackground = true,
+            Name = "ClipboardSetText",
+        };
+        thread.SetApartmentState(System.Threading.ApartmentState.STA);
+        thread.Start();
+
+        return AwaitWithTimeoutAsync(tcs.Task, timeout);
+    }
+
+    private static async Task<bool> AwaitWithTimeoutAsync(Task<bool> task, TimeSpan timeout)
+    {
+        var completed = await Task.WhenAny(task, Task.Delay(timeout)).ConfigureAwait(false);
+        if (completed != task)
+        {
+            AppLog.Warning("Clipboard.SetText.Timeout", new TimeoutException($"Clipboard write exceeded {timeout.TotalSeconds:0}s"));
+            return false;
+        }
+
+        return task.Result;
     }
 
     public async Task SaveToFileAsync(SKBitmap bitmap, string path)
