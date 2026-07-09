@@ -9,7 +9,7 @@
 
 ---
 
-## Unreleased
+## v0.63.0 - 2026-07-09
 
 ### ✂️ Video editing
 
