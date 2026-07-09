@@ -33,7 +33,7 @@ public partial class SnipWindowViewModel
 
         public Task CopyToClipboardAsync(SKBitmap bitmap) => Task.CompletedTask;
 
-        public Task CopyToClipboardAsync(string text) => Task.CompletedTask;
+        public Task<bool> CopyToClipboardAsync(string text) => Task.FromResult(true);
 
         public Task CopyFileToClipboardAsync(string filePath) => Task.CompletedTask;
 

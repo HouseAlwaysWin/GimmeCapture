@@ -15,7 +15,10 @@ public interface IScreenCaptureService
         IEnumerable<TranslatedBlock>? translationBlocks = null,
         bool includeCursor = false);
     Task CopyToClipboardAsync(SKBitmap bitmap);
-    Task CopyToClipboardAsync(string text);
+
+    /// <summary>Copy text to the clipboard. Returns <c>true</c> if the write succeeded, <c>false</c> if it
+    /// failed or timed out — so callers don't falsely report a successful copy.</summary>
+    Task<bool> CopyToClipboardAsync(string text);
     Task CopyFileToClipboardAsync(string filePath);
     Task SaveToFileAsync(SKBitmap bitmap, string path);
     
