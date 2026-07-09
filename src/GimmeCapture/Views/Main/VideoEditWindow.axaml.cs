@@ -22,6 +22,7 @@ public partial class VideoEditWindow : Window
     private double _stripPressX;
     private bool _stripDidDrag;
     private bool _stripScrubbing;
+    private int _stripPressClickCount;
 
     private bool _cropDragging;
     private Point _cropStart;
@@ -66,7 +67,7 @@ public partial class VideoEditWindow : Window
         PositionSlider.AddHandler(PointerPressedEvent, OnScrubPressed, RoutingStrategies.Bubble, handledEventsToo: true);
         PositionSlider.AddHandler(PointerReleasedEvent, OnScrubReleased, RoutingStrategies.Bubble, handledEventsToo: true);
 
-        // Segment strip: drag = scrub the playhead, tap = keep/drop the piece under it.
+        // Segment strip: drag = scrub the playhead, double-click = keep/drop the piece under it.
         SegmentStripGrid.PointerPressed += OnStripPressed;
         SegmentStripGrid.PointerMoved += OnStripMoved;
         SegmentStripGrid.PointerReleased += OnStripReleased;
@@ -233,7 +234,7 @@ public partial class VideoEditWindow : Window
         }
     }
 
-    // ── Segment strip: drag = scrub, tap = keep/drop (mirrors FloatingVideoWindow) ──
+    // ── Segment strip: drag = scrub, double-click = keep/drop (mirrors FloatingVideoWindow) ──
 
     private void OnStripPressed(object? sender, PointerPressedEventArgs e)
     {
@@ -243,6 +244,7 @@ public partial class VideoEditWindow : Window
         }
         _stripScrubbing = true;
         _stripDidDrag = false;
+        _stripPressClickCount = e.ClickCount;
         _stripPressX = e.GetPosition(SegmentStripGrid).X;
         e.Pointer.Capture(SegmentStripGrid);
         vm.BeginScrub();
@@ -272,21 +274,24 @@ public partial class VideoEditWindow : Window
             return;
         }
 
-        if (_stripDidDrag)
+        // A DOUBLE-click (no drag) toggles keep/drop of the piece under the pointer. A single click or a drag just
+        // scrubs — decode the frame at the landed position. Requiring a double-click keeps single clicks free for
+        // seeking without accidentally flipping a segment's kept/dropped state (which shifts the whole strip).
+        // `== 2` (not `>= 2`) so a triple/quadruple over-click fires exactly once — ClickCount keeps rising past 2.
+        if (!_stripDidDrag && _stripPressClickCount == 2)
         {
-            _ = vm.SeekAsync(vm.PositionSeconds); // decode the frame at the scrubbed position
+            double w = SegmentStripGrid.Bounds.Width;
+            double total = vm.TotalSourceDuration;
+            if (w > 0 && total > 0)
+            {
+                double sourceTime = Math.Clamp(_stripPressX / w, 0, 1) * total;
+                int index = VideoSegmentEditor.IndexForSourceTime(vm.EditSegments, sourceTime);
+                vm.ToggleKept(index);
+            }
             return;
         }
 
-        // A tap (no real drag) toggles the kept/dropped state of the piece under the pointer.
-        double w = SegmentStripGrid.Bounds.Width;
-        double total = vm.TotalSourceDuration;
-        if (w > 0 && total > 0)
-        {
-            double sourceTime = Math.Clamp(_stripPressX / w, 0, 1) * total;
-            int index = VideoSegmentEditor.IndexForSourceTime(vm.EditSegments, sourceTime);
-            vm.ToggleKept(index);
-        }
+        _ = vm.SeekAsync(vm.PositionSeconds); // decode the frame at the scrubbed/clicked position
     }
 
     // Pieces are contiguous in source, so pixel X maps to source time directly; move the red playhead.

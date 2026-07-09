@@ -79,6 +79,7 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
         ApplyCommand = ReactiveCommand.Create(Apply);
         CancelCommand = ReactiveCommand.Create(() => RequestClose?.Invoke());
         CompareCommand = ReactiveCommand.CreateFromTask(ToggleCompareAsync);
+        ResetAllCommand = ReactiveCommand.CreateFromTask(ResetAllAsync);
 
         PlayPauseCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.EditPlayPause", ex));
         StepBackCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.EditStepBack", ex));
@@ -91,6 +92,7 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
         RotateCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.EditRotate", ex));
         ToggleCropCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.EditCrop", ex));
         CompareCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.EditCompare", ex));
+        ResetAllCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Compress.EditResetAll", ex));
 
         InitializeEditing(initial);
         ReplaceSegments(BuildEditSegments(initial.KeptRuns, _duration));
@@ -292,6 +294,9 @@ internal sealed partial class VideoEditViewModel : ViewModelBase, IDisposable
     public ReactiveCommand<Unit, Unit> ClearCropCommand { get; }
     public ReactiveCommand<Unit, Unit> ApplyCommand { get; }
     public ReactiveCommand<Unit, Unit> CancelCommand { get; }
+
+    /// <summary>還原預設: revert every edit (segments/speed, crop, rotation, annotations, redaction, preview speed).</summary>
+    public ReactiveCommand<Unit, Unit> ResetAllCommand { get; }
 
     /// <summary>Decodes and shows the frame at the current position. Call once after the window opens.</summary>
     public async Task InitializeAsync()

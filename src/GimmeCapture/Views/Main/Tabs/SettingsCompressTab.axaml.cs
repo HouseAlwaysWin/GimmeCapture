@@ -92,6 +92,11 @@ public partial class SettingsCompressTab : UserControl
                 vm.ConfirmYesNoAction?.Invoke(loc["CompressEditWindowTitle"], loc["CompressEditTransformClearsEdits"])
                 ?? System.Threading.Tasks.Task.FromResult(true);
 
+            // 還原預設 discards every (non-undoable) edit — confirm via the same dialog.
+            editVm.ConfirmResetAllAction = () =>
+                vm.ConfirmYesNoAction?.Invoke(loc["CompressEditWindowTitle"], loc["CompressEditResetConfirm"])
+                ?? System.Threading.Tasks.Task.FromResult(true);
+
             // Freeze-frame → a plain floating image pin (no AI): just the current frame pinned out.
             // The user can enter point-removal / background-removal from the pinned image's own toolbar.
             editVm.FreezeFrameToImagePinAction = bitmap => Avalonia.Threading.Dispatcher.UIThread.Post(() =>

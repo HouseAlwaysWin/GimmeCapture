@@ -50,6 +50,11 @@
                     <Button Theme="{StaticResource SmallGothicMetalButton}" Command="{Binding Draw.RedoCommand}" ToolTip.Tip="{Binding Draw.RedoTooltip}">
                         <PathIcon Data="M18.4,10.6C16.55,8.99 14.15,8 11.5,8C6.85,8 2.92,11.03 1.54,15.22L3.9,16C4.95,12.81 7.96,10.5 11.5,10.5C13.46,10.5 15.23,11.22 16.62,12.38L13,16H22V7L18.4,10.6Z" Width="14" Height="14"/>
                     </Button>
+                    <!-- 還原預設: a labelled text button (matches the category buttons) that reverts every edit
+                         (segments/speed/crop/rotation/annotations/redaction) to defaults. -->
+                    <Button Theme="{StaticResource SmallGothicMetalButton}" Command="{Binding ResetAllCommand}"
+                            Content="{Binding [CompressEditResetLabel], Source={x:Static services:LocalizationService.Instance}}"
+                            ToolTip.Tip="{Binding [CompressEditResetAll], Source={x:Static services:LocalizationService.Instance}}"/>
                     <Rectangle Fill="#444444" Width="1" Height="18" Margin="4,0" VerticalAlignment="Center"/>
                     <Button Theme="{StaticResource SmallGothicMetalButton}"
                             Content="{Binding [CompressEditCatAnnotate], Source={x:Static services:LocalizationService.Instance}}"
@@ -266,7 +271,7 @@
                     Value="{Binding PositionSeconds}"
                     IsEnabled="{Binding IsPreparing, Converter={StaticResource BoolInvertConverter}}"/>
 
-            <!-- Segment strip: proportional pieces; drag = scrub, tap = keep/drop. Layout set in code-behind. -->
+            <!-- Segment strip: proportional pieces; drag = scrub, double-click = keep/drop. Layout set in code-behind. -->
             <Grid x:Name="SegmentStripGrid" Height="34">
                 <Border Background="#262626" CornerRadius="3"/>
                 <ItemsControl ItemsSource="{Binding SegmentBlocks}" IsHitTestVisible="False">
