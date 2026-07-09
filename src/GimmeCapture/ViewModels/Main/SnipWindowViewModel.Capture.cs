@@ -49,6 +49,13 @@ public partial class SnipWindowViewModel
                 ScreenOffset,
                 VisualScaling,
                 includeCursor: false);
+
+            // The snip overlay (which hosts ShowProcessingOverlay) was just hidden to grab a clean capture, so
+            // surface a standalone "recognizing…" spinner while OCR runs — otherwise the multi-second recognition
+            // looks like the app froze. Shown AFTER the capture so it isn't grabbed into the OCR image; OCR itself
+            // runs on a background thread (RecognizeAsync uses Task.Run), so the spinner stays animated.
+            ShowProcessingWindowAction?.Invoke();
+
             var result = await _quickOcrService.RecognizeAsync(
                 bitmap,
                 _mainVm.SourceLanguage,
@@ -87,9 +94,14 @@ public partial class SnipWindowViewModel
             Volatile.Write(ref _quickOcrRunning, 0);
             _isLocalProcessing = false;
             ShowProcessingOverlay = false;
+            HideProcessingWindowAction?.Invoke();
             CloseAction?.Invoke();
         }
     }
+
+    // Test hook: drives the private Quick-OCR text-copy flow directly (the production trigger posts it to the
+    // dispatcher), so the processing-spinner ordering/teardown invariants can be unit-tested without a UI thread.
+    internal Task RunQuickOcrTextCopyForTestAsync() => ExecuteTextCopyAsync();
 
     private async Task ExecuteCopyAsync()
     {

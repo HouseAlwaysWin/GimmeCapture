@@ -291,6 +291,14 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     public Action? ShowAction { get; set; }
     public Action? OpenRecordingProgressWindowAction { get; set; }
     public Action? CloseRecordingProgressWindowAction { get; set; }
+    /// <summary>
+    /// Assigned by SnipWindow: shows/closes a standalone always-on-top "processing" spinner. Used by flows that
+    /// hide the snip overlay to grab a clean capture but then run a long background task (Quick-OCR text copy), so
+    /// the in-overlay <see cref="ShowProcessingOverlay"/> — which lives on the now-hidden snip window — would not
+    /// be visible. Without it, the multi-second OCR looks like the app has frozen.
+    /// </summary>
+    public Action? ShowProcessingWindowAction { get; set; }
+    public Action? HideProcessingWindowAction { get; set; }
     public Action? SaveAction { get; set; }
     public Action? FocusWindowAction { get; set; }
     /// <summary>
@@ -854,6 +862,8 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         ShowAction = null;
         OpenRecordingProgressWindowAction = null;
         CloseRecordingProgressWindowAction = null;
+        ShowProcessingWindowAction = null;
+        HideProcessingWindowAction = null;
         FocusWindowAction = null;
         PersistTranslationSelectionsAction = null;
         CaptureDrawingModeSnapshotAsync = null;

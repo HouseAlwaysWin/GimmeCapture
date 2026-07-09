@@ -25,6 +25,15 @@
   OLE call and hang the whole app. The write now runs on a dedicated STA thread bounded by a timeout, so the
   clipboard can never block the UI thread — and a copy that still fails reports a distinct status instead of a
   false "copied".
+- **Quick-OCR (Shift+F4) no longer looks frozen while recognizing** — the snip overlay is hidden to grab a clean
+  capture, which also hid the in-overlay "recognizing…" indicator, so multi-second recognition looked like the app
+  had hung. A standalone always-on-top spinner now shows during recognition (recognition already runs off the UI
+  thread), so there is clear feedback until the text lands on the clipboard.
+- **Copying a large image or file no longer freezes the app** — image copies (Snip "copy", pin image copy) and
+  file copies (pin/video-clip copy) now run the synchronous Windows clipboard write on a dedicated background STA
+  thread bounded by a timeout, matching the earlier OCR-text-copy fix. A large payload racing the Windows
+  clipboard-history listeners can no longer wedge the UI thread; a write that overruns the timeout is abandoned
+  harmlessly instead.
 
 ## v0.62.0 - 2026-07-08
 

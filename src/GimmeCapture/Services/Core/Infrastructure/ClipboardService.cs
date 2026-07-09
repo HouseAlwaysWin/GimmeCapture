@@ -22,48 +22,32 @@ public class ClipboardService : IClipboardService
 #if WINDOWS
             if (OperatingSystem.IsWindows())
             {
-                // Windows-specific robust copy - MUST run on UI Thread (STA) for Clipboard
-                await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => 
+                // Windows-specific robust copy. The OLE SetDataObject write is SYNCHRONOUS and can wedge on a
+                // large image racing the Windows clipboard-history listeners (or another app holding the clipboard
+                // open) — running it on the UI thread froze the whole app. Do the encode + write on a dedicated
+                // STA thread bounded by a timeout so the clipboard can never block the UI thread. SetDataObject
+                // with copy:true flushes the data, so it persists after the worker thread exits.
+                await StaClipboard.RunAsync(() =>
                 {
-                    try 
-                    {
-                        var pngBytes = FloatingBitmapConversionHelper.EncodeBitmapToPngBytes(bitmap);
-                        
-                        using var msForBitmap = new System.IO.MemoryStream(pngBytes);
-                        using var winBitmap = new System.Drawing.Bitmap(msForBitmap);
-                        
-                        // Create DataObject with multiple formats
-                        var data = new System.Windows.Forms.DataObject();
-                        
-                        // 1. Standard Bitmap (Legacy apps) - Alpha might be lost depending on app
-                        data.SetData(System.Windows.Forms.DataFormats.Bitmap, true, winBitmap);
-                        
-                        // 2. PNG Format (Modern apps: Chrome, Discord, Slack support transparency via this)
-                        // Note: Stream must be kept open? DataObject usually serializes it.
-                        // Ideally we pass MemoryStream. 
-                        using var pngStream = new System.IO.MemoryStream(pngBytes);
-                        data.SetData("PNG", false, pngStream);
-                        
-                        // Specific retry logic for clipboard which can be locked
-                        for (int i = 0; i < 5; i++)
-                        {
-                            try
-                            {
-                                System.Windows.Forms.Clipboard.SetDataObject(data, true);
-                                return;
-                            }
-                            catch (System.Runtime.InteropServices.ExternalException)
-                            {
-                                System.Threading.Thread.Sleep(100);
-                            }
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        AppLog.Warning("Clipboard.CopyImage.WinForms", ex);
-                        // Continue to fallback if WinForms fails (though uncommon for basic copy)
-                    }
-                });
+                    var pngBytes = FloatingBitmapConversionHelper.EncodeBitmapToPngBytes(bitmap);
+
+                    using var msForBitmap = new System.IO.MemoryStream(pngBytes);
+                    using var winBitmap = new System.Drawing.Bitmap(msForBitmap);
+
+                    // Create DataObject with multiple formats
+                    var data = new System.Windows.Forms.DataObject();
+
+                    // 1. Standard Bitmap (Legacy apps) - Alpha might be lost depending on app
+                    data.SetData(System.Windows.Forms.DataFormats.Bitmap, true, winBitmap);
+
+                    // 2. PNG Format (Modern apps: Chrome, Discord, Slack support transparency via this)
+                    // Note: Stream must be kept open? DataObject usually serializes it.
+                    // Ideally we pass MemoryStream.
+                    using var pngStream = new System.IO.MemoryStream(pngBytes);
+                    data.SetData("PNG", false, pngStream);
+
+                    RetryClipboardWrite(() => System.Windows.Forms.Clipboard.SetDataObject(data, true));
+                }, TimeSpan.FromSeconds(8), "Clipboard.CopyImage", "ClipboardSetImage").ConfigureAwait(false);
             }
             else
 #endif
@@ -103,32 +87,17 @@ public class ClipboardService : IClipboardService
 #if WINDOWS
         if (OperatingSystem.IsWindows())
         {
-            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+            var fullPath = Path.GetFullPath(filePath);
+            // SetFileDropList is a synchronous OLE write that can wedge when the clipboard is contended; run it on
+            // a dedicated STA thread bounded by a timeout so it can never block the UI thread.
+            await StaClipboard.RunAsync(() =>
             {
-                try
-                {
-                    var fileList = new System.Collections.Specialized.StringCollection();
-                    fileList.Add(Path.GetFullPath(filePath));
-                    
-                    // Use WinForms for reliable file copy (standard Windows way)
-                    for (int i = 0; i < 5; i++)
-                    {
-                        try
-                        {
-                            System.Windows.Forms.Clipboard.SetFileDropList(fileList);
-                            return;
-                        }
-                        catch (System.Runtime.InteropServices.ExternalException)
-                        {
-                            System.Threading.Thread.Sleep(100);
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    AppLog.Warning("Clipboard.CopyFile.WinForms", ex);
-                }
-            });
+                var fileList = new System.Collections.Specialized.StringCollection();
+                fileList.Add(fullPath);
+
+                // Use WinForms for reliable file copy (standard Windows way)
+                RetryClipboardWrite(() => System.Windows.Forms.Clipboard.SetFileDropList(fileList));
+            }, TimeSpan.FromSeconds(8), "Clipboard.CopyFile", "ClipboardSetFiles").ConfigureAwait(false);
         }
         else
 #endif
@@ -161,52 +130,37 @@ public class ClipboardService : IClipboardService
 #if WINDOWS
             if (OperatingSystem.IsWindows())
             {
-                await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+                var fullPath = Path.GetFullPath(filePath);
+                // The OLE SetDataObject write is synchronous and can wedge when the clipboard is contended; run it
+                // (plus the thumbnail encode) on a bounded STA thread so it can never block the UI thread.
+                await StaClipboard.RunAsync(() =>
                 {
+                    // The FILE is the primary payload (e.g. a trimmed video clip) — set it first so
+                    // it always lands on the clipboard. The thumbnail bitmap is best-effort: if it
+                    // fails (e.g. a null/odd frame), we must NOT skip the file, or a stale prior
+                    // clipboard entry (the whole video) would survive and paste instead.
+                    var fileList = new System.Collections.Specialized.StringCollection();
+                    fileList.Add(fullPath);
+
+                    var data = new System.Windows.Forms.DataObject();
+                    data.SetFileDropList(fileList);
+
                     try
                     {
-                        // The FILE is the primary payload (e.g. a trimmed video clip) — set it first so
-                        // it always lands on the clipboard. The thumbnail bitmap is best-effort: if it
-                        // fails (e.g. a null/odd frame), we must NOT skip the file, or a stale prior
-                        // clipboard entry (the whole video) would survive and paste instead.
-                        var fileList = new System.Collections.Specialized.StringCollection();
-                        fileList.Add(Path.GetFullPath(filePath));
-
-                        var data = new System.Windows.Forms.DataObject();
-                        data.SetFileDropList(fileList);
-
-                        try
-                        {
-                            var pngBytes = FloatingBitmapConversionHelper.EncodeBitmapToPngBytes(bitmap);
-                            using var msForBitmap = new System.IO.MemoryStream(pngBytes);
-                            using var winBitmap = new System.Drawing.Bitmap(msForBitmap);
-                            data.SetData(System.Windows.Forms.DataFormats.Bitmap, true, winBitmap);
-                            var pngStream = new System.IO.MemoryStream(pngBytes);
-                            data.SetData("PNG", false, pngStream);
-                        }
-                        catch (Exception imgEx)
-                        {
-                            AppLog.Warning("Clipboard.CopyFileAndImage.Thumbnail", imgEx);
-                        }
-
-                        for (int i = 0; i < 5; i++)
-                        {
-                            try
-                            {
-                                System.Windows.Forms.Clipboard.SetDataObject(data, true);
-                                return;
-                            }
-                            catch (System.Runtime.InteropServices.ExternalException)
-                            {
-                                System.Threading.Thread.Sleep(100);
-                            }
-                        }
+                        var pngBytes = FloatingBitmapConversionHelper.EncodeBitmapToPngBytes(bitmap);
+                        using var msForBitmap = new System.IO.MemoryStream(pngBytes);
+                        using var winBitmap = new System.Drawing.Bitmap(msForBitmap);
+                        data.SetData(System.Windows.Forms.DataFormats.Bitmap, true, winBitmap);
+                        var pngStream = new System.IO.MemoryStream(pngBytes);
+                        data.SetData("PNG", false, pngStream);
                     }
-                    catch (Exception ex)
+                    catch (Exception imgEx)
                     {
-                        AppLog.Warning("Clipboard.CopyFileAndImage.WinForms", ex);
+                        AppLog.Warning("Clipboard.CopyFileAndImage.Thumbnail", imgEx);
                     }
-                });
+
+                    RetryClipboardWrite(() => System.Windows.Forms.Clipboard.SetDataObject(data, true));
+                }, TimeSpan.FromSeconds(8), "Clipboard.CopyFileAndImage", "ClipboardSetFileAndImage").ConfigureAwait(false);
             }
             else
 #endif
@@ -222,11 +176,39 @@ public class ClipboardService : IClipboardService
         }
     }
 
+#if WINDOWS
+    // Runs a flushing clipboard write with a short bounded retry for the transient "clipboard is locked by another
+    // app" ExternalException. Rethrows the last error if every attempt fails so the STA runner reports the write
+    // as failed rather than as a false success. Must be called on an STA thread (see StaClipboard).
+    private static void RetryClipboardWrite(Action write)
+    {
+        System.Runtime.InteropServices.ExternalException? lastError = null;
+        for (int i = 0; i < 5; i++)
+        {
+            try
+            {
+                write();
+                return;
+            }
+            catch (System.Runtime.InteropServices.ExternalException ex)
+            {
+                lastError = ex;
+                System.Threading.Thread.Sleep(100);
+            }
+        }
+
+        if (lastError != null)
+        {
+            throw lastError;
+        }
+    }
+#endif
+
     private TopLevel? GetTopLevel()
     {
         if (Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
         {
-            return TopLevel.GetTopLevel(desktop.MainWindow);    
+            return TopLevel.GetTopLevel(desktop.MainWindow);
         }
         return null;
     }

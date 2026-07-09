@@ -268,12 +268,37 @@ public partial class SnipWindow : Window
                     _progressWindow.Close();
                     _progressWindow = null;
                 }
-                
+
                 // Show main window back after finalization (e.g. for file picker)
                 // Unless it was already closed/closing
                 if (this.IsVisible)
                 {
                     Show();
+                }
+            };
+
+            // Standalone processing spinner for flows that hide the snip overlay to grab a clean capture and then
+            // run a long background task (Quick-OCR text copy). Unlike the recording progress window, the caller
+            // already hid the snip window and manages its own show/close, so this only shows/closes the themed
+            // spinner — no capture-affinity or Hide()/Show() bookkeeping. Reuses the same generic spinner view.
+            _viewModel.ShowProcessingWindowAction = () =>
+            {
+                if (_processingWindow != null) return;
+
+                _processingWindow = new RecordingProgressWindow
+                {
+                    DataContext = _viewModel,
+                    WindowStartupLocation = WindowStartupLocation.CenterScreen
+                };
+                _processingWindow.Show();
+            };
+
+            _viewModel.HideProcessingWindowAction = () =>
+            {
+                if (_processingWindow != null)
+                {
+                    _processingWindow.Close();
+                    _processingWindow = null;
                 }
             };
             

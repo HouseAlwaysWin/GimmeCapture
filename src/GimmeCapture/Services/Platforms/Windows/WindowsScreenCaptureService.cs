@@ -436,58 +436,56 @@ public class WindowsScreenCaptureService : IScreenCaptureService
 
     public async Task CopyToClipboardAsync(SKBitmap bitmap)
     {
+        if (OperatingSystem.IsWindows())
+        {
+            /*
+             * Windows-specific implementation using System.Windows.Forms.Clipboard for maximum compatibility
+             * with other Windows apps. The OLE SetImage write is SYNCHRONOUS and can wedge for a long time — a
+             * large image racing the Windows clipboard-history listeners (or another app holding the clipboard
+             * open) can stall it. Running it on the UI thread froze the whole app, so do the encode + write on a
+             * dedicated STA thread bounded by a timeout. SetImage flushes the data (copy:true) internally, so it
+             * persists on the clipboard after the worker thread exits.
+             */
+            var copied = await StaClipboard.RunAsync(() =>
+            {
+                using var image = SKImage.FromBitmap(bitmap);
+                using var data = image.Encode(SKEncodedImageFormat.Png, 100);
+                using var stream = data.AsStream();
+                using var ms = new MemoryStream();
+                stream.CopyTo(ms);
+                ms.Position = 0;
+
+                using var winBitmap = new System.Drawing.Bitmap(ms);
+                System.Windows.Forms.Clipboard.SetImage(winBitmap);
+            }, TimeSpan.FromSeconds(8), "Clipboard.CopyImage", "ClipboardSetImage").ConfigureAwait(false);
+
+            if (copied)
+            {
+                return;
+            }
+            // Windows write failed or timed out — fall through to the Avalonia clipboard as a best-effort fallback.
+        }
+
+        // Fallback / Non-Windows implementation
         await global::Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
         {
-             if (OperatingSystem.IsWindows())
-             {
-                 /* 
-                  * Windows specific implementation using System.Windows.Forms.Clipboard
-                  * for maximum compatibility with other Windows apps.
-                  */
-                 try
-                 {
-                     using var image = SKImage.FromBitmap(bitmap);
-                     using var data = image.Encode(SKEncodedImageFormat.Png, 100);
-                     using var stream = data.AsStream();
-                     using var ms = new MemoryStream();
-                     stream.CopyTo(ms);
-                     ms.Position = 0;
-                     
-                     // Create System.Drawing.Bitmap
-                     using var winBitmap = new System.Drawing.Bitmap(ms);
-                     
-                     // Set to Clipboard
-                     // Note: System.Windows.Forms.Clipboard.SetImage requires STA thread.
-                     // Avalonia UI thread is usually STA on Windows.
-                     System.Windows.Forms.Clipboard.SetImage(winBitmap);
-                     return;
-                 }
-                 catch (Exception ex)
-                 {
-                     System.Diagnostics.Debug.WriteLine($"WinForms Clipboard failed: {ex.Message}");
-                     // Fallback to Avalonia implementation below
-                 }
-             }
+            var topLevel = ResolveClipboardTopLevel();
+            if (topLevel?.Clipboard is { } clipboard)
+            {
+                using var image = SKImage.FromBitmap(bitmap);
 
-              // Fallback / Non-Windows implementation
-              var topLevel = ResolveClipboardTopLevel();
-              if (topLevel?.Clipboard is { } clipboard)
-              {
-                  using var image = SKImage.FromBitmap(bitmap);
-                  // ... rest of Avalonia implementation ...
-                  
-                  // Encode to PNG for clipboard
-                  using var encodedData = image.Encode(SKEncodedImageFormat.Png, 100);
-                  using var stream = encodedData.AsStream();
-                  using var ms = new MemoryStream();
-                  stream.CopyTo(ms);
-                  ms.Position = 0;
-                  
-                  var avaloniaBitmap = new global::Avalonia.Media.Imaging.Bitmap(ms);
-                  
-                  // Use new extension method way
-                  await global::Avalonia.Input.Platform.ClipboardExtensions.SetBitmapAsync(clipboard, avaloniaBitmap);
-              }
+                // Encode to PNG for clipboard
+                using var encodedData = image.Encode(SKEncodedImageFormat.Png, 100);
+                using var stream = encodedData.AsStream();
+                using var ms = new MemoryStream();
+                stream.CopyTo(ms);
+                ms.Position = 0;
+
+                var avaloniaBitmap = new global::Avalonia.Media.Imaging.Bitmap(ms);
+
+                // Use new extension method way
+                await global::Avalonia.Input.Platform.ClipboardExtensions.SetBitmapAsync(clipboard, avaloniaBitmap);
+            }
         });
     }
 
@@ -506,7 +504,11 @@ public class WindowsScreenCaptureService : IScreenCaptureService
             // wedge it. Running it on the UI thread froze the whole app when OCR produced long text. Do it on a
             // dedicated STA thread bounded by a timeout so the clipboard can never block the UI thread; a
             // successful SetText flushes the data (copy:true) so it persists after the worker thread exits.
-            return await TrySetClipboardTextStaAsync(text, TimeSpan.FromSeconds(4)).ConfigureAwait(false);
+            return await StaClipboard.RunAsync(
+                () => System.Windows.Forms.Clipboard.SetText(text),
+                TimeSpan.FromSeconds(4),
+                "Clipboard.SetText",
+                "ClipboardSetText").ConfigureAwait(false);
         }
 
         // Non-Windows: Avalonia's async clipboard.
@@ -529,49 +531,6 @@ public class WindowsScreenCaptureService : IScreenCaptureService
             AppLog.Warning("Clipboard.SetText.Fallback", ex);
             return false;
         }
-    }
-
-    // Write text to the clipboard on a dedicated STA thread, bounded by <paramref name="timeout"/>. Returns true
-    // only if the write completed successfully in time. A thread that overruns the timeout is abandoned (it's a
-    // background thread, so it never blocks the caller or app exit) rather than blocking the UI thread — which is
-    // what caused the reported hang with long OCR text.
-    private static Task<bool> TrySetClipboardTextStaAsync(string text, TimeSpan timeout)
-    {
-        var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-
-        var thread = new System.Threading.Thread(() =>
-        {
-            try
-            {
-                System.Windows.Forms.Clipboard.SetText(text);
-                tcs.TrySetResult(true);
-            }
-            catch (Exception ex)
-            {
-                AppLog.Warning("Clipboard.SetText.Sta", ex);
-                tcs.TrySetResult(false);
-            }
-        })
-        {
-            IsBackground = true,
-            Name = "ClipboardSetText",
-        };
-        thread.SetApartmentState(System.Threading.ApartmentState.STA);
-        thread.Start();
-
-        return AwaitWithTimeoutAsync(tcs.Task, timeout);
-    }
-
-    private static async Task<bool> AwaitWithTimeoutAsync(Task<bool> task, TimeSpan timeout)
-    {
-        var completed = await Task.WhenAny(task, Task.Delay(timeout)).ConfigureAwait(false);
-        if (completed != task)
-        {
-            AppLog.Warning("Clipboard.SetText.Timeout", new TimeoutException($"Clipboard write exceeded {timeout.TotalSeconds:0}s"));
-            return false;
-        }
-
-        return task.Result;
     }
 
     public async Task SaveToFileAsync(SKBitmap bitmap, string path)
