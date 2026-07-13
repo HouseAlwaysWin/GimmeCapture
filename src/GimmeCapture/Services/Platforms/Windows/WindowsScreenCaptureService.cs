@@ -237,7 +237,7 @@ public class WindowsScreenCaptureService : IScreenCaptureService
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Failed to capture region: {ex.Message}");
+                AppLog.Error("ScreenCapture.CaptureRegionBitmap", ex);
                 return null;
             }
         });

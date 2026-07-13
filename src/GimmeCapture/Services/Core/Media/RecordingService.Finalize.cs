@@ -547,8 +547,7 @@ public partial class RecordingService
                 return;
             }
 
-            string sidecarDir = Path.Combine(Path.GetTempPath(), "GimmeCapture_Pins");
-            Directory.CreateDirectory(sidecarDir);
+            string sidecarDir = PinTempDirectory.EnsureDirectory();
             sidecar = Path.Combine(sidecarDir, $"gifrec_{Guid.NewGuid():N}.mp4");
             await Task.Run(() => LibavMuxer.MuxVideoAndAudio(mergedMkv, aac, sidecar, GetMuxerFormatName("mp4")));
             if (File.Exists(sidecar) && new FileInfo(sidecar).Length > 0)

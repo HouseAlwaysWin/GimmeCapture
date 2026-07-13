@@ -719,6 +719,7 @@ public partial class SnipWindowViewModel
         var scanCts = new System.Threading.CancellationTokenSource();
         var previousScanCts = System.Threading.Interlocked.Exchange(ref _scanCts, scanCts);
         previousScanCts?.Cancel();
+        previousScanCts?.Dispose(); // superseded source: cancel AND dispose (the owning task handles the cancellation)
         var token = scanCts.Token;
 
         ShowTopLoadingBar = true;
@@ -755,7 +756,7 @@ public partial class SnipWindowViewModel
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[AI Scan][OCR] ERROR: {ex.Message}");
+            AppLog.Error("Snip.RunOCRScan", ex);
         }
         finally
         {
@@ -879,7 +880,7 @@ public partial class SnipWindowViewModel
     private void InitializeSelectionCommands()
     {
         ToggleAIScanBoxCommand = ReactiveCommand.Create(() => { ShowAIScanBox = !ShowAIScanBox; return Unit.Default; });
-        ToggleAIScanBoxCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Toggle AI Box error: {ex}"));
+        ToggleAIScanBoxCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Snip.ToggleAIScanBox", ex));
 
 
         var canExecuteInTranslation = this.WhenAnyValue(
@@ -890,10 +891,10 @@ public partial class SnipWindowViewModel
         TranslateAllSelectionsCommand = ReactiveCommand.Create(
             () => TranslateAllSelectionsAsync().Forget("Translation.TranslateAllSelections"),
             canExecuteInTranslation);
-        TranslateAllSelectionsCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"TranslateAll error: {ex}"));
+        TranslateAllSelectionsCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Snip.TranslateAll", ex));
 
         ScanAllTextCommand = ReactiveCommand.CreateFromTask(ScanAllDetectedTranslationParagraphsAsync, canExecuteInTranslation);
-        ScanAllTextCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"ScanAll error: {ex}"));
+        ScanAllTextCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Snip.ScanAll", ex));
 
         ClearAllSelectionsCommand = ReactiveCommand.Create(() =>
         {
@@ -906,19 +907,19 @@ public partial class SnipWindowViewModel
             }
             RefreshInteractionRegion();
         }, canExecuteInTranslation);
-        ClearAllSelectionsCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"ClearAll error: {ex}"));
+        ClearAllSelectionsCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Snip.ClearAll", ex));
 
         ToggleTranslationSelectCommand = ReactiveCommand.Create(() => { IsTranslationSelectionActive = !IsTranslationSelectionActive; }, canExecuteInTranslation);
-        ToggleTranslationSelectCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"ToggleSelect error: {ex}"));
+        ToggleTranslationSelectCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Snip.ToggleSelect", ex));
 
         ToggleAutoDetectCommand = ReactiveCommand.Create(() => { IsGlobalAutoDetectEnabled = !IsGlobalAutoDetectEnabled; }, canExecuteInTranslation);
-        ToggleAutoDetectCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"ToggleAutoDetect error: {ex}"));
+        ToggleAutoDetectCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Snip.ToggleAutoDetect", ex));
         
         SelectTranslationToolCommand = ReactiveCommand.Create<TranslationTool>(tool => 
         {
             CurrentTranslationTool = tool;
         });
-        SelectTranslationToolCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Select Tool error: {ex}"));
+        SelectTranslationToolCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Snip.SelectTool", ex));
 
         RemoveUserSelectionCommand = ReactiveCommand.Create<UserSelectionRect>(item =>
         {
@@ -926,7 +927,7 @@ public partial class SnipWindowViewModel
             if (CurrentTranslationTool == TranslationTool.Audio && item.IsAudioPanel) return;
             UserSelections.Remove(item);
         });
-        RemoveUserSelectionCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"RemoveSelection error: {ex}"));
+        RemoveUserSelectionCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Snip.RemoveSelection", ex));
 
         CopyTranslationTextCommand = ReactiveCommand.CreateFromTask<object?>(async item =>
         {
@@ -951,12 +952,12 @@ public partial class SnipWindowViewModel
                 _mainVm?.SetStatus("StatusCopied");
             }
         });
-        CopyTranslationTextCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Copy Translation error: {ex}"));
+        CopyTranslationTextCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Snip.CopyTranslation", ex));
 
         PinTranslationCommand = ReactiveCommand.CreateFromTask<object?>(PinTranslationAsync);
-        PinTranslationCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Pin Translation error: {ex}"));
+        PinTranslationCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Snip.PinTranslation", ex));
         PinTranslationResultsCommand = ReactiveCommand.CreateFromTask(PinAllTranslationsAsync, canExecuteInTranslation);
-        PinTranslationResultsCommand.ThrownExceptions.Subscribe(ex => System.Diagnostics.Debug.WriteLine($"Pin All Translation error: {ex}"));
+        PinTranslationResultsCommand.ThrownExceptions.Subscribe(ex => AppLog.Error("Snip.PinAllTranslation", ex));
 
         // Keep native interaction regions and audio helper state in sync with selection edits.
         UserSelections.CollectionChanged += (s, e) =>

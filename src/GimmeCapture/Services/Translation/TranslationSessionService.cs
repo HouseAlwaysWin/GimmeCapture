@@ -75,7 +75,7 @@ public sealed class TranslationSessionService : ITranslationSessionService
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[TranslationWarmup] Failed: {ex.Message}");
+                AppLog.Warning("Translation.Warmup", ex);
             }
         }, token);
     }
@@ -108,7 +108,7 @@ public sealed class TranslationSessionService : ITranslationSessionService
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[TranslationWarmup] Await failed: {ex.Message}");
+            AppLog.Warning("Translation.WarmupAwait", ex);
         }
     }
 

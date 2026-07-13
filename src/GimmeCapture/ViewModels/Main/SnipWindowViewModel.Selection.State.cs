@@ -370,7 +370,7 @@ public partial class SnipWindowViewModel
             catch (TaskCanceledException) { break; }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[AutoDetect] Loop Error: {ex.Message}");
+                AppLog.Error("Snip.AutoDetectLoop", ex);
             }
         }
     }

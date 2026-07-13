@@ -432,7 +432,7 @@ public partial class SnipWindowViewModel
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[TranslationMode] ScanAll error: {ex}");
+            AppLog.Error("Translation.ScanAll", ex);
         }
         finally
         {
@@ -462,7 +462,7 @@ public partial class SnipWindowViewModel
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[TranslationMode] ScanAllDetectedTranslationParagraphs error: {ex}");
+            AppLog.Error("Translation.ScanAllDetectedParagraphs", ex);
         }
         finally
         {
@@ -547,7 +547,7 @@ public partial class SnipWindowViewModel
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[TranslationMode] EnsureEngineReady error: {ex}");
+            AppLog.Error("Translation.EnsureEngineReady", ex);
         }
 
         return false;
@@ -569,7 +569,7 @@ public partial class SnipWindowViewModel
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[TranslationMode] PinTranslation error: {ex}");
+            AppLog.Error("Translation.PinTranslation", ex);
         }
         finally
         {
@@ -618,7 +618,7 @@ public partial class SnipWindowViewModel
         if (!FloatingBitmapConversionHelper.TryCreateDetachedBitmapFromSkBitmap(skBitmap, out var avaloniaBitmap, out var conversionError)
             || avaloniaBitmap == null)
         {
-            System.Diagnostics.Debug.WriteLine($"[TranslationMode] PinTranslation conversion failed: {conversionError}");
+            AppLog.Warning("Translation.PinTranslationConversion", conversionError);
             return;
         }
 
@@ -745,7 +745,7 @@ public partial class SnipWindowViewModel
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[TranslationMode] PinAllTranslations error: {ex}");
+            AppLog.Error("Translation.PinAllTranslations", ex);
         }
     }
 

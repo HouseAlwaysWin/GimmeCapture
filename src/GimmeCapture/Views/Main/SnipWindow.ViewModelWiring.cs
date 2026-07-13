@@ -659,7 +659,7 @@ public partial class SnipWindow : Window
                         }
                         catch (Exception ex)
                         {
-                            System.Diagnostics.Debug.WriteLine($"Failed to save pinned image: {ex}");
+                            AppLog.Error("SnipWindow.SavePinnedImage", ex);
                         }
                     };
                     
@@ -667,7 +667,7 @@ public partial class SnipWindow : Window
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"Error showing Floating Window: {ex}");
+                    AppLog.Error("SnipWindow.ShowFloatingWindow", ex);
                 }
             };
         }
