@@ -895,10 +895,10 @@ public partial class MainWindowViewModel
                         item.Status = CompressQueueStatus.Failed;
                         return;
                     }
-                    targetKbps = ComputeTargetVideoBitrateKbps((double)snap.TargetSizeMB, outputDuration);
+                    targetKbps = CompressEncodeMath.ComputeTargetVideoBitrateKbps((double)snap.TargetSizeMB, outputDuration);
                 }
 
-                string outputPath = BuildBatchOutputPath(
+                string outputPath = CompressOutputPath.BuildBatchOutputPath(
                     item.Path, item.OutputName, outputFolder, ext, appendDate, DateTime.Now);
                 try
                 {
