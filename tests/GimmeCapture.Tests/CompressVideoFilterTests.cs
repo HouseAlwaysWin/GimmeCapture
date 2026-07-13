@@ -73,13 +73,13 @@ public class CompressVideoFilterTests
     [Fact]
     public void HasOutput_TrueOnlyWhenDoneWithAProducedPath()
     {
-        var item = new MainWindowViewModel.CompressQueueItem(@"D:\Videos\clip.mp4");
+        var item = new CompressQueueItem(@"D:\Videos\clip.mp4");
         Assert.False(item.HasOutput);                 // fresh: Queued, no output path
 
         item.OutputPath = @"D:\out\clip_20260707.mp4";
         Assert.False(item.HasOutput);                 // has a path but not finished yet
 
-        item.Status = MainWindowViewModel.CompressQueueStatus.Done;
+        item.Status = CompressQueueStatus.Done;
         Assert.True(item.HasOutput);                  // Done + path → reveal button enabled
 
         item.OutputPath = null;

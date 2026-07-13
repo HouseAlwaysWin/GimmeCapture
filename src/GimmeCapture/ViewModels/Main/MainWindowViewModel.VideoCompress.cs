@@ -756,13 +756,13 @@ public partial class MainWindowViewModel
         if (s.UseTargetSize)
         {
             // Target-size mode encodes to (approximately) the requested size by design.
-            return $"{prefix}: ≈ {FormatFileSize((long)((double)s.TargetSizeMB * 1024 * 1024))}";
+            return $"{prefix}: ≈ {FileSizeFormatter.Format((long)((double)s.TargetSizeMB * 1024 * 1024))}";
         }
 
         int audioKbps = s.DropAudio ? 0 : (s.AudioBitrateKbps > 0 ? s.AudioBitrateKbps : 128);
         long est = EstimateOutputSizeBytes(
             item.ProbedWidth, item.ProbedHeight, item.ProbedFps, dur, s.MaxHeight, s.MaxFps, s.Codec, s.Crf, audioKbps);
-        return $"{prefix}: ≈ {FormatFileSize(est)}";
+        return $"{prefix}: ≈ {FileSizeFormatter.Format(est)}";
     }
 
     /// <summary>
@@ -1631,17 +1631,4 @@ public partial class MainWindowViewModel
         return safe.Length > 0 ? Path.Combine(safe) : string.Empty;
     }
 
-    private static string FormatFileSize(long bytes)
-    {
-        string[] units = ["B", "KB", "MB", "GB"];
-        double size = bytes;
-        int unit = 0;
-        while (size >= 1024 && unit < units.Length - 1)
-        {
-            size /= 1024;
-            unit++;
-        }
-
-        return unit == 0 ? $"{bytes} {units[unit]}" : $"{size:0.0} {units[unit]}";
-    }
 }
