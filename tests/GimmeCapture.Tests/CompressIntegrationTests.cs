@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Threading.Tasks;
 using GimmeCapture.Models;
+using GimmeCapture.Services.Core.Media;
 using GimmeCapture.Services.Core.Media.NativeFFmpeg;
 using GimmeCapture.ViewModels.Main;
 using Xunit;
@@ -84,7 +85,7 @@ public class CompressIntegrationTests
         // more efficient than H.264, must be smaller than the H.264 baseline (this also catches a silent
         // fallback to H.264 if libsvtav1 were missing). CRF is the encoder-native scale (UI 24 + AV1 offset).
         string av1 = await Run("av1_crf24",
-            new LibavExportOptions { Codec = VideoCodec.Av1, CrfOverride = MainWindowViewModel.EncoderScaleCrf(VideoCodec.Av1, 24) });
+            new LibavExportOptions { Codec = VideoCodec.Av1, CrfOverride = CompressEncodeMath.EncoderScaleCrf(VideoCodec.Av1, 24) });
         await AssertHeight(av1, srcSize!.Value.Height);
         long av1Len = new FileInfo(av1).Length;
         Assert.True(av1Len < new FileInfo(baseline).Length, $"av1 ({av1Len}) should be smaller than H.264 baseline");
@@ -129,7 +130,7 @@ public class CompressIntegrationTests
         Assert.True(lowAudioLen < baselineLen, $"audio64 ({lowAudioLen}) should be smaller than baseline ({baselineLen})");
 
         // Target ~5 MB: output should land at or under target (+20% tolerance for ABR + container overhead).
-        int kbps = MainWindowViewModel.ComputeTargetVideoBitrateKbps(5, duration);
+        int kbps = CompressEncodeMath.ComputeTargetVideoBitrateKbps(5, duration);
         long target = new FileInfo(await Run("target5mb", new LibavExportOptions { TargetVideoBitrateKbps = kbps })).Length;
         Assert.True(target <= 5L * 1024 * 1024 * 12 / 10, $"target5mb={target} exceeds 5 MB + 20%");
 
