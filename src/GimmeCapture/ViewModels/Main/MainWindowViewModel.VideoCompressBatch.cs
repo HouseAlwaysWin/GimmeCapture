@@ -764,7 +764,7 @@ public partial class MainWindowViewModel
         item.EstimatedText = $"{prefix}: {LocalizationService.Instance["CompressEstimating"]}";
         try
         {
-            long bytes = await EstimateBySampleAsync(item.Path, snap, item.EffectiveKeptRuns(), item.Crop);
+            long bytes = await CompressPipeline.EstimateBySampleAsync(item.Path, snap, item.EffectiveKeptRuns(), item.Crop);
             item.EstimatedText = bytes >= 0
                 ? $"{prefix}: ≈ {FileSizeFormatter.Format(bytes)} ({LocalizationService.Instance["CompressEstimateMeasured"]})"
                 : BuildItemEstimate(item); // sample failed → fall back to the formula
@@ -816,7 +816,7 @@ public partial class MainWindowViewModel
         // Per-file kept runs captured on the UI thread (whole clip when trim off); re-clamped against the fresh probe.
         IReadOnlyList<(double Start, double End, double Speed)> keptRuns = item.EffectiveKeptRuns();
         // Annotations/redaction burn-in (snapshotted here on the UI thread; null when the item has neither).
-        Action<SKBitmap, double>? burnIn = BuildBurnInComposite(
+        Action<SKBitmap, double>? burnIn = CompressPipeline.BuildBurnInComposite(
             item.Annotations, item.AnnotationSurfaceWidth, item.AnnotationSurfaceHeight, item.RedactionTracks);
         item.PrepareForStart(_batchCts.Token);
         var progress = new Progress<double>(p => item.Progress = p); // UI thread → callbacks marshal back
@@ -861,7 +861,7 @@ public partial class MainWindowViewModel
                 item.Status = CompressQueueStatus.Running;
                 PersistItemState(item); // clear any stale "paused" marker now that it's actually encoding
 
-                double duration = await ProbeInputDurationAsync(item.Path);
+                double duration = await CompressPipeline.ProbeInputDurationAsync(item.Path);
 
                 // Re-clamp the captured kept runs against the freshly probed duration (whole file when empty).
                 var runs = keptRuns
@@ -913,7 +913,7 @@ public partial class MainWindowViewModel
                     AppLog.Error("Compress.QueueOutDir", ex);
                 }
 
-                bool ok = await EncodeOneFileAsync(
+                bool ok = await CompressPipeline.EncodeOneFileAsync(
                     item.Path, outputPath, snap, targetKbps, duration, progress, token, item.Gate, item.Rotation,
                     resumeProgress, runs, crop, burnInComposite);
                 if (ok)
