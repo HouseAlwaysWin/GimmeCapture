@@ -44,10 +44,10 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
     }
     
     // AI / SAM2 Properties & State
-    private SAM2Service? _sam2Service;
+    private ISam2Service? _sam2Service;
     // Reused across this pin's background removals (not new'd per op) so the ~hundreds-of-MB U2Net session is
     // loaded once and its 10s idle keep-warm actually works. Disposed on pin close.
-    private BackgroundRemovalService? _backgroundRemoval;
+    private IBackgroundRemovalService? _backgroundRemoval;
     private readonly InteractiveRemovalSession _interactiveSession = new();
     public bool IsInteractiveSelectionMode => _interactiveSession.IsActive;
 
@@ -158,8 +158,8 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
     private readonly IResourceQueueService _resourceQueue;
     private readonly AppSettingsService _appSettingsService = null!;
     private string? _sam2LeaseId;
-    internal SAM2Service? CurrentSam2ServiceForTesting => _sam2Service;
-    internal void SetSam2ServiceForTesting(SAM2Service? service) => _sam2Service = service;
+    internal ISam2Service? CurrentSam2ServiceForTesting => _sam2Service;
+    internal void SetSam2ServiceForTesting(ISam2Service? service) => _sam2Service = service;
     internal void HandleImageChangedForSam2()
     {
         _sam2Service?.InvalidatePreparedImage();
