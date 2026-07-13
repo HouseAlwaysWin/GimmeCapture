@@ -11,7 +11,7 @@ using SkiaSharp;
 
 namespace GimmeCapture.Services.Core.AI;
 
-public class BackgroundRemovalService : IDisposable
+public class BackgroundRemovalService : GimmeCapture.Services.Abstractions.IBackgroundRemovalService
 {
     /// <summary>Fixed square input resolution required by the U2Net background-removal model.</summary>
     private const int U2NetInputSize = 320;

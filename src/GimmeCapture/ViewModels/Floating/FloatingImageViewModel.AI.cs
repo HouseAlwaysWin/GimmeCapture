@@ -3,6 +3,7 @@ using ReactiveUI;
 using System.Reactive;
 using System.Collections.Generic;
 using GimmeCapture.Models;
+using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core;
 using System.Reactive.Linq;
 using System.Reactive.Disposables;
@@ -719,7 +720,7 @@ public partial class FloatingImageViewModel
         }
     }
 
-    private async Task<SAM2Service?> GetSAM2ServiceAsync(bool prepareCurrentImage = false)
+    private async Task<ISam2Service?> GetSAM2ServiceAsync(bool prepareCurrentImage = false)
     {
         if (_sam2Service == null)
         {
@@ -745,7 +746,7 @@ public partial class FloatingImageViewModel
         return _sam2Service;
     }
 
-    private async Task<bool> PrepareCurrentImageForSam2Async(SAM2Service sam2)
+    private async Task<bool> PrepareCurrentImageForSam2Async(ISam2Service sam2)
     {
         using var skImage = FloatingBitmapConversionHelper.ToSkBitmap(Image);
         if (skImage == null)

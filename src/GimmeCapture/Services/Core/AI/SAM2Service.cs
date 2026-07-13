@@ -11,7 +11,7 @@ using SkiaSharp;
 
 namespace GimmeCapture.Services.Core.AI;
 
-public class SAM2Service : IDisposable
+public class SAM2Service : GimmeCapture.Services.Abstractions.ISam2Service
 {
     /// <summary>Fixed square input resolution the SAM2 encoder expects (image is stretched to this grid).</summary>
     private const int Sam2InputSize = 1024;
