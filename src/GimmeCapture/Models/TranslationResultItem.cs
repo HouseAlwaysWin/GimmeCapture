@@ -3,7 +3,7 @@ using ReactiveUI;
 
 namespace GimmeCapture.Models;
 
-internal sealed class TranslationResultItem : ReactiveObject
+public sealed class TranslationResultItem : ReactiveObject
 {
     private Rect _bounds;
     private bool _isTranslated;

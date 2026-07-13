@@ -423,7 +423,7 @@ public partial class SnipWindow : Window
             return;
         }
 
-        TranslationResultLayerManager.ShowOrAppend(
+        _viewModel.TranslationResultLayer?.ShowOrAppend(
             _viewModel.ScreenOffset,
             _viewModel.ViewportSize,
             _viewModel.VisualScaling,

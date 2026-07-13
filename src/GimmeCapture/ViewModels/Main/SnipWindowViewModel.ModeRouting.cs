@@ -166,7 +166,7 @@ public partial class SnipWindowViewModel
         RaiseProperties(_modeTooltipPropertyNames);
 
         _selectionStateController.HandleModeTransition(oldMode, value, CurrentState);
-        TranslationResultLayerManager.RefreshWindowState();
+        TranslationResultLayer?.RefreshWindowState();
 
         // Recording AND Screenshot both keep the toolbar fixed top-center (like Translation) so it's reachable
         // immediately on entry — before drawing a selection — instead of only appearing after a box is dragged.

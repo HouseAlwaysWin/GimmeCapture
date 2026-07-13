@@ -2,6 +2,7 @@ using GimmeCapture.Services.Abstractions;
 using GimmeCapture.Services.Core.AI;
 using GimmeCapture.Services.Core.Infrastructure;
 using GimmeCapture.Services.Core.Media;
+using GimmeCapture.Services.Platforms.Avalonia;
 using GimmeCapture.Services.Platforms.Desktop;
 using GimmeCapture.Services.Platforms.Linux;
 #if WINDOWS
@@ -64,6 +65,7 @@ public static class MainWindowViewModelDependenciesFactory
             sam2RuntimeService.Value.UnloadModels));
         var aiResourceOrchestrator = new Lazy<AIResourceOrchestrator>(() => aiResourceService.Value.Orchestrator);
         var ocrRuntimeService = new Lazy<OcrRuntimeService>(() => new OcrRuntimeService(aiResourceService.Value));
+        var translationResultLayer = new TranslationResultLayerService();
 
         return new MainWindowViewModelDependencies(
             settingsService,
@@ -85,7 +87,8 @@ public static class MainWindowViewModelDependenciesFactory
             sam2RuntimeService,
             ocrRuntimeService,
             aiPathService,
-            resourceQueue);
+            resourceQueue,
+            translationResultLayer);
     }
 
     internal static IStartupRegistrationService CreateStartupRegistrationService()

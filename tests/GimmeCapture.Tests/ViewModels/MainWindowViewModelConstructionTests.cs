@@ -63,7 +63,8 @@ public class MainWindowViewModelConstructionTests
             new Lazy<SAM2RuntimeService>(() => sam2RuntimeService),
             new Lazy<OcrRuntimeService>(() => ocrRuntimeService),
             aiPathService,
-            resourceQueue);
+            resourceQueue,
+            new GimmeCapture.Services.Platforms.Avalonia.TranslationResultLayerService());
 
         var viewModel = new MainWindowViewModel(dependencies);
 

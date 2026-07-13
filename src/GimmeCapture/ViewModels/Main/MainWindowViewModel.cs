@@ -217,6 +217,9 @@ public partial class MainWindowViewModel : ViewModelBase
     public OcrRuntimeService OcrRuntimeService => _ocrRuntimeService.Value;
     public AIPathService AIPathService { get; }
     public IResourceQueueService ResourceQueue { get; }
+
+    /// <summary>The app-wide floating translation-overlay layer (was the static TranslationResultLayerManager).</summary>
+    public ITranslationResultLayerService TranslationResultLayer { get; }
     private readonly ModuleInstallCoordinator _moduleInstallCoordinator;
 
     public ObservableCollection<ModuleItem> Modules { get; } = new();
@@ -295,6 +298,7 @@ public partial class MainWindowViewModel : ViewModelBase
         _ocrRuntimeService = dependencies.OcrRuntimeService;
         AIPathService = dependencies.AIPathService;
         ResourceQueue = dependencies.ResourceQueue;
+        TranslationResultLayer = dependencies.TranslationResultLayer;
         _moduleInstallCoordinator = new ModuleInstallCoordinator(
             _aiModelCatalog,
             _aiResourceService,
