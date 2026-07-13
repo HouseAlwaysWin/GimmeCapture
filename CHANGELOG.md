@@ -9,6 +9,19 @@
 
 ---
 
+## Unreleased
+
+### 🧹 Maintenance / reliability
+
+- **Temp-file cleanup.** GIF-recording audio sidecars and cropped-video-pin copies (under
+  `%TEMP%/GimmeCapture_Pins`) are now deleted when their pin closes, and a best-effort startup sweep removes any
+  `GimmeCapture_*` temp workspaces a previous crash left behind (age-gated so a running second instance is never
+  touched) — no more unbounded `%TEMP%` growth.
+- **Better diagnostics.** ~37 error sites that were logged only to `Debug.WriteLine` (invisible in Release builds)
+  now go to the `AppLog` file sink, so OCR / translation / recording / pin failures are diagnosable from the log.
+- Fixed a small `CancellationTokenSource` leak on rapid re-scans, and added unit tests for the OCR text formatter
+  and hotkey mapping.
+
 ## v0.63.0 - 2026-07-09
 
 ### ✂️ Video editing

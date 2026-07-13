@@ -452,7 +452,7 @@ public partial class SnipWindowViewModel
                     }
                     catch (Exception ex)
                     {
-                        System.Diagnostics.Debug.WriteLine($"Failed to move recording: {ex.Message}");
+                        AppLog.Error("Recording.MoveOutput", ex);
                     }
                 }
                 else
@@ -473,7 +473,7 @@ public partial class SnipWindowViewModel
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"Failed to delete cancelled recording: {ex.Message}");
+                    AppLog.Warning("Recording.DeleteCancelled", ex);
                 }
             }
         }
@@ -675,7 +675,7 @@ public partial class SnipWindowViewModel
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"Failed to copy recording to clipboard: {ex.Message}");
+                    AppLog.Warning("Recording.CopyToClipboard", ex);
                 }
             }
             else
@@ -791,7 +791,7 @@ public partial class SnipWindowViewModel
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Error pinning recording: {ex}");
+            AppLog.Error("Recording.Pin", ex);
         }
         finally
         {

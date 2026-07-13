@@ -17,7 +17,7 @@ public class StringToKeyGestureConverter : IValueConverter
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[StringToKeyGestureConverter] Failed to parse hotkey '{hotkeyStr}': {ex.Message}");
+                GimmeCapture.Services.Core.Infrastructure.AppLog.Warning("StringToKeyGesture.Convert", ex);
             }
         }
         return null;

@@ -36,7 +36,7 @@ public sealed class AvaloniaDownloadWindowService : IDownloadWindowService
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"Failed to show download window: {ex}");
+                    GimmeCapture.Services.Core.Infrastructure.AppLog.Error("DownloadWindow.Show", ex);
                 }
             }
             else

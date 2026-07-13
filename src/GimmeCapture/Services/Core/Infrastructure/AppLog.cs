@@ -66,6 +66,16 @@ public static class AppLog
         Record(LogEventLevel.Warning, operation, exception);
     }
 
+    /// <summary>
+    /// Log a warning that carries a diagnostic MESSAGE (not an exception) — for failure sites that have a reason
+    /// string but no exception object. Unlike the exception overload, the message text IS written to the sink
+    /// (the exception overload records only the type/HResult/stack, never Exception.Message).
+    /// </summary>
+    public static void Warning(string operation, string message)
+    {
+        Log.Write(LogEventLevel.Warning, "{Operation}: {Message}", SanitizeLabel(operation), message ?? "(none)");
+    }
+
     public static void Error(string operation, Exception exception)
     {
         Record(LogEventLevel.Error, operation, exception);

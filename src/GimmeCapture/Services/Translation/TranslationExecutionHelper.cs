@@ -31,7 +31,7 @@ public static class TranslationExecutionHelper
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[{scope}] Failed: {ex.Message}");
+            GimmeCapture.Services.Core.Infrastructure.AppLog.Error($"TranslationExecution.{scope}", ex);
             return fallbackFactory();
         }
     }

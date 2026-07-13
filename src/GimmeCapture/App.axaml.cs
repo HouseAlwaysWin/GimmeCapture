@@ -67,6 +67,9 @@ public partial class App : Application
             _ = System.Threading.Tasks.Task.Run(async () =>
             {
                 await System.Threading.Tasks.Task.Delay(TimeSpan.FromSeconds(8)).ConfigureAwait(false);
+                // Best-effort mop-up of temp workspaces a previous crash/kill left behind (age-gated; safe with a
+                // concurrent second instance). Runs off the UI thread at settle so it never delays startup.
+                TempWorkspaceCleaner.SweepOrphans();
                 await ProcessMemoryTrimService.RequestIdleTrimAsync("startup-settled", TimeSpan.FromSeconds(3)).ConfigureAwait(false);
             });
         }

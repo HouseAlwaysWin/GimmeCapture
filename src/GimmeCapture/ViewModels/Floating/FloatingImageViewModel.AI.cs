@@ -427,7 +427,7 @@ public partial class FloatingImageViewModel
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"FloatingVM: RefineMask Error: {ex}");
+            AppLog.Error("FloatingImage.RefineMask", ex);
             DiagnosticText = $"Refine Error: {ex.Message}";
         }
         finally
@@ -463,7 +463,7 @@ public partial class FloatingImageViewModel
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"FloatingVM: Multi-point Error: {ex}");
+            AppLog.Error("FloatingImage.HandlePointClick", ex);
             DiagnosticText = $"Click Error: {ex.Message}";
         }
     }
@@ -619,7 +619,7 @@ public partial class FloatingImageViewModel
         }
         catch (System.Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"AI Processing Failed: {ex}");
+            AppLog.Error("FloatingImage.RemoveBackground", ex);
             ShowErrorDialog(ex.Message);
         }
         finally
@@ -701,7 +701,7 @@ public partial class FloatingImageViewModel
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Failed to confirm interactive: {ex}");
+            AppLog.Error("FloatingImage.ConfirmInteractive", ex);
             ShowErrorDialog($"Failed to apply background removal: {ex.Message}");
         }
         finally
@@ -731,7 +731,7 @@ public partial class FloatingImageViewModel
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[AI] Init Failed: {ex}");
+            AppLog.Error("FloatingImage.GetSAM2Service", ex);
             DiagnosticText = $"AI init failed: {ex.Message}";
             _sam2Service = null;
         }
@@ -754,7 +754,7 @@ public partial class FloatingImageViewModel
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[AI] Prepare image failed: {ex}");
+            AppLog.Error("FloatingImage.PrepareImageForSam2", ex);
             DiagnosticText = $"AI prepare failed: {ex.Message}";
             return false;
         }

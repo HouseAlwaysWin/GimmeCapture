@@ -92,9 +92,9 @@ public partial class FloatingVideoViewModel
                 return;
             }
 
-            // Move the export to a stable per-pin temp file so the GUID export dir can be reused/cleaned.
-            string pinDir = Path.Combine(Path.GetTempPath(), "GimmeCapture_Pins");
-            Directory.CreateDirectory(pinDir);
+            // Move the export to a stable per-pin temp file so the GUID export dir can be reused/cleaned. The new
+            // pin owns this file and deletes it on dispose (a crash orphan is swept at next startup).
+            string pinDir = PinTempDirectory.EnsureDirectory();
             string pinnedPath = Path.Combine(pinDir, $"crop_{Guid.NewGuid():N}{Path.GetExtension(exported)}");
             File.Copy(exported, pinnedPath, true);
 

@@ -557,6 +557,11 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
             _latestFrameData = null;
             _latestFrameLength = 0;
         }
+
+        // The native player released the file handle above; if this pin's source is a temp file we created in
+        // %TEMP%/GimmeCapture_Pins (a cropped-clip copy or a GIF-recording audio sidecar), delete it now so it
+        // doesn't accumulate. No-op for any normal (non-temp) source path.
+        GimmeCapture.Services.Core.Media.PinTempDirectory.TryDeleteOwnedFile(VideoPath);
     }
 
     private static async Task<bool> WaitForTaskOrTimeoutAsync(Task task, TimeSpan timeout, string operation)
