@@ -22,6 +22,15 @@
 - Fixed a small `CancellationTokenSource` leak on rapid re-scans, and added unit tests for the OCR text formatter
   and hotkey mapping.
 
+### ⚡ Performance
+
+- **Faster repeated background removal.** A pinned image now reuses one background-removal engine instead of
+  reloading the (hundreds-of-MB) U2Net model from disk on every removal — the model loads once and stays warm
+  between removals, so refining a cut-out is much snappier.
+- **Smoother mosaic/blur drag.** The live redaction preview no longer re-converts the whole source image on every
+  drag frame (a ~8&#160;MB copy up to 60×/s on the UI thread); the conversion is cached for the drag, cutting jank
+  on large monitors.
+
 ## v0.63.0 - 2026-07-09
 
 ### ✂️ Video editing

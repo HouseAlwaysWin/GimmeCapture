@@ -34,6 +34,9 @@ public partial class AnnotationControl : UserControl
     }
 
     private IDisposable? _effectSubscription;
+    // Cached Avalonia→Skia conversion of the drag snapshot, reused across throttled ticks (see RegenerateEffectPreview).
+    private SkiaSharp.SKBitmap? _cachedPreviewSource;
+    private Bitmap? _cachedPreviewSourceKey;
 
     public AnnotationControl()
     {
@@ -74,6 +77,10 @@ public partial class AnnotationControl : UserControl
         var old = EffectPreviewBitmap;
         EffectPreviewBitmap = null;
         old?.Dispose();
+
+        _cachedPreviewSource?.Dispose();
+        _cachedPreviewSource = null;
+        _cachedPreviewSourceKey = null;
     }
 
     private void RegenerateEffectPreview(Annotation annotation)
@@ -93,7 +100,9 @@ public partial class AnnotationControl : UserControl
         if (double.IsNaN(referenceHeight) || referenceHeight <= 0)
             referenceHeight = snapshot.PixelSize.Height;
 
-        var result = AnnotationRenderService.Shared.RenderAnnotationPreview(snapshot, annotation, referenceWidth, referenceHeight);
+        var result = AnnotationRenderService.Shared.RenderAnnotationPreview(
+            snapshot, annotation, referenceWidth, referenceHeight,
+            ref _cachedPreviewSource, ref _cachedPreviewSourceKey);
         var old = EffectPreviewBitmap;
         EffectPreviewBitmap = result;
         old?.Dispose();

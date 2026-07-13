@@ -587,9 +587,16 @@ public partial class FloatingImageViewModel
             if (!FloatingBitmapConversionHelper.TryEncodeBitmapToPngBytes(Image, out var imageBytes, out var encodeError))
                 throw new Exception(encodeError ?? "Failed to serialize image.");
 
-            // 2. Process
-            using var aiService = new BackgroundRemovalService(_aiResourceService, _pathService);
-            
+            // 2. Process — reuse this pin's background-removal service (created once, kept warm ~10s between
+            // removals by its own idle scheduler) instead of new'ing/disposing a fresh U2Net session each time.
+            // Recreate if a global AI unload (module removal) disposed the shared instance, so the rebuilt
+            // session stays subscribed to future global-unload requests.
+            if (_backgroundRemoval == null || _backgroundRemoval.IsDisposed)
+            {
+                _backgroundRemoval = new BackgroundRemovalService(_aiResourceService, _pathService);
+            }
+            var aiService = _backgroundRemoval;
+
             // SelectionRect is in logical pixels (UI space). 
             // We need to scale it to physical image pixels for BackgroundRemovalService.
             Avalonia.Rect? scaledRect = null;

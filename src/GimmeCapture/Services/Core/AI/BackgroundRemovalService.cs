@@ -671,8 +671,13 @@ public class BackgroundRemovalService : IDisposable
         }
     }
 
+    /// <summary>True once disposed (e.g. by a global AI unload). A holder reusing an instance must recreate a
+    /// fresh one when this is set, or its rebuilt session would no longer be subscribed to global unload.</summary>
+    public bool IsDisposed { get; private set; }
+
     public void Dispose()
     {
+        IsDisposed = true;
         AIResourceService.RequestGlobalUnload -= HandleGlobalUnload;
         _idleUnload.Cancel();
         UnloadSession();

@@ -45,6 +45,9 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
     
     // AI / SAM2 Properties & State
     private SAM2Service? _sam2Service;
+    // Reused across this pin's background removals (not new'd per op) so the ~hundreds-of-MB U2Net session is
+    // loaded once and its 10s idle keep-warm actually works. Disposed on pin close.
+    private BackgroundRemovalService? _backgroundRemoval;
     private readonly InteractiveRemovalSession _interactiveSession = new();
     public bool IsInteractiveSelectionMode => _interactiveSession.IsActive;
 
@@ -380,6 +383,8 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
 
         base.Dispose();
         ReleaseSam2Resources();
+        _backgroundRemoval?.Dispose();
+        _backgroundRemoval = null;
         _interactiveMask?.Dispose();
         _interactiveMask = null;
     }
