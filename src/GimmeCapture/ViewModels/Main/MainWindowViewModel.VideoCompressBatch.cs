@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 using Avalonia.Media.Imaging;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Core.Infrastructure;
+using GimmeCapture.Services.Core.Media;
 using GimmeCapture.Services.Core.Media.NativeFFmpeg;
 using GimmeCapture.ViewModels.Floating;
 using ReactiveUI;
