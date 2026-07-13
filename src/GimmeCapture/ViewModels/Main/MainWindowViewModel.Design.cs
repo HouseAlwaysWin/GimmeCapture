@@ -16,53 +16,18 @@ public partial class MainWindowViewModel
             Path.GetTempPath(),
             "GimmeCapture.Design",
             nameof(MainWindowViewModel));
-        var settingsService = new AppSettingsService(baseDataDirectory);
-        var hotkeyService = new NoOpGlobalHotkeyService();
-        var globalHotkeySettingsCoordinator = new NoOpGlobalHotkeySettingsCoordinator();
-        var startupRegistrationService = new NoOpStartupRegistrationService();
-        var settingsSaveCoordinatorFactory = new NoOpSettingsSaveCoordinatorFactory();
-        var settingsPersistenceService = new MainWindowSettingsPersistenceService();
-        var hotkeyMappingService = new HotkeyMappingService();
-        var hotkeyRouterService = new HotkeyRouterService();
-        var aiPathService = new AIPathService(settingsService);
-        var nativeResolverService = new NativeResolverService(aiPathService);
-        var aiModelDownloader = new AIModelDownloader();
-        var aiModelCatalog = new AIModelCatalog();
-        var ffmpegDownloader = new Lazy<FFmpegDownloaderService>(() => new FFmpegDownloaderService(settingsService));
-        var recordingService = new Lazy<RecordingService>(() => new RecordingService(ffmpegDownloader.Value, settingsService));
-        var updateService = new Lazy<UpdateService>(() => new UpdateService(AppVersionInfo.CurrentVersion));
-        var sam2RuntimeService = new Lazy<SAM2RuntimeService>(() => new SAM2RuntimeService(aiPathService, nativeResolverService));
-        var aiResourceService = new Lazy<AIResourceService>(() => new AIResourceService(
-            settingsService,
-            aiPathService,
-            nativeResolverService,
-            aiModelDownloader,
-            aiModelCatalog,
-            sam2RuntimeService.Value.UnloadModels));
-        var aiResourceOrchestrator = new Lazy<AIResourceOrchestrator>(() => aiResourceService.Value.Orchestrator);
-        var ocrRuntimeService = new Lazy<OcrRuntimeService>(() => new OcrRuntimeService(aiResourceService.Value));
 
-        return new MainWindowViewModelDependencies(
-            settingsService,
-            new NoOpWindowManager(),
-            new NoOpThemeResourceService(),
-            hotkeyService,
-            globalHotkeySettingsCoordinator,
-            startupRegistrationService,
-            settingsSaveCoordinatorFactory,
-            settingsPersistenceService,
-            hotkeyMappingService,
-            hotkeyRouterService,
-            ffmpegDownloader,
-            recordingService,
-            updateService,
-            aiModelCatalog,
-            aiResourceService,
-            aiResourceOrchestrator,
-            sam2RuntimeService,
-            ocrRuntimeService,
-            aiPathService,
-            new ResourceQueueService());
+        // Reuse the REAL factory graph, substituting only the platform services with design-time no-ops. This
+        // keeps the ~14-service AI/media/settings wiring in one place (the factory) so design-time and runtime
+        // can no longer drift apart.
+        return Composition.MainWindowViewModelDependenciesFactory.CreateDefault(
+            existingSettingsService: new AppSettingsService(baseDataDirectory),
+            existingStartupRegistrationService: new NoOpStartupRegistrationService(),
+            windowManager: new NoOpWindowManager(),
+            themeResourceService: new NoOpThemeResourceService(),
+            hotkeyService: new NoOpGlobalHotkeyService(),
+            globalHotkeySettingsCoordinator: new NoOpGlobalHotkeySettingsCoordinator(),
+            settingsSaveCoordinatorFactory: new NoOpSettingsSaveCoordinatorFactory());
     }
 
     private sealed class NoOpWindowManager : IWindowManager

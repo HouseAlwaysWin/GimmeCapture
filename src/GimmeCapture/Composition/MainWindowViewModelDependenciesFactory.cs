@@ -14,17 +14,25 @@ namespace GimmeCapture.Composition;
 
 public static class MainWindowViewModelDependenciesFactory
 {
+    // The optional platform-service parameters let the design-time path (MainWindowViewModel.Design.cs) reuse this
+    // one real graph while substituting no-op platform services, instead of re-declaring the whole ~14-service
+    // wiring (which drifted). Runtime callers omit them and get the real platform services.
     public static MainWindowViewModelDependencies CreateDefault(
         AppSettingsService? existingSettingsService = null,
         IStartupRegistrationService? existingStartupRegistrationService = null,
-        IMainWindowSettingsPersistenceService? existingSettingsPersistenceService = null)
+        IMainWindowSettingsPersistenceService? existingSettingsPersistenceService = null,
+        IWindowManager? windowManager = null,
+        IThemeResourceService? themeResourceService = null,
+        IGlobalHotkeyService? hotkeyService = null,
+        IGlobalHotkeySettingsCoordinator? globalHotkeySettingsCoordinator = null,
+        ISettingsSaveCoordinatorFactory? settingsSaveCoordinatorFactory = null)
     {
         var settingsService = existingSettingsService ?? new AppSettingsService();
-        var windowManager = new AvaloniaWindowManager();
-        var themeResourceService = new AvaloniaThemeResourceService();
+        windowManager ??= new AvaloniaWindowManager();
+        themeResourceService ??= new AvaloniaThemeResourceService();
         // Global hotkeys are Windows-only today; other platforms get a no-op service until an X11 /
         // portal binding lands (docs/LINUX_PORT_FEASIBILITY.md, Phase 2).
-        IGlobalHotkeyService hotkeyService =
+        hotkeyService ??=
 #if WINDOWS
             OperatingSystem.IsWindows()
             ? new WindowsGlobalHotkeyService()
@@ -32,9 +40,9 @@ public static class MainWindowViewModelDependenciesFactory
 #else
             new LinuxGlobalHotkeyService();
 #endif
-        var globalHotkeySettingsCoordinator = new GlobalHotkeySettingsCoordinator(hotkeyService);
+        globalHotkeySettingsCoordinator ??= new GlobalHotkeySettingsCoordinator(hotkeyService);
         var startupRegistrationService = existingStartupRegistrationService ?? CreateStartupRegistrationService();
-        var settingsSaveCoordinatorFactory = new DebouncedSettingsSaveCoordinatorFactory();
+        settingsSaveCoordinatorFactory ??= new DebouncedSettingsSaveCoordinatorFactory();
         var settingsPersistenceService = existingSettingsPersistenceService ?? new MainWindowSettingsPersistenceService();
         var hotkeyMappingService = new HotkeyMappingService();
         var hotkeyRouterService = new HotkeyRouterService();
