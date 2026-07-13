@@ -900,7 +900,7 @@ public partial class SnipWindowViewModel
         {
             UserSelections.Clear();
             InvalidateTranslationOcrSearchCache();
-            TranslationResultLayerManager.ClearAll();
+            TranslationResultLayer?.ClearAll();
             if (CurrentTranslationTool == TranslationTool.Audio)
             {
                 EnsureAudioTranslationBox();

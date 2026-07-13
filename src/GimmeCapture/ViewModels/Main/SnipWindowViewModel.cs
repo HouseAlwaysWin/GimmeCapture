@@ -78,6 +78,9 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     public RecordingService? RecordingService => _recordingService;
     private readonly MainWindowViewModel? _mainVm;
     public MainWindowViewModel? MainVm => _mainVm;
+
+    /// <summary>The app-wide translation-overlay layer (null in design-time when there is no MainVm).</summary>
+    public ITranslationResultLayerService? TranslationResultLayer => _mainVm?.TranslationResultLayer;
     private readonly IScreenCaptureService _captureService;
     private readonly ITranslationSessionService? _translationSession;
     private readonly ITranslationSelectionMonitor? _translationSelectionMonitor;

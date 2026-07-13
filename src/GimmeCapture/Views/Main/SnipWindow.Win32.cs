@@ -113,7 +113,7 @@ public partial class SnipWindow : Window
         base.OnClosed(e);
         UninstallLLKeyboardHook();
         StopLinuxSnipKeyGrab();
-        TranslationResultLayerManager.RefreshWindowState();
+        _viewModel?.TranslationResultLayer?.RefreshWindowState();
 
         // The snip/record/translate overlay held large capture/preview buffers (a full-screen grab is tens of
         // MB), now released. The app usually returns to idle/tray after a capture, so reclaim the working set

@@ -424,9 +424,9 @@ public partial class SnipWindowViewModel
 
     private IReadOnlyList<UserSelectionRect> GetTranslationSelectionsForCapture()
     {
-        var detachedSelections = TranslationResultLayerManager.GetCaptureSelectionSnapshots(
+        var detachedSelections = TranslationResultLayer?.GetCaptureSelectionSnapshots(
             ScreenOffset,
-            VisualScaling);
+            VisualScaling) ?? System.Array.Empty<UserSelectionRect>();
 
         if (detachedSelections.Count == 0)
         {

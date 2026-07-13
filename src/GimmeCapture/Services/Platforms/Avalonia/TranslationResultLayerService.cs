@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Media;
 using GimmeCapture.Models;
+using GimmeCapture.Services.Abstractions;
 using GimmeCapture.ViewModels.Main;
 using GimmeCapture.ViewModels.Floating;
 using GimmeCapture.Views.Floating;
@@ -9,21 +10,27 @@ using GimmeCapture.Views.Main;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace GimmeCapture.Services.Platforms.Avalonia;
 
-internal static class TranslationResultLayerManager
+/// <summary>
+/// Injected singleton owning the single always-on-top floating translation-overlay window. Formerly the static
+/// <c>TranslationResultLayerManager</c>; converting it to an instance service removed the process-global static
+/// state and put the <c>Application.Current</c> lookup behind <see cref="ITranslationResultLayerService"/>.
+/// </summary>
+public sealed class TranslationResultLayerService : ITranslationResultLayerService
 {
-    private static FloatingTranslationWindow? _window;
+    private FloatingTranslationWindow? _window;
 
-    public static void ShowOrAppend(
+    public void ShowOrAppend(
         PixelPoint screenOffset,
         Size viewportSize,
         double visualScaling,
         Color borderColor,
         IEnumerable<TranslationResultItem> items,
-        Func<object?, System.Threading.Tasks.Task> copyAction,
-        Func<TranslationResultItem, System.Threading.Tasks.Task> pinAction)
+        Func<object?, Task> copyAction,
+        Func<TranslationResultItem, Task> pinAction)
     {
         var window = EnsureWindow();
         if (window.DataContext is not FloatingTranslationLayerViewModel vm)
@@ -51,7 +58,7 @@ internal static class TranslationResultLayerManager
         RefreshWindowState();
     }
 
-    public static void ClearAll()
+    public void ClearAll()
     {
         if (_window?.DataContext is not FloatingTranslationLayerViewModel vm)
         {
@@ -62,7 +69,7 @@ internal static class TranslationResultLayerManager
         _window.Hide();
     }
 
-    public static IReadOnlyList<UserSelectionRect> GetCaptureSelectionSnapshots(
+    public IReadOnlyList<UserSelectionRect> GetCaptureSelectionSnapshots(
         PixelPoint targetScreenOffset,
         double targetVisualScaling)
     {
@@ -110,7 +117,7 @@ internal static class TranslationResultLayerManager
         return snapshots;
     }
 
-    public static void RefreshWindowState()
+    public void RefreshWindowState()
     {
         if (_window == null)
         {
@@ -126,7 +133,7 @@ internal static class TranslationResultLayerManager
         _window.Topmost = !IsTranslationSnipWindowVisible();
     }
 
-    private static FloatingTranslationWindow EnsureWindow()
+    private FloatingTranslationWindow EnsureWindow()
     {
         if (_window != null)
         {

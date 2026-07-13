@@ -53,7 +53,8 @@ public class MainWindowViewModelHotkeyTests
             new Lazy<SAM2RuntimeService>(() => sam2RuntimeService),
             new Lazy<OcrRuntimeService>(() => ocrRuntimeService),
             aiPathService,
-            new ResourceQueueService());
+            new ResourceQueueService(),
+            new GimmeCapture.Services.Platforms.Avalonia.TranslationResultLayerService());
 
         var viewModel = new MainWindowViewModel(dependencies);
 
@@ -159,7 +160,8 @@ public class MainWindowViewModelHotkeyTests
             new Lazy<SAM2RuntimeService>(() => sam2RuntimeService),
             new Lazy<OcrRuntimeService>(() => ocrRuntimeService),
             aiPathService,
-            new ResourceQueueService());
+            new ResourceQueueService(),
+            new GimmeCapture.Services.Platforms.Avalonia.TranslationResultLayerService());
 
         return new MainWindowViewModel(dependencies);
     }
