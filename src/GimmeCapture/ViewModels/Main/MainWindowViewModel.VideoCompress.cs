@@ -824,21 +824,7 @@ public partial class MainWindowViewModel
             }
 
             // CRF sample (no target bitrate / two-pass): same knobs that drive the real per-file size.
-            var options = new LibavExportOptions
-            {
-                Codec = snap.Codec,
-                CrfOverride = snap.Crf,
-                Preset = snap.Preset,
-                MaxHeight = snap.MaxHeight,
-                MaxFps = snap.MaxFps,
-                DropAudio = snap.DropAudio,
-                AudioBitrateKbps = snap.AudioBitrateKbps,
-                AudioChannels = snap.AudioChannels,
-                Denoise = snap.Denoise,
-                Sharpen = snap.Sharpen,
-                Deblock = snap.Deblock,
-                Grayscale = snap.Grayscale
-            };
+            var options = snap.ToExportOptions();
 
             bool ok = await Task.Run(() =>
                 LibavClipExporter.TryExport(sourcePath, ranges, sampleOut, VideoQuality.Medium, crop: crop, options: options));
@@ -918,12 +904,8 @@ public partial class MainWindowViewModel
         return ranges.ToArray();
     }
 
-    // Immutable snapshot of the encode knobs so a run reads stable values (a run reads these off the UI thread).
-    private readonly record struct CompressSettingsSnapshot(
-        VideoCodec Codec, int Crf, int MaxHeight, int MaxFps, string Preset,
-        bool DropAudio, int AudioBitrateKbps, int AudioChannels,
-        bool UseTargetSize, decimal TargetSizeMB, bool UseTwoPass,
-        DenoiseMode Denoise, SharpenMode Sharpen, bool Deblock, bool Grayscale);
+    // CompressSettingsSnapshot (the immutable encode-knobs snapshot) now lives in
+    // Services/Core/Media/CompressSettingsSnapshot.cs so the compress pipeline can consume it directly.
 
     // AV1 (SVT-AV1) uses a 0-63 CRF scale that sits ~8 higher than x264/x265 for the same visual quality.
     // The compress UI keeps ONE slider on the x265 scale; this offset is folded in HERE when snapshotting, so
@@ -1028,24 +1010,7 @@ public partial class MainWindowViewModel
             async Task<string?> EncodeAttemptAsync(int bitrateKbps, int attempt)
             {
                 string attemptOut = Path.Combine(tempDir, $"attempt{attempt}{outExt}");
-                var options = new LibavExportOptions
-                {
-                    Codec = s.Codec,
-                    TargetVideoBitrateKbps = bitrateKbps,
-                    CrfOverride = s.Crf,
-                    Preset = s.Preset,
-                    MaxHeight = s.MaxHeight,
-                    MaxFps = s.MaxFps,
-                    DropAudio = s.DropAudio,
-                    AudioBitrateKbps = s.AudioBitrateKbps,
-                    AudioChannels = s.AudioChannels,
-                    TwoPass = s.UseTwoPass,
-                    RotationDegrees = rotationDegrees,
-                    Denoise = s.Denoise,
-                    Sharpen = s.Sharpen,
-                    Deblock = s.Deblock,
-                    Grayscale = s.Grayscale
-                };
+                var options = s.ToExportOptions(rotationDegrees, bitrateKbps, s.UseTwoPass);
                 if (attempt > 1)
                 {
                     progress.Report(0); // corrective pass restarts the bar
@@ -1367,23 +1332,8 @@ public partial class MainWindowViewModel
             ? ComputeTargetVideoBitrateKbps((double)snap.TargetSizeMB, item.ProbedDuration)
             : 0;
 
-        var options = new LibavExportOptions
-        {
-            Codec = snap.Codec,
-            TargetVideoBitrateKbps = targetKbps,
-            CrfOverride = snap.Crf,
-            Preset = snap.Preset,
-            MaxHeight = snap.MaxHeight,
-            MaxFps = snap.MaxFps,
-            DropAudio = snap.DropAudio,
-            AudioBitrateKbps = snap.AudioBitrateKbps,
-            AudioChannels = snap.AudioChannels,
-            RotationDegrees = 0, // rotation is applied at display time to BOTH frames, not baked into the sample
-            Denoise = snap.Denoise,
-            Sharpen = snap.Sharpen,
-            Deblock = snap.Deblock,
-            Grayscale = snap.Grayscale
-        };
+        // Rotation is applied at display time to BOTH compare frames, not baked into the sample.
+        var options = snap.ToExportOptions(rotationDegrees: 0, targetVideoBitrateKbps: targetKbps);
 
         return new CompareViewModel(
             item.Path, item.ProbedDuration, item.ProbedFps, item.ProbedWidth, item.ProbedHeight,
