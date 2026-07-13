@@ -124,7 +124,7 @@
                             <ScrollViewer MaxHeight="240" VerticalScrollBarVisibility="Auto" Padding="0,0,14,0">
                                 <ItemsControl ItemsSource="{Binding CompressQueue}">
                                 <ItemsControl.ItemTemplate>
-                                    <DataTemplate x:DataType="vm:MainWindowViewModel+CompressQueueItem">
+                                    <DataTemplate x:DataType="models:CompressQueueItem">
                                         <!-- Hairline separator between rows -->
                                         <Border BorderBrush="#333333" BorderThickness="0,0,0,1" Padding="0,8,0,10">
                                         <Grid ColumnDefinitions="Auto,*,Auto">

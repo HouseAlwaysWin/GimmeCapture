@@ -9,13 +9,13 @@ namespace GimmeCapture.Tests;
 // the probed duration; the source file need not exist (ReadFileMeta is best-effort).
 public class CompressTrimTests
 {
-    private static MainWindowViewModel.CompressQueueItem Item(double probedDuration) =>
+    private static CompressQueueItem Item(double probedDuration) =>
         new(@"D:\Videos\clip.mp4") { ProbedDuration = probedDuration };
 
     [Fact]
     public void Trim_Disabled_ReturnsWholeClip()
     {
-        MainWindowViewModel.CompressQueueItem item = Item(100);
+        CompressQueueItem item = Item(100);
 
         Assert.False(item.TrimEnabled);
         var runs = item.EffectiveKeptRuns();
@@ -28,7 +28,7 @@ public class CompressTrimTests
     [Fact]
     public void Trim_Enabled_WithSegments_ReturnsClampedSortedRuns()
     {
-        MainWindowViewModel.CompressQueueItem item = Item(100);
+        CompressQueueItem item = Item(100);
         item.TrimEnabled = true;
         item.KeptSegments = new[] { new VideoEditSegment(10, 30), new VideoEditSegment(50, 120) };
 
@@ -44,7 +44,7 @@ public class CompressTrimTests
     [Fact]
     public void Trim_Enabled_EmptySegments_FallsBackToWholeClip()
     {
-        MainWindowViewModel.CompressQueueItem item = Item(100);
+        CompressQueueItem item = Item(100);
         item.TrimEnabled = true;
         item.KeptSegments = new List<VideoEditSegment>();
 
@@ -55,7 +55,7 @@ public class CompressTrimTests
     [Fact]
     public void Trim_BeforeProbe_ReturnsEmpty()
     {
-        MainWindowViewModel.CompressQueueItem item = Item(0);
+        CompressQueueItem item = Item(0);
         item.TrimEnabled = true;
         item.KeptSegments = new[] { new VideoEditSegment(10, 30) };
 
@@ -66,7 +66,7 @@ public class CompressTrimTests
     [Fact]
     public void Speed_PreservedInRuns_AndShortensOutputDuration()
     {
-        MainWindowViewModel.CompressQueueItem item = Item(100);
+        CompressQueueItem item = Item(100);
         item.TrimEnabled = true;
         item.KeptSegments = new[] { new VideoEditSegment(0, 100, 2.0) };
 
@@ -80,7 +80,7 @@ public class CompressTrimTests
     [Fact]
     public void HasEdits_FalseForPlainClip_TrueWithCropOrRotation()
     {
-        MainWindowViewModel.CompressQueueItem item = Item(100);
+        CompressQueueItem item = Item(100);
         Assert.False(item.HasEdits);
 
         item.Rotation = 90;
