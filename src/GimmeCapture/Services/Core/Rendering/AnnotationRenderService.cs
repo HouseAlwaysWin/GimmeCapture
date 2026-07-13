@@ -38,6 +38,36 @@ public sealed class AnnotationRenderService : IAnnotationRenderService
         return ConvertSkBitmapToWriteableBitmap(preview);
     }
 
+    /// <summary>
+    /// Caching variant for live mosaic/blur drag preview. The Avalonia→Skia conversion of <paramref name="snapshot"/>
+    /// (a full-image ~8&#160;MB copy at 1080p) is invariant for the whole drag, so it is done once and reused: the
+    /// caller holds <paramref name="cachedSource"/> / <paramref name="cachedSourceKey"/> and disposes the cached
+    /// bitmap when the control detaches. Only the cheap ROI effect re-runs per throttled drag tick.
+    /// </summary>
+    public WriteableBitmap? RenderAnnotationPreview(
+        Bitmap? snapshot, Annotation annotation, double referenceWidth, double referenceHeight,
+        ref SKBitmap? cachedSource, ref Bitmap? cachedSourceKey)
+    {
+        if (snapshot == null)
+            return null;
+
+        if (cachedSource == null || !ReferenceEquals(cachedSourceKey, snapshot))
+        {
+            cachedSource?.Dispose();
+            cachedSource = ConvertAvaloniaBitmapToSkBitmap(snapshot);
+            cachedSourceKey = snapshot;
+        }
+
+        if (cachedSource == null)
+            return null;
+
+        using var preview = RenderAnnotationPreviewToSkBitmap(cachedSource, annotation, referenceWidth, referenceHeight);
+        if (preview == null)
+            return null;
+
+        return ConvertSkBitmapToWriteableBitmap(preview);
+    }
+
     public SKBitmap? RenderAnnotationPreviewToSkBitmap(SKBitmap snapshot, Annotation annotation, double referenceWidth, double referenceHeight)
     {
         if (annotation.Type != AnnotationType.Mosaic && annotation.Type != AnnotationType.Blur)
