@@ -46,17 +46,13 @@ public partial class SnipWindowViewModel
         var r = SelectionRect;
         if (_mainVm == null) return r;
 
-        bool hideBorder = _mainVm.HideRecordSelectionBorder;
         bool hideDeco = _mainVm.HideRecordSelectionDecoration;
-        if (hideBorder && hideDeco)
-            return r;
 
         const double cornerMarginPad = 1.5;
         const double edgePad = 2.0;
 
-        double inset = 0;
-        if (!hideBorder)
-            inset = Math.Max(inset, SelectionBorderThickness * 2 + 1);
+        // The selection border is always shown, so always inset past it so it is not captured.
+        double inset = SelectionBorderThickness * 2 + 1;
         if (!hideDeco)
             inset = Math.Max(inset, SelectionIconSize + SelectionBorderThickness + cornerMarginPad + edgePad);
 

@@ -261,7 +261,6 @@ public class AppSettingsService
         dest.HideSnipPinDecoration = source.HideSnipPinDecoration;
         dest.HideSnipPinBorder = source.HideSnipPinBorder;
         dest.HideSnipSelectionDecoration = source.HideSnipSelectionDecoration;
-        dest.HideSnipSelectionBorder = source.HideSnipSelectionBorder;
         dest.AutoPinScreenshotSelection = source.AutoPinScreenshotSelection;
         dest.CaptureDelay = source.CaptureDelay;
         dest.OcrTextLayout = source.OcrTextLayout;
@@ -270,7 +269,6 @@ public class AppSettingsService
         dest.HideRecordPinDecoration = source.HideRecordPinDecoration;
         dest.HideRecordPinBorder = source.HideRecordPinBorder;
         dest.HideRecordSelectionDecoration = source.HideRecordSelectionDecoration;
-        dest.HideRecordSelectionBorder = source.HideRecordSelectionBorder;
         dest.AutoSave = source.AutoSave;
         dest.EnableHistory = source.EnableHistory;
         dest.RevealAfterSave = source.RevealAfterSave;

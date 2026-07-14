@@ -41,7 +41,6 @@ public partial class MainWindowViewModel
             HideSnipPinDecoration = HideSnipPinDecoration,
             HideSnipPinBorder = HideSnipPinBorder,
             HideSnipSelectionDecoration = HideSnipSelectionDecoration,
-            HideSnipSelectionBorder = HideSnipSelectionBorder,
             AutoPinScreenshotSelection = AutoPinScreenshotSelection,
             CaptureDelay = CaptureDelay,
             OcrTextLayout = OcrTextLayout,
@@ -50,7 +49,6 @@ public partial class MainWindowViewModel
             HideRecordPinDecoration = HideRecordPinDecoration,
             HideRecordPinBorder = HideRecordPinBorder,
             HideRecordSelectionDecoration = HideRecordSelectionDecoration,
-            HideRecordSelectionBorder = HideRecordSelectionBorder,
             DefaultHideSnipToolbar = DefaultHideSnipToolbar,
             DefaultHideRecordToolbar = DefaultHideRecordToolbar,
             AutoSave = AutoSave,
@@ -134,14 +132,12 @@ public partial class MainWindowViewModel
         HideRecordPinDecoration = snapshot.HideRecordPinDecoration;
         HideRecordPinBorder = snapshot.HideRecordPinBorder;
         HideSnipSelectionDecoration = snapshot.HideSnipSelectionDecoration;
-        HideSnipSelectionBorder = snapshot.HideSnipSelectionBorder;
         AutoPinScreenshotSelection = snapshot.AutoPinScreenshotSelection;
         CaptureDelay = snapshot.CaptureDelay;
         OcrTextLayout = snapshot.OcrTextLayout;
         ScrollingCaptureDirection = snapshot.ScrollingCaptureDirection;
         SnipToolbarPosition = snapshot.SnipToolbarPosition;
         HideRecordSelectionDecoration = snapshot.HideRecordSelectionDecoration;
-        HideRecordSelectionBorder = snapshot.HideRecordSelectionBorder;
         ShowSnipCursor = snapshot.ShowSnipCursor;
         ShowRecordCursor = snapshot.ShowRecordCursor;
         RecordSystemAudio = snapshot.RecordSystemAudio;

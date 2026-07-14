@@ -119,13 +119,11 @@ public partial class MainWindowViewModel
         HideRecordPinDecoration = false;
         HideRecordPinBorder = false;
         HideSnipSelectionDecoration = false;
-        HideSnipSelectionBorder = false;
         AutoPinScreenshotSelection = defaultSettings.AutoPinScreenshotSelection;
         CaptureDelay = defaultSettings.CaptureDelay;
         OcrTextLayout = defaultSettings.OcrTextLayout;
         ScrollingCaptureDirection = defaultSettings.ScrollingCaptureDirection;
         HideRecordSelectionDecoration = false;
-        HideRecordSelectionBorder = false;
         ShowSnipCursor = defaultSettings.ShowSnipCursor;
         ShowRecordCursor = defaultSettings.ShowRecordCursor;
         RecordSystemAudio = defaultSettings.RecordSystemAudio;

@@ -33,7 +33,6 @@
                         <CheckBox IsChecked="{Binding HideSnipPinDecoration}" Content="{Binding [HideSnipPinDecoration], Source={x:Static services:LocalizationService.Instance}}"/>
                         <CheckBox IsChecked="{Binding HideSnipPinBorder}" Content="{Binding [HideSnipPinBorder], Source={x:Static services:LocalizationService.Instance}}"/>
                         <CheckBox IsChecked="{Binding HideSnipSelectionDecoration}" Content="{Binding [HideSnipSelectionDecoration], Source={x:Static services:LocalizationService.Instance}}"/>
-                        <CheckBox IsChecked="{Binding HideSnipSelectionBorder}" Content="{Binding [HideSnipSelectionBorder], Source={x:Static services:LocalizationService.Instance}}"/>
                         <CheckBox IsChecked="{Binding AutoPinScreenshotSelection}" Content="{Binding [AutoPinScreenshotSelection], Source={x:Static services:LocalizationService.Instance}}"/>
                         <CheckBox IsChecked="{Binding DefaultHideSnipToolbar}" Content="{Binding [DefaultHideSnipToolbar], Source={x:Static services:LocalizationService.Instance}}"/>
                         <Grid ColumnDefinitions="Auto,*" Margin="0,6,0,0">

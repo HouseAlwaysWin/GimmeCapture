@@ -244,7 +244,9 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
     {
         get
         {
-            double hPad = HidePinDecoration ? 10 : (WingWidth + SelectionThickness + 10);
+            // Decoration hidden: no wings, and the hidden-decoration style drops the outer glow too, so collapse
+            // the left/right band to nothing — this removes the thin glow strip that used to linger on each side.
+            double hPad = HidePinDecoration ? 0 : (WingWidth + SelectionThickness + 10);
             double topPad = 48; // Increased from 45
             // Reserve a band above the content for the floating contextual sub-toolbar while it's open.
             if (IsSubToolbarVisible) topPad += SubToolbarReserve;

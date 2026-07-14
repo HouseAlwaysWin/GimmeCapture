@@ -68,6 +68,12 @@
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Background" Value="Transparent"/>
         </Style>
+        <!-- Hiding decoration also drops the outer glow (box-shadow); the border line itself stays
+             governed by hidden-border. Combined with WindowPadding collapsing the left/right band,
+             this removes the thin glow "residual" that used to linger on the left/right edges. -->
+        <Style Selector="Border.MainBorder.hidden-decoration">
+            <Setter Property="BoxShadow" Value="0 0 0 0 Transparent"/>
+        </Style>
         <Style Selector="Border.InnerBorder.hidden-border">
             <Setter Property="BorderThickness" Value="0"/>
         </Style>
@@ -84,6 +90,7 @@
                 Margin="{Binding WindowPadding}"
                 Classes="MainBorder"
                 Classes.hidden-border="{Binding HidePinBorder}"
+                Classes.hidden-decoration="{Binding HidePinDecoration}"
                 CornerRadius="0"
                 ClipToBounds="False"
                 Opacity="{Binding ContentOpacity}"
