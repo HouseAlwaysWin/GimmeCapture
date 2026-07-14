@@ -304,6 +304,7 @@
   "HideSnipSelectionDecoration": "Hide Selection Window Decorations",
   "RevealAfterSave": "Open file location after saving",
   "AutoPinScreenshotSelection": "Lock selected screenshot instead of click-through",
+  "TipLockSelection": "Lock selection (no click-through)",
   "ShowSnipCursor": "Show Cursor in Snip",
   "UseFixedRecordPath": "Always save to same file",
   "TempPath": "Temporary File Path:",
