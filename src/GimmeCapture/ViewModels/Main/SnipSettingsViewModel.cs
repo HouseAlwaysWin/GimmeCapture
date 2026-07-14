@@ -70,13 +70,6 @@ public class SnipSettingsViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _hideSnipSelectionDecoration, value);
     }
 
-    private bool _hideSnipSelectionBorder;
-    public bool HideSnipSelectionBorder
-    {
-        get => _hideSnipSelectionBorder;
-        set => this.RaiseAndSetIfChanged(ref _hideSnipSelectionBorder, value);
-    }
-
     private bool _autoPinScreenshotSelection;
     public bool AutoPinScreenshotSelection
     {

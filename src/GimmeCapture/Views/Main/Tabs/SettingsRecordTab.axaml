@@ -110,7 +110,6 @@
                     <CheckBox Content="{Binding [HideRecordPinDecoration], Source={x:Static services:LocalizationService.Instance}}" IsChecked="{Binding HideRecordPinDecoration}"/>
                     <CheckBox Content="{Binding [HideRecordPinBorder], Source={x:Static services:LocalizationService.Instance}}" IsChecked="{Binding HideRecordPinBorder}"/>
                     <CheckBox Content="{Binding [HideRecordSelectionDecoration], Source={x:Static services:LocalizationService.Instance}}" IsChecked="{Binding HideRecordSelectionDecoration}"/>
-                    <CheckBox Content="{Binding [HideRecordSelectionBorder], Source={x:Static services:LocalizationService.Instance}}" IsChecked="{Binding HideRecordSelectionBorder}"/>
                     <CheckBox Content="{Binding [DefaultHideRecordToolbar], Source={x:Static services:LocalizationService.Instance}}" IsChecked="{Binding DefaultHideRecordToolbar}"/>
                 </StackPanel>
             </Expander>

@@ -282,21 +282,8 @@ public partial class SnipWindowViewModel
         }
     }
 
-    public bool HideFrameBorder
-    {
-        get
-        {
-            // "Hide selection border (record)" applies DURING recording only (see HideSelectionDecoration):
-            // when checked, the border is hidden while recording / paused / finalizing; while selecting the
-            // region it is always shown. Snip mode keeps its own setting (applied to selection).
-            if (CurrentMode == SnipMode.Recording)
-            {
-                bool recordingActive = IsRecordingFinalizing || RecState == RecordingState.Recording || RecState == RecordingState.Paused;
-                return recordingActive && (_mainVm?.HideRecordSelectionBorder ?? false);
-            }
-            return _mainVm?.HideSnipSelectionBorder ?? false;
-        }
-    }
+    // The selection-frame border is always shown; the hide-border settings were removed.
+    public bool HideFrameBorder => false;
 
     private SnipAutoAction _autoActionMode = SnipAutoAction.None;
     public SnipAutoAction AutoActionMode

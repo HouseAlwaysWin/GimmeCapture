@@ -117,7 +117,6 @@ public class AppSettings
     public bool HideSnipPinDecoration { get; set; } = false;
     public bool HideSnipPinBorder { get; set; } = false;
     public bool HideSnipSelectionDecoration { get; set; } = false;
-    public bool HideSnipSelectionBorder { get; set; } = false;
     public bool AutoPinScreenshotSelection { get; set; } = false;
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public CaptureDelay CaptureDelay { get; set; } = CaptureDelay.Off;
@@ -131,7 +130,6 @@ public class AppSettings
     public bool HideRecordPinDecoration { get; set; } = false;
     public bool HideRecordPinBorder { get; set; } = false;
     public bool HideRecordSelectionDecoration { get; set; } = false;
-    public bool HideRecordSelectionBorder { get; set; } = false;
     
     // Default State
     public bool DefaultHideSnipToolbar { get; set; } = false;

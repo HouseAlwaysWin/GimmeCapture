@@ -417,12 +417,6 @@ public partial class MainWindowViewModel
         set => Snip.HideSnipSelectionDecoration = value;
     }
 
-    public bool HideSnipSelectionBorder
-    {
-        get => Snip.HideSnipSelectionBorder;
-        set => Snip.HideSnipSelectionBorder = value;
-    }
-
     public bool AutoPinScreenshotSelection
     {
         get => Snip.AutoPinScreenshotSelection;
@@ -479,13 +473,6 @@ public partial class MainWindowViewModel
     {
         get => _hideRecordSelectionDecoration;
         set => this.RaiseAndSetIfChanged(ref _hideRecordSelectionDecoration, value);
-    }
-
-    private bool _hideRecordSelectionBorder = false;
-    public bool HideRecordSelectionBorder
-    {
-        get => _hideRecordSelectionBorder;
-        set => this.RaiseAndSetIfChanged(ref _hideRecordSelectionBorder, value);
     }
 
     private string _tempDirectory = string.Empty;

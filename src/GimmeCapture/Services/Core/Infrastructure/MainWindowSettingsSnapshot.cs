@@ -16,7 +16,6 @@ public sealed class MainWindowSettingsSnapshot
     public required bool HideSnipPinDecoration { get; init; }
     public required bool HideSnipPinBorder { get; init; }
     public required bool HideSnipSelectionDecoration { get; init; }
-    public required bool HideSnipSelectionBorder { get; init; }
     public required bool AutoPinScreenshotSelection { get; init; }
     public required CaptureDelay CaptureDelay { get; init; }
     public required OcrTextLayout OcrTextLayout { get; init; }
@@ -25,7 +24,6 @@ public sealed class MainWindowSettingsSnapshot
     public required bool HideRecordPinDecoration { get; init; }
     public required bool HideRecordPinBorder { get; init; }
     public required bool HideRecordSelectionDecoration { get; init; }
-    public required bool HideRecordSelectionBorder { get; init; }
     public required bool DefaultHideSnipToolbar { get; init; }
     public required bool DefaultHideRecordToolbar { get; init; }
     public required bool AutoSave { get; init; }
@@ -94,7 +92,6 @@ public sealed class MainWindowSettingsSnapshot
             HideSnipPinDecoration = settings.HideSnipPinDecoration,
             HideSnipPinBorder = settings.HideSnipPinBorder,
             HideSnipSelectionDecoration = settings.HideSnipSelectionDecoration,
-            HideSnipSelectionBorder = settings.HideSnipSelectionBorder,
             AutoPinScreenshotSelection = settings.AutoPinScreenshotSelection,
             CaptureDelay = settings.CaptureDelay,
             OcrTextLayout = settings.OcrTextLayout,
@@ -103,7 +100,6 @@ public sealed class MainWindowSettingsSnapshot
             HideRecordPinDecoration = settings.HideRecordPinDecoration,
             HideRecordPinBorder = settings.HideRecordPinBorder,
             HideRecordSelectionDecoration = settings.HideRecordSelectionDecoration,
-            HideRecordSelectionBorder = settings.HideRecordSelectionBorder,
             DefaultHideSnipToolbar = settings.DefaultHideSnipToolbar,
             DefaultHideRecordToolbar = settings.DefaultHideRecordToolbar,
             AutoSave = settings.AutoSave,
@@ -172,7 +168,6 @@ public sealed class MainWindowSettingsSnapshot
         settings.HideSnipPinDecoration = HideSnipPinDecoration;
         settings.HideSnipPinBorder = HideSnipPinBorder;
         settings.HideSnipSelectionDecoration = HideSnipSelectionDecoration;
-        settings.HideSnipSelectionBorder = HideSnipSelectionBorder;
         settings.AutoPinScreenshotSelection = AutoPinScreenshotSelection;
         settings.CaptureDelay = CaptureDelay;
         settings.OcrTextLayout = OcrTextLayout;
@@ -181,7 +176,6 @@ public sealed class MainWindowSettingsSnapshot
         settings.HideRecordPinDecoration = HideRecordPinDecoration;
         settings.HideRecordPinBorder = HideRecordPinBorder;
         settings.HideRecordSelectionDecoration = HideRecordSelectionDecoration;
-        settings.HideRecordSelectionBorder = HideRecordSelectionBorder;
         settings.DefaultHideSnipToolbar = DefaultHideSnipToolbar;
         settings.DefaultHideRecordToolbar = DefaultHideRecordToolbar;
         settings.AutoSave = AutoSave;
