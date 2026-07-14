@@ -290,6 +290,7 @@
   "HideSnipSelectionDecoration": "選択ウィンドウの裝飾を隠す",
   "RevealAfterSave": "保存後にファイルの場所を開く",
   "AutoPinScreenshotSelection": "選択したスクリーンショットを固定して透過クリックしない",
+  "TipLockSelection": "選択を固定（透過クリックしない）",
   "ShowSnipCursor": "キャプチャ時にカーソルを表示",
   "UseFixedRecordPath": "固定録畫パスを使用",
   "VideoFormat": "動画フォーマット:",

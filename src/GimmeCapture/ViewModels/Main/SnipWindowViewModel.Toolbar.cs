@@ -99,6 +99,22 @@ public partial class SnipWindowViewModel
         }
     }
 
+    /// <summary>
+    /// Toolbar toggle for "lock selected screenshot instead of click-through". Flips the live lock on the
+    /// current selection (its setter freezes / unfreezes the snapshot on the spot) and persists the choice
+    /// back to the AutoPinScreenshotSelection setting, so the toolbar button and the settings checkbox stay
+    /// the same switch.
+    /// </summary>
+    private void ToggleLockSelectionSnapshot()
+    {
+        bool newValue = !LockSelectedScreenshotSelection;
+        LockSelectedScreenshotSelection = newValue;
+        if (_mainVm != null)
+        {
+            _mainVm.AutoPinScreenshotSelection = newValue;
+        }
+    }
+
     private bool _isSelectionSnapshotLocked;
     public bool IsSelectionSnapshotLocked
     {
