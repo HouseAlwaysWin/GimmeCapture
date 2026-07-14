@@ -110,7 +110,14 @@
                         <!-- Video Base -->
                         <Image Source="{Binding VideoBitmap}"
                                Stretch="Fill"
-                               Name="PinnedVideo"/>
+                               Name="PinnedVideo">
+                            <!-- Cursor reflects the active drawing tool immediately on switch + on hover. -->
+                            <Image.Cursor>
+                                <MultiBinding Converter="{StaticResource AnnotationToolToCursorConverter}">
+                                    <Binding Path="CurrentAnnotationTool"/>
+                                </MultiBinding>
+                            </Image.Cursor>
+                        </Image>
                         
                         <!-- Processing/Export Overlay -->
                         <Border IsVisible="{Binding IsExporting}" 

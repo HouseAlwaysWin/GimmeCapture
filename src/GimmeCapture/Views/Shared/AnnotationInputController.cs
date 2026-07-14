@@ -416,15 +416,8 @@ public sealed class AnnotationInputController
         }
     }
 
-    // Cursor over empty content while a tool is active: Text = I-beam, Pen/Highlighter = pen glyph,
-    // Mosaic/Blur = box glyph, shape tools keep the crosshair (the drawing convention).
-    private static Cursor ResolveToolCursor(AnnotationType tool) => tool switch
-    {
-        AnnotationType.Text => new Cursor(StandardCursorType.Ibeam),
-        AnnotationType.Pen or AnnotationType.Highlighter => DrawingToolCursors.Pen,
-        AnnotationType.Mosaic or AnnotationType.Blur => DrawingToolCursors.Box,
-        _ => new Cursor(StandardCursorType.Cross),
-    };
+    // Cursor over empty content while a tool is active (shared with the reactive XAML binding).
+    private static Cursor ResolveToolCursor(AnnotationType tool) => DrawingToolCursors.ForTool(tool);
 
     private static Cursor CreateAnnotationCursor(AnnotationHitZone zone)
     {

@@ -3,6 +3,7 @@ using System.IO;
 using Avalonia;
 using Avalonia.Input;
 using Avalonia.Media.Imaging;
+using GimmeCapture.Models;
 using GimmeCapture.Services.Core.Infrastructure;
 using SkiaSharp;
 
@@ -18,6 +19,7 @@ internal static class DrawingToolCursors
 {
     private const int Size = 32;
     private static readonly Cursor Fallback = new(StandardCursorType.Cross);
+    private static readonly Cursor Ibeam = new(StandardCursorType.Ibeam);
 
     private static Cursor? _pen;
     private static Cursor? _box;
@@ -27,6 +29,21 @@ internal static class DrawingToolCursors
 
     /// <summary>Square-outline glyph; hotspot at the centre.</summary>
     public static Cursor Box => _box ??= Build(DrawBox, hotspotX: 16, hotspotY: 16) ?? Fallback;
+
+    /// <summary>
+    /// The cursor for an active annotation tool. Single source of truth shared by the reactive
+    /// XAML binding (<c>AnnotationToolToCursorConverter</c>) and the pointer-move cursor logic
+    /// (<c>AnnotationInputController</c>): Text = I-beam, Pen/Highlighter = pen, Mosaic/Blur = box,
+    /// shape tools = crosshair, None = the default arrow.
+    /// </summary>
+    public static Cursor ForTool(AnnotationType tool) => tool switch
+    {
+        AnnotationType.None => Cursor.Default,
+        AnnotationType.Text => Ibeam,
+        AnnotationType.Pen or AnnotationType.Highlighter => Pen,
+        AnnotationType.Mosaic or AnnotationType.Blur => Box,
+        _ => Fallback,
+    };
 
     private static Cursor? Build(Action<SKCanvas> draw, int hotspotX, int hotspotY)
     {
