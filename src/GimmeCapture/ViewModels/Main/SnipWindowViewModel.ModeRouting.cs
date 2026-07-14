@@ -270,13 +270,14 @@ public partial class SnipWindowViewModel
     {
         get
         {
-            // "Hide selection decoration (record)" applies DURING recording only: when checked, the chrome is
-            // hidden while recording / paused / finalizing; while still selecting the region it is always shown
-            // so the user can see what will be captured. Snip mode keeps its own setting (applied to selection).
+            // "Hide selection decoration" applies immediately in both modes: when checked, the gothic
+            // wings/corners are hidden the moment the region overlay appears and stay hidden through recording.
+            // The selection border is always drawn (HideFrameBorder => false), so the captured region stays
+            // visible either way — record and snip differ only in which setting they read. (Previously the record
+            // variant was gated to the active-recording phase, which made toggling it look like it did nothing.)
             if (CurrentMode == SnipMode.Recording)
             {
-                bool recordingActive = IsRecordingFinalizing || RecState == RecordingState.Recording || RecState == RecordingState.Paused;
-                return recordingActive && (_mainVm?.HideRecordSelectionDecoration ?? false);
+                return _mainVm?.HideRecordSelectionDecoration ?? false;
             }
             return _mainVm?.HideSnipSelectionDecoration ?? false;
         }
