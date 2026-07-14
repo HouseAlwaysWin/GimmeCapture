@@ -44,7 +44,7 @@
         <KeyBinding Gesture="{Binding CropHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding CropCommand}" />
         <KeyBinding Gesture="{Binding PinHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding PinSelectionCommand}" />
         <KeyBinding Gesture="F4" Command="{Binding ToggleToolbarCommand}" />
-        <KeyBinding Gesture="W" Command="{Binding ToggleToolGroupCommand}" CommandParameter="MagicWand" /> 
+        <KeyBinding Gesture="W" Command="{Binding TogglePointRemovalCommand}" /> 
         <KeyBinding Gesture="Shift+R" Command="{Binding RemoveBackgroundCommand}" />
 
         <!-- Core Actions -->

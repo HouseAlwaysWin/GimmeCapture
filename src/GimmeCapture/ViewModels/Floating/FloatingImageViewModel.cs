@@ -89,6 +89,9 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
     public ReactiveCommand<Unit, Unit> RemoveBackgroundCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> ConfirmInteractiveCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> CancelInteractiveCommand { get; private set; } = null!;
+    // Keyboard toggle (W) for "click to remove background" / point-removal mode. Replaces the old dead
+    // ToggleToolGroupCommand("MagicWand") binding, which resolved to no tool.
+    public ReactiveCommand<Unit, Unit> TogglePointRemovalCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> UndoInteractivePointCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> UndoShortcutCommand { get; private set; } = null!;
 
@@ -342,6 +345,11 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
         {
             IsPointRemovalMode = false;
         }, null, nameof(CancelInteractiveCommand));
+
+        TogglePointRemovalCommand = CreateCommand(() =>
+        {
+            IsPointRemovalMode = !IsPointRemovalMode;
+        }, null, nameof(TogglePointRemovalCommand));
 
         UndoInteractivePointCommand = CreateAsyncCommand(
             UndoLastPointAsync,

@@ -278,6 +278,17 @@ public abstract class FloatingWindowBase : Window
     protected virtual void OnPointerPressed(object? sender, PointerPressedEventArgs e)
     {
         if (DataContext is not FloatingWindowViewModelBase vm) return;
+
+        // Take keyboard focus on any interactive click so the window's KeyBindings (the drawing-tool
+        // shortcuts R/E/A/L/P/T/M/B/W) fire without first having to open a focusable toolbar control —
+        // the pin is click-through and never self-focuses on open. A focusable child that was clicked
+        // (toolbar button / text box) re-takes focus during its own click handling, so this only
+        // "sticks" when the press landed on non-focusable content (the image/canvas).
+        if (!IsKeyboardFocusWithin)
+        {
+            Focus();
+        }
+
         var source = e.Source as Control;
         var pCurrentPoint = e.GetCurrentPoint(this);
         var pointerPos = pCurrentPoint.Position;
