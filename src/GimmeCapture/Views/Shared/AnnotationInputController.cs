@@ -402,14 +402,29 @@ public sealed class AnnotationInputController
         }
 
         var hit = AnnotationInteractionService.HitTest(state.Annotations, state.SelectedAnnotation, point);
-        _setCursor(hit.IsHit
-            ? CreateAnnotationCursor(hit.Zone)
-            : new Cursor(contentBounds.Contains(point)
-                ? (state.CurrentAnnotationTool == AnnotationType.Text
-                    ? StandardCursorType.Ibeam
-                    : StandardCursorType.Cross)
-                : StandardCursorType.Arrow));
+        if (hit.IsHit)
+        {
+            _setCursor(CreateAnnotationCursor(hit.Zone));
+        }
+        else if (!contentBounds.Contains(point))
+        {
+            _setCursor(new Cursor(StandardCursorType.Arrow));
+        }
+        else
+        {
+            _setCursor(ResolveToolCursor(state.CurrentAnnotationTool));
+        }
     }
+
+    // Cursor over empty content while a tool is active: Text = I-beam, Pen/Highlighter = pen glyph,
+    // Mosaic/Blur = box glyph, shape tools keep the crosshair (the drawing convention).
+    private static Cursor ResolveToolCursor(AnnotationType tool) => tool switch
+    {
+        AnnotationType.Text => new Cursor(StandardCursorType.Ibeam),
+        AnnotationType.Pen or AnnotationType.Highlighter => DrawingToolCursors.Pen,
+        AnnotationType.Mosaic or AnnotationType.Blur => DrawingToolCursors.Box,
+        _ => new Cursor(StandardCursorType.Cross),
+    };
 
     private static Cursor CreateAnnotationCursor(AnnotationHitZone zone)
     {
