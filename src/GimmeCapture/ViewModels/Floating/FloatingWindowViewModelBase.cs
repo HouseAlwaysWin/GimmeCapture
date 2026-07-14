@@ -552,22 +552,25 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
             ActiveToolbarCategory = ActiveToolbarCategory == category ? ToolbarCategory.None : category;
         });
 
-        SelectToolCommand = ReactiveCommand.Create<AnnotationType>(tool => 
+        SelectToolCommand = ReactiveCommand.Create<AnnotationType>(tool =>
         {
             var targetTool = CurrentAnnotationTool == tool ? AnnotationType.None : tool;
             if (targetTool != AnnotationType.None)
             {
                 CurrentTool = FloatingTool.None;
+                // Reveal the Annotate toolbar so activating a tool by shortcut gives visible feedback.
+                ActiveToolbarCategory = ToolbarCategory.Annotate;
             }
             CurrentAnnotationTool = targetTool;
         }, notEnteringText);
 
-        ToggleToolGroupCommand = ReactiveCommand.Create<string>(group => 
+        ToggleToolGroupCommand = ReactiveCommand.Create<string>(group =>
         {
             var targetTool = _editorState.GetToolGroupTarget(group);
             if (targetTool != AnnotationType.None)
             {
                 CurrentTool = FloatingTool.None;
+                ActiveToolbarCategory = ToolbarCategory.Annotate;
             }
             CurrentAnnotationTool = targetTool;
         }, notEnteringText);

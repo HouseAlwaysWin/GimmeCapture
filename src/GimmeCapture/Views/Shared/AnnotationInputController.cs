@@ -402,14 +402,22 @@ public sealed class AnnotationInputController
         }
 
         var hit = AnnotationInteractionService.HitTest(state.Annotations, state.SelectedAnnotation, point);
-        _setCursor(hit.IsHit
-            ? CreateAnnotationCursor(hit.Zone)
-            : new Cursor(contentBounds.Contains(point)
-                ? (state.CurrentAnnotationTool == AnnotationType.Text
-                    ? StandardCursorType.Ibeam
-                    : StandardCursorType.Cross)
-                : StandardCursorType.Arrow));
+        if (hit.IsHit)
+        {
+            _setCursor(CreateAnnotationCursor(hit.Zone));
+        }
+        else if (!contentBounds.Contains(point))
+        {
+            _setCursor(new Cursor(StandardCursorType.Arrow));
+        }
+        else
+        {
+            _setCursor(ResolveToolCursor(state.CurrentAnnotationTool));
+        }
     }
+
+    // Cursor over empty content while a tool is active (shared with the reactive XAML binding).
+    private static Cursor ResolveToolCursor(AnnotationType tool) => DrawingToolCursors.ForTool(tool);
 
     private static Cursor CreateAnnotationCursor(AnnotationHitZone zone)
     {

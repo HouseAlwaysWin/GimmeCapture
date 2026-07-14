@@ -44,7 +44,7 @@
         <KeyBinding Gesture="{Binding CropHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding CropCommand}" />
         <KeyBinding Gesture="{Binding PinHotkey, Converter={StaticResource StringToKeyGestureConverter}}" Command="{Binding PinSelectionCommand}" />
         <KeyBinding Gesture="F4" Command="{Binding ToggleToolbarCommand}" />
-        <KeyBinding Gesture="W" Command="{Binding ToggleToolGroupCommand}" CommandParameter="MagicWand" /> 
+        <KeyBinding Gesture="W" Command="{Binding TogglePointRemovalCommand}" /> 
         <KeyBinding Gesture="Shift+R" Command="{Binding RemoveBackgroundCommand}" />
 
         <!-- Core Actions -->
@@ -128,8 +128,17 @@
                         <Grid HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
                             <Image Source="{Binding Image}"
                                    Stretch="Fill"
-                                   Name="PinnedImage"
-                                   Cursor="{Binding IsPointRemovalMode, Converter={StaticResource BoolToCrossCursorConverter}}"/>
+                                   Name="PinnedImage">
+                                <!-- Cursor reflects the active drawing tool (pen / box / crosshair / I-beam)
+                                     immediately on switch and on hover. A window-level cursor only shows while
+                                     the pointer is captured (pressed), so it must live on the content element. -->
+                                <Image.Cursor>
+                                    <MultiBinding Converter="{StaticResource AnnotationToolToCursorConverter}">
+                                        <Binding Path="CurrentAnnotationTool"/>
+                                        <Binding Path="IsPointRemovalMode"/>
+                                    </MultiBinding>
+                                </Image.Cursor>
+                            </Image>
                             
                             <!-- AI Ready Feedback Border -->
                             <Border BorderBrush="#FFD700" 

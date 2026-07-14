@@ -41,6 +41,7 @@
             <cv:FillSupportedConverter x:Key="FillSupportedConverter"/>
             <cv:ObjectNotNullConverter x:Key="ObjectNotNullConverter"/>
             <cv:BoolToCrossCursorConverter x:Key="BoolToCrossCursorConverter"/>
+            <cv:AnnotationToolToCursorConverter x:Key="AnnotationToolToCursorConverter"/>
             <cv:BoolToOpacityConverter x:Key="BoolToOpacityConverter"/>
             <cv:ThicknessToLeftTopMarginConverter x:Key="ThicknessToLeftTopMarginConverter"/>
             <cv:StatusToColorConverter x:Key="StatusToColorConverter"/>
