@@ -21,12 +21,16 @@ namespace GimmeCapture.ViewModels.Main;
 
 // Batch queue for the Compress tab. Each file can be started / paused / cancelled individually; a shared
 // concurrency cap (CompressParallelCount) bounds how many encode at once, whether started one-by-one or via
-// "Compress all". The per-file encode core (EncodeOneFileAsync) is shared with the single-file path.
+// "Compress all". This partial keeps only the bindable queue/settings state + command wiring; the actual
+// scheduling engine (shared CTS + concurrency semaphore + in-flight count + per-item run loop) lives in
+// CompressBatchRunner, which the VM feeds UI-thread-captured per-run values and two callbacks (state
+// persistence + batch completion). The per-file encode core (CompressPipeline.EncodeOneFileAsync) is shared
+// with the single-file path.
 //
-// Threading: every worker is launched from the UI thread and never uses ConfigureAwait(false), so all item
-// state mutations + the shared _inFlight/_batchCts/_batchSemaphore bookkeeping run on the UI thread (no locks
-// needed). The CPU-heavy encode itself runs on a Task.Run thread inside EncodeOneFileAsync, so parallelism is
-// real while the queue plumbing stays single-threaded.
+// Threading: the runner launches every worker from the UI thread and never uses ConfigureAwait(false), so
+// all item-state mutations + the shared bookkeeping run on the UI thread (no locks needed). The CPU-heavy
+// encode itself runs on a Task.Run thread inside EncodeOneFileAsync, so parallelism is real while the queue
+// plumbing stays single-threaded.
 public partial class MainWindowViewModel
 {
 
@@ -86,10 +90,9 @@ public partial class MainWindowViewModel
         private set => this.RaiseAndSetIfChanged(ref _compressQueueCount, value);
     }
 
-    // Shared batch context, alive only while at least one worker is in flight (created lazily on first start).
-    private CancellationTokenSource? _batchCts;
-    private SemaphoreSlim? _batchSemaphore;
-    private int _inFlight;
+    // The batch scheduling engine (shared CTS + concurrency semaphore + in-flight count + the per-item run
+    // loop). Extracted from this VM; the VM keeps only the bindable queue/settings and delegates the run.
+    private readonly CompressBatchRunner _batchRunner = new();
 
     // The queue item shown in the "Edit" accordion (first-frame preview + rotation).
     private CompressQueueItem? _selectedQueueItem;
@@ -724,7 +727,7 @@ public partial class MainWindowViewModel
         }
     }
 
-    private void CancelAllCompressQueue() => _batchCts?.Cancel();
+    private void CancelAllCompressQueue() => _batchRunner.Cancel();
 
     private void EstimateQueueItem(CompressQueueItem item) => _ = EstimateItemSampleAsync(item, notifyTargetSize: true);
 
@@ -792,8 +795,8 @@ public partial class MainWindowViewModel
         }
     }
 
-    // Dispatches one item: ensures the shared batch context, snapshots settings on the UI thread, and launches
-    // a worker (fire-and-forget; tracked via _inFlight). The concurrency cap is enforced by _batchSemaphore.
+    // Dispatches one item: ensures the shared batch context, snapshots settings/burn-in on the UI thread, and
+    // hands the item to the batch runner (which enforces the concurrency cap + owns the worker lifecycle).
     private void StartCompressItem(CompressQueueItem item)
     {
         if (item.Status is CompressQueueStatus.Waiting or CompressQueueStatus.Running)
@@ -801,11 +804,7 @@ public partial class MainWindowViewModel
             return;
         }
 
-        if (_batchCts == null || _batchSemaphore == null)
-        {
-            _batchCts = new CancellationTokenSource();
-            _batchSemaphore = new SemaphoreSlim(Math.Clamp(CompressParallelCount, 1, 8));
-        }
+        CancellationToken batchToken = _batchRunner.EnsureContext(CompressParallelCount);
 
         CompressSettingsSnapshot snap = BuildSettingsSnapshot(item);         // per-item bundle or live settings
         string ext = "." + EffectiveFormatFor(item).ToLowerInvariant();      // container follows the effective format
@@ -818,153 +817,20 @@ public partial class MainWindowViewModel
         // Annotations/redaction burn-in (snapshotted here on the UI thread; null when the item has neither).
         Action<SKBitmap, double>? burnIn = CompressPipeline.BuildBurnInComposite(
             item.Annotations, item.AnnotationSurfaceWidth, item.AnnotationSurfaceHeight, item.RedactionTracks);
-        item.PrepareForStart(_batchCts.Token);
+        item.PrepareForStart(batchToken);
         var progress = new Progress<double>(p => item.Progress = p); // UI thread → callbacks marshal back
         var resumeProgress = new Progress<double>(p => item.ResumePoint = p); // last safe pause checkpoint
         item.ResumePoint = 0;
 
-        _inFlight++;
         IsBatchRunning = true;
-        _ = RunQueueItemAsync(item, snap, ext, outputFolder, appendDate, progress, resumeProgress, keptRuns, burnIn);
+        _batchRunner.Start(item, snap, ext, outputFolder, appendDate, progress, resumeProgress, keptRuns, burnIn,
+            PersistItemState, OnAllWorkersDone);
     }
 
-    private async Task RunQueueItemAsync(
-        CompressQueueItem item, CompressSettingsSnapshot snap, string ext, string outputFolder, bool appendDate,
-        IProgress<double> progress, IProgress<double> resumeProgress,
-        IReadOnlyList<(double Start, double End, double Speed)> keptRuns, Action<SKBitmap, double>? burnInComposite)
+    // Batch completion (UI-thread worker continuation from the runner): the runner has already torn down its
+    // shared context. Update the bindable batch state and release the working buffers accumulated over the run.
+    private void OnAllWorkersDone()
     {
-        SemaphoreSlim semaphore = _batchSemaphore!;
-        CancellationToken token = item.Cts!.Token;
-        try
-        {
-            try
-            {
-                await semaphore.WaitAsync(token);
-            }
-            catch (OperationCanceledException)
-            {
-                item.Status = CompressQueueStatus.Cancelled;
-                CompressSegmentStore.Clear(item.Path); // cancelled: discard any resume chunks
-                return;
-            }
-
-            try
-            {
-                token.ThrowIfCancellationRequested();
-                if (!File.Exists(item.Path))
-                {
-                    item.Status = CompressQueueStatus.Failed;
-                    return;
-                }
-
-                item.Gate = new ManualResetEventSlim(true);
-                item.Status = CompressQueueStatus.Running;
-                PersistItemState(item); // clear any stale "paused" marker now that it's actually encoding
-
-                double duration = await CompressPipeline.ProbeInputDurationAsync(item.Path);
-
-                // Re-clamp the captured kept runs against the freshly probed duration (whole file when empty).
-                var runs = keptRuns
-                    .Select(r => (Start: Math.Clamp(r.Start, 0, duration), End: Math.Clamp(r.End, 0, duration),
-                        Speed: r.Speed > 0 ? r.Speed : 1.0))
-                    .Where(r => r.End > r.Start + 0.001)
-                    .OrderBy(r => r.Start)
-                    .ToList();
-                if (runs.Count == 0 && duration > 0)
-                {
-                    runs.Add((0, duration, 1.0));
-                }
-                // Output span honors per-run speed (a 2× run is half as long); drives the target-size bitrate.
-                double outputDuration = runs.Sum(r => (r.End - r.Start) / (r.Speed > 0 ? r.Speed : 1.0));
-                bool multiSegment = runs.Count > 1;
-                bool hasSpeed = runs.Any(r => Math.Abs(r.Speed - 1.0) > 0.001);
-                VideoEditCrop? crop = item.Crop;
-
-                // Resumable segmented CRF only handles one contiguous, full-speed, un-cropped, un-annotated span
-                // into a plain container; anything else (target-size / multi-segment / speed / crop / burn-in /
-                // GIF / WebM) uses the whole-file path below.
-                bool gifWebm = ext.Equals(".gif", StringComparison.OrdinalIgnoreCase)
-                    || ext.Equals(".webm", StringComparison.OrdinalIgnoreCase);
-                item.SupportsResume = !snap.UseTargetSize && duration > 0 && !multiSegment && !hasSpeed && crop == null
-                    && burnInComposite == null && !gifWebm;
-                int targetKbps = 0;
-                if (snap.UseTargetSize)
-                {
-                    if (duration <= 0 || outputDuration <= 0)
-                    {
-                        item.Status = CompressQueueStatus.Failed;
-                        return;
-                    }
-                    targetKbps = CompressEncodeMath.ComputeTargetVideoBitrateKbps((double)snap.TargetSizeMB, outputDuration);
-                }
-
-                string outputPath = CompressOutputPath.BuildBatchOutputPath(
-                    item.Path, item.OutputName, outputFolder, ext, appendDate, DateTime.Now);
-                try
-                {
-                    string? finalDir = Path.GetDirectoryName(outputPath);
-                    if (!string.IsNullOrEmpty(finalDir))
-                    {
-                        Directory.CreateDirectory(finalDir); // includes any user-typed subfolder
-                    }
-                }
-                catch (Exception ex)
-                {
-                    AppLog.Error("Compress.QueueOutDir", ex);
-                }
-
-                bool ok = await CompressPipeline.EncodeOneFileAsync(
-                    item.Path, outputPath, snap, targetKbps, duration, progress, token, item.Gate, item.Rotation,
-                    resumeProgress, runs, crop, burnInComposite);
-                if (ok)
-                {
-                    item.OutputPath = outputPath; // record the produced file for the 開啟資料夾 button
-                }
-                item.Status = ok ? CompressQueueStatus.Done : CompressQueueStatus.Failed;
-                if (ok)
-                {
-                    PersistItemState(item); // remember completion so a resumed batch skips this file
-                }
-            }
-            catch (OperationCanceledException)
-            {
-                item.Status = CompressQueueStatus.Cancelled;
-                CompressSegmentStore.Clear(item.Path); // cancelled: discard any resume chunks
-            }
-            catch (Exception ex)
-            {
-                AppLog.Error("Compress.QueueItem", ex);
-                item.Status = CompressQueueStatus.Failed;
-            }
-            finally
-            {
-                item.Gate?.Dispose();
-                item.Gate = null;
-                semaphore.Release();
-            }
-        }
-        finally
-        {
-            item.Cts?.Dispose();
-            item.Cts = null;
-            OnWorkerDone();
-        }
-    }
-
-    // Runs on the UI thread (worker continuation). When the last worker finishes, tears down the batch context.
-    private void OnWorkerDone()
-    {
-        _inFlight--;
-        if (_inFlight > 0)
-        {
-            return;
-        }
-
-        _inFlight = 0;
-        _batchSemaphore?.Dispose();
-        _batchSemaphore = null;
-        _batchCts?.Dispose();
-        _batchCts = null;
         IsBatchRunning = false;
 
         int done = CompressQueue.Count(i => i.Status == CompressQueueStatus.Done);
