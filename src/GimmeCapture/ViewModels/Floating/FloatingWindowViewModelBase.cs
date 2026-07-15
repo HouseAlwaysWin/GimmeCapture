@@ -139,14 +139,88 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
     public double DisplayWidth
     {
         get => _displayWidth;
-        set => this.RaiseAndSetIfChanged(ref _displayWidth, value);
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _displayWidth, value);
+            if (!_contentScrolls)
+            {
+                this.RaisePropertyChanged(nameof(ViewportWidth)); // viewport mirrors content for normal pins
+            }
+        }
     }
 
     private double _displayHeight;
     public double DisplayHeight
     {
         get => _displayHeight;
-        set => this.RaiseAndSetIfChanged(ref _displayHeight, value);
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _displayHeight, value);
+            if (!_contentScrolls)
+            {
+                this.RaisePropertyChanged(nameof(ViewportHeight));
+            }
+        }
+    }
+
+    // Scrolling-content mode: a fixed viewport (the window content area) over a larger image that scrolls
+    // inside it. Used for long scrolling-capture strips — the window matches the original selection while the
+    // full-height stitch scrolls. For every normal pin ContentScrolls stays false, ViewportWidth/Height mirror
+    // DisplayWidth/Height, and the scroll bars are disabled, so behaviour is unchanged.
+    private bool _contentScrolls;
+    public bool ContentScrolls
+    {
+        get => _contentScrolls;
+        private set => this.RaiseAndSetIfChanged(ref _contentScrolls, value);
+    }
+
+    // The visible viewport (drives the window/border size). Mirrors DisplayWidth/Height for normal pins; for a
+    // scrolling pin it is the smaller, independently-resizable window over the larger content.
+    private double _viewportWidth;
+    public double ViewportWidth
+    {
+        get => _contentScrolls ? _viewportWidth : DisplayWidth;
+        set
+        {
+            if (_viewportWidth != value)
+            {
+                _viewportWidth = value;
+                this.RaisePropertyChanged();
+            }
+        }
+    }
+
+    private double _viewportHeight;
+    public double ViewportHeight
+    {
+        get => _contentScrolls ? _viewportHeight : DisplayHeight;
+        set
+        {
+            if (_viewportHeight != value)
+            {
+                _viewportHeight = value;
+                this.RaisePropertyChanged();
+            }
+        }
+    }
+
+    // Auto (show a scroll bar when the content overflows) for scrolling pins; Disabled for normal pins so a
+    // sub-pixel content/viewport mismatch never flashes a scroll bar on an ordinary image pin.
+    public Avalonia.Controls.Primitives.ScrollBarVisibility ContentScrollBarVisibility =>
+        _contentScrolls
+            ? Avalonia.Controls.Primitives.ScrollBarVisibility.Auto
+            : Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled;
+
+    // Switches this pin into scrolling-content mode with the given fixed viewport (the original selection).
+    // DisplayWidth/Height keep the full content size; the window follows the viewport.
+    public void ConfigureScrollableViewport(double viewportWidth, double viewportHeight)
+    {
+        _viewportWidth = viewportWidth;
+        _viewportHeight = viewportHeight;
+        ContentScrolls = true;
+        this.RaisePropertyChanged(nameof(ViewportWidth));
+        this.RaisePropertyChanged(nameof(ViewportHeight));
+        this.RaisePropertyChanged(nameof(ContentScrollBarVisibility));
     }
 
     // Decoration Scale

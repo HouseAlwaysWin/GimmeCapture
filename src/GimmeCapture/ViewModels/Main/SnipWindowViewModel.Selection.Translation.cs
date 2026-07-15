@@ -622,7 +622,7 @@ public partial class SnipWindowViewModel
             return;
         }
 
-        OpenPinWindowAction?.Invoke(avaloniaBitmap, bounds, SelectionBorderColor, SelectionBorderThickness, false, false, text, fontSize);
+        OpenPinWindowAction?.Invoke(avaloniaBitmap, bounds, SelectionBorderColor, SelectionBorderThickness, false, false, text, fontSize, null);
     }
 
     private static bool TryResolveTranslationPinPayload(object item, out Rect bounds, out string? text, out double fontSize)
@@ -736,7 +736,8 @@ public partial class SnipWindowViewModel
                     false,
                     false,
                     null,
-                    12.0);
+                    12.0,
+                    null);
             }
             finally
             {

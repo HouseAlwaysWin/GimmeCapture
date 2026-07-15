@@ -250,7 +250,7 @@ public partial class FloatingImageViewModel
         {
             // Open new Pin Window with selected content
             // arg5: runAI = false (Do NOT auto-remove background)
-            OpenPinWindowAction(selected, SelectionRect, BorderColor, BorderThickness, false, false, PinnedText, InferredFontSize);
+            OpenPinWindowAction(selected, SelectionRect, BorderColor, BorderThickness, false, false, PinnedText, InferredFontSize, null);
             
             // Do NOT close the current window.
             // User expects "Pin" to create a NEW window, preserving the source.

@@ -331,7 +331,7 @@ public partial class SnipWindowViewModel
             }
 
             // Open Floating Window
-            OpenPinWindowAction?.Invoke(avaloniaBitmap, SelectionRect, SelectionBorderColor, SelectionBorderThickness, runAI, initialInteractive, null, 12.0);
+            OpenPinWindowAction?.Invoke(avaloniaBitmap, SelectionRect, SelectionBorderColor, SelectionBorderThickness, runAI, initialInteractive, null, 12.0, null);
         }
         finally
         {
@@ -384,16 +384,19 @@ public partial class SnipWindowViewModel
             }
         }
 
-        // The stitched bitmap is in physical pixels; present it at logical size so DPI matches.
+        // The stitched bitmap is in physical pixels; present it at logical size so DPI matches. The pin
+        // window (viewport) matches the original selection, and the full-height stitch scrolls inside it —
+        // so the viewport rect is the selection and the scrollable content is the whole stitched image.
         double scaling = VisualScaling <= 0 ? 1.0 : VisualScaling;
-        var pinRect = new Rect(
+        var viewportRect = new Rect(
             SelectionRect.X,
             SelectionRect.Y,
-            skBitmap.Width / scaling,
-            skBitmap.Height / scaling);
+            SelectionRect.Width,
+            SelectionRect.Height);
+        var contentSize = new Avalonia.Size(skBitmap.Width / scaling, skBitmap.Height / scaling);
 
         OpenPinWindowAction?.Invoke(
-            avaloniaBitmap, pinRect, SelectionBorderColor, SelectionBorderThickness, false, false, null, 12.0);
+            avaloniaBitmap, viewportRect, SelectionBorderColor, SelectionBorderThickness, false, false, null, 12.0, contentSize);
     }
 
     private async Task RunCaptureActionAsync(CaptureMode mode, Func<Task> captureAsync)

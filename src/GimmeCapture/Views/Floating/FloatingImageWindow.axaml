@@ -85,8 +85,8 @@
         <Border x:Name="MainBorder"
                 HorizontalAlignment="Center"
                 VerticalAlignment="Top"
-                Width="{Binding DisplayWidth}"
-                Height="{Binding DisplayHeight}"
+                Width="{Binding ViewportWidth}"
+                Height="{Binding ViewportHeight}"
                 Margin="{Binding WindowPadding}"
                 Classes="MainBorder"
                 Classes.hidden-border="{Binding HidePinBorder}"
@@ -124,8 +124,15 @@
                         </Border>
                                 
                         <!-- Center everything in a shared container to ensure PinnedImage and SelectionCanvas
-                             share the exact same coordinate space even if window is larger than image -->
-                        <Grid HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                             share the exact same coordinate space even if window is larger than image.
+                             The ScrollViewer lets a long scrolling-capture strip scroll inside the fixed
+                             viewport (ContentScrolls); for a normal pin the content == viewport, so the scroll
+                             bars are Disabled and it never scrolls (identical to before). -->
+                        <ScrollViewer HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                                      HorizontalScrollBarVisibility="{Binding ContentScrollBarVisibility}"
+                                      VerticalScrollBarVisibility="{Binding ContentScrollBarVisibility}">
+                        <Grid Width="{Binding DisplayWidth}" Height="{Binding DisplayHeight}"
+                              HorizontalAlignment="Left" VerticalAlignment="Top">
                             <Image Source="{Binding Image}"
                                    Stretch="Fill"
                                    Name="PinnedImage">
@@ -214,7 +221,8 @@
                                                    xml:space="preserve"/>
                             </Border>
                         </Grid>
-                            
+                        </ScrollViewer>
+
                         <!-- Decoration Layer (Unified) -->
                         <Grid x:Name="DecorationLayer" ClipToBounds="False">
                             <ctl:GothicDecoration x:Name="PinDecoration"
