@@ -1090,6 +1090,18 @@ public partial class MainWindowViewModel
         {
             _isDataLoading = false;
 
+            // Self-heal an inconsistent AI config: "OCR selection detection" persisted ON while the master
+            // EnableAI persisted OFF. That state predates the coupling in the EnableOcrSelectionDetection setter,
+            // so the OCR auto-scan silently aborts at its EnableAI gate ("skipped — master EnableAI is off") and
+            // produces nothing — the checkbox LOOKS enabled but OCR is dead until the user manually re-toggles it.
+            // Repair it on load (setter persists now that _isDataLoading is false) so OCR works on first launch.
+            // Mirrors the RunOnStartup self-heal above.
+            if (EnableOcrSelectionDetection && !EnableAI)
+            {
+                AppLog.Information("Settings.SelfHeal: OCR selection detection is on but master EnableAI was off — enabling EnableAI so OCR works without a manual re-toggle.");
+                EnableAI = true;
+            }
+
             if (AutoCheckUpdates) _ = CheckForUpdates(true);
         }
     }

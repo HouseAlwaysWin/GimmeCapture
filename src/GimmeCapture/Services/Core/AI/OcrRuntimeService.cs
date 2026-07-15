@@ -94,16 +94,8 @@ public sealed class OcrRuntimeService : IDisposable
 
             var paths = _aiResourceService.GetOCRPaths(language);
 
-            var options = new SessionOptions
-            {
-                GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL
-            };
-
-            OnnxProviderConfigurator.AppendGpuProvidersWithFallback(options);
-
             ForceUnload();
-            _detSession = new InferenceSession(paths.Det, options);
-            _recSession = new InferenceSession(paths.Rec, options);
+            (_detSession, _recSession) = CreateOcrSessionsWithCpuFallback(paths.Det, paths.Rec);
             _loadedLanguage = language;
             _dictionary = LoadDictionaryWithEncodingFallback(paths.Dict);
             _dictionary.Insert(0, string.Empty);
@@ -112,6 +104,48 @@ public sealed class OcrRuntimeService : IDisposable
         finally
         {
             _loadLock.Release();
+        }
+    }
+
+    /// <summary>
+    /// Builds the detection + recognition sessions, attempting GPU execution providers (CUDA/DirectML) first and
+    /// falling back to a CPU-only session if GPU session construction throws. DirectML can be appended without
+    /// error yet fail at <see cref="InferenceSession"/> construction on some Windows 10 configurations (older
+    /// system DirectML.dll / DX12 driver) — without this fallback OCR throws there and silently produces nothing
+    /// (only a Debug line) while working on Windows 11. Both sessions share one provider path (GPU or CPU) so
+    /// detection and recognition never split across backends.
+    /// </summary>
+    private static (InferenceSession Det, InferenceSession Rec) CreateOcrSessionsWithCpuFallback(string detPath, string recPath)
+    {
+        try
+        {
+            var gpuOptions = new SessionOptions { GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL };
+            OnnxProviderConfigurator.AppendGpuProvidersWithFallback(gpuOptions);
+            var det = new InferenceSession(detPath, gpuOptions);
+            InferenceSession rec;
+            try
+            {
+                rec = new InferenceSession(recPath, gpuOptions);
+            }
+            catch
+            {
+                det.Dispose(); // don't leak the GPU detection session when recognition fails the same way
+                throw;
+            }
+            AppLog.Information("OcrRuntime.SessionCreated: GPU providers attempted (DirectML/CUDA where available).");
+            return (det, rec);
+        }
+        catch (Exception ex)
+        {
+            // GPU (typically DirectML) session construction failed — common on some Windows 10 setups. Retry
+            // CPU-only so OCR still works instead of silently failing. Logged to the file sink so a Win10-vs-Win11
+            // discrepancy is diagnosable without a debugger.
+            AppLog.Warning("OcrRuntime.GpuSessionCreateFailed.CpuFallback", ex);
+            var cpuOptions = new SessionOptions { GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL };
+            var det = new InferenceSession(detPath, cpuOptions);
+            var rec = new InferenceSession(recPath, cpuOptions);
+            AppLog.Information("OcrRuntime.SessionCreated: CPU fallback (GPU execution provider unavailable/failed).");
+            return (det, rec);
         }
     }
 
