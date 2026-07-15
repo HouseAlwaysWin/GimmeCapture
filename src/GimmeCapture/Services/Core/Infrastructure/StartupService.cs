@@ -28,11 +28,19 @@ public class StartupService
         try
         {
             using var key = Registry.CurrentUser.OpenSubKey(RunKeyPath, true);
-            if (key == null) return;
+            if (key == null)
+            {
+                AppLog.Warning("StartupRegistration.Set", "Could not open the HKCU Run key for writing.");
+                return;
+            }
 
             var existingValue = key.GetValue(AppName) as string;
             var exePath = Environment.ProcessPath;
-            if (string.IsNullOrEmpty(exePath)) return;
+            if (string.IsNullOrEmpty(exePath))
+            {
+                AppLog.Warning("StartupRegistration.Set", "Environment.ProcessPath was empty; cannot register run-on-startup.");
+                return;
+            }
 
             var expectedValue = runOnStartup
                 ? $"\"{exePath}\" {RunArgumentForTrayStartup}"
@@ -40,10 +48,11 @@ public class StartupService
 
             if (runOnStartup)
             {
-                // Only write if not exists or different
+                // Write only when missing or stale (e.g. the exe path changed after a reinstall/update).
                 if (existingValue != expectedValue)
                 {
                     key.SetValue(AppName, expectedValue!);
+                    AppLog.Information($"StartupRegistration: registered run-on-startup -> {expectedValue} (previous: {existingValue ?? "<none>"})");
                 }
             }
             else
@@ -52,6 +61,7 @@ public class StartupService
                 if (existingValue != null)
                 {
                     key.DeleteValue(AppName);
+                    AppLog.Information("StartupRegistration: removed the run-on-startup entry (setting is off).");
                 }
             }
         }
