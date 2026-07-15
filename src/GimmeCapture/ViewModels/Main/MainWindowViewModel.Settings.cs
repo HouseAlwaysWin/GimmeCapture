@@ -1067,6 +1067,17 @@ public partial class MainWindowViewModel
         {
             var snapshot = await _settingsPersistenceService.LoadAsync(_settingsService);
             ApplySettingsSnapshot(snapshot);
+
+            // When run-on-startup is enabled, re-assert the OS registration on every launch, re-writing it with
+            // the CURRENT executable path. SetStartup is otherwise only called when the user toggles the option,
+            // so a drifted Run entry — a stale exe path after a reinstall/update, or a value that got wiped —
+            // silently stops auto-start with no way to self-heal. Re-applying it here fixes it after one launch.
+            // (The off case needs no work: toggling off already removes the entry.)
+            if (RunOnStartup)
+            {
+                _settingsSideEffectCoordinator.ApplyRunOnStartup(true);
+            }
+
             RefreshLlamaModelCatalog();
             RaiseSettingsBackedPropertyNotifications();
             IsModified = false;
