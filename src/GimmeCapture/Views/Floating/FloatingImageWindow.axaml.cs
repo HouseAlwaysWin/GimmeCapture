@@ -152,9 +152,10 @@ public partial class FloatingImageWindow : FloatingWindowBase
                 dialog.ShowDialog<bool>(owner);
             };
             
-            vm.OpenPinWindowAction ??= (bitmap, rect, color, thickness, runAI, initialInteractive, pinnedText, inferredFontSize) =>
+            vm.OpenPinWindowAction ??= (bitmap, rect, color, thickness, runAI, initialInteractive, pinnedText, inferredFontSize, scrollableContentSize) =>
             {
-                var newVm = new FloatingImageViewModel(bitmap, rect.Width, rect.Height, color, thickness, vm.HidePinDecoration, vm.HidePinBorder, 
+                // Pin-from-pin (selecting a region inside a pin) is never a scrolling pin, so the content size is ignored.
+                var newVm = new FloatingImageViewModel(bitmap, rect.Width, rect.Height, color, thickness, vm.HidePinDecoration, vm.HidePinBorder,
                     vm.ClipboardService, vm.AIResourceService, vm.SAM2RuntimeService, vm.AppSettingsService, vm.AIPathService, vm.ResourceQueue, pinnedText, inferredFontSize);
                 
                 newVm.WingScale = vm.WingScale;
@@ -298,6 +299,24 @@ public partial class FloatingImageWindow : FloatingWindowBase
             || DataContext is not FloatingImageViewModel vm
             || vm.Image == null)
         {
+            return;
+        }
+
+        // A scrolling-capture pin shows an opaque screenshot filling a fixed viewport that clips the (much
+        // larger) scrolling image, so the whole viewport is opaque + hit-testable. Mark the MainBorder rect
+        // directly — a per-pixel scan of the full strip would be far too costly and would not reflect scroll.
+        if (vm.ContentScrolls)
+        {
+            if (this.FindControl<Border>("MainBorder") is { } viewportBorder
+                && viewportBorder.Bounds.Width > 0 && viewportBorder.Bounds.Height > 0
+                && viewportBorder.TranslatePoint(new Point(0, 0), this) is { } vpTopLeft)
+            {
+                var vpRect = new Rect(vpTopLeft.X, vpTopLeft.Y, viewportBorder.Bounds.Width, viewportBorder.Bounds.Height);
+                double sc = RenderScaling;
+                dest.Add(new Rect(vpRect.X * sc, vpRect.Y * sc, vpRect.Width * sc, vpRect.Height * sc));
+                _interactiveHitTestRegions.Add(vpRect);
+            }
+
             return;
         }
 

@@ -263,7 +263,7 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
 
 
     // Actions
-    public System.Action<Bitmap, Avalonia.Rect, Avalonia.Media.Color, double, bool, bool, string?, double>? OpenPinWindowAction { get; set; }
+    public System.Action<Bitmap, Avalonia.Rect, Avalonia.Media.Color, double, bool, bool, string?, double, Avalonia.Size?>? OpenPinWindowAction { get; set; }
 
     // Commands
     public ReactiveCommand<Unit, Unit> CopyCommand { get; private set; } = null!;

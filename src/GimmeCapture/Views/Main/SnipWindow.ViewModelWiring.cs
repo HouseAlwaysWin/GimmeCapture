@@ -484,7 +484,8 @@ public partial class SnipWindow : Window
                             false, // runAI (auto background removal)
                             false, // initialInteractive (do NOT auto-enter SAM2 point-removal)
                             null,  // pinnedText
-                            0.0)); // inferredFontSize
+                            0.0,   // inferredFontSize
+                            null)); // scrollableContentSize (not a scrolling pin)
                 };
 
                 var padding = vm.WindowPadding;
@@ -498,7 +499,7 @@ public partial class SnipWindow : Window
                 window.Show();
             };
 
-            _viewModel.OpenPinWindowAction = (bitmap, rect, color, thickness, runAI, initialInteractive, pinnedText, inferredFontSize) =>
+            _viewModel.OpenPinWindowAction = (bitmap, rect, color, thickness, runAI, initialInteractive, pinnedText, inferredFontSize, scrollableContentSize) =>
             {
                 // Use settings directly from MainVm to ensure consistency
                 bool hideDecoration = _viewModel.MainVm?.HideSnipPinDecoration ?? false;
@@ -513,8 +514,16 @@ public partial class SnipWindow : Window
                 }
                 
                 if (_viewModel.MainVm == null) return;
+                // The window (DisplayWidth/Height) is `rect` in both cases. For a long scrolling-capture pin the
+                // rect is the original selection and `scrollableContentSize` (the full stitch) only sets the
+                // fit-to-width scrolling content — the window still resizes freely like any other pin.
+                bool scrolling = scrollableContentSize.HasValue;
                 var vm = new FloatingImageViewModel(bitmap, rect.Width, rect.Height, color, thickness, hideDecoration, hideBorder, _clipboardService, aiService, _viewModel.MainVm.SAM2RuntimeService, _viewModel.MainVm.AppSettingsService, _viewModel.MainVm.AIPathService, _viewModel.MainVm.ResourceQueue, pinnedText, inferredFontSize);
                 vm.WingScale = _viewModel.WingScale;
+                if (scrolling)
+                {
+                    vm.ConfigureScrollableContent(scrollableContentSize!.Value.Width, scrollableContentSize.Value.Height);
+                }
                 
                 try
                 {
@@ -552,9 +561,9 @@ public partial class SnipWindow : Window
                     {
                         double contentW = vm.DisplayWidth + padding.Left + padding.Right;
                         double contentH = vm.DisplayHeight + padding.Top + padding.Bottom;
-                        // Scale the displayed window down to fit the target screen (aspect
-                        // preserved). Only DisplayWidth/Height change — vm.Image stays full
-                        // resolution, so save/copy/export are unaffected. Pure math lives in
+                        // Scale the displayed window down to fit the target screen (aspect preserved). Only
+                        // DisplayWidth/Height change; vm.Image stays full resolution (and a scrolling pin's
+                        // content re-fits its width), so save/copy/export are unaffected. Pure math lives in
                         // PinFitMath so it can be unit tested without a UI thread.
                         double fit = PinFitMath.ComputeFitScale(contentW, contentH, screenW, screenH);
                         if (fit < 1.0)

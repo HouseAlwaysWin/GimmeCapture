@@ -127,7 +127,7 @@ public abstract class FloatingWindowBase : Window
             // Re-bind property changed
             _boundViewModelPropertyChangedHandler = (s, ev) =>
             {
-                if (ev.PropertyName == nameof(FloatingWindowViewModelBase.ShowToolbar) || 
+                if (ev.PropertyName == nameof(FloatingWindowViewModelBase.ShowToolbar) ||
                     ev.PropertyName == nameof(FloatingWindowViewModelBase.WindowPadding) ||
                     ev.PropertyName == nameof(FloatingWindowViewModelBase.DisplayWidth) ||
                     ev.PropertyName == nameof(FloatingWindowViewModelBase.DisplayHeight))
@@ -543,7 +543,7 @@ public abstract class FloatingWindowBase : Window
             // Update Window Size
             double hPad = padding.Left + padding.Right;
             double vPad = padding.Top + padding.Bottom;
-            
+
             double targetWindowW = vm.DisplayWidth + hPad;
             double targetWindowH = vm.DisplayHeight + vPad;
 
