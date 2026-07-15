@@ -410,6 +410,8 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
         finally
         {
             webcam?.Dispose();
+            overlay?.Dispose();
+            keystrokes?.Dispose();
 
             SafeFreePkt(&pkt);
             SafeFreeFrame(&decFrame);

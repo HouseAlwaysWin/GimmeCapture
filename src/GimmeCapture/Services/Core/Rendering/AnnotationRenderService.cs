@@ -232,8 +232,7 @@ public sealed class AnnotationRenderService : IAnnotationRenderService
 
         var weight = ann.IsBold ? SKFontStyleWeight.Bold : SKFontStyleWeight.Normal;
         var slant = ann.IsItalic ? SKFontStyleSlant.Italic : SKFontStyleSlant.Upright;
-        var style = new SKFontStyle(weight, SKFontStyleWidth.Normal, slant);
-        using var typeface = SKTypeface.FromFamilyName(ann.FontFamily.Name, style) ?? SKTypeface.Default;
+        var typeface = TypefaceCache.Get(ann.FontFamily.Name, weight, slant); // cached + shared; do not dispose
         using var font = new SKFont(typeface, (float)(ann.FontSize * uniformScale));
 
         var origin = new SKPoint((float)(textOrigin.X * scaleX), (float)(textOrigin.Y * scaleY));

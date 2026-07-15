@@ -9,7 +9,7 @@ namespace GimmeCapture.Services.Core.Media.NativeFFmpeg;
 /// <see cref="SKBitmap"/>). Holds the small amount of animation state needed for the ripple, so it is
 /// created once per recording session and called per frame from the live encode loop.
 /// </summary>
-internal sealed class CursorOverlayRenderer
+internal sealed class CursorOverlayRenderer : IDisposable
 {
     private const int RippleDurationFrames = 12;
 
@@ -17,6 +17,12 @@ internal sealed class CursorOverlayRenderer
     private readonly int _offsetY;
     private readonly bool _drawRing;
     private readonly bool _drawClicks;
+
+    // Paints are created once per session and reused across frames (only the ripple's colour changes per
+    // frame) instead of allocating three SKPaints on every recorded frame.
+    private readonly SKPaint? _glowPaint;
+    private readonly SKPaint? _ringPaint;
+    private readonly SKPaint? _ripplePaint;
 
     private bool _wasDown;
     private int _rippleFrames;
@@ -29,6 +35,23 @@ internal sealed class CursorOverlayRenderer
         _offsetY = offsetY;
         _drawRing = drawRing;
         _drawClicks = drawClicks;
+
+        if (drawRing)
+        {
+            _glowPaint = new SKPaint { Color = new SKColor(255, 215, 0, 60), IsAntialias = true, Style = SKPaintStyle.Fill };
+            _ringPaint = new SKPaint { Color = new SKColor(255, 215, 0, 160), IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 3 };
+        }
+        if (drawClicks)
+        {
+            _ripplePaint = new SKPaint { IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 3 };
+        }
+    }
+
+    public void Dispose()
+    {
+        _glowPaint?.Dispose();
+        _ringPaint?.Dispose();
+        _ripplePaint?.Dispose();
     }
 
     /// <summary>Draws the overlay for the current cursor position onto <paramref name="bmp"/> (BGRA).</summary>
@@ -56,41 +79,22 @@ internal sealed class CursorOverlayRenderer
             }
             _wasDown = down;
 
-            if (_rippleFrames > 0)
+            if (_rippleFrames > 0 && _ripplePaint != null)
             {
                 float t = 1f - (_rippleFrames / (float)RippleDurationFrames); // 0 → 1 over the ripple
                 float radius = 10f + t * 30f;
                 byte alpha = (byte)(170 * (1f - t));
-                using var ripple = new SKPaint
-                {
-                    Color = new SKColor(255, 80, 80, alpha),
-                    IsAntialias = true,
-                    Style = SKPaintStyle.Stroke,
-                    StrokeWidth = 3,
-                };
-                canvas.DrawCircle(_rippleX, _rippleY, radius, ripple);
+                _ripplePaint.Color = new SKColor(255, 80, 80, alpha);
+                canvas.DrawCircle(_rippleX, _rippleY, radius, _ripplePaint);
                 _rippleFrames--;
             }
         }
 
-        if (_drawRing && x >= -40 && y >= -40 && x <= bmp.Width + 40 && y <= bmp.Height + 40)
+        if (_drawRing && _glowPaint != null && _ringPaint != null
+            && x >= -40 && y >= -40 && x <= bmp.Width + 40 && y <= bmp.Height + 40)
         {
-            using var glow = new SKPaint
-            {
-                Color = new SKColor(255, 215, 0, 60),
-                IsAntialias = true,
-                Style = SKPaintStyle.Fill,
-            };
-            canvas.DrawCircle(x, y, 20, glow);
-
-            using var ring = new SKPaint
-            {
-                Color = new SKColor(255, 215, 0, 160),
-                IsAntialias = true,
-                Style = SKPaintStyle.Stroke,
-                StrokeWidth = 3,
-            };
-            canvas.DrawCircle(x, y, 20, ring);
+            canvas.DrawCircle(x, y, 20, _glowPaint);
+            canvas.DrawCircle(x, y, 20, _ringPaint);
         }
     }
 

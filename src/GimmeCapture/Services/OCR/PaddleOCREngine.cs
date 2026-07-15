@@ -543,15 +543,19 @@ public class PaddleOCREngine : IOCREngine
     private (string text, float confidence) DecodeCTCAuto(Tensor<float> tensor)
     {
         int d1 = tensor.Dimensions[1], d2 = tensor.Dimensions[2];
-        var ntc = DecodeCTC(tensor, d1, d2, true);
-        var nct = DecodeCTC(tensor, d2, d1, false);
         var dictCount = _ocrRuntimeService.Dictionary.Count;
 
+        // Which axis is the class dimension is fixed per model, so decode only the plausible orientation
+        // instead of always decoding both (a seqLen×classCount scan over a ~6000-entry dictionary per box).
         bool ntcP = Math.Abs(dictCount - d2) <= 8;
         bool nctP = Math.Abs(dictCount - d1) <= 8;
 
-        if (ntcP && !nctP) return ntc;
-        if (!ntcP && nctP) return nct;
+        if (ntcP && !nctP) return DecodeCTC(tensor, d1, d2, true);
+        if (!ntcP && nctP) return DecodeCTC(tensor, d2, d1, false);
+
+        // Ambiguous (both or neither plausible): fall back to decoding both and taking the higher confidence.
+        var ntc = DecodeCTC(tensor, d1, d2, true);
+        var nct = DecodeCTC(tensor, d2, d1, false);
         return nct.confidence > ntc.confidence ? nct : ntc;
     }
 

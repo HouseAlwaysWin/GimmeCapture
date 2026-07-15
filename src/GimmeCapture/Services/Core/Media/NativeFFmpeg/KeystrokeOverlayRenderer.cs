@@ -12,7 +12,7 @@ namespace GimmeCapture.Services.Core.Media.NativeFFmpeg;
 /// state once per frame (no keyboard hook), detecting up→down edges itself, so it is created once per
 /// recording session and called per frame from the live encode loop.
 /// </summary>
-internal sealed class KeystrokeOverlayRenderer
+internal sealed class KeystrokeOverlayRenderer : IDisposable
 {
     private const int KeystrokeDurationFrames = 48; // ~1.6s at 30fps before a pill disappears
     private const int FadeFrames = 12;              // fade out over the last N frames
@@ -27,6 +27,22 @@ internal sealed class KeystrokeOverlayRenderer
     private readonly List<Entry> _recent = new();
     private readonly Dictionary<int, bool> _prevDown = new();
 
+    // Cached across frames (created once, colours mutated per pill) instead of allocating a font + three
+    // SKPaints on every recorded frame. The font size only depends on frame height (constant per session).
+    private SKFont? _font;
+    private float _fontSize = -1f;
+    private readonly SKPaint _bgPaint = new() { IsAntialias = true, Style = SKPaintStyle.Fill };
+    private readonly SKPaint _borderPaint = new() { IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 1.5f };
+    private readonly SKPaint _textPaint = new() { IsAntialias = true };
+
+    public void Dispose()
+    {
+        _font?.Dispose();
+        _bgPaint.Dispose();
+        _borderPaint.Dispose();
+        _textPaint.Dispose();
+    }
+
     public void Draw(SKBitmap bmp)
     {
         AdvanceState();
@@ -37,7 +53,13 @@ internal sealed class KeystrokeOverlayRenderer
         }
 
         float fontSize = Math.Clamp(bmp.Height * 0.035f, 16f, 40f);
-        using var font = new SKFont(SKTypeface.Default, fontSize);
+        if (_font == null || fontSize != _fontSize)
+        {
+            _font?.Dispose();
+            _font = new SKFont(SKTypeface.Default, fontSize);
+            _fontSize = fontSize;
+        }
+        SKFont font = _font;
         float padX = fontSize * 0.5f;
         float padY = fontSize * 0.32f;
         float gap = fontSize * 0.4f;
@@ -63,17 +85,17 @@ internal sealed class KeystrokeOverlayRenderer
             byte bgA = (byte)(190 * a);
             byte fgA = (byte)(255 * a);
 
-            using var bg = new SKPaint { Color = new SKColor(20, 20, 20, bgA), IsAntialias = true, Style = SKPaintStyle.Fill };
-            using var border = new SKPaint { Color = new SKColor(255, 255, 255, (byte)(70 * a)), IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 1.5f };
-            using var text = new SKPaint { Color = new SKColor(255, 255, 255, fgA), IsAntialias = true };
+            _bgPaint.Color = new SKColor(20, 20, 20, bgA);
+            _borderPaint.Color = new SKColor(255, 255, 255, (byte)(70 * a));
+            _textPaint.Color = new SKColor(255, 255, 255, fgA);
 
             var rect = new SKRect(x, y, x + widths[i], y + pillH);
             float radius = pillH * 0.28f;
-            canvas.DrawRoundRect(rect, radius, radius, bg);
-            canvas.DrawRoundRect(rect, radius, radius, border);
+            canvas.DrawRoundRect(rect, radius, radius, _bgPaint);
+            canvas.DrawRoundRect(rect, radius, radius, _borderPaint);
 
             float baseline = y + padY + fontSize * 0.8f;
-            canvas.DrawText(_recent[i].Text, x + padX, baseline, font, text);
+            canvas.DrawText(_recent[i].Text, x + padX, baseline, font, _textPaint);
 
             x += widths[i] + gap;
         }
