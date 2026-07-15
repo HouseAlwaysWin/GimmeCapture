@@ -54,7 +54,7 @@ internal static class CompressSessionService
         try
         {
             Directory.CreateDirectory(AppStoragePaths.GetRootDirectory());
-            File.WriteAllText(FilePath, JsonSerializer.Serialize(state, JsonOptions));
+            AtomicFile.WriteAllText(FilePath, JsonSerializer.Serialize(state, JsonOptions));
         }
         catch (Exception ex)
         {

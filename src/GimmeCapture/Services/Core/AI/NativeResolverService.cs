@@ -49,7 +49,7 @@ public class NativeResolverService
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[AI] Failed to setup native resolvers: {ex.Message}");
+            AppLog.Warning("NativeResolver.Setup", ex);
         }
     }
 }

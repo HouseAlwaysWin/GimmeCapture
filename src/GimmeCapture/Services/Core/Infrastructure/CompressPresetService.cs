@@ -41,7 +41,7 @@ internal static class CompressPresetService
         try
         {
             Directory.CreateDirectory(AppStoragePaths.GetRootDirectory());
-            File.WriteAllText(FilePath, JsonSerializer.Serialize(presets, JsonOptions));
+            AtomicFile.WriteAllText(FilePath, JsonSerializer.Serialize(presets, JsonOptions));
         }
         catch (Exception ex)
         {

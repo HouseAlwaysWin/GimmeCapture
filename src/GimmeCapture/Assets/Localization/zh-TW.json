@@ -267,6 +267,8 @@
   "DiagnosticsCopied": "診斷資訊已複製到剪貼簿。",
   "FFmpegNotReady": "內建 FFmpeg 元件遺失或初始化失敗，請重新安裝 GimmeCapture。",
   "RecordLowDiskSpace": "磁碟空間不足 —— 已停止錄影並保存。",
+  "RecordMicUnavailable": "麥克風無法使用 —— 將不含麥克風錄影。",
+  "RecordSystemAudioUnavailable": "系統音訊無法使用 —— 將不含系統音訊錄影。",
   "AIDownloadConfirm": "互動選取功能需要下載 AI 模組 (約 100MB)。現在要下載嗎？",
   "TabModules": "模組管理",
   "ModuleAICoreDescription": "ONNX Runtime 執行環境與 U2Net 影像分割模型 (用於去背與核心任務)。",

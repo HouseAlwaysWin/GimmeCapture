@@ -266,7 +266,7 @@ public sealed class CaptureHistoryService
         {
             FileLocationService.EnsureDirectory(_historyDir, "CaptureHistory.EnsureDirs");
             string json = JsonSerializer.Serialize(_items, JsonOptions);
-            await File.WriteAllTextAsync(_indexPath, json).ConfigureAwait(false);
+            await AtomicFile.WriteAllTextAsync(_indexPath, json).ConfigureAwait(false);
         }
         catch (Exception ex)
         {

@@ -342,6 +342,17 @@ public partial class SnipWindowViewModel
             {
                 AppLog.Information($"Recording.StartWarning (suppressed in UI): {_recordingService.LastStartWarning}");
             }
+
+            // A requested audio device was unavailable and capture fell back to none — notify the user so the
+            // loss isn't silent (recording still proceeds without it).
+            if (_recordingService.RequestedMicrophoneUnavailable)
+            {
+                _mainVm.ShowToast("RecordMicUnavailable");
+            }
+            if (_recordingService.RequestedSystemAudioUnavailable)
+            {
+                _mainVm.ShowToast("RecordSystemAudioUnavailable");
+            }
         }
         else
         {
@@ -662,7 +673,7 @@ public partial class SnipWindowViewModel
                     var psi = new System.Diagnostics.ProcessStartInfo
                     {
                         FileName = "powershell",
-                        Arguments = $"-noprofile -command \"Set-Clipboard -Path '{actualOutputPath}'\"",
+                        Arguments = GimmeCapture.Services.Interop.PowerShellClipboardCommand.BuildSetClipboardArguments(actualOutputPath),
                         UseShellExecute = false,
                         CreateNoWindow = true
                     };

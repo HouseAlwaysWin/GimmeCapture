@@ -124,6 +124,16 @@ public partial class MainWindowViewModel : ViewModelBase
         ShowToastAction?.Invoke(message, ClassifyToastSeverity(key));
     }
 
+    /// <summary>Shows a transient toast for a localization key without changing the persistent status text.</summary>
+    public void ShowToast(string localizationKey)
+    {
+        var message = LocalizationService.Instance[localizationKey];
+        if (!string.IsNullOrWhiteSpace(message))
+        {
+            ShowToastAction?.Invoke(message, ClassifyToastSeverity(localizationKey));
+        }
+    }
+
     internal static ToastSeverity ClassifyToastSeverity(string key)
     {
         if (key.Contains("Failed", StringComparison.OrdinalIgnoreCase)
