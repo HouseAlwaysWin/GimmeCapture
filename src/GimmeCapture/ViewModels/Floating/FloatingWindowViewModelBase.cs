@@ -135,6 +135,9 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
         set => this.RaiseAndSetIfChanged(ref _originalHeight, value);
     }
 
+    // DisplayWidth/Height are the window content size for BOTH normal and scrolling pins, so a scrolling pin
+    // resizes freely exactly like a normal one. The scrolling content (image + overlays) is sized separately
+    // by ScrollContentWidth/Height (below), which recompute as the window resizes.
     private double _displayWidth;
     public double DisplayWidth
     {
@@ -142,10 +145,7 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
         set
         {
             this.RaiseAndSetIfChanged(ref _displayWidth, value);
-            if (!_contentScrolls)
-            {
-                this.RaisePropertyChanged(nameof(ViewportWidth)); // viewport mirrors content for normal pins
-            }
+            RaiseScrollContentChanged();
         }
     }
 
@@ -156,16 +156,13 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
         set
         {
             this.RaiseAndSetIfChanged(ref _displayHeight, value);
-            if (!_contentScrolls)
-            {
-                this.RaisePropertyChanged(nameof(ViewportHeight));
-            }
+            RaiseScrollContentChanged();
         }
     }
 
-    // Scrolling-content mode: a fixed viewport (the window content area) over a larger image that scrolls
-    // inside it. Used for long scrolling-capture strips — the window matches the original selection while the
-    // full-height stitch scrolls. For every normal pin ContentScrolls stays false, ViewportWidth/Height mirror
+    // Scrolling-content ("long screenshot reader") mode: the image fits the window's cross axis (aspect
+    // preserved) and the long axis scrolls. The window itself resizes freely (via DisplayWidth/Height) just
+    // like a normal pin. For every normal pin ContentScrolls stays false, ScrollContentWidth/Height mirror
     // DisplayWidth/Height, and the scroll bars are disabled, so behaviour is unchanged.
     private bool _contentScrolls;
     public bool ContentScrolls
@@ -174,53 +171,54 @@ public abstract class FloatingWindowViewModelBase : ViewModelBase, IDisposable
         private set => this.RaiseAndSetIfChanged(ref _contentScrolls, value);
     }
 
-    // The visible viewport (drives the window/border size). Mirrors DisplayWidth/Height for normal pins; for a
-    // scrolling pin it is the smaller, independently-resizable window over the larger content.
-    private double _viewportWidth;
-    public double ViewportWidth
-    {
-        get => _contentScrolls ? _viewportWidth : DisplayWidth;
-        set
-        {
-            if (_viewportWidth != value)
-            {
-                _viewportWidth = value;
-                this.RaisePropertyChanged();
-            }
-        }
-    }
+    private double _scrollContentAspect = 1.0; // image height / width
+    private bool _scrollVertical = true;        // long axis vertical (tall strip) vs horizontal (wide strip)
 
-    private double _viewportHeight;
-    public double ViewportHeight
-    {
-        get => _contentScrolls ? _viewportHeight : DisplayHeight;
-        set
-        {
-            if (_viewportHeight != value)
-            {
-                _viewportHeight = value;
-                this.RaisePropertyChanged();
-            }
-        }
-    }
+    // Size of the scrollable content (image + overlays). Normal pin: == the window. Scrolling pin: the image
+    // fitted to the window's cross axis, so the long axis overflows and scrolls.
+    public double ScrollContentWidth =>
+        !_contentScrolls ? DisplayWidth
+        : _scrollVertical ? DisplayWidth                                    // fit width
+        : DisplayHeight / (_scrollContentAspect <= 0 ? 1.0 : _scrollContentAspect); // fit height -> derive width
 
-    // Auto (show a scroll bar when the content overflows) for scrolling pins; Disabled for normal pins so a
-    // sub-pixel content/viewport mismatch never flashes a scroll bar on an ordinary image pin.
-    public Avalonia.Controls.Primitives.ScrollBarVisibility ContentScrollBarVisibility =>
-        _contentScrolls
+    public double ScrollContentHeight =>
+        !_contentScrolls ? DisplayHeight
+        : _scrollVertical ? DisplayWidth * _scrollContentAspect             // fit width -> derive height
+        : DisplayHeight;                                                    // fit height
+
+    // Auto on the long axis (scroll), Disabled on the cross axis (the image fits it) — and Disabled/Disabled
+    // for a normal pin (content == window).
+    public Avalonia.Controls.Primitives.ScrollBarVisibility ContentVerticalScrollBarVisibility =>
+        _contentScrolls && _scrollVertical
             ? Avalonia.Controls.Primitives.ScrollBarVisibility.Auto
             : Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled;
 
-    // Switches this pin into scrolling-content mode with the given fixed viewport (the original selection).
-    // DisplayWidth/Height keep the full content size; the window follows the viewport.
-    public void ConfigureScrollableViewport(double viewportWidth, double viewportHeight)
+    public Avalonia.Controls.Primitives.ScrollBarVisibility ContentHorizontalScrollBarVisibility =>
+        _contentScrolls && !_scrollVertical
+            ? Avalonia.Controls.Primitives.ScrollBarVisibility.Auto
+            : Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled;
+
+    private void RaiseScrollContentChanged()
     {
-        _viewportWidth = viewportWidth;
-        _viewportHeight = viewportHeight;
+        this.RaisePropertyChanged(nameof(ScrollContentWidth));
+        this.RaisePropertyChanged(nameof(ScrollContentHeight));
+    }
+
+    // Switches this pin into scrolling-content mode. The window keeps its (selection-sized) DisplayWidth/Height;
+    // the image's native size only sets the aspect + long axis for the scrollable content.
+    public void ConfigureScrollableContent(double imageNativeWidth, double imageNativeHeight)
+    {
+        if (imageNativeWidth <= 0 || imageNativeHeight <= 0)
+        {
+            return;
+        }
+
+        _scrollContentAspect = imageNativeHeight / imageNativeWidth;
+        _scrollVertical = imageNativeHeight >= imageNativeWidth; // tall strip scrolls vertically
         ContentScrolls = true;
-        this.RaisePropertyChanged(nameof(ViewportWidth));
-        this.RaisePropertyChanged(nameof(ViewportHeight));
-        this.RaisePropertyChanged(nameof(ContentScrollBarVisibility));
+        RaiseScrollContentChanged();
+        this.RaisePropertyChanged(nameof(ContentVerticalScrollBarVisibility));
+        this.RaisePropertyChanged(nameof(ContentHorizontalScrollBarVisibility));
     }
 
     // Decoration Scale

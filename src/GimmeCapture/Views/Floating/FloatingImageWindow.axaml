@@ -85,8 +85,8 @@
         <Border x:Name="MainBorder"
                 HorizontalAlignment="Center"
                 VerticalAlignment="Top"
-                Width="{Binding ViewportWidth}"
-                Height="{Binding ViewportHeight}"
+                Width="{Binding DisplayWidth}"
+                Height="{Binding DisplayHeight}"
                 Margin="{Binding WindowPadding}"
                 Classes="MainBorder"
                 Classes.hidden-border="{Binding HidePinBorder}"
@@ -125,13 +125,14 @@
                                 
                         <!-- Center everything in a shared container to ensure PinnedImage and SelectionCanvas
                              share the exact same coordinate space even if window is larger than image.
-                             The ScrollViewer lets a long scrolling-capture strip scroll inside the fixed
-                             viewport (ContentScrolls); for a normal pin the content == viewport, so the scroll
-                             bars are Disabled and it never scrolls (identical to before). -->
+                             For a long scrolling-capture pin (ContentScrolls) the content is the image fitted
+                             to the window's cross axis (ScrollContentWidth/Height) so the long axis overflows
+                             and scrolls; for a normal pin the content == window, scroll bars are Disabled, so
+                             it never scrolls (identical to before). -->
                         <ScrollViewer HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
-                                      HorizontalScrollBarVisibility="{Binding ContentScrollBarVisibility}"
-                                      VerticalScrollBarVisibility="{Binding ContentScrollBarVisibility}">
-                        <Grid Width="{Binding DisplayWidth}" Height="{Binding DisplayHeight}"
+                                      HorizontalScrollBarVisibility="{Binding ContentHorizontalScrollBarVisibility}"
+                                      VerticalScrollBarVisibility="{Binding ContentVerticalScrollBarVisibility}">
+                        <Grid Width="{Binding ScrollContentWidth}" Height="{Binding ScrollContentHeight}"
                               HorizontalAlignment="Left" VerticalAlignment="Top">
                             <Image Source="{Binding Image}"
                                    Stretch="Fill"
@@ -180,15 +181,15 @@
                             <ItemsControl ItemsSource="{Binding Annotations}" IsHitTestVisible="False">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
-                                        <Canvas Width="{Binding DisplayWidth}" Height="{Binding DisplayHeight}"/>
+                                        <Canvas Width="{Binding ScrollContentWidth}" Height="{Binding ScrollContentHeight}"/>
                                     </ItemsPanelTemplate>
                                 </ItemsControl.ItemsPanel>
 
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="m:Annotation">
                                         <ctl:AnnotationControl Annotation="{Binding}"
-                                                               Width="{Binding $parent[Window].((vm:FloatingImageViewModel)DataContext).DisplayWidth}"
-                                                               Height="{Binding $parent[Window].((vm:FloatingImageViewModel)DataContext).DisplayHeight}"/>
+                                                               Width="{Binding $parent[Window].((vm:FloatingImageViewModel)DataContext).ScrollContentWidth}"
+                                                               Height="{Binding $parent[Window].((vm:FloatingImageViewModel)DataContext).ScrollContentHeight}"/>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
@@ -211,8 +212,8 @@
                                     HorizontalAlignment="Center" VerticalAlignment="Center"
                                     Padding="10" Background="#CC000000" CornerRadius="4"
                                     IsHitTestVisible="True" ZIndex="10"
-                                    MaxWidth="{Binding DisplayWidth}"
-                                    MaxHeight="{Binding DisplayHeight}">
+                                    MaxWidth="{Binding ScrollContentWidth}"
+                                    MaxHeight="{Binding ScrollContentHeight}">
                                 <SelectableTextBlock Text="{Binding PinnedText}"
                                                    Foreground="White"
                                                    FontSize="{Binding ScaledFontSize}"

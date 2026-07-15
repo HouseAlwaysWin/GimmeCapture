@@ -130,9 +130,7 @@ public abstract class FloatingWindowBase : Window
                 if (ev.PropertyName == nameof(FloatingWindowViewModelBase.ShowToolbar) ||
                     ev.PropertyName == nameof(FloatingWindowViewModelBase.WindowPadding) ||
                     ev.PropertyName == nameof(FloatingWindowViewModelBase.DisplayWidth) ||
-                    ev.PropertyName == nameof(FloatingWindowViewModelBase.DisplayHeight) ||
-                    ev.PropertyName == nameof(FloatingWindowViewModelBase.ViewportWidth) ||
-                    ev.PropertyName == nameof(FloatingWindowViewModelBase.ViewportHeight))
+                    ev.PropertyName == nameof(FloatingWindowViewModelBase.DisplayHeight))
                 {
                     if (_suppressWindowSizeSync || _isResizing)
                     {
@@ -181,10 +179,8 @@ public abstract class FloatingWindowBase : Window
 
              var padding = vm.WindowPadding;
              double border = 0; // If any extra border logic needed
-             // ViewportWidth/Height == DisplayWidth/Height for normal pins; for a scrolling pin the window
-             // follows the (smaller) viewport while the content scrolls inside.
-             double contentW = vm.ViewportWidth + padding.Left + padding.Right + border;
-             double contentH = vm.ViewportHeight + padding.Top + padding.Bottom + border;
+             double contentW = vm.DisplayWidth + padding.Left + padding.Right + border;
+             double contentH = vm.DisplayHeight + padding.Top + padding.Bottom + border;
              
              // Dynamic MinWidth to protect toolbar
              MinWidth = vm.ShowToolbar ? (480 + padding.Left + padding.Right) : 50;
@@ -311,9 +307,8 @@ public abstract class FloatingWindowBase : Window
                 _resizeStartPoint = this.PointToScreen(pointerPos).ToPoint(1.0);
                 _startPosition = Position;
                 _startSize = Bounds.Size;
-                // A scrolling pin resizes its viewport (window), not the image content.
-                _startContentWidth = vm.ContentScrolls ? vm.ViewportWidth : vm.DisplayWidth;
-                _startContentHeight = vm.ContentScrolls ? vm.ViewportHeight : vm.DisplayHeight;
+                _startContentWidth = vm.DisplayWidth;
+                _startContentHeight = vm.DisplayHeight;
                 e.Pointer.Capture(this);
                 e.Handled = true;
             }
@@ -439,9 +434,7 @@ public abstract class FloatingWindowBase : Window
             e.Pointer.Capture(null); 
             _isResizing = false;
 
-            // Resize undo tracks DisplayWidth/Height; a scrolling pin resizes only its viewport (content
-            // unchanged), so there is nothing to record for it.
-            if (DataContext is FloatingWindowViewModelBase vm && !vm.ContentScrolls)
+            if (DataContext is FloatingWindowViewModelBase vm)
             {
                 vm.PushResizeAction(_startPosition, _startSize.Width, _startSize.Height, _startContentWidth, _startContentHeight,
                                        Position, Width, Height, vm.DisplayWidth, vm.DisplayHeight);
@@ -544,30 +537,15 @@ public abstract class FloatingWindowBase : Window
 
             // Update ViewModel without re-entering SyncWindowSizeToContent on every pointer move.
             _suppressWindowSizeSync = true;
-            double newFrameW, newFrameH;
-            if (vm.ContentScrolls)
-            {
-                // Resize the viewport (visible window) over the fixed-size scrolling content; never larger
-                // than the content itself (past that there is nothing more to reveal).
-                newFrameW = Math.Clamp(contentW, 1, vm.DisplayWidth);
-                newFrameH = Math.Clamp(contentH, 1, vm.DisplayHeight);
-                vm.ViewportWidth = newFrameW;
-                vm.ViewportHeight = newFrameH;
-            }
-            else
-            {
-                newFrameW = Math.Max(1, contentW);
-                newFrameH = Math.Max(1, contentH);
-                vm.DisplayWidth = newFrameW;
-                vm.DisplayHeight = newFrameH;
-            }
+            vm.DisplayWidth = Math.Max(1, contentW);
+            vm.DisplayHeight = Math.Max(1, contentH);
 
             // Update Window Size
             double hPad = padding.Left + padding.Right;
             double vPad = padding.Top + padding.Bottom;
 
-            double targetWindowW = newFrameW + hPad;
-            double targetWindowH = newFrameH + vPad;
+            double targetWindowW = vm.DisplayWidth + hPad;
+            double targetWindowH = vm.DisplayHeight + vPad;
 
             MinWidth = vm.ShowToolbar ? (480 + hPad) : 50;
             MinHeight = vm.ShowToolbar ? (150 + vPad) : 50;

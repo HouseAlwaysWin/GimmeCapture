@@ -514,16 +514,15 @@ public partial class SnipWindow : Window
                 }
                 
                 if (_viewModel.MainVm == null) return;
-                // For a long scrolling-capture pin, `scrollableContentSize` is the full stitch and `rect` is the
-                // fixed viewport (original selection); otherwise the content == the rect.
+                // The window (DisplayWidth/Height) is `rect` in both cases. For a long scrolling-capture pin the
+                // rect is the original selection and `scrollableContentSize` (the full stitch) only sets the
+                // fit-to-width scrolling content — the window still resizes freely like any other pin.
                 bool scrolling = scrollableContentSize.HasValue;
-                double contentW = scrollableContentSize?.Width ?? rect.Width;
-                double contentH = scrollableContentSize?.Height ?? rect.Height;
-                var vm = new FloatingImageViewModel(bitmap, contentW, contentH, color, thickness, hideDecoration, hideBorder, _clipboardService, aiService, _viewModel.MainVm.SAM2RuntimeService, _viewModel.MainVm.AppSettingsService, _viewModel.MainVm.AIPathService, _viewModel.MainVm.ResourceQueue, pinnedText, inferredFontSize);
+                var vm = new FloatingImageViewModel(bitmap, rect.Width, rect.Height, color, thickness, hideDecoration, hideBorder, _clipboardService, aiService, _viewModel.MainVm.SAM2RuntimeService, _viewModel.MainVm.AppSettingsService, _viewModel.MainVm.AIPathService, _viewModel.MainVm.ResourceQueue, pinnedText, inferredFontSize);
                 vm.WingScale = _viewModel.WingScale;
                 if (scrolling)
                 {
-                    vm.ConfigureScrollableViewport(rect.Width, rect.Height);
+                    vm.ConfigureScrollableContent(scrollableContentSize!.Value.Width, scrollableContentSize.Value.Height);
                 }
                 
                 try
@@ -560,25 +559,17 @@ public partial class SnipWindow : Window
                     bool clampedToScreen = false;
                     if (haveScreen)
                     {
-                        // Clamp the on-screen frame to the target screen (aspect preserved). For a scrolling pin
-                        // that frame is the viewport (the content stays full-height and scrolls); for a normal pin
-                        // it is the display size. vm.Image always stays full resolution, so save/copy/export are
-                        // unaffected. Pure math lives in PinFitMath so it can be unit tested without a UI thread.
-                        double frameW = (scrolling ? vm.ViewportWidth : vm.DisplayWidth) + padding.Left + padding.Right;
-                        double frameH = (scrolling ? vm.ViewportHeight : vm.DisplayHeight) + padding.Top + padding.Bottom;
-                        double fit = PinFitMath.ComputeFitScale(frameW, frameH, screenW, screenH);
+                        double contentW = vm.DisplayWidth + padding.Left + padding.Right;
+                        double contentH = vm.DisplayHeight + padding.Top + padding.Bottom;
+                        // Scale the displayed window down to fit the target screen (aspect preserved). Only
+                        // DisplayWidth/Height change; vm.Image stays full resolution (and a scrolling pin's
+                        // content re-fits its width), so save/copy/export are unaffected. Pure math lives in
+                        // PinFitMath so it can be unit tested without a UI thread.
+                        double fit = PinFitMath.ComputeFitScale(contentW, contentH, screenW, screenH);
                         if (fit < 1.0)
                         {
-                            if (scrolling)
-                            {
-                                vm.ViewportWidth *= fit;
-                                vm.ViewportHeight *= fit;
-                            }
-                            else
-                            {
-                                vm.DisplayWidth *= fit;
-                                vm.DisplayHeight *= fit;
-                            }
+                            vm.DisplayWidth *= fit;
+                            vm.DisplayHeight *= fit;
                             clampedToScreen = true;
                         }
                     }
@@ -606,10 +597,9 @@ public partial class SnipWindow : Window
                         DataContext = vm,
                         // Set physical position using converted values
                         Position = pinPosition,
-                        // Width/Height in Avalonia are Logical. Size to the viewport (== display size for a
-                        // normal pin; the selection-sized window for a scrolling pin).
-                        Width = (scrolling ? vm.ViewportWidth : vm.DisplayWidth) + padding.Left + padding.Right,
-                        Height = (scrolling ? vm.ViewportHeight : vm.DisplayHeight) + padding.Top + padding.Bottom
+                        // Width/Height in Avalonia are Logical (use the possibly-clamped display size)
+                        Width = vm.DisplayWidth + padding.Left + padding.Right,
+                        Height = vm.DisplayHeight + padding.Top + padding.Bottom
                     };
                     
                     // Auto-Run AI if requested
