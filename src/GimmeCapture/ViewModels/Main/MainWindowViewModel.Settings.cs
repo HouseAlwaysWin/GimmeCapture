@@ -1084,7 +1084,7 @@ public partial class MainWindowViewModel
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Failed to load settings: {ex.Message}");
+            AppLog.Warning("MainWindow.LoadSettings", ex);
         }
         finally
         {
@@ -1106,7 +1106,7 @@ public partial class MainWindowViewModel
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Failed to save settings: {ex.Message}");
+            AppLog.Warning("MainWindow.SaveSettings", ex);
             return false;
         }
     }

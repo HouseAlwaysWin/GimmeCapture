@@ -410,7 +410,8 @@ public class AppSettingsService
         }
         catch (Exception ex)
         {
-            DebugLog($"ERROR loading from {path}: {ex.Message}");
+            // A parse/read failure here reverts to defaults — surface it (was silent DebugLog).
+            AppLog.Warning("Settings.Load", ex);
         }
     }
 
@@ -592,12 +593,12 @@ public class AppSettingsService
             {
                 Directory.CreateDirectory(BaseDataDirectory);
             }
-            await File.WriteAllTextAsync(ConfigPath, json);
+            await AtomicFile.WriteAllTextAsync(ConfigPath, json);
             DebugLog($"Saved to {ConfigPath} successfully.");
         }
         catch (Exception ex)
         {
-            DebugLog($"CRITICAL SAVE ERROR: {ex.Message}");
+            AppLog.Error("Settings.Save", ex);
         }
     }
 }

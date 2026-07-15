@@ -845,7 +845,9 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     public void Dispose()
     {
         _scanCts?.Cancel();
+        _scanCts?.Dispose();
         _quickOcrCts?.Cancel();
+        _quickOcrCts?.Dispose();
         CancelTranslationWarmup();
         _translationCts?.Cancel();
         _translationCts?.Dispose();

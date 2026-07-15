@@ -75,7 +75,7 @@ internal static class CompressSegmentStore
         try
         {
             Directory.CreateDirectory(DirForInput(state.InputPath));
-            File.WriteAllText(StateFile(state.InputPath), JsonSerializer.Serialize(state, JsonOptions));
+            AtomicFile.WriteAllText(StateFile(state.InputPath), JsonSerializer.Serialize(state, JsonOptions));
         }
         catch (Exception ex)
         {

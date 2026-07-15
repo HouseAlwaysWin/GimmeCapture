@@ -100,6 +100,10 @@ public partial class RecordingService : ReactiveObject
     public string? LastRecordingPath => string.IsNullOrEmpty(_outputFile) ? null : _outputFile;
     public string LastStartError { get; private set; } = string.Empty;
     public string LastStartWarning { get; private set; } = string.Empty;
+    /// <summary>True when the user requested system-audio / microphone capture but it was unavailable and the
+    /// recording fell back to none — surfaced to the user as a toast so the loss isn't silent.</summary>
+    public bool RequestedSystemAudioUnavailable { get; private set; }
+    public bool RequestedMicrophoneUnavailable { get; private set; }
     public string LastSelectedVideoEncoderName => _lastSelectedVideoEncoderName;
     public void ClearLastRecording() { _outputFile = string.Empty; }
     
@@ -171,7 +175,10 @@ public partial class RecordingService : ReactiveObject
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Disk space check failed: {ex.Message}");
+            // Can't determine free space (e.g. a UNC/removable path where DriveInfo throws): log it and fail
+            // open so a legitimate recording isn't stopped spuriously. The finalize-time write error is the
+            // backstop if the drive then fills. Previously this was a Debug.WriteLine — silent in Release.
+            AppLog.Warning("RecordingService.DiskSpaceCheck", ex);
             return long.MaxValue;
         }
     }
@@ -209,6 +216,8 @@ public partial class RecordingService : ReactiveObject
         {
         LastStartError = string.Empty;
         LastStartWarning = string.Empty;
+        RequestedSystemAudioUnavailable = false;
+        RequestedMicrophoneUnavailable = false;
         _lastSelectedVideoEncoderName = string.Empty;
         MuteSystemAudio = false;
         MuteMicrophone = false;
@@ -309,7 +318,8 @@ public partial class RecordingService : ReactiveObject
             }
             else
             {
-                Debug.WriteLine("Loopback capture unavailable, fallback to video-only.");
+                AppLog.Warning("RecordingService.Audio", "System-audio (loopback) capture unavailable — recording video-only.");
+                RequestedSystemAudioUnavailable = true;
                 _recordSystemAudio = false;
             }
         }
@@ -323,7 +333,8 @@ public partial class RecordingService : ReactiveObject
             }
             else
             {
-                Debug.WriteLine("Microphone capture unavailable, continuing without mic.");
+                AppLog.Warning("RecordingService.Audio", "Microphone capture unavailable — continuing without mic.");
+                RequestedMicrophoneUnavailable = true;
                 _recordMicrophone = false;
             }
         }

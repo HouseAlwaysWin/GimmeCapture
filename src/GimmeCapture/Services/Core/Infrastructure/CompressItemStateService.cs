@@ -123,7 +123,7 @@ internal static class CompressItemStateService
         try
         {
             Directory.CreateDirectory(AppStoragePaths.GetRootDirectory());
-            File.WriteAllText(FilePath, JsonSerializer.Serialize(states, JsonOptions));
+            AtomicFile.WriteAllText(FilePath, JsonSerializer.Serialize(states, JsonOptions));
         }
         catch (Exception ex)
         {
