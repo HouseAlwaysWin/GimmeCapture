@@ -618,7 +618,7 @@ public partial class SnipWindowViewModel
         if (!FloatingBitmapConversionHelper.TryCreateDetachedBitmapFromSkBitmap(skBitmap, out var avaloniaBitmap, out var conversionError)
             || avaloniaBitmap == null)
         {
-            AppLog.Warning("Translation.PinTranslationConversion", conversionError);
+            AppLog.Warning("Translation.PinTranslationConversion", conversionError ?? "bitmap conversion failed");
             return;
         }
 

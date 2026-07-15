@@ -1,0 +1,24 @@
+# Repo-wide editor conventions. Diagnostics that gate the build live in Directory.Build.props
+# (nullable warnings are errors); this file establishes formatting so new code stays consistent.
+root = true
+
+[*]
+indent_style = space
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.cs]
+indent_size = 4
+# Prefer file-scoped namespaces and modern C# (suggestions only — non-breaking).
+csharp_style_namespace_declarations = file_scoped:suggestion
+dotnet_style_prefer_conditional_expression_over_return = true:suggestion
+dotnet_style_null_propagation = true:suggestion
+
+[*.{json,axaml,xaml,xml,props,targets,csproj,slnx,config}]
+indent_size = 2
+
+[*.{yml,yaml}]
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false

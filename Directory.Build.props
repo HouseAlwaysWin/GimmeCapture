@@ -3,6 +3,11 @@
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <RestoreLockedMode Condition="'$(ContinuousIntegrationBuild)' == 'true'">true</RestoreLockedMode>
     <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+
+    <!-- Ratchet: nullable-reference-type warnings are build errors so the codebase stays null-safe as it
+         grows (a null-deref that today is a warning would otherwise slip in silently). Scoped to nullable
+         only — the many intentional obsolete-API / platform-compat warnings stay warnings. -->
+    <WarningsAsErrors>nullable</WarningsAsErrors>
   </PropertyGroup>
 
   <!-- Allow compiling the net10.0-windows target on Linux/macOS (compile-check only;
