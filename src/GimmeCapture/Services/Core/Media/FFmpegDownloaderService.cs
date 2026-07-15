@@ -31,7 +31,7 @@ public class FFmpegDownloaderService : ReactiveObject
         set => this.RaiseAndSetIfChanged(ref _isDownloading, value);
     }
 
-    public FFmpegDownloaderService(AppSettingsService? settingsService = null) { }
+    public FFmpegDownloaderService(IAppSettingsService? settingsService = null) { }
 
     /// <summary>FFmpeg DLL runtime available (pure DLL mode).</summary>
     public bool IsFFmpegAvailable()

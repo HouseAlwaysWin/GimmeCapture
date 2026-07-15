@@ -17,7 +17,7 @@ public enum RecordingState { Idle, Recording, Paused }
 public partial class RecordingService : ReactiveObject
 {
     private readonly FFmpegDownloaderService _downloader;
-    private readonly AppSettingsService? _settingsService;
+    private readonly IAppSettingsService? _settingsService;
     private RecordingState _state = RecordingState.Idle;
     private readonly List<string> _segments = new();
     private readonly List<string> _audioSegments = new();
@@ -199,7 +199,7 @@ public partial class RecordingService : ReactiveObject
 
     public string BaseTempDir => Path.Combine(_settingsService?.BaseDataDirectory ?? AppDomain.CurrentDomain.BaseDirectory, "Temp", "Recordings");
 
-    public RecordingService(FFmpegDownloaderService downloader, AppSettingsService? settingsService = null)
+    public RecordingService(FFmpegDownloaderService downloader, IAppSettingsService? settingsService = null)
     {
         _downloader = downloader;
         _settingsService = settingsService;

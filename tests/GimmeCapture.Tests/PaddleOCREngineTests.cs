@@ -16,13 +16,13 @@ namespace GimmeCapture.Tests;
 public class PaddleOCREngineTests
 {
     private readonly Mock<AIResourceService> _mockAiResource;
-    private readonly Mock<AppSettingsService> _mockSettings;
+    private readonly Mock<IAppSettingsService> _mockSettings;
     private readonly OcrRuntimeService _ocrRuntimeService;
     private readonly PaddleOCREngine _sut;
 
     public PaddleOCREngineTests()
     {
-        _mockSettings = new Mock<AppSettingsService>();
+        _mockSettings = new Mock<IAppSettingsService>();
         var mockPath = new Mock<AIPathService>(_mockSettings.Object);
         var mockResolver = new Mock<NativeResolverService>(mockPath.Object);
         var mockDownloader = new Mock<AIModelDownloader>();

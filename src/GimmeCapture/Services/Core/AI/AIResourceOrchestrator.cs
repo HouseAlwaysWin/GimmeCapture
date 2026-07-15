@@ -9,7 +9,7 @@ namespace GimmeCapture.Services.Core.AI;
 
 public sealed class AIResourceOrchestrator
 {
-    private readonly AppSettingsService _settingsService;
+    private readonly IAppSettingsService _settingsService;
     private readonly AIPathService _pathService;
     private readonly NativeResolverService _resolverService;
     private readonly AIModelCatalog _modelCatalog;
@@ -18,7 +18,7 @@ public sealed class AIResourceOrchestrator
     private readonly Action _requestGlobalUnload;
 
     internal AIResourceOrchestrator(
-        AppSettingsService settingsService,
+        IAppSettingsService settingsService,
         AIPathService pathService,
         NativeResolverService resolverService,
         AIModelCatalog modelCatalog,

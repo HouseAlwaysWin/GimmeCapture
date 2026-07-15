@@ -8,13 +8,13 @@ namespace GimmeCapture.Services.Core.AI;
 public sealed class QuickOcrEngineProvider : IQuickOcrEngineProvider
 {
     private readonly AIResourceService _aiResourceService;
-    private readonly AppSettingsService _settingsService;
+    private readonly IAppSettingsService _settingsService;
     private readonly OcrRuntimeService _ocrRuntimeService;
     private readonly IOcrEngineFactory _ocrEngineFactory;
 
     public QuickOcrEngineProvider(
         AIResourceService aiResourceService,
-        AppSettingsService settingsService,
+        IAppSettingsService settingsService,
         OcrRuntimeService ocrRuntimeService,
         IOcrEngineFactory ocrEngineFactory)
     {

@@ -19,7 +19,7 @@ public static class MainWindowViewModelDependenciesFactory
     // one real graph while substituting no-op platform services, instead of re-declaring the whole ~14-service
     // wiring (which drifted). Runtime callers omit them and get the real platform services.
     public static MainWindowViewModelDependencies CreateDefault(
-        AppSettingsService? existingSettingsService = null,
+        IAppSettingsService? existingSettingsService = null,
         IStartupRegistrationService? existingStartupRegistrationService = null,
         IMainWindowSettingsPersistenceService? existingSettingsPersistenceService = null,
         IWindowManager? windowManager = null,

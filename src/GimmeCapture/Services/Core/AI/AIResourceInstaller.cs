@@ -9,7 +9,7 @@ namespace GimmeCapture.Services.Core.AI;
 
 internal sealed class AIResourceInstaller
 {
-    private readonly AppSettingsService _settingsService;
+    private readonly IAppSettingsService _settingsService;
     private readonly AIPathService _pathService;
     private readonly AIModelDownloader _downloader;
     private readonly AIModelCatalog _modelCatalog;
@@ -17,7 +17,7 @@ internal sealed class AIResourceInstaller
     private readonly SemaphoreSlim _downloadLock = new(1, 1);
 
     public AIResourceInstaller(
-        AppSettingsService settingsService,
+        IAppSettingsService settingsService,
         AIPathService pathService,
         AIModelDownloader downloader,
         AIModelCatalog modelCatalog,

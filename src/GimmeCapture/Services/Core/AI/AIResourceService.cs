@@ -15,7 +15,7 @@ public class AIResourceService : ReactiveObject
     private readonly AIResourceOrchestrator _orchestrator = null!;
 
     public AIResourceService(
-        AppSettingsService settingsService,
+        IAppSettingsService settingsService,
         AIPathService pathService,
         NativeResolverService resolverService,
         AIModelDownloader downloader)
@@ -24,7 +24,7 @@ public class AIResourceService : ReactiveObject
     }
 
     public AIResourceService(
-        AppSettingsService settingsService,
+        IAppSettingsService settingsService,
         AIPathService pathService,
         NativeResolverService resolverService,
         AIModelDownloader downloader,
@@ -34,7 +34,7 @@ public class AIResourceService : ReactiveObject
     }
 
     public AIResourceService(
-        AppSettingsService settingsService,
+        IAppSettingsService settingsService,
         AIPathService pathService,
         NativeResolverService resolverService,
         AIModelDownloader downloader,

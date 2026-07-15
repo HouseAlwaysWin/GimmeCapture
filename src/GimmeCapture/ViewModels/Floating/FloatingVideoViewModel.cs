@@ -390,8 +390,8 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
     // Dependencies
     private readonly GimmeCapture.Services.Abstractions.IClipboardService _clipboardService;
     public GimmeCapture.Services.Abstractions.IClipboardService ClipboardService => _clipboardService;
-    private readonly AppSettingsService? _appSettingsService;
-    public AppSettingsService? AppSettingsService => _appSettingsService;
+    private readonly IAppSettingsService? _appSettingsService;
+    public IAppSettingsService? AppSettingsService => _appSettingsService;
 
     // Actions & Commands
     public System.Func<Task>? CopyAction { get; set; }
@@ -435,7 +435,7 @@ public partial class FloatingVideoViewModel : FloatingWindowViewModelBase, IDraw
         return Math.Max(1, 1000 / safeFps);
     }
 
-    public FloatingVideoViewModel(string videoPath, int width, int height, double originalWidth, double originalHeight, Avalonia.Media.Color borderColor, double borderThickness, bool hideDecoration, bool hideBorder, GimmeCapture.Services.Abstractions.IClipboardService clipboardService, AppSettingsService? appSettingsService)
+    public FloatingVideoViewModel(string videoPath, int width, int height, double originalWidth, double originalHeight, Avalonia.Media.Color borderColor, double borderThickness, bool hideDecoration, bool hideBorder, GimmeCapture.Services.Abstractions.IClipboardService clipboardService, IAppSettingsService? appSettingsService)
     {
         VideoPath = videoPath;
         // Toolbar export format defaults to the main-menu recording format (synced with the app setting), else

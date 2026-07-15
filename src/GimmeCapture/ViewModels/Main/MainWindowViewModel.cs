@@ -177,10 +177,10 @@ public partial class MainWindowViewModel : ViewModelBase
         _captureLaunchCoordinator.Cancel();
     }
 
-    public AppSettingsService AppSettingsService => _settingsService;
+    public IAppSettingsService AppSettingsService => _settingsService;
     /// <summary>Capture history index for saved screenshots and finalized recordings (B3 history panel).</summary>
     public CaptureHistoryService CaptureHistory { get; }
-    private readonly AppSettingsService _settingsService;
+    private readonly IAppSettingsService _settingsService;
     private readonly IWindowManager _windowManager;
     private readonly IThemeResourceService _themeResourceService;
     private readonly IGlobalHotkeySettingsCoordinator _globalHotkeySettingsCoordinator;

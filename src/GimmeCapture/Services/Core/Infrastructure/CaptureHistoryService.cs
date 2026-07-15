@@ -21,7 +21,7 @@ public sealed class CaptureHistoryService
     private const int MaxItems = 300;
     private const int ThumbnailMaxLongSide = 320;
 
-    private readonly AppSettingsService _settingsService;
+    private readonly IAppSettingsService _settingsService;
     private readonly string _historyDir;
     private readonly string _thumbsDir;
     private readonly string _capturesDir;
@@ -39,7 +39,7 @@ public sealed class CaptureHistoryService
     /// <summary>Raised (off the gate) after the index changes, so an open history panel can refresh live.</summary>
     public event Action? Changed;
 
-    public CaptureHistoryService(AppSettingsService settingsService, string? rootDirectoryOverride = null)
+    public CaptureHistoryService(IAppSettingsService settingsService, string? rootDirectoryOverride = null)
     {
         _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
         var root = string.IsNullOrWhiteSpace(rootDirectoryOverride)

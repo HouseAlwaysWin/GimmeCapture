@@ -17,14 +17,14 @@ public sealed class ModuleInstallCoordinator
     private readonly AIModelCatalog _modelCatalog;
     private readonly Lazy<AIResourceService> _aiResourceService;
     private readonly Lazy<AIResourceOrchestrator> _orchestrator;
-    private readonly AppSettingsService _settingsService;
+    private readonly IAppSettingsService _settingsService;
     private readonly IResourceQueueService _resourceQueue;
 
     public ModuleInstallCoordinator(
         AIModelCatalog modelCatalog,
         Lazy<AIResourceService> aiResourceService,
         Lazy<AIResourceOrchestrator> orchestrator,
-        AppSettingsService settingsService,
+        IAppSettingsService settingsService,
         IResourceQueueService resourceQueue)
     {
         _modelCatalog = modelCatalog;

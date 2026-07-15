@@ -149,7 +149,7 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
     public AIResourceService AIResourceService => _aiResourceService;
     public SAM2RuntimeService SAM2RuntimeService => _sam2RuntimeService;
     public AIPathService AIPathService => _pathService;
-    public AppSettingsService AppSettingsService => _appSettingsService;
+    public IAppSettingsService AppSettingsService => _appSettingsService;
     public IResourceQueueService ResourceQueue => _resourceQueue;
     public Func<string, Task<bool>>? ConfirmDialogAction { get; set; }
     public Action<string, string>? ShowDialogAction { get; set; }
@@ -159,7 +159,7 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
     private readonly SAM2RuntimeService _sam2RuntimeService;
     private readonly AIPathService _pathService;
     private readonly IResourceQueueService _resourceQueue;
-    private readonly AppSettingsService _appSettingsService = null!;
+    private readonly IAppSettingsService _appSettingsService = null!;
     private string? _sam2LeaseId;
     internal ISam2Service? CurrentSam2ServiceForTesting => _sam2Service;
     internal void SetSam2ServiceForTesting(ISam2Service? service) => _sam2Service = service;
@@ -301,7 +301,7 @@ public partial class FloatingImageViewModel : FloatingWindowViewModelBase, IDraw
         return false;
     }
 
-    public FloatingImageViewModel(Bitmap image, double originalWidth, double originalHeight, Avalonia.Media.Color borderColor, double borderThickness, bool hideDecoration, bool hideBorder, IClipboardService clipboardService, AIResourceService aiResourceService, SAM2RuntimeService sam2RuntimeService, AppSettingsService appSettingsService, AIPathService pathService, IResourceQueueService resourceQueue, string? pinnedText = null, double inferredFontSize = 12.0)
+    public FloatingImageViewModel(Bitmap image, double originalWidth, double originalHeight, Avalonia.Media.Color borderColor, double borderThickness, bool hideDecoration, bool hideBorder, IClipboardService clipboardService, AIResourceService aiResourceService, SAM2RuntimeService sam2RuntimeService, IAppSettingsService appSettingsService, AIPathService pathService, IResourceQueueService resourceQueue, string? pinnedText = null, double inferredFontSize = 12.0)
     {
         Image = image;
         OriginalWidth = originalWidth;

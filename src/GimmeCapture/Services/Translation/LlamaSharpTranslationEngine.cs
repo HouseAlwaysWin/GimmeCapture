@@ -24,7 +24,7 @@ public sealed class LlamaSharpTranslationEngine : ITranslationEngine, IDisposabl
     public TranslationEngine EngineType => TranslationEngine.LlamaSharp;
 
     private readonly AIResourceService _aiResourceService;
-    private readonly AppSettingsService _settingsService;
+    private readonly IAppSettingsService _settingsService;
     private readonly ITranslationCache _cache;
 
     private LLamaWeights? _weights;
@@ -41,7 +41,7 @@ public sealed class LlamaSharpTranslationEngine : ITranslationEngine, IDisposabl
 
     public LlamaSharpTranslationEngine(
         AIResourceService aiResourceService,
-        AppSettingsService settingsService,
+        IAppSettingsService settingsService,
         ITranslationCache cache)
     {
         _aiResourceService = aiResourceService ?? throw new ArgumentNullException(nameof(aiResourceService));

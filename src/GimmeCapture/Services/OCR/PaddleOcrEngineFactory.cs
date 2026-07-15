@@ -9,7 +9,7 @@ public sealed class PaddleOcrEngineFactory : IOcrEngineFactory
 {
     public IOCREngine Create(
         AIResourceService aiResourceService,
-        AppSettingsService settingsService,
+        IAppSettingsService settingsService,
         OcrRuntimeService ocrRuntimeService)
     {
         ArgumentNullException.ThrowIfNull(aiResourceService);

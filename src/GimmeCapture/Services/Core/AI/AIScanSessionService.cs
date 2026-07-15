@@ -14,7 +14,7 @@ public sealed class AIScanSessionService : IAIScanSessionService
     private readonly AIResourceService _aiResourceService;
     private readonly SAM2RuntimeService _sam2RuntimeService;
     private readonly OcrRuntimeService _ocrRuntimeService;
-    private readonly AppSettingsService _settingsService;
+    private readonly IAppSettingsService _settingsService;
     private readonly IOcrEngineFactory _ocrEngineFactory;
     private readonly SAM2Service _sam2Service;
 
@@ -23,7 +23,7 @@ public sealed class AIScanSessionService : IAIScanSessionService
         AIResourceService aiResourceService,
         SAM2RuntimeService sam2RuntimeService,
         OcrRuntimeService ocrRuntimeService,
-        AppSettingsService settingsService,
+        IAppSettingsService settingsService,
         IOcrEngineFactory ocrEngineFactory)
     {
         _captureService = captureService ?? throw new ArgumentNullException(nameof(captureService));

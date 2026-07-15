@@ -13,7 +13,7 @@ namespace GimmeCapture.Composition;
 
 public sealed class AppBootstrapper : IAsyncDisposable
 {
-    private readonly AppSettingsService _settingsService;
+    private readonly IAppSettingsService _settingsService;
     private readonly IStartupRegistrationService _startupRegistrationService;
     private readonly IMainWindowSettingsPersistenceService _settingsPersistenceService;
     private readonly Lazy<MainWindowViewModelDependencies> _mainWindowDependencies;

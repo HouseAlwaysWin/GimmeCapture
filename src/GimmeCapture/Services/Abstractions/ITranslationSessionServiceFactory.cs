@@ -7,7 +7,7 @@ namespace GimmeCapture.Services.Translation;
 public interface ITranslationSessionServiceFactory
 {
     ITranslationSessionService Create(
-        AppSettingsService settingsService,
+        IAppSettingsService settingsService,
         AIResourceService aiResourceService,
         OcrRuntimeService ocrRuntimeService);
 }

@@ -43,11 +43,11 @@ public class SAM2Service : GimmeCapture.Services.Abstractions.ISam2Service
     internal bool IsImagePreparedForTesting => _isImagePrepared;
     internal string? PreparedImageKeyForTesting => _preparedImageKey;
 
-    private readonly AppSettingsService _settingsService;
+    private readonly IAppSettingsService _settingsService;
     private readonly SemaphoreSlim _initLock = new(1, 1);
     private readonly SemaphoreSlim _prepareLock = new(1, 1);
 
-    public SAM2Service(SAM2RuntimeService runtimeService, AppSettingsService settingsService)
+    public SAM2Service(SAM2RuntimeService runtimeService, IAppSettingsService settingsService)
     {
         _runtimeService = runtimeService;
         _settingsService = settingsService;

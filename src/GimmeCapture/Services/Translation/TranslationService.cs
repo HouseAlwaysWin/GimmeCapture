@@ -18,7 +18,7 @@ namespace GimmeCapture.Services.Translation;
 
 public partial class TranslationService : IDisposable
 {
-    private readonly AppSettingsService _settingsService;
+    private readonly IAppSettingsService _settingsService;
     private readonly OcrRuntimeService _ocrRuntimeService;
     private readonly IEnumerable<ITranslationEngine> _translationEngines;
     private readonly TranslationEngineRunner _translationEngineRunner;
@@ -31,7 +31,7 @@ public partial class TranslationService : IDisposable
 
     public TranslationService(
         AIResourceService aiResourceService,
-        AppSettingsService settingsService,
+        IAppSettingsService settingsService,
         OcrRuntimeService ocrRuntimeService)
     {
         _aiResourceService = aiResourceService ?? throw new ArgumentNullException(nameof(aiResourceService));

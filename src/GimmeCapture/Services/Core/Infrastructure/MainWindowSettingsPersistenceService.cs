@@ -6,7 +6,7 @@ namespace GimmeCapture.Services.Core.Infrastructure;
 
 public sealed class MainWindowSettingsPersistenceService : IMainWindowSettingsPersistenceService
 {
-    public async Task<MainWindowSettingsSnapshot> LoadAsync(AppSettingsService settingsService)
+    public async Task<MainWindowSettingsSnapshot> LoadAsync(IAppSettingsService settingsService)
     {
         ArgumentNullException.ThrowIfNull(settingsService);
 
@@ -14,7 +14,7 @@ public sealed class MainWindowSettingsPersistenceService : IMainWindowSettingsPe
         return MainWindowSettingsSnapshot.FromAppSettings(settingsService.Settings);
     }
 
-    public async Task SaveAsync(AppSettingsService settingsService, MainWindowSettingsSnapshot snapshot)
+    public async Task SaveAsync(IAppSettingsService settingsService, MainWindowSettingsSnapshot snapshot)
     {
         ArgumentNullException.ThrowIfNull(settingsService);
         ArgumentNullException.ThrowIfNull(snapshot);
