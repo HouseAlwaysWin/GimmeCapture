@@ -18,7 +18,12 @@ namespace GimmeCapture.ViewModels.Main;
 // long pin); Esc cancels.
 public partial class SnipWindowViewModel
 {
+    // The seed / detection-phase strip (a plain bitmap) BEFORE any frame has stitched. Axis detection and
+    // its 90° rotations run on this. On the first stitch it is promoted into _manualStrip (below) and nulled.
     private SKBitmap? _manualAccumulated;
+    // The growing accumulated strip once stitching starts — keeps a long capture O(n) (cached signatures +
+    // geometric-capacity growth) instead of the old O(n²) per-frame full-strip resample + copy.
+    private ManualScrollStrip? _manualStrip;
     private SKBitmap? _manualPrevFrame;
     private bool _manualScrollActive;
     private bool _manualFinishing;
@@ -256,7 +261,9 @@ public partial class SnipWindowViewModel
             {
                 try
                 {
-                    if (_manualPrevFrame == null || _manualAccumulated == null)
+                    // Valid state = an anchor plus a strip: the seed bitmap before the first stitch, or the
+                    // promoted _manualStrip after it (ApplyStitchFrame nulls _manualAccumulated on promotion).
+                    if (_manualPrevFrame == null || (_manualAccumulated == null && _manualStrip == null))
                     {
                         frame.Dispose();
                         continue;
@@ -271,7 +278,7 @@ public partial class SnipWindowViewModel
 
                     if (grew)
                     {
-                        int newHeight = _manualAccumulated.Height;
+                        int newHeight = _manualStrip!.Height; // grew => the strip has been promoted
                         Dispatcher.UIThread.Post(() => UpdateScrollingHintAction?.Invoke(newHeight));
 
                         if (newHeight >= _manualMaxHeight)
@@ -316,32 +323,35 @@ public partial class SnipWindowViewModel
     // frame's ownership always moves into _manualPrevFrame. Returns whether the strip grew.
     private bool ApplyStitchFrame(SKBitmap stitchFrame)
     {
+        // Promote the seed bitmap into the growable strip on the first stitch. Axis detection + its 90°
+        // rotations run before this on the plain _manualAccumulated bitmap; from here the strip owns the pixels.
+        if (_manualStrip == null)
+        {
+            _manualStrip = new ManualScrollStrip(_manualAccumulated!, _manualIgnoreRight);
+            _manualAccumulated!.Dispose();
+            _manualAccumulated = null;
+        }
+
         bool grew = false;
         int height = stitchFrame.Height;
 
-        ScrollStitcher.FrameAlignment align = ScrollStitcher.AlignFrameToStrip(
-            _manualAccumulated!, stitchFrame,
-            out double diagBestScore, out double diagAmbiguityGap, out int diagSampleCount,
-            _manualMinOverlap, _manualIgnoreRight, ManualRowMismatchTolerance, height);
+        ScrollStitcher.FrameAlignment align = _manualStrip.Align(
+            stitchFrame, _manualMinOverlap, ManualRowMismatchTolerance, height,
+            out double diagBestScore, out double diagAmbiguityGap, out int diagSampleCount);
 
         if (align.Found)
         {
-            int stripH = _manualAccumulated!.Height;
+            int stripH = _manualStrip.Height;
             if (align.Offset < 0)
             {
                 // Frame overhangs the top: prepend the new head rows.
-                SKBitmap grown = ScrollStitcher.Prepend(_manualAccumulated, stitchFrame, -align.Offset);
-                _manualAccumulated.Dispose();
-                _manualAccumulated = grown;
+                _manualStrip.Prepend(stitchFrame, -align.Offset);
                 grew = true;
             }
             else if (align.Offset + height > stripH)
             {
-                // Frame overhangs the bottom: append the new tail rows.
-                int overlap = stripH - align.Offset;
-                SKBitmap grown = ScrollStitcher.Append(_manualAccumulated, stitchFrame, overlap);
-                _manualAccumulated.Dispose();
-                _manualAccumulated = grown;
+                // Frame overhangs the bottom: append the frame rows past the strip's bottom.
+                _manualStrip.Append(stitchFrame, align.Offset + height - stripH);
                 grew = true;
             }
             // else: frame lies fully inside the strip (scrolled back) — nothing new.
@@ -353,7 +363,7 @@ public partial class SnipWindowViewModel
         string best = diagBestScore == double.MaxValue ? "MAX" : diagBestScore.ToString("F3");
         string ambGap = diagAmbiguityGap == double.MaxValue ? "none" : diagAmbiguityGap.ToString("F3");
         AppLog.Information(
-            $"ManualScroll.Align horiz={_manualHorizontal} strip={_manualAccumulated!.Width}x{_manualAccumulated.Height} " +
+            $"ManualScroll.Align horiz={_manualHorizontal} strip={_manualStrip.Width}x{_manualStrip.Height} " +
             $"frame={stitchFrame.Width}x{stitchFrame.Height} found={align.Found} off={align.Offset} grew={grew} " +
             $"best={best} ambGap={ambGap} samples={diagSampleCount}");
 
@@ -504,8 +514,12 @@ public partial class SnipWindowViewModel
                 }
             }
 
-            SKBitmap? result = _manualAccumulated;
+            // Assemble the final strip: from the growable strip once stitching started, else the seed bitmap
+            // (session ended before any frame stitched). ToLogicalBitmap returns a fresh, owned bitmap.
+            ManualScrollStrip? strip = _manualStrip;
+            SKBitmap? result = strip != null ? strip.ToLogicalBitmap() : _manualAccumulated;
             SKBitmap? prev = _manualPrevFrame;
+            _manualStrip = null;
             _manualAccumulated = null;
             _manualPrevFrame = null;
 
@@ -533,6 +547,7 @@ public partial class SnipWindowViewModel
             {
                 result?.Dispose();
                 prev?.Dispose();
+                strip?.Dispose();
             }
         }
         finally

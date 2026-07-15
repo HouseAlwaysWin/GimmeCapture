@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using SkiaSharp;
 
 namespace GimmeCapture.Services.Core.Media;
@@ -298,21 +299,63 @@ internal static class ScrollStitcher
             return new FrameAlignment(0, false);
         }
 
+        byte[] stripSig = ComputeRowSignatures(strip, ignoreRightColumns, out int stripSampleCount);
+        return AlignCore(
+            stripSig, 0, strip.Height, stripSampleCount, frame,
+            out bestScoreOut, out ambiguityGapOut, out sampleCountOut,
+            minOverlapRows, ignoreRightColumns, maxRowMismatchRatio, searchMargin);
+    }
+
+    /// <summary>
+    /// Alignment core shared by the public <see cref="AlignFrameToStrip(SKBitmap,SKBitmap,out double,out double,out int,int,int,double,int)"/>
+    /// and the incremental <see cref="ManualScrollStrip"/>: aligns <paramref name="frame"/> against a strip
+    /// whose row signatures are already computed (row <c>r</c> at
+    /// <c>stripSig[stripFirstRowByteOffset + r * stripSampleCount * 4 ..]</c>). Passing the strip signatures
+    /// in — rather than re-sampling the whole strip every frame — is what lets a long capture stay O(n).
+    /// <para>
+    /// Only offsets within <paramref name="searchMargin"/> rows of either edge are scored; this is exactly
+    /// the set the naive full scan scored (every other offset was <c>double.MaxValue</c> and could never
+    /// win), so the chosen placement, ambiguity rejection and diagnostics are byte-for-byte identical — it
+    /// just avoids allocating and scanning an O(stripHeight) score array.
+    /// </para>
+    /// </summary>
+    internal static FrameAlignment AlignCore(
+        byte[] stripSig,
+        int stripFirstRowByteOffset,
+        int stripHeight,
+        int stripSampleCount,
+        SKBitmap frame,
+        out double bestScoreOut,
+        out double ambiguityGapOut,
+        out int sampleCountOut,
+        int minOverlapRows,
+        int ignoreRightColumns,
+        double maxRowMismatchRatio,
+        int searchMargin)
+    {
+        bestScoreOut = double.MaxValue;
+        ambiguityGapOut = double.MaxValue;
+        sampleCountOut = 0;
+
         int frameH = frame.Height;
-        int stripH = strip.Height;
-        int effectiveMin = Math.Clamp(minOverlapRows, 1, Math.Min(frameH, stripH));
+        if (frameH <= 0 || stripHeight <= 0 || frame.Width <= 0)
+        {
+            return new FrameAlignment(0, false);
+        }
+
+        int effectiveMin = Math.Clamp(minOverlapRows, 1, Math.Min(frameH, stripHeight));
         double clampedRatio = Math.Clamp(maxRowMismatchRatio, 0.0, 1.0);
 
         byte[] frameSig = ComputeRowSignatures(frame, ignoreRightColumns, out int sampleCount);
-        byte[] stripSig = ComputeRowSignatures(strip, ignoreRightColumns, out _);
         sampleCountOut = sampleCount;
-        if (sampleCount == 0)
+        if (sampleCount == 0 || sampleCount != stripSampleCount)
         {
             return new FrameAlignment(0, false);
         }
 
         double[] frameWeights = ComputeRowWeights(frameSig, frameH, sampleCount);
         int allowedRowSampleDiffs = (int)(sampleCount * RowPixelMismatchTolerance);
+        int stride = sampleCount * 4;
 
         // Score on every rowStep-th row so the per-frame cost stays bounded on tall regions
         // (~O(frameH^2 / rowStep)). Offsets are still searched at full pixel resolution, so the
@@ -320,71 +363,82 @@ internal static class ScrollStitcher
         int rowStep = Math.Clamp(frameH / CoarseTargetRows, 1, MaxRowStep);
 
         int lo = -(frameH - effectiveMin); // frame overhangs the top
-        int hi = stripH - effectiveMin;    // frame overhangs the bottom
+        int hi = stripHeight - effectiveMin; // frame overhangs the bottom
         int margin = searchMargin <= 0 ? (hi - lo) : searchMargin;
 
-        var scores = new double[hi - lo + 1]; // index = o - lo
-        Array.Fill(scores, double.MaxValue);
+        // The scored offsets are the two edge windows { o - lo <= margin } ∪ { hi - o <= margin }.
+        // Collected in ascending-offset order so the winner/rival selection below matches the old
+        // ascending scan exactly (strict "<" => first wins on ties).
+        var scored = new List<(int Offset, double Score)>();
 
-        for (int o = lo; o <= hi; o++)
+        void ScoreRange(int from, int to)
         {
-            // Only evaluate near the top or bottom edge (where new content appears).
-            if (o - lo > margin && hi - o > margin)
+            for (int o = from; o <= to; o++)
             {
-                continue;
-            }
-
-            int startR = Math.Max(0, -o);
-            int endR = Math.Min(frameH, stripH - o);
-            int overlap = endR - startR;
-            if (overlap < effectiveMin)
-            {
-                continue;
-            }
-
-            int sampledRows = ((overlap + rowStep - 1) / rowStep);
-            int allowedRowMismatches = (int)(sampledRows * clampedRatio);
-            double weightedDiff = 0;
-            double weightSum = 0;
-            int rowMismatches = 0;
-            bool gated = false;
-            for (int r = startR; r < endR; r += rowStep)
-            {
-                int diffs = RowSampleDiffs(
-                    frameSig, r * sampleCount * 4,
-                    stripSig, (o + r) * sampleCount * 4,
-                    sampleCount);
-
-                double w = frameWeights[r];
-                weightedDiff += diffs * w;
-                weightSum += w;
-
-                if (diffs > allowedRowSampleDiffs)
+                int startR = Math.Max(0, -o);
+                int endR = Math.Min(frameH, stripHeight - o);
+                int overlap = endR - startR;
+                if (overlap < effectiveMin)
                 {
-                    rowMismatches++;
-                    if (rowMismatches > allowedRowMismatches)
+                    continue;
+                }
+
+                int sampledRows = (overlap + rowStep - 1) / rowStep;
+                int allowedRowMismatches = (int)(sampledRows * clampedRatio);
+                double weightedDiff = 0;
+                double weightSum = 0;
+                int rowMismatches = 0;
+                bool gated = false;
+                for (int r = startR; r < endR; r += rowStep)
+                {
+                    int diffs = RowSampleDiffs(
+                        frameSig, r * stride,
+                        stripSig, stripFirstRowByteOffset + ((o + r) * stride),
+                        sampleCount);
+
+                    double w = frameWeights[r];
+                    weightedDiff += diffs * w;
+                    weightSum += w;
+
+                    if (diffs > allowedRowSampleDiffs)
                     {
-                        gated = true;
-                        break;
+                        rowMismatches++;
+                        if (rowMismatches > allowedRowMismatches)
+                        {
+                            gated = true;
+                            break;
+                        }
                     }
                 }
-            }
 
-            if (!gated && weightSum > 1e-9)
-            {
-                scores[o - lo] = weightedDiff / (weightSum * sampleCount);
+                if (!gated && weightSum > 1e-9)
+                {
+                    scored.Add((o, weightedDiff / (weightSum * sampleCount)));
+                }
             }
+        }
+
+        int topWindowHi = Math.Min(lo + margin, hi);
+        int bottomWindowLo = Math.Max(hi - margin, lo);
+        if (bottomWindowLo <= topWindowHi + 1)
+        {
+            ScoreRange(lo, hi); // windows meet/overlap → one contiguous range
+        }
+        else
+        {
+            ScoreRange(lo, topWindowHi);
+            ScoreRange(bottomWindowLo, hi);
         }
 
         double bestScore = double.MaxValue;
         int bestOffset = 0;
         bool found = false;
-        for (int i = 0; i < scores.Length; i++)
+        foreach ((int offset, double score) in scored)
         {
-            if (scores[i] < bestScore)
+            if (score < bestScore)
             {
-                bestScore = scores[i];
-                bestOffset = i + lo;
+                bestScore = score;
+                bestOffset = offset;
                 found = true;
             }
         }
@@ -399,16 +453,16 @@ internal static class ScrollStitcher
         // Reject an ambiguous placement: a clear winner must beat the best rival at least
         // ShiftSeparationRows away.
         double rivalScore = double.MaxValue;
-        for (int i = 0; i < scores.Length; i++)
+        foreach ((int offset, double score) in scored)
         {
-            if (Math.Abs((i + lo) - bestOffset) < ShiftSeparationRows)
+            if (Math.Abs(offset - bestOffset) < ShiftSeparationRows)
             {
                 continue;
             }
 
-            if (scores[i] < rivalScore)
+            if (score < rivalScore)
             {
-                rivalScore = scores[i];
+                rivalScore = score;
             }
         }
 
@@ -631,28 +685,21 @@ internal static class ScrollStitcher
     }
 
     /// <summary>
-    /// Builds a per-row signature of <paramref name="sampleCount"/> BGRA samples taken at
-    /// evenly-spaced columns across the usable width (excluding <paramref name="ignoreRightColumns"/>).
-    /// Returned as a flat byte array of length <c>height * sampleCount * 4</c>; row <c>r</c>
-    /// occupies <c>[r * sampleCount * 4 .. +sampleCount * 4)</c>.
+    /// The evenly-spaced sample column x-positions across the usable width (excluding
+    /// <paramref name="ignoreRightColumns"/>), shared by every row. Extracted so a strip's signatures
+    /// can be extended incrementally (see <see cref="ManualScrollStrip"/>) with the exact same sampling
+    /// the whole-bitmap <see cref="ComputeRowSignatures"/> uses. Returns an empty array with
+    /// <paramref name="sampleCount"/> = 0 when there is no usable width.
     /// </summary>
-    private static byte[] ComputeRowSignatures(SKBitmap bitmap, int ignoreRightColumns, out int sampleCount)
+    internal static int[] BuildSampleColumns(int width, int ignoreRightColumns, out int sampleCount)
     {
-        int width = bitmap.Width;
-        int height = bitmap.Height;
         int usableColumns = Math.Max(0, width - Math.Max(0, ignoreRightColumns));
-
         sampleCount = Math.Min(SampleColumns, usableColumns);
-        var signatures = new byte[height * Math.Max(1, sampleCount) * 4];
-
-        int stride = bitmap.RowBytes;
-        IntPtr pixels = bitmap.GetPixels();
-        if (pixels == IntPtr.Zero || sampleCount == 0)
+        if (sampleCount == 0)
         {
-            return signatures;
+            return Array.Empty<int>();
         }
 
-        // Precompute the sampled column x-positions once (same for every row).
         var columns = new int[sampleCount];
         for (int i = 0; i < sampleCount; i++)
         {
@@ -661,25 +708,62 @@ internal static class ScrollStitcher
                 : (int)((long)i * (usableColumns - 1) / (sampleCount - 1));
         }
 
+        return columns;
+    }
+
+    /// <summary>
+    /// Samples <paramref name="rowCount"/> rows of <paramref name="bitmap"/> (from <paramref name="firstRow"/>)
+    /// at <paramref name="columns"/> into <paramref name="dest"/> starting at <paramref name="destByteOffset"/>
+    /// (BGRA per sample, <paramref name="sampleCount"/> samples per row). No-op when the pixels are
+    /// unavailable or nothing is sampled — the destination bytes are left untouched.
+    /// </summary>
+    internal static void SampleRowsInto(
+        SKBitmap bitmap, int firstRow, int rowCount, int[] columns, int sampleCount, byte[] dest, int destByteOffset)
+    {
+        if (sampleCount == 0 || rowCount <= 0)
+        {
+            return;
+        }
+
+        int stride = bitmap.RowBytes;
+        IntPtr pixels = bitmap.GetPixels();
+        if (pixels == IntPtr.Zero)
+        {
+            return;
+        }
+
         unsafe
         {
             byte* basePtr = (byte*)pixels;
-            for (int row = 0; row < height; row++)
+            for (int row = 0; row < rowCount; row++)
             {
-                byte* rowPtr = basePtr + (row * stride);
-                int sigBase = row * sampleCount * 4;
+                byte* rowPtr = basePtr + ((long)(firstRow + row) * stride);
+                int sigBase = destByteOffset + (row * sampleCount * 4);
                 for (int i = 0; i < sampleCount; i++)
                 {
                     byte* px = rowPtr + (columns[i] * 4);
                     int o = sigBase + (i * 4);
-                    signatures[o] = px[0];
-                    signatures[o + 1] = px[1];
-                    signatures[o + 2] = px[2];
-                    signatures[o + 3] = px[3];
+                    dest[o] = px[0];
+                    dest[o + 1] = px[1];
+                    dest[o + 2] = px[2];
+                    dest[o + 3] = px[3];
                 }
             }
         }
+    }
 
+    /// <summary>
+    /// Builds a per-row signature of <paramref name="sampleCount"/> BGRA samples taken at
+    /// evenly-spaced columns across the usable width (excluding <paramref name="ignoreRightColumns"/>).
+    /// Returned as a flat byte array of length <c>height * sampleCount * 4</c>; row <c>r</c>
+    /// occupies <c>[r * sampleCount * 4 .. +sampleCount * 4)</c>.
+    /// </summary>
+    private static byte[] ComputeRowSignatures(SKBitmap bitmap, int ignoreRightColumns, out int sampleCount)
+    {
+        int height = bitmap.Height;
+        int[] columns = BuildSampleColumns(bitmap.Width, ignoreRightColumns, out sampleCount);
+        var signatures = new byte[height * Math.Max(1, sampleCount) * 4];
+        SampleRowsInto(bitmap, 0, height, columns, sampleCount, signatures, 0);
         return signatures;
     }
 }
