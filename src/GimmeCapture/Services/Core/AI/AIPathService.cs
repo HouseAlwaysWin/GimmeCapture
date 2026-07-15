@@ -6,9 +6,9 @@ namespace GimmeCapture.Services.Core.AI;
 
 public class AIPathService
 {
-    private readonly AppSettingsService _settingsService;
+    private readonly IAppSettingsService _settingsService;
 
-    public AIPathService(AppSettingsService settingsService)
+    public AIPathService(IAppSettingsService settingsService)
     {
         _settingsService = settingsService;
     }

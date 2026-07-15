@@ -8,7 +8,7 @@ using GimmeCapture.Models;
 
 namespace GimmeCapture.Services.Core.Infrastructure;
 
-public class AppSettingsService
+public class AppSettingsService : IAppSettingsService
 {
     // Config migration history:
     // v0: Legacy configs without ConfigVersion. May still use HoldSingle/HoldMulti and pre-function-key action defaults.
@@ -34,7 +34,7 @@ public class AppSettingsService
     private string RuntimeVersionedAppDataConfigPath => AppStoragePaths.GetVersionedConfigPath(RuntimeExecutableDirectory, _appVersion);
     private static string LegacyAppDataConfigPath => AppStoragePaths.GetLegacyConfigPath();
     
-    public virtual AppSettings Settings { get; protected set; } = new();
+    public AppSettings Settings { get; protected set; } = new();
 
     public AppSettingsService()
     {

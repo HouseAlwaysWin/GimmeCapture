@@ -38,7 +38,7 @@ public class FloatingImageViewModelTests
     {
         // Arrange
         var mockService = new MockClipboardService();
-        var mockSettings = new Mock<AppSettingsService>();
+        var mockSettings = new Mock<IAppSettingsService>();
         mockSettings.Setup(s => s.Settings).Returns(new AppSettings());
         
         var mockAiPath = new Mock<AIPathService>(mockSettings.Object);
@@ -59,7 +59,7 @@ public class FloatingImageViewModelTests
     public void ImageChange_ShouldPreserveSam2Service_AndInvalidatePreparedImage()
     {
         var mockService = new MockClipboardService();
-        var mockSettings = new Mock<AppSettingsService>();
+        var mockSettings = new Mock<IAppSettingsService>();
         mockSettings.Setup(s => s.Settings).Returns(new AppSettings());
 
         var mockAiPath = new Mock<AIPathService>(mockSettings.Object);
@@ -85,7 +85,7 @@ public class FloatingImageViewModelTests
     public void ReleaseSam2Resources_ShouldDisposeService_AndReleaseRuntimeLease()
     {
         var mockService = new MockClipboardService();
-        var mockSettings = new Mock<AppSettingsService>();
+        var mockSettings = new Mock<IAppSettingsService>();
         mockSettings.Setup(s => s.Settings).Returns(new AppSettings());
 
         var mockAiPath = new Mock<AIPathService>(mockSettings.Object);

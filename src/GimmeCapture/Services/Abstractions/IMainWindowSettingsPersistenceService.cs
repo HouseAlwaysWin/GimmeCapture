@@ -5,7 +5,7 @@ namespace GimmeCapture.Services.Core.Infrastructure;
 
 public interface IMainWindowSettingsPersistenceService
 {
-    Task<MainWindowSettingsSnapshot> LoadAsync(AppSettingsService settingsService);
+    Task<MainWindowSettingsSnapshot> LoadAsync(IAppSettingsService settingsService);
 
-    Task SaveAsync(AppSettingsService settingsService, MainWindowSettingsSnapshot snapshot);
+    Task SaveAsync(IAppSettingsService settingsService, MainWindowSettingsSnapshot snapshot);
 }

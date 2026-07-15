@@ -25,12 +25,12 @@ public class PaddleOCREngine : IOCREngine
     private const float LowContrastThreshold = 64f;
     private static readonly bool SaveOcrDebugImages = false;
 
-    private readonly AppSettingsService _settingsService;
+    private readonly IAppSettingsService _settingsService;
     private readonly OcrRuntimeService _ocrRuntimeService;
     private OCRLanguage? _currentOCRLanguage;
     private string? _leaseId;
 
-    public PaddleOCREngine(AIResourceService aiResourceService, AppSettingsService settingsService, OcrRuntimeService ocrRuntimeService)
+    public PaddleOCREngine(AIResourceService aiResourceService, IAppSettingsService settingsService, OcrRuntimeService ocrRuntimeService)
     {
         ArgumentNullException.ThrowIfNull(aiResourceService);
         _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));

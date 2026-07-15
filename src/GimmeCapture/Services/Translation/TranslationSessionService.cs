@@ -13,7 +13,7 @@ namespace GimmeCapture.Services.Translation;
 
 public sealed class TranslationSessionService : ITranslationSessionService
 {
-    private readonly AppSettingsService _settingsService;
+    private readonly IAppSettingsService _settingsService;
     private readonly AIResourceService _aiResourceService;
     private readonly TranslationService _translationService;
     private CancellationTokenSource? _warmupCts;
@@ -22,7 +22,7 @@ public sealed class TranslationSessionService : ITranslationSessionService
 
     public TranslationSessionService(
         AIResourceService aiResourceService,
-        AppSettingsService settingsService,
+        IAppSettingsService settingsService,
         OcrRuntimeService ocrRuntimeService)
     {
         _aiResourceService = aiResourceService ?? throw new ArgumentNullException(nameof(aiResourceService));

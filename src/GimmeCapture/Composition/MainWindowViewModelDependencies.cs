@@ -7,7 +7,7 @@ using System;
 namespace GimmeCapture.ViewModels.Main;
 
 public sealed record MainWindowViewModelDependencies(
-    AppSettingsService SettingsService,
+    IAppSettingsService SettingsService,
     IWindowManager WindowManager,
     IThemeResourceService ThemeResourceService,
     IGlobalHotkeyService HotkeyService,
