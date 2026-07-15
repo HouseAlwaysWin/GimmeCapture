@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Abstractions;
+using GimmeCapture.Services.Core.Infrastructure;
 
 namespace GimmeCapture.Services.Core.AI;
 
@@ -78,6 +79,10 @@ public sealed class AIScanSessionService : IAIScanSessionService
         await ocrEngine.EnsureLoadedAsync(request.SourceLanguage, ct);
         progress?.Report(AIScanStage.DetectingObjects);
         var textBoxes = await Task.Run(() => ocrEngine.DetectText(bitmap), ct);
+        // Diagnostic (release-visible): distinguishes "capture failed" (0x0 bitmap) from "OCR found nothing"
+        // (0 boxes on a real capture — e.g. a DirectML inference-correctness issue on some Win10 setups) from
+        // "OCR works". Pair with OcrRuntime.SessionCreated (GPU vs CPU) to pinpoint a Win10-vs-Win11 discrepancy.
+        AppLog.Information($"OcrScan.Detected: {textBoxes.Count} text boxes from a {bitmap.Width}x{bitmap.Height} capture (lang={request.SourceLanguage}).");
 
         double scaleX = bitmap.Width > 0 ? request.ViewportBounds.Width / bitmap.Width : 1;
         double scaleY = bitmap.Height > 0 ? request.ViewportBounds.Height / bitmap.Height : 1;
