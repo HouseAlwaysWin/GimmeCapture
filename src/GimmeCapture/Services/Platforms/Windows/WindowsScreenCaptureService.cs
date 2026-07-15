@@ -326,10 +326,8 @@ public class WindowsScreenCaptureService : IScreenCaptureService
             Style = SKPaintStyle.Fill
         };
 
-        // Font setup
-        var weight = SKFontStyleWeight.Normal;
-        var style = new SKFontStyle(weight, SKFontStyleWidth.Normal, SKFontStyleSlant.Upright);
-        using var typeface = SKTypeface.FromFamilyName("Microsoft JhengHei", style); // Match UI preference
+        // Font setup — cached + shared typeface (do not dispose); only the SKFont wrapper is per-draw.
+        var typeface = GimmeCapture.Services.Core.Rendering.TypefaceCache.Get("Microsoft JhengHei"); // Match UI preference
         using var font = new SKFont(typeface, (float)(fontSize * scale));
 
         var lines = WrapText(text, (float)(relBounds.Width * scale - padding * 2), font);
