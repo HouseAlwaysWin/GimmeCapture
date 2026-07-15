@@ -96,8 +96,11 @@ public class PaddleOCREngine : IOCREngine
             canvas.DrawBitmap(bitmap, expandedBox, new SKRect(0, 0, expandedBox.Width, expandedBox.Height));
         }
 
-        bool shouldInvert = AnalyzeLuminance(cropped) < 120;
-        bool shouldEnhance = AnalyzeContrast(cropped) < LowContrastThreshold || box.Height < 28;
+        // One luminance pass over the crop yields both signals: the average (invert decision) and the
+        // min/max spread (contrast decision) — previously two separate full passes.
+        AnalyzeLuminanceAndContrast(cropped, out float averageLuminance, out int contrast);
+        bool shouldInvert = averageLuminance < 120;
+        bool shouldEnhance = contrast < LowContrastThreshold || box.Height < 28;
 
         const int targetHeight = 48;
         int textWidth = (int)MathF.Ceiling(cropped.Width * ((float)targetHeight / cropped.Height));
@@ -130,26 +133,12 @@ public class PaddleOCREngine : IOCREngine
         return bestResult;
     }
 
-    private float AnalyzeLuminance(SKBitmap bitmap)
+    // Single per-pixel luminance pass producing both the average (for the invert decision) and the
+    // min/max spread (for the contrast decision). Folds the former AnalyzeLuminance + AnalyzeContrast;
+    // the per-pixel luminance expression and the average's (long)-truncation semantics are unchanged.
+    private static void AnalyzeLuminanceAndContrast(SKBitmap bitmap, out float averageLuminance, out int contrast)
     {
         long totalLuminous = 0;
-        for (int y = 0; y < bitmap.Height; y++)
-        {
-            var row = GetPixelRowSpan(bitmap, y);
-            for (int x = 0; x < bitmap.Width; x++)
-            {
-                int offset = x * 4;
-                byte blue = row[offset];
-                byte green = row[offset + 1];
-                byte red = row[offset + 2];
-                totalLuminous += (long)(red * 0.2126f + green * 0.7152f + blue * 0.0722f);
-            }
-        }
-        return totalLuminous / (float)(bitmap.Width * bitmap.Height);
-    }
-
-    private float AnalyzeContrast(SKBitmap bitmap)
-    {
         byte min = byte.MaxValue;
         byte max = byte.MinValue;
 
@@ -162,13 +151,16 @@ public class PaddleOCREngine : IOCREngine
                 byte blue = row[offset];
                 byte green = row[offset + 1];
                 byte red = row[offset + 2];
-                byte luminance = (byte)Math.Clamp((red * 0.2126f) + (green * 0.7152f) + (blue * 0.0722f), 0f, 255f);
-                if (luminance < min) min = luminance;
-                if (luminance > max) max = luminance;
+                float luminance = (red * 0.2126f) + (green * 0.7152f) + (blue * 0.0722f);
+                totalLuminous += (long)luminance;
+                byte luminanceByte = (byte)Math.Clamp(luminance, 0f, 255f);
+                if (luminanceByte < min) min = luminanceByte;
+                if (luminanceByte > max) max = luminanceByte;
             }
         }
 
-        return max - min;
+        averageLuminance = totalLuminous / (float)(bitmap.Width * bitmap.Height);
+        contrast = max - min;
     }
 
     private SKBitmap PrepareTensorBitmap(SKBitmap cropped, int textWidth, int paddedWidth, int targetHeight, bool invert, bool enhanceContrast)
@@ -444,38 +436,56 @@ public class PaddleOCREngine : IOCREngine
         return true;
     }
 
-    private static unsafe void FillDetectionTensor(SKBitmap bitmap, DenseTensor<float> input, ReadOnlySpan<float> mean, ReadOnlySpan<float> std)
+    // Fills the NCHW [1,3,H,W] detection input. Writing input.Buffer.Span directly (row-major: channel c,
+    // row y begins at c*plane + y*width) avoids the DenseTensor multi-dimensional indexer — a strided index
+    // computation per element — across the millions of elements of the detection input. Values unchanged.
+    internal static void FillDetectionTensor(SKBitmap bitmap, DenseTensor<float> input, ReadOnlySpan<float> mean, ReadOnlySpan<float> std)
     {
-        for (int y = 0; y < bitmap.Height; y++)
+        int width = bitmap.Width;
+        int height = bitmap.Height;
+        Span<float> buffer = input.Buffer.Span;
+        int plane = height * width;
+        for (int y = 0; y < height; y++)
         {
             var row = GetPixelRowSpan(bitmap, y);
-            for (int x = 0; x < bitmap.Width; x++)
+            int rBase = y * width;              // channel 0 (red)
+            int gBase = plane + rBase;          // channel 1 (green)
+            int bBase = (2 * plane) + rBase;    // channel 2 (blue)
+            for (int x = 0; x < width; x++)
             {
                 int offset = x * 4;
                 float blue = row[offset] / 255.0f;
                 float green = row[offset + 1] / 255.0f;
                 float red = row[offset + 2] / 255.0f;
-                input[0, 0, y, x] = (red - mean[0]) / std[0];
-                input[0, 1, y, x] = (green - mean[1]) / std[1];
-                input[0, 2, y, x] = (blue - mean[2]) / std[2];
+                buffer[rBase + x] = (red - mean[0]) / std[0];
+                buffer[gBase + x] = (green - mean[1]) / std[1];
+                buffer[bBase + x] = (blue - mean[2]) / std[2];
             }
         }
     }
 
-    private static unsafe void FillRecognitionTensor(SKBitmap bitmap, DenseTensor<float> input)
+    // Fills the NCHW [1,3,H,W] recognition input (see FillDetectionTensor for the flat-buffer rationale).
+    internal static void FillRecognitionTensor(SKBitmap bitmap, DenseTensor<float> input)
     {
-        for (int y = 0; y < bitmap.Height; y++)
+        int width = bitmap.Width;
+        int height = bitmap.Height;
+        Span<float> buffer = input.Buffer.Span;
+        int plane = height * width;
+        for (int y = 0; y < height; y++)
         {
             var row = GetPixelRowSpan(bitmap, y);
-            for (int x = 0; x < bitmap.Width; x++)
+            int rBase = y * width;
+            int gBase = plane + rBase;
+            int bBase = (2 * plane) + rBase;
+            for (int x = 0; x < width; x++)
             {
                 int offset = x * 4;
                 float blue = row[offset] / 255.0f;
                 float green = row[offset + 1] / 255.0f;
                 float red = row[offset + 2] / 255.0f;
-                input[0, 0, y, x] = (red - 0.5f) / 0.5f;
-                input[0, 1, y, x] = (green - 0.5f) / 0.5f;
-                input[0, 2, y, x] = (blue - 0.5f) / 0.5f;
+                buffer[rBase + x] = (red - 0.5f) / 0.5f;
+                buffer[gBase + x] = (green - 0.5f) / 0.5f;
+                buffer[bBase + x] = (blue - 0.5f) / 0.5f;
             }
         }
     }
@@ -567,14 +577,47 @@ public class PaddleOCREngine : IOCREngine
         float totalConf = 0f;
         int count = 0;
 
+        // Flat, row-major access when the runtime handed back a DenseTensor (it does), avoiding the
+        // multi-dimensional strided indexer in the seqLen×classCount argmax scan. For a [1,d1,d2] tensor
+        // [0,i,j] = i*stride + j (stride = d2): the NTC row t is contiguous; NCT strides by `stride`.
+        ReadOnlySpan<float> flat = tensor is DenseTensor<float> dense ? dense.Buffer.Span : default;
+        bool useFlat = !flat.IsEmpty;
+        int stride = tensor.Dimensions[2];
+
         for (int t = 0; t < seqLen; t++)
         {
             int maxIdx = 0;
-            float maxVal = isNTC ? tensor[0, t, 0] : tensor[0, 0, t];
-            for (int c = 1; c < classCount; c++)
+            float maxVal;
+            if (useFlat)
             {
-                float v = isNTC ? tensor[0, t, c] : tensor[0, c, t];
-                if (v > maxVal) { maxVal = v; maxIdx = c; }
+                if (isNTC)
+                {
+                    int rowBase = t * stride;
+                    maxVal = flat[rowBase];
+                    for (int c = 1; c < classCount; c++)
+                    {
+                        float v = flat[rowBase + c];
+                        if (v > maxVal) { maxVal = v; maxIdx = c; }
+                    }
+                }
+                else
+                {
+                    maxVal = flat[t]; // c == 0
+                    for (int c = 1; c < classCount; c++)
+                    {
+                        float v = flat[(c * stride) + t];
+                        if (v > maxVal) { maxVal = v; maxIdx = c; }
+                    }
+                }
+            }
+            else
+            {
+                maxVal = isNTC ? tensor[0, t, 0] : tensor[0, 0, t];
+                for (int c = 1; c < classCount; c++)
+                {
+                    float v = isNTC ? tensor[0, t, c] : tensor[0, c, t];
+                    if (v > maxVal) { maxVal = v; maxIdx = c; }
+                }
             }
 
             if (maxIdx > 0 && maxIdx != prevIdx && maxIdx < dict.Count)
