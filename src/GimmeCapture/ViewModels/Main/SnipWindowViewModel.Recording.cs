@@ -327,7 +327,7 @@ public partial class SnipWindowViewModel
             _separateOutputLogicalBounds = boundsSnapshot;
         }
 
-        if (await _recordingService.StartAsync(region, _currentRecordingPath, format, _mainVm.ShowRecordCursor, ScreenOffset, VisualScaling, _mainVm.RecordingSettings.RecordFPS, enableSystemAudio, _mainVm.RecordMicrophone, _mainVm.SelectedMicDeviceId, _mainVm.MicVolume, windowHandle: default, windowHandles: windowHandles, multiWindowMode: RecordMultiWindowMode, separateOutputFiles: separateOutputFiles))
+        if (await _recordingService.StartAsync(region, _currentRecordingPath, format, _mainVm.ShowRecordCursor, ScreenOffset, VisualScaling, _mainVm.RecordingSettings.RecordFPS, enableSystemAudio, _mainVm.RecordingSettings.RecordMicrophone, _mainVm.RecordingSettings.SelectedMicDeviceId, _mainVm.RecordingSettings.MicVolume, windowHandle: default, windowHandles: windowHandles, multiWindowMode: RecordMultiWindowMode, separateOutputFiles: separateOutputFiles))
         {
             _recordingCaptureLogicalRect = region;
             EnsureRecordingTimerStarted();

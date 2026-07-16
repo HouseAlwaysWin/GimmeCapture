@@ -655,7 +655,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     public bool IsInputAudioActive => InputAudioLevel >= 0.01;
     public bool IsOutputAudioActive => OutputAudioLevel >= 0.01;
     // Whether the recording captures the mic — drives the mic level meter's visibility in the toolbar.
-    public bool IsMicrophoneEnabled => _mainVm?.RecordMicrophone ?? false;
+    public bool IsMicrophoneEnabled => _mainVm?.RecordingSettings.RecordMicrophone ?? false;
 
     // Live mute toggles for the active recording (session-only; reset to unmuted on each Start). When muted
     // the capture writes silence so the audio timeline stays in sync — see RecordingService.Audio.cs.
@@ -701,7 +701,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         }
 
         // Meter the mic the recording will actually use (not just the system default input).
-        _audioLevelMonitor.MicDeviceId = _mainVm?.SelectedMicDeviceId;
+        _audioLevelMonitor.MicDeviceId = _mainVm?.RecordingSettings.SelectedMicDeviceId;
         if (_audioLevelMonitor.TryRefresh())
         {
             InputAudioLevel = QuantizeAudioLevel(_audioLevelMonitor.InputPeak);
