@@ -493,6 +493,12 @@ public partial class SnipWindow : Window
         var hwnd = this.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
         if (hwnd == IntPtr.Zero) return;
 
+        // Toggle WS_EX_TRANSPARENT so a browser underneath doesn't gray out while the translation toolbar is
+        // hidden (Chromium skips WS_EX_TRANSPARENT top-most windows in its occlusion tracker). This runs here
+        // because the region subscription already fires on ShowToolbar / IsToolbarShownOnScreen / IsTranslationMode
+        // changes; the method itself is a no-op unless the desired state actually changed.
+        SyncTranslationClickThroughExStyle();
+
         // Reset WM_NCHITTEST pass-through islands every refresh to avoid leaking translation-only
         // hit-test state into screenshot/recording region logic.
         _useHitTestRegions = false;

@@ -30,6 +30,12 @@ public partial class SnipWindow : Window
     [DllImport("user32.dll", EntryPoint = "SetWindowLong")]
     private static extern IntPtr SetWindowLongPtr32(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
 
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtr")]
+    private static extern IntPtr GetWindowLongPtr64(IntPtr hWnd, int nIndex);
+
+    [DllImport("user32.dll", EntryPoint = "GetWindowLong")]
+    private static extern int GetWindowLong32(IntPtr hWnd, int nIndex);
+
     [DllImport("user32.dll")]
     private static extern IntPtr CallWindowProc(IntPtr lpPrevWndFunc, IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
 
@@ -38,11 +44,55 @@ public partial class SnipWindow : Window
     private static extern bool ScreenToClient(IntPtr hWnd, ref POINT lpPoint);
 
     private const int GWLP_WNDPROC = -4;
+    private const int GWL_EXSTYLE = -20;
+    private const long WS_EX_TRANSPARENT = 0x20;
     private const uint WM_NCHITTEST = 0x0084;
     private const int HTTRANSPARENT = -1;
 
     private WndProcDelegate? _wndProcDelegate;
     private IntPtr _oldWndProc;
+    private bool _translationClickThroughExStyleActive;
+
+    /// <summary>
+    /// While the translation toolbar is HIDDEN, add <c>WS_EX_TRANSPARENT</c> to the overlay so a Chromium
+    /// (GPU/DWM-composited) browser underneath stops graying out on tab/page switch. Chromium's native-window
+    /// occlusion tracker treats a <c>WS_EX_TRANSPARENT</c> top-most window as non-occluding and skips it, so it
+    /// never marks the browser occluded. This is the ONLY lever that fixes the gray — the window's content,
+    /// Win32 region, and capture affinity (the earlier attempts) do not affect Chromium's occlusion decision,
+    /// only the extended style does. The style is removed when the toolbar is shown so the toolbar stays
+    /// clickable; while hidden the overlay is fully click-through anyway ("read the page" mode — Esc / the
+    /// toolbar-toggle hotkey still work through the global keyboard hook). Windows-only; no-op elsewhere.
+    /// </summary>
+    private void SyncTranslationClickThroughExStyle()
+    {
+        if (!OperatingSystem.IsWindows() || _viewModel == null) return;
+
+        bool want = _viewModel.IsTranslationMode && !_viewModel.IsToolbarShownOnScreen;
+        if (want == _translationClickThroughExStyleActive) return;
+
+        var hwnd = this.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
+        if (hwnd == IntPtr.Zero) return;
+
+        try
+        {
+            long ex = IntPtr.Size == 8
+                ? GetWindowLongPtr64(hwnd, GWL_EXSTYLE).ToInt64()
+                : GetWindowLong32(hwnd, GWL_EXSTYLE);
+            long updated = want ? (ex | WS_EX_TRANSPARENT) : (ex & ~WS_EX_TRANSPARENT);
+            if (updated != ex)
+            {
+                if (IntPtr.Size == 8)
+                    SetWindowLongPtr64(hwnd, GWL_EXSTYLE, new IntPtr(updated));
+                else
+                    SetWindowLongPtr32(hwnd, GWL_EXSTYLE, new IntPtr((int)updated));
+            }
+            _translationClickThroughExStyleActive = want;
+        }
+        catch (Exception e)
+        {
+            AppLog.Warning("SnipWindow.SyncTranslationClickThroughExStyle", e);
+        }
+    }
 
     private readonly List<Rect> _hitTestRegions = new();
     private bool _useHitTestRegions;
