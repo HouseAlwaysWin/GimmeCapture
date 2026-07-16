@@ -285,6 +285,33 @@ public partial class SnipWindow : Window
             && isMatch(hotkey);
     }
 
+    // The toolbar toggle is the one unfocused shortcut allowed in EVERY overlay mode — including translation,
+    // which the general unfocused path excludes (so target-app Esc can't close the overlay). This lets the
+    // user re-show the toolbar after hiding it while the target app (e.g. an editor) has focus. Gated to a
+    // toolbar-bearing mode and to not-typing.
+    private bool CanToggleToolbarWhileUnfocused()
+    {
+        return _viewModel != null
+            && _viewModel.IsToolbarVisible
+            && !_viewModel.IsEnteringText
+            && !_viewModel.IsInputFocused;
+    }
+
+    private bool MatchesToolbarToggleKeyNow(string keyStr)
+    {
+        string hotkey = _viewModel?.ActiveToolbarHotkey ?? string.Empty;
+        if (!IsSafeUnfocusedCaptureHotkey(hotkey))
+        {
+            return false; // only a safe single key (e.g. F4) toggles globally; combos would risk swallowing typing
+        }
+
+        bool noModifiers = (GetAsyncKeyState(0x10) & 0x8000) == 0 // Shift
+            && (GetAsyncKeyState(0x11) & 0x8000) == 0             // Ctrl
+            && (GetAsyncKeyState(0x12) & 0x8000) == 0;            // Alt
+        ReadOnlySpan<char> keyPart = HotkeyParsingHelper.GetKeyPart(hotkey.AsSpan().Trim());
+        return noModifiers && keyPart.Equals(keyStr.AsSpan(), StringComparison.OrdinalIgnoreCase);
+    }
+
     private void PostHandleDismissOrCloseHotkey()
     {
         // Route to the same VM decision the Esc key-binding uses, so the two paths can't diverge.
@@ -359,6 +386,20 @@ public partial class SnipWindow : Window
         if (_viewModel == null) return false;
 
         bool ownsForeground = ShouldRouteLowLevelHotkeysForForegroundWindow();
+
+        // Re-show/hide the toolbar from anywhere while the overlay is active — including translation mode and
+        // while the target app has focus. Handled before the general unfocused gate below (which excludes
+        // translation for Esc/close etc.); only the safe single-key toolbar hotkey with no modifiers matches,
+        // so it won't disturb the target app. Without this, hiding the toolbar while focused on e.g. VS Code
+        // left no way to bring it back until the overlay regained focus.
+        if (isKeyDown && !ownsForeground && CanToggleToolbarWhileUnfocused() && MatchesToolbarToggleKeyNow(keyStr))
+        {
+            Avalonia.Threading.Dispatcher.UIThread.Post(
+                () => _viewModel?.ToggleToolbarCommand?.Execute().Subscribe(),
+                Avalonia.Threading.DispatcherPriority.Input);
+            return true;
+        }
+
         bool isCtrlModifierEvent = IsPureModifierKey(keyStr) && string.Equals(keyStr, "Ctrl", StringComparison.OrdinalIgnoreCase);
         bool allowGlobalCtrlSelectionModifier =
             _viewModel.IsTranslationMode &&
