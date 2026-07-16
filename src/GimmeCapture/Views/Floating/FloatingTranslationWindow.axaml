@@ -4,6 +4,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:vm="using:GimmeCapture.ViewModels.Floating"
         xmlns:m="using:GimmeCapture.Models"
+        xmlns:cv="using:GimmeCapture.Converters"
         xmlns:services="using:GimmeCapture.Services.Core"
         mc:Ignorable="d"
         x:Class="GimmeCapture.Views.Floating.FloatingTranslationWindow"
@@ -80,7 +81,7 @@
                                     <Grid RowDefinitions="*,Auto">
                                         <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                                                       ToolTip.Tip="{Binding TranslatedText}">
-                                            <SelectableTextBlock Text="{Binding TranslatedText}"
+                                            <SelectableTextBlock Text="{Binding TranslatedText, Converter={x:Static cv:SelectableTextSanitizeConverter.Instance}}"
                                                                  Foreground="White"
                                                                  FontSize="{Binding DisplayFontSize}"
                                                                  TextWrapping="Wrap">
@@ -135,7 +136,7 @@
                                         ToolTip.Tip="{Binding TranslatedText}"
                                         ClipToBounds="True">
                                     <StackPanel>
-                                        <SelectableTextBlock Text="{Binding TranslatedText}"
+                                        <SelectableTextBlock Text="{Binding TranslatedText, Converter={x:Static cv:SelectableTextSanitizeConverter.Instance}}"
                                                              Foreground="White"
                                                              FontSize="{Binding DisplayFontSize}"
                                                              TextWrapping="Wrap">
