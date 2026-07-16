@@ -76,24 +76,25 @@ public partial class SnipWindow : Window
     /// Optionally merges the toolbar so it stays hit-testable.
     /// </summary>
     /// <remarks>
-    /// When the toolbar is hidden: if Ctrl is <b>not</b> held, use disjoint islands only (video-friendly).
-    /// If Ctrl <b>is</b> held, we must use the nearly full-client region — otherwise <c>SetWindowRgn</c> leaves
-    /// almost no hit-testable area and Ctrl-drag selection is delivered to windows below. While Ctrl is held,
-    /// hardware video may be affected; release Ctrl to restore disjoint mode.
+    /// When the toolbar is hidden we ALWAYS use disjoint islands / pass-through (video-friendly), regardless of the
+    /// selection modifier. A near-full-client <c>SetWindowRgn</c> (as used when the toolbar is shown) makes
+    /// Chromium/DWM treat the overlay as an occluder and stop compositing the browser underneath — a solid-gray
+    /// tab/page switch. The cost is that a new drag-selection can't be started with the toolbar hidden: re-show it
+    /// (F4 toggles globally) to restore full-client hit-testing.
     /// </remarks>
     private void ApplyTranslationDwmMinimalOccluderFix(IntPtr hwnd, double scaling, int windowWidth, int windowHeight)
     {
         if (_viewModel != null && !_viewModel.IsToolbarShownOnScreen)
         {
-            bool selModHeld = IsTranslationSelectionModifierDownForRegion();
-            if (selModHeld && !_translationSuppressFullHitUntilSelectionModifierUp)
-            {
-                Win32Helpers.SetMultiWindowHoleRegion(hwnd, windowWidth, windowHeight, new[] { new Rect(0, 0, 1, 1) }, 0, null, null);
-                _hitTestRegions.Clear();
-                _useHitTestRegions = false;
-                return;
-            }
-
+            // Toolbar hidden = the user switched to "read / use the page" mode. NEVER expand to the near-full-client
+            // region here: a full-screen opaque SetWindowRgn makes Chromium/DWM treat this overlay as an occluder
+            // and stop compositing the browser underneath, so switching browser tabs/pages paints a solid gray
+            // frame (the reported bug). Previously the selection modifier being physically down still forced the
+            // full-client region — which fires transiently for ANY browser Ctrl-shortcut (Ctrl+Tab / Ctrl+PgDn, via
+            // the global Ctrl hook), and permanently when the modifier is set to "None". Always use the
+            // video-friendly pass-through instead. Trade-off: starting a NEW drag-selection now requires re-showing
+            // the toolbar (F4, which toggles globally) to restore full-client hit-testing — acceptable, since a
+            // hidden toolbar signals the user is done selecting and wants to interact with the page.
             ApplyTranslationPassThroughExceptToolbarAndLoadingBar(hwnd, scaling);
             return;
         }
