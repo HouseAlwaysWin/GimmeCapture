@@ -312,6 +312,46 @@ public partial class SnipWindow : Window
         return noModifiers && keyPart.Equals(keyStr.AsSpan(), StringComparison.OrdinalIgnoreCase);
     }
 
+    // Esc/close needs the unfocused path ONLY in translation mode. Screenshot/recording already dismiss on an
+    // unfocused Esc via the general capture-hotkey gate below — but that gate excludes translation (so a
+    // target-app Esc couldn't close the overlay), which is exactly what left the translation overlay
+    // un-closable by keyboard once the target app took focus. Gated to not-typing so it won't hijack Esc while
+    // the user edits a translation input field.
+    private bool CanDismissOrCloseWhileUnfocused()
+    {
+        return _viewModel != null
+            && _viewModel.IsTranslationMode
+            && !_viewModel.IsEnteringText
+            && !_viewModel.IsInputFocused;
+    }
+
+    private bool MatchesDismissOrCloseKeyNow(string keyStr)
+    {
+        // Never hijack a physical modifier combo (e.g. Ctrl+W in the target app) — only a bare press dismisses.
+        bool noModifiers = (GetAsyncKeyState(0x10) & 0x8000) == 0 // Shift
+            && (GetAsyncKeyState(0x11) & 0x8000) == 0             // Ctrl
+            && (GetAsyncKeyState(0x12) & 0x8000) == 0;            // Alt
+        if (!noModifiers)
+        {
+            return false;
+        }
+
+        // Bare Escape always dismisses (single key, universally expected).
+        if (string.Equals(keyStr, "Escape", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        // Also honor a configured single-key close hotkey; reject combos so a bound letter can't swallow typing.
+        string hotkey = _viewModel?.CloseHotkey ?? string.Empty;
+        if (!IsSafeUnfocusedCaptureHotkey(hotkey))
+        {
+            return false;
+        }
+        ReadOnlySpan<char> keyPart = HotkeyParsingHelper.GetKeyPart(hotkey.AsSpan().Trim());
+        return keyPart.Equals(keyStr.AsSpan(), StringComparison.OrdinalIgnoreCase);
+    }
+
     private void PostHandleDismissOrCloseHotkey()
     {
         // Route to the same VM decision the Esc key-binding uses, so the two paths can't diverge.
@@ -397,6 +437,19 @@ public partial class SnipWindow : Window
             Avalonia.Threading.Dispatcher.UIThread.Post(
                 () => _viewModel?.ToggleToolbarCommand?.Execute().Subscribe(),
                 Avalonia.Threading.DispatcherPriority.Input);
+            return true;
+        }
+
+        // Dismiss/close (Esc, or the configured close hotkey) while in translation mode with the target app
+        // (browser/editor) focused. Mirrors the toolbar-toggle case above and runs before the general unfocused
+        // gate below, which deliberately excludes translation for Esc/close — an exclusion that left the overlay
+        // impossible to dismiss by keyboard once focus moved to the target app (the reported bug: "esc 會關不掉").
+        // Only a bare Esc / single-key close hotkey with no modifiers matches, so it won't swallow target-app
+        // shortcuts. Screenshot/recording keep dismissing via the existing gate — this only closes the gap for
+        // translation.
+        if (isKeyDown && !ownsForeground && CanDismissOrCloseWhileUnfocused() && MatchesDismissOrCloseKeyNow(keyStr))
+        {
+            PostHandleDismissOrCloseHotkey();
             return true;
         }
 
