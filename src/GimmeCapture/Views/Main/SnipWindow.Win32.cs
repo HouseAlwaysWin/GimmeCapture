@@ -67,7 +67,12 @@ public partial class SnipWindow : Window
     {
         if (!OperatingSystem.IsWindows() || _viewModel == null) return;
 
-        bool want = _viewModel.IsTranslationMode && !_viewModel.IsToolbarShownOnScreen;
+        // While the selection modifier is held the overlay must be INTERACTIVE so a Ctrl-drag can start a
+        // selection even with the toolbar hidden — so it can't be WS_EX_TRANSPARENT then. The browser dims like a
+        // normal screenshot selection for that brief window and restores on release. Otherwise (reading the page)
+        // keep it click-through so the browser doesn't gray.
+        bool selecting = IsTranslationSelectionModifierDownForRegion() && !_translationSuppressFullHitUntilSelectionModifierUp;
+        bool want = _viewModel.IsTranslationMode && !_viewModel.IsToolbarShownOnScreen && !selecting;
         if (want == _translationClickThroughExStyleActive) return;
 
         var hwnd = this.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
