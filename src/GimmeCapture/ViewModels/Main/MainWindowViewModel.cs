@@ -458,6 +458,36 @@ public partial class MainWindowViewModel : ViewModelBase
             }
         };
 
+        // Translation settings live in a sub-VM but are exposed as forwarder properties here (SourceLanguage,
+        // TargetLanguage, SelectedTranslationEngine, ...). Mirror the settings-backed selections into the live
+        // settings model immediately (so the translation engine sees the choice before the debounced save),
+        // then re-raise on this VM so the forwarder bindings refresh and the global auto-save handler persists.
+        Translation.PropertyChanged += (s, e) =>
+        {
+            if (e.PropertyName is null)
+            {
+                return;
+            }
+
+            if (!_isDataLoading)
+            {
+                switch (e.PropertyName)
+                {
+                    case nameof(TranslationSettingsViewModel.SourceLanguage):
+                        _settingsService.Settings.SourceLanguage = Translation.SourceLanguage;
+                        break;
+                    case nameof(TranslationSettingsViewModel.TargetLanguage):
+                        _settingsService.Settings.TargetLanguage = Translation.TargetLanguage;
+                        break;
+                    case nameof(TranslationSettingsViewModel.SelectedTranslationEngine):
+                        _settingsService.Settings.SelectedTranslationEngine = Translation.SelectedTranslationEngine;
+                        break;
+                }
+            }
+
+            this.RaisePropertyChanged(e.PropertyName);
+        };
+
         _loadTask = LoadSettingsAsync();
     }
 
