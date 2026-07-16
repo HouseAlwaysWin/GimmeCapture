@@ -137,9 +137,19 @@ public partial class SnipWindow : Window
     {
         rect = default;
 
+        // The toolbar only contributes an opaque / hit-test island while the user can actually SEE it on
+        // screen (ShowToolbar on). When hidden, emit no island — otherwise its old position stays masked and
+        // the area underneath can't be interacted with (the reported bug). IsToolbarShownOnScreen is the
+        // documented flag for Win32 hit-testing; IsToolbarVisible (used below) ignores ShowToolbar, so the
+        // fallback would otherwise keep returning the cached toolbar rect after the toolbar was hidden.
+        if (_viewModel == null || !_viewModel.IsToolbarShownOnScreen)
+        {
+            return false;
+        }
+
         if (Toolbar == null || !Toolbar.IsVisible || Toolbar.Bounds.Width <= 1 || Toolbar.Bounds.Height <= 1)
         {
-            if (_viewModel == null || !_viewModel.IsToolbarVisible || _viewModel.ToolbarWidth <= 1 || _viewModel.ToolbarHeight <= 1)
+            if (!_viewModel.IsToolbarVisible || _viewModel.ToolbarWidth <= 1 || _viewModel.ToolbarHeight <= 1)
             {
                 return false;
             }
