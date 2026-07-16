@@ -206,12 +206,12 @@
                       Header="{Binding [RecordAudioGroup], Source={x:Static services:LocalizationService.Instance}}">
                 <StackPanel Spacing="5">
                     <CheckBox Content="{Binding [RecordSystemAudio], Source={x:Static services:LocalizationService.Instance}}" IsChecked="{Binding RecordSystemAudio}"/>
-                    <CheckBox Content="{Binding [RecordMicrophone], Source={x:Static services:LocalizationService.Instance}}" IsChecked="{Binding RecordMicrophone}"/>
-                    <StackPanel Margin="24,0,0,0" Spacing="6" IsVisible="{Binding RecordMicrophone}">
+                    <CheckBox Content="{Binding [RecordMicrophone], Source={x:Static services:LocalizationService.Instance}}" IsChecked="{Binding RecordingSettings.RecordMicrophone}"/>
+                    <StackPanel Margin="24,0,0,0" Spacing="6" IsVisible="{Binding RecordingSettings.RecordMicrophone}">
                         <DockPanel>
                             <TextBlock Text="{Binding [MicDevice], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                            <ComboBox ItemsSource="{Binding MicInputDevices}"
-                                      SelectedValue="{Binding SelectedMicDeviceId}"
+                            <ComboBox ItemsSource="{Binding RecordingSettings.MicInputDevices}"
+                                      SelectedValue="{Binding RecordingSettings.SelectedMicDeviceId}"
                                       SelectedValueBinding="{Binding Id}"
                                       HorizontalAlignment="Stretch">
                                 <ComboBox.ItemTemplate>
@@ -222,7 +222,7 @@
                             </ComboBox>
                         </DockPanel>
                         <TextBlock Text="{Binding [MicVolume], Source={x:Static services:LocalizationService.Instance}}" FontSize="12"/>
-                        <Slider Minimum="0" Maximum="2" Value="{Binding MicVolume}"
+                        <Slider Minimum="0" Maximum="2" Value="{Binding RecordingSettings.MicVolume}"
                                 TickFrequency="0.1" SmallChange="0.1" LargeChange="0.5" IsSnapToTickEnabled="True"/>
                     </StackPanel>
                 </StackPanel>

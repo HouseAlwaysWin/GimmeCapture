@@ -63,9 +63,9 @@ public partial class MainWindowViewModel
             WebcamCorner = RecordingSettings.WebcamCorner,
             WebcamSize = RecordingSettings.WebcamSize,
             WebcamCircular = RecordingSettings.WebcamCircular,
-            RecordMicrophone = RecordMicrophone,
-            SelectedMicDeviceId = SelectedMicDeviceId,
-            MicVolume = MicVolume,
+            RecordMicrophone = RecordingSettings.RecordMicrophone,
+            SelectedMicDeviceId = RecordingSettings.SelectedMicDeviceId,
+            MicVolume = RecordingSettings.MicVolume,
             HighlightCursor = HighlightCursor,
             HighlightClicks = HighlightClicks,
             ShowKeystrokes = ShowKeystrokes,
@@ -146,9 +146,9 @@ public partial class MainWindowViewModel
         RecordingSettings.WebcamCorner = snapshot.WebcamCorner;
         RecordingSettings.WebcamSize = snapshot.WebcamSize;
         RecordingSettings.WebcamCircular = snapshot.WebcamCircular;
-        RecordMicrophone = snapshot.RecordMicrophone;
-        SelectedMicDeviceId = snapshot.SelectedMicDeviceId;
-        MicVolume = snapshot.MicVolume;
+        RecordingSettings.RecordMicrophone = snapshot.RecordMicrophone;
+        RecordingSettings.SelectedMicDeviceId = snapshot.SelectedMicDeviceId;
+        RecordingSettings.MicVolume = snapshot.MicVolume;
         HighlightCursor = snapshot.HighlightCursor;
         HighlightClicks = snapshot.HighlightClicks;
         ShowKeystrokes = snapshot.ShowKeystrokes;

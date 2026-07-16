@@ -134,9 +134,9 @@ public partial class MainWindowViewModel
         RecordingSettings.WebcamCircular = defaultSettings.WebcamCircular;
         CustomVideoCrf = defaultSettings.CustomVideoCrf;
         CustomVideoBitrateKbps = defaultSettings.CustomVideoBitrateKbps;
-        RecordMicrophone = defaultSettings.RecordMicrophone;
-        SelectedMicDeviceId = defaultSettings.SelectedMicDeviceId;
-        MicVolume = defaultSettings.MicVolume;
+        RecordingSettings.RecordMicrophone = defaultSettings.RecordMicrophone;
+        RecordingSettings.SelectedMicDeviceId = defaultSettings.SelectedMicDeviceId;
+        RecordingSettings.MicVolume = defaultSettings.MicVolume;
         HighlightCursor = defaultSettings.HighlightCursor;
         HighlightClicks = defaultSettings.HighlightClicks;
         ShowKeystrokes = defaultSettings.ShowKeystrokes;
