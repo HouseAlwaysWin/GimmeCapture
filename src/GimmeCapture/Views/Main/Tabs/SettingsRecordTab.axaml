@@ -232,16 +232,16 @@
             <Expander Theme="{StaticResource GothicExpander}"
                       Header="{Binding [RecordWebcamGroup], Source={x:Static services:LocalizationService.Instance}}">
                 <StackPanel Spacing="5">
-                    <CheckBox Content="{Binding [EnableWebcam], Source={x:Static services:LocalizationService.Instance}}" IsChecked="{Binding EnableWebcam}"/>
-                    <StackPanel Margin="24,0,0,0" Spacing="6" IsVisible="{Binding EnableWebcam}">
+                    <CheckBox Content="{Binding [EnableWebcam], Source={x:Static services:LocalizationService.Instance}}" IsChecked="{Binding RecordingSettings.EnableWebcam}"/>
+                    <StackPanel Margin="24,0,0,0" Spacing="6" IsVisible="{Binding RecordingSettings.EnableWebcam}">
                         <DockPanel>
                             <TextBlock Text="{Binding [WebcamDevice], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,0,10,0"/>
                             <Button DockPanel.Dock="Right"
-                                    Command="{Binding RefreshWebcamDevicesCommand}"
+                                    Command="{Binding RecordingSettings.RefreshWebcamDevicesCommand}"
                                     Content="{Binding [WebcamRefresh], Source={x:Static services:LocalizationService.Instance}}"
                                     Margin="6,0,0,0"/>
-                            <AutoCompleteBox ItemsSource="{Binding WebcamDevices}"
-                                             Text="{Binding WebcamDeviceName, Mode=TwoWay}"
+                            <AutoCompleteBox ItemsSource="{Binding RecordingSettings.WebcamDevices}"
+                                             Text="{Binding RecordingSettings.WebcamDeviceName, Mode=TwoWay}"
                                              FilterMode="Contains"
                                              MinimumPrefixLength="0"
                                              IsTextCompletionEnabled="False"
@@ -250,8 +250,8 @@
                         </DockPanel>
                         <DockPanel>
                             <TextBlock Text="{Binding [WebcamCorner], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                            <ComboBox ItemsSource="{Binding WebcamCornerOptions}"
-                                      SelectedValue="{Binding WebcamCorner}"
+                            <ComboBox ItemsSource="{Binding RecordingSettings.WebcamCornerOptions}"
+                                      SelectedValue="{Binding RecordingSettings.WebcamCorner}"
                                       SelectedValueBinding="{Binding Value}"
                                       HorizontalAlignment="Stretch">
                                 <ComboBox.ItemTemplate>
@@ -263,8 +263,8 @@
                         </DockPanel>
                         <DockPanel>
                             <TextBlock Text="{Binding [WebcamSize], Source={x:Static services:LocalizationService.Instance}}" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                            <ComboBox ItemsSource="{Binding WebcamSizeOptions}"
-                                      SelectedValue="{Binding WebcamSize}"
+                            <ComboBox ItemsSource="{Binding RecordingSettings.WebcamSizeOptions}"
+                                      SelectedValue="{Binding RecordingSettings.WebcamSize}"
                                       SelectedValueBinding="{Binding Value}"
                                       HorizontalAlignment="Stretch">
                                 <ComboBox.ItemTemplate>
@@ -275,7 +275,7 @@
                             </ComboBox>
                         </DockPanel>
                         <CheckBox Content="{Binding [WebcamCircular], Source={x:Static services:LocalizationService.Instance}}"
-                                  IsChecked="{Binding WebcamCircular}"/>
+                                  IsChecked="{Binding RecordingSettings.WebcamCircular}"/>
                     </StackPanel>
                 </StackPanel>
             </Expander>

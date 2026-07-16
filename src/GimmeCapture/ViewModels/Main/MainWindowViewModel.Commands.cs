@@ -127,11 +127,11 @@ public partial class MainWindowViewModel
         ShowSnipCursor = defaultSettings.ShowSnipCursor;
         ShowRecordCursor = defaultSettings.ShowRecordCursor;
         RecordSystemAudio = defaultSettings.RecordSystemAudio;
-        EnableWebcam = defaultSettings.EnableWebcam;
-        WebcamDeviceName = defaultSettings.WebcamDeviceName;
-        WebcamCorner = defaultSettings.WebcamCorner;
-        WebcamSize = defaultSettings.WebcamSize;
-        WebcamCircular = defaultSettings.WebcamCircular;
+        RecordingSettings.EnableWebcam = defaultSettings.EnableWebcam;
+        RecordingSettings.WebcamDeviceName = defaultSettings.WebcamDeviceName;
+        RecordingSettings.WebcamCorner = defaultSettings.WebcamCorner;
+        RecordingSettings.WebcamSize = defaultSettings.WebcamSize;
+        RecordingSettings.WebcamCircular = defaultSettings.WebcamCircular;
         CustomVideoCrf = defaultSettings.CustomVideoCrf;
         CustomVideoBitrateKbps = defaultSettings.CustomVideoBitrateKbps;
         RecordMicrophone = defaultSettings.RecordMicrophone;
