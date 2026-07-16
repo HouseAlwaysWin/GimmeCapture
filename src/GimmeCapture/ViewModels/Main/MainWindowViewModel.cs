@@ -391,7 +391,6 @@ public partial class MainWindowViewModel : ViewModelBase
         InitializeVideoCompress();
 
         RefreshLlamaModelsCommand = ReactiveCommand.Create(() => RefreshLlamaModelCatalog());
-        RefreshWebcamDevicesCommand = ReactiveCommand.Create(RefreshWebcamDevices);
         SelectLlamaModelCommand = ReactiveCommand.Create<string>(modelId =>
         {
             if (string.IsNullOrWhiteSpace(modelId))
