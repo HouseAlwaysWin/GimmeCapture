@@ -61,77 +61,35 @@ public partial class MainWindowViewModel
         new(SnipToolbarPosition.TopRight, LocalizationService.Instance["SnipToolbarPositionTopRight"])
     ];
 
-    public List<TranslationLanguage> AvailableTranslationLanguages =>
-        Enum.GetValues<TranslationLanguage>().AsValueEnumerable().ToList();
+    // Translation settings section VM (source/target language + engine). These stay as forwarder properties
+    // on MainWindowViewModel so the many Snip / toolbar consumers of SourceLanguage/TargetLanguage stay
+    // untouched; the immediate settings-model mirror + auto-save are wired by the Translation.PropertyChanged
+    // bridge in the constructor.
+    public TranslationSettingsViewModel Translation { get; } = new();
 
-    public List<OCRLanguage> AvailableOCRLanguages =>
-        Enum.GetValues<OCRLanguage>().AsValueEnumerable().ToList();
+    public List<TranslationLanguage> AvailableTranslationLanguages => Translation.AvailableTranslationLanguages;
+    public List<OCRLanguage> AvailableOCRLanguages => Translation.AvailableOCRLanguages;
+    public List<TranslationEngine> AvailableTranslationEngines => Translation.AvailableTranslationEngines;
 
-    private OCRLanguage _sourceLanguage;
     public OCRLanguage SourceLanguage
     {
-        get => _sourceLanguage;
-        set
-        {
-            if (_sourceLanguage != value)
-            {
-                this.RaiseAndSetIfChanged(ref _sourceLanguage, value);
-                
-                if (!_isDataLoading)
-                {
-                   _settingsService.Settings.SourceLanguage = value; // Immediate sync
-                   MarkModifiedAndQueueSettingsSave();
-                }
-            }
-        }
+        get => Translation.SourceLanguage;
+        set => Translation.SourceLanguage = value;
     }
 
-    private TranslationLanguage _targetLanguage;
     public TranslationLanguage TargetLanguage
     {
-        get => _targetLanguage;
-        set
-        {
-            if (_targetLanguage != value)
-            {
-                this.RaiseAndSetIfChanged(ref _targetLanguage, value);
-                
-                if (!_isDataLoading)
-                {
-                   _settingsService.Settings.TargetLanguage = value; // Immediate sync
-                   MarkModifiedAndQueueSettingsSave(); // Auto-save for convenience
-                }
-            }
-        }
+        get => Translation.TargetLanguage;
+        set => Translation.TargetLanguage = value;
     }
 
-    public List<TranslationEngine> AvailableTranslationEngines { get; } = new() { TranslationEngine.LlamaSharp };
-    
-    private TranslationEngine _selectedTranslationEngine;
     public TranslationEngine SelectedTranslationEngine
     {
-        get => _selectedTranslationEngine;
-        set
-        {
-            if (_selectedTranslationEngine != value)
-            {
-                this.RaiseAndSetIfChanged(ref _selectedTranslationEngine, value);
-                this.RaisePropertyChanged(nameof(IsLlamaVisible));
-                
-                // Notify language lists changed
-                this.RaisePropertyChanged(nameof(AvailableOCRLanguages));
-                this.RaisePropertyChanged(nameof(AvailableTranslationLanguages));
-
-                if (!_isDataLoading)
-                {
-                    _settingsService.Settings.SelectedTranslationEngine = value; // Immediate sync
-                    MarkModifiedAndQueueSettingsSave();
-                }
-            }
-        }
+        get => Translation.SelectedTranslationEngine;
+        set => Translation.SelectedTranslationEngine = value;
     }
 
-    public bool IsLlamaVisible => SelectedTranslationEngine == TranslationEngine.LlamaSharp;
+    public bool IsLlamaVisible => Translation.IsLlamaVisible;
 
     public LanguageOption[] AvailableLanguages { get; } = new[]
     {
