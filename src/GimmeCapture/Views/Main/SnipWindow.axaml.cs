@@ -212,15 +212,9 @@ public partial class SnipWindow : Window
                     _viewModel.InitializeTranslationToolbarPosition();
                 }, Avalonia.Threading.DispatcherPriority.Loaded);
 
-                if (_viewModel.IsTranslationMode)
-                {
-                    // Exclude from capture specifically for Translation Mode to prevent flickering during background OCR updates.
-                    var hwnd = this.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
-                    if (hwnd != IntPtr.Zero && OperatingSystem.IsWindows())
-                    {
-                        Win32Helpers.SetWindowCaptureVisibility(hwnd, false);
-                    }
-                }
+                // NOTE: translation mode used to SetWindowCaptureVisibility(false) here for the whole session.
+                // Removed — that continuous WDA_EXCLUDEFROMCAPTURE grayed a Chromium window underneath the
+                // overlay (see ApplyRecordingScreenCaptureAffinity). The OCR grabs now exclude per-capture.
             }
             else
             {
@@ -686,9 +680,14 @@ public partial class SnipWindow : Window
 
         // Do not gate RecordingUsesWindowsExcludeFromCapture on RecState: that flag is set and Sync runs
         // before RecordingService sets State=Recording, so requiring RecState!=Idle cleared WDA and broke capture.
-        bool excludeFromCapture =
-            vm.IsTranslationMode
-            || vm.RecordingUsesWindowsExcludeFromCapture;
+        //
+        // Translation mode no longer excludes the overlay CONTINUOUSLY. A WDA_EXCLUDEFROMCAPTURE + SetWindowRgn
+        // overlay corrupts DWM composition of a Chromium (GPU/DWM-composited) window underneath: the browser
+        // paints a solid-gray frame on tab/page switch whenever the overlay has no opaque content to anchor it
+        // (e.g. the toolbar is hidden). Same class of artifact as the "DWM ghost" in docs/WGC_HANDOFF.md (Fix F).
+        // The OCR grabs that actually need the exclusion now toggle it per-capture
+        // (RunTranslationOcrGrabExcludedAsync); recording-without-annotations still excludes continuously.
+        bool excludeFromCapture = vm.RecordingUsesWindowsExcludeFromCapture;
 
         Win32Helpers.SetWindowCaptureVisibility(hwnd, visible: !excludeFromCapture);
     }

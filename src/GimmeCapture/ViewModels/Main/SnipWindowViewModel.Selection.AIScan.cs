@@ -197,7 +197,15 @@ public partial class SnipWindowViewModel
             }
 
             var fullScreenRect = new Rect(0, 0, ViewportSize.Width, ViewportSize.Height);
-            using var bitmap = await _captureService.CaptureScreenAsync(fullScreenRect, ScreenOffset, VisualScaling, false);
+            // Exclude the overlay from capture ONLY around this full-screen grab, so OCR doesn't pick up its own
+            // toolbar / loading bar / existing translation boxes. The overlay is NOT excluded continuously (that
+            // grays a Chromium window underneath — see SnipWindow.ApplyRecordingScreenCaptureAffinity); the View
+            // wrapper toggles WDA_EXCLUDEFROMCAPTURE per-grab and restores WDA_NONE afterwards.
+            Func<Task<SkiaSharp.SKBitmap>> grabFullScreen =
+                () => _captureService.CaptureScreenAsync(fullScreenRect, ScreenOffset, VisualScaling, false);
+            using var bitmap = RunTranslationOcrGrabExcludedAsync != null
+                ? await RunTranslationOcrGrabExcludedAsync(grabFullScreen)
+                : await grabFullScreen();
             if (bitmap == null)
             {
                 return;
