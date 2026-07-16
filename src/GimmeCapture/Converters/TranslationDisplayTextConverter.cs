@@ -13,16 +13,13 @@ public sealed class TranslationDisplayTextConverter : IMultiValueConverter
         string translatedText = values.Count > 1 ? values[1] as string ?? string.Empty : string.Empty;
         bool showOcrResult = values.Count > 2 && values[2] is bool show && show;
 
-        if (showOcrResult && !string.IsNullOrWhiteSpace(originalText))
-        {
-            return originalText;
-        }
+        string result =
+            showOcrResult && !string.IsNullOrWhiteSpace(originalText) ? originalText
+            : !string.IsNullOrWhiteSpace(translatedText) ? translatedText
+            : originalText;
 
-        if (!string.IsNullOrWhiteSpace(translatedText))
-        {
-            return translatedText;
-        }
-
-        return originalText;
+        // Sanitize so the SelectableTextBlocks these feed can't crash Avalonia's selection hit-test on a
+        // zero-length (blank / trailing-newline) line — see SelectableTextSanitizeConverter.
+        return SelectableTextSanitizeConverter.Sanitize(result);
     }
 }

@@ -214,7 +214,7 @@
                                     IsHitTestVisible="True" ZIndex="10"
                                     MaxWidth="{Binding ScrollContentWidth}"
                                     MaxHeight="{Binding ScrollContentHeight}">
-                                <SelectableTextBlock Text="{Binding PinnedText}"
+                                <SelectableTextBlock Text="{Binding PinnedText, Converter={x:Static cv:SelectableTextSanitizeConverter.Instance}}"
                                                    Foreground="White"
                                                    FontSize="{Binding ScaledFontSize}"
                                                    TextWrapping="Wrap"
