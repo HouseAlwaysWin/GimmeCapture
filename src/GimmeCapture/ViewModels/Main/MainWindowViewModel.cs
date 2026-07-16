@@ -304,6 +304,11 @@ public partial class MainWindowViewModel : ViewModelBase
         _aiModelCatalog = dependencies.AIModelCatalog;
         _aiResourceService = dependencies.AIResourceService;
         _aiResourceOrchestrator = dependencies.AIResourceOrchestrator;
+
+        // Translation settings section (language/engine + Llama model catalog). Exposed via forwarder
+        // properties on this VM; needs the lazy AIResourceService getter + a StatusText callback for the
+        // Llama catalog. Constructed here so the forwarders + the Translation bridge below can use it.
+        Translation = new TranslationSettingsViewModel(() => AIResourceService, status => StatusText = status);
         _sam2RuntimeService = dependencies.SAM2RuntimeService;
         _ocrRuntimeService = dependencies.OcrRuntimeService;
         AIPathService = dependencies.AIPathService;
@@ -481,6 +486,18 @@ public partial class MainWindowViewModel : ViewModelBase
                         break;
                     case nameof(TranslationSettingsViewModel.SelectedTranslationEngine):
                         _settingsService.Settings.SelectedTranslationEngine = Translation.SelectedTranslationEngine;
+                        break;
+                    case nameof(TranslationSettingsViewModel.LlamaModelId):
+                        _settingsService.Settings.LlamaModelId = Translation.LlamaModelId;
+                        break;
+                    case nameof(TranslationSettingsViewModel.LlamaCustomModelPath):
+                        _settingsService.Settings.LlamaCustomModelPath = Translation.LlamaCustomModelPath;
+                        break;
+                    case nameof(TranslationSettingsViewModel.LlamaContextSize):
+                        _settingsService.Settings.LlamaContextSize = Translation.LlamaContextSize;
+                        break;
+                    case nameof(TranslationSettingsViewModel.LlamaGpuLayers):
+                        _settingsService.Settings.LlamaGpuLayers = Translation.LlamaGpuLayers;
                         break;
                 }
             }
