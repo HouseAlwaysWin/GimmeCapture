@@ -312,6 +312,11 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
     public Func<string, string, Task>? ShowOkDialogAction { get; set; }
     internal Action? PersistTranslationSelectionsAction { get; set; }
     public Func<Task<Avalonia.Media.Imaging.WriteableBitmap?>>? CaptureDrawingModeSnapshotAsync { get; set; }
+    // Runs the given screen-grab with the overlay briefly excluded from capture (WDA_EXCLUDEFROMCAPTURE) then
+    // restored to WDA_NONE, so a full-screen OCR grab doesn't pick up the overlay's own chrome while the overlay
+    // is NOT excluded continuously (which grays a Chromium window underneath — see ApplyRecordingScreenCaptureAffinity).
+    // Wired by the View (needs the hwnd); null on non-Windows / design → callers fall back to the bare grab.
+    public Func<Func<Task<SkiaSharp.SKBitmap>>, Task<SkiaSharp.SKBitmap>>? RunTranslationOcrGrabExcludedAsync { get; set; }
     // Last param: the scrollable content size (logical px) — non-null only for a long scrolling-capture pin,
     // where `rect` is the fixed viewport (original selection) and the full stitch scrolls inside it.
     public Action<Avalonia.Media.Imaging.Bitmap, Rect, Color, double, bool, bool, string?, double, Avalonia.Size?>? OpenPinWindowAction { get; set; }
@@ -874,6 +879,7 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         FocusWindowAction = null;
         PersistTranslationSelectionsAction = null;
         CaptureDrawingModeSnapshotAsync = null;
+        RunTranslationOcrGrabExcludedAsync = null;
         OpenPinnedVideoWindowAction = null;
         PickSaveFileAction = null;
     }

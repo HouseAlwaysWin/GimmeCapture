@@ -395,6 +395,36 @@ public partial class SnipWindow : Window
                 }
             };
 
+            // Per-capture exclusion for the full-screen translation OCR grab. The overlay is NOT excluded from
+            // capture continuously anymore (that grayed a Chromium window underneath — see
+            // ApplyRecordingScreenCaptureAffinity); instead we exclude it only for the ~50 ms of the grab so the
+            // OCR image doesn't include the overlay's own chrome, then restore WDA_NONE. Same shape as
+            // CaptureDrawingModeSnapshotAsync above.
+            _viewModel.RunTranslationOcrGrabExcludedAsync = async grab =>
+            {
+                var hwnd = this.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
+                bool restoreCaptureVisibility = false;
+
+                try
+                {
+                    if (hwnd != IntPtr.Zero && OperatingSystem.IsWindows())
+                    {
+                        Win32Helpers.SetWindowCaptureVisibility(hwnd, visible: false);
+                        restoreCaptureVisibility = true;
+                        await Task.Delay(50);
+                    }
+
+                    return await grab();
+                }
+                finally
+                {
+                    if (restoreCaptureVisibility && hwnd != IntPtr.Zero && OperatingSystem.IsWindows())
+                    {
+                        Win32Helpers.SetWindowCaptureVisibility(hwnd, visible: true);
+                    }
+                }
+            };
+
             _viewModel.PickSaveFileAction = async () =>
             {
                  var topLevel = TopLevel.GetTopLevel(this);
