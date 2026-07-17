@@ -9,6 +9,41 @@
 
 ---
 
+## Unreleased
+
+### 🌐 Translation overlay
+
+- **The browser no longer greys out when the toolbar is hidden.** Hiding the translation toolbar over a
+  Chromium-based browser (Chrome/Edge) used to make the page repaint solid grey when switching tabs/pages; the
+  overlay is now marked non-occluding so the browser keeps compositing normally.
+- **Ctrl-drag to select while the toolbar is hidden.** Hold the selection modifier (default Ctrl) and drag to
+  translate a new region even with the toolbar hidden — the screen dims like a normal selection and returns to
+  click-through on release.
+- **Esc closes the overlay from anywhere.** Esc now dismisses/closes the translation overlay even when another
+  app (browser/editor) holds focus, not only when the capture app is focused.
+- **The show/hide-toolbar hotkey (F4) works globally** during translation, including while the target app is
+  focused — so you can always bring the toolbar back.
+- **A hidden toolbar no longer blocks clicks.** The spot where the toolbar used to sit — and the desktop under a
+  hidden toolbar — is fully click-through again.
+- **Fixed a crash** when selecting/copying text in a pinned translation (or pinned image caption) that contained
+  a blank line.
+
+### 🔤 OCR
+
+- **Windows 10 compatibility.** When the DirectML OCR session can't initialize (seen on some Windows 10 /
+  GPU-driver setups), OCR now falls back to CPU instead of failing, and logs the outcome. Inconsistent saved AI
+  settings (e.g. OCR detection on while the master AI switch is off) are also repaired on load.
+
+### 🖼️ Long screenshot
+
+- **Scrollable long-screenshot pin.** A long scrolling capture now pins at the size of your original selection
+  and scrolls the tall image inside it (fit-to-width), and the pin can be resized freely like any image pin.
+
+### ⚡ Performance
+
+- Faster scrolling-capture stitching, OCR tensor fills / CTC decoding, and auto-translate — the language-detection
+  probe's result is reused instead of running detection twice.
+
 ## v0.64.0 - 2026-07-15
 
 ### 🧹 Maintenance / reliability
