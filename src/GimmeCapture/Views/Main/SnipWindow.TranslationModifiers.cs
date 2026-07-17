@@ -91,12 +91,20 @@ public partial class SnipWindow
         return IsPhysicalModifierLabelDown(m);
     }
 
-    /// <summary> Win32 region: <c>None</c> behaves like modifier always active (full-hit for selection). </summary>
+    /// <summary>
+    /// Win32 region / hidden-overlay interactivity gate. A real hold-modifier reports its physical state.
+    /// <c>None</c> (left-drag, no key) reports "active" ONLY while the toolbar is shown — so the overlay is
+    /// full-client and catches left-drags there. While the toolbar is HIDDEN, None reports NOT active: otherwise
+    /// the hidden overlay would be permanently interactive/opaque, which blocks the page and re-grays the browser
+    /// underneath (WS_EX_TRANSPARENT can only be applied when the overlay is meant to be click-through — see
+    /// <see cref="SyncTranslationClickThroughExStyle"/>). Re-show the toolbar, or use a real hold-modifier, to
+    /// drag-select while hidden.
+    /// </summary>
     private bool IsTranslationSelectionModifierDownForRegion()
     {
         var m = _viewModel?.TranslationSelectionHoldModifier ?? "Ctrl";
         if (string.Equals(m, "None", StringComparison.OrdinalIgnoreCase))
-            return true;
+            return _viewModel?.IsToolbarShownOnScreen == true;
         return IsPhysicalModifierLabelDown(m);
     }
 

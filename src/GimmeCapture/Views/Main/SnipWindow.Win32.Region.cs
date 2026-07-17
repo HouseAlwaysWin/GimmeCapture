@@ -118,14 +118,17 @@ public partial class SnipWindow : Window
     /// <summary>
     /// Translation idle (no untranslated rings yet): only toolbar + top loading strip own hit-testing;
     /// the rest of the overlay passes clicks to windows below so the user can interact with the desktop.
-    /// When the toolbar is hidden, a moderate transparent + click-through "anchor" rect keeps the window region
-    /// non-degenerate so DWM does not gray a Chromium window underneath (see the hidden branch below).
+    /// Pass-through relies on the WINDOW REGION only (points outside the region reach any process's window).
+    /// Do NOT re-add the #125 "invisible anchor rect" here: a region rect whose clicks are meant to be forwarded
+    /// via WM_NCHITTEST → HTTRANSPARENT silently BLOCKS other processes' windows — HTTRANSPARENT only forwards to
+    /// windows of the SAME thread, so over a browser/editor the click is swallowed (the reported "can't click the
+    /// app under the old toolbar area" bug). The browser-gray the anchor tried to fix is actually handled by
+    /// WS_EX_TRANSPARENT (see <see cref="SyncTranslationClickThroughExStyle"/>).
     /// </summary>
     private void ApplyTranslationPassThroughExceptToolbarAndLoadingBar(IntPtr hwnd, double scaling)
     {
         var opaque = new System.Collections.Generic.List<Rect>();
-        bool toolbarShown = TryGetToolbarOpaqueRect(scaling, 4, out var toolbarRect);
-        if (toolbarShown)
+        if (TryGetToolbarOpaqueRect(scaling, 4, out var toolbarRect))
         {
             opaque.Add(toolbarRect);
         }
@@ -138,40 +141,11 @@ public partial class SnipWindow : Window
             }
         }
 
-        if (!toolbarShown)
-        {
-            // Toolbar hidden: without a real on-screen region the overlay collapses to the ~1×1 stub below. A
-            // near-degenerate window region on this transparent, top-most overlay corrupts the DWM composition of
-            // a Chromium (GPU/DWM-composited) window underneath — the browser repaints solid gray on tab/page
-            // switch. It only happens when the toolbar is hidden, because a SHOWN toolbar leaves a real region
-            // island that keeps DWM composing normally. Emit a moderate "anchor" rect that reproduces that
-            // shown-state footprint. Nothing is painted there while hidden (so it's invisible) and it is made
-            // fully click-through below, so it does NOT reintroduce the un-clickable mask that #120 removed.
-            opaque.Add(GetTranslationHiddenDwmAnchorRect(scaling));
-        }
-
         // Keep a 1x1 region to avoid full-screen occluder heuristics while still allowing pass-through.
         opaque.Add(new Rect(0, 0, 1, 1));
         Win32Helpers.SetDisjointOpaqueRegions(hwnd, opaque, null);
         _hitTestRegions.Clear();
-        // Shown: the toolbar island owns clicks and the region itself defines pass-through (outside = click-through).
-        // Hidden: the anchor rect is part of the window region (the DWM anchor) but must NOT block clicks — route
-        // every point through the WM_NCHITTEST hook, which returns HTTRANSPARENT for anything not in
-        // _hitTestRegions (empty here), making the whole overlay click-through.
-        _useHitTestRegions = !toolbarShown;
-    }
-
-    /// <summary>
-    /// A moderate on-screen rect used ONLY while the translation toolbar is hidden, to keep the Win32 window
-    /// region non-degenerate so DWM keeps compositing a browser underneath (see
-    /// <see cref="ApplyTranslationPassThroughExceptToolbarAndLoadingBar"/>). Toolbar-sized, anchored at the
-    /// top-left corner (guaranteed on the primary monitor); rendered transparent and click-through, so invisible.
-    /// </summary>
-    private Rect GetTranslationHiddenDwmAnchorRect(double scaling)
-    {
-        double logicalW = _viewModel != null && _viewModel.ToolbarWidth > 1 ? _viewModel.ToolbarWidth : 220;
-        double logicalH = _viewModel != null && _viewModel.ToolbarHeight > 1 ? _viewModel.ToolbarHeight : 52;
-        return new Rect(0, 0, logicalW * scaling, logicalH * scaling);
+        _useHitTestRegions = false;
     }
 
     private bool TryGetToolbarOpaqueRect(double scaling, double logicalPadding, out Rect rect)
