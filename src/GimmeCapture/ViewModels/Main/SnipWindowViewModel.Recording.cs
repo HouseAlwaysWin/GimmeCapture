@@ -269,7 +269,7 @@ public partial class SnipWindowViewModel
         {
             // Ensure directory exists
             FileLocationService.EnsureDirectory(_mainVm.RecordingSettings.VideoSaveDirectory, "SnipRecording.EnsureVideoDirectory");
-            string fileName = CaptureFileNameService.BuildFileName(format);
+            string fileName = CaptureFileNameService.BuildFileName(format, _mainVm.FileNameTemplate);
             _currentRecordingPath = System.IO.Path.Combine(_mainVm.RecordingSettings.VideoSaveDirectory, fileName);
         }
         else

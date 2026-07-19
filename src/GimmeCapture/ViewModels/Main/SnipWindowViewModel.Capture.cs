@@ -207,7 +207,7 @@ public partial class SnipWindowViewModel
                     }
                     FileLocationService.EnsureDirectory(dir, "SnipCapture.EnsureSaveDirectory");
 
-                    var fileName = CaptureFileNameService.BuildFileName("png");
+                    var fileName = CaptureFileNameService.BuildFileName("png", _mainVm.FileNameTemplate);
                     var path = System.IO.Path.Combine(dir, fileName);
                     await _captureService.SaveToFileAsync(bitmap, path);
                     savedPath = path;
@@ -228,7 +228,7 @@ public partial class SnipWindowViewModel
                 else
                 {
                     // Fallback
-                    var fileName = CaptureFileNameService.BuildFileName("png");
+                    var fileName = CaptureFileNameService.BuildFileName("png", _mainVm?.FileNameTemplate);
                     var path = System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.MyPictures), fileName);
                     await _captureService.SaveToFileAsync(bitmap, path);
                     savedPath = path;

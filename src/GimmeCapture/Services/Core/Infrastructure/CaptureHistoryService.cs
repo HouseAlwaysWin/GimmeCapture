@@ -60,7 +60,8 @@ public sealed class CaptureHistoryService
     public string CreateManagedCapturePath(string extension)
     {
         FileLocationService.EnsureDirectory(_capturesDir, "CaptureHistory.EnsureCaptures");
-        string name = $"GimmeCapture_{DateTime.Now:yyyyMMdd_HHmmss}_{Guid.NewGuid().ToString("N")[..6]}.{extension}";
+        string baseName = CaptureFileNameService.RenderTemplate(_settingsService.Settings.FileNameTemplate, DateTime.Now);
+        string name = $"{baseName}_{Guid.NewGuid().ToString("N")[..6]}.{extension}";
         return Path.Combine(_capturesDir, name);
     }
 
