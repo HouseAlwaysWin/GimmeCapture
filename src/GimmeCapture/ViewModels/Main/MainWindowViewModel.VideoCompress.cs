@@ -266,14 +266,32 @@ public partial class MainWindowViewModel
 
     // Output container. MP4/MKV/MOV go through LibavClipExporter; GIF/WebM render an edited intermediate mp4
     // then transcode (see EncodeGifWebmAsync), matching the formats Pin mode offers.
-    public string[] CompressOutputFormats { get; } = ["MP4", "MKV", "MOV", "GIF", "WebM"];
+    public string[] CompressOutputFormats { get; } = ["MP4", "MKV", "MOV", "GIF", "WebM", "MP3", "WAV", "M4A", "Opus"];
+
+    /// <summary>Audio-only output formats (extract the audio track; video knobs don't apply).</summary>
+    internal static bool IsAudioOnlyFormat(string fmt) =>
+        fmt.Equals("MP3", StringComparison.OrdinalIgnoreCase)
+        || fmt.Equals("WAV", StringComparison.OrdinalIgnoreCase)
+        || fmt.Equals("M4A", StringComparison.OrdinalIgnoreCase)
+        || fmt.Equals("Opus", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Maps a display format to its file extension ("Opus" ships in an .ogg container).</summary>
+    internal static string ExtensionForFormat(string fmt) =>
+        fmt.Equals("Opus", StringComparison.OrdinalIgnoreCase) ? ".ogg" : "." + fmt.ToLowerInvariant();
 
     private string _selectedCompressFormat = "MP4";
     public string SelectedCompressFormat
     {
         get => _selectedCompressFormat;
-        set => this.RaiseAndSetIfChanged(ref _selectedCompressFormat, value);
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _selectedCompressFormat, value);
+            this.RaisePropertyChanged(nameof(IsAudioOnlyFormatSelected));
+        }
     }
+
+    /// <summary>Shows the "video knobs don't apply" hint when an audio-only output format is chosen.</summary>
+    public bool IsAudioOnlyFormatSelected => IsAudioOnlyFormat(SelectedCompressFormat);
 
     public ReactiveCommand<Unit, Unit> PickCompressOutputFolderCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> ClearCompressOutputFolderCommand { get; private set; } = null!;
@@ -751,6 +769,22 @@ public partial class MainWindowViewModel
         if (fmt.Equals("GIF", StringComparison.OrdinalIgnoreCase) || fmt.Equals("WebM", StringComparison.OrdinalIgnoreCase))
         {
             return $"{prefix}: {LocalizationService.Instance["CompressEstimateVaries"]}";
+        }
+
+        // Audio-only: size ≈ audio bitrate × duration (WAV = raw PCM at 48 kHz stereo s16). Whole-file
+        // duration on purpose — the audio branch extracts the full track regardless of editor trims.
+        if (IsAudioOnlyFormat(fmt))
+        {
+            double durationSec = item.ProbedDuration;
+            if (durationSec <= 0)
+            {
+                return $"{prefix}: {LocalizationService.Instance["CompressEstimateVaries"]}";
+            }
+
+            long bytes = fmt.Equals("WAV", StringComparison.OrdinalIgnoreCase)
+                ? (long)(durationSec * 48_000 * 2 * 2)
+                : (long)(durationSec * (s.AudioBitrateKbps > 0 ? s.AudioBitrateKbps : 128) * 1000 / 8);
+            return $"{prefix}: ≈ {FileSizeFormatter.Format(bytes)}";
         }
 
         if (s.UseTargetSize)

@@ -577,5 +577,6 @@
   "QuickOcrFailed": "Text recognition failed.",
   "QuickOcrSavedToFile": "OCR text copied and saved to file",
   "QuickOcrSaveFailed": "OCR text copied, but saving the file failed",
+  "CompressAudioOnlyHint": "Audio-only output: extracts the full audio track; video settings (codec/CRF/resolution/filters/edits) do not apply.",
   "GifUnavailableReason": "The GIF encoder is unavailable in this installation, so GIF output is disabled."
 }

@@ -441,6 +441,9 @@
                                       SelectedItem="{Binding SelectedCompressFormat}"
                                       HorizontalAlignment="Stretch"/>
                         </DockPanel>
+                        <TextBlock Text="{Binding [CompressAudioOnlyHint], Source={x:Static services:LocalizationService.Instance}}"
+                                   IsVisible="{Binding IsAudioOnlyFormatSelected}"
+                                   FontSize="11" Opacity="0.7" TextWrapping="Wrap" Margin="0,2,0,0"/>
 
                         <!-- Target size vs quality -->
                         <CheckBox IsChecked="{Binding CompressUseTargetSize}"

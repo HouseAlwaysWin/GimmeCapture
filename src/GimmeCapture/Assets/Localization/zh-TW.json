@@ -578,5 +578,6 @@
   "QuickOcrFailed": "\u6587\u5b57\u8fa8\u8b58\u5931\u6557\u3002",
   "QuickOcrSavedToFile": "OCR 文字已複製並存檔",
   "QuickOcrSaveFailed": "OCR 文字已複製，但存檔失敗",
+  "CompressAudioOnlyHint": "純音訊輸出：抽取完整音軌；影片設定（編碼/CRF/解析度/濾鏡/剪輯）不適用。",
   "GifUnavailableReason": "\u6b64\u5b89\u88dd\u7f3a\u5c11 GIF \u7de8\u78bc\u5668\uff0c\u56e0\u6b64\u7121\u6cd5\u9078\u64c7 GIF\u3002"
 }
