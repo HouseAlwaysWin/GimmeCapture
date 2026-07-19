@@ -57,6 +57,7 @@ public partial class MainWindowViewModel
             RevealAfterSave = RevealAfterSave,
             SaveDirectory = SaveDirectory,
             FileNameTemplate = FileNameTemplate,
+            ImgurClientId = ImgurClientId,
             ShowSnipCursor = ShowSnipCursor,
             ShowRecordCursor = ShowRecordCursor,
             RecordSystemAudio = RecordSystemAudio,
@@ -117,6 +118,7 @@ public partial class MainWindowViewModel
         RevealAfterSave = snapshot.RevealAfterSave;
         SaveDirectory = snapshot.SaveDirectory;
         FileNameTemplate = snapshot.FileNameTemplate;
+        ImgurClientId = snapshot.ImgurClientId;
         SnipHotkey = snapshot.SnipHotkey;
         TranslateHotkey = snapshot.TranslateHotkey;
         RecordHotkey = snapshot.RecordHotkey;

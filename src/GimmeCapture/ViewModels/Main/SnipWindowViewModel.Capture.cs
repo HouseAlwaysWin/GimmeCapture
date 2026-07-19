@@ -184,6 +184,62 @@ public partial class SnipWindowViewModel
         }
     }
 
+    /// <summary>Renders the selection, closes the snip overlay, and hands the PNG off to the
+    /// app-lifetime MainWindowViewModel for a fire-and-forget Imgur upload — the fullscreen overlay
+    /// must never stay open blocking on a network call.</summary>
+    private async Task ExecuteUploadAsync()
+    {
+        if (_isProcessingRecording) return;
+        if (CurrentMode != SnipMode.Screenshot) return;
+        if (SelectionRect.Width <= 0 || SelectionRect.Height <= 0) return;
+        if (_mainVm == null) return;
+
+        // No Client-ID: tell the user before touching the window, so the snip stays open and
+        // Copy/Save remain usable.
+        if (string.IsNullOrWhiteSpace(_mainVm.ImgurClientId))
+        {
+            _mainVm.SetStatus("StatusImgurClientIdMissing");
+            return;
+        }
+
+        await _captureVisibilityCoordinator.HideAndWaitForCaptureAsync(
+            HideAction ?? (() => { }));
+
+        try
+        {
+            _isLocalProcessing = true;
+            ShowProcessingOverlay = true;
+            IsIndeterminate = true;
+            ProcessingText = LocalizationService.Instance["StatusUploading"] ?? "Uploading...";
+            using var bitmap = await _captureService.CaptureScreenWithAnnotationsAsync(
+                SelectionRect,
+                ScreenOffset,
+                VisualScaling,
+                Annotations,
+                GetTranslationSelectionsForCapture(),
+                TranslatedBlocks,
+                _mainVm.ShowSnipCursor);
+
+            byte[] png;
+            using (var image = SkiaSharp.SKImage.FromBitmap(bitmap))
+            using (var data = image.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100))
+            {
+                png = data.ToArray();
+            }
+
+            // The capture service is app-lifetime (owned by the factory), so its text-clipboard
+            // delegate stays valid after this window closes.
+            _mainVm.RunImgurUploadAsync(png, _captureService.CopyToClipboardAsync).Forget("Upload.Imgur");
+        }
+        finally
+        {
+            PersistTranslatedSelectionsAfterCaptureIfNeeded();
+            _isLocalProcessing = false;
+            ShowProcessingOverlay = false;
+            CloseAction?.Invoke();
+        }
+    }
+
     private async Task ExecuteSaveAsync()
     {
         // If recording is active, stop recording instead of saving screenshot
