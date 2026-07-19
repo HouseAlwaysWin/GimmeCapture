@@ -31,9 +31,11 @@ if ($LASTEXITCODE -ne 0) {
     throw "Localization parity check failed with exit code $LASTEXITCODE."
 }
 
+# No --runtime flag: it would override the projects' RuntimeIdentifiers (win-x64, plus
+# linux-x64 on the net10.0 head) and locked mode would then flag the lock file's
+# linux-x64 sections as a mismatch. Project-driven RIDs already cover win-x64.
 Invoke-DotNet restore $solution `
     --locked-mode `
-    --runtime win-x64 `
     --artifacts-path $artifacts `
     --disable-parallel `
     --disable-build-servers
@@ -47,6 +49,10 @@ Invoke-DotNet build $solution `
 
 $testArgs = @(
     "test", $testProject,
+    # The Tests project multi-targets (net10.0-windows;net10.0) for the Linux Tests CI gate. Locally we
+    # only run the Windows head — the net10.0 head is exercised by linux-tests.yml on every push, and
+    # running both here would double the test (and coverage) time for no extra signal on Windows.
+    "--framework", "net10.0-windows10.0.19041.0",
     "--configuration", "Release",
     "--no-build",
     "--no-restore",

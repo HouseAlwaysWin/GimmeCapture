@@ -12,14 +12,13 @@
   </PropertyGroup>
 
   <!-- Tests that construct / subclass Windows-only types (fenced out of the app's net10.0 head):
-       keep them Windows-head-only. SnipWindowViewModelTests is here only because its fake wraps the
-       real WindowDetectionService — a candidate to un-fence later via an interface-only fake. -->
+       keep them Windows-head-only. SnipWindowViewModelTests runs on both heads since its fake uses
+       the shared WindowCandidateHitTester instead of the real WindowDetectionService. -->
   <ItemGroup Condition="!$(TargetFramework.Contains('-windows'))">
     <Compile Remove="HotkeyServiceTests.cs" />
     <Compile Remove="WindowDetectionServiceTests.cs" />
     <Compile Remove="ViewModels\MainWindowViewModelConstructionTests.cs" />
     <Compile Remove="ViewModels\MainWindowViewModelHotkeyTests.cs" />
-    <Compile Remove="ViewModels\SnipWindowViewModelTests.cs" />
   </ItemGroup>
 
   <ItemGroup>

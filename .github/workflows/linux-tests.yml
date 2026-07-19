@@ -53,8 +53,10 @@ jobs:
       # Non-locked restore (EnableWindowsTargeting packs aren't in the lock file; the
       # Windows CI still enforces locked mode). --force-evaluate refreshes the lock
       # files so csproj changes (e.g. the Tests TFM addition) keep them current.
+      # No --runtime flag: the CLI flag OVERRIDES the projects' RuntimeIdentifiers, which
+      # would strip the net10.0 head's linux-x64 sections out of the refreshed lock files.
       - name: Restore (refresh lock files)
-        run: dotnet restore GimmeCapture.slnx --runtime win-x64 -p:EnableWindowsTargeting=true -p:RestoreLockedMode=false --force-evaluate
+        run: dotnet restore GimmeCapture.slnx -p:EnableWindowsTargeting=true -p:RestoreLockedMode=false --force-evaluate
 
       # This cloud/Linux dev flow has no local dotnet to regenerate lock files, so the CI
       # commits refreshed locks back to the working branch (push events only, never PRs).

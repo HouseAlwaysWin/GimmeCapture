@@ -111,8 +111,10 @@ powershell -ExecutionPolicy Bypass -File scripts/ensure-ffmpeg-libs.ps1
 Common commands:
 
 ```powershell
-# Restore (locked mode is enforced in CI — keep packages.lock.json in sync)
-dotnet restore GimmeCapture.slnx --runtime win-x64
+# Restore (locked mode is enforced in CI — keep packages.lock.json in sync).
+# No --runtime flag: it overrides the projects' RuntimeIdentifiers (win-x64, plus
+# linux-x64 on the net10.0 head) and desyncs the lock files.
+dotnet restore GimmeCapture.slnx
 
 # Build
 dotnet build GimmeCapture.slnx -c Debug

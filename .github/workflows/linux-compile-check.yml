@@ -38,7 +38,7 @@ jobs:
       # Windows targeting + WinRT projection packs via PackageDownload, which the
       # lock file does not cover; locked mode is still enforced by the Windows CI.
       - name: Restore
-        run: dotnet restore GimmeCapture.slnx --runtime win-x64 -p:EnableWindowsTargeting=true
+        run: dotnet restore GimmeCapture.slnx -p:EnableWindowsTargeting=true
 
       - name: Build (compile only)
         run: dotnet build GimmeCapture.slnx -c Debug --no-restore -p:EnableWindowsTargeting=true -maxcpucount

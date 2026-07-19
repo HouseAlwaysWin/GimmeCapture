@@ -3,13 +3,15 @@ using System.Collections.Generic;
 using Avalonia;
 using GimmeCapture.Models;
 using GimmeCapture.Services.Abstractions;
+using GimmeCapture.Services.Core.Interaction;
 
 namespace GimmeCapture.Services.Platforms.Linux;
 
 /// <summary>
-/// Placeholder <see cref="IWindowDetectionService"/> for non-Windows (Linux) runs. Enumerating and
-/// hit-testing top-level windows needs X11/Wayland queries — future work
-/// (docs/LINUX_PORT_FEASIBILITY.md). Returns empty sets so window-pick features degrade gracefully.
+/// Placeholder <see cref="IWindowDetectionService"/> for non-Windows (Linux) runs. Enumerating
+/// top-level windows needs X11/Wayland queries — future work (docs/LINUX_PORT_FEASIBILITY.md).
+/// Returns empty sets so window-pick features degrade gracefully; hit-testing already shares the
+/// pure <see cref="WindowCandidateHitTester"/> so only enumeration is missing.
 /// </summary>
 public sealed class LinuxWindowDetectionService : IWindowDetectionService
 {
@@ -18,7 +20,8 @@ public sealed class LinuxWindowDetectionService : IWindowDetectionService
 
     public IReadOnlyList<WindowCandidate> GetVisibleWindowCandidates(IntPtr? excludeHWnd = null) => NoCandidates;
 
-    public WindowCandidate? GetCandidateAtPoint(Point point, IReadOnlyList<WindowCandidate> candidates, WindowCandidate? previousCandidate = null) => null;
+    public WindowCandidate? GetCandidateAtPoint(Point point, IReadOnlyList<WindowCandidate> candidates, WindowCandidate? previousCandidate = null)
+        => WindowCandidateHitTester.GetCandidateAtPoint(point, candidates, previousCandidate);
 
     public IReadOnlyList<RecordableWindow> GetRecordableWindows(IntPtr? excludeHWnd = null) => NoWindows;
 }
