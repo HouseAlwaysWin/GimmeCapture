@@ -337,6 +337,7 @@ public partial class SnipWindowViewModel
     public ReactiveCommand<Unit, Unit> CopyCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> SaveCommand { get; set; } = null!;
     public ReactiveCommand<Unit, Unit> PinCommand { get; set; } = null!;
+    public ReactiveCommand<Unit, Unit> UploadCommand { get; set; } = null!;
     // Toolbar toggle mirroring the "lock selected screenshot instead of click-through" setting: flips the
     // live lock on the current selection and persists the preference (see ToggleLockSelectionSnapshot).
     public ReactiveCommand<Unit, Unit> ToggleLockSelectionSnapshotCommand { get; set; } = null!;
@@ -546,6 +547,8 @@ public partial class SnipWindowViewModel
             canExecuteHotkeys);
 
         SaveCommand = CreateAsyncCommand(Save, nameof(SaveCommand), canExecuteHotkeys);
+
+        UploadCommand = CreateAsyncCommand(ExecuteUploadAsync, nameof(UploadCommand), canExecuteHotkeys);
 
         ScrollingCaptureCommand = CreateAsyncCommand(ExecuteScrollingCapture, nameof(ScrollingCaptureCommand), canExecuteHotkeys);
 
