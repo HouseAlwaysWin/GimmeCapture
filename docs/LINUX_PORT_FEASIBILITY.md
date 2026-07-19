@@ -4,12 +4,12 @@
 Windows-only 螢幕擷取工具）移植到 Linux 的可行性、阻力點與工作量分級。定位為 **核心子集優先**：
 先讓 Snip / 標註 / Pin / 檔案式壓縮在 Linux 跑起來，即時錄影、系統音訊、全域熱鍵延後。
 
-> ✅ 現況（2026-07-04 更新）：**Phase 0 + Phase 1 靜態擷取已實作並在 Linux 實機驗證**。
-> `GimmeCapture.csproj` 現在多目標 `net10.0-windows10.0.19041.0;net10.0`，Windows-only 型別 fenced 出
-> net10.0 head（WGC 走 `LibavWgcSessions.NonWindows.cs` 編譯 shim；Clipboard/MessageBox 走 Avalonia /
-> `PlatformErrorDialog`）。App 能在 X11 桌面啟動、主視窗顯示，`LinuxScreenCaptureService` 以 libX11
-> `XGetImage` 做真實區域擷取（已驗證輸出正確彩色截圖）。**即時錄影、系統音訊、全域熱鍵、WGC 仍未移植**
-> （下方 Phase 2 / 硬阻力）。VS Code 以 "Debug GimmeCapture (Linux)" 設定可直接 F5。
+> ✅ 現況（2026-07-17 更新）：**Phase 0/1/2 全部完成並自 v0.51.0 出貨** — 本文件其餘內容為
+> 移植前的可行性快照，僅供歷史參考。Linux (X11) 版已涵蓋完整功能集：libX11 靜態擷取、
+> `XGrabKey` 全域熱鍵、`x11grab` 錄影、PulseAudio 系統/麥克風音訊、V4L2 webcam、
+> 捲動截圖、跨平台自動更新，release 並隨附 `GimmeCapture_linux-x64.tar.gz`。
+> 唯一維持 Windows 專屬的是 **WGC 逐視窗錄影**（Linux 無等價 API，維持隱藏）。
+> 尚缺的是**自動化驗證**：測試專案仍單一目標 `net10.0-windows`，`net10.0` head 沒有任何測試 gate。
 
 ---
 

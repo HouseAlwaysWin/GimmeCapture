@@ -4,18 +4,26 @@ Guidance for AI assistants working in this repository.
 
 ## Project Overview
 
-**GimmeCapture!!** is a Windows desktop screen-capture tool built with **Avalonia
-12** on **.NET 10** (`net10.0-windows`). It combines four core modes:
+**GimmeCapture!!** is a desktop screen-capture tool built with **Avalonia 12** on
+**.NET 10**, multi-targeting `net10.0-windows10.0.19041.0` (full feature set) and
+`net10.0` (Linux/X11 subset). It combines five core modes:
 
 - **Snip** — capture a screen region, then copy / save / annotate / pin it.
 - **Record** — screen recording with system audio, live toolbar, multiple export
   formats (MP4, MKV, GIF, WebM, MOV).
 - **Translate** — OCR-assisted region selection with local translation overlays.
 - **Pin** — floating always-on-top windows for captured images and video clips.
+- **Compress** — HandBrake-lite video re-encode: batch queue, H.264/H.265/AV1,
+  two-pass target size, and an editor (trim/speed/crop/rotate/annotations).
 
-The app runs **Windows-only** (Win32 APIs, WinForms tray, gdigrab capture). Local AI
-features (OCR, background removal, smart selection, translation) are powered by
-downloadable model modules.
+**Windows is the primary platform** (Win32 APIs, WGC per-window recording, WASAPI
+audio). Since v0.51 a **Linux/X11 build ships from the `net10.0` head** with the
+whole capture/record/translate/pin/compress feature set ported — libX11 capture,
+`XGrabKey` hotkeys, `x11grab` recording, PulseAudio system/mic audio, V4L2 webcam.
+Only **per-window (WGC) recording stays Windows-exclusive**. See
+`docs/LINUX_PORT_FEASIBILITY.md` for the port history. Local AI features (OCR,
+background removal, smart selection, translation) are powered by downloadable model
+modules.
 
 Current version: see `<Version>` in `src/GimmeCapture/GimmeCapture.csproj` and
 `CHANGELOG.md`.
@@ -64,7 +72,8 @@ src/GimmeCapture/
       Interfaces/              # IOCREngine, ITranslationEngine
     Translation/               # TranslationService.*, LlamaSharp engine, cache
     OCR/                       # PaddleOCR engine + factory
-    Platforms/Windows/         # Win32 capture, hotkeys, window detection
+    Platforms/Windows/         # Win32 capture, hotkeys, window detection (Windows TFM only)
+    Platforms/Linux/           # X11 capture, XGrabKey hotkeys, window shape (net10.0 head)
     Platforms/Avalonia/        # Avalonia-backed UI services (window mgr, theme…)
     Interop/                   # Win32Helpers
   Converters/                  # Avalonia value converters
@@ -75,18 +84,21 @@ tests/
   GimmeCapture.Tests/          # xUnit unit tests
   GimmeCapture.Benchmarks/     # BenchmarkDotNet
 docs/                          # architecture roadmap, refactor plan, release catalog
-scripts/                       # verify.ps1, check-localization.ps1, ensure-ffmpeg-libs.ps1
-.github/workflows/             # ci.yml, release.yml
+scripts/                       # verify.ps1, check-localization.ps1, ensure-ffmpeg-libs.ps1,
+                               # ensure-ffmpeg-libs-linux.sh, test-compress.ps1, build-installer.ps1
+.github/workflows/             # ci.yml, linux-compile-check.yml, release.yml
 release.ps1 / release.bat      # release automation (main branch only)
 ```
 
 ## Build, Test & Verify
 
-> Running, testing and publishing require a **Windows** environment with the **.NET 10 SDK**;
-> CI runs on `windows-latest`. However, the solution **does compile on Linux/macOS** with
-> `dotnet build -p:EnableWindowsTargeting=true` (proven by the `linux-compile-check.yml`
-> workflow, which type-checks every `claude/**` push in ~80 s) — so cross-platform sessions
-> can get compiler feedback even though they cannot run the app or the tests.
+> **Tests, `verify.ps1` and the full app still require Windows** (the Tests project is
+> single-target `net10.0-windows`); CI runs them on `windows-latest`. The solution
+> **compiles on Linux/macOS** with `dotnet build -p:EnableWindowsTargeting=true` —
+> enforced by the `linux-compile-check.yml` workflow on every `claude/**` push and PR
+> (~80 s), building BOTH TFMs. The `net10.0` head also *runs* on a Linux X11 desktop
+> (full feature set minus WGC per-window recording), but has no automated test
+> coverage yet — nothing executes tests against the `net10.0` head.
 
 **Before building Release/Publish**, native FFmpeg DLLs must exist under
 `src/GimmeCapture/ffmpeg-lib/` or the build fails (guardrail target
@@ -116,8 +128,9 @@ powershell -ExecutionPolicy Bypass -File scripts/verify.ps1
 `scripts/verify.ps1` is the canonical "is my change good" check — run it (or at least
 build + test) before pushing. Use `-SkipPublish` to skip the publish smoke step.
 
-CI (`.github/workflows/ci.yml`) on every PR/`main` push:
-ensure FFmpeg → `check-localization.ps1` → `verify.ps1` → upload coverage.
+CI on every PR/`main` push: `ci.yml` (windows-latest) runs ensure-FFmpeg → `verify.ps1`
+(which includes the localization check) → upload coverage; `linux-compile-check.yml`
+(ubuntu-latest) type-checks both TFMs. PRs run `verify.ps1 -SkipPublish`.
 
 ## Architecture & Conventions
 
@@ -216,11 +229,13 @@ Three locales are kept in **strict key parity**:
 - **Keep package lock files in sync** (`packages.lock.json`); CI restores in locked
   mode. If you change `PackageReference`s, restore so the lock file updates.
 - **Don't commit native FFmpeg DLLs** — they are produced by script and gitignored.
-- **Can't run/test on non-Windows, but CAN compile**: on non-Windows environments use
+- **Non-Windows environments: compile yes, tests no.** Use
   `dotnet build GimmeCapture.slnx -p:EnableWindowsTargeting=true` (or rely on the
-  `Linux Compile Check` workflow that runs on every `claude/**` push) for compiler
-  feedback. Tests, `verify.ps1`, and running the app still require Windows; state that
-  limitation rather than claiming a green build from a compile alone.
+  `Linux Compile Check` workflow on every `claude/**` push) for compiler feedback on
+  both TFMs. Tests and `verify.ps1` still require Windows; the app itself runs on a
+  Linux X11 desktop from the `net10.0` head (everything except WGC per-window
+  recording). State these limitations rather than claiming a green build from a
+  compile alone.
 - **Git workflow**: develop on the assigned feature branch, commit with clear
   messages, push with `git push -u origin <branch>`. Do **not** open a PR unless
   explicitly asked.
