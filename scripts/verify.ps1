@@ -47,6 +47,10 @@ Invoke-DotNet build $solution `
 
 $testArgs = @(
     "test", $testProject,
+    # The Tests project multi-targets (net10.0-windows;net10.0) for the Linux Tests CI gate. Locally we
+    # only run the Windows head — the net10.0 head is exercised by linux-tests.yml on every push, and
+    # running both here would double the test (and coverage) time for no extra signal on Windows.
+    "--framework", "net10.0-windows10.0.19041.0",
     "--configuration", "Release",
     "--no-build",
     "--no-restore",
