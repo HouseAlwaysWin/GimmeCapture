@@ -89,6 +89,29 @@ internal static class LinuxWindowShape
         }
     }
 
+    /// <summary>Closes the lazily opened display connection. Call once at orderly app shutdown
+    /// (UI thread, like every other use of this class); subsequent calls re-open on demand.</summary>
+    public static void Shutdown()
+    {
+        if (_display == IntPtr.Zero)
+        {
+            return;
+        }
+
+        try
+        {
+            XCloseDisplay(_display);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warning("LinuxWindowShape.Shutdown", ex);
+        }
+        finally
+        {
+            _display = IntPtr.Zero;
+        }
+    }
+
     [StructLayout(LayoutKind.Sequential)]
     private struct XRectangle
     {
@@ -103,6 +126,9 @@ internal static class LinuxWindowShape
 
     [DllImport("libX11.so.6")]
     private static extern int XFlush(IntPtr dpy);
+
+    [DllImport("libX11.so.6")]
+    private static extern int XCloseDisplay(IntPtr dpy);
 
     [DllImport("libXext.so.6")]
     private static extern void XShapeCombineRectangles(IntPtr dpy, IntPtr dest, int kind, int xOff, int yOff, [In] XRectangle[] rects, int nRects, int op, int ordering);

@@ -143,6 +143,11 @@ public sealed class AnnotationEditorState : ReactiveObject, IDisposable
         set => this.RaiseAndSetIfChanged(ref _pendingText, value);
     }
 
+    // Cap so a long-lived editor cannot accumulate unbounded full-resolution snapshots: every
+    // crop/rotate/AI edit pushes a BitmapHistoryAction holding old+new bitmaps. Dropped (oldest)
+    // actions are disposed; BitmapHistoryAction's ref-count + current-bitmap guard makes that safe.
+    private const int MaxHistoryDepth = 30;
+
     private readonly Stack<IHistoryAction> _historyStack = new();
     private readonly Stack<IHistoryAction> _redoHistoryStack = new();
     public Stack<IHistoryAction> HistoryStack => _historyStack;
@@ -601,7 +606,29 @@ public sealed class AnnotationEditorState : ReactiveObject, IDisposable
             redoAction.Dispose();
         }
         _redoHistoryStack.Clear();
+        TrimHistoryToDepthLimit();
         UpdateHistoryStatus();
+    }
+
+    private void TrimHistoryToDepthLimit()
+    {
+        if (_historyStack.Count <= MaxHistoryDepth)
+        {
+            return;
+        }
+
+        // Stack<T> enumerates top-first, so the entries beyond MaxHistoryDepth are the oldest.
+        var entries = _historyStack.ToArray();
+        for (int i = MaxHistoryDepth; i < entries.Length; i++)
+        {
+            entries[i].Dispose();
+        }
+
+        _historyStack.Clear();
+        for (int i = MaxHistoryDepth - 1; i >= 0; i--)
+        {
+            _historyStack.Push(entries[i]);
+        }
     }
 
     public void Undo()
