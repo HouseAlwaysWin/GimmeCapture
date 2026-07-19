@@ -31,9 +31,11 @@ if ($LASTEXITCODE -ne 0) {
     throw "Localization parity check failed with exit code $LASTEXITCODE."
 }
 
+# No --runtime flag: it would override the projects' RuntimeIdentifiers (win-x64, plus
+# linux-x64 on the net10.0 head) and locked mode would then flag the lock file's
+# linux-x64 sections as a mismatch. Project-driven RIDs already cover win-x64.
 Invoke-DotNet restore $solution `
     --locked-mode `
-    --runtime win-x64 `
     --artifacts-path $artifacts `
     --disable-parallel `
     --disable-build-servers

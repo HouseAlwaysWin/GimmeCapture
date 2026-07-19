@@ -131,7 +131,7 @@ jobs:
     # DebugType=none avoids shipping PDBs in the artifact.
     - name: Publish application (self-contained)
       run: |
-        dotnet restore src/GimmeCapture/GimmeCapture.csproj --locked-mode --runtime win-x64 --disable-parallel
+        dotnet restore src/GimmeCapture/GimmeCapture.csproj --locked-mode --disable-parallel
 
         $version = "${{ github.ref_name }}".TrimStart('v')
         $coreVersion = $version.Split('-')[0]
