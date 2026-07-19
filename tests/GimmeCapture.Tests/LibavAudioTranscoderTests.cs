@@ -111,4 +111,20 @@ public class LibavAudioTranscoderTests
         // s16 stereo => 4 bytes/frame; the byte count must be frame-aligned.
         Assert.Equal(0, decoded.PcmBytes.Length % 4);
     }
+
+    [Fact]
+    public void EncodeWavToMp3_ProducesReadableMp3Audio()
+    {
+        if (!Enabled) return;
+
+        string wav = NewWav("mp3_src.wav");
+        string mp3 = OutPath("mp3_out.mp3");
+
+        LibavMp3Transcoder.EncodeWavToMp3(wav, mp3, VideoQuality.Medium);
+
+        Assert.True(File.Exists(mp3) && new FileInfo(mp3).Length > 0, "MP3 output not produced");
+        // Prove the .mp3 carries a decodable audio stream by decoding it back to PCM.
+        var decoded = LibavPinAudioPcmDecoder.Decode(mp3, 0);
+        Assert.True(decoded.PcmBytes.Length > 0, "MP3 output has no decodable audio");
+    }
 }

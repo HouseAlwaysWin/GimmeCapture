@@ -8,11 +8,24 @@ namespace GimmeCapture.Services.Core.Media.NativeFFmpeg;
 
 /// <summary>
 /// WAV -> AAC-in-MP4/M4A for muxing into MP4/MOV outputs (native libav*, no Media Foundation / no ffmpeg.exe).
+/// The encode core is codec-agnostic and shared with <see cref="LibavMp3Transcoder"/>.
 /// </summary>
 internal static class LibavAacTranscoder
 {
-    public static unsafe void EncodeWavToM4a(
+    public static void EncodeWavToM4a(
         string wavPath, string m4aPath, VideoQuality quality, int bitrateKbps = 0, int targetChannels = 0)
+    {
+        EncodeWavToAudioFile(
+            wavPath, m4aPath, "mp4", "aac", AVCodecID.AV_CODEC_ID_AAC, quality, bitrateKbps, targetChannels, "aac");
+    }
+
+    /// <summary>
+    /// Codec-agnostic WAV→compressed-audio encode (the original AAC path parameterized by container /
+    /// encoder). <paramref name="ctx"/> prefixes the error contexts so failures stay attributable.
+    /// </summary>
+    internal static unsafe void EncodeWavToAudioFile(
+        string wavPath, string outPath, string containerName, string encoderName, AVCodecID fallbackCodecId,
+        VideoQuality quality, int bitrateKbps, int targetChannels, string ctx)
     {
         FFmpegRuntime.EnsureInitialized();
 
@@ -30,32 +43,32 @@ internal static class LibavAacTranscoder
 
         try
         {
-            ThrowIfErr(ffmpeg.avformat_alloc_output_context2(&outFmt, null, "mp4", m4aPath), "aac_alloc_out");
+            ThrowIfErr(ffmpeg.avformat_alloc_output_context2(&outFmt, null, containerName, outPath), $"{ctx}_alloc_out");
             if (outFmt == null)
             {
-                throw new InvalidOperationException("Failed to create M4A output context.");
+                throw new InvalidOperationException($"Failed to create {containerName} output context.");
             }
 
-            AVCodec* enc = ffmpeg.avcodec_find_encoder_by_name("aac");
+            AVCodec* enc = ffmpeg.avcodec_find_encoder_by_name(encoderName);
             if (enc == null)
             {
-                enc = ffmpeg.avcodec_find_encoder(AVCodecID.AV_CODEC_ID_AAC);
+                enc = ffmpeg.avcodec_find_encoder(fallbackCodecId);
             }
 
             if (enc == null)
             {
-                throw new InvalidOperationException("AAC encoder unavailable.");
+                throw new InvalidOperationException($"{encoderName} encoder unavailable.");
             }
 
             encCtx = ffmpeg.avcodec_alloc_context3(enc);
             if (encCtx == null)
             {
-                throw new OutOfMemoryException("aac_alloc_enc");
+                throw new OutOfMemoryException($"{ctx}_alloc_enc");
             }
 
             encCtx->sample_rate = provider.WaveFormat.SampleRate;
             encCtx->time_base = new AVRational { num = 1, den = encCtx->sample_rate };
-            ThrowIfErr(ffmpeg.av_channel_layout_copy(&encCtx->ch_layout, &outLayout), "aac_enc_layout");
+            ThrowIfErr(ffmpeg.av_channel_layout_copy(&encCtx->ch_layout, &outLayout), $"{ctx}_enc_layout");
             encCtx->sample_fmt = ChooseSampleFormat(enc);
             encCtx->bit_rate = bitrateKbps > 0
                 ? (long)bitrateKbps * 1000
@@ -71,29 +84,29 @@ internal static class LibavAacTranscoder
                 encCtx->flags |= ffmpeg.AV_CODEC_FLAG_GLOBAL_HEADER;
             }
 
-            ThrowIfErr(ffmpeg.avcodec_open2(encCtx, enc, null), "aac_open_enc");
+            ThrowIfErr(ffmpeg.avcodec_open2(encCtx, enc, null), $"{ctx}_open_enc");
 
             outStream = ffmpeg.avformat_new_stream(outFmt, null);
             if (outStream == null)
             {
-                throw new OutOfMemoryException("aac_new_stream");
+                throw new OutOfMemoryException($"{ctx}_new_stream");
             }
 
-            ThrowIfErr(ffmpeg.avcodec_parameters_from_context(outStream->codecpar, encCtx), "aac_par_from_ctx");
+            ThrowIfErr(ffmpeg.avcodec_parameters_from_context(outStream->codecpar, encCtx), $"{ctx}_par_from_ctx");
             outStream->codecpar->codec_tag = 0;
             outStream->time_base = encCtx->time_base;
 
             if ((outFmt->oformat->flags & ffmpeg.AVFMT_NOFILE) == 0)
             {
-                ThrowIfErr(ffmpeg.avio_open(&outFmt->pb, m4aPath, ffmpeg.AVIO_FLAG_WRITE), "aac_avio_open");
+                ThrowIfErr(ffmpeg.avio_open(&outFmt->pb, outPath, ffmpeg.AVIO_FLAG_WRITE), $"{ctx}_avio_open");
             }
 
-            ThrowIfErr(ffmpeg.avformat_write_header(outFmt, null), "aac_write_header");
+            ThrowIfErr(ffmpeg.avformat_write_header(outFmt, null), $"{ctx}_write_header");
 
             outPkt = ffmpeg.av_packet_alloc();
             if (outPkt == null)
             {
-                throw new OutOfMemoryException("aac_alloc_pkt");
+                throw new OutOfMemoryException($"{ctx}_alloc_pkt");
             }
 
             // provider was normalised to `channels` (mono or stereo) by CreateNormalizedSampleProvider.
@@ -126,7 +139,7 @@ internal static class LibavAacTranscoder
                     WriteSamplesToFrame(frame, encCtx->sample_fmt, sampleBuffer, frameSamples, channels);
                     frame->pts = ptsSamples;
                     ptsSamples += samplesReadPerChannel;
-                    ThrowIfErr(ffmpeg.avcodec_send_frame(encCtx, frame), "aac_send_frame");
+                    ThrowIfErr(ffmpeg.avcodec_send_frame(encCtx, frame), $"{ctx}_send_frame");
                     WriteEncodedPackets(encCtx, outFmt, outStream, outPkt);
                 }
                 finally
@@ -138,7 +151,7 @@ internal static class LibavAacTranscoder
                 }
             }
 
-            ThrowIfErr(ffmpeg.avcodec_send_frame(encCtx, null), "aac_flush_enc");
+            ThrowIfErr(ffmpeg.avcodec_send_frame(encCtx, null), $"{ctx}_flush_enc");
             WriteEncodedPackets(encCtx, outFmt, outStream, outPkt);
 
             ffmpeg.av_write_trailer(outFmt);
