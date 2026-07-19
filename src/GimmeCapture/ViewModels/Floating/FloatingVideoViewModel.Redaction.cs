@@ -57,7 +57,7 @@ public partial class FloatingVideoViewModel
             this.WhenAnyValue(x => x.IsSelectionActive));
 
         // Re-raise the delegating properties so existing bindings (tooltip, export guards) stay live.
-        _redaction.Changed += () =>
+        _redaction.RedactionChanged += () =>
         {
             this.RaisePropertyChanged(nameof(HasRedaction));
             this.RaisePropertyChanged(nameof(RedactionStatus));
