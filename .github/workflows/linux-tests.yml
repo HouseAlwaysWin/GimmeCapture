@@ -1,0 +1,61 @@
+# Linux behavioral test gate: EXECUTE the cross-platform test suite against the app's
+# net10.0 (Linux) head on ubuntu. The Linux build has shipped since v0.51 with zero
+# automated behavioral coverage — the Windows CI only ever runs tests on the Windows
+# head. Windows-only test files are fenced in GimmeCapture.Tests.csproj.
+#
+# Spike phase: the job also uploads the regenerated packages.lock.json files as an
+# artifact (the Tests project gained a TFM, and this environment has no local dotnet
+# to regenerate locks) — they get committed back, after which locked Windows restore
+# stays consistent.
+name: Linux Tests
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "claude/**"
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-linuxtest-${{ runner.os }}-${{ hashFiles('**/packages.lock.json') }}
+          restore-keys: |
+            nuget-linuxtest-${{ runner.os }}-
+
+      # Non-locked restore (EnableWindowsTargeting packs aren't in the lock file; the
+      # Windows CI still enforces locked mode). --force-evaluate refreshes the lock
+      # files so the artifact below always reflects the current csproj graph.
+      - name: Restore (refresh lock files)
+        run: dotnet restore GimmeCapture.slnx --runtime win-x64 -p:EnableWindowsTargeting=true -p:RestoreLockedMode=false --force-evaluate
+
+      - name: Upload regenerated lock files
+        uses: actions/upload-artifact@v4
+        with:
+          name: packages-lock-files
+          path: |
+            src/GimmeCapture/packages.lock.json
+            tests/GimmeCapture.Tests/packages.lock.json
+            tests/GimmeCapture.Benchmarks/packages.lock.json
+          if-no-files-found: error
+
+      - name: Run tests on the net10.0 head
+        run: >
+          dotnet test tests/GimmeCapture.Tests/GimmeCapture.Tests.csproj
+          -c Release -f net10.0 --no-restore
+          -p:EnableWindowsTargeting=true
+          --blame-hang --blame-hang-timeout 8m
+          --logger "console;verbosity=normal"
