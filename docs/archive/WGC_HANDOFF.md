@@ -1,5 +1,7 @@
 # Handoff: True per-window recording via Windows Graphics Capture (WGC)
 
+> **已終結（archived）**：2026-06-27 使用者決定停止追蹤 dual-monitor WGC 問題；WGC 逐視窗錄影維持 Windows 專屬、Linux 隱藏。本文件僅供歷史參考。
+
 > Read this first if you are a fresh Claude Code session picking up the
 > `claude/record-window-wgc` branch on a local Windows machine.
 

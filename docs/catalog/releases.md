@@ -2,6 +2,35 @@
 
 This catalog summarizes released versions from `v0.1.0` onward based on repository tags and commit history.
 
+## v0.65.0 - 2026-07-17
+
+- **Translation overlay overhaul** — hidden-toolbar no longer grays Chromium browsers or blocks clicks;
+  Ctrl-drag selection and Esc-close work even while another app holds focus; F4 show/hide is global.
+- **OCR on Windows 10** — DirectML failures fall back to CPU; inconsistent saved AI settings self-repair.
+- **Scrollable long-screenshot pin** (pins at selection size, scrolls the tall image inside) and faster
+  stitching / OCR decode / auto-translate.
+
+## v0.64.0 - 2026-07-15
+
+- **Temp-file cleanup**: pin sidecars/copies deleted on close + startup sweep of crash leftovers (no more
+  unbounded %TEMP% growth); ~37 Debug-only error sites now reach the AppLog file sink.
+- **Performance**: background-removal engine stays warm between uses; mosaic/blur drag no longer re-converts
+  the whole source image per frame.
+
+## v0.63.0 - 2026-07-09
+
+- Advanced video editor: **Reset-all** button; timeline keep/drop now takes a **double-click** (single click
+  only scrubs).
+- **Clipboard freezes fixed** — OCR text, large images, and file copies moved to a timeout-bounded background
+  STA thread; quick-OCR shows a standalone spinner instead of appearing hung.
+
+## v0.62.0 - 2026-07-08
+
+- **Compress video filters** (denoise/sharpen/deblock/grayscale via libavfilter), **output categories**,
+  per-row open-output-folder, and **GIF/WebM output** with all edits baked in.
+- **Pin export-format picker** (image: PNG/JPG/WebP; video: MP4/MKV/MOV/GIF/WebM) applying to Save and Copy;
+  GIF recordings keep their audio for pinning.
+
 ## v0.60.0 - 2026-07-07
 
 - **AV1 (SVT-AV1) video compression** — the most efficient codec for the smallest files at the same perceived
@@ -11,6 +40,19 @@ This catalog summarizes released versions from `v0.1.0` onward based on reposito
 - **Translation**: a picker/browse button for the custom local GGUF model.
 - **Memory**: idle-unload of heavy AI models (translation LLM / background removal / OCR), broader working-set
   trimming (after captures/exports and at startup, not just tray), and several bitmap-leak/crash fixes.
+
+## v0.52.0 - 2026-07-05
+
+- Documentation-only release: refreshed zh-TW/ja READMEs (Linux, scrolling capture, compress, AI modules,
+  auto-update) and documented Linux support requirements (x86-64 glibc, X11 session, PulseAudio).
+
+## v0.51.0 - 2026-07-05
+
+- **GimmeCapture now runs on Linux (X11)** — full capture/record/translate/pin/compress feature set ported:
+  libX11 snip, XGrabKey global hotkeys, x11grab recording, PulseAudio system+mic audio, V4L2 webcam PiP;
+  only WGC per-window recording stays Windows-exclusive.
+- **Cross-platform auto-update** (Linux tar.gz swap with backup+rollback) and releases now ship a Linux x64
+  self-contained tarball beside the Windows zip + installer under one SHA256SUMS.txt.
 
 ## v0.50.0 - 2026-07-04
 
