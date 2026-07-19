@@ -127,8 +127,11 @@ public class UpdateServiceTests
     public async Task CancelDownload_CancelsActiveVerifiedArtifactDownload()
     {
         var hash = new string('a', 64);
+        // Manifest carries both platform artifacts — GetPreferredZipAsset picks the win zip on the
+        // Windows head and the linux tarball on the net10.0 (Linux CI) head.
         using var client = new HttpClient(new StaticResponseHandler(
-            $"{hash}  GimmeCapture_win-x64.zip{Environment.NewLine}"));
+            $"{hash}  GimmeCapture_win-x64.zip{Environment.NewLine}" +
+            $"{hash}  GimmeCapture_linux-x64.tar.gz{Environment.NewLine}"));
         var downloader = new BlockingArtifactDownloader();
         var service = new UpdateService("0.40.0", client, downloader);
         var release = CreateRelease("v0.41.0", hasZip: true);
@@ -157,8 +160,14 @@ public class UpdateServiceTests
             TagName = tagName,
             Prerelease = prerelease,
             Draft = draft,
+            // Real releases ship both platform artifacts; including both keeps these tests meaningful
+            // on the net10.0 (Linux) head, where GetPreferredZipAsset selects the tarball instead.
             Assets = hasZip
-                ? new List<ReleaseAsset> { new() { Name = "GimmeCapture_win-x64.zip", DownloadUrl = "https://example.com/test.zip" } }
+                ? new List<ReleaseAsset>
+                {
+                    new() { Name = "GimmeCapture_win-x64.zip", DownloadUrl = "https://example.com/test.zip" },
+                    new() { Name = "GimmeCapture_linux-x64.tar.gz", DownloadUrl = "https://example.com/test.tar.gz" }
+                }
                 : new List<ReleaseAsset>()
         };
     }

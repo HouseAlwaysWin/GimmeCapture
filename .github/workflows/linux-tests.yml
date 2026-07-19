@@ -3,10 +3,8 @@
 # automated behavioral coverage — the Windows CI only ever runs tests on the Windows
 # head. Windows-only test files are fenced in GimmeCapture.Tests.csproj.
 #
-# Spike phase: the job also uploads the regenerated packages.lock.json files as an
-# artifact (the Tests project gained a TFM, and this environment has no local dotnet
-# to regenerate locks) — they get committed back, after which locked Windows restore
-# stays consistent.
+# Run #1 (spike) result: compiled clean, 782 tests, 775 passed — the 7 failures were
+# Windows-centric test inputs (fixed) plus missing native FFmpeg .so (provisioned below).
 name: Linux Tests
 
 on:
@@ -16,6 +14,9 @@ on:
       - "claude/**"
   pull_request:
     branches: [main]
+
+permissions:
+  contents: write # lock-file auto-commit (push events on claude/** only)
 
 jobs:
   test:
@@ -28,6 +29,19 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
+      - name: Cache FFmpeg .so bundle
+        id: cache-ffmpeg
+        uses: actions/cache@v4
+        with:
+          path: src/GimmeCapture/ffmpeg-lib
+          key: ffmpeg-linux-so-${{ hashFiles('scripts/ensure-ffmpeg-libs-linux.sh') }}
+
+      # The libav contract tests (e.g. the GIF transcoder) load the real native FFmpeg;
+      # the app csproj copies ffmpeg-lib/*.so.* into the test output.
+      - name: Ensure FFmpeg native libs
+        if: steps.cache-ffmpeg.outputs.cache-hit != 'true'
+        run: bash scripts/ensure-ffmpeg-libs-linux.sh
+
       - name: Cache NuGet packages
         uses: actions/cache@v4
         with:
@@ -38,19 +52,25 @@ jobs:
 
       # Non-locked restore (EnableWindowsTargeting packs aren't in the lock file; the
       # Windows CI still enforces locked mode). --force-evaluate refreshes the lock
-      # files so the artifact below always reflects the current csproj graph.
+      # files so csproj changes (e.g. the Tests TFM addition) keep them current.
       - name: Restore (refresh lock files)
         run: dotnet restore GimmeCapture.slnx --runtime win-x64 -p:EnableWindowsTargeting=true -p:RestoreLockedMode=false --force-evaluate
 
-      - name: Upload regenerated lock files
-        uses: actions/upload-artifact@v4
-        with:
-          name: packages-lock-files
-          path: |
-            src/GimmeCapture/packages.lock.json
-            tests/GimmeCapture.Tests/packages.lock.json
-            tests/GimmeCapture.Benchmarks/packages.lock.json
-          if-no-files-found: error
+      # This cloud/Linux dev flow has no local dotnet to regenerate lock files, so the CI
+      # commits refreshed locks back to the working branch. [skip ci] prevents a loop;
+      # push events only (never PRs).
+      - name: Commit refreshed lock files (claude/** pushes only)
+        if: github.event_name == 'push'
+        run: |
+          if git diff --quiet -- '**/packages.lock.json'; then
+            echo "Lock files unchanged."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- '**/packages.lock.json'
+          git commit -m "chore(ci): refresh packages.lock.json after restore [skip ci]"
+          git push origin HEAD:${GITHUB_REF_NAME}
 
       - name: Run tests on the net10.0 head
         run: >
