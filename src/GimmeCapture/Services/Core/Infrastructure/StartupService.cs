@@ -23,6 +23,7 @@ public class StartupService
         return false;
     }
 
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
     public static void SetStartup(bool runOnStartup)
     {
         try
@@ -71,6 +72,7 @@ public class StartupService
         }
     }
 
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
     public static bool IsRegistered()
     {
         try

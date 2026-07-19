@@ -2,6 +2,7 @@ using GimmeCapture.Services.Abstractions;
 
 namespace GimmeCapture.Services.Core.Infrastructure;
 
+[System.Runtime.Versioning.SupportedOSPlatform("windows")]
 public sealed class WindowsStartupRegistrationService : IStartupRegistrationService
 {
     public void SetStartup(bool runOnStartup)
