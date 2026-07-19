@@ -299,6 +299,12 @@ public partial class MainWindowViewModel
         get => Snip.SaveDirectory;
         set => Snip.SaveDirectory = value;
     }
+
+    public string FileNameTemplate
+    {
+        get => Snip.FileNameTemplate;
+        set => Snip.FileNameTemplate = value;
+    }
     
     // Control Settings
     private string _snipHotkey = "Shift+F1";

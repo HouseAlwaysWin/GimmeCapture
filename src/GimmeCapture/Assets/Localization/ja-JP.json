@@ -291,6 +291,8 @@
   "HideSnipPinBorder": "ピン留めウィンドウの枠線を隠す",
   "HideSnipSelectionDecoration": "選択ウィンドウの裝飾を隠す",
   "RevealAfterSave": "保存後にファイルの場所を開く",
+  "FileNameTemplate": "ファイル名テンプレート",
+  "FileNameTemplateHint": "使用可能トークン：{date} {time} {datetime} {yyyy} {MM} {dd} {HH} {mm} {ss}。空欄 = GimmeCapture_{date}_{time}。",
   "AutoPinScreenshotSelection": "選択したスクリーンショットを固定して透過クリックしない",
   "TipLockSelection": "選択を固定（透過クリックしない）",
   "ShowSnipCursor": "キャプチャ時にカーソルを表示",

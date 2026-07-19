@@ -55,6 +55,7 @@ public partial class MainWindowViewModel
             EnableHistory = EnableHistory,
             RevealAfterSave = RevealAfterSave,
             SaveDirectory = SaveDirectory,
+            FileNameTemplate = FileNameTemplate,
             ShowSnipCursor = ShowSnipCursor,
             ShowRecordCursor = ShowRecordCursor,
             RecordSystemAudio = RecordSystemAudio,
@@ -114,6 +115,7 @@ public partial class MainWindowViewModel
         EnableHistory = snapshot.EnableHistory;
         RevealAfterSave = snapshot.RevealAfterSave;
         SaveDirectory = snapshot.SaveDirectory;
+        FileNameTemplate = snapshot.FileNameTemplate;
         SnipHotkey = snapshot.SnipHotkey;
         TranslateHotkey = snapshot.TranslateHotkey;
         RecordHotkey = snapshot.RecordHotkey;

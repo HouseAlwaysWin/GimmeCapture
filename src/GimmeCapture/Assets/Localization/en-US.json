@@ -305,6 +305,8 @@
   "HideSnipPinBorder": "Hide Pin Window Border",
   "HideSnipSelectionDecoration": "Hide Selection Window Decorations",
   "RevealAfterSave": "Open file location after saving",
+  "FileNameTemplate": "File name template",
+  "FileNameTemplateHint": "Tokens: {date} {time} {datetime} {yyyy} {MM} {dd} {HH} {mm} {ss}. Blank = GimmeCapture_{date}_{time}.",
   "AutoPinScreenshotSelection": "Lock selected screenshot instead of click-through",
   "TipLockSelection": "Lock selection (no click-through)",
   "ShowSnipCursor": "Show Cursor in Snip",

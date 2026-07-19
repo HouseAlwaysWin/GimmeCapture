@@ -41,6 +41,13 @@ public class SnipSettingsViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _saveDirectory, value);
     }
 
+    private string _fileNameTemplate = string.Empty;
+    public string FileNameTemplate
+    {
+        get => _fileNameTemplate;
+        set => this.RaiseAndSetIfChanged(ref _fileNameTemplate, value);
+    }
+
     // Pin & selection windows
     private bool _hideSnipPinDecoration;
     public bool HideSnipPinDecoration

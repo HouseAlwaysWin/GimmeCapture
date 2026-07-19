@@ -273,6 +273,7 @@ public class AppSettingsService : IAppSettingsService
         dest.EnableHistory = source.EnableHistory;
         dest.RevealAfterSave = source.RevealAfterSave;
         dest.SaveDirectory = source.SaveDirectory;
+        dest.FileNameTemplate = source.FileNameTemplate;
         dest.ShowSnipCursor = source.ShowSnipCursor;
         dest.ShowRecordCursor = source.ShowRecordCursor;
         dest.RecordSystemAudio = source.RecordSystemAudio;

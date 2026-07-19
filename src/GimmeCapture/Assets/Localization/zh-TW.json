@@ -297,6 +297,8 @@
   "HideSnipPinBorder": "隱藏釘選視窗邊框",
   "HideSnipSelectionDecoration": "隱藏選取視窗裝飾",
   "RevealAfterSave": "存檔後開啟檔案位置",
+  "FileNameTemplate": "檔名模板",
+  "FileNameTemplateHint": "可用代碼：{date} {time} {datetime} {yyyy} {MM} {dd} {HH} {mm} {ss}。留空 = GimmeCapture_{date}_{time}。",
   "AutoPinScreenshotSelection": "選取截圖後鎖定畫面不穿透",
   "TipLockSelection": "鎖定選取（不穿透）",
   "ShowSnipCursor": "擷圖時顯示游標",

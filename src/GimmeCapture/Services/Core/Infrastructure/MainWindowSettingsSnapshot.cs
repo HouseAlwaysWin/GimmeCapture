@@ -30,6 +30,7 @@ public sealed class MainWindowSettingsSnapshot
     public required bool EnableHistory { get; init; }
     public required bool RevealAfterSave { get; init; }
     public required string SaveDirectory { get; init; }
+    public required string FileNameTemplate { get; init; }
     public required bool ShowSnipCursor { get; init; }
     public required bool ShowRecordCursor { get; init; }
     public required bool RecordSystemAudio { get; init; }
@@ -106,6 +107,7 @@ public sealed class MainWindowSettingsSnapshot
             EnableHistory = settings.EnableHistory,
             RevealAfterSave = settings.RevealAfterSave,
             SaveDirectory = settings.SaveDirectory,
+            FileNameTemplate = settings.FileNameTemplate,
             ShowSnipCursor = settings.ShowSnipCursor,
             ShowRecordCursor = settings.ShowRecordCursor,
             RecordSystemAudio = settings.RecordSystemAudio,
@@ -182,6 +184,7 @@ public sealed class MainWindowSettingsSnapshot
         settings.EnableHistory = EnableHistory;
         settings.RevealAfterSave = RevealAfterSave;
         settings.SaveDirectory = SaveDirectory;
+        settings.FileNameTemplate = FileNameTemplate;
         settings.ShowSnipCursor = ShowSnipCursor;
         settings.ShowRecordCursor = ShowRecordCursor;
         settings.RecordSystemAudio = RecordSystemAudio;

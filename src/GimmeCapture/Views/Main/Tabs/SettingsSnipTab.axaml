@@ -22,6 +22,13 @@
                                     Margin="10,0,0,0"/>
                             <TextBox Text="{Binding SaveDirectory}" Margin="0,0,10,0"/>
                         </DockPanel>
+                        <TextBlock Text="{Binding [FileNameTemplate], Source={x:Static services:LocalizationService.Instance}}"
+                                   Margin="0,5,0,0"/>
+                        <TextBox Text="{Binding FileNameTemplate}"
+                                 PlaceholderText="GimmeCapture_{date}_{time}"
+                                 Margin="24,0,10,0"/>
+                        <TextBlock Text="{Binding [FileNameTemplateHint], Source={x:Static services:LocalizationService.Instance}}"
+                                   FontSize="11" Opacity="0.7" TextWrapping="Wrap" Margin="24,0,10,5"/>
                         <CheckBox IsChecked="{Binding RevealAfterSave}" Content="{Binding [RevealAfterSave], Source={x:Static services:LocalizationService.Instance}}"/>
                     </StackPanel>
                 </Expander>
