@@ -121,9 +121,9 @@ public class AppSettings
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public CaptureDelay CaptureDelay { get; set; } = CaptureDelay.Off;
     [JsonConverter(typeof(JsonStringEnumConverter))]
-    public OcrTextLayout OcrTextLayout { get; set; }
+    public OcrTextLayout OcrTextLayout { get; set; } = OcrTextLayout.PreserveLines;
     /// <summary>When true, quick-OCR (Shift+F4) also writes the recognized text to a .txt file in SaveDirectory.</summary>
-    public bool SaveOcrTextToFile { get; set; } = OcrTextLayout.PreserveLines;
+    public bool SaveOcrTextToFile { get; set; }
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public ScrollingCaptureDirection ScrollingCaptureDirection { get; set; } = ScrollingCaptureDirection.Auto;
     [JsonConverter(typeof(JsonStringEnumConverter))]
