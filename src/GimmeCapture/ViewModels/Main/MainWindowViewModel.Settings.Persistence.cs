@@ -44,6 +44,7 @@ public partial class MainWindowViewModel
             AutoPinScreenshotSelection = AutoPinScreenshotSelection,
             CaptureDelay = CaptureDelay,
             OcrTextLayout = OcrTextLayout,
+            SaveOcrTextToFile = SaveOcrTextToFile,
             ScrollingCaptureDirection = ScrollingCaptureDirection,
             SnipToolbarPosition = SnipToolbarPosition,
             HideRecordPinDecoration = HideRecordPinDecoration,
@@ -55,6 +56,7 @@ public partial class MainWindowViewModel
             EnableHistory = EnableHistory,
             RevealAfterSave = RevealAfterSave,
             SaveDirectory = SaveDirectory,
+            FileNameTemplate = FileNameTemplate,
             ShowSnipCursor = ShowSnipCursor,
             ShowRecordCursor = ShowRecordCursor,
             RecordSystemAudio = RecordSystemAudio,
@@ -114,6 +116,7 @@ public partial class MainWindowViewModel
         EnableHistory = snapshot.EnableHistory;
         RevealAfterSave = snapshot.RevealAfterSave;
         SaveDirectory = snapshot.SaveDirectory;
+        FileNameTemplate = snapshot.FileNameTemplate;
         SnipHotkey = snapshot.SnipHotkey;
         TranslateHotkey = snapshot.TranslateHotkey;
         RecordHotkey = snapshot.RecordHotkey;
@@ -135,6 +138,7 @@ public partial class MainWindowViewModel
         AutoPinScreenshotSelection = snapshot.AutoPinScreenshotSelection;
         CaptureDelay = snapshot.CaptureDelay;
         OcrTextLayout = snapshot.OcrTextLayout;
+        SaveOcrTextToFile = snapshot.SaveOcrTextToFile;
         ScrollingCaptureDirection = snapshot.ScrollingCaptureDirection;
         SnipToolbarPosition = snapshot.SnipToolbarPosition;
         HideRecordSelectionDecoration = snapshot.HideRecordSelectionDecoration;

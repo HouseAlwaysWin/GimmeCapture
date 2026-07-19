@@ -66,7 +66,24 @@ public partial class SnipWindowViewModel
             {
                 case QuickOcrStatus.Success:
                     bool copied = await _captureService.CopyToClipboardAsync(result.Text);
-                    _mainVm.SetStatus(copied ? "QuickOcrCopied" : "QuickOcrCopyFailed");
+                    string statusKey = copied ? "QuickOcrCopied" : "QuickOcrCopyFailed";
+                    if (copied && _mainVm.SaveOcrTextToFile)
+                    {
+                        // Best-effort side channel: also persist the text as a .txt in the save directory
+                        // (same fallback as screenshot auto-save when no directory is configured).
+                        var exportDir = _mainVm.SaveDirectory;
+                        if (string.IsNullOrEmpty(exportDir))
+                        {
+                            exportDir = System.IO.Path.Combine(
+                                System.Environment.GetFolderPath(System.Environment.SpecialFolder.MyPictures),
+                                "GimmeCapture");
+                        }
+
+                        string? exportedPath = await OcrTextExportService.WriteAsync(
+                            result.Text, exportDir, _mainVm.FileNameTemplate);
+                        statusKey = exportedPath != null ? "QuickOcrSavedToFile" : "QuickOcrSaveFailed";
+                    }
+                    _mainVm.SetStatus(statusKey);
                     break;
                 case QuickOcrStatus.ModuleMissing:
                     _mainVm.SetStatus("QuickOcrModuleMissing");
@@ -207,7 +224,7 @@ public partial class SnipWindowViewModel
                     }
                     FileLocationService.EnsureDirectory(dir, "SnipCapture.EnsureSaveDirectory");
 
-                    var fileName = CaptureFileNameService.BuildFileName("png");
+                    var fileName = CaptureFileNameService.BuildFileName("png", _mainVm.FileNameTemplate);
                     var path = System.IO.Path.Combine(dir, fileName);
                     await _captureService.SaveToFileAsync(bitmap, path);
                     savedPath = path;
@@ -228,7 +245,7 @@ public partial class SnipWindowViewModel
                 else
                 {
                     // Fallback
-                    var fileName = CaptureFileNameService.BuildFileName("png");
+                    var fileName = CaptureFileNameService.BuildFileName("png", _mainVm?.FileNameTemplate);
                     var path = System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.MyPictures), fileName);
                     await _captureService.SaveToFileAsync(bitmap, path);
                     savedPath = path;

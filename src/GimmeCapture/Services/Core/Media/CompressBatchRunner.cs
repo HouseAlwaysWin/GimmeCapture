@@ -110,8 +110,9 @@ internal sealed class CompressBatchRunner
                 // GIF / WebM) uses the whole-file path below.
                 bool gifWebm = ext.Equals(".gif", StringComparison.OrdinalIgnoreCase)
                     || ext.Equals(".webm", StringComparison.OrdinalIgnoreCase);
+                bool audioOnly = AudioOnlyExporter.IsAudioOnlyExtension(ext.ToLowerInvariant());
                 item.SupportsResume = !snap.UseTargetSize && duration > 0 && !multiSegment && !hasSpeed && crop == null
-                    && burnInComposite == null && !gifWebm;
+                    && burnInComposite == null && !gifWebm && !audioOnly;
                 int targetKbps = 0;
                 if (snap.UseTargetSize)
                 {

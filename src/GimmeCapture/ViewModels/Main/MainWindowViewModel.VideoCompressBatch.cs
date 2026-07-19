@@ -757,8 +757,10 @@ public partial class MainWindowViewModel
 
         // GIF/WebM: a sample-mp4 measure doesn't reflect the palette/VP9 output — show the "varies" note.
         string estFmt = EffectiveFormatFor(item);
-        if (estFmt.Equals("GIF", StringComparison.OrdinalIgnoreCase) || estFmt.Equals("WebM", StringComparison.OrdinalIgnoreCase))
+        if (estFmt.Equals("GIF", StringComparison.OrdinalIgnoreCase) || estFmt.Equals("WebM", StringComparison.OrdinalIgnoreCase)
+            || IsAudioOnlyFormat(estFmt))
         {
+            // GIF/WebM: sample-mp4 doesn't reflect palette/VP9; audio-only: computed directly from bitrate×duration.
             item.EstimatedText = BuildItemEstimate(item);
             return;
         }
@@ -807,7 +809,7 @@ public partial class MainWindowViewModel
         CancellationToken batchToken = _batchRunner.EnsureContext(CompressParallelCount);
 
         CompressSettingsSnapshot snap = BuildSettingsSnapshot(item);         // per-item bundle or live settings
-        string ext = "." + EffectiveFormatFor(item).ToLowerInvariant();      // container follows the effective format
+        string ext = ExtensionForFormat(EffectiveFormatFor(item));      // container follows the effective format (Opus -> .ogg)
         // Per-item folder chosen from the working-dir dropdown overrides the global one; empty = global, else
         // next to source. Captured on the UI thread alongside the other per-run values.
         string outputFolder = string.IsNullOrEmpty(item.SelectedOutputDir) ? CompressOutputFolder : item.SelectedOutputDir;

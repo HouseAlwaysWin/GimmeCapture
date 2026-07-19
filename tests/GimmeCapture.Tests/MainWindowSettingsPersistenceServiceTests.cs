@@ -36,6 +36,7 @@ public class MainWindowSettingsPersistenceServiceTests
             AutoPinScreenshotSelection = true,
             CaptureDelay = CaptureDelay.FiveSeconds,
             OcrTextLayout = OcrTextLayout.SingleLine,
+            SaveOcrTextToFile = true,
             ScrollingCaptureDirection = ScrollingCaptureDirection.Horizontal,
             SnipToolbarPosition = SnipToolbarPosition.TopRight,
             HideRecordPinDecoration = true,
@@ -47,6 +48,7 @@ public class MainWindowSettingsPersistenceServiceTests
             EnableHistory = false,
             RevealAfterSave = false,
             SaveDirectory = @"D:\captures",
+            FileNameTemplate = "shot_{date}_{time}",
             ShowSnipCursor = true,
             ShowRecordCursor = false,
             RecordSystemAudio = false,
@@ -102,8 +104,10 @@ public class MainWindowSettingsPersistenceServiceTests
         Assert.Equal(snapshot.EnableHistory, persisted.EnableHistory);
         Assert.Equal(snapshot.CaptureDelay, persisted.CaptureDelay);
         Assert.Equal(snapshot.OcrTextLayout, persisted.OcrTextLayout);
+        Assert.Equal(snapshot.SaveOcrTextToFile, persisted.SaveOcrTextToFile);
         Assert.Equal(snapshot.ScrollingCaptureDirection, persisted.ScrollingCaptureDirection);
         Assert.Equal(snapshot.SnipToolbarPosition, persisted.SnipToolbarPosition);
+        Assert.Equal(snapshot.FileNameTemplate, persisted.FileNameTemplate);
         Assert.Equal(snapshot.TextCopyHotkey, persisted.TextCopyHotkey);
         Assert.Equal(snapshot.EnableAIScan, persisted.EnableAIScan);
         Assert.Equal(snapshot.AIResourcesDirectory, persisted.AIResourcesDirectory);

@@ -264,6 +264,7 @@ public class AppSettingsService : IAppSettingsService
         dest.AutoPinScreenshotSelection = source.AutoPinScreenshotSelection;
         dest.CaptureDelay = source.CaptureDelay;
         dest.OcrTextLayout = source.OcrTextLayout;
+        dest.SaveOcrTextToFile = source.SaveOcrTextToFile;
         dest.ScrollingCaptureDirection = source.ScrollingCaptureDirection;
         dest.SnipToolbarPosition = source.SnipToolbarPosition;
         dest.HideRecordPinDecoration = source.HideRecordPinDecoration;
@@ -273,6 +274,7 @@ public class AppSettingsService : IAppSettingsService
         dest.EnableHistory = source.EnableHistory;
         dest.RevealAfterSave = source.RevealAfterSave;
         dest.SaveDirectory = source.SaveDirectory;
+        dest.FileNameTemplate = source.FileNameTemplate;
         dest.ShowSnipCursor = source.ShowSnipCursor;
         dest.ShowRecordCursor = source.ShowRecordCursor;
         dest.RecordSystemAudio = source.RecordSystemAudio;

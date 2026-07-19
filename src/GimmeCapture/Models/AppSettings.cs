@@ -122,6 +122,8 @@ public class AppSettings
     public CaptureDelay CaptureDelay { get; set; } = CaptureDelay.Off;
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public OcrTextLayout OcrTextLayout { get; set; } = OcrTextLayout.PreserveLines;
+    /// <summary>When true, quick-OCR (Shift+F4) also writes the recognized text to a .txt file in SaveDirectory.</summary>
+    public bool SaveOcrTextToFile { get; set; }
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public ScrollingCaptureDirection ScrollingCaptureDirection { get; set; } = ScrollingCaptureDirection.Auto;
     [JsonConverter(typeof(JsonStringEnumConverter))]
@@ -138,6 +140,8 @@ public class AppSettings
     // Output
     public bool AutoSave { get; set; }
     public string SaveDirectory { get; set; } = "";
+    /// <summary>File-name template for saved captures/recordings ({date} {time} {datetime} {yyyy} {MM} {dd} {HH} {mm} {ss}); blank = the default "GimmeCapture_{date}_{time}".</summary>
+    public string FileNameTemplate { get; set; } = "";
     /// <summary>When true, saved screenshots and finalized recordings are recorded in the capture history panel.</summary>
     public bool EnableHistory { get; set; } = true;
     /// <summary>When true, the saved file is revealed in File Explorer after a screenshot save or recording finish.</summary>

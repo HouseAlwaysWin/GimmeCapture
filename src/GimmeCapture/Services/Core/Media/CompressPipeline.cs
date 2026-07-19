@@ -171,6 +171,13 @@ internal static class CompressPipeline
                 input, outputPath, outFmtExt, s, ranges, rotationDegrees, crop, burnInComposite, progress, pauseGate, token);
         }
 
+        // Audio-only (WAV/MP3/M4A/OGG): extract the ORIGINAL file's audio track whole — editor
+        // keep-ranges/speed/crop and every video knob are irrelevant here by design.
+        if (AudioOnlyExporter.IsAudioOnlyExtension(outFmtExt))
+        {
+            return await EncodeAudioOnlyAsync(input, outputPath, s, progress, token);
+        }
+
         // CRF + known duration + a single contiguous, full-speed, un-cropped, un-annotated run → resumable
         // segmented path; target-size / 2-pass / unknown-duration / multi-segment / speed / crop / burn-in
         // keep the whole-file concat path.
@@ -252,6 +259,43 @@ internal static class CompressPipeline
     // render an all-edits-applied intermediate mp4 (trim/crop/rotate/filters/downscale/fps/burn-in) via the clip
     // exporter, then transcode it (shared with the pin via GifWebmVideoExporter). Quality follows the CRF slider;
     // target-size / two-pass / segmented-resume don't apply (the transcoders are quality-driven).
+    /// <summary>
+    /// Audio-only tail: decode → (temp WAV) → per-extension encode inside a temp dir, publishing to the
+    /// real output only on success so a failure never leaves a partial file at the user's location.
+    /// </summary>
+    private static async Task<bool> EncodeAudioOnlyAsync(
+        string input, string outputPath, CompressSettingsSnapshot s,
+        IProgress<double> progress, CancellationToken token)
+    {
+        // Same loose CRF→tier mapping as the GIF/WebM tail (drives the no-explicit-bitrate defaults).
+        VideoQuality quality = s.Crf <= 20 ? VideoQuality.High : s.Crf >= 30 ? VideoQuality.Low : VideoQuality.Medium;
+
+        string tempDir = Path.Combine(Path.GetTempPath(), "GimmeCapture_Compress_" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(tempDir);
+            progress.Report(0);
+
+            string staged = Path.Combine(tempDir, "out" + Path.GetExtension(outputPath));
+            bool ok = await Task.Run(
+                () => AudioOnlyExporter.ExtractAudio(
+                    input, staged, tempDir, quality, s.AudioBitrateKbps, s.AudioChannels, token),
+                token);
+            if (!ok)
+            {
+                return false;
+            }
+
+            File.Copy(staged, outputPath, true);
+            progress.Report(1);
+            return File.Exists(outputPath) && new FileInfo(outputPath).Length > 0;
+        }
+        finally
+        {
+            try { Directory.Delete(tempDir, true); } catch { /* best-effort temp cleanup */ }
+        }
+    }
+
     private static async Task<bool> EncodeGifWebmAsync(
         string input, string outputPath, string outExt, CompressSettingsSnapshot s,
         LibavClipExporter.SourceRange[] ranges, int rotationDegrees, VideoEditCrop? crop,

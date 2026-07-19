@@ -451,7 +451,7 @@ public partial class SnipWindow : Window
                      Title = isRecording ? "Save Recording" : "Save Screenshot",
                      DefaultExtension = defaultExt,
                      ShowOverwritePrompt = true,
-                    SuggestedFileName = CaptureFileNameService.SuggestedBaseName(),
+                    SuggestedFileName = CaptureFileNameService.SuggestedBaseName(_viewModel.MainVm?.FileNameTemplate),
                      FileTypeChoices = fileChoices
                  });
                  
@@ -665,7 +665,7 @@ public partial class SnipWindow : Window
                                     Title = "Save Pinned Image",
                                     DefaultExtension = defaultExt,
                                     ShowOverwritePrompt = true,
-                                    SuggestedFileName = $"{CaptureFileNameService.SuggestedBaseName()}.{defaultExt}",
+                                    SuggestedFileName = $"{CaptureFileNameService.SuggestedBaseName(_viewModel.MainVm?.FileNameTemplate)}.{defaultExt}",
                                     FileTypeChoices = choices
                                 });
 

@@ -297,6 +297,9 @@
   "HideSnipPinBorder": "隱藏釘選視窗邊框",
   "HideSnipSelectionDecoration": "隱藏選取視窗裝飾",
   "RevealAfterSave": "存檔後開啟檔案位置",
+  "FileNameTemplate": "檔名模板",
+  "FileNameTemplateHint": "可用代碼：{date} {time} {datetime} {yyyy} {MM} {dd} {HH} {mm} {ss}。留空 = GimmeCapture_{date}_{time}。",
+  "SaveOcrTextToFile": "同時將 OCR 文字存成 .txt 檔",
   "AutoPinScreenshotSelection": "選取截圖後鎖定畫面不穿透",
   "TipLockSelection": "鎖定選取（不穿透）",
   "ShowSnipCursor": "擷圖時顯示游標",
@@ -573,5 +576,8 @@
   "QuickOcrModuleMissing": "\u5c1a\u672a\u5b89\u88dd PaddleOCR \u6a21\u7d44\u3002\u8acb\u5148\u5728\u6a21\u7d44\u7ba1\u7406\u4e2d\u5b89\u88dd\u3002",
   "QuickOcrNoText": "\u9078\u53d6\u7bc4\u570d\u5167\u627e\u4e0d\u5230\u53ef\u8fa8\u8b58\u6587\u5b57\u3002",
   "QuickOcrFailed": "\u6587\u5b57\u8fa8\u8b58\u5931\u6557\u3002",
+  "QuickOcrSavedToFile": "OCR 文字已複製並存檔",
+  "QuickOcrSaveFailed": "OCR 文字已複製，但存檔失敗",
+  "CompressAudioOnlyHint": "純音訊輸出：抽取完整音軌；影片設定（編碼/CRF/解析度/濾鏡/剪輯）不適用。",
   "GifUnavailableReason": "\u6b64\u5b89\u88dd\u7f3a\u5c11 GIF \u7de8\u78bc\u5668\uff0c\u56e0\u6b64\u7121\u6cd5\u9078\u64c7 GIF\u3002"
 }

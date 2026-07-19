@@ -305,6 +305,9 @@
   "HideSnipPinBorder": "Hide Pin Window Border",
   "HideSnipSelectionDecoration": "Hide Selection Window Decorations",
   "RevealAfterSave": "Open file location after saving",
+  "FileNameTemplate": "File name template",
+  "FileNameTemplateHint": "Tokens: {date} {time} {datetime} {yyyy} {MM} {dd} {HH} {mm} {ss}. Blank = GimmeCapture_{date}_{time}.",
+  "SaveOcrTextToFile": "Also save OCR text as a .txt file",
   "AutoPinScreenshotSelection": "Lock selected screenshot instead of click-through",
   "TipLockSelection": "Lock selection (no click-through)",
   "ShowSnipCursor": "Show Cursor in Snip",
@@ -572,5 +575,8 @@
   "QuickOcrModuleMissing": "PaddleOCR is not installed. Install it from Modules first.",
   "QuickOcrNoText": "No recognizable text was found in the selection.",
   "QuickOcrFailed": "Text recognition failed.",
+  "QuickOcrSavedToFile": "OCR text copied and saved to file",
+  "QuickOcrSaveFailed": "OCR text copied, but saving the file failed",
+  "CompressAudioOnlyHint": "Audio-only output: extracts the full audio track; video settings (codec/CRF/resolution/filters/edits) do not apply.",
   "GifUnavailableReason": "The GIF encoder is unavailable in this installation, so GIF output is disabled."
 }

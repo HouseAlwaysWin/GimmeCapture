@@ -81,7 +81,7 @@ public partial class FloatingVideoWindow : FloatingWindowBase
                     Title = GimmeCapture.Services.Core.Infrastructure.LocalizationService.Instance["SaveVideo"],
                     DefaultExtension = defaultExt,
                     ShowOverwritePrompt = true,
-                    SuggestedFileName = $"{CaptureFileNameService.SuggestedBaseName()}.{defaultExt}",
+                    SuggestedFileName = $"{CaptureFileNameService.SuggestedBaseName(vm.AppSettingsService?.Settings.FileNameTemplate)}.{defaultExt}",
                     FileTypeChoices = choices
                 });
 

@@ -299,6 +299,12 @@ public partial class MainWindowViewModel
         get => Snip.SaveDirectory;
         set => Snip.SaveDirectory = value;
     }
+
+    public string FileNameTemplate
+    {
+        get => Snip.FileNameTemplate;
+        set => Snip.FileNameTemplate = value;
+    }
     
     // Control Settings
     private string _snipHotkey = "Shift+F1";
@@ -446,6 +452,12 @@ public partial class MainWindowViewModel
     {
         get => Snip.OcrTextLayout;
         set => Snip.OcrTextLayout = value;
+    }
+
+    public bool SaveOcrTextToFile
+    {
+        get => Snip.SaveOcrTextToFile;
+        set => Snip.SaveOcrTextToFile = value;
     }
 
     private ScrollingCaptureDirection _scrollingCaptureDirection;
