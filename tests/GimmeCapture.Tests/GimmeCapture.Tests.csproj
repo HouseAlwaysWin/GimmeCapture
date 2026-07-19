@@ -1,11 +1,26 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <!-- Multi-target like the app: the net10.0 head lets the Linux CI job actually EXECUTE the
+         cross-platform (file-flow / VM / service) tests against the shipping Linux head, which
+         previously had zero behavioral coverage. Windows-only test files are fenced below.
+         Note: on Windows, `dotnet test` without -f now runs BOTH heads. -->
+    <TargetFrameworks>net10.0-windows10.0.19041.0;net10.0</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
   </PropertyGroup>
+
+  <!-- Tests that construct / subclass Windows-only types (fenced out of the app's net10.0 head):
+       keep them Windows-head-only. SnipWindowViewModelTests is here only because its fake wraps the
+       real WindowDetectionService — a candidate to un-fence later via an interface-only fake. -->
+  <ItemGroup Condition="!$(TargetFramework.Contains('-windows'))">
+    <Compile Remove="HotkeyServiceTests.cs" />
+    <Compile Remove="WindowDetectionServiceTests.cs" />
+    <Compile Remove="ViewModels\MainWindowViewModelConstructionTests.cs" />
+    <Compile Remove="ViewModels\MainWindowViewModelHotkeyTests.cs" />
+    <Compile Remove="ViewModels\SnipWindowViewModelTests.cs" />
+  </ItemGroup>
 
   <ItemGroup>
     <Compile Remove="bin\**\*.cs;obj\**\*.cs;.tmp-build-verify\**\*.cs" />

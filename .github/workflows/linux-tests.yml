@@ -1,0 +1,83 @@
+# Linux behavioral test gate: EXECUTE the cross-platform test suite against the app's
+# net10.0 (Linux) head on ubuntu. The Linux build has shipped since v0.51 with zero
+# automated behavioral coverage — the Windows CI only ever runs tests on the Windows
+# head. Windows-only test files are fenced in GimmeCapture.Tests.csproj.
+#
+# Run #1 (spike) result: compiled clean, 782 tests, 775 passed — the 7 failures were
+# Windows-centric test inputs (fixed) plus missing native FFmpeg .so (provisioned below).
+name: Linux Tests
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "claude/**"
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write # lock-file auto-commit (push events on claude/** only)
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Cache FFmpeg .so bundle
+        id: cache-ffmpeg
+        uses: actions/cache@v4
+        with:
+          path: src/GimmeCapture/ffmpeg-lib
+          key: ffmpeg-linux-so-${{ hashFiles('scripts/ensure-ffmpeg-libs-linux.sh') }}
+
+      # The libav contract tests (e.g. the GIF transcoder) load the real native FFmpeg;
+      # the app csproj copies ffmpeg-lib/*.so.* into the test output.
+      - name: Ensure FFmpeg native libs
+        if: steps.cache-ffmpeg.outputs.cache-hit != 'true'
+        run: bash scripts/ensure-ffmpeg-libs-linux.sh
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-linuxtest-${{ runner.os }}-${{ hashFiles('**/packages.lock.json') }}
+          restore-keys: |
+            nuget-linuxtest-${{ runner.os }}-
+
+      # Non-locked restore (EnableWindowsTargeting packs aren't in the lock file; the
+      # Windows CI still enforces locked mode). --force-evaluate refreshes the lock
+      # files so csproj changes (e.g. the Tests TFM addition) keep them current.
+      - name: Restore (refresh lock files)
+        run: dotnet restore GimmeCapture.slnx --runtime win-x64 -p:EnableWindowsTargeting=true -p:RestoreLockedMode=false --force-evaluate
+
+      # This cloud/Linux dev flow has no local dotnet to regenerate lock files, so the CI
+      # commits refreshed locks back to the working branch (push events only, never PRs).
+      # No skip-ci marker: a skip-ci head commit would also suppress ALL of a PR's checks
+      # when it sits at the branch tip. The re-trigger self-terminates instead — the next
+      # run's restore finds the locks already current and commits nothing.
+      - name: Commit refreshed lock files (claude/** pushes only)
+        if: github.event_name == 'push'
+        run: |
+          if git diff --quiet -- '**/packages.lock.json'; then
+            echo "Lock files unchanged."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- '**/packages.lock.json'
+          git commit -m "chore(ci): refresh packages.lock.json after restore"
+          git push origin HEAD:${GITHUB_REF_NAME}
+
+      - name: Run tests on the net10.0 head
+        run: >
+          dotnet test tests/GimmeCapture.Tests/GimmeCapture.Tests.csproj
+          -c Release -f net10.0 --no-restore
+          -p:EnableWindowsTargeting=true
+          --blame-hang --blame-hang-timeout 8m
+          --logger "console;verbosity=normal"
