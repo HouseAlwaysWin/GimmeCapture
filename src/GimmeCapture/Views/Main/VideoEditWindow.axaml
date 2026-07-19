@@ -33,7 +33,7 @@
             <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Top" Margin="0,0,12,0">
                 <TextBox Text="{Binding OutputFileName, Mode=TwoWay}" Width="170" FontSize="11"
                          VerticalAlignment="Center" IsEnabled="{Binding !IsComparing}"
-                         Watermark="{Binding [CompressOutputNameWatermark], Source={x:Static services:LocalizationService.Instance}}"
+                         PlaceholderText="{Binding [CompressOutputNameWatermark], Source={x:Static services:LocalizationService.Instance}}"
                          ToolTip.Tip="{Binding [CompressOutputNameLabel], Source={x:Static services:LocalizationService.Instance}}"/>
                 <!-- Toggle: opens/closes the inline compare; dims to show the active state. Stays enabled while comparing. -->
                 <Button Content="{Binding [CompressCompareButton], Source={x:Static services:LocalizationService.Instance}}"

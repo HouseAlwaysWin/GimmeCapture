@@ -213,33 +213,13 @@ public partial class SnipWindow : Window
             if (sel.Bounds.Width <= 10 || sel.Bounds.Height <= 10) continue;
             var rect = sel.Bounds;
 
-            if (sel.IsTranslated)
-            {
-                if (sel.IsAudioPanel)
-                {
-                    dest.Add(new Rect(
-                        rect.X * scaling,
-                        rect.Y * scaling,
-                        rect.Width * scaling,
-                        rect.Height * scaling));
-                }
-                else
-                {
-	                    dest.Add(new Rect(
-	                        rect.X * scaling,
-	                        rect.Y * scaling,
-	                        rect.Width * scaling,
-	                        rect.Height * scaling));
-                }
-            }
-            else
-            {
-                dest.Add(new Rect(
-                    rect.X * scaling,
-                    rect.Y * scaling,
-                    rect.Width * scaling,
-                    rect.Height * scaling));
-            }
+            // Same physical rect regardless of translated/audio-panel state (the branches had
+            // accreted byte-identical bodies).
+            dest.Add(new Rect(
+                rect.X * scaling,
+                rect.Y * scaling,
+                rect.Width * scaling,
+                rect.Height * scaling));
         }
 
         if (_viewModel.ShowTopLoadingBar)
@@ -540,24 +520,13 @@ public partial class SnipWindow : Window
 
                         if (sel.IsTranslated)
                         {
-                            if (sel.IsAudioPanel)
-                            {
-                                // Audio panel keeps text inside fixed box (no extra text island below).
-                                extraRegions.Add(new Rect(
-                                    (rect.X - 20) * scaling,
-                                    (rect.Y - 20) * scaling,
-                                    (rect.Width + 40) * scaling,
-                                    (rect.Height + 40) * scaling));
-                            }
-                            else
-                            {
-                                // 已翻譯：選取框及下方文字島嶼保持不透明
-	                                extraRegions.Add(new Rect(
-	                                    (rect.X - 20) * scaling,
-	                                    (rect.Y - 20) * scaling,
-	                                    (rect.Width + 40) * scaling,
-	                                    (rect.Height + 40) * scaling));
-                            }
+                            // 已翻譯：選取框（含 20px 邊）保持不透明。Audio panel 與一般翻譯框
+                            // 用同一個 rect — audio panel 的文字固定在框內，沒有額外的下方文字島嶼。
+                            extraRegions.Add(new Rect(
+                                (rect.X - 20) * scaling,
+                                (rect.Y - 20) * scaling,
+                                (rect.Width + 40) * scaling,
+                                (rect.Height + 40) * scaling));
                         }
                         else
                         {

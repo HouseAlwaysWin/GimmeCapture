@@ -245,7 +245,7 @@
                                              FilterMode="Contains"
                                              MinimumPrefixLength="0"
                                              IsTextCompletionEnabled="False"
-                                             Watermark="{Binding [WebcamDeviceWatermark], Source={x:Static services:LocalizationService.Instance}}"
+                                             PlaceholderText="{Binding [WebcamDeviceWatermark], Source={x:Static services:LocalizationService.Instance}}"
                                              HorizontalAlignment="Stretch"/>
                         </DockPanel>
                         <DockPanel>

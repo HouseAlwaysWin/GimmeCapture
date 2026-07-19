@@ -338,7 +338,7 @@
                                         Command="{Binding SaveCompressPresetCommand}"
                                         Margin="10,0,0,0"/>
                                 <TextBox Text="{Binding CompressPresetName}"
-                                         Watermark="{Binding [CompressPresetNameWatermark], Source={x:Static services:LocalizationService.Instance}}"/>
+                                         PlaceholderText="{Binding [CompressPresetNameWatermark], Source={x:Static services:LocalizationService.Instance}}"/>
                             </DockPanel>
                         </StackPanel>
 
@@ -520,7 +520,7 @@
                                         Margin="10,0,0,0"/>
                                 <TextBox Text="{Binding CompressOutputFolder}"
                                          IsReadOnly="True"
-                                         Watermark="{Binding [CompressOutputFolderAuto], Source={x:Static services:LocalizationService.Instance}}"/>
+                                         PlaceholderText="{Binding [CompressOutputFolderAuto], Source={x:Static services:LocalizationService.Instance}}"/>
                             </DockPanel>
                         </StackPanel>
 

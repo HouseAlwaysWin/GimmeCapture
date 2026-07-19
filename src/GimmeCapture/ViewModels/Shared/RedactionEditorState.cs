@@ -102,8 +102,9 @@ public sealed class RedactionEditorState : ReactiveObject
         }
     }
 
-    /// <summary>Raised after any redaction edit so hosts can re-raise their derived/delegating properties.</summary>
-    public event Action? Changed;
+    /// <summary>Raised after any redaction edit so hosts can re-raise their derived/delegating properties.
+    /// Named RedactionChanged (not Changed) so it doesn't hide ReactiveObject's IObservable Changed member.</summary>
+    public event Action? RedactionChanged;
 
     public ReactiveCommand<Unit, Unit> AddKeyframeCommand { get; }
     public ReactiveCommand<Unit, Unit> NewObjectCommand { get; }
@@ -193,7 +194,7 @@ public sealed class RedactionEditorState : ReactiveObject
         this.RaisePropertyChanged(nameof(HasRedaction));
         this.RaisePropertyChanged(nameof(RedactionStatus));
         RefreshActiveBoxes();
-        Changed?.Invoke();
+        RedactionChanged?.Invoke();
     }
 
     /// <summary>Recompute the live-preview boxes for the current playhead (call when the playhead moves).</summary>

@@ -83,3 +83,4 @@ project.nuget.cache
 # Build / publish output
 /publish/
 /installer/output/
+BenchmarkDotNet.Artifacts/
