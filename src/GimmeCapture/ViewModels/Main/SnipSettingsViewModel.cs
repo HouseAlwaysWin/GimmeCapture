@@ -105,4 +105,11 @@ public class SnipSettingsViewModel : ViewModelBase
         get => _ocrTextLayout;
         set => this.RaiseAndSetIfChanged(ref _ocrTextLayout, value);
     }
+
+    private bool _saveOcrTextToFile;
+    public bool SaveOcrTextToFile
+    {
+        get => _saveOcrTextToFile;
+        set => this.RaiseAndSetIfChanged(ref _saveOcrTextToFile, value);
+    }
 }

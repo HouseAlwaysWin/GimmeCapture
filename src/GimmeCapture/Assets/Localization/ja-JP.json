@@ -293,6 +293,7 @@
   "RevealAfterSave": "保存後にファイルの場所を開く",
   "FileNameTemplate": "ファイル名テンプレート",
   "FileNameTemplateHint": "使用可能トークン：{date} {time} {datetime} {yyyy} {MM} {dd} {HH} {mm} {ss}。空欄 = GimmeCapture_{date}_{time}。",
+  "SaveOcrTextToFile": "OCR テキストを .txt としても保存",
   "AutoPinScreenshotSelection": "選択したスクリーンショットを固定して透過クリックしない",
   "TipLockSelection": "選択を固定（透過クリックしない）",
   "ShowSnipCursor": "キャプチャ時にカーソルを表示",
@@ -578,5 +579,7 @@
   "QuickOcrModuleMissing": "PaddleOCR \u30e2\u30b8\u30e5\u30fc\u30eb\u304c\u30a4\u30f3\u30b9\u30c8\u30fc\u30eb\u3055\u308c\u3066\u3044\u307e\u305b\u3093\u3002\u30e2\u30b8\u30e5\u30fc\u30eb\u7ba1\u7406\u304b\u3089\u30a4\u30f3\u30b9\u30c8\u30fc\u30eb\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
   "QuickOcrNoText": "\u9078\u629e\u7bc4\u56f2\u306b\u8a8d\u8b58\u53ef\u80fd\u306a\u6587\u5b57\u304c\u3042\u308a\u307e\u305b\u3093\u3002",
   "QuickOcrFailed": "\u6587\u5b57\u8a8d\u8b58\u306b\u5931\u6557\u3057\u307e\u3057\u305f\u3002",
+  "QuickOcrSavedToFile": "OCR テキストをコピーしファイルに保存しました",
+  "QuickOcrSaveFailed": "OCR テキストはコピー済みですが、ファイル保存に失敗しました",
   "GifUnavailableReason": "\u3053\u306e\u74b0\u5883\u3067\u306f GIF \u30a8\u30f3\u30b3\u30fc\u30c0\u30fc\u3092\u5229\u7528\u3067\u304d\u306a\u3044\u305f\u3081\u3001GIF \u3092\u9078\u629e\u3067\u304d\u307e\u305b\u3093\u3002"
 }

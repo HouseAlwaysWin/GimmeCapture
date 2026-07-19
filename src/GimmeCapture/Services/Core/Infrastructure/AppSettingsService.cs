@@ -264,6 +264,7 @@ public class AppSettingsService : IAppSettingsService
         dest.AutoPinScreenshotSelection = source.AutoPinScreenshotSelection;
         dest.CaptureDelay = source.CaptureDelay;
         dest.OcrTextLayout = source.OcrTextLayout;
+        dest.SaveOcrTextToFile = source.SaveOcrTextToFile;
         dest.ScrollingCaptureDirection = source.ScrollingCaptureDirection;
         dest.SnipToolbarPosition = source.SnipToolbarPosition;
         dest.HideRecordPinDecoration = source.HideRecordPinDecoration;

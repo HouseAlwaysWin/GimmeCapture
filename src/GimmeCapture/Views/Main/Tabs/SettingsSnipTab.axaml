@@ -95,6 +95,9 @@
                                 </ComboBox.ItemTemplate>
                             </ComboBox>
                         </Grid>
+                        <CheckBox IsChecked="{Binding SaveOcrTextToFile}"
+                                  Content="{Binding [SaveOcrTextToFile], Source={x:Static services:LocalizationService.Instance}}"
+                                  Margin="0,6,0,0"/>
                         <Grid ColumnDefinitions="Auto,*" Margin="0,6,0,0">
                             <TextBlock Text="{Binding [ScrollDirection], Source={x:Static services:LocalizationService.Instance}}"
                                        VerticalAlignment="Center"

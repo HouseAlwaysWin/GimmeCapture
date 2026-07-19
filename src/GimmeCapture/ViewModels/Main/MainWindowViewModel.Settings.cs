@@ -454,6 +454,12 @@ public partial class MainWindowViewModel
         set => Snip.OcrTextLayout = value;
     }
 
+    public bool SaveOcrTextToFile
+    {
+        get => Snip.SaveOcrTextToFile;
+        set => Snip.SaveOcrTextToFile = value;
+    }
+
     private ScrollingCaptureDirection _scrollingCaptureDirection;
     public ScrollingCaptureDirection ScrollingCaptureDirection
     {
