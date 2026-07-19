@@ -38,6 +38,10 @@ class Program
         }
         finally
         {
+            if (!OperatingSystem.IsWindows())
+            {
+                Services.Platforms.Linux.LinuxWindowShape.Shutdown();
+            }
             AppLog.Shutdown();
         }
     }

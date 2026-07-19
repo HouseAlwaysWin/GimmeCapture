@@ -19,6 +19,38 @@ public static class ProcessMemoryTrimService
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool EmptyWorkingSet(IntPtr hProcess);
 
+    // glibc: returns freed heap pages (allocator arenas) to the OS. This is the Linux counterpart of
+    // EmptyWorkingSet — without it, native memory freed by e.g. an unloaded llama.cpp model stays in
+    // the process RSS indefinitely. Not part of POSIX: absent on musl and macOS, hence the flag below.
+    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
+    [DllImport("libc", EntryPoint = "malloc_trim")]
+    private static extern int MallocTrim(nuint pad);
+
+    private static volatile bool _mallocTrimUnavailable;
+
+    /// <summary>Best-effort "give freed memory back to the OS" step shared by both trim flavors.</summary>
+    private static void ReturnFreedMemoryToOs(Process process)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            _ = EmptyWorkingSet(process.Handle);
+            return;
+        }
+
+        if (OperatingSystem.IsLinux() && !_mallocTrimUnavailable)
+        {
+            try
+            {
+                _ = MallocTrim(0);
+            }
+            catch (Exception ex) when (ex is EntryPointNotFoundException or DllNotFoundException)
+            {
+                _mallocTrimUnavailable = true; // non-glibc libc — skip quietly from now on
+                AppLog.Information($"MemoryTrim.MallocTrimUnavailable.{ex.GetType().Name}");
+            }
+        }
+    }
+
     public static Task<bool> RequestIdleTrimAsync(
         string reason,
         TimeSpan? delay = null,
@@ -60,10 +92,7 @@ public static class ProcessMemoryTrimService
             GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true, compacting: true);
 
             using var process = Process.GetCurrentProcess();
-            if (OperatingSystem.IsWindows())
-            {
-                _ = EmptyWorkingSet(process.Handle);
-            }
+            ReturnFreedMemoryToOs(process);
             process.Refresh();
 
             var after = CaptureSnapshot();
@@ -84,10 +113,7 @@ public static class ProcessMemoryTrimService
             AppLog.Information($"MemoryTrim.WorkingSetBefore.{reason}.{before}");
 
             using var process = Process.GetCurrentProcess();
-            if (OperatingSystem.IsWindows())
-            {
-                _ = EmptyWorkingSet(process.Handle);
-            }
+            ReturnFreedMemoryToOs(process);
             process.Refresh();
 
             var after = CaptureSnapshot();

@@ -606,6 +606,30 @@ public class AnnotationEditorStateTests
     }
 
     [Fact]
+    public void PushUndoAction_CapsHistoryDepth_AndDisposesDroppedOldestActions()
+    {
+        var state = new AnnotationEditorState();
+        var first = new DisposeTrackingAction();
+        state.PushUndoAction(first);
+        for (int i = 0; i < 40; i++)
+        {
+            state.PushUndoAction(new DisposeTrackingAction());
+        }
+
+        Assert.Equal(30, state.HistoryStack.Count);
+        Assert.True(first.Disposed, "The oldest action should be dropped and disposed once the cap is exceeded.");
+        Assert.All(state.HistoryStack, a => Assert.False(((DisposeTrackingAction)a).Disposed));
+    }
+
+    private sealed class DisposeTrackingAction : IHistoryAction
+    {
+        public bool Disposed { get; private set; }
+        public void Undo() { }
+        public void Redo() { }
+        public void Dispose() => Disposed = true;
+    }
+
+    [Fact]
     public void Dispose_DoesNotThrow()
     {
         var state = new AnnotationEditorState();
