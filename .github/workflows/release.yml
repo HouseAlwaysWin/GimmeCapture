@@ -19,14 +19,32 @@ jobs:
       with:
         dotnet-version: '10.0.x'
 
+    # Same cache shape as linux-tests.yml: the bundled build is pinned inside the script,
+    # so keying on the script hash invalidates exactly when the pinned build changes.
+    - name: Cache FFmpeg .so bundle
+      id: cache-ffmpeg
+      uses: actions/cache@v4
+      with:
+        path: src/GimmeCapture/ffmpeg-lib
+        key: ffmpeg-linux-so-${{ hashFiles('scripts/ensure-ffmpeg-libs-linux.sh') }}
+
     - name: Ensure bundled FFmpeg .so
+      if: steps.cache-ffmpeg.outputs.cache-hit != 'true'
       run: |
         chmod +x scripts/ensure-ffmpeg-libs-linux.sh
         scripts/ensure-ffmpeg-libs-linux.sh
 
-    # Only the net10.0 head runs on Linux (the net10.0-windows head is not built here). The repo lock
-    # file pins win-x64 only, so restore non-locked (RestoreLockedMode=false) to resolve linux-x64 assets;
-    # package versions stay pinned by the exact PackageReferences.
+    - name: Cache NuGet packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.nuget/packages
+        key: nuget-${{ runner.os }}-${{ hashFiles('**/packages.lock.json') }}
+        restore-keys: |
+          nuget-${{ runner.os }}-
+
+    # Only the net10.0 head runs on Linux (the net10.0-windows head is not built here). The lock
+    # files pin both win-x64 and linux-x64 (Directory.Build.props RuntimeIdentifiers), so the
+    # shipped Linux binary restores in locked mode like the Windows one.
     - name: Publish application (self-contained, single file)
       run: |
         version="${GITHUB_REF_NAME#v}"
@@ -39,7 +57,7 @@ jobs:
         asmver="$major.$minor.$patch.0"
         dotnet publish src/GimmeCapture/GimmeCapture.csproj \
           -f net10.0 -r linux-x64 -c Release --self-contained true \
-          -p:RestoreLockedMode=false \
+          -p:RestoreLockedMode=true \
           -p:PublishSingleFile=true \
           -p:IncludeNativeLibrariesForSelfExtract=true \
           -p:IncludeAllContentForSelfExtract=true \
@@ -84,9 +102,26 @@ jobs:
       with:
         dotnet-version: '10.0.x'
 
+    # Same cache keys as ci.yml, so a release run reuses the caches CI already populated.
+    - name: Cache FFmpeg DLLs
+      id: cache-ffmpeg
+      uses: actions/cache@v4
+      with:
+        path: src/GimmeCapture/ffmpeg-lib
+        key: ffmpeg-${{ hashFiles('scripts/ensure-ffmpeg-libs.ps1') }}
+
     - name: Ensure bundled FFmpeg DLLs
+      if: steps.cache-ffmpeg.outputs.cache-hit != 'true'
       shell: powershell
       run: powershell -ExecutionPolicy Bypass -File scripts/ensure-ffmpeg-libs.ps1
+
+    - name: Cache NuGet packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.nuget/packages
+        key: nuget-${{ runner.os }}-${{ hashFiles('**/packages.lock.json') }}
+        restore-keys: |
+          nuget-${{ runner.os }}-
 
     - name: Verify
       shell: powershell

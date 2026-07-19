@@ -2,7 +2,9 @@
   <PropertyGroup>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <RestoreLockedMode Condition="'$(ContinuousIntegrationBuild)' == 'true'">true</RestoreLockedMode>
-    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+    <!-- linux-x64 included so packages.lock.json pins both shipped RIDs — the release Linux publish
+         and the Linux CI jobs can then restore in locked mode instead of opting out. -->
+    <RuntimeIdentifiers>win-x64;linux-x64</RuntimeIdentifiers>
 
     <!-- Ratchet: nullable-reference-type warnings are build errors so the codebase stays null-safe as it
          grows (a null-deref that today is a warning would otherwise slip in silently). Scoped to nullable
