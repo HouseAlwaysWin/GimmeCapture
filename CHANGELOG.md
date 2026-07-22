@@ -9,7 +9,7 @@
 
 ---
 
-## Unreleased
+## v0.66.0 - 2026-07-22
 
 ### 🎬 Recording
 
