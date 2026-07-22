@@ -45,6 +45,13 @@ jobs:
     # Only the net10.0 head runs on Linux (the net10.0-windows head is not built here). The lock
     # files pin both win-x64 and linux-x64 (Directory.Build.props RuntimeIdentifiers), so the
     # shipped Linux binary restores in locked mode like the Windows one.
+    #
+    # Restore separately in locked mode, then publish with --no-restore — the same split the Windows
+    # job below uses. Letting `dotnet publish` do the restore itself re-resolves in the
+    # self-contained + RID context, where the SDK injects an implicit Microsoft.NET.ILLink.Tasks
+    # whose version tracks the installed SDK. That package is not in packages.lock.json, so locked
+    # mode aborts the whole release with NU1004 (this is what broke v0.66.0). Pinning it in the lock
+    # file would only move the break to the next SDK bump, since there is no global.json.
     - name: Publish application (self-contained, single file)
       run: |
         version="${GITHUB_REF_NAME#v}"
@@ -55,9 +62,10 @@ jobs:
           exit 1
         fi
         asmver="$major.$minor.$patch.0"
+        dotnet restore src/GimmeCapture/GimmeCapture.csproj --locked-mode --disable-parallel
+
         dotnet publish src/GimmeCapture/GimmeCapture.csproj \
-          -f net10.0 -r linux-x64 -c Release --self-contained true \
-          -p:RestoreLockedMode=true \
+          -f net10.0 -r linux-x64 -c Release --self-contained true --no-restore \
           -p:PublishSingleFile=true \
           -p:IncludeNativeLibrariesForSelfExtract=true \
           -p:IncludeAllContentForSelfExtract=true \
