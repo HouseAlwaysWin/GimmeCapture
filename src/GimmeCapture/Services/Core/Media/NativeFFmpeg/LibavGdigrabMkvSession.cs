@@ -60,12 +60,16 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
     public bool PipelinedEncoding { get; set; }
 
     /// <summary>
-    /// Timestamp output frames by wall-clock arrival time instead of a frame counter. Needed when gdigrab can't
-    /// keep up with the target fps (e.g. several large window regions captured concurrently): a frame counter at
-    /// 1/fps spacing then yields a sped-up video (5 s captured → ~1 s playback). Wall-clock PTS keeps the output
-    /// duration equal to real time (lower effective fps, but correct speed). Off by default so the proven
-    /// single-region path is unchanged. Forces the single-threaded encode loop.
+    /// Timestamp output frames by wall-clock arrival time instead of a frame counter. Whenever gdigrab can't keep
+    /// up with the target fps, a frame counter at 1/fps spacing yields a video SHORTER than real time (5 s
+    /// captured → ~1 s playback). The recorded audio is real-time either way, so that same gap is exactly what
+    /// desynchronises audio from video, growing as the recording runs. Wall-clock PTS keeps the output duration
+    /// equal to real time (lower effective fps, but correct speed and in sync).
     /// </summary>
+    /// <remarks>
+    /// Works with <see cref="PipelinedEncoding"/>: PTS is stamped on the producer thread at frame arrival and
+    /// travels with the frame through the queue, so pipelining does not affect the timeline.
+    /// </remarks>
     public bool UseWallClockPts { get; set; }
 
     /// <summary>Software-encoder CRF override (1-51); 0 keeps the default 23.</summary>
@@ -339,7 +343,7 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
 
             ThrowIfErr(ffmpeg.avformat_write_header(outputFmt, null), "write_header");
 
-            if (PipelinedEncoding && !UseWallClockPts)
+            if (PipelinedEncoding)
             {
                 RunPipelinedEncode(inputFmt, videoIn, pkt, decCtx, encCtx, ref sws, ref swsToBgra, decFrame, ref bgraFrame, composite, outputFmt, outStream, ref frameCounter, ref packetCounter, firstFrameTcs, ct);
             }
@@ -636,6 +640,10 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
         Exception? consumerEx = null;
         long localPacketCounter = 0;
 
+        // Only the producer stamps PTS, so this clock/last-pts pair needs no synchronization.
+        var encodeClock = new System.Diagnostics.Stopwatch();
+        long lastEncPts = -1;
+
         // Pointers can't be captured by a lambda — pass them through as IntPtr and cast back inside.
         IntPtr encCtxPtr = (IntPtr)encCtx;
         IntPtr outFmtPtr = (IntPtr)outputFmt;
@@ -699,11 +707,11 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
 
                 ThrowIfErr(ffmpeg.avcodec_send_packet(decCtx, readPkt), "send_packet(dec,pipe)");
                 ffmpeg.av_packet_unref(readPkt);
-                DecodeComposeEnqueue(decCtx, encCtx, ref sws, ref swsToBgra, decFrame, ref bgraFrame, composite, queue, ref frameCounter, firstFrameTcs);
+                DecodeComposeEnqueue(decCtx, encCtx, ref sws, ref swsToBgra, decFrame, ref bgraFrame, composite, queue, ref frameCounter, firstFrameTcs, UseWallClockPts, encodeClock, ref lastEncPts);
             }
 
             ffmpeg.avcodec_send_packet(decCtx, null);
-            DecodeComposeEnqueue(decCtx, encCtx, ref sws, ref swsToBgra, decFrame, ref bgraFrame, composite, queue, ref frameCounter, firstFrameTcs);
+            DecodeComposeEnqueue(decCtx, encCtx, ref sws, ref swsToBgra, decFrame, ref bgraFrame, composite, queue, ref frameCounter, firstFrameTcs, UseWallClockPts, encodeClock, ref lastEncPts);
         }
         finally
         {
@@ -737,7 +745,10 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
         Action<SKBitmap>? composite,
         BlockingCollection<IntPtr> queue,
         ref long frameCounter,
-        TaskCompletionSource<bool> firstFrameTcs)
+        TaskCompletionSource<bool> firstFrameTcs,
+        bool useWallClockPts,
+        System.Diagnostics.Stopwatch encodeClock,
+        ref long lastEncPts)
     {
         while (true)
         {
@@ -813,7 +824,34 @@ internal sealed class LibavGdigrabMkvSession : IDisposable
                 ffmpeg.sws_scale(sws, decFrame->data, decFrame->linesize, 0, decFrame->height, encFrame->data, encFrame->linesize);
             }
 
-            encFrame->pts = frameCounter++;
+            // Same PTS rule as the single-threaded loop. Stamping happens HERE, on the producer thread, at frame
+            // arrival — the frame then carries its pts through the queue and the consumer only encodes it — so
+            // wall-clock pacing is just as correct when pipelined as when not.
+            if (useWallClockPts)
+            {
+                if (!encodeClock.IsRunning)
+                {
+                    encodeClock.Start();
+                }
+
+                double fps = encCtx->time_base.num != 0
+                    ? encCtx->time_base.den / (double)encCtx->time_base.num
+                    : 30.0;
+                long pts = (long)(encodeClock.Elapsed.TotalSeconds * fps);
+                if (pts <= lastEncPts)
+                {
+                    pts = lastEncPts + 1;
+                }
+
+                lastEncPts = pts;
+                encFrame->pts = pts;
+            }
+            else
+            {
+                encFrame->pts = frameCounter;
+            }
+
+            frameCounter++;
             if (frameCounter == 1)
             {
                 firstFrameTcs.TrySetResult(true);
