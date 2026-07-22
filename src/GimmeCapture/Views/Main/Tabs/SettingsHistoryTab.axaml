@@ -39,11 +39,11 @@
             </Grid>
         </StackPanel>
 
-        <!-- Category tabs: output copy vs plain copy (TabControl headers; the thumbnail grid below is shared) -->
+        <!-- Category tabs: screenshots vs recordings (TabControl headers; the thumbnail grid below is shared) -->
         <TabControl x:Name="HistoryCategoryTabs" Grid.Row="1"
                     SelectedIndex="{Binding HistoryCategoryIndex, Mode=TwoWay}" Margin="0,8,0,0">
-            <TabItem Header="{Binding [HistoryTabOutput], Source={x:Static services:LocalizationService.Instance}}"/>
-            <TabItem Header="{Binding [HistoryTabCopy], Source={x:Static services:LocalizationService.Instance}}"/>
+            <TabItem Header="{Binding [HistoryTabScreenshot], Source={x:Static services:LocalizationService.Instance}}"/>
+            <TabItem Header="{Binding [HistoryTabRecording], Source={x:Static services:LocalizationService.Instance}}"/>
         </TabControl>
 
         <!-- Empty state -->
