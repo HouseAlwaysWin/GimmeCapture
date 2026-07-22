@@ -190,6 +190,11 @@ public class MainWindowViewModelHotkeyTests
         {
             return false;
         }
+
+        public bool IsDisabledByOs()
+        {
+            return false;
+        }
     }
 
     private sealed class CountingStartupRegistrationService : IStartupRegistrationService
@@ -207,6 +212,14 @@ public class MainWindowViewModelHotkeyTests
         {
             return LastRunOnStartupValue;
         }
+
+        public bool IsDisabledByOs()
+        {
+            return IsDisabledByOsResult;
+        }
+
+        /// <summary>Lets a test simulate the OS having switched the startup entry off.</summary>
+        public bool IsDisabledByOsResult { get; set; }
     }
 
     private sealed class ImmediateSettingsSaveCoordinatorFactory : ISettingsSaveCoordinatorFactory

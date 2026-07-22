@@ -195,6 +195,7 @@ public partial class MainWindowViewModel
             {
                 this.RaiseAndSetIfChanged(ref _runOnStartup, value);
                 _settingsSideEffectCoordinator.ApplyRunOnStartup(value);
+                RefreshStartupBlockedByOs();
                 if (!_isDataLoading)
                 {
                     _settingsService.Settings.RunOnStartup = value;
@@ -202,6 +203,23 @@ public partial class MainWindowViewModel
                 }
             }
         }
+    }
+
+    private bool _isStartupBlockedByOs;
+    /// <summary>
+    /// True when run-on-startup is ON but the OS has switched the entry off (Windows: Task Manager → "Startup
+    /// apps"), so it will NOT launch at login. Without this the settings switch reads "on" while Windows silently
+    /// ignores it — the app kept re-registering a valid entry and looked fine while auto-start never happened.
+    /// </summary>
+    public bool IsStartupBlockedByOs
+    {
+        get => _isStartupBlockedByOs;
+        private set => this.RaiseAndSetIfChanged(ref _isStartupBlockedByOs, value);
+    }
+
+    private void RefreshStartupBlockedByOs()
+    {
+        IsStartupBlockedByOs = RunOnStartup && _settingsSideEffectCoordinator.IsStartupDisabledByOs();
     }
 
     private bool _autoCheckUpdates;
@@ -754,6 +772,18 @@ public partial class MainWindowViewModel
             if (RunOnStartup)
             {
                 _settingsSideEffectCoordinator.ApplyRunOnStartup(true);
+            }
+
+            // Re-registering above only fixes a drifted/missing entry. It CANNOT overcome the OS having switched
+            // the entry off (Windows: Task Manager -> "Startup apps"), which makes Windows ignore the Run value
+            // entirely — the app then looks correctly registered and still never launches at login. Surface it.
+            RefreshStartupBlockedByOs();
+            if (IsStartupBlockedByOs)
+            {
+                AppLog.Warning(
+                    "StartupRegistration.Check",
+                    "Run-on-startup is enabled but the OS has DISABLED this startup entry, so it will not launch " +
+                    "at login. Re-enable it in Task Manager -> Startup apps.");
             }
 
             RefreshLlamaModelCatalog();
