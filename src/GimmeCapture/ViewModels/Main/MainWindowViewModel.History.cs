@@ -43,43 +43,45 @@ public partial class MainWindowViewModel
         private set => this.RaiseAndSetIfChanged(ref _isHistoryEmpty, value);
     }
 
-    // History category tabs: "output copy" (saved/exported) vs "plain copy" (clipboard copies).
-    private CaptureHistorySource _historySourceFilter = CaptureHistorySource.OutputExport;
-    public CaptureHistorySource HistorySourceFilter
+    // History category tabs: screenshots (images) vs recordings (videos). Entries still record how they were
+    // produced (CaptureHistorySource: output/export vs plain clipboard copy) and both kinds appear here — the
+    // tabs simply group by what the capture IS rather than how it was produced, which is how users look for it.
+    private CaptureHistoryKind _historyKindFilter = CaptureHistoryKind.Image;
+    public CaptureHistoryKind HistoryKindFilter
     {
-        get => _historySourceFilter;
+        get => _historyKindFilter;
         set
         {
-            if (_historySourceFilter != value)
+            if (_historyKindFilter != value)
             {
-                this.RaiseAndSetIfChanged(ref _historySourceFilter, value);
-                this.RaisePropertyChanged(nameof(IsHistoryOutputTab));
-                this.RaisePropertyChanged(nameof(IsHistoryCopyTab));
+                this.RaiseAndSetIfChanged(ref _historyKindFilter, value);
+                this.RaisePropertyChanged(nameof(IsHistoryScreenshotTab));
+                this.RaisePropertyChanged(nameof(IsHistoryRecordingTab));
                 this.RaisePropertyChanged(nameof(HistoryCategoryIndex));
                 ApplyHistoryFilter();
             }
         }
     }
 
-    /// <summary>Two-way bound to the "output copy" tab toggle.</summary>
-    public bool IsHistoryOutputTab
+    /// <summary>Two-way bound to the "screenshot" tab toggle.</summary>
+    public bool IsHistoryScreenshotTab
     {
-        get => HistorySourceFilter == CaptureHistorySource.OutputExport;
-        set { if (value) HistorySourceFilter = CaptureHistorySource.OutputExport; }
+        get => HistoryKindFilter == CaptureHistoryKind.Image;
+        set { if (value) HistoryKindFilter = CaptureHistoryKind.Image; }
     }
 
-    /// <summary>Two-way bound to the "plain copy" tab toggle.</summary>
-    public bool IsHistoryCopyTab
+    /// <summary>Two-way bound to the "recording" tab toggle.</summary>
+    public bool IsHistoryRecordingTab
     {
-        get => HistorySourceFilter == CaptureHistorySource.PlainCopy;
-        set { if (value) HistorySourceFilter = CaptureHistorySource.PlainCopy; }
+        get => HistoryKindFilter == CaptureHistoryKind.Video;
+        set { if (value) HistoryKindFilter = CaptureHistoryKind.Video; }
     }
 
-    /// <summary>Two-way bound to the history category TabStrip (0 = output copy, 1 = plain copy).</summary>
+    /// <summary>Two-way bound to the history category TabStrip (0 = screenshots, 1 = recordings).</summary>
     public int HistoryCategoryIndex
     {
-        get => HistorySourceFilter == CaptureHistorySource.PlainCopy ? 1 : 0;
-        set => HistorySourceFilter = value == 1 ? CaptureHistorySource.PlainCopy : CaptureHistorySource.OutputExport;
+        get => HistoryKindFilter == CaptureHistoryKind.Video ? 1 : 0;
+        set => HistoryKindFilter = value == 1 ? CaptureHistoryKind.Video : CaptureHistoryKind.Image;
     }
 
     public ReactiveCommand<Unit, Unit> RefreshHistoryCommand { get; private set; } = null!;
@@ -145,7 +147,8 @@ public partial class MainWindowViewModel
     private void ApplyHistoryFilter()
     {
         HistoryItems.Clear();
-        IEnumerable<HistoryItemViewModel> query = _allHistoryItems.Where(i => i.Source == HistorySourceFilter);
+        bool wantVideo = HistoryKindFilter == CaptureHistoryKind.Video;
+        IEnumerable<HistoryItemViewModel> query = _allHistoryItems.Where(i => i.IsVideo == wantVideo);
         if (!string.IsNullOrWhiteSpace(HistorySearchText))
         {
             var term = HistorySearchText.Trim();
