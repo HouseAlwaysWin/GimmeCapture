@@ -24,15 +24,24 @@
         <StackPanel Grid.Row="0" Spacing="8">
             <CheckBox IsChecked="{Binding EnableHistory}"
                       Content="{Binding [EnableHistory], Source={x:Static services:LocalizationService.Instance}}"/>
-            <Grid ColumnDefinitions="*,Auto,Auto">
+            <Grid ColumnDefinitions="*,Auto,Auto,Auto">
                 <TextBox Grid.Column="0" Text="{Binding HistorySearchText}"
                          PlaceholderText="{Binding [HistorySearch], Source={x:Static services:LocalizationService.Instance}}"
                          Margin="0,0,8,0"/>
-                <Button Grid.Column="1" Margin="0,0,6,0"
+                <!-- Item order here IS the contract for HistorySortIndex (0 newest .. 3 name Z-A). -->
+                <ComboBox Grid.Column="1" Margin="0,0,6,0" MinWidth="150"
+                          ToolTip.Tip="{Binding [HistorySort], Source={x:Static services:LocalizationService.Instance}}"
+                          SelectedIndex="{Binding HistorySortIndex, Mode=TwoWay}">
+                    <ComboBoxItem Content="{Binding [HistorySortNewest], Source={x:Static services:LocalizationService.Instance}}"/>
+                    <ComboBoxItem Content="{Binding [HistorySortOldest], Source={x:Static services:LocalizationService.Instance}}"/>
+                    <ComboBoxItem Content="{Binding [HistorySortNameAsc], Source={x:Static services:LocalizationService.Instance}}"/>
+                    <ComboBoxItem Content="{Binding [HistorySortNameDesc], Source={x:Static services:LocalizationService.Instance}}"/>
+                </ComboBox>
+                <Button Grid.Column="2" Margin="0,0,6,0"
                         Theme="{StaticResource SmallGothicMetalButton}"
                         Content="{Binding [HistoryRefresh], Source={x:Static services:LocalizationService.Instance}}"
                         Command="{Binding RefreshHistoryCommand}"/>
-                <Button Grid.Column="2"
+                <Button Grid.Column="3"
                         Theme="{StaticResource SmallGothicMetalButton}"
                         Content="{Binding [HistoryClear], Source={x:Static services:LocalizationService.Instance}}"
                         Command="{Binding ClearHistoryCommand}"/>

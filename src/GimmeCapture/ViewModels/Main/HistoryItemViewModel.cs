@@ -27,6 +27,7 @@ public sealed class HistoryItemViewModel : ViewModelBase, IDisposable
         Source = item.Source;
         IsVideo = item.Kind == CaptureHistoryKind.Video;
         IsImage = !IsVideo;
+        CapturedAtUtc = item.CapturedAtUtc;
         CapturedAtLocal = item.CapturedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss");
         Dimensions = item.Width > 0 && item.Height > 0 ? $"{item.Width}×{item.Height}" : string.Empty;
 
@@ -48,6 +49,8 @@ public sealed class HistoryItemViewModel : ViewModelBase, IDisposable
     public CaptureHistorySource Source { get; }
     public bool IsVideo { get; }
     public bool IsImage { get; }
+    /// <summary>Raw capture time, kept alongside the formatted string so sorting compares dates, not text.</summary>
+    public DateTime CapturedAtUtc { get; }
     public string CapturedAtLocal { get; }
     public string Dimensions { get; }
     public Bitmap? Thumbnail { get; }

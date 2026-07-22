@@ -84,6 +84,38 @@ public partial class MainWindowViewModel
         set => HistoryKindFilter = value == 1 ? CaptureHistoryKind.Video : CaptureHistoryKind.Image;
     }
 
+    /// <summary>
+    /// Two-way bound to the sort ComboBox, whose items are declared in the same order in the view:
+    /// 0 = newest first (default), 1 = oldest first, 2 = name A→Z, 3 = name Z→A.
+    /// </summary>
+    private int _historySortIndex;
+    public int HistorySortIndex
+    {
+        get => _historySortIndex;
+        set
+        {
+            if (_historySortIndex != value)
+            {
+                this.RaiseAndSetIfChanged(ref _historySortIndex, value);
+                ApplyHistoryFilter();
+            }
+        }
+    }
+
+    /// <summary>Applies the selected sort. Kept separate from filtering so both stay readable.</summary>
+    private IEnumerable<HistoryItemViewModel> SortHistory(IEnumerable<HistoryItemViewModel> items)
+    {
+        return HistorySortIndex switch
+        {
+            1 => items.OrderBy(i => i.CapturedAtUtc),
+            // File names share a long "GimmeCapture_<guid>" prefix, so compare them the way a file manager does
+            // (case-insensitive) rather than by ordinal, which would scatter otherwise-adjacent names.
+            2 => items.OrderBy(i => i.FileName, StringComparer.OrdinalIgnoreCase),
+            3 => items.OrderByDescending(i => i.FileName, StringComparer.OrdinalIgnoreCase),
+            _ => items.OrderByDescending(i => i.CapturedAtUtc),
+        };
+    }
+
     public ReactiveCommand<Unit, Unit> RefreshHistoryCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> ClearHistoryCommand { get; private set; } = null!;
     public ReactiveCommand<HistoryItemViewModel, Unit> OpenHistoryItemCommand { get; private set; } = null!;
@@ -155,7 +187,7 @@ public partial class MainWindowViewModel
             query = query.Where(i => i.FileName.Contains(term, StringComparison.OrdinalIgnoreCase));
         }
 
-        foreach (var item in query)
+        foreach (var item in SortHistory(query))
         {
             HistoryItems.Add(item);
         }
