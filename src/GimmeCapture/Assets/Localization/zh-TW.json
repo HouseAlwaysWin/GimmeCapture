@@ -209,6 +209,7 @@
   "HistoryRemoveTitle": "從歷史移除",
   "HistoryRemoveConfirm": "要移除「{0}」並從磁碟刪除該檔案嗎?此動作無法復原。",
   "RunOnStartup": "開機自動啟動",
+  "RunOnStartupBlockedByOs": "⚠ Windows 已停用此開機項目，所以開機時不會啟動。請到「工作管理員 → 啟動應用程式」把 GimmeCapture 重新啟用。",
   "AutoCheckUpdates": "自動檢查更新",
   "BorderThickness": "邊框粗細:",
   "BorderColor": "邊框顏色:",

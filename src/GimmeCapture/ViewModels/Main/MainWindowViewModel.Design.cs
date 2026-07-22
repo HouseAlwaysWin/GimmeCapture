@@ -71,6 +71,7 @@ public partial class MainWindowViewModel
     {
         public void SetStartup(bool runOnStartup) { }
         public bool IsRegistered() => false;
+        public bool IsDisabledByOs() => false;
     }
 
     private sealed class NoOpSettingsSaveCoordinatorFactory : ISettingsSaveCoordinatorFactory

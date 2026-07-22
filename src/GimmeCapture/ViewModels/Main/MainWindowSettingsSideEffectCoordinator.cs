@@ -36,6 +36,15 @@ internal sealed class MainWindowSettingsSideEffectCoordinator
         _startupRegistrationService.SetStartup(runOnStartup);
     }
 
+    /// <summary>
+    /// True when the OS has switched our startup entry off, so it won't launch at login no matter what we write
+    /// to the registry (Windows: Task Manager → "Startup apps" → Disable).
+    /// </summary>
+    public bool IsStartupDisabledByOs()
+    {
+        return _startupRegistrationService.IsDisabledByOs();
+    }
+
     public void ApplyThemeColors(Color themeColor, Color themeDeepColor)
     {
         _themeResourceService.UpdateThemeColors(themeColor, themeDeepColor);
