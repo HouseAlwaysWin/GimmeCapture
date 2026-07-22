@@ -9,6 +9,57 @@
 
 ---
 
+## Unreleased
+
+### 🎬 Recording
+
+- **Fixed audio/video drifting out of sync.** Video frames were timestamped from a frame counter, which assumes
+  every frame lands exactly 1/fps apart, while the recorded audio is always real time. Whenever capture fell
+  behind the target fps — large region, busy scene, loaded CPU — the video timeline came out shorter than
+  reality and the gap widened as the recording ran (which is why it only happened *sometimes*). Video is now
+  paced by wall clock, so the output duration matches real time and the two tracks stay aligned. This also
+  works together with the experimental pipelined-encoding option, which previously excluded it.
+
+### 📤 Sharing
+
+- **One-click Imgur upload** for screenshots — share a capture and get a link without leaving the app.
+
+### 🏷️ File naming
+
+- **File-name templates.** Define how captures are named (date/time and other tokens) from the Snip settings
+  tab; the template drives all six places the app names a file, so saved screenshots, recordings and exports
+  all follow it consistently.
+
+### 🎧 Audio & compression
+
+- **Audio-only extract.** Pull the audio out of any video to **WAV / MP3 / M4A / OGG-Opus**, and those formats
+  are now selectable in the compress output-format picker.
+
+### 🔤 OCR
+
+- **Optionally save quick-OCR text to a `.txt` file** alongside the capture, instead of only copying it.
+
+### 🖼️ History
+
+- **Tabs are grouped by capture kind — 截圖 (screenshots) / 錄影 (recordings)** — instead of by how the entry was
+  produced, so a copied screenshot no longer hides in a separate tab from a saved one.
+- **New sort selector**: date (newest/oldest) and name (A→Z / Z→A), composing with the search box and the tabs.
+
+### ⚙️ Startup
+
+- **Run-on-startup now tells you when Windows has disabled it.** Windows records a Task Manager → "Startup apps"
+  disable separately and then ignores the registered entry, so the app could keep re-registering a valid entry,
+  report success, and still never launch at login. That state is now detected and surfaced in Settings → General
+  with instructions, instead of showing a switch the OS silently overrides. (It is only reported, never flipped
+  back — that stays your choice.)
+
+### 🧹 Maintenance
+
+- **Memory**: freed memory is now returned to the OS on Linux, and the annotation undo history is capped so long
+  editing sessions can't grow unbounded.
+- **Linux**: the test suite is multi-targeted with a Linux CI job, so regressions on the Linux head get caught.
+- Build/CI: FFmpeg + NuGet caching, correct `linux-x64` RID scoping, and a compiler-warning cleanup.
+
 ## v0.65.0 - 2026-07-17
 
 ### 🌐 Translation overlay
