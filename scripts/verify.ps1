@@ -109,6 +109,39 @@ if (-not $SkipPublish) {
     if (-not (Test-Path -LiteralPath $publishedExe)) {
         throw "Publish smoke test did not produce GimmeCapture.exe."
     }
+
+    # Also smoke the LINUX release artifact (net10.0 head, linux-x64 self-contained single-file). This is the
+    # exact build that blocks a release in .github/workflows/release.yml, and verify used to skip it — so a
+    # Linux-publish break (like the locked-restore NU1004 that sank the first v0.66.0 attempt) only surfaced
+    # AFTER the tag was pushed. Running it here means "one command, then release" is trustworthy again.
+    # Mirrors release.yml: --no-restore off the locked solution restore above. (Letting publish restore itself
+    # in the self-contained + RID context drags in an SDK-versioned implicit Microsoft.NET.ILLink.Tasks that
+    # locked mode rejects — that is exactly the failure we want caught locally.) Cross-RID publish from Windows
+    # is supported; the SDK uses the linux-x64 runtime pack the solution restore already fetched.
+    $publishLinux = Join-Path $artifacts "publish-smoke-linux"
+    $publishLinuxArgs = @(
+        "publish", $appProject,
+        "--framework", "net10.0",
+        "--runtime", "linux-x64",
+        "--self-contained", "true",
+        "--no-restore",
+        "--artifacts-path", $artifacts,
+        "--disable-build-servers",
+        "-p:PublishSingleFile=true",
+        "-p:IncludeNativeLibrariesForSelfExtract=true",
+        "-p:IncludeAllContentForSelfExtract=true",
+        "-p:EnableCompressionInSingleFile=true",
+        "-p:DebugType=none",
+        "-p:DebugSymbols=false",
+        "--output", $publishLinux
+    )
+    Invoke-DotNet @publishLinuxArgs
+
+    # The Linux single-file host has no extension.
+    $publishedElf = Join-Path $publishLinux "GimmeCapture"
+    if (-not (Test-Path -LiteralPath $publishedElf)) {
+        throw "Linux publish smoke test did not produce the GimmeCapture executable."
+    }
 }
 
 Write-Host "Verification completed successfully."
