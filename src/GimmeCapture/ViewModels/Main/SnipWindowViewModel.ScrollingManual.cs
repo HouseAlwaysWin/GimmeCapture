@@ -76,6 +76,20 @@ public partial class SnipWindowViewModel
     /// <summary>Update the hint with the current captured height (physical px).</summary>
     public Action<int>? UpdateScrollingHintAction { get; set; }
 
+    /// <summary>
+    /// Signals the hint window that stitching has lost/regained track of the content (true = a run of
+    /// frames failed to align — typically after scrolling too fast past the strip's edge; false = a frame
+    /// matched again). Lets the user recover mid-capture by scrolling back, instead of discovering a
+    /// stub image only after finishing.
+    /// </summary>
+    public Action<bool>? UpdateScrollingStallAction { get; set; }
+
+    // ~25 captured frames/second: signal a stall after ~1.2s of consecutive misses. Shorter would flash
+    // on transient mismatches (mid-animation frames); longer leaves the user scrolling into the void.
+    private const int ManualStallSignalFrames = 30;
+    private int _manualAlignFailStreak;
+    private bool _manualStallSignaled;
+
     /// <summary>Hide/close the hint window.</summary>
     public Action? HideScrollingHintAction { get; set; }
 
@@ -170,6 +184,8 @@ public partial class SnipWindowViewModel
         _manualPrevFrame = _manualAccumulated.Copy();
         _manualFinishing = false;
         _manualScrollActive = true;
+        _manualAlignFailStreak = 0;
+        _manualStallSignaled = false;
 
         // DIAGNOSTIC (temporary): records the resolved direction, region/strip dims and the active
         // match params so a captured log can show whether forcing is applied and how alignment behaves.
@@ -355,6 +371,28 @@ public partial class SnipWindowViewModel
                 grew = true;
             }
             // else: frame lies fully inside the strip (scrolled back) — nothing new.
+
+            _manualAlignFailStreak = 0;
+            if (_manualStallSignaled)
+            {
+                _manualStallSignaled = false;
+                Dispatcher.UIThread.Post(() => UpdateScrollingStallAction?.Invoke(false));
+            }
+        }
+        else
+        {
+            // A sustained run of misses means the view no longer overlaps the strip (scrolled too fast
+            // past its edge) — every further frame is lost content. Warn so the user scrolls back a bit;
+            // alignment then recovers on its own and the warning clears above. Logged once per stall.
+            _manualAlignFailStreak++;
+            if (!_manualStallSignaled && _manualAlignFailStreak >= ManualStallSignalFrames)
+            {
+                _manualStallSignaled = true;
+                AppLog.Information(
+                    $"ManualScroll.Stalled after {_manualAlignFailStreak} consecutive misses " +
+                    $"(strip={_manualStrip.Width}x{_manualStrip.Height})");
+                Dispatcher.UIThread.Post(() => UpdateScrollingStallAction?.Invoke(true));
+            }
         }
 
         // DIAGNOSTIC (temporary): per-frame alignment outcome + WHY it was rejected.

@@ -233,6 +233,7 @@
   "ScrollingCapture": "Scrolling Capture",
   "ScrollingCaptureTip": "Select a region over a scrollable window, then scroll by hand (vertically or horizontally) to stitch a long screenshot.",
   "ScrollingHintText": "Scroll inside the red frame · F6 finish · Esc cancel",
+  "ScrollingHintStalled": "Lost the content — scroll back a little to continue",
   "ScrollingFinish": "Finish",
   "StatusReady": "Ready",
   "RemoveBackground": "Remove Background",
