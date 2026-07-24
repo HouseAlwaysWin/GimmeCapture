@@ -90,6 +90,14 @@ public partial class SnipWindowViewModel
     private int _manualAlignFailStreak;
     private bool _manualStallSignaled;
 
+    // Motion-consistency state (see ManualScrollMotionGate): frame-to-frame shift accumulated since the last
+    // accepted placement, whether every shift in that run was measurable, the strip offset of the last
+    // accepted frame (current strip coords), and how many candidates in a row the gate has vetoed.
+    private long _manualMotionAccum;
+    private bool _manualMotionValid;
+    private int _manualMotionVetoStreak;
+    private int _manualLastStripOffset;
+
     /// <summary>Hide/close the hint window.</summary>
     public Action? HideScrollingHintAction { get; set; }
 
@@ -186,6 +194,10 @@ public partial class SnipWindowViewModel
         _manualScrollActive = true;
         _manualAlignFailStreak = 0;
         _manualStallSignaled = false;
+        _manualMotionAccum = 0;
+        _manualMotionValid = true;
+        _manualMotionVetoStreak = 0;
+        _manualLastStripOffset = 0; // the seed frame sits at strip offset 0
 
         // DIAGNOSTIC (temporary): records the resolved direction, region/strip dims and the active
         // match params so a captured log can show whether forcing is applied and how alignment behaves.
@@ -351,11 +363,41 @@ public partial class SnipWindowViewModel
         bool grew = false;
         int height = stitchFrame.Height;
 
+        // Motion tracking: consecutive frames (40 ms apart) overlap almost entirely, so their relative shift
+        // is cheap and nearly unambiguous. Accumulated since the last ACCEPTED placement, it predicts where
+        // the next placement must land — the veto below uses it to reject "excellent-looking" strip matches
+        // at physically impossible positions (repeated page content matching far away; see
+        // ManualScrollMotionGate). An unmeasurable shift invalidates the prediction until the next accept.
+        ScrollStitcher.VerticalShift frameShift = ScrollStitcher.FindVerticalShift(
+            _manualPrevFrame!, stitchFrame, _manualMinOverlap, _manualIgnoreRight, ManualRowMismatchTolerance);
+        if (frameShift.Found)
+        {
+            _manualMotionAccum += frameShift.Rows;
+        }
+        else
+        {
+            _manualMotionValid = false;
+        }
+
         ScrollStitcher.FrameAlignment align = _manualStrip.Align(
             stitchFrame, _manualMinOverlap, ManualRowMismatchTolerance, height,
             out double diagBestScore, out double diagAmbiguityGap, out int diagSampleCount);
 
-        if (align.Found)
+        bool motionVetoed = false;
+        if (align.Found && ManualScrollMotionGate.ShouldVeto(
+                _manualMotionValid, _manualMotionAccum, _manualLastStripOffset, align.Offset, height))
+        {
+            // Self-heal: if the prediction keeps vetoing real matches (its own drift), stop trusting it
+            // rather than locking the capture out; the strip matcher then decides alone, as before.
+            motionVetoed = true;
+            _manualMotionVetoStreak++;
+            if (_manualMotionVetoStreak >= ManualScrollMotionGate.MaxConsecutiveVetoes)
+            {
+                _manualMotionValid = false;
+            }
+        }
+
+        if (align.Found && !motionVetoed)
         {
             int stripH = _manualStrip.Height;
             if (align.Offset < 0)
@@ -371,6 +413,12 @@ public partial class SnipWindowViewModel
                 grew = true;
             }
             // else: frame lies fully inside the strip (scrolled back) — nothing new.
+
+            // A prepend rebases strip coordinates: the just-placed frame is now at offset 0.
+            _manualLastStripOffset = align.Offset < 0 ? 0 : align.Offset;
+            _manualMotionAccum = 0;
+            _manualMotionValid = true;
+            _manualMotionVetoStreak = 0;
 
             _manualAlignFailStreak = 0;
             if (_manualStallSignaled)
@@ -400,10 +448,11 @@ public partial class SnipWindowViewModel
         // overlap well; small ambGap (<0.035) => rejected as ambiguous.
         string best = diagBestScore == double.MaxValue ? "MAX" : diagBestScore.ToString("F3");
         string ambGap = diagAmbiguityGap == double.MaxValue ? "none" : diagAmbiguityGap.ToString("F3");
+        string motion = _manualMotionValid ? _manualMotionAccum.ToString() : "off";
         AppLog.Information(
             $"ManualScroll.Align horiz={_manualHorizontal} strip={_manualStrip.Width}x{_manualStrip.Height} " +
             $"frame={stitchFrame.Width}x{stitchFrame.Height} found={align.Found} off={align.Offset} grew={grew} " +
-            $"best={best} ambGap={ambGap} samples={diagSampleCount}");
+            $"best={best} ambGap={ambGap} motion={motion} veto={motionVetoed} samples={diagSampleCount}");
 
         _manualPrevFrame!.Dispose();
         _manualPrevFrame = stitchFrame; // anchor always advances; ownership moves into prev
