@@ -207,10 +207,12 @@ public partial class SnipWindow : Window
                 if (_scrollHintWindow == null)
                 {
                     var hint = LocalizationService.Instance["ScrollingHintText"];
+                    var stalled = LocalizationService.Instance["ScrollingHintStalled"];
                     var finishLabel = LocalizationService.Instance["ScrollingFinish"];
                     var cancelLabel = LocalizationService.Instance["Cancel"];
                     _scrollHintWindow = new ScrollingCaptureHintWindow(
                         hint,
+                        stalled,
                         finishLabel,
                         cancelLabel,
                         anchor,
@@ -220,6 +222,7 @@ public partial class SnipWindow : Window
                 }
             };
             _viewModel.UpdateScrollingHintAction = rows => _scrollHintWindow?.UpdateHint(rows);
+            _viewModel.UpdateScrollingStallAction = stalled => _scrollHintWindow?.SetStalled(stalled);
             _viewModel.HideScrollingHintAction = () =>
             {
                 _scrollHintWindow?.Close();

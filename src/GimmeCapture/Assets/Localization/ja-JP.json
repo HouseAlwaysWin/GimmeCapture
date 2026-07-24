@@ -233,6 +233,7 @@
   "ScrollingCapture": "スクロールキャプチャ",
   "ScrollingCaptureTip": "スクロール可能なウィンドウ上で領域を選択し、手動でスクロール（縦または横）して長いスクリーンショットを連結します。",
   "ScrollingHintText": "赤枠内でスクロール · F6 完了 · Esc 取消",
+  "ScrollingHintStalled": "位置を見失いました — 少し戻ってから続けてください",
   "ScrollingFinish": "完了",
   "StatusReady": "待機中",
   "StatusSnip": "キャプチャ中...",

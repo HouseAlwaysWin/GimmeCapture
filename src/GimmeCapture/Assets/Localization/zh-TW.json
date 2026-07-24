@@ -233,6 +233,7 @@
   "ScrollingCapture": "滾動截圖",
   "ScrollingCaptureTip": "在可捲動的視窗上框選一塊區域，再手動捲動（垂直或水平）即可拼接成長截圖。",
   "ScrollingHintText": "在紅框內捲動 · F6 完成 · Esc 取消",
+  "ScrollingHintStalled": "對不上內容 — 請往回捲一點再繼續",
   "ScrollingFinish": "完成",
   "StatusReady": "就緒",
   "RemoveBackground": "AI 去背",
