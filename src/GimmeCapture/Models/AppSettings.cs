@@ -117,7 +117,6 @@ public class AppSettings
     public bool HideSnipPinDecoration { get; set; } = false;
     public bool HideSnipPinBorder { get; set; } = false;
     public bool HideSnipSelectionDecoration { get; set; } = false;
-    public bool AutoPinScreenshotSelection { get; set; } = false;
     /// <summary>
     /// When true, the screenshot/record overlay opens WITHOUT stealing foreground focus (ShowActivated=false +
     /// WS_EX_NOACTIVATE), so focus-sensitive target UI — dropdowns, right-click context menus — stays open and

@@ -92,8 +92,7 @@ public sealed class SnipWindowFactory : ISnipWindowFactory
             new AvaloniaCaptureVisibilityCoordinator(),
             ocrEngineFactory);
 
-        snipVm.LockSelectedScreenshotSelection = mode == CaptureMode.Normal && vm.AutoPinScreenshotSelection;
-        snipVm.AutoActionMode = SnipWindowViewModel.ResolveAutoActionMode(mode, vm.AutoPinScreenshotSelection);
+        snipVm.AutoActionMode = SnipWindowViewModel.ResolveAutoActionMode(mode);
         if (mode == CaptureMode.Record)
         {
             snipVm.CurrentMode = SnipMode.Recording;

@@ -142,6 +142,22 @@ public partial class SnipWindowViewModel : ViewModelBase, IDisposable, IDrawingT
         }
     }
 
+    /// <summary>
+    /// Two-way access to the FreezeScreenOnScreenshot setting for the toolbar's freeze toggle, so the toolbar
+    /// button and the settings checkbox are the same switch. It affects the NEXT capture (the current overlay's
+    /// still is already grabbed) — same "persist a preference" behaviour the old lock-selection toolbar button had.
+    /// </summary>
+    public bool FreezeScreenOnScreenshot
+    {
+        get => _mainVm?.FreezeScreenOnScreenshot == true;
+        set
+        {
+            if (_mainVm == null || _mainVm.FreezeScreenOnScreenshot == value) return;
+            _mainVm.FreezeScreenOnScreenshot = value;
+            this.RaisePropertyChanged();
+        }
+    }
+
     /// <summary>The app-wide translation-overlay layer (null in design-time when there is no MainVm).</summary>
     public ITranslationResultLayerService? TranslationResultLayer => _mainVm?.TranslationResultLayer;
     private readonly IScreenCaptureService _captureService;

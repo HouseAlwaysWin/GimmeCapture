@@ -77,12 +77,6 @@ public class SnipSettingsViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _hideSnipSelectionDecoration, value);
     }
 
-    private bool _autoPinScreenshotSelection;
-    public bool AutoPinScreenshotSelection
-    {
-        get => _autoPinScreenshotSelection;
-        set => this.RaiseAndSetIfChanged(ref _autoPinScreenshotSelection, value);
-    }
 
     private bool _captureWithoutStealingFocus = true;
     public bool CaptureWithoutStealingFocus

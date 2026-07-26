@@ -200,13 +200,13 @@
                     IsVisible="{Binding !IsTranslationMode}">
                 <PathIcon Data="M16,12V4H17V2H7V4H8V12L6,14V16H11.2V22H12.8V16H18V14L16,12Z" Width="14" Height="14"/>
             </Button>
-            <!-- Lock selection snapshot (freeze / no click-through) — screenshot mode toggle; mirrors the
-                 "lock selected screenshot instead of click-through" setting and applies live to the selection -->
+            <!-- Freeze screen on screenshot — screenshot mode toggle; same switch as the "freeze screen when
+                 taking a screenshot" setting. Captures shell popups (tray flyout / Start menu / dropdowns). -->
             <Button Theme="{StaticResource SnipToolButton}" FontSize="12" BorderThickness="1"
-                    Classes.active="{Binding LockSelectedScreenshotSelection}"
-                    Command="{Binding ToggleLockSelectionSnapshotCommand}"
+                    Classes.active="{Binding FreezeScreenOnScreenshot}"
+                    Command="{Binding ToggleFreezeScreenCommand}"
                     IsVisible="{Binding IsScreenshotMode}"
-                    ToolTip.Tip="{Binding [TipLockSelection], Source={x:Static infra:LocalizationService.Instance}}">
+                    ToolTip.Tip="{Binding [TipFreezeScreen], Source={x:Static infra:LocalizationService.Instance}}">
                 <PathIcon Data="M12,17A2,2 0 0,0 14,15C14,13.89 13.1,13 12,13A2,2 0 0,0 10,15A2,2 0 0,0 12,17M18,8A2,2 0 0,1 20,10V20A2,2 0 0,1 18,22H6A2,2 0 0,1 4,20V10C4,8.89 4.9,8 6,8H7V6A5,5 0 0,1 12,1A5,5 0 0,1 17,6V8H18M12,3A3,3 0 0,0 9,6V8H15V6A3,3 0 0,0 12,3Z" Width="14" Height="14"/>
             </Button>
             <!-- Scrolling (long) capture — screenshot mode only. Split button: the main button
